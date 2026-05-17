@@ -88,7 +88,7 @@ const PROPERTY_IMAGE_WIDTHS = [320, 480, 768, 1024];
 const PROPERTY_CARD_IMAGE_SIZES = "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw";
 const COMPACT_PROPERTY_IMAGE_SIZES = "96px";
 
-function getSizedImageUrl(src: string, width: number): string | null {
+const getSizedImageUrl = (src: string, width: number): string | null => {
   try {
     const url = new URL(src, APP_ORIGIN);
     if (!["http:", "https:"].includes(url.protocol)) return null;
@@ -112,9 +112,9 @@ function getSizedImageUrl(src: string, width: number): string | null {
   }
 
   return null;
-}
+};
 
-function getPropertyImageSrcSet(src: string): string | undefined {
+const getPropertyImageSrcSet = (src: string): string | undefined => {
   const srcSet = PROPERTY_IMAGE_WIDTHS
     .map((width) => {
       const sizedUrl = getSizedImageUrl(src, width);
@@ -124,9 +124,9 @@ function getPropertyImageSrcSet(src: string): string | undefined {
     .join(", ");
 
   return srcSet || undefined;
-}
+};
 
-export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(function PropertyCard({ property, compact = false }, _ref) {
+export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(function PropertyCard({ property, compact = false }, _ref) { // skipcq: JS-R1005 - Card rendering branches compact, auction, and standard listing affordances in one reusable surface.
   const { t } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -349,7 +349,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
                   {property.listingType === "rent" ? `${formatPrice(property.price)}/mo` : formatPrice(property.price)}
                 </span>
               </div>
-              {!!property.pricePerSqm && (
+              {Boolean(property.pricePerSqm) && (
                 <div className="text-xs text-white/70 mt-1 ml-1">€{property.pricePerSqm}/m²</div>
               )}
             </div>
@@ -364,7 +364,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
                   {property.priceChange > 0 ? "+" : ""}{property.priceChange}%
                 </div>
               )}
-              {!!property.views && property.views > 0 && (
+              {(property.views ?? 0) > 0 && (
                 <div className="flex items-center gap-1 text-xs text-white/60">
                   <Eye className="w-3 h-3" /> {property.views}
                 </div>

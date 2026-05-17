@@ -83,7 +83,7 @@ export type ListingsFilters = {
  * full hook + react-query wrapper. The shape of the returned object mirrors
  * the supabase-js query builder so consumers can `await` it directly.
  */
-export function buildListingsQuery(filters?: ListingsFilters, from = 0, pageSize = 24) {
+export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize = 24) => { // skipcq: JS-R1005 - Listing filters intentionally map one public search model onto Supabase query clauses.
   const sort = filters?.sort ?? "featured";
   let query = supabase
     .from("listings")
@@ -171,9 +171,9 @@ export function buildListingsQuery(filters?: ListingsFilters, from = 0, pageSize
   }
 
   return query;
-}
+};
 
-async function fetchListingsPage(filters?: ListingsFilters, page = 1, pageSize = 24) {
+const fetchListingsPage = async (filters?: ListingsFilters, page = 1, pageSize = 24) => {
   const from = (page - 1) * pageSize;
   const { data, error } = await buildListingsQuery(filters, from, pageSize);
 
@@ -201,15 +201,15 @@ async function fetchListingsPage(filters?: ListingsFilters, page = 1, pageSize =
 
   // ORDER BY is applied server-side in buildListingsQuery; no client sort needed.
   return { data: enriched, hasMore: rows.length === pageSize };
-}
+};
 
 /** Paginated listings for grid view — fetches 24 per page, server-side filtering */
 export const PAGE_SIZE = 24;
 
-export function useListingsPaginated(
+export const useListingsPaginated = (
   filters?: ListingsFilters,
   options?: { enabled?: boolean },
-) {
+) => {
   return useInfiniteQuery({
     queryKey: ["listings-paginated", filters],
     queryFn: ({ pageParam = 1 }) => fetchListingsPage(filters, pageParam, PAGE_SIZE),
@@ -219,15 +219,15 @@ export function useListingsPaginated(
     enabled: options?.enabled ?? true,
     staleTime: filters?.owner_id ? USER_SCOPED_QUERY_STALE_TIME : CATALOG_STATIC_QUERY_STALE_TIME,
   });
-}
+};
 
 /** All listings for map/split view — single bounded fetch, max 200 rows. Set enabled: false to skip. */
 export const MAP_FETCH_LIMIT = 200;
 
-export function useListings(
+export const useListings = (
   filters?: ListingsFilters,
   options?: { enabled?: boolean }
-) {
+) => {
   return useQuery({
     queryKey: ["listings", filters],
     enabled: options?.enabled ?? true,
@@ -258,7 +258,7 @@ export function useListings(
       })) as ListingWithJoins[];
     },
   });
-}
+};
 
 type UseListingOptions = {
   initialData?: ListingWithJoins | null;
@@ -342,7 +342,7 @@ export const useOwnerProStatus = (listingId?: string, ownerId?: string | null) =
  * Uses an Edge Function wrapper so public page views do not require browser
  * execute grants on SECURITY DEFINER database functions.
  */
-export function useTrackListingView() {
+export const useTrackListingView = () => {
   return useMutation({
     mutationFn: async (listingId: string) => {
       const sessionKey = `viewed_${listingId}`;
@@ -354,9 +354,9 @@ export function useTrackListingView() {
       }).catch((e: unknown) => logger.warn("View tracking failed:", e));
     },
   });
-}
+};
 
-export function useCreateListing() {
+export const useCreateListing = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
@@ -392,9 +392,9 @@ export function useCreateListing() {
       toast.error(msg ?? err.message);
     },
   });
-}
+};
 
-export function useUpdateListing() {
+export const useUpdateListing = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   return useMutation({
@@ -418,9 +418,9 @@ export function useUpdateListing() {
     },
     onError: (err: Error) => toast.error(err.message),
   });
-}
+};
 
-export function useDeleteListing() {
+export const useDeleteListing = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   return useMutation({
@@ -436,10 +436,10 @@ export function useDeleteListing() {
     },
     onError: (err: Error) => toast.error(err.message),
   });
-}
+};
 
 /** Shorthand: returns all listings owned by the currently logged-in user. */
-export function useMyListings() {
+export const useMyListings = () => {
   const { user } = useAuth();
   return useListings({ owner_id: user?.id });
-}
+};
