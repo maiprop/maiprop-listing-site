@@ -203,7 +203,9 @@ export default function AuctionDetail() {
   const [walkScore, setWalkScore] = useState<number | null>(null);
 
   const auctionFromState = state?.auction ?? null;
-  const { data: allAuctions = [], isLoading: auctionsLoading } = useAuctionListings();
+  const { data: allAuctions = [], isLoading: auctionsLoading } = useAuctionListings(undefined, {
+    enabled: !auctionFromState,
+  });
   const auctionFromCache = useMemo(
     () => allAuctions.find((auction) => auction.id === id) ?? null,
     [allAuctions, id],

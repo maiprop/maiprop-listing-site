@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Helmet } from "react-helmet-async";
 import { useModal } from "@/hooks/useModal";
 import { supabase as supabaseClient } from "@/integrations/supabase/client";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import {
   ChevronRight,
   ExternalLink,
@@ -16,7 +16,7 @@ import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { PropertyCard } from "@/components/PropertyCard";
 import ViewingDialog from "@/components/ViewingDialog";
-import { useListing, useTrackListingView } from "@/hooks/useListings";
+import { useListing, useOwnerProStatus, useTrackListingView } from "@/hooks/useListings";
 import type { ListingWithJoins } from "@/hooks/useListings";
 import { useSimilarListings } from "@/hooks/useSimilarListings";
 import { useFavorites, useToggleFavorite } from "@/hooks/useFavorites";
@@ -50,13 +50,20 @@ import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
 export default function PropertyDetail() {
   const { id } = useParams<{id: string;}>();
   const navigate = useNavigate();
+  const { state } = useLocation() as { state?: { listing?: ListingWithJoins } };
   const { t } = useTranslation();
   const { user, profile } = useAuth();
   const { isPro } = useSubscription();
 
-  const { data: dbListing, isLoading, isError } = useListing(id || "");
+  const routeListing = state?.listing;
+  const listingFromState = routeListing?.id === id ? routeListing : undefined;
+  const { data: dbListing, isLoading, isError } = useListing(id || "", {
+    initialData: listingFromState,
+  });
   const { mutate: trackViewMutate } = useTrackListingView();
-  const ownerIsPro = !!(dbListing as ListingWithJoins | null)?.ownerIsPro;
+  const ownerId = (dbListing as ListingWithJoins | null)?.owner_id;
+  const { data: ownerProStatus = false } = useOwnerProStatus(dbListing?.id, ownerId);
+  const ownerIsPro = ownerProStatus || !!(dbListing as ListingWithJoins | null)?.ownerIsPro;
   // Video viewing: free for buyers, Pro required for all other roles
   const isBuyer = getParticipantTypeFromProfile(profile) === "buyer";
   const canVideoView = isPro || isBuyer;

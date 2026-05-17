@@ -260,7 +260,22 @@ export function useListings(
   });
 }
 
-export function useListing(id: string) {
+type UseListingOptions = {
+  initialData?: ListingWithJoins | null;
+};
+
+const normalizeListingWithJoins = (listing: Database["public"]["Tables"]["listings"]["Row"] & Partial<ListingWithJoins>): ListingWithJoins => {
+  const profiles = listing.profiles ?? null;
+  return {
+    ...listing,
+    listing_images: listing.listing_images ?? [],
+    profiles,
+    ownerIsPro: listing.ownerIsPro ?? false,
+    ownerParticipantType: listing.ownerParticipantType ?? getOwnerParticipantType(profiles),
+  } as ListingWithJoins;
+};
+
+export function useListing(id: string, options: UseListingOptions = {}) {
   return useQuery({
     queryKey: ["listing", id],
     queryFn: async () => {
@@ -275,22 +290,18 @@ export function useListing(id: string) {
       // PGRST116 (no rows) now handled by maybeSingle() — only real errors thrown
       if (error) throw error;
       if (!data) return null;
-      // Fetch owner profile and Pro status (Pro owners can receive messages and calendar).
-      // Pro status is resolved server-side so subscription truth sources do not
-      // need direct browser RPC access.
+      // Fetch owner profile only; Pro status is resolved in a separate query so
+      // detail pages do not wait on an Edge Function before first paint.
       let profiles = null;
-      let ownerIsPro = false;
       let ownerParticipantType: "agent" | "seller" | null = null;
       if (data.owner_id) {
         try {
-          const [{ data: profilePublic }, isProRpc] = await Promise.all([
-            supabase.from("profiles_public").select("user_id, display_name, avatar_url, role").eq("user_id", data.owner_id).maybeSingle(),
-            supabase.functions.invoke("owner-pro-status", {
-              body: { listingId: data.id },
-            }),
-          ]);
+          const { data: profilePublic } = await supabase
+            .from("profiles_public")
+            .select("user_id, display_name, avatar_url, role")
+            .eq("user_id", data.owner_id)
+            .maybeSingle();
           profiles = profilePublic ?? null;
-          ownerIsPro = (isProRpc.data as { isPro?: boolean } | null)?.isPro === true;
           if (profilePublic) {
             ownerParticipantType = getOwnerParticipantType(profilePublic as { role?: string; bio?: string | null });
           }
@@ -298,10 +309,27 @@ export function useListing(id: string) {
           // owner profile fetch is non-critical; listing still renders without it
         }
       }
-      return { ...data, profiles, ownerIsPro, ownerParticipantType } as ListingWithJoins;
+      return normalizeListingWithJoins({ ...data, profiles, ownerParticipantType });
     },
     enabled: !!id,
+    initialData: options.initialData ? normalizeListingWithJoins(options.initialData) : undefined,
     staleTime: CATALOG_STATIC_QUERY_STALE_TIME,
+  });
+}
+
+export function useOwnerProStatus(listingId?: string, ownerId?: string | null) {
+  return useQuery({
+    queryKey: ["owner-pro-status", listingId],
+    queryFn: async () => {
+      if (!listingId || !ownerId) return false;
+      const { data, error } = await supabase.functions.invoke("owner-pro-status", {
+        body: { listingId },
+      });
+      if (error) throw error;
+      return (data as { isPro?: boolean } | null)?.isPro === true;
+    },
+    enabled: !!listingId && !!ownerId,
+    staleTime: USER_SCOPED_QUERY_STALE_TIME,
   });
 }
 

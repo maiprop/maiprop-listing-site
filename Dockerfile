@@ -11,6 +11,8 @@
 ARG NODE_VERSION=20.19.5
 ARG DENO_VERSION=2.7.12
 
+FROM denoland/deno:bin-${DENO_VERSION} AS deno-bin
+
 FROM node:${NODE_VERSION}-slim AS base
 WORKDIR /app
 ENV HUSKY=0
@@ -31,21 +33,19 @@ RUN VITE_SUPABASE_URL="${APP_SUPABASE_URL}" \
     npm run build
 
 FROM deps AS dev
-ARG DENO_VERSION
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl unzip \
-    && curl -fsSL https://deno.land/install.sh | sh -s "v${DENO_VERSION}" \
-    && apt-get purge -y --auto-remove curl unzip \
-    && rm -rf /var/lib/apt/lists/*
-ENV DENO_INSTALL=/root/.deno
+COPY --from=deno-bin /deno /usr/local/bin/deno
+ENV DENO_INSTALL=/home/node/.deno
 ENV PATH="${DENO_INSTALL}/bin:${PATH}"
 COPY . .
+RUN chown -R node:node /app
+USER node
 EXPOSE 8080
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "8080"]
 
 FROM nginxinc/nginx-unprivileged:1.27-alpine AS production
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
+USER 101
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1

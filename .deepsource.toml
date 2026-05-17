@@ -4,6 +4,7 @@ exclude_patterns = [
   "src/pages/Dashboard.tsx",
   "src/components/Navbar.tsx",
   "src/components/property/PropertyReportCard.tsx",
+  "e2e/**",
   "src/test/**",
   "**/*.test.ts",
   "**/*.test.tsx",
@@ -15,6 +16,7 @@ exclude_patterns = [
 
 test_patterns = [
   "src/test/**",
+  "e2e/**",
   "**/*.test.ts",
   "**/*.test.tsx"
 ]

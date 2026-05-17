@@ -62,6 +62,8 @@ export interface Property {
   walkabilityScore?: number;
   safetyScore?: number;
   noiseScore?: number;
+  /** Raw DB listing row used to seed detail pages for instant card-to-detail opens. */
+  _raw?: unknown;
 }
 
 interface PropertyCardProps {
@@ -144,6 +146,14 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
     : (property.isPreSale || property.constructionStatus)
     ? `/new-build/${property.id}`
     : `/property/${property.id}`;
+  const detailState = property._raw && typeof property._raw === "object"
+    ? {
+        listing: {
+          ...(property._raw as Record<string, unknown>),
+          ownerParticipantType: property.ownerParticipantType ?? (property._raw as Record<string, unknown>).ownerParticipantType,
+        },
+      }
+    : undefined;
 
   const handleShare = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -209,7 +219,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
     const thumb = property.images?.[0];
     const thumbSrcSet = thumb ? getPropertyImageSrcSet(thumb) : undefined;
     return (
-      <Link to={detailPath} className="glass-card rounded-xl overflow-hidden flex gap-3 p-3 property-card group" data-testid="property-card">
+      <Link to={detailPath} state={detailState} className="glass-card rounded-xl overflow-hidden flex gap-3 p-3 property-card group" data-testid="property-card">
         <div className="relative w-24 h-20 rounded-lg overflow-hidden shrink-0 bg-muted">
           {thumb ? (
             <img
@@ -368,13 +378,14 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
       <div className="p-4 sm:p-4 flex flex-col flex-1 gap-3">
         {/* Title + location */}
         <div>
-          <Link to={detailPath}>
+          <Link to={detailPath} state={detailState}>
             <h3 className="font-display font-semibold text-[15px] sm:text-base text-foreground hover:text-primary transition-colors line-clamp-2 leading-snug">
               {property.title}
             </h3>
           </Link>
           <Link
             to={detailPath}
+            state={detailState}
             className="flex items-center gap-1 mt-1.5 text-muted-foreground text-xs group/addr hover:text-primary transition-colors w-fit max-w-full"
           >
             <MapPin className="w-3.5 h-3.5 sm:w-3 sm:h-3 shrink-0 text-primary/70 group-hover/addr:text-primary transition-colors" />
@@ -539,7 +550,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
           {/* Action row: detail CTA for special inventory + Share + Report */}
           <div className={`flex items-center gap-2 ${property.listingType === "auction" || property.listingType === "open_house" ? "" : "justify-end"}`}>
             {property.listingType === "open_house" && (
-              <Link to={detailPath} className="flex-1">
+              <Link to={detailPath} state={detailState} className="flex-1">
                 <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-primary text-primary-foreground font-semibold text-sm transition-all hover:opacity-90 hover:shadow-md active:scale-[0.98]">
                   <Calendar className="w-4 h-4" />
                   {t("propertyCard.actions.viewOpenHouse")}
@@ -547,7 +558,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
               </Link>
             )}
             {property.listingType === "auction" && (
-              <Link to={detailPath} className="flex-1">
+              <Link to={detailPath} state={detailState} className="flex-1">
                 <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-brand-auction text-white font-semibold text-sm transition-all hover:bg-brand-purple-dark hover:shadow-md active:scale-[0.98]">
                   <Gavel className="w-4 h-4" aria-hidden="true" />
                   {t("propertyCard.actions.viewAuction")}

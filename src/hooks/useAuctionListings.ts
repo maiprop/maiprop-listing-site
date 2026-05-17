@@ -7,6 +7,8 @@ const QUERY_TIMEOUT_MS = 15_000;
 const AUCTION_FETCH_LIMIT = 500;
 const PORTAL_AUCTION_FETCH_LIMIT = 600;
 const AUCTION_RANDOMIZATION_SALT = "maiprop-auctions-v1";
+const AUCTION_QUERY_STALE_TIME = 5 * 60_000;
+const AUCTION_QUERY_GC_TIME = 30 * 60_000;
 
 /**
  * Shape returned by the fetchAll helper. Columns are a Pick<> against the
@@ -166,10 +168,25 @@ const fetchFallbackAuctions = async (today: string, maxRows: number): Promise<Au
 
 const fetchAuctionListings = async (maxRows: number): Promise<AuctionListingRow[]> => {
   const today = getTodayDate();
+  let cachedRows: AuctionListingRow[] = [];
+
+  try {
+    cachedRows = await fetchFallbackAuctions(today, maxRows);
+    if (cachedRows.length > 0) {
+      return randomizeAuctionPresentation(cachedRows);
+    }
+  } catch (dbErr: unknown) {
+    try {
+      return randomizeAuctionPresentation(await fetchAuctionsFromOs(today, maxRows));
+    } catch (_osErr: unknown) {
+      throw dbErr;
+    }
+  }
+
   try {
     return randomizeAuctionPresentation(await fetchAuctionsFromOs(today, maxRows));
   } catch (_osErr: unknown) {
-    return randomizeAuctionPresentation(await fetchFallbackAuctions(today, maxRows));
+    return cachedRows;
   }
 };
 
@@ -204,11 +221,17 @@ const getAuctionQuery = (maxRows: number): Promise<AuctionListingRow[]> => {
   return withAuctionTimeout(fetchAuctionListings(maxRows));
 };
 
-export const useAuctionListings = (maxRows?: number) => {
+export type UseAuctionListingsOptions = {
+  enabled?: boolean;
+};
+
+export const useAuctionListings = (maxRows?: number, options: UseAuctionListingsOptions = {}) => {
   const fetchLimit = normalizeAuctionFetchLimit(maxRows);
   return useQuery({
     queryKey: ["auction-listings", fetchLimit],
     queryFn: () => getAuctionQuery(fetchLimit),
-    staleTime: 30_000, // 30s — auction status changes frequently
+    enabled: options.enabled ?? true,
+    staleTime: AUCTION_QUERY_STALE_TIME,
+    gcTime: AUCTION_QUERY_GC_TIME,
   });
 };

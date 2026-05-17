@@ -36,7 +36,7 @@ vi.mock("@/hooks/useContacts", () => ({
 
 import ContactsCRM from "@/components/ContactsCRM";
 
-const today = new Date().toISOString().slice(0, 10);
+const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
 
 const contact = (overrides: Record<string, unknown> = {}) => ({
   id: "contact-1",
