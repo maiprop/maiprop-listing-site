@@ -47,7 +47,7 @@ import { PropertyValuationLockedCard } from "@/components/property/PropertyValua
 import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
 
 // ─── Main component ──────────────────────────────────────────────────────────
-export default function PropertyDetail() {
+export default function PropertyDetail() { // skipcq: JS-R1005 - Detail route coordinates listing data, media, modals, and gated owner actions in one page shell.
   const { id } = useParams<{id: string;}>();
   const navigate = useNavigate();
   const { state } = useLocation() as { state?: { listing?: ListingWithJoins } };
@@ -63,7 +63,7 @@ export default function PropertyDetail() {
   const { mutate: trackViewMutate } = useTrackListingView();
   const ownerId = (dbListing as ListingWithJoins | null)?.owner_id;
   const { data: ownerProStatus = false } = useOwnerProStatus(dbListing?.id, ownerId);
-  const ownerIsPro = ownerProStatus || !!(dbListing as ListingWithJoins | null)?.ownerIsPro;
+  const ownerIsPro = ownerProStatus || Boolean((dbListing as ListingWithJoins | null)?.ownerIsPro);
   // Video viewing: free for buyers, Pro required for all other roles
   const isBuyer = getParticipantTypeFromProfile(profile) === "buyer";
   const canVideoView = isPro || isBuyer;

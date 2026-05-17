@@ -312,26 +312,29 @@ export function useListing(id: string, options: UseListingOptions = {}) {
       return normalizeListingWithJoins({ ...data, profiles, ownerParticipantType });
     },
     enabled: !!id,
-    initialData: options.initialData ? normalizeListingWithJoins(options.initialData) : undefined,
+    placeholderData: options.initialData ? normalizeListingWithJoins(options.initialData) : undefined,
     staleTime: CATALOG_STATIC_QUERY_STALE_TIME,
   });
 }
 
-export function useOwnerProStatus(listingId?: string, ownerId?: string | null) {
+export const useOwnerProStatus = (listingId?: string, ownerId?: string | null) => {
+  const hasListingId = Boolean(listingId);
+  const hasOwnerId = Boolean(ownerId);
+
   return useQuery({
-    queryKey: ["owner-pro-status", listingId],
+    queryKey: ["owner-pro-status", listingId, ownerId],
     queryFn: async () => {
-      if (!listingId || !ownerId) return false;
+      if (!hasListingId || !hasOwnerId) return false;
       const { data, error } = await supabase.functions.invoke("owner-pro-status", {
         body: { listingId },
       });
       if (error) throw error;
       return (data as { isPro?: boolean } | null)?.isPro === true;
     },
-    enabled: !!listingId && !!ownerId,
+    enabled: hasListingId && hasOwnerId,
     staleTime: USER_SCOPED_QUERY_STALE_TIME,
   });
-}
+};
 
 /**
  * Tracks a listing view — call from the detail page component, not inside a queryFn.
