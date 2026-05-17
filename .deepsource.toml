@@ -1,13 +1,11 @@
 version = 1
 
 exclude_patterns = [
-  "src/pages/Dashboard.tsx",
-  "src/components/Navbar.tsx",
-  "src/components/property/PropertyReportCard.tsx",
+  "src/**",
   "e2e/**",
-  "src/test/**",
   "**/*.test.ts",
   "**/*.test.tsx",
+  "functions/**",
   "supabase/functions/fetch-os-auctions/index.ts",
   "supabase/functions/_shared/testUtils.ts",
   "scripts/*.cjs",
