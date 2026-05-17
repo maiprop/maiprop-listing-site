@@ -118,6 +118,19 @@ describe("useSubscription", () => {
     expect(result.current.accessSource).toBe("stripe");
   });
 
+  it("does not grant Pro access for a non-developer product during developer use", async () => {
+    (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
+      subscription: { subscribed: true, productId: "prod_abc", subscriptionEnd: "2027-01-01", loading: false },
+      refreshSubscription: vi.fn(),
+      profile: { role: "developer", participant_type: "developer" },
+      user: { id: "u5" },
+    });
+    const { result } = renderHook(() => useSubscription(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.isPro).toBe(false);
+    expect(result.current.hasDeveloperPro).toBe(false);
+  });
+
   it("force_pro_access grants isPro", () => {
     (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
       subscription: { subscribed: false, productId: null, subscriptionEnd: null, loading: false },
