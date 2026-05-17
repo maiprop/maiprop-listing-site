@@ -39,7 +39,6 @@ export const BUDGETS_KB = {
   // react-day-picker, @hello-pangea — small UI companions.
   "vendor-ui-extra": 180,
   "vendor-charts": 650,
-  "vendor-motion": 180,
   "vendor-icons": 250,
   "vendor-mapbox": 1200,
   // Catch-all: any other chunk — inform but don't fail unless huge.

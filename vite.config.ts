@@ -50,7 +50,6 @@ export default defineConfig((_env) => ({
           // in the initial HTML modulepreload. Forcing them into a named chunk
           // causes clsx (a shared dep) to be statically imported into the entry
           // bundle, adding ~106 kB gzip to every page load unnecessarily.
-          if (id.includes("/framer-motion/")) return "vendor-motion";
           if (id.includes("/lucide-react/")) return "vendor-icons";
           if (
             id.includes("/react-router") ||
