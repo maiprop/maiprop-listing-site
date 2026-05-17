@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -111,10 +112,18 @@ interface RejectDialogProps {
 }
 
 function RejectDialog({ investorName, onConfirm, onCancel }: RejectDialogProps) {
+  const dialogRef = useFocusTrap<HTMLDivElement>({ onEscape: onCancel });
   const [reason, setReason] = useState("");
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-card border border-border rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Reject POF for ${investorName}`}
+        tabIndex={-1}
+        className="bg-card border border-border rounded-2xl w-full max-w-md shadow-2xl overflow-hidden"
+      >
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h3 className="font-semibold text-foreground">Reject POF — {investorName}</h3>
           <button onClick={onCancel} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground">

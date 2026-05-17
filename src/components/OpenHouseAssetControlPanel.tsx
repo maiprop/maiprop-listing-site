@@ -24,6 +24,7 @@ import {
 } from "@/hooks/useOpenHouseAssetControl";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 interface Props {
   listingId: string;
@@ -45,6 +46,10 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
   const [offersOpen, setOffersOpen] = useState(true);
   const [rejectTarget, setRejectTarget] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const rejectDialogRef = useFocusTrap<HTMLDivElement>({
+    active: Boolean(rejectTarget),
+    onEscape: () => setRejectTarget(null),
+  });
 
   const { user } = useAuth();
   const { data: settings, isLoading: _settingsLoading } = useOpenHouseSettings(listingId);
@@ -305,7 +310,14 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
       {/* Reject reason dialog */}
       {rejectTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-card border border-border rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+          <div
+            ref={rejectDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Rejection reason"
+            tabIndex={-1}
+            className="bg-card border border-border rounded-2xl w-full max-w-md shadow-2xl overflow-hidden"
+          >
             <div className="flex items-center justify-between px-6 py-4 border-b border-border">
               <h3 className="font-semibold text-foreground">Rejection Reason</h3>
               <button onClick={() => setRejectTarget(null)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground">

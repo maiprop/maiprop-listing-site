@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 import { logger } from "@/lib/logger";
 import { getOwnerParticipantType } from "@/lib/participantConfig";
+import { CATALOG_STATIC_QUERY_STALE_TIME, USER_SCOPED_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 
 /**
  * Minimal shape we need from a listings row to enrich it with profiles. The
@@ -216,6 +217,7 @@ export function useListingsPaginated(
       lastPage.hasMore ? allPages.length + 1 : undefined,
     initialPageParam: 1,
     enabled: options?.enabled ?? true,
+    staleTime: filters?.owner_id ? USER_SCOPED_QUERY_STALE_TIME : CATALOG_STATIC_QUERY_STALE_TIME,
   });
 }
 
@@ -229,6 +231,7 @@ export function useListings(
   return useQuery({
     queryKey: ["listings", filters],
     enabled: options?.enabled ?? true,
+    staleTime: filters?.owner_id ? USER_SCOPED_QUERY_STALE_TIME : CATALOG_STATIC_QUERY_STALE_TIME,
     queryFn: async () => {
       const limit = filters?.limit ?? MAP_FETCH_LIMIT;
       const { data, error } = await buildListingsQuery(filters, 0, limit);
@@ -298,6 +301,7 @@ export function useListing(id: string) {
       return { ...data, profiles, ownerIsPro, ownerParticipantType } as ListingWithJoins;
     },
     enabled: !!id,
+    staleTime: CATALOG_STATIC_QUERY_STALE_TIME,
   });
 }
 

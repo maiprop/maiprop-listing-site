@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { REALTIME_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 
 type ConversationCandidate = { id: string; listing_id: string | null };
 type StartConversationInput = { other_user_id: string; listing_id?: string };
@@ -172,6 +173,7 @@ export function useConversations() {
       }));
     },
     enabled: !!user,
+    staleTime: REALTIME_QUERY_STALE_TIME,
   });
 }
 
@@ -242,6 +244,7 @@ export function useMessages(conversation_id: string) {
       }));
     },
     enabled: !!conversation_id,
+    staleTime: REALTIME_QUERY_STALE_TIME,
   });
 }
 

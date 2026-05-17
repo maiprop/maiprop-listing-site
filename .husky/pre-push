@@ -1,0 +1,3 @@
+npm run check:secrets
+npm run typecheck
+npm test

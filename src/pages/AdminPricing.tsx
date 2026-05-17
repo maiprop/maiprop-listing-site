@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { isPlatformAdmin } from "@/lib/authUtils";
 import { SlidersHorizontal, Save, Plus, Loader2, Shield, Euro, Trash2, Sparkles, X as XIcon, CreditCard, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 type PricingConfig = {
   id: string;
@@ -223,6 +224,10 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
   const [stripeCreatingId, setStripeCreatingId] = useState<string | null>(null);
   const [stripeSyncing, setStripeSyncing] = useState(false);
   const [stripeSyncResult, setStripeSyncResult] = useState<{ summary: Record<string, number>; errors: string[] } | null>(null);
+  const addModalRef = useFocusTrap<HTMLDivElement>({
+    active: showAddModal,
+    onEscape: () => setShowAddModal(false),
+  });
 
   if (!embed && !isAdmin) {
     return (
@@ -584,7 +589,15 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
         {/* Add item modal: choose module + audience */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4" onClick={() => setShowAddModal(false)}>
-          <div className="glass-card rounded-2xl border border-border w-full max-w-md p-6 shadow-elevated space-y-4" onClick={e => e.stopPropagation()}>
+          <div
+            ref={addModalRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Add pricing item"
+            tabIndex={-1}
+            className="glass-card rounded-2xl border border-border w-full max-w-md p-6 shadow-elevated space-y-4"
+            onClick={e => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between">
               <h3 className="font-display font-semibold text-lg">Add pricing item</h3>
               <button className="p-1 rounded-lg text-muted-foreground hover:text-foreground" onClick={() => setShowAddModal(false)}>

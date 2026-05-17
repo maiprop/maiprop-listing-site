@@ -9,7 +9,7 @@
 | --- | --- | --- | --- |
 | 1 | Run live Supabase security/performance advisors. | Done | Advisors queried on active project `qvvicunqcrwpioqnvzxf` after live migrations through `20260507201245`. |
 | 2 | Produce table-by-table RLS access matrix. | Done | See `docs/RLS_ACCESS_MATRIX.md`. |
-| 3 | Document every public Edge Function auth model. | Done | See `docs/EDGE_FUNCTION_AUTH_AUDIT.md`. |
+| 3 | Document every public Edge Function auth model. | Done | See `docs/EDGE_FUNCTION_AUTH_RATIONALE.md`. |
 | 4 | Add owner filters to child-table mutations where possible. | Done | `project_units`, `project_leads`, `project_media`, `professional_services`, and `professional_availability` hooks now add client-side ownership preflights/payload checks. |
 | 5 | Fix or explain future-dated migrations. | Done | Added `npm run lint:migrations:chronology` plus `scripts/applied-future-migrations.json` because the future-dated migrations are already applied in the live project and cannot be safely renamed. |
 | 6 | Split large page components. | Started | Extracted shared listing compare-button UI into `ListingCompareButton`; larger page-section splits remain. |
@@ -26,7 +26,7 @@
 - Fixed: authenticated users can no longer execute the public SECURITY DEFINER role/quota helper RPCs directly; RLS policies now call private-schema helper copies.
 - Fixed: listing view tracking now uses one service-role-only atomic RPC with least-privilege invoker execution.
 - Fixed: Edge-only onboarding and platform-admin transfer RPCs now receive the verified caller explicitly instead of relying on `auth.uid()` in service-role calls.
-- **Accepted risk** (2026-05-10): Auth leaked password protection (HIBP) is disabled. The live project `qvvicunqcrwpioqnvzxf` is on the Supabase Free plan and HIBP is gated behind Pro+. Org-level decision is to **not upgrade for HIBP alone**. Mitigations in place: `password_min_length=8`, rate limiting on repeated failures via Supabase Auth defaults, all sensitive RPCs run via Edge Functions with rate limiting (see `docs/EDGE_FUNCTION_AUTH_AUDIT.md`). Re-evaluate when an unrelated business need pushes the org onto Pro.
+- **Accepted risk** (2026-05-10): Auth leaked password protection (HIBP) is disabled. The live project `qvvicunqcrwpioqnvzxf` is on the Supabase Free plan and HIBP is gated behind Pro+. Org-level decision is to **not upgrade for HIBP alone**. Mitigations in place: `password_min_length=8`, rate limiting on repeated failures via Supabase Auth defaults, all sensitive RPCs run via Edge Functions with rate limiting (see `docs/EDGE_FUNCTION_AUTH_RATIONALE.md`). Re-evaluate when an unrelated business need pushes the org onto Pro.
 
 ## Live Supabase Performance Advisor Findings
 

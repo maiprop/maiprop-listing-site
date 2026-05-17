@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { SignInForAI } from "@/components/SignInForAI";
 import { toast } from "sonner";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 const SUGGESTIONS = [
   "Quiet apartment near metro in Athens under 200k",
@@ -40,6 +41,7 @@ export function AISearchBar({ onFiltersApplied }: AISearchBarProps) {
   const [loading, setLoading] = useState(false);
   const [lastSummary, setLastSummary] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useFocusTrap<HTMLDivElement>({ active: open, onEscape: () => setOpen(false) });
 
   const handleSearch = async (q?: string) => {
     if (!user) return;
@@ -102,7 +104,14 @@ export function AISearchBar({ onFiltersApplied }: AISearchBarProps) {
       ) : (
         <div className="fixed inset-0 z-[70] flex items-start justify-center pt-20 px-4 bg-background/70 backdrop-blur-sm"
           onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
-          <div className="w-full max-w-xl bg-card border border-border rounded-2xl shadow-elevated overflow-hidden">
+          <div
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="AI property search"
+            tabIndex={-1}
+            className="w-full max-w-xl bg-card border border-border rounded-2xl shadow-elevated overflow-hidden"
+          >
             {/* Header */}
             <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-primary/5">
               <Sparkles className="w-5 h-5 text-primary shrink-0" />

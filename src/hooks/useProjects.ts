@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import type { TablesUpdate } from "@/integrations/supabase/types";
+import { USER_SCOPED_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function useProjects(ownerId?: string) {
@@ -20,6 +21,7 @@ export function useProjects(ownerId?: string) {
       return data || [];
     },
     enabled: !!user,
+    staleTime: USER_SCOPED_QUERY_STALE_TIME,
   });
 }
 
@@ -38,6 +40,7 @@ export function useProject(id: string | undefined) {
       return data;
     },
     enabled: !!id,
+    staleTime: USER_SCOPED_QUERY_STALE_TIME,
   });
 }
 

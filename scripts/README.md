@@ -1,43 +1,89 @@
-# Seed Scripts
+# Scripts
 
-## Mock Users (All Types)
+This directory contains release checks, inventory generators, seeders, and
+maintenance utilities. Prefer the `npm run ...` commands when they exist, so CI
+and local usage stay aligned.
 
-Creates **21 accounts** – 3 of each participant type – with cross-type interactions to test end-to-end flows.
+## Safety Notes
 
-### Types
+- Treat any script using `SUPABASE_SERVICE_ROLE_KEY` as database-mutating.
+- Seed and destructive scripts use `scripts/_seed-env.ts` and
+  `scripts/_prod-guard.ts`; they require a Supabase URL plus service-role key
+  and block production-looking hosts unless `I_KNOW_THIS_IS_PROD=yes` is set.
+- Do not paste service-role keys, webhook secrets, or provider keys into logs,
+  screenshots, PR descriptions, or chat.
+- Inventory and check scripts are generally read-only. The exception is an
+  explicit `--out` flag, which writes the generated report to the target path.
+- Run destructive maintenance scripts only against local, test, development, or
+  staging projects unless an incident commander explicitly approves production.
+
+## Checks and Inventories
+
+| Command or file | Purpose | Notes |
+| --- | --- | --- |
+| `npm run check:runtime` | Verifies Node, npm, and `packageManager` match the repo engines. | Run before debugging dependency or CI drift. |
+| `npm run check:secrets` | Scans tracked workspace text files for common committed secret/token patterns. | Runs in CI and pre-push; rotate any real value it flags before committing. |
+| `npm run check:bundle-size` | Checks built JS chunks in `dist/assets` against conservative size budgets. | Run after `npm run build`; fails on budget breaches and forbidden initial preloads. |
+| `npm run inventory:release` | Generates the release-safety inventory from functions, workflows, and env docs. | Read-only unless an output flag is added manually. |
+| `npm run check:release-safety` | Enforces release-safety invariants for CI. | Checks workflow coverage, public function posture, and documented env references. |
+| `npm run inventory:public-functions` | Regenerates `docs/public-edge-function-inventory.json`. | Use after changing `supabase/config.toml` or public Edge Function auth. |
+| `npm run check:public-functions` | Fails when a `verify_jwt=false` function is unclassified, missing source, missing required snippets, or missing tests. | Required before releasing Edge Function auth changes. |
+| `npm run check:supabase-advisor` | Fetches live Supabase Security and Performance Advisor lints through the Management API. | Requires `SUPABASE_ACCESS_TOKEN` and a project ref; writes JSON when `--out` is provided. |
+| `npm run check:supabase-types` | Checks generated Supabase types freshness. | Use after schema or migration changes. |
+| `npm run inventory:audit-coverage` | Generates audit coverage inventory data. | Pairs with audit remediation work. |
+| `npm run check:audit-coverage` | Enforces audit coverage plus the critical workflow proof test. | CI-oriented guard. |
+| `npm run lint:migrations` | Lints new migrations for idempotent SQL patterns. | New migrations must use safe re-run patterns. |
+| `npm run lint:migrations:chronology` | Adds migration chronology checks to the idempotency lint. | Use when adding or reordering migration files. |
+| `scripts/coverage-report.mjs` | Utility for coverage reporting. | Use alongside Vitest coverage output. |
+
+## Build, Performance, and Assets
+
+| Command or file | Purpose | Notes |
+| --- | --- | --- |
+| `npm run compress:images` | Compresses project image assets with Sharp. | Review resulting media diffs before committing. |
+| `scripts/lighthouse-auth.cjs` | Provides Lighthouse CI auth/session setup. | Requires the same staging credentials used by the Lighthouse workflow. |
+| `scripts/load-test/basic.js` | Basic k6 load-test script. | Run only against approved non-production targets unless production load testing is scheduled. |
+
+## Seed and Demo Data
+
+All seeders require migrations to be applied and a service-role key in the
+environment. They should be run against local, development, or staging projects.
+
+| Command or file | Purpose | Notes |
+| --- | --- | --- |
+| `npm run seed:users` | Creates 21 mock accounts across buyer, seller, investor, agent, institutional, developer, and professional roles. | Demo password is `Demo2025!`; also creates cross-role interactions. |
+| `npm run seed:listings` | Creates mock listings. | Uses the production guard and service-role key. |
+| `npm run seed:professionals` | Creates mock professional directory entries. | Useful for marketplace and consultation flows. |
+| `npm run seed:open-houses` | Creates mock open-house data. | Use after listings exist. |
+| `npm run seed:new-builds` | Creates mock new-build/project data. | Useful for developer and project-detail flows. |
+| `npm run seed:notifications` | Creates mock notification data. | Useful for notification UI testing. |
+| `npm run seed:listing-images` | Attaches listing images. | Review storage bucket and public URL settings first. |
+| `npm run seed:demo-accounts` | Creates curated demo accounts. | Keep credentials out of public docs if they differ from local defaults. |
+| `scripts/seed-production-listings.ts` | Seeds production-style listing data. | Requires explicit production approval and prod-guard override if used against production. |
+
+## Maintenance and Destructive Utilities
+
+| File | Purpose | Notes |
+| --- | --- | --- |
+| `scripts/delete-past-auctions.mjs` | Deletes or cleans up past auction data. | Destructive; confirm target project and backup status first. |
+| `scripts/wipe-all-listings.mjs` | Removes listing data. | Highly destructive; use only for reset scenarios with explicit approval. |
+| `scripts/suppress-any-legacy.mjs` | Legacy TypeScript cleanup helper. | Use only when intentionally suppressing legacy `any` debt. |
+| `scripts/_seed-env.ts` | Shared Supabase URL and service-role env resolver for seeders. | Fails fast when required env vars are missing. |
+| `scripts/_prod-guard.ts` / `scripts/_prod-guard.mjs` | Shared production safety guard. | Blocks known/likely production hosts unless explicitly overridden. |
+
+## Mock User Details
+
+`npm run seed:users` creates 3 accounts per role:
 
 | Type | Role | Count | Indices |
-|------|------|-------|---------|
-| Buyer | individual | 3 | 0–2 |
-| Seller | seller_landlord | 3 | 3–5 |
-| Investor | investor | 3 | 6–8 |
-| Agent | agent | 3 | 9–11 |
-| Institutional | institutional | 3 | 12–14 |
-| Developer | developer | 3 | 15–17 |
-| Professional | professional | 3 | 18–20 |
+| --- | --- | --- | --- |
+| Buyer | `individual` | 3 | 0-2 |
+| Seller | `seller_landlord` | 3 | 3-5 |
+| Investor | `investor` | 3 | 6-8 |
+| Agent | `agent` | 3 | 9-11 |
+| Institutional | `institutional` | 3 | 12-14 |
+| Developer | `developer` | 3 | 15-17 |
+| Professional | `professional` | 3 | 18-20 |
 
-### Interactions
-
-- **Listings**: agents (3), sellers (2), developer (1) – sale + rent
-- **Messages**: buyer↔agent, buyer↔seller, investor↔agent, institutional↔agent, investor↔agent
-- **Viewings**: buyers/investors/institutional request viewings on agent/seller listings
-- **Favorites**: buyers, investors, institutional save listings
-- **Contacts (CRM)**: agents have contacts from buyer/investor inquiries
-- **Professionals**: 3 in directory (architect, lawyer, valuer)
-- **Consultation requests**: buyers/investors request from professionals
-
-### Prerequisites
-
-- Supabase project with migrations applied
-- **Service role key** from Supabase Dashboard → Project Settings → API → `service_role`
-
-### Run
-
-```bash
-export SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
-npm run seed:users
-```
-
-### Login
-
-All accounts use password: **`Demo2025!`**
+It also seeds representative listings, messages, viewings, favorites, CRM
+contacts, professionals, and consultation requests.

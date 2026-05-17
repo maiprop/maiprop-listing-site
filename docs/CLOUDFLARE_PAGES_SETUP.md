@@ -155,7 +155,7 @@ Or use the dashboard: **Pages → project → Deployments → ⋯ → Rollback**
   `https://plausible.io/api/event`.
 - `docs/*.md` still mentions Netlify in operational runbooks
   (`PRODUCTION_CHECKLIST.md`, `STAGING_SETUP.md`, `SECRETS_ROTATION.md`,
-  `ENV_SETUP.md`, `AUDIT_RECONCILIATION.md`). Update when convenient.
+  `ENV_SETUP.md`, `archive/audits/AUDIT_RECONCILIATION.md`). Update when convenient.
 
 ## 8. Pre-launch site lock (passcode gate)
 

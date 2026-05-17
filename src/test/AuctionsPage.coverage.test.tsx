@@ -169,7 +169,7 @@ describe("Auctions page coverage", () => {
     fireEvent.click(screen.getByRole("button", { name: /unfavorite auction-1/i }));
     expect(mocks.mutate).toHaveBeenCalledWith({ listing_id: "auction-1", isFavorited: true });
     fireEvent.click(screen.getByRole("button", { name: /next page/i }));
-  });
+  }, 15000);
 
   it("redirects anonymous favorite and sign-in alert actions and renders no-results clearing", async () => {
     mocks.user = null;

@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { queryCache, mutationCache } from "@/lib/queryObserver";
+import { DEFAULT_QUERY_GC_TIME, USER_SCOPED_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 import { BrowserRouter, Routes, Route, useLocation, Navigate, useParams } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { HelmetProvider } from "react-helmet-async";
@@ -63,8 +64,8 @@ const queryClient = new QueryClient({
     queries: {
       retry: 1,
       refetchOnWindowFocus: false,
-      staleTime: 5 * 60_000,
-      gcTime: 30 * 60_000,
+      staleTime: USER_SCOPED_QUERY_STALE_TIME,
+      gcTime: DEFAULT_QUERY_GC_TIME,
     },
   },
 });

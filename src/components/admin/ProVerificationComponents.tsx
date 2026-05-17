@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PROFESSIONAL_CATEGORY_COLORS as CATEGORY_COLORS } from "@/lib/statusColors";
 import { fmtDate } from "@/lib/format";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -101,13 +102,21 @@ export function VerificationModal({
   onRequestInfo,
   onReject,
 }: VerificationModalProps) {
+  const dialogRef = useFocusTrap<HTMLDivElement>({ onEscape: onClose });
   const [licenseNumber, setLicenseNumber] = useState(pro.license_number ?? "");
   const [notes, setNotes] = useState("");
   const catColor = CATEGORY_COLORS[pro.category] ?? "bg-muted text-muted-foreground border-border";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-card border border-border rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Review professional"
+        tabIndex={-1}
+        className="bg-card border border-border rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden"
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h2 className="font-display font-semibold text-foreground">Review Professional</h2>

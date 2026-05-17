@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import type { Database, TablesUpdate } from "@/integrations/supabase/types";
+import { USER_SCOPED_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 
 const DEAL_STAGES = ["new", "contacted", "qualified", "proposal", "negotiation", "won", "lost"] as const;
 
@@ -47,6 +48,7 @@ export function useContacts() {
       return data || [];
     },
     enabled: !!user,
+    staleTime: USER_SCOPED_QUERY_STALE_TIME,
   });
 }
 
@@ -150,6 +152,7 @@ export function useContactTasks(contactId: string | null) {
       return data || [];
     },
     enabled: !!contactId && !!user,
+    staleTime: USER_SCOPED_QUERY_STALE_TIME,
   });
 }
 

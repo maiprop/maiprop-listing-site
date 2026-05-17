@@ -146,7 +146,7 @@ The project has **two distinct backend function layers**. Use the table below to
 - [`docs/SECRETS_ROTATION.md`](./docs/SECRETS_ROTATION.md) — rotation cadence + incident procedure
 - [`docs/LIGHTHOUSE_CI_SETUP.md`](./docs/LIGHTHOUSE_CI_SETUP.md) — GitHub App install + token
 - [`docs/WEBHOOK_VERIFICATION.md`](./docs/WEBHOOK_VERIFICATION.md) — Stripe + MaiProp-OS HMAC contracts
-- [`docs/AUDIT_RECONCILIATION.md`](./docs/AUDIT_RECONCILIATION.md) — external audit findings vs. reality
+- [`docs/archive/audits/AUDIT_RECONCILIATION.md`](./docs/archive/audits/AUDIT_RECONCILIATION.md) — external audit findings vs. reality
 
 ### API reference
 

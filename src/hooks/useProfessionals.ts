@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Enums } from "@/integrations/supabase/types";
+import { CATALOG_STATIC_QUERY_STALE_TIME, USER_SCOPED_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function useProfessionals(category?: string) {
@@ -17,6 +18,7 @@ export function useProfessionals(category?: string) {
       if (error) throw error;
       return data || [];
     },
+    staleTime: CATALOG_STATIC_QUERY_STALE_TIME,
   });
 }
 
@@ -34,6 +36,7 @@ export function useProfessional(id: string) {
       return data;
     },
     enabled: !!id,
+    staleTime: CATALOG_STATIC_QUERY_STALE_TIME,
   });
 }
 
@@ -52,5 +55,6 @@ export function useProfessionalByUserId(userId: string | undefined) {
       return data;
     },
     enabled: !!userId,
+    staleTime: USER_SCOPED_QUERY_STALE_TIME,
   });
 }

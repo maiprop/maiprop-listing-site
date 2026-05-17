@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
+import { FAST_CHANGING_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 
 export type ConsultationRequestInput = {
   professional_id: string;
@@ -114,6 +115,7 @@ export function useMyConsultationRequests() {
       return data || [];
     },
     enabled: !!user,
+    staleTime: FAST_CHANGING_QUERY_STALE_TIME,
   });
 }
 

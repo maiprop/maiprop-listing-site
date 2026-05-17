@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import type { TablesUpdate } from "@/integrations/supabase/types";
+import { CATALOG_STATIC_QUERY_STALE_TIME, USER_SCOPED_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 
 export interface ProfessionalService {
   id: string;
@@ -53,6 +54,7 @@ export function useProfessionalServices(professionalId: string) {
       return (data || []) as ProfessionalService[];
     },
     enabled: !!professionalId,
+    staleTime: CATALOG_STATIC_QUERY_STALE_TIME,
   });
 }
 
@@ -70,6 +72,7 @@ export function useProfessionalAvailability(professionalId: string) {
       return (data || []) as ProfessionalAvailability[];
     },
     enabled: !!professionalId,
+    staleTime: CATALOG_STATIC_QUERY_STALE_TIME,
   });
 }
 
@@ -88,6 +91,7 @@ export function useMyProfessional() {
       return data;
     },
     enabled: !!user?.id,
+    staleTime: USER_SCOPED_QUERY_STALE_TIME,
   });
 }
 

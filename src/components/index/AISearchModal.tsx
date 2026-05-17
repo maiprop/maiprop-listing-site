@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { SignInForAI } from "@/components/SignInForAI";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 const AI_SUGGESTIONS = [
   "Quiet apartment near metro in Athens under 200k",
@@ -24,6 +25,7 @@ export function AISearchModal({
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useFocusTrap<HTMLDivElement>({ onEscape: onClose });
 
   useEffect(() => {
     setTimeout(() => inputRef.current?.focus(), 50);
@@ -52,7 +54,14 @@ export function AISearchModal({
       className="fixed inset-0 z-[70] flex items-start justify-center pt-20 px-4 bg-background/70 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="w-full max-w-xl bg-card border border-border rounded-2xl shadow-elevated overflow-hidden">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="AI property search"
+        tabIndex={-1}
+        className="w-full max-w-xl bg-card border border-border rounded-2xl shadow-elevated overflow-hidden"
+      >
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-primary/5">
           <Sparkles className="w-5 h-5 text-primary shrink-0" />
           <div className="flex-1">

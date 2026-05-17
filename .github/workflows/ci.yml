@@ -48,6 +48,9 @@ jobs:
       - name: Security audit (production deps only)
         run: npm audit --omit=dev --audit-level=high
 
+      - name: Check committed secrets
+        run: npm run check:secrets
+
       - name: Type-check & build
         run: npm run build
 
@@ -167,12 +170,26 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           RELEASE_SAFETY_SUPABASE_PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
 
+      - name: Check live Supabase advisors
+        if: >
+          (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'pull_request' &&
+            github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
+            github.event.pull_request.draft == false &&
+            github.actor != 'dependabot[bot]')
+        run: npm run check:supabase-advisor -- --fail-on-error --out supabase-advisor-summary.json
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ github.event_name == 'pull_request' && secrets.STAGING_SUPABASE_PROJECT_ID || secrets.VITE_SUPABASE_PROJECT_ID }}
+
       - name: Upload release safety inventory
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-safety-inventory
-          path: release-safety-inventory*.json
+          path: |
+            release-safety-inventory*.json
+            supabase-advisor-summary.json
           if-no-files-found: ignore
           retention-days: 14
 
@@ -499,7 +516,12 @@ jobs:
   lighthouse:
     name: Lighthouse CI
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: >
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' &&
+        github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
+        github.event.pull_request.draft == false &&
+        github.actor != 'dependabot[bot]')
     needs: [quality, release-safety]
     env:
       # Lighthouse audits protected app surfaces, so use staging Supabase and
@@ -541,20 +563,15 @@ jobs:
           missing=0
           for key in "${required[@]}"; do
             if [ -z "${!key}" ]; then
-              echo "::warning::Missing Lighthouse secret: $key"
+              echo "::error::Missing Lighthouse secret: $key"
               missing=1
             fi
           done
           if [ "$missing" -ne 0 ]; then
-            if [ "${GITHUB_EVENT_NAME}" = "push" ] && [ "${GITHUB_REF}" = "refs/heads/main" ]; then
-              echo "::error::Authenticated Lighthouse audit secrets are required on main."
-              exit 1
-            fi
-            echo "::warning::Authenticated Lighthouse audit skipped because required secrets are not configured."
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "::error::Authenticated Lighthouse audit secrets are required for same-repo PR and main gates."
+            exit 1
           fi
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
 
       - name: Build app
         if: steps.lighthouse-secrets.outputs.enabled == 'true'

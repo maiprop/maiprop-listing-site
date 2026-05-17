@@ -3,6 +3,7 @@ import type { TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { FAST_CHANGING_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 
 export const LEAD_STATUSES = ["new", "contacted", "qualified", "proposal", "negotiation", "won", "lost"] as const;
 export const LEAD_SOURCES = ["manual", "listing_inquiry", "consultation", "callback", "project_inquiry", "viewing", "message"] as const;
@@ -25,6 +26,7 @@ export function useLeads() {
       return data || [];
     },
     enabled: !!user,
+    staleTime: FAST_CHANGING_QUERY_STALE_TIME,
   });
 }
 
