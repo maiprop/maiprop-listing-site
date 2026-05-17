@@ -29,6 +29,8 @@ interface Env {
 const COOKIE_NAME = "maiprop_unlock";
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
 const UNLOCK_PATH = "/__unlock";
+const ASSET_PREFIX = "/assets/";
+const ASSET_FILE_EXTENSION_RE = /\.[a-z0-9]+$/i;
 
 async function sha256Hex(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
@@ -182,6 +184,32 @@ function loginPage(opts: { error?: string; redirectTo: string; status?: number }
   });
 }
 
+// skipcq: JS-0067 - Cloudflare Pages middleware helpers are intentionally module-scoped.
+function isAssetRequest(pathname: string): boolean {
+  return pathname.startsWith(ASSET_PREFIX) && ASSET_FILE_EXTENSION_RE.test(pathname);
+}
+
+// skipcq: JS-0067 - Cloudflare Pages middleware helpers are intentionally module-scoped.
+async function nextWithoutAssetHtmlFallback(
+  ctx: Parameters<PagesFunction<Env>>[0],
+  pathname: string,
+): Promise<Response> {
+  const response = await ctx.next();
+  if (!isAssetRequest(pathname)) return response;
+
+  const contentType = response.headers.get("Content-Type") ?? "";
+  if (!contentType.toLowerCase().includes("text/html")) return response;
+
+  return new Response("Asset not found", {
+    status: 404,
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+}
+
 /**
  * Canonical-host redirect table. Keys are hostnames that should 301 to the
  * value. EMPTY at the moment because the apparent canonical domain
@@ -216,7 +244,7 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
   // Feature-flag: if no passcode is configured for this environment, let
   // every request through. This keeps preview / staging / any non-locked
   // environment fully functional.
-  if (!password) return ctx.next();
+  if (!password) return nextWithoutAssetHtmlFallback(ctx, reqUrl.pathname);
 
   const url = new URL(ctx.request.url);
   const cookies = parseCookies(ctx.request.headers.get("Cookie"));
@@ -272,7 +300,7 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
   // Already unlocked — proceed to static assets / other Pages Functions.
   const cookieToken = cookies[COOKIE_NAME];
   if (cookieToken && constantTimeEqual(cookieToken, expectedToken)) {
-    return ctx.next();
+    return nextWithoutAssetHtmlFallback(ctx, url.pathname);
   }
 
   // Locked. Differentiate HTML navigations (show form) from asset/API
