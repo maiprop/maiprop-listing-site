@@ -3,6 +3,9 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
 import "./i18n";
+import { installChunkLoadRecovery } from "@/lib/chunkLoadRecovery";
+
+installChunkLoadRecovery();
 
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN as string | undefined;
 if (sentryDsn) {
