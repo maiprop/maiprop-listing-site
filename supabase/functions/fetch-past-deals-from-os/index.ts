@@ -89,8 +89,10 @@ Deno.serve(async (req) => {
     );
   }
 
-  // Pro subscription gate — this is a Pro-only feature
-  const proCheck = await requireProSubscription(user.id, corsHeaders);
+  // Pro subscription gate - auction deal history is an investor/institutional feature.
+  const proCheck = await requireProSubscription(user.id, corsHeaders, {
+    audience: ["investor", "institutional"],
+  });
   if (proCheck.errorResponse) return proCheck.errorResponse;
 
   try {

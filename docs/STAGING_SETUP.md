@@ -41,7 +41,8 @@ SUPABASE_SERVICE_ROLE_KEY=<staging-service-key> \
 ### 4. GitHub
 
 - Settings → Environments → create `staging` env. No reviewers required.
-- Add `staging` secrets: `SUPABASE_STAGING_DB_URL` (for CI migration validation).
+- Add `staging` secrets: `STAGING_SUPABASE_URL`, `STAGING_SUPABASE_PUBLISHABLE_KEY`, `STAGING_SUPABASE_PROJECT_ID`, `SUPABASE_ACCESS_TOKEN`, `SUPABASE_STAGING_DB_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and seeded E2E account credentials.
+- `SUPABASE_STAGING_DB_URL` is the percent-encoded Postgres connection string used by CI to run `supabase db push --db-url` before deploying staging edge functions.
 
 ## Deployment flow
 

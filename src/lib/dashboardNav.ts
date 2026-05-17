@@ -95,7 +95,7 @@ const NAV_FREE: Record<string, NavKey[]> = {
   seller:        ["overview", "listings", "saved", "messages", "viewings", "open-houses", "billing", "profile", "settings"],
   agent:         ["overview", "listings", "saved", "messages", "viewings", "auctions", "open-houses", "data-input", "billing", "profile", "settings"],
   developer:     ["overview", "listings", "open-houses", "messages", "billing", "profile", "settings"],
-  professional:  ["overview", "services", "messages", "billing", "profile", "settings"],
+  professional:  ["overview", "billing", "profile", "settings"],
   investor:      ["overview", "saved", "messages", "viewings", "auctions", "billing", "profile", "settings"],
   institutional: ["overview", "saved", "listings", "messages", "viewings", "auctions", "billing", "profile", "settings"],
   admin:         ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "services", "booking", "leads", "contacts", "projects", "portfolios", "data-input", "billing", "profile", "settings"],

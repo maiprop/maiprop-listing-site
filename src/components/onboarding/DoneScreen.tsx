@@ -13,6 +13,7 @@ export function DoneScreen({
   selectedServicesCount,
   actions,
   navigate,
+  autoRedirect = true,
   onUpgradeToPro,
   professionalProPrice,
 }: {
@@ -24,6 +25,7 @@ export function DoneScreen({
   selectedServicesCount: number;
   actions: { primary: { label: string; href: string }; subtitle: string };
   navigate: (href: string) => void;
+  autoRedirect?: boolean;
   onUpgradeToPro?: () => Promise<void>;
   professionalProPrice?: string;
 }) {
@@ -32,11 +34,12 @@ export function DoneScreen({
   const [redirectCancelled, setRedirectCancelled] = useState(false);
 
   useEffect(() => {
+    if (!autoRedirect) return;
     if (redirectCancelled) return;
     if (countdown <= 0) { navigate(actions.primary.href); return; }
     const t = setTimeout(() => setCountdown(c => c - 1), 1000);
     return () => clearTimeout(t);
-  }, [countdown, redirectCancelled, actions.primary.href, navigate]);
+  }, [autoRedirect, countdown, redirectCancelled, actions.primary.href, navigate]);
 
   return (
     <div className="text-center py-4">
@@ -84,14 +87,14 @@ export function DoneScreen({
       >
         <ArrowRight className="w-4 h-4 mr-2" />
         {actions.primary.label}
-        {!redirectCancelled && countdown > 0 && (
+        {autoRedirect && !redirectCancelled && countdown > 0 && (
           <span className="ml-auto text-[11px] opacity-70 font-normal tabular-nums">
             {countdown}s
           </span>
         )}
       </Button>
 
-      {!redirectCancelled && countdown > 0 && (
+      {autoRedirect && !redirectCancelled && countdown > 0 && (
         <p className="text-[11px] text-muted-foreground mb-3">
           Redirecting in {countdown}s ·{" "}
           <button

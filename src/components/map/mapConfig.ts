@@ -67,12 +67,6 @@ export function buildGeoJSON(listings: MapListing[]) {
         listingType: l.listingType || "sale",
         colour: typeColour(l.listingType),
         label: priceLabel(l.price),
-        title: l.title,
-        sqm: l.sqm,
-        bedrooms: l.bedrooms ?? null,
-        bathrooms: l.bathrooms ?? null,
-        images: JSON.stringify(l.images ?? []),
-        city: l.city,
       },
       geometry: {
         type: "Point" as const,

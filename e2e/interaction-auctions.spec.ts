@@ -17,19 +17,16 @@
  */
 import { test, expect, type Page, type Browser } from "@playwright/test";
 import { getBaseURL } from "./helpers/baseURL";
+import { demoAccounts, demoPasswords, seededDemoAccountsEnabled } from "./helpers/demoAccounts";
 
 // ─── Credentials ─────────────────────────────────────────────────────────────
 
-const PW = process.env.E2E_DEMO_PASSWORD ?? "";
-
-const BUYER_EMAIL                 = process.env.E2E_BUYER_EMAIL                  ?? "";
-const INVESTOR_PRIVATE_EMAIL      = process.env.E2E_INVESTOR_PRIVATE_EMAIL       ?? "";
-const INVESTOR_INSTITUTIONAL_EMAIL = process.env.E2E_INVESTOR_INSTITUTIONAL_EMAIL ?? "";
-const ADMIN_EMAIL                 = process.env.E2E_ADMIN_EMAIL                  ?? "";
-
-const hasCredentials =
-  BUYER_EMAIL !== "" && INVESTOR_PRIVATE_EMAIL !== "" &&
-  INVESTOR_INSTITUTIONAL_EMAIL !== "" && ADMIN_EMAIL !== "" && PW !== "";
+const PW = demoPasswords.default;
+const BUYER_EMAIL = demoAccounts.buyerFree;
+const INVESTOR_PRIVATE_EMAIL = demoAccounts.investorPrivate;
+const INVESTOR_INSTITUTIONAL_EMAIL = demoAccounts.investorInstitutional;
+const ADMIN_EMAIL = demoAccounts.admin;
+const hasSeededDemoAccounts = seededDemoAccountsEnabled();
 
 // ─── Sign-in helper ───────────────────────────────────────────────────────────
 
@@ -37,16 +34,53 @@ const hasCredentials =
  * Sign in with the given email/password and wait for the post-login redirect.
  * Accepts /dashboard, /onboarding, or /admin as valid landing URLs.
  */
-async function signIn(page: Page, email: string, password: string): Promise<void> {
-  await page.goto("/login");
-  await page.locator('input[type="email"], input[name="email"]').first().fill(email);
-  await page.locator('input[type="password"]').first().fill(password);
-  await page
-    .locator('button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")')
-    .first()
-    .click();
-  await page.waitForURL(/\/dashboard|\/onboarding|\/admin/, { timeout: 25_000 });
-}
+const signIn = async (
+  page: Page,
+  email: string,
+  password: string,
+): Promise<void> => {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await page.goto("/login");
+    await page
+      .locator('input[type="email"], input[name="email"]')
+      .first()
+      .fill(email);
+    await page.locator('input[type="password"]').first().fill(password);
+    await page
+      .locator(
+        'button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")',
+      )
+      .first()
+      .click();
+
+    try {
+      await page.waitForURL(/\/dashboard|\/onboarding|\/admin/, {
+        timeout: 25_000,
+      });
+      return;
+    } catch (error) {
+      const invalidCredentials = await page
+        .getByText("Invalid email or password", { exact: true })
+        .isVisible()
+        .catch(() => false);
+      if (attempt === 1 || invalidCredentials) throw error;
+      await page.waitForTimeout(1_000);
+    }
+  }
+};
+
+const expectPageShell = async (page: Page): Promise<void> => {
+  await expect(page.locator("main, #main-content, body").first()).toBeVisible({
+    timeout: 10_000,
+  });
+  await expect(
+    page
+      .locator(
+        "h1, h2, [role='heading'], article, [class*='card'], [class*='empty']",
+      )
+      .first(),
+  ).toBeVisible({ timeout: 15_000 });
+};
 
 // ─── PUBLIC — auction browsing ────────────────────────────────────────────────
 
@@ -72,7 +106,7 @@ test.describe("Public auction browsing", () => {
 
     const hasEmptyState = await page
       .locator(
-        "[class*='empty'], [class*='no-result'], .text-muted-foreground, [data-testid='empty-state']"
+        "[class*='empty'], [class*='no-result'], .text-muted-foreground, [data-testid='empty-state']",
       )
       .first()
       .isVisible()
@@ -88,14 +122,16 @@ test.describe("Public auction browsing", () => {
 
     const toggle = page
       .locator(
-        'button:has-text("Map"), button:has-text("List"), [aria-label*="map" i], [aria-label*="list" i], button svg'
+        'button:has-text("Map"), button:has-text("List"), [aria-label*="map" i], [aria-label*="list" i], button svg',
       )
       .first();
 
     await expect(toggle).toBeAttached({ timeout: 8_000 });
   });
 
-  test("clicking an auction card navigates to auction detail", async ({ page }) => {
+  test("clicking an auction card navigates to auction detail", async ({
+    page,
+  }) => {
     await page.goto("/auctions");
     await page.waitForLoadState("load", { timeout: 15_000 });
 
@@ -103,7 +139,9 @@ test.describe("Public auction browsing", () => {
       .locator("article, [class*='card'], [data-testid*='auction']")
       .first();
 
-    const cardExists = await card.isVisible({ timeout: 8_000 }).catch(() => false);
+    const cardExists = await card
+      .isVisible({ timeout: 8_000 })
+      .catch(() => false);
     if (!cardExists) {
       // No seeded auction data — nothing to click
       test.skip();
@@ -112,13 +150,17 @@ test.describe("Public auction browsing", () => {
 
     await card.click();
     // After navigation the navbar must still be present
-    await expect(page.locator("nav, header").first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("nav, header").first()).toBeVisible({
+      timeout: 10_000,
+    });
     // Body must have meaningful content (not a blank white screen)
     const bodyText = await page.locator("body").textContent();
     expect((bodyText ?? "").trim().length).toBeGreaterThan(10);
   });
 
-  test("auction detail page shows bid history or property info", async ({ page }) => {
+  test("auction detail page shows bid history or property info", async ({
+    page,
+  }) => {
     await page.goto("/auctions");
     await page.waitForLoadState("load", { timeout: 15_000 });
 
@@ -126,7 +168,9 @@ test.describe("Public auction browsing", () => {
       .locator("article, [class*='card'], [data-testid*='auction']")
       .first();
 
-    const cardExists = await card.isVisible({ timeout: 8_000 }).catch(() => false);
+    const cardExists = await card
+      .isVisible({ timeout: 8_000 })
+      .catch(() => false);
     if (!cardExists) {
       test.skip();
       return;
@@ -160,9 +204,8 @@ test.describe("Public auction browsing", () => {
 // ─── AUTHENTICATED — auction interaction ──────────────────────────────────────
 
 test.describe("Authenticated auction interaction", () => {
-  test.skip(!hasCredentials, "Requires seeded demo accounts");
-
-  test("buyer.pro can view auctions after sign-in", async ({ page }) => {
+  test.skip(!hasSeededDemoAccounts, "Seeded demo accounts require real Supabase config");
+  test("seeded buyer can view auctions after sign-in", async ({ page }) => {
     await signIn(page, BUYER_EMAIL, PW);
     await page.goto("/auctions");
     await page.waitForLoadState("load", { timeout: 15_000 });
@@ -195,7 +238,9 @@ test.describe("Authenticated auction interaction", () => {
       .locator("article, [class*='card'], [data-testid*='auction']")
       .first();
 
-    const cardExists = await card.isVisible({ timeout: 8_000 }).catch(() => false);
+    const cardExists = await card
+      .isVisible({ timeout: 8_000 })
+      .catch(() => false);
     if (cardExists) {
       await card.click();
       await page.waitForLoadState("load", { timeout: 15_000 });
@@ -213,10 +258,7 @@ test.describe("Authenticated auction interaction", () => {
     await signIn(page, INVESTOR_PRIVATE_EMAIL, PW);
     await page.goto("/investor-dashboard");
     await page.waitForLoadState("load", { timeout: 15_000 });
-
-    // Body must render content
-    const bodyText = await page.locator("body").textContent();
-    expect((bodyText ?? "").trim().length).toBeGreaterThan(10);
+    await expectPageShell(page);
 
     // Must NOT be blocked by the access gate
     const hasGate = await page
@@ -226,13 +268,13 @@ test.describe("Authenticated auction interaction", () => {
     expect(hasGate).toBe(false);
   });
 
-  test("investor.institutional accesses /investor-dashboard", async ({ page }) => {
+  test("investor.institutional accesses /investor-dashboard", async ({
+    page,
+  }) => {
     await signIn(page, INVESTOR_INSTITUTIONAL_EMAIL, PW);
     await page.goto("/investor-dashboard");
     await page.waitForLoadState("load", { timeout: 15_000 });
-
-    const bodyText = await page.locator("body").textContent();
-    expect((bodyText ?? "").trim().length).toBeGreaterThan(10);
+    await expectPageShell(page);
 
     const hasGate = await page
       .locator("text=Investor Access Required")
@@ -253,11 +295,13 @@ test.describe("Authenticated auction interaction", () => {
 
     const alertBtn = page
       .locator(
-        'button:has-text("Alert"), button:has-text("Set Alert"), button[aria-label*="alert" i], button svg'
+        'button:has-text("Alert"), button:has-text("Set Alert"), button[aria-label*="alert" i], button svg',
       )
       .first();
 
-    const btnAttached = await alertBtn.isVisible({ timeout: 8_000 }).catch(() => false);
+    const btnAttached = await alertBtn
+      .isVisible({ timeout: 8_000 })
+      .catch(() => false);
     if (!btnAttached) {
       // Button not present in current build — skip gracefully
       test.skip();
@@ -294,8 +338,7 @@ test.describe("Authenticated auction interaction", () => {
 // ─── MULTI-USER simultaneous browsing ────────────────────────────────────────
 
 test.describe("Multi-user simultaneous browsing", () => {
-  test.skip(!hasCredentials, "Requires seeded demo accounts");
-
+  test.skip(!hasSeededDemoAccounts, "Seeded demo accounts require real Supabase config");
   /**
    * Two browser contexts: one unauthenticated (buyer), one authenticated
    * (investor.private). Both navigate to /auctions simultaneously.
@@ -323,20 +366,22 @@ test.describe("Multi-user simultaneous browsing", () => {
 
       // Both navigate to /auctions simultaneously
       await Promise.all([
-        buyerPage.goto("/auctions").then(() =>
-          buyerPage.waitForLoadState("load", { timeout: 15_000 })
-        ),
-        investorPage.goto("/auctions").then(() =>
-          investorPage.waitForLoadState("load", { timeout: 15_000 })
-        ),
+        buyerPage
+          .goto("/auctions")
+          .then(() => buyerPage.waitForLoadState("load", { timeout: 15_000 })),
+        investorPage
+          .goto("/auctions")
+          .then(() =>
+            investorPage.waitForLoadState("load", { timeout: 15_000 }),
+          ),
       ]);
 
       // Both pages must render a heading
       await expect(
-        buyerPage.locator("h1, h2, [role='heading']").first()
+        buyerPage.locator("h1, h2, [role='heading']").first(),
       ).toBeVisible({ timeout: 10_000 });
       await expect(
-        investorPage.locator("h1, h2, [role='heading']").first()
+        investorPage.locator("h1, h2, [role='heading']").first(),
       ).toBeVisible({ timeout: 10_000 });
 
       // No JS errors in either context
@@ -373,7 +418,7 @@ test.describe("Multi-user simultaneous browsing", () => {
 
     invPrivatePage.on("pageerror", (err) => invPrivateErrors.push(err.message));
     invInstitutionalPage.on("pageerror", (err) =>
-      invInstitutionalErrors.push(err.message)
+      invInstitutionalErrors.push(err.message),
     );
     buyerPage.on("pageerror", (err) => buyerErrors.push(err.message));
 
@@ -389,25 +434,21 @@ test.describe("Multi-user simultaneous browsing", () => {
         invPrivatePage
           .goto("/investor-dashboard")
           .then(() =>
-            invPrivatePage.waitForLoadState("load", { timeout: 15_000 })
+            invPrivatePage.waitForLoadState("load", { timeout: 15_000 }),
           ),
         invInstitutionalPage
           .goto("/auctions")
           .then(() =>
-            invInstitutionalPage.waitForLoadState("load", { timeout: 15_000 })
+            invInstitutionalPage.waitForLoadState("load", { timeout: 15_000 }),
           ),
         buyerPage
           .goto("/auctions")
-          .then(() =>
-            buyerPage.waitForLoadState("load", { timeout: 15_000 })
-          ),
+          .then(() => buyerPage.waitForLoadState("load", { timeout: 15_000 })),
       ]);
 
-      // Each page must have substantive content
-      for (const p of [invPrivatePage, invInstitutionalPage, buyerPage]) {
-        const bodyText = await p.locator("body").textContent();
-        expect((bodyText ?? "").trim().length).toBeGreaterThan(10);
-      }
+      await expectPageShell(invPrivatePage);
+      await expectPageShell(invInstitutionalPage);
+      await expectPageShell(buyerPage);
 
       // No JS errors in any context
       expect(invPrivateErrors).toHaveLength(0);
@@ -451,24 +492,20 @@ test.describe("Multi-user simultaneous browsing", () => {
       await Promise.all([
         adminPage
           .goto("/admin")
-          .then(() =>
-            adminPage.waitForLoadState("load", { timeout: 15_000 })
-          ),
+          .then(() => adminPage.waitForLoadState("load", { timeout: 15_000 })),
         investorPage
           .goto("/investor-dashboard")
           .then(() =>
-            investorPage.waitForLoadState("load", { timeout: 15_000 })
+            investorPage.waitForLoadState("load", { timeout: 15_000 }),
           ),
       ]);
 
       // Admin: URL must still contain /admin (not redirected away) and page renders
       expect(adminPage.url()).toContain("/admin");
-      const adminBodyText = await adminPage.locator("body").textContent();
-      expect((adminBodyText ?? "").trim().length).toBeGreaterThan(10);
+      await expectPageShell(adminPage);
 
       // Investor: page renders without the access gate
-      const investorBodyText = await investorPage.locator("body").textContent();
-      expect((investorBodyText ?? "").trim().length).toBeGreaterThan(10);
+      await expectPageShell(investorPage);
 
       const hasGate = await investorPage
         .locator("text=Investor Access Required")

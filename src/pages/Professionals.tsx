@@ -244,10 +244,10 @@ export default function Professionals() {
   return (
     <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
       <Helmet>
-        <title>Find Property Professionals in Greece — maiProp</title>
+        <title>Find Property Professionals in Greece — mAI prop</title>
         <meta name="description" content="Connect with verified architects, lawyers, agents and contractors for your Greek property transaction." />
         <link rel="canonical" href="https://maiprop.co/professionals" />
-        <meta property="og:title" content="Property Professionals Directory — maiProp" />
+        <meta property="og:title" content="Property Professionals Directory — mAI prop" />
         <meta property="og:description" content="Verified architects, lawyers, agents and contractors across Greece." />
         <meta property="og:url" content="https://maiprop.co/professionals" />
         <script type="application/ld+json">{JSON.stringify({
@@ -256,7 +256,7 @@ export default function Professionals() {
           "name": "Greek Property Professionals Directory",
           "url": "https://maiprop.co/professionals",
           "description": "Verified architects, lawyers, agents and contractors across Greece.",
-          "provider": { "@type": "Organization", "name": "maiProp", "url": "https://maiprop.co" },
+          "provider": { "@type": "Organization", "name": "mAI prop", "url": "https://maiprop.co" },
         })}</script>
       </Helmet>
       <Navbar />
@@ -442,6 +442,8 @@ export default function Professionals() {
                 const rating = Number(pro.rating) || 0;
                 const specialties = pro.specialties || [];
 
+                const professionalIsPro = (pro.subscription_tier || "").toLowerCase() === "pro";
+
                 return (
                   <div
                     key={pro.id}
@@ -528,8 +530,10 @@ export default function Professionals() {
                         >
                           <Link to={`/professionals/${pro.id}`}>View Profile <ArrowRight className="w-3 h-3" /></Link>
                         </Button>
-                        <Button size="sm" variant="outline" className="border-border px-3" asChild aria-label={`Contact ${pro.display_name}`}>
-                          <Link to={`/professionals/${pro.id}?contact=1`}><MessageSquare className="w-3.5 h-3.5" /></Link>
+                        <Button size="sm" variant="outline" className="border-border px-3" asChild aria-label={`${professionalIsPro ? "Contact" : "View contact details for"} ${pro.display_name}`}>
+                          <Link to={professionalIsPro ? `/professionals/${pro.id}?contact=1` : `/professionals/${pro.id}`}>
+                            <MessageSquare className="w-3.5 h-3.5" />
+                          </Link>
                         </Button>
                       </div>
                     </div>);

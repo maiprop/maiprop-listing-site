@@ -10,17 +10,25 @@ import React from "react";
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: vi.fn((table: string) => {
+      const pricingRows = [
+        { key: "pro", audience: "participant", metadata: { stripe_product_id: "prod_participant" } },
+        { key: "agent_basic", audience: "agent", metadata: { stripe_product_id: "prod_abc" } },
+        { key: "developer_pro", audience: "developer", metadata: { stripe_product_id: "prod_dev" } },
+      ];
       const chain = {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         in: vi.fn().mockReturnThis(),
         limit: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn().mockResolvedValue({
-          data: table === "pro_product_ids" ? { product_id: "prod_abc" } : null,
+          data: null,
           error: null,
         }),
         single: vi.fn().mockResolvedValue({ data: null, error: null }),
       };
+      if (table === "pricing_configs") {
+        chain.eq = vi.fn().mockReturnValue(Promise.resolve({ data: pricingRows, error: null }));
+      }
       return chain;
     }),
   },
@@ -28,6 +36,8 @@ vi.mock("@/integrations/supabase/client", () => ({
 
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: vi.fn(),
+  profileRoleSwitchInProgress: (profile: { role_switch_in_progress_at?: string | null } | null) =>
+    Boolean(profile?.role_switch_in_progress_at),
 }));
 
 vi.mock("@/hooks/usePricingConfigs", () => ({
@@ -76,6 +86,7 @@ describe("useSubscription", () => {
     });
     const { result } = renderHook(() => useSubscription(), { wrapper });
     expect(result.current.isPro).toBe(false);
+    expect(result.current.accessSource).toBe("free");
   });
 
   it("Stripe subscriber gets isPro when the product is server-authorized", async () => {
@@ -88,9 +99,38 @@ describe("useSubscription", () => {
     const { result } = renderHook(() => useSubscription(), { wrapper });
     await waitFor(() => expect(result.current.isPro).toBe(true));
     expect(result.current.productId).toBe("prod_abc");
+    expect(result.current.accessSource).toBe("stripe");
+    expect(result.current.hasStripeBilling).toBe(true);
   });
 
-  it("does not grant developer modules for a non-developer Pro product", async () => {
+  it("rejects participant Pro as developer entitlement", async () => {
+    (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
+      subscription: { subscribed: true, productId: "prod_participant", subscriptionEnd: "2027-01-01", loading: false },
+      refreshSubscription: vi.fn(),
+      profile: { role: "developer", participant_type: "developer" },
+      user: { id: "u6" },
+    });
+    const { result } = renderHook(() => useSubscription(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.isPro).toBe(false);
+    expect(result.current.hasDeveloperPro).toBe(false);
+    expect(result.current.accessSource).toBe("free");
+  });
+
+  it("accepts developer Pro only for developer entitlement", async () => {
+    (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
+      subscription: { subscribed: true, productId: "prod_dev", subscriptionEnd: "2027-01-01", loading: false },
+      refreshSubscription: vi.fn(),
+      profile: { role: "developer", participant_type: "developer" },
+      user: { id: "u7" },
+    });
+    const { result } = renderHook(() => useSubscription(), { wrapper });
+    await waitFor(() => expect(result.current.hasDeveloperPro).toBe(true));
+    expect(result.current.isPro).toBe(true);
+    expect(result.current.accessSource).toBe("stripe");
+  });
+
+  it("does not grant Pro access for a non-developer product during developer use", async () => {
     (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
       subscription: { subscribed: true, productId: "prod_abc", subscriptionEnd: "2027-01-01", loading: false },
       refreshSubscription: vi.fn(),
@@ -98,7 +138,8 @@ describe("useSubscription", () => {
       user: { id: "u5" },
     });
     const { result } = renderHook(() => useSubscription(), { wrapper });
-    await waitFor(() => expect(result.current.isPro).toBe(true));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.isPro).toBe(false);
     expect(result.current.hasDeveloperPro).toBe(false);
   });
 
@@ -111,5 +152,23 @@ describe("useSubscription", () => {
     });
     const { result } = renderHook(() => useSubscription(), { wrapper });
     expect(result.current.isPro).toBe(true);
+    expect(result.current.accessSource).toBe("override");
+    expect(result.current.isManuallyManagedPlan).toBe(true);
+  });
+
+  it("does not inherit investor-pro entitlement during a role switch", async () => {
+    (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
+      subscription: { subscribed: false, productId: null, subscriptionEnd: null, loading: false },
+      refreshSubscription: vi.fn(),
+      profile: {
+        role: "investor",
+        participant_type: "investor",
+        role_switch_in_progress_at: "2026-05-14T10:00:00.000Z",
+      },
+      user: { id: "u5" },
+    });
+    const { result } = renderHook(() => useSubscription(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.isPro).toBe(false);
   });
 });

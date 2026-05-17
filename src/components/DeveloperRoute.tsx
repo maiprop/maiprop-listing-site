@@ -1,22 +1,30 @@
 import { Link } from "react-router-dom";
 import { Building2 } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
+import { profileRoleSwitchInProgress, useAuth } from "@/contexts/AuthContext";
 import { isPlatformAdmin } from "@/lib/authUtils";
+import { getExplicitParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { useSubscription } from "@/hooks/useSubscription";
 import { Button } from "@/components/ui/button";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 
-type GateStatus = "loading" | "missing-profile" | "admin" | "wrong-role" | "missing-plan" | "allowed";
+type GateStatus =
+  | "loading"
+  | "missing-profile"
+  | "admin"
+  | "wrong-role"
+  | "switching"
+  | "missing-plan"
+  | "allowed";
+type GateContext = {
+  profile: ReturnType<typeof useAuth>["profile"];
+  loading: boolean;
+  subLoading: boolean;
+  hasDeveloperPro: boolean;
+};
 type GateCheck = {
   status: GateStatus;
-  matches: (context: {
-    profile: ReturnType<typeof useAuth>["profile"];
-    loading: boolean;
-    subLoading: boolean;
-    hasDeveloperPro: boolean;
-  }) => boolean;
+  matches: (context: GateContext) => boolean;
 };
-
 type GateMessageProps = {
   tone: "muted" | "orange";
   title: string;
@@ -25,18 +33,31 @@ type GateMessageProps = {
   secondary: { to: string; label: string };
 };
 
-const gateMessageContent: Record<Exclude<GateStatus, "loading" | "admin" | "allowed">, GateMessageProps> = {
+const gateMessageContent: Record<
+  Exclude<GateStatus, "loading" | "admin" | "allowed">,
+  GateMessageProps
+> = {
   "missing-profile": {
     tone: "muted",
     title: "Profile Required",
-    message: "We could not load your account profile. Refresh your session or return to the dashboard before opening developer modules.",
+    message:
+      "We could not load your account profile. Refresh your session or return to the dashboard before opening developer modules.",
     primary: { to: "/dashboard", label: "Back to Dashboard" },
     secondary: { to: "/login", label: "Sign In Again" },
+  },
+  switching: {
+    tone: "orange",
+    title: "Developer Access Required",
+    message:
+      "Your account type change is still in progress. Finish onboarding before opening developer modules.",
+    primary: { to: "/dashboard/settings", label: "Switch Account Type" },
+    secondary: { to: "/dashboard", label: "Back to Dashboard" },
   },
   "wrong-role": {
     tone: "orange",
     title: "Developer Access Required",
-    message: "Projects and portfolios are available to Developer accounts. Switch your account type in Settings to use these modules.",
+    message:
+      "Projects and portfolios are available to Developer accounts. Switch your account type in Settings to use these modules.",
     primary: { to: "/dashboard/settings", label: "Switch Account Type" },
     secondary: { to: "/dashboard", label: "Back to Dashboard" },
   },
@@ -56,7 +77,8 @@ const LoadingGate = () => (
 );
 
 const GateIcon = ({ tone }: Pick<GateMessageProps, "tone">) => {
-  const iconClass = tone === "orange" ? "bg-orange-500/10 text-orange-500" : "bg-muted text-muted-foreground";
+  const iconClass =
+    tone === "orange" ? "bg-orange-500/10 text-orange-500" : "bg-muted text-muted-foreground";
 
   return (
     <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto ${iconClass}`}>
@@ -90,10 +112,16 @@ const GateMessage = ({ tone, title, message, primary, secondary }: GateMessagePr
 );
 
 const gateChecks: GateCheck[] = [
-  { status: "loading", matches: ({ loading, subLoading }) => [loading, subLoading].includes(true) },
+  { status: "loading", matches: ({ loading, subLoading }) => loading || subLoading },
   { status: "missing-profile", matches: ({ profile }) => profile === null },
   { status: "admin", matches: ({ profile }) => isPlatformAdmin(profile) },
-  { status: "wrong-role", matches: ({ profile }) => profile?.role !== "developer" },
+  { status: "switching", matches: ({ profile }) => profileRoleSwitchInProgress(profile) },
+  {
+    status: "wrong-role",
+    matches: ({ profile }) =>
+      profile?.role !== "developer" ||
+      getExplicitParticipantTypeFromProfile(profile) !== "developer",
+  },
   { status: "allowed", matches: ({ hasDeveloperPro }) => hasDeveloperPro },
 ];
 

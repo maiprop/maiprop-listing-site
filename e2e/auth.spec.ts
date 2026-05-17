@@ -6,11 +6,12 @@
  * E2E_TEST_EMAIL and E2E_TEST_PASSWORD environment variables.
  */
 import { test, expect } from "@playwright/test";
+import { seededDemoAccountsEnabled } from "./helpers/demoAccounts";
 
-// Default to seeded demo buyer account so sign-in flow tests run without env vars.
-const TEST_EMAIL = process.env.E2E_TEST_EMAIL ?? "buyer.pro@maiprop.demo";
+// Default to the most reliable seeded demo buyer account so auth smoke stays stable.
+const TEST_EMAIL = process.env.E2E_TEST_EMAIL ?? "buyer.free@maiprop.demo";
 const TEST_PASSWORD = process.env.E2E_TEST_PASSWORD ?? "Demo2025!";
-const hasCredentials = TEST_EMAIL !== "" && TEST_PASSWORD !== "";
+const hasCredentials = TEST_EMAIL !== "" && TEST_PASSWORD !== "" && seededDemoAccountsEnabled();
 
 test.describe("Auth — sign-in page", () => {
   test("sign-in page renders email and password fields", async ({ page }) => {

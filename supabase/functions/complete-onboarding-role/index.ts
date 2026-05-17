@@ -13,7 +13,13 @@ type OnboardingRequest = {
   phone?: unknown;
 };
 
-const ROLES = new Set(["buyer", "seller", "agent", "developer", "professional"]);
+const SELF_SERVICE_ROLES = new Set([
+  "buyer",
+  "seller",
+  "agent",
+  "developer",
+  "professional",
+]);
 
 const optionalString = (value: unknown, maxLength: number): string | null => {
   if (typeof value !== "string") return null;
@@ -41,8 +47,15 @@ const getServiceConfig = (): { supabaseUrl: string; serviceRoleKey: string } | n
 const parseOnboardingBody = (body: OnboardingRequest) => {
   const role = requiredString(body.role);
   const participantType = requiredString(body.participantType);
-  if (!ROLES.has(role) || participantType.length === 0 || participantType.length > 80) {
-    throw new AuthError("Invalid onboarding payload", 400);
+  if (
+    !SELF_SERVICE_ROLES.has(role) ||
+    participantType.length === 0 ||
+    participantType.length > 80
+  ) {
+    throw new AuthError("role_not_allowed", 400);
+  }
+  if (role !== participantType) {
+    throw new AuthError("role_participant_mismatch", 400);
   }
 
   return {

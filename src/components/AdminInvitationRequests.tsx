@@ -80,6 +80,29 @@ async function sendNotificationEmail(params: {
   }
 }
 
+async function reviewInvitationRequest(params: {
+  requestId: string;
+  decision: "approved" | "rejected";
+  tier?: string;
+  rejectionReason?: string;
+}) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("Admin session expired");
+
+  const { data, error } = await supabase.functions.invoke("admin-review-invitation", {
+    body: params,
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+
+  if (error) throw error;
+  return data as {
+    success: boolean;
+    result?: {
+      granted_role?: string | null;
+    };
+  };
+}
+
 export default function AdminInvitationRequests() {
   const { profile } = useAuth();
   const qc = useQueryClient();
@@ -116,44 +139,14 @@ export default function AdminInvitationRequests() {
     }
     setUpdating(req.id);
     try {
-      // 1. Mark invitation as approved
-      const { error: invErr } = await supabase
-        .from("invitation_requests")
-        .update({ status: "approved" })
-        .eq("id", req.id);
-      if (invErr) throw invErr;
-
-      // 2. Auto-create investor_subscriptions (upsert by user_id)
       const tier = getTier(req.id);
-      const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
-      const { error: subErr } = await supabase
-        .from("investor_subscriptions")
-        .upsert(
-          {
-            user_id: req.user_id,
-            tier,
-            status: "active",
-            started_at: new Date().toISOString(),
-            expires_at: expiresAt,
-          },
-          { onConflict: "user_id" }
-        );
-      if (subErr) throw subErr;
+      const review = await reviewInvitationRequest({
+        requestId: req.id,
+        decision: "approved",
+        tier,
+      });
+      const grantedRole = review.result?.granted_role ?? "investor";
 
-      // 3. Grant the matching role (admin bypasses RLS guard)
-      const roleForTier: Record<string, string> = {
-        private: "investor",
-        institutional: "institutional",
-        developer: "developer",
-      };
-      const grantedRole = roleForTier[tier] ?? "investor";
-      const { error: roleErr } = await supabase
-        .from("profiles")
-        .update({ role: grantedRole, participant_type: grantedRole } as never)
-        .eq("user_id", req.user_id);
-      if (roleErr) logger.warn("Role update failed (non-fatal):", roleErr.message);
-
-      // 4. Send email notification (fire-and-forget)
       sendNotificationEmail({
         type: "approved",
         email: req.email,
@@ -179,13 +172,12 @@ export default function AdminInvitationRequests() {
     setUpdating(req.id);
     const reason = getRejectionReason(req.id);
     try {
-      const { error } = await supabase
-        .from("invitation_requests")
-        .update({ status: "rejected" })
-        .eq("id", req.id);
-      if (error) throw error;
+      await reviewInvitationRequest({
+        requestId: req.id,
+        decision: "rejected",
+        rejectionReason: reason || undefined,
+      });
 
-      // Send rejection email (fire-and-forget)
       sendNotificationEmail({
         type: "rejected",
         email: req.email,
@@ -228,7 +220,7 @@ export default function AdminInvitationRequests() {
             <MailPlus className="w-5 h-5 text-primary" /> Invitation Requests
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Approve to automatically activate a 1-year investor subscription. Email notifications are sent automatically.
+            Approve to mark the applicant as vetted and send the payment next step. Deal-flow access activates only after payment is confirmed.
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-2 h-8 text-xs">
@@ -484,7 +476,7 @@ export default function AdminInvitationRequests() {
       <ConfirmDialog
         open={!!approveTarget}
         title="Approve investor access?"
-        description={`Grant full investor dashboard access to ${approveTarget?.full_name || approveTarget?.email || "this applicant"}?`}
+        description={`Approve ${approveTarget?.full_name || approveTarget?.email || "this applicant"} for payment setup? Full investor dashboard access starts only after payment is confirmed.`}
         confirmLabel="Approve"
         destructive={false}
         onConfirm={() => { if (approveTarget) approve(approveTarget); setApproveTarget(null); }}

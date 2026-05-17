@@ -26,7 +26,7 @@ AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.profiles
     WHERE user_id = _user_id
-    AND role IN ('agent'::public.user_role, 'institutional'::public.user_role, 'developer'::public.user_role)
+    AND role::text IN ('agent', 'institutional', 'developer')
   );
 $$;
 
@@ -41,7 +41,7 @@ AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.profiles
     WHERE user_id = _user_id
-    AND role IN ('investor'::public.user_role, 'institutional'::public.user_role)
+    AND role::text IN ('investor', 'institutional')
   );
 $$;
 
@@ -55,11 +55,11 @@ CREATE POLICY "Users can update their own profile"
     AND (
       role = (SELECT p.role FROM public.profiles p WHERE p.user_id = auth.uid())
       OR
-      ( (SELECT p.role FROM public.profiles p WHERE p.user_id = auth.uid()) = 'individual'::public.user_role
-        AND role IN ('seller_landlord'::public.user_role, 'professional'::public.user_role, 'investor'::public.user_role, 'institutional'::public.user_role, 'developer'::public.user_role) )
+      ( (SELECT p.role::text FROM public.profiles p WHERE p.user_id = auth.uid()) = 'individual'
+        AND role::text IN ('seller_landlord', 'professional', 'investor', 'institutional', 'developer') )
       OR
-      ( (SELECT p.role FROM public.profiles p WHERE p.user_id = auth.uid()) = 'seller_landlord'::public.user_role
-        AND role = 'individual'::public.user_role )
+      ( (SELECT p.role::text FROM public.profiles p WHERE p.user_id = auth.uid()) = 'seller_landlord'
+        AND role::text = 'individual' )
     )
   );
 
@@ -81,12 +81,12 @@ CREATE POLICY "Admins can insert investor subscriptions"
 -- Set their role to institutional or developer
 UPDATE public.profiles
 SET role = 'institutional'::public.user_role
-WHERE role = 'agent'::public.user_role AND bio LIKE '__type:institutional%';
+WHERE role::text = 'agent' AND bio LIKE '__type:institutional%';
 
 UPDATE public.profiles
 SET role = 'developer'::public.user_role
-WHERE role = 'agent'::public.user_role AND bio LIKE '__type:developer%';
+WHERE role::text = 'agent' AND bio LIKE '__type:developer%';
 
 UPDATE public.profiles
 SET role = 'investor'::public.user_role
-WHERE role = 'individual'::public.user_role AND bio LIKE '__type:investor%';
+WHERE role::text = 'individual' AND bio LIKE '__type:investor%';

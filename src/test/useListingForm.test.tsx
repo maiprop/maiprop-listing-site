@@ -96,7 +96,7 @@ beforeEach(() => {
 
 describe("useListingForm — initialisation + simple setters", () => {
   it("starts with the canonical initial form", () => {
-    const { result } = renderHook(() => useListingForm(), { wrapper: wrap });
+    const { result } = renderHook(() => useListingForm({ allowPreSale: true }), { wrapper: wrap });
     expect(result.current.form.listing_type).toBe("sale");
     expect(result.current.form.property_type).toBe("apartment");
     expect(result.current.form.title).toBe("");
@@ -105,13 +105,13 @@ describe("useListingForm — initialisation + simple setters", () => {
   });
 
   it("set() updates the requested field", () => {
-    const { result } = renderHook(() => useListingForm(), { wrapper: wrap });
+    const { result } = renderHook(() => useListingForm({ allowPreSale: true }), { wrapper: wrap });
     act(() => result.current.set("title", "Athens 3-bed"));
     expect(result.current.form.title).toBe("Athens 3-bed");
   });
 
   it("toggle() flips a boolean field", () => {
-    const { result } = renderHook(() => useListingForm(), { wrapper: wrap });
+    const { result } = renderHook(() => useListingForm({ allowPreSale: true }), { wrapper: wrap });
     act(() => result.current.toggle("has_parking"));
     expect(result.current.form.has_parking).toBe(true);
     act(() => result.current.toggle("has_parking"));
@@ -329,6 +329,19 @@ describe("useListingForm — handleSubmit", () => {
     expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/Open house date/));
   });
 
+  it("blocks submission when required fields are filled but the user is signed out", async () => {
+    useAuthMock.mockReturnValue({ user: null });
+    const { result } = renderHook(() => useListingForm(), { wrapper: wrap });
+    setBaseForm(result);
+
+    await act(async () => {
+      await result.current.handleSubmit();
+    });
+
+    expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/signed in/i));
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
   it("posts a residential listing and navigates to /property/:id", async () => {
     fromMock.mockReturnValueOnce({
       insert: vi.fn().mockReturnValue({
@@ -344,6 +357,38 @@ describe("useListingForm — handleSubmit", () => {
     });
     expect(toastMock.success).toHaveBeenCalledWith(expect.stringMatching(/published/));
     expect(navigateMock).toHaveBeenCalledWith("/property/L-1");
+  });
+
+  it("persists uploaded non-cover images after the listing insert succeeds", async () => {
+    const listingInsert = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { id: "L-images" }, error: null }),
+      }),
+    });
+    const imageInsert = vi.fn().mockResolvedValue({ error: null });
+    fromMock.mockImplementation((table: string) => {
+      if (table === "listings") return { insert: listingInsert };
+      if (table === "listing_images") return { insert: imageInsert };
+      throw new Error(`unexpected table ${table}`);
+    });
+    storageMock.getPublicUrl
+      .mockReturnValueOnce({ data: { publicUrl: "https://cdn/cover.webp" } })
+      .mockReturnValueOnce({ data: { publicUrl: "https://cdn/extra.webp" } });
+    const cover = new File([new Uint8Array(1000)], "cover.jpg", { type: "image/jpeg" });
+    const extra = new File([new Uint8Array(1000)], "extra.jpg", { type: "image/jpeg" });
+    const { result } = renderHook(() => useListingForm(), { wrapper: wrap });
+    await act(async () => {
+      await result.current.handleFilesSelected({ 0: cover, 1: extra, length: 2, item: () => null } as unknown as FileList);
+    });
+    setBaseForm(result);
+
+    await act(async () => {
+      await result.current.handleSubmit();
+    });
+
+    expect(imageInsert).toHaveBeenCalledWith([
+      { listing_id: "L-images", url: "https://cdn/extra.webp", sort_order: 1 },
+    ]);
   });
 
   it("posts a draft when asDraft=true (status=draft)", async () => {
@@ -370,13 +415,32 @@ describe("useListingForm — handleSubmit", () => {
         }),
       }),
     });
-    const { result } = renderHook(() => useListingForm(), { wrapper: wrap });
+    const { result } = renderHook(() => useListingForm({ allowPreSale: true }), { wrapper: wrap });
     setBaseForm(result);
     act(() => result.current.toggle("is_pre_sale"));
     await act(async () => {
       await result.current.handleSubmit();
     });
     expect(navigateMock).toHaveBeenCalledWith("/new-build/L-3");
+  });
+
+  it("forces stale pre-sale form state off when allowPreSale is false", async () => {
+    const insertMock = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { id: "L-regular" }, error: null }),
+      }),
+    });
+    fromMock.mockReturnValueOnce({ insert: insertMock });
+    const { result } = renderHook(() => useListingForm({ allowPreSale: false }), { wrapper: wrap });
+    setBaseForm(result);
+    act(() => result.current.toggle("is_pre_sale"));
+
+    await act(async () => {
+      await result.current.handleSubmit();
+    });
+
+    expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({ is_pre_sale: false }));
+    expect(navigateMock).toHaveBeenCalledWith("/property/L-regular");
   });
 
   it("routes an open_house listing to /open-house/:id", async () => {

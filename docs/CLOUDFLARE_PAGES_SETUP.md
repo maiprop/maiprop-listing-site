@@ -199,10 +199,9 @@ runtime picks up the new binding.
 ### Disable the lock
 
 - **CI-managed:** delete the GitHub secret (`gh secret delete SITE_LOCK_PASSWORD`)
-  *and* remove the `SITE_LOCK_PASSWORD` entry from the Pages project
-  (dashboard → Environment variables → Production → delete). Deleting the
-  GitHub secret alone will skip re-syncing but the previously-stored Pages
-  value stays active until you remove it on Cloudflare's side.
+  and re-run the production deploy. The CI sync step sends
+  `SITE_LOCK_PASSWORD: null` to Cloudflare Pages, which removes any previously
+  stored production binding before the new deployment is uploaded.
 - **Dashboard-only:** delete the variable on Cloudflare Pages and redeploy.
 
 ### Rotate the passcode

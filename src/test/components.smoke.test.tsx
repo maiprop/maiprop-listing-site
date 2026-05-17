@@ -99,6 +99,8 @@ vi.mock("@/contexts/AuthContext", () => ({
     refreshProfile: vi.fn().mockResolvedValue(undefined),
     refreshSubscription: vi.fn().mockResolvedValue(undefined),
   }),
+  profileRoleSwitchInProgress: (profile: { role_switch_in_progress_at?: string | null } | null) =>
+    Boolean(profile?.role_switch_in_progress_at),
   AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
@@ -219,6 +221,18 @@ const MOCK_PROFESSIONAL = {
 
 const noop = () => {};
 const asyncNoop = async () => {};
+
+const flushSmokeEffects = async () => {
+  await Promise.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+};
+
+async function expectRenderWithProvidersNotToThrow(ui: React.ReactElement) {
+  await act(async () => {
+    expect(() => renderWithProviders(ui)).not.toThrow();
+    await flushSmokeEffects();
+  });
+}
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
@@ -850,7 +864,16 @@ describe("Component smoke tests", () => {
   it("InvestorHeroHeader renders without throwing", async () => {
     const { InvestorHeroHeader } = await import("@/components/investor/InvestorHeroHeader");
     expect(() => renderWithProviders(
-      <InvestorHeroHeader status="active" expiresAt={null} onRefresh={noop} />
+      <InvestorHeroHeader
+        dealsCount={0}
+        totalValue={0}
+        avgDiscount="0"
+        avgRoi="0"
+        subscription={null}
+        subscribed={false}
+        showInviteCta={false}
+        onInviteClick={noop}
+      />
     )).not.toThrow();
   });
 
@@ -920,9 +943,9 @@ describe("Component smoke tests", () => {
 
   it("HeroSection renders without throwing", async () => {
     const { HeroSection } = await import("@/components/index/HeroSection");
-    expect(() => renderWithProviders(
+    await expectRenderWithProvidersNotToThrow(
       <Suspense fallback={<div />}><HeroSection /></Suspense>
-    )).not.toThrow();
+    );
   });
 
   it("BrowseByTypeSection renders without throwing", async () => {
@@ -938,6 +961,36 @@ describe("Component smoke tests", () => {
   it("HomepageAuctionsSection renders without throwing", async () => {
     const { HomepageAuctionsSection } = await import("@/components/index/HomepageAuctionsSection");
     expect(() => renderWithProviders(<HomepageAuctionsSection listings={[]} isLoading={false} />)).not.toThrow();
+    expect(() => renderWithProviders(
+      <HomepageAuctionsSection
+        isLoading={false}
+        listings={[{
+          id: "auction-1",
+          title: "Athens auction flat",
+          address: null,
+          city: "Athens",
+          price: "120000",
+          price_per_sqm: "2400",
+          bedrooms: 2,
+          bathrooms: 1,
+          sqm: "50",
+          floor: 3,
+          total_floors: 5,
+          year_built: 1998,
+          energy_class: "B",
+          listing_images: [{ sort_order: 1, url: "https://example.com/auction.jpg" }],
+          property_type: "apartment",
+          listing_type: "auction",
+          auction_date: "2026-06-01T10:00:00Z",
+          auction_starting_bid: "90000",
+          ai_score: 82,
+          views_count: 12,
+          tags: ["auction"],
+          is_pre_sale: true,
+          construction_status: "resale",
+        }]}
+      />
+    )).not.toThrow();
   });
 
   it("HomepageOpenHousesSection renders without throwing", async () => {
@@ -1029,9 +1082,9 @@ describe("Component smoke tests", () => {
 
   it("AdminPanel renders without throwing", async () => {
     const { default: AdminPanel } = await import("@/components/AdminPanel");
-    expect(() => renderWithProviders(
+    await expectRenderWithProvidersNotToThrow(
       <Suspense fallback={<div />}><AdminPanel /></Suspense>
-    )).not.toThrow();
+    );
   });
 
   it("AdminReports renders without throwing", async () => {
@@ -1071,12 +1124,12 @@ describe("Component smoke tests", () => {
 
   it("POFVerificationPanel renders without throwing", async () => {
     const { POFVerificationPanel } = await import("@/components/POFVerificationPanel");
-    expect(() => renderWithProviders(<POFVerificationPanel />)).not.toThrow();
+    await expectRenderWithProvidersNotToThrow(<POFVerificationPanel />);
   });
 
   it("ProfessionalVerificationPanel renders without throwing", async () => {
     const { ProfessionalVerificationPanel } = await import("@/components/ProfessionalVerificationPanel");
-    expect(() => renderWithProviders(<ProfessionalVerificationPanel />)).not.toThrow();
+    await expectRenderWithProvidersNotToThrow(<ProfessionalVerificationPanel />);
   });
 
   it("ProofOfFundsReviewer renders without throwing", async () => {

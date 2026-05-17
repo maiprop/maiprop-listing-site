@@ -1,7 +1,17 @@
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createLogger } from "../_shared/logger.ts";
+import {
+  makeRateLimiter,
+  tooManyRequestsResponse,
+} from "../_shared/rateLimit.ts";
 
 const log = createLogger("csp-report");
+const MAX_REPORT_BYTES = 16_384;
+const limiter = makeRateLimiter({
+  bucket: "csp-report",
+  maxRequests: 60,
+  windowMs: 60_000,
+});
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return handleCors(req);
@@ -11,8 +21,25 @@ Deno.serve(async (req) => {
     return new Response(null, { status: 405, headers });
   }
 
+  const ip =
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
+  if (await limiter.isLimited(ip)) return tooManyRequestsResponse(headers);
+
+  const contentLength = Number(req.headers.get("content-length") ?? 0);
+  if (contentLength > MAX_REPORT_BYTES) {
+    log.warn("csp_violation", { reason: "oversized report body" });
+    return new Response(null, { status: 413, headers });
+  }
+
   try {
-    const body = await req.json();
+    const rawBody = await req.text();
+    const rawBodyBytes = new TextEncoder().encode(rawBody).length;
+    if (rawBodyBytes > MAX_REPORT_BYTES) {
+      log.warn("csp_violation", { reason: "oversized report body" });
+      return new Response(null, { status: 413, headers });
+    }
+
+    const body = JSON.parse(rawBody);
     // Reporting API (report-to): body is an array of {type, url, body: {...}}
     // Legacy report-uri: body is {"csp-report": {...}}
     const reports = Array.isArray(body)

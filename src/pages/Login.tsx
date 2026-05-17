@@ -86,7 +86,7 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
-      <div className="flex-1 flex items-center justify-center pt-16 px-4">
+      <main id="main-content" className="flex-1 flex items-center justify-center pt-16 px-4">
         <div className="w-full max-w-sm">
           <div className="glass-card rounded-2xl p-8 border border-border">
 
@@ -96,10 +96,10 @@ export default function Login() {
                 <div className="text-center mb-6">
                   <img
                     src={logoImg}
-                    alt="maiProp"
+                    alt="mAI prop"
                     className="h-10 w-auto object-contain mx-auto mb-2"
                   />
-                  <p className="text-muted-foreground text-sm mt-1">{t("loginPage.title")}</p>
+                  <h1 className="text-muted-foreground text-sm mt-1 font-normal">{t("loginPage.title")}</h1>
                 </div>
 
                 {/* Google */}
@@ -192,7 +192,7 @@ export default function Login() {
             )}
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

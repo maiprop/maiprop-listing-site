@@ -12,7 +12,6 @@ interface Props {
   listingId: string;
   auctionDate: string | null | undefined;
   auctionStartingBid: number | null | undefined;
-  auctionCourt: string | null | undefined;
   ownershipDisplay: OwnershipDisplay | null;
   ownershipPct: number | null;
   ownershipStatus: string | null;
@@ -22,7 +21,6 @@ export function PropertyAuctionSection({
   listingId,
   auctionDate,
   auctionStartingBid,
-  auctionCourt,
   ownershipDisplay,
   ownershipPct,
   ownershipStatus,
@@ -70,13 +68,6 @@ export function PropertyAuctionSection({
                 </span>
               )}
             </div>
-          </div>
-        )}
-
-        {auctionCourt && (
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Court / Platform</p>
-            <p className="text-sm font-semibold">{auctionCourt}</p>
           </div>
         )}
 

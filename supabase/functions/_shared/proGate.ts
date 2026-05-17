@@ -1,19 +1,18 @@
 /**
- * proGate — server-side Pro subscription enforcement for edge functions.
+ * proGate - server-side Pro subscription enforcement for edge functions.
  *
- * AI endpoints (property-valuation, neighbourhood-report, fetch-past-deals-from-os)
- * are documented as Pro-only, but previously only had UI guards. This module
- * provides a server-side check that validates against actual subscription data.
- *
- * Usage:
- *   import { requireProSubscription } from "../_shared/proGate.ts";
- *
- *   const proCheck = await requireProSubscription(userId, corsHeaders);
- *   if (proCheck.errorResponse) return proCheck.errorResponse;
+ * AI endpoints and OS enrichment endpoints must not rely only on UI guards.
+ * This module validates paid access against active pricing_configs for the
+ * caller's current profile audience.
  */
 
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { createLogger } from "./logger.ts";
+import {
+  getProfilePricingAudience,
+  isAudienceAllowed,
+  resolveSubscriptionEntitlement,
+} from "./entitlements.ts";
 
 const log = createLogger("proGate");
 
@@ -35,101 +34,137 @@ export interface ProGateResult {
   errorResponse: Response | null;
 }
 
+export type ProGateOptions = {
+  audience?: string | string[];
+};
+
+type ProfileRow = {
+  role: string;
+  participant_type: string | null;
+  subscription_product_id: string | null;
+  force_pro_access: boolean | null;
+};
+
+const jsonError = (
+  message: string,
+  status: number,
+  corsHeaders: Record<string, string>,
+) =>
+  new Response(JSON.stringify({ error: message }), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+
+const unavailable = (corsHeaders: Record<string, string>) =>
+  jsonError(
+    "Subscription verification is temporarily unavailable.",
+    503,
+    corsHeaders,
+  );
+
+const proRequired = (corsHeaders: Record<string, string>) =>
+  jsonError(
+    "This feature requires a Pro subscription. Please upgrade your plan.",
+    403,
+    corsHeaders,
+  );
+
+async function getProfile(
+  client: SupabaseClient,
+  userId: string,
+): Promise<{ profile: ProfileRow | null; error: { message: string } | null }> {
+  // Use service role client to bypass RLS for subscription lookup.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (client as any)
+    .from("profiles")
+    .select("role, participant_type, subscription_product_id, force_pro_access")
+    .eq("user_id", userId)
+    .maybeSingle() as {
+      data: ProfileRow | null;
+      error: { message: string } | null;
+    };
+  return { profile: data, error };
+}
+
+async function hasActiveInvestorSubscription(
+  client: SupabaseClient,
+  userId: string,
+): Promise<boolean> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = await (client as any)
+    .from("investor_subscriptions")
+    .select("id")
+    .eq("user_id", userId)
+    .in("status", ["active", "trial"])
+    .limit(1)
+    .maybeSingle() as { data: { id: string } | null; error: unknown };
+  return Boolean(data);
+}
+
 /**
- * Checks whether the given user has an active Pro subscription by joining
- * profiles.subscription_product_id against the pro_product_ids table,
- * or by checking force_pro_access / admin role.
- *
- * Returns `{ allowed: true, errorResponse: null }` if the user is Pro.
- * Returns a 403 Response if not.
- *
- * Fails OPEN if Supabase is unreachable (service degradation is
- * preferable to a hard outage for paying users).
+ * Returns `{ allowed: true, errorResponse: null }` for a valid paid entitlement.
+ * Returns 403 for known non-Pro callers and 503 when entitlement lookup cannot
+ * be trusted. Authorization failures are fail-closed.
  */
 export async function requireProSubscription(
   userId: string,
   corsHeaders: Record<string, string>,
+  options: ProGateOptions = {},
 ): Promise<ProGateResult> {
   const client = getServiceClient();
   if (!client) {
-    log.warn("no SUPABASE_URL/SERVICE_ROLE_KEY — failing open");
-    return { allowed: true, errorResponse: null };
+    log.error("no SUPABASE_URL/SERVICE_ROLE_KEY - failing closed");
+    return { allowed: false, errorResponse: unavailable(corsHeaders) };
   }
 
   try {
-    // Use service role client to bypass RLS for subscription lookup.
-    // Tables may not be in the generated types, so use narrow casts.
-    interface ProfileRow {
-      role: string;
-      subscription_product_id: string | null;
-      force_pro_access: boolean | null;
+    const { profile, error } = await getProfile(client, userId);
+    if (error) {
+      log.error("profile lookup failed - failing closed", {
+        error: error.message,
+      });
+      return { allowed: false, errorResponse: unavailable(corsHeaders) };
+    }
+    if (!profile) {
+      return { allowed: false, errorResponse: proRequired(corsHeaders) };
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: profile, error } = await (client as any)
-      .from("profiles")
-      .select("role, subscription_product_id, force_pro_access")
-      .eq("user_id", userId)
-      .single() as { data: ProfileRow | null; error: { message: string } | null };
-
-    if (error || !profile) {
-      log.warn("profile lookup failed — failing open", { error: error?.message ?? "not found" });
-      return { allowed: true, errorResponse: null };
-    }
-
-    // Admins always pass
     if (profile.role === "admin") {
       return { allowed: true, errorResponse: null };
     }
 
-    // force_pro_access override
-    if (profile.force_pro_access) {
+    const profileAudience = getProfilePricingAudience(profile);
+    const audienceAllowed = isAudienceAllowed(profileAudience, options.audience);
+
+    if (profile.force_pro_access && audienceAllowed) {
       return { allowed: true, errorResponse: null };
     }
 
-    // Validate subscription_product_id against pro_product_ids
     if (profile.subscription_product_id) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: proProduct } = await (client as any)
-        .from("pro_product_ids")
-        .select("product_id")
-        .eq("product_id", profile.subscription_product_id)
-        .single() as { data: { product_id: string } | null; error: unknown };
-
-      if (proProduct) {
+      const entitlement = await resolveSubscriptionEntitlement(
+        client,
+        userId,
+        { productId: profile.subscription_product_id },
+        options.audience,
+      );
+      if (entitlement) {
         return { allowed: true, errorResponse: null };
       }
     }
 
-    // Also check investor_subscriptions for active subscription
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: activeSub } = await (client as any)
-      .from("investor_subscriptions")
-      .select("id")
-      .eq("user_id", userId)
-      .in("status", ["active", "trial"])
-      .limit(1)
-      .maybeSingle() as { data: { id: string } | null; error: unknown };
-
-    if (activeSub) {
+    if (
+      (profileAudience === "investor" || profileAudience === "institutional") &&
+      audienceAllowed &&
+      await hasActiveInvestorSubscription(client, userId)
+    ) {
       return { allowed: true, errorResponse: null };
     }
 
-    // Not Pro — block access
-    return {
-      allowed: false,
-      errorResponse: new Response(
-        JSON.stringify({
-          error: "This feature requires a Pro subscription. Please upgrade your plan.",
-        }),
-        {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      ),
-    };
+    return { allowed: false, errorResponse: proRequired(corsHeaders) };
   } catch (err) {
-    log.warn("unexpected error — failing open", { error: err instanceof Error ? err.message : String(err) });
-    return { allowed: true, errorResponse: null };
+    log.error("unexpected entitlement error - failing closed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return { allowed: false, errorResponse: unavailable(corsHeaders) };
   }
 }

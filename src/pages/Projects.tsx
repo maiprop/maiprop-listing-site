@@ -160,7 +160,7 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground block mb-1.5">Αριθμός Οικοδομικής Άδειας (Building permit) *</label>
+                <label className="text-xs text-muted-foreground block mb-1.5">Building permit number *</label>
                 <input
                   value={newPermit}
                   onChange={(e) => setNewPermit(e.target.value)}

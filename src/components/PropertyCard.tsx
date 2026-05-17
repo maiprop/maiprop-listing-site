@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   MapPin, Bed, Bath, Square, Heart, Gavel, Flame,
   Eye, TrendingUp, Video, CheckCircle,
-  Home, Calendar, Layers, MessageCircle,
+  Home, Calendar, Layers,
   Share2, Flag, Crown, Clock,
 } from "lucide-react";
 import { getSubtypeLabel, type PropertyTypeKey } from "@/lib/propertyTypes";
@@ -225,7 +225,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
 
         {/* Badges top-left */}
-        <div className="absolute top-3 left-3 flex gap-1.5 flex-wrap max-w-[70%]">
+        <div className="absolute top-3 left-3 right-16 flex gap-1.5 flex-wrap">
           {countdown && (
             <span className={`text-xs font-bold px-2.5 py-1 rounded-full shadow-sm flex items-center gap-1 ${
               countdown.urgent ? "bg-destructive/90 text-white" : "bg-brand-gold text-background"
@@ -483,16 +483,8 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
               )}
             </div>
           )}
-          {/* Action row: Contact (non-auction/non-open_house) + Share + Report */}
-          <div className="flex items-center gap-2">
-            {property.listingType !== "auction" && property.listingType !== "open_house" && (
-              <Link to={detailPath} className="flex-1">
-                <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-primary text-primary-foreground font-semibold text-sm transition-all hover:opacity-90 hover:shadow-md active:scale-[0.98]">
-                  <MessageCircle className="w-4 h-4" />
-                  {t("propertyCard.actions.contactAgent")}
-                </button>
-              </Link>
-            )}
+          {/* Action row: detail CTA for special inventory + Share + Report */}
+          <div className={`flex items-center gap-2 ${property.listingType === "auction" || property.listingType === "open_house" ? "" : "justify-end"}`}>
             {property.listingType === "open_house" && (
               <Link to={detailPath} className="flex-1">
                 <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-primary text-primary-foreground font-semibold text-sm transition-all hover:opacity-90 hover:shadow-md active:scale-[0.98]">
@@ -503,8 +495,8 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
             )}
             {property.listingType === "auction" && (
               <Link to={detailPath} className="flex-1">
-                <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-brand-auction/80 text-white font-semibold text-sm transition-all hover:bg-brand-auction hover:shadow-md active:scale-[0.98]">
-                  <Gavel className="w-4 h-4" />
+                <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-brand-auction text-white font-semibold text-sm transition-all hover:bg-brand-purple-dark hover:shadow-md active:scale-[0.98]">
+                  <Gavel className="w-4 h-4" aria-hidden="true" />
                   {t("propertyCard.actions.viewAuction")}
                 </button>
               </Link>

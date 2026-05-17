@@ -2,17 +2,26 @@
   "name": "maiprop-listing-site",
   "description": "MaiProp — Greek real estate listing, auction, and investment platform (Vite + React 18 + Supabase).",
   "private": true,
-  "version": "1.7.0",
+  "version": "1.8.0",
   "license": "UNLICENSED",
   "homepage": "https://maiprop.co",
   "repository": {
     "type": "git",
     "url": "https://github.com/maiprop/maiprop-listing-site.git"
   },
+  "packageManager": "npm@10.8.2",
+  "engines": {
+    "node": ">=20.19.0 <21",
+    "npm": ">=10.8.0 <11"
+  },
   "type": "module",
   "overrides": {
     "tmp": "^0.2.4",
     "uuid": "^14.0.0"
+  },
+  "overridesRationale": {
+    "tmp": "@lhci/cli@0.15.1 pulls old tmp ranges through Lighthouse and inquirer/external-editor. Pin tmp above GHSA-52f5-9888-hmc6 until Lighthouse CI removes those transitive ranges.",
+    "uuid": "@lhci/cli@0.15.1 still declares uuid ^8.3.1. Pin to a supported uuid release because npm deprecates uuid@10 and below."
   },
   "scripts": {
     "dev": "vite",
@@ -27,6 +36,7 @@
     "seed:demo-accounts": "npx tsx scripts/seed-demo-accounts.ts",
     "db:push": "supabase db push",
     "api-docs:copy": "node -e \"const fs=require('fs');fs.mkdirSync('public/docs',{recursive:true});fs.copyFileSync('docs/api/edge-functions.openapi.yaml','public/docs/edge-functions.openapi.yaml')\"",
+    "check:runtime": "node scripts/check-runtime.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "prebuild": "npm run api-docs:copy && npm run typecheck",
     "build": "vite build",
@@ -38,9 +48,19 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:perf": "playwright test e2e/performance-gates.spec.ts --project=chromium",
+    "test:e2e:live-smoke": "playwright test e2e/live-critical-smoke.spec.ts --project=chromium",
     "test:e2e:ui": "playwright test --ui",
-    "test:deno": "deno test --allow-env --allow-net --allow-read supabase/functions/",
+    "test:deno": "deno test --allow-env --allow-net --allow-read --allow-write supabase/functions/",
     "check:bundle-size": "node scripts/check-bundle-size.mjs",
+    "inventory:release": "node scripts/release-safety-inventory.mjs",
+    "check:release-safety": "node scripts/release-safety-inventory.mjs --check",
+    "inventory:public-functions": "node scripts/public-function-inventory.cjs --out docs/public-edge-function-inventory.json",
+    "check:public-functions": "node scripts/public-function-inventory.cjs --check",
+    "check:supabase-types": "node scripts/check-supabase-types-freshness.cjs",
+    "inventory:audit-coverage": "node scripts/audit-coverage-inventory.mjs",
+    "check:audit-coverage": "node scripts/audit-coverage-inventory.mjs --check && vitest run src/test/criticalWorkflowProof.test.ts",
+    "test:audit-coverage": "npm run test:coverage && npm run inventory:audit-coverage && npm run check:audit-coverage",
     "lint:migrations": "node scripts/check-migration-idempotency.mjs",
     "lint:migrations:chronology": "node scripts/check-migration-idempotency.mjs --check-chronology",
     "lighthouse": "lhci autorun",
@@ -133,7 +153,7 @@
     "i18next-scanner": "^4.6.0",
     "jsdom": "^29.1.0",
     "postcss": "^8.5.14",
-    "rollup-plugin-visualizer": "^7.0.1",
+    "rollup-plugin-visualizer": "^6.0.3",
     "sharp": "^0.34.5",
     "supabase": "^2.98.1",
     "tailwindcss": "^3.4.17",

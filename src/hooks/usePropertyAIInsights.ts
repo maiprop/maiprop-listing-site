@@ -16,43 +16,20 @@ export interface AIInsightsData {
 export function usePropertyAIInsights(
   dbListing: ListingWithJoins | null | undefined,
   user: User | null,
-  id: string | undefined,
-  isPro: boolean,
+  _id: string | undefined,
+  _isPro: boolean,
 ) {
   const [aiInsightsData, setAiInsightsData] = useState<AIInsightsData | null>(null);
   const [aiInsightsLoading, setAiInsightsLoading] = useState(false);
   const [aiInsightsLoaded, setAiInsightsLoaded] = useState(false);
 
   useEffect(() => {
-    if (!dbListing || aiInsightsLoaded || !user || !isPro) return;
+    if (!dbListing || aiInsightsLoaded || !user) return;
     setAiInsightsLoaded(true);
     setAiInsightsLoading(true);
     const snapshot = dbListing;
-    const listingId = id ?? snapshot.id;
     const invokeValuation = async () => {
       try {
-        if (listingId) {
-          const { data: osRes } = await supabaseClient.functions.invoke("fetch-report-from-os", {
-            body: { listing_id: listingId, report_type: "valuation" },
-          });
-          if (
-            osRes?.ok &&
-            osRes.report != null &&
-            typeof osRes.report === "object" &&
-            typeof osRes.report.estimatedValue === "number"
-          ) {
-            const r = osRes.report as Record<string, unknown>;
-            setAiInsightsData({
-              vsMarket: typeof r.marketComparisonPct === "number" ? r.marketComparisonPct : 0,
-              rentalYield: typeof r.rentalYieldEstimate === "number" ? r.rentalYieldEstimate : 0,
-              estimatedValue: typeof r.estimatedValue === "number" ? r.estimatedValue : 0,
-              marketComparison: typeof r.marketComparison === "string" ? r.marketComparison : "at_market",
-              confidenceLabel: typeof r.confidenceLabel === "string" ? r.confidenceLabel : "Medium",
-            });
-            setAiInsightsLoading(false);
-            return;
-          }
-        }
         const { data, error: fnErr } = await supabaseClient.functions.invoke("property-valuation", {
           body: {
             title: snapshot.title,
@@ -103,7 +80,7 @@ export function usePropertyAIInsights(
       }
     };
     invokeValuation();
-  }, [dbListing, aiInsightsLoaded, user, id, isPro]);
+  }, [dbListing, aiInsightsLoaded, user]);
 
   return { aiInsightsData, aiInsightsLoading };
 }

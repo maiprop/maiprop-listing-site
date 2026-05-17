@@ -1,5 +1,5 @@
 /**
- * LegalDocumentModal — Greek property legal document template library with mock e-sign.
+ * LegalDocumentModal - Greek property legal document template library with mock e-sign.
  * Left panel: template list. Right panel: document preview + signature capture.
  */
 
@@ -28,7 +28,7 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 interface Props {
   open: boolean;
@@ -50,47 +50,47 @@ interface Template {
   description: string;
 }
 
-// ── Templates ────────────────────────────────────────────────────────────────
+// Templates
 
 const TEMPLATES: Template[] = [
   {
     id: "preliminary",
-    titleEl: "Î ÏÎ¿ÏƒÏÎ¼Ï†Ï‰Î½Î¿ Î ÏŽÎ»Î·ÏƒÎ·Ï‚",
+    titleEl: "Προσύμφωνο Πώλησης",
     titleEn: "Preliminary Purchase Agreement",
     tag: "Most common",
     description: "Binding pre-contract locking in price, terms, and completion timeline before the final notarial deed.",
   },
   {
     id: "final",
-    titleEl: "ÎŸÏÎ¹ÏƒÏ„Î¹ÎºÏŒ Î£Ï…Î¼Ï†Ï‰Î½Î·Ï„Î¹ÎºÏŒ",
+    titleEl: "Οριστικό Συμφωνητικό",
     titleEn: "Final Purchase Agreement",
     tag: "Notarial",
     description: "The definitive deed of sale executed before a Greek notary public, transferring legal title.",
   },
   {
     id: "rental",
-    titleEl: "ÎœÎ¹ÏƒÎ¸Ï‰Ï„Î®ÏÎ¹Î¿ Î£Ï…Î¼Î²ÏŒÎ»Î±Î¹Î¿",
+    titleEl: "Μισθωτήριο Συμβόλαιο",
     titleEn: "Rental Contract",
     tag: "Residential",
     description: "Standard lease agreement compliant with Greek Law 1703/1987 and recent amendments.",
   },
   {
     id: "poa",
-    titleEl: "Î Î»Î·ÏÎµÎ¾Î¿ÏÏƒÎ¹Î¿",
+    titleEl: "Πληρεξούσιο",
     titleEn: "Power of Attorney",
     tag: "Legal proxy",
     description: "Grants a representative authority to act on your behalf in property transactions.",
   },
   {
     id: "mou",
-    titleEl: "ÎœÎ½Î·Î¼ÏŒÎ½Î¹Î¿ Î£Ï…Î¼Ï†Ï‰Î½Î¯Î±Ï‚",
+    titleEl: "Μνημόνιο Συμφωνίας",
     titleEn: "Quick Sale MOU",
     tag: "Fast-track",
-    description: "Non-binding letter of intent for firesale or court auction acquisitions — agreed within 48 hours.",
+    description: "Non-binding letter of intent for fast-sale or court auction acquisitions, agreed within 48 hours.",
   },
 ];
 
-// ── Document body generator ───────────────────────────────────────────────────
+// Document body generator
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("el-GR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
@@ -100,130 +100,130 @@ const getDocumentBody = (tpl: Template, seller: string, buyer: string, listing: 
   switch (tpl.id) {
     case "preliminary":
       return `
-Î Î¡ÎŸÎ£Î¥ÎœÎ¦Î©ÎÎŸ Î Î©Î›Î—Î£Î—Î£ Î‘ÎšÎ™ÎÎ—Î¤ÎŸÎ¥
+ΠΡΟΣΥΜΦΩΝΟ ΠΩΛΗΣΗΣ
 PRELIMINARY AGREEMENT FOR THE SALE OF REAL PROPERTY
 
-Î£Ï„Î·Î½ Î‘Î¸Î®Î½Î±, ÏƒÎ®Î¼ÎµÏÎ± ${date}, Î¿Î¹ ÎºÎ¬Ï„Ï‰Î¸Î¹ ÏƒÏ…Î¼Î²Î±Î»Î»ÏŒÎ¼ÎµÎ½Î¿Î¹:
+Στην Αθήνα, σήμερα ${date}, οι κάτωθι συμβαλλόμενοι:
 
-Î Î©Î›Î—Î¤Î—Î£ / SELLER: ${seller}
-Î‘Î“ÎŸÎ¡Î‘Î£Î¤Î—Î£ / BUYER: ${buyer}
+ΠΩΛΗΤΗΣ / SELLER: ${seller}
+ΑΓΟΡΑΣΤΗΣ / BUYER: ${buyer}
 
-Î‘ÎÎ¤Î™ÎšÎ•Î™ÎœÎ•ÎÎŸ / SUBJECT PROPERTY:
+ΑΝΤΙΚΕΙΜΕΝΟ / SUBJECT PROPERTY:
 ${listing}
 
-Î¤Î™ÎœÎ— Î Î©Î›Î—Î£Î—Î£ / SALE PRICE: ${priceTxt}
-Î ÏÎ¿ÎºÎ±Ï„Î±Î²Î¿Î»Î® / Deposit (10%): ${fmt(price * 0.1)}
+ΤΙΜΗ ΠΩΛΗΣΗΣ / SALE PRICE: ${priceTxt}
+Προκαταβολή / Deposit (10%): ${fmt(price * 0.1)}
 
-Î£Ï…Î¼Ï†Ï‰Î½Î¿ÏÎ½ Ï„Î± ÎµÎ¾Î®Ï‚ / Agree as follows:
-1. ÎŸ Ï€Ï‰Î»Î·Ï„Î®Ï‚ Î´ÎµÏƒÎ¼ÎµÏÎµÏ„Î±Î¹ Î½Î± Î¼ÎµÏ„Î±Î²Î¹Î²Î¬ÏƒÎµÎ¹ Ï„Î¿ Î±ÎºÎ¯Î½Î·Ï„Î¿ ÎµÎ»ÎµÏÎ¸ÎµÏÎ¿ Î²Î±ÏÏŽÎ½.
+Συμφωνούν τα εξής / Agree as follows:
+1. Ο πωλητής δεσμεύεται να μεταβιβάσει το ακίνητο ελεύθερο βαρών.
    The seller undertakes to transfer the property free of encumbrances.
 
-2. Î¤Î¿ Î¿ÏÎ¹ÏƒÏ„Î¹ÎºÏŒ ÏƒÏ…Î¼Î²ÏŒÎ»Î±Î¹Î¿ Î¸Î± Ï…Ï€Î¿Î³ÏÎ±Ï†ÎµÎ¯ ÎµÎ½Ï„ÏŒÏ‚ 60 Î·Î¼ÎµÏÏŽÎ½.
+2. Το οριστικό συμβόλαιο θα υπογραφεί εντός 60 ημερών.
    The final deed shall be signed within 60 days.
 
-3. Î£Îµ Ï€ÎµÏÎ¯Ï€Ï„Ï‰ÏƒÎ· Ï…Ï€Î±Î½Î±Ï‡ÏŽÏÎ·ÏƒÎ·Ï‚ Î±Î³Î¿ÏÎ±ÏƒÏ„Î®, Î· Ï€ÏÎ¿ÎºÎ±Ï„Î±Î²Î¿Î»Î® ÎºÎ±Ï„Î¬Ï€Ï„ÎµÎ¹.
+3. Σε περίπτωση υπαναχώρησης αγοραστή, η προκαταβολή καταπίπτει.
    If the buyer withdraws, the deposit is forfeited.
 
-4. Î£Îµ Ï€ÎµÏÎ¯Ï€Ï„Ï‰ÏƒÎ· Ï…Ï€Î±Î½Î±Ï‡ÏŽÏÎ·ÏƒÎ·Ï‚ Ï€Ï‰Î»Î·Ï„Î®, ÎµÏ€Î¹ÏƒÏ„ÏÎ­Ï†ÎµÎ¹ Î´Î¹Ï€Î»Î® Ï€ÏÎ¿ÎºÎ±Ï„Î±Î²Î¿Î»Î®.
+4. Σε περίπτωση υπαναχώρησης πωλητή, επιστρέφεται διπλή προκαταβολή.
    If the seller withdraws, double deposit is returned.
       `;
     case "final":
       return `
-ÎŸÎ¡Î™Î£Î¤Î™ÎšÎŸ Î£Î¥ÎœÎ’ÎŸÎ›Î‘Î™ÎŸ Î Î©Î›Î—Î£Î—Î£
+ΟΡΙΣΤΙΚΟ ΣΥΜΦΩΝΗΤΙΚΟ ΠΩΛΗΣΗΣ
 FINAL DEED OF SALE
 
-Î•Î½ÏŽÏ€Î¹Î¿Î½ Ï„Î¿Ï…/Ï„Î·Ï‚ Î£Ï…Î¼Î²Î¿Î»Î±Î¹Î¿Î³ÏÎ¬Ï†Î¿Ï… Î‘Î¸Î·Î½ÏŽÎ½, ÏƒÎ®Î¼ÎµÏÎ± ${date}:
+Ενώπιον του/της Συμβολαιογράφου Αθηνών, σήμερα ${date}:
 
-Î Î©Î›Î—Î¤Î—Î£ / SELLER: ${seller}
-Î‘Î“ÎŸÎ¡Î‘Î£Î¤Î—Î£ / BUYER: ${buyer}
+ΠΩΛΗΤΗΣ / SELLER: ${seller}
+ΑΓΟΡΑΣΤΗΣ / BUYER: ${buyer}
 
-Î Î•Î¡Î™Î“Î¡Î‘Î¦Î— Î‘ÎšÎ™ÎÎ—Î¤ÎŸÎ¥ / PROPERTY DESCRIPTION:
+ΠΕΡΙΓΡΑΦΗ ΑΚΙΝΗΤΟΥ / PROPERTY DESCRIPTION:
 ${listing}
 
-Î¤Î™ÎœÎ— Î Î©Î›Î—Î£Î—Î£ / SALE PRICE: ${priceTxt}
+ΤΙΜΗ ΠΩΛΗΣΗΣ / SALE PRICE: ${priceTxt}
 
-ÎŸ Ï€Ï‰Î»Î·Ï„Î®Ï‚ Î¼ÎµÏ„Î±Î²Î¹Î²Î¬Î¶ÎµÎ¹ ÏƒÏ„Î¿Î½ Î±Î³Î¿ÏÎ±ÏƒÏ„Î®, Î¿ Î¿Ï€Î¿Î¯Î¿Ï‚ Î±Ï€Î¿Î´Î­Ï‡ÎµÏ„Î±Î¹, Ï€Î»Î®ÏÎ· ÎºÏ…ÏÎ¹ÏŒÏ„Î·Ï„Î±, Î½Î¿Î¼Î® ÎºÎ±Î¹ ÎºÎ±Ï„Î¿Ï‡Î® ÎµÏ€Î¯ Ï„Î¿Ï… Î±Î½Ï‰Ï„Î­ÏÏ‰ Î±ÎºÎ¹Î½Î®Ï„Î¿Ï…, ÎµÎ»ÎµÏÎ¸ÎµÏÎ¿Ï… Ï€Î±Î½Ï„ÏŒÏ‚ Î²Î¬ÏÎ¿Ï…Ï‚, Î´ÎµÏƒÎ¼ÎµÏÏƒÎµÏ‰Ï‚, ÎµÎ¼Ï€ÏÎ¬Î³Î¼Î±Ï„Î¿Ï… Î´Î¹ÎºÎ±Î¹ÏŽÎ¼Î±Ï„Î¿Ï‚ Ï„ÏÎ¯Ï„Î¿Ï…, Ï…Ï€Î¿Î¸Î®ÎºÎ·Ï‚, Ï€ÏÎ¿ÏƒÎ·Î¼ÎµÎ¯Ï‰ÏƒÎ·Ï‚, ÎºÎ±Ï„Î¬ÏƒÏ‡ÎµÏƒÎ·Ï‚, Î´Î¹ÎµÎºÎ´Î¯ÎºÎ·ÏƒÎ·Ï‚ Î® Î¿Ï€Î¿Î¹Î¿Ï…Î´Î®Ï€Î¿Ï„Îµ Î¬Î»Î»Î¿Ï… Î´Î¹ÎºÎ±Î¹ÏŽÎ¼Î±Ï„Î¿Ï‚ Ï„ÏÎ¯Ï„Î¿Ï….
+Ο πωλητής μεταβιβάζει στον αγοραστή πλήρη κυριότητα, νομή και κατοχή του ανωτέρω ακινήτου, ελεύθερου από βάρη, υποθήκες, προσημειώσεις, κατασχέσεις ή αξιώσεις τρίτων.
 
-The seller transfers to the buyer full ownership, possession and occupation of the above property, free from all encumbrances, mortgages, attachments, third-party claims or any other rights of third parties.
+The seller transfers to the buyer full ownership, possession, and occupation of the above property, free from encumbrances, mortgages, attachments, third-party claims, or any other third-party rights.
 
-Î¦ÎŸÎ¡ÎŸÎ£ ÎœÎ•Î¤Î‘Î’Î™Î’Î‘Î£Î—Î£ / TRANSFER TAX: ${fmt(price * 0.03)}
+ΦΟΡΟΣ ΜΕΤΑΒΙΒΑΣΗΣ / TRANSFER TAX: ${fmt(price * 0.03)}
       `;
     case "rental":
       return `
-ÎœÎ™Î£Î˜Î©Î¤Î—Î¡Î™ÎŸ Î£Î¥ÎœÎ’ÎŸÎ›Î‘Î™ÎŸ ÎšÎ‘Î¤ÎŸÎ™ÎšÎ™Î‘Î£
+ΜΙΣΘΩΤΗΡΙΟ ΣΥΜΒΟΛΑΙΟ ΚΑΤΟΙΚΙΑΣ
 RESIDENTIAL LEASE AGREEMENT
 
-ÎœÎµÏ„Î±Î¾Ï Ï„Ï‰Î½ / Between:
+Μεταξύ των / Between:
 
-Î•ÎšÎœÎ™Î£Î˜Î©Î¤Î—Î£ / LANDLORD: ${seller}
-ÎœÎ™Î£Î˜Î©Î¤Î—Î£ / TENANT: ${buyer}
+ΕΚΜΙΣΘΩΤΗΣ / LANDLORD: ${seller}
+ΜΙΣΘΩΤΗΣ / TENANT: ${buyer}
 
-ÎœÎ™Î£Î˜Î™ÎŸ / LEASED PROPERTY:
+ΜΙΣΘΙΟ / LEASED PROPERTY:
 ${listing}
 
-ÎœÎ—ÎÎ™Î‘Î™ÎŸ ÎœÎ™Î£Î˜Î©ÎœÎ‘ / MONTHLY RENT: ${fmt(Math.round(price * 0.004))}
-Î•Î“Î“Î¥Î—Î£Î— / SECURITY DEPOSIT: ${fmt(Math.round(price * 0.008))} (2 months)
-Î”Î™Î‘Î¡ÎšÎ•Î™Î‘ / DURATION: 12 months from ${date}
-Î‘ÎÎ‘ÎÎ•Î©Î£Î— / RENEWAL: Automatic unless 1 month notice given
+ΜΗΝΙΑΙΟ ΜΙΣΘΩΜΑ / MONTHLY RENT: ${fmt(Math.round(price * 0.004))}
+ΕΓΓΥΗΣΗ / SECURITY DEPOSIT: ${fmt(Math.round(price * 0.008))} (2 months)
+ΔΙΑΡΚΕΙΑ / DURATION: 12 months from ${date}
+ΑΝΑΝΕΩΣΗ / RENEWAL: Automatic unless 1 month notice is given
 
-ÎŸÎ¡ÎŸÎ™ / TERMS:
-1. ÎŸ Î¼Î¹ÏƒÎ¸Ï‰Ï„Î®Ï‚ Î±Î½Î±Î»Î±Î¼Î²Î¬Î½ÎµÎ¹ Ï„Î· Î´Î¹Î±Ï„Î®ÏÎ·ÏƒÎ· Ï„Î·Ï‚ ÎºÎ±Ï„Î¿Î¹ÎºÎ¯Î±Ï‚ ÏƒÎµ ÎºÎ±Î»Î® ÎºÎ±Ï„Î¬ÏƒÏ„Î±ÏƒÎ·.
-2. Î‘Ï€Î±Î³Î¿ÏÎµÏÎµÏ„Î±Î¹ Î· Ï…Ï€ÎµÎºÎ¼Î¯ÏƒÎ¸Ï‰ÏƒÎ· Ï‡Ï‰ÏÎ¯Ï‚ Î³ÏÎ±Ï€Ï„Î® ÏƒÏ…Î½Î±Î¯Î½ÎµÏƒÎ·.
-3. Î¤Î¿ Î¼Î¯ÏƒÎ¸Ï‰Î¼Î± ÎºÎ±Ï„Î±Î²Î¬Î»Î»ÎµÏ„Î±Î¹ Ï„Î·Î½ 1Î· ÎºÎ¬Î¸Îµ Î¼Î®Î½Î±.
+ΟΡΟΙ / TERMS:
+1. Ο μισθωτής αναλαμβάνει τη διατήρηση της κατοικίας σε καλή κατάσταση.
+2. Απαγορεύεται η υπεκμίσθωση χωρίς γραπτή συναίνεση.
+3. Το μίσθωμα καταβάλλεται την 1η κάθε μήνα.
       `;
     case "poa":
       return `
-Î Î›Î—Î¡Î•ÎžÎŸÎ¥Î£Î™ÎŸ
+ΠΛΗΡΕΞΟΥΣΙΟ
 POWER OF ATTORNEY
 
-Î•Î³ÏŽ, Î¿/Î· ${buyer}, Î´Î¹Î± Ï„Î¿Ï… Ï€Î±ÏÏŒÎ½Ï„Î¿Ï‚ Ï€Î±ÏÎ­Ï‡Ï‰ Ï€Î»Î·ÏÎµÎ¾Î¿Ï…ÏƒÎ¹ÏŒÏ„Î·Ï„Î± ÏƒÏ„Î¿Î½/ÏƒÏ„Î·Î½ ${seller}:
+Εγώ, ο/η ${buyer}, δια του παρόντος παρέχω πληρεξουσιότητα στον/στην ${seller}:
 
-Î•ÎžÎŸÎ¥Î£Î™ÎŸÎ”ÎŸÎ¤Î—Î£Î— / AUTHORITY GRANTED:
-• ÎÎ± ÎµÎºÏ€ÏÎ¿ÏƒÏ‰Ï€Î®ÏƒÎµÎ¹ Î¼Îµ ÎµÎ½ÏŽÏ€Î¹Î¿Î½ Ï€Î±Î½Ï„ÏŒÏ‚ Î£Ï…Î¼Î²Î¿Î»Î±Î¹Î¿Î³ÏÎ¬Ï†Î¿Ï….
+ΕΞΟΥΣΙΟΔΟΤΗΣΗ / AUTHORITY GRANTED:
+• Να εκπροσωπήσει εμένα ενώπιον παντός Συμβολαιογράφου.
   To represent me before any Notary Public.
-• ÎÎ± Ï…Ï€Î¿Î³ÏÎ¬ÏˆÎµÎ¹ Î¿ÏÎ¹ÏƒÏ„Î¹ÎºÎ¬ ÏƒÏ…Î¼Î²ÏŒÎ»Î±Î¹Î± Î¼ÎµÏ„Î±Î²Î¯Î²Î±ÏƒÎ·Ï‚.
+• Να υπογράψει οριστικά συμβόλαια μεταβίβασης.
   To sign final deeds of transfer on my behalf.
-• ÎÎ± ÎºÎ±Ï„Î±Î²Î¬Î»ÎµÎ¹ Ï„Ï…Ï‡ÏŒÎ½ Ï†ÏŒÏÎ¿Ï…Ï‚ ÎºÎ±Î¹ Ï„Î­Î»Î·.
+• Να καταβάλει τυχόν φόρους και τέλη.
   To pay applicable taxes and fees.
 
-Î‘ÎšÎ™ÎÎ—Î¤ÎŸ / PROPERTY: ${listing}
-Î‘ÎžÎ™Î‘ / VALUE UP TO: ${priceTxt}
+ΑΚΙΝΗΤΟ / PROPERTY: ${listing}
+ΑΞΙΑ / VALUE UP TO: ${priceTxt}
 
-Î™ÏƒÏ‡ÏÏ‚ / Valid until: 6 months from ${date}
+Ισχύς / Valid until: 6 months from ${date}
 
-Î•ÎºÎ´ÏŒÎ¸Î·ÎºÎµ ÏƒÏ„Î·Î½ Î‘Î¸Î®Î½Î± / Issued in Athens, ${date}
+Εκδόθηκε στην Αθήνα / Issued in Athens, ${date}
       `;
     case "mou":
       return `
-ÎœÎÎ—ÎœÎŸÎÎ™ÎŸ Î£Î¥ÎœÎ¦Î©ÎÎ™Î‘Î£ — Î“Î¡Î—Î“ÎŸÎ¡Î— Î Î©Î›Î—Î£Î—
-MEMORANDUM OF UNDERSTANDING — QUICK SALE
+ΜΝΗΜΟΝΙΟ ΣΥΜΦΩΝΙΑΣ - ΓΡΗΓΟΡΗ ΠΩΛΗΣΗ
+MEMORANDUM OF UNDERSTANDING - QUICK SALE
 
-ÎœÎµÏ„Î±Î¾Ï / Between:
-Î Î©Î›Î—Î¤Î—Î£ / SELLER: ${seller}
-Î‘Î“ÎŸÎ¡Î‘Î£Î¤Î—Î£ / BUYER: ${buyer}
+Μεταξύ / Between:
+ΠΩΛΗΤΗΣ / SELLER: ${seller}
+ΑΓΟΡΑΣΤΗΣ / BUYER: ${buyer}
 
-Î‘ÎšÎ™ÎÎ—Î¤ÎŸ / PROPERTY: ${listing}
-Î•ÎÎ”Î•Î™ÎšÎ¤Î™ÎšÎ— Î¤Î™ÎœÎ— / INDICATIVE PRICE: ${priceTxt}
+ΑΚΙΝΗΤΟ / PROPERTY: ${listing}
+ΕΝΔΕΙΚΤΙΚΗ ΤΙΜΗ / INDICATIVE PRICE: ${priceTxt}
 
-ÎŸÎ¡ÎŸÎ™ MOU / MOU TERMS:
+ΟΡΟΙ MOU / MOU TERMS:
 1. NON-BINDING: This MOU does not constitute a legally binding contract.
-   Î¤Î¿ Ï€Î±ÏÏŒÎ½ Î´ÎµÎ½ Î±Ï€Î¿Ï„ÎµÎ»ÎµÎ¯ Î´ÎµÏƒÎ¼ÎµÏ…Ï„Î¹ÎºÏŒ ÏƒÏ…Î¼Î²ÏŒÎ»Î±Î¹Î¿.
+   Το παρόν δεν αποτελεί δεσμευτικό συμβόλαιο.
 
-2. EXCLUSIVITY: Seller agrees to 72-hour exclusivity period.
-   Î‘Ï€Î¿ÎºÎ»ÎµÎ¹ÏƒÏ„Î¹ÎºÏŒÏ„Î·Ï„Î± 72 Ï‰ÏÏŽÎ½ Ï…Ï€Î­Ï Î±Î³Î¿ÏÎ±ÏƒÏ„Î®.
+2. EXCLUSIVITY: Seller agrees to a 72-hour exclusivity period.
+   Αποκλειστικότητα 72 ωρών υπέρ αγοραστή.
 
 3. DUE DILIGENCE: Buyer to complete by ${date}.
-   ÎŸ Î­Î»ÎµÎ³Ï‡Î¿Ï‚ Ï„Î¯Ï„Î»Ï‰Î½ Î½Î± Î¿Î»Î¿ÎºÎ»Î·ÏÏ‰Î¸ÎµÎ¯ ÎµÎ½Ï„ÏŒÏ‚ 5 Î·Î¼ÎµÏÏŽÎ½.
+   Ο έλεγχος τίτλων να ολοκληρωθεί εντός 5 ημερών.
 
-4. GOOD FAITH: Both parties to negotiate in good faith.
+4. GOOD FAITH: Both parties will negotiate in good faith.
 
-Î—Î¼ÎµÏÎ¿Î¼Î·Î½Î¯Î± / Date: ${date}
+Ημερομηνία / Date: ${date}
       `;
   }
   return "";
 };
 
-// ── Canvas draw signature ────────────────────────────────────────────────────
+// Canvas draw signature
 
 const SignatureCanvas = ({ onSign }: { onSign: (dataUrl: string) => void }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -323,7 +323,7 @@ const SignatureCanvas = ({ onSign }: { onSign: (dataUrl: string) => void }) => {
   );
 };
 
-// ── Main component ───────────────────────────────────────────────────────────
+// Main component
 
 export const LegalDocumentModal = ({ open, onClose, listingTitle = "Property", sellerName = "Seller Name", buyerName = "Buyer Name", price = 250000 }: Props) => { // skipcq: JS-R1005 - This modal coordinates several small UI states around one document preview.
   const [selected, setSelected] = useState<TemplateId>("preliminary");
@@ -363,7 +363,6 @@ export const LegalDocumentModal = ({ open, onClose, listingTitle = "Property", s
   async function handleShare() {
     if (!shareEmail.includes("@")) { toast.error("Enter a valid email address."); return; }
     try {
-       
       const { error } = await supabase.from("contact_submissions").insert({
         type: "document_share",
         email: shareEmail,
@@ -398,7 +397,6 @@ export const LegalDocumentModal = ({ open, onClose, listingTitle = "Property", s
         </DialogHeader>
 
         <div className="flex flex-1 overflow-hidden">
-          {/* Left: template list */}
           <aside className="w-64 shrink-0 border-r border-border overflow-y-auto bg-muted/20 p-3 space-y-1.5 hidden md:block">
             {TEMPLATES.map((t) => (
               <button
@@ -421,9 +419,7 @@ export const LegalDocumentModal = ({ open, onClose, listingTitle = "Property", s
             ))}
           </aside>
 
-          {/* Right: document + sign */}
           <main className="flex-1 overflow-y-auto flex flex-col">
-            {/* Mobile template selector */}
             <div className="md:hidden border-b border-border px-4 py-2 bg-muted/20">
               <select
                 value={selected}
@@ -434,10 +430,8 @@ export const LegalDocumentModal = ({ open, onClose, listingTitle = "Property", s
               </select>
             </div>
 
-            {/* Document preview */}
             <div className="flex-1 p-5 md:p-6">
               <div className="max-w-2xl mx-auto">
-                {/* Doc header */}
                 <div className="rounded-t-xl border border-border bg-card px-6 py-4 border-b-0">
                   <div className="flex items-start justify-between">
                     <div>
@@ -451,13 +445,11 @@ export const LegalDocumentModal = ({ open, onClose, listingTitle = "Property", s
                   <p className="text-xs text-muted-foreground mt-2">{tpl.description}</p>
                 </div>
 
-                {/* Doc body */}
                 <div className="rounded-b-xl border border-border border-t border-dashed bg-card px-6 py-5">
                   <pre className="whitespace-pre-wrap text-sm text-foreground font-mono leading-relaxed">
                     {body}
                   </pre>
 
-                  {/* Signature lines */}
                   <div className="mt-8 pt-6 border-t border-dashed border-border grid grid-cols-2 gap-8">
                     <div>
                       <div className="h-12 border-b border-foreground/30 flex items-end pb-1">
@@ -465,7 +457,7 @@ export const LegalDocumentModal = ({ open, onClose, listingTitle = "Property", s
                           <span className="text-lg text-primary" style={{ fontFamily: "cursive" }}>{typedSig}</span>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">Seller / Î Ï‰Î»Î·Ï„Î®Ï‚</p>
+                      <p className="text-xs text-muted-foreground mt-1">Seller / Πωλητής</p>
                       <p className="text-xs font-medium">{sellerName}</p>
                     </div>
                     <div>
@@ -474,12 +466,11 @@ export const LegalDocumentModal = ({ open, onClose, listingTitle = "Property", s
                           <span className="text-xs text-brand-emerald flex items-center gap-1"><Check className="w-3 h-3" /> Signed</span>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">Buyer / Î‘Î³Î¿ÏÎ±ÏƒÏ„Î®Ï‚</p>
+                      <p className="text-xs text-muted-foreground mt-1">Buyer / Αγοραστής</p>
                       <p className="text-xs font-medium">{buyerName}</p>
                     </div>
                   </div>
 
-                  {/* E-sign section */}
                   {!signed ? (
                     <div className="mt-6 rounded-xl border border-border bg-muted/20 p-4 space-y-4">
                       <div className="flex items-center gap-2">
@@ -487,7 +478,6 @@ export const LegalDocumentModal = ({ open, onClose, listingTitle = "Property", s
                         <p className="text-sm font-semibold text-foreground">Add your signature</p>
                       </div>
 
-                      {/* Mode toggle */}
                       <div className="flex rounded-lg border border-border overflow-hidden w-fit">
                         {(["type", "draw"] as SignMode[]).map((m) => (
                           <button
@@ -560,7 +550,9 @@ export const LegalDocumentModal = ({ open, onClose, listingTitle = "Property", s
                           <p className="text-xs text-muted-foreground">Your download is being prepared.</p>
                         </div>
                       </div>
-                      <Button size="sm" variant="outline" onClick={resetSigned}>Sign again</Button>
+                      <Button variant="ghost" onClick={resetSigned} className="text-sm">
+                        Sign another
+                      </Button>
                     </div>
                   )}
                 </div>

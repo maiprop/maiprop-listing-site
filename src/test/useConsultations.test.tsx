@@ -11,7 +11,7 @@ import React from "react";
 const { useAuthMock, fromMock, toastMock, loggerMock } = vi.hoisted(() => ({
   useAuthMock: vi.fn(),
   fromMock: vi.fn(),
-  toastMock: { success: vi.fn(), error: vi.fn() },
+  toastMock: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
   loggerMock: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
 
@@ -41,6 +41,7 @@ beforeEach(() => {
   fromMock.mockReset();
   toastMock.success.mockReset();
   toastMock.error.mockReset();
+  toastMock.warning.mockReset();
   loggerMock.warn.mockReset();
   useAuthMock.mockReturnValue({ user: { id: "u-1" } });
 });
@@ -90,7 +91,7 @@ describe("useSubmitConsultation", () => {
       email: "bob@example.com",
       status: "new",
     }));
-    expect(toastMock.success).toHaveBeenCalled();
+    expect(toastMock.success).toHaveBeenCalledWith("Callback request sent.");
   });
 
   it("does not insert a lead when the professional row is missing", async () => {
@@ -114,6 +115,35 @@ describe("useSubmitConsultation", () => {
       });
     });
     expect(leadInsert).not.toHaveBeenCalled();
+    expect(toastMock.success).toHaveBeenCalledWith("Consultation request sent.");
+  });
+
+  it("shows a partial-success warning when the professional lead record cannot be created", async () => {
+    const consInsert = vi.fn().mockResolvedValue({ error: null });
+    const proSingle = vi.fn().mockResolvedValue({ data: { user_id: "pro-owner" }, error: null });
+    const leadInsert = vi.fn().mockReturnValue({
+      then: (cb: (r: { error: Error }) => unknown) => Promise.resolve(cb({ error: new Error("lead failed") })),
+    });
+    fromMock.mockImplementation((table: string) => {
+      if (table === "consultation_requests") return { insert: consInsert };
+      if (table === "professionals") return { select: () => ({ eq: () => ({ single: proSingle }) }) };
+      if (table === "leads") return { insert: leadInsert };
+      throw new Error("unexpected table " + table);
+    });
+
+    const { result } = renderHook(() => useSubmitConsultation(), { wrapper: wrapper() });
+    await act(async () => {
+      await result.current.mutateAsync({
+        professional_id: "p-1",
+        requester_name: "Casey",
+        requester_email: "casey@example.com",
+        request_type: "message",
+      });
+    });
+
+    expect(toastMock.warning).toHaveBeenCalledWith(
+      "Message request sent. The professional CRM record could not be created automatically.",
+    );
   });
 
   it("toasts an error when consultation insert fails", async () => {

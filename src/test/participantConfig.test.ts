@@ -122,6 +122,20 @@ describe("getPricingAudienceFromProfile", () => {
   it("maps professional to 'professional'", () => {
     expect(getPricingAudienceFromProfile({ participant_type: "professional" })).toBe("professional");
   });
+
+  it("maps investor and institutional profiles to invite-only pricing audiences", () => {
+    expect(getPricingAudienceFromProfile({ participant_type: "investor" })).toBe("investor");
+    expect(getPricingAudienceFromProfile({ participant_type: "institutional" })).toBe("institutional");
+  });
+
+  it("prefers participant_type over legacy role for pricing gates", () => {
+    expect(
+      getPricingAudienceFromProfile({ participant_type: "seller", role: "agent" })
+    ).toBe("participant");
+    expect(
+      getPricingAudienceFromProfile({ participant_type: "developer", role: "buyer" })
+    ).toBe("developer");
+  });
 });
 
 describe("isInvestorMode", () => {

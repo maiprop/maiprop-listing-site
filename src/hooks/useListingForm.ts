@@ -68,7 +68,7 @@ const INITIAL_FORM: ListingFormData = {
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
-export function useListingForm() {
+export function useListingForm(options?: { allowPreSale?: boolean }) {
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -364,7 +364,7 @@ export function useListingForm() {
         suitable_student: form.suitable_student, suitable_holiday: form.suitable_holiday,
         suitable_investment: form.suitable_investment, suitable_commercial_use: form.suitable_commercial_use,
         is_buildable: form.is_buildable, within_city_plan: form.within_city_plan,
-        is_pre_sale: form.is_pre_sale, is_off_market: form.is_off_market,
+        is_pre_sale: options?.allowPreSale ? form.is_pre_sale : false, is_off_market: form.is_off_market,
         within_settlement: form.within_settlement, has_water_supply: form.has_water_supply,
         has_electricity_supply: form.has_electricity_supply, has_land_concession: form.has_land_concession,
         has_three_phase_power: form.has_three_phase_power, has_loading_dock: form.has_loading_dock,
@@ -395,7 +395,7 @@ export function useListingForm() {
       toast.success(asDraft ? "Listing saved as draft!" : "Listing published successfully!");
       const detailRoute = lt === "open_house"
         ? `/open-house/${(data as { id: string }).id}`
-        : form.is_pre_sale
+        : options?.allowPreSale && form.is_pre_sale
         ? `/new-build/${(data as { id: string }).id}`
         : `/property/${(data as { id: string }).id}`;
       navigate(detailRoute);
@@ -404,7 +404,7 @@ export function useListingForm() {
     } finally {
       setSubmitting(false);
     }
-  }, [form, images, coverImageId, user, navigate]);
+  }, [form, images, coverImageId, user, navigate, options?.allowPreSale]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
 

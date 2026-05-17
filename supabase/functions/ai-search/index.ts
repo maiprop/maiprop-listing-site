@@ -7,17 +7,17 @@ import { createLogger } from "../_shared/logger.ts";
 const log = createLogger("ai-search");
 
 const BUCKET = "ai-search";
-const aiSearchLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000 });
+const aiSearchLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000, failClosed: true });
 
-Deno.serve(async (req) => {
+const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, AI parsing, and response shaping.
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
-  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
-  if (await aiSearchLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
-
   const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
   if (quota.errorResponse) return quota.errorResponse;
+
+  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? quota.userId ?? "anonymous";
+  if (await aiSearchLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
   try {
     const { query } = await req.json();
@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
     const src = parsed as Record<string, unknown>;
     const optionalString = (v: unknown): string | null =>
       typeof v === "string" && v.trim() !== "" ? v.trim().slice(0, 80) : null;
-    const optionalNumber = (v: unknown, lo = 0, hi = 1_000_000_000): number | null => {
+    const optionalNumber = (v: unknown, lo = 0, hi = 1_000_000_000): number | null => { // skipcq: JS-R1005 - Numeric coercion handles string/number AI output and clamps it to safe bounds.
       const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
       if (!Number.isFinite(n)) return null;
       return Math.max(lo, Math.min(hi, Math.round(n)));
@@ -131,4 +131,6 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+};
+
+Deno.serve(handleRequest);

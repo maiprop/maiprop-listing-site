@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
+import { profileRoleSwitchInProgress, useAuth } from "@/contexts/AuthContext";
 import { isSellSideRole, isPlatformAdmin } from "@/lib/authUtils";
+import { getExplicitParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { useSubscription } from "@/hooks/useSubscription";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,10 @@ export function SellerRoute({ children }: { children: React.ReactNode }) {
 function SellerGate({ children }: { children: React.ReactNode }) {
   const { profile, loading } = useAuth();
   const { isPro, loading: subLoading } = useSubscription();
+  const switching = profileRoleSwitchInProgress(profile);
+  const participantType = switching
+    ? null
+    : getExplicitParticipantTypeFromProfile(profile);
 
   if (loading || subLoading || !profile) {
     return (
@@ -26,7 +31,7 @@ function SellerGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!isSellSideRole(profile) && !isPlatformAdmin(profile)) {
+  if (switching || (!isSellSideRole(profile) && !isPlatformAdmin(profile))) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-4">
         <div className="max-w-md w-full text-center space-y-5">
@@ -34,9 +39,13 @@ function SellerGate({ children }: { children: React.ReactNode }) {
             <span className="text-2xl">🏠</span>
           </div>
           <div>
-            <h1 className="font-display text-2xl font-bold mb-2">Listing Access Required</h1>
+            <h1 className="font-display text-2xl font-bold mb-2">
+              Listing Access Required
+            </h1>
             <p className="text-muted-foreground text-sm">
-              Creating listings requires an Agent, Seller, Developer, or Institutional account. To list a property, switch your account type in Settings or start a new onboarding.
+              Creating listings requires an Agent, Seller, Developer, or
+              Institutional account. To list a property, switch your account
+              type in Settings or start a new onboarding.
             </p>
           </div>
           <div className="flex gap-3 justify-center">
@@ -53,7 +62,7 @@ function SellerGate({ children }: { children: React.ReactNode }) {
   }
 
   // Developer role requires an active Pro subscription — listing creation is Pro-only for developers.
-  if (profile.role === "developer" && !isPro && !isPlatformAdmin(profile)) {
+  if (participantType === "developer" && !isPro && !isPlatformAdmin(profile)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-4">
         <div className="max-w-md w-full text-center space-y-5">
@@ -61,9 +70,13 @@ function SellerGate({ children }: { children: React.ReactNode }) {
             <span className="text-2xl">🏗️</span>
           </div>
           <div>
-            <h1 className="font-display text-2xl font-bold mb-2">Developer Pro Required</h1>
+            <h1 className="font-display text-2xl font-bold mb-2">
+              Developer Pro Required
+            </h1>
             <p className="text-muted-foreground text-sm">
-              Creating listings as a Developer requires an active Developer Pro subscription. Upgrade to unlock unlimited project listings and new-build showcase pages.
+              Creating listings as a Developer requires an active Developer Pro
+              subscription. Upgrade to unlock unlimited project listings and
+              new-build showcase pages.
             </p>
           </div>
           <div className="flex gap-3 justify-center">
@@ -79,5 +92,5 @@ function SellerGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  return <>{children}</>;
+  return children as React.ReactElement;
 }

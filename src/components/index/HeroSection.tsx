@@ -30,10 +30,23 @@ export function HeroSection() {
   const [showAI, setShowAI] = useState(false);
   const [heroVideoReady, setHeroVideoReady] = useState(false);
 
-  // Defer source attachment until after first paint so poster renders instantly.
+  // Keep the decorative video off the critical path; the poster and search UI
+  // need to win first paint on slower connections.
   useEffect(() => {
-    const id = requestAnimationFrame(() => setHeroVideoReady(true));
-    return () => cancelAnimationFrame(id);
+    if (!window.matchMedia("(min-width: 1024px)").matches) return;
+    const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+    if (connection?.saveData) return;
+
+    const scheduleIdle = window.requestIdleCallback ?? ((cb: IdleRequestCallback) => window.setTimeout(() => cb({ didTimeout: false, timeRemaining: () => 0 }), 1500));
+    const cancelIdle = window.cancelIdleCallback ?? window.clearTimeout;
+    let idleId: number | undefined;
+    const timer = window.setTimeout(() => {
+      idleId = scheduleIdle(() => setHeroVideoReady(true), { timeout: 2500 });
+    }, 8000);
+    return () => {
+      window.clearTimeout(timer);
+      if (idleId !== undefined) cancelIdle(idleId);
+    };
   }, []);
 
   const handleSearch = () => {
@@ -125,7 +138,7 @@ export function HeroSection() {
             muted
             loop
             playsInline
-            preload="auto"
+            preload="none"
             poster="/hero-poster.jpg"
             aria-hidden="true"
             className="hero-video absolute inset-0 w-full h-full object-cover opacity-100 dark:opacity-70"
@@ -171,7 +184,7 @@ export function HeroSection() {
             {/* ── LEFT: Copy + Search ── */}
             <div className="text-white min-w-0">
               {/* Eyebrow */}
-              <div className="relative inline-flex mb-3 sm:mb-7 animate-fade-in-up" style={{ animationDelay: "0s" }}>
+              <div className="relative inline-flex mb-3 sm:mb-7">
                 <span
                   className="absolute inset-0 rounded-full animate-pulse"
                   style={{ boxShadow: "0 0 0 4px hsl(var(--brand-cyan) / 0.16), 0 0 18px 4px hsl(var(--brand-purple) / 0.12)" }}
@@ -187,8 +200,8 @@ export function HeroSection() {
 
               {/* Headline */}
               <h1
-                className="font-display font-black leading-[1.1] mb-4 sm:mb-6 animate-fade-in-up text-white break-words"
-                style={{ fontSize: "clamp(1.4rem, 6.5vw, 4.5rem)", animationDelay: "0.08s" }}
+                className="font-display font-black leading-[1.1] mb-4 sm:mb-6 text-white break-words"
+                style={{ fontSize: "clamp(1.4rem, 6.5vw, 4.5rem)" }}
               >
                 Find your perfect<br className="sm:hidden" /> property in Greece
                 <div className="mt-1">
@@ -202,7 +215,7 @@ export function HeroSection() {
               </h1>
 
               {/* ── Search Card ── */}
-              <div className="animate-fade-in-up" style={{ animationDelay: "0.28s" }}>
+              <div>
                 <div
                   className="bg-card/90 backdrop-blur-2xl border border-border/70 rounded-2xl shadow-elevated overflow-visible"
                   style={{
@@ -274,9 +287,10 @@ export function HeroSection() {
                       <Button
                         size="default"
                         onClick={handleSearch}
+                        aria-label={searchType === "Professionals" ? "Search professionals" : "Search properties"}
                         className={`bg-primary hover:opacity-90 border-0 text-primary-foreground rounded-xl font-semibold shrink-0 px-4 min-h-[44px] ${searchType === "Professionals" ? "flex-1" : ""}`}
                       >
-                        <Search className="w-4 h-4 sm:mr-2" />
+                        <Search className="w-4 h-4 sm:mr-2" aria-hidden="true" />
                         <span className="hidden sm:inline">Search</span>
                       </Button>
                     </div>
@@ -286,7 +300,7 @@ export function HeroSection() {
             </div>
 
             {/* ── RIGHT: Live Market Ticker Card ── */}
-            <div className="hidden lg:block animate-fade-in-up relative" style={{ animationDelay: "0.25s" }}>
+            <div className="hidden lg:block relative">
               <div
                 className="absolute -inset-6 rounded-3xl blur-3xl opacity-15"
                 style={{ background: "radial-gradient(ellipse, hsl(var(--brand-cyan)), hsl(var(--brand-indigo)), hsl(var(--brand-purple)), transparent 70%)" }}

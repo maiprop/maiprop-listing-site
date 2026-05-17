@@ -10,7 +10,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
-import { formatTimeAgo } from "@/lib/format";
+import { formatPrice, formatTimeAgo } from "@/lib/format";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   pending:     { label: "Pending",     color: "bg-brand-gold/15 text-brand-gold border-brand-gold/20" },
@@ -29,6 +29,7 @@ type ScreeningDeal = {
   ai_estimate: number | null;
   asking_price: number | null;
   status: string;
+  published_to_investors: boolean;
   created_at: string;
 };
 
@@ -38,7 +39,7 @@ function useScreeningDeals() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("firesale_requests")
-        .select("id, address, city, property_type, sqm, bedrooms, ai_estimate, asking_price, status, created_at")
+        .select("id, address, city, property_type, sqm, bedrooms, ai_estimate, asking_price, status, published_to_investors, created_at")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data || []) as unknown as ScreeningDeal[];
@@ -49,22 +50,22 @@ function useScreeningDeals() {
 function useSetDealStatus() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await supabase
-        .from("firesale_requests")
-        .update({ status })
-        .eq("id", id);
+    mutationFn: async ({ id, published }: { id: string; published: boolean }) => {
+      const { error } = await supabase.rpc("admin_set_firesale_investor_publication" as never, {
+        p_deal_id: id,
+        p_published: published,
+      } as never);
       if (error) throw error;
     },
-    onSuccess: (_, { status }) => {
+    onSuccess: (_, { published }) => {
       qc.invalidateQueries({ queryKey: ["admin-screening-deals"] });
       toast.success(
-        status === "reviewed"
+        published
           ? "Marked as reviewed — visible to investors"
           : "Returned to pending screening"
       );
     },
-    onError: (_, { status }) => toast.error(status === "reviewed" ? "Failed to publish" : "Failed to unpublish"),
+    onError: (_, { published }) => toast.error(published ? "Failed to publish" : "Failed to unpublish"),
   });
 }
 
@@ -73,8 +74,8 @@ export default function AdminInvestorScreening() {
   const { data: deals = [], isLoading, refetch } = useScreeningDeals();
   const setStatus = useSetDealStatus();
 
-  const unpublished = deals.filter((d) => d.status === "pending");
-  const published = deals.filter((d) => d.status !== "pending");
+  const unpublished = deals.filter((d) => !d.published_to_investors);
+  const published = deals.filter((d) => d.published_to_investors);
   const displayList = filter === "unpublished" ? unpublished : published;
 
   return (
@@ -167,7 +168,7 @@ export default function AdminInvestorScreening() {
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {deal.sqm} m²
                     {deal.bedrooms != null && ` · ${deal.bedrooms} bed`}
-                    {deal.asking_price != null && ` · €${(deal.asking_price / 1000).toFixed(0)}k`}
+                    {deal.asking_price != null && ` · ${formatPrice(deal.asking_price)}`}
                     {discount != null && ` · ${discount}% below estimate`}
                   </p>
                   <p className="text-[10px] text-muted-foreground mt-1">{formatTimeAgo(deal.created_at)}</p>
@@ -177,7 +178,7 @@ export default function AdminInvestorScreening() {
                     <Button
                       size="sm"
                       className="bg-primary text-primary-foreground gap-1"
-                      onClick={() => setStatus.mutate({ id: deal.id, status: "reviewed" })}
+                      onClick={() => setStatus.mutate({ id: deal.id, published: true })}
                     >
                       <Check className="w-3.5 h-3.5" /> Publish
                     </Button>
@@ -186,7 +187,7 @@ export default function AdminInvestorScreening() {
                       size="sm"
                       variant="outline"
                       className="gap-1 text-destructive border-destructive/40 hover:bg-destructive/10"
-                      onClick={() => setStatus.mutate({ id: deal.id, status: "pending" })}
+                      onClick={() => setStatus.mutate({ id: deal.id, published: false })}
                     >
                       <X className="w-3.5 h-3.5" /> Unpublish
                     </Button>

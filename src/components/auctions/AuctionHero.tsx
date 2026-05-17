@@ -30,9 +30,9 @@ export function AuctionHero({ stats }: AuctionHeroProps) {
           {stats.map((s) => (
             <div
               key={s.label}
-              className="rounded-2xl p-2.5 sm:p-5 text-center flex flex-col items-center justify-center border border-white/15 bg-gradient-to-br from-white/18 via-white/6 to-transparent backdrop-blur-xl"
+              className="min-h-20 sm:min-h-28 rounded-2xl p-2.5 sm:p-5 text-center flex flex-col items-center justify-center border border-white/15 bg-gradient-to-br from-white/18 via-white/6 to-transparent backdrop-blur-xl"
             >
-              <div className="font-display text-lg sm:text-3xl font-bold text-white drop-shadow-sm">
+              <div className="min-w-16 sm:min-w-28 font-display text-lg sm:text-3xl font-bold text-white drop-shadow-sm">
                 {s.value}
               </div>
               <div className="text-[9px] sm:text-xs text-white/80 mt-0.5 sm:mt-1.5 font-medium leading-tight">

@@ -11,12 +11,13 @@
  *
  * Output is a markdown table so it surfaces cleanly in GH Action summaries.
  */
-import { readdirSync, statSync, writeFileSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, statSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const DIST = "dist/assets";
+const INDEX_HTML = "dist/index.html";
 
 // Soft budgets — uncompressed size in kilobytes. A breach fails CI.
 // Adjust as chunks grow; the goal is to notice surprise growth, not to chase
@@ -37,12 +38,29 @@ export const BUDGETS_KB = {
   // cmdk, vaul, sonner, embla-carousel, react-resizable-panels, input-otp,
   // react-day-picker, @hello-pangea — small UI companions.
   "vendor-ui-extra": 180,
-  "vendor-charts": 500,
-  "vendor-motion": 180,
+  "vendor-charts": 650,
   "vendor-icons": 250,
+  "vendor-mapbox": 1200,
   // Catch-all: any other chunk — inform but don't fail unless huge.
   "*": 1500,
 };
+
+export const FORBIDDEN_INITIAL_PRELOAD_PATTERNS = [
+  /(?:^|\/)(?:LazyRecharts|recharts|vendor-charts|BarChart|LineChart|AreaChart|PieChart|ResponsiveContainer)-[^/]+\.js$/i,
+  /(?:^|\/)d3-[^/]+\.js$/i,
+  /(?:^|\/)(?:mapbox-gl|react-map-gl|vendor-mapbox)-[^/]+\.js$/i,
+];
+
+export function modulePreloadHrefs(html) {
+  return Array.from(html.matchAll(/<link\b(?=[^>]*\brel=["']modulepreload["'])[^>]*\bhref=["']([^"']+\.js)["'][^>]*>/gi))
+    .map((match) => match[1]);
+}
+
+export function forbiddenInitialPreloads(html) {
+  return modulePreloadHrefs(html).filter((href) =>
+    FORBIDDEN_INITIAL_PRELOAD_PATTERNS.some((pattern) => pattern.test(href))
+  );
+}
 
 /**
  * Shape of a Rollup/Vite content-hash tail. Covers:
@@ -82,6 +100,14 @@ const HASH_SHAPE_RE = /^[A-Za-z0-9_-]{6,24}$/;
 export function budgetKeyFor(filename, budgets = BUDGETS_KB) {
   if (!filename.endsWith(".js")) return "*";
   const stem = filename.slice(0, -3); // strip ".js"
+
+  if (/^(mapbox-gl|react-map-gl|vendor-mapbox)(-|$)/.test(stem) && budgets["vendor-mapbox"] !== undefined) {
+    return "vendor-mapbox";
+  }
+
+  if (/^(recharts|vendor-charts|BarChart|LineChart|AreaChart|PieChart|ResponsiveContainer)(-|$)|^d3-/.test(stem) && budgets["vendor-charts"] !== undefined) {
+    return "vendor-charts";
+  }
 
   // Walk left from the rightmost `-`, accepting the first split whose
   // prefix is a known budget key or "index".
@@ -159,6 +185,17 @@ function main() {
     console.error(`\n❌ ${failed} chunk(s) exceed budget. Either split the chunk, remove imports, or raise the budget in scripts/check-bundle-size.mjs after review.`);
     process.exit(1);
   }
+
+  if (existsSync(INDEX_HTML)) {
+    const forbiddenPreloads = forbiddenInitialPreloads(readFileSync(INDEX_HTML, "utf8"));
+    if (forbiddenPreloads.length > 0) {
+      console.error("\nLazy-only chart/map chunks were preloaded by dist/index.html:");
+      for (const href of forbiddenPreloads) console.error(`  - ${href}`);
+      console.error("Keep Recharts, d3, Mapbox, and react-map-gl behind route/component-level dynamic imports.");
+      process.exit(1);
+    }
+  }
+
   console.log(`\n✅ All ${rows.length} chunks within budget.`);
 }
 

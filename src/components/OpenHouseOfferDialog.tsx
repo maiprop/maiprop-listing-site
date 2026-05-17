@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Euro, Loader2, Clock, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   useOpenHouseSettings,
@@ -98,6 +98,9 @@ export default function OpenHouseOfferDialog({
       <DialogContent className="bg-card border-border max-w-md">
         <DialogHeader>
           <DialogTitle className="font-display text-lg">Submit Offer</DialogTitle>
+          <DialogDescription className="sr-only">
+            Review offer eligibility and submit a sealed offer for this open-house listing.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">

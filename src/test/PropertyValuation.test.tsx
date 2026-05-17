@@ -3,10 +3,8 @@
  * subscription, valuation usage + record) is fully mocked so we can
  * deterministically test:
  *   - Sign-in gate
- *   - Pro plan gate (both paths)
- *   - Per-month limit gate
- *   - OS API short-circuit (fetch-report-from-os success)
- *   - AI fallback path (property-valuation success)
+ *   - Signed-in access for free and Pro users
+ *   - Server-side quota path through property-valuation
  *   - AI error → toast
  *   - Result UI (estimate, score rings, pricing position, score bars)
  *   - Expanded analysis section
@@ -112,64 +110,43 @@ describe("PropertyValuation — gates", () => {
     expect(screen.getByText(/Sign in for Property Valuation/i)).toBeInTheDocument();
   });
 
-  it("toasts a Pro-required error when a non-Pro user clicks Run", () => {
+  it("runs for non-Pro users because the server enforces the free quota", async () => {
     useSubMock.mockReturnValue({ isPro: false });
+    invokeMock.mockResolvedValue({ data: validResult, error: null });
     render(<PropertyValuation {...baseProps} />);
     fireEvent.click(screen.getByRole("button", { name: /Run AI Valuation/i }));
-    expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/Pro plan/i));
-    expect(invokeMock).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByText(/240\.000/)).toBeInTheDocument());
+    expect(invokeMock).toHaveBeenCalledWith("property-valuation", expect.any(Object));
   });
 
-  it("toasts the limit-reached message when monthly quota is exhausted", () => {
+  it("does not enforce the old client-side monthly valuation cap", async () => {
     useValMock.mockReturnValue({ data: 5 });
+    invokeMock.mockResolvedValue({ data: validResult, error: null });
     render(<PropertyValuation {...baseProps} />);
     fireEvent.click(screen.getByRole("button", { name: /Run AI Valuation/i }));
-    expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/included valuations/i));
-    expect(invokeMock).not.toHaveBeenCalled();
-  });
-
-  it("renders the remaining-quota copy when there is at least one valuation left", () => {
-    useValMock.mockReturnValue({ data: 2 });
-    render(<PropertyValuation {...baseProps} />);
-    expect(screen.getByText(/3 of 5 valuations remaining/i)).toBeInTheDocument();
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("property-valuation", expect.any(Object)));
   });
 });
 
+
 describe("PropertyValuation — happy paths", () => {
-  it("uses the OS API short-circuit when listingId is provided and OS returns a report", async () => {
-    invokeMock.mockImplementation((name: string) => {
-      if (name === "fetch-report-from-os")
-        return Promise.resolve({ data: { ok: true, report: validResult }, error: null });
-      throw new Error("AI should not be called");
-    });
+  it("calls property-valuation when listingId is provided so quota and GPT analysis are enforced", async () => {
+    invokeMock.mockResolvedValue({ data: validResult, error: null });
     render(<PropertyValuation {...baseProps} listingId="l-1" />);
     fireEvent.click(screen.getByRole("button", { name: /Run AI Valuation/i }));
-    await waitFor(() => expect(screen.getByText("€240.000")).toBeInTheDocument());
-    // Pricing badge "Underpriced".
+    await waitFor(() => expect(screen.getByText(/240\.000/)).toBeInTheDocument());
     expect(screen.getByText(/Underpriced/i)).toBeInTheDocument();
-  });
-
-  it("falls back to property-valuation when the OS API returns no report", async () => {
-    invokeMock.mockImplementation((name: string) => {
-      if (name === "fetch-report-from-os")
-        return Promise.resolve({ data: { ok: false, report: null }, error: null });
-      if (name === "property-valuation")
-        return Promise.resolve({ data: validResult, error: null });
-      throw new Error("unexpected " + name);
-    });
-    render(<PropertyValuation {...baseProps} listingId="l-2" />);
-    fireEvent.click(screen.getByRole("button", { name: /Run AI Valuation/i }));
-    await waitFor(() => expect(screen.getByText("€240.000")).toBeInTheDocument());
-    // Both score rings are rendered. Confidence value 88 + liquidity 72.
-    expect(screen.getByText("88")).toBeInTheDocument();
-    expect(screen.getByText("72")).toBeInTheDocument();
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+    expect(invokeMock).toHaveBeenCalledWith("property-valuation", expect.objectContaining({
+      body: expect.objectContaining({ city: "Athens", price: 250_000, sqm: 90 }),
+    }));
   });
 
   it("calls AI directly when no listingId is provided (no OS path)", async () => {
     invokeMock.mockResolvedValue({ data: validResult, error: null });
     render(<PropertyValuation {...baseProps} />);
     fireEvent.click(screen.getByRole("button", { name: /Run AI Valuation/i }));
-    await waitFor(() => expect(screen.getByText("€240.000")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/240\.000/)).toBeInTheDocument());
     expect(invokeMock).toHaveBeenCalledTimes(1);
     expect(invokeMock).toHaveBeenCalledWith("property-valuation", expect.objectContaining({
       body: expect.objectContaining({ city: "Athens", price: 250_000, sqm: 90 }),
@@ -203,7 +180,7 @@ describe("PropertyValuation — result UI", () => {
     invokeMock.mockResolvedValue({ data: validResult, error: null });
     render(<PropertyValuation {...baseProps} />);
     fireEvent.click(screen.getByRole("button", { name: /Run AI Valuation/i }));
-    await waitFor(() => expect(screen.getByText("€240.000")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/240\.000/)).toBeInTheDocument());
     // Execution value pill.
     expect(screen.getByText(/Execution value/i)).toBeInTheDocument();
     expect(screen.getByText("€235.000")).toBeInTheDocument();

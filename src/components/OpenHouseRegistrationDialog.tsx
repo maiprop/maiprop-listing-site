@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import {
   Calendar, Upload, FileCheck, Shield, Loader2, Check, FileSignature, ClipboardCheck,
+  Mail, Phone, UserRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -70,7 +71,14 @@ export default function OpenHouseRegistrationDialog({
   // Require screening when property is >= €200k or a screening flag is set
   const requiresScreening = (listingPrice ?? 0) >= 200_000;
 
-  const [step, setStep] = useState<"timeslot" | "screening" | "id" | "waiver" | "qualified" | "done">("timeslot");
+  const [step, setStep] = useState<"contact" | "timeslot" | "screening" | "id" | "waiver" | "qualified" | "done">("contact");
+  const [contactName, setContactName] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [visitPurpose, setVisitPurpose] = useState("");
+  const [contactPermission, setContactPermission] = useState(false);
+  const [idConsent, setIdConsent] = useState(false);
+  const [privacyAcknowledged, setPrivacyAcknowledged] = useState(false);
   const [timeslotIndex, setTimeslotIndex] = useState<number | null>(null);
   // Screening fields
   const [mortgageStatus, setMortgageStatus] = useState<string>("");
@@ -94,6 +102,14 @@ export default function OpenHouseRegistrationDialog({
   const timeslots = (settings?.timeslots ?? []) as OHTimeslot[];
   const myReg = registrations.find((r: { requester_id: string }) => r.requester_id === user?.id);
   const regId = registrationId || myReg?.id;
+  const hasContactPacket = !!(
+    myReg?.contact_name &&
+    myReg?.contact_email &&
+    myReg?.contact_phone &&
+    myReg?.contact_permission_at &&
+    myReg?.id_verification_consent_at &&
+    myReg?.privacy_acknowledged_at
+  );
 
   // RSVP plan-limit check (free buyer = 3/month)
   const participantType = getParticipantTypeFromProfile(profile);
@@ -123,18 +139,55 @@ export default function OpenHouseRegistrationDialog({
 
   // Determine step order based on configuration
   const stepOrder: Array<typeof step> = (() => {
-    const steps: Array<typeof step> = ["timeslot"];
+    const steps: Array<typeof step> = ["contact", "timeslot"];
     if (requiresScreening) steps.push("screening");
-    if (hasAssetControl) {
-      steps.push("id");
-      steps.push("waiver");
-      if (requirePOF || requireInvestor) steps.push("qualified");
-    }
+    steps.push("id");
+    steps.push("waiver");
+    if (requirePOF || requireInvestor) steps.push("qualified");
     steps.push("done");
     return steps;
   })();
   const currentStepIdx = stepOrder.indexOf(step);
   const totalSteps = stepOrder.length - 1; // exclude "done"
+
+  const handleContactContinue = async () => {
+    if (!user) {
+      toast.error("Please sign in to register");
+      return;
+    }
+    if (!contactName.trim() || !contactEmail.trim() || !contactPhone.trim()) {
+      toast.error("Please add your name, email, and phone number");
+      return;
+    }
+    if (!contactPermission || !idConsent || !privacyAcknowledged) {
+      toast.error("Please accept the contact, ID verification, and privacy acknowledgements");
+      return;
+    }
+
+    if (myReg && !hasContactPacket) {
+      setLoading(true);
+      try {
+        await updateReg.mutateAsync({
+          id: myReg.id,
+          updates: {
+            contact_name: contactName,
+            contact_email: contactEmail,
+            contact_phone: contactPhone,
+            contact_permission_at: new Date().toISOString(),
+            id_verification_consent_at: new Date().toISOString(),
+            privacy_acknowledged_at: new Date().toISOString(),
+            visit_purpose: visitPurpose || undefined,
+          },
+        });
+      } catch (_err: unknown) {
+        setLoading(false);
+        return;
+      }
+      setLoading(false);
+    }
+
+    setStep("timeslot");
+  };
 
   const handleStartRegistration = async () => {
     if (!user) {
@@ -155,18 +208,20 @@ export default function OpenHouseRegistrationDialog({
         setRegistrationId(myReg.id);
         // Jump to correct next step
         if (requiresScreening) setStep("screening");
-        else if (hasAssetControl) setStep("id");
-        else setStep("done");
+        else setStep("id");
       } else {
         const data = await createReg.mutateAsync({
           listingId,
           timeslotIndex: timeslots.length ? (timeslotIndex ?? 0) : undefined,
           note: undefined,
+          contactName,
+          contactEmail,
+          contactPhone,
+          visitPurpose,
         });
         setRegistrationId((data as { id?: string })?.id ?? null);
         if (requiresScreening) setStep("screening");
-        else if (hasAssetControl) setStep("id");
-        else setStep("done");
+        else setStep("id");
       }
     } catch (_err: unknown) {
       // handled by mutation
@@ -240,7 +295,7 @@ export default function OpenHouseRegistrationDialog({
       const storedPath = await uploadOpenHouseDoc(idDocFile, path);
       await updateReg.mutateAsync({
         id: regId,
-        updates: { id_doc_type: idDocType, id_doc_url: storedPath, id_verified_at: new Date().toISOString() },
+        updates: { id_doc_type: idDocType, id_doc_url: storedPath },
       });
       setStep("waiver");
     } catch (e: unknown) {
@@ -298,8 +353,11 @@ export default function OpenHouseRegistrationDialog({
   // Reset state when dialog closes
   useEffect(() => {
     if (!open) {
-      setStep("timeslot");
+      setStep("contact");
       setTimeslotIndex(null);
+      setContactPermission(false);
+      setIdConsent(false);
+      setPrivacyAcknowledged(false);
       setMortgageStatus("");
       setBudgetRange("");
       setWorkingWithAgent("");
@@ -314,6 +372,20 @@ export default function OpenHouseRegistrationDialog({
     }
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const profileName =
+      profile?.display_name ||
+      [profile?.first_name, profile?.last_name].filter(Boolean).join(" ");
+    setContactName(myReg?.contact_name || profileName || "");
+    setContactEmail(myReg?.contact_email || user?.email || "");
+    setContactPhone(myReg?.contact_phone || "");
+    setVisitPurpose(myReg?.visit_purpose || "");
+    setContactPermission(!!myReg?.contact_permission_at);
+    setIdConsent(!!myReg?.id_verification_consent_at);
+    setPrivacyAcknowledged(!!myReg?.privacy_acknowledged_at);
+  }, [myReg, open, profile?.display_name, profile?.first_name, profile?.last_name, user?.email]);
+
   if (!open) return null;
 
   return (
@@ -323,6 +395,9 @@ export default function OpenHouseRegistrationDialog({
           <DialogTitle className="font-display text-lg">
             {step === "done" ? "Registration Submitted" : "Pre-register for Open House"}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Submit visitor details, scheduling preferences, verification documents, and required open-house consents.
+          </DialogDescription>
         </DialogHeader>
 
         {step === "done" ? (
@@ -351,6 +426,120 @@ export default function OpenHouseRegistrationDialog({
                   />
                 </div>
               </div>
+            )}
+
+            {/* Step: Contact and consent */}
+            {step === "contact" && (
+              <>
+                <div className="flex items-center gap-2 mb-1">
+                  <UserRound className="w-4 h-4 text-primary" />
+                  <p className="text-sm font-semibold">Visitor details</p>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Hosts need verified contact details before they can approve access to a private viewing.
+                </p>
+
+                <div className="space-y-2">
+                  <Label htmlFor="oh-contact-name" className="text-xs font-semibold text-muted-foreground">
+                    Full name <span className="text-destructive">*</span>
+                  </Label>
+                  <input
+                    id="oh-contact-name"
+                    value={contactName}
+                    onChange={(e) => setContactName(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm"
+                    placeholder="Your legal name"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="oh-contact-email" className="text-xs font-semibold text-muted-foreground">
+                      Email <span className="text-destructive">*</span>
+                    </Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <input
+                        id="oh-contact-email"
+                        type="email"
+                        value={contactEmail}
+                        onChange={(e) => setContactEmail(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 rounded-lg border border-border bg-background text-sm"
+                        placeholder="you@example.com"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="oh-contact-phone" className="text-xs font-semibold text-muted-foreground">
+                      Phone <span className="text-destructive">*</span>
+                    </Label>
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <input
+                        id="oh-contact-phone"
+                        type="tel"
+                        value={contactPhone}
+                        onChange={(e) => setContactPhone(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 rounded-lg border border-border bg-background text-sm"
+                        placeholder="+30..."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="oh-visit-purpose" className="text-xs font-semibold text-muted-foreground">
+                    Reason for attending
+                  </Label>
+                  <textarea
+                    id="oh-visit-purpose"
+                    rows={3}
+                    value={visitPurpose}
+                    onChange={(e) => setVisitPurpose(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm resize-none"
+                    placeholder="Buying, renting, representing a client, investment review..."
+                  />
+                </div>
+
+                <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-3">
+                  <label className="flex items-start gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={contactPermission}
+                      onChange={(e) => setContactPermission(e.target.checked)}
+                      className="mt-1 rounded border-border"
+                    />
+                    <span>I allow the host or their representative to contact me about this open house.</span>
+                  </label>
+                  <label className="flex items-start gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={idConsent}
+                      onChange={(e) => setIdConsent(e.target.checked)}
+                      className="mt-1 rounded border-border"
+                    />
+                    <span>I agree to provide ID for admission verification before attending.</span>
+                  </label>
+                  <label className="flex items-start gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={privacyAcknowledged}
+                      onChange={(e) => setPrivacyAcknowledged(e.target.checked)}
+                      className="mt-1 rounded border-border"
+                    />
+                    <span>I understand my registration details and documents are shared with the listing host for review.</span>
+                  </label>
+                </div>
+
+                <Button
+                  className="w-full gap-2"
+                  onClick={handleContactContinue}
+                  disabled={loading || !contactName.trim() || !contactEmail.trim() || !contactPhone.trim() || !contactPermission || !idConsent || !privacyAcknowledged}
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserRound className="w-4 h-4" />}
+                  Continue
+                </Button>
+              </>
             )}
 
             {/* Step: Timeslot */}

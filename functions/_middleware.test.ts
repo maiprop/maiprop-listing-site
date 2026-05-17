@@ -82,6 +82,21 @@ describe("middleware (feature flag off)", () => {
     expect(next).toHaveBeenCalledTimes(1);
     expect(await res.text()).toBe("UNLOCKED");
   });
+
+  it("returns a no-store 404 when an unmatched asset falls through to SPA HTML", async () => {
+    const next = vi.fn(() => new Response("<!doctype html><div id=\"root\"></div>", {
+      status: 200,
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    }));
+    const res = await onRequest(makeCtx({
+      url: "https://portal.maiprop.co/assets/Login-old.js",
+      next,
+    }));
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe(404);
+    expect(res.headers.get("Content-Type")).toMatch(/text\/plain/);
+    expect(res.headers.get("Cache-Control")).toContain("no-store");
+  });
 });
 
 // ─── /__unlock POST flow ────────────────────────────────────────────────────
@@ -394,6 +409,44 @@ describe("middleware with valid maiprop_unlock cookie", () => {
     );
     expect(next).toHaveBeenCalled();
     expect(await res.text()).toBe("CHILD");
+  });
+
+  it("does not serve SPA HTML as a missing chunk for unlocked users", async () => {
+    const next = vi.fn(() => new Response("<!doctype html><div id=\"root\"></div>", {
+      status: 200,
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    }));
+    const res = await onRequest(
+      makeCtx({
+        url: "https://portal.maiprop.co/assets/Login-old.js",
+        password: PWD,
+        cookie: `maiprop_unlock=${TOKEN}`,
+        next,
+      }),
+    );
+
+    expect(next).toHaveBeenCalled();
+    expect(res.status).toBe(404);
+    expect(await res.text()).toBe("Asset not found");
+  });
+
+  it("passes real asset responses through unchanged for unlocked users", async () => {
+    const next = vi.fn(() => new Response("console.log('ok')", {
+      status: 200,
+      headers: { "Content-Type": "application/javascript" },
+    }));
+    const res = await onRequest(
+      makeCtx({
+        url: "https://portal.maiprop.co/assets/Login-current.js",
+        password: PWD,
+        cookie: `maiprop_unlock=${TOKEN}`,
+        next,
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("application/javascript");
+    expect(await res.text()).toBe("console.log('ok')");
   });
 
   it("ignores a stale cookie value and shows the splash again", async () => {

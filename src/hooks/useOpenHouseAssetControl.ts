@@ -6,7 +6,36 @@ import type { Database } from "@/integrations/supabase/types";
 
 type OHRegUpdate = Database["public"]["Tables"]["open_house_registrations"]["Update"];
 type OHOfferUpdate = Database["public"]["Tables"]["open_house_offers"]["Update"];
-type OHOfferInsert = Database["public"]["Tables"]["open_house_offers"]["Insert"];
+type CreateOpenHouseRegistrationRpc = (
+  fn: "create_open_house_registration",
+  args: {
+    p_listing_id: string;
+    p_timeslot_index?: number | null;
+    p_contact_name?: string | null;
+    p_contact_email?: string | null;
+    p_contact_phone?: string | null;
+    p_visit_purpose?: string | null;
+    p_note?: string | null;
+    p_contact_permission?: boolean;
+    p_id_verification_consent?: boolean;
+    p_privacy_acknowledgement?: boolean;
+  },
+) => Promise<{ data: OpenHouseRegistration | null; error: { code?: string; message?: string } | null }>;
+type SubmitOpenHouseOfferRpc = (
+  fn: "submit_open_house_offer",
+  args: {
+    p_listing_id: string;
+    p_amount: number;
+    p_message?: string | null;
+    p_currency?: string;
+  },
+) => Promise<{ data: OpenHouseOffer | null; error: Error | null }>;
+type AcceptOpenHouseOfferRpc = (
+  fn: "accept_open_house_offer",
+  args: {
+    p_offer_id: string;
+  },
+) => Promise<{ data: OpenHouseOffer | null; error: Error | null }>;
 
 /** Listing summary attached to "my" registrations and offers via the listing_id join. */
 type OHListingSummary = Pick<
@@ -45,6 +74,13 @@ export interface OpenHouseRegistration {
   id: string;
   listing_id: string;
   requester_id: string;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  contact_permission_at: string | null;
+  id_verification_consent_at: string | null;
+  privacy_acknowledged_at: string | null;
+  visit_purpose: string | null;
   timeslot_index: number | null;
   id_doc_type: OHIdDocType | null;
   id_doc_url: string | null;
@@ -84,6 +120,103 @@ export interface OpenHouseOffer {
   decided_by: string | null;
   decided_at: string | null;
   profiles?: { display_name: string } | null;
+}
+
+type RegistrationContext = Pick<
+  OpenHouseRegistration,
+  | "timeslot_index"
+  | "contact_name"
+  | "contact_email"
+  | "contact_phone"
+  | "contact_permission_at"
+  | "id_verification_consent_at"
+  | "privacy_acknowledged_at"
+  | "id_doc_url"
+  | "id_verified_at"
+  | "waiver_signed_at"
+  | "proof_of_funds_url"
+  | "proof_amount"
+  | "investor_declaration_signed_at"
+  | "mortgage_status"
+  | "budget_range"
+  | "working_with_agent"
+>;
+
+type OfferEligibilityContext = {
+  open_house_date: string | null;
+  offer_deadline: string | null;
+};
+
+const OPEN_HOUSE_SCREENING_PRICE_THRESHOLD = 200_000;
+
+function requiresOpenHouseScreening(listingPrice: number | null | undefined) {
+  return Number(listingPrice ?? 0) >= OPEN_HOUSE_SCREENING_PRICE_THRESHOLD;
+}
+
+function isDateInPast(value: string | null | undefined) {
+  if (!value) return false;
+  return new Date(value).getTime() <= Date.now();
+}
+
+function getOpenHouseRevealBlocker({ open_house_date, offer_deadline }: OfferEligibilityContext) {
+  const revealGate = offer_deadline ?? open_house_date;
+  if (!revealGate) return null;
+  if (!isDateInPast(revealGate)) {
+    return offer_deadline
+      ? "Bids can only be revealed after the offer deadline."
+      : "Bids can only be revealed after the open house has taken place.";
+  }
+
+  return null;
+}
+
+export function getOpenHouseApprovalBlockers(
+  registration: RegistrationContext,
+  settings: OpenHouseSettings | null | undefined,
+  listingPrice?: number | null
+) {
+  const blockers: string[] = [];
+  const requiresScreening = requiresOpenHouseScreening(listingPrice);
+
+  if ((settings?.timeslots?.length ?? 0) > 0 && registration.timeslot_index === null) {
+    blockers.push("Timeslot not selected");
+  }
+
+  if (!registration.contact_name) blockers.push("Contact name missing");
+  if (!registration.contact_email) blockers.push("Contact email missing");
+  if (!registration.contact_phone) blockers.push("Contact phone missing");
+  if (!registration.contact_permission_at) blockers.push("Contact permission missing");
+  if (!registration.id_verification_consent_at) blockers.push("ID verification consent missing");
+  if (!registration.privacy_acknowledged_at) blockers.push("Privacy acknowledgement missing");
+
+  if (requiresScreening) {
+    if (!registration.mortgage_status) blockers.push("Mortgage/funds question missing");
+    if (!registration.budget_range) blockers.push("Budget range missing");
+    if (!registration.working_with_agent) blockers.push("Agent representation question missing");
+  }
+
+  if (!registration.id_doc_url || !registration.id_verified_at) {
+    blockers.push("ID verification incomplete");
+  }
+
+  if (!registration.waiver_signed_at) {
+    blockers.push("Waiver not signed");
+  }
+
+  if (settings?.require_proof_of_funds) {
+    if (!registration.proof_of_funds_url) {
+      blockers.push("Proof of funds missing");
+    }
+    if (settings.min_proof_amount && Number(registration.proof_amount ?? 0) < Number(settings.min_proof_amount)) {
+      blockers.push(`Proof of funds is below the minimum ${Number(settings.min_proof_amount).toLocaleString()}`);
+    }
+  }
+
+  if (settings?.require_investor_declaration && !registration.investor_declaration_signed_at) {
+    blockers.push("Investor declaration not signed");
+  }
+
+  return blockers;
 }
 
 export function useOpenHouseSettings(listingId: string | undefined) {
@@ -195,24 +328,34 @@ export function useCreateOpenHouseRegistration() {
       listingId,
       timeslotIndex,
       note,
+      contactName,
+      contactEmail,
+      contactPhone,
+      visitPurpose,
     }: {
       listingId: string;
       timeslotIndex?: number;
       note?: string;
+      contactName: string;
+      contactEmail: string;
+      contactPhone: string;
+      visitPurpose?: string;
     }) => {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) throw new Error("Not authenticated");
-      const { data, error } = await supabase
-        .from("open_house_registrations")
-        .insert({
-          listing_id: listingId,
-          requester_id: authUser.id,
-          timeslot_index: timeslotIndex ?? null,
-          status: "pending" as OHRegistrationStatus,
-          note: note || null,
-        })
-        .select()
-        .single();
+      const rpc = supabase.rpc as unknown as CreateOpenHouseRegistrationRpc;
+      const { data, error } = await rpc("create_open_house_registration", {
+          p_listing_id: listingId,
+          p_timeslot_index: timeslotIndex ?? null,
+          p_contact_name: contactName,
+          p_contact_email: contactEmail,
+          p_contact_phone: contactPhone,
+          p_visit_purpose: visitPurpose || null,
+          p_note: note || null,
+          p_contact_permission: true,
+          p_id_verification_consent: true,
+          p_privacy_acknowledgement: true,
+        });
       if (error) {
         // Handle duplicate registration gracefully — fetch existing and return it
         if (error.code === "23505") {
@@ -231,6 +374,17 @@ export function useCreateOpenHouseRegistration() {
         }
         // PostgrestError has a `.message` but does not extend Error — wrap it so
         // the onError handler always receives a true Error instance.
+        const capacityMessages: Record<string, string> = {
+          open_house_total_capacity_reached: "This open house is fully booked.",
+          open_house_timeslot_capacity_reached: "That timeslot is fully booked. Please choose another slot.",
+          open_house_timeslot_required: "Please choose a timeslot.",
+          open_house_timeslot_invalid: "That timeslot is no longer available. Please choose another slot.",
+          open_house_registration_closed: "Registration for this open house is closed.",
+          open_house_not_active: "This open house is not accepting registrations.",
+        };
+        if (error.message && capacityMessages[error.message]) {
+          throw new Error(capacityMessages[error.message]);
+        }
         throw new Error(error.message || "Registration failed. Please try again.");
       }
       return data;
@@ -256,6 +410,14 @@ export function useUpdateOpenHouseRegistration() {
     }: {
       id: string;
       updates: Partial<{
+        timeslot_index: number;
+        contact_name: string;
+        contact_email: string;
+        contact_phone: string;
+        contact_permission_at: string;
+        id_verification_consent_at: string;
+        privacy_acknowledged_at: string;
+        visit_purpose: string;
         id_doc_type: OHIdDocType;
         id_doc_url: string;
         id_verified_at: string;
@@ -286,18 +448,131 @@ export function useUpdateOpenHouseRegistration() {
       // a server round-trip rather than getting an opaque RLS rejection.
       const { data: reg, error: lookupErr } = await supabase
         .from("open_house_registrations")
-        .select("requester_id, listings!inner(owner_id)")
+        .select(`
+          requester_id,
+          status,
+          timeslot_index,
+          contact_name,
+          contact_email,
+          contact_phone,
+          contact_permission_at,
+          id_verification_consent_at,
+          privacy_acknowledged_at,
+          id_doc_url,
+          id_verified_at,
+          waiver_signed_at,
+          proof_of_funds_url,
+          proof_amount,
+          investor_declaration_signed_at,
+          mortgage_status,
+          budget_range,
+          working_with_agent,
+          listings!inner(
+            owner_id,
+            price,
+            open_house_settings (
+              id,
+              listing_id,
+              timeslots,
+              max_visitors_per_slot,
+              max_total_visitors,
+              broker_required,
+              require_proof_of_funds,
+              min_proof_amount,
+              require_investor_declaration,
+              offer_deadline,
+              allow_sealed_bids,
+              created_at,
+              updated_at
+            )
+          )
+        `)
         .eq("id", id)
         .maybeSingle();
       if (lookupErr) throw lookupErr;
       const lookup = reg as unknown as {
         requester_id?: string;
-        listings?: { owner_id?: string };
+        status?: OHRegistrationStatus;
+        timeslot_index?: number | null;
+        contact_name?: string | null;
+        contact_email?: string | null;
+        contact_phone?: string | null;
+        contact_permission_at?: string | null;
+        id_verification_consent_at?: string | null;
+        privacy_acknowledged_at?: string | null;
+        id_doc_url?: string | null;
+        id_verified_at?: string | null;
+        waiver_signed_at?: string | null;
+        proof_of_funds_url?: string | null;
+        proof_amount?: number | null;
+        investor_declaration_signed_at?: string | null;
+        mortgage_status?: string | null;
+        budget_range?: string | null;
+        working_with_agent?: string | null;
+        listings?: {
+          owner_id?: string;
+          price?: number | null;
+          open_house_settings?: OpenHouseSettings[] | OpenHouseSettings | null;
+        };
       } | null;
       const requesterId = lookup?.requester_id;
       const ownerId = lookup?.listings?.owner_id;
       if (uid !== requesterId && uid !== ownerId) {
         throw new Error("Not authorised for this registration");
+      }
+      const isOwner = uid === ownerId;
+      const isRequester = uid === requesterId;
+      const requestedStatus = updates.status;
+
+      if (isRequester) {
+        const requesterStatusAllowed = requestedStatus === undefined || requestedStatus === "cancelled";
+        const ownerOnlyFields = [
+          "id_verified_at",
+          "approved_by",
+          "approved_at",
+          "attended_at",
+          "rejection_reason",
+          "pof_verified_status",
+          "timeslot_index",
+        ] as const;
+        if (!requesterStatusAllowed || ownerOnlyFields.some((field) => field in updates)) {
+          throw new Error("Only the host can approve, reject, or mark attendance.");
+        }
+      }
+
+      if (isOwner && requestedStatus === "approved") {
+        const registrationForApproval: RegistrationContext = {
+          timeslot_index: updates.timeslot_index ?? lookup?.timeslot_index ?? null,
+          contact_name: updates.contact_name ?? lookup?.contact_name ?? null,
+          contact_email: updates.contact_email ?? lookup?.contact_email ?? null,
+          contact_phone: updates.contact_phone ?? lookup?.contact_phone ?? null,
+          contact_permission_at: updates.contact_permission_at ?? lookup?.contact_permission_at ?? null,
+          id_verification_consent_at: updates.id_verification_consent_at ?? lookup?.id_verification_consent_at ?? null,
+          privacy_acknowledged_at: updates.privacy_acknowledged_at ?? lookup?.privacy_acknowledged_at ?? null,
+          id_doc_url: updates.id_doc_url ?? lookup?.id_doc_url ?? null,
+          id_verified_at: updates.id_verified_at ?? lookup?.id_verified_at ?? null,
+          waiver_signed_at: updates.waiver_signed_at ?? lookup?.waiver_signed_at ?? null,
+          proof_of_funds_url: updates.proof_of_funds_url ?? lookup?.proof_of_funds_url ?? null,
+          proof_amount: updates.proof_amount ?? lookup?.proof_amount ?? null,
+          investor_declaration_signed_at: updates.investor_declaration_signed_at ?? lookup?.investor_declaration_signed_at ?? null,
+          mortgage_status: updates.mortgage_status ?? lookup?.mortgage_status ?? null,
+          budget_range: updates.budget_range ?? lookup?.budget_range ?? null,
+          working_with_agent: updates.working_with_agent ?? lookup?.working_with_agent ?? null,
+        };
+        const rawSettings = lookup?.listings?.open_house_settings;
+        const settings = Array.isArray(rawSettings) ? rawSettings[0] : rawSettings;
+        const blockers = getOpenHouseApprovalBlockers(
+          registrationForApproval,
+          settings ?? null,
+          lookup?.listings?.price ?? null
+        );
+        if (blockers.length > 0) {
+          throw new Error(`Registration is incomplete: ${blockers.join(", ")}`);
+        }
+      }
+
+      if (isOwner && requestedStatus === "attended" && lookup?.status !== "approved") {
+        throw new Error("Only approved registrations can be marked as attended.");
       }
       const { data, error } = await supabase
         .from("open_house_registrations")
@@ -375,20 +650,13 @@ export function useSubmitOpenHouseOffer() {
     }) => {
       const uid = (await supabase.auth.getUser()).data.user?.id;
       if (!uid) throw new Error("Not authenticated");
-      const { data, error } = await supabase
-        .from("open_house_offers")
-        .upsert(
-          {
-            listing_id: listingId,
-            bidder_id: uid,
-            amount,
-            message: message || null,
-            status: "submitted",
-          } as OHOfferInsert,
-          { onConflict: "listing_id,bidder_id" }
-        )
-        .select()
-        .single();
+      const rpc = supabase.rpc as unknown as SubmitOpenHouseOfferRpc;
+      const { data, error } = await rpc("submit_open_house_offer", {
+        p_listing_id: listingId,
+        p_amount: amount,
+        p_message: message || null,
+        p_currency: "EUR",
+      });
       if (error) throw error;
       return data;
     },
@@ -423,18 +691,55 @@ export function useUpdateOpenHouseOffer() {
       // the hook surfaces a clear "not authorised" before the server call.
       const { data: offer, error: lookupErr } = await supabase
         .from("open_house_offers")
-        .select("bidder_id, listings!inner(owner_id)")
+        .select(`
+          bidder_id,
+          status,
+          listings!inner(
+            owner_id,
+            open_house_date,
+            open_house_settings (offer_deadline)
+          )
+        `)
         .eq("id", id)
         .maybeSingle();
       if (lookupErr) throw lookupErr;
       const lookup = offer as unknown as {
         bidder_id?: string;
-        listings?: { owner_id?: string };
+        status?: OHOfferStatus;
+        listings?: {
+          owner_id?: string;
+          open_house_date?: string | null;
+          open_house_settings?: Array<{ offer_deadline?: string | null }> | { offer_deadline?: string | null } | null;
+        };
       } | null;
       const bidderId = lookup?.bidder_id;
       const ownerId = lookup?.listings?.owner_id;
       if (uid !== bidderId && uid !== ownerId) {
         throw new Error("Not authorised for this offer");
+      }
+      const isOwner = uid === ownerId;
+      const isBidder = uid === bidderId;
+      const rawSettings = lookup?.listings?.open_house_settings;
+      const settings = Array.isArray(rawSettings) ? rawSettings[0] : rawSettings;
+
+      if (isOwner && status === "revealed") {
+        const revealBlocker = getOpenHouseRevealBlocker({
+          open_house_date: lookup?.listings?.open_house_date ?? null,
+          offer_deadline: settings?.offer_deadline ?? null,
+        });
+        if (revealBlocker) throw new Error(revealBlocker);
+      }
+
+      if (isOwner && status === "accepted" && lookup?.status !== "revealed") {
+        throw new Error("Only revealed bids can be accepted.");
+      }
+
+      if (isBidder && status !== "withdrawn") {
+        throw new Error("Bidders can only withdraw their own bids.");
+      }
+
+      if (isOwner && status === "withdrawn") {
+        throw new Error("Only the bidder can withdraw a bid.");
       }
       const updates: OHOfferUpdate = { status };
       if (status === "revealed") updates.revealed_at = new Date().toISOString();
@@ -476,21 +781,13 @@ export function useAcceptOpenHouseOffer() {
       allOfferIds: string[];
     }) => {
       const uid = (await supabase.auth.getUser()).data.user?.id;
-      const now = new Date().toISOString();
-      const { error: e1 } = await supabase
-        .from("open_house_offers")
-        .update({ status: "accepted", decided_by: uid, decided_at: now, revealed_at: now })
-        .eq("id", acceptId);
-      if (e1) throw e1;
-      const otherIds = allOfferIds.filter((id) => id !== acceptId);
-      if (otherIds.length > 0) {
-        const { error: e2 } = await supabase
-          .from("open_house_offers")
-          .update({ status: "rejected", decided_by: uid, decided_at: now })
-          .in("id", otherIds)
-          .neq("status", "withdrawn");
-        if (e2) throw e2;
-      }
+      if (!uid) throw new Error("Not authenticated");
+      void uid;
+      void _listingId;
+      void allOfferIds;
+      const rpc = supabase.rpc as unknown as AcceptOpenHouseOfferRpc;
+      const { error } = await rpc("accept_open_house_offer", { p_offer_id: acceptId });
+      if (error) throw error;
     },
     onSuccess: (_, v) => {
       qc.invalidateQueries({ queryKey: ["open_house_offers", v.listingId] });
@@ -508,6 +805,33 @@ export function useRevealAllOffers() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ listingId: _listingId, offerIds }: { listingId: string; offerIds: string[] }) => {
+      const uid = (await supabase.auth.getUser()).data.user?.id;
+      if (!uid) throw new Error("Not authenticated");
+      const { data: listing, error: listingErr } = await supabase
+        .from("listings")
+        .select(`
+          owner_id,
+          open_house_date,
+          open_house_settings (offer_deadline)
+        `)
+        .eq("id", _listingId)
+        .maybeSingle();
+      if (listingErr) throw listingErr;
+      const lookup = listing as unknown as {
+        owner_id?: string;
+        open_house_date?: string | null;
+        open_house_settings?: Array<{ offer_deadline?: string | null }> | { offer_deadline?: string | null } | null;
+      } | null;
+      if (lookup?.owner_id !== uid) {
+        throw new Error("Only the host can reveal sealed bids.");
+      }
+      const rawSettings = lookup?.open_house_settings;
+      const settings = Array.isArray(rawSettings) ? rawSettings[0] : rawSettings;
+      const revealBlocker = getOpenHouseRevealBlocker({
+        open_house_date: lookup?.open_house_date ?? null,
+        offer_deadline: settings?.offer_deadline ?? null,
+      });
+      if (revealBlocker) throw new Error(revealBlocker);
       const { error } = await supabase
         .from("open_house_offers")
         .update({ status: "revealed", revealed_at: new Date().toISOString() })

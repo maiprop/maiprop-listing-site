@@ -7,7 +7,7 @@ import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import {
   ArrowLeft, Building2, MapPin, Calendar, Home,
-  Zap, Lock, Eye, Thermometer, Check,
+  Zap, Eye, Thermometer, Check,
   ChevronDown, ChevronUp, Shield, Flame, Wifi, Car, TreePine, Phone,
   Loader2, Maximize2, BedDouble, Bath, Layers, FileImage,
 } from "lucide-react";
@@ -22,6 +22,7 @@ import NeighbourhoodReport from "@/components/NeighbourhoodReport";
 import PropertyMiniMap from "@/components/PropertyMiniMap";
 import { ENERGY_SCALE, ENERGY_COLORS } from "@/types";
 import { CONSTRUCTION_PHASES, formatNewBuildPrice as formatPrice } from "@/lib/newBuildConfig";
+import { formatPrice as formatCurrency } from "@/lib/format";
 import { FeatureSection } from "@/components/property/DetailPrimitives";
 import { PropertyGallery as Gallery } from "@/components/new-build/PropertyGallery";
 import { ConstructionTimeline } from "@/components/new-build/ConstructionTimeline";
@@ -136,7 +137,7 @@ export default function NewBuildDetail() {
   };
 
   useEffect(() => {
-    if (!listing || !user || !isPro) return;
+    if (!listing || !user) return;
     setAiInsightsLoading(true);
     supabase.functions.invoke("property-valuation", {
       body: {
@@ -171,7 +172,7 @@ export default function NewBuildDetail() {
       }
     }).finally(() => setAiInsightsLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listing?.id, user, isPro]);
+  }, [listing?.id, user]);
 
   if (isLoading) return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -330,29 +331,13 @@ export default function NewBuildDetail() {
                   <span className="ml-auto text-[10px] text-muted-foreground">Powered by mAI Prop OS</span>
                 </div>
                 <div className="p-5">
-                  {user && !isPro && (
-                    <div className="text-center space-y-3 py-2">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto">
-                        <Lock className="w-5 h-5 text-primary" />
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        AI Market Insights are a Pro feature.
-                      </p>
-                      <Link
-                        to="/pricing"
-                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity"
-                      >
-                        <Zap className="w-3.5 h-3.5" /> Upgrade to Pro
-                      </Link>
-                    </div>
-                  )}
-                  {user && isPro && aiInsightsLoading && (
+                  {user && aiInsightsLoading && (
                     <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
                       <Loader2 className="w-4 h-4 animate-spin" />
                       <span className="text-xs">Analysing market data…</span>
                     </div>
                   )}
-                  {user && isPro && !aiInsightsLoading && aiInsightsData && (() => {
+                  {user && !aiInsightsLoading && aiInsightsData && (() => {
                     const cmpCfg: Record<string, { label: string; color: string; bg: string }> = {
                       below_market: { label: "Below Market", color: "text-emerald-400", bg: "bg-emerald-400/10 border-emerald-400/20" },
                       at_market:    { label: "At Market",    color: "text-yellow-400",  bg: "bg-yellow-400/10 border-yellow-400/20" },
@@ -376,14 +361,14 @@ export default function NewBuildDetail() {
                         <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
                           <p className="text-[10px] text-muted-foreground uppercase tracking-widest">AI Estimate</p>
                           <span className="font-display font-black text-3xl text-foreground">
-                            €{(aiInsightsData.estimatedValue / 1000).toFixed(0)}k
+                            {formatCurrency(aiInsightsData.estimatedValue)}
                           </span>
                           <p className="text-[10px] text-muted-foreground">Confidence: {aiInsightsData.confidenceLabel}</p>
                         </div>
                       </div>
                     );
                   })()}
-                  {user && isPro && !aiInsightsLoading && !aiInsightsData && (
+                  {user && !aiInsightsLoading && !aiInsightsData && (
                     <p className="text-xs text-muted-foreground text-center py-4">Market analysis unavailable</p>
                   )}
                   {!user && (

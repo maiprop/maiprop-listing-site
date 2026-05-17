@@ -1,14 +1,13 @@
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
-import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
+import { hasAIProviderCredentials, openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
-import { requireProSubscription } from "../_shared/proGate.ts";
 import { createLogger } from "../_shared/logger.ts";
 
 const log = createLogger("property-valuation");
 
 const BUCKET = "property-valuation";
-const valuationLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 15, windowMs: 60_000 });
+const valuationLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 15, windowMs: 60_000, failClosed: true });
 
 // ── Greece 2026 market benchmarks ─────────────────────────────────────────────
 const MARKET_BENCHMARKS = `
@@ -137,7 +136,7 @@ execution_value = market_value MINUS transaction_friction MINUS legal_uncertaint
 `;
 
 // ── Property-type specific methodology ────────────────────────────────────────
-function getTypeInstructions(propertyType: string, listingType: string): string {
+const getTypeInstructions = (propertyType: string, listingType: string): string => {
   const isAuction = listingType === "auction";
 
   const base: Record<string, string> = {
@@ -208,27 +207,77 @@ METHODOLOGY: GENERAL PROPERTY — Comparable model with type-specific adjustment
 Use benchmark table. Apply condition, location, feature adjustments. Range: ±15-25%. Liquidity: moderate 0.3-0.5.`;
 
   return (base[propertyType] || fallback) + auctionSuffix;
-}
+};
 
 // ── Main handler ───────────────────────────────────────────────────────────────
-Deno.serve(async (req) => {
+const fallbackValuation = (input: { // skipcq: JS-R1005 - Deterministic valuation fallback keeps comparable scoring and confidence fields aligned.
+  city: string;
+  price: number;
+  sqm: number;
+  propertyType?: string;
+  listingType?: string;
+  reason?: string;
+}) => {
+  const listedPrice = Number.isFinite(input.price) && input.price > 0 ? input.price : input.sqm * 2500;
+  const sqm = Number.isFinite(input.sqm) && input.sqm > 0 ? input.sqm : 1;
+  const pricePerSqm = Math.round(listedPrice / sqm);
+  const isAuction = input.listingType === "auction";
+  const estimatedValue = Math.round(listedPrice);
+  const rangeLow = Math.round(estimatedValue * 0.85);
+  const rangeHigh = Math.round(estimatedValue * 1.12);
+  const executionValue = Math.round(estimatedValue * (1 - (isAuction ? 0.25 : 0.14)));
+
+  return {
+    estimatedValue,
+    rangeLow,
+    rangeHigh,
+    executionValue,
+    pricePerSqmEstimate: pricePerSqm,
+    confidence: 35,
+    confidenceLabel: "Low",
+    liquidityScore: input.propertyType === "apartment" ? 70 : 45,
+    marketComparison: "at_market",
+    marketComparisonPct: 0,
+    pricingPosition: "fair",
+    methodUsed: "Conservative fallback based on submitted listing price and standard transaction friction",
+    valuationMode: "MODE_1_LISTING_ONLY",
+    summary: `Fallback valuation for ${input.city}: ${input.reason ?? "the AI provider returned malformed JSON"}, so this uses the submitted price as the market anchor and applies conservative transaction/legal uncertainty adjustments. Treat this as a temporary estimate until a full AI valuation can be generated.`,
+    keyFactors: [
+      { factor: "Submitted price anchor", impact: "neutral", note: "Used because provider output was unavailable" },
+      { factor: "2026 market uncertainty", impact: "neutral", note: "Conservative confidence applied" },
+      { factor: "Transaction costs", impact: "negative", note: "Execution value includes friction" },
+      { factor: "Legal/planning data", impact: "negative", note: "Document status unknown" },
+    ],
+    legalCleanliness: 45,
+    planningCertainty: input.propertyType === "apartment" ? 65 : 45,
+    taxFriction: isAuction ? 55 : 30,
+    transferReadiness: 50,
+    legalSummary: "Legal and planning documents were not verified by this fallback valuation. Confirm title, building identity, permits, and restrictions before relying on the estimate.",
+    taxSummary: "Assumes normal Greek transaction costs unless the asset is an auction or complex transfer.",
+    objectiveValueProxy: null,
+    renovationPotential: null,
+    rentalYieldEstimate: input.propertyType === "apartment" ? 4.5 : 3.5,
+    highestBestUseHint: null,
+    redFlags: [`${input.reason ?? "AI provider returned malformed JSON"}; fallback valuation used`],
+    auctionAdjustedValue: isAuction ? Math.round(estimatedValue / 0.8) : null,
+    listingQualityScore: 40,
+    generatedBy: "fallback",
+  };
+};
+
+Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, valuation parsing, fallback, and response shaping.
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
-  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
-  if (await valuationLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
-
   // Enforce AI quota before processing
   const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
   if (quota.errorResponse) return quota.errorResponse;
   const quotaUserId = quota.userId;
 
-  // Pro subscription gate — this is a Pro-only feature
-  if (quotaUserId) {
-    const proCheck = await requireProSubscription(quotaUserId, corsHeaders);
-    if (proCheck.errorResponse) return proCheck.errorResponse;
-  }
+  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? quotaUserId ?? "anonymous";
+  if (await valuationLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
+  // Signed-in access gate is handled by enforceAiQuota; free vs Pro caps live in the DB.
   try {
     const body = await req.json();
     const {
@@ -251,7 +300,19 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (!Deno.env.get("OPENAI_API_KEY")) throw new Error("OPENAI_API_KEY not configured");
+    if (!hasAIProviderCredentials()) {
+      log.warn("property-valuation: AI provider key missing; using fallback valuation", { city });
+      const fallback = fallbackValuation({
+        city: String(city),
+        price: Number(price),
+        sqm: Number(sqm),
+        propertyType: typeof propertyType === "string" ? propertyType : undefined,
+        listingType: typeof listingType === "string" ? listingType : undefined,
+        reason: "the AI provider is not configured",
+      });
+      await recordAiCall(quotaUserId, BUCKET);
+      return new Response(JSON.stringify(fallback), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     // ── Key property specifics (construction year, condition, heating) for valuation ──
     const keySpecifics = [
@@ -383,17 +444,22 @@ Rules:
     const response = await openAIChatCompletion({
       messages: [{ role: "user", content: prompt }],
       temperature: 0.15,
-      max_tokens: 2000,
+      max_tokens: 8192,
     });
 
     if (!response.ok) {
       const txt = await response.text();
       log.error("AI gateway error", { status: response.status, body: txt.slice(0, 500) });
-      const usageLimitMsg = "AI features are temporarily unavailable due to usage limits. Please try again later or contact support.";
-      if (response.status === 402 || response.status === 429) {
-        return new Response(JSON.stringify({ error: usageLimitMsg }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-      throw new Error(`AI gateway error: ${response.status}`);
+      const fallback = fallbackValuation({
+        city: String(city),
+        price: Number(price),
+        sqm: Number(sqm),
+        propertyType: typeof propertyType === "string" ? propertyType : undefined,
+        listingType: typeof listingType === "string" ? listingType : undefined,
+        reason: `the AI provider returned ${response.status}`,
+      });
+      await recordAiCall(quotaUserId, BUCKET);
+      return new Response(JSON.stringify(fallback), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const aiData = await response.json();
@@ -419,8 +485,20 @@ Rules:
     try {
       result = JSON.parse(raw);
     } catch (parseErr) {
-      log.error("JSON parse failed", { err: parseErr instanceof Error ? parseErr.message : String(parseErr), raw: raw.slice(0, 500) });
-      throw new Error("Failed to parse AI response — invalid JSON from model");
+      log.warn("property-valuation: AI returned invalid JSON; using fallback valuation", {
+        err: parseErr instanceof Error ? parseErr.message : String(parseErr),
+        city,
+        rawLength: raw.length,
+        sample: raw.slice(0, 240),
+      });
+      result = fallbackValuation({
+        city: String(city),
+        price: Number(price),
+        sqm: Number(sqm),
+        propertyType: typeof propertyType === "string" ? propertyType : undefined,
+        listingType: typeof listingType === "string" ? listingType : undefined,
+        reason: "the AI provider returned malformed JSON",
+      });
     }
 
     // Ensure backwards-compatible fields

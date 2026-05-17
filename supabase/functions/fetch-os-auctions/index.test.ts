@@ -2,11 +2,28 @@
 /**
  * Unit coverage for fetch-os-auctions request shaping and public rate-limit keying.
  */
-import { assertEquals, assertNotEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { captureHandler } from "../_shared/testUtils.ts";
+import {
+  assertEquals,
+  assertNotEquals,
+} from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { authedReq, captureHandler } from "../_shared/testUtils.ts";
 
-const { restore } = await captureHandler(import.meta.url, "./index.ts");
-const { buildFilterRequest, getRateLimitKey, mapAuction } = await import("./index.ts");
+const { handler, restore } = await captureHandler(
+  import.meta.url,
+  "./index.ts",
+  {
+    RATE_LIMIT_FORCE_MEMORY: "true",
+    MAIPROP_OS_URL: "https://app.os.maiprop.co",
+  },
+);
+const {
+  buildFilterRequest,
+  getFetchErrorPayload,
+  getValidatedPagination,
+  getRateLimitKey,
+  mapAuction,
+  hasPortalProAccess,
+} = await import("./index.ts");
 
 Deno.test("buildFilterRequest forwards sort fields to OS", () => {
   const request = buildFilterRequest({
@@ -24,9 +41,12 @@ Deno.test("rate-limit key ignores spoofable forwarded IP headers", async () => {
   const first = new Request("https://functions.supabase.co/fetch-os-auctions", {
     headers: { "x-forwarded-for": "1.1.1.1" },
   });
-  const second = new Request("https://functions.supabase.co/fetch-os-auctions", {
-    headers: { "x-forwarded-for": "2.2.2.2" },
-  });
+  const second = new Request(
+    "https://functions.supabase.co/fetch-os-auctions",
+    {
+      headers: { "x-forwarded-for": "2.2.2.2" },
+    },
+  );
 
   assertEquals(await getRateLimitKey(first), "anonymous");
   assertEquals(await getRateLimitKey(second), "anonymous");
@@ -36,9 +56,12 @@ Deno.test("rate-limit key uses a stable token hash for authenticated callers", a
   const first = new Request("https://functions.supabase.co/fetch-os-auctions", {
     headers: { authorization: "Bearer token-a" },
   });
-  const second = new Request("https://functions.supabase.co/fetch-os-auctions", {
-    headers: { authorization: "Bearer token-b" },
-  });
+  const second = new Request(
+    "https://functions.supabase.co/fetch-os-auctions",
+    {
+      headers: { authorization: "Bearer token-b" },
+    },
+  );
 
   const firstKey = await getRateLimitKey(first);
   assertEquals(firstKey, await getRateLimitKey(first));
@@ -63,6 +86,105 @@ Deno.test("mapAuction drops malformed numeric fields", () => {
   assertEquals(mapped.longitude, 23.7);
   assertEquals(mapped.year_built, null);
   assertEquals(mapped.tags.includes("ownership_pct:NaN"), false);
+});
+
+Deno.test("OS upstream failures return sanitized client payload", () => {
+  const payload = getFetchErrorPayload({
+    kind: "os-api",
+    status: 500,
+    detail: "upstream stack trace with credentials",
+  });
+
+  assertEquals(payload.status, 502);
+  assertEquals(payload.error, "Auction provider temporarily unavailable");
+});
+
+Deno.test("generic fetch failures return sanitized client payload", () => {
+  const payload = getFetchErrorPayload(
+    new Error("connection failed with token=secret"),
+  );
+
+  assertEquals(payload.status, 500);
+  assertEquals(payload.error, "Unable to fetch auctions");
+});
+
+Deno.test("handler rejects non-POST methods", async () => {
+  const res = await handler(authedReq("GET"));
+  assertEquals(res.status, 405);
+});
+
+Deno.test("pagination validation rejects malformed page/pageSize", () => {
+  assertEquals(getValidatedPagination({ page: -1 }, 60), {
+    error: "page must be a finite non-negative integer",
+  });
+  assertEquals(getValidatedPagination({ page: Number.NaN }, 60), {
+    error: "page must be a finite non-negative integer",
+  });
+  assertEquals(getValidatedPagination({ pageSize: 0 }, 60), {
+    error: "pageSize must be a finite integer between 1 and 60",
+  });
+  assertEquals(getValidatedPagination({ pageSize: 61 }, 60), {
+    error: "pageSize must be a finite integer between 1 and 60",
+  });
+  assertEquals(getValidatedPagination({ page: 2, pageSize: 10 }, 60), {
+    page: 2,
+    size: 10,
+  });
+});
+
+function makeEntitlementClient(profile: Record<string, unknown>, pricingRow: Record<string, unknown> | null = null) {
+  return {
+    from(table: string) {
+      return {
+        select() {
+          return this;
+        },
+        eq() {
+          return this;
+        },
+        in() {
+          return this;
+        },
+        limit() {
+          return this;
+        },
+        single() {
+          if (table === "profiles") return Promise.resolve({ data: profile });
+          return Promise.resolve({ data: null });
+        },
+        maybeSingle() {
+          if (table === "pricing_configs") return Promise.resolve({ data: pricingRow });
+          return Promise.resolve({ data: null });
+        },
+      };
+    },
+  };
+}
+
+Deno.test("OS portal access rejects non-investor Stripe products", async () => {
+  const client = makeEntitlementClient({
+    role: "agent",
+    participant_type: "agent",
+    subscription_product_id: "prod_agent",
+    force_pro_access: false,
+  });
+
+  assertEquals(await hasPortalProAccess(client as never, "user-agent"), false);
+});
+
+Deno.test("OS portal access accepts only investor-scoped pricing products", async () => {
+  const client = makeEntitlementClient({
+    role: "investor",
+    participant_type: "investor",
+    subscription_product_id: "prod_investor",
+    force_pro_access: false,
+  }, {
+    key: "investor_private",
+    audience: "investor",
+    metadata: { stripe_product_id: "prod_investor" },
+  });
+
+  assertEquals(await hasPortalProAccess(client as never, "user-investor"), true);
 });
 
 restore();

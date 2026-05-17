@@ -11,7 +11,11 @@ const mockFrom = vi.fn();
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: { from: (...args: unknown[]) => mockFrom(...args) },
 }));
-vi.mock("@/contexts/AuthContext", () => ({ useAuth: vi.fn() }));
+vi.mock("@/contexts/AuthContext", () => ({
+  useAuth: vi.fn(),
+  profileRoleSwitchInProgress: (profile: { role_switch_in_progress_at?: string | null } | null) =>
+    Boolean(profile?.role_switch_in_progress_at),
+}));
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useEligibleForQuickSale } from "@/hooks/useEligibleForQuickSale";
@@ -51,17 +55,29 @@ describe("useEligibleForQuickSale", () => {
   });
 
   it("active investor subscription is eligible", async () => {
-    setupMock({ role: "investor" }, { status: "active" });
+    setupMock({ role: "investor", participant_type: "investor" }, { status: "active" });
     const { result } = renderHook(() => useEligibleForQuickSale(), { wrapper });
     await waitFor(() => expect(result.current.hasActiveSubscription).toBe(true));
     expect(result.current.eligible).toBe(true);
   });
 
-  it("force_pro_access grants eligibility", async () => {
+  it("force_pro_access alone does not grant eligibility", async () => {
     setupMock({ role: "buyer", force_pro_access: true }, null);
     const { result } = renderHook(() => useEligibleForQuickSale(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.eligible).toBe(true);
+    expect(result.current.eligible).toBe(false);
+  });
+
+  it("drops investor eligibility while a role switch is in progress", async () => {
+    setupMock({
+      role: "investor",
+      participant_type: "investor",
+      role_switch_in_progress_at: "2026-05-14T10:00:00.000Z",
+    }, { status: "active" });
+    const { result } = renderHook(() => useEligibleForQuickSale(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.eligible).toBe(false);
+    expect(result.current.isInvestorRole).toBe(false);
   });
 
   it("non-admin without subscription is not eligible", async () => {

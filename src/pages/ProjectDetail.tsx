@@ -320,7 +320,7 @@ export default function ProjectDetail() {
           <Section title="Basic project info" icon={FileText}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2"><label className={LABEL_CLS}>Project name *</label><input value={(currentForm.name as string) || ""} onChange={e => updateField("name", e.target.value)} placeholder="e.g. Marina Heights" className={INPUT_CLS} /></div>
-              <div><label className={LABEL_CLS}>Î‘ÏÎ¹Î¸Î¼ÏŒÏ‚ ÎŸÎ¹ÎºÎ¿Î´Î¿Î¼Î¹ÎºÎ®Ï‚ Î†Î´ÎµÎ¹Î±Ï‚ (Building permit number) *</label><input value={(currentForm.building_permit_number as string) || ""} onChange={e => updateField("building_permit_number", e.target.value)} placeholder="e.g. 12345/2024" className={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>Building permit number *</label><input value={(currentForm.building_permit_number as string) || ""} onChange={e => updateField("building_permit_number", e.target.value)} placeholder="e.g. 12345/2024" className={INPUT_CLS} /></div>
               <div><label className={LABEL_CLS}>Developer company</label><input value={(currentForm.developer_company as string) || ""} onChange={e => updateField("developer_company", e.target.value)} placeholder="Company name" className={INPUT_CLS} /></div>
               <div><label className={LABEL_CLS}>Architect / developer group</label><input value={(currentForm.architect_group as string) || ""} onChange={e => updateField("architect_group", e.target.value)} placeholder="Architect or group" className={INPUT_CLS} /></div>
               <div><label className={LABEL_CLS}>Construction company</label><input value={(currentForm.construction_company as string) || ""} onChange={e => updateField("construction_company", e.target.value)} placeholder="Constructor" className={INPUT_CLS} /></div>
@@ -333,7 +333,7 @@ export default function ProjectDetail() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2"><label className={LABEL_CLS}>Address</label><input value={(currentForm.address as string) || ""} onChange={e => updateField("address", e.target.value)} placeholder="Street, number" className={INPUT_CLS} /></div>
               <div><label className={LABEL_CLS}>City</label><input value={(currentForm.city as string) || ""} onChange={e => updateField("city", e.target.value)} placeholder="e.g. Athens" className={INPUT_CLS} /></div>
-              <div><label className={LABEL_CLS}>Municipality</label><input value={(currentForm.municipality as string) || ""} onChange={e => updateField("municipality", e.target.value)} placeholder="Î”Î®Î¼Î¿Ï‚" className={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>Municipality</label><input value={(currentForm.municipality as string) || ""} onChange={e => updateField("municipality", e.target.value)} placeholder="Municipality" className={INPUT_CLS} /></div>
               <div><label className={LABEL_CLS}>Latitude</label><input type="number" step="any" value={(currentForm.latitude as number) ?? ""} onChange={e => updateField("latitude", e.target.value ? parseFloat(e.target.value) : undefined)} placeholder="e.g. 37.9838" className={INPUT_CLS} /></div>
               <div><label className={LABEL_CLS}>Longitude</label><input type="number" step="any" value={(currentForm.longitude as number) ?? ""} onChange={e => updateField("longitude", e.target.value ? parseFloat(e.target.value) : undefined)} placeholder="e.g. 23.7275" className={INPUT_CLS} /></div>
               <div className="sm:col-span-2"><label className={LABEL_CLS}>Area description</label><textarea value={(currentForm.area_description as string) || ""} onChange={e => updateField("area_description", e.target.value)} rows={2} placeholder="Neighbourhood, amenities, surroundings..." className={INPUT_CLS + " resize-none"} /></div>
@@ -491,7 +491,7 @@ export default function ProjectDetail() {
                 {listings.map((l: { id: string; title?: string | null; sqm?: number | null; price?: number | null; cover_image_url?: string | null }) => (
                   <div key={l.id} className="flex items-center gap-3 bg-secondary rounded-xl p-3">
                     {l.cover_image_url && <img src={l.cover_image_url} alt="" className="w-12 h-12 rounded-lg object-cover" />}
-                    <div className="flex-1 min-w-0"><Link to={`/property/${l.id}`} className="font-medium hover:underline truncate block">{l.title}</Link><span className="text-xs text-muted-foreground">€{Number(l.price).toLocaleString()} Â· {l.sqm}m²</span></div>
+                    <div className="flex-1 min-w-0"><Link to={`/property/${l.id}`} className="font-medium hover:underline truncate block">{l.title}</Link><span className="text-xs text-muted-foreground">€{Number(l.price).toLocaleString()} · {l.sqm}m²</span></div>
                     <Button variant="ghost" size="sm" onClick={() => handleUnlinkListing(l.id)}>Unlink</Button>
                   </div>
                 ))}
@@ -504,7 +504,7 @@ export default function ProjectDetail() {
               {myListings.filter((l) => !linkedListingIds.has(l.id)).length === 0 && (
                 <p className="text-sm text-muted-foreground">
                   No unlinked listings. <Link to="/listings/new" className="text-primary underline">Create one</Link>
-                  {isDeveloper && <>{" Â· "}<Link to="/listings/new-building" className="text-primary underline">New building</Link></>}
+                  {isDeveloper && <>{" · "}<Link to="/listings/new-building" className="text-primary underline">New building</Link></>}
                 </p>
               )}
             </div>

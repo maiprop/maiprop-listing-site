@@ -1,4 +1,4 @@
-import { useState, useMemo, lazy, Suspense } from "react";
+import { useRef, useState, useMemo, lazy, Suspense, useCallback } from "react";
 import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
@@ -22,6 +22,7 @@ import { ListingTypeButton } from "@/components/listings/ListingTypeButton";
 import { PropertyTypeButton } from "@/components/listings/PropertyTypeButton";
 import { MapGate } from "@/components/listings/MapGate";
 import { ListingCompareButton } from "@/components/listings/ListingCompareButton";
+import { VirtualizedListingGrid } from "@/components/listings/VirtualizedListingGrid";
 
 import type { ListingsFilters } from "@/hooks/useListings";
 import { useListingsFilters } from "@/hooks/useListingsFilters";
@@ -35,6 +36,7 @@ import { useSmartFilters } from "@/hooks/useSmartFilters";
 import {
   buyPriceRanges, rentPriceRanges, listingTypeOptions, sortOptions,
 } from "@/lib/listingsConfig";
+import { mapListingFromCard } from "@/lib/listingsPerformance";
 
 export default function Listings() {
   const { t } = useTranslation();
@@ -46,6 +48,7 @@ export default function Listings() {
   const [viewportIds, setViewportIds] = useState<Set<string> | null>(null);
   const [polygonFilterIds, setPolygonFilterIds] = useState<Set<string> | null>(null);
   const [mobileTab, setMobileTab] = useState<"list" | "map">("list");
+  const splitListRef = useRef<HTMLDivElement | null>(null);
   const { user } = useAuth();
   const { consent, accept } = useCookieConsent();
 
@@ -118,24 +121,37 @@ export default function Listings() {
     minWalkability,
   });
 
+  const mapListings = useMemo(() => filtered.map(mapListingFromCard), [filtered]);
+
   // Compare helpers
-  const toggleCompare = (listing: ListingCardWithRaw) => {
+  const toggleCompare = useCallback((listing: ListingCardWithRaw) => {
     setCompareList(prev => {
       const exists = prev.find(l => l.id === listing.id);
       if (exists) return prev.filter(l => l.id !== listing.id);
       if (prev.length >= 3) return prev; // max 3
       return [...prev, listing];
     });
-  };
-  const isComparing = (id: string) => compareList.some(l => l.id === id);
+  }, []);
+  const isComparing = useCallback((id: string) => compareList.some(l => l.id === id), [compareList]);
+  const renderListingCard = useCallback((property: ListingCardWithRaw) => (
+    <div key={property.id} className="relative group">
+      <PropertyCard property={property} />
+      <ListingCompareButton
+        listing={property}
+        isSelected={isComparing(property.id)}
+        isLimitReached={compareList.length >= 3}
+        onToggle={toggleCompare}
+      />
+    </div>
+  ), [compareList, isComparing, toggleCompare]);
 
   return (
     <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
       <Helmet>
-        <title>Properties for Sale &amp; Rent in Greece — maiProp</title>
+        <title>Properties for Sale &amp; Rent in Greece — mAI prop</title>
         <meta name="description" content="Search thousands of properties for sale and rent across Greece. Filter by city, type, price and more." />
         <link rel="canonical" href="https://maiprop.co/listings" />
-        <meta property="og:title" content="Properties for Sale &amp; Rent in Greece — maiProp" />
+        <meta property="og:title" content="Properties for Sale &amp; Rent in Greece — mAI prop" />
         <meta property="og:description" content="Search thousands of properties for sale and rent across Greece." />
         <meta property="og:url" content="https://maiprop.co/listings" />
         <script type="application/ld+json">{JSON.stringify({
@@ -144,7 +160,7 @@ export default function Listings() {
           "name": "Properties for Sale & Rent in Greece",
           "description": "Search thousands of properties for sale and rent across Greece.",
           "url": "https://maiprop.co/listings",
-          "provider": { "@type": "Organization", "name": "maiProp", "url": "https://maiprop.co" },
+          "provider": { "@type": "Organization", "name": "mAI prop", "url": "https://maiprop.co" },
         })}</script>
       </Helmet>
       <Navbar />
@@ -192,13 +208,19 @@ export default function Listings() {
                 </div>
                 {/* View toggle */}
                 <div className="flex rounded-xl border border-border overflow-hidden shrink-0">
-                  <button onClick={() => setViewMode("grid")}
+                  <button
+                    onClick={() => setViewMode("grid")}
+                    aria-label="Grid view"
+                    aria-pressed={viewMode === "grid"}
                     className={`p-2 transition-colors ${viewMode === "grid" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}>
-                    <LayoutGrid className="w-4 h-4" />
+                    <LayoutGrid className="w-4 h-4" aria-hidden="true" />
                   </button>
-                  <button onClick={() => setViewMode("map")}
+                  <button
+                    onClick={() => setViewMode("map")}
+                    aria-label="Map view"
+                    aria-pressed={viewMode === "map" || viewMode === "split"}
                     className={`p-2 transition-colors ${viewMode === "map" || viewMode === "split" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}>
-                    <Map className="w-4 h-4" />
+                    <Map className="w-4 h-4" aria-hidden="true" />
                   </button>
                 </div>
                 {/* Filters button */}
@@ -404,7 +426,7 @@ export default function Listings() {
 
             {/* Desktop active filter chips */}
             {activeFilterCount > 0 && (
-              <div className="hidden sm:flex items-center gap-2 mt-3 flex-wrap overflow-x-auto scrollbar-none pb-0.5">
+              <div className="hidden sm:flex items-center gap-2 mt-3 flex-wrap overflow-visible pb-0.5 [&>button]:max-w-full [&>button]:min-w-0 [&>button]:whitespace-normal">
                 <span className="text-xs text-muted-foreground shrink-0">Active:</span>
                 {selectedType && <button onClick={() => { setParam("type", ""); setParam("subtype", ""); }} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">{PROPERTY_TYPE_MAP[selectedType as PropertyTypeKey]?.emoji} {getTypeLabel(selectedType)} <X className="w-3 h-3" /></button>}
                 {selectedSubtype && selectedType && <button onClick={() => setParam("subtype", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">{getSubtypeLabel(selectedType, selectedSubtype)} <X className="w-3 h-3" /></button>}
@@ -484,7 +506,6 @@ export default function Listings() {
               : viewportIds !== null
               ? filtered.filter(p => viewportIds.has(p.id))
               : filtered;
-
             const gridCards = splitDisplayList.length === 0 ? (
               <div className="glass-card rounded-xl p-10 text-center mt-4">
                 <MapPin className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
@@ -492,17 +513,16 @@ export default function Listings() {
                 <p className="text-xs text-muted-foreground mt-1">Pan the map or clear any area filter</p>
               </div>
             ) : (
-              splitDisplayList.map((property: ListingCardWithRaw) => (
-                <div key={property.id} className="relative group">
-                  <PropertyCard property={property} />
-                  <ListingCompareButton
-                    listing={property}
-                    isSelected={isComparing(property.id)}
-                    isLimitReached={compareList.length >= 3}
-                    onToggle={toggleCompare}
-                  />
-                </div>
-              ))
+              <VirtualizedListingGrid
+                items={splitDisplayList}
+                columns={1}
+                scrollParentRef={splitListRef}
+                gap={12}
+                estimateItemHeight={380}
+                className="grid grid-cols-1 gap-3"
+                renderItem={renderListingCard}
+                data-testid="split-listing-grid"
+              />
             );
 
             return (
@@ -527,6 +547,7 @@ export default function Listings() {
                 <div className={`md:w-[420px] shrink-0 overflow-y-auto px-4 space-y-3 pb-8 border-r border-border
                   ${mobileTab === "map" ? "hidden md:block" : "block"}
                   md:h-full h-[60vh]`}
+                  ref={splitListRef}
                 >
                   {isLoading
                     ? <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <PropertyCardSkeleton key={i} />)}</div>
@@ -541,7 +562,7 @@ export default function Listings() {
                   <MapGate consent={consent} accept={accept} height="100%">
                     <Suspense fallback={<div className="h-64 bg-muted animate-pulse rounded-lg" />}>
                       <MapView
-                        listings={filtered}
+                        listings={mapListings}
                         onVisibleListingsChange={setViewportIds}
                         onPolygonFilter={ids => { setPolygonFilterIds(ids); }}
                         height="100%"
@@ -582,19 +603,17 @@ export default function Listings() {
             ) : (
               <>
                 {filtered.length > 0 && (
-                <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-                  {filtered.map((property: ListingCardWithRaw) => (
-                    <div key={property.id} className="relative group">
-                      <PropertyCard property={property} />
-                      <ListingCompareButton
-                        listing={property}
-                        isSelected={isComparing(property.id)}
-                        isLimitReached={compareList.length >= 3}
-                        onToggle={toggleCompare}
-                      />
-                    </div>
-                  ))}
-                </div>
+                  <VirtualizedListingGrid
+                    items={filtered}
+                    className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4"
+                    gap={16}
+                    estimateItemHeight={430}
+                    renderItem={renderListingCard}
+                    data-testid="listing-grid"
+                  />
+                )}
+                {hasNextPage && !isFetchingNextPage && (
+                  <div ref={sentinelRef} aria-hidden="true" className="h-8 mt-2" />
                 )}
                 {/* Searching state: every loaded row was excluded by the
                  * client-side filters but more pages exist. Render a few
@@ -610,9 +629,6 @@ export default function Listings() {
                     {Array.from({ length: 4 }).map((_, i) => <PropertyCardSkeleton key={`more-${i}`} />)}
                   </div>
                 )}
-                {hasNextPage && !isFetchingNextPage && (
-                  <div ref={sentinelRef} aria-hidden="true" className="h-8 mt-2" />
-                )}
                 {!hasNextPage && filtered.length > 0 && (
                   <div className="text-center text-xs text-muted-foreground mt-6 pb-2">
                     {t("listings.endOfResults", "No more results")}
@@ -625,7 +641,7 @@ export default function Listings() {
             <MapGate consent={consent} accept={accept}>
               <Suspense fallback={<div className="h-64 bg-muted animate-pulse rounded-lg" />}>
                 <MapView
-                  listings={filtered}
+                  listings={mapListings}
                   onVisibleListingsChange={setViewportIds}
                   onPolygonFilter={setPolygonFilterIds}
                 />

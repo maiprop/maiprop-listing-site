@@ -10,12 +10,14 @@ interface Props {
   dealsCount: number;
   totalValue: number;
   avgDiscount: string;
+  avgRoi: string;
   subscription: Subscription | null;
   subscribed: boolean;
+  showInviteCta: boolean;
   onInviteClick: () => void;
 }
 
-export function InvestorHeroHeader({ dealsCount, totalValue, avgDiscount, subscription, subscribed, onInviteClick }: Props) {
+export function InvestorHeroHeader({ dealsCount, totalValue, avgDiscount, avgRoi, subscription, subscribed, showInviteCta, onInviteClick }: Props) {
   const { t } = useTranslation();
   return (
     <div className="relative border-b border-border overflow-hidden">
@@ -42,14 +44,16 @@ export function InvestorHeroHeader({ dealsCount, totalValue, avgDiscount, subscr
                 <div className="w-1.5 h-1.5 rounded-full bg-brand-emerald animate-pulse" />
                 {t("investor.hero.liveDeals", { count: dealsCount })}
               </div>
-              <button
-                type="button"
-                onClick={onInviteClick}
-                className="inline-flex items-center gap-1.5 text-xs bg-primary/10 border border-primary/20 text-primary px-3 py-1.5 rounded-full font-semibold hover:bg-primary/20 transition-colors"
-              >
-                <MailPlus className="w-3 h-3" />
-                {t("investor.hero.requestInvitation")}
-              </button>
+              {showInviteCta && (
+                <button
+                  type="button"
+                  onClick={onInviteClick}
+                  className="inline-flex items-center gap-1.5 text-xs bg-primary/10 border border-primary/20 text-primary px-3 py-1.5 rounded-full font-semibold hover:bg-primary/20 transition-colors"
+                >
+                  <MailPlus className="w-3 h-3" />
+                  {t("investor.hero.requestInvitation")}
+                </button>
+              )}
             </div>
             {subscribed && subscription && (
               <div className="flex items-center gap-1.5 text-xs bg-primary/10 border border-primary/20 text-primary px-3 py-1.5 rounded-full font-bold capitalize">
@@ -66,7 +70,7 @@ export function InvestorHeroHeader({ dealsCount, totalValue, avgDiscount, subscr
             { label: t("investor.kpi.liveDeals"), value: String(dealsCount), delta: t("investor.kpi.liveDealsThisWeek"), icon: Flame, color: "text-destructive" },
             { label: t("investor.kpi.totalDealValue"), value: `€${(totalValue / 1_000_000).toFixed(1)}M`, delta: t("investor.kpi.totalDealValueDelta"), icon: DollarSign, color: "text-primary" },
             { label: t("investor.kpi.avgDiscount"), value: `${avgDiscount}%`, delta: t("investor.kpi.avgDiscountDelta"), icon: TrendingDown, color: "text-brand-emerald" },
-            { label: t("investor.kpi.avgRoi"), value: "9.4%", delta: t("investor.kpi.avgRoiDelta"), icon: TrendingUp, color: "text-brand-gold" },
+            { label: t("investor.kpi.avgRoi"), value: `${avgRoi}%`, delta: t("investor.kpi.avgRoiDelta"), icon: TrendingUp, color: "text-brand-gold" },
           ].map(s => (
             <div key={s.label} className="glass-card rounded-xl p-3 sm:p-4 border border-border">
               <div className="flex items-center justify-between mb-1.5 sm:mb-2">

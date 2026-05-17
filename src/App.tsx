@@ -13,6 +13,7 @@ import { AdminRoute } from "@/components/AdminRoute";
 import { InvestorRoute } from "@/components/InvestorRoute";
 import { SellerRoute } from "@/components/SellerRoute";
 import { DeveloperRoute } from "@/components/DeveloperRoute";
+import { NewBuildingRoute } from "@/components/NewBuildingRoute";
 import { BottomNav } from "@/components/BottomNav";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useAiTranslation } from "@/hooks/useAiTranslation";
@@ -114,7 +115,7 @@ const App = () => (
                     <Routes>
                       <Route path="/" element={<ErrorBoundary><Index /></ErrorBoundary>} />
                       <Route path="/listings/new" element={<SellerRoute><ErrorBoundary><CreateListing /></ErrorBoundary></SellerRoute>} />
-                      <Route path="/listings/new-building" element={<SellerRoute><ErrorBoundary><CreateNewBuildingListing /></ErrorBoundary></SellerRoute>} />
+                      <Route path="/listings/new-building" element={<NewBuildingRoute><ErrorBoundary><CreateNewBuildingListing /></ErrorBoundary></NewBuildingRoute>} />
                       <Route path="/listings" element={<ErrorBoundary><Listings /></ErrorBoundary>} />
                       <Route path="/property/:id" element={<ErrorBoundary><PropertyDetail /></ErrorBoundary>} />
                       <Route path="/auction/:id" element={<ErrorBoundary><AuctionRouter /></ErrorBoundary>} />

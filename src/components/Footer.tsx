@@ -72,14 +72,14 @@ export function Footer() {
               )}
             </ul>
             <div className="mt-4 space-y-1">
-              <a href="mailto:hello@maiprop.co" className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
-                <Mail className="w-3 h-3" /> hello@maiprop.co
+              <a href="mailto:hello@maiprop.co" className="flex min-h-6 items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                <Mail className="w-3 h-3" aria-hidden="true" /> hello@maiprop.co
               </a>
-              <a href="mailto:hello@maiprop.com" className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
-                <Mail className="w-3 h-3" /> hello@maiprop.com
+              <a href="mailto:hello@maiprop.com" className="flex min-h-6 items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                <Mail className="w-3 h-3" aria-hidden="true" /> hello@maiprop.com
               </a>
-              <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                <MapPin className="w-3 h-3" /> {t("footerFull.location")}
+              <span className="flex min-h-6 items-center gap-2 text-xs text-muted-foreground">
+                <MapPin className="w-3 h-3" aria-hidden="true" /> {t("footerFull.location")}
               </span>
             </div>
           </div>

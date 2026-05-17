@@ -130,6 +130,9 @@ verify_jwt = false
 [functions.transfer-platform-admin]
 verify_jwt = true
 
+[functions.admin-review-invitation]
+verify_jwt = true
+
 [functions.record-listing-view]
 verify_jwt = false
 
@@ -137,4 +140,10 @@ verify_jwt = false
 verify_jwt = true
 
 [functions.owner-pro-status]
+verify_jwt = true
+
+[functions.followup-lead]
+verify_jwt = true
+
+[functions.scheduled-followups]
 verify_jwt = false

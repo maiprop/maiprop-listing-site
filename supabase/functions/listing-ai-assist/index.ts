@@ -1,26 +1,23 @@
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
-import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
+import { hasAIProviderCredentials, openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
 import { createLogger } from "../_shared/logger.ts";
 
 const log = createLogger("listing-ai-assist");
 
 const BUCKET = "listing-ai-assist";
-const listingAiLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000 });
+const listingAiLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000, failClosed: true });
 
-Deno.serve(async (req) => {
+const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, provider errors, and response shaping.
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
-  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
-  if (await listingAiLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
-
 
   try {
     const body = await req.json().catch(() => ({}));
     const { type, property } = body;
-    if (!Deno.env.get("OPENAI_API_KEY")) throw new Error("OPENAI_API_KEY required");
+    if (!hasAIProviderCredentials()) throw new Error("AI provider key required");
 
     if (type === "ping") {
       return new Response(JSON.stringify({ ok: true, message: "listing-ai-assist is available" }), {
@@ -32,6 +29,9 @@ Deno.serve(async (req) => {
     // (ping is excluded from both since it's a free health check).
     const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
     if (quota.errorResponse) return quota.errorResponse;
+
+    const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? quota.userId ?? "anonymous";
+    if (await listingAiLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
     let systemPrompt = "";
     let userPrompt = "";
@@ -108,4 +108,6 @@ ${property.listing_type === "rent" ? "Provide monthly rent estimate in EUR." : "
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+};
+
+Deno.serve(handleRequest);

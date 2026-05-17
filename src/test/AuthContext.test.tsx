@@ -55,6 +55,7 @@ vi.mock("@/lib/config", () => ({ APP_ORIGIN: "https://test.maiprop" }));
 
 import { AuthProvider, useAuth, profileNeedsOnboarding } from "@/contexts/AuthContext";
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function wrap({ children }: { children: React.ReactNode }) {
   return <AuthProvider>{children}</AuthProvider>;
 }
@@ -95,6 +96,16 @@ describe("profileNeedsOnboarding (pure helper)", () => {
     expect(
       profileNeedsOnboarding({ role: "admin", participant_type: null } as never),
     ).toBe(false);
+  });
+
+  it("returns true while a role switch is in progress even if role and participant_type still align", () => {
+    expect(
+      profileNeedsOnboarding({
+        role: "seller",
+        participant_type: "seller",
+        role_switch_in_progress_at: "2026-05-14T10:00:00.000Z",
+      } as never),
+    ).toBe(true);
   });
 
   it("does not trust the legacy bio __type marker", () => {
@@ -330,6 +341,36 @@ describe("AuthProvider auth API methods", () => {
     });
     expect(outcome.error).toBeInstanceOf(Error);
     expect(outcome.error?.message).toMatch(/Not authenticated/);
+  });
+
+  it("updateProfile strips participant_type and role from self-service updates", async () => {
+    const updateSpy = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) });
+    supabaseMock.from.mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      update: updateSpy,
+      single: vi.fn().mockResolvedValue({
+        data: { user_id: "u-10", role: "buyer", participant_type: "buyer" },
+        error: null,
+      }),
+    });
+
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    act(() => {
+      authStateCallbackHolder.current?.("SIGNED_IN", { user: { id: "u-10" } });
+    });
+    await waitFor(() => expect(result.current.user?.id).toBe("u-10"));
+
+    await act(async () => {
+      await result.current.updateProfile({
+        display_name: "Alice Updated",
+        role: "developer",
+        participant_type: "developer",
+      } as never);
+    });
+
+    expect(updateSpy).toHaveBeenCalledWith({ display_name: "Alice Updated" });
   });
 
   it("refreshSubscription re-invokes check-subscription using the current session", async () => {

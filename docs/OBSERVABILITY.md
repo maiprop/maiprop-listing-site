@@ -10,6 +10,22 @@
 | **CSP reporting** | `csp-report` edge function | ✅ Report-Only + enforced |
 | **Edge function errors** | Sentry via `SENTRY_DSN` secret | ✅ Forwarded from Deno runtime |
 
+## Verification Contract
+
+Production telemetry is considered verifiable only when all of these pass:
+
+1. Frontend build has `VITE_SENTRY_DSN` set for the deployed Cloudflare Pages
+   environment.
+2. Supabase Edge Function secrets include `SENTRY_DSN` for function-side error
+   forwarding.
+3. A local operator can run read-only Sentry issue/event checks with
+   `SENTRY_AUTH_TOKEN` set in the shell. This token is an audit credential, not
+   an app runtime secret, and must never be committed or exposed to the browser.
+
+If `SENTRY_AUTH_TOKEN` is absent during an audit, record production telemetry as
+**unknown**, not healthy. CI can prove that Sentry integration code builds, but
+only an authenticated Sentry query proves that live events are flowing.
+
 ## Recommended Additions
 
 ### OpenTelemetry (H1)

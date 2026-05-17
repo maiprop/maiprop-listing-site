@@ -12,6 +12,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { type ProjectMediaType } from "@/hooks/useProjectMedia";
 import { toast } from "sonner";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
+import { isPlatformAdmin } from "@/lib/authUtils";
 import { useSubscription } from "@/hooks/useSubscription";
 import { getPlanLimits } from "@/hooks/usePlanLimits";
 import { useMyListings } from "@/hooks/useListings";
@@ -58,10 +59,10 @@ export default function CreateNewBuildingListing() {
   const submitNewBuildingListing = useCreateBuildingListing();
 
   const participantType = getParticipantTypeFromProfile(profile);
-  const canCreateListing = participantType === "developer" || participantType === "agent";
-  const { isPro } = useSubscription();
+  const canCreateListing = profile?.role === "developer" || isPlatformAdmin(profile);
+  const { hasDeveloperPro } = useSubscription();
   const { data: myListings = [] } = useMyListings();
-  const listingLimit = getPlanLimits(participantType, isPro ? "pro" : "free").listings;
+  const listingLimit = getPlanLimits(participantType, hasDeveloperPro ? "pro" : "free").listings;
 
   const { step, stepIndex, isFirst, isLast, goNext, goPrev, goTo } = useFormWizard({ steps: WIZARD_STEPS });
   const [submitting, setSubmitting] = useState(false);
@@ -130,7 +131,7 @@ export default function CreateNewBuildingListing() {
 
   useEffect(() => {
     if (!user || !profile || canCreateListing) return;
-    toast.error("New building listings are for developers and agents only. Switch your participant type in Settings.");
+    toast.error("New building listings are for developers only. Switch your account type in Settings.");
     navigate("/dashboard/settings", { replace: true });
   }, [user, profile, canCreateListing, navigate]);
 
@@ -155,7 +156,7 @@ export default function CreateNewBuildingListing() {
           <div>
             <h1 className="font-display text-2xl font-bold mb-2">Listing Limit Reached</h1>
             <p className="text-muted-foreground text-sm">
-              You have reached the {listingLimit}-listing limit on your current plan ({isPro ? "Pro" : "Free"}).
+              You have reached the {listingLimit}-listing limit on your current plan ({hasDeveloperPro ? "Developer Pro" : "Free"}).
               Upgrade to add more listings.
             </p>
           </div>
@@ -374,7 +375,7 @@ export default function CreateNewBuildingListing() {
                   <div><label className={LABEL_CLS}>Developer company</label><input value={project.developer_company} onChange={e => setProjectField("developer_company", e.target.value)} placeholder="Company name" className={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>Architect / group</label><input value={project.architect_group} onChange={e => setProjectField("architect_group", e.target.value)} placeholder="Architect or group" className={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>Construction company</label><input value={project.construction_company} onChange={e => setProjectField("construction_company", e.target.value)} placeholder="Constructor" className={INPUT_CLS} /></div>
-                  <div><label className={LABEL_CLS}>Municipality</label><input value={project.municipality} onChange={e => setProjectField("municipality", e.target.value)} placeholder="Î”Î®Î¼Î¿Ï‚" className={INPUT_CLS} /></div>
+                  <div><label className={LABEL_CLS}>Municipality</label><input value={project.municipality} onChange={e => setProjectField("municipality", e.target.value)} placeholder="Δήμος" className={INPUT_CLS} /></div>
                   <div className="sm:col-span-2"><label className={LABEL_CLS}>Address</label><input value={project.address} onChange={e => setProjectField("address", e.target.value)} placeholder="Street, number" className={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>Latitude</label><input type="number" step="any" value={project.latitude} onChange={e => setProjectField("latitude", e.target.value)} placeholder="37.9838" className={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>Longitude</label><input type="number" step="any" value={project.longitude} onChange={e => setProjectField("longitude", e.target.value)} placeholder="23.7275" className={INPUT_CLS} /></div>
@@ -560,7 +561,7 @@ export default function CreateNewBuildingListing() {
 
           <p className="text-center text-sm text-muted-foreground mt-4">
             <Link to="/listings/new" className="text-primary hover:underline">Create a regular listing</Link>
-            {" Â· "}
+            {" · "}
             <Link to="/projects" className="text-primary hover:underline">My projects</Link>
           </p>
         </div>

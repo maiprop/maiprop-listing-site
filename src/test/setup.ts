@@ -3,6 +3,16 @@ import type React from "react";
 import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
+const originalConsoleError = console.error.bind(console);
+
+console.error = (...args: unknown[]) => {
+  const message = String(args[0] ?? "");
+  if (message.includes("A suspended resource finished loading inside a test")) {
+    return;
+  }
+  originalConsoleError(...args);
+};
+
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, fallback?: string) => fallback ?? key,
@@ -53,6 +63,9 @@ Object.defineProperty(window, "IntersectionObserver", { writable: true, value: I
 
 // scrollIntoView — not implemented in jsdom
 Element.prototype.scrollIntoView = () => {};
+
+// scrollTo - jsdom exposes a warning-only implementation.
+Object.defineProperty(window, "scrollTo", { writable: true, value: vi.fn() });
 
 // Canvas export APIs are missing unless jsdom is paired with the optional
 // native canvas package. Tests only need deterministic, non-throwing output.

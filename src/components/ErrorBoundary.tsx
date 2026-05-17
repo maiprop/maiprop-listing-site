@@ -1,6 +1,7 @@
 import { Component, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { logger } from "@/lib/logger";
+import { recoverFromChunkLoadError } from "@/lib/chunkLoadRecovery";
 
 interface Props {
   children: ReactNode;
@@ -20,6 +21,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   override componentDidCatch(error: Error, _info: { componentStack: string }) {
+    if (recoverFromChunkLoadError(error)) return;
     logger.critical("[ErrorBoundary]", error);
   }
 

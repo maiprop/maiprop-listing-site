@@ -3,11 +3,11 @@
  * Shows KPIs, conversion funnel, timeslot utilization, and mortgage status breakdown.
  */
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend,
-} from "recharts";
+  PieChart, Pie, Cell, Legend, ChartFallback,
+} from "@/components/charts/LazyRecharts";
 import { Users, CheckCircle, TrendingUp, FileText } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -209,8 +209,9 @@ export default function OpenHouseAnalytics({ listingId }: { listingId: string })
           <CardTitle className="text-base font-display">Conversion Funnel</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={160}>
-            <BarChart
+          <Suspense fallback={<ChartFallback height={160} />}>
+            <ResponsiveContainer width="100%" height={160}>
+              <BarChart
               data={funnelData}
               layout="vertical"
               margin={{ top: 0, right: 32, left: 0, bottom: 0 }}
@@ -244,8 +245,9 @@ export default function OpenHouseAnalytics({ listingId }: { listingId: string })
                   return <Cell key={i} fill={colors[i] ?? "hsl(var(--primary))"} />;
                 })}
               </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+              </BarChart>
+            </ResponsiveContainer>
+          </Suspense>
         </CardContent>
       </Card>
 
@@ -292,8 +294,9 @@ export default function OpenHouseAnalytics({ listingId }: { listingId: string })
             <CardTitle className="text-base font-display">Attendee Pre-qualification</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
+            <Suspense fallback={<ChartFallback height={200} />}>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
                 <Pie
                   data={mortgageDist}
                   cx="50%"
@@ -318,14 +321,15 @@ export default function OpenHouseAnalytics({ listingId }: { listingId: string })
                 <Legend
                   iconType="circle"
                   iconSize={8}
-                  formatter={(value) => (
+                  formatter={(value: string) => (
                     <span style={{ fontSize: 12, color: "hsl(var(--muted-foreground))" }}>
                       {value}
                     </span>
                   )}
                 />
-              </PieChart>
-            </ResponsiveContainer>
+                </PieChart>
+              </ResponsiveContainer>
+            </Suspense>
           </CardContent>
         </Card>
       )}

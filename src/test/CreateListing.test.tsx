@@ -23,7 +23,7 @@ const { useAuthMock, useSubMock, useListingFormMock, useMyListingsMock, useConne
 
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => useAuthMock() }));
 vi.mock("@/hooks/useSubscription", () => ({ useSubscription: () => useSubMock() }));
-vi.mock("@/hooks/useListingForm", () => ({ useListingForm: () => useListingFormMock() }));
+vi.mock("@/hooks/useListingForm", () => ({ useListingForm: (...a: unknown[]) => useListingFormMock(...a) }));
 vi.mock("@/hooks/useListings", () => ({ useMyListings: () => useMyListingsMock() }));
 vi.mock("@/hooks/useCreateListingConnections", () => ({ useCreateListingConnections: () => useConnectionsMock() }));
 vi.mock("@/hooks/usePlanLimits", () => ({ getPlanLimits: (...a: unknown[]) => getPlanLimitsMock(...a) }));
@@ -96,7 +96,7 @@ beforeEach(() => {
   useAuthMock.mockReset();
   useAuthMock.mockReturnValue({
     user: { id: "u-1" },
-    profile: { participant_type: "seller" },
+    profile: { role: "seller", participant_type: "seller" },
   });
   useSubMock.mockReset();
   useSubMock.mockReturnValue({ isPro: false });
@@ -125,7 +125,7 @@ describe("CreateListing", () => {
   it("redirects non-eligible users (participant_type=buyer) and toasts an error", () => {
     useAuthMock.mockReturnValue({
       user: { id: "u-1" },
-      profile: { participant_type: "buyer" },
+      profile: { role: "buyer", participant_type: "buyer" },
     });
     render(<CreateListing />, { wrapper: wrap });
     // A spinner + 'Redirecting…' label appears.
@@ -177,5 +177,47 @@ describe("CreateListing", () => {
     useListingFormMock.mockReturnValue(baseForm({ completionPct: 73 }));
     render(<CreateListing />, { wrapper: wrap });
     expect(screen.getByText("73%")).toBeInTheDocument();
+  });
+
+  it("resets pre-sale fields when a non-developer seller lands with a stale pre-sale form", () => {
+    const set = vi.fn();
+    useListingFormMock.mockReturnValue(baseForm({
+      form: { is_pre_sale: true },
+      set,
+    }));
+    render(<CreateListing />, { wrapper: wrap });
+
+    expect(useListingFormMock).toHaveBeenCalledWith({ allowPreSale: false });
+    expect(set).toHaveBeenCalledWith("is_pre_sale", false);
+    expect(set).toHaveBeenCalledWith("construction_status", "");
+  });
+
+  it("allows developers through the pre-sale creation gate", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1" },
+      profile: { role: "developer", participant_type: "developer" },
+    });
+    render(<CreateListing />, { wrapper: wrap });
+    expect(useListingFormMock).toHaveBeenCalledWith({ allowPreSale: true });
+    expect(screen.getByTestId("step-type")).toBeInTheDocument();
+  });
+
+  it("shows publishing stuck-state controls while the submit mutation is pending", () => {
+    const handleSaveDraft = vi.fn();
+    const handleSubmit = vi.fn();
+    useFormWizardMock.mockReturnValue(baseWizard({ step: "photos", stepIndex: 5, isFirst: false, isLast: true }));
+    useListingFormMock.mockReturnValue(baseForm({
+      submitting: true,
+      handleSaveDraft,
+      handleSubmit,
+    }));
+    render(<CreateListing />, { wrapper: wrap });
+
+    expect(screen.getByRole("button", { name: /Save Draft/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Publishing/i })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /Publishing/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Save Draft/i }));
+    expect(handleSubmit).not.toHaveBeenCalled();
+    expect(handleSaveDraft).not.toHaveBeenCalled();
   });
 });

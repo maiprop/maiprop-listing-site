@@ -11,8 +11,6 @@ import { getAiErrorMessage } from "@/lib/aiErrorUtils";
 import { useAuth } from "@/contexts/AuthContext";
 import { SignInForAI } from "@/components/SignInForAI";
 import { toast } from "sonner";
-import { useSubscription } from "@/hooks/useSubscription";
-import { useValuationUsage, VALUATION_INCLUDED, VALUATION_EXTRA_COST } from "@/hooks/useUsageAddons";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -90,7 +88,7 @@ export interface PropertyValuationProps {
   cadastreNumber?: string | null;
   hasLandConcession?: boolean | null;
   landUse?: string | null;
-  /** If provided, fetch valuation report from OS API first; fall back to AI if none. */
+  /** Listing identifier for callers that need to associate this analysis with a listing. */
   listingId?: string | null;
 }
 
@@ -184,41 +182,18 @@ function ScoreBar({ label, score, invert = false, icon }: { label: string; score
 
 export default function PropertyValuation(props: PropertyValuationProps) {
   const { user } = useAuth();
-  const { isPro } = useSubscription();
   const queryClient = useQueryClient();
-  const { data: valuationCount = 0 } = useValuationUsage();
   const [result, setResult] = useState<ValuationResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
-  const { listingId, ...valuationProps } = props;
-  const remaining = isPro ? Math.max(0, VALUATION_INCLUDED - valuationCount) : 0;
-  const needsExtra = isPro && valuationCount >= VALUATION_INCLUDED;
+  const { listingId: _listingId, ...valuationProps } = props;
 
   const runValuation = async () => {
     if (!user) return;
-    if (!isPro) {
-      toast.error("Property Valuation requires Pro plan");
-      return;
-    }
-    if (needsExtra) {
-      toast.error(`You've used your ${VALUATION_INCLUDED} included valuations. Extra valuations cost €${VALUATION_EXTRA_COST} each.`);
-      return;
-    }
+
     setLoading(true);
     try {
-      if (listingId) {
-        const { data: osRes, error: osErr } = await supabase.functions.invoke("fetch-report-from-os", {
-          body: { listing_id: listingId, report_type: "valuation" },
-        });
-        if (!osErr && osRes?.ok && osRes.report && typeof (osRes.report as ValuationResult).estimatedValue === "number") {
-          setResult(osRes.report as ValuationResult);
-          setExpanded(true);
-          void queryClient.invalidateQueries({ queryKey: ["usage_ai_calls"] });
-          setLoading(false);
-          return;
-        }
-      }
       const { data, error } = await supabase.functions.invoke("property-valuation", { body: valuationProps });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -252,11 +227,7 @@ export default function PropertyValuation(props: PropertyValuationProps) {
         {!user && <SignInForAI feature="Property Valuation" />}
         {user && !result && (
           <div className="text-center space-y-3">
-            {isPro && (
-              <p className="text-[10px] text-muted-foreground">
-                {remaining > 0 ? `${remaining} of ${VALUATION_INCLUDED} valuations remaining this month` : `Included valuations used. Extra: €${VALUATION_EXTRA_COST} each`}
-              </p>
-            )}
+
             <p className="text-xs text-muted-foreground leading-relaxed">
               Type-specific AI valuation — price range, confidence, liquidity, and Greek legal/tax overlay (legal cleanliness, planning certainty, transfer readiness).
             </p>

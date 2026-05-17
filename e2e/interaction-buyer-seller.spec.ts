@@ -9,33 +9,56 @@
  */
 import { test, expect, type Page, type Browser } from "@playwright/test";
 import { getBaseURL } from "./helpers/baseURL";
+import { demoAccounts, demoPasswords, seededDemoAccountsEnabled } from "./helpers/demoAccounts";
 
 // ── Credentials ───────────────────────────────────────────────────────────────
 
-const buyerEmail    = process.env.E2E_BUYER_EMAIL    ?? "";
-const buyerPassword = process.env.E2E_BUYER_PASSWORD ?? "";
-const sellerEmail   = process.env.E2E_SELLER_EMAIL   ?? "";
-const sellerPassword = process.env.E2E_SELLER_PASSWORD ?? "";
-
-const hasCredentials = buyerEmail !== "" && buyerPassword !== "" &&
-                       sellerEmail !== "" && sellerPassword !== "";
+const buyerEmail = demoAccounts.buyerFree;
+const buyerPassword = demoPasswords.buyerFree;
+const sellerEmail = demoAccounts.sellerPro;
+const sellerPassword = demoPasswords.sellerPro;
+const hasSeededDemoAccounts = seededDemoAccountsEnabled();
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** Sign in a page object with the provided credentials and wait for the app shell. */
-async function signInAs(page: Page, email: string, password: string): Promise<void> {
-  await page.goto("/login");
-  await page.locator('input[type="email"], input[name="email"]').first().fill(email);
-  await page.locator('input[type="password"]').first().fill(password);
-  await page.locator('button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")').first().click();
-  await page.waitForURL(/\/dashboard|\/onboarding/, { timeout: 25_000 });
-}
+const signInAs = async (
+  page: Page,
+  email: string,
+  password: string,
+): Promise<void> => {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await page.goto("/login");
+    await page
+      .locator('input[type="email"], input[name="email"]')
+      .first()
+      .fill(email);
+    await page.locator('input[type="password"]').first().fill(password);
+    await page
+      .locator(
+        'button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")',
+      )
+      .first()
+      .click();
+    try {
+      await page.waitForURL(/\/dashboard|\/onboarding/, { timeout: 25_000 });
+      return;
+    } catch (error) {
+      const invalidCredentials = await page
+        .getByText("Invalid email or password", { exact: true })
+        .isVisible()
+        .catch(() => false);
+      if (attempt === 1 || invalidCredentials) throw error;
+      await page.waitForTimeout(1_000);
+    }
+  }
+};
 
 /**
  * Navigate to /listings, wait for at least one property card to attach, and
  * return the URL of the first card's detail page (or null if none loaded).
  */
-async function navigateToFirstListing(page: Page): Promise<string | null> {
+const navigateToFirstListing = async (page: Page): Promise<string | null> => {
   await page.goto("/listings");
   // Use "load" instead of "networkidle" — Mapbox tile requests keep the network busy indefinitely.
   await page.waitForLoadState("load", { timeout: 15_000 });
@@ -44,29 +67,35 @@ async function navigateToFirstListing(page: Page): Promise<string | null> {
   // for the first card's link to render rather than sleeping for a fixed
   // duration; cuts ~2 s off every run when the page is fast and avoids racing
   // when it's slow.
-  const cardLink = page.locator(
-    'a[href*="/property/"], a[href*="/listing/"]'
-  ).first();
+  const cardLink = page
+    .locator('a[href*="/property/"], a[href*="/listing/"]')
+    .first();
 
-  const attached = await cardLink.waitFor({ state: "visible", timeout: 10_000 }).then(() => true).catch(() => false);
+  const attached = await cardLink
+    .waitFor({ state: "visible", timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false);
   if (!attached) return null;
 
   const href = await cardLink.getAttribute("href");
   return href ?? null;
-}
+};
 
 // ── Multi-context tests ───────────────────────────────────────────────────────
 
 test.describe("Buyer + Seller simultaneous sessions", () => {
-  test.skip(!hasCredentials, "Set buyer/seller demo credentials to run cross-user tests");
-
+  test.skip(!hasSeededDemoAccounts, "Seeded demo accounts require real Supabase config");
   // 1. Both users can sign in at the same time
-  test("buyer and seller can both sign in simultaneously", async ({ browser }: { browser: Browser }) => {
+  test("buyer and seller can both sign in simultaneously", async ({
+    browser,
+  }: {
+    browser: Browser;
+  }) => {
     test.setTimeout(90_000);
     const baseURL = getBaseURL();
-    const buyerCtx  = await browser.newContext({ baseURL });
+    const buyerCtx = await browser.newContext({ baseURL });
     const sellerCtx = await browser.newContext({ baseURL });
-    const buyerPage  = await buyerCtx.newPage();
+    const buyerPage = await buyerCtx.newPage();
     const sellerPage = await sellerCtx.newPage();
 
     try {
@@ -84,19 +113,23 @@ test.describe("Buyer + Seller simultaneous sessions", () => {
   });
 
   // 7. Both contexts visit /messages without JS errors
-  test("both buyer and seller see messages page without crash", async ({ browser }: { browser: Browser }) => {
+  test("both buyer and seller see messages page without crash", async ({
+    browser,
+  }: {
+    browser: Browser;
+  }) => {
     test.setTimeout(90_000);
     const baseURL = getBaseURL();
-    const buyerCtx  = await browser.newContext({ baseURL });
+    const buyerCtx = await browser.newContext({ baseURL });
     const sellerCtx = await browser.newContext({ baseURL });
-    const buyerPage  = await buyerCtx.newPage();
+    const buyerPage = await buyerCtx.newPage();
     const sellerPage = await sellerCtx.newPage();
 
-    const buyerErrors:  string[] = [];
+    const buyerErrors: string[] = [];
     const sellerErrors: string[] = [];
 
     // Register error listeners BEFORE any navigation.
-    buyerPage.on("pageerror",  (err) => buyerErrors.push(err.message));
+    buyerPage.on("pageerror", (err) => buyerErrors.push(err.message));
     sellerPage.on("pageerror", (err) => sellerErrors.push(err.message));
 
     try {
@@ -115,14 +148,14 @@ test.describe("Buyer + Seller simultaneous sessions", () => {
 
       // Both pages must have a nav element (app shell rendered).
       await expect(
-        buyerPage.locator('nav, [role="navigation"], aside').first()
+        buyerPage.locator('nav, [role="navigation"], aside').first(),
       ).toBeAttached({ timeout: 15_000 });
       await expect(
-        sellerPage.locator('nav, [role="navigation"], aside').first()
+        sellerPage.locator('nav, [role="navigation"], aside').first(),
       ).toBeAttached({ timeout: 15_000 });
 
       // No uncaught JS errors in either context.
-      expect(buyerErrors,  "buyer /messages JS errors").toHaveLength(0);
+      expect(buyerErrors, "buyer /messages JS errors").toHaveLength(0);
       expect(sellerErrors, "seller /messages JS errors").toHaveLength(0);
     } finally {
       await buyerCtx.close();
@@ -134,10 +167,11 @@ test.describe("Buyer + Seller simultaneous sessions", () => {
 // ── Single-context buyer tests ────────────────────────────────────────────────
 
 test.describe("Buyer — listings and property detail", () => {
-  test.skip(!hasCredentials, "Set buyer demo credentials to run buyer tests");
-
+  test.skip(!hasSeededDemoAccounts, "Seeded demo accounts require real Supabase config");
   // 2. Buyer browses listings and opens a property detail
-  test("buyer can browse listings and navigate to a property detail page", async ({ page }) => {
+  test("buyer can browse listings and navigate to a property detail page", async ({
+    page,
+  }) => {
     await signInAs(page, buyerEmail, buyerPassword);
 
     const href = await navigateToFirstListing(page);
@@ -155,7 +189,7 @@ test.describe("Buyer — listings and property detail", () => {
 
     // Navbar (app shell) must be visible.
     await expect(
-      page.locator('nav, header, [role="navigation"]').first()
+      page.locator('nav, header, [role="navigation"]').first(),
     ).toBeVisible({ timeout: 15_000 });
 
     // Page must contain meaningful DOM content.
@@ -164,22 +198,29 @@ test.describe("Buyer — listings and property detail", () => {
   });
 
   // 3. Buyer sees Contact / Message / Enquire button on a property detail
-  test("buyer sees Send Message / Contact button on property detail", async ({ page }) => {
+  test("buyer sees Send Message / Contact button on property detail", async ({
+    page,
+  }) => {
     await signInAs(page, buyerEmail, buyerPassword);
 
     const href = await navigateToFirstListing(page);
-    if (!href) { test.skip(); return; }
+    if (!href) {
+      test.skip();
+      return;
+    }
 
     await page.goto(href);
     await page.waitForLoadState("load", { timeout: 15_000 });
 
     // Accept any variant of a contact / message call-to-action.
-    const contactBtn = page.locator(
-      'button:has-text("Contact"), button:has-text("Message"), button:has-text("Enquire"),' +
-      'a:has-text("Contact"), a:has-text("Message"), a:has-text("Enquire"),' +
-      '[data-testid*="contact"], [data-testid*="message"], [data-testid*="enquire"],' +
-      '[aria-label*="contact"], [aria-label*="message"]'
-    ).first();
+    const contactBtn = page
+      .locator(
+        'button:has-text("Contact"), button:has-text("Message"), button:has-text("Enquire"),' +
+          'a:has-text("Contact"), a:has-text("Message"), a:has-text("Enquire"),' +
+          '[data-testid*="contact"], [data-testid*="message"], [data-testid*="enquire"],' +
+          '[aria-label*="contact"], [aria-label*="message"]',
+      )
+      .first();
 
     const btnCount = await contactBtn.count();
     if (btnCount === 0) {
@@ -197,54 +238,75 @@ test.describe("Buyer — listings and property detail", () => {
     await signInAs(page, buyerEmail, buyerPassword);
 
     const href = await navigateToFirstListing(page);
-    if (!href) { test.skip(); return; }
+    if (!href) {
+      test.skip();
+      return;
+    }
 
     await page.goto(href);
     await page.waitForLoadState("load", { timeout: 15_000 });
 
-    const contactBtn = page.locator(
-      'button:has-text("Contact"), button:has-text("Message"), button:has-text("Enquire"),' +
-      'a:has-text("Contact"), a:has-text("Message"), a:has-text("Enquire"),' +
-      '[data-testid*="contact"], [data-testid*="message"]'
-    ).first();
+    const contactBtn = page
+      .locator(
+        'button:has-text("Contact"), button:has-text("Message"), button:has-text("Enquire"),' +
+          'a:has-text("Contact"), a:has-text("Message"), a:has-text("Enquire"),' +
+          '[data-testid*="contact"], [data-testid*="message"]',
+      )
+      .first();
 
-    const btnFound = await contactBtn.isVisible({ timeout: 10_000 }).catch(() => false);
-    if (!btnFound) { test.skip(); return; }
+    const btnFound = await contactBtn
+      .isVisible({ timeout: 10_000 })
+      .catch(() => false);
+    if (!btnFound) {
+      test.skip();
+      return;
+    }
 
     await contactBtn.click();
 
     // Accept either: a modal/dialog overlay OR navigation to /messages.
-    const dialogOrMessages = page.locator(
-      '[role="dialog"], [data-testid*="modal"], [data-testid*="message-compose"],' +
-      'textarea[placeholder*="message"], textarea[placeholder*="Message"]'
-    ).first();
+    const dialogOrMessages = page
+      .locator(
+        '[role="dialog"], [data-testid*="modal"], [data-testid*="message-compose"],' +
+          'textarea[placeholder*="message"], textarea[placeholder*="Message"]',
+      )
+      .first();
 
-    const modalOpened = await dialogOrMessages.isVisible({ timeout: 8_000 }).catch(() => false);
+    const modalOpened = await dialogOrMessages
+      .isVisible({ timeout: 8_000 })
+      .catch(() => false);
     const navigatedToMessages = page.url().includes("/messages");
 
     expect(
       modalOpened || navigatedToMessages,
-      "Expected a compose modal or /messages navigation after clicking Contact"
+      "Expected a compose modal or /messages navigation after clicking Contact",
     ).toBe(true);
   });
 
   // 8. Buyer can see agent/seller info on a listing detail page
-  test("buyer can view seller's contact info or agent badge on a listing", async ({ page }) => {
+  test("buyer can view seller's contact info or agent badge on a listing", async ({
+    page,
+  }) => {
     await signInAs(page, buyerEmail, buyerPassword);
 
     const href = await navigateToFirstListing(page);
-    if (!href) { test.skip(); return; }
+    if (!href) {
+      test.skip();
+      return;
+    }
 
     await page.goto(href);
     await page.waitForLoadState("load", { timeout: 15_000 });
 
     // Look for any agent/seller/contact section by class, role, or data attribute.
-    const agentSection = page.locator(
-      '[class*="agent"], [class*="seller"], [class*="contact"],' +
-      '[data-testid*="agent"], [data-testid*="seller"], [data-testid*="contact"],' +
-      'img[alt*="agent"], img[alt*="seller"], img[alt*="avatar"],' +
-      '[aria-label*="agent"], [aria-label*="seller"]'
-    ).first();
+    const agentSection = page
+      .locator(
+        '[class*="agent"], [class*="seller"], [class*="contact"],' +
+          '[data-testid*="agent"], [data-testid*="seller"], [data-testid*="contact"],' +
+          'img[alt*="agent"], img[alt*="seller"], img[alt*="avatar"],' +
+          '[aria-label*="agent"], [aria-label*="seller"]',
+      )
+      .first();
 
     const found = (await agentSection.count()) > 0;
 
@@ -261,8 +323,7 @@ test.describe("Buyer — listings and property detail", () => {
 // ── Single-context seller tests ───────────────────────────────────────────────
 
 test.describe("Seller — dashboard and listings", () => {
-  test.skip(!hasCredentials, "Set seller demo credentials to run seller tests");
-
+  test.skip(!hasSeededDemoAccounts, "Seeded demo accounts require real Supabase config");
   // 5. Seller can view their dashboard without crash
   test("seller can view their listings in the dashboard", async ({ page }) => {
     await signInAs(page, sellerEmail, sellerPassword);
@@ -283,12 +344,16 @@ test.describe("Seller — dashboard and listings", () => {
 
     // Sellers land on /dashboard; try navigating to the listings tab or /listings.
     // First, check if there's a "My Listings" / "Listings" nav item in the dashboard sidebar.
-    const dashboardListingsLink = page.locator(
-      'a[href*="/dashboard/listings"], a:has-text("My Listings"), a:has-text("Listings"), ' +
-      '[data-testid*="listings-nav"], [data-testid*="my-listings"]'
-    ).first();
+    const dashboardListingsLink = page
+      .locator(
+        'a[href*="/dashboard/listings"], a:has-text("My Listings"), a:has-text("Listings"), ' +
+          '[data-testid*="listings-nav"], [data-testid*="my-listings"]',
+      )
+      .first();
 
-    const linkFound = await dashboardListingsLink.isVisible({ timeout: 8_000 }).catch(() => false);
+    const linkFound = await dashboardListingsLink
+      .isVisible({ timeout: 8_000 })
+      .catch(() => false);
 
     if (linkFound) {
       await dashboardListingsLink.click();
@@ -300,10 +365,12 @@ test.describe("Seller — dashboard and listings", () => {
     }
 
     // Either a heading or a list of listings must be rendered.
-    const content = page.locator(
-      'h1, h2, [role="heading"], article, [class*="card"], [class*="listing"],' +
-      '[data-testid="listing-card"], [data-testid="empty-state"]'
-    ).first();
+    const content = page
+      .locator(
+        'h1, h2, [role="heading"], article, [class*="card"], [class*="listing"],' +
+          '[data-testid="listing-card"], [data-testid="empty-state"]',
+      )
+      .first();
 
     await expect(content).toBeAttached({ timeout: 15_000 });
   });

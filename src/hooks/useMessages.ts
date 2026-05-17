@@ -4,6 +4,98 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
+type ConversationCandidate = { id: string; listing_id: string | null };
+type StartConversationInput = { other_user_id: string; listing_id?: string };
+
+const getParticipantConversationFilter = (currentUserId: string, otherUserId: string) =>
+  `and(participant_a.eq.${currentUserId},participant_b.eq.${otherUserId}),and(participant_a.eq.${otherUserId},participant_b.eq.${currentUserId})`;
+
+const findMatchingConversation = (
+  conversations: ConversationCandidate[],
+  targetListingId: string | null,
+) => conversations.find(
+  (conversation) => conversation.listing_id === targetListingId || (conversation.listing_id == null && targetListingId == null),
+);
+
+const selectParticipantConversations = async (
+  participantFilter: string,
+): Promise<ConversationCandidate[]> => {
+  const { data, error } = await supabase
+    .from("conversations")
+    .select("id, listing_id")
+    .or(participantFilter);
+  if (error) throw error;
+  return data ?? [];
+};
+
+const insertConversation = async (
+  currentUserId: string,
+  otherUserId: string,
+  targetListingId: string | null,
+) => {
+  const { data, error } = await supabase.from("conversations")
+    .insert({
+      participant_a: currentUserId,
+      participant_b: otherUserId,
+      listing_id: targetListingId,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data.id;
+};
+
+const getReusableConversationId = (
+  conversations: ConversationCandidate[],
+  targetListingId: string | null,
+) => findMatchingConversation(conversations, targetListingId)?.id ?? conversations[0]?.id;
+
+const getFallbackConversationId = async (participantFilter: string) => {
+  const { data } = await supabase
+    .from("conversations")
+    .select("id, listing_id")
+    .or(participantFilter);
+  return data?.[0]?.id ?? null;
+};
+
+const requireCurrentUserId = (currentUserId: string | undefined) => {
+  if (!currentUserId) throw new Error("Must be logged in");
+  return currentUserId;
+};
+
+const assertDifferentParticipant = (currentUserId: string, otherUserId: string) => {
+  if (otherUserId === currentUserId) throw new Error("Cannot start a conversation with yourself");
+};
+
+const createConversationWithFallback = async (
+  currentUserId: string,
+  otherUserId: string,
+  targetListingId: string | null,
+  participantFilter: string,
+) => {
+  try {
+    return await insertConversation(currentUserId, otherUserId, targetListingId);
+  } catch (error: unknown) {
+    const fallbackConversationId = await getFallbackConversationId(participantFilter);
+    if (fallbackConversationId) return fallbackConversationId;
+    throw error;
+  }
+};
+
+const startConversationForUser = async (
+  currentUserId: string | undefined,
+  { other_user_id, listing_id }: StartConversationInput,
+) => {
+  const userId = requireCurrentUserId(currentUserId);
+  assertDifferentParticipant(userId, other_user_id);
+  const participantFilter = getParticipantConversationFilter(userId, other_user_id);
+  const targetListingId = listing_id ?? null;
+  const conversations = await selectParticipantConversations(participantFilter);
+  const reusableConversationId = getReusableConversationId(conversations, targetListingId);
+  return reusableConversationId
+    ?? createConversationWithFallback(userId, other_user_id, targetListingId, participantFilter);
+};
+
 export function useConversations() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -225,32 +317,7 @@ export function useStartConversation() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: async ({ other_user_id, listing_id }: { other_user_id: string; listing_id?: string }) => {
-      if (!user) throw new Error("Must be logged in");
-      const { data: existingList } = await supabase
-        .from("conversations")
-        .select("id, listing_id")
-        .or(
-          `and(participant_a.eq.${user.id},participant_b.eq.${other_user_id}),and(participant_a.eq.${other_user_id},participant_b.eq.${user.id})`
-        );
-      const targetListingId = listing_id ?? null;
-      const match = (existingList || []).find(
-        (c) => c.listing_id === targetListingId || (c.listing_id == null && targetListingId == null)
-      );
-      if (match) return match.id;
-
-       
-      const { data, error } = await supabase.from("conversations")
-        .insert({
-          participant_a: user.id,
-          participant_b: other_user_id,
-          listing_id: targetListingId,
-        })
-        .select()
-        .single();
-      if (error) throw error;
-      return data.id;
-    },
+    mutationFn: (input: StartConversationInput) => startConversationForUser(user?.id, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
     },

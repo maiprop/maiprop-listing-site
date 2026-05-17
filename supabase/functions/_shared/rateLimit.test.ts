@@ -14,6 +14,7 @@ import {
   assertStrictEquals,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
+  makeDbRateLimiter,
   makeMemoryRateLimiter,
   tooManyRequestsResponse,
 } from "./rateLimit.ts";
@@ -115,4 +116,31 @@ Deno.test("tooManyRequestsResponse returns 429 with Retry-After header", async (
   assertStrictEquals(resp.headers.get("Access-Control-Allow-Origin"), "*");
   const body = await resp.json();
   assertEquals(typeof body.error, "string");
+});
+
+Deno.test("DB limiter failClosed blocks when backend cannot be reached", async () => {
+  const limiter = makeDbRateLimiter({
+    bucket: "expensive",
+    maxRequests: 1,
+    windowMs: 60_000,
+    supabaseUrl: "not-a-valid-url",
+    serviceRoleKey: "test",
+    failClosed: true,
+  });
+
+  assertStrictEquals(await limiter.isLimited("user-1"), true);
+  const status = await limiter.status("user-1");
+  assertEquals(status.remaining, 0);
+});
+
+Deno.test("DB limiter fail-open default allows when backend cannot be reached", async () => {
+  const limiter = makeDbRateLimiter({
+    bucket: "ordinary",
+    maxRequests: 1,
+    windowMs: 60_000,
+    supabaseUrl: "not-a-valid-url",
+    serviceRoleKey: "test",
+  });
+
+  assertStrictEquals(await limiter.isLimited("user-1"), false);
 });

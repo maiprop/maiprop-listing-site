@@ -23,15 +23,17 @@
  *     return tooManyRequestsResponse(corsHeaders);
  *   }
  *
- * Fail-open policy:
- *   If the DB RPC throws (network glitch, DB down), we LOG and ALLOW the
- *   request. Breaking user-facing AI calls because the rate-limit
- *   infrastructure misbehaves would be worse than briefly relaxing the cap.
- *   The in-memory fallback also still runs on the affected isolate, so
- *   single-region abuse is still bounded.
+ * Failure policy:
+ *   DB RPC failures fail open by default for ordinary user-facing endpoints.
+ *   High-cost or abuse-sensitive buckets should pass `failClosed: true`, which
+ *   denies requests when the shared limiter cannot prove the caller is under
+ *   the limit.
  */
 
-import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.57.2";
+import {
+  createClient,
+  type SupabaseClient,
+} from "npm:@supabase/supabase-js@2.57.2";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -58,6 +60,7 @@ export interface RateLimiterOptions {
   bucket: string;
   maxRequests: number;
   windowMs: number;
+  failClosed?: boolean;
 }
 
 // ── Public factory ───────────────────────────────────────────────────────────
@@ -67,6 +70,10 @@ export interface RateLimiterOptions {
  * credentials are available, otherwise falls back to in-memory.
  */
 export function makeRateLimiter(opts: RateLimiterOptions): RateLimiter {
+  if (safeEnv("RATE_LIMIT_FORCE_MEMORY") === "true") {
+    return makeMemoryRateLimiter(opts);
+  }
+
   const supabaseUrl = safeEnv("SUPABASE_URL");
   const serviceRoleKey = safeEnv("SUPABASE_SERVICE_ROLE_KEY");
 
@@ -167,7 +174,14 @@ interface DbRateLimiterOptions extends RateLimiterOptions {
 export function makeDbRateLimiter(
   opts: DbRateLimiterOptions,
 ): RateLimiter {
-  const { bucket, maxRequests, windowMs, supabaseUrl, serviceRoleKey } = opts;
+  const {
+    bucket,
+    maxRequests,
+    windowMs,
+    supabaseUrl,
+    serviceRoleKey,
+    failClosed = false,
+  } = opts;
   const windowSeconds = Math.max(1, Math.round(windowMs / 1000));
 
   // One client per limiter — cheap, stateless, persists across requests on
@@ -197,7 +211,9 @@ export function makeDbRateLimiter(
         console.error(
           JSON.stringify({
             level: "error",
-            event: "rate_limit_fail_open",
+            event: failClosed
+              ? "rate_limit_fail_closed"
+              : "rate_limit_fail_open",
             bucket,
             key,
             reason: error.message,
@@ -212,7 +228,7 @@ export function makeDbRateLimiter(
       console.error(
         JSON.stringify({
           level: "error",
-          event: "rate_limit_fail_open",
+          event: failClosed ? "rate_limit_fail_closed" : "rate_limit_fail_open",
           bucket,
           key,
           reason: msg,
@@ -226,8 +242,7 @@ export function makeDbRateLimiter(
   return {
     async isLimited(key: string): Promise<boolean> {
       const r = await callRpc(key);
-      // Fail-open on null. See module-level fail-open policy.
-      if (r === null) return false;
+      if (r === null) return failClosed;
       return !r.allowed;
     },
     async status(key: string): Promise<{ remaining: number; resetAt: number }> {
@@ -235,7 +250,10 @@ export function makeDbRateLimiter(
       // simplicity. Callers should not rely on it for gating decisions.
       const r = await callRpc(key);
       if (r === null) {
-        return { remaining: maxRequests, resetAt: Date.now() + windowMs };
+        return {
+          remaining: failClosed ? 0 : maxRequests,
+          resetAt: Date.now() + windowMs,
+        };
       }
       return {
         remaining: Math.max(0, r.limit - r.count),

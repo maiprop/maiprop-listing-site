@@ -1,33 +1,39 @@
 name: Deploy Edge Functions
 
 on:
-  # Manual trigger with optional function filter
+  # Manual trigger with explicit targeting. This workflow intentionally does
+  # not auto-deploy on push; production Supabase changes require an explicit
+  # ready-to-proceed action.
   workflow_dispatch:
     inputs:
       functions:
-        description: "Space-separated function names to deploy (leave empty for ALL)"
+        description: "Space-separated function names to deploy"
         required: false
         type: string
-      dry_run:
-        description: "Dry run — list functions without deploying"
+      confirm_deploy_all:
+        description: "Required when functions is blank; confirms deploying ALL edge functions"
         required: false
         type: boolean
         default: false
+      dry_run:
+        description: "Dry run - list functions without deploying"
+        required: false
+        type: boolean
+        default: true
 
-  # Auto-deploy when edge function source changes on main
-  push:
-    branches: [main]
-    paths:
-      - "supabase/functions/**"
-      - "supabase/config.toml"
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-edge-functions-production
+  cancel-in-progress: false
 
 jobs:
   deploy:
     name: Deploy to Supabase
     runs-on: ubuntu-latest
     environment: production
-    # Only auto-deploy on push; always run on manual dispatch
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    if: github.event_name == 'workflow_dispatch'
 
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -38,10 +44,6 @@ jobs:
         with:
           fetch-depth: 2
 
-      - uses: supabase/setup-cli@b60b5899c73b63a2d2d651b1e90db8d4c9392f51 # v1.6.0
-        with:
-          version: latest
-
       - name: Validate secrets
         run: |
           if [ -z "$SUPABASE_ACCESS_TOKEN" ] || [ -z "$PROJECT_REF" ]; then
@@ -49,56 +51,79 @@ jobs:
             exit 1
           fi
 
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Check runtime
+        run: npm run check:runtime
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
+        with:
+          deno-version: 2.7.12
+
+      - uses: supabase/setup-cli@b60b5899c73b63a2d2d651b1e90db8d4c9392f51 # v1.6.0
+        with:
+          version: 2.98.1
+
+      - name: Guard production deploy ref
+        if: inputs.dry_run != true
+        run: |
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "::error::Production edge function deploys must run from main. Current ref: ${GITHUB_REF}"
+            exit 1
+          fi
+          {
+            echo "### Supabase edge function deployment"
+            echo "- Ref: ${GITHUB_REF}"
+            echo "- SHA: ${GITHUB_SHA}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Link project
         run: supabase link --project-ref "$PROJECT_REF"
-
-      - name: Detect changed functions (push event)
-        id: changes
-        if: github.event_name == 'push'
-        run: |
-          set -euo pipefail
-          # Get changed files in the push
-          CHANGED=$(git diff --name-only HEAD~1 HEAD -- supabase/functions/ supabase/config.toml 2>/dev/null || echo "")
-
-          if echo "$CHANGED" | grep -q "config.toml"; then
-            echo "Config changed — deploying all functions"
-            echo "deploy_all=true" >> "$GITHUB_OUTPUT"
-          else
-            # Extract function names from changed paths
-            FUNCS=$(echo "$CHANGED" | grep "^supabase/functions/" | cut -d'/' -f3 | grep -v "^_shared$" | grep -v "^deno" | grep -v "^node_modules$" | sort -u | tr '\n' ' ')
-            if echo "$CHANGED" | grep -q "_shared/"; then
-              echo "Shared code changed — deploying all functions"
-              echo "deploy_all=true" >> "$GITHUB_OUTPUT"
-            elif [ -n "$FUNCS" ]; then
-              echo "Changed functions: $FUNCS"
-              echo "functions=$FUNCS" >> "$GITHUB_OUTPUT"
-              echo "deploy_all=false" >> "$GITHUB_OUTPUT"
-            else
-              echo "No function changes detected"
-              echo "deploy_all=false" >> "$GITHUB_OUTPUT"
-              echo "functions=" >> "$GITHUB_OUTPUT"
-            fi
-          fi
 
       - name: Determine functions to deploy
         id: target
         env:
-          EVENT_NAME: ${{ github.event_name }}
           INPUT_FUNCTIONS: ${{ github.event.inputs.functions }}
-          CHANGES_DEPLOY_ALL: ${{ steps.changes.outputs.deploy_all }}
-          CHANGES_FUNCTIONS: ${{ steps.changes.outputs.functions }}
+          CONFIRM_DEPLOY_ALL: ${{ github.event.inputs.confirm_deploy_all }}
         run: |
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            if [ -z "$INPUT_FUNCTIONS" ]; then
-              echo "deploy_all=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "functions=$INPUT_FUNCTIONS" >> "$GITHUB_OUTPUT"
-              echo "deploy_all=false" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          if [ -z "$INPUT_FUNCTIONS" ]; then
+            if [ "$CONFIRM_DEPLOY_ALL" != "true" ]; then
+              echo "::error::Set 'functions' or set 'confirm_deploy_all=true' to target every edge function."
+              exit 1
             fi
+            echo "deploy_all=true" >> "$GITHUB_OUTPUT"
           else
-            echo "deploy_all=$CHANGES_DEPLOY_ALL" >> "$GITHUB_OUTPUT"
-            echo "functions=$CHANGES_FUNCTIONS" >> "$GITHUB_OUTPUT"
+            echo "functions=$INPUT_FUNCTIONS" >> "$GITHUB_OUTPUT"
+            echo "deploy_all=false" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Run edge function tests
+        if: inputs.dry_run != true
+        run: npm run test:deno
+
+      - name: Capture production live function drift inventory
+        if: inputs.dry_run != true
+        run: npm run check:release-safety -- --live-functions --out release-safety-production-live-functions.json
+        env:
+          RELEASE_SAFETY_SUPABASE_PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+          SUPABASE_ACCESS_TOKEN:               ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Upload production live drift inventory
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-safety-production-live-functions
+          path: release-safety-production-live-functions.json
+          if-no-files-found: ignore
+          retention-days: 30
 
       - name: Deploy functions
         if: inputs.dry_run != true
@@ -119,13 +144,13 @@ jobs:
             echo "No functions to deploy"
           fi
 
-      - name: Dry run — list targets
+      - name: Dry run - list targets
         if: inputs.dry_run == true
         env:
           TARGET_DEPLOY_ALL: ${{ steps.target.outputs.deploy_all }}
           TARGET_FUNCTIONS: ${{ steps.target.outputs.functions }}
         run: |
-          echo "DRY RUN — would deploy:"
+          echo "DRY RUN - would deploy:"
           if [ "$TARGET_DEPLOY_ALL" = "true" ]; then
             echo "  ALL functions"
             ls -d supabase/functions/*/ | grep -v _shared | grep -v node_modules | sed 's|supabase/functions/||;s|/||'
@@ -134,5 +159,5 @@ jobs:
               echo "  - $fn"
             done
           else
-            echo "  (none — no changes detected)"
+            echo "  (none)"
           fi

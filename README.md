@@ -5,10 +5,15 @@ A full-stack property listing and investment platform for the Greek market. Buil
 ## Quick Start
 
 ```bash
+nvm use                         # Node 20.19.5 / npm 10.x
 cp .env.example .env          # fill in required vars (see below)
-npm install
+npm ci
 npm run dev                   # http://localhost:8080
 ```
+
+This repo is pinned to Node `20.19.5` and npm `10.8.2`. `.nvmrc`,
+`.node-version`, `.npmrc`, CI, and the development Dockerfile all enforce that
+runtime contract.
 
 ## Required Environment Variables
 
@@ -31,6 +36,7 @@ See `.env.example` for the full list.
 
 ```bash
 npm run dev          # dev server on :8080
+npm run check:runtime # verify Node/npm match package.json engines
 npm run build        # production build (dist/)
 npm run preview      # preview prod build on :4173
 npm run lint         # ESLint

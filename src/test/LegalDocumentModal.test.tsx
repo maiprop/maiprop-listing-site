@@ -110,7 +110,7 @@ describe("LegalDocumentModal", () => {
     await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith(expect.stringMatching(/signed and downloaded/i)));
     expect(screen.getByText(/Document signed successfully/i)).toBeInTheDocument();
     // Reset path
-    fireEvent.click(screen.getByRole("button", { name: /Sign again/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Sign another/i }));
     expect(screen.queryByText(/Document signed successfully/i)).toBeNull();
   });
 

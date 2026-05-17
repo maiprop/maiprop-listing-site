@@ -16,12 +16,15 @@
 import { test, expect } from "@playwright/test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import WebSocket from "ws";
+import { getSupabaseProjectRef } from "./helpers/liveSafety";
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL ?? "";
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "";
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+const PRODUCTION_PROJECT_REF = "qvvicunqcrwpioqnvzxf";
 
 // Two seeded demo users with known passwords.
-const USER_A_EMAIL = process.env.RLS_USER_A_EMAIL ?? "buyer.pro@maiprop.demo";
+const USER_A_EMAIL = process.env.RLS_USER_A_EMAIL ?? "buyer.free@maiprop.demo";
 const USER_B_EMAIL = process.env.RLS_USER_B_EMAIL ?? "seller.pro@maiprop.demo";
 const USER_PASSWORD = process.env.RLS_USER_PASSWORD ?? "Demo2025!";
 
@@ -97,6 +100,59 @@ test.describe("RLS — cross-user isolation", () => {
       (data?.length ?? 0) === 0,
       `Expected anon to see 0 rows in user_roles; got ${data?.length ?? 0}. Error: ${error?.message ?? "none"}`,
     ).toBe(true);
+  });
+
+  test("anonymous client cannot read a non-active private listing", async () => {
+    test.skip(
+      SUPABASE_SERVICE_ROLE_KEY.length <= 40,
+      "Requires SUPABASE_SERVICE_ROLE_KEY to seed a private listing fixture",
+    );
+    test.skip(
+      getSupabaseProjectRef() === PRODUCTION_PROJECT_REF,
+      "Refusing to create private listing fixture against production Supabase",
+    );
+
+    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      realtime: { transport: WebSocket },
+    });
+    const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      realtime: { transport: WebSocket },
+    });
+
+    const title = `RLS private fixture ${Date.now()}`;
+    const { data: created, error: createError } = await admin
+      .from("listings")
+      .insert({
+        title,
+        city: "Athens",
+        price: 123456,
+        sqm: 55,
+        property_type: "apartment",
+        listing_type: "sale",
+        status: "draft",
+      })
+      .select("id")
+      .single();
+
+    expect(createError, `create private listing fixture: ${createError?.message}`).toBeNull();
+    const listingId = created?.id;
+    if (!listingId) throw new Error("Supabase did not return a listing fixture id.");
+
+    try {
+      const { data, error } = await anonClient
+        .from("listings")
+        .select("id, title, status")
+        .eq("id", listingId);
+
+      expect(
+        data ?? [],
+        `Expected anon to see 0 rows for draft listing ${listingId}. Error: ${error?.message ?? "none"}`,
+      ).toHaveLength(0);
+    } finally {
+      await admin.from("listings").delete().eq("id", listingId);
+    }
   });
 
   test("non-admin user cannot read admin_audit_log", async () => {

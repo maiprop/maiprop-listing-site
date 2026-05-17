@@ -9,11 +9,19 @@ on:
     - cron: "0 3 * * *"
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+
 env:
   # Format-valid stubs — real secrets are never committed.
-  # URL must match https://<ref>.supabase.co; key must be a 3-segment JWT.
+  # URL must match https://<ref>.supabase.co; key uses Supabase's publishable-key prefix.
   VITE_SUPABASE_URL: https://abcdefghijklmnop.supabase.co
-  VITE_SUPABASE_PUBLISHABLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlhdCI6MTcwMDAwMDAwMCwiZXhwIjo5OTk5OTk5OTk5fQ.ci_placeholder_signature_not_real
+  VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder_not_real
   VITE_SUPABASE_PROJECT_ID: abcdefghijklmnop
 
 jobs:
@@ -23,11 +31,16 @@ jobs:
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version-file: .node-version
           cache: npm
+
+      - name: Check runtime
+        run: npm run check:runtime
 
       - name: Install dependencies
         run: npm ci
@@ -46,6 +59,9 @@ jobs:
 
       - name: Lint migrations (timestamp chronology)
         run: npm run lint:migrations:chronology
+
+      - name: Check public edge function protections
+        run: npm run check:public-functions
 
       - name: Lint
         run: npm run lint
@@ -75,7 +91,14 @@ jobs:
           fi
 
       - name: SBOM generation
-        run: npm sbom --sbom-format cyclonedx > /dev/null 2>&1 || echo "::notice::npm sbom not supported in this npm version — skipping"
+        run: npm sbom --sbom-format cyclonedx > sbom.cdx.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sbom
+          path: sbom.cdx.json
+          retention-days: 14
 
       - name: License compliance check
         run: |
@@ -86,7 +109,6 @@ jobs:
 
       - name: Secret scanning (gitleaks)
         uses: gitleaks/gitleaks-action@44c470ffc35caa8b1eb3e8012ca53c2f9bea4eb5 # v2.3.8
-        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
@@ -100,7 +122,7 @@ jobs:
         working-directory: supabase/functions
         run: |
           for attempt in 1 2 3; do
-            deno test --allow-env --allow-net --allow-read . && exit 0
+            deno test --allow-env --allow-net --allow-read --allow-write . && exit 0
             if [ "$attempt" -eq 3 ]; then
               exit 1
             fi
@@ -116,11 +138,9 @@ jobs:
           path: dist/
           retention-days: 1
 
-  e2e:
-    name: E2E Tests
+  release-safety:
+    name: Release Safety Inventory
     runs-on: ubuntu-latest
-    # Only run on push to main or when a PR targets main and is not a draft
-    if: github.event_name == 'push' || github.event.pull_request.draft == false
     needs: quality
 
     steps:
@@ -128,8 +148,52 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version-file: .node-version
           cache: npm
+
+      - name: Check runtime
+        run: npm run check:runtime
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check release safety inventory
+        run: npm run check:release-safety -- --out release-safety-inventory.json
+
+      - name: Check live Supabase function inventory
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: npm run check:release-safety -- --live-functions --out release-safety-inventory-live.json
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          RELEASE_SAFETY_SUPABASE_PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+
+      - name: Upload release safety inventory
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-safety-inventory
+          path: release-safety-inventory*.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    # Only run on push to main or when a PR targets main and is not a draft
+    if: github.event_name == 'push' || github.event.pull_request.draft == false
+    needs: [quality, release-safety]
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Check runtime
+        run: npm run check:runtime
 
       - name: Install dependencies
         run: npm ci
@@ -140,12 +204,23 @@ jobs:
       - name: Build app
         run: npm run build
 
-      - name: Run E2E smoke + auth tests
-        run: npx playwright test --project=chromium
+      - name: Run authenticated performance gates
+        run: npm run test:perf
         env:
           CI: true
           VITE_SUPABASE_URL: https://abcdefghijklmnop.supabase.co
-          VITE_SUPABASE_PUBLISHABLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlhdCI6MTcwMDAwMDAwMCwiZXhwIjo5OTk5OTk5OTk5fQ.ci_placeholder_signature_not_real
+          VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder_not_real
+          VITE_SUPABASE_PROJECT_ID: abcdefghijklmnop
+
+      - name: Run placeholder Supabase E2E smoke + auth tests
+        timeout-minutes: 8
+        run: |
+          echo "This job uses placeholder Supabase env and is a UI smoke gate, not staging integration proof."
+          npx playwright test --project=chromium --grep-invert @perf --reporter=line
+        env:
+          CI: true
+          VITE_SUPABASE_URL: https://abcdefghijklmnop.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder_not_real
           VITE_SUPABASE_PROJECT_ID: abcdefghijklmnop
           # Auth tests skip gracefully when these secrets are not set in repo settings
           E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
@@ -171,7 +246,7 @@ jobs:
         github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
         github.actor != 'dependabot[bot]' &&
         github.event.pull_request.draft == false)
-    needs: quality
+    needs: [quality, release-safety]
     env:
       CI: true
       VITE_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
@@ -183,26 +258,34 @@ jobs:
       ONBOARDING_TEST_EMAIL: ${{ secrets.ONBOARDING_TEST_EMAIL }}
       ONBOARDING_TEST_PASSWORD: ${{ secrets.ONBOARDING_TEST_PASSWORD }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS: true
+      E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version-file: .node-version
           cache: npm
+
+      - name: Check runtime
+        run: npm run check:runtime
 
       - name: Validate required staging secrets
         run: |
           required=(
             "VITE_SUPABASE_URL"
             "VITE_SUPABASE_PUBLISHABLE_KEY"
+            "VITE_SUPABASE_PROJECT_ID"
             "RLS_USER_A_EMAIL"
             "RLS_USER_B_EMAIL"
             "RLS_USER_PASSWORD"
             "ONBOARDING_TEST_EMAIL"
             "ONBOARDING_TEST_PASSWORD"
             "SUPABASE_SERVICE_ROLE_KEY"
+            "SUPABASE_ACCESS_TOKEN"
           )
 
           missing=0
@@ -219,6 +302,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Check generated Supabase types against staging
+        run: node scripts/check-supabase-types-freshness.cjs
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
@@ -240,7 +326,7 @@ jobs:
   migrations-validate:
     name: Validate Supabase migrations
     runs-on: ubuntu-latest
-    needs: quality
+    needs: [quality, release-safety]
 
     services:
       postgres:
@@ -414,30 +500,77 @@ jobs:
     name: Lighthouse CI
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: quality
+    needs: [quality, release-safety]
     env:
-      # Keep Lighthouse builds on the same format-valid Supabase stubs used
-      # elsewhere in CI so route chunks that import the client never crash.
-      VITE_SUPABASE_URL: https://abcdefghijklmnop.supabase.co
-      VITE_SUPABASE_PUBLISHABLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlhdCI6MTcwMDAwMDAwMCwiZXhwIjo5OTk5OTk5OTk5fQ.ci_placeholder_signature_not_real
-      VITE_SUPABASE_PROJECT_ID: abcdefghijklmnop
+      # Lighthouse audits protected app surfaces, so use staging Supabase and
+      # a seeded Pro seller account instead of measuring the login page.
+      VITE_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+      VITE_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+      LIGHTHOUSE_AUTH_EMAIL: ${{ secrets.E2E_SELLER_PRO_EMAIL }}
+      LIGHTHOUSE_AUTH_PASSWORD: ${{ secrets.E2E_SELLER_PRO_PASSWORD }}
+      LIGHTHOUSE_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      LIGHTHOUSE_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version-file: .node-version
           cache: npm
+
+      - name: Check runtime
+        run: npm run check:runtime
 
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate Lighthouse authenticated audit secrets
+        id: lighthouse-secrets
+        run: |
+          required=(
+            "VITE_SUPABASE_URL"
+            "VITE_SUPABASE_PUBLISHABLE_KEY"
+            "VITE_SUPABASE_PROJECT_ID"
+            "LIGHTHOUSE_AUTH_EMAIL"
+            "LIGHTHOUSE_AUTH_PASSWORD"
+            "LIGHTHOUSE_ADMIN_EMAIL"
+            "LIGHTHOUSE_ADMIN_PASSWORD"
+          )
+          missing=0
+          for key in "${required[@]}"; do
+            if [ -z "${!key}" ]; then
+              echo "::warning::Missing Lighthouse secret: $key"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            if [ "${GITHUB_EVENT_NAME}" = "push" ] && [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+              echo "::error::Authenticated Lighthouse audit secrets are required on main."
+              exit 1
+            fi
+            echo "::warning::Authenticated Lighthouse audit skipped because required secrets are not configured."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build app
+        if: steps.lighthouse-secrets.outputs.enabled == 'true'
         run: npm run build
 
+      - name: Install Lighthouse browser
+        if: steps.lighthouse-secrets.outputs.enabled == 'true'
+        run: |
+          npx playwright install chromium --with-deps
+          CHROME_PATH=$(node -e 'const { chromium } = require("playwright"); process.stdout.write(chromium.executablePath())')
+          test -x "$CHROME_PATH"
+          echo "CHROME_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
+
       - name: Run Lighthouse CI
-        run: npx @lhci/cli@latest autorun
+        if: steps.lighthouse-secrets.outputs.enabled == 'true'
+        run: npx @lhci/cli@0.15.1 autorun
         env:
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
 
@@ -446,7 +579,10 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [quality, e2e]
+    needs: [quality, release-safety, e2e, e2e-security-staging, migrations-validate, lighthouse]
+    concurrency:
+      group: cloudflare-pages-production
+      cancel-in-progress: false
 
     env:
       CF_API_TOKEN:   ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -460,8 +596,11 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version-file: .node-version
           cache: npm
+
+      - name: Check runtime
+        run: npm run check:runtime
 
       - name: Install dependencies
         run: npm ci
@@ -504,29 +643,36 @@ jobs:
       # Pages *project* settings (NOT from the GitHub Actions env and NOT from
       # the built Vite bundle). Sync the runtime bindings from GitHub secrets
       # so functions/sitemap-dynamic.xml.ts can resolve SUPABASE_PROJECT_ID on
-      # every request, and functions/_middleware.ts can resolve the optional
-      # SITE_LOCK_PASSWORD for the pre-launch passcode gate.
+      # every request, the SEO Pages Functions can read public listing data via
+      # SUPABASE_PUBLISHABLE_KEY, and functions/_middleware.ts can resolve the
+      # optional SITE_LOCK_PASSWORD for the pre-launch passcode gate.
       - name: Sync Cloudflare Pages runtime environment variables
         env:
-          SUPABASE_PROJECT_ID:  ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
-          SITE_LOCK_PASSWORD:   ${{ secrets.SITE_LOCK_PASSWORD }}
+          SUPABASE_PROJECT_ID:       ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+          SUPABASE_PUBLISHABLE_KEY:  ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          SITE_LOCK_PASSWORD:        ${{ secrets.SITE_LOCK_PASSWORD }}
         run: |
           set -euo pipefail
           if [ -z "${SUPABASE_PROJECT_ID}" ]; then
             echo "::warning::VITE_SUPABASE_PROJECT_ID secret is empty; sitemap function will use static fallback"
           fi
+          if [ -z "${SUPABASE_PUBLISHABLE_KEY}" ]; then
+            echo "::warning::VITE_SUPABASE_PUBLISHABLE_KEY secret is empty; SEO Functions will use the static app shell"
+          fi
 
-          # Build env_vars payload. SITE_LOCK_PASSWORD is optional — only
-          # include it when the GitHub secret is set. Remove the secret (and
-          # redeploy) to unlock the site. `secret_text` stores the value
-          # encrypted-at-rest on Cloudflare's side.
+          # Build env_vars payload. SITE_LOCK_PASSWORD is optional; when the
+          # GitHub secret is absent, send a null binding so Cloudflare removes
+          # any previously stored passcode instead of preserving stale state.
+          # `secret_text` stores the value encrypted-at-rest on Cloudflare's side.
           ENV_JSON=$(jq -n \
             --arg pid "$SUPABASE_PROJECT_ID" \
+            --arg pkey "$SUPABASE_PUBLISHABLE_KEY" \
             --arg lock "$SITE_LOCK_PASSWORD" \
             '
             ({} +
               (if $pid  != "" then { SUPABASE_PROJECT_ID: { value: $pid,  type: "plain_text"  } } else {} end) +
-              (if $lock != "" then { SITE_LOCK_PASSWORD: { value: $lock, type: "secret_text" } } else {} end)
+              (if $pkey != "" then { SUPABASE_PUBLISHABLE_KEY: { value: $pkey, type: "plain_text" } } else {} end) +
+              (if $lock != "" then { SITE_LOCK_PASSWORD: { value: $lock, type: "secret_text" } } else { SITE_LOCK_PASSWORD: null } end)
             )')
 
           PAYLOAD=$(jq -n --argjson env "$ENV_JSON" '{
@@ -554,7 +700,7 @@ jobs:
         with:
           apiToken:   ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId:  ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command:    pages deploy dist --project-name=maiprop-listing-site --branch=main --commit-dirty=true
+          command:    pages deploy dist --project-name=maiprop-listing-site --branch=main --commit-hash=${{ github.sha }} --commit-message=${{ github.sha }} --commit-dirty=true
 
       - name: Post-deploy health check
         id: health_check
@@ -594,15 +740,60 @@ jobs:
     # Keep deployments out of arbitrary PRs; staging receives mainline and manual
     # deployments after the quality gate passes.
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
-    needs: quality
+    needs: [quality, release-safety, migrations-validate]
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect Supabase staging deployment changes
+        id: supabase_changes
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            echo "Manual run: Supabase staging deploy enabled."
+            exit 0
+          fi
+
+          base="${{ github.event.before }}"
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            base="$(git rev-list --max-parents=0 HEAD)"
+          fi
+
+          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=50 origin "${{ github.ref_name }}" || true
+          fi
+
+          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "::warning::Could not inspect the previous commit; enabling Supabase staging deploy."
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed_files="$(git diff --name-only "$base" "${{ github.sha }}" || true)"
+          echo "$changed_files"
+
+          if grep -Eq '^(supabase/|deno\.json|deno\.lock)$' <<< "$changed_files"; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            echo "Supabase changes detected: staging deploy enabled."
+          else
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "No Supabase DB/function changes detected: staging deploy skipped."
+          fi
+
+      - name: Skip Supabase staging deploy
+        if: steps.supabase_changes.outputs.deploy != 'true'
+        run: echo "No Supabase migration/function changes in this push; skipping staging deploy."
 
       - name: Validate required staging secrets
+        if: steps.supabase_changes.outputs.deploy == 'true'
         run: |
           required=(
             "STAGING_SUPABASE_PROJECT_ID"
+            "SUPABASE_STAGING_DB_URL"
             "SUPABASE_ACCESS_TOKEN"
           )
           missing=0
@@ -617,18 +808,62 @@ jobs:
           fi
         env:
           STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          SUPABASE_STAGING_DB_URL:     ${{ secrets.SUPABASE_STAGING_DB_URL }}
           SUPABASE_ACCESS_TOKEN:       ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
-      - name: Setup Supabase CLI
-        uses: supabase/setup-cli@v1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        if: steps.supabase_changes.outputs.deploy == 'true'
         with:
-          version: latest
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Check runtime
+        if: steps.supabase_changes.outputs.deploy == 'true'
+        run: npm run check:runtime
+
+      - name: Install dependencies
+        if: steps.supabase_changes.outputs.deploy == 'true'
+        run: npm ci
+
+      - name: Setup Supabase CLI
+        if: steps.supabase_changes.outputs.deploy == 'true'
+        uses: supabase/setup-cli@b60b5899c73b63a2d2d651b1e90db8d4c9392f51 # v1.6.0
+        with:
+          version: 2.98.1
+
+      - name: Dry-run staging database migrations
+        if: steps.supabase_changes.outputs.deploy == 'true'
+        run: supabase db push --db-url "$SUPABASE_STAGING_DB_URL" --dry-run
+        env:
+          SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
+
+      - name: Apply database migrations to staging
+        if: steps.supabase_changes.outputs.deploy == 'true'
+        run: supabase db push --db-url "$SUPABASE_STAGING_DB_URL" --yes
+        env:
+          SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
+
+      - name: Capture staging live function drift inventory
+        if: steps.supabase_changes.outputs.deploy == 'true'
+        run: npm run check:release-safety -- --live-functions --out release-safety-staging-live-functions.json
+        env:
+          SUPABASE_ACCESS_TOKEN:                 ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          RELEASE_SAFETY_SUPABASE_PROJECT_REF:   ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+
+      - name: Upload staging live drift inventory
+        if: always() && steps.supabase_changes.outputs.deploy == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-safety-staging-live-functions
+          path: release-safety-staging-live-functions.json
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Deploy edge functions to staging
+        if: steps.supabase_changes.outputs.deploy == 'true'
         run: |
           supabase functions deploy \
-            --project-ref "$STAGING_SUPABASE_PROJECT_ID" \
-            --no-verify-jwt
+            --project-ref "$STAGING_SUPABASE_PROJECT_ID"
         env:
           SUPABASE_ACCESS_TOKEN:         ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           STAGING_SUPABASE_PROJECT_ID:   ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
@@ -644,17 +879,36 @@ jobs:
       github.event_name == 'pull_request' &&
       github.event.pull_request.draft == false &&
       github.actor != 'dependabot[bot]'
-    needs: quality
+    needs: [quality, release-safety]
 
     steps:
       - name: Checkout (for Pages Functions in functions/)
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: Download dist artifact
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          name: dist
-          path: dist/
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Check runtime
+        run: npm run check:runtime
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build app with staging environment
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL:             ${{ secrets.STAGING_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SUPABASE_PROJECT_ID:      ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          VITE_MAPBOX_TOKEN:             ${{ secrets.VITE_MAPBOX_TOKEN }}
+          VITE_SENTRY_DSN:               ${{ secrets.VITE_SENTRY_DSN }}
+          VITE_STRIPE_PRO_PRODUCT_ID:    ${{ secrets.VITE_STRIPE_PRO_PRODUCT_ID }}
+          VITE_TURNSTILE_SITE_KEY:       ${{ secrets.VITE_TURNSTILE_SITE_KEY }}
+          VITE_GOOGLE_MAPS_API_KEY:      ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+          VITE_PLAUSIBLE_DOMAIN:         ${{ secrets.VITE_PLAUSIBLE_DOMAIN }}
+          VITE_APP_URL:                  ${{ secrets.VITE_APP_URL }}
 
       - name: Deploy to Cloudflare Pages (PR preview)
         uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3.15.0

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import {
   BarChart2, Building2, Eye, TrendingUp, Star,
   MessageSquare, Calendar, Percent, Clock,
@@ -6,8 +6,8 @@ import {
 import { Link } from "react-router-dom";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  BarChart, Bar, Cell,
-} from "recharts";
+  BarChart, Bar, Cell, ChartFallback,
+} from "@/components/charts/LazyRecharts";
 import { Button } from "@/components/ui/button";
 import { ProGate } from "@/components/gates/ProGate";
 import { useAuth } from "@/contexts/AuthContext";
@@ -242,8 +242,9 @@ function SellerAgentAnalytics({ participantType }: { participantType: string }) 
           Property views – last {selectedDays} days
         </h2>
         {hasViewData ? (
-          <ResponsiveContainer width="100%" height={180}>
-            <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+          <Suspense fallback={<ChartFallback height={180} />}>
+            <ResponsiveContainer width="100%" height={180}>
+              <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="viewGradient" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.25} />
@@ -280,8 +281,9 @@ function SellerAgentAnalytics({ participantType }: { participantType: string }) 
                 fill="url(#viewGradient)"
                 dot={false}
               />
-            </AreaChart>
-          </ResponsiveContainer>
+              </AreaChart>
+            </ResponsiveContainer>
+          </Suspense>
         ) : (
           <div className="flex flex-col items-center justify-center h-32 text-center">
             <Eye className="w-8 h-8 text-muted-foreground mb-2" />
@@ -304,8 +306,9 @@ function SellerAgentAnalytics({ participantType }: { participantType: string }) 
               Math.min(selectedDays, 30),
             );
             return (
-              <ResponsiveContainer width="100%" height={160}>
-                <BarChart data={enquiriesData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+              <Suspense fallback={<ChartFallback height={160} />}>
+                <ResponsiveContainer width="100%" height={160}>
+                  <BarChart data={enquiriesData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                   <XAxis
                     dataKey="label"
                     tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
@@ -329,8 +332,9 @@ function SellerAgentAnalytics({ participantType }: { participantType: string }) 
                     labelStyle={{ color: "hsl(var(--foreground))" }}
                   />
                   <Bar dataKey="enquiries" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} opacity={0.85} />
-                </BarChart>
-              </ResponsiveContainer>
+                  </BarChart>
+                </ResponsiveContainer>
+              </Suspense>
             );
           })()
         ) : (
@@ -421,8 +425,9 @@ function SellerAgentAnalytics({ participantType }: { participantType: string }) 
           {leadFunnel.total === 0 ? (
             <p className="text-sm text-muted-foreground">No consultation requests yet.</p>
           ) : (
-            <ResponsiveContainer width="100%" height={140}>
-              <BarChart
+            <Suspense fallback={<ChartFallback height={140} />}>
+              <ResponsiveContainer width="100%" height={140}>
+                <BarChart
                 data={funnelBars}
                 layout="vertical"
                 margin={{ top: 0, right: 40, left: 0, bottom: 0 }}
@@ -450,8 +455,9 @@ function SellerAgentAnalytics({ participantType }: { participantType: string }) 
                     <Cell key={entry.key} fill={FUNNEL_COLORS[entry.key] ?? "hsl(var(--primary))"} />
                   ))}
                 </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+                </BarChart>
+              </ResponsiveContainer>
+            </Suspense>
           )}
         </div>
       )}

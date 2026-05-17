@@ -44,8 +44,12 @@ export function useSmartFilters(type: string, subtype: string, listingType: stri
   );
   const [loading, setLoading] = useState(!cache.has(cacheKey) && !!type);
   const abortRef = useRef<AbortController | null>(null);
+  const requestSeqRef = useRef(0);
 
   useEffect(() => {
+    const requestSeq = requestSeqRef.current + 1;
+    requestSeqRef.current = requestSeq;
+
     // If no type selected, use default
     if (!type) {
       setConfig(DEFAULT_CONFIG);
@@ -77,6 +81,7 @@ export function useSmartFilters(type: string, subtype: string, listingType: stri
         body: { type, subtype: subtype || null, listing_type: listingType || null },
       })
       .then(({ data, error }) => {
+        if (requestSeqRef.current !== requestSeq) return;
         if (error || !data || data.error) {
           logger.warn("smart-filters fallback:", error || data?.error);
           setLoading(false);
@@ -85,6 +90,11 @@ export function useSmartFilters(type: string, subtype: string, listingType: stri
         const result = data as SmartFilterConfig;
         cache.set(cacheKey, result);
         setConfig(result);
+        setLoading(false);
+      })
+      .catch((error: unknown) => {
+        if (requestSeqRef.current !== requestSeq) return;
+        logger.warn("smart-filters fallback:", error);
         setLoading(false);
       });
 

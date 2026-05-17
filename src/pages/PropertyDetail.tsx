@@ -8,7 +8,7 @@ import {
   ChevronRight,
   ExternalLink,
   Loader2,
-  Info, LayoutGrid, Globe, Scale,
+  Info, LayoutGrid, Scale,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -26,8 +26,8 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { PropertyReportCard } from "@/components/property/PropertyReportCard";
 import { PropertyAuctionSection } from "@/components/property/PropertyAuctionSection";
 import { toast } from "sonner";
-import PropertyMiniMap from "@/components/PropertyMiniMap";
 import PropertyValuation from "@/components/PropertyValuation";
+const PropertyMiniMap = lazy(() => import("@/components/PropertyMiniMap"));
 const NeighbourhoodReport = lazy(() => import("@/components/NeighbourhoodReport"));
 import { buildPropertyFeatureGroups, buildDetailRows } from "@/lib/propertyFeatures";
 const AIAssistantWidget = lazy(() => import("@/components/AIAssistantWidget"));
@@ -35,7 +35,6 @@ import { AuctionAlertModal } from "@/components/AuctionAlertModal";
 import { getStreetViewProxyUrl } from "@/lib/config";
 import { dbListingToCard } from "@/lib/listingUtils";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
-import { Section, SectionHeader } from "@/components/property/DetailPrimitives";
 import PropertyGallery from "@/components/property/PropertyGallery";
 import PropertyFeatureList from "@/components/property/PropertyFeatureList";
 import PropertyOwnerCard from "@/components/property/PropertyOwnerCard";
@@ -119,6 +118,7 @@ export default function PropertyDetail() {
     (dbListing as ListingWithJoins).profiles?.user_id ?? (dbListing as ListingWithJoins).owner_id :
     undefined;
     if (!ownerId) {toast.info(t("property.contactUnavailable"));return;}
+    if (ownerId === user.id) {toast.info(t("property.ownListingContact"));return;}
     try {
       const convId = await startConversation.mutateAsync({ other_user_id: ownerId, listing_id: id });
       navigate("/messages", { state: { openConversationId: convId } });
@@ -176,7 +176,6 @@ export default function PropertyDetail() {
   const energyClass = db.energy_class;
   const isLandType = propertyType === "land";
   const isAuction = listingType === "auction";
-  const websiteUrl = db.website_url;
 
   // Extract ownership info from tags (for auction listings)
   const tags: string[] = db.tags ?? [];
@@ -281,16 +280,16 @@ export default function PropertyDetail() {
   return (
     <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
       <Helmet>
-        <title>{`${title} — maiProp`}</title>
+        <title>{`${title} — mAI prop`}</title>
         <meta name="description" content={ogDescription} />
         <link rel="canonical" href={canonicalUrl} />
-        <meta property="og:title" content={`${title} — maiProp`} />
+        <meta property="og:title" content={`${title} — mAI prop`} />
         <meta property="og:description" content={ogDescription} />
         <meta property="og:image" content={ogImage} />
         <meta property="og:url" content={canonicalUrl} />
         <meta property="og:type" content="website" />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={`${title} — maiProp`} />
+        <meta name="twitter:title" content={`${title} — mAI prop`} />
         <meta name="twitter:description" content={ogDescription} />
         <meta name="twitter:image" content={ogImage} />
         <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
@@ -357,7 +356,6 @@ export default function PropertyDetail() {
                   listingId={id!}
                   auctionDate={db.auction_date}
                   auctionStartingBid={Number(db.auction_starting_bid) || 0}
-                  auctionCourt={db.auction_court}
                   ownershipDisplay={ownershipDisplay}
                   ownershipPct={ownershipPct}
                   ownershipStatus={ownershipStatus}
@@ -376,21 +374,17 @@ export default function PropertyDetail() {
               />
 
               {/* ── Website Link (distinctive section) ── */}
-              {websiteUrl &&
-              <Section>
-                  <SectionHeader icon={Globe} title="Official Website" />
-                </Section>
-              }
-
               {/* ── Mini map ── */}
               <div className="rounded-2xl overflow-hidden">
-                <PropertyMiniMap
-                  latitude={db?.latitude}
-                  longitude={db?.longitude}
-                  address={address}
-                  city={city}
-                  title={title}
-                  onWalkScoreChange={setWalkScore} />
+                <Suspense fallback={<div className="h-96 bg-muted animate-pulse rounded-2xl" />}>
+                  <PropertyMiniMap
+                    latitude={db?.latitude}
+                    longitude={db?.longitude}
+                    address={address}
+                    city={city}
+                    title={title}
+                    onWalkScoreChange={setWalkScore} />
+                </Suspense>
               </div>
 
               {/* ── Neighbourhood Report — sign-in only ── */}

@@ -24,6 +24,24 @@ export interface MapViewProps {
   height?: string;
 }
 
+const VISIBLE_RECALC_THROTTLE_MS = 120;
+const HEATMAP_SAMPLE_LIMIT = 1500;
+
+function sampleListingsForHeatmap(listings: MapListing[], limit = HEATMAP_SAMPLE_LIMIT) {
+  if (listings.length <= limit) return listings;
+  const step = listings.length / limit;
+  return Array.from({ length: limit }, (_unused, index) => listings[Math.floor(index * step)]);
+}
+
+function boundsKey(bounds: { getWest: () => number; getSouth: () => number; getEast: () => number; getNorth: () => number }) {
+  return [
+    bounds.getWest(),
+    bounds.getSouth(),
+    bounds.getEast(),
+    bounds.getNorth(),
+  ].map((value) => value.toFixed(4)).join(":");
+}
+
 export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, height }: MapViewProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [MapComponents, setMapComponents] = useState<any>(null);
@@ -68,7 +86,27 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
       Number(l.latitude) !== 0 && Number(l.longitude) !== 0
   ), [listings]);
 
+  const listingById = useMemo(() => new Map(mapped.map((listing) => [listing.id, listing])), [mapped]);
+
+  const mapBounds = useMemo(() => {
+    if (mapped.length === 0) return null;
+    let minLng = Infinity;
+    let minLat = Infinity;
+    let maxLng = -Infinity;
+    let maxLat = -Infinity;
+    for (const listing of mapped) {
+      const lng = Number(listing.longitude);
+      const lat = Number(listing.latitude);
+      if (lng < minLng) minLng = lng;
+      if (lng > maxLng) maxLng = lng;
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+    }
+    return [[minLng, minLat], [maxLng, maxLat]] as [[number, number], [number, number]];
+  }, [mapped]);
+
   const geoJSON = useMemo(() => buildGeoJSON(mapped), [mapped]);
+  const heatmapGeoJSON = useMemo(() => buildGeoJSON(sampleListingsForHeatmap(mapped)), [mapped]);
 
   // Draw GeoJSON (reactive)
   const drawLineGJ = useMemo(() => {
@@ -114,14 +152,12 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
 
   // ── Fit bounds ──────────────────────────────────────────────────────────────
   const fitBounds = useCallback(() => {
-    if (!mapRef.current || mapped.length === 0) return;
-    const lngs = mapped.map(l => Number(l.longitude));
-    const lats = mapped.map(l => Number(l.latitude));
+    if (!mapRef.current || !mapBounds) return;
     mapRef.current.fitBounds(
-      [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
+      mapBounds,
       { padding: 60, duration: 600 }
     );
-  }, [mapped]);
+  }, [mapBounds]);
 
   useEffect(() => { const t = setTimeout(fitBounds, 300); return () => clearTimeout(t); }, [fitBounds]);
 
@@ -136,6 +172,38 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
     }
     onVisibleListingsChange(ids);
   }, [mapped, onVisibleListingsChange]);
+
+  const lastVisibleBoundsKeyRef = useRef<string | null>(null);
+  const visibleTimerRef = useRef<number | null>(null);
+  const visibleRafRef = useRef<number | null>(null);
+
+  const scheduleComputeVisible = useCallback((force = false) => {
+    if (!onVisibleListingsChange) return;
+    const map = mapRef.current?.getMap?.();
+    const bounds = map?.getBounds?.();
+    if (!bounds) return;
+    const key = boundsKey(bounds);
+    if (!force && key === lastVisibleBoundsKeyRef.current) return;
+    lastVisibleBoundsKeyRef.current = key;
+
+    if (visibleTimerRef.current != null) {
+      window.clearTimeout(visibleTimerRef.current);
+    }
+    visibleTimerRef.current = window.setTimeout(() => {
+      if (visibleRafRef.current != null) {
+        window.cancelAnimationFrame(visibleRafRef.current);
+      }
+      visibleRafRef.current = window.requestAnimationFrame(() => {
+        visibleRafRef.current = null;
+        computeVisible();
+      });
+    }, force ? 0 : VISIBLE_RECALC_THROTTLE_MS);
+  }, [computeVisible, onVisibleListingsChange]);
+
+  useEffect(() => () => {
+    if (visibleTimerRef.current != null) window.clearTimeout(visibleTimerRef.current);
+    if (visibleRafRef.current != null) window.cancelAnimationFrame(visibleRafRef.current);
+  }, []);
 
   // ── Close polygon ────────────────────────────────────────────────────────
   const closePolygon = useCallback((points: [number, number][]) => {
@@ -201,7 +269,7 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
     if (pins.length) {
       const props = pins[0].properties!;
       const id = props.id;
-      const listing = mapped.find(l => l.id === id);
+      const listing = listingById.get(id);
       if (listing) {
         setPopupInfo(p =>
           p?.listing.id === id ? null
@@ -212,7 +280,7 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
     }
 
     setPopupInfo(null);
-  }, [closePolygon, mapped]);
+  }, [closePolygon, listingById]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const onMouseMove = useCallback((e: any) => {
@@ -266,16 +334,16 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
         interactiveLayerIds={["clusters", "price-labels"]}
         onClick={onClick}
         onMouseMove={onMouseMove}
-        onMoveEnd={computeVisible}
-        onZoomEnd={computeVisible}
-        onLoad={computeVisible}
+        onMoveEnd={() => scheduleComputeVisible()}
+        onZoomEnd={() => scheduleComputeVisible()}
+        onLoad={() => scheduleComputeVisible(true)}
         cursor={drawMode && !polygonClosed ? "crosshair" : undefined}
       >
         <MapComponents.NavigationControl position="bottom-right" />
 
         {/* Heatmap source */}
         {showHeatmap && (
-          <MapComponents.Source id="heatmap-data" type="geojson" data={geoJSON}>
+          <MapComponents.Source id="heatmap-data" type="geojson" data={heatmapGeoJSON}>
             <MapComponents.Layer {...heatmapLayer} id="price-heatmap" source="heatmap-data" />
           </MapComponents.Source>
         )}

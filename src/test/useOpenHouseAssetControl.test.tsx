@@ -10,8 +10,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 
-const { fromMock, getUserMock, useAuthMock, storageBucket, toastMock } = vi.hoisted(() => ({
+const { fromMock, rpcMock, getUserMock, useAuthMock, storageBucket, toastMock } = vi.hoisted(() => ({
   fromMock: vi.fn(),
+  rpcMock: vi.fn(),
   getUserMock: vi.fn(),
   useAuthMock: vi.fn(),
   storageBucket: { upload: vi.fn(), createSignedUrl: vi.fn() },
@@ -21,6 +22,7 @@ const { fromMock, getUserMock, useAuthMock, storageBucket, toastMock } = vi.hois
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: (...a: unknown[]) => fromMock(...a),
+    rpc: (...a: unknown[]) => rpcMock(...a),
     storage: { from: () => storageBucket },
     auth: { getUser: () => getUserMock() },
   },
@@ -59,6 +61,7 @@ const renderHookWithQuery = <T,>(hook: () => T) =>
 
 beforeEach(() => {
   fromMock.mockReset();
+  rpcMock.mockReset();
   getUserMock.mockReset();
   getUserMock.mockResolvedValue({ data: { user: { id: "u-1" } } });
   useAuthMock.mockReset();
@@ -189,29 +192,63 @@ describe("useCreateOpenHouseRegistration", () => {
     const { result } = renderHookWithQuery(() => useCreateOpenHouseRegistration());
     await expect(
       act(async () => {
-        await result.current.mutateAsync({ listingId: "l-1" });
+        await result.current.mutateAsync({
+          listingId: "l-1",
+          contactName: "Buyer One",
+          contactEmail: "buyer@example.com",
+          contactPhone: "+306900000000",
+        });
       }),
     ).rejects.toBeInstanceOf(Error);
   });
 
-  it("inserts a pending registration and toasts on success", async () => {
-    const insert = vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        single: vi.fn().mockResolvedValue({ data: { id: "r-3" }, error: null }),
-      }),
-    });
-    fromMock.mockReturnValue({ insert });
+  it("creates a pending registration through the capacity-checked RPC and toasts on success", async () => {
+    rpcMock.mockResolvedValue({ data: { id: "r-3" }, error: null });
     const { result } = renderHookWithQuery(() => useCreateOpenHouseRegistration());
     await act(async () => {
-      await result.current.mutateAsync({ listingId: "l-1", timeslotIndex: 2, note: "hi" });
+      await result.current.mutateAsync({
+        listingId: "l-1",
+        timeslotIndex: 2,
+        note: "hi",
+        contactName: "Buyer One",
+        contactEmail: "buyer@example.com",
+        contactPhone: "+306900000000",
+        visitPurpose: "Buying",
+      });
     });
-    expect(insert).toHaveBeenCalledWith(expect.objectContaining({
-      listing_id: "l-1",
-      requester_id: "u-1",
-      timeslot_index: 2,
-      note: "hi",
-    }));
+    expect(rpcMock).toHaveBeenCalledWith("create_open_house_registration", {
+      p_listing_id: "l-1",
+      p_timeslot_index: 2,
+      p_contact_name: "Buyer One",
+      p_contact_email: "buyer@example.com",
+      p_contact_phone: "+306900000000",
+      p_visit_purpose: "Buying",
+      p_note: "hi",
+      p_contact_permission: true,
+      p_id_verification_consent: true,
+      p_privacy_acknowledgement: true,
+    });
     expect(toastMock.success).toHaveBeenCalled();
+  });
+
+  it("maps server-side capacity errors to visitor-friendly copy", async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { message: "open_house_timeslot_capacity_reached" },
+    });
+    const { result } = renderHookWithQuery(() => useCreateOpenHouseRegistration());
+    await act(async () => {
+      await result.current
+        .mutateAsync({
+          listingId: "l-1",
+          timeslotIndex: 2,
+          contactName: "Buyer One",
+          contactEmail: "buyer@example.com",
+          contactPhone: "+306900000000",
+        })
+        .catch(() => {});
+    });
+    expect(toastMock.error).toHaveBeenCalledWith("That timeslot is fully booked. Please choose another slot.");
   });
 });
 
@@ -222,7 +259,28 @@ describe("useUpdateOpenHouseRegistration", () => {
   // the SELECT returns; the test drives uid via the existing getUserMock.
   function mockRegUpdate(lookup: {
     requester_id?: string;
-    listings?: { owner_id?: string };
+    status?: string;
+    timeslot_index?: number | null;
+    contact_name?: string | null;
+    contact_email?: string | null;
+    contact_phone?: string | null;
+    contact_permission_at?: string | null;
+    id_verification_consent_at?: string | null;
+    privacy_acknowledged_at?: string | null;
+    id_doc_url?: string | null;
+    id_verified_at?: string | null;
+    waiver_signed_at?: string | null;
+    proof_of_funds_url?: string | null;
+    proof_amount?: number | null;
+    investor_declaration_signed_at?: string | null;
+    mortgage_status?: string | null;
+    budget_range?: string | null;
+    working_with_agent?: string | null;
+    listings?: {
+      owner_id?: string;
+      price?: number | null;
+      open_house_settings?: Array<Record<string, unknown>> | Record<string, unknown> | null;
+    };
   } | null) {
     const lookupMaybe = vi.fn().mockResolvedValue({ data: lookup, error: null });
     const single = vi.fn().mockResolvedValue({ data: { id: "r-1" }, error: null });
@@ -243,7 +301,28 @@ describe("useUpdateOpenHouseRegistration", () => {
   it("allows the listing owner to update and toasts 'Updated'", async () => {
     const { eq } = mockRegUpdate({
       requester_id: "buyer-77",
-      listings: { owner_id: "u-1" },
+      status: "pending",
+      timeslot_index: 0,
+      contact_name: "Buyer One",
+      contact_email: "buyer@example.com",
+      contact_phone: "+306900000000",
+      contact_permission_at: "2026-01-01T09:00:00.000Z",
+      id_verification_consent_at: "2026-01-01T09:00:00.000Z",
+      privacy_acknowledged_at: "2026-01-01T09:00:00.000Z",
+      id_doc_url: "docs/id.pdf",
+      id_verified_at: "2026-01-01T10:00:00.000Z",
+      waiver_signed_at: "2026-01-01T10:05:00.000Z",
+      proof_of_funds_url: null,
+      proof_amount: null,
+      investor_declaration_signed_at: null,
+      mortgage_status: null,
+      budget_range: null,
+      working_with_agent: null,
+      listings: {
+        owner_id: "u-1",
+        price: 150000,
+        open_house_settings: null,
+      },
     });
     const { result } = renderHookWithQuery(() => useUpdateOpenHouseRegistration());
     await act(async () => {
@@ -267,6 +346,46 @@ describe("useUpdateOpenHouseRegistration", () => {
     });
     expect(eq).toHaveBeenCalledWith("id", "r-1");
     expect(toastMock.success).toHaveBeenCalledWith("Updated");
+  });
+
+  it("blocks requesters from self-verifying ID or marking attendance", async () => {
+    mockRegUpdate({
+      requester_id: "u-1",
+      status: "approved",
+      listings: { owner_id: "someone-else" },
+    });
+    const { result } = renderHookWithQuery(() => useUpdateOpenHouseRegistration());
+    await act(async () => {
+      await result.current
+        .mutateAsync({
+          id: "r-1",
+          updates: {
+            id_verified_at: "2026-01-01T10:00:00.000Z",
+            status: "attended",
+          },
+        })
+        .catch(() => {});
+    });
+    expect(toastMock.error).toHaveBeenCalledWith("Only the host can approve, reject, or mark attendance.");
+  });
+
+  it("blocks requesters from moving themselves into another timeslot", async () => {
+    mockRegUpdate({
+      requester_id: "u-1",
+      status: "pending",
+      timeslot_index: 0,
+      listings: { owner_id: "someone-else" },
+    });
+    const { result } = renderHookWithQuery(() => useUpdateOpenHouseRegistration());
+    await act(async () => {
+      await result.current
+        .mutateAsync({
+          id: "r-1",
+          updates: { timeslot_index: 1 },
+        })
+        .catch(() => {});
+    });
+    expect(toastMock.error).toHaveBeenCalledWith("Only the host can approve, reject, or mark attendance.");
   });
 
   it("rejects when the caller is neither the requester nor the listing owner", async () => {
@@ -318,25 +437,18 @@ describe("useMyOpenHouseOffers", () => {
 // ─── useSubmitOpenHouseOffer ────────────────────────────────────────────────
 
 describe("useSubmitOpenHouseOffer", () => {
-  it("upserts a submitted offer keyed by listing_id+bidder_id", async () => {
-    const single = vi.fn().mockResolvedValue({ data: { id: "o-1" }, error: null });
-    const upsert = vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({ single }),
-    });
-    fromMock.mockReturnValue({ upsert });
+  it("submits through the server-side offer RPC", async () => {
+    rpcMock.mockResolvedValue({ data: { id: "o-1" }, error: null });
     const { result } = renderHookWithQuery(() => useSubmitOpenHouseOffer());
     await act(async () => {
       await result.current.mutateAsync({ listingId: "l-1", amount: 350_000, message: "best" });
     });
-    expect(upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        listing_id: "l-1",
-        bidder_id: "u-1",
-        amount: 350_000,
-        status: "submitted",
-      }),
-      { onConflict: "listing_id,bidder_id" },
-    );
+    expect(rpcMock).toHaveBeenCalledWith("submit_open_house_offer", {
+      p_listing_id: "l-1",
+      p_amount: 350_000,
+      p_message: "best",
+      p_currency: "EUR",
+    });
     expect(toastMock.success).toHaveBeenCalledWith("Offer submitted");
   });
 
@@ -358,9 +470,18 @@ describe("useUpdateOpenHouseOffer", () => {
   // actual update mutation, then returns the captured `update` mock so the
   // body of each test can assert on it. Defaults to the listing-owner path.
   function mockOfferUpdate(
-    lookup: { bidder_id?: string; listings?: { owner_id?: string } } = {
+    lookup: {
+      bidder_id?: string;
+      status?: string;
+      listings?: {
+        owner_id?: string;
+        open_house_date?: string | null;
+        open_house_settings?: Array<Record<string, unknown>> | Record<string, unknown> | null;
+      };
+    } = {
       bidder_id: "some-bidder",
-      listings: { owner_id: "u-1" },
+      status: "submitted",
+      listings: { owner_id: "u-1", open_house_date: "2026-01-01T10:00:00.000Z", open_house_settings: null },
     },
   ) {
     const lookupMaybe = vi.fn().mockResolvedValue({ data: lookup, error: null });
@@ -392,7 +513,11 @@ describe("useUpdateOpenHouseOffer", () => {
   });
 
   it("stamps decided_by + decided_at when status='accepted'", async () => {
-    const updateMock = mockOfferUpdate();
+    const updateMock = mockOfferUpdate({
+      bidder_id: "some-bidder",
+      status: "revealed",
+      listings: { owner_id: "u-1", open_house_date: "2026-01-01T10:00:00.000Z", open_house_settings: null },
+    });
     const { result } = renderHookWithQuery(() => useUpdateOpenHouseOffer());
     await act(async () => {
       await result.current.mutateAsync({ id: "o-1", status: "accepted" });
@@ -417,7 +542,11 @@ describe("useUpdateOpenHouseOffer", () => {
   });
 
   it("does not stamp the revealed/decided fields for status='withdrawn'", async () => {
-    const updateMock = mockOfferUpdate();
+    const updateMock = mockOfferUpdate({
+      bidder_id: "u-1",
+      status: "submitted",
+      listings: { owner_id: "someone-else", open_house_date: "2026-01-01T10:00:00.000Z", open_house_settings: null },
+    });
     const { result } = renderHookWithQuery(() => useUpdateOpenHouseOffer());
     await act(async () => {
       await result.current.mutateAsync({ id: "o-1", status: "withdrawn" });
@@ -443,18 +572,8 @@ describe("useUpdateOpenHouseOffer", () => {
 // ─── useAcceptOpenHouseOffer ────────────────────────────────────────────────
 
 describe("useAcceptOpenHouseOffer", () => {
-  it("accepts the chosen offer and rejects every other id", async () => {
-    const eqAccept = vi.fn().mockResolvedValue({ error: null });
-    const eqOthers = vi.fn().mockReturnValue({
-      neq: vi.fn().mockResolvedValue({ error: null }),
-    });
-    const inOthers = vi.fn().mockReturnValue({ neq: vi.fn().mockResolvedValue({ error: null }) });
-    let call = 0;
-    fromMock.mockImplementation(() => {
-      call++;
-      if (call === 1) return { update: vi.fn().mockReturnValue({ eq: eqAccept }) };
-      return { update: vi.fn().mockReturnValue({ in: inOthers }) };
-    });
+  it("accepts through the atomic server-side RPC", async () => {
+    rpcMock.mockResolvedValue({ data: { id: "o-1" }, error: null });
     const { result } = renderHookWithQuery(() => useAcceptOpenHouseOffer());
     await act(async () => {
       await result.current.mutateAsync({
@@ -463,28 +582,21 @@ describe("useAcceptOpenHouseOffer", () => {
         allOfferIds: ["o-1", "o-2", "o-3"],
       });
     });
-    expect(eqAccept).toHaveBeenCalledWith("id", "o-1");
-    expect(inOthers).toHaveBeenCalledWith("id", ["o-2", "o-3"]);
+    expect(rpcMock).toHaveBeenCalledWith("accept_open_house_offer", { p_offer_id: "o-1" });
     expect(toastMock.success).toHaveBeenCalled();
-    expect(eqOthers).not.toHaveBeenCalled();
   });
 
-  it("skips the second update when there are no other offers", async () => {
-    fromMock.mockReturnValue({
-      update: vi.fn().mockReturnValue({
-        eq: vi.fn().mockResolvedValue({ error: null }),
-      }),
-    });
+  it("toasts an error when the accept RPC fails", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: new Error("active_offer_already_accepted") });
     const { result } = renderHookWithQuery(() => useAcceptOpenHouseOffer());
     await act(async () => {
       await result.current.mutateAsync({
         acceptId: "o-1",
         listingId: "l-1",
         allOfferIds: ["o-1"],
-      });
+      }).catch(() => {});
     });
-    // Only one fromMock call (the accept update).
-    expect(fromMock).toHaveBeenCalledTimes(1);
+    expect(toastMock.error).toHaveBeenCalled();
   });
 });
 
@@ -492,9 +604,25 @@ describe("useAcceptOpenHouseOffer", () => {
 
 describe("useRevealAllOffers", () => {
   it("flips every submitted offer to revealed in one batch", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        owner_id: "u-1",
+        open_house_date: "2026-01-01T10:00:00.000Z",
+        open_house_settings: null,
+      },
+      error: null,
+    });
     const eq = vi.fn().mockResolvedValue({ error: null });
     const inFn = vi.fn().mockReturnValue({ eq });
-    fromMock.mockReturnValue({ update: vi.fn().mockReturnValue({ in: inFn }) });
+    fromMock.mockImplementation((table: string) => {
+      if (table === "listings") {
+        return { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle }) }) };
+      }
+      if (table === "open_house_offers") {
+        return { update: vi.fn().mockReturnValue({ in: inFn }) };
+      }
+      throw new Error("unexpected " + table);
+    });
     const { result } = renderHookWithQuery(() => useRevealAllOffers());
     await act(async () => {
       await result.current.mutateAsync({ listingId: "l-1", offerIds: ["a", "b"] });
