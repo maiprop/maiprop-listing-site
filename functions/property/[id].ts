@@ -2,6 +2,7 @@ import {
   fetchActiveListingById,
   fetchIndexHtml,
   injectSeoHead,
+  listingDetailPath,
   listingDescription,
   propertyJsonLd,
   type SeoEnv,
@@ -20,7 +21,7 @@ export const onRequestGet: PagesFunction<SeoEnv, "id"> = async (ctx) => {
     });
   }
 
-  const canonicalUrl = `https://maiprop.co/property/${listing.id}`;
+  const canonicalUrl = `https://maiprop.co${listingDetailPath(listing)}`;
   const enriched = injectSeoHead(html, {
     title: `${listing.title} - mAI prop`,
     description: listingDescription(listing),
@@ -32,5 +33,5 @@ export const onRequestGet: PagesFunction<SeoEnv, "id"> = async (ctx) => {
   const headers = new Headers(index.headers);
   headers.set("Content-Type", "text/html; charset=utf-8");
   headers.set("Cache-Control", "public, max-age=300, s-maxage=300");
-  return new Response(enriched, { status: 200, headers });
+  return new Response(enriched, { status: index.status, headers });
 };

@@ -9,6 +9,7 @@ import {
 export const onRequestGet: PagesFunction<SeoEnv> = async (ctx) => {
   const requestUrl = new URL(ctx.request.url);
   const index = await fetchIndexHtml(ctx);
+  if (!index.ok) return index;
   const html = await index.text();
   const listings = await fetchListingPage(ctx.env, requestUrl, { listingType: "auction" });
   const canonicalUrl = "https://maiprop.co/auctions";
@@ -23,5 +24,5 @@ export const onRequestGet: PagesFunction<SeoEnv> = async (ctx) => {
   const headers = new Headers(index.headers);
   headers.set("Content-Type", "text/html; charset=utf-8");
   headers.set("Cache-Control", "public, max-age=300, s-maxage=300");
-  return new Response(enriched, { status: 200, headers });
+  return new Response(enriched, { status: index.status, headers });
 };
