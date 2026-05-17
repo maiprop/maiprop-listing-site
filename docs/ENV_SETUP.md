@@ -42,7 +42,7 @@ Find these in Supabase → Project Settings → API.
 | Error monitoring | `VITE_SENTRY_DSN` | sentry.io → Project → Client Keys |
 | Production telemetry audit | `SENTRY_AUTH_TOKEN` | sentry.io → User Settings → Auth Tokens; local/read-only audit only |
 | Analytics | `VITE_PLAUSIBLE_DOMAIN` | plausible.io → Sites |
-| Street view / Places | `VITE_GOOGLE_MAPS_API_KEY` | Google Cloud Console; restrict to local/staging domains |
+| Street view / Places | `VITE_GOOGLE_MAPS_API_KEY` | Google Cloud Console; use a browser key restricted to local/dev referrers |
 
 ### 4. Service-role key (server-side scripts only)
 
@@ -90,7 +90,19 @@ See [`STAGING_SETUP.md`](./STAGING_SETUP.md) for the full walkthrough. Variables
 | `VITE_STRIPE_PRO_PRODUCT_ID` | required for billing | Production product |
 | `VITE_STRIPE_PRICE_*` | required for billing | Production prices |
 | `VITE_TURNSTILE_SITE_KEY` | optional | Cloudflare Turnstile |
-| `VITE_GOOGLE_MAPS_API_KEY` | optional | Restricted to prod domain |
+| `VITE_GOOGLE_MAPS_API_KEY` | optional | See browser-key restrictions below |
+
+#### Google Maps browser-key restrictions
+
+`VITE_GOOGLE_MAPS_API_KEY` is embedded in the Vite browser bundle. In Google
+Cloud Console, configure the key with:
+
+- Application restrictions: HTTP referrers.
+- Allowed production referrers: `https://maiprop.co/*`, `https://portal.maiprop.co/*`, `https://maiprop-listing-site.pages.dev/*`, and `https://*.maiprop-listing-site.pages.dev/*`.
+- API restrictions: Maps JavaScript API and Places API only.
+
+Do not allowlist broad patterns such as `https://*.pages.dev/*`; keep preview
+access scoped to this Cloudflare Pages project.
 
 ### In Supabase (edge functions)
 
@@ -154,7 +166,7 @@ fail-fast behavior.
 | `VITE_SENTRY_DSN` | optional browser Sentry DSN | production environment |
 | `VITE_STRIPE_PRO_PRODUCT_ID` | optional Stripe product id for subscription checks | production environment |
 | `VITE_TURNSTILE_SITE_KEY` | optional Turnstile site key | production environment |
-| `VITE_GOOGLE_MAPS_API_KEY` | optional browser Google Maps key | production environment |
+| `VITE_GOOGLE_MAPS_API_KEY` | optional browser Google Maps key; see browser-key restrictions above | production environment |
 | `VITE_PLAUSIBLE_DOMAIN` | optional analytics domain | production environment |
 | `VITE_APP_URL` | canonical app origin for production build | production environment |
 | `SITE_LOCK_PASSWORD` | optional Cloudflare Pages runtime passcode gate | production environment |

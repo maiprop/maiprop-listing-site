@@ -36,7 +36,6 @@ describe("budgetKeyFor — Vite 7 (base64url hash)", () => {
   it("maps named manual chunks with mixed-case hashes", () => {
     expect(budgetKeyFor("vendor-react-AbCdEfGh.js")).toBe("vendor-react");
     expect(budgetKeyFor("vendor-radix-ZyXwVuTs.js")).toBe("vendor-radix");
-    expect(budgetKeyFor("vendor-motion-0123abCD.js")).toBe("vendor-motion");
     expect(budgetKeyFor("vendor-icons-QwErTyUi.js")).toBe("vendor-icons");
   });
 

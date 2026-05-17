@@ -57,8 +57,11 @@ if (!import.meta.env.VITE_GOOGLE_MAPS_API_KEY && import.meta.env.PROD) {
 }
 
 // Google Maps API key — use only for Maps JavaScript (e.g. Places autocomplete).
-// Restrict to HTTP referrers in Google Cloud Console. Do NOT use for Street View
-// in client URLs; use getStreetViewProxyUrl() so the key stays server-side.
+// Vite embeds VITE_* values in browser JS, so this key must be restricted in
+// Google Cloud Console to HTTP referrers for maiprop.co, portal.maiprop.co, and
+// project-specific Cloudflare Pages previews, with APIs limited to Maps
+// JavaScript API and Places API. Do NOT use it for Street View client URLs; use
+// getStreetViewProxyUrl() so the Street View key stays server-side.
 export const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? "";
 
 /**
