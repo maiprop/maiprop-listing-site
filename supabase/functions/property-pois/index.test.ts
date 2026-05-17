@@ -12,10 +12,10 @@ const okJson = (body: unknown, status = 200): Response =>
     headers: { "content-type": "application/json" },
   });
 
-async function withQuotaAndProviderMock(
+const withQuotaAndProviderMock = async (
   providerResponse: Response,
   run: () => Promise<void>,
-): Promise<void> {
+): Promise<void> => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
@@ -35,7 +35,7 @@ async function withQuotaAndProviderMock(
   } finally {
     globalThis.fetch = originalFetch;
   }
-}
+};
 
 Deno.test("OPTIONS preflight returns 200", async () => {
   const res = await handler(req("OPTIONS"));
@@ -63,7 +63,24 @@ Deno.test("provider usage limit returns fallback POIs instead of an unavailable 
     }, { authorization: "Bearer test-valid-token" }));
     const body = await jsonBody(res) as { error?: string; generatedBy?: string; pois?: unknown[] };
     assertEquals(res.status, 200);
-    assertEquals(body.error, undefined);
+    assertEquals(typeof body.error, "undefined");
+    assertEquals(body.generatedBy, "fallback");
+    assertEquals(Array.isArray(body.pois), true);
+    assertEquals(body.pois?.length, 12);
+  });
+});
+
+Deno.test("provider server errors return fallback POIs instead of failing the module", async () => {
+  await withQuotaAndProviderMock(new Response("upstream unavailable", { status: 503 }), async () => {
+    const res = await handler(req("POST", {
+      address: "Syntagma",
+      city: "Athens",
+      lat: 37.9755,
+      lng: 23.7348,
+    }, { authorization: "Bearer test-valid-token" }));
+    const body = await jsonBody(res) as { error?: string; generatedBy?: string; pois?: unknown[] };
+    assertEquals(res.status, 200);
+    assertEquals(typeof body.error, "undefined");
     assertEquals(body.generatedBy, "fallback");
     assertEquals(Array.isArray(body.pois), true);
     assertEquals(body.pois?.length, 12);
