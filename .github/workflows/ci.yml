@@ -793,7 +793,6 @@ jobs:
         run: |
           required=(
             "STAGING_SUPABASE_PROJECT_ID"
-            "SUPABASE_STAGING_DB_URL"
             "SUPABASE_ACCESS_TOKEN"
           )
           missing=0
@@ -805,6 +804,9 @@ jobs:
           done
           if [ "$missing" -ne 0 ]; then
             exit 1
+          fi
+          if [ -z "$SUPABASE_STAGING_DB_URL" ]; then
+            echo "::warning::SUPABASE_STAGING_DB_URL is not set; staging database migration push will be skipped."
           fi
         env:
           STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
@@ -831,14 +833,27 @@ jobs:
         with:
           version: 2.98.1
 
-      - name: Dry-run staging database migrations
+      - name: Check staging database migration secret
         if: steps.supabase_changes.outputs.deploy == 'true'
+        id: staging_db
+        run: |
+          if [ -n "$SUPABASE_STAGING_DB_URL" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Skipping staging database migration push because SUPABASE_STAGING_DB_URL is not configured."
+          fi
+        env:
+          SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
+
+      - name: Dry-run staging database migrations
+        if: steps.supabase_changes.outputs.deploy == 'true' && steps.staging_db.outputs.available == 'true'
         run: supabase db push --db-url "$SUPABASE_STAGING_DB_URL" --dry-run
         env:
           SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
 
       - name: Apply database migrations to staging
-        if: steps.supabase_changes.outputs.deploy == 'true'
+        if: steps.supabase_changes.outputs.deploy == 'true' && steps.staging_db.outputs.available == 'true'
         run: supabase db push --db-url "$SUPABASE_STAGING_DB_URL" --yes
         env:
           SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
