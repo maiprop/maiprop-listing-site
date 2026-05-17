@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const { hooksMock } = vi.hoisted(() => ({
@@ -92,5 +92,94 @@ describe("DataInputTab billing credit summary", () => {
     expect(screen.getByText("Applied to upcoming invoices.")).toBeInTheDocument();
     expect(screen.getAllByText("credit:12500")).toHaveLength(1);
     expect(screen.getAllByText("credit:3750")).toHaveLength(1);
+  });
+
+  it("submits a valid closing, trims optional fields, and resets the form", async () => {
+    const mutateAsync = vi.fn().mockResolvedValue(undefined);
+    hooksMock.useSubmitAgentDataInput.mockReturnValue({ isPending: false, mutateAsync });
+
+    render(<DataInputTab />);
+
+    fireEvent.change(screen.getByLabelText(/Closing date/i), { target: { value: "2026-04-20" } });
+    fireEvent.change(screen.getByLabelText(/Closing price/i), { target: { value: "250000" } });
+    fireEvent.change(screen.getByLabelText(/Property address/i), { target: { value: "  Ermou 12  " } });
+    fireEvent.change(screen.getByLabelText(/^City/i), { target: { value: " Athens " } });
+    fireEvent.change(screen.getByLabelText(/Postal code/i), { target: { value: " 10563 " } });
+    fireEvent.change(screen.getByLabelText(/KAEK/i), { target: { value: " 050123456789 " } });
+    fireEvent.change(screen.getByLabelText(/Buyer name/i), { target: { value: " Buyer One " } });
+    fireEvent.change(screen.getByLabelText(/Seller name/i), { target: { value: " Seller One " } });
+    fireEvent.change(screen.getByLabelText(/Notes/i), { target: { value: " Notary ref " } });
+
+    fireEvent.click(screen.getByRole("button", { name: /submit closing/i }));
+
+    await waitFor(() =>
+      expect(mutateAsync).toHaveBeenCalledWith(expect.objectContaining({
+        closed_at: "2026-04-20",
+        property_address: "Ermou 12",
+        property_city: "Athens",
+        property_postal_code: "10563",
+        transaction_type: "sale",
+        closing_price: 250000,
+        kaek: "050123456789",
+        buyer_name: "Buyer One",
+        seller_name: "Seller One",
+        notes: "Notary ref",
+      })),
+    );
+    expect(screen.getByLabelText(/Closing price/i)).toHaveValue(null);
+  });
+
+  it("blocks invalid prices and disabled quota states without submitting", () => {
+    const mutateAsync = vi.fn();
+    hooksMock.useSubmitAgentDataInput.mockReturnValue({ isPending: false, mutateAsync });
+
+    const { rerender } = render(<DataInputTab />);
+    fireEvent.change(screen.getByLabelText(/Closing price/i), { target: { value: "-1" } });
+    fireEvent.submit(screen.getByRole("button", { name: /submit closing/i }).closest("form")!);
+    expect(mutateAsync).not.toHaveBeenCalled();
+
+    hooksMock.useAgentDataInputQuota.mockReturnValue({
+      data: { used: 20, monthly_limit: 20, remaining: 0, is_banned: false },
+      isLoading: false,
+    });
+    rerender(<DataInputTab />);
+    expect(screen.getByText(/Limit reached for this month/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /submit closing/i })).toBeDisabled();
+
+    hooksMock.useAgentDataInputQuota.mockReturnValue({
+      data: { used: 5, monthly_limit: 20, remaining: 15, is_banned: true },
+      isLoading: false,
+    });
+    rerender(<DataInputTab />);
+    expect(screen.getByText(/Data input submissions disabled/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /submit closing/i })).not.toBeInTheDocument();
+  });
+
+  it("renders loading, empty, rejected, pending, and verified history states", () => {
+    const { rerender } = render(<DataInputTab />);
+    expect(screen.getByText(/No submissions yet/i)).toBeInTheDocument();
+
+    hooksMock.useAgentDataInputs.mockReturnValue({ data: [], isLoading: true });
+    rerender(<DataInputTab />);
+    expect(screen.queryByText(/No submissions yet/i)).not.toBeInTheDocument();
+
+    hooksMock.useAgentDataInputs.mockReturnValue({
+      data: [
+        { ...baseInput, id: "pending-1", status: "pending", property_address: "Pending Street" },
+        { ...baseInput, id: "verified-1", status: "verified", property_address: "Verified Street" },
+        { ...baseInput, id: "rejected-1", status: "rejected", property_address: "Rejected Street", rejection_reason: "Could not verify" },
+      ],
+      isLoading: false,
+    });
+    rerender(<DataInputTab />);
+
+    expect(screen.getByText("3 total")).toBeInTheDocument();
+    expect(screen.getByText("Pending Street")).toBeInTheDocument();
+    expect(screen.getByText("Verified Street")).toBeInTheDocument();
+    expect(screen.getByText("Rejected Street")).toBeInTheDocument();
+    expect(screen.getByText("Could not verify")).toBeInTheDocument();
+    expect(screen.getByText("Pending review")).toBeInTheDocument();
+    expect(screen.getByText("Verified")).toBeInTheDocument();
+    expect(screen.getByText("Rejected")).toBeInTheDocument();
   });
 });

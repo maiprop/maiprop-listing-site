@@ -17,6 +17,7 @@ import OpenHouseOfferDialog from "@/components/OpenHouseOfferDialog";
 import PropertyMiniMap from "@/components/PropertyMiniMap";
 import PropertyValuation from "@/components/PropertyValuation";
 import NeighbourhoodReport from "@/components/NeighbourhoodReport";
+import { PropertyReportCard } from "@/components/property/PropertyReportCard";
 import { useListing, useTrackListingView, useUpdateListing, useDeleteListing, type ListingWithJoins } from "@/hooks/useListings";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFavorites, useToggleFavorite } from "@/hooks/useFavorites";
@@ -26,6 +27,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { HEATING_TYPES, CONDITION_OPTIONS } from "@/lib/filterConfig";
 import { getStreetViewProxyUrl } from "@/lib/config";
+import { formatPrice } from "@/lib/format";
 import { Section, SectionHeader, FeatureSection } from "@/components/property/DetailPrimitives";
 import { buildPropertyFeatureGroups, buildDetailRows } from "@/lib/propertyFeatures";
 import { PropertyDetailsAndEnergy } from "@/components/property/PropertyDetailsAndEnergy";
@@ -399,7 +401,7 @@ export default function OpenHouseDetail() {
                         <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
                           <p className="text-[10px] text-muted-foreground uppercase tracking-widest">AI Estimate</p>
                           <span className="font-display font-black text-3xl text-foreground">
-                            €{(aiInsightsData.estimatedValue / 1000).toFixed(0)}k
+                            {formatPrice(aiInsightsData.estimatedValue)}
                           </span>
                           <p className="text-[10px] text-muted-foreground">Confidence: {aiInsightsData.confidenceLabel}</p>
                         </div>
@@ -459,11 +461,6 @@ export default function OpenHouseDetail() {
                   lng={db.longitude != null ? Number(db.longitude) : undefined}
                   listingId={id ?? undefined}
                 />
-              )}
-
-              {/* AI Valuation */}
-              {id && (
-                <PropertyValuation listingId={id} title={db.title} city={city} address={db.address ?? undefined} price={price} sqm={sqm} bedrooms={db.bedrooms} bathrooms={db.bathrooms} propertyType={db.property_type} yearBuilt={db.year_built} energyClass={db.energy_class} floor={db.floor} totalFloors={db.total_floors} heatingSystem={db.heating_system} />
               )}
 
               {/* Professionals */}
@@ -635,6 +632,54 @@ export default function OpenHouseDetail() {
                   })()}
                 </div>
               )}
+
+              {/* AI Valuation + Property Report, matching the main listing detail sidebar */}
+              {id && (
+                <PropertyValuation
+                  listingId={id}
+                  title={db.title}
+                  city={city}
+                  address={db.address ?? undefined}
+                  price={price}
+                  sqm={sqm}
+                  bedrooms={db.bedrooms}
+                  bathrooms={db.bathrooms}
+                  propertyType={db.property_type}
+                  listingType={db.listing_type}
+                  floor={db.floor}
+                  totalFloors={db.total_floors}
+                  yearBuilt={db.year_built}
+                  heatingSystem={db.heating_system}
+                  energyClass={db.energy_class}
+                  pricePerSqm={pricePerSqm}
+                  hasParking={db.has_parking}
+                  hasPool={db.has_pool}
+                  hasElevator={db.has_elevator}
+                  hasGarden={db.has_garden}
+                  hasStorage={db.has_storage}
+                  hasBalcony={db.has_balcony}
+                  hasView={db.has_view}
+                  hasFurnished={db.has_furnished}
+                  region={db.region}
+                  description={db.description}
+                  tags={db.tags}
+                  plotSurface={db.plot_surface}
+                  condition={db.construction_status ?? undefined}
+                  isNeoclassical={db.is_neoclassical}
+                  isPreserved={db.is_preserved}
+                  distanceFromSea={db.distance_from_sea}
+                  withinCityPlan={db.within_city_plan}
+                  withinSettlement={db.within_settlement}
+                  buildingAllowance={db.building_allowance}
+                  coverageRatio={db.coverage_ratio}
+                  isBuildable={db.is_buildable}
+                  cadastreNumber={db.cadastre_number}
+                  hasLandConcession={db.has_land_concession}
+                  landUse={db.land_use}
+                />
+              )}
+
+              {id && <PropertyReportCard listingId={id} listing={db} />}
             </div>
           </div>
         </div>

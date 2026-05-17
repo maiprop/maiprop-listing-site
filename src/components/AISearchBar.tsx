@@ -72,27 +72,33 @@ export function AISearchBar({ onFiltersApplied }: AISearchBarProps) {
     <div className="relative">
       {/* Trigger button / inline bar */}
       {!open ? (
-        <button
-          onClick={() => { setOpen(true); setTimeout(() => inputRef.current?.focus(), 50); }}
-          className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 transition-colors text-sm font-medium shrink-0"
-        >
-          <Sparkles className="w-4 h-4" />
-          <span className="hidden sm:inline">
-            {lastSummary ? (
-              <span className="max-w-[160px] truncate text-xs">{lastSummary}</span>
-            ) : (
-              "AI Search"
-            )}
-          </span>
+        <div className="flex items-stretch shrink-0 rounded-xl border border-primary/30 bg-primary/5 text-primary overflow-hidden">
+          <button
+            type="button"
+            onClick={() => { setOpen(true); setTimeout(() => inputRef.current?.focus(), 50); }}
+            className="flex items-center gap-2 px-3 py-2.5 hover:bg-primary/10 transition-colors text-sm font-medium"
+            aria-label={lastSummary ? `Open AI Search. Current filter: ${lastSummary}` : "Open AI Search"}
+          >
+            <Sparkles className="w-4 h-4" />
+            <span className="hidden sm:inline">
+              {lastSummary ? (
+                <span className="block max-w-[160px] truncate text-xs">{lastSummary}</span>
+              ) : (
+                "AI Search"
+              )}
+            </span>
+          </button>
           {lastSummary && (
             <button
-              onClick={(e) => { e.stopPropagation(); setLastSummary(null); onFiltersApplied({}); }}
-              className="ml-1 text-muted-foreground hover:text-foreground"
+              type="button"
+              aria-label="Clear AI search filters"
+              onClick={() => { setLastSummary(null); onFiltersApplied({}); }}
+              className="px-2 text-muted-foreground hover:text-foreground hover:bg-primary/10 border-l border-primary/20"
             >
               <X className="w-3 h-3" />
             </button>
           )}
-        </button>
+        </div>
       ) : (
         <div className="fixed inset-0 z-[70] flex items-start justify-center pt-20 px-4 bg-background/70 backdrop-blur-sm"
           onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>

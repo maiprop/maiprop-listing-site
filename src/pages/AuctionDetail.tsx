@@ -16,7 +16,6 @@ import {
   Clock,
   ExternalLink,
   Gavel,
-  Globe,
   LayoutGrid,
   Loader2,
   MapPin,
@@ -42,6 +41,7 @@ import {
   getPropertyTypeLabel,
   normalizeOwnership,
 } from "@/lib/auctionUtils";
+import { getAuctionImageList } from "@/lib/auctionStreetView";
 
 const AIAssistantWidget = lazy(() => import("@/components/AIAssistantWidget"));
 const PropertyMiniMap = lazy(() => import("@/components/PropertyMiniMap"));
@@ -82,6 +82,7 @@ const asNumber = (value: unknown): number | null => {
   return null;
 };
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function AuctionBreadcrumb({ title }: { title: string }) {
   return (
     <nav aria-label="Breadcrumb" className="container py-2 sm:py-3">
@@ -102,6 +103,7 @@ function AuctionBreadcrumb({ title }: { title: string }) {
   );
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function StatChip({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
     <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
@@ -111,6 +113,7 @@ function StatChip({ icon, label }: { icon: React.ReactNode; label: string }) {
   );
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function AuctionTitleSection({
   title,
   city,
@@ -250,7 +253,14 @@ export default function AuctionDetail() {
   const websiteUrl = safeUrl(auction.website_url as string | null | undefined);
   const propertyType = auction.property_type as string | undefined;
   const propertyTypeLabel = getPropertyTypeLabel(auction as Parameters<typeof getPropertyTypeLabel>[0]);
-  const images = typeof auction.cover_image_url === "string" && auction.cover_image_url ? [auction.cover_image_url] : [];
+  const images = getAuctionImageList({
+    cover_image_url: auction.cover_image_url as string | null | undefined,
+    latitude: auction.latitude as number | string | null | undefined,
+    longitude: auction.longitude as number | string | null | undefined,
+    address,
+    city,
+    region,
+  });
   const days = daysUntil(auctionDate ?? null);
   const tags = (auction.tags as string[] | undefined) ?? [];
   const ownershipStatus = normalizeOwnership(getOwnershipStatus(tags));
@@ -265,7 +275,6 @@ export default function AuctionDetail() {
   if (auctionDate) detailRows.push({ label: "Auction Date", value: formatDate(auctionDate) });
   if (yearBuilt) detailRows.push({ label: "Construction Year", value: yearBuilt });
   if (region) detailRows.push({ label: "Region", value: region });
-  if (websiteUrl) detailRows.push({ label: "Official Platform", value: "eAuction" });
 
   const propertyContext = {
     title,
@@ -297,10 +306,10 @@ export default function AuctionDetail() {
   return (
     <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
       <Helmet>
-        <title>{title} - maiProp Auctions</title>
+        <title>{title} - mAI prop Auctions</title>
         <meta name="description" content={ogDescription} />
         <link rel="canonical" href={canonicalUrl} />
-        <meta property="og:title" content={`${title} - maiProp Auctions`} />
+        <meta property="og:title" content={`${title} - mAI prop Auctions`} />
         <meta property="og:description" content={ogDescription} />
         {images[0] && <meta property="og:image" content={images[0]} />}
         <meta property="og:url" content={canonicalUrl} />
@@ -377,6 +386,14 @@ export default function AuctionDetail() {
                   <div className="rounded-xl bg-brand-gold/8 border border-brand-gold/20 p-3 text-xs text-muted-foreground leading-relaxed">
                     Judicial auction - buyer conducts own due diligence. maiProp provides AI-powered pre-auction analysis.
                   </div>
+
+                  {websiteUrl && (
+                    <Button asChild variant="outline" className="w-full gap-2">
+                      <a href={websiteUrl} target="_blank" rel="noreferrer noopener">
+                        <ExternalLink className="w-4 h-4" /> Open eAuction listing
+                      </a>
+                    </Button>
+                  )}
                 </div>
               </Section>
 
@@ -486,18 +503,6 @@ export default function AuctionDetail() {
                 </div>
               </div>
 
-              {websiteUrl && (
-                <Section>
-                  <SectionHeader icon={Globe} title="Official Website" />
-                  <div className="p-5">
-                    <Button asChild variant="outline" className="w-full gap-2">
-                      <a href={websiteUrl} target="_blank" rel="noreferrer noopener">
-                        <ExternalLink className="w-4 h-4" /> View source listing
-                      </a>
-                    </Button>
-                  </div>
-                </Section>
-              )}
             </div>
           </div>
         </div>

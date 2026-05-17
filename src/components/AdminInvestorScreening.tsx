@@ -10,7 +10,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
-import { formatTimeAgo } from "@/lib/format";
+import { formatPrice, formatTimeAgo } from "@/lib/format";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   pending:     { label: "Pending",     color: "bg-brand-gold/15 text-brand-gold border-brand-gold/20" },
@@ -168,7 +168,7 @@ export default function AdminInvestorScreening() {
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {deal.sqm} m²
                     {deal.bedrooms != null && ` · ${deal.bedrooms} bed`}
-                    {deal.asking_price != null && ` · €${(deal.asking_price / 1000).toFixed(0)}k`}
+                    {deal.asking_price != null && ` · ${formatPrice(deal.asking_price)}`}
                     {discount != null && ` · ${discount}% below estimate`}
                   </p>
                   <p className="text-[10px] text-muted-foreground mt-1">{formatTimeAgo(deal.created_at)}</p>

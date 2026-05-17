@@ -17,7 +17,7 @@
  */
 import { test, expect, type Page, type Browser } from "@playwright/test";
 import { getBaseURL } from "./helpers/baseURL";
-import { demoAccounts, demoPasswords } from "./helpers/demoAccounts";
+import { demoAccounts, demoPasswords, seededDemoAccountsEnabled } from "./helpers/demoAccounts";
 
 // ─── Credentials ─────────────────────────────────────────────────────────────
 
@@ -26,6 +26,7 @@ const BUYER_EMAIL = demoAccounts.buyerFree;
 const INVESTOR_PRIVATE_EMAIL = demoAccounts.investorPrivate;
 const INVESTOR_INSTITUTIONAL_EMAIL = demoAccounts.investorInstitutional;
 const ADMIN_EMAIL = demoAccounts.admin;
+const hasSeededDemoAccounts = seededDemoAccountsEnabled();
 
 // ─── Sign-in helper ───────────────────────────────────────────────────────────
 
@@ -203,6 +204,7 @@ test.describe("Public auction browsing", () => {
 // ─── AUTHENTICATED — auction interaction ──────────────────────────────────────
 
 test.describe("Authenticated auction interaction", () => {
+  test.skip(!hasSeededDemoAccounts, "Seeded demo accounts require real Supabase config");
   test("seeded buyer can view auctions after sign-in", async ({ page }) => {
     await signIn(page, BUYER_EMAIL, PW);
     await page.goto("/auctions");
@@ -336,6 +338,7 @@ test.describe("Authenticated auction interaction", () => {
 // ─── MULTI-USER simultaneous browsing ────────────────────────────────────────
 
 test.describe("Multi-user simultaneous browsing", () => {
+  test.skip(!hasSeededDemoAccounts, "Seeded demo accounts require real Supabase config");
   /**
    * Two browser contexts: one unauthenticated (buyer), one authenticated
    * (investor.private). Both navigate to /auctions simultaneously.

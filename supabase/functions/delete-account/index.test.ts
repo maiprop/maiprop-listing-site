@@ -19,6 +19,11 @@ Deno.test("missing Authorization returns 401", async () => {
   assertEquals(res.status, 401);
 });
 
+Deno.test("authenticated destructive endpoint rejects non-POST before auth lookup", async () => {
+  const res = await handler(authedReq("GET"));
+  assertEquals(res.status, 405);
+});
+
 Deno.test("fake Bearer token returns 401 (not 500)", async () => {
   const res = await handler(authedReq("POST"));
   assertEquals([401, 503].includes(res.status), true);

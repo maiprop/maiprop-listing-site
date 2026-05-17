@@ -1,4 +1,4 @@
-import { useState, useMemo, lazy, Suspense, useCallback } from "react";
+import { useRef, useState, useMemo, lazy, Suspense, useCallback } from "react";
 import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
@@ -48,6 +48,7 @@ export default function Listings() {
   const [viewportIds, setViewportIds] = useState<Set<string> | null>(null);
   const [polygonFilterIds, setPolygonFilterIds] = useState<Set<string> | null>(null);
   const [mobileTab, setMobileTab] = useState<"list" | "map">("list");
+  const splitListRef = useRef<HTMLDivElement | null>(null);
   const { user } = useAuth();
   const { consent, accept } = useCookieConsent();
 
@@ -147,10 +148,10 @@ export default function Listings() {
   return (
     <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
       <Helmet>
-        <title>Properties for Sale &amp; Rent in Greece — maiProp</title>
+        <title>Properties for Sale &amp; Rent in Greece — mAI prop</title>
         <meta name="description" content="Search thousands of properties for sale and rent across Greece. Filter by city, type, price and more." />
         <link rel="canonical" href="https://maiprop.co/listings" />
-        <meta property="og:title" content="Properties for Sale &amp; Rent in Greece — maiProp" />
+        <meta property="og:title" content="Properties for Sale &amp; Rent in Greece — mAI prop" />
         <meta property="og:description" content="Search thousands of properties for sale and rent across Greece." />
         <meta property="og:url" content="https://maiprop.co/listings" />
         <script type="application/ld+json">{JSON.stringify({
@@ -159,7 +160,7 @@ export default function Listings() {
           "name": "Properties for Sale & Rent in Greece",
           "description": "Search thousands of properties for sale and rent across Greece.",
           "url": "https://maiprop.co/listings",
-          "provider": { "@type": "Organization", "name": "maiProp", "url": "https://maiprop.co" },
+          "provider": { "@type": "Organization", "name": "mAI prop", "url": "https://maiprop.co" },
         })}</script>
       </Helmet>
       <Navbar />
@@ -425,7 +426,7 @@ export default function Listings() {
 
             {/* Desktop active filter chips */}
             {activeFilterCount > 0 && (
-              <div className="hidden sm:flex items-center gap-2 mt-3 flex-wrap overflow-x-auto scrollbar-none pb-0.5">
+              <div className="hidden sm:flex items-center gap-2 mt-3 flex-wrap overflow-visible pb-0.5 [&>button]:max-w-full [&>button]:min-w-0 [&>button]:whitespace-normal">
                 <span className="text-xs text-muted-foreground shrink-0">Active:</span>
                 {selectedType && <button onClick={() => { setParam("type", ""); setParam("subtype", ""); }} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">{PROPERTY_TYPE_MAP[selectedType as PropertyTypeKey]?.emoji} {getTypeLabel(selectedType)} <X className="w-3 h-3" /></button>}
                 {selectedSubtype && selectedType && <button onClick={() => setParam("subtype", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">{getSubtypeLabel(selectedType, selectedSubtype)} <X className="w-3 h-3" /></button>}
@@ -515,6 +516,7 @@ export default function Listings() {
               <VirtualizedListingGrid
                 items={splitDisplayList}
                 columns={1}
+                scrollParentRef={splitListRef}
                 gap={12}
                 estimateItemHeight={380}
                 className="grid grid-cols-1 gap-3"
@@ -545,6 +547,7 @@ export default function Listings() {
                 <div className={`md:w-[420px] shrink-0 overflow-y-auto px-4 space-y-3 pb-8 border-r border-border
                   ${mobileTab === "map" ? "hidden md:block" : "block"}
                   md:h-full h-[60vh]`}
+                  ref={splitListRef}
                 >
                   {isLoading
                     ? <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <PropertyCardSkeleton key={i} />)}</div>

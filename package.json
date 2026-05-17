@@ -2,7 +2,7 @@
   "name": "maiprop-listing-site",
   "description": "MaiProp — Greek real estate listing, auction, and investment platform (Vite + React 18 + Supabase).",
   "private": true,
-  "version": "1.7.0",
+  "version": "1.8.0",
   "license": "UNLICENSED",
   "homepage": "https://maiprop.co",
   "repository": {
@@ -18,6 +18,10 @@
   "overrides": {
     "tmp": "^0.2.4",
     "uuid": "^14.0.0"
+  },
+  "overridesRationale": {
+    "tmp": "@lhci/cli@0.15.1 pulls old tmp ranges through Lighthouse and inquirer/external-editor. Pin tmp above GHSA-52f5-9888-hmc6 until Lighthouse CI removes those transitive ranges.",
+    "uuid": "@lhci/cli@0.15.1 still declares uuid ^8.3.1. Pin to a supported uuid release because npm deprecates uuid@10 and below."
   },
   "scripts": {
     "dev": "vite",
@@ -51,8 +55,11 @@
     "check:bundle-size": "node scripts/check-bundle-size.mjs",
     "inventory:release": "node scripts/release-safety-inventory.mjs",
     "check:release-safety": "node scripts/release-safety-inventory.mjs --check",
+    "inventory:public-functions": "node scripts/public-function-inventory.cjs --out docs/public-edge-function-inventory.json",
+    "check:public-functions": "node scripts/public-function-inventory.cjs --check",
+    "check:supabase-types": "node scripts/check-supabase-types-freshness.cjs",
     "inventory:audit-coverage": "node scripts/audit-coverage-inventory.mjs",
-    "check:audit-coverage": "node scripts/audit-coverage-inventory.mjs --check",
+    "check:audit-coverage": "node scripts/audit-coverage-inventory.mjs --check && vitest run src/test/criticalWorkflowProof.test.ts",
     "test:audit-coverage": "npm run test:coverage && npm run inventory:audit-coverage && npm run check:audit-coverage",
     "lint:migrations": "node scripts/check-migration-idempotency.mjs",
     "lint:migrations:chronology": "node scripts/check-migration-idempotency.mjs --check-chronology",

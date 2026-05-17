@@ -1,35 +1,31 @@
 {
-  "generated_at": "2026-05-14T19:24:25.873Z",
+  "generated_at": "2026-05-16T14:20:28.496Z",
   "totals": {
-    "source_files": 484,
-    "source_lines": 84489,
-    "test_files": 182,
+    "source_files": 494,
+    "source_lines": 89038,
+    "test_files": 236,
     "routes": 38,
     "supabase_functions": 49,
-    "likely_tested_source_files": 428,
+    "likely_tested_source_files": 450,
     "coverage_available": true,
-    "coverage_lines_pct": 66.51,
-    "coverage_functions_pct": 44.49,
-    "coverage_branches_pct": 60.89,
+    "coverage_lines_pct": 85.46,
+    "coverage_functions_pct": 66.62,
+    "coverage_branches_pct": 76.01,
     "zero_covered_runtime_files": 0
   },
   "by_root": {
     "src/pages": {
       "files": 48,
-      "lines": 17737,
+      "lines": 18715,
       "likely_tested_files": 48,
       "likely_untested_files": []
     },
     "src/components": {
       "files": 206,
-      "lines": 33981,
-      "likely_tested_files": 179,
+      "lines": 34557,
+      "likely_tested_files": 183,
       "likely_untested_files": [
-        "src/components/dashboard/DashboardMobileNav.tsx",
-        "src/components/dashboard/DashboardSidebar.tsx",
-        "src/components/firesale/QuickSaleSubmittedView.tsx",
         "src/components/listings/ListingCompareButton.tsx",
-        "src/components/listings/VirtualizedListingGrid.tsx",
         "src/components/map/mapConfig.ts",
         "src/components/property/PropertyDescriptionSection.tsx",
         "src/components/property/PropertyDetailsAndEnergy.tsx",
@@ -56,53 +52,45 @@
     },
     "src/hooks": {
       "files": 61,
-      "lines": 8585,
-      "likely_tested_files": 49,
+      "lines": 8828,
+      "likely_tested_files": 53,
       "likely_untested_files": [
         "src/hooks/listingForm.types.ts",
-        "src/hooks/projectOwnership.ts",
         "src/hooks/useContactSubmissions.ts",
-        "src/hooks/useCreateBuildingListing.ts",
         "src/hooks/useFiresalePhotoUploader.ts",
         "src/hooks/useHomepageListings.ts",
         "src/hooks/useInvitationRequests.ts",
-        "src/hooks/useListingsPipeline.ts",
         "src/hooks/useNominatimAddressSuggestions.ts",
         "src/hooks/usePortalDropdown.ts",
-        "src/hooks/usePriceIndex.ts",
-        "src/hooks/useSmartFilters.ts"
+        "src/hooks/usePriceIndex.ts"
       ]
     },
     "src/lib": {
-      "files": 41,
-      "lines": 5743,
-      "likely_tested_files": 28,
+      "files": 43,
+      "lines": 5825,
+      "likely_tested_files": 34,
       "likely_untested_files": [
         "src/lib/apiDocsData.ts",
         "src/lib/authErrorMessages.ts",
         "src/lib/authRedirect.ts",
-        "src/lib/buildingListingUploads.ts",
         "src/lib/documentTemplateData.ts",
-        "src/lib/filterConfig.ts",
         "src/lib/listingsConfig.ts",
         "src/lib/newBuildConfig.ts",
         "src/lib/passwordPolicy.ts",
-        "src/lib/professionalServiceCatalog.ts",
-        "src/lib/propertyFeatures.ts",
         "src/lib/propertyTypes.ts",
         "src/lib/statusColors.ts"
       ]
     },
     "src/contexts": {
       "files": 1,
-      "lines": 295,
+      "lines": 411,
       "likely_tested_files": 1,
       "likely_untested_files": []
     },
     "supabase/functions": {
-      "files": 127,
-      "lines": 18148,
-      "likely_tested_files": 123,
+      "files": 135,
+      "lines": 20702,
+      "likely_tested_files": 131,
       "likely_untested_files": [
         "supabase/functions/_shared/email-templates/email-change.tsx",
         "supabase/functions/_shared/email-templates/magic-link.tsx",
@@ -113,9 +101,22 @@
   },
   "largest_files": [
     {
+      "file": "src/pages/dashboard/BillingTab.tsx",
+      "lines": 1097,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 80.06,
+        "functions": 53.33,
+        "branches": 60.65,
+        "statements": 80.06,
+        "covered_lines": 735,
+        "total_lines": 918
+      }
+    },
+    {
       "file": "src/lib/professionalServiceCatalog.ts",
       "lines": 1019,
-      "likely_tested": false,
+      "likely_tested": true,
       "coverage": {
         "lines": 100,
         "functions": 100,
@@ -140,34 +141,53 @@
     },
     {
       "file": "src/pages/Onboarding.tsx",
-      "lines": 919,
+      "lines": 949,
       "likely_tested": true,
       "coverage": {
-        "lines": 31.54,
-        "functions": 10.25,
-        "branches": 20.98,
-        "statements": 31.54,
-        "covered_lines": 217,
-        "total_lines": 688
+        "lines": 70.08,
+        "functions": 68.42,
+        "branches": 75.92,
+        "statements": 70.08,
+        "covered_lines": 499,
+        "total_lines": 712
       }
     },
     {
-      "file": "supabase/functions/fetch-os-auctions/index.ts",
-      "lines": 828,
+      "file": "supabase/functions/create-checkout/index.ts",
+      "lines": 891,
       "likely_tested": true,
       "coverage": null
     },
     {
       "file": "src/hooks/useOpenHouseAssetControl.ts",
-      "lines": 791,
+      "lines": 873,
       "likely_tested": true,
       "coverage": {
-        "lines": 92.72,
+        "lines": 94.3,
         "functions": 97.72,
-        "branches": 64.94,
-        "statements": 92.72,
-        "covered_lines": 459,
-        "total_lines": 495
+        "branches": 65.44,
+        "statements": 94.3,
+        "covered_lines": 497,
+        "total_lines": 527
+      }
+    },
+    {
+      "file": "supabase/functions/fetch-os-auctions/index.ts",
+      "lines": 855,
+      "likely_tested": true,
+      "coverage": null
+    },
+    {
+      "file": "src/components/OpenHouseRegistrationDialog.tsx",
+      "lines": 845,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 90.15,
+        "functions": 79.31,
+        "branches": 69.95,
+        "statements": 90.15,
+        "covered_lines": 641,
+        "total_lines": 711
       }
     },
     {
@@ -175,77 +195,64 @@
       "lines": 777,
       "likely_tested": true,
       "coverage": {
-        "lines": 78.08,
-        "functions": 33.33,
-        "branches": 53.5,
-        "statements": 78.08,
-        "covered_lines": 488,
-        "total_lines": 625
-      }
-    },
-    {
-      "file": "src/pages/Dashboard.tsx",
-      "lines": 716,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 74.25,
-        "functions": 9.09,
-        "branches": 46.49,
-        "statements": 74.25,
-        "covered_lines": 424,
-        "total_lines": 571
-      }
-    },
-    {
-      "file": "src/pages/Listings.tsx",
-      "lines": 703,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 53.15,
-        "functions": 1.88,
-        "branches": 13.63,
-        "statements": 53.15,
-        "covered_lines": 303,
-        "total_lines": 570
-      }
-    },
-    {
-      "file": "src/pages/NewBuildDetail.tsx",
-      "lines": 689,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 37.09,
-        "functions": 11.11,
-        "branches": 2.77,
-        "statements": 37.09,
-        "covered_lines": 207,
-        "total_lines": 558
+        "lines": 81.68,
+        "functions": 46.66,
+        "branches": 59.64,
+        "statements": 81.68,
+        "covered_lines": 513,
+        "total_lines": 628
       }
     },
     {
       "file": "src/pages/OpenHouseDetail.tsx",
-      "lines": 687,
+      "lines": 732,
       "likely_tested": true,
       "coverage": {
-        "lines": 44.94,
-        "functions": 5,
-        "branches": 5.05,
-        "statements": 44.94,
-        "covered_lines": 258,
+        "lines": 76.37,
+        "functions": 42.85,
+        "branches": 66.47,
+        "statements": 76.37,
+        "covered_lines": 472,
+        "total_lines": 618
+      }
+    },
+    {
+      "file": "src/pages/Dashboard.tsx",
+      "lines": 719,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 77.35,
+        "functions": 18.18,
+        "branches": 64.61,
+        "statements": 77.35,
+        "covered_lines": 444,
         "total_lines": 574
       }
     },
     {
-      "file": "src/components/OpenHouseRegistrationDialog.tsx",
-      "lines": 656,
+      "file": "src/pages/Listings.tsx",
+      "lines": 706,
       "likely_tested": true,
       "coverage": {
-        "lines": 21.25,
-        "functions": 6.25,
-        "branches": 16.66,
-        "statements": 21.25,
-        "covered_lines": 115,
-        "total_lines": 541
+        "lines": 91.72,
+        "functions": 20.68,
+        "branches": 60.24,
+        "statements": 91.72,
+        "covered_lines": 532,
+        "total_lines": 580
+      }
+    },
+    {
+      "file": "src/pages/NewBuildDetail.tsx",
+      "lines": 674,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 96.88,
+        "functions": 77.77,
+        "branches": 66.9,
+        "statements": 96.88,
+        "covered_lines": 529,
+        "total_lines": 546
       }
     },
     {
@@ -259,38 +266,25 @@
       "lines": 652,
       "likely_tested": true,
       "coverage": {
-        "lines": 69.33,
-        "functions": 17.77,
-        "branches": 55.93,
-        "statements": 69.33,
-        "covered_lines": 373,
-        "total_lines": 538
+        "lines": 72.17,
+        "functions": 28.88,
+        "branches": 60.6,
+        "statements": 72.17,
+        "covered_lines": 389,
+        "total_lines": 539
       }
     },
     {
       "file": "src/pages/PropertyDetail.tsx",
-      "lines": 647,
+      "lines": 639,
       "likely_tested": true,
       "coverage": {
-        "lines": 77.38,
+        "lines": 77.6,
         "functions": 10,
-        "branches": 60.44,
-        "statements": 77.38,
-        "covered_lines": 397,
-        "total_lines": 513
-      }
-    },
-    {
-      "file": "src/pages/Pricing.tsx",
-      "lines": 642,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 79.42,
-        "functions": 14.28,
-        "branches": 26.78,
-        "statements": 79.42,
-        "covered_lines": 413,
-        "total_lines": 520
+        "branches": 61.19,
+        "statements": 77.6,
+        "covered_lines": 395,
+        "total_lines": 509
       }
     },
     {
@@ -300,29 +294,74 @@
       "coverage": null
     },
     {
+      "file": "src/pages/Pricing.tsx",
+      "lines": 635,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 93.69,
+        "functions": 44.44,
+        "branches": 79.78,
+        "statements": 93.69,
+        "covered_lines": 490,
+        "total_lines": 523
+      }
+    },
+    {
+      "file": "supabase/functions/followup-lead/index.ts",
+      "lines": 633,
+      "likely_tested": true,
+      "coverage": null
+    },
+    {
       "file": "src/pages/ProjectDetail.tsx",
       "lines": 629,
       "likely_tested": true,
       "coverage": {
-        "lines": 43.27,
-        "functions": 2.08,
-        "branches": 5.26,
-        "statements": 43.27,
-        "covered_lines": 238,
+        "lines": 97.81,
+        "functions": 50.63,
+        "branches": 64.54,
+        "statements": 97.81,
+        "covered_lines": 538,
         "total_lines": 550
       }
     },
     {
       "file": "src/components/firesale/FiresaleQuickSaleForm.tsx",
-      "lines": 611,
+      "lines": 626,
       "likely_tested": true,
       "coverage": {
-        "lines": 83.3,
-        "functions": 66.66,
-        "branches": 68.22,
-        "statements": 83.3,
-        "covered_lines": 439,
-        "total_lines": 527
+        "lines": 81.88,
+        "functions": 65.21,
+        "branches": 75,
+        "statements": 81.88,
+        "covered_lines": 443,
+        "total_lines": 541
+      }
+    },
+    {
+      "file": "src/components/PropertyMiniMap.tsx",
+      "lines": 619,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 94.33,
+        "functions": 70,
+        "branches": 90.24,
+        "statements": 94.33,
+        "covered_lines": 433,
+        "total_lines": 459
+      }
+    },
+    {
+      "file": "src/pages/ProfessionalProfile.tsx",
+      "lines": 580,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 87.65,
+        "functions": 20,
+        "branches": 68.91,
+        "statements": 87.65,
+        "covered_lines": 426,
+        "total_lines": 486
       }
     },
     {
@@ -330,12 +369,25 @@
       "lines": 573,
       "likely_tested": true,
       "coverage": {
-        "lines": 37.55,
-        "functions": 1.92,
-        "branches": 29.26,
-        "statements": 37.55,
-        "covered_lines": 187,
+        "lines": 94.97,
+        "functions": 31.48,
+        "branches": 81.63,
+        "statements": 94.97,
+        "covered_lines": 473,
         "total_lines": 498
+      }
+    },
+    {
+      "file": "src/components/BookConsultationModal.tsx",
+      "lines": 570,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 97.11,
+        "functions": 80,
+        "branches": 88.12,
+        "statements": 97.11,
+        "covered_lines": 471,
+        "total_lines": 485
       }
     },
     {
@@ -352,16 +404,29 @@
       }
     },
     {
-      "file": "src/pages/Professionals.tsx",
-      "lines": 561,
+      "file": "src/components/OpenHouseAssetControlPanel.tsx",
+      "lines": 567,
       "likely_tested": true,
       "coverage": {
-        "lines": 70.73,
-        "functions": 7.69,
-        "branches": 36.84,
-        "statements": 70.73,
-        "covered_lines": 336,
-        "total_lines": 475
+        "lines": 96.37,
+        "functions": 52.94,
+        "branches": 65.32,
+        "statements": 96.37,
+        "covered_lines": 452,
+        "total_lines": 469
+      }
+    },
+    {
+      "file": "src/pages/Professionals.tsx",
+      "lines": 566,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 98.95,
+        "functions": 84.61,
+        "branches": 85.58,
+        "statements": 98.95,
+        "covered_lines": 473,
+        "total_lines": 478
       }
     },
     {
@@ -369,12 +434,12 @@
       "lines": 557,
       "likely_tested": true,
       "coverage": {
-        "lines": 10.26,
-        "functions": 11.11,
-        "branches": 33.33,
-        "statements": 10.26,
-        "covered_lines": 46,
-        "total_lines": 448
+        "lines": 80.61,
+        "functions": 80,
+        "branches": 57.57,
+        "statements": 80.61,
+        "covered_lines": 366,
+        "total_lines": 454
       }
     },
     {
@@ -382,106 +447,16 @@
       "lines": 556,
       "likely_tested": true,
       "coverage": {
-        "lines": 63.26,
-        "functions": 20,
-        "branches": 52.63,
-        "statements": 63.26,
-        "covered_lines": 279,
+        "lines": 87.98,
+        "functions": 59.37,
+        "branches": 68.06,
+        "statements": 87.98,
+        "covered_lines": 388,
         "total_lines": 441
-      }
-    },
-    {
-      "file": "supabase/functions/full-sync-from-os/index.ts",
-      "lines": 554,
-      "likely_tested": true,
-      "coverage": null
-    },
-    {
-      "file": "src/components/Navbar.tsx",
-      "lines": 540,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 35.8,
-        "functions": 13.33,
-        "branches": 37.2,
-        "statements": 35.8,
-        "covered_lines": 164,
-        "total_lines": 458
-      }
-    },
-    {
-      "file": "src/components/OpenHouseAssetControlPanel.tsx",
-      "lines": 540,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 24.16,
-        "functions": 7.69,
-        "branches": 5.26,
-        "statements": 24.16,
-        "covered_lines": 108,
-        "total_lines": 447
-      }
-    },
-    {
-      "file": "supabase/functions/create-checkout/index.ts",
-      "lines": 540,
-      "likely_tested": true,
-      "coverage": null
-    },
-    {
-      "file": "src/components/PropertyCard.tsx",
-      "lines": 535,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 63.61,
-        "functions": 50,
-        "branches": 63.95,
-        "statements": 63.61,
-        "covered_lines": 250,
-        "total_lines": 393
-      }
-    },
-    {
-      "file": "src/components/ProfessionalServicesEditor.tsx",
-      "lines": 529,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 11.41,
-        "functions": 5.55,
-        "branches": 47.36,
-        "statements": 11.41,
-        "covered_lines": 50,
-        "total_lines": 438
-      }
-    },
-    {
-      "file": "src/pages/dashboard/BillingTab.tsx",
-      "lines": 525,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 67.14,
-        "functions": 40,
-        "branches": 25.8,
-        "statements": 67.14,
-        "covered_lines": 280,
-        "total_lines": 417
       }
     }
   ],
   "likely_untested_large_files": [
-    {
-      "file": "src/lib/professionalServiceCatalog.ts",
-      "lines": 1019,
-      "likely_tested": false,
-      "coverage": {
-        "lines": 100,
-        "functions": 100,
-        "branches": 100,
-        "statements": 100,
-        "covered_lines": 906,
-        "total_lines": 906
-      }
-    },
     {
       "file": "src/lib/documentTemplateData.ts",
       "lines": 1015,
@@ -513,38 +488,12 @@
       "lines": 316,
       "likely_tested": false,
       "coverage": {
-        "lines": 98,
-        "functions": 0,
-        "branches": 100,
-        "statements": 98,
-        "covered_lines": 246,
-        "total_lines": 251
-      }
-    },
-    {
-      "file": "src/lib/filterConfig.ts",
-      "lines": 295,
-      "likely_tested": false,
-      "coverage": {
-        "lines": 96.13,
-        "functions": 0,
-        "branches": 100,
-        "statements": 96.13,
-        "covered_lines": 224,
-        "total_lines": 233
-      }
-    },
-    {
-      "file": "src/hooks/useCreateBuildingListing.ts",
-      "lines": 234,
-      "likely_tested": false,
-      "coverage": {
-        "lines": 8.52,
+        "lines": 100,
         "functions": 100,
-        "branches": 100,
-        "statements": 8.52,
-        "covered_lines": 11,
-        "total_lines": 129
+        "branches": 66.66,
+        "statements": 100,
+        "covered_lines": 251,
+        "total_lines": 251
       }
     },
     {
@@ -577,25 +526,12 @@
       "lines": 197,
       "likely_tested": false,
       "coverage": {
-        "lines": 99.37,
+        "lines": 99.35,
         "functions": 100,
-        "branches": 68.75,
-        "statements": 99.37,
-        "covered_lines": 159,
-        "total_lines": 160
-      }
-    },
-    {
-      "file": "src/hooks/useListingsPipeline.ts",
-      "lines": 193,
-      "likely_tested": false,
-      "coverage": {
-        "lines": 52.77,
-        "functions": 60,
-        "branches": 47.05,
-        "statements": 52.77,
-        "covered_lines": 57,
-        "total_lines": 108
+        "branches": 78.57,
+        "statements": 99.35,
+        "covered_lines": 153,
+        "total_lines": 154
       }
     },
     {
@@ -609,19 +545,6 @@
       "lines": 179,
       "likely_tested": false,
       "coverage": null
-    },
-    {
-      "file": "src/components/dashboard/DashboardSidebar.tsx",
-      "lines": 166,
-      "likely_tested": false,
-      "coverage": {
-        "lines": 91.37,
-        "functions": 75,
-        "branches": 78.94,
-        "statements": 91.37,
-        "covered_lines": 106,
-        "total_lines": 116
-      }
     },
     {
       "file": "src/hooks/useHomepageListings.ts",
@@ -641,19 +564,6 @@
       "lines": 133,
       "likely_tested": false,
       "coverage": null
-    },
-    {
-      "file": "src/lib/propertyFeatures.ts",
-      "lines": 125,
-      "likely_tested": false,
-      "coverage": {
-        "lines": 100,
-        "functions": 100,
-        "branches": 2.4,
-        "statements": 100,
-        "covered_lines": 96,
-        "total_lines": 96
-      }
     },
     {
       "file": "src/lib/statusColors.ts",
@@ -679,11 +589,11 @@
       "lines": 109,
       "likely_tested": false,
       "coverage": {
-        "lines": 36.92,
-        "functions": 33.33,
-        "branches": 42.85,
-        "statements": 36.92,
-        "covered_lines": 24,
+        "lines": 100,
+        "functions": 100,
+        "branches": 100,
+        "statements": 100,
+        "covered_lines": 65,
         "total_lines": 65
       }
     },
@@ -692,51 +602,6 @@
       "lines": 108,
       "likely_tested": false,
       "coverage": null
-    },
-    {
-      "file": "src/components/dashboard/DashboardMobileNav.tsx",
-      "lines": 102,
-      "likely_tested": false,
-      "coverage": {
-        "lines": 95.38,
-        "functions": 66.66,
-        "branches": 90.9,
-        "statements": 95.38,
-        "covered_lines": 62,
-        "total_lines": 65
-      }
-    },
-    {
-      "file": "src/components/firesale/QuickSaleSubmittedView.tsx",
-      "lines": 100,
-      "likely_tested": false,
-      "coverage": {
-        "lines": 17.94,
-        "functions": 0,
-        "branches": 100,
-        "statements": 17.94,
-        "covered_lines": 14,
-        "total_lines": 78
-      }
-    },
-    {
-      "file": "src/components/listings/VirtualizedListingGrid.tsx",
-      "lines": 100,
-      "likely_tested": false,
-      "coverage": null
-    },
-    {
-      "file": "src/hooks/useSmartFilters.ts",
-      "lines": 96,
-      "likely_tested": false,
-      "coverage": {
-        "lines": 71.42,
-        "functions": 100,
-        "branches": 50,
-        "statements": 71.42,
-        "covered_lines": 50,
-        "total_lines": 70
-      }
     },
     {
       "file": "src/hooks/listingForm.types.ts",
@@ -765,19 +630,6 @@
       }
     },
     {
-      "file": "src/lib/buildingListingUploads.ts",
-      "lines": 76,
-      "likely_tested": false,
-      "coverage": {
-        "lines": 6.06,
-        "functions": 0,
-        "branches": 100,
-        "statements": 6.06,
-        "covered_lines": 2,
-        "total_lines": 33
-      }
-    },
-    {
       "file": "src/hooks/usePriceIndex.ts",
       "lines": 72,
       "likely_tested": false,
@@ -795,36 +647,104 @@
       "lines": 62,
       "likely_tested": false,
       "coverage": null
+    },
+    {
+      "file": "supabase/functions/_shared/email-templates/email-change.tsx",
+      "lines": 61,
+      "likely_tested": false,
+      "coverage": null
+    },
+    {
+      "file": "supabase/functions/_shared/email-templates/magic-link.tsx",
+      "lines": 58,
+      "likely_tested": false,
+      "coverage": null
+    },
+    {
+      "file": "src/lib/listingsConfig.ts",
+      "lines": 55,
+      "likely_tested": false,
+      "coverage": {
+        "lines": 100,
+        "functions": 100,
+        "branches": 100,
+        "statements": 100,
+        "covered_lines": 45,
+        "total_lines": 45
+      }
+    },
+    {
+      "file": "supabase/functions/_shared/email-templates/reauthentication.tsx",
+      "lines": 55,
+      "likely_tested": false,
+      "coverage": null
+    },
+    {
+      "file": "src/components/ui/accordion.tsx",
+      "lines": 53,
+      "likely_tested": false,
+      "coverage": null
+    },
+    {
+      "file": "src/components/ui/toggle-group.tsx",
+      "lines": 50,
+      "likely_tested": false,
+      "coverage": null
+    },
+    {
+      "file": "src/components/property/PropertyDescriptionSection.tsx",
+      "lines": 49,
+      "likely_tested": false,
+      "coverage": {
+        "lines": 62.5,
+        "functions": 50,
+        "branches": 66.66,
+        "statements": 62.5,
+        "covered_lines": 20,
+        "total_lines": 32
+      }
+    },
+    {
+      "file": "src/hooks/useInvitationRequests.ts",
+      "lines": 41,
+      "likely_tested": false,
+      "coverage": {
+        "lines": 44,
+        "functions": 50,
+        "branches": 33.33,
+        "statements": 44,
+        "covered_lines": 11,
+        "total_lines": 25
+      }
+    },
+    {
+      "file": "src/components/ui/scroll-area.tsx",
+      "lines": 39,
+      "likely_tested": false,
+      "coverage": null
+    },
+    {
+      "file": "src/components/listings/ListingCompareButton.tsx",
+      "lines": 38,
+      "likely_tested": false,
+      "coverage": {
+        "lines": 100,
+        "functions": 100,
+        "branches": 100,
+        "statements": 100,
+        "covered_lines": 24,
+        "total_lines": 24
+      }
+    },
+    {
+      "file": "src/components/ui/resizable.tsx",
+      "lines": 38,
+      "likely_tested": false,
+      "coverage": null
     }
   ],
   "zero_covered_runtime_files": [],
   "low_covered_runtime_files": [
-    {
-      "file": "src/components/admin/ProVerificationComponents.tsx",
-      "lines": 335,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 5.35,
-        "functions": 0,
-        "branches": 100,
-        "statements": 5.35,
-        "covered_lines": 12,
-        "total_lines": 224
-      }
-    },
-    {
-      "file": "src/lib/buildingListingUploads.ts",
-      "lines": 76,
-      "likely_tested": false,
-      "coverage": {
-        "lines": 6.06,
-        "functions": 0,
-        "branches": 100,
-        "statements": 6.06,
-        "covered_lines": 2,
-        "total_lines": 33
-      }
-    },
     {
       "file": "src/components/admin/FiresaleComponents.tsx",
       "lines": 427,
@@ -841,7 +761,7 @@
     {
       "file": "src/hooks/useCreateBuildingListing.ts",
       "lines": 234,
-      "likely_tested": false,
+      "likely_tested": true,
       "coverage": {
         "lines": 8.52,
         "functions": 100,
@@ -849,58 +769,6 @@
         "statements": 8.52,
         "covered_lines": 11,
         "total_lines": 129
-      }
-    },
-    {
-      "file": "src/pages/dashboard/AnalyticsTab.tsx",
-      "lines": 557,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 10.26,
-        "functions": 11.11,
-        "branches": 33.33,
-        "statements": 10.26,
-        "covered_lines": 46,
-        "total_lines": 448
-      }
-    },
-    {
-      "file": "src/lib/messageContent.tsx",
-      "lines": 48,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 10.81,
-        "functions": 0,
-        "branches": 100,
-        "statements": 10.81,
-        "covered_lines": 4,
-        "total_lines": 37
-      }
-    },
-    {
-      "file": "src/components/ProfessionalServicesEditor.tsx",
-      "lines": 529,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 11.41,
-        "functions": 5.55,
-        "branches": 47.36,
-        "statements": 11.41,
-        "covered_lines": 50,
-        "total_lines": 438
-      }
-    },
-    {
-      "file": "src/components/firesale/QuickSaleSubmittedView.tsx",
-      "lines": 100,
-      "likely_tested": false,
-      "coverage": {
-        "lines": 17.94,
-        "functions": 0,
-        "branches": 100,
-        "statements": 17.94,
-        "covered_lines": 14,
-        "total_lines": 78
       }
     },
     {
@@ -917,32 +785,6 @@
       }
     },
     {
-      "file": "src/components/OpenHouseRegistrationDialog.tsx",
-      "lines": 656,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 21.25,
-        "functions": 6.25,
-        "branches": 16.66,
-        "statements": 21.25,
-        "covered_lines": 115,
-        "total_lines": 541
-      }
-    },
-    {
-      "file": "src/components/AdminInvitationRequests.tsx",
-      "lines": 488,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 22.07,
-        "functions": 7.69,
-        "branches": 12.5,
-        "statements": 22.07,
-        "covered_lines": 81,
-        "total_lines": 367
-      }
-    },
-    {
       "file": "src/components/listings/ImageGallery.tsx",
       "lines": 96,
       "likely_tested": true,
@@ -956,29 +798,16 @@
       }
     },
     {
-      "file": "src/components/ContactsCRM.tsx",
-      "lines": 512,
+      "file": "src/hooks/useUsageAddons.ts",
+      "lines": 160,
       "likely_tested": true,
       "coverage": {
-        "lines": 22.55,
-        "functions": 4.76,
-        "branches": 20,
-        "statements": 22.55,
-        "covered_lines": 99,
-        "total_lines": 439
-      }
-    },
-    {
-      "file": "src/components/OpenHouseAssetControlPanel.tsx",
-      "lines": 540,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 24.16,
-        "functions": 7.69,
-        "branches": 5.26,
-        "statements": 24.16,
-        "covered_lines": 108,
-        "total_lines": 447
+        "lines": 22.83,
+        "functions": 25,
+        "branches": 66.66,
+        "statements": 22.83,
+        "covered_lines": 29,
+        "total_lines": 127
       }
     },
     {
@@ -995,84 +824,6 @@
       }
     },
     {
-      "file": "src/components/professionals/ProfessionalOverviewTab.tsx",
-      "lines": 321,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 24.34,
-        "functions": 100,
-        "branches": 20,
-        "statements": 24.34,
-        "covered_lines": 65,
-        "total_lines": 267
-      }
-    },
-    {
-      "file": "src/components/BookConsultationModal.tsx",
-      "lines": 487,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 24.51,
-        "functions": 11.11,
-        "branches": 47.36,
-        "statements": 24.51,
-        "covered_lines": 101,
-        "total_lines": 412
-      }
-    },
-    {
-      "file": "src/components/AIAssistantWidget.tsx",
-      "lines": 419,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 24.75,
-        "functions": 10,
-        "branches": 18.75,
-        "statements": 24.75,
-        "covered_lines": 77,
-        "total_lines": 311
-      }
-    },
-    {
-      "file": "src/pages/Projects.tsx",
-      "lines": 358,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 26.03,
-        "functions": 6.25,
-        "branches": 16.66,
-        "statements": 26.03,
-        "covered_lines": 82,
-        "total_lines": 315
-      }
-    },
-    {
-      "file": "src/components/AdminFeaturedListings.tsx",
-      "lines": 497,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 26.14,
-        "functions": 28.57,
-        "branches": 33.33,
-        "statements": 26.14,
-        "covered_lines": 97,
-        "total_lines": 371
-      }
-    },
-    {
-      "file": "src/pages/dashboard/PortfoliosTab.tsx",
-      "lines": 307,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 27.23,
-        "functions": 12.5,
-        "branches": 25,
-        "statements": 27.23,
-        "covered_lines": 70,
-        "total_lines": 257
-      }
-    },
-    {
       "file": "src/hooks/useDealChecklists.ts",
       "lines": 88,
       "likely_tested": true,
@@ -1086,159 +837,16 @@
       }
     },
     {
-      "file": "src/components/CompareDrawer.tsx",
-      "lines": 189,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 28.47,
-        "functions": 8.33,
-        "branches": 50,
-        "statements": 28.47,
-        "covered_lines": 43,
-        "total_lines": 151
-      }
-    },
-    {
-      "file": "src/pages/dashboard/ViewingsTab.tsx",
-      "lines": 155,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 28.68,
-        "functions": 33.33,
-        "branches": 20,
-        "statements": 28.68,
-        "covered_lines": 37,
-        "total_lines": 129
-      }
-    },
-    {
-      "file": "src/hooks/useUsageAddons.ts",
-      "lines": 160,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 29.13,
-        "functions": 33.33,
-        "branches": 60,
-        "statements": 29.13,
-        "covered_lines": 37,
-        "total_lines": 127
-      }
-    },
-    {
-      "file": "src/components/OpenHouseDashboardSection.tsx",
-      "lines": 435,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 29.19,
-        "functions": 16.66,
-        "branches": 20,
-        "statements": 29.19,
-        "covered_lines": 101,
-        "total_lines": 346
-      }
-    },
-    {
       "file": "src/components/AISearchBar.tsx",
-      "lines": 167,
+      "lines": 173,
       "likely_tested": true,
       "coverage": {
-        "lines": 30.08,
+        "lines": 31.78,
         "functions": 11.11,
-        "branches": 25,
-        "statements": 30.08,
-        "covered_lines": 37,
-        "total_lines": 123
-      }
-    },
-    {
-      "file": "src/pages/dashboard/MyListingsSection.tsx",
-      "lines": 300,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 30.63,
-        "functions": 25,
         "branches": 20,
-        "statements": 30.63,
-        "covered_lines": 68,
-        "total_lines": 222
-      }
-    },
-    {
-      "file": "src/components/professionals/ProfessionalReviewsTab.tsx",
-      "lines": 251,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 30.65,
-        "functions": 8.33,
-        "branches": 15.38,
-        "statements": 30.65,
-        "covered_lines": 61,
-        "total_lines": 199
-      }
-    },
-    {
-      "file": "src/pages/Onboarding.tsx",
-      "lines": 919,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 31.54,
-        "functions": 10.25,
-        "branches": 20.98,
-        "statements": 31.54,
-        "covered_lines": 217,
-        "total_lines": 688
-      }
-    },
-    {
-      "file": "src/components/listings/StepPricing.tsx",
-      "lines": 189,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 32.16,
-        "functions": 5.88,
-        "branches": 7.14,
-        "statements": 32.16,
-        "covered_lines": 46,
-        "total_lines": 143
-      }
-    },
-    {
-      "file": "src/lib/config.ts",
-      "lines": 94,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 33.96,
-        "functions": 0,
-        "branches": 0,
-        "statements": 33.96,
-        "covered_lines": 18,
-        "total_lines": 53
-      }
-    },
-    {
-      "file": "src/components/listings/PropertyTypeButton.tsx",
-      "lines": 108,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 34.4,
-        "functions": 50,
-        "branches": 11.11,
-        "statements": 34.4,
-        "covered_lines": 32,
-        "total_lines": 93
-      }
-    },
-    {
-      "file": "src/components/professionals/ProfessionalServicesTab.tsx",
-      "lines": 141,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 34.9,
-        "functions": 33.33,
-        "branches": 16.66,
-        "statements": 34.9,
-        "covered_lines": 37,
-        "total_lines": 106
+        "statements": 31.78,
+        "covered_lines": 41,
+        "total_lines": 129
       }
     },
     {
@@ -1255,19 +863,6 @@
       }
     },
     {
-      "file": "src/components/Navbar.tsx",
-      "lines": 540,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 35.8,
-        "functions": 13.33,
-        "branches": 37.2,
-        "statements": 35.8,
-        "covered_lines": 164,
-        "total_lines": 458
-      }
-    },
-    {
       "file": "src/components/property/PropertyReportCard.tsx",
       "lines": 143,
       "likely_tested": true,
@@ -1278,6 +873,19 @@
         "statements": 35.96,
         "covered_lines": 41,
         "total_lines": 114
+      }
+    },
+    {
+      "file": "src/components/listings/PropertyTypeButton.tsx",
+      "lines": 108,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 36.55,
+        "functions": 50,
+        "branches": 76.92,
+        "statements": 36.55,
+        "covered_lines": 34,
+        "total_lines": 93
       }
     },
     {
@@ -1294,58 +902,6 @@
       }
     },
     {
-      "file": "src/components/property/PropertyDetailsAndEnergy.tsx",
-      "lines": 109,
-      "likely_tested": false,
-      "coverage": {
-        "lines": 36.92,
-        "functions": 33.33,
-        "branches": 42.85,
-        "statements": 36.92,
-        "covered_lines": 24,
-        "total_lines": 65
-      }
-    },
-    {
-      "file": "src/pages/NewBuildDetail.tsx",
-      "lines": 689,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 37.09,
-        "functions": 11.11,
-        "branches": 2.77,
-        "statements": 37.09,
-        "covered_lines": 207,
-        "total_lines": 558
-      }
-    },
-    {
-      "file": "src/components/OpenHouseOfferDialog.tsx",
-      "lines": 169,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 37.2,
-        "functions": 25,
-        "branches": 21.73,
-        "statements": 37.2,
-        "covered_lines": 48,
-        "total_lines": 129
-      }
-    },
-    {
-      "file": "src/pages/CreateNewBuildingListing.tsx",
-      "lines": 573,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 37.55,
-        "functions": 1.92,
-        "branches": 29.26,
-        "statements": 37.55,
-        "covered_lines": 187,
-        "total_lines": 498
-      }
-    },
-    {
       "file": "src/pages/dashboard/AuctionsTab.tsx",
       "lines": 204,
       "likely_tested": true,
@@ -1356,45 +912,6 @@
         "statements": 37.93,
         "covered_lines": 66,
         "total_lines": 174
-      }
-    },
-    {
-      "file": "src/hooks/useProjectMedia.ts",
-      "lines": 98,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 38.88,
-        "functions": 50,
-        "branches": 75,
-        "statements": 38.88,
-        "covered_lines": 28,
-        "total_lines": 72
-      }
-    },
-    {
-      "file": "src/pages/dashboard/SavedSearchesTab.tsx",
-      "lines": 139,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 39.31,
-        "functions": 33.33,
-        "branches": 33.33,
-        "statements": 39.31,
-        "covered_lines": 46,
-        "total_lines": 117
-      }
-    },
-    {
-      "file": "src/components/index/LocationInput.tsx",
-      "lines": 165,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 40.44,
-        "functions": 11.11,
-        "branches": 31.25,
-        "statements": 40.44,
-        "covered_lines": 55,
-        "total_lines": 136
       }
     },
     {
@@ -1411,19 +928,6 @@
       }
     },
     {
-      "file": "src/components/listings/StepDetails.tsx",
-      "lines": 204,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 40.93,
-        "functions": 11.11,
-        "branches": 45.45,
-        "statements": 40.93,
-        "covered_lines": 70,
-        "total_lines": 171
-      }
-    },
-    {
       "file": "src/components/dashboard/BookingCalendarSection.tsx",
       "lines": 136,
       "likely_tested": true,
@@ -1437,16 +941,458 @@
       }
     },
     {
-      "file": "src/pages/AuctionDetail.tsx",
-      "lines": 376,
+      "file": "src/hooks/useFiresalePhotoUploader.ts",
+      "lines": 214,
+      "likely_tested": false,
+      "coverage": {
+        "lines": 43.93,
+        "functions": 37.5,
+        "branches": 90.9,
+        "statements": 43.93,
+        "covered_lines": 58,
+        "total_lines": 132
+      }
+    },
+    {
+      "file": "src/components/index/FeaturedPropertiesSection.tsx",
+      "lines": 71,
       "likely_tested": true,
       "coverage": {
-        "lines": 42.52,
+        "lines": 44.06,
+        "functions": 100,
+        "branches": 88.88,
+        "statements": 44.06,
+        "covered_lines": 26,
+        "total_lines": 59
+      }
+    },
+    {
+      "file": "src/components/new-build/PropertyGallery.tsx",
+      "lines": 95,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 44.3,
+        "functions": 33.33,
+        "branches": 10,
+        "statements": 44.3,
+        "covered_lines": 35,
+        "total_lines": 79
+      }
+    },
+    {
+      "file": "src/components/ProAIToolsWidget.tsx",
+      "lines": 244,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 44.44,
+        "functions": 16.66,
+        "branches": 66.66,
+        "statements": 44.44,
+        "covered_lines": 88,
+        "total_lines": 198
+      }
+    },
+    {
+      "file": "src/components/index/AISearchModal.tsx",
+      "lines": 119,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 45.19,
+        "functions": 16.66,
+        "branches": 60,
+        "statements": 45.19,
+        "covered_lines": 47,
+        "total_lines": 104
+      }
+    },
+    {
+      "file": "src/components/index/HomepageOpenHousesSection.tsx",
+      "lines": 96,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 45.23,
+        "functions": 100,
+        "branches": 100,
+        "statements": 45.23,
+        "covered_lines": 38,
+        "total_lines": 84
+      }
+    },
+    {
+      "file": "src/components/property/PropertyGallery.tsx",
+      "lines": 122,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 47.19,
+        "functions": 33.33,
+        "branches": 18.18,
+        "statements": 47.19,
+        "covered_lines": 42,
+        "total_lines": 89
+      }
+    },
+    {
+      "file": "src/hooks/useProfessionalReviews.ts",
+      "lines": 103,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 49.18,
+        "functions": 42.85,
+        "branches": 60,
+        "statements": 49.18,
+        "covered_lines": 30,
+        "total_lines": 61
+      }
+    },
+    {
+      "file": "src/components/professionals/ProfileComponents.tsx",
+      "lines": 79,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 49.23,
+        "functions": 100,
+        "branches": 85.71,
+        "statements": 49.23,
+        "covered_lines": 32,
+        "total_lines": 65
+      }
+    },
+    {
+      "file": "src/hooks/useProfessionalServices.ts",
+      "lines": 186,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 49.65,
+        "functions": 42.1,
+        "branches": 57.14,
+        "statements": 49.65,
+        "covered_lines": 72,
+        "total_lines": 145
+      }
+    },
+    {
+      "file": "src/components/index/ServiceInput.tsx",
+      "lines": 108,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 50.54,
         "functions": 14.28,
-        "branches": 6.66,
-        "statements": 42.52,
-        "covered_lines": 111,
-        "total_lines": 261
+        "branches": 30,
+        "statements": 50.54,
+        "covered_lines": 46,
+        "total_lines": 91
+      }
+    },
+    {
+      "file": "src/components/property/PropertyOwnerCard.tsx",
+      "lines": 155,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 51.85,
+        "functions": 100,
+        "branches": 50,
+        "statements": 51.85,
+        "covered_lines": 56,
+        "total_lines": 108
+      }
+    },
+    {
+      "file": "src/components/new-build/ConstructionTimeline.tsx",
+      "lines": 49,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 52.27,
+        "functions": 100,
+        "branches": 33.33,
+        "statements": 52.27,
+        "covered_lines": 23,
+        "total_lines": 44
+      }
+    },
+    {
+      "file": "src/components/AdminInvestorScreening.tsx",
+      "lines": 204,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 52.72,
+        "functions": 40,
+        "branches": 36.36,
+        "statements": 52.72,
+        "covered_lines": 87,
+        "total_lines": 165
+      }
+    },
+    {
+      "file": "src/components/DashboardPlanCard.tsx",
+      "lines": 113,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 52.77,
+        "functions": 100,
+        "branches": 7.14,
+        "statements": 52.77,
+        "covered_lines": 38,
+        "total_lines": 72
+      }
+    },
+    {
+      "file": "src/hooks/useListingsPipeline.ts",
+      "lines": 193,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 53.7,
+        "functions": 60,
+        "branches": 78.26,
+        "statements": 53.7,
+        "covered_lines": 58,
+        "total_lines": 108
+      }
+    },
+    {
+      "file": "src/hooks/useContacts.ts",
+      "lines": 222,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 54.11,
+        "functions": 45.83,
+        "branches": 70,
+        "statements": 54.11,
+        "covered_lines": 92,
+        "total_lines": 170
+      }
+    },
+    {
+      "file": "src/components/dashboard/ProfessionalProfileEditor.tsx",
+      "lines": 171,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 56.29,
+        "functions": 50,
+        "branches": 14.28,
+        "statements": 56.29,
+        "covered_lines": 85,
+        "total_lines": 151
+      }
+    },
+    {
+      "file": "src/components/investor/InvestorAccessGate.tsx",
+      "lines": 137,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 56.3,
+        "functions": 100,
+        "branches": 20,
+        "statements": 56.3,
+        "covered_lines": 67,
+        "total_lines": 119
+      }
+    },
+    {
+      "file": "src/components/listings/ListingTypeButton.tsx",
+      "lines": 51,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 56.81,
+        "functions": 100,
+        "branches": 71.42,
+        "statements": 56.81,
+        "covered_lines": 25,
+        "total_lines": 44
+      }
+    },
+    {
+      "file": "src/hooks/useListingsFilters.ts",
+      "lines": 211,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 58.06,
+        "functions": 100,
+        "branches": 60,
+        "statements": 58.06,
+        "covered_lines": 72,
+        "total_lines": 124
+      }
+    },
+    {
+      "file": "src/components/index/HomepageAuctionsSection.tsx",
+      "lines": 109,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 58.24,
+        "functions": 28.57,
+        "branches": 100,
+        "statements": 58.24,
+        "covered_lines": 53,
+        "total_lines": 91
+      }
+    },
+    {
+      "file": "src/components/listings/StepPhotos.tsx",
+      "lines": 82,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 58.62,
+        "functions": 33.33,
+        "branches": 25,
+        "statements": 58.62,
+        "covered_lines": 34,
+        "total_lines": 58
+      }
+    },
+    {
+      "file": "src/hooks/useInView.ts",
+      "lines": 68,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 60,
+        "functions": 66.66,
+        "branches": 42.85,
+        "statements": 60,
+        "covered_lines": 27,
+        "total_lines": 45
+      }
+    },
+    {
+      "file": "src/components/property/PropertyTitleSection.tsx",
+      "lines": 173,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 60.3,
+        "functions": 100,
+        "branches": 18.18,
+        "statements": 60.3,
+        "covered_lines": 79,
+        "total_lines": 131
+      }
+    },
+    {
+      "file": "src/hooks/useAuctionAlerts.ts",
+      "lines": 94,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 60.52,
+        "functions": 35.71,
+        "branches": 66.66,
+        "statements": 60.52,
+        "covered_lines": 46,
+        "total_lines": 76
+      }
+    },
+    {
+      "file": "src/components/listings/StepType.tsx",
+      "lines": 142,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 61.2,
+        "functions": 12.5,
+        "branches": 75,
+        "statements": 61.2,
+        "covered_lines": 71,
+        "total_lines": 116
+      }
+    },
+    {
+      "file": "src/components/AdminProfessionalVerification.tsx",
+      "lines": 218,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 61.62,
+        "functions": 14.28,
+        "branches": 70,
+        "statements": 61.62,
+        "covered_lines": 106,
+        "total_lines": 172
+      }
+    },
+    {
+      "file": "src/lib/config.ts",
+      "lines": 94,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 62.26,
+        "functions": 100,
+        "branches": 21.42,
+        "statements": 62.26,
+        "covered_lines": 33,
+        "total_lines": 53
+      }
+    },
+    {
+      "file": "src/components/property/PropertyDescriptionSection.tsx",
+      "lines": 49,
+      "likely_tested": false,
+      "coverage": {
+        "lines": 62.5,
+        "functions": 50,
+        "branches": 66.66,
+        "statements": 62.5,
+        "covered_lines": 20,
+        "total_lines": 32
+      }
+    },
+    {
+      "file": "src/components/dashboard/SettingsSection.tsx",
+      "lines": 250,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 62.62,
+        "functions": 14.28,
+        "branches": 33.33,
+        "statements": 62.62,
+        "covered_lines": 124,
+        "total_lines": 198
+      }
+    },
+    {
+      "file": "src/components/ProofOfFundsReviewer.tsx",
+      "lines": 388,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 63.33,
+        "functions": 31.25,
+        "branches": 79.41,
+        "statements": 63.33,
+        "covered_lines": 171,
+        "total_lines": 270
+      }
+    },
+    {
+      "file": "src/pages/DocumentTemplates.tsx",
+      "lines": 276,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 63.46,
+        "functions": 8.33,
+        "branches": 58.33,
+        "statements": 63.46,
+        "covered_lines": 132,
+        "total_lines": 208
+      }
+    },
+    {
+      "file": "src/hooks/useAiTranslation.ts",
+      "lines": 149,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 63.79,
+        "functions": 100,
+        "branches": 70.37,
+        "statements": 63.79,
+        "covered_lines": 74,
+        "total_lines": 116
+      }
+    },
+    {
+      "file": "src/components/new-build/FloorPlanSection.tsx",
+      "lines": 73,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 64.4,
+        "functions": 100,
+        "branches": 50,
+        "statements": 64.4,
+        "covered_lines": 38,
+        "total_lines": 59
       }
     }
   ],
@@ -1684,12 +1630,12 @@
     {
       "name": "record-listing-view",
       "has_index": true,
-      "has_test": false
+      "has_test": true
     },
     {
       "name": "scheduled-followups",
       "has_index": true,
-      "has_test": false
+      "has_test": true
     },
     {
       "name": "send-saved-search-alerts",
@@ -1739,8 +1685,8 @@
   ],
   "role_term_coverage": {
     "buyer": {
-      "source_files": 54,
-      "test_files": 38,
+      "source_files": 55,
+      "test_files": 60,
       "sample_source_files": [
         "src/pages/AdminPricing.tsx",
         "src/pages/AuctionDetail.tsx",
@@ -1766,29 +1712,29 @@
       "sample_test_files": [
         "src/test/authContext.onboarding.test.ts",
         "src/test/AuthContext.test.tsx",
+        "src/test/authIndexAssistant.behavior.test.tsx",
         "src/test/authUtils.test.ts",
+        "src/test/BookConsultationModal.test.tsx",
+        "src/test/branchCoverageForms.test.tsx",
         "src/test/components.smoke.test.tsx",
         "src/test/components.test.tsx",
+        "src/test/ContactsCRM.test.tsx",
         "src/test/CreateListing.test.tsx",
+        "src/test/criticalBusinessInvariants.test.ts",
+        "src/test/Dashboard.behavior.test.tsx",
+        "src/test/dashboardAdminWidgets.test.tsx",
         "src/test/dashboardNav.test.ts",
+        "src/test/DashboardTabs.behavior.test.tsx",
         "src/test/DataInputTab.test.tsx",
         "src/test/highTrustRoleMigration.test.ts",
+        "src/test/interactionModals.coverage.test.tsx",
         "src/test/LeadsCRM.test.tsx",
-        "src/test/LegalDocumentModal.test.tsx",
-        "src/test/onboardingFlow.test.ts",
-        "src/test/openHouseAssetControl.test.ts",
-        "src/test/participantConfig.test.ts",
-        "src/test/rolePlanMap.test.ts",
-        "src/test/routeGuards.test.tsx",
-        "src/test/subscriptionUtils.test.ts",
-        "src/test/useAgentDataInputs.test.tsx",
-        "src/test/useEligibleForQuickSale.test.tsx",
-        "src/test/useListings.isPro.test.ts"
+        "src/test/LegalDocumentModal.test.tsx"
       ]
     },
     "seller": {
       "source_files": 59,
-      "test_files": 31,
+      "test_files": 44,
       "sample_source_files": [
         "src/pages/AdminPricing.tsx",
         "src/pages/CreateListing.tsx",
@@ -1815,23 +1761,23 @@
         "src/test/authContext.onboarding.test.ts",
         "src/test/AuthContext.test.tsx",
         "src/test/authUtils.test.ts",
+        "src/test/BillingTab.addons.test.tsx",
+        "src/test/branchCoverageForms.test.tsx",
         "src/test/components.smoke.test.tsx",
         "src/test/components.test.tsx",
         "src/test/CreateListing.test.tsx",
+        "src/test/CreateNewBuildingListing.test.tsx",
+        "src/test/Dashboard.behavior.test.tsx",
         "src/test/dashboardNav.test.ts",
+        "src/test/DashboardTabs.behavior.test.tsx",
         "src/test/DataInputTab.test.tsx",
+        "src/test/DoneScreen.test.tsx",
         "src/test/FiresaleQuickSaleForm.test.tsx",
         "src/test/highTrustRoleMigration.test.ts",
         "src/test/LeadsCRM.test.tsx",
         "src/test/LegalDocumentModal.test.tsx",
-        "src/test/onboardingFlow.test.ts",
-        "src/test/openHouseAssetControl.test.ts",
-        "src/test/participantConfig.test.ts",
-        "src/test/rolePlanMap.test.ts",
-        "src/test/routeGuards.test.tsx",
-        "src/test/subscriptionUtils.test.ts",
-        "src/test/useAgentDataInput.legacy.test.tsx",
-        "src/test/useAgentDataInputs.test.tsx"
+        "src/test/Navbar.behavior.test.tsx",
+        "src/test/onboardingFlow.test.ts"
       ]
     },
     "landlord": {
@@ -1852,8 +1798,8 @@
       "sample_test_files": []
     },
     "agent": {
-      "source_files": 81,
-      "test_files": 35,
+      "source_files": 84,
+      "test_files": 53,
       "sample_source_files": [
         "src/pages/AdminPricing.tsx",
         "src/pages/AIAssistantPage.tsx",
@@ -1878,33 +1824,34 @@
       ],
       "sample_test_files": [
         "src/test/AdminPricing.test.tsx",
+        "src/test/audienceScopedProEntitlementsMigration.test.ts",
         "src/test/authContext.onboarding.test.ts",
         "src/test/authUtils.test.ts",
+        "src/test/BillingTab.addons.test.tsx",
+        "src/test/branchCoverageForms.test.tsx",
         "src/test/components.smoke.test.tsx",
         "src/test/components.test.tsx",
         "src/test/CreateListing.test.tsx",
+        "src/test/criticalBusinessInvariants.test.ts",
+        "src/test/Dashboard.behavior.test.tsx",
         "src/test/dashboardNav.test.ts",
+        "src/test/DashboardTabs.behavior.test.tsx",
         "src/test/DataInputTab.test.tsx",
         "src/test/highTrustRoleMigration.test.ts",
+        "src/test/ListingSteps.interactions.test.tsx",
         "src/test/listingUtils.test.ts",
+        "src/test/Navbar.behavior.test.tsx",
         "src/test/onboardingFlow.test.ts",
-        "src/test/openHouseAssetControl.test.ts",
-        "src/test/pages.smoke.test.tsx",
-        "src/test/participantConfig.test.ts",
-        "src/test/rolePlanMap.test.ts",
-        "src/test/routeGuards.test.tsx",
-        "src/test/subscriptionUtils.test.ts",
-        "src/test/useAgentDataInput.legacy.test.tsx",
-        "src/test/useAgentDataInputs.test.tsx",
-        "src/test/useOpenHouseAssetControl.test.tsx"
+        "src/test/OnboardingPage.test.tsx"
       ]
     },
     "professional": {
-      "source_files": 86,
-      "test_files": 24,
+      "source_files": 88,
+      "test_files": 41,
       "sample_source_files": [
         "src/pages/AdminDashboard.tsx",
         "src/pages/AdminPricing.tsx",
+        "src/pages/AuctionDetail.tsx",
         "src/pages/BrandedVideoRoom.tsx",
         "src/pages/dashboard/AnalyticsTab.tsx",
         "src/pages/dashboard/BillingTab.tsx",
@@ -1921,35 +1868,34 @@
         "src/pages/ProfessionalProfileMe.tsx",
         "src/pages/Professionals.tsx",
         "src/pages/PropertyDetail.tsx",
-        "src/pages/TermsOfService.tsx",
-        "src/components/admin/ProVerificationComponents.tsx"
+        "src/pages/TermsOfService.tsx"
       ],
       "sample_test_files": [
         "src/test/App.test.tsx",
+        "src/test/audienceScopedProEntitlementsMigration.test.ts",
         "src/test/authContext.onboarding.test.ts",
+        "src/test/BookConsultationModal.test.tsx",
+        "src/test/branchCoverageForms.test.tsx",
         "src/test/components.smoke.test.tsx",
         "src/test/components.test.tsx",
+        "src/test/criticalBusinessInvariants.test.ts",
+        "src/test/Dashboard.behavior.test.tsx",
+        "src/test/dashboardAdminWidgets.test.tsx",
         "src/test/dashboardNav.test.ts",
+        "src/test/DashboardTabs.behavior.test.tsx",
         "src/test/highTrustRoleMigration.test.ts",
+        "src/test/interactionModals.coverage.test.tsx",
         "src/test/onboardingFlow.test.ts",
+        "src/test/OnboardingPage.test.tsx",
         "src/test/pages.smoke.test.tsx",
         "src/test/participantConfig.test.ts",
-        "src/test/ProfessionalVerificationPanel.test.tsx",
-        "src/test/rolePlanMap.test.ts",
-        "src/test/subscriptionUtils.test.ts",
-        "src/test/useAdminProfessionals.test.tsx",
-        "src/test/useAnalytics.test.tsx",
-        "src/test/useConsultations.test.tsx",
-        "src/test/useListings.isPro.test.ts",
-        "src/test/useProfessionals.test.tsx",
-        "e2e/interaction-professional-buyer.spec.ts",
-        "e2e/onboarding-role-selection.spec.ts",
-        "e2e/pages-authenticated.spec.ts"
+        "src/test/participantTypeEntitlementHardeningMigration.test.ts",
+        "src/test/pricing-dashboard-auction-specific.test.tsx"
       ]
     },
     "developer": {
-      "source_files": 54,
-      "test_files": 23,
+      "source_files": 59,
+      "test_files": 39,
       "sample_source_files": [
         "src/pages/AdminPricing.tsx",
         "src/pages/ApiDocs.tsx",
@@ -1973,31 +1919,31 @@
         "src/components/DashboardPlanCard.tsx"
       ],
       "sample_test_files": [
+        "src/test/audienceScopedProEntitlementsMigration.test.ts",
         "src/test/authContext.onboarding.test.ts",
+        "src/test/AuthContext.test.tsx",
         "src/test/authUtils.test.ts",
+        "src/test/branchCoverageForms.test.tsx",
         "src/test/components.smoke.test.tsx",
         "src/test/CreateListing.test.tsx",
+        "src/test/CreateNewBuildingListing.test.tsx",
+        "src/test/criticalBusinessInvariants.test.ts",
+        "src/test/criticalWorkflowProof.test.ts",
         "src/test/dashboardNav.test.ts",
         "src/test/highTrustRoleMigration.test.ts",
         "src/test/highTrustSubscriptionActivationMigration.test.ts",
         "src/test/InvestorDashboard.behavior.test.tsx",
+        "src/test/Navbar.behavior.test.tsx",
+        "src/test/NewBuildDetail.test.tsx",
         "src/test/onboardingFlow.test.ts",
+        "src/test/OnboardingPage.test.tsx",
         "src/test/participantConfig.test.ts",
-        "src/test/rolePlanMap.test.ts",
-        "src/test/routeGuards.test.tsx",
-        "src/test/subscriptionUtils.test.ts",
-        "src/test/usePlanLimits.test.ts",
-        "src/test/useProjects.test.tsx",
-        "src/test/useSubscription.test.tsx",
-        "e2e/interaction-agent-developer.spec.ts",
-        "e2e/onboarding-role-selection.spec.ts",
-        "e2e/pages-authenticated.spec.ts",
-        "e2e/pages-roles.spec.ts"
+        "src/test/participantTypeEntitlementHardeningMigration.test.ts"
       ]
     },
     "investor": {
-      "source_files": 55,
-      "test_files": 30,
+      "source_files": 62,
+      "test_files": 45,
       "sample_source_files": [
         "src/pages/AdminDashboard.tsx",
         "src/pages/AdminPricing.tsx",
@@ -2025,27 +1971,27 @@
         "src/test/authContext.onboarding.test.ts",
         "src/test/AuthContext.test.tsx",
         "src/test/authUtils.test.ts",
+        "src/test/BillingTab.addons.test.tsx",
+        "src/test/branchCoverageForms.test.tsx",
         "src/test/components.smoke.test.tsx",
         "src/test/components.test.tsx",
+        "src/test/criticalBusinessInvariants.test.ts",
+        "src/test/criticalWorkflowProof.test.ts",
+        "src/test/dashboardAdminWidgets.test.tsx",
         "src/test/dashboardNav.test.ts",
         "src/test/firesalePublicationMigration.test.ts",
         "src/test/highTrustSubscriptionActivationMigration.test.ts",
         "src/test/InvestorDashboard.behavior.test.tsx",
+        "src/test/InvitationRequestModal.test.tsx",
+        "src/test/Navbar.behavior.test.tsx",
+        "src/test/openHouseAdminUi.test.tsx",
         "src/test/openHouseAssetControl.test.ts",
-        "src/test/pages.smoke.test.tsx",
-        "src/test/participantConfig.test.ts",
-        "src/test/POFVerificationPanel.test.tsx",
-        "src/test/rolePlanMap.test.ts",
-        "src/test/routeGuards.test.tsx",
-        "src/test/useEligibleForQuickSale.test.tsx",
-        "src/test/useFiresaleInterest.test.tsx",
-        "src/test/useOpenHouseAssetControl.test.tsx",
-        "src/test/usePlanLimits.test.ts"
+        "src/test/openHouseRegistrationDialog.test.tsx"
       ]
     },
     "admin": {
-      "source_files": 79,
-      "test_files": 43,
+      "source_files": 81,
+      "test_files": 54,
       "sample_source_files": [
         "src/pages/AdminDashboard.tsx",
         "src/pages/AdminPricing.tsx",
@@ -2075,41 +2021,44 @@
         "src/test/AuctionFiltersPanel.test.tsx",
         "src/test/authContext.onboarding.test.ts",
         "src/test/AuthContext.test.tsx",
+        "src/test/authIndexAssistant.behavior.test.tsx",
         "src/test/authUtils.test.ts",
         "src/test/buildAuctionFilter.test.ts",
         "src/test/components.smoke.test.tsx",
         "src/test/components.test.tsx",
+        "src/test/criticalBusinessInvariants.test.ts",
+        "src/test/criticalWorkflowProof.test.ts",
+        "src/test/dashboardAdminWidgets.test.tsx",
         "src/test/dashboardNav.test.ts",
+        "src/test/explicitDataApiGrantsMigration.test.ts",
         "src/test/firesalePublicationMigration.test.ts",
         "src/test/firesaleReservationMigration.test.ts",
         "src/test/highTrustRoleMigration.test.ts",
-        "src/test/highTrustSubscriptionActivationMigration.test.ts",
-        "src/test/InvestorDashboard.behavior.test.tsx",
-        "src/test/pages.smoke.test.tsx",
-        "src/test/participantConfig.test.ts",
-        "src/test/POFVerificationPanel.test.tsx",
-        "src/test/ProfessionalVerificationPanel.test.tsx"
+        "src/test/highTrustSubscriptionActivationMigration.test.ts"
       ]
     },
     "platform_admin": {
-      "source_files": 5,
-      "test_files": 1,
+      "source_files": 6,
+      "test_files": 3,
       "sample_source_files": [
         "src/contexts/AuthContext.tsx",
         "supabase/functions/apply-data-input-credit/index.test.ts",
         "supabase/functions/apply-data-input-credit/index.ts",
+        "supabase/functions/healthz/index.ts",
         "supabase/functions/invitation-notify/index.ts",
         "supabase/functions/transfer-platform-admin/index.ts"
       ],
       "sample_test_files": [
+        "src/test/explicitDataApiGrantsMigration.test.ts",
+        "src/test/useAuctionsPipeline.test.tsx",
         "supabase/functions/apply-data-input-credit/index.test.ts"
       ]
     }
   },
   "business_term_coverage": {
     "pricing": {
-      "source_files": 66,
-      "test_files": 17,
+      "source_files": 70,
+      "test_files": 37,
       "sample_source_files": [
         "src/pages/AdminDashboard.tsx",
         "src/pages/AdminPricing.tsx",
@@ -2122,7 +2071,6 @@
         "src/pages/Dashboard.tsx",
         "src/pages/DocumentTemplates.tsx",
         "src/pages/InvestorDashboard.tsx",
-        "src/pages/NewBuildDetail.tsx",
         "src/pages/Onboarding.tsx",
         "src/pages/PlatformMap.tsx",
         "src/pages/Pricing.tsx",
@@ -2130,32 +2078,37 @@
         "src/pages/PropertyDetail.tsx",
         "src/components/AdminSubscribers.tsx",
         "src/components/auctions/AuctionFiltersPanel.tsx",
-        "src/components/BookConsultationModal.tsx"
+        "src/components/BookConsultationModal.tsx",
+        "src/components/dashboard/BuyerOpenHousesCard.tsx"
       ],
       "sample_test_files": [
         "src/test/AdminPricing.test.tsx",
         "src/test/App.test.tsx",
+        "src/test/audienceScopedProEntitlementsMigration.test.ts",
+        "src/test/BookConsultationModal.test.tsx",
+        "src/test/branchCoverageForms.test.tsx",
         "src/test/components.smoke.test.tsx",
         "src/test/CreateListing.test.tsx",
+        "src/test/CreateNewBuildingListing.test.tsx",
+        "src/test/criticalBusinessInvariants.test.ts",
+        "src/test/criticalWorkflowProof.test.ts",
+        "src/test/dashboardAdminWidgets.test.tsx",
+        "src/test/DashboardTabs.behavior.test.tsx",
+        "src/test/ListingSteps.interactions.test.tsx",
+        "src/test/Navbar.behavior.test.tsx",
+        "src/test/OnboardingPage.test.tsx",
         "src/test/pages.smoke.test.tsx",
         "src/test/participantConfig.test.ts",
-        "src/test/PropertyValuation.test.tsx",
-        "src/test/rolePlanMap.test.ts",
-        "src/test/routeGuards.test.tsx",
-        "src/test/useListingForm.test.tsx",
-        "src/test/useListingForm.validation.test.ts",
-        "src/test/useSubscription.test.tsx",
-        "e2e/pages-public.spec.ts",
-        "e2e/pages-roles.spec.ts",
-        "e2e/payment-checkout.spec.ts",
-        "e2e/performance-gates.spec.ts",
-        "supabase/functions/sync-stripe-pricing/index.test.ts"
+        "src/test/participantTypeEntitlementHardeningMigration.test.ts",
+        "src/test/pricing-dashboard-auction-specific.test.tsx",
+        "src/test/ProfessionalProfileComponents.test.tsx"
       ]
     },
     "checkout": {
-      "source_files": 12,
-      "test_files": 6,
+      "source_files": 15,
+      "test_files": 13,
       "sample_source_files": [
+        "src/pages/dashboard/BillingTab.tsx",
         "src/pages/Onboarding.tsx",
         "src/pages/Pricing.tsx",
         "src/components/RoleSwitchModal.tsx",
@@ -2165,22 +2118,31 @@
         "supabase/functions/create-checkout/index.ts",
         "supabase/functions/create-checkout/sanitizeRedirectPath.test.ts",
         "supabase/functions/customer-portal/index.ts",
+        "supabase/functions/stripe-webhook/addonGuard.ts",
         "supabase/functions/stripe-webhook/index.test.ts",
         "supabase/functions/stripe-webhook/index.ts",
-        "supabase/functions/_shared/auditLog.ts"
+        "supabase/functions/_shared/auditLog.ts",
+        "supabase/functions/_shared/stripeMode.test.ts"
       ],
       "sample_test_files": [
+        "src/test/BillingTab.addons.test.tsx",
+        "src/test/criticalBusinessInvariants.test.ts",
+        "src/test/criticalWorkflowProof.test.ts",
+        "src/test/pricing-dashboard-auction-specific.test.tsx",
         "src/test/rolePlanMap.test.ts",
+        "src/test/roleTierInteractionMatrix.test.ts",
+        "src/test/stripeWebhookAddonGuard.test.ts",
         "e2e/live-critical-smoke.spec.ts",
         "e2e/payment-checkout.spec.ts",
         "supabase/functions/create-checkout/index.test.ts",
         "supabase/functions/create-checkout/sanitizeRedirectPath.test.ts",
-        "supabase/functions/stripe-webhook/index.test.ts"
+        "supabase/functions/stripe-webhook/index.test.ts",
+        "supabase/functions/_shared/stripeMode.test.ts"
       ]
     },
     "subscription": {
-      "source_files": 67,
-      "test_files": 23,
+      "source_files": 68,
+      "test_files": 43,
       "sample_source_files": [
         "src/pages/AdminPricing.tsx",
         "src/pages/AIAssistantPage.tsx",
@@ -2206,29 +2168,29 @@
       "sample_test_files": [
         "src/test/AdminPricing.test.tsx",
         "src/test/App.test.tsx",
+        "src/test/audienceScopedProEntitlementsMigration.test.ts",
         "src/test/AuthContext.test.tsx",
+        "src/test/BillingTab.addons.test.tsx",
         "src/test/components.smoke.test.tsx",
         "src/test/components.test.tsx",
         "src/test/CreateListing.test.tsx",
+        "src/test/CreateNewBuildingListing.test.tsx",
+        "src/test/criticalBusinessInvariants.test.ts",
+        "src/test/criticalWorkflowProof.test.ts",
+        "src/test/Dashboard.behavior.test.tsx",
+        "src/test/dashboardAdminWidgets.test.tsx",
+        "src/test/DashboardTabs.behavior.test.tsx",
         "src/test/FiresaleQuickSaleForm.test.tsx",
         "src/test/highTrustRoleMigration.test.ts",
         "src/test/highTrustSubscriptionActivationMigration.test.ts",
         "src/test/InvestorDashboard.behavior.test.tsx",
-        "src/test/pages.smoke.test.tsx",
-        "src/test/PropertyValuation.test.tsx",
-        "src/test/routeGuards.test.tsx",
-        "src/test/subscriptionUtils.test.ts",
-        "src/test/useEligibleForQuickSale.test.tsx",
-        "src/test/useListings.isPro.test.ts",
-        "src/test/useProfessionals.test.tsx",
-        "src/test/useSubscription.test.tsx",
-        "e2e/performance-gates.spec.ts",
-        "supabase/functions/admin-review-invitation/index.test.ts"
+        "src/test/Navbar.behavior.test.tsx",
+        "src/test/NewBuildDetail.test.tsx"
       ]
     },
     "invoice": {
       "source_files": 10,
-      "test_files": 4,
+      "test_files": 5,
       "sample_source_files": [
         "src/pages/dashboard/BillingTab.tsx",
         "src/pages/dashboard/DataInputTab.tsx",
@@ -2242,6 +2204,7 @@
         "supabase/functions/stripe-webhook/index.ts"
       ],
       "sample_test_files": [
+        "src/test/BillingTab.addons.test.tsx",
         "src/test/DataInputTab.test.tsx",
         "src/test/useAgentDataInputs.test.tsx",
         "supabase/functions/apply-data-input-credit/index.test.ts",
@@ -2249,8 +2212,8 @@
       ]
     },
     "stripe": {
-      "source_files": 37,
-      "test_files": 14,
+      "source_files": 44,
+      "test_files": 24,
       "sample_source_files": [
         "src/pages/AdminPricing.tsx",
         "src/pages/dashboard/BillingTab.tsx",
@@ -2270,29 +2233,35 @@
         "src/contexts/AuthContext.tsx",
         "supabase/functions/apply-data-input-credit/index.test.ts",
         "supabase/functions/apply-data-input-credit/index.ts",
-        "supabase/functions/check-subscription/index.ts",
-        "supabase/functions/create-checkout/index.ts"
+        "supabase/functions/check-subscription/index.test.ts",
+        "supabase/functions/check-subscription/index.ts"
       ],
       "sample_test_files": [
         "src/test/AdminPricing.test.tsx",
+        "src/test/audienceScopedProEntitlementsMigration.test.ts",
+        "src/test/BillingTab.addons.test.tsx",
+        "src/test/criticalBusinessInvariants.test.ts",
+        "src/test/criticalWorkflowProof.test.ts",
         "src/test/DataInputTab.test.tsx",
+        "src/test/pricing-dashboard-auction-specific.test.tsx",
         "src/test/rolePlanMap.test.ts",
+        "src/test/stripeWebhookAddonGuard.test.ts",
         "src/test/subscriptionUtils.test.ts",
         "src/test/useAgentDataInputs.test.tsx",
         "src/test/useSubscription.test.tsx",
         "e2e/payment-checkout.spec.ts",
         "supabase/functions/apply-data-input-credit/index.test.ts",
+        "supabase/functions/check-subscription/index.test.ts",
         "supabase/functions/create-checkout/sanitizeRedirectPath.test.ts",
         "supabase/functions/create-stripe-price/index.test.ts",
+        "supabase/functions/fetch-os-auctions/index.test.ts",
         "supabase/functions/healthz/index.test.ts",
-        "supabase/functions/stripe-webhook/index.test.ts",
-        "supabase/functions/stripe-webhook/webhook.test.ts",
-        "supabase/functions/sync-stripe-pricing/index.test.ts"
+        "supabase/functions/stripe-webhook/index.test.ts"
       ]
     },
     "open_house": {
       "source_files": 21,
-      "test_files": 10,
+      "test_files": 20,
       "sample_source_files": [
         "src/pages/OpenHouseDetail.tsx",
         "src/pages/OpenHouses.tsx",
@@ -2318,9 +2287,19 @@
       "sample_test_files": [
         "src/test/components.smoke.test.tsx",
         "src/test/components.test.tsx",
+        "src/test/criticalBusinessInvariants.test.ts",
+        "src/test/criticalWorkflowProof.test.ts",
+        "src/test/dashboardAdminWidgets.test.tsx",
+        "src/test/ListingSteps.interactions.test.tsx",
+        "src/test/Navbar.behavior.test.tsx",
+        "src/test/openHouseAdminUi.test.tsx",
         "src/test/OpenHouseAnalytics.test.tsx",
         "src/test/openHouseOfferMigration.test.ts",
+        "src/test/openHousePages.behavior.test.tsx",
         "src/test/openHouseRegistrationMutationGuard.test.ts",
+        "src/test/pages.smoke.test.tsx",
+        "src/test/PropertyCard.behavior.test.tsx",
+        "src/test/roleTierInteractionMatrix.test.ts",
         "src/test/useListingForm.test.tsx",
         "src/test/useListingForm.validation.test.ts",
         "src/test/useOpenHouseAssetControl.test.tsx",
@@ -2329,8 +2308,8 @@
       ]
     },
     "auction": {
-      "source_files": 86,
-      "test_files": 28,
+      "source_files": 87,
+      "test_files": 41,
       "sample_source_files": [
         "src/pages/AdminDashboard.tsx",
         "src/pages/AdminPricing.tsx",
@@ -2356,29 +2335,29 @@
       "sample_test_files": [
         "src/test/App.test.tsx",
         "src/test/AuctionBidHistory.test.tsx",
+        "src/test/AuctionCard.behavior.test.tsx",
         "src/test/AuctionFiltersPanel.test.tsx",
         "src/test/AuctionPagination.test.tsx",
+        "src/test/auctionStreetView.test.ts",
         "src/test/auctionUtils.test.ts",
+        "src/test/audienceScopedProEntitlementsMigration.test.ts",
         "src/test/buildAuctionFilter.test.ts",
         "src/test/components.smoke.test.tsx",
         "src/test/components.test.tsx",
+        "src/test/Dashboard.behavior.test.tsx",
+        "src/test/dashboardAdminWidgets.test.tsx",
+        "src/test/interactionModals.coverage.test.tsx",
+        "src/test/ListingSteps.interactions.test.tsx",
+        "src/test/Navbar.behavior.test.tsx",
         "src/test/pages.smoke.test.tsx",
         "src/test/planLimitErrors.test.ts",
-        "src/test/PropertyValuation.test.tsx",
-        "src/test/useAuctionAlerts.test.tsx",
-        "src/test/useAuctionListings.test.tsx",
-        "src/test/useListingForm.test.tsx",
-        "src/test/useListingForm.validation.test.ts",
-        "src/test/useListings.filters.test.ts",
-        "src/test/useListings.isPro.test.ts",
-        "src/test/usePlanLimits.test.ts",
-        "e2e/interaction-agent-developer.spec.ts",
-        "e2e/interaction-auctions.spec.ts"
+        "src/test/pricing-dashboard-auction-specific.test.tsx",
+        "src/test/PropertyCard.behavior.test.tsx"
       ]
     },
     "firesale": {
-      "source_files": 38,
-      "test_files": 18,
+      "source_files": 39,
+      "test_files": 25,
       "sample_source_files": [
         "src/pages/AdminDashboard.tsx",
         "src/pages/AdminPricing.tsx",
@@ -2406,33 +2385,38 @@
         "src/test/App.test.tsx",
         "src/test/components.smoke.test.tsx",
         "src/test/components.test.tsx",
+        "src/test/criticalBusinessInvariants.test.ts",
+        "src/test/criticalWorkflowProof.test.ts",
+        "src/test/dashboardAdminWidgets.test.tsx",
         "src/test/DealChecklist.test.tsx",
         "src/test/firesalePublicationMigration.test.ts",
         "src/test/FiresaleQuickSaleForm.test.tsx",
         "src/test/firesaleReservationMigration.test.ts",
         "src/test/InvestorDashboard.behavior.test.tsx",
+        "src/test/Navbar.behavior.test.tsx",
         "src/test/pages.smoke.test.tsx",
+        "src/test/PropertyCard.behavior.test.tsx",
+        "src/test/QuickSaleSubmittedView.test.tsx",
+        "src/test/roleTierInteractionMatrix.test.ts",
         "src/test/useFiresaleInterest.test.tsx",
         "src/test/useListings.filters.test.ts",
-        "e2e/interaction-investor-admin.spec.ts",
-        "e2e/live-critical-smoke.spec.ts",
-        "e2e/pages-authenticated.spec.ts",
-        "e2e/pages-public.spec.ts",
-        "supabase/functions/delete-account/index.test.ts",
-        "supabase/functions/sync-firesale-to-os/index.test.ts"
+        "e2e/interaction-investor-admin.spec.ts"
       ]
     },
     "quick_sale": {
       "source_files": 1,
-      "test_files": 0,
+      "test_files": 2,
       "sample_source_files": [
         "src/components/Navbar.tsx"
       ],
-      "sample_test_files": []
+      "sample_test_files": [
+        "src/test/criticalBusinessInvariants.test.ts",
+        "src/test/Navbar.behavior.test.tsx"
+      ]
     },
     "pof": {
       "source_files": 10,
-      "test_files": 8,
+      "test_files": 11,
       "sample_source_files": [
         "src/pages/AdminDashboard.tsx",
         "src/pages/InvestorDashboard.tsx",
@@ -2447,8 +2431,11 @@
       ],
       "sample_test_files": [
         "src/test/components.smoke.test.tsx",
+        "src/test/dashboardAdminWidgets.test.tsx",
         "src/test/DealChecklist.test.tsx",
+        "src/test/openHouseAdminUi.test.tsx",
         "src/test/openHouseAssetControl.test.ts",
+        "src/test/openHouseRegistrationDialog.test.tsx",
         "src/test/openHouseRegistrationMutationGuard.test.ts",
         "src/test/pages.smoke.test.tsx",
         "src/test/POFVerificationPanel.test.tsx",
@@ -2458,7 +2445,7 @@
     },
     "portfolio": {
       "source_files": 24,
-      "test_files": 8,
+      "test_files": 11,
       "sample_source_files": [
         "src/pages/dashboard/PortfoliosTab.tsx",
         "src/pages/Dashboard.tsx",
@@ -2484,8 +2471,11 @@
       "sample_test_files": [
         "src/test/App.test.tsx",
         "src/test/dashboardNav.test.ts",
+        "src/test/DashboardTabs.behavior.test.tsx",
         "src/test/pages.smoke.test.tsx",
         "src/test/Portfolios.test.tsx",
+        "src/test/pricing-dashboard-auction-specific.test.tsx",
+        "src/test/ProfessionalProfileComponents.test.tsx",
         "src/test/usePortfolios.test.tsx",
         "src/test/useProjects.test.tsx",
         "e2e/pages-authenticated.spec.ts",
@@ -2494,7 +2484,7 @@
     },
     "project": {
       "source_files": 62,
-      "test_files": 21,
+      "test_files": 31,
       "sample_source_files": [
         "src/pages/AdminPricing.tsx",
         "src/pages/ApiDocs.tsx",
@@ -2519,7 +2509,10 @@
       ],
       "sample_test_files": [
         "src/test/App.test.tsx",
+        "src/test/branchCoverageForms.test.tsx",
+        "src/test/buildingListingUploads.test.ts",
         "src/test/components.smoke.test.tsx",
+        "src/test/CreateNewBuildingListing.test.tsx",
         "src/test/dashboardNav.test.ts",
         "src/test/DataInputTab.test.tsx",
         "src/test/idor.mutations.test.ts",
@@ -2528,21 +2521,18 @@
         "src/test/liveSafety.test.ts",
         "src/test/NeighbourhoodReport.test.tsx",
         "src/test/pages.smoke.test.tsx",
-        "src/test/ProjectsTab.test.tsx",
-        "src/test/routeGuards.test.tsx",
-        "src/test/useProjects.test.tsx",
-        "src/test/useProjectViews.test.tsx",
-        "e2e/interaction-agent-developer.spec.ts",
-        "e2e/pages-authenticated.spec.ts",
-        "e2e/pages-public.spec.ts",
-        "e2e/payment-checkout.spec.ts",
-        "e2e/rls-security.spec.ts",
-        "supabase/functions/delete-account/index.test.ts"
+        "src/test/pricing-dashboard-auction-specific.test.tsx",
+        "src/test/ProfessionalProfileComponents.test.tsx",
+        "src/test/Professionals.behavior.test.tsx",
+        "src/test/ProjectDetail.test.tsx",
+        "src/test/projectManagementHooks.test.tsx",
+        "src/test/Projects.page.test.tsx",
+        "src/test/ProjectsTab.test.tsx"
       ]
     },
     "listing": {
-      "source_files": 197,
-      "test_files": 79,
+      "source_files": 201,
+      "test_files": 114,
       "sample_source_files": [
         "src/pages/AdminDashboard.tsx",
         "src/pages/AdminPricing.tsx",
@@ -2571,26 +2561,26 @@
         "src/test/App.test.tsx",
         "src/test/async.errors.test.ts",
         "src/test/AuctionBidHistory.test.tsx",
+        "src/test/audienceScopedProEntitlementsMigration.test.ts",
+        "src/test/BillingTab.addons.test.tsx",
+        "src/test/branchCoverageForms.test.tsx",
         "src/test/buildAuctionFilter.test.ts",
+        "src/test/buildingListingUploads.test.ts",
         "src/test/CompareAIReports.test.tsx",
+        "src/test/CompareDrawer.test.tsx",
         "src/test/components.smoke.test.tsx",
         "src/test/components.test.tsx",
         "src/test/compressImage.real.test.ts",
+        "src/test/ContactsCRM.test.tsx",
         "src/test/CreateListing.test.tsx",
-        "src/test/dashboardNav.test.ts",
-        "src/test/DealChecklist.test.tsx",
-        "src/test/idor.mutations.test.ts",
-        "src/test/LeadsCRM.test.tsx",
-        "src/test/LegalDocumentModal.test.tsx",
-        "src/test/listings.mutations.test.ts",
-        "src/test/Listings.performance.test.ts",
-        "src/test/listingsFilters.test.ts",
-        "src/test/listingUtils.test.ts"
+        "src/test/CreateNewBuildingListing.test.tsx",
+        "src/test/criticalBusinessInvariants.test.ts",
+        "src/test/criticalWorkflowProof.test.ts"
       ]
     },
     "lead": {
       "source_files": 98,
-      "test_files": 13,
+      "test_files": 21,
       "sample_source_files": [
         "src/pages/AdminPricing.tsx",
         "src/pages/ApiDocs.tsx",
@@ -2617,21 +2607,28 @@
         "src/test/async.errors.test.ts",
         "src/test/components.smoke.test.tsx",
         "src/test/components.test.tsx",
+        "src/test/ContactsCRM.test.tsx",
+        "src/test/Dashboard.behavior.test.tsx",
         "src/test/dashboardNav.test.ts",
+        "src/test/DashboardTabs.behavior.test.tsx",
         "src/test/idor.mutations.test.ts",
+        "src/test/interactionModals.coverage.test.tsx",
         "src/test/LeadsCRM.test.tsx",
+        "src/test/NewBuildDetail.test.tsx",
         "src/test/pages.smoke.test.tsx",
+        "src/test/pricing-dashboard-auction-specific.test.tsx",
+        "src/test/ProjectDetail.test.tsx",
+        "src/test/projectManagementHooks.test.tsx",
         "src/test/useAnalytics.test.tsx",
         "src/test/useConsultations.test.tsx",
         "src/test/useFormWizard.test.ts",
         "src/test/useLeads.test.tsx",
-        "src/test/useListings.filters.test.ts",
-        "e2e/interaction-agent-developer.spec.ts"
+        "src/test/useListings.filters.test.ts"
       ]
     },
     "message": {
-      "source_files": 168,
-      "test_files": 60,
+      "source_files": 169,
+      "test_files": 76,
       "sample_source_files": [
         "src/pages/AdminPricing.tsx",
         "src/pages/Contact.tsx",
@@ -2659,27 +2656,27 @@
         "src/test/App.test.tsx",
         "src/test/async.errors.test.ts",
         "src/test/AuthContext.test.tsx",
+        "src/test/authIndexAssistant.behavior.test.tsx",
+        "src/test/BookConsultationModal.test.tsx",
         "src/test/CompareAIReports.test.tsx",
         "src/test/components.smoke.test.tsx",
         "src/test/components.test.tsx",
+        "src/test/dashboardAdminWidgets.test.tsx",
         "src/test/dashboardNav.test.ts",
+        "src/test/DashboardTabs.behavior.test.tsx",
+        "src/test/interactionModals.coverage.test.tsx",
         "src/test/InvestorDashboard.behavior.test.tsx",
         "src/test/LeadsCRM.test.tsx",
         "src/test/listings.mutations.test.ts",
+        "src/test/ListingSteps.interactions.test.tsx",
+        "src/test/messageContent.test.tsx",
         "src/test/Messages.test.tsx",
-        "src/test/messagesHelpers.test.ts",
-        "src/test/NeighbourhoodReport.test.tsx",
-        "src/test/pages.smoke.test.tsx",
-        "src/test/planLimitErrors.test.ts",
-        "src/test/Portfolios.test.tsx",
-        "src/test/PropertyMiniMap.test.tsx",
-        "src/test/PropertyValuation.test.tsx",
-        "src/test/queryObserver.test.ts"
+        "src/test/messagesHelpers.test.ts"
       ]
     },
     "viewing": {
-      "source_files": 49,
-      "test_files": 8,
+      "source_files": 48,
+      "test_files": 18,
       "sample_source_files": [
         "src/pages/CookiePolicy.tsx",
         "src/pages/dashboard/AnalyticsTab.tsx",
@@ -2703,19 +2700,29 @@
         "src/components/index/HomepageOpenHousesSection.tsx"
       ],
       "sample_test_files": [
+        "src/test/audienceScopedProEntitlementsMigration.test.ts",
         "src/test/components.smoke.test.tsx",
         "src/test/components.test.tsx",
+        "src/test/Dashboard.behavior.test.tsx",
         "src/test/dashboardNav.test.ts",
+        "src/test/DashboardTabs.behavior.test.tsx",
+        "src/test/interactionModals.coverage.test.tsx",
         "src/test/LeadsCRM.test.tsx",
+        "src/test/Listings.interactions.test.tsx",
+        "src/test/ListingsAdvancedFilters.interactions.test.tsx",
+        "src/test/messageContent.test.tsx",
+        "src/test/Navbar.behavior.test.tsx",
         "src/test/pages.smoke.test.tsx",
         "src/test/planLimitErrors.test.ts",
+        "src/test/pricing-dashboard-auction-specific.test.tsx",
+        "src/test/ProfessionalProfileComponents.test.tsx",
         "src/test/useLeads.test.tsx",
         "src/test/useViewings.test.tsx"
       ]
     },
     "consultation": {
       "source_files": 27,
-      "test_files": 6,
+      "test_files": 15,
       "sample_source_files": [
         "src/pages/BrandedVideoRoom.tsx",
         "src/pages/dashboard/AnalyticsTab.tsx",
@@ -2739,17 +2746,26 @@
         "src/components/SendMessageModal.tsx"
       ],
       "sample_test_files": [
+        "src/test/BookConsultationModal.test.tsx",
         "src/test/components.smoke.test.tsx",
         "src/test/components.test.tsx",
+        "src/test/Dashboard.behavior.test.tsx",
+        "src/test/interactionModals.coverage.test.tsx",
         "src/test/LeadsCRM.test.tsx",
+        "src/test/OnboardingPage.test.tsx",
         "src/test/pages.smoke.test.tsx",
+        "src/test/pricing-dashboard-auction-specific.test.tsx",
+        "src/test/ProfessionalProfileComponents.test.tsx",
+        "src/test/ProfessionalServicesEditor.test.tsx",
+        "src/test/roleTierInteractionMatrix.test.ts",
         "src/test/useConsultations.test.tsx",
+        "src/test/useViewings.test.tsx",
         "e2e/interaction-professional-buyer.spec.ts"
       ]
     },
     "onboarding": {
       "source_files": 35,
-      "test_files": 26,
+      "test_files": 31,
       "sample_source_files": [
         "src/pages/AdminPricing.tsx",
         "src/pages/dashboard/BillingTab.tsx",
@@ -2777,27 +2793,27 @@
         "src/test/authContext.onboarding.test.ts",
         "src/test/AuthContext.test.tsx",
         "src/test/components.smoke.test.tsx",
+        "src/test/criticalBusinessInvariants.test.ts",
+        "src/test/criticalWorkflowProof.test.ts",
+        "src/test/DoneScreen.test.tsx",
         "src/test/FiresaleQuickSaleForm.test.tsx",
         "src/test/highTrustRoleMigration.test.ts",
         "src/test/highTrustSubscriptionActivationMigration.test.ts",
         "src/test/onboardingFlow.test.ts",
+        "src/test/OnboardingPage.test.tsx",
         "src/test/pages.smoke.test.tsx",
+        "src/test/participantTypeEntitlementHardeningMigration.test.ts",
         "src/test/routeGuards.test.tsx",
         "src/test/useFormWizard.test.ts",
         "e2e/auth.spec.ts",
         "e2e/gdpr-delete-account.spec.ts",
         "e2e/interaction-agent-developer.spec.ts",
-        "e2e/interaction-auctions.spec.ts",
-        "e2e/interaction-buyer-seller.spec.ts",
-        "e2e/interaction-investor-admin.spec.ts",
-        "e2e/interaction-open-house.spec.ts",
-        "e2e/interaction-professional-buyer.spec.ts",
-        "e2e/live-critical-smoke.spec.ts"
+        "e2e/interaction-auctions.spec.ts"
       ]
     },
     "role_switch": {
       "source_files": 5,
-      "test_files": 9,
+      "test_files": 14,
       "sample_source_files": [
         "src/pages/Onboarding.tsx",
         "src/components/dashboard/SettingsSection.tsx",
@@ -2809,9 +2825,14 @@
         "src/test/AuthContext.test.tsx",
         "src/test/components.smoke.test.tsx",
         "src/test/components.test.tsx",
+        "src/test/criticalWorkflowProof.test.ts",
+        "src/test/Dashboard.behavior.test.tsx",
         "src/test/highTrustSubscriptionActivationMigration.test.ts",
         "src/test/InvestorDashboard.behavior.test.tsx",
+        "src/test/OnboardingPage.test.tsx",
         "src/test/pages.smoke.test.tsx",
+        "src/test/participantTypeEntitlementHardeningMigration.test.ts",
+        "src/test/pricing-dashboard-auction-specific.test.tsx",
         "src/test/routeGuards.test.tsx",
         "src/test/useEligibleForQuickSale.test.tsx",
         "src/test/useSubscription.test.tsx"

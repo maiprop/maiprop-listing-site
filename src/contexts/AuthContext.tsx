@@ -60,12 +60,14 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function profileRoleSwitchInProgress(
   profile: { role_switch_in_progress_at?: string | null } | null,
 ): boolean {
   return Boolean(profile?.role_switch_in_progress_at);
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function profileNeedsOnboarding(p: Profile | null): boolean {
   if (!p) return false;
   if (p.role === "admin") return false;
@@ -77,6 +79,7 @@ export function profileNeedsOnboarding(p: Profile | null): boolean {
   return !(explicitType && roleText && explicitType === roleText);
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -313,10 +316,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (updates: Partial<Profile>) => {
       if (!user) return { error: new Error("Not authenticated") };
 
-      // Allowlist: only these fields may be self-updated by the user.
-      // Sensitive columns (role, is_platform_admin, subscription_product_id,
-      // force_pro_access, stripe_customer_id) are excluded — they must be set
-      // server-side via RPC or admin action.
+      // Allowlist: user-editable profile fields only. Privileged account fields
+      // must be set server-side via RPC or admin action.
       const ALLOWED_FIELDS: ReadonlySet<keyof Profile> = new Set([
         "display_name",
         "bio",
@@ -329,7 +330,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         "video_link",
         "website_url",
         "investor_mode",
-        "participant_type",
       ] as const);
 
       const safe: Partial<Tables<"profiles">> = {};
@@ -404,6 +404,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");

@@ -2,13 +2,15 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { openAIChatCompletion } from "../_shared/openai.ts";
+import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
 import { createLogger } from "../_shared/logger.ts";
 
 const log = createLogger("pro-ai-tools");
 
-const proAiLimiter = makeRateLimiter({ bucket: "pro-ai-tools", maxRequests: 15, windowMs: 60_000 });
+const BUCKET = "pro-ai-tools";
+const proAiLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 15, windowMs: 60_000, failClosed: true });
 
-async function requireAuth(req: Request): Promise<{ error: Response | null; userId: string | null }> {
+const requireAuth = async (req: Request): Promise<{ error: Response | null; userId: string | null }> => {
   const corsHeaders = getCorsHeaders(req);
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
@@ -35,7 +37,7 @@ async function requireAuth(req: Request): Promise<{ error: Response | null; user
     };
   }
   return { error: null, userId: user.id };
-}
+};
 
 const systemPrompts: Record<string, string> = {
   agents: `You are a Greek real estate agent AI assistant (2025–2026). Your role is to help with:
@@ -84,27 +86,19 @@ Use current market context (e.g. 2025–2026 trends). Recommend a qualified advi
 Keep answers practical and aligned with Greek law and market practice. Recommend a property manager or lawyer for contract drafting and disputes.`,
 };
 
-Deno.serve(async (req) => {
+Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, tool dispatch, AI output, and response shaping.
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
-  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
-  if (await proAiLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
-
 
   const { error: authErr, userId } = await requireAuth(req);
   if (authErr) return authErr;
 
-  // Verify active subscription — pro-ai-tools is a Pro-only feature.
-  // Use the service-role client so RLS doesn't block the profiles read.
-  const svcClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-  const { data: profile } = await svcClient.from("profiles").select("subscription_product_id").eq("user_id", userId).single();
-  if (!profile?.subscription_product_id) {
-    return new Response(JSON.stringify({ error: "Active subscription required to use Pro AI tools" }), {
-      status: 403,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+  const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
+  if (quota.errorResponse) return quota.errorResponse;
+
+  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? quota.userId ?? userId ?? "anonymous";
+  if (await proAiLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
   try {
     const { messages, groupId } = await req.json();
@@ -140,6 +134,7 @@ Deno.serve(async (req) => {
       });
     }
 
+    await recordAiCall(quota.userId ?? userId, BUCKET);
     return new Response(response.body, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });

@@ -17,14 +17,14 @@ export type StripeSubscriptionStatus =
   | "paused";
 
 /** Returns true for statuses where the user should have Pro access. */
-export function isActiveSubscription(status: StripeSubscriptionStatus | string): boolean {
+export const isActiveSubscription = (status: StripeSubscriptionStatus | string): boolean => {
   return status === "active" || status === "trialing";
-}
+};
 
 /** Returns true if the Stripe subscription object has Pro access. */
-export function isProSubscription(sub: { status: string }): boolean {
+export const isProSubscription = (sub: { status: string }): boolean => {
   return isActiveSubscription(sub.status);
-}
+};
 
 export type SubscriptionAudience =
   | "participant"
@@ -34,21 +34,28 @@ export type SubscriptionAudience =
   | "investor"
   | "institutional";
 
-export function normalizeSubscriptionAudience(raw: string | null | undefined): SubscriptionAudience | null {
-  if (raw === "buyer" || raw === "seller" || raw === "participant" || raw === "pro") return "participant";
-  if (raw === "agent") return "agent";
-  if (raw === "developer") return "developer";
-  if (raw === "professional") return "professional";
-  if (raw === "investor") return "investor";
-  if (raw === "institutional") return "institutional";
-  return null;
-}
+const SUBSCRIPTION_AUDIENCE_ALIASES: Record<string, SubscriptionAudience> = {
+  agent: "agent",
+  buyer: "participant",
+  developer: "developer",
+  institutional: "institutional",
+  investor: "investor",
+  participant: "participant",
+  pro: "participant",
+  professional: "professional",
+  seller: "participant",
+  user: "participant",
+};
 
-export function isSubscriptionAudienceAllowed(
+export const normalizeSubscriptionAudience = (raw: string | null | undefined): SubscriptionAudience | null => {
+  return raw ? SUBSCRIPTION_AUDIENCE_ALIASES[raw] ?? null : null;
+};
+
+export const isSubscriptionAudienceAllowed = (
   productAudience: string | null | undefined,
   profileAudience: string | null | undefined,
-): boolean {
+): boolean => {
   const normalizedProductAudience = normalizeSubscriptionAudience(productAudience);
   const normalizedProfileAudience = normalizeSubscriptionAudience(profileAudience);
   return Boolean(normalizedProductAudience && normalizedProductAudience === normalizedProfileAudience);
-}
+};

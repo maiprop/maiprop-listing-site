@@ -1,0 +1,9 @@
+title = "maiprop gitleaks config"
+
+[allowlist]
+description = "Generated dependency/schema artifacts with deterministic false positives"
+paths = [
+  '''^deno\.lock$''',
+  '''^supabase/functions/deno\.lock$''',
+  '''^src/integrations/supabase/types\.ts$''',
+]

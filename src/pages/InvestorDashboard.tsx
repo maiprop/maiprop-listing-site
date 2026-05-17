@@ -22,7 +22,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { profileRoleSwitchInProgress, useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { isPlatformAdmin } from "@/lib/authUtils";
-import { formatTimeAgo } from "@/lib/format";
+import { formatPrice, formatTimeAgo } from "@/lib/format";
 import {
   hasPriorityProof,
   isActiveReservation,
@@ -297,7 +297,7 @@ export default function InvestorDashboard() {
       .map(([city, { count, value }]) => ({
         city,
         deals: count,
-        value: value >= 1_000_000 ? `EUR ${(value / 1_000_000).toFixed(1)}M` : `EUR ${(value / 1000).toFixed(0)}k`,
+        value: formatPrice(value),
         pct: total ? Math.round((count / total) * 100) : 0,
       }))
       .sort((a, b) => b.deals - a.deals)
@@ -534,11 +534,11 @@ export default function InvestorDashboard() {
                             <div className="text-right shrink-0">
                               <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-0.5">Asking</div>
                               <div className="font-display font-black text-xl text-foreground">
-                                EUR {deal.asking_price.toLocaleString()}
+                                {formatPrice(deal.asking_price)}
                               </div>
                               {deal.ai_estimate > 0 && (
                                 <div className="text-[10px] text-muted-foreground mt-0.5">
-                                  AI value: EUR {deal.ai_estimate.toLocaleString()}
+                                  AI value: {formatPrice(deal.ai_estimate)}
                                 </div>
                               )}
                             </div>
@@ -554,7 +554,7 @@ export default function InvestorDashboard() {
                               <p className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">ROI Est.</p>
                             </div>
                             <div className="text-center">
-                              <p className="font-black text-sm text-primary">EUR {Math.round(deal.asking_price / Math.max(deal.sqm, 1)).toLocaleString()}</p>
+                              <p className="font-black text-sm text-primary">{formatPrice(Math.round(deal.asking_price / Math.max(deal.sqm, 1)))}</p>
                               <p className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">Per m2</p>
                             </div>
                             <div className="text-center">
@@ -654,7 +654,7 @@ export default function InvestorDashboard() {
                       <div>
                         <h3 id="express-interest-title" className="font-display font-bold text-lg">Express Interest</h3>
                         <p id="express-interest-description" className="text-xs text-muted-foreground mt-0.5">
-                          {deal?.address}, {deal?.city} · EUR {deal?.asking_price.toLocaleString()}
+                          {deal?.address}, {deal?.city} · {deal ? formatPrice(deal.asking_price) : ""}
                         </p>
                       </div>
                       <button

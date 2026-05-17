@@ -73,7 +73,12 @@ export function useAuctionsPipeline(opts: UseAuctionsPipelineOptions) {
   const { isPro } = useSubscription();
   const isMaiPropOsUser = isPlatformAdmin(profile);
 
-  const { data: auctions = [], isLoading, error } = useAuctionListings();
+  /** Per-tier page cap. OS users have no cap. */
+  const pageCap = isMaiPropOsUser ? Infinity : isPro ? AUCTIONS_MAX_PAGES_PRO : AUCTIONS_MAX_PAGES_FREE;
+  const maxItems = Number.isFinite(pageCap) ? pageCap * AUCTIONS_PAGE_SIZE : Infinity;
+  const fetchLimit = Number.isFinite(maxItems) ? maxItems : undefined;
+
+  const { data: auctions = [], isLoading, error } = useAuctionListings(fetchLimit);
 
   /** Distinct city list seeded with "All Cities". */
   const cityOptions = useMemo(() => {
@@ -90,10 +95,6 @@ export function useAuctionsPipeline(opts: UseAuctionsPipelineOptions) {
     if (rounds.some((n) => n >= 3)) result.push({ value: "3plus", label: "3rd+ Auction" });
     return result;
   }, [auctions]);
-
-  /** Per-tier page cap. OS users have no cap. */
-  const pageCap = isMaiPropOsUser ? Infinity : isPro ? AUCTIONS_MAX_PAGES_PRO : AUCTIONS_MAX_PAGES_FREE;
-  const maxItems = Number.isFinite(pageCap) ? pageCap * AUCTIONS_PAGE_SIZE : Infinity;
 
   /**
    * Cap is applied on the RAW auctions list BEFORE filtering so that

@@ -96,7 +96,7 @@ export default function Login() {
                 <div className="text-center mb-6">
                   <img
                     src={logoImg}
-                    alt="maiProp"
+                    alt="mAI prop"
                     className="h-10 w-auto object-contain mx-auto mb-2"
                   />
                   <h1 className="text-muted-foreground text-sm mt-1 font-normal">{t("loginPage.title")}</h1>

@@ -20,6 +20,7 @@ const tempDir = await Deno.makeTempDir({ prefix: "admin-review-invitation-test-"
 const mockClientPath = `${tempDir}/mockSupabase.ts`;
 const transformedPath = `${tempDir}/index.ts`;
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function fileUrl(path: string) {
   return `file:///${path.replaceAll("\\", "/").replace(/^([A-Za-z]):/, "$1:")}`;
 }
@@ -27,6 +28,7 @@ function fileUrl(path: string) {
 await Deno.writeTextFile(
   mockClientPath,
   `
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function createClient() {
   const scenario = globalThis.__adminReviewInvitationScenario;
   return {
@@ -64,13 +66,12 @@ await Deno.writeTextFile(transformedPath, transformedSource);
 
 const { handler, restore } = await captureHandler(import.meta.url, fileUrl(transformedPath));
 
-function resetScenario(overrides: Partial<MockScenario> = {}) {
+const resetScenario = (overrides: Partial<MockScenario> = {}) => {
   globalThis.__adminReviewInvitationScenario = { calls: [], ...overrides };
-}
+};
 
-function authedJson(body: unknown) {
-  return req("POST", body, { authorization: "Bearer test-token" });
-}
+const authedJson = (body: unknown) =>
+  req("POST", body, { authorization: `Bearer ${crypto.randomUUID()}` });
 
 const requestId = "00000000-0000-4000-8000-000000000000";
 

@@ -12,11 +12,12 @@
  * those are intentionally NOT duplicated here.
  */
 import { test, expect, type Page } from "@playwright/test";
+import { seededDemoAccountsEnabled } from "./helpers/demoAccounts";
 
 // Default to seeded demo buyer account (not admin, not investor — triggers wrong-role gates).
 const TEST_EMAIL = process.env.E2E_TEST_EMAIL ?? "seller.pro@maiprop.demo";
 const TEST_PASSWORD = process.env.E2E_TEST_PASSWORD ?? "Demo2025!";
-const hasCredentials = TEST_EMAIL !== "" && TEST_PASSWORD !== "";
+const hasCredentials = TEST_EMAIL !== "" && TEST_PASSWORD !== "" && seededDemoAccountsEnabled();
 
 // ─── Unauthenticated redirect guards ─────────────────────────────────────────
 

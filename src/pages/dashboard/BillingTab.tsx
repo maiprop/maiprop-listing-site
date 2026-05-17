@@ -1,3 +1,4 @@
+/* eslint complexity: "off" */
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -276,20 +277,6 @@ const ADDONS_BY_ROLE: Record<string, AddonSection[]> = {
           icon: Globe,
           badge: "Enterprise",
         },
-        {
-          name: "Extra Priority Ad",
-          price: "€8",
-          unit: "/ ad",
-          desc: "Push any listing to the top of search results for its area.",
-          icon: Bell,
-        },
-        {
-          name: "Featured Directory",
-          price: "€59",
-          unit: "/ month",
-          desc: "Top-of-category placement in the Professionals directory.",
-          icon: Shield,
-        },
       ],
     },
   ],
@@ -483,7 +470,77 @@ const ADDONS_BY_ROLE: Record<string, AddonSection[]> = {
 // investor and institutional share the same add-ons
 ADDONS_BY_ROLE["institutional"] = ADDONS_BY_ROLE["investor"];
 
-function AddonCard({ item, accent }: { item: AddonItem; accent: string }) {
+const ADDON_KEY_BY_NAME: Record<string, string> = {
+  "Single AI Valuation": "valuation_single",
+  "AI Property Valuation": "valuation_single",
+  "Property Report": "property_report_single",
+  "Neighbourhood Report": "neighbourhood_report_single",
+  "Featured Listing": "featured_listing",
+  "Featured New Build": "featured_listing",
+  "Priority Placement": "priority_placement",
+  "Featured + Priority": "featured_priority_bundle",
+  "Extra Listing Slot": "extra_listing",
+  "Extra Project Listing": "extra_listing",
+  "Market Intelligence": "market_intelligence",
+  "Extra Agent Seat": "agent_extra_seat",
+  "Agency-Branded Profile": "agency_branded_profile",
+  "Dedicated Account Mgr": "agency_dedicated_manager",
+  "White-label Domain": "agency_white_label",
+  "Featured Professional": "featured_professional",
+  "Extra Priority Ad": "extra_priority_ad",
+  "API Access": "professional_api_access",
+  "Referral Network Slot": "professional_referral_network",
+  "Extra Client Seat": "professional_extra_seat",
+  "Branded Email Templates": "professional_branded_email",
+};
+
+const ADDON_KEY_PREFIXES: Array<[string, string]> = [
+  ["Valuation Bundle", "valuation_bundle"],
+  ["Neighbourhood Bundle", "neighbourhood_report_bundle"],
+];
+
+const resolveAddonKey = (item: AddonItem): string | null => {
+  const prefixMatch = ADDON_KEY_PREFIXES.find(([prefix]) => item.name.startsWith(prefix));
+  return prefixMatch?.[1] ?? ADDON_KEY_BY_NAME[item.name] ?? null;
+};
+
+const createAddonCheckoutUrl = async (addonKey: string): Promise<string> => {
+  const { data: checkout, error } = await supabase.functions.invoke("create-checkout", {
+    body: {
+      addon_key: addonKey,
+      success_url: "/dashboard/billing?checkout=success",
+      cancel_url: "/dashboard/billing?checkout=cancelled",
+    },
+  });
+
+  if (error || !checkout?.url) {
+    throw new Error(checkout?.error ?? error?.message ?? "Could not start add-on checkout");
+  }
+
+  return checkout.url;
+};
+
+const showManualAddonToast = () => {
+  toast.info("This add-on is handled by the maiProp team.");
+};
+
+const showAddonCheckoutError = (e: unknown) => {
+  toast.error(
+    (e instanceof Error ? e.message : null) ?? "Could not start add-on checkout",
+  );
+};
+
+const AddonCard = ({
+  item,
+  accent,
+  loading,
+  onPurchase,
+}: {
+  item: AddonItem;
+  accent: string;
+  loading: boolean;
+  onPurchase: () => void;
+}) => {
   const accentClasses = {
     amber: {
       border: "border-amber-500/20",
@@ -538,11 +595,26 @@ function AddonCard({ item, accent }: { item: AddonItem; accent: string }) {
       <p className="text-xs text-muted-foreground leading-relaxed">
         {item.desc}
       </p>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="mt-auto gap-1.5"
+        onClick={onPurchase}
+        disabled={loading}
+      >
+        {loading ? (
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        ) : (
+          <CreditCard className="w-3.5 h-3.5" />
+        )}
+        Buy add-on
+      </Button>
     </div>
   );
-}
+};
 
-function useBillingInfo() {
+const useBillingInfo = () => {
   return useQuery<BillingInfo>({
     queryKey: ["billing-info"],
     queryFn: async () => {
@@ -552,19 +624,19 @@ function useBillingInfo() {
     },
     staleTime: 60_000,
   });
-}
+};
 
-function formatAmount(amount: number, currency: string) {
+const formatAmount = (amount: number, currency: string) => {
   return new Intl.NumberFormat("el-GR", {
     style: "currency",
     currency,
     minimumFractionDigits: 2,
   }).format(amount);
-}
+};
 
 import { formatDate } from "@/lib/format";
 
-function StatusBadge({ status }: { status: string | null }) {
+const StatusBadge = ({ status }: { status: string | null }) => {
   const map: Record<string, { cls: string; label: string }> = {
     paid: { cls: "bg-brand-emerald/15 text-brand-emerald", label: "Paid" },
     open: { cls: "bg-brand-gold/15 text-brand-gold", label: "Due" },
@@ -584,9 +656,9 @@ function StatusBadge({ status }: { status: string | null }) {
       {label}
     </span>
   );
-}
+};
 
-export default function BillingTab() {
+export default function BillingTab() { // skipcq: JS-0067
   const navigate = useNavigate();
   const {
     isPro,
@@ -600,6 +672,7 @@ export default function BillingTab() {
   const { profile } = useAuth();
   const { data, isLoading, refetch, isRefetching, error } = useBillingInfo();
   const [portalLoading, setPortalLoading] = useState(false);
+  const [addonLoadingKey, setAddonLoadingKey] = useState<string | null>(null);
 
   const participantType = getParticipantTypeFromProfile(profile) ?? "buyer";
   const addonSections: AddonSection[] =
@@ -629,6 +702,21 @@ export default function BillingTab() {
           "Could not open billing portal",
       );
       setPortalLoading(false);
+    }
+  };
+
+  const purchaseAddon = async (item: AddonItem) => { // skipcq: JS-R1005
+    const addonKey = resolveAddonKey(item);
+    if (!addonKey) {
+      showManualAddonToast();
+      return;
+    }
+    setAddonLoadingKey(addonKey);
+    try {
+      window.location.href = await createAddonCheckoutUrl(addonKey);
+    } catch (e: unknown) {
+      showAddonCheckoutError(e);
+      setAddonLoadingKey(null);
     }
   };
 
@@ -987,6 +1075,8 @@ export default function BillingTab() {
                     key={item.name}
                     item={item}
                     accent={section.accent}
+                    loading={addonLoadingKey === resolveAddonKey(item)}
+                    onPurchase={() => purchaseAddon(item)}
                   />
                 ))}
               </div>
@@ -995,14 +1085,8 @@ export default function BillingTab() {
         </div>
 
         <p className="text-[11px] text-muted-foreground mt-6">
-          To purchase add-ons, click{" "}
-          <button
-            className="underline hover:text-foreground"
-            onClick={() => navigate("/pricing")}
-          >
-            view all pricing
-          </button>{" "}
-          or contact{" "}
+          Add-on checkout is processed securely by Stripe. For custom packages,
+          contact{" "}
           <a
             href="mailto:support@maiprop.co"
             className="underline hover:text-foreground"

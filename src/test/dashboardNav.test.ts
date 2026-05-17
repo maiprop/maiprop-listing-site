@@ -130,9 +130,11 @@ describe("developer role", () => {
 // ── Professional ──────────────────────────────────────────────────────────────
 
 describe("professional role", () => {
-  it("free professional has booking, leads, contacts, analytics, viewings locked", () => {
+  it("free professional has client workflow tabs locked", () => {
     const result = getNavItemsForBioType(null, "professional", false);
     const locked = lockedKeys(result);
+    expect(locked).toContain("services");
+    expect(locked).toContain("messages");
     expect(locked).toContain("booking");
     expect(locked).toContain("leads");
     expect(locked).toContain("contacts");
@@ -145,11 +147,10 @@ describe("professional role", () => {
     expect(lockedKeys(result)).toHaveLength(0);
   });
 
-  it("free professional can access services and messages unlocked", () => {
+  it("free professional can access only profile, billing, settings, and overview unlocked", () => {
     const result = getNavItemsForBioType(null, "professional", false);
     const free = unlockedKeys(result);
-    expect(free).toContain("services");
-    expect(free).toContain("messages");
+    expect(free).toEqual(["overview", "billing", "profile", "settings"]);
   });
 });
 

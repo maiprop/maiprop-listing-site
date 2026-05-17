@@ -8,7 +8,7 @@
  * Invoke: POST with empty body or cron.
  */
 
-import { createClient } from "npm:@supabase/supabase-js@2.57.2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createLogger } from "../_shared/logger.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
@@ -36,7 +36,30 @@ function verifyCronSecret(req: Request): boolean {
   return auth === `Bearer ${secret}`;
 }
 
-function buildListingsQuery(supabase: ReturnType<typeof createClient>, filters: Record<string, unknown>) {
+function escapeHtml(value: unknown): string {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => {
+    switch (char) {
+      case "&":
+        return "&amp;";
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case '"':
+        return "&quot;";
+      case "'":
+        return "&#39;";
+      default:
+        return char;
+    }
+  });
+}
+
+function propertyUrl(appUrl: string, id: string): string {
+  return `${appUrl.replace(/\/$/, "")}/property/${encodeURIComponent(id)}`;
+}
+
+function buildListingsQuery(supabase: SupabaseClient, filters: Record<string, unknown>) {
   let query = supabase
     .from("listings")
     .select("id, title, city, price, cover_image_url, listing_type")
@@ -131,15 +154,17 @@ Deno.serve(async (req) => {
       const listHtml = listingsToSend
         .map(
           (l: { id: string; title: string; city: string; price: number }) =>
-            `<li><a href="${APP_URL}/property/${l.id}">${l.title}</a> · ${l.city || ""} · €${Number(l.price || 0).toLocaleString()}</li>`,
+            `<li><a href="${escapeHtml(propertyUrl(APP_URL, l.id))}">${escapeHtml(l.title)}</a> &middot; ${escapeHtml(l.city || "")} &middot; EUR ${Number(l.price || 0).toLocaleString()}</li>`,
         )
         .join("");
 
       const subject = `maiProp: ${listingsToSend.length} new match${listingsToSend.length > 1 ? "es" : ""} for "${s.name}"`;
+      const searchName = escapeHtml(s.name);
+      const listingsUrl = escapeHtml(`${APP_URL.replace(/\/$/, "")}/listings`);
       const html = `
-        <h2>Your saved search "${s.name}" has new matches</h2>
+        <h2>Your saved search "${searchName}" has new matches</h2>
         <ul>${listHtml}</ul>
-        <p><a href="${APP_URL}/listings">View all listings</a></p>
+        <p><a href="${listingsUrl}">View all listings</a></p>
       `;
 
       if (BREVO_KEY) {

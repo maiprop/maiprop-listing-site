@@ -6,6 +6,7 @@ const AUCTION_SELECT_CORE = "id, title, city, address, price, auction_starting_b
 const QUERY_TIMEOUT_MS = 15_000;
 const AUCTION_FETCH_LIMIT = 500;
 const PORTAL_AUCTION_FETCH_LIMIT = 600;
+const AUCTION_RANDOMIZATION_SALT = "maiprop-auctions-v1";
 
 /**
  * Shape returned by the fetchAll helper. Columns are a Pick<> against the
@@ -43,24 +44,59 @@ type AuctionListingRow = Pick<
   listing_images?: { url: string; sort_order: number }[];
 };
 
-function getTodayDate(): string {
+const getTodayDate = (): string => {
   return new Date().toISOString().split("T")[0];
-}
+};
 
-function getAuctionSelect(withImages: boolean): string {
+const getAuctionSelect = (withImages: boolean): string => {
   return withImages ? `${AUCTION_SELECT_CORE}, listing_images(url, sort_order)` : AUCTION_SELECT_CORE;
-}
+};
 
-function hasCompleteAuctionPage(rows: AuctionListingRow[], pageSize: number): boolean {
+const normalizeAuctionFetchLimit = (maxRows?: number): number => {
+  if (!Number.isFinite(maxRows)) return PORTAL_AUCTION_FETCH_LIMIT;
+  return Math.max(1, Math.min(PORTAL_AUCTION_FETCH_LIMIT, Math.floor(Number(maxRows))));
+};
+
+const hasCompleteAuctionPage = (rows: AuctionListingRow[], pageSize: number): boolean => {
   return rows.length === pageSize;
-}
+};
 
-async function fetchAuctionPageFromDatabase(
+const hashString = (value: string): number => {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+};
+
+const getAuctionRotationSeed = (date = new Date()): string => {
+  return `${AUCTION_RANDOMIZATION_SALT}:${date.toISOString().slice(0, 10)}`;
+};
+
+const getAuctionShuffleScore = (row: AuctionListingRow, seed: string): number => {
+  return hashString(`${seed}:${row.id}:${row.auction_date ?? ""}:${row.city ?? ""}`);
+};
+
+export const randomizeAuctionPresentation = (
+  rows: AuctionListingRow[],
+  seed = getAuctionRotationSeed(),
+): AuctionListingRow[] => {
+  return [...rows].sort((a, b) => {
+    const priorityDelta = (b.priority_placement ?? 0) - (a.priority_placement ?? 0);
+    if (priorityDelta !== 0) return priorityDelta;
+    const featuredDelta = Number(b.is_featured) - Number(a.is_featured);
+    if (featuredDelta !== 0) return featuredDelta;
+    return getAuctionShuffleScore(a, seed) - getAuctionShuffleScore(b, seed);
+  });
+};
+
+const fetchAuctionPageFromDatabase = async (
   today: string,
   withImages: boolean,
   from: number,
   pageSize: number,
-): Promise<AuctionListingRow[]> {
+): Promise<AuctionListingRow[]> => {
   const { data, error } = await supabase
     .from("listings")
     .select(getAuctionSelect(withImages))
@@ -74,15 +110,15 @@ async function fetchAuctionPageFromDatabase(
 
   if (error) throw error;
   return (data ?? []) as unknown as AuctionListingRow[];
-}
+};
 
-async function fetchAuctionFallbackPageRange(
+const fetchAuctionFallbackPageRange = async (
   today: string,
   withImages: boolean,
   from: number,
   remainingRows: number,
   allAuctions: AuctionListingRow[],
-): Promise<AuctionListingRow[]> {
+): Promise<AuctionListingRow[]> => {
   if (remainingRows <= 0) return allAuctions;
 
   const pageSize = Math.min(AUCTION_FETCH_LIMIT, remainingRows);
@@ -92,22 +128,22 @@ async function fetchAuctionFallbackPageRange(
   return hasCompleteAuctionPage(rows, pageSize)
     ? fetchAuctionFallbackPageRange(today, withImages, from + pageSize, remainingRows - rows.length, nextAuctions)
     : nextAuctions;
-}
+};
 
-function fetchAuctionsFromDatabase(
+const fetchAuctionsFromDatabase = (
   today: string,
   withImages: boolean,
   maxRows = PORTAL_AUCTION_FETCH_LIMIT,
-): Promise<AuctionListingRow[]> {
+): Promise<AuctionListingRow[]> => {
   return fetchAuctionFallbackPageRange(today, withImages, 0, maxRows, []);
-}
+};
 
-async function fetchAuctionsFromOs(today: string): Promise<AuctionListingRow[]> {
+const fetchAuctionsFromOs = async (today: string, maxRows: number): Promise<AuctionListingRow[]> => {
   const { data, error } = await supabase.functions.invoke("fetch-os-auctions", {
     body: {
       auctionDateFrom: today,
       page: 0,
-      pageSize: PORTAL_AUCTION_FETCH_LIMIT,
+      pageSize: maxRows,
       sortBy: "AUCTION_DATE",
       order: "ASC",
     },
@@ -118,60 +154,61 @@ async function fetchAuctionsFromOs(today: string): Promise<AuctionListingRow[]> 
   const rows = data?.data;
   if (!Array.isArray(rows)) throw new Error("Unexpected OS auctions response");
   return rows as AuctionListingRow[];
-}
+};
 
-async function fetchFallbackAuctions(today: string): Promise<AuctionListingRow[]> {
+const fetchFallbackAuctions = async (today: string, maxRows: number): Promise<AuctionListingRow[]> => {
   try {
-    return await fetchAuctionsFromDatabase(today, true);
+    return await fetchAuctionsFromDatabase(today, true, maxRows);
   } catch (_dbJoinErr: unknown) {
-    return fetchAuctionsFromDatabase(today, false);
+    return fetchAuctionsFromDatabase(today, false, maxRows);
   }
-}
+};
 
-async function fetchAuctionListings(): Promise<AuctionListingRow[]> {
+const fetchAuctionListings = async (maxRows: number): Promise<AuctionListingRow[]> => {
   const today = getTodayDate();
   try {
-    return await fetchAuctionsFromOs(today);
+    return randomizeAuctionPresentation(await fetchAuctionsFromOs(today, maxRows));
   } catch (_osErr: unknown) {
-    return fetchFallbackAuctions(today);
+    return randomizeAuctionPresentation(await fetchFallbackAuctions(today, maxRows));
   }
-}
+};
 
-function getTimeoutRejection(
+const getTimeoutRejection = (
   setTimer: (timer: ReturnType<typeof setTimeout>) => void,
-): Promise<never> {
-  return new Promise(function createTimeoutRejection(_, reject) {
-    const timer = setTimeout(function rejectTimeout() {
+): Promise<never> => {
+  return new Promise((_, reject) => {
+    const timer = setTimeout(() => {
       reject(new Error("Request timeout"));
     }, QUERY_TIMEOUT_MS);
     setTimer(timer);
   });
-}
+};
 
-async function withAuctionTimeout(
+const withAuctionTimeout = async (
   request: Promise<AuctionListingRow[]>,
-): Promise<AuctionListingRow[]> {
+): Promise<AuctionListingRow[]> => {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
       request,
-      getTimeoutRejection(function setTimeoutHandle(timer) {
+      getTimeoutRejection((timer) => {
         timeout = timer;
       }),
     ]);
   } finally {
     if (timeout) clearTimeout(timeout);
   }
-}
+};
 
-function getAuctionQuery(): Promise<AuctionListingRow[]> {
-  return withAuctionTimeout(fetchAuctionListings());
-}
+const getAuctionQuery = (maxRows: number): Promise<AuctionListingRow[]> => {
+  return withAuctionTimeout(fetchAuctionListings(maxRows));
+};
 
-export function useAuctionListings() {
+export const useAuctionListings = (maxRows?: number) => {
+  const fetchLimit = normalizeAuctionFetchLimit(maxRows);
   return useQuery({
-    queryKey: ["auction-listings-all"],
-    queryFn: getAuctionQuery,
+    queryKey: ["auction-listings", fetchLimit],
+    queryFn: () => getAuctionQuery(fetchLimit),
     staleTime: 30_000, // 30s — auction status changes frequently
   });
-}
+};

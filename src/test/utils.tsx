@@ -18,6 +18,7 @@ import { HelmetProvider } from "react-helmet-async";
  * - No retries (fail fast so tests don't wait 3× retry on expected errors)
  * - GC time 0 so stale queries don't bleed between tests
  */
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function createTestQueryClient() {
   return new QueryClient({
     defaultOptions: {
@@ -36,10 +37,11 @@ export function createTestQueryClient() {
 interface WrapperProps {
   children: React.ReactNode;
   initialPath?: string;
+  queryClient?: QueryClient;
 }
 
-function AllProviders({ children, initialPath = "/" }: WrapperProps) {
-  const queryClient = createTestQueryClient();
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
+function AllProviders({ children, initialPath = "/", queryClient = createTestQueryClient() }: WrapperProps) {
   return (
     <HelmetProvider>
       <MemoryRouter initialEntries={[initialPath]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
@@ -58,14 +60,15 @@ function AllProviders({ children, initialPath = "/" }: WrapperProps) {
  *
  * Does NOT include AuthProvider — mock `useAuth` separately per test when needed.
  */
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function renderWithProviders(
   ui: ReactElement,
-  options?: Omit<RenderOptions, "wrapper"> & { initialPath?: string }
+  options?: Omit<RenderOptions, "wrapper"> & { initialPath?: string; queryClient?: QueryClient }
 ) {
-  const { initialPath, ...rest } = options ?? {};
+  const { initialPath, queryClient, ...rest } = options ?? {};
   return render(ui, {
     wrapper: ({ children }) => (
-      <AllProviders initialPath={initialPath}>{children}</AllProviders>
+      <AllProviders initialPath={initialPath} queryClient={queryClient}>{children}</AllProviders>
     ),
     ...rest,
   });
@@ -78,6 +81,7 @@ export function renderWithProviders(
  *   const sb = makeMockSupabase();
  *   sb.from.mockReturnValueOnce({ select: vi.fn().mockReturnValue({ data: [...], error: null }) });
  */
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function makeMockSupabase() {
   return {
     from: vi.fn().mockReturnValue({

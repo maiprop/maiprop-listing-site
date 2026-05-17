@@ -13,7 +13,7 @@
  */
 import { test, expect, type Page, type Browser, type BrowserContext } from "@playwright/test";
 import { getBaseURL } from "./helpers/baseURL";
-import { demoAccounts, demoPasswords } from "./helpers/demoAccounts";
+import { demoAccounts, demoPasswords, seededDemoAccountsEnabled } from "./helpers/demoAccounts";
 
 // ─── Credentials ─────────────────────────────────────────────────────────────
 
@@ -25,6 +25,7 @@ const ACCOUNTS = {
   lawyer: demoAccounts.professionalLawyer,
   valuer: demoAccounts.professionalValuer,
 } as const;
+const hasSeededDemoAccounts = seededDemoAccountsEnabled();
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -69,6 +70,7 @@ async function signInContext(
 // ─── 1. Professional own-profile access ──────────────────────────────────────
 
 test.describe("Professional own-profile (/professionals/me)", () => {
+  test.skip(!hasSeededDemoAccounts, "Seeded demo accounts require real Supabase config");
   test("architect.pro signs in and can access /professionals/me", async ({ page }) => {
     await signIn(page, ACCOUNTS.architect);
     await page.goto("/professionals/me");
@@ -162,6 +164,7 @@ test.describe("Professional own-profile (/professionals/me)", () => {
 // ─── 2. Buyer browsing the professionals directory ────────────────────────────
 
 test.describe("Buyer — professionals directory (/professionals)", () => {
+  test.skip(!hasSeededDemoAccounts, "Seeded demo accounts require real Supabase config");
   test("seeded buyer can browse /professionals directory", async ({ page }) => {
     await signIn(page, ACCOUNTS.buyer);
     await page.goto("/professionals");
@@ -280,6 +283,7 @@ test.describe("Buyer — professionals directory (/professionals)", () => {
 // ─── 3. Consultation / contact button on professional detail page ─────────────
 
 test.describe("Professional detail page — consultation / contact button", () => {
+  test.skip(!hasSeededDemoAccounts, "Seeded demo accounts require real Supabase config");
   test(
     "professional profile detail page has a contact or book button",
     async ({ page }) => {
@@ -329,6 +333,7 @@ test.describe("Professional detail page — consultation / contact button", () =
 // ─── 4. Video room — authenticated no-crash check ────────────────────────────
 
 test.describe("Video room — authenticated buyer", () => {
+  test.skip(!hasSeededDemoAccounts, "Seeded demo accounts require real Supabase config");
   test(
     "seeded buyer navigating to /video-room lands on valid page (not crash)",
     async ({ page }) => {

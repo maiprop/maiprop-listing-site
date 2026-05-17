@@ -124,6 +124,7 @@ DECLARE
   v_used INTEGER;
   v_id UUID;
   v_transaction_type TEXT;
+  v_month_start TIMESTAMPTZ;
 BEGIN
   IF v_user IS NULL THEN
     RAISE EXCEPTION 'Not authenticated' USING ERRCODE = '42501';
@@ -143,11 +144,16 @@ BEGIN
       USING ERRCODE = '42501';
   END IF;
 
+  v_month_start := date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC';
+  PERFORM pg_advisory_xact_lock(
+    hashtextextended(v_user::TEXT || ':' || ((v_month_start AT TIME ZONE 'UTC')::DATE)::TEXT, 0)
+  );
+
   SELECT COUNT(*)
   INTO v_used
   FROM public.agent_data_inputs
   WHERE user_id = v_user
-    AND created_at >= date_trunc('month', now() AT TIME ZONE 'UTC');
+    AND created_at >= v_month_start;
 
   IF v_used >= 20 THEN
     RAISE EXCEPTION 'Monthly data input limit (20) reached'

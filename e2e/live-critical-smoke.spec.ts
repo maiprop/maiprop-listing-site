@@ -169,6 +169,8 @@ test.describe("Live critical smoke checks", () => {
   test("non-admin users cannot reach the role approval surface", async ({
     page,
   }) => {
+    skipUnlessLiveSupabase();
+
     const errors: string[] = [];
     page.on("pageerror", (err) => errors.push(err.message));
 
@@ -183,6 +185,8 @@ test.describe("Live critical smoke checks", () => {
   test("admin can load the role approval queue without mutating requests", async ({
     page,
   }) => {
+    skipUnlessLiveSupabase();
+
     const errors: string[] = [];
     page.on("pageerror", (err) => errors.push(err.message));
 
@@ -204,6 +208,8 @@ test.describe("Live critical smoke checks", () => {
   test("firesale and investor access surfaces render for a regular buyer", async ({
     page,
   }) => {
+    skipUnlessLiveSupabase();
+
     const errors: string[] = [];
     page.on("pageerror", (err) => errors.push(err.message));
 
@@ -233,6 +239,8 @@ test.describe("Live critical smoke checks", () => {
   test("open-house browsing flow renders and detail navigation stays healthy", async ({
     page,
   }) => {
+    skipUnlessLiveSupabase();
+
     const errors: string[] = [];
     page.on("pageerror", (err) => errors.push(err.message));
 

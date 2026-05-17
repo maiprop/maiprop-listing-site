@@ -4,13 +4,13 @@ project_id = "qvvicunqcrwpioqnvzxf"
 verify_jwt = false
 
 [functions.property-valuation]
-verify_jwt = true
+verify_jwt = false
 
 [functions.neighbourhood-report]
-verify_jwt = true
+verify_jwt = false
 
 [functions.property-pois]
-verify_jwt = true
+verify_jwt = false
 
 [functions.property-chat]
 verify_jwt = true

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { MessageSquare, Send, Loader2, CheckCircle2 } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useStartConversation, useSendMessage } from "@/hooks/useMessages";
@@ -81,6 +81,9 @@ export default function SendMessageModal({ open, onClose, professional }: SendMe
             <MessageSquare className="w-5 h-5 text-primary" />
             {done ? "Message Sent!" : `Message ${firstName}`}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Send a message or consultation request to this professional.
+          </DialogDescription>
         </DialogHeader>
 
         {done ? (

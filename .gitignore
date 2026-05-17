@@ -39,6 +39,7 @@ mai-pro-os/
 
 # Supabase local temp (generated)
 supabase/.temp/
+supabase/.branches/
 
 # Test artifacts
 coverage/

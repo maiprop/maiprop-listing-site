@@ -18,6 +18,9 @@
         "http://localhost:4173/platform-map"
       ],
       "puppeteerScript": "./scripts/lighthouse-auth.cjs",
+      "puppeteerLaunchOptions": {
+        "args": ["--no-sandbox"]
+      },
       "numberOfRuns": 2,
       "settings": {
         "preset": "desktop",

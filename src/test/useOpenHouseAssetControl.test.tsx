@@ -202,13 +202,8 @@ describe("useCreateOpenHouseRegistration", () => {
     ).rejects.toBeInstanceOf(Error);
   });
 
-  it("inserts a pending registration and toasts on success", async () => {
-    const insert = vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        single: vi.fn().mockResolvedValue({ data: { id: "r-3" }, error: null }),
-      }),
-    });
-    fromMock.mockReturnValue({ insert });
+  it("creates a pending registration through the capacity-checked RPC and toasts on success", async () => {
+    rpcMock.mockResolvedValue({ data: { id: "r-3" }, error: null });
     const { result } = renderHookWithQuery(() => useCreateOpenHouseRegistration());
     await act(async () => {
       await result.current.mutateAsync({
@@ -221,17 +216,39 @@ describe("useCreateOpenHouseRegistration", () => {
         visitPurpose: "Buying",
       });
     });
-    expect(insert).toHaveBeenCalledWith(expect.objectContaining({
-      listing_id: "l-1",
-      requester_id: "u-1",
-      contact_name: "Buyer One",
-      contact_email: "buyer@example.com",
-      contact_phone: "+306900000000",
-      timeslot_index: 2,
-      visit_purpose: "Buying",
-      note: "hi",
-    }));
+    expect(rpcMock).toHaveBeenCalledWith("create_open_house_registration", {
+      p_listing_id: "l-1",
+      p_timeslot_index: 2,
+      p_contact_name: "Buyer One",
+      p_contact_email: "buyer@example.com",
+      p_contact_phone: "+306900000000",
+      p_visit_purpose: "Buying",
+      p_note: "hi",
+      p_contact_permission: true,
+      p_id_verification_consent: true,
+      p_privacy_acknowledgement: true,
+    });
     expect(toastMock.success).toHaveBeenCalled();
+  });
+
+  it("maps server-side capacity errors to visitor-friendly copy", async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { message: "open_house_timeslot_capacity_reached" },
+    });
+    const { result } = renderHookWithQuery(() => useCreateOpenHouseRegistration());
+    await act(async () => {
+      await result.current
+        .mutateAsync({
+          listingId: "l-1",
+          timeslotIndex: 2,
+          contactName: "Buyer One",
+          contactEmail: "buyer@example.com",
+          contactPhone: "+306900000000",
+        })
+        .catch(() => {});
+    });
+    expect(toastMock.error).toHaveBeenCalledWith("That timeslot is fully booked. Please choose another slot.");
   });
 });
 
@@ -346,6 +363,25 @@ describe("useUpdateOpenHouseRegistration", () => {
             id_verified_at: "2026-01-01T10:00:00.000Z",
             status: "attended",
           },
+        })
+        .catch(() => {});
+    });
+    expect(toastMock.error).toHaveBeenCalledWith("Only the host can approve, reject, or mark attendance.");
+  });
+
+  it("blocks requesters from moving themselves into another timeslot", async () => {
+    mockRegUpdate({
+      requester_id: "u-1",
+      status: "pending",
+      timeslot_index: 0,
+      listings: { owner_id: "someone-else" },
+    });
+    const { result } = renderHookWithQuery(() => useUpdateOpenHouseRegistration());
+    await act(async () => {
+      await result.current
+        .mutateAsync({
+          id: "r-1",
+          updates: { timeslot_index: 1 },
         })
         .catch(() => {});
     });

@@ -17,10 +17,11 @@ const CORS = { "Access-Control-Allow-Origin": "*" };
 
 Deno.test("enforceAiQuota: returns 401 when Authorization header is missing", async () => {
   const req = new Request("https://example.com/fn", { method: "POST" });
-  const { userId, errorResponse } = await enforceAiQuota(req, "test-bucket", CORS);
+  const { userId, errorResponse, reserved } = await enforceAiQuota(req, "test-bucket", CORS);
 
   assertStrictEquals(userId, null);
   assertStrictEquals(errorResponse?.status, 401);
+  assertStrictEquals(reserved, false);
 
   const body = await errorResponse!.json();
   assertEquals(body.error, "Authentication required");
@@ -31,10 +32,11 @@ Deno.test("enforceAiQuota: returns 401 when Authorization is not Bearer", async 
     method: "POST",
     headers: { Authorization: "Basic abc123" },
   });
-  const { userId, errorResponse } = await enforceAiQuota(req, "test-bucket", CORS);
+  const { userId, errorResponse, reserved } = await enforceAiQuota(req, "test-bucket", CORS);
 
   assertStrictEquals(userId, null);
   assertStrictEquals(errorResponse?.status, 401);
+  assertStrictEquals(reserved, false);
 });
 
 Deno.test("enforceAiQuota: returns 401 for empty Authorization header", async () => {
@@ -42,10 +44,11 @@ Deno.test("enforceAiQuota: returns 401 for empty Authorization header", async ()
     method: "POST",
     headers: { Authorization: "" },
   });
-  const { userId, errorResponse } = await enforceAiQuota(req, "test-bucket", CORS);
+  const { userId, errorResponse, reserved } = await enforceAiQuota(req, "test-bucket", CORS);
 
   assertStrictEquals(userId, null);
   assertStrictEquals(errorResponse?.status, 401);
+  assertStrictEquals(reserved, false);
 });
 
 Deno.test("enforceAiQuota: CORS headers included in 401 response", async () => {
@@ -60,9 +63,9 @@ Deno.test("enforceAiQuota: CORS headers included in 401 response", async () => {
   assertStrictEquals(errorResponse?.headers.get("Content-Type"), "application/json");
 });
 
-// ── enforceAiQuota: fail-open when Supabase is unavailable ────────────────────
+// ── enforceAiQuota: fail-closed when Supabase is unavailable ──────────────────
 
-Deno.test("enforceAiQuota: fails open when Supabase env is missing", async () => {
+Deno.test("enforceAiQuota: fails closed when Supabase env is missing", async () => {
   const prevUrl = Deno.env.get("SUPABASE_URL");
   const prevKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   Deno.env.delete("SUPABASE_URL");
@@ -73,11 +76,13 @@ Deno.test("enforceAiQuota: fails open when Supabase env is missing", async () =>
       method: "POST",
       headers: { Authorization: "Bearer fake-jwt-token" },
     });
-    const { userId, errorResponse } = await enforceAiQuota(req, "test-bucket", CORS);
+    const { userId, errorResponse, reserved } = await enforceAiQuota(req, "test-bucket", CORS);
 
-    // Fails open: no error, but userId is null (couldn't verify token)
-    assertStrictEquals(errorResponse, null);
     assertStrictEquals(userId, null);
+    assertStrictEquals(errorResponse?.status, 503);
+    assertStrictEquals(reserved, false);
+    const body = await errorResponse!.json();
+    assertEquals(body.error, "AI quota service unavailable. Please retry shortly.");
   } finally {
     if (prevUrl) Deno.env.set("SUPABASE_URL", prevUrl);
     if (prevKey) Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", prevKey);

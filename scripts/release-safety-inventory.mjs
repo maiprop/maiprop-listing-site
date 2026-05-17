@@ -75,6 +75,11 @@ function parseFunctionConfig(toml) {
   return functions;
 }
 
+function parseProjectRefFromConfig(toml) {
+  const match = toml.match(/^\s*project_id\s*=\s*"([^"]+)"\s*$/m);
+  return match?.[1] ?? "";
+}
+
 function scanEnvNames() {
   const files = walk(root).filter((file) => {
     const rel = file.slice(root.length + 1).replace(/\\/g, "/");
@@ -196,14 +201,16 @@ function collectLiveFunctionInventory(sourceFunctions) {
     };
   }
 
+  const configToml = existsSync(configPath) ? read(configPath) : "";
   const projectRef = process.env.RELEASE_SAFETY_SUPABASE_PROJECT_REF ||
     process.env.SUPABASE_PROJECT_REF ||
     process.env.VITE_SUPABASE_PROJECT_ID ||
+    parseProjectRefFromConfig(configToml) ||
     "";
   if (!projectRef) {
     return {
       checked: true,
-      error: "Missing RELEASE_SAFETY_SUPABASE_PROJECT_REF, SUPABASE_PROJECT_REF, or VITE_SUPABASE_PROJECT_ID",
+      error: "Missing RELEASE_SAFETY_SUPABASE_PROJECT_REF, SUPABASE_PROJECT_REF, VITE_SUPABASE_PROJECT_ID, and supabase/config.toml project_id",
       deployed: [],
       live_missing_repo: [],
       repo_missing_live: [],

@@ -22,6 +22,7 @@ import NeighbourhoodReport from "@/components/NeighbourhoodReport";
 import PropertyMiniMap from "@/components/PropertyMiniMap";
 import { ENERGY_SCALE, ENERGY_COLORS } from "@/types";
 import { CONSTRUCTION_PHASES, formatNewBuildPrice as formatPrice } from "@/lib/newBuildConfig";
+import { formatPrice as formatCurrency } from "@/lib/format";
 import { FeatureSection } from "@/components/property/DetailPrimitives";
 import { PropertyGallery as Gallery } from "@/components/new-build/PropertyGallery";
 import { ConstructionTimeline } from "@/components/new-build/ConstructionTimeline";
@@ -360,7 +361,7 @@ export default function NewBuildDetail() {
                         <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
                           <p className="text-[10px] text-muted-foreground uppercase tracking-widest">AI Estimate</p>
                           <span className="font-display font-black text-3xl text-foreground">
-                            €{(aiInsightsData.estimatedValue / 1000).toFixed(0)}k
+                            {formatCurrency(aiInsightsData.estimatedValue)}
                           </span>
                           <p className="text-[10px] text-muted-foreground">Confidence: {aiInsightsData.confidenceLabel}</p>
                         </div>

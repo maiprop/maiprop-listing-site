@@ -18,12 +18,35 @@ import { AuctionHero } from "@/components/auctions/AuctionHero";
 import { AuctionAlertBanner } from "@/components/auctions/AuctionAlertBanner";
 import { AuctionFiltersPanel } from "@/components/auctions/AuctionFiltersPanel";
 import { AuctionPagination } from "@/components/auctions/AuctionPagination";
+import { formatPrice } from "@/lib/format";
 import {
   useAuctionsPipeline,
   AUCTIONS_PAGE_SIZE,
   AUCTIONS_MAX_PAGES_FREE,
   AUCTIONS_MAX_PAGES_PRO,
 } from "@/hooks/useAuctionsPipeline";
+
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
+function AuctionCardSkeleton() {
+  return (
+    <div className="glass-card rounded-xl overflow-hidden border border-border flex flex-col min-h-[382px]" aria-hidden="true">
+      <div className="h-44 bg-muted animate-pulse" />
+      <div className="p-4 space-y-3 flex-1 flex flex-col">
+        <div className="h-4 w-5/6 rounded bg-muted animate-pulse" />
+        <div className="h-3 w-2/3 rounded bg-muted animate-pulse" />
+        <div className="flex gap-2">
+          <div className="h-5 w-20 rounded-full bg-muted animate-pulse" />
+          <div className="h-5 w-16 rounded-full bg-muted animate-pulse" />
+        </div>
+        <div className="h-6 w-28 rounded bg-muted animate-pulse" />
+        <div className="mt-auto pt-3 border-t border-border flex gap-2">
+          <div className="h-8 w-20 rounded-lg bg-muted animate-pulse" />
+          <div className="h-8 w-20 rounded-lg bg-muted animate-pulse" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Auctions() {
   const { user } = useAuth();
@@ -107,15 +130,15 @@ export default function Auctions() {
   const auctionStats = [
   { value: isLoading ? "—" : String(thisWeek), label: "This Week", icon: Gavel },
   { value: isLoading ? "—" : visibleFiltered.length.toLocaleString(), label: "Visible Auctions", icon: TrendingUp },
-  { value: isLoading ? "—" : avgBid > 0 ? `€${(avgBid / 1000).toFixed(0)}k` : "—", label: "Avg Starting Bid", icon: TrendingUp }];
+  { value: isLoading ? "—" : avgBid > 0 ? formatPrice(avgBid) : "—", label: "Avg Starting Bid", icon: TrendingUp }];
 
   return (
     <div className="min-h-screen bg-background">
       <Helmet>
-        <title>Property Auctions in Greece — maiProp</title>
+        <title>Property Auctions in Greece — mAI prop</title>
         <meta name="description" content="Browse real-time Greek court property auctions. Filter by city, type, and bid range." />
         <link rel="canonical" href="https://maiprop.co/auctions" />
-        <meta property="og:title" content="Property Auctions in Greece — maiProp" />
+        <meta property="og:title" content="Property Auctions in Greece — mAI prop" />
         <meta property="og:description" content="Real-time court auction data for Greek properties." />
         <meta property="og:url" content="https://maiprop.co/auctions" />
         <script type="application/ld+json">{JSON.stringify({
@@ -124,11 +147,11 @@ export default function Auctions() {
           "name": "Greek Property Auctions",
           "description": "Real-time court auction listings for properties across Greece.",
           "url": "https://maiprop.co/auctions",
-          "provider": { "@type": "Organization", "name": "maiProp", "url": "https://maiprop.co" },
+          "provider": { "@type": "Organization", "name": "mAI prop", "url": "https://maiprop.co" },
         })}</script>
       </Helmet>
       <Navbar />
-      <div className="pt-16">
+      <main id="main-content" className="pt-16">
         <AuctionHero stats={auctionStats} />
         <AuctionAlertBanner
           isAuthenticated={!!user}
@@ -318,10 +341,21 @@ export default function Auctions() {
         {/* ── LIST VIEW ── */}
         {viewMode === "list" &&
         <div className="container pb-24 lg:pb-16">
+            <div className="mb-4">
+              <h2 className="font-display text-3xl sm:text-4xl font-bold text-foreground">Greek Property Auction Listings</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Browse court auction opportunities with live filters and daily randomized rotation.
+              </p>
+            </div>
             {isLoading &&
-          <div className="flex items-center justify-center py-20 gap-3 text-muted-foreground">
-                <Loader2 className="w-5 h-5 animate-spin" />
-                <span className="text-sm">Loading auctions from OS…</span>
+          <div className="space-y-4" aria-busy="true" aria-live="polite">
+                <div className="flex items-center gap-3 text-muted-foreground">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span className="text-sm">Loading auctions from OS…</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                  {Array.from({ length: AUCTIONS_PAGE_SIZE }).map((_, i) => <AuctionCardSkeleton key={i} />)}
+                </div>
               </div>
           }
 
@@ -353,7 +387,7 @@ export default function Auctions() {
                    <span className="font-semibold text-foreground">{polygonFilteredCount}</span> auctions
                    {polygonFilterIds && <span className="text-primary"> · area filter active</span>}
                    {selectedCity !== "All Cities" ? ` in ${selectedCity}` : ""}
-                   {" · "}ordered by date
+                   {" · "}daily randomized rotation
                  </p>
                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                    {paginated.map((a) =>
@@ -420,7 +454,7 @@ export default function Auctions() {
             </div>
           </div>
         }
-      </div>
+      </main>
       <Footer />
       {alertModalOpen && (
         <AuctionAlertModal

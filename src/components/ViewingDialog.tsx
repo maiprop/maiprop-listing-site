@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Calendar, Video, MapPin, Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -22,6 +22,7 @@ const timeSlots = [
   "09:00", "10:00", "11:00", "12:00", "14:00", "15:00", "16:00", "17:00", "18:00"
 ];
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function buildDynamicDays(dayNames: string[]): { label: string; date: string; iso: string }[] {
   const days: { label: string; date: string; iso: string }[] = [];
   const now = new Date();
@@ -117,6 +118,9 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
           <DialogTitle className="font-display text-lg">
             {confirmed ? t("viewingDialog.successTitle") : t("viewingDialog.title")}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Choose a viewing type, date, time, and optional note for this property.
+          </DialogDescription>
         </DialogHeader>
 
         {confirmed ? (

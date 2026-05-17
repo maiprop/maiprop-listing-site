@@ -120,7 +120,9 @@ BEGIN
   END IF;
 
   v_month_start := date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC';
-  PERFORM pg_advisory_xact_lock(hashtextextended(v_user::TEXT || ':' || v_month_start::DATE::TEXT, 0));
+  PERFORM pg_advisory_xact_lock(
+    hashtextextended(v_user::TEXT || ':' || ((v_month_start AT TIME ZONE 'UTC')::DATE)::TEXT, 0)
+  );
 
   EXECUTE
     'SELECT COUNT(*)

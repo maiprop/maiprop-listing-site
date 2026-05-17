@@ -37,11 +37,12 @@ Find these in Supabase → Project Settings → API.
 | Feature | Variable | Where to get it |
 |---|---|---|
 | Maps | `VITE_MAPBOX_TOKEN` | mapbox.com → Account → Access Tokens |
-| AI search / assist | `OPENAI_API_KEY` | OpenAI dashboard (set in Supabase Edge Function secrets) |
+| AI search / assist | `GEMINI_API_KEY` or `OPENAI_API_KEY` | Gemini or OpenAI dashboard (set in Supabase Edge Function secrets) |
 | Stripe checkout | `VITE_STRIPE_PRO_PRODUCT_ID` + all `VITE_STRIPE_PRICE_*` | Stripe dashboard → Products |
 | Error monitoring | `VITE_SENTRY_DSN` | sentry.io → Project → Client Keys |
+| Production telemetry audit | `SENTRY_AUTH_TOKEN` | sentry.io → User Settings → Auth Tokens; local/read-only audit only |
 | Analytics | `VITE_PLAUSIBLE_DOMAIN` | plausible.io → Sites |
-| Street view / Places | `VITE_GOOGLE_MAPS_API_KEY` | Google Cloud Console; restrict to local/staging domains |
+| Street view / Places | `VITE_GOOGLE_MAPS_API_KEY` | Google Cloud Console; use a browser key restricted to local/dev referrers |
 
 ### 4. Service-role key (server-side scripts only)
 
@@ -89,7 +90,19 @@ See [`STAGING_SETUP.md`](./STAGING_SETUP.md) for the full walkthrough. Variables
 | `VITE_STRIPE_PRO_PRODUCT_ID` | required for billing | Production product |
 | `VITE_STRIPE_PRICE_*` | required for billing | Production prices |
 | `VITE_TURNSTILE_SITE_KEY` | optional | Cloudflare Turnstile |
-| `VITE_GOOGLE_MAPS_API_KEY` | optional | Restricted to prod domain |
+| `VITE_GOOGLE_MAPS_API_KEY` | optional | See browser-key restrictions below |
+
+#### Google Maps browser-key restrictions
+
+`VITE_GOOGLE_MAPS_API_KEY` is embedded in the Vite browser bundle. In Google
+Cloud Console, configure the key with:
+
+- Application restrictions: HTTP referrers.
+- Allowed production referrers: `https://maiprop.co/*`, `https://portal.maiprop.co/*`, `https://maiprop-listing-site.pages.dev/*`, and `https://*.maiprop-listing-site.pages.dev/*`.
+- API restrictions: Maps JavaScript API and Places API only.
+
+Do not allowlist broad patterns such as `https://*.pages.dev/*`; keep preview
+access scoped to this Cloudflare Pages project.
 
 ### In Supabase (edge functions)
 
@@ -111,7 +124,12 @@ Dashboard → Project Settings → Edge Functions → Secrets.
 | `WEBHOOK_SECRET` | `oh-registration-notify` |
 | `SENTRY_DSN` | edge-function structured logger forwarding |
 | `ENVIRONMENT` | edge-function environment tag and CORS tightening |
-| `OPENAI_API_KEY` | `ai-search`, `property-chat`, `pro-ai-tools`, `listing-ai-assist`, `ai-translate`, `smart-filters`, `neighbourhood-report`, `ai-service-match`, `property-valuation`, `property-pois` |
+| `GEMINI_API_KEY` | Preferred AI provider for report/search/assist functions when configured |
+| `GEMINI_MODEL` | Optional Gemini model override; defaults to `gemini-2.5-flash` |
+| `OPENAI_API_KEY` | Fallback AI provider for `ai-search`, `property-chat`, `pro-ai-tools`, `listing-ai-assist`, `ai-translate`, `smart-filters`, `neighbourhood-report`, `ai-service-match`, `property-valuation`, `property-pois` |
+| `OPENAI_MODEL` | Optional OpenAI model override for non-translation AI functions |
+| `OPENAI_TRANSLATION_MODEL` | Optional OpenAI model override for translation |
+| `OPENAI_REASONING_EFFORT` | Optional OpenAI reasoning effort override for supported models |
 | `LOVABLE_API_KEY` | legacy `followup-lead` content generation |
 | `BREVO_API_KEY` | `send-saved-search-alerts`, `auth-email-hook`, `process-email-queue`, `invitation-notify`, `oh-registration-notify` |
 | `BREVO_FROM_EMAIL` | same Brevo-backed email functions as above |
@@ -148,7 +166,7 @@ fail-fast behavior.
 | `VITE_SENTRY_DSN` | optional browser Sentry DSN | production environment |
 | `VITE_STRIPE_PRO_PRODUCT_ID` | optional Stripe product id for subscription checks | production environment |
 | `VITE_TURNSTILE_SITE_KEY` | optional Turnstile site key | production environment |
-| `VITE_GOOGLE_MAPS_API_KEY` | optional browser Google Maps key | production environment |
+| `VITE_GOOGLE_MAPS_API_KEY` | optional browser Google Maps key; see browser-key restrictions above | production environment |
 | `VITE_PLAUSIBLE_DOMAIN` | optional analytics domain | production environment |
 | `VITE_APP_URL` | canonical app origin for production build | production environment |
 | `SITE_LOCK_PASSWORD` | optional Cloudflare Pages runtime passcode gate | production environment |
@@ -156,13 +174,17 @@ fail-fast behavior.
 | `STAGING_SUPABASE_PUBLISHABLE_KEY` | staging anon/publishable key | repo or staging environment |
 | `STAGING_SUPABASE_PROJECT_ID` | staging Supabase project ref | repo or staging environment |
 | `SUPABASE_ACCESS_TOKEN` | Supabase CLI deploy/list token | repo or environment scoped to deploy jobs |
+| `SUPABASE_STAGING_DB_URL` | staging Postgres connection string for CI `supabase db push --db-url` | staging environment only |
 | `SUPABASE_PROJECT_REF` | optional project ref alias used by release-safety live inventory | manual release certification |
+| `RELEASE_SAFETY_SUPABASE_PROJECT_REF` | optional project ref override for release-safety live inventory; defaults to `supabase/config.toml` `project_id` when unset | manual release certification |
+| `SENTRY_AUTH_TOKEN` | optional read-only token for local production telemetry checks; never required by app runtime | local operator shell only |
 | `RLS_USER_A_EMAIL` | staging RLS test user A | repo or staging environment |
 | `RLS_USER_B_EMAIL` | staging RLS test user B | repo or staging environment |
 | `RLS_USER_PASSWORD` | shared staging RLS test password | repo or staging environment |
 | `ONBOARDING_TEST_EMAIL` | staging onboarding E2E user | repo or staging environment |
 | `ONBOARDING_TEST_PASSWORD` | staging onboarding E2E password | repo or staging environment |
 | `SUPABASE_SERVICE_ROLE_KEY` | staging-only service role for security tests and fixtures | staging environment only |
+| `MAIPROP_EDGE_TEST_AUTH_BYPASS` | explicit CI-only bypass marker for edge-function tests that exercise handler internals without live Supabase Auth | CI test environment only |
 
 Additional seeded E2E accounts:
 
@@ -199,9 +221,21 @@ Release inventory can optionally compare repo functions with live Supabase:
 
 ```powershell
 $env:RELEASE_SAFETY_LIVE_FUNCTIONS="true"
+# Optional override. If omitted, the script reads supabase/config.toml project_id.
 $env:RELEASE_SAFETY_SUPABASE_PROJECT_REF="<project-ref>"
 npm run check:release-safety -- --live-functions
 ```
+
+For local production telemetry verification, set a read-only Sentry token only in
+the operator shell:
+
+```powershell
+$env:SENTRY_AUTH_TOKEN="<redacted>"
+```
+
+Do not commit Sentry auth tokens or add them to browser-visible `VITE_*`
+variables. The app only needs `VITE_SENTRY_DSN` at build time and `SENTRY_DSN`
+for edge-function error forwarding.
 
 CI intentionally uses **stub** Supabase URL + key (format-valid placeholders in `.github/workflows/ci.yml`). Real keys must never be checked in.
 

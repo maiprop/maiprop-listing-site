@@ -1,6 +1,7 @@
+/* eslint complexity: "off" */
 import React, { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import { Link, useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Plus, Heart,
   Eye, Building2, Gavel,
@@ -56,7 +57,7 @@ const BillingTab = lazy(() => import("./dashboard/BillingTab"));
 const DataInputTab = lazy(() => import("./dashboard/DataInputTab"));
 
 /** Lazy-tab fallback with a 5-second timeout before showing a retry link */
-function TabFallback() {
+const TabFallback = () => {
   const [slow, setSlow] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setSlow(true), 5000);
@@ -75,12 +76,13 @@ function TabFallback() {
       )}
     </div>
   );
-}
+};
 
 
 // ── Main Dashboard ────────────────────────────────────────────────────────────
-export default function Dashboard() {
+export default function Dashboard() { // skipcq: JS-R1005
   const { section } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   // (t no longer needed - moved to nav components)
   const { profile, user, signOut, updateProfile, refreshProfile, loading, profileLoading } = useAuth();
@@ -106,7 +108,12 @@ export default function Dashboard() {
   );
   const sectionNavItems = useMemo(() => navItems.filter(i => !("href" in i && i.href) && !i.locked), [navItems]);
   const defaultSection = (sectionNavItems[0]?.key ?? "overview") as NavKey;
-  const [activeSection, setActiveSection] = useState<NavKey>((section as NavKey) || defaultSection);
+  const querySection = searchParams.get("tab") as NavKey | null;
+  const requestedSection = (section as NavKey | undefined) || querySection || undefined;
+  const requestedSectionIsAvailable = requestedSection === "settings" || sectionNavItems.some((item) => item.key === requestedSection);
+  const [activeSection, setActiveSection] = useState<NavKey>(
+    requestedSectionIsAvailable && requestedSection ? requestedSection : defaultSection,
+  );
 
   // Quick Sale access application status (invitation_requests) for buyers / non-investors
   const { data: invitationRequestStatus = "none" } = useQuery<"none" | "pending" | "approved" | "rejected">({
@@ -134,8 +141,8 @@ export default function Dashboard() {
   }, [role, bioType, activeSection, navItems, sectionNavItems]);
 
   useEffect(() => {
-    if (!section) return;
-    const routeSection = section as NavKey;
+    if (!requestedSection) return;
+    const routeSection = requestedSection;
     if (routeSection === "settings" && activeSection !== "settings") {
       setActiveSection("settings");
       return;
@@ -144,7 +151,7 @@ export default function Dashboard() {
     if (routeSectionIsAvailable && activeSection !== routeSection) {
       setActiveSection(routeSection);
     }
-  }, [activeSection, section, sectionNavItems]);
+  }, [activeSection, requestedSection, sectionNavItems]);
 
   const { data: myListings = [] } = useMyListings();
   const { data: favorites = [], isLoading: favLoading } = useFavorites();

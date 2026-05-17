@@ -18,7 +18,7 @@
  */
 import { test, expect, type Page, type Browser, type BrowserContext } from "@playwright/test";
 import { getBaseURL } from "./helpers/baseURL";
-import { demoAccounts, demoPasswords } from "./helpers/demoAccounts";
+import { demoAccounts, demoPasswords, seededDemoAccountsEnabled } from "./helpers/demoAccounts";
 
 // ---------------------------------------------------------------------------
 // Credentials
@@ -32,6 +32,7 @@ const DEV_PASSWORD = demoPasswords.developerPro;
 
 const BUYER_EMAIL = demoAccounts.buyerFree;
 const BUYER_PASSWORD = demoPasswords.buyerFree;
+const hasSeededDemoAccounts = seededDemoAccountsEnabled();
 
 // ---------------------------------------------------------------------------
 // Sign-in helper
@@ -53,6 +54,7 @@ async function signIn(page: Page, email: string, password: string): Promise<void
 // ---------------------------------------------------------------------------
 
 test.describe("Agent Pro — sign-in and dashboard", () => {
+  test.skip(!hasSeededDemoAccounts, "Seeded demo accounts require real Supabase config");
   // 1. Basic sign-in check
   test("agent.pro signs in and reaches dashboard", async ({ page }) => {
     await signIn(page, AGENT_EMAIL, AGENT_PASSWORD);
@@ -134,6 +136,7 @@ test.describe("Agent Pro — sign-in and dashboard", () => {
 // ---------------------------------------------------------------------------
 
 test.describe("Developer Pro — sign-in, dashboard, and new-building form", () => {
+  test.skip(!hasSeededDemoAccounts, "Seeded demo accounts require real Supabase config");
   // 6. Basic sign-in check
   test("developer.pro signs in and reaches dashboard", async ({ page }) => {
     await signIn(page, DEV_EMAIL, DEV_PASSWORD);
@@ -189,6 +192,7 @@ test.describe("Developer Pro — sign-in, dashboard, and new-building form", () 
 // ---------------------------------------------------------------------------
 
 test.describe("Cross-user — Agent and Buyer simultaneously", () => {
+  test.skip(!hasSeededDemoAccounts, "Seeded demo accounts require real Supabase config");
   // 10. Agent goes to /dashboard while Buyer browses /listings — both render
   test("agent and buyer sign in simultaneously — buyer sees listings grid", async ({ browser }: { browser: Browser }) => {
     let agentCtx: BrowserContext | null = null;
@@ -246,6 +250,7 @@ test.describe("Cross-user — Agent and Buyer simultaneously", () => {
 });
 
 test.describe("Cross-user — Developer and Buyer simultaneously", () => {
+  test.skip(!hasSeededDemoAccounts, "Seeded demo accounts require real Supabase config");
   // 11. Developer browses /projects or /dashboard while Buyer browses /auctions or /listings
   test("developer and buyer sign in simultaneously — both pages render without errors", async ({ browser }: { browser: Browser }) => {
     let devCtx: BrowserContext | null = null;

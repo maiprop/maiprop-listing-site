@@ -3,18 +3,66 @@ import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { jsonResponse } from "../_shared/response.ts";
 import { getStripeMode } from "../_shared/stripeMode.ts";
 
+type CheckStatus = "ok" | "fail" | "mock";
+type HealthChecks = Record<string, CheckStatus>;
+
+const getBearerToken = (req: Request): string | null => {
+  const authHeader = req.headers.get("Authorization");
+  const match = authHeader?.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || null;
+};
+
+const hasMonitorSecret = (req: Request): boolean => {
+  const secret = Deno.env.get("HEALTHZ_MONITOR_SECRET");
+  if (!secret) return false;
+
+  const suppliedSecret = req.headers.get("x-healthz-monitor-secret") ??
+    getBearerToken(req);
+  return suppliedSecret === secret;
+};
+
+const isAuthorizedAdmin = async (
+  req: Request,
+  url: string | undefined,
+  serviceRoleKey: string | undefined,
+): Promise<boolean> => {
+  const token = getBearerToken(req);
+  if (!token || !url || !serviceRoleKey) return false;
+  if (Deno.env.get("HEALTHZ_MONITOR_SECRET") === token) return false;
+
+  try {
+    const sb = createClient(url, serviceRoleKey, {
+      auth: { persistSession: false },
+    });
+    const { data: authData, error: authError } = await sb.auth.getUser(token);
+    const userId = authData.user?.id;
+    if (authError || !userId) return false;
+
+    const { data, error } = await sb
+      .from("profiles")
+      .select("role, is_platform_admin")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error) return false;
+
+    return data?.role === "admin" || data?.is_platform_admin === true;
+  } catch {
+    return false;
+  }
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return handleCors(req) ?? new Response("ok");
   const headers = getCorsHeaders(req);
 
-  const checks: Record<string, "ok" | "fail" | "mock"> = {};
+  const checks: HealthChecks = {};
   let allOk = true;
   const billingMode = getStripeMode();
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
   // 1. Database connectivity
   try {
-    const url = Deno.env.get("SUPABASE_URL");
-    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!url || !key) throw new Error("Missing env");
     const sb = createClient(url, key);
     const { error } = await sb.from("profiles").select("user_id").limit(1);
@@ -32,7 +80,10 @@ Deno.serve(async (req) => {
 
   // 3. Integrations. Billing is a release-critical dependency: a missing
   // Stripe secret should degrade health instead of hiding behind "healthy".
-  checks.openai = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("OPENAI_API_KEY") ? "ok" : "fail";
+  checks.openai =
+    Deno.env.get("GEMINI_API_KEY") || Deno.env.get("OPENAI_API_KEY")
+      ? "ok"
+      : "fail";
   checks.stripe = billingMode === "mock"
     ? "mock"
     : Deno.env.get("STRIPE_SECRET_KEY") && Deno.env.get("STRIPE_WEBHOOK_SECRET")
@@ -43,13 +94,17 @@ Deno.serve(async (req) => {
   if (checks.stripe === "fail") allOk = false;
 
   const status = allOk ? 200 : 503;
+  const basePayload = {
+    status: allOk ? "healthy" : "degraded",
+    timestamp: new Date().toISOString(),
+  };
+  const detailed = hasMonitorSecret(req) ||
+    await isAuthorizedAdmin(req, url, key);
+
   return jsonResponse(
-    {
-      status: allOk ? "healthy" : "degraded",
-      billing_mode: billingMode,
-      checks,
-      timestamp: new Date().toISOString(),
-    },
+    detailed
+      ? { ...basePayload, billing_mode: billingMode, checks }
+      : basePayload,
     status,
     headers,
   );

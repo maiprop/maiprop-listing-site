@@ -5,6 +5,10 @@
 -- profile must stop looking like an incomplete buyer onboarding row; otherwise
 -- ProtectedRoute redirects eligible investors back to /onboarding.
 
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS participant_type TEXT
+  CHECK (participant_type IN ('buyer','seller','agent','developer','professional','investor','institutional'));
+
 CREATE OR REPLACE FUNCTION public.sync_profile_role_from_investor_subscription()
 RETURNS trigger
 LANGUAGE plpgsql

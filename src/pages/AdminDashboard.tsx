@@ -8,27 +8,27 @@ import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { Shield, Flame, Users, Wifi, SlidersHorizontal, ArrowLeft, DoorOpen, FolderKanban, MailPlus, FileText, Star, BadgeCheck, Wallet } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
-import AdminFiresalePipeline from "@/components/AdminFiresalePipeline";
-import AdminInvestorScreening from "@/components/AdminInvestorScreening";
-import AdminSubscribers from "@/components/AdminSubscribers";
-import AdminPanel from "@/components/AdminPanel";
-import { AdminPricingContent } from "@/pages/AdminPricing";
-import OpenHouseDashboardSection from "@/components/OpenHouseDashboardSection";
-import AdminInvitationRequests from "@/components/AdminInvitationRequests";
-import AdminFeaturedListings from "@/components/AdminFeaturedListings";
-import { AdminProfessionalVerification } from "@/components/AdminProfessionalVerification";
-import { POFVerificationPanel } from "@/components/POFVerificationPanel";
 import { useMyListings } from "@/hooks/useListings";
 import { Button } from "@/components/ui/button";
 
 type AdminTab = "pipeline" | "investor-screening" | "subscribers" | "pricing" | "os-sync" | "open-houses" | "reports" | "invitations" | "featured" | "pro-verification" | "pof-review";
 
 const VALID_TABS = ["pipeline", "investor-screening", "subscribers", "pricing", "os-sync", "open-houses", "reports", "invitations", "featured", "pro-verification", "pof-review"];
+const AdminFiresalePipeline = lazy(() => import("@/components/AdminFiresalePipeline"));
+const AdminInvestorScreening = lazy(() => import("@/components/AdminInvestorScreening"));
+const AdminSubscribers = lazy(() => import("@/components/AdminSubscribers"));
+const AdminPanel = lazy(() => import("@/components/AdminPanel"));
+const AdminPricingContent = lazy(() => import("@/pages/AdminPricing").then((m) => ({ default: m.AdminPricingContent })));
+const OpenHouseDashboardSection = lazy(() => import("@/components/OpenHouseDashboardSection"));
+const AdminInvitationRequests = lazy(() => import("@/components/AdminInvitationRequests"));
+const AdminFeaturedListings = lazy(() => import("@/components/AdminFeaturedListings"));
+const AdminProfessionalVerification = lazy(() => import("@/components/AdminProfessionalVerification").then((m) => ({ default: m.AdminProfessionalVerification })));
+const POFVerificationPanel = lazy(() => import("@/components/POFVerificationPanel").then((m) => ({ default: m.POFVerificationPanel })));
 const AdminReports = lazy(() => import("@/components/AdminReports"));
 
 function AdminTabFallback() {
   return (
-    <div className="rounded-lg border border-border bg-card p-8 text-sm text-muted-foreground">
+    <div className="min-h-[560px] rounded-lg border border-border bg-card p-8 text-sm text-muted-foreground">
       Loading...
     </div>
   );
@@ -106,6 +106,8 @@ export default function AdminDashboard() {
             ))}
           </div>
 
+          <div className="min-h-[560px]">
+          <Suspense fallback={<AdminTabFallback />}>
           {activeTab === "pipeline" && <AdminFiresalePipeline />}
           {activeTab === "investor-screening" && <AdminInvestorScreening />}
           {activeTab === "open-houses" && (
@@ -123,14 +125,12 @@ export default function AdminDashboard() {
           {activeTab === "pricing" && <AdminPricingContent embed />}
           {activeTab === "os-sync" && <AdminPanel />}
           {activeTab === "invitations" && <AdminInvitationRequests />}
-          {activeTab === "reports" && (
-            <Suspense fallback={<AdminTabFallback />}>
-              <AdminReports />
-            </Suspense>
-          )}
+          {activeTab === "reports" && <AdminReports />}
           {activeTab === "featured" && <AdminFeaturedListings />}
           {activeTab === "pro-verification" && <AdminProfessionalVerification />}
           {activeTab === "pof-review" && <POFVerificationPanel />}
+          </Suspense>
+          </div>
         </div>
       </div>
       <Footer />

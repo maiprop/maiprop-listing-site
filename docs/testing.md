@@ -9,7 +9,7 @@
 | **Playwright** | E2E browser tests | `npm run test:e2e` |
 | **Deno test** | Edge-function tests | `npm run test:deno` |
 
-## Current coverage baseline (2026-05-14)
+## Current coverage baseline (2026-05-16)
 
 | Metric | Current | Threshold | Target Q3 | Target Q4 |
 |--------|---------|-----------|-----------|-----------|
@@ -35,7 +35,31 @@ that coverage was measured, that every audited runtime file has at least one
 executed line, and that remaining low-coverage files are visible in the
 inventory for prioritization.
 
+The audit inventory is a coverage floor, not mathematical line/function proof.
+"Top-grade" for this product means every revenue, trust, role, and data-mutation
+path below has explicit happy-path, denial-path, and regression tests even when
+the global coverage percentages are already above threshold.
+
 Ranked by business impact:
+
+### Current P0 contract
+
+- Checkout and webhook entitlement mapping: plan key, audience, Stripe product
+  ID, role mismatch denial, invite-only denial, and subscription cancellation.
+- Role switching and onboarding: buyer/seller/agent/developer/professional
+  self-service, investor/institutional denial, in-progress sentinel recovery,
+  and route redirect behavior.
+- Open-house registration and offer flow: contact/ID consent, slot capacity,
+  owner approval, proof-of-funds controls, direct insert/update denial, and
+  concurrent capacity races.
+- Firesale submission and investor reservation: KAEK/format validation,
+  proof upload policy, active subscription requirement, and duplicate
+  reservation races.
+- Professional directory monetization: free users see contact details only;
+  Pro-only actions are denied and tested at UI and server/data boundaries.
+- AI quota and parsing: signed-in access, free cap of 5 where applicable,
+  provider quota failure, invalid JSON fallback, and no paid provider call when
+  quota reservation fails.
 
 ### P0 — Revenue / trust paths
 - `src/pages/PropertyDetail.tsx` (has partial coverage — extend)
@@ -52,7 +76,9 @@ Ranked by business impact:
 - `src/pages/ProfessionalProfile.tsx`
 
 ### P2 — Dashboard tabs
-- `src/pages/dashboard/*Tab.tsx` (9 files, all 0%)
+- `src/pages/dashboard/*Tab.tsx`: keep smoke coverage, then add behavior tests
+  for write actions, empty/error states, and role-specific visibility. Do not
+  treat smoke coverage as proof that a tab's business workflow is safe.
 
 ## Large-file decomposition roadmap
 

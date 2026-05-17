@@ -48,6 +48,7 @@ const fetchStub = vi.fn().mockRejectedValue(new Error("network-disabled-in-tests
 vi.stubGlobal("fetch", fetchStub);
 
 import { FiresaleQuickSaleForm } from "@/components/firesale/FiresaleQuickSaleForm";
+import { isValidKaek, normalizeKaek, toFiresalePropertyType } from "@/lib/firesaleValidation";
 
 beforeEach(() => {
   useAuthMock.mockReset();
@@ -70,6 +71,16 @@ beforeEach(() => {
 });
 
 describe("FiresaleQuickSaleForm", () => {
+  it("keeps KAEK and property-type helpers aligned with Greek cadastral and DB formats", () => {
+    expect(normalizeKaek(" 050240601001 // 0 / 1 abc ")).toBe("050240601001/0/1");
+    expect(isValidKaek("050240601001")).toBe(true);
+    expect(isValidKaek("050240601001/0/1")).toBe(true);
+    expect(isValidKaek("2222222222222222222222")).toBe(false);
+    expect(toFiresalePropertyType("commercial_shop")).toBe("commercial");
+    expect(toFiresalePropertyType("apartment")).toBe("apartment");
+    expect(toFiresalePropertyType("garage")).toBeNull();
+  });
+
   it("renders the step-1 form header + step indicator", () => {
     render(<FiresaleQuickSaleForm />);
     expect(screen.getByText(/Get Your Instant Cash Offer/i)).toBeInTheDocument();
@@ -107,10 +118,12 @@ describe("FiresaleQuickSaleForm", () => {
     expect(navigateMock).toHaveBeenCalledWith("/signup?type=seller");
   });
 
-  it("the primary 'Get AI Estimate & Continue' button is disabled until step 1 is valid", () => {
+  it("the primary 'Get AI Estimate & Continue' button stays clickable and surfaces validation errors", () => {
     render(<FiresaleQuickSaleForm />);
     const btn = screen.getByRole("button", { name: /Get AI Estimate/i });
-    expect(btn).toBeDisabled();
+    expect(btn).not.toBeDisabled();
+    fireEvent.click(btn);
+    expect(toastMock.error).toHaveBeenCalledWith("Please enter a full address (min 5 characters).");
   });
 
   it("updates controlled state as the user fills in the address + KAEK + property type + sqm/price/year", () => {
@@ -140,6 +153,29 @@ describe("FiresaleQuickSaleForm", () => {
     expect(year.value).toBe("2010");
   });
 
+  it("normalizes KAEK input and rejects values that do not match Greek cadastral format", () => {
+    render(<FiresaleQuickSaleForm />);
+    const kaek = screen.getByPlaceholderText(/050240601001/i) as HTMLInputElement;
+
+    fireEvent.change(kaek, { target: { value: " 050240601001 // 0 / 1 abc " } });
+    expect(kaek.value).toBe("050240601001/0/1");
+
+    fireEvent.change(screen.getByPlaceholderText(/Kifisia, Dekelia/i), {
+      target: { value: "Kolonaki 12, Athens" },
+    });
+    fireEvent.change(kaek, { target: { value: "222222222222222222222222" } });
+    fireEvent.change(document.querySelector("select")!, { target: { value: "apartment" } });
+    fireEvent.change(screen.getByPlaceholderText(/^e\.g\. 120$/i), { target: { value: "95" } });
+    fireEvent.change(screen.getByPlaceholderText(/Your target/i), { target: { value: "350000" } });
+    fireEvent.change(screen.getByPlaceholderText(/^e\.g\. 1998$/i), { target: { value: "2010" } });
+    fireEvent.change(screen.getByPlaceholderText(/Legal issues, urgent timeline/i), {
+      target: { value: "all ok" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Get AI Estimate/i }));
+    expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/KAEK must be 12 digits/i));
+  });
+
   it("debounces Nominatim autocomplete when the address ≥ 3 chars, and clears when < 3", async () => {
     vi.useFakeTimers();
     try {
@@ -166,8 +202,8 @@ describe("FiresaleQuickSaleForm", () => {
     expect(fileInput).toBeTruthy();
     // Simulate an empty FileList — the handler should skip cleanly.
     fireEvent.change(fileInput, { target: { files: [] } });
-    // Continue button still disabled — no photos selected.
-    expect(screen.getByRole("button", { name: /Get AI Estimate/i })).toBeDisabled();
+    // Continue stays clickable so validation can explain exactly what is missing.
+    expect(screen.getByRole("button", { name: /Get AI Estimate/i })).not.toBeDisabled();
   });
 
   it("filters out invalid file types + warns, then renders previews for the survivors", () => {

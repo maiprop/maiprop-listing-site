@@ -73,8 +73,10 @@ Deno.serve(async (req) => {
     );
   }
 
-  // Pro subscription gate — enrichment is a Pro-only feature
-  const proCheck = await requireProSubscription(user.id, corsHeaders);
+  // Pro subscription gate - auction enrichment is an investor/institutional feature.
+  const proCheck = await requireProSubscription(user.id, corsHeaders, {
+    audience: ["investor", "institutional"],
+  });
   if (proCheck.errorResponse) return proCheck.errorResponse;
 
   try {

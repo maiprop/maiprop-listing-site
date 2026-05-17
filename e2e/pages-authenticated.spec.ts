@@ -11,11 +11,12 @@
  * Demo accounts (password: Demo2025!) are seeded via scripts/seed-demo-accounts.ts.
  */
 import { test, expect, type Page } from "@playwright/test";
+import { seededDemoAccountsEnabled } from "./helpers/demoAccounts";
 
 // Default to the most reliable seeded demo buyer account so credentialed tests run without env vars.
 const TEST_EMAIL = process.env.E2E_TEST_EMAIL ?? "buyer.free@maiprop.demo";
 const TEST_PASSWORD = process.env.E2E_TEST_PASSWORD ?? "Demo2025!";
-const hasCredentials = TEST_EMAIL !== "" && TEST_PASSWORD !== "";
+const hasCredentials = TEST_EMAIL !== "" && TEST_PASSWORD !== "" && seededDemoAccountsEnabled();
 
 /** Helper: sign in and wait for the dashboard or onboarding redirect. */
 async function signIn(page: Page): Promise<void> {

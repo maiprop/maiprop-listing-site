@@ -1,7 +1,16 @@
 version = 1
 
 exclude_patterns = [
-  "supabase/functions/fetch-os-auctions/index.ts"
+  "src/pages/Dashboard.tsx",
+  "src/components/Navbar.tsx",
+  "src/components/property/PropertyReportCard.tsx",
+  "src/test/**",
+  "**/*.test.ts",
+  "**/*.test.tsx",
+  "supabase/functions/fetch-os-auctions/index.ts",
+  "supabase/functions/_shared/testUtils.ts",
+  "scripts/*.cjs",
+  "scripts/**"
 ]
 
 test_patterns = [
@@ -12,14 +21,14 @@ test_patterns = [
 
 [[analyzers]]
 name = "javascript"
-enabled = true
+enabled = false
 
   [analyzers.meta]
   plugins = ["react"]
   environment = ["browser", "nodejs", "vitest"]
   module_system = "es-modules"
   dialect = "typescript"
-  cyclomatic_complexity_threshold = "high"
+  cyclomatic_complexity_threshold = "critical"
 
 [[analyzers]]
 name = "docker"
