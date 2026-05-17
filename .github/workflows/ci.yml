@@ -744,8 +744,52 @@ jobs:
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect Supabase staging deployment changes
+        id: supabase_changes
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            echo "Manual run: Supabase staging deploy enabled."
+            exit 0
+          fi
+
+          base="${{ github.event.before }}"
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            base="$(git rev-list --max-parents=0 HEAD)"
+          fi
+
+          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=50 origin "${{ github.ref_name }}" || true
+          fi
+
+          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "::warning::Could not inspect the previous commit; enabling Supabase staging deploy."
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed_files="$(git diff --name-only "$base" "${{ github.sha }}" || true)"
+          echo "$changed_files"
+
+          if grep -Eq '^(supabase/|deno\.json|deno\.lock)$' <<< "$changed_files"; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            echo "Supabase changes detected: staging deploy enabled."
+          else
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "No Supabase DB/function changes detected: staging deploy skipped."
+          fi
+
+      - name: Skip Supabase staging deploy
+        if: steps.supabase_changes.outputs.deploy != 'true'
+        run: echo "No Supabase migration/function changes in this push; skipping staging deploy."
 
       - name: Validate required staging secrets
+        if: steps.supabase_changes.outputs.deploy == 'true'
         run: |
           required=(
             "STAGING_SUPABASE_PROJECT_ID"
@@ -768,39 +812,46 @@ jobs:
           SUPABASE_ACCESS_TOKEN:       ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        if: steps.supabase_changes.outputs.deploy == 'true'
         with:
           node-version-file: .node-version
           cache: npm
 
       - name: Check runtime
+        if: steps.supabase_changes.outputs.deploy == 'true'
         run: npm run check:runtime
 
       - name: Install dependencies
+        if: steps.supabase_changes.outputs.deploy == 'true'
         run: npm ci
 
       - name: Setup Supabase CLI
+        if: steps.supabase_changes.outputs.deploy == 'true'
         uses: supabase/setup-cli@b60b5899c73b63a2d2d651b1e90db8d4c9392f51 # v1.6.0
         with:
           version: 2.98.1
 
       - name: Dry-run staging database migrations
+        if: steps.supabase_changes.outputs.deploy == 'true'
         run: supabase db push --db-url "$SUPABASE_STAGING_DB_URL" --dry-run
         env:
           SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
 
       - name: Apply database migrations to staging
+        if: steps.supabase_changes.outputs.deploy == 'true'
         run: supabase db push --db-url "$SUPABASE_STAGING_DB_URL" --yes
         env:
           SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
 
       - name: Capture staging live function drift inventory
+        if: steps.supabase_changes.outputs.deploy == 'true'
         run: npm run check:release-safety -- --live-functions --out release-safety-staging-live-functions.json
         env:
           SUPABASE_ACCESS_TOKEN:                 ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           RELEASE_SAFETY_SUPABASE_PROJECT_REF:   ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
 
       - name: Upload staging live drift inventory
-        if: always()
+        if: always() && steps.supabase_changes.outputs.deploy == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-safety-staging-live-functions
@@ -809,6 +860,7 @@ jobs:
           retention-days: 14
 
       - name: Deploy edge functions to staging
+        if: steps.supabase_changes.outputs.deploy == 'true'
         run: |
           supabase functions deploy \
             --project-ref "$STAGING_SUPABASE_PROJECT_ID"
