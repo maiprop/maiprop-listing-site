@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.8.1](https://github.com/maiprop/maiprop-listing-site/compare/v1.8.0...v1.8.1) (2026-05-17)
+
+
+### Bug Fixes
+
+* align SEO listings filters with route intent ([c79f72c](https://github.com/maiprop/maiprop-listing-site/commit/c79f72c894cf7bc52d552dde27189c237a917e0d))
+* allow staging edge deploy without db url ([7630929](https://github.com/maiprop/maiprop-listing-site/commit/76309298e66670ea2993b6db94da8d77c0a5471a))
+* harden release SEO and staging gates ([5b396fc](https://github.com/maiprop/maiprop-listing-site/commit/5b396fcab5d9d3ad9e2e14d862ca86f6ecabeb70))
+* recover AI modules from provider and chunk failures ([aa716d3](https://github.com/maiprop/maiprop-listing-site/commit/aa716d3a8fca1742d270dd80205b69f14e49a55a))
+* recover from stale chunk loads ([928102b](https://github.com/maiprop/maiprop-listing-site/commit/928102b164dc2a96204ada52ae8933a0da859c1c))
+
 ## [1.8.0](https://github.com/maiprop/maiprop-listing-site/compare/v1.7.0...v1.8.0) (2026-05-17)
 
 
