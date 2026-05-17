@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useModal } from "@/hooks/useModal";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
-  MapPin, Bed, Bath, Square, Calendar, ChevronLeft, ChevronRight, Eye, Zap,
+  MapPin, Bed, Bath, Square, Calendar, ChevronLeft, ChevronRight, Eye,
   Pencil, Pause, Play, Trash2, Loader2, MessageCircle, Euro, Users, LayoutDashboard,
   Home, Wrench, Lock, ExternalLink, Heart, Share2, Layers, Thermometer, Building2,
   Check,
@@ -23,21 +23,23 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useFavorites, useToggleFavorite } from "@/hooks/useFavorites";
 import { useOpenHouseSettings, useOpenHouseRegistrations, useOpenHouseOffers } from "@/hooks/useOpenHouseAssetControl";
 import { useStartConversation } from "@/hooks/useMessages";
-import { supabase } from "@/integrations/supabase/client";
+import { useSubscription } from "@/hooks/useSubscription";
 import { toast } from "sonner";
 import { HEATING_TYPES, CONDITION_OPTIONS } from "@/lib/filterConfig";
 import { getStreetViewProxyUrl } from "@/lib/config";
-import { formatPrice } from "@/lib/format";
 import { Section, SectionHeader, FeatureSection } from "@/components/property/DetailPrimitives";
 import { buildPropertyFeatureGroups, buildDetailRows } from "@/lib/propertyFeatures";
 import { PropertyDetailsAndEnergy } from "@/components/property/PropertyDetailsAndEnergy";
 import { PropertyDescriptionSection } from "@/components/property/PropertyDescriptionSection";
+import { PropertyAIInsightsSection } from "@/components/property/PropertyAIInsightsSection";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
 
 export default function OpenHouseDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { isPro } = useSubscription();
   const { data: listing, isLoading } = useListing(id || "");
   const trackView = useTrackListingView();
   const updateListing = useUpdateListing();
@@ -55,15 +57,13 @@ export default function OpenHouseDetail() {
   const hasAssetControl = !!assetSettings;
   const startConversation = useStartConversation();
 
-  const [aiInsightsData, setAiInsightsData] = useState<{ vsMarket: number; rentalYield: number; estimatedValue: number; marketComparison: string; confidenceLabel: string } | null>(null);
-  const [aiInsightsLoading, setAiInsightsLoading] = useState(false);
-
   useEffect(() => {
     if (id && listing) trackView.mutate(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, !!listing]);
 
   const db = listing as ListingWithJoins;
+  const { aiInsightsData, aiInsightsLoading } = usePropertyAIInsights(db, user, id, isPro);
   const myReg = registrations.find(r => r.requester_id === user?.id);
   const myOffer = offers.find(o => o.bidder_id === user?.id);
   const isOwner = !!(user?.id && db?.owner_id === user.id);
@@ -96,39 +96,6 @@ export default function OpenHouseDetail() {
       toast.error("Could not start conversation");
     }
   };
-
-  useEffect(() => {
-    if (!db || !user) return;
-    setAiInsightsLoading(true);
-    supabase.functions.invoke("property-valuation", {
-      body: {
-        title: db.title,
-        city: db.city,
-        address: db.address,
-        price: Number(db.price),
-        sqm: Number(db.sqm),
-        bedrooms: db.bedrooms,
-        bathrooms: db.bathrooms,
-        propertyType: db.property_type,
-        listingType: "sale",
-        floor: db.floor,
-        yearBuilt: db.year_built,
-        energyClass: db.energy_class,
-        pricePerSqm: db.price_per_sqm ? Number(db.price_per_sqm) : undefined,
-      },
-    }).then(({ data }) => {
-      if (data && !data.error) {
-        setAiInsightsData({
-          vsMarket: data.marketComparisonPct ?? 0,
-          rentalYield: data.rentalYieldEstimate ?? 0,
-          estimatedValue: data.estimatedValue ?? Number(db.price),
-          marketComparison: data.marketComparison ?? "at_market",
-          confidenceLabel: data.confidenceLabel ?? "Medium",
-        });
-      }
-    }).finally(() => setAiInsightsLoading(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [db?.id, user]);
 
   useEffect(() => {
     // Redirect if not an open house listing
@@ -370,47 +337,12 @@ export default function OpenHouseDetail() {
                 </Section>
               )}
 
-              {/* AI Market Insights */}
-              <Section>
-                <SectionHeader icon={Zap} title="AI Market Insights" badge={
-                  <span className="text-[10px] text-muted-foreground">Powered by mAI Prop OS</span>
-                } />
-                <div className="p-5">
-                  {aiInsightsLoading && <div className="flex justify-center py-6"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>}
-                  {!aiInsightsLoading && aiInsightsData && (() => {
-                    const cmpCfg: Record<string, { label: string; color: string; bg: string }> = {
-                      below_market: { label: "Below Market", color: "text-emerald-400", bg: "bg-emerald-400/10 border-emerald-400/20" },
-                      at_market:    { label: "At Market",    color: "text-yellow-400",  bg: "bg-yellow-400/10 border-yellow-400/20" },
-                      above_market: { label: "Above Market", color: "text-destructive",  bg: "bg-destructive/10 border-destructive/20" },
-                    };
-                    const cmp = cmpCfg[aiInsightsData.marketComparison] ?? cmpCfg.at_market;
-                    return (
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className={`rounded-xl border p-4 flex flex-col gap-1 ${cmp.bg}`}>
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">vs Market</p>
-                          <span className={`font-display font-black text-3xl ${cmp.color}`}>
-                            {aiInsightsData.vsMarket > 0 ? "+" : ""}{aiInsightsData.vsMarket}%
-                          </span>
-                          <p className={`text-[10px] font-semibold ${cmp.color}`}>{cmp.label}</p>
-                        </div>
-                        <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Rental Yield</p>
-                          <span className="font-display font-black text-3xl text-primary">{aiInsightsData.rentalYield}%</span>
-                          <p className="text-[10px] text-muted-foreground">Est. gross annual yield</p>
-                        </div>
-                        <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">AI Estimate</p>
-                          <span className="font-display font-black text-3xl text-foreground">
-                            {formatPrice(aiInsightsData.estimatedValue)}
-                          </span>
-                          <p className="text-[10px] text-muted-foreground">Confidence: {aiInsightsData.confidenceLabel}</p>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                  {user && !aiInsightsLoading && !aiInsightsData && <p className="text-xs text-muted-foreground text-center py-4">Market analysis unavailable</p>}
-                </div>
-              </Section>
+              <PropertyAIInsightsSection
+                user={user}
+                isPro={isPro}
+                loading={aiInsightsLoading}
+                data={aiInsightsData}
+              />
 
               {/* Description */}
               <PropertyDescriptionSection description={db.description} />
