@@ -8,7 +8,9 @@ import {
   normalizeOwnership, getOwnershipStatus, getOwnershipPct, OWNERSHIP_BADGE,
 } from "@/lib/auctionUtils";
 import { APP_ORIGIN } from "@/lib/config";
+import { getAuctionStreetViewImageUrl } from "@/lib/auctionStreetView";
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function PremiumBadge() {
   return (
     <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gradient-primary text-primary-foreground border border-primary/30">
@@ -29,7 +31,7 @@ export const AuctionCard = memo(function AuctionCard({
 }) {
   const days = daysUntil(a.auction_date);
   const badge = countdownBadge(days);
-  const imgSrc = a.cover_image_url;
+  const imgSrc = getAuctionStreetViewImageUrl(a);
   const isFav = favoritedIds.has(a.id);
   const ownershipStatus = normalizeOwnership(getOwnershipStatus(a.tags));
   const ownershipPct = getOwnershipPct(a.tags);

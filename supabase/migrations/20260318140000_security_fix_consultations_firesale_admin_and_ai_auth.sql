@@ -162,20 +162,6 @@ ON CONFLICT (id) DO NOTHING;
 -- 3) has_platform_admin(): support both role='admin' and legacy is_platform_admin
 -- ──────────────────────────────────────────────────────────────────────────────
 
--- Ensure 'admin' value exists on the user_role enum. The dedicated migration
--- 20260413115500_add_admin_enum.sql runs later; on fresh installs this
--- function body would otherwise fail to parse the 'admin'::public.user_role cast.
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_enum e
-    JOIN pg_type t ON e.enumtypid = t.oid
-    WHERE t.typname = 'user_role' AND e.enumlabel = 'admin'
-  ) THEN
-    ALTER TYPE public.user_role ADD VALUE 'admin';
-  END IF;
-END $$;
-
 CREATE OR REPLACE FUNCTION public.has_platform_admin(_user_id uuid DEFAULT auth.uid())
 RETURNS boolean
 LANGUAGE sql
@@ -184,7 +170,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
   SELECT COALESCE(
-    (SELECT (role = 'admin'::public.user_role) OR COALESCE(is_platform_admin, false)
+    (SELECT (role::text = 'admin') OR COALESCE(is_platform_admin, false)
      FROM public.profiles
      WHERE user_id = _user_id
      LIMIT 1),

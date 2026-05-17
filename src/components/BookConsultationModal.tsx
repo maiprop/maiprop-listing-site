@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { Calendar, Clock, CheckCircle2, Loader2, Euro, Briefcase, Video, Users, ChevronRight } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubmitConsultation } from "@/hooks/useConsultations";
@@ -217,6 +217,9 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
             <Calendar className="w-5 h-5 text-primary" />
             {done ? "Consultation Request Sent" : `Book with ${firstName}`}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Select a professional service, preferred time, and contact details for a consultation request.
+          </DialogDescription>
         </DialogHeader>
 
         {done ? (

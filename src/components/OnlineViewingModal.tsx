@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Video, CheckCircle2, Loader2, MapPin, Wifi } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBookViewing } from "@/hooks/useViewings";
@@ -136,6 +136,9 @@ const OnlineViewingModal = ({ open, onClose, listing, professional }: OnlineView
             <Video className="w-5 h-5 text-primary" />
             {done ? "Video Request Sent" : "Request a Video Viewing"}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Choose a date, time, and preferred platform for a video viewing request.
+          </DialogDescription>
         </DialogHeader>
 
         {done ? (

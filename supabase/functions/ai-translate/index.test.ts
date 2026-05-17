@@ -84,7 +84,7 @@ Deno.test("translation parse failures do not expose raw model output", async () 
     }
     if (url.includes("generativelanguage.googleapis.com") || url.includes("api.openai.com")) {
       return Promise.resolve(new Response(JSON.stringify({
-        choices: [{ message: { content: "not-json-secret-fragment" } }],
+        choices: [{ message: { content: "not-json-response-fragment" } }],
       }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -97,7 +97,7 @@ Deno.test("translation parse failures do not expose raw model output", async () 
     const res = await handler(req("POST", {
       locale: "fr",
       strings: { "nav.home": "Home" },
-    }, { authorization: "Bearer fake-token" }));
+    }, { authorization: `Bearer ${crypto.randomUUID()}` }));
     assertEquals(res.status, 502);
     const body = await res.json();
     assertEquals(body.error, "Translation parsing failed");

@@ -129,7 +129,7 @@ export default function Signup() {
                 <div className="text-center mb-6">
                   <img
                     src={logoImg}
-                    alt="maiProp"
+                    alt="mAI prop"
                     className="h-9 w-auto object-contain mx-auto mb-3"
                   />
                   <h1 className="font-display font-bold text-xl">{t("auth.signup.title")}</h1>

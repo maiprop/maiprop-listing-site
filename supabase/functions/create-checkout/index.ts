@@ -11,6 +11,7 @@ import {
   isStripeMockMode,
   withMockBillingParams,
 } from "../_shared/stripeMode.ts";
+import { getProfilePricingAudience } from "../_shared/entitlements.ts";
 
 const log = createLogger("create-checkout");
 const limiter = makeRateLimiter({
@@ -101,7 +102,9 @@ export const sanitizeRedirectPath = (raw: unknown): string | null => {
 type PricingConfigRow = {
   key?: string | null;
   audience?: string | null;
+  module?: string | null;
   unit?: string | null;
+  label?: string | null;
   metadata?: {
     stripe_price_id?: string;
     stripe_price_id_monthly?: string;
@@ -122,6 +125,16 @@ type CheckoutPlan = {
   billingCycle: BillingCycle;
   productId?: string;
 };
+type CheckoutAddon = {
+  priceId: string;
+  addonKey: string;
+  audience: string;
+  module: string;
+  unit: string;
+  checkoutMode: "payment" | "subscription";
+  label?: string;
+  productId?: string;
+};
 type CheckoutProfileRow = {
   role?: string | null;
   participant_type?: string | null;
@@ -130,6 +143,11 @@ type CheckoutProfileRow = {
 export const normalizePlanKey = (raw: unknown): string | null => {
   const plan = typeof raw === "string" && raw.trim() ? raw.trim() : "pro";
   return PLAN_KEY_RE.test(plan) ? plan : null;
+};
+
+export const normalizeExplicitCheckoutKey = (raw: unknown): string | null => {
+  const key = typeof raw === "string" && raw.trim() ? raw.trim() : null;
+  return key && PLAN_KEY_RE.test(key) ? key : null;
 };
 
 const BILLING_CYCLE_ALIASES: Record<string, BillingCycle> = {
@@ -158,6 +176,16 @@ export const isInviteOnlyCheckoutPlan = (planKey: string): boolean => {
 export const isSupportedCheckoutPlan = (planKey: string): boolean => {
   return PUBLIC_CHECKOUT_PLAN_KEYS.has(planKey) ||
     INVITE_ONLY_PLAN_KEYS.has(planKey);
+};
+
+const SELF_SERVE_ADDON_MODULES = new Set([
+  "valuation_reports",
+  "adhoc_charges",
+  "os_data_products",
+]);
+
+export const isSupportedCheckoutAddonModule = (module: string | null | undefined): boolean => {
+  return Boolean(module && SELF_SERVE_ADDON_MODULES.has(module));
 };
 
 const getConfiguredAllowedOrigins = (): string[] => {
@@ -202,29 +230,11 @@ const getPlanEntitlement = (planKey: string) => {
   return PLAN_ENTITLEMENT[planKey] ?? null;
 };
 
-const CHECKOUT_AUDIENCE_ALIASES: Record<string, string> = {
-  agent: "agent",
-  buyer: "participant",
-  developer: "developer",
-  institutional: "institutional",
-  investor: "investor",
-  participant: "participant",
-  pro: "participant",
-  professional: "professional",
-  seller: "participant",
-  user: "participant",
-};
-
-const normalizeAudience = (raw: string | null | undefined): string | null => {
-  return raw ? CHECKOUT_AUDIENCE_ALIASES[raw] ?? null : null;
-};
-
 export const isCheckoutAudienceAllowed = (
   planAudience: string,
   profile: CheckoutProfileRow | null,
 ): boolean => {
-  const profileAudience = normalizeAudience(profile?.participant_type) ??
-    normalizeAudience(profile?.role);
+  const profileAudience = getProfilePricingAudience(profile);
   return profileAudience === planAudience;
 };
 
@@ -372,11 +382,19 @@ const queryActivePricingConfig = async (
   const { data } = await ((supabase as { from: any }).from as any)(
     "pricing_configs",
   )
-    .select("key, audience, unit, metadata")
+    .select("key, audience, module, unit, label, metadata")
     .eq("key", planKey)
     .eq("is_active", true)
     .maybeSingle();
   return data as PricingConfigRow | null;
+};
+
+const queryActiveAddonConfig = async (
+  supabase: unknown,
+  addonKey: string,
+): Promise<PricingConfigRow | null> => {
+  const row = await queryActivePricingConfig(supabase, addonKey);
+  return isSupportedCheckoutAddonModule(row?.module) ? row : null;
 };
 
 const buildCheckoutPlan = (
@@ -414,7 +432,10 @@ const buildDbCheckoutPlan = ( // skipcq: JS-R1005 - Mirrors Stripe DB fallback p
   entitlement: NonNullable<ReturnType<typeof getPlanEntitlement>>,
 ): CheckoutPlan | null => {
   const stripePriceId = getDbStripePriceId(row, billingCycle);
-  const rowAudience = normalizeAudience(row?.audience ?? null);
+  const rowAudience = getProfilePricingAudience({
+    role: row?.audience ?? null,
+    participant_type: null,
+  });
   return stripePriceId && rowAudience === entitlement.audience
     ? buildCheckoutPlan(
       stripePriceId,
@@ -449,6 +470,53 @@ const getCheckoutPlan = async (
   const row = await queryActivePricingConfig(supabase, planKey);
   return buildDbCheckoutPlan(row, planKey, billingCycle, entitlement) ??
     buildFallbackCheckoutPlan(planKey, billingCycle);
+};
+
+const getAddonStripePriceId = (row: PricingConfigRow | null): string | undefined => {
+  return row?.metadata?.stripe_price_id ??
+    row?.metadata?.stripe_price_id_monthly ??
+    row?.metadata?.stripe_monthly_price_id;
+};
+
+const getCheckoutAddon = async (
+  supabase: unknown,
+  addonKey: string,
+): Promise<CheckoutAddon | null> => {
+  const row = await queryActiveAddonConfig(supabase, addonKey);
+  const priceId = getAddonStripePriceId(row);
+  const audience = getProfilePricingAudience({
+    role: row?.audience ?? null,
+    participant_type: null,
+  });
+  return priceId && row?.key && row.module && row.unit && audience
+    ? {
+      priceId,
+      addonKey: row.key,
+      audience,
+      module: row.module,
+      unit: row.unit,
+      checkoutMode: row.unit === "monthly" || row.unit === "yearly"
+        ? "subscription"
+        : "payment",
+      label: row.label ?? undefined,
+      productId: row.metadata?.stripe_product_id,
+    }
+    : null;
+};
+
+export const isCheckoutAddonAudienceAllowed = (
+  addonAudience: string,
+  addonModule: string,
+  profile: CheckoutProfileRow | null,
+): boolean => {
+  const profileAudience = getProfilePricingAudience(profile);
+  if (!profileAudience) return false;
+  if (profileAudience === addonAudience) return true;
+  // Participant add-ons cover consumer/pay-as-you-go products such as AI
+  // reports and listing boosts. They are exposed role-selectively in the UI,
+  // but server-side allow-listing keeps agents/professionals/developers from
+  // being blocked when they buy the same one-off report or boost.
+  return addonAudience === "participant" && isSupportedCheckoutAddonModule(addonModule);
 };
 
 const findOwnedStripeCustomer = async (
@@ -538,6 +606,104 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
     const body = req.method === "POST" && req.body
       ? await req.json().catch(() => ({}))
       : {};
+    const addonKey = normalizeExplicitCheckoutKey(body.addon_key ?? body.addonKey);
+    if (addonKey) {
+      const profile = await getCheckoutProfile(supabaseClient, user.id);
+      const origin = resolveCheckoutOrigin(req.headers.get("origin"));
+      if (isStripeMockMode()) {
+        const url = `${origin}${
+          withMockBillingParams(
+            sanitizeRedirectPath(body.success_url) ?? "/dashboard/billing?checkout=success",
+            { checkout: "success", addon: addonKey },
+          )
+        }`;
+        return new Response(
+          JSON.stringify({ url, mock: true, mode: "mock", addon_key: addonKey }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          },
+        );
+      }
+
+      const checkoutAddon = await getCheckoutAddon(supabaseClient, addonKey);
+      if (!checkoutAddon) {
+        return new Response(JSON.stringify({ error: "Add-on is unavailable" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 404,
+        });
+      }
+      if (!isCheckoutAddonAudienceAllowed(checkoutAddon.audience, checkoutAddon.module, profile)) {
+        log.warn("blocked cross-role add-on checkout attempt", {
+          userId: user.id,
+          addonKey,
+          addonAudience: checkoutAddon.audience,
+          profileRole: profile?.role ?? null,
+          profileParticipantType: profile?.participant_type ?? null,
+        });
+        return new Response(
+          JSON.stringify({
+            error: "This add-on is not available for your current account type.",
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 403,
+          },
+        );
+      }
+
+      const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "");
+      const customerId = await getOrCreateOwnedStripeCustomer(stripe, user);
+      const success = `${origin}${sanitizeRedirectPath(body.success_url) ?? "/dashboard/billing?checkout=success"}`;
+      const cancel = `${origin}${sanitizeRedirectPath(body.cancel_url) ?? "/dashboard/billing?checkout=cancelled"}`;
+      const redirectHash = await shortSha256(`${success}|${cancel}`);
+      const session = await stripe.checkout.sessions.create(
+        {
+          customer: customerId,
+          line_items: [{ price: checkoutAddon.priceId, quantity: 1 }],
+          mode: checkoutAddon.checkoutMode,
+          success_url: success,
+          cancel_url: cancel,
+          metadata: {
+            user_id: user.id,
+            checkout_type: "addon",
+            addon_key: checkoutAddon.addonKey,
+            audience: checkoutAddon.audience,
+            module: checkoutAddon.module,
+            unit: checkoutAddon.unit,
+            ...(checkoutAddon.productId ? { product_id: checkoutAddon.productId } : {}),
+          },
+          ...(checkoutAddon.checkoutMode === "subscription"
+            ? {
+              subscription_data: {
+                metadata: {
+                  user_id: user.id,
+                  checkout_type: "addon",
+                  addon_key: checkoutAddon.addonKey,
+                  audience: checkoutAddon.audience,
+                  module: checkoutAddon.module,
+                  unit: checkoutAddon.unit,
+                  ...(checkoutAddon.productId ? { product_id: checkoutAddon.productId } : {}),
+                },
+              },
+            }
+            : {}),
+        },
+        {
+          idempotencyKey:
+            `maiprop-addon-${user.id}-${checkoutAddon.addonKey}-${redirectHash}`,
+        },
+      );
+      logStep("Add-on checkout session created", {
+        sessionId: session.id,
+        addonKey: checkoutAddon.addonKey,
+      });
+      return new Response(JSON.stringify({ url: session.url }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
+
     const plan = normalizePlanKey(body.plan);
     if (!plan) {
       return new Response(JSON.stringify({ error: "Invalid plan" }), {
@@ -634,9 +800,7 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
       );
     }
 
-    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
-      apiVersion: "2025-08-27.basil",
-    });
+    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "");
 
     const checkoutPlan = await getCheckoutPlan(
       supabaseClient,

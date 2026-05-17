@@ -132,6 +132,8 @@ export const captureHandler = async (
     WEBHOOK_SECRET: nonSensitiveTestValue("webhook"),
     CRON_SECRET: nonSensitiveTestValue("cron"),
     MAIPROP_OS_WEBHOOK_SECRET: nonSensitiveTestValue("os-webhook"),
+    MAIPROP_EDGE_TEST_AUTH_BYPASS: "true",
+    RATE_LIMIT_FORCE_MEMORY: "true",
     ...envOverrides,
   };
   // Track keys explicitly deleted by tests so they short-circuit before

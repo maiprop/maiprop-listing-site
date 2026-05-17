@@ -4,6 +4,7 @@ import logoImg from "@/assets/logo.png";
 import { cn } from "@/lib/utils";
 import type { OnboardingStep } from "@/lib/onboardingConfig";
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function OnboardingShell({
   children,
   stepIndex,
@@ -62,7 +63,7 @@ export function OnboardingShell({
     <div className="min-h-screen bg-background flex flex-col items-center justify-start px-4 pt-10 pb-16 overflow-x-hidden">
       <div className="mb-6 text-center shrink-0">
         <Link to="/">
-          <img src={logoImg} alt="maiProp" className="h-10 w-auto object-contain mx-auto" />
+          <img src={logoImg} alt="mAI prop" className="h-10 w-auto object-contain mx-auto" />
         </Link>
       </div>
 

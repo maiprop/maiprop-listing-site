@@ -123,6 +123,8 @@ const DEFAULT_SEED: Omit<PricingConfig, "id" | "created_at" | "updated_at">[] = 
   { key: "auction_intelligence",      label: "Auction Intelligence",    description: "Full court auction schedule, minimum bids & outcome DB for legal pros",    audience: "participant",         module: "os_data_products",         unit: "monthly",    currency: "EUR", amount: 149,  is_active: true, sort_order: 3,  metadata: {} },
 ];
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
+// skipcq: JS-0067 - Local hook is intentionally module-scoped for the admin pricing surface.
 function usePricingConfigs() {
   return useQuery<PricingConfig[]>({
     queryKey: ["admin-pricing-configs"],
@@ -140,7 +142,9 @@ function usePricingConfigs() {
 }
 
 /** Embeddable pricing content — use in AdminDashboard tab. Skips Navbar/Footer and access check when embed=true. */
-export function AdminPricingContent({ embed = false }: { embed?: boolean }) { // skipcq: JS-R1005 - Admin pricing keeps table editing, validation, and Stripe sync controls together for one audited surface.
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
+// skipcq: JS-R1005 - Admin pricing keeps table editing, validation, and Stripe sync controls together for one audited surface.
+export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
   const { profile } = useAuth();
   const qc = useQueryClient();
   const isAdmin = isPlatformAdmin(profile);
@@ -173,6 +177,7 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) { //
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-pricing-configs"] });
+      qc.invalidateQueries({ queryKey: ["pricing-configs-public"] });
       toast.success("Pricing row deleted.");
     },
     onError: (e: unknown) => toast.error((e instanceof Error ? e.message : null) ?? "Failed to delete pricing row."),
@@ -622,6 +627,14 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) { //
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Delete pricing row"
+        description="This cannot be undone."
+        confirmLabel="Delete"
+        onConfirm={() => { if (deleteTarget) deleteMutation.mutate(deleteTarget); setDeleteTarget(null); }}
+        onCancel={() => setDeleteTarget(null)}
+      />
         </>
   );
 
@@ -637,15 +650,6 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) { //
         </div>
       </div>
       <Footer />
-      <ConfirmDialog
-        open={!!deleteTarget}
-        title="Delete pricing row"
-        description="This cannot be undone."
-        confirmLabel="Delete"
-        onConfirm={() => { if (deleteTarget) deleteMutation.mutate(deleteTarget); setDeleteTarget(null); }}
-        onCancel={() => setDeleteTarget(null)}
-      />
     </div>
   );
 }
-

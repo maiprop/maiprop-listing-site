@@ -136,7 +136,7 @@ execution_value = market_value MINUS transaction_friction MINUS legal_uncertaint
 `;
 
 // ── Property-type specific methodology ────────────────────────────────────────
-function getTypeInstructions(propertyType: string, listingType: string): string {
+const getTypeInstructions = (propertyType: string, listingType: string): string => {
   const isAuction = listingType === "auction";
 
   const base: Record<string, string> = {
@@ -207,16 +207,17 @@ METHODOLOGY: GENERAL PROPERTY — Comparable model with type-specific adjustment
 Use benchmark table. Apply condition, location, feature adjustments. Range: ±15-25%. Liquidity: moderate 0.3-0.5.`;
 
   return (base[propertyType] || fallback) + auctionSuffix;
-}
+};
 
 // ── Main handler ───────────────────────────────────────────────────────────────
-function fallbackValuation(input: { // skipcq: JS-R1005 - Deterministic valuation fallback keeps comparable scoring and confidence fields aligned.
+const fallbackValuation = (input: { // skipcq: JS-R1005 - Deterministic valuation fallback keeps comparable scoring and confidence fields aligned.
   city: string;
   price: number;
   sqm: number;
   propertyType?: string;
   listingType?: string;
-}) {
+  reason?: string;
+}) => {
   const listedPrice = Number.isFinite(input.price) && input.price > 0 ? input.price : input.sqm * 2500;
   const sqm = Number.isFinite(input.sqm) && input.sqm > 0 ? input.sqm : 1;
   const pricePerSqm = Math.round(listedPrice / sqm);
@@ -240,9 +241,9 @@ function fallbackValuation(input: { // skipcq: JS-R1005 - Deterministic valuatio
     pricingPosition: "fair",
     methodUsed: "Conservative fallback based on submitted listing price and standard transaction friction",
     valuationMode: "MODE_1_LISTING_ONLY",
-    summary: `Fallback valuation for ${input.city}: the AI provider returned malformed JSON, so this uses the submitted price as the market anchor and applies conservative transaction/legal uncertainty adjustments. Treat this as a temporary estimate until a full AI valuation can be generated.`,
+    summary: `Fallback valuation for ${input.city}: ${input.reason ?? "the AI provider returned malformed JSON"}, so this uses the submitted price as the market anchor and applies conservative transaction/legal uncertainty adjustments. Treat this as a temporary estimate until a full AI valuation can be generated.`,
     keyFactors: [
-      { factor: "Submitted price anchor", impact: "neutral", note: "Used because provider JSON was invalid" },
+      { factor: "Submitted price anchor", impact: "neutral", note: "Used because provider output was unavailable" },
       { factor: "2026 market uncertainty", impact: "neutral", note: "Conservative confidence applied" },
       { factor: "Transaction costs", impact: "negative", note: "Execution value includes friction" },
       { factor: "Legal/planning data", impact: "negative", note: "Document status unknown" },
@@ -257,12 +258,12 @@ function fallbackValuation(input: { // skipcq: JS-R1005 - Deterministic valuatio
     renovationPotential: null,
     rentalYieldEstimate: input.propertyType === "apartment" ? 4.5 : 3.5,
     highestBestUseHint: null,
-    redFlags: ["AI provider returned malformed JSON; fallback valuation used"],
+    redFlags: [`${input.reason ?? "AI provider returned malformed JSON"}; fallback valuation used`],
     auctionAdjustedValue: isAuction ? Math.round(estimatedValue / 0.8) : null,
     listingQualityScore: 40,
     generatedBy: "fallback",
   };
-}
+};
 
 Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, valuation parsing, fallback, and response shaping.
   const corsPreflightResponse = handleCors(req);
@@ -437,9 +438,17 @@ Rules:
     if (!response.ok) {
       const txt = await response.text();
       log.error("AI gateway error", { status: response.status, body: txt.slice(0, 500) });
-      const usageLimitMsg = "AI features are temporarily unavailable due to usage limits. Please try again later or contact support.";
       if (response.status === 402 || response.status === 403 || response.status === 429) {
-        return new Response(JSON.stringify({ error: usageLimitMsg }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        const fallback = fallbackValuation({
+          city: String(city),
+          price: Number(price),
+          sqm: Number(sqm),
+          propertyType: typeof propertyType === "string" ? propertyType : undefined,
+          listingType: typeof listingType === "string" ? listingType : undefined,
+          reason: `the AI provider returned ${response.status}`,
+        });
+        await recordAiCall(quotaUserId, BUCKET);
+        return new Response(JSON.stringify(fallback), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
       throw new Error(`AI gateway error: ${response.status}`);
     }
@@ -479,6 +488,7 @@ Rules:
         sqm: Number(sqm),
         propertyType: typeof propertyType === "string" ? propertyType : undefined,
         listingType: typeof listingType === "string" ? listingType : undefined,
+        reason: "the AI provider returned malformed JSON",
       });
     }
 

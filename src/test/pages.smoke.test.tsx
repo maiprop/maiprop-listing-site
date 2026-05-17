@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, screen } from "@testing-library/react";
+import { act, fireEvent, screen } from "@testing-library/react";
 import React, { Suspense } from "react";
 import { Route, Routes } from "react-router-dom";
 import { renderWithProviders } from "@/test/utils";
@@ -651,6 +651,25 @@ describe("Page smoke tests", () => {
     await preloadListingsLazyDependencies();
     await renderWithSettledSuspense(<Listings />);
     expect(screen.getByTestId("navbar")).toBeInTheDocument();
+  });
+
+  it("Listings page exercises core filter and view controls", async () => {
+    const { default: Listings } = await import("@/pages/Listings");
+    await preloadListingsLazyDependencies();
+    await renderWithSettledSuspense(<Listings />);
+
+    const citySearch = screen.getAllByLabelText(/search by city/i)[0];
+    fireEvent.change(citySearch, { target: { value: "Athens" } });
+
+    fireEvent.click(screen.getAllByLabelText(/map view/i)[0]);
+    expect(screen.getAllByLabelText(/map view/i)[0]).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(screen.getAllByLabelText(/grid view/i)[0]);
+    expect(screen.getAllByLabelText(/grid view/i)[0]).toHaveAttribute("aria-pressed", "true");
+
+    const filtersButton = screen.getAllByLabelText(/^filters/i)[0];
+    fireEvent.click(filtersButton);
+    expect(filtersButton).toHaveAttribute("aria-expanded", "true");
   });
 
   it("Dashboard page renders without throwing", async () => {

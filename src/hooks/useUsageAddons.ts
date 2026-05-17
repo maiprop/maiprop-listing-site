@@ -68,18 +68,14 @@ export function useReportUsage() {
   const monthStart = startOfMonth();
 
   return useQuery({
-    // Key uses "report-usage" to avoid React Query deduplication with
-    // useValuationUsage. Both query the same bucket because
-    // PropertyReportCard falls back to the property-valuation edge fn.
-    queryKey: ["usage_ai_calls", "report-usage", user?.id, monthStart],
+    queryKey: ["usage_property_reports", user?.id, monthStart],
     enabled: !!user,
     queryFn: async () => {
       if (!user) return 0;
       const { data, error } = await supabase
-        .from("usage_ai_calls")
+        .from("usage_property_reports")
         .select("id")
         .eq("user_id", user.id)
-        .eq("bucket", "property-valuation")
         .gte("created_at", monthStart);
       if (error) throw error;
       return (data ?? []).length;

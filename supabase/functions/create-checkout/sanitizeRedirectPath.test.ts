@@ -138,6 +138,14 @@ Deno.test("isCheckoutAudienceAllowed: blocks cross-role plan use", () => {
     true,
   );
   assertEquals(
+    isCheckoutAudienceAllowed("developer", { role: "buyer", participant_type: "developer" }),
+    false,
+  );
+  assertEquals(
+    isCheckoutAudienceAllowed("participant", { role: "buyer", participant_type: "developer" }),
+    true,
+  );
+  assertEquals(
     isCheckoutAudienceAllowed("participant", { role: "buyer", participant_type: "buyer" }),
     true,
   );

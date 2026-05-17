@@ -9,9 +9,9 @@ import { defineConfig, devices } from "@playwright/test";
  *   npx playwright test --ui          # Playwright UI mode
  *   npx playwright test e2e/listings  # single suite
  *
- * Requires the app to be running:
- *   npm run dev
- * Or let webServer auto-start it (enabled below via process.env.CI).
+ * Playwright starts the right server automatically:
+ *   - CI: npm run preview on port 4173 after the production build
+ *   - Local: npm run dev on port 8080, reusing an existing server when present
  */
 export default defineConfig({
   testDir: "./e2e",
@@ -49,8 +49,8 @@ export default defineConfig({
     },
   ],
 
-  /* In CI: serve the pre-built dist/ via preview (faster than dev server).
-   * Locally: assume `npm run dev` is already running on 8080. */
+  /* In CI: serve the pre-built dist/ via preview.
+   * Locally: start Vite dev server unless one is already running. */
   webServer: process.env.CI
     ? {
         command: "npm run preview",
@@ -58,5 +58,10 @@ export default defineConfig({
         reuseExistingServer: false,
         timeout: 30_000,
       }
-    : undefined,
+    : {
+        command: "npm run dev -- --host 127.0.0.1 --port 8080",
+        url: "http://localhost:8080",
+        reuseExistingServer: true,
+        timeout: 30_000,
+      },
 });

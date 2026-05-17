@@ -8,4 +8,4 @@ COMMENT ON COLUMN public.listings.open_house_date IS 'When the open house viewin
 
 CREATE INDEX IF NOT EXISTS idx_listings_open_house_date
   ON public.listings (open_house_date)
-  WHERE listing_type = 'open_house' AND status = 'active';
+  WHERE status = 'active';

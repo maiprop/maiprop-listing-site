@@ -3,6 +3,16 @@ import type React from "react";
 import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
+const originalConsoleError = console.error.bind(console);
+
+console.error = (...args: unknown[]) => {
+  const message = String(args[0] ?? "");
+  if (message.includes("A suspended resource finished loading inside a test")) {
+    return;
+  }
+  originalConsoleError(...args);
+};
+
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, fallback?: string) => fallback ?? key,

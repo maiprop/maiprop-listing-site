@@ -20,7 +20,18 @@ let feedError: Error | null = null;
 const expressInterestMock = vi.fn().mockResolvedValue({});
 let authProfile: Record<string, unknown> = { id: "profile-1", role: "admin", participant_type: "investor" };
 let queriedTables: string[] = [];
+let subscriptionRow: Record<string, unknown> | null = {
+  id: "sub-1",
+  user_id: "user-1",
+  tier: "private",
+  status: "active",
+  started_at: "2026-01-01T00:00:00Z",
+  expires_at: null,
+};
+let invitationRow: Record<string, unknown> | null = null;
+let myInterestsMap = new Map<string, Record<string, unknown>>();
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function makeQuery(table: string) {
   queriedTables.push(table);
   const query = {
@@ -31,17 +42,10 @@ function makeQuery(table: string) {
     limit: vi.fn(() => query),
     maybeSingle: vi.fn(async () => {
       if (table === "investor_subscriptions") {
-        return {
-          data: {
-            id: "sub-1",
-            user_id: "user-1",
-            tier: "private",
-            status: "active",
-            started_at: "2026-01-01T00:00:00Z",
-            expires_at: null,
-          },
-          error: null,
-        };
+        return { data: subscriptionRow, error: null };
+      }
+      if (table === "invitation_requests") {
+        return { data: invitationRow, error: null };
       }
       return { data: null, error: null };
     }),
@@ -76,14 +80,21 @@ vi.mock("@/hooks/useFiresaleInterest", async () => {
   const actual = await vi.importActual<typeof import("@/hooks/useFiresaleInterest")>("@/hooks/useFiresaleInterest");
   return {
     ...actual,
-    useMyFiresaleInterests: () => ({ data: new Map(), isLoading: false }),
+    useMyFiresaleInterests: () => ({ data: myInterestsMap, isLoading: false }),
     useExpressInterest: () => ({ mutateAsync: expressInterestMock, isPending: false }),
   };
 });
 
 vi.mock("@/components/Navbar", () => ({ Navbar: () => <nav data-testid="navbar" /> }));
 vi.mock("@/components/Footer", () => ({ Footer: () => <footer data-testid="footer" /> }));
-vi.mock("@/components/InvitationRequestModal", () => ({ InvitationRequestModal: () => null }));
+vi.mock("@/components/InvitationRequestModal", () => ({
+  InvitationRequestModal: ({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) => (
+    <div role="dialog" aria-label="Invitation request">
+      <button onClick={onSuccess}>submit invitation success</button>
+      <button onClick={onClose}>close invitation</button>
+    </div>
+  ),
+}));
 vi.mock("@/components/investor/InvestorSidebarAnalytics", () => ({
   InvestorSidebarAnalytics: () => <aside data-testid="investor-sidebar-analytics" />,
 }));
@@ -99,6 +110,31 @@ vi.mock("react-i18next", () => ({
         "investor.hero.liveDeals": `${params?.count ?? 0} live deals`,
         "investor.hero.requestInvitation": "Request invitation",
         "investor.hero.planActive": `${params?.tier ?? ""} plan active`,
+        "investor.expiry.titleToday": `${params?.tier ?? ""} expires today`,
+        "investor.expiry.title": `${params?.tier ?? ""} expires in ${params?.count ?? 1} day`,
+        "investor.expiry.title_other": `${params?.tier ?? ""} expires in ${params?.count ?? 0} days`,
+        "investor.expiry.subtitle": "Renew before access pauses.",
+        "investor.expiry.requestRenewal": "Request renewal",
+        "investor.access.noneBadge": "Invitation required",
+        "investor.access.noneTitle": "Request",
+        "investor.access.noneTitleHighlight": "access",
+        "investor.access.noneDesc": "Apply to join the quick-sale deal flow.",
+        "investor.access.cta": "Request invitation",
+        "investor.access.alreadyApplied": "Already applied?",
+        "investor.access.alreadyAppliedNote": "We will follow up.",
+        "investor.access.pendingBadge": "Pending",
+        "investor.access.pendingTitle": "Application",
+        "investor.access.pendingTitleHighlight": "pending",
+        "investor.access.pendingDesc": "Your application is being reviewed.",
+        "investor.access.pendingNote": "Review in progress",
+        "investor.access.pendingCTA": "Pending review",
+        "investor.access.pendingCTANote": "We will contact you.",
+        "investor.access.rejectedBadge": "Rejected",
+        "investor.access.rejectedTitle": "Application",
+        "investor.access.rejectedTitleHighlight": "not approved",
+        "investor.access.rejectedDesc": "You can re-apply with more detail.",
+        "investor.access.reApply": "Re-apply for access",
+        "investor.access.reApplyNote": "Add more proof this time.",
         "investor.kpi.liveDeals": "Live deals",
         "investor.kpi.liveDealsThisWeek": "Updated this week",
         "investor.kpi.totalDealValue": "Total deal value",
@@ -144,6 +180,16 @@ describe("InvestorDashboard behavior", () => {
     feedRows = defaultRows;
     feedError = null;
     authProfile = { id: "profile-1", role: "admin", participant_type: "investor" };
+    subscriptionRow = {
+      id: "sub-1",
+      user_id: "user-1",
+      tier: "private",
+      status: "active",
+      started_at: "2026-01-01T00:00:00Z",
+      expires_at: null,
+    };
+    invitationRow = null;
+    myInterestsMap = new Map();
     queriedTables = [];
     expressInterestMock.mockClear();
   });
@@ -160,6 +206,40 @@ describe("InvestorDashboard behavior", () => {
     expect(screen.getByLabelText(/property type/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/urgency/i)).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText("20.0%")).toBeInTheDocument());
+  });
+
+  it("filters the visible deal feed by city, type, and urgency", async () => {
+    renderWithProviders(<InvestorDashboard />);
+
+    await screen.findByText("Kolonaki 12");
+    fireEvent.change(screen.getByLabelText(/city/i), { target: { value: "Athens" } });
+    expect(screen.getByText(/1 deals found/i)).toBeInTheDocument();
+    expect(screen.getByText("Kolonaki 12")).toBeInTheDocument();
+    expect(screen.queryByText("Marina 8")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/property type/i), { target: { value: "villa" } });
+    expect(screen.getByText(/0 deals found/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/city/i), { target: { value: "all" } });
+    fireEvent.change(screen.getByLabelText(/property type/i), { target: { value: "all" } });
+    fireEvent.change(screen.getByLabelText(/urgency/i), { target: { value: "HIGH" } });
+    expect(screen.getByText(/1 deals found/i)).toBeInTheDocument();
+    expect(screen.getByText("Kolonaki 12")).toBeInTheDocument();
+  });
+
+  it("exports a deal report for authorized users", async () => {
+    const createObjectURL = vi.fn(() => "blob:deal-report");
+    const revokeObjectURL = vi.fn();
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectURL });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: revokeObjectURL });
+
+    renderWithProviders(<InvestorDashboard />);
+
+    const reportButtons = await screen.findAllByRole("button", { name: /ai report/i });
+    fireEvent.click(reportButtons[0]);
+
+    expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:deal-report");
   });
 
   it("shows a generic retryable deal-feed error without raw backend detail", async () => {
@@ -183,6 +263,78 @@ describe("InvestorDashboard behavior", () => {
     await waitFor(() => expect(queriedTables).toContain("investor_subscriptions"));
     expect(queriedTables).not.toContain("firesale_requests_investor_feed");
     expect(queriedTables).not.toContain("firesale_requests");
+  });
+
+  it("opens invitation requests from access gates and expiry renewal CTAs", async () => {
+    authProfile = { id: "profile-1", role: "buyer", participant_type: "buyer" };
+    subscriptionRow = null;
+    invitationRow = { status: "rejected" };
+
+    const { unmount } = renderWithProviders(<InvestorDashboard />);
+    await screen.findByText(/not approved/i);
+    fireEvent.click(screen.getByRole("button", { name: /Re-apply for access/i }));
+    expect(await screen.findByRole("dialog", { name: /Invitation request/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /close invitation/i }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: /Invitation request/i })).not.toBeInTheDocument());
+
+    unmount();
+    authProfile = { id: "profile-1", role: "investor", participant_type: "investor" };
+    subscriptionRow = {
+      id: "sub-1",
+      user_id: "user-1",
+      tier: "private",
+      status: "active",
+      started_at: "2026-01-01T00:00:00Z",
+      expires_at: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+    renderWithProviders(<InvestorDashboard />);
+    await screen.findByText(/expires in/i);
+    fireEvent.click(screen.getByRole("button", { name: /Request renewal/i }));
+    expect(await screen.findByRole("dialog", { name: /Invitation request/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /submit invitation success/i }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: /Invitation request/i })).not.toBeInTheDocument());
+  });
+
+  it("shows interest status badges and submits proof-backed interest", async () => {
+    myInterestsMap = new Map([
+      [
+        "deal-1",
+        {
+          id: "interest-1",
+          deal_id: "deal-1",
+          status: "reserved",
+          proof_of_funds_url: "https://example.com/pof.pdf",
+          reservation_expires_at: new Date(Date.now() + 90 * 60 * 1000).toISOString(),
+        },
+      ],
+      [
+        "deal-2",
+        {
+          id: "interest-2",
+          deal_id: "deal-2",
+          status: "expired",
+          proof_of_funds_url: null,
+          reservation_expires_at: new Date(Date.now() - 60 * 1000).toISOString(),
+        },
+      ],
+    ]);
+    renderWithProviders(<InvestorDashboard />);
+
+    await screen.findAllByText(/Reserved for you/i);
+    fireEvent.click(screen.getByRole("button", { name: /Rejoin Queue/i }));
+    fireEvent.change(screen.getByLabelText(/message to admin/i), { target: { value: "Ready to verify" } });
+    fireEvent.change(screen.getByLabelText(/proof of funds/i), {
+      target: { files: [new File(["funds"], "funds.pdf", { type: "application/pdf" })] },
+    });
+    fireEvent.change(await screen.findByLabelText(/available proof of funds amount/i), { target: { value: "250000" } });
+    fireEvent.click(screen.getByRole("button", { name: /Register Interest/i }));
+
+    await waitFor(() => expect(expressInterestMock).toHaveBeenCalledWith(expect.objectContaining({
+      dealId: "deal-2",
+      message: "Ready to verify",
+      proofAmount: "250000",
+      proofFile: expect.any(File),
+    })));
   });
 
   it("labels the express-interest dialog fields and restores focus on close", async () => {

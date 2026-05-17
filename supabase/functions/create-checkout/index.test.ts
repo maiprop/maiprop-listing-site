@@ -18,8 +18,11 @@ const { handler, restore } = await captureHandler(
 const moduleUrl = new URL("./index.ts", import.meta.url).href;
 const {
   isCheckoutAudienceAllowed,
+  isCheckoutAddonAudienceAllowed,
   isInviteOnlyCheckoutPlan,
   isSupportedCheckoutPlan,
+  isSupportedCheckoutAddonModule,
+  normalizeExplicitCheckoutKey,
   normalizePlanKey,
 } = await import(moduleUrl);
 
@@ -53,6 +56,9 @@ Deno.test("checkout plan keys are allowlisted and investor plans remain invitati
   assertEquals(normalizePlanKey(undefined), "pro");
   assertEquals(normalizePlanKey("agent_basic"), "agent_basic");
   assertEquals(normalizePlanKey("bad plan"), null);
+  assertEquals(normalizeExplicitCheckoutKey("featured_listing"), "featured_listing");
+  assertEquals(normalizeExplicitCheckoutKey(""), null);
+  assertEquals(normalizeExplicitCheckoutKey(undefined), null);
 
   assertEquals(isSupportedCheckoutPlan("pro"), true);
   assertEquals(isSupportedCheckoutPlan("developer_pro"), true);
@@ -67,12 +73,58 @@ Deno.test("checkout plan keys are allowlisted and investor plans remain invitati
 Deno.test("checkout audience gate blocks cross-role public plan purchases", () => {
   assertEquals(isCheckoutAudienceAllowed("participant", { role: "buyer" }), true);
   assertEquals(isCheckoutAudienceAllowed("participant", { participant_type: "seller" }), true);
-  assertEquals(isCheckoutAudienceAllowed("agent", { participant_type: "agent" }), true);
-  assertEquals(isCheckoutAudienceAllowed("developer", { participant_type: "developer" }), true);
+  assertEquals(isCheckoutAudienceAllowed("agent", { role: "agent", participant_type: "agent" }), true);
+  assertEquals(isCheckoutAudienceAllowed("developer", { role: "developer", participant_type: "developer" }), true);
+  assertEquals(
+    isCheckoutAudienceAllowed("developer", {
+      role: "buyer",
+      participant_type: "developer",
+    }),
+    false,
+  );
+  assertEquals(
+    isCheckoutAudienceAllowed("participant", {
+      role: "buyer",
+      participant_type: "developer",
+    }),
+    true,
+  );
 
   assertEquals(isCheckoutAudienceAllowed("agent", { participant_type: "buyer" }), false);
   assertEquals(isCheckoutAudienceAllowed("developer", { participant_type: "agent" }), false);
   assertEquals(isCheckoutAudienceAllowed("professional", null), false);
+});
+
+Deno.test("self-serve add-on modules are explicitly allowlisted", () => {
+  assertEquals(isSupportedCheckoutAddonModule("valuation_reports"), true);
+  assertEquals(isSupportedCheckoutAddonModule("adhoc_charges"), true);
+  assertEquals(isSupportedCheckoutAddonModule("os_data_products"), true);
+  assertEquals(isSupportedCheckoutAddonModule("user_subscription"), false);
+  assertEquals(isSupportedCheckoutAddonModule("investor_subscription"), false);
+  assertEquals(isSupportedCheckoutAddonModule(null), false);
+});
+
+Deno.test("add-on audience gate allows universal participant add-ons but blocks role-specific add-ons", () => {
+  assertEquals(
+    isCheckoutAddonAudienceAllowed("participant", "valuation_reports", { role: "agent" }),
+    true,
+  );
+  assertEquals(
+    isCheckoutAddonAudienceAllowed("participant", "adhoc_charges", { role: "professional" }),
+    true,
+  );
+  assertEquals(
+    isCheckoutAddonAudienceAllowed("agent", "adhoc_charges", { role: "agent" }),
+    true,
+  );
+  assertEquals(
+    isCheckoutAddonAudienceAllowed("professional", "adhoc_charges", { role: "agent" }),
+    false,
+  );
+  assertEquals(
+    isCheckoutAddonAudienceAllowed("participant", "os_data_products", { role: "agent" }),
+    true,
+  );
 });
 
 restore();

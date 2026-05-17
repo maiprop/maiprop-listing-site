@@ -4,7 +4,9 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { captureHandler, req } from "../_shared/testUtils.ts";
 
-const { handler, restore } = await captureHandler(import.meta.url, "./index.ts");
+const { handler, restore } = await captureHandler(import.meta.url, "./index.ts", {
+  RATE_LIMIT_FORCE_MEMORY: "true",
+});
 
 Deno.test("OPTIONS preflight returns 200", async () => {
   const res = await handler(req("OPTIONS"));
@@ -51,6 +53,17 @@ Deno.test("POST with invalid JSON body still returns 204", async () => {
     }),
   );
   assertEquals(res.status, 204);
+});
+
+Deno.test("POST with oversized report body returns 413", async () => {
+  const res = await handler(
+    new Request("https://functions.supabase.co/fn", {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "https://maiprop.co" },
+      body: JSON.stringify({ "csp-report": { "blocked-uri": "x".repeat(17_000) } }),
+    }),
+  );
+  assertEquals(res.status, 413);
 });
 
 restore();

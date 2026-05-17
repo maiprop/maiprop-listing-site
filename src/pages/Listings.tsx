@@ -148,10 +148,10 @@ export default function Listings() {
   return (
     <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
       <Helmet>
-        <title>Properties for Sale &amp; Rent in Greece — maiProp</title>
+        <title>Properties for Sale &amp; Rent in Greece — mAI prop</title>
         <meta name="description" content="Search thousands of properties for sale and rent across Greece. Filter by city, type, price and more." />
         <link rel="canonical" href="https://maiprop.co/listings" />
-        <meta property="og:title" content="Properties for Sale &amp; Rent in Greece — maiProp" />
+        <meta property="og:title" content="Properties for Sale &amp; Rent in Greece — mAI prop" />
         <meta property="og:description" content="Search thousands of properties for sale and rent across Greece." />
         <meta property="og:url" content="https://maiprop.co/listings" />
         <script type="application/ld+json">{JSON.stringify({
@@ -160,7 +160,7 @@ export default function Listings() {
           "name": "Properties for Sale & Rent in Greece",
           "description": "Search thousands of properties for sale and rent across Greece.",
           "url": "https://maiprop.co/listings",
-          "provider": { "@type": "Organization", "name": "maiProp", "url": "https://maiprop.co" },
+          "provider": { "@type": "Organization", "name": "mAI prop", "url": "https://maiprop.co" },
         })}</script>
       </Helmet>
       <Navbar />

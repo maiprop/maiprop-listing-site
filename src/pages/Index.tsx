@@ -55,10 +55,10 @@ export default function Index() {
       <Navbar />
 
       <Helmet>
-        <title>maiProp — Greek Real Estate | Buy, Rent &amp; Invest in Greece</title>
+        <title>mAI prop — Greek Real Estate | Buy, Rent &amp; Invest in Greece</title>
         <meta name="description" content="Browse verified Greek property listings — apartments, villas, land &amp; commercial. AI-powered search, auction alerts, and instant viewings." />
         <link rel="canonical" href="https://maiprop.co/" />
-        <meta property="og:title" content="maiProp — Greek Real Estate | Buy, Rent &amp; Invest in Greece" />
+        <meta property="og:title" content="mAI prop — Greek Real Estate | Buy, Rent &amp; Invest in Greece" />
         <meta property="og:description" content="Browse verified Greek property listings — apartments, villas, land &amp; commercial. AI-powered search, auction alerts, and instant viewings." />
         <meta property="og:url" content="https://maiprop.co/" />
         <meta property="og:type" content="website" />
@@ -67,7 +67,7 @@ export default function Index() {
         <script type="application/ld+json">{JSON.stringify({
           "@context": "https://schema.org",
           "@type": "WebSite",
-          "name": "maiProp",
+          "name": "mAI prop",
           "url": "https://maiprop.co",
           "description": "Greek real estate marketplace — buy, sell, rent and invest",
           "potentialAction": {

@@ -32,6 +32,7 @@ const tempDir = await Deno.makeTempDir({ prefix: "agent-data-input-test-" });
 const mockClientPath = `${tempDir}/mockSupabase.ts`;
 const transformedPath = `${tempDir}/index.ts`;
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function fileUrl(path: string) {
   return `file:///${path.replaceAll("\\", "/").replace(/^([A-Za-z]):/, "$1:")}`;
 }
@@ -41,6 +42,7 @@ await Deno.writeTextFile(
   `
 type Scenario = typeof globalThis.__agentDataInputScenario;
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function thenable<T>(value: T) {
   return { then: (resolve: (value: T) => unknown, reject?: (reason: unknown) => unknown) => Promise.resolve(value).then(resolve, reject) };
 }
@@ -97,6 +99,7 @@ class QueryBuilder {
   }
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function createClient() {
   const scenario = globalThis.__agentDataInputScenario;
   return {
@@ -144,21 +147,22 @@ const { handler, restore } = await captureHandler(
   { RATE_LIMIT_FORCE_MEMORY: "true" },
 );
 
-function resetScenario(overrides: Partial<MockScenario> = {}) {
+const resetScenario = (overrides: Partial<MockScenario> = {}) => {
   globalThis.__agentDataInputScenario = {
     user: { id: "11111111-1111-4111-8111-111111111111" },
     calls: [],
     ...overrides,
   };
-}
+};
 
-function authedJson(body: unknown) {
+const authedJson = (body: unknown) => {
   return req("POST", body, {
-    authorization: "Bearer test-token",
+    authorization: `Bearer ${crypto.randomUUID()}`,
     "x-forwarded-for": crypto.randomUUID(),
   });
-}
+};
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function validSubmitPayload() {
   return {
     property_address: "12 Test Street",

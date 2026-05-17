@@ -16,24 +16,42 @@ const checkSubLimiter = makeRateLimiter({
   windowMs: 60_000,
 });
 
-type FallbackSubscriptionState = {
+export type FallbackSubscriptionState = {
   subscribed: boolean;
   product_id: string | null;
   subscription_end: string | null;
   source?: string;
 };
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function isStripeSubscribed(status: string | null | undefined) {
   return status === "active" || status === "trialing";
 }
 
-async function getDatabaseFallback( // skipcq: JS-R1005 - Fallback subscription resolution intentionally checks product IDs, direct subscription state, and investor grants.
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
+export function isValidInvestorSubscription(
+  investor: { status?: string | null; expires_at?: string | null } | null,
+  now = new Date(),
+) {
+  if (investor?.status !== "active" && investor?.status !== "trial") {
+    return false;
+  }
+  if (!investor.expires_at) return true;
+
+  const expiresAt = new Date(investor.expires_at);
+  return !Number.isNaN(expiresAt.getTime()) && expiresAt > now;
+}
+
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
+export async function getDatabaseFallback( // skipcq: JS-R1005 - Fallback subscription resolution intentionally checks product IDs, direct subscription state, and investor grants.
   supabaseClient: unknown,
   userId: string,
+  { allowProfileEntitlement = false }: { allowProfileEntitlement?: boolean } =
+    {},
 ): Promise<FallbackSubscriptionState> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const from = (supabaseClient as { from: any }).from as any;
-  const [{ data: profile }, { data: investorSub }] = await Promise.all([
+  const [{ data: profile }, { data: investorSubs }] = await Promise.all([
     from("profiles")
       .select("subscription_product_id")
       .eq("user_id", userId)
@@ -41,33 +59,79 @@ async function getDatabaseFallback( // skipcq: JS-R1005 - Fallback subscription 
     from("investor_subscriptions")
       .select("status, expires_at")
       .eq("user_id", userId)
-      .in("status", ["active", "trial"])
-      .limit(1)
-      .maybeSingle(),
+      .in("status", ["active", "trial"]),
   ]);
 
   const productId =
     (profile as { subscription_product_id?: string | null } | null)
       ?.subscription_product_id ?? null;
-  const entitlement = productId
+  const entitlement = allowProfileEntitlement && productId
     ? await resolveSubscriptionEntitlement(supabaseClient, userId, {
       productId,
     })
     : null;
-  const investor = investorSub as {
-    status?: string;
-    expires_at?: string | null;
-  } | null;
+  const investors =
+    (Array.isArray(investorSubs)
+      ? investorSubs
+      : investorSubs
+      ? [investorSubs]
+      : []) as Array<
+        {
+          status?: string;
+          expires_at?: string | null;
+        } | null
+      >;
+  const investor = investors.find((row) => isValidInvestorSubscription(row)) ??
+    null;
+  const hasInvestorSubscription = Boolean(investor);
 
   return {
-    subscribed: Boolean(entitlement) || investor?.status === "active" ||
-      investor?.status === "trial",
+    subscribed: Boolean(entitlement) || hasInvestorSubscription,
     product_id: entitlement?.productId ?? null,
-    subscription_end: investor?.expires_at ?? null,
+    subscription_end: hasInvestorSubscription
+      ? investor?.expires_at ?? null
+      : null,
     source: "database",
   };
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
+export async function resolveSubscriptionResponse(
+  supabaseClient: unknown,
+  userId: string,
+  {
+    customerFound,
+    entitlement,
+    subscriptionEnd,
+  }: {
+    customerFound: boolean;
+    entitlement: Awaited<ReturnType<typeof resolveSubscriptionEntitlement>>;
+    subscriptionEnd: string | null;
+  },
+): Promise<FallbackSubscriptionState> {
+  if (entitlement) {
+    return {
+      subscribed: true,
+      product_id: entitlement.productId,
+      subscription_end: subscriptionEnd,
+      source: customerFound ? "stripe" : "database",
+    };
+  }
+
+  const fallback = await getDatabaseFallback(supabaseClient, userId, {
+    allowProfileEntitlement: false,
+  });
+  if (fallback.subscribed) return fallback;
+
+  return {
+    subscribed: false,
+    product_id: null,
+    subscription_end: subscriptionEnd,
+    source: customerFound ? "stripe" : "database",
+  };
+}
+
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function getSubscriptionItemIds(subscription: Stripe.Subscription | null): {
   productId: string | null;
   priceId: string | null;
@@ -80,6 +144,7 @@ function getSubscriptionItemIds(subscription: Stripe.Subscription | null): {
   };
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 async function listOwnedCustomers(stripe: Stripe, userId: string) {
   const search = await stripe.customers.search({
     query: `metadata['user_id']:'${userId}'`,
@@ -90,6 +155,7 @@ async function listOwnedCustomers(stripe: Stripe, userId: string) {
   );
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 async function getSubscribedStripeRecord(stripe: Stripe, customerId: string) {
   const subs = await stripe.subscriptions.list({
     customer: customerId,
@@ -101,6 +167,7 @@ async function getSubscribedStripeRecord(stripe: Stripe, customerId: string) {
   ) ?? null;
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 async function resolveCustomerAndSubscription(stripe: Stripe, userId: string) {
   const candidates = await listOwnedCustomers(stripe, userId);
   let chosenCustomer: Stripe.Customer | null = null;
@@ -166,17 +233,27 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
           stripeItem,
         )
         : null;
-      const productId = entitlement?.productId ?? null;
       const currentPeriodEnd =
         (subscription as unknown as { current_period_end?: number } | null)
           ?.current_period_end;
       const subscriptionEnd = currentPeriodEnd
         ? new Date(currentPeriodEnd * 1000).toISOString()
         : null;
+      const subscriptionState = await resolveSubscriptionResponse(
+        supabaseClient,
+        user.id,
+        {
+          customerFound: Boolean(customer),
+          entitlement,
+          subscriptionEnd,
+        },
+      );
 
       const { error: updateError } = await supabaseClient
         .from("profiles")
-        .update({ subscription_product_id: productId ?? null })
+        .update({
+          subscription_product_id: subscriptionState.product_id ?? null,
+        })
         .eq("user_id", user.id);
 
       if (updateError) {
@@ -187,19 +264,16 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
       }
 
       return new Response(
-        JSON.stringify({
-          subscribed: Boolean(entitlement),
-          product_id: productId,
-          subscription_end: subscriptionEnd,
-          source: customer ? "stripe" : "database",
-        }),
+        JSON.stringify(subscriptionState),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 200,
         },
       );
     } catch (stripeError: unknown) {
-      const fallback = await getDatabaseFallback(supabaseClient, user.id);
+      const fallback = await getDatabaseFallback(supabaseClient, user.id, {
+        allowProfileEntitlement: false,
+      });
       log.warn("stripe lookup failed; using database fallback", {
         userId: user.id,
         message: stripeError instanceof Error

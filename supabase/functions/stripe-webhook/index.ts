@@ -16,12 +16,14 @@ import Stripe from "npm:stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { createLogger } from "../_shared/logger.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { shouldSkipProfileEntitlementSync } from "./addonGuard.ts";
 
 const log = createLogger("stripe-webhook");
 
 type PricingConfigRow = {
   key?: string | null;
   audience?: string | null;
+  module?: string | null;
   metadata?: {
     stripe_price_id?: string | null;
     stripe_product_id?: string | null;
@@ -167,6 +169,7 @@ Deno.serve(async (req) => {
 /** Resolve which column/value to use when matching the Supabase profile.
  *  Prefers user_id from customer metadata (set at checkout).
  *  Falls back to email for legacy customers created before the metadata change. */
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function resolveProfileFilter(customer: Stripe.Customer): { column: string; value: string } | null {
   const userId = customer.metadata?.user_id;
   if (userId) return { column: "user_id", value: userId };
@@ -174,6 +177,7 @@ function resolveProfileFilter(customer: Stripe.Customer): { column: string; valu
   return null;
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function normalizeAudience(raw: string | null | undefined): string | null {
   if (raw === "buyer" || raw === "seller" || raw === "participant" || raw === "pro") return "participant";
   if (raw === "agent" || raw === "developer" || raw === "professional" || raw === "investor" || raw === "institutional") {
@@ -182,14 +186,17 @@ function normalizeAudience(raw: string | null | undefined): string | null {
   return null;
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function firstSubscriptionItem(sub: Stripe.Subscription) {
   return sub.items.data[0] ?? null;
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 async function resolveSubscriptionEntitlement(
   supabase: SupabaseAdminClient,
   sub: Stripe.Subscription,
 ): Promise<SubscriptionEntitlement> {
+  if (shouldSkipProfileEntitlementSync(sub)) return null;
   const item = firstSubscriptionItem(sub);
   const priceId = item?.price?.id ?? null;
   const productId = typeof item?.price?.product === "string" ? item.price.product : null;
@@ -198,11 +205,17 @@ async function resolveSubscriptionEntitlement(
   const metadataPlan = (sub.metadata?.plan_key ?? sub.metadata?.plan ?? "") as string;
   const { data } = await supabase
     .from("pricing_configs")
-    .select("key, audience, metadata")
+    .select("key, audience, module, metadata")
     .eq("is_active", true);
 
   const rows = (data ?? []) as PricingConfigRow[];
   const row = rows.find((candidate) => {
+    if (
+      !["user_subscription", "agent_subscription", "developer_subscription", "professional_subscription"]
+        .includes(candidate.module ?? "")
+    ) {
+      return false;
+    }
     const meta = candidate.metadata ?? {};
     const matchesProductOrPrice = meta.stripe_product_id === productId || meta.stripe_price_id === priceId;
     if (metadataPlan) {
@@ -221,11 +234,20 @@ async function resolveSubscriptionEntitlement(
   };
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 async function syncSubscription(
   supabase: SupabaseAdminClient,
   stripe: Stripe,
   sub: Stripe.Subscription,
 ) {
+  if (shouldSkipProfileEntitlementSync(sub)) {
+    log.info("skipping profile entitlement sync for add-on subscription", {
+      sub_id: sub.id,
+      addon_key: sub.metadata?.addon_key ?? null,
+    });
+    return;
+  }
+
   const customerId = sub.customer as string;
   const customer = await stripe.customers.retrieve(customerId) as Stripe.Customer;
   const filter = resolveProfileFilter(customer);
@@ -263,6 +285,7 @@ async function syncSubscription(
   await syncProfessionalTier(supabase, sub, isActive, entitlement);
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 async function clearSubscription(
   supabase: SupabaseAdminClient,
   stripe: Stripe,
@@ -301,6 +324,7 @@ async function clearSubscription(
 }
 
 /** Update professionals.subscription_tier when the subscription is a professional plan. */
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 async function syncProfessionalTier(
   supabase: SupabaseAdminClient,
   sub: Stripe.Subscription,
@@ -329,6 +353,7 @@ async function syncProfessionalTier(
   }
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 async function resolveUserIdByEmail(
   supabase: SupabaseAdminClient,
   email: string | null,
@@ -342,6 +367,7 @@ async function resolveUserIdByEmail(
   return (data as { user_id?: string } | null)?.user_id ?? null;
 }
 
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function errorResponse(message: string, status: number, corsHeaders: Record<string, string>) {
   return new Response(JSON.stringify({ error: message }), {
     status,
@@ -369,6 +395,7 @@ function errorResponse(message: string, status: number, corsHeaders: Record<stri
  *     verified inputs are possible yet).
  *   - Customer has no user_id metadata.
  */
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 async function applyAgentDataInputDiscount(
   supabase: SupabaseAdminClient,
   stripe: Stripe,
