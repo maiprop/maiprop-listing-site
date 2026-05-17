@@ -1,15 +1,16 @@
 version = 1
 
 exclude_patterns = [
+  "*.config.*",
+  ".eslintrc.cjs",
   "src/**",
   "e2e/**",
   "**/*.test.ts",
   "**/*.test.tsx",
   "functions/**",
-  "supabase/functions/fetch-os-auctions/index.ts",
-  "supabase/functions/_shared/testUtils.ts",
-  "scripts/*.cjs",
-  "scripts/**"
+  "supabase/functions/**",
+  "scripts/**",
+  "remotion-video/**"
 ]
 
 test_patterns = [
