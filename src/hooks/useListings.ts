@@ -301,24 +301,28 @@ const fetchListingOwnerContext = async (ownerId: string | null): Promise<Listing
   }
 };
 
+const fetchListingById = async (id: string): Promise<ListingWithJoins | null> => {
+  const { data, error } = await supabase
+    .from("listings")
+    .select(`
+      *,
+      listing_images(url, sort_order)
+    `)
+    .eq("id", id)
+    .maybeSingle();
+
+  // PGRST116 (no rows) now handled by maybeSingle() — only real errors thrown
+  if (error) throw error;
+  if (!data) return null;
+
+  const { profiles, ownerParticipantType } = await fetchListingOwnerContext(data.owner_id);
+  return normalizeListingWithJoins({ ...data, profiles, ownerParticipantType });
+};
+
 export const useListing = (id: string, options: UseListingOptions = {}) => {
   return useQuery({
     queryKey: ["listing", id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("listings")
-        .select(`
-          *,
-          listing_images(url, sort_order)
-        `)
-        .eq("id", id)
-        .maybeSingle();
-      // PGRST116 (no rows) now handled by maybeSingle() — only real errors thrown
-      if (error) throw error;
-      if (!data) return null;
-      const { profiles, ownerParticipantType } = await fetchListingOwnerContext(data.owner_id);
-      return normalizeListingWithJoins({ ...data, profiles, ownerParticipantType });
-    },
+    queryFn: () => fetchListingById(id),
     enabled: Boolean(id),
     placeholderData: options.initialData ? normalizeListingWithJoins(options.initialData) : undefined,
     staleTime: CATALOG_STATIC_QUERY_STALE_TIME,
