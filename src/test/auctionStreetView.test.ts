@@ -1,19 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
+  AUCTION_FALLBACK_LOGO_URL,
   getAuctionImageList,
   getAuctionStreetViewImageUrl,
   getAuctionStreetViewLocation,
 } from "@/lib/auctionStreetView";
 
 describe("auction Street View image fallback", () => {
-  it("keeps an existing cover image before using Street View", () => {
-    expect(
-      getAuctionStreetViewImageUrl({
-        cover_image_url: " https://cdn.example/auction.jpg ",
-        latitude: 37.98,
-        longitude: 23.72,
-      }),
-    ).toBe("https://cdn.example/auction.jpg");
+  it("prefers Street View before an existing cover image", () => {
+    const url = getAuctionStreetViewImageUrl({
+      cover_image_url: " https://cdn.example/auction.jpg ",
+      latitude: 37.98,
+      longitude: 23.72,
+    });
+
+    expect(url).toContain("/functions/v1/streetview-proxy");
+    expect(url).toContain("lat=37.98");
   });
 
   it("builds a proxied Street View URL from coordinates", () => {
@@ -57,7 +59,27 @@ describe("auction Street View image fallback", () => {
     expect(url).toContain("location=1+Ermou%2C+Athens%2C+Attica%2C+Greece");
   });
 
-  it("returns an empty image list when neither image nor location exists", () => {
-    expect(getAuctionImageList({})).toEqual([]);
+  it("uses the maiProp logo when neither image nor location exists", () => {
+    expect(getAuctionStreetViewImageUrl({})).toBe(AUCTION_FALLBACK_LOGO_URL);
+    expect(getAuctionImageList({})).toEqual([AUCTION_FALLBACK_LOGO_URL]);
+  });
+
+  it("falls back to an existing cover image when no Street View location exists", () => {
+    expect(
+      getAuctionStreetViewImageUrl({
+        cover_image_url: " https://cdn.example/auction.jpg ",
+      }),
+    ).toBe("https://cdn.example/auction.jpg");
+  });
+
+  it("keeps the cover image as a secondary fallback when Street View is available", () => {
+    const images = getAuctionImageList({
+      cover_image_url: "https://cdn.example/auction.jpg",
+      latitude: 37.98,
+      longitude: 23.72,
+    });
+
+    expect(images[0]).toContain("/functions/v1/streetview-proxy");
+    expect(images[1]).toBe("https://cdn.example/auction.jpg");
   });
 });

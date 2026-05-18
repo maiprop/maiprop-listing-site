@@ -5,6 +5,15 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useMyProfessional, useUpdateProfessional } from "@/hooks/useProfessionalServices";
 
+const getSaveErrorMessage = (error: unknown) => {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "object" && error && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) return message;
+  }
+  return "Could not save profile.";
+};
+
 export function ProfessionalProfileEditor({
   onSwitchToSettings,
 }: {
@@ -53,9 +62,8 @@ export function ProfessionalProfileEditor({
           languages:        form.languages ? form.languages.split(",").map((s: string) => s.trim()).filter(Boolean) : null,
         },
       });
-      toast.success("Profile saved.");
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Could not save profile.");
+      toast.error(getSaveErrorMessage(e));
     } finally {
       setSaving(false);
     }

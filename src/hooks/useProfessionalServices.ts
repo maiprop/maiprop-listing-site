@@ -176,8 +176,15 @@ export function useUpdateProfessional() {
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: TablesUpdate<"professionals"> }) => {
       if (!user) throw new Error("Must be logged in");
-      const { error } = await supabase.from("professionals").update(updates).eq("id", id).eq("user_id", user.id);
+      const { data, error } = await supabase
+        .from("professionals")
+        .update(updates)
+        .eq("id", id)
+        .eq("user_id", user.id)
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error("No editable professional profile was found for your account.");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["my_professional", user?.id] });

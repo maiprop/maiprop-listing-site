@@ -9,8 +9,8 @@ import {
   getAuctionRound,
   estimateYield,
   yieldRange,
-  streetViewImg,
 } from "@/lib/auctionUtils";
+import { getAuctionImageList } from "@/lib/auctionStreetView";
 
 /** Inferred row type returned by `useAuctionListings()`. */
 type Auction = NonNullable<ReturnType<typeof useAuctionListings>["data"]>[number];
@@ -178,16 +178,12 @@ export function useAuctionsPipeline(opts: UseAuctionsPipelineOptions) {
         latitude: a.latitude,
         longitude: a.longitude,
         images: (() => {
-          const imgs: string[] = a.cover_image_url ? [a.cover_image_url] : [];
-          if (!imgs.length && a.listing_images?.length) {
-            const sorted = [...a.listing_images].sort((x, y) => x.sort_order - y.sort_order);
-            sorted.forEach((img) => imgs.push(img.url));
-          }
-          if (!imgs.length) {
-            const sv = streetViewImg(a.latitude, a.longitude);
-            if (sv) imgs.push(sv);
-          }
-          return imgs;
+          const streetViewImages = getAuctionImageList(a);
+          if (streetViewImages.length) return streetViewImages;
+          return [...(a.listing_images ?? [])]
+            .sort((x, y) => x.sort_order - y.sort_order)
+            .map((img) => img.url)
+            .filter(Boolean);
         })(),
         listingType: "auction",
         city: a.city,

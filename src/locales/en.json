@@ -760,7 +760,7 @@
     "inPerson": "In-Person",
     "video": "Video",
     "successMessage": "Your request has been sent to the property owner. They will confirm the appointment and you will receive a notification.",
-    "videoNote": "Video viewings are manually confirmed by the owner or agent. Once confirmed, they will add or send the call link before the scheduled time.",
+    "videoNote": "Video viewings are manually confirmed by the owner or agent. Once confirmed, you can join the built-in mAI prop video room, unless the host adds an external meeting link.",
     "done": "Done",
     "days": {
       "sun": "Sun",

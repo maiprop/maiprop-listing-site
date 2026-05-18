@@ -1,9 +1,10 @@
-import { Loader2, Calendar, ExternalLink, Lock } from "lucide-react";
+import { Loader2, Calendar, ExternalLink, Lock, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useViewings, useUpdateViewing } from "@/hooks/useViewings";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { createViewingVideoRoomPath } from "@/lib/videoRooms";
 import type { Tables } from "@/integrations/supabase/types";
 import type { Profile } from "@/contexts/AuthContext";
 
@@ -14,6 +15,8 @@ const FREE_VIEWING_CAP = 3;
 function ViewingCard({ v, isOwner, profile, updateViewing }: { v: Viewing; isOwner: boolean; profile: Profile | null; updateViewing: ReturnType<typeof useUpdateViewing> }) {
   const isVideo = v.viewing_type === "video";
   const hasVideoLink = !!v.video_link;
+  const roomPath = createViewingVideoRoomPath(v.id);
+  const canJoinMaiPropRoom = isVideo && !hasVideoLink && v.status === "confirmed";
   return (
     <div className="glass-card rounded-xl p-4 flex flex-wrap items-start gap-4">
       <div className={`w-2 h-10 rounded-full shrink-0 ${
@@ -53,7 +56,7 @@ function ViewingCard({ v, isOwner, profile, updateViewing }: { v: Viewing; isOwn
                 if (url) updateViewing.mutate({ id: v.id, updates: { video_link: url } });
               }}
             >
-              Set link
+              Set external link
             </Button>
           </div>
         )}
@@ -61,6 +64,14 @@ function ViewingCard({ v, isOwner, profile, updateViewing }: { v: Viewing; isOwn
           <a href={v.video_link ?? undefined} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-xs text-primary hover:underline">
             <ExternalLink className="w-3 h-3" /> Join video call
           </a>
+        )}
+        {canJoinMaiPropRoom && (
+          <Link to={roomPath} className="inline-flex items-center gap-1 mt-2 text-xs text-primary hover:underline">
+            <Video className="w-3 h-3" /> Join mAI prop video room
+          </Link>
+        )}
+        {isVideo && !hasVideoLink && v.status !== "confirmed" && (
+          <p className="text-xs text-muted-foreground mt-2">mAI prop video room opens after the viewing is confirmed.</p>
         )}
       </div>
     </div>

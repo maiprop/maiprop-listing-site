@@ -16,7 +16,11 @@ const mocks = vi.hoisted(() => ({
   queryError: null as Error | null,
   queryPending: false,
   getUserMedia: vi.fn(),
+  getSession: vi.fn(),
   writeText: vi.fn(),
+  setRealtimeAuth: vi.fn(),
+  removeChannel: vi.fn(),
+  channel: null as ReturnType<typeof createChannelMock> | null,
   toastSuccess: vi.fn(),
   toastError: vi.fn(),
 }));
@@ -50,8 +54,44 @@ vi.mock("@/integrations/supabase/client", () => ({
       };
       return query;
     }),
+    channel: vi.fn(() => {
+      mocks.channel = createChannelMock();
+      return mocks.channel;
+    }),
+    auth: {
+      getSession: mocks.getSession,
+    },
+    realtime: {
+      setAuth: mocks.setRealtimeAuth,
+    },
+    removeChannel: mocks.removeChannel,
   },
 }));
+
+function createMediaStreamMock() {
+  const audioTrack = { enabled: true, stop: vi.fn() };
+  const videoTrack = { enabled: true, stop: vi.fn() };
+  return {
+    getTracks: () => [audioTrack, videoTrack],
+    getAudioTracks: () => [audioTrack],
+    getVideoTracks: () => [videoTrack],
+  } as unknown as MediaStream;
+}
+
+function createChannelMock() {
+  const channel = {
+    on: vi.fn(() => channel),
+    subscribe: vi.fn((callback?: (status: string) => void | Promise<void>) => {
+      void callback?.("SUBSCRIBED");
+      return channel;
+    }),
+    track: vi.fn().mockResolvedValue("ok"),
+    untrack: vi.fn().mockResolvedValue("ok"),
+    send: vi.fn().mockResolvedValue("ok"),
+    presenceState: vi.fn(() => ({})),
+  };
+  return channel;
+}
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function renderRoom() {
@@ -71,7 +111,10 @@ describe("BrandedVideoRoom", () => {
       video_link: null,
     };
     mocks.queryError = null;
-    mocks.getUserMedia.mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] });
+    mocks.channel = null;
+    mocks.getSession.mockResolvedValue({ data: { session: { access_token: "test-token" } } });
+    mocks.setRealtimeAuth.mockResolvedValue(undefined);
+    mocks.getUserMedia.mockResolvedValue(createMediaStreamMock());
     mocks.writeText.mockResolvedValue(undefined);
     Object.defineProperty(navigator, "mediaDevices", {
       configurable: true,
@@ -109,19 +152,18 @@ describe("BrandedVideoRoom", () => {
 
     renderRoom();
 
-    expect(await screen.findByText(/maiProp video room/i)).toBeInTheDocument();
+    expect(await screen.findByText(/mAI prop video room/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Test camera/i }));
     await waitFor(() => expect(mocks.getUserMedia).toHaveBeenCalledWith({ video: true, audio: true }));
     await waitFor(() => expect(mocks.toastSuccess).toHaveBeenCalledWith("Camera and microphone are working."));
 
     fireEvent.click(screen.getByRole("button", { name: /Copy link/i }));
-    await waitFor(() => expect(mocks.writeText).toHaveBeenCalledWith("https://meet.jit.si/maiprop-pro-1"));
+    await waitFor(() => expect(mocks.writeText).toHaveBeenCalledWith(expect.stringMatching(/\/video-room\/pro-1$/)));
 
     fireEvent.click(screen.getByRole("button", { name: /Join now/i }));
-    expect(await screen.findByTitle("Video consultation")).toHaveAttribute(
-      "src",
-      expect.stringContaining("userInfo.displayName=K%20R"),
-    );
+    expect(await screen.findByText(/Waiting for the other participant/i)).toBeInTheDocument();
+    expect(mocks.setRealtimeAuth).toHaveBeenCalledWith("test-token");
+    expect(mocks.channel?.track).toHaveBeenCalledWith(expect.objectContaining({ displayName: "K R" }));
 
     fireEvent.click(screen.getByRole("button", { name: /End call/i }));
     expect(await screen.findByText("Call Summary")).toBeInTheDocument();
@@ -145,6 +187,6 @@ describe("BrandedVideoRoom", () => {
     fireEvent.click(screen.getByRole("button", { name: /Test camera/i }));
 
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith("Could not access camera or microphone. Please check your browser permissions."));
-    expect(screen.queryByTitle("Video consultation")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Waiting for the other participant/i)).not.toBeInTheDocument();
   });
 });

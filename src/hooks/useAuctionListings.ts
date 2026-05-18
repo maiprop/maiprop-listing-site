@@ -166,25 +166,29 @@ const fetchFallbackAuctions = async (today: string, maxRows: number): Promise<Au
   }
 };
 
+const randomizeAndLimitAuctionRows = (rows: AuctionListingRow[], maxRows: number): AuctionListingRow[] =>
+  randomizeAuctionPresentation(rows).slice(0, maxRows);
+
 const fetchAuctionListings = async (maxRows: number): Promise<AuctionListingRow[]> => {
   const today = getTodayDate();
+  const sourceRows = PORTAL_AUCTION_FETCH_LIMIT;
   let cachedRows: AuctionListingRow[] = [];
 
   try {
-    cachedRows = await fetchFallbackAuctions(today, maxRows);
+    cachedRows = await fetchFallbackAuctions(today, sourceRows);
     if (cachedRows.length > 0) {
-      return randomizeAuctionPresentation(cachedRows);
+      return randomizeAndLimitAuctionRows(cachedRows, maxRows);
     }
   } catch (dbErr: unknown) {
     try {
-      return randomizeAuctionPresentation(await fetchAuctionsFromOs(today, maxRows));
+      return randomizeAndLimitAuctionRows(await fetchAuctionsFromOs(today, sourceRows), maxRows);
     } catch (_osErr: unknown) {
       throw dbErr;
     }
   }
 
   try {
-    return randomizeAuctionPresentation(await fetchAuctionsFromOs(today, maxRows));
+    return randomizeAndLimitAuctionRows(await fetchAuctionsFromOs(today, sourceRows), maxRows);
   } catch (_osErr: unknown) {
     return cachedRows;
   }
