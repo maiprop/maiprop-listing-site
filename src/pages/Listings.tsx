@@ -46,7 +46,8 @@ const GRID_LOADING_SKELETON_KEYS = [
 ];
 const GRID_ESTIMATED_ROW_HEIGHT = 520;
 
-export default function Listings() { // skipcq: JS-R1005 - Listings coordinates search filters, view modes, compare state, save search, map sync, and pagination in one route shell.
+// skipcq - Listings coordinates search filters, view modes, compare state, save search, map sync, and pagination in one route shell.
+export default function Listings() {
   const { t } = useTranslation();
 
   const [viewMode, setViewMode] = useState<"grid" | "split" | "map">("grid");
