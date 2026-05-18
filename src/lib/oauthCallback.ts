@@ -43,16 +43,6 @@ const parseLocalRedirectPath = (value: string, fallback: string): string => {
   }
 };
 
-export const buildOAuthCallbackRedirectTo = (
-  intent: OAuthIntent,
-  next = DEFAULT_NEXT[intent],
-): string => {
-  const callback = new URL("/auth/callback", APP_ORIGIN);
-  callback.searchParams.set("intent", intent);
-  callback.searchParams.set("next", safeRedirectPath(next, DEFAULT_NEXT[intent]));
-  return callback.toString();
-};
-
 export const safeRedirectPath = (
   value: string | null | undefined,
   fallback = "/dashboard",
@@ -62,6 +52,16 @@ export const safeRedirectPath = (
   }
 
   return parseLocalRedirectPath(value, fallback);
+};
+
+export const buildOAuthCallbackRedirectTo = (
+  intent: OAuthIntent,
+  next = DEFAULT_NEXT[intent],
+): string => {
+  const callback = new URL("/auth/callback", APP_ORIGIN);
+  callback.searchParams.set("intent", intent);
+  callback.searchParams.set("next", safeRedirectPath(next, DEFAULT_NEXT[intent]));
+  return callback.toString();
 };
 
 export const parseOAuthCallbackParams = (

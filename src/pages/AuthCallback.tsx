@@ -18,7 +18,7 @@ interface OAuthErrorRedirect {
 const hasCallbackError = (params: OAuthCallbackParams): boolean =>
   Boolean(params.error || params.errorCode || params.errorDescription);
 
-const getOAuthErrorRedirect = (params: OAuthCallbackParams): OAuthErrorRedirect | null => {
+const getOAuthErrorRedirect = (params: OAuthCallbackParams): OAuthErrorRedirect | null => { // skipcq: JS-R1005 - OAuth failures intentionally branch by intent, known Supabase signup errors, and fallback toast routing.
   if (!hasCallbackError(params)) {
     return null;
   }
@@ -59,7 +59,7 @@ const AuthCallback = () => {
   );
   const errorRedirect = useMemo(() => getOAuthErrorRedirect(params), [params]);
 
-  useEffect(() => {
+  useEffect(() => { // skipcq: JS-R1005 - Redirect side effects must guard missing, toast, and stateful signup branches together.
     if (!errorRedirect) {
       return;
     }
