@@ -39,30 +39,30 @@ const DetailRowsGrid = ({ rows }: { rows: VisibleDetailRow[] }) => (
   </div>
 );
 
-/**
- * Property Details section: a 2-column grid of `DetailRow`s plus the optional
- * Energy Performance Certificate visualisation.
- *
- * Extracted from PropertyDetail.tsx to lower its cyclomatic complexity (the
- * energy certificate had nested conditionals + a loop + an IIFE all inline).
- * See docs/ENTERPRISE_ASSESSMENT_2026-04-27.md (Quadrant I, Top fn-size).
- */
-export const PropertyDetailsAndEnergy = ({ detailRows, energyClass }: Props) => {
-  const displayEnergyClass = getDisplayEnergyClass(energyClass);
-  const visibleDetailRows = detailRows.filter(hasDisplayValue);
+interface EnergyBarProps {
+  bar: { cls: string; hex: string };
+  index: number;
+  active: boolean;
+}
 
+const EnergyBar = ({ bar, index, active }: EnergyBarProps) => {
+  const barH = 16 + index * 4;
+  const dark = ["B", "C", "D"].includes(bar.cls);
   return (
-    <Section>
-      <SectionHeader icon={Home} title="Property Details" />
-      <div className="p-6">
-        <DetailRowsGrid rows={visibleDetailRows} />
-
-        <EnergyCertificate
-          energyClass={displayEnergyClass}
-          energyDesc={getEnergyDescription(displayEnergyClass)}
-        />
+    <div className="flex-1 flex flex-col items-center gap-0.5">
+      {active && <div className="text-[8px] font-black text-foreground">▼</div>}
+      <div
+        style={{ backgroundColor: bar.hex, height: `${barH}px`, opacity: active ? 1 : 0.4 }}
+        className={`w-full rounded-sm flex items-end justify-center pb-0.5 transition-all ${active ? "ring-2 ring-white/30 ring-offset-1 ring-offset-card" : ""}`}
+      >
+        <span
+          className="text-[8px] font-black leading-none"
+          style={{ color: dark ? "#000" : "#fff" }}
+        >
+          {bar.cls}
+        </span>
       </div>
-    </Section>
+    </div>
   );
 };
 
@@ -99,29 +99,29 @@ const EnergyCertificate = ({ energyClass, energyDesc }: EnergyCertificateProps) 
   );
 };
 
-interface EnergyBarProps {
-  bar: { cls: string; hex: string };
-  index: number;
-  active: boolean;
-}
+/**
+ * Property Details section: a 2-column grid of `DetailRow`s plus the optional
+ * Energy Performance Certificate visualisation.
+ *
+ * Extracted from PropertyDetail.tsx to lower its cyclomatic complexity (the
+ * energy certificate had nested conditionals + a loop + an IIFE all inline).
+ * See docs/ENTERPRISE_ASSESSMENT_2026-04-27.md (Quadrant I, Top fn-size).
+ */
+export const PropertyDetailsAndEnergy = ({ detailRows, energyClass }: Props) => {
+  const displayEnergyClass = getDisplayEnergyClass(energyClass);
+  const visibleDetailRows = detailRows.filter(hasDisplayValue);
 
-const EnergyBar = ({ bar, index, active }: EnergyBarProps) => {
-  const barH = 16 + index * 4;
-  const dark = ["B", "C", "D"].includes(bar.cls);
   return (
-    <div className="flex-1 flex flex-col items-center gap-0.5">
-      {active && <div className="text-[8px] font-black text-foreground">▼</div>}
-      <div
-        style={{ backgroundColor: bar.hex, height: `${barH}px`, opacity: active ? 1 : 0.4 }}
-        className={`w-full rounded-sm flex items-end justify-center pb-0.5 transition-all ${active ? "ring-2 ring-white/30 ring-offset-1 ring-offset-card" : ""}`}
-      >
-        <span
-          className="text-[8px] font-black leading-none"
-          style={{ color: dark ? "#000" : "#fff" }}
-        >
-          {bar.cls}
-        </span>
+    <Section>
+      <SectionHeader icon={Home} title="Property Details" />
+      <div className="p-6">
+        <DetailRowsGrid rows={visibleDetailRows} />
+
+        <EnergyCertificate
+          energyClass={displayEnergyClass}
+          energyDesc={getEnergyDescription(displayEnergyClass)}
+        />
       </div>
-    </div>
+    </Section>
   );
 };
