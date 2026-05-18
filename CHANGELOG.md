@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.9.0](https://github.com/maiprop/maiprop-listing-site/compare/v1.8.1...v1.9.0) (2026-05-18)
+
+
+### Features
+
+* incorporate live QA and video viewing updates ([2bd8b83](https://github.com/maiprop/maiprop-listing-site/commit/2bd8b83edeb9c0bd3c7417a99ce88120979f762f))
+
+
+### Bug Fixes
+
+* clear deepsource deploy smoke findings ([6f33f08](https://github.com/maiprop/maiprop-listing-site/commit/6f33f080ae0a142b1923b39cdd65aeff7f655231))
+* clear deploy smoke DeepSource findings ([#175](https://github.com/maiprop/maiprop-listing-site/issues/175)) ([667d6cb](https://github.com/maiprop/maiprop-listing-site/commit/667d6cbd10f847a81aacc827114d25164889be9c))
+* clear final release gates ([7a8cc03](https://github.com/maiprop/maiprop-listing-site/commit/7a8cc034ef97f69e134b9f78665d991beddde25f))
+* finalize remediation gate followups ([#172](https://github.com/maiprop/maiprop-listing-site/issues/172)) ([e09bdb1](https://github.com/maiprop/maiprop-listing-site/commit/e09bdb1b96265e852063827391bdbe9f76b35ea8))
+* protect platform admin report access ([741b4cc](https://github.com/maiprop/maiprop-listing-site/commit/741b4cc158731af4007b18b5805035dcf7036229))
+
+
+### Performance Improvements
+
+* harden public traffic and perf gates ([8e6c796](https://github.com/maiprop/maiprop-listing-site/commit/8e6c7969c97051defef54bab4422f249a3a94f18))
+
 ## [1.8.1](https://github.com/maiprop/maiprop-listing-site/compare/v1.8.0...v1.8.1) (2026-05-17)
 
 
