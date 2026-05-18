@@ -18,7 +18,8 @@ interface OAuthErrorRedirect {
 const hasCallbackError = (params: OAuthCallbackParams): boolean =>
   Boolean(params.error || params.errorCode || params.errorDescription);
 
-const getOAuthErrorRedirect = (params: OAuthCallbackParams): OAuthErrorRedirect | null => { // skipcq: JS-R1005 - OAuth failures intentionally branch by intent, known Supabase signup errors, and fallback toast routing.
+// skipcq: JS-R1005 - OAuth failures intentionally branch by intent, known Supabase signup errors, and fallback toast routing.
+const getOAuthErrorRedirect = (params: OAuthCallbackParams): OAuthErrorRedirect | null => {
   if (!hasCallbackError(params)) {
     return null;
   }
@@ -49,6 +50,20 @@ const getCompletedOAuthRedirect = (
   return params.next;
 };
 
+const navigateOAuthError = (
+  redirect: OAuthErrorRedirect,
+  navigate: ReturnType<typeof useNavigate>,
+): void => {
+  if (redirect.toastMessage) {
+    toast.error(redirect.toastMessage);
+  }
+
+  navigate(redirect.path, {
+    replace: true,
+    state: redirect.reason ? { oauthRedirectReason: redirect.reason } : undefined,
+  });
+};
+
 const AuthCallback = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -59,19 +74,12 @@ const AuthCallback = () => {
   );
   const errorRedirect = useMemo(() => getOAuthErrorRedirect(params), [params]);
 
-  useEffect(() => { // skipcq: JS-R1005 - Redirect side effects must guard missing, toast, and stateful signup branches together.
+  useEffect(() => {
     if (!errorRedirect) {
       return;
     }
 
-    if (errorRedirect.toastMessage) {
-      toast.error(errorRedirect.toastMessage);
-    }
-
-    navigate(errorRedirect.path, {
-      replace: true,
-      state: errorRedirect.reason ? { oauthRedirectReason: errorRedirect.reason } : undefined,
-    });
+    navigateOAuthError(errorRedirect, navigate);
   }, [errorRedirect, navigate]);
 
   useEffect(() => {

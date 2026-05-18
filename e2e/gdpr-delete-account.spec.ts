@@ -24,7 +24,8 @@ const canRun =
   ANON_KEY.length > 40 &&
   SERVICE_ROLE.length > 40;
 
-const listAuthUsersByEmail = async ( // skipcq: JS-R1005 - Live Auth pagination keeps deletion and same-email recreation checks in one helper.
+// skipcq: JS-R1005 - Live Auth pagination keeps deletion and same-email recreation checks in one helper.
+const listAuthUsersByEmail = async (
   admin: SupabaseClient,
   email: string,
 ): Promise<User[]> => {
@@ -51,7 +52,8 @@ test.describe("GDPR — account deletion", () => {
     "Requires VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY, and SUPABASE_SERVICE_ROLE_KEY",
   );
 
-  test("deleting an account removes the auth user, blocks old sign-in, and allows fresh signup", async ({ // skipcq: JS-R1005 - This destructive audit must prove delete, blocked old sign-in, PII scrubbing, same-email signup, and cleanup in one isolated user lifecycle.
+  // skipcq: JS-R1005 - This destructive audit must prove delete, blocked old sign-in, PII scrubbing, same-email signup, and cleanup in one isolated user lifecycle.
+  test("deleting an account removes the auth user, blocks old sign-in, and allows fresh signup", async ({
     page,
   }) => {
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE, {
