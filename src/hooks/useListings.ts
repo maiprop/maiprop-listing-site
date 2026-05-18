@@ -7,6 +7,7 @@ import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 import { logger } from "@/lib/logger";
 import { getOwnerParticipantType } from "@/lib/participantConfig";
 import { CATALOG_STATIC_QUERY_STALE_TIME, USER_SCOPED_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
+import { fetchPublicApi } from "@/lib/publicApi";
 
 /**
  * Minimal shape we need from a listings row to enrich it with profiles. The
@@ -173,7 +174,67 @@ export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize
   return query;
 };
 
+type PublicListingsResponse = {
+  data: ListingWithJoins[];
+  hasMore: boolean;
+  page: number;
+  pageSize: number;
+};
+
+function shouldUsePublicListingsApi(filters?: ListingsFilters): boolean {
+  if (filters?.owner_id) return false;
+  if (filters?.status && filters.status !== "active") return false;
+  return true;
+}
+
+function publicListingsPath(filters: ListingsFilters | undefined, page: number, pageSize: number): string {
+  const params = new URLSearchParams();
+  params.set("page", String(page));
+  params.set("pageSize", String(pageSize));
+
+  const append = (key: keyof ListingsFilters, value = filters?.[key]) => {
+    if (value === undefined || value === null || value === "") return;
+    if (Array.isArray(value)) {
+      for (const item of value) params.append(key, String(item));
+      return;
+    }
+    params.set(key, String(value));
+  };
+
+  append("city");
+  append("listing_type");
+  append("property_type");
+  append("includeAuctions");
+  append("price_min");
+  append("price_max");
+  append("beds_min");
+  append("beds_max");
+  append("baths_min");
+  append("baths_max");
+  append("sqm_min");
+  append("sqm_max");
+  append("floor_min");
+  append("floor_max");
+  append("year_min");
+  append("year_max");
+  append("energy_class");
+  append("heating_system");
+  append("construction_status");
+  append("commercial_subtype");
+  append("is_pre_sale");
+  append("is_off_market");
+  append("features");
+  append("sort");
+
+  return `/api/public/listings?${params.toString()}`;
+}
+
 const fetchListingsPage = async (filters?: ListingsFilters, page = 1, pageSize = 24) => { // skipcq: JS-R1005 - Page fetch keeps listing rows and owner profile enrichment together.
+  if (shouldUsePublicListingsApi(filters)) {
+    const cached = await fetchPublicApi<PublicListingsResponse>(publicListingsPath(filters, page, pageSize));
+    if (cached) return cached;
+  }
+
   const from = (page - 1) * pageSize;
   const { data, error } = await buildListingsQuery(filters, from, pageSize);
 
@@ -234,6 +295,11 @@ export const useListings = (
     staleTime: filters?.owner_id ? USER_SCOPED_QUERY_STALE_TIME : CATALOG_STATIC_QUERY_STALE_TIME,
     queryFn: async () => { // skipcq: JS-R1005 - Owner profile enrichment keeps the map fetch result self-contained.
       const limit = filters?.limit ?? MAP_FETCH_LIMIT;
+      if (shouldUsePublicListingsApi(filters)) {
+        const cached = await fetchPublicApi<PublicListingsResponse>(publicListingsPath(filters, 1, limit));
+        if (cached) return cached.data;
+      }
+
       const { data, error } = await buildListingsQuery(filters, 0, limit);
       if (error) throw error;
       const rows = data ?? [];
@@ -357,9 +423,17 @@ export const useOwnerProStatus = (listingId?: string, ownerId?: string | null) =
 export const useTrackListingView = () => {
   return useMutation({
     mutationFn: async (listingId: string) => {
-      const sessionKey = `viewed_${listingId}`;
-      if (sessionStorage.getItem(sessionKey)) return;
-      sessionStorage.setItem(sessionKey, "1");
+      const viewTtlMs = 6 * 60 * 60 * 1000;
+      const storageKey = `maiprop_viewed_${listingId}`;
+      const now = Date.now();
+      const lastTracked = Number(localStorage.getItem(storageKey) ?? sessionStorage.getItem(storageKey) ?? "0");
+      if (Number.isFinite(lastTracked) && now - lastTracked < viewTtlMs) return;
+
+      localStorage.setItem(storageKey, String(now));
+      sessionStorage.setItem(storageKey, String(now));
+
+      const sampleRate = Number(import.meta.env.VITE_VIEW_TRACKING_SAMPLE_RATE ?? "1");
+      if (Number.isFinite(sampleRate) && sampleRate >= 0 && sampleRate < 1 && Math.random() > sampleRate) return;
 
       await supabase.functions.invoke("record-listing-view", {
         body: { listingId },

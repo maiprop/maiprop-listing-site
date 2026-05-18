@@ -50,7 +50,7 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "test:perf": "playwright test e2e/performance-gates.spec.ts --project=chromium",
+    "test:perf": "npm run build && playwright test e2e/performance-gates.spec.ts --project=chromium",
     "test:e2e:live-smoke": "playwright test e2e/live-critical-smoke.spec.ts --project=chromium",
     "test:e2e:ui": "playwright test --ui",
     "test:deno": "deno test --allow-env --allow-net --allow-read --allow-write supabase/functions/",
