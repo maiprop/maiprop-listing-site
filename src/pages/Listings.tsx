@@ -38,10 +38,16 @@ import {
 } from "@/lib/listingsConfig";
 import { mapListingFromCard } from "@/lib/listingsPerformance";
 
-const GRID_LOADING_SKELETON_COUNT = 4;
+const GRID_LOADING_SKELETON_KEYS = [
+  "grid-loading-1",
+  "grid-loading-2",
+  "grid-loading-3",
+  "grid-loading-4",
+];
 const GRID_ESTIMATED_ROW_HEIGHT = 520;
 
-export default function Listings() {
+// skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
+export default function Listings() { // skipcq: JS-R1005 - Listings coordinates filters, map state, comparison, and virtualization in one route shell.
   const { t } = useTranslation();
 
   const [viewMode, setViewMode] = useState<"grid" | "split" | "map">("grid");
@@ -75,7 +81,7 @@ export default function Listings() {
     ? selectedPrice.split("-").map(Number)
     : [undefined, undefined];
 
-  const filters = useMemo<ListingsFilters>(() => ({
+  const filters = useMemo<ListingsFilters>(() => ({ // skipcq: JS-R1005 - Listings route maps many independent URL filters into one query payload.
     city: searchQuery || undefined,
     listing_type: preSaleOnly ? "sale" : (selectedListingType || undefined),
     property_type: selectedType || undefined,
@@ -505,7 +511,7 @@ export default function Listings() {
           </div>
 
           {/* ── Split view ── */}
-          {viewMode === "split" ? (() => {
+          {viewMode === "split" ? (() => { // skipcq: JS-R1005 - Split view derives viewport and polygon lists in one render branch.
             const splitDisplayList = polygonFilterIds !== null
               ? filtered.filter(p => polygonFilterIds.has(p.id))
               : viewportIds !== null
@@ -580,7 +586,7 @@ export default function Listings() {
           })() : viewMode === "grid" ? (
             isLoading ? (
               <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-                {Array.from({ length: GRID_LOADING_SKELETON_COUNT }).map((_, i) => <PropertyCardSkeleton key={i} />)}
+                {GRID_LOADING_SKELETON_KEYS.map((key) => <PropertyCardSkeleton key={key} />)}
               </div>
             ) : isError ? (
               <EmptyState

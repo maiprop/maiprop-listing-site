@@ -7,7 +7,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { validatePassword } from "@/lib/passwordPolicy";
 
-export default function ResetPassword() {
+// skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
+export default function ResetPassword() { // skipcq: JS-R1005 - Password reset route coordinates recovery state, validation, and submit UI.
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -32,7 +33,7 @@ export default function ResetPassword() {
     }
     const pw = validatePassword(password);
     if (!pw.valid) {
-      toast.error(pw.error!);
+      toast.error(pw.error ?? "Password does not meet the requirements");
       return;
     }
     setLoading(true);

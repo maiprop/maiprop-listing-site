@@ -73,7 +73,7 @@ const AUCTION_INFO_NOTES: { id: string; text: string }[] = [
 const safeUrl = (url: string | null | undefined): string | null =>
   url && /^https?:\/\//i.test(url) ? url : null;
 
-const asNumber = (value: unknown): number | null => {
+const asNumber = (value: unknown): number | null => { // skipcq: JS-R1005 - Auction values may arrive as numeric or string payloads.
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string" && value.trim() !== "") {
     const parsed = Number(value);
@@ -114,7 +114,7 @@ const StatChip = ({ icon, label }: { icon: React.ReactNode; label: string }) => 
 };
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-const AuctionTitleSection = ({
+const AuctionTitleSection = ({ // skipcq: JS-R1005 - Title metadata intentionally renders compact optional auction badges in one reusable header block.
   title,
   city,
   address,
@@ -138,7 +138,7 @@ const AuctionTitleSection = ({
   yearBuilt: number | null;
   ownershipBadge: { cls: string; label: string } | null;
   ownershipPct: number | null;
-}) => {
+}) => { // skipcq: JS-R1005 - Auction title section renders optional metadata and badges in one header.
   const badge = countdownBadge(days);
 
   return (
@@ -197,7 +197,7 @@ const AuctionTitleSection = ({
   );
 };
 
-const AuctionDetail = () => {
+const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates auction state, SEO, media, map, valuation, and assistant sections in one page shell.
   const { id = "" } = useParams<{ id: string }>();
   const { state } = useLocation() as { state?: { auction?: Record<string, unknown> } };
   const [walkScore, setWalkScore] = useState<number | null>(null);

@@ -173,7 +173,7 @@ export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize
   return query;
 };
 
-const fetchListingsPage = async (filters?: ListingsFilters, page = 1, pageSize = 24) => {
+const fetchListingsPage = async (filters?: ListingsFilters, page = 1, pageSize = 24) => { // skipcq: JS-R1005 - Page fetch keeps listing rows and owner profile enrichment together.
   const from = (page - 1) * pageSize;
   const { data, error } = await buildListingsQuery(filters, from, pageSize);
 
@@ -232,7 +232,7 @@ export const useListings = (
     queryKey: ["listings", filters],
     enabled: options?.enabled ?? true,
     staleTime: filters?.owner_id ? USER_SCOPED_QUERY_STALE_TIME : CATALOG_STATIC_QUERY_STALE_TIME,
-    queryFn: async () => {
+    queryFn: async () => { // skipcq: JS-R1005 - Owner profile enrichment keeps the map fetch result self-contained.
       const limit = filters?.limit ?? MAP_FETCH_LIMIT;
       const { data, error } = await buildListingsQuery(filters, 0, limit);
       if (error) throw error;
@@ -275,42 +275,54 @@ const normalizeListingWithJoins = (listing: Database["public"]["Tables"]["listin
   } as ListingWithJoins;
 };
 
+type ListingOwnerContext = Pick<ListingWithJoins, "profiles" | "ownerParticipantType">;
+
+const EMPTY_OWNER_CONTEXT: ListingOwnerContext = {
+  profiles: null,
+  ownerParticipantType: null,
+};
+
+const fetchListingOwnerContext = async (ownerId: string | null): Promise<ListingOwnerContext> => { // skipcq: JS-R1005 - Owner context fetch handles nullable owner ids and fallback profile state.
+  if (!ownerId) return EMPTY_OWNER_CONTEXT;
+
+  try {
+    const { data: profilePublic } = await supabase
+      .from("profiles_public")
+      .select("user_id, display_name, avatar_url, role")
+      .eq("user_id", ownerId)
+      .maybeSingle();
+    const profiles = profilePublic ?? null;
+    return {
+      profiles,
+      ownerParticipantType: profiles ? getOwnerParticipantType(profiles as { role?: string; bio?: string | null }) : null,
+    };
+  } catch (_err: unknown) {
+    return EMPTY_OWNER_CONTEXT;
+  }
+};
+
+const fetchListingById = async (id: string): Promise<ListingWithJoins | null> => {
+  const { data, error } = await supabase
+    .from("listings")
+    .select(`
+      *,
+      listing_images(url, sort_order)
+    `)
+    .eq("id", id)
+    .maybeSingle();
+
+  // PGRST116 (no rows) now handled by maybeSingle() — only real errors thrown
+  if (error) throw error;
+  if (!data) return null;
+
+  const { profiles, ownerParticipantType } = await fetchListingOwnerContext(data.owner_id);
+  return normalizeListingWithJoins({ ...data, profiles, ownerParticipantType });
+};
+
 export const useListing = (id: string, options: UseListingOptions = {}) => {
   return useQuery({
     queryKey: ["listing", id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("listings")
-        .select(`
-          *,
-          listing_images(url, sort_order)
-        `)
-        .eq("id", id)
-        .maybeSingle();
-      // PGRST116 (no rows) now handled by maybeSingle() — only real errors thrown
-      if (error) throw error;
-      if (!data) return null;
-      // Fetch owner profile only; Pro status is resolved in a separate query so
-      // detail pages do not wait on an Edge Function before first paint.
-      let profiles = null;
-      let ownerParticipantType: "agent" | "seller" | null = null;
-      if (data.owner_id) {
-        try {
-          const { data: profilePublic } = await supabase
-            .from("profiles_public")
-            .select("user_id, display_name, avatar_url, role")
-            .eq("user_id", data.owner_id)
-            .maybeSingle();
-          profiles = profilePublic ?? null;
-          if (profilePublic) {
-            ownerParticipantType = getOwnerParticipantType(profilePublic as { role?: string; bio?: string | null });
-          }
-        } catch (_err: unknown) {
-          // owner profile fetch is non-critical; listing still renders without it
-        }
-      }
-      return normalizeListingWithJoins({ ...data, profiles, ownerParticipantType });
-    },
+    queryFn: () => fetchListingById(id),
     enabled: Boolean(id),
     placeholderData: options.initialData ? normalizeListingWithJoins(options.initialData) : undefined,
     staleTime: CATALOG_STATIC_QUERY_STALE_TIME,

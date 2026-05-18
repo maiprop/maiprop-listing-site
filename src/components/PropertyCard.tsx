@@ -88,30 +88,34 @@ const PROPERTY_IMAGE_WIDTHS = [320, 480, 768, 1024];
 const PROPERTY_CARD_IMAGE_SIZES = "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw";
 const COMPACT_PROPERTY_IMAGE_SIZES = "96px";
 
+const withUnsplashImageParams = (url: URL, width: number): string | null => {
+  if (!url.hostname.includes("images.unsplash.com")) return null;
+
+  url.searchParams.set("auto", "format");
+  url.searchParams.set("q", "80");
+  url.searchParams.set("w", String(width));
+  return url.toString();
+};
+
+const withSupabaseImageParams = (url: URL, width: number): string | null => {
+  if (!url.hostname.endsWith("supabase.co") || !url.pathname.includes("/storage/v1/object/public/")) return null;
+
+  url.pathname = url.pathname.replace("/storage/v1/object/public/", "/storage/v1/render/image/public/");
+  url.searchParams.set("quality", "80");
+  url.searchParams.set("resize", "cover");
+  url.searchParams.set("width", String(width));
+  return url.toString();
+};
+
 const getSizedImageUrl = (src: string, width: number): string | null => {
   try {
     const url = new URL(src, APP_ORIGIN);
     if (!["http:", "https:"].includes(url.protocol)) return null;
 
-    if (url.hostname.includes("images.unsplash.com")) {
-      url.searchParams.set("auto", "format");
-      url.searchParams.set("q", "80");
-      url.searchParams.set("w", String(width));
-      return url.toString();
-    }
-
-    if (url.hostname.endsWith("supabase.co") && url.pathname.includes("/storage/v1/object/public/")) {
-      url.pathname = url.pathname.replace("/storage/v1/object/public/", "/storage/v1/render/image/public/");
-      url.searchParams.set("quality", "80");
-      url.searchParams.set("resize", "cover");
-      url.searchParams.set("width", String(width));
-      return url.toString();
-    }
+    return withUnsplashImageParams(url, width) ?? withSupabaseImageParams(url, width);
   } catch {
     return null;
   }
-
-  return null;
 };
 
 const getPropertyImageSrcSet = (src: string): string | undefined => {

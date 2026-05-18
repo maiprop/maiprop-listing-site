@@ -712,6 +712,9 @@ jobs:
             echo "Pages production env vars synced (site lock: disabled)"
           fi
 
+      - name: Install deploy smoke browser
+        run: npx playwright install --with-deps chromium
+
       - name: Deploy to Cloudflare Pages (production)
         uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3.15.0
         with:
@@ -721,27 +724,7 @@ jobs:
 
       - name: Post-deploy health check
         id: health_check
-        run: |
-          # Checks the active production custom domain. Add additional URLs
-          # (space-separated) as more domains are attached in Cloudflare Pages.
-          HEALTH_URLS="https://portal.maiprop.co"
-          for url in $HEALTH_URLS; do
-            ok=0
-            for i in $(seq 1 8); do
-              if curl --fail --silent --max-time 30 "$url" > /dev/null; then
-                echo "[$url] health check passed on attempt $i"
-                ok=1
-                break
-              fi
-              echo "[$url] attempt $i failed, retrying in 10s..."
-              sleep 10
-            done
-            if [ "$ok" -eq 0 ]; then
-              echo "[$url] health check failed after all retries"
-              exit 1
-            fi
-          done
-          echo "All health checks passed"
+        run: npm run check:production-deploy -- https://portal.maiprop.co --browser
 
       - name: Rollback on health check failure
         if: failure() && steps.health_check.outcome == 'failure' && steps.prev_deploy.outputs.id != ''

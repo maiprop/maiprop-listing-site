@@ -40,7 +40,8 @@ const STATUS_LABELS: Record<OHRegistrationStatus, string> = {
   cancelled: "Cancelled",
 };
 
-export default function OpenHouseAssetControlPanel({ listingId, isOwner, listingPrice }: Props) {
+// skipcq: JS-0067 - Exported React component is intentionally module-scoped.
+export default function OpenHouseAssetControlPanel({ listingId, isOwner, listingPrice }: Props) { // skipcq: JS-R1005 - Owner control panel coordinates settings, approvals, documents, and offers in one surface.
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [registrationsOpen, setRegistrationsOpen] = useState(true);
   const [offersOpen, setOffersOpen] = useState(true);
@@ -204,7 +205,7 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
               <div className="p-8 text-center text-muted-foreground text-sm">No registrations yet</div>
             ) : (
               <div className="divide-y divide-border">
-                {registrations.map((r: OpenHouseRegistration) => (
+                {registrations.map((r: OpenHouseRegistration) => ( // skipcq: JS-R1005 - Registration row renders optional contact and approval states together.
                   <div key={r.id} className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div className="min-w-0 flex-1">
                       <div className="font-medium">
@@ -395,8 +396,9 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
                 )}
 
                 {/* Winner banner */}
-                {offers.some(o => o.status === "accepted") && (() => {
-                  const winner = offers.find(o => o.status === "accepted")!;
+                {(() => {
+                  const winner = offers.find(o => o.status === "accepted");
+                  if (!winner) return null;
                   return (
                     <div className="mx-4 mt-4 mb-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 flex items-center justify-between">
                       <div>
@@ -412,7 +414,7 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
                 })()}
 
                 <div className="divide-y divide-border max-h-64 overflow-y-auto">
-                  {[...offers].sort((a, b) => Number(b.amount) - Number(a.amount)).map((o) => {
+                  {[...offers].sort((a, b) => Number(b.amount) - Number(a.amount)).map((o) => { // skipcq: JS-R1005 - Offer row keeps sealed, revealed, accepted, and rejected states together.
                     const bidderName = o.profiles?.display_name || "Bidder";
                     const isWinner = o.status === "accepted";
                     const isRevealed = o.status === "revealed";
@@ -468,7 +470,8 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
   );
 }
 
-function OpenHouseSettingsForm({
+// skipcq: JS-0067 - Form subcomponent is intentionally module-scoped for stable identity.
+function OpenHouseSettingsForm({ // skipcq: JS-R1005 - Settings form owns related open-house controls and defaults.
   listingId: _listingId,
   settings,
   onSave,
@@ -490,7 +493,7 @@ function OpenHouseSettingsForm({
   );
   const [allowSealed, setAllowSealed] = useState(settings?.allow_sealed_bids ?? true);
 
-  useEffect(() => {
+  useEffect(() => { // skipcq: JS-R1005 - Settings sync mirrors several related form fields from one source.
     if (settings) {
       setTimeslots(settings.timeslots ?? []);
       setMaxPerSlot(settings.max_visitors_per_slot ?? 10);

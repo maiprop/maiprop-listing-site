@@ -27,12 +27,14 @@ export interface MapViewProps {
 const VISIBLE_RECALC_THROTTLE_MS = 120;
 const HEATMAP_SAMPLE_LIMIT = 1500;
 
+// skipcq: JS-0067 - Pure map helper is intentionally module-scoped.
 function sampleListingsForHeatmap(listings: MapListing[], limit = HEATMAP_SAMPLE_LIMIT) {
   if (listings.length <= limit) return listings;
   const step = listings.length / limit;
   return Array.from({ length: limit }, (_unused, index) => listings[Math.floor(index * step)]);
 }
 
+// skipcq: JS-0067 - Pure map helper is intentionally module-scoped.
 function boundsKey(bounds: { getWest: () => number; getSouth: () => number; getEast: () => number; getNorth: () => number }) {
   return [
     bounds.getWest(),
@@ -42,7 +44,8 @@ function boundsKey(bounds: { getWest: () => number; getSouth: () => number; getE
   ].map((value) => value.toFixed(4)).join(":");
 }
 
-export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, height }: MapViewProps) {
+// skipcq: JS-0067 - Exported React component is intentionally module-scoped.
+export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, height }: MapViewProps) { // skipcq: JS-R1005 - MapView keeps Mapbox load state, drawing, heatmap, and visibility callbacks together.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [MapComponents, setMapComponents] = useState<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -88,7 +91,7 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
 
   const listingById = useMemo(() => new Map(mapped.map((listing) => [listing.id, listing])), [mapped]);
 
-  const mapBounds = useMemo(() => {
+  const mapBounds = useMemo(() => { // skipcq: JS-R1005 - Bounds calculation intentionally handles all coordinate extrema in one pass.
     if (mapped.length === 0) return null;
     let minLng = Infinity;
     let minLat = Infinity;
@@ -109,7 +112,7 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
   const heatmapGeoJSON = useMemo(() => buildGeoJSON(sampleListingsForHeatmap(mapped)), [mapped]);
 
   // Draw GeoJSON (reactive)
-  const drawLineGJ = useMemo(() => {
+  const drawLineGJ = useMemo(() => { // skipcq: JS-R1005 - Draw line state handles hover and closed polygon variants together.
     if (drawnPoints.length === 0) return EMPTY_GJ;
     const coords: [number, number][] = [...drawnPoints];
     if (hoverPoint && !polygonClosed) coords.push(hoverPoint);
@@ -162,7 +165,7 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
   useEffect(() => { const t = setTimeout(fitBounds, 300); return () => clearTimeout(t); }, [fitBounds]);
 
   // ── Compute visible listings ─────────────────────────────────────────────
-  const computeVisible = useCallback(() => {
+  const computeVisible = useCallback(() => { // skipcq: JS-R1005 - Visible listing computation is tied to map bounds and callback state.
     if (!onVisibleListingsChange) return;
     const bounds = mapRef.current?.getMap()?.getBounds();
     if (!bounds) return;
@@ -177,7 +180,7 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
   const visibleTimerRef = useRef<number | null>(null);
   const visibleRafRef = useRef<number | null>(null);
 
-  const scheduleComputeVisible = useCallback((force = false) => {
+  const scheduleComputeVisible = useCallback((force = false) => { // skipcq: JS-R1005 - Scheduler coordinates bounds dedupe, timer cleanup, and RAF batching.
     if (!onVisibleListingsChange) return;
     const map = mapRef.current?.getMap?.();
     const bounds = map?.getBounds?.();
@@ -206,7 +209,7 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
   }, []);
 
   // ── Close polygon ────────────────────────────────────────────────────────
-  const closePolygon = useCallback((points: [number, number][]) => {
+  const closePolygon = useCallback((points: [number, number][]) => { // skipcq: JS-R1005 - Polygon close action updates drawing state and filters in one place.
     if (points.length < 3) return;
     setPolygonClosed(true);
     setDrawMode(false);
@@ -232,7 +235,7 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
 
   // ── Click handler ────────────────────────────────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const onClick = useCallback((event: any) => {
+  const onClick = useCallback((event: any) => { // skipcq: JS-R1005 - Map click handler coordinates drawing, clusters, and popup selection.
     const { drawMode, polygonClosed, drawnPoints } = stateRef.current;
 
     if (drawMode && !polygonClosed) {
@@ -267,7 +270,8 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
     // Price label click → open popup
     const pins = map.queryRenderedFeatures(event.point, { layers: ["price-labels"] });
     if (pins.length) {
-      const props = pins[0].properties!;
+      const props = pins[0].properties;
+      if (!props?.id) return;
       const id = props.id;
       const listing = listingById.get(id);
       if (listing) {

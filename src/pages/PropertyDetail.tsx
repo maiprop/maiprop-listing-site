@@ -47,8 +47,7 @@ import { PropertyValuationLockedCard } from "@/components/property/PropertyValua
 import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
 
 // ─── Main component ──────────────────────────────────────────────────────────
-// skipcq: JS-R1005 - Detail route coordinates listing data, media, modals, and gated owner actions in one page shell.
-const PropertyDetail = () => {
+const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates listing data, media, modals, and gated owner actions in one page shell.
   const { id } = useParams<{id: string;}>();
   const navigate = useNavigate();
   const { state } = useLocation() as { state?: { listing?: ListingWithJoins } };
@@ -86,7 +85,7 @@ const PropertyDetail = () => {
   // - new build  → /new-build/:id
   // - auction    → /auction/:id  (AuctionRouter renders PropertyDetail there too,
   //                so UI is identical; this just keeps the URL canonical)
-  useEffect(() => {
+  useEffect(() => { // skipcq: JS-R1005 - Canonical route redirect checks new-build and auction variants together.
     if (!dbListing) return;
     const _db = dbListing as ListingWithJoins;
     if (_db.is_pre_sale || _db.construction_status) {
@@ -120,7 +119,7 @@ const PropertyDetail = () => {
     if (id) toggleFav.mutate({ listing_id: id, isFavorited });
   };
 
-  const handleContact = async () => {
+  const handleContact = async () => { // skipcq: JS-R1005 - Contact flow validates auth, owner state, and conversation creation together.
     if (!user) {toast.error(t("property.signInToContact"));navigate("/login");return;}
     const ownerId = dbListing ?
     (dbListing as ListingWithJoins).profiles?.user_id ?? (dbListing as ListingWithJoins).owner_id :
@@ -229,7 +228,7 @@ const PropertyDetail = () => {
 
 
   // Street View fallback via proxy (key never in client URLs)
-  const streetViewFallback = (() => {
+  const streetViewFallback = (() => { // skipcq: JS-R1005 - Street View fallback supports coordinate and address lookup paths.
     if (db.latitude != null && db.longitude != null) {
       return getStreetViewProxyUrl({ lat: Number(db.latitude), lng: Number(db.longitude) });
     }
@@ -361,7 +360,7 @@ const PropertyDetail = () => {
               {/* ── Auction Details (shown first for auction listings) ── */}
               {isAuction && (
                 <PropertyAuctionSection
-                  listingId={id!}
+                  listingId={db.id}
                   auctionDate={db.auction_date}
                   auctionStartingBid={Number(db.auction_starting_bid) || 0}
                   ownershipDisplay={ownershipDisplay}
@@ -497,7 +496,7 @@ const PropertyDetail = () => {
               )}
 
               {/* ④ Property Report — Pro only, 3 free/month, €9 each extra */}
-              <PropertyReportCard listingId={id!} listing={db} />
+              <PropertyReportCard listingId={db.id} listing={db} />
 
               {/* Professional add-ons — valuation & legal */}
               <div className="glass-card rounded-2xl border border-border overflow-hidden">

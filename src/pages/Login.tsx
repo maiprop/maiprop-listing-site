@@ -33,6 +33,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [didSignIn, setDidSignIn] = useState(false);
+  const [authError, setAuthError] = useState("");
 
   const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname || "/dashboard";
 
@@ -44,25 +45,35 @@ export default function Login() {
     }
   }, [authLoading, user, from, navigate]);
 
+  useEffect(() => {
+    setAuthError("");
+  }, [view]);
+
   const handleGoogleSignIn = async () => {
+    setAuthError("");
     setGoogleLoading(true);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: `${APP_ORIGIN}${from}` },
     });
     if (error) {
-      toast.error("Google sign-in failed. Please try again.");
+      const message = "Google sign-in failed. Please try again.";
+      setAuthError(message);
+      toast.error(message);
       setGoogleLoading(false);
     }
   };
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAuthError("");
     setLoading(true);
     const { error } = await signIn(email, password);
     setLoading(false);
     if (error) {
-      toast.error("Invalid email or password");
+      const message = "Invalid email or password";
+      setAuthError(message);
+      toast.error(message);
     } else {
       // signIn triggers onAuthStateChange which sets user → useEffect above redirects
       setDidSignIn(true);
@@ -71,12 +82,14 @@ export default function Login() {
 
   const handleForgot = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAuthError("");
     setLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
       redirectTo: `${APP_ORIGIN}/reset-password`,
     });
     setLoading(false);
     if (error) {
+      setAuthError(error.message);
       toast.error(error.message);
     } else {
       setView("forgot-sent");
@@ -140,6 +153,11 @@ export default function Login() {
                     {(loading || (didSignIn && authLoading)) && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
                     {t("loginPage.signIn")}
                   </Button>
+                  {authError && (
+                    <p role="alert" aria-live="polite" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                      {authError}
+                    </p>
+                  )}
                 </form>
                 <p className="text-xs text-muted-foreground text-center mt-4">
                   {t("loginPage.noAccount")}{" "}
@@ -171,6 +189,11 @@ export default function Login() {
                     {loading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
                     {t("loginPage.sendLink")}
                   </Button>
+                  {authError && (
+                    <p role="alert" aria-live="polite" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                      {authError}
+                    </p>
+                  )}
                 </form>
               </>
             )}
