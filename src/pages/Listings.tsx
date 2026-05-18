@@ -38,6 +38,9 @@ import {
 } from "@/lib/listingsConfig";
 import { mapListingFromCard } from "@/lib/listingsPerformance";
 
+const GRID_LOADING_SKELETON_COUNT = 4;
+const GRID_ESTIMATED_ROW_HEIGHT = 520;
+
 export default function Listings() {
   const { t } = useTranslation();
 
@@ -459,7 +462,7 @@ export default function Listings() {
         )}
 
         {/* Results */}
-        <div className={`${viewMode === "split" ? "" : "container"} py-4 sm:py-8 pb-28 lg:pb-8`}>
+        <div className={`${viewMode === "split" ? "" : "container min-h-[calc(100vh-8rem)]"} py-4 sm:py-8 pb-28 lg:pb-8`}>
           {/* Stats bar */}
           <div className={`flex items-center justify-between mb-6 flex-wrap gap-3 ${viewMode === "split" ? "container" : ""}`}>
             <div className="flex items-center gap-3">
@@ -577,7 +580,7 @@ export default function Listings() {
           })() : viewMode === "grid" ? (
             isLoading ? (
               <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-                {Array.from({ length: 8 }).map((_, i) => <PropertyCardSkeleton key={i} />)}
+                {Array.from({ length: GRID_LOADING_SKELETON_COUNT }).map((_, i) => <PropertyCardSkeleton key={i} />)}
               </div>
             ) : isError ? (
               <EmptyState
@@ -609,7 +612,7 @@ export default function Listings() {
                     items={filtered}
                     className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4"
                     gap={16}
-                    estimateItemHeight={430}
+                    estimateItemHeight={GRID_ESTIMATED_ROW_HEIGHT}
                     renderItem={renderListingCard}
                     data-testid="listing-grid"
                   />
