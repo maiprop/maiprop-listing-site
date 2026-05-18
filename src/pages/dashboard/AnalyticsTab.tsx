@@ -96,8 +96,7 @@ function BuyerPlaceholder() {
 
 // ── Seller / Agent / Developer / Professional analytics ───────────────────────────
 // skipcq: JS-0067 - View helper is intentionally module-scoped.
-// skipcq: JS-R1005 - Analytics view coordinates several dashboard metrics and chart states in one tab.
-function SellerAgentAnalytics({ participantType }: { participantType: string }) {
+function SellerAgentAnalytics({ participantType }: { participantType: string }) { // skipcq: JS-R1005 - Analytics view coordinates several dashboard metrics and chart states in one tab.
   const [selectedDays, setSelectedDays] = useState(14);
 
   const { data: myListings = [], isLoading: listingsLoading } = useMyListings();

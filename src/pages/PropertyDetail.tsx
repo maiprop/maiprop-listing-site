@@ -47,8 +47,7 @@ import { PropertyValuationLockedCard } from "@/components/property/PropertyValua
 import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
 
 // ─── Main component ──────────────────────────────────────────────────────────
-// skipcq: JS-R1005 - Detail route coordinates listing data, media, modals, and gated owner actions in one page shell.
-const PropertyDetail = () => {
+const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates listing data, media, modals, and gated owner actions in one page shell.
   const { id } = useParams<{id: string;}>();
   const navigate = useNavigate();
   const { state } = useLocation() as { state?: { listing?: ListingWithJoins } };

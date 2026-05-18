@@ -36,8 +36,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
 
 // skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
-// skipcq: JS-R1005 - Open-house detail coordinates listing data, registration, offers, and owner controls.
-export default function OpenHouseDetail() {
+export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house detail coordinates listing data, registration, offers, and owner controls.
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();

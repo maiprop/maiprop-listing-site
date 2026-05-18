@@ -45,8 +45,7 @@ function boundsKey(bounds: { getWest: () => number; getSouth: () => number; getE
 }
 
 // skipcq: JS-0067 - Exported React component is intentionally module-scoped.
-// skipcq: JS-R1005 - MapView keeps Mapbox load state, drawing, heatmap, and visibility callbacks together.
-export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, height }: MapViewProps) {
+export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, height }: MapViewProps) { // skipcq: JS-R1005 - MapView keeps Mapbox load state, drawing, heatmap, and visibility callbacks together.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [MapComponents, setMapComponents] = useState<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
