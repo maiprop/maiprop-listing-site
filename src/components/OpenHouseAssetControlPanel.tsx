@@ -40,6 +40,8 @@ const STATUS_LABELS: Record<OHRegistrationStatus, string> = {
   cancelled: "Cancelled",
 };
 
+// skipcq: JS-0067 - Exported React component is intentionally module-scoped.
+// skipcq: JS-R1005 - Owner control panel coordinates settings, approvals, documents, and offers in one surface.
 export default function OpenHouseAssetControlPanel({ listingId, isOwner, listingPrice }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [registrationsOpen, setRegistrationsOpen] = useState(true);
@@ -469,6 +471,7 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
   );
 }
 
+// skipcq: JS-0067 - Form subcomponent is intentionally module-scoped for stable identity.
 function OpenHouseSettingsForm({
   listingId: _listingId,
   settings,

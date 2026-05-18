@@ -17,6 +17,7 @@ interface DealChecklistProps {
   entityId: string | undefined;
 }
 
+// skipcq: JS-0067 - Exported React component is intentionally module-scoped.
 export function DealChecklist({ entityType, entityId }: DealChecklistProps) {
   const { user } = useAuth();
   const { data: checklist, isLoading } = useDealChecklist(entityType, entityId);

@@ -36,6 +36,7 @@ const DEFAULT_CONFIG: SmartFilterConfig = {
   featuresLabel: "Features & Amenities",
 };
 
+// skipcq: JS-0067 - Exported hook is intentionally module-scoped.
 export function useSmartFilters(type: string, subtype: string, listingType: string) {
   const { user } = useAuth();
   const cacheKey = `${type}|${subtype}|${listingType}`;

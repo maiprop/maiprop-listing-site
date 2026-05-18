@@ -99,6 +99,8 @@ const notifyDeveloperInterest = async (ownerId: string, contactName: string, lis
 };
 
 // ── Main page ─────────────────────────────────────────────────────────────────
+// skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
+// skipcq: JS-R1005 - New-build detail coordinates listing data, lead capture, media, and analytics affordances.
 export default function NewBuildDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();

@@ -119,6 +119,8 @@ const BACK_STEP_BY_STEP: Readonly<Partial<Record<OnboardingStep, OnboardingStep>
   "pro-video": "pro-availability",
 };
 
+// skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
+// skipcq: JS-R1005 - Onboarding keeps a multi-step account setup workflow in one route shell.
 export default function Onboarding() {
   const navigate = useNavigate();
   const { user, profile, refreshProfile, loading: authLoading } = useAuth();

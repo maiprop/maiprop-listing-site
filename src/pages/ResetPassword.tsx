@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { validatePassword } from "@/lib/passwordPolicy";
 
+// skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
 export default function ResetPassword() {
   const navigate = useNavigate();
   const [password, setPassword] = useState("");

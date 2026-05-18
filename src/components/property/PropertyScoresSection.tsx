@@ -19,6 +19,7 @@ interface Props {
   noiseScore: number | null;
 }
 
+// skipcq: JS-0067 - Small presentational helper is intentionally module-scoped.
 function ScoreRing({
   score,
   max,
@@ -61,6 +62,7 @@ function ScoreRing({
   );
 }
 
+// skipcq: JS-0067 - Exported React component is intentionally module-scoped.
 export function PropertyScoresSection({ walkScore, walkabilityScore, safetyScore, noiseScore }: Props) {
   const resolvedWalkScore = walkScore ?? walkabilityScore;
   const hasWalk = resolvedWalkScore !== null;

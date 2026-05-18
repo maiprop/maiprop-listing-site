@@ -27,12 +27,14 @@ export interface MapViewProps {
 const VISIBLE_RECALC_THROTTLE_MS = 120;
 const HEATMAP_SAMPLE_LIMIT = 1500;
 
+// skipcq: JS-0067 - Pure map helper is intentionally module-scoped.
 function sampleListingsForHeatmap(listings: MapListing[], limit = HEATMAP_SAMPLE_LIMIT) {
   if (listings.length <= limit) return listings;
   const step = listings.length / limit;
   return Array.from({ length: limit }, (_unused, index) => listings[Math.floor(index * step)]);
 }
 
+// skipcq: JS-0067 - Pure map helper is intentionally module-scoped.
 function boundsKey(bounds: { getWest: () => number; getSouth: () => number; getEast: () => number; getNorth: () => number }) {
   return [
     bounds.getWest(),
@@ -42,6 +44,8 @@ function boundsKey(bounds: { getWest: () => number; getSouth: () => number; getE
   ].map((value) => value.toFixed(4)).join(":");
 }
 
+// skipcq: JS-0067 - Exported React component is intentionally module-scoped.
+// skipcq: JS-R1005 - MapView keeps Mapbox load state, drawing, heatmap, and visibility callbacks together.
 export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, height }: MapViewProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [MapComponents, setMapComponents] = useState<any>(null);

@@ -61,6 +61,7 @@ export interface ListingsFilterActions {
   getMulti: (key: string) => string[];
 }
 
+// skipcq: JS-0067 - Exported hook is intentionally module-scoped.
 export function useListingsFilters(): ListingsFilterState & ListingsFilterActions {
   const [searchParams, setSearchParams] = useSearchParams();
 
