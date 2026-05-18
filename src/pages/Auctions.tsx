@@ -27,7 +27,7 @@ import {
 } from "@/hooks/useAuctionsPipeline";
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-function AuctionCardSkeleton() {
+const AuctionCardSkeleton = () => {
   return (
     <div className="glass-card rounded-xl overflow-hidden border border-border flex flex-col min-h-[382px]" aria-hidden="true">
       <div className="h-44 bg-muted animate-pulse" />
@@ -46,9 +46,9 @@ function AuctionCardSkeleton() {
       </div>
     </div>
   );
-}
+};
 
-export default function Auctions() {
+const Auctions = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -154,7 +154,7 @@ export default function Auctions() {
       <main id="main-content" className="pt-16">
         <AuctionHero stats={auctionStats} />
         <AuctionAlertBanner
-          isAuthenticated={!!user}
+          isAuthenticated={Boolean(user)}
           onOpenAlert={() => setAlertModalOpen(true)}
           onSignInRedirect={() => navigate("/login", { state: { from: "/auctions" } })}
         />
@@ -351,7 +351,7 @@ export default function Auctions() {
           <div className="space-y-4" aria-busy="true" aria-live="polite">
                 <div className="flex items-center gap-3 text-muted-foreground">
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  <span className="text-sm">Loading auctions from OS…</span>
+                  <span className="text-sm">Loading auctions...</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                   {Array.from({ length: AUCTIONS_PAGE_SIZE }).map((_, i) => <AuctionCardSkeleton key={i} />)}
@@ -464,4 +464,6 @@ export default function Auctions() {
       )}
     </div>
   );
-}
+};
+
+export default Auctions;

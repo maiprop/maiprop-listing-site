@@ -83,7 +83,7 @@ const asNumber = (value: unknown): number | null => {
 };
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-function AuctionBreadcrumb({ title }: { title: string }) {
+const AuctionBreadcrumb = ({ title }: { title: string }) => {
   return (
     <nav aria-label="Breadcrumb" className="container py-2 sm:py-3">
       <ol className="flex items-center gap-1.5 text-xs text-muted-foreground overflow-x-auto scrollbar-none list-none p-0 m-0">
@@ -101,20 +101,20 @@ function AuctionBreadcrumb({ title }: { title: string }) {
       </ol>
     </nav>
   );
-}
+};
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-function StatChip({ icon, label }: { icon: React.ReactNode; label: string }) {
+const StatChip = ({ icon, label }: { icon: React.ReactNode; label: string }) => {
   return (
     <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
       <span className="text-primary shrink-0">{icon}</span>
       {label}
     </div>
   );
-}
+};
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-function AuctionTitleSection({
+const AuctionTitleSection = ({
   title,
   city,
   address,
@@ -138,7 +138,7 @@ function AuctionTitleSection({
   yearBuilt: number | null;
   ownershipBadge: { cls: string; label: string } | null;
   ownershipPct: number | null;
-}) {
+}) => {
   const badge = countdownBadge(days);
 
   return (
@@ -195,15 +195,17 @@ function AuctionTitleSection({
       </div>
     </div>
   );
-}
+};
 
-export default function AuctionDetail() {
+const AuctionDetail = () => {
   const { id = "" } = useParams<{ id: string }>();
   const { state } = useLocation() as { state?: { auction?: Record<string, unknown> } };
   const [walkScore, setWalkScore] = useState<number | null>(null);
 
   const auctionFromState = state?.auction ?? null;
-  const { data: allAuctions = [], isLoading: auctionsLoading } = useAuctionListings();
+  const { data: allAuctions = [], isLoading: auctionsLoading } = useAuctionListings(undefined, {
+    enabled: !auctionFromState,
+  });
   const auctionFromCache = useMemo(
     () => allAuctions.find((auction) => auction.id === id) ?? null,
     [allAuctions, id],
@@ -515,4 +517,6 @@ export default function AuctionDetail() {
       <Footer />
     </div>
   );
-}
+};
+
+export default AuctionDetail;

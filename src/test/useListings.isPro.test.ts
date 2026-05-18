@@ -1,9 +1,9 @@
 /**
- * Regression test for owner Pro status in useListing().
+ * Regression tests for listing detail loading and owner Pro status.
  *
  * The browser must not receive direct execute grants on subscription helper
- * RPCs. The hook resolves the owner's status through the owner-pro-status Edge
- * Function and treats any missing/false response as non-Pro.
+ * RPCs. Owner Pro status resolves through the owner-pro-status Edge Function,
+ * but separately from useListing() so ad detail pages can first-paint quickly.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -21,7 +21,7 @@ vi.mock("@/integrations/supabase/client", () => ({
 }));
 
 import { supabase } from "@/integrations/supabase/client";
-import { useListing } from "@/hooks/useListings";
+import { useListing, useOwnerProStatus } from "@/hooks/useListings";
 
 const TEST_LISTING_ID = "00000000-0000-4000-8000-000000000101";
 const TEST_OWNER_ID = "00000000-0000-4000-8000-000000000001";
@@ -55,7 +55,7 @@ function mockTableQuery(resolved: { data: unknown; error: null }) {
   return builder;
 }
 
-describe("useListing owner Pro status", () => {
+describe("useListing detail loading and owner Pro status", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -82,11 +82,11 @@ describe("useListing owner Pro status", () => {
     expect(supabase.functions.invoke).not.toHaveBeenCalled();
   });
 
-  it("returns ownerIsPro=true when owner-pro-status returns true", async () => {
+  it("loads owner profile without waiting on owner-pro-status", async () => {
     const listingRow = {
       id: TEST_LISTING_ID,
       owner_id: TEST_OWNER_ID,
-      title: "Owned by a Pro",
+      title: "Owned listing",
       listing_images: [],
     };
 
@@ -102,71 +102,42 @@ describe("useListing owner Pro status", () => {
       }
       throw new Error(`unexpected table: ${table}`);
     });
+    const { result } = renderHook(() => useListing(TEST_LISTING_ID), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(supabase.functions.invoke).not.toHaveBeenCalled();
+    expect(result.current.data?.profiles?.display_name).toBe("Pro Owner");
+    expect(result.current.data?.ownerIsPro).toBe(false);
+  });
+
+  it("returns ownerIsPro=false when owner-pro-status returns false", async () => {
+    vi.mocked(supabase.functions.invoke).mockResolvedValue({ data: { isPro: false }, error: null });
+
+    const { result } = renderHook(() => useOwnerProStatus(TEST_LISTING_ID, TEST_OWNER_ID), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data).toBe(false);
+  });
+
+  it("returns ownerIsPro=false when owner-pro-status returns null", async () => {
+    vi.mocked(supabase.functions.invoke).mockResolvedValue({ data: null, error: null });
+
+    const { result } = renderHook(() => useOwnerProStatus(TEST_LISTING_ID, TEST_OWNER_ID), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data).toBe(false);
+  });
+
+  it("returns ownerIsPro=true when owner-pro-status returns true", async () => {
     vi.mocked(supabase.functions.invoke).mockResolvedValue({ data: { isPro: true }, error: null });
 
-    const { result } = renderHook(() => useListing(TEST_LISTING_ID), { wrapper });
+    const { result } = renderHook(() => useOwnerProStatus(TEST_LISTING_ID, TEST_OWNER_ID), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(supabase.functions.invoke).toHaveBeenCalledWith("owner-pro-status", {
       body: { listingId: TEST_LISTING_ID },
     });
-    expect(result.current.data?.ownerIsPro).toBe(true);
-  });
-
-  it("returns ownerIsPro=false when owner-pro-status returns false", async () => {
-    const listingRow = {
-      id: TEST_LISTING_ID,
-      owner_id: TEST_OWNER_ID,
-      title: "Owned by a non-Pro",
-      listing_images: [],
-    };
-
-    vi.mocked(supabase.from).mockImplementation((table: string) => {
-      if (table === "listings") {
-        return mockTableQuery({ data: listingRow, error: null }) as unknown as ReturnType<typeof supabase.from>;
-      }
-      if (table === "profiles_public") {
-        return mockTableQuery({
-          data: { user_id: TEST_OWNER_ID, display_name: "Free User", avatar_url: null, role: "buyer" },
-          error: null,
-        }) as unknown as ReturnType<typeof supabase.from>;
-      }
-      throw new Error(`unexpected table: ${table}`);
-    });
-    vi.mocked(supabase.functions.invoke).mockResolvedValue({ data: { isPro: false }, error: null });
-
-    const { result } = renderHook(() => useListing(TEST_LISTING_ID), { wrapper });
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-    expect(result.current.data?.ownerIsPro).toBe(false);
-  });
-
-  it("returns ownerIsPro=false when owner-pro-status returns null", async () => {
-    const listingRow = {
-      id: TEST_LISTING_ID,
-      owner_id: TEST_OWNER_ID,
-      title: "Listing with null status result",
-      listing_images: [],
-    };
-
-    vi.mocked(supabase.from).mockImplementation((table: string) => {
-      if (table === "listings") {
-        return mockTableQuery({ data: listingRow, error: null }) as unknown as ReturnType<typeof supabase.from>;
-      }
-      if (table === "profiles_public") {
-        return mockTableQuery({
-          data: { user_id: TEST_OWNER_ID, display_name: "Owner", avatar_url: null, role: "buyer" },
-          error: null,
-        }) as unknown as ReturnType<typeof supabase.from>;
-      }
-      throw new Error(`unexpected table: ${table}`);
-    });
-    vi.mocked(supabase.functions.invoke).mockResolvedValue({ data: null, error: null });
-
-    const { result } = renderHook(() => useListing(TEST_LISTING_ID), { wrapper });
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-    expect(result.current.data?.ownerIsPro).toBe(false);
+    expect(result.current.data).toBe(true);
   });
 
   it("returns null when the listing does not exist", async () => {

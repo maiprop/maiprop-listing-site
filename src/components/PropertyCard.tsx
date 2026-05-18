@@ -62,6 +62,8 @@ export interface Property {
   walkabilityScore?: number;
   safetyScore?: number;
   noiseScore?: number;
+  /** Raw DB listing row used to seed detail pages for instant card-to-detail opens. */
+  _raw?: unknown;
 }
 
 interface PropertyCardProps {
@@ -86,7 +88,7 @@ const PROPERTY_IMAGE_WIDTHS = [320, 480, 768, 1024];
 const PROPERTY_CARD_IMAGE_SIZES = "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw";
 const COMPACT_PROPERTY_IMAGE_SIZES = "96px";
 
-function getSizedImageUrl(src: string, width: number): string | null {
+const getSizedImageUrl = (src: string, width: number): string | null => {
   try {
     const url = new URL(src, APP_ORIGIN);
     if (!["http:", "https:"].includes(url.protocol)) return null;
@@ -110,9 +112,9 @@ function getSizedImageUrl(src: string, width: number): string | null {
   }
 
   return null;
-}
+};
 
-function getPropertyImageSrcSet(src: string): string | undefined {
+const getPropertyImageSrcSet = (src: string): string | undefined => {
   const srcSet = PROPERTY_IMAGE_WIDTHS
     .map((width) => {
       const sizedUrl = getSizedImageUrl(src, width);
@@ -122,9 +124,9 @@ function getPropertyImageSrcSet(src: string): string | undefined {
     .join(", ");
 
   return srcSet || undefined;
-}
+};
 
-export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(function PropertyCard({ property, compact = false }, _ref) {
+export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(function PropertyCard({ property, compact = false }, _ref) { // skipcq: JS-R1005 - Card rendering branches compact, auction, and standard listing affordances in one reusable surface.
   const { t } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -144,6 +146,14 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
     : (property.isPreSale || property.constructionStatus)
     ? `/new-build/${property.id}`
     : `/property/${property.id}`;
+  const detailState = property._raw && typeof property._raw === "object"
+    ? {
+        listing: {
+          ...(property._raw as Record<string, unknown>),
+          ownerParticipantType: property.ownerParticipantType ?? (property._raw as Record<string, unknown>).ownerParticipantType,
+        },
+      }
+    : undefined;
 
   const handleShare = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -209,7 +219,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
     const thumb = property.images?.[0];
     const thumbSrcSet = thumb ? getPropertyImageSrcSet(thumb) : undefined;
     return (
-      <Link to={detailPath} className="glass-card rounded-xl overflow-hidden flex gap-3 p-3 property-card group" data-testid="property-card">
+      <Link to={detailPath} state={detailState} className="glass-card rounded-xl overflow-hidden flex gap-3 p-3 property-card group" data-testid="property-card">
         <div className="relative w-24 h-20 rounded-lg overflow-hidden shrink-0 bg-muted">
           {thumb ? (
             <img
@@ -339,7 +349,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
                   {property.listingType === "rent" ? `${formatPrice(property.price)}/mo` : formatPrice(property.price)}
                 </span>
               </div>
-              {!!property.pricePerSqm && (
+              {Boolean(property.pricePerSqm) && (
                 <div className="text-xs text-white/70 mt-1 ml-1">€{property.pricePerSqm}/m²</div>
               )}
             </div>
@@ -354,7 +364,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
                   {property.priceChange > 0 ? "+" : ""}{property.priceChange}%
                 </div>
               )}
-              {!!property.views && property.views > 0 && (
+              {(property.views ?? 0) > 0 && (
                 <div className="flex items-center gap-1 text-xs text-white/60">
                   <Eye className="w-3 h-3" /> {property.views}
                 </div>
@@ -368,13 +378,14 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
       <div className="p-4 sm:p-4 flex flex-col flex-1 gap-3">
         {/* Title + location */}
         <div>
-          <Link to={detailPath}>
+          <Link to={detailPath} state={detailState}>
             <h3 className="font-display font-semibold text-[15px] sm:text-base text-foreground hover:text-primary transition-colors line-clamp-2 leading-snug">
               {property.title}
             </h3>
           </Link>
           <Link
             to={detailPath}
+            state={detailState}
             className="flex items-center gap-1 mt-1.5 text-muted-foreground text-xs group/addr hover:text-primary transition-colors w-fit max-w-full"
           >
             <MapPin className="w-3.5 h-3.5 sm:w-3 sm:h-3 shrink-0 text-primary/70 group-hover/addr:text-primary transition-colors" />
@@ -539,7 +550,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
           {/* Action row: detail CTA for special inventory + Share + Report */}
           <div className={`flex items-center gap-2 ${property.listingType === "auction" || property.listingType === "open_house" ? "" : "justify-end"}`}>
             {property.listingType === "open_house" && (
-              <Link to={detailPath} className="flex-1">
+              <Link to={detailPath} state={detailState} className="flex-1">
                 <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-primary text-primary-foreground font-semibold text-sm transition-all hover:opacity-90 hover:shadow-md active:scale-[0.98]">
                   <Calendar className="w-4 h-4" />
                   {t("propertyCard.actions.viewOpenHouse")}
@@ -547,7 +558,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
               </Link>
             )}
             {property.listingType === "auction" && (
-              <Link to={detailPath} className="flex-1">
+              <Link to={detailPath} state={detailState} className="flex-1">
                 <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-brand-auction text-white font-semibold text-sm transition-all hover:bg-brand-purple-dark hover:shadow-md active:scale-[0.98]">
                   <Gavel className="w-4 h-4" aria-hidden="true" />
                   {t("propertyCard.actions.viewAuction")}

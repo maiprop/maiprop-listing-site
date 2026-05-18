@@ -19,7 +19,7 @@ vi.mock("@/hooks/useLeads", () => ({
   useDeleteLead: () => mocks.deleteLead,
 }));
 
-const today = new Date().toISOString().slice(0, 10);
+const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
 
 const lead = (overrides: Record<string, unknown> = {}) => ({
   id: "lead-1",

@@ -38,6 +38,9 @@ import {
 } from "@/lib/listingsConfig";
 import { mapListingFromCard } from "@/lib/listingsPerformance";
 
+const GRID_LOADING_SKELETON_COUNT = 4;
+const GRID_ESTIMATED_ROW_HEIGHT = 520;
+
 export default function Listings() {
   const { t } = useTranslation();
 
@@ -350,8 +353,8 @@ export default function Listings() {
               )}
             </div>
 
-            {/* ── DESKTOP FILTER BAR (unchanged) ── */}
-            <div className="hidden sm:flex gap-2 items-center overflow-x-auto scrollbar-none sm:flex-wrap">
+            {/* ── DESKTOP FILTER BAR ── */}
+            <div className="hidden sm:flex gap-2 items-center content-start overflow-x-auto scrollbar-none sm:flex-wrap">
               {/* Search */}
               <div className="shrink-0 flex-1 min-w-[200px] flex items-center gap-2 bg-secondary rounded-xl px-4 py-2.5 border border-border focus-within:border-primary transition-colors">
                 <Search className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -408,19 +411,21 @@ export default function Listings() {
                   {t("listings.saveSearch")}
                 </Button>
               )}
-              <div className="flex rounded-xl border border-border overflow-hidden shrink-0">
-                <button onClick={() => setViewMode("grid")} aria-label="Grid view" aria-pressed={viewMode === "grid"}
-                  className={`p-2.5 transition-colors ${viewMode === "grid" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
-                  <LayoutGrid className="w-4 h-4" />
-                </button>
-                <button onClick={() => setViewMode("split")} aria-label="Split view" aria-pressed={viewMode === "split"}
-                  className={`p-2.5 transition-colors ${viewMode === "split" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
-                  <Columns2 className="w-4 h-4" />
-                </button>
-                <button onClick={() => setViewMode("map")} aria-label="Map view" aria-pressed={viewMode === "map"}
-                  className={`p-2.5 transition-colors ${viewMode === "map" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
-                  <Map className="w-4 h-4" />
-                </button>
+              <div className="basis-full flex">
+                <div className="flex rounded-xl border border-border overflow-hidden shrink-0">
+                  <button onClick={() => setViewMode("grid")} aria-label="Grid view" aria-pressed={viewMode === "grid"}
+                    className={`p-2.5 transition-colors ${viewMode === "grid" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
+                    <LayoutGrid className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => setViewMode("split")} aria-label="Split view" aria-pressed={viewMode === "split"}
+                    className={`p-2.5 transition-colors ${viewMode === "split" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
+                    <Columns2 className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => setViewMode("map")} aria-label="Map view" aria-pressed={viewMode === "map"}
+                    className={`p-2.5 transition-colors ${viewMode === "map" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
+                    <Map className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -457,7 +462,7 @@ export default function Listings() {
         )}
 
         {/* Results */}
-        <div className={`${viewMode === "split" ? "" : "container"} py-4 sm:py-8 pb-28 lg:pb-8`}>
+        <div className={`${viewMode === "split" ? "" : "container min-h-[calc(100vh-8rem)]"} py-4 sm:py-8 pb-28 lg:pb-8`}>
           {/* Stats bar */}
           <div className={`flex items-center justify-between mb-6 flex-wrap gap-3 ${viewMode === "split" ? "container" : ""}`}>
             <div className="flex items-center gap-3">
@@ -575,7 +580,7 @@ export default function Listings() {
           })() : viewMode === "grid" ? (
             isLoading ? (
               <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-                {Array.from({ length: 8 }).map((_, i) => <PropertyCardSkeleton key={i} />)}
+                {Array.from({ length: GRID_LOADING_SKELETON_COUNT }).map((_, i) => <PropertyCardSkeleton key={i} />)}
               </div>
             ) : isError ? (
               <EmptyState
@@ -607,7 +612,7 @@ export default function Listings() {
                     items={filtered}
                     className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4"
                     gap={16}
-                    estimateItemHeight={430}
+                    estimateItemHeight={GRID_ESTIMATED_ROW_HEIGHT}
                     renderItem={renderListingCard}
                     data-testid="listing-grid"
                   />

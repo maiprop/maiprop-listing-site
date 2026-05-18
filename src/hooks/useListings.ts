@@ -83,7 +83,7 @@ export type ListingsFilters = {
  * full hook + react-query wrapper. The shape of the returned object mirrors
  * the supabase-js query builder so consumers can `await` it directly.
  */
-export function buildListingsQuery(filters?: ListingsFilters, from = 0, pageSize = 24) {
+export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize = 24) => { // skipcq: JS-R1005 - Listing filters intentionally map one public search model onto Supabase query clauses.
   const sort = filters?.sort ?? "featured";
   let query = supabase
     .from("listings")
@@ -171,9 +171,9 @@ export function buildListingsQuery(filters?: ListingsFilters, from = 0, pageSize
   }
 
   return query;
-}
+};
 
-async function fetchListingsPage(filters?: ListingsFilters, page = 1, pageSize = 24) {
+const fetchListingsPage = async (filters?: ListingsFilters, page = 1, pageSize = 24) => {
   const from = (page - 1) * pageSize;
   const { data, error } = await buildListingsQuery(filters, from, pageSize);
 
@@ -201,15 +201,15 @@ async function fetchListingsPage(filters?: ListingsFilters, page = 1, pageSize =
 
   // ORDER BY is applied server-side in buildListingsQuery; no client sort needed.
   return { data: enriched, hasMore: rows.length === pageSize };
-}
+};
 
 /** Paginated listings for grid view — fetches 24 per page, server-side filtering */
 export const PAGE_SIZE = 24;
 
-export function useListingsPaginated(
+export const useListingsPaginated = (
   filters?: ListingsFilters,
   options?: { enabled?: boolean },
-) {
+) => {
   return useInfiniteQuery({
     queryKey: ["listings-paginated", filters],
     queryFn: ({ pageParam = 1 }) => fetchListingsPage(filters, pageParam, PAGE_SIZE),
@@ -219,15 +219,15 @@ export function useListingsPaginated(
     enabled: options?.enabled ?? true,
     staleTime: filters?.owner_id ? USER_SCOPED_QUERY_STALE_TIME : CATALOG_STATIC_QUERY_STALE_TIME,
   });
-}
+};
 
 /** All listings for map/split view — single bounded fetch, max 200 rows. Set enabled: false to skip. */
 export const MAP_FETCH_LIMIT = 200;
 
-export function useListings(
+export const useListings = (
   filters?: ListingsFilters,
   options?: { enabled?: boolean }
-) {
+) => {
   return useQuery({
     queryKey: ["listings", filters],
     enabled: options?.enabled ?? true,
@@ -258,9 +258,24 @@ export function useListings(
       })) as ListingWithJoins[];
     },
   });
-}
+};
 
-export function useListing(id: string) {
+type UseListingOptions = {
+  initialData?: ListingWithJoins | null;
+};
+
+const normalizeListingWithJoins = (listing: Database["public"]["Tables"]["listings"]["Row"] & Partial<ListingWithJoins>): ListingWithJoins => {
+  const profiles = listing.profiles ?? null;
+  return {
+    ...listing,
+    listing_images: listing.listing_images ?? [],
+    profiles,
+    ownerIsPro: listing.ownerIsPro ?? false,
+    ownerParticipantType: listing.ownerParticipantType ?? getOwnerParticipantType(profiles),
+  } as ListingWithJoins;
+};
+
+export const useListing = (id: string, options: UseListingOptions = {}) => {
   return useQuery({
     queryKey: ["listing", id],
     queryFn: async () => {
@@ -275,22 +290,18 @@ export function useListing(id: string) {
       // PGRST116 (no rows) now handled by maybeSingle() — only real errors thrown
       if (error) throw error;
       if (!data) return null;
-      // Fetch owner profile and Pro status (Pro owners can receive messages and calendar).
-      // Pro status is resolved server-side so subscription truth sources do not
-      // need direct browser RPC access.
+      // Fetch owner profile only; Pro status is resolved in a separate query so
+      // detail pages do not wait on an Edge Function before first paint.
       let profiles = null;
-      let ownerIsPro = false;
       let ownerParticipantType: "agent" | "seller" | null = null;
       if (data.owner_id) {
         try {
-          const [{ data: profilePublic }, isProRpc] = await Promise.all([
-            supabase.from("profiles_public").select("user_id, display_name, avatar_url, role").eq("user_id", data.owner_id).maybeSingle(),
-            supabase.functions.invoke("owner-pro-status", {
-              body: { listingId: data.id },
-            }),
-          ]);
+          const { data: profilePublic } = await supabase
+            .from("profiles_public")
+            .select("user_id, display_name, avatar_url, role")
+            .eq("user_id", data.owner_id)
+            .maybeSingle();
           profiles = profilePublic ?? null;
-          ownerIsPro = (isProRpc.data as { isPro?: boolean } | null)?.isPro === true;
           if (profilePublic) {
             ownerParticipantType = getOwnerParticipantType(profilePublic as { role?: string; bio?: string | null });
           }
@@ -298,12 +309,32 @@ export function useListing(id: string) {
           // owner profile fetch is non-critical; listing still renders without it
         }
       }
-      return { ...data, profiles, ownerIsPro, ownerParticipantType } as ListingWithJoins;
+      return normalizeListingWithJoins({ ...data, profiles, ownerParticipantType });
     },
-    enabled: !!id,
+    enabled: Boolean(id),
+    placeholderData: options.initialData ? normalizeListingWithJoins(options.initialData) : undefined,
     staleTime: CATALOG_STATIC_QUERY_STALE_TIME,
   });
-}
+};
+
+export const useOwnerProStatus = (listingId?: string, ownerId?: string | null) => {
+  const hasListingId = Boolean(listingId);
+  const hasOwnerId = Boolean(ownerId);
+
+  return useQuery({
+    queryKey: ["owner-pro-status", listingId, ownerId],
+    queryFn: async () => {
+      if (!hasListingId || !hasOwnerId) return false;
+      const { data, error } = await supabase.functions.invoke("owner-pro-status", {
+        body: { listingId },
+      });
+      if (error) throw error;
+      return (data as { isPro?: boolean } | null)?.isPro === true;
+    },
+    enabled: hasListingId && hasOwnerId,
+    staleTime: USER_SCOPED_QUERY_STALE_TIME,
+  });
+};
 
 /**
  * Tracks a listing view — call from the detail page component, not inside a queryFn.
@@ -311,7 +342,7 @@ export function useListing(id: string) {
  * Uses an Edge Function wrapper so public page views do not require browser
  * execute grants on SECURITY DEFINER database functions.
  */
-export function useTrackListingView() {
+export const useTrackListingView = () => {
   return useMutation({
     mutationFn: async (listingId: string) => {
       const sessionKey = `viewed_${listingId}`;
@@ -323,9 +354,9 @@ export function useTrackListingView() {
       }).catch((e: unknown) => logger.warn("View tracking failed:", e));
     },
   });
-}
+};
 
-export function useCreateListing() {
+export const useCreateListing = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
@@ -361,9 +392,9 @@ export function useCreateListing() {
       toast.error(msg ?? err.message);
     },
   });
-}
+};
 
-export function useUpdateListing() {
+export const useUpdateListing = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   return useMutation({
@@ -387,9 +418,9 @@ export function useUpdateListing() {
     },
     onError: (err: Error) => toast.error(err.message),
   });
-}
+};
 
-export function useDeleteListing() {
+export const useDeleteListing = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   return useMutation({
@@ -405,10 +436,10 @@ export function useDeleteListing() {
     },
     onError: (err: Error) => toast.error(err.message),
   });
-}
+};
 
 /** Shorthand: returns all listings owned by the currently logged-in user. */
-export function useMyListings() {
+export const useMyListings = () => {
   const { user } = useAuth();
   return useListings({ owner_id: user?.id });
-}
+};

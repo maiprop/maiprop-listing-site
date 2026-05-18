@@ -111,6 +111,7 @@ vi.mock("@/hooks/useListings", () => ({
     isFetchingNextPage: false,
   }),
   useListing: vi.fn().mockReturnValue({ data: null, isLoading: false, isError: false }),
+  useOwnerProStatus: vi.fn().mockReturnValue({ data: false, isLoading: false }),
   useTrackListingView: vi.fn().mockReturnValue({ mutate: vi.fn() }),
   useUpdateListing: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn() }),
   useDeleteListing: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn() }),

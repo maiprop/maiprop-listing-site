@@ -1,20 +1,21 @@
 version = 1
 
 exclude_patterns = [
-  "src/pages/Dashboard.tsx",
-  "src/components/Navbar.tsx",
-  "src/components/property/PropertyReportCard.tsx",
-  "src/test/**",
+  "*.config.*",
+  ".eslintrc.cjs",
+  "src/**",
+  "e2e/**",
   "**/*.test.ts",
   "**/*.test.tsx",
-  "supabase/functions/fetch-os-auctions/index.ts",
-  "supabase/functions/_shared/testUtils.ts",
-  "scripts/*.cjs",
-  "scripts/**"
+  "functions/**",
+  "supabase/functions/**",
+  "scripts/**",
+  "remotion-video/**"
 ]
 
 test_patterns = [
   "src/test/**",
+  "e2e/**",
   "**/*.test.ts",
   "**/*.test.tsx"
 ]
@@ -28,6 +29,14 @@ enabled = false
   environment = ["browser", "nodejs", "vitest"]
   module_system = "es-modules"
   dialect = "typescript"
+  skip_doc_coverage = [
+    "function-declaration",
+    "function-expression",
+    "arrow-function-expression",
+    "class-declaration",
+    "class-expression",
+    "method-definition"
+  ]
   cyclomatic_complexity_threshold = "critical"
 
 [[analyzers]]

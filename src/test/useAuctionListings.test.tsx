@@ -1,7 +1,7 @@
 /**
- * Tests for the useAuctionListings hook. The hook prefers the live OS auction
- * proxy and falls back to DB pagination. If the listing_images join fails, it
- * retries without the join.
+ * Tests for the useAuctionListings hook. The hook prefers cached DB pagination
+ * for a fast portal response, then falls back to the live OS proxy when the
+ * cache is empty. If the listing_images join fails, it retries without the join.
  */
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -107,18 +107,34 @@ describe("useAuctionListings", () => {
     expect(ordered[1].id).toBe("featured");
   });
 
-  it("returns live OS auctions when the proxy succeeds", async () => {
-    invokeMock.mockResolvedValue({ data: { data: [{ id: "os-a1", title: "OS auction" }] }, error: null });
+  it("returns cached database auctions before hitting the live OS proxy", async () => {
+    fromMock.mockReturnValue(makeBuilder(() => Promise.resolve({
+      data: [{ id: "db-a1", title: "Cached auction" }],
+      error: null,
+    })));
+
     const { result } = renderHookWithQuery(() => useAuctionListings());
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data?.[0]).toMatchObject({ id: "db-a1" });
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it("falls back to live OS auctions when the cache is empty", async () => {
+    fromMock.mockReturnValue(makeBuilder(() => Promise.resolve({ data: [], error: null })));
+    invokeMock.mockResolvedValue({ data: { data: [{ id: "os-a1", title: "OS auction" }] }, error: null });
+
+    const { result } = renderHookWithQuery(() => useAuctionListings());
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
     expect(result.current.data?.[0]).toMatchObject({ id: "os-a1" });
     expect(invokeMock).toHaveBeenCalledWith("fetch-os-auctions", expect.objectContaining({
       body: expect.objectContaining({ pageSize: 600 }),
     }));
-    expect(fromMock).not.toHaveBeenCalled();
   });
 
-  it("passes an entitlement-aware fetch limit to the OS proxy", async () => {
+  it("passes an entitlement-aware fetch limit to the OS proxy when the cache is empty", async () => {
+    fromMock.mockReturnValue(makeBuilder(() => Promise.resolve({ data: [], error: null })));
     invokeMock.mockResolvedValue({ data: { data: [{ id: "os-a1", title: "OS auction" }] }, error: null });
 
     const { result } = renderHookWithQuery(() => useAuctionListings(60));
@@ -127,7 +143,6 @@ describe("useAuctionListings", () => {
     expect(invokeMock).toHaveBeenCalledWith("fetch-os-auctions", expect.objectContaining({
       body: expect.objectContaining({ pageSize: 60 }),
     }));
-    expect(fromMock).not.toHaveBeenCalled();
   });
 
   it("returns an empty array when the first page is empty", async () => {

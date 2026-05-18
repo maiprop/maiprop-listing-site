@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { getAutoListingGridColumns } from "@/lib/virtualizedGrid";
 
@@ -33,7 +33,7 @@ export function VirtualizedListingGrid<T extends { id: string }>({
     typeof window === "undefined" ? 900 : window.innerHeight,
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const node = rootRef.current;
     if (!node) return;
 
@@ -164,7 +164,7 @@ function MeasuredGridRow({
 }) {
   const rowRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const node = rowRef.current;
     if (!node) return;
 
