@@ -35,6 +35,10 @@ BEGIN
     RAISE EXCEPTION 'profile_not_found';
   END IF;
 
+  IF v_old_role = 'admin'::public.user_role THEN
+    RAISE EXCEPTION 'admin_role_locked';
+  END IF;
+
   IF p_participant_type NOT IN ('buyer','seller','agent','developer','professional') THEN
     RAISE EXCEPTION 'invalid_participant_type';
   END IF;
