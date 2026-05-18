@@ -10,7 +10,7 @@
  * Skips when SUPABASE_SERVICE_ROLE_KEY is not set (PR forks / open-source CI).
  */
 import { test, expect } from "@playwright/test";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import WebSocket from "ws";
 import { skipUnlessDestructiveLiveE2EAllowed } from "./helpers/liveSafety";
 
@@ -24,6 +24,26 @@ const canRun =
   ANON_KEY.length > 40 &&
   SERVICE_ROLE.length > 40;
 
+// skipcq: JS-R1005 - Live Auth pagination keeps deletion and same-email recreation checks in one helper.
+const listAuthUsersByEmail = async (
+  admin: SupabaseClient,
+  email: string,
+): Promise<User[]> => {
+  const matches: User[] = [];
+  for (let pageIndex = 1; pageIndex <= 10; pageIndex += 1) {
+    const {
+      data: { users },
+      error,
+    } = await admin.auth.admin.listUsers({ page: pageIndex, perPage: 1000 });
+    expect(error, `list users: ${error?.message}`).toBeNull();
+    matches.push(
+      ...users.filter((user) => user.email?.toLowerCase() === email.toLowerCase()),
+    );
+    if (users.length < 1000) break;
+  }
+  return matches;
+};
+
 test.describe("GDPR — account deletion", () => {
   skipUnlessDestructiveLiveE2EAllowed();
 
@@ -32,7 +52,8 @@ test.describe("GDPR — account deletion", () => {
     "Requires VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY, and SUPABASE_SERVICE_ROLE_KEY",
   );
 
-  test("deleting an account removes the auth user and scrubs profile PII", async ({
+  // skipcq: JS-R1005 - This destructive audit must prove delete, blocked old sign-in, PII scrubbing, same-email signup, and cleanup in one isolated user lifecycle.
+  test("deleting an account removes the auth user, blocks old sign-in, and allows fresh signup", async ({
     page,
   }) => {
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE, {
@@ -54,6 +75,9 @@ test.describe("GDPR — account deletion", () => {
     if (!userId) {
       throw new Error("Supabase did not return a created user id.");
     }
+
+    let recreatedUserId: string | null = null;
+    const recreatedPassword = "GdprRetest2025!";
 
     try {
       await admin.from("profiles").upsert(
@@ -166,10 +190,8 @@ test.describe("GDPR — account deletion", () => {
       expect(page.url()).toMatch(/\/login/);
 
       // 7. Verify via service role that the auth user is gone.
-      const {
-        data: { users },
-      } = await admin.auth.admin.listUsers({ perPage: 1000 });
-      const stillExists = users.some((u) => u.id === userId);
+      const deletedEmailUsers = await listAuthUsersByEmail(admin, email);
+      const stillExists = deletedEmailUsers.some((u) => u.id === userId);
       expect(stillExists, "auth user should be deleted").toBe(false);
 
       // 8. Verify profile row is either deleted or has no PII left.
@@ -193,8 +215,74 @@ test.describe("GDPR — account deletion", () => {
           email.toLowerCase(),
         );
       }
+
+      // 9. A deleted user may create a fresh account with the same email.
+      //    This verifies deletion did not leave an auth uniqueness blocker while
+      //    still proving the old credentials no longer work.
+      await page.goto("/signup");
+      const textInputs = page.locator('input[type="text"]');
+      if ((await textInputs.count()) >= 2) {
+        await textInputs.nth(0).fill("GDPR");
+        await textInputs.nth(1).fill("Retest");
+      }
+      await page
+        .locator('input[type="email"], input[name="email"]')
+        .first()
+        .fill(email);
+      await page.locator('input[type="password"]').first().fill(recreatedPassword);
+      await page
+        .locator(
+          'button[type="submit"], button:has-text("Create account"), button:has-text("Create Account")',
+        )
+        .first()
+        .click();
+
+      await expect
+        .poll(async () => {
+          const users = await listAuthUsersByEmail(admin, email);
+          return users.find((user) => user.id !== userId)?.id ?? null;
+        }, { timeout: 20_000, message: "same email should be reusable after deletion" })
+        .not.toBeNull();
+
+      const recreatedUsers = await listAuthUsersByEmail(admin, email);
+      recreatedUserId =
+        recreatedUsers.find((user) => user.id !== userId)?.id ?? null;
+      expect(recreatedUserId, "recreated auth user should exist").toBeTruthy();
+      expect(
+        recreatedUserId,
+        "recreated auth user should be a fresh account, not the deleted account",
+      ).not.toBe(userId);
+
+      if (!recreatedUserId) {
+        throw new Error("Expected the recreated auth user id before confirming email.");
+      }
+
+      const { error: confirmErr } = await admin.auth.admin.updateUserById(recreatedUserId, {
+        email_confirm: true,
+      });
+      expect(confirmErr, `confirm recreated user: ${confirmErr?.message}`).toBeNull();
+
+      // 10. The recreated account can sign in and reaches the expected
+      //     first-run platform state.
+      await page.context().clearCookies();
+      await page.goto("/");
+      await page.evaluate(() => {
+        localStorage.clear();
+        sessionStorage.clear();
+      });
+      await page.goto("/login");
+      await page
+        .locator('input[type="email"], input[name="email"]')
+        .first()
+        .fill(email);
+      await page.locator('input[type="password"]').first().fill(recreatedPassword);
+      await page.locator('button[type="submit"]').first().click();
+      await page.waitForURL(/\/dashboard|\/onboarding/, { timeout: 20_000 });
     } finally {
       // Best-effort cleanup in case the test fails mid-way.
+      if (recreatedUserId) {
+        await admin.auth.admin.deleteUser(recreatedUserId).catch(() => undefined);
+      }
       await admin.auth.admin.deleteUser(userId).catch(() => undefined);
     }
   });

@@ -1,12 +1,12 @@
-import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Loader2, ArrowRight, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { APP_ORIGIN } from "@/lib/config";
 import { trackAnalyticsEvent } from "@/lib/analytics";
+import { buildOAuthCallbackRedirectTo } from "@/lib/oauthCallback";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import logoImg from "@/assets/logo.png";
@@ -22,6 +22,7 @@ const GoogleIcon = () => (
 
 export default function Signup() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { signUp, user, loading: authLoading } = useAuth();
   const { t } = useTranslation();
 
@@ -31,8 +32,16 @@ export default function Signup() {
   // "confirm" = waiting for email click; "done" = session established, navigating
   const [view, setView] = useState<"form" | "confirm">("form");
   const [submittedEmail, setSubmittedEmail] = useState("");
+  const showedOAuthNoticeRef = useRef(false);
 
   const [form, setForm] = useState({ firstName: "", lastName: "", email: "", password: "" });
+
+  useEffect(() => {
+    const state = location.state as { oauthRedirectReason?: string } | null;
+    if (showedOAuthNoticeRef.current || state?.oauthRedirectReason !== "account_required") return;
+    showedOAuthNoticeRef.current = true;
+    toast.info("Create an account to continue with Google.");
+  }, [location.state]);
 
   // When session arrives (after email confirmation link is clicked), navigate to onboarding.
   // Also handles already-logged-in users landing on /signup.
@@ -45,7 +54,7 @@ export default function Signup() {
     trackAnalyticsEvent("oauth_started", { provider: "google", source: "signup" });
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${APP_ORIGIN}/onboarding` },
+      options: { redirectTo: buildOAuthCallbackRedirectTo("signup", "/onboarding") },
     });
     if (error) {
       trackAnalyticsEvent("oauth_error", { provider: "google" });

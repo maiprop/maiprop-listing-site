@@ -8,6 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { APP_ORIGIN } from "@/lib/config";
+import { buildOAuthCallbackRedirectTo } from "@/lib/oauthCallback";
 import logoImg from "@/assets/logo.png";
 
 const GoogleIcon = () => (
@@ -54,7 +55,7 @@ export default function Login() { // skipcq: JS-R1005 - Auth route coordinates c
     setGoogleLoading(true);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${APP_ORIGIN}${from}` },
+      options: { redirectTo: buildOAuthCallbackRedirectTo("login", from) },
     });
     if (error) {
       const message = "Google sign-in failed. Please try again.";

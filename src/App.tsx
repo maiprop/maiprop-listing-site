@@ -32,6 +32,7 @@ const ProfessionalProfileMe = lazy(() => import("./pages/ProfessionalProfileMe")
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Signup = lazy(() => import("./pages/Signup"));
 const Login = lazy(() => import("./pages/Login"));
+const AuthCallback = lazy(() => import("@/pages/AuthCallback"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const Messages = lazy(() => import("./pages/Messages"));
 const CreateListing = lazy(() => import("./pages/CreateListing"));
@@ -92,7 +93,7 @@ function AuctionRouter() {
 
 // Routes that render their own embedded AI widget or have no need for the floating one
 const HIDE_WIDGET_PREFIXES = [
-  "/login", "/signup", "/onboarding", "/dashboard", "/messages", "/ai-assistant",
+  "/login", "/signup", "/auth/callback", "/onboarding", "/dashboard", "/messages", "/ai-assistant",
   "/property/", "/auction/", "/new-build/",
 ];
 
@@ -132,6 +133,7 @@ const App = () => (
                       <Route path="/open-house/:id" element={<ErrorBoundary><OpenHouseDetail /></ErrorBoundary>} />
                       <Route path="/signup" element={<ErrorBoundary><Signup /></ErrorBoundary>} />
                       <Route path="/login" element={<ErrorBoundary><Login /></ErrorBoundary>} />
+                      <Route path="/auth/callback" element={<ErrorBoundary><AuthCallback /></ErrorBoundary>} />
                       <Route path="/onboarding" element={<ErrorBoundary><Onboarding /></ErrorBoundary>} />
                       <Route path="/dashboard" element={<ProtectedRoute><ErrorBoundary><Dashboard /></ErrorBoundary></ProtectedRoute>} />
                       <Route path="/dashboard/:section" element={<ProtectedRoute><ErrorBoundary><Dashboard /></ErrorBoundary></ProtectedRoute>} />
