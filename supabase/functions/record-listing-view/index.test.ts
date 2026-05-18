@@ -24,11 +24,24 @@ Deno.test("invalid listing id is rejected before RPC work", async () => {
 });
 
 Deno.test("missing service role configuration fails closed", async () => {
+  Deno.env.set("VIEW_TRACKING_SAMPLE_RATE", "1");
   Deno.env.delete("SUPABASE_SERVICE_ROLE_KEY");
   const res = await handler(req("POST", {
     listingId: "11111111-1111-4111-8111-111111111111",
   }));
   assertEquals(res.status, 503);
+  Deno.env.delete("VIEW_TRACKING_SAMPLE_RATE");
+});
+
+Deno.test("sampled-out view returns success without service-role work", async () => {
+  Deno.env.set("VIEW_TRACKING_SAMPLE_RATE", "0");
+  Deno.env.delete("SUPABASE_SERVICE_ROLE_KEY");
+  const res = await handler(req("POST", {
+    listingId: "11111111-1111-4111-8111-111111111111",
+  }));
+  assertEquals(res.status, 200);
+  assertEquals(await res.json(), { success: true, sampled: false });
+  Deno.env.delete("VIEW_TRACKING_SAMPLE_RATE");
 });
 
 restore();

@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchPublicApi } from "@/lib/publicApi";
+import type { Property } from "@/components/PropertyCard";
 
 /**
  * Homepage data hooks.
@@ -23,6 +25,34 @@ const queryTimeout = <T,>(p: Promise<T>, ms: number): Promise<T> =>
   Promise.race([p, new Promise<T>((_, rej) => setTimeout(() => rej(new Error("Request timeout")), ms))]);
 
 type HasCoverOrImages = { cover_image_url?: string | null; listing_images?: { url: string; sort_order: number }[] };
+type HomepageListing = HasCoverOrImages & {
+  id: string;
+  title: string;
+  address?: string | null;
+  city: string;
+  price?: number | string | null;
+  price_per_sqm?: number | string | null;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
+  sqm?: number | string | null;
+  floor?: number | null;
+  total_floors?: number | null;
+  year_built?: number | null;
+  energy_class?: string | null;
+  property_type?: Property["type"] | null;
+  listing_type?: Property["listingType"] | null;
+  auction_date?: string | null;
+  auction_starting_bid?: number | string | null;
+  open_house_date?: string | null;
+  ai_score?: number | null;
+  views_count?: number | null;
+  tags?: string[] | null;
+  is_pre_sale?: boolean | null;
+  construction_status?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  region?: string | null;
+};
 
 const sortByImagePresence = <T extends HasCoverOrImages>(rows: T[]): T[] =>
   [...rows].sort((a, b) => {
@@ -37,6 +67,9 @@ export function useHomepageTypeCounts() {
     queryKey: ["homepage-type-counts"],
     staleTime: 10 * 60 * 1000,
     queryFn: async () => {
+      const cached = await fetchPublicApi<Record<string, number>>("/api/public/homepage?section=type-counts");
+      if (cached) return cached;
+
       const { data, error } = await supabase
         .from("listings")
         .select("property_type")
@@ -57,6 +90,9 @@ export function useHomepageFeaturedListings() {
   return useQuery({
     queryKey: ["homepage-featured"],
     queryFn: async () => {
+      const cached = await fetchPublicApi<HomepageListing[]>("/api/public/homepage?section=featured");
+      if (cached) return cached;
+
       const run = async () => {
         const { data, error } = await supabase
           .from("listings")
@@ -92,6 +128,9 @@ export function useHomepageAuctionListings() {
   return useQuery({
     queryKey: ["homepage-auctions"],
     queryFn: async () => {
+      const cached = await fetchPublicApi<HomepageListing[]>("/api/public/homepage?section=auctions");
+      if (cached) return sortByImagePresence(cached);
+
       const run = async () => {
         const { data, error } = await supabase
           .from("listings")
@@ -127,6 +166,9 @@ export function useHomepageOpenHouseListings() {
   return useQuery({
     queryKey: ["homepage-open-houses"],
     queryFn: async () => {
+      const cached = await fetchPublicApi<HomepageListing[]>("/api/public/homepage?section=open-houses");
+      if (cached) return sortByImagePresence(cached);
+
       const now = new Date().toISOString();
       const { data, error } = await supabase
         .from("listings")

@@ -71,16 +71,17 @@ gh secret set VITE_SUPABASE_PROJECT_ID      --repo maiprop/maiprop-listing-site
 Pages Functions run on the Workers runtime; they read env vars from the
 **Pages project settings**, NOT from the Vite bundle or GitHub Actions env.
 
-| Variable               | Notes                                                              |
-| ---------------------- | ------------------------------------------------------------------ |
-| `SUPABASE_PROJECT_ID`  | server-side only — used by `functions/sitemap-dynamic.xml.ts` to proxy the dynamic sitemap. Same value as `VITE_SUPABASE_PROJECT_ID`. |
-| `SITE_LOCK_PASSWORD`   | **optional** — when set, `functions/_middleware.ts` locks every request behind a passcode splash. Leave unset to keep the site public. Stored as `secret_text` (encrypted at rest on Cloudflare). See section 8 below. |
+| Variable                    | Notes                                                              |
+| --------------------------- | ------------------------------------------------------------------ |
+| `SUPABASE_PROJECT_ID`       | server-side only; used by `functions/sitemap-dynamic.xml.ts`, SEO prerendering, and cached public API routes. Same value as `VITE_SUPABASE_PROJECT_ID`. |
+| `SUPABASE_PUBLISHABLE_KEY`  | server-side public anon key for cached public listing/homepage API routes. Same value as `VITE_SUPABASE_PUBLISHABLE_KEY`. Do not use a service-role key in Pages Functions. |
+| `SITE_LOCK_PASSWORD`        | **optional**; when set, `functions/_middleware.ts` locks every request behind a passcode splash. Leave unset to keep the site public. Stored as `secret_text` (encrypted at rest on Cloudflare). See section 8 below. |
 
-The CI `deploy` job **automatically syncs** both variables into the Pages
+The CI `deploy` job **automatically syncs** these variables into the Pages
 production env on every deploy (step: *Sync Cloudflare Pages runtime
-environment variables*), sourced from the `VITE_SUPABASE_PROJECT_ID` and
-`SITE_LOCK_PASSWORD` GitHub secrets respectively. You only need to touch
-Cloudflare Pages → Settings → Environment variables if you add **new**
+environment variables*), sourced from the `VITE_SUPABASE_PROJECT_ID`,
+`VITE_SUPABASE_PUBLISHABLE_KEY`, and `SITE_LOCK_PASSWORD` GitHub secrets.
+You only need to touch Cloudflare Pages Settings > Environment variables if you add **new**
 server-side bindings (and then extend that CI step accordingly).
 
 > See `.env.staging.example` for the canonical list of Vite vars.

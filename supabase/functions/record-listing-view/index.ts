@@ -4,9 +4,10 @@ import { createLogger } from "../_shared/logger.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 
 const log = createLogger("record-listing-view");
+const maxRequestsPerMinute = readPositiveInt("VIEW_TRACKING_MAX_REQUESTS_PER_MINUTE", 120);
 const limiter = makeRateLimiter({
   bucket: "record-listing-view",
-  maxRequests: 120,
+  maxRequests: maxRequestsPerMinute,
   windowMs: 60_000,
 });
 const LISTING_ID_REGEX = /^[0-9a-f-]{36}$/i;
@@ -20,6 +21,21 @@ function parseListingId(body: ViewRequest): string {
     throw new Error("Invalid listingId");
   }
   return body.listingId;
+}
+
+function readPositiveInt(key: string, fallback: number): number {
+  const raw = Deno.env.get(key);
+  if (!raw) return fallback;
+  const value = Number(raw);
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
+function readSampleRate(): number {
+  const raw = Deno.env.get("VIEW_TRACKING_SAMPLE_RATE");
+  if (!raw) return 1;
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(1, Math.max(0, value));
 }
 
 Deno.serve(async (req) => {
@@ -37,18 +53,26 @@ Deno.serve(async (req) => {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
   if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
 
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  if (!serviceRoleKey || !supabaseUrl) {
-    return new Response(JSON.stringify({ error: "Service unavailable" }), {
-      status: 503,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
   try {
     const body = await req.json().catch(() => ({})) as ViewRequest;
     const listingId = parseListingId(body);
+    const sampleRate = readSampleRate();
+    if (sampleRate <= 0 || Math.random() > sampleRate) {
+      return new Response(JSON.stringify({ success: true, sampled: false }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    if (!serviceRoleKey || !supabaseUrl) {
+      return new Response(JSON.stringify({ error: "Service unavailable" }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const token = req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "").trim();
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },

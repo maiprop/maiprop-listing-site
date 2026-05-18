@@ -1,7 +1,6 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 
 const SUPABASE_ORIGIN = "https://abcdefghijklmnop.supabase.co";
-const APP_ORIGIN = process.env.CI ? "http://localhost:4173" : "http://localhost:8080";
 const AUTH_STORAGE_KEY = "sb-abcdefghijklmnop-auth-token";
 const PERF_USER_ID = "00000000-0000-4000-8000-000000000001";
 const PERF_LISTING_ID = "00000000-0000-4000-8000-000000000101";
@@ -159,6 +158,10 @@ async function installAuthenticatedSupabaseMocks(page: Page) {
   });
 }
 
+function getAppOrigin(baseURL: string | undefined): string {
+  return new URL(baseURL ?? (process.env.CI ? "http://localhost:4173" : "http://localhost:8080")).origin;
+}
+
 async function installWebVitalsCollector(page: Page) {
   await page.addInitScript(() => {
     const vitals: BrowserVitalsState = {
@@ -293,14 +296,15 @@ test.describe("authenticated performance gates @perf", () => {
     }
   });
 
-  test("protected and property routes stay within JS budgets and keep chart/map chunks lazy", async ({ page }) => {
+  test("protected and property routes stay within JS budgets and keep chart/map chunks lazy", async ({ page }, testInfo) => {
     await installAuthenticatedSupabaseMocks(page);
+    const appOrigin = getAppOrigin(testInfo.project.use.baseURL);
 
     for (const [path, budgetKb] of Object.entries(ROUTE_JS_BUDGET_KB)) {
       const loadedJs = new Map<string, number>();
       page.on("response", async (response) => {
         const url = new URL(response.url());
-        if (url.origin !== APP_ORIGIN || !url.pathname.endsWith(".js")) return;
+        if (url.origin !== appOrigin || !url.pathname.endsWith(".js")) return;
         const body = await response.body().catch(() => null);
         loadedJs.set(url.pathname, body?.byteLength ?? Number(response.headers()["content-length"] ?? 0));
       });
