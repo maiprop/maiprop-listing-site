@@ -361,7 +361,7 @@ const PropertyDetail = () => {
               {/* ── Auction Details (shown first for auction listings) ── */}
               {isAuction && (
                 <PropertyAuctionSection
-                  listingId={id!}
+                  listingId={db.id}
                   auctionDate={db.auction_date}
                   auctionStartingBid={Number(db.auction_starting_bid) || 0}
                   ownershipDisplay={ownershipDisplay}
@@ -497,7 +497,7 @@ const PropertyDetail = () => {
               )}
 
               {/* ④ Property Report — Pro only, 3 free/month, €9 each extra */}
-              <PropertyReportCard listingId={id!} listing={db} />
+              <PropertyReportCard listingId={db.id} listing={db} />
 
               {/* Professional add-ons — valuation & legal */}
               <div className="glass-card rounded-2xl border border-border overflow-hidden">

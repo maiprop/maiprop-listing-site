@@ -124,9 +124,11 @@ function SellerAgentAnalytics({ participantType }: { participantType: string }) 
   const avgDaysListed = (() => {
     const now = Date.now();
     const listings = myListings as Array<{ created_at?: string; status?: string }>;
-    const active = listings.filter((l) => l.status === "active" && l.created_at);
+    const active = listings.filter(
+      (l): l is { created_at: string; status?: string } => l.status === "active" && Boolean(l.created_at),
+    );
     if (active.length === 0) return 0;
-    const totalMs = active.reduce((s, l) => s + (now - new Date(l.created_at!).getTime()), 0);
+    const totalMs = active.reduce((s, l) => s + (now - new Date(l.created_at).getTime()), 0);
     return Math.round(totalMs / active.length / 86_400_000);
   })();
 

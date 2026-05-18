@@ -53,4 +53,7 @@ if (plausibleDomain) {
   window.addEventListener("maiprop_consent_updated", inject, { once: true });
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+const rootElement = document.getElementById("root");
+if (!rootElement) throw new Error("Missing root element");
+
+createRoot(rootElement).render(<App />);

@@ -723,8 +723,9 @@ export default function Onboarding() {
 
     // ── Pick type (top-level — flat selection across all role types) ──
     if (step === "pick-type") {
-      const devParticipant = participants.find(x => x.id === "developer")!;
-      const proParticipant = participants.find(x => x.id === "professional")!;
+      const devParticipant = participants.find(x => x.id === "developer");
+      const proParticipant = participants.find(x => x.id === "professional");
+      if (!devParticipant || !proParticipant) return null;
       return (
         <PickTypeStep
           pendingCardId={pendingCardId}
@@ -945,4 +946,3 @@ export default function Onboarding() {
     </>
   );
 }
-

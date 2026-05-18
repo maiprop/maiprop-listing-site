@@ -22,9 +22,11 @@ interface Props {
  * See docs/ENTERPRISE_ASSESSMENT_2026-04-27.md (Quadrant I, Top fn-size).
  */
 export function PropertyDetailsAndEnergy({ detailRows, energyClass }: Props) {
-  const hasEnergyClass =
-    !!energyClass && energyClass !== "Exempt" && (energyClass as EnergyClass) in ENERGY_COLORS;
-  const energyData = hasEnergyClass ? ENERGY_SCALE.find((e) => e.cls === energyClass) : undefined;
+  const displayEnergyClass =
+    energyClass && energyClass !== "Exempt" && (energyClass as EnergyClass) in ENERGY_COLORS
+      ? energyClass
+      : null;
+  const energyData = displayEnergyClass ? ENERGY_SCALE.find((e) => e.cls === displayEnergyClass) : undefined;
 
   return (
     <Section>
@@ -40,8 +42,8 @@ export function PropertyDetailsAndEnergy({ detailRows, energyClass }: Props) {
             ))}
         </div>
 
-        {hasEnergyClass && (
-          <EnergyCertificate energyClass={energyClass!} energyDesc={energyData?.desc} />
+        {displayEnergyClass && (
+          <EnergyCertificate energyClass={displayEnergyClass} energyDesc={energyData?.desc} />
         )}
       </div>
     </Section>

@@ -395,8 +395,9 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
                 )}
 
                 {/* Winner banner */}
-                {offers.some(o => o.status === "accepted") && (() => {
-                  const winner = offers.find(o => o.status === "accepted")!;
+                {(() => {
+                  const winner = offers.find(o => o.status === "accepted");
+                  if (!winner) return null;
                   return (
                     <div className="mx-4 mt-4 mb-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 flex items-center justify-between">
                       <div>

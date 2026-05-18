@@ -166,6 +166,7 @@ export default function OpenHouseDetail() {
     );
   }
 
+  const listingId = db.id;
   const price = Number(db.price ?? 0);
   const sqm = Number(db.sqm ?? 0);
   const address = db.address ?? db.city;
@@ -620,7 +621,7 @@ export default function OpenHouseDetail() {
       <OpenHouseRegistrationDialog
         open={modal.isOpen("reg")}
         onClose={() => modal.close()}
-        listingId={id!}
+        listingId={listingId}
         listingTitle={db.title}
         hasAssetControl={hasAssetControl}
         listingPrice={price}
@@ -628,7 +629,7 @@ export default function OpenHouseDetail() {
       <OpenHouseOfferDialog
         open={modal.isOpen("offer")}
         onClose={() => modal.close()}
-        listingId={id!}
+        listingId={listingId}
         listingTitle={db.title}
         listingPrice={price}
         canSubmit={canSubmitOffer}

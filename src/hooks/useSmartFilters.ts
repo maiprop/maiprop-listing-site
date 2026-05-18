@@ -65,8 +65,9 @@ export function useSmartFilters(type: string, subtype: string, listingType: stri
     }
 
     // Cache hit
-    if (cache.has(cacheKey)) {
-      setConfig(cache.get(cacheKey)!);
+    const cachedConfig = cache.get(cacheKey);
+    if (cachedConfig) {
+      setConfig(cachedConfig);
       setLoading(false);
       return;
     }

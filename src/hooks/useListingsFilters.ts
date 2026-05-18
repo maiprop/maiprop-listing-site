@@ -158,7 +158,8 @@ export function useListingsFilters(): ListingsFilterState & ListingsFilterAction
     setSearchParams(prev => {
       const next = new URLSearchParams();
       // Preserve city (user typed it in the search bar, not a filter)
-      if (prev.get("city")) next.set("city", prev.get("city")!);
+      const city = prev.get("city");
+      if (city) next.set("city", city);
       return next;
     }, { replace: true });
   }, [setSearchParams]);

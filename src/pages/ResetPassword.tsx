@@ -32,7 +32,7 @@ export default function ResetPassword() {
     }
     const pw = validatePassword(password);
     if (!pw.valid) {
-      toast.error(pw.error!);
+      toast.error(pw.error ?? "Password does not meet the requirements");
       return;
     }
     setLoading(true);

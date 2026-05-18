@@ -93,7 +93,7 @@ export default function NewBuildDetail() {
   });
 
   const handleRegisterInterest = async (form: { name: string; phone: string; message: string }) => {
-    if (!listing?.owner_id) return;
+    if (!id || !listing?.owner_id) return;
     if (!user) { navigate("/login"); return; }
     const contactName = form.name || profile?.display_name || profile?.first_name || "Interested buyer";
     const msg = [
@@ -104,7 +104,7 @@ export default function NewBuildDetail() {
     void msg; // message constructed for future use
     await startConv.mutateAsync({ other_user_id: listing.owner_id, listing_id: id });
     const { error: _leadInsertError } = await supabase.from("new_building_leads").insert({
-      new_building_id: id!,
+      new_building_id: id,
       user_id: user.id,
       email: user.email ?? "",
       full_name: profile?.display_name || "",

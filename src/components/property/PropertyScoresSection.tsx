@@ -70,8 +70,8 @@ export function PropertyScoresSection({ walkScore, walkabilityScore, safetyScore
 
   return (
     <>
-      {hasWalk && (() => {
-        const score = resolvedWalkScore!;
+      {resolvedWalkScore !== null && (() => {
+        const score = resolvedWalkScore;
         const colour = walkScoreColour(score);
         const label = walkScoreLabel(score);
         return (

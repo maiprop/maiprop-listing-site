@@ -267,7 +267,8 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
     // Price label click → open popup
     const pins = map.queryRenderedFeatures(event.point, { layers: ["price-labels"] });
     if (pins.length) {
-      const props = pins[0].properties!;
+      const props = pins[0].properties;
+      if (!props?.id) return;
       const id = props.id;
       const listing = listingById.get(id);
       if (listing) {
