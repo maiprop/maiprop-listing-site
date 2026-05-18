@@ -275,6 +275,32 @@ const normalizeListingWithJoins = (listing: Database["public"]["Tables"]["listin
   } as ListingWithJoins;
 };
 
+type ListingOwnerContext = Pick<ListingWithJoins, "profiles" | "ownerParticipantType">;
+
+const EMPTY_OWNER_CONTEXT: ListingOwnerContext = {
+  profiles: null,
+  ownerParticipantType: null,
+};
+
+const fetchListingOwnerContext = async (ownerId: string | null): Promise<ListingOwnerContext> => {
+  if (!ownerId) return EMPTY_OWNER_CONTEXT;
+
+  try {
+    const { data: profilePublic } = await supabase
+      .from("profiles_public")
+      .select("user_id, display_name, avatar_url, role")
+      .eq("user_id", ownerId)
+      .maybeSingle();
+    const profiles = profilePublic ?? null;
+    return {
+      profiles,
+      ownerParticipantType: profiles ? getOwnerParticipantType(profiles as { role?: string; bio?: string | null }) : null,
+    };
+  } catch (_err: unknown) {
+    return EMPTY_OWNER_CONTEXT;
+  }
+};
+
 export const useListing = (id: string, options: UseListingOptions = {}) => {
   return useQuery({
     queryKey: ["listing", id],
@@ -290,25 +316,7 @@ export const useListing = (id: string, options: UseListingOptions = {}) => {
       // PGRST116 (no rows) now handled by maybeSingle() — only real errors thrown
       if (error) throw error;
       if (!data) return null;
-      // Fetch owner profile only; Pro status is resolved in a separate query so
-      // detail pages do not wait on an Edge Function before first paint.
-      let profiles = null;
-      let ownerParticipantType: "agent" | "seller" | null = null;
-      if (data.owner_id) {
-        try {
-          const { data: profilePublic } = await supabase
-            .from("profiles_public")
-            .select("user_id, display_name, avatar_url, role")
-            .eq("user_id", data.owner_id)
-            .maybeSingle();
-          profiles = profilePublic ?? null;
-          if (profilePublic) {
-            ownerParticipantType = getOwnerParticipantType(profilePublic as { role?: string; bio?: string | null });
-          }
-        } catch (_err: unknown) {
-          // owner profile fetch is non-critical; listing still renders without it
-        }
-      }
+      const { profiles, ownerParticipantType } = await fetchListingOwnerContext(data.owner_id);
       return normalizeListingWithJoins({ ...data, profiles, ownerParticipantType });
     },
     enabled: Boolean(id),
