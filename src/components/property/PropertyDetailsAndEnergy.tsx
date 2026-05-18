@@ -18,18 +18,26 @@ type VisibleDetailRow = {
   value: string | number;
 };
 
-function hasDisplayValue(row: DetailRowItem): row is VisibleDetailRow {
+const hasDisplayValue = (row: DetailRowItem): row is VisibleDetailRow => {
   return row.value !== null && row.value !== undefined;
-}
+};
 
-function getDisplayEnergyClass(energyClass: string | null | undefined): EnergyClass | null {
+const getDisplayEnergyClass = (energyClass: string | null | undefined): EnergyClass | null => {
   if (!energyClass || energyClass === "Exempt") return null;
   return energyClass in ENERGY_COLORS ? (energyClass as EnergyClass) : null;
-}
+};
 
-function getEnergyDescription(energyClass: EnergyClass | null) {
+const getEnergyDescription = (energyClass: EnergyClass | null) => {
   return ENERGY_SCALE.find((e) => e.cls === energyClass)?.desc;
-}
+};
+
+const DetailRowsGrid = ({ rows }: { rows: VisibleDetailRow[] }) => (
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10">
+    {rows.map((row) => (
+      <DetailRow key={row.label} label={row.label} value={row.value} />
+    ))}
+  </div>
+);
 
 /**
  * Property Details section: a 2-column grid of `DetailRow`s plus the optional
@@ -39,7 +47,7 @@ function getEnergyDescription(energyClass: EnergyClass | null) {
  * energy certificate had nested conditionals + a loop + an IIFE all inline).
  * See docs/ENTERPRISE_ASSESSMENT_2026-04-27.md (Quadrant I, Top fn-size).
  */
-export function PropertyDetailsAndEnergy({ detailRows, energyClass }: Props) {
+export const PropertyDetailsAndEnergy = ({ detailRows, energyClass }: Props) => {
   const displayEnergyClass = getDisplayEnergyClass(energyClass);
   const visibleDetailRows = detailRows.filter(hasDisplayValue);
 
@@ -47,11 +55,7 @@ export function PropertyDetailsAndEnergy({ detailRows, energyClass }: Props) {
     <Section>
       <SectionHeader icon={Home} title="Property Details" />
       <div className="p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10">
-          {visibleDetailRows.map((row) => (
-            <DetailRow key={row.label} label={row.label} value={row.value} />
-          ))}
-        </div>
+        <DetailRowsGrid rows={visibleDetailRows} />
 
         <EnergyCertificate
           energyClass={displayEnergyClass}
@@ -60,14 +64,14 @@ export function PropertyDetailsAndEnergy({ detailRows, energyClass }: Props) {
       </div>
     </Section>
   );
-}
+};
 
 interface EnergyCertificateProps {
   energyClass: EnergyClass | null;
   energyDesc: string | undefined;
 }
 
-function EnergyCertificate({ energyClass, energyDesc }: EnergyCertificateProps) {
+const EnergyCertificate = ({ energyClass, energyDesc }: EnergyCertificateProps) => {
   if (!energyClass) return null;
 
   return (
@@ -93,7 +97,7 @@ function EnergyCertificate({ energyClass, energyDesc }: EnergyCertificateProps) 
       )}
     </div>
   );
-}
+};
 
 interface EnergyBarProps {
   bar: { cls: string; hex: string };
@@ -101,7 +105,7 @@ interface EnergyBarProps {
   active: boolean;
 }
 
-function EnergyBar({ bar, index, active }: EnergyBarProps) {
+const EnergyBar = ({ bar, index, active }: EnergyBarProps) => {
   const barH = 16 + index * 4;
   const dark = ["B", "C", "D"].includes(bar.cls);
   return (
@@ -120,4 +124,4 @@ function EnergyBar({ bar, index, active }: EnergyBarProps) {
       </div>
     </div>
   );
-}
+};

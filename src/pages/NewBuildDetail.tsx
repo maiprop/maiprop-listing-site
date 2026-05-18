@@ -33,12 +33,12 @@ import { UnitShowcase } from "@/components/new-build/UnitShowcase";
 import { RegisterInterestCard } from "@/components/new-build/RegisterInterestCard";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
-function EnergyBadge({ cls }: { cls: string }) {
+const EnergyBadge = ({ cls }: { cls: string }) => {
   const colorClass = (ENERGY_COLORS as Record<string, string>)[cls] ?? "bg-muted text-muted-foreground";
   return (
     <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${colorClass}`}>{cls}</span>
   );
-}
+};
 
 type RegisterInterestForm = {
   name: string;
@@ -54,29 +54,29 @@ type RegisterInterestPayload = {
   contactName: string;
 };
 
-function cleanOptionalText(value: string | null | undefined) {
+const cleanOptionalText = (value: string | null | undefined) => {
   const trimmed = value?.trim();
   return trimmed || undefined;
-}
+};
 
-function getInterestContactName(form: RegisterInterestForm, profile: Profile | null) {
+const getInterestContactName = (form: RegisterInterestForm, profile: Profile | null) => {
   return cleanOptionalText(form.name)
     ?? cleanOptionalText(profile?.display_name)
     ?? cleanOptionalText(profile?.first_name)
     ?? "Interested buyer";
-}
+};
 
-function getInterestPhone(form: RegisterInterestForm, profile: Profile | null) {
+const getInterestPhone = (form: RegisterInterestForm, profile: Profile | null) => {
   return cleanOptionalText(form.phone) ?? cleanOptionalText(profile?.phone) ?? null;
-}
+};
 
-async function insertNewBuildLead({
+const insertNewBuildLead = async ({
   listingId,
   user,
   profile,
   form,
   contactName,
-}: RegisterInterestPayload) {
+}: RegisterInterestPayload) => {
   await supabase.from("new_building_leads").insert({
     new_building_id: listingId,
     user_id: user.id,
@@ -87,16 +87,16 @@ async function insertNewBuildLead({
     notes: cleanOptionalText(form.message) ?? "",
     utm_source: "newbuild_detail_register",
   });
-}
+};
 
-async function notifyDeveloperInterest(ownerId: string, contactName: string, listingTitle: string) {
+const notifyDeveloperInterest = async (ownerId: string, contactName: string, listingTitle: string) => {
   await supabase.from("notifications").insert({
     user_id: ownerId,
     type: "new_interest",
     title: "New interest registered",
     body: `${contactName} registered interest in ${listingTitle}`,
   });
-}
+};
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function NewBuildDetail() {
