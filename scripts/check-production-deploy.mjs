@@ -182,8 +182,15 @@ async function checkWithRetries(url) {
   throw lastError;
 }
 
-for (const url of urls) {
-  await checkWithRetries(url);
+async function main() {
+  for (const url of urls) {
+    await checkWithRetries(url);
+  }
+
+  console.log("All production deploy checks passed");
 }
 
-console.log("All production deploy checks passed");
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : error);
+  process.exitCode = 1;
+});

@@ -19,7 +19,7 @@ const GoogleIcon = () => (
   </svg>
 );
 
-export default function Login() {
+export default function Login() { // skipcq: JS-R1005 - Auth route coordinates credential, OAuth, recovery, and redirect states.
   const navigate = useNavigate();
   const location = useLocation();
   const { signIn, user, loading: authLoading } = useAuth();
