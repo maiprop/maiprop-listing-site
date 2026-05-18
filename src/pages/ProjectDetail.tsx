@@ -29,9 +29,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import {
+  IMAGE_AND_VIDEO_MIME_TYPES,
+  PDF_MIME_TYPES,
+  assertAllowedUpload,
+} from "@/lib/uploadValidation";
 
 const INPUT_CLS = "w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors";
 const LABEL_CLS = "text-xs text-muted-foreground block mb-1.5 font-medium";
+const PROJECT_MEDIA_UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
 
 const MEDIA_TYPES: { value: ProjectMediaType; label: string; mandatory?: boolean }[] = [
   { value: "rendering", label: "Building renderings", mandatory: true },
@@ -135,6 +141,11 @@ export default function ProjectDetail() {
 
   const uploadProjectMedia = useCallback(async (file: File, mediaType: ProjectMediaType): Promise<string> => {
     if (!user || !id) throw new Error("Not authenticated");
+    const allowed = mediaType === "brochure_pdf" ? PDF_MIME_TYPES : IMAGE_AND_VIDEO_MIME_TYPES;
+    assertAllowedUpload(file, allowed, {
+      label: mediaType === "brochure_pdf" ? "PDF brochure" : "media file",
+      maxBytes: PROJECT_MEDIA_UPLOAD_MAX_BYTES,
+    });
     const ext = file.name.split(".").pop() || "jpg";
     const path = `${user.id}/${id}/${mediaType}-${crypto.randomUUID()}.${ext}`;
     const { error } = await supabase.storage.from("project-media").upload(path, file, { upsert: true });

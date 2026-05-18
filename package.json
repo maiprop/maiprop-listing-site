@@ -38,6 +38,7 @@
     "api-docs:copy": "node -e \"const fs=require('fs');fs.mkdirSync('public/docs',{recursive:true});fs.copyFileSync('docs/api/edge-functions.openapi.yaml','public/docs/edge-functions.openapi.yaml')\"",
     "check:runtime": "node scripts/check-runtime.mjs",
     "check:secrets": "node scripts/check-secrets.mjs",
+    "check:production-deploy": "node scripts/check-production-deploy.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "prebuild": "npm run api-docs:copy && npm run typecheck",
     "build": "vite build",

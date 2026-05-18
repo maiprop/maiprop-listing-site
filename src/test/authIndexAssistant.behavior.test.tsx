@@ -162,6 +162,7 @@ describe("Login", () => {
 
     await waitFor(() => expect(authMock.signIn).toHaveBeenCalledWith("buyer@example.com", "secret123"));
     expect(toastMock.error).toHaveBeenCalledWith("Invalid email or password");
+    expect(screen.getByRole("alert")).toHaveTextContent("Invalid email or password");
   });
 
   it("requests a password reset, shows the sent state, and returns to sign in", async () => {
@@ -198,6 +199,7 @@ describe("Login", () => {
     fireEvent.click(screen.getByRole("button", { name: "loginPage.sendLink" }));
 
     await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith("Reset unavailable"));
+    expect(screen.getByRole("alert")).toHaveTextContent("Reset unavailable");
   });
 
   it("shows the pending sign-in loader after successful credentials while auth is refreshing", async () => {
@@ -225,6 +227,7 @@ describe("Login", () => {
       }),
     );
     expect(toastMock.error).toHaveBeenCalledWith("Google sign-in failed. Please try again.");
+    expect(screen.getByRole("alert")).toHaveTextContent("Google sign-in failed. Please try again.");
     expect(screen.getByRole("button", { name: "loginPage.googleCta" })).not.toBeDisabled();
   });
 });
