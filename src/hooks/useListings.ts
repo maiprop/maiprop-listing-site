@@ -232,7 +232,7 @@ export const useListings = (
     queryKey: ["listings", filters],
     enabled: options?.enabled ?? true,
     staleTime: filters?.owner_id ? USER_SCOPED_QUERY_STALE_TIME : CATALOG_STATIC_QUERY_STALE_TIME,
-    queryFn: async () => {
+    queryFn: async () => { // skipcq: JS-R1005 - Owner profile enrichment keeps the map fetch result self-contained.
       const limit = filters?.limit ?? MAP_FETCH_LIMIT;
       const { data, error } = await buildListingsQuery(filters, 0, limit);
       if (error) throw error;
