@@ -38,7 +38,12 @@ import {
 } from "@/lib/listingsConfig";
 import { mapListingFromCard } from "@/lib/listingsPerformance";
 
-const GRID_LOADING_SKELETON_COUNT = 4;
+const GRID_LOADING_SKELETON_KEYS = [
+  "grid-loading-1",
+  "grid-loading-2",
+  "grid-loading-3",
+  "grid-loading-4",
+];
 const GRID_ESTIMATED_ROW_HEIGHT = 520;
 
 export default function Listings() {
@@ -580,7 +585,7 @@ export default function Listings() {
           })() : viewMode === "grid" ? (
             isLoading ? (
               <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-                {Array.from({ length: GRID_LOADING_SKELETON_COUNT }).map((_, i) => <PropertyCardSkeleton key={i} />)}
+                {GRID_LOADING_SKELETON_KEYS.map((key) => <PropertyCardSkeleton key={key} />)}
               </div>
             ) : isError ? (
               <EmptyState

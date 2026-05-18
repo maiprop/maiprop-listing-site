@@ -13,7 +13,7 @@ const ITEMS: ListingGridTestItem[] = Array.from({ length: 20 }, (_, index) => ({
   title: `Listing ${index + 1}`,
 }));
 
-function mockElementClientWidth(width: number) {
+const mockElementClientWidth = (width: number) => {
   const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
   Object.defineProperty(HTMLElement.prototype, "clientWidth", {
     configurable: true,
@@ -27,7 +27,7 @@ function mockElementClientWidth(width: number) {
     }
     Reflect.deleteProperty(HTMLElement.prototype, "clientWidth");
   };
-}
+};
 
 describe("VirtualizedListingGrid", () => {
   it("renders nothing for an empty item set", () => {

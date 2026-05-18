@@ -48,7 +48,7 @@ const AuctionCardSkeleton = () => {
   );
 };
 
-const Auctions = () => {
+const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinates filter state, map/list view state, pagination, and Pro upsells.
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();

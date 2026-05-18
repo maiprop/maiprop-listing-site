@@ -114,7 +114,7 @@ const StatChip = ({ icon, label }: { icon: React.ReactNode; label: string }) => 
 };
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-const AuctionTitleSection = ({
+const AuctionTitleSection = ({ // skipcq: JS-R1005 - Title metadata intentionally renders compact optional auction badges in one reusable header block.
   title,
   city,
   address,
@@ -197,7 +197,7 @@ const AuctionTitleSection = ({
   );
 };
 
-const AuctionDetail = () => {
+const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates auction state, SEO, media, map, valuation, and assistant sections in one page shell.
   const { id = "" } = useParams<{ id: string }>();
   const { state } = useLocation() as { state?: { auction?: Record<string, unknown> } };
   const [walkScore, setWalkScore] = useState<number | null>(null);
