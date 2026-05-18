@@ -10,6 +10,7 @@ const migration = readFileSync(
 describe("force Pro SQL entitlement migration", () => {
   it("keeps SQL is_pro aligned with the app-level force_pro_access override", () => {
     expect(migration).toContain("CREATE OR REPLACE FUNCTION public.is_pro(p_user_id uuid)");
+    expect(migration).toContain("ADD COLUMN IF NOT EXISTS force_pro_access");
     expect(migration).toContain("p.force_pro_access");
     expect(migration).toContain("public.has_audience_scoped_pro_entitlement(p_user_id)");
     expect(migration).toContain("public.has_platform_admin(p_user_id)");
