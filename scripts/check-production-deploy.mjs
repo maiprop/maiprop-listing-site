@@ -13,6 +13,7 @@
 const DEFAULT_URLS = ["https://portal.maiprop.co"];
 const DEFAULT_ATTEMPTS = 8;
 const DEFAULT_DELAY_MS = 10_000;
+const FETCH_TIMEOUT_MS = 30_000;
 const USER_AGENT = "maiprop-production-deploy-check/1.0";
 
 const args = process.argv.slice(2);
@@ -48,6 +49,7 @@ function assert(condition, message) {
 async function fetchText(url, options = {}) {
   const res = await fetch(url, {
     redirect: "follow",
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     headers: {
       "user-agent": USER_AGENT,
       ...(options.headers ?? {}),
@@ -182,15 +184,13 @@ async function checkWithRetries(url) {
   throw lastError;
 }
 
-async function main() {
+(async () => {
   for (const url of urls) {
     await checkWithRetries(url);
   }
 
-  console.log("All production deploy checks passed");
-}
-
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
+  process.stdout.write("All production deploy checks passed\n");
+})().catch((error) => {
+  process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
   process.exitCode = 1;
 });
