@@ -77,6 +77,7 @@ vi.mock("@/pages/PrivacyPolicy", () => stub("page-privacy"));
 vi.mock("@/pages/TermsOfService", () => stub("page-terms"));
 vi.mock("@/pages/CookiePolicy", () => stub("page-cookie"));
 vi.mock("@/pages/BrandedVideoRoom", () => stub("page-video"));
+vi.mock("@/pages/VideoViewingRoom", () => stub("page-video-viewing"));
 vi.mock("@/pages/NewBuildDetail", () => stub("page-newbuild"));
 vi.mock("@/pages/OpenHouses", () => stub("page-openhouses"));
 vi.mock("@/pages/OpenHouseDetail", () => stub("page-openhouse-detail"));

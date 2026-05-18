@@ -116,7 +116,7 @@ describe("BookConsultationModal", () => {
       service: "Remote Review",
       preferred_date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
       preferred_time: "09:30",
-      message: expect.stringContaining("Video consultation requested via maiProp room"),
+      message: expect.stringContaining("Video consultation requested via mAI prop video room"),
     })));
     expect(await screen.findByText(/Consultation request received/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Google Calendar/i })).toHaveAttribute("href", expect.stringContaining("calendar.google.com"));
@@ -138,6 +138,16 @@ describe("BookConsultationModal", () => {
 
     expect(toastMock.info).toHaveBeenCalledWith("This service is not available via video");
     expect(screen.getByText("Not available")).toBeInTheDocument();
+  });
+
+  it("routes no-video general requests directly to scheduling", () => {
+    renderWithProviders(
+      <BookConsultationModal open onClose={onClose} allowVideoCall={false} professional={professional} />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Continue as General Consultation/i }));
+
+    expect(screen.getByText(/No availability has been set yet/i)).toBeInTheDocument();
   });
 
   it("supports general requests without availability and shows submit errors", async () => {

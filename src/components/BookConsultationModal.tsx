@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Calendar, Clock, CheckCircle2, Loader2, Euro, Briefcase, Video, Users, ChevronRight } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -154,6 +154,16 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
   const serviceSupportsVideo = selectedService ? Boolean(selectedService.video_enabled) : allowVideoCall;
   const usesHostedRoom = !professional.video_link;
   const canVideo = allowVideoCall && serviceSupportsVideo;
+  const nextStepAfterService = allowVideoCall ? 2 : 3;
+  const previousStepFromSchedule = allowVideoCall ? 2 : 1;
+
+  useEffect(() => {
+    if (!allowVideoCall && step === 2) setStep(3);
+  }, [allowVideoCall, step]);
+
+  useEffect(() => {
+    if (!canVideo && bookingType === "video") setBookingType("in_person");
+  }, [canVideo, bookingType]);
 
   const handleClose = () => {
     setStep(1);
@@ -186,7 +196,7 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
         preferred_time: selectedTime,
         message: [
           bookingType === "video"
-            ? `Video consultation requested via ${usesHostedRoom ? "maiProp room" : "professional meeting link"}`
+            ? `Video consultation requested via ${usesHostedRoom ? "mAI prop video room" : "professional meeting link"}`
             : "In-person consultation requested",
           note,
         ].filter(Boolean).join("\n"),
@@ -262,7 +272,7 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
             {bookingType === "video" && (
               <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground text-left">
                 {usesHostedRoom
-                  ? "If the request is accepted, the professional can meet you in the built-in maiProp video room."
+                  ? "If the request is accepted, the professional can meet you in the built-in mAI prop video room."
                   : "If the request is accepted, the professional will share or confirm the final meeting link."}
               </div>
             )}
@@ -318,7 +328,7 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
                   <div className="text-center py-6 text-sm text-muted-foreground">
                     <Briefcase className="w-8 h-8 mx-auto mb-2 opacity-40" />
                     No services are configured yet. You can still send a general consultation request.
-                    <Button className="w-full mt-3 bg-gradient-primary border-0 text-primary-foreground" onClick={() => setStep(2)}>
+                    <Button className="w-full mt-3 bg-gradient-primary border-0 text-primary-foreground" onClick={() => setStep(nextStepAfterService)}>
                       Continue as General Consultation
                     </Button>
                   </div>
@@ -373,7 +383,7 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
                     <Button
                       className="w-full bg-gradient-primary border-0 text-primary-foreground"
                       disabled={!selectedService}
-                      onClick={() => setStep(allowVideoCall ? 2 : 3)}
+                      onClick={() => setStep(nextStepAfterService)}
                     >
                       Continue
                     </Button>
@@ -405,7 +415,7 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
                     <Video className={`w-7 h-7 mx-auto mb-2 ${bookingType === "video" ? "text-primary" : "text-muted-foreground"}`} />
                     <div className="font-semibold text-sm">Video Request</div>
                     <div className="text-xs text-muted-foreground mt-0.5">
-                      {usesHostedRoom ? "maiProp room after confirmation" : "Professional meeting link"}
+                      {usesHostedRoom ? "mAI prop video room after confirmation" : "Professional meeting link"}
                     </div>
                     {!canVideo && (
                       <div className="absolute inset-0 flex items-center justify-center rounded-xl">
@@ -478,7 +488,7 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
                 )}
 
                 <div className="flex gap-2">
-                  <Button variant="outline" className="border-border" onClick={() => setStep(allowVideoCall ? 2 : 1)}>Back</Button>
+                  <Button variant="outline" className="border-border" onClick={() => setStep(previousStepFromSchedule)}>Back</Button>
                   <Button
                     className="flex-1 bg-gradient-primary border-0 text-primary-foreground"
                     disabled={availableDays.length > 0 && (!selectedDate || !selectedTime)}

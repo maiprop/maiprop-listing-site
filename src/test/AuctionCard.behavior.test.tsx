@@ -15,6 +15,7 @@ vi.mock("@/lib/config", () => ({
 }));
 
 vi.mock("@/lib/auctionStreetView", () => ({
+  AUCTION_FALLBACK_LOGO_URL: "/images/maiprop-logo.webp",
   getAuctionStreetViewImageUrl: (auction: unknown) => streetViewMock(auction),
 }));
 
@@ -81,7 +82,7 @@ describe("AuctionCard behavior", () => {
     expect(toastInfo).toHaveBeenCalledWith("Report submitted. Our team will review it.");
   });
 
-  it("swallows cancelled native share and hides broken street-view images", async () => {
+  it("swallows cancelled native share and falls back from broken street-view images", async () => {
     const shareMock = vi.fn().mockRejectedValue(new Error("cancelled"));
     Object.defineProperty(navigator, "share", { configurable: true, value: shareMock });
     const { AuctionCard } = await import("@/components/auctions/AuctionCard");
@@ -102,10 +103,10 @@ describe("AuctionCard behavior", () => {
 
     const image = screen.getByAltText("Auction Apartment") as HTMLImageElement;
     fireEvent.error(image);
-    expect(image.style.display).toBe("none");
+    expect(image.src).toContain("/images/maiprop-logo.webp");
   });
 
-  it("uses the icon placeholder and minimal price fallback when street-view and prices are absent", async () => {
+  it("uses the maiProp logo and minimal price fallback when street-view and prices are absent", async () => {
     streetViewMock.mockReturnValue(null);
     const { AuctionCard } = await import("@/components/auctions/AuctionCard");
 
@@ -117,7 +118,7 @@ describe("AuctionCard behavior", () => {
       />,
     );
 
-    expect(screen.queryByAltText("Auction Apartment")).not.toBeInTheDocument();
+    expect(screen.getByAltText("Auction Apartment")).toHaveAttribute("src", "/images/maiprop-logo.webp");
     expect(screen.getByText("0")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save" })).toHaveTextContent("Save");
   });

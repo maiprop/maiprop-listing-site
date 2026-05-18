@@ -50,6 +50,7 @@ const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const TermsOfService = lazy(() => import("./pages/TermsOfService"));
 const CookiePolicy = lazy(() => import("./pages/CookiePolicy"));
 const BrandedVideoRoom = lazy(() => import("./pages/BrandedVideoRoom"));
+const VideoViewingRoom = lazy(() => import("./pages/VideoViewingRoom"));
 const NewBuildDetail = lazy(() => import("./pages/NewBuildDetail"));
 const OpenHouses = lazy(() => import("./pages/OpenHouses"));
 const OpenHouseDetail = lazy(() => import("./pages/OpenHouseDetail"));
@@ -94,7 +95,7 @@ function AuctionRouter() {
 // Routes that render their own embedded AI widget or have no need for the floating one
 const HIDE_WIDGET_PREFIXES = [
   "/login", "/signup", "/auth/callback", "/onboarding", "/dashboard", "/messages", "/ai-assistant",
-  "/property/", "/auction/", "/new-build/",
+  "/property/", "/auction/", "/new-build/", "/video-room/", "/video-viewing/",
 ];
 
 function GlobalAIWidget() {
@@ -128,6 +129,7 @@ const App = () => (
                       <Route path="/professionals/me" element={<ProtectedRoute><ErrorBoundary><ProfessionalProfileMe /></ErrorBoundary></ProtectedRoute>} />
                       <Route path="/professionals/:id" element={<ErrorBoundary><ProfessionalProfile /></ErrorBoundary>} />
                       <Route path="/video-room/:professionalId" element={<ProtectedRoute><ErrorBoundary><BrandedVideoRoom /></ErrorBoundary></ProtectedRoute>} />
+                      <Route path="/video-viewing/:viewingId" element={<ProtectedRoute><ErrorBoundary><VideoViewingRoom /></ErrorBoundary></ProtectedRoute>} />
                       <Route path="/new-build/:id" element={<ErrorBoundary><NewBuildDetail /></ErrorBoundary>} />
                       <Route path="/open-houses" element={<ErrorBoundary><OpenHouses /></ErrorBoundary>} />
                       <Route path="/open-house/:id" element={<ErrorBoundary><OpenHouseDetail /></ErrorBoundary>} />

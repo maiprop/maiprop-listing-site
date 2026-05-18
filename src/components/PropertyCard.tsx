@@ -222,6 +222,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
   if (compact) {
     const thumb = property.images?.[0];
     const thumbSrcSet = thumb ? getPropertyImageSrcSet(thumb) : undefined;
+    const thumbIsLogoFallback = thumb?.includes("maiprop-logo");
     return (
       <Link to={detailPath} state={detailState} className="glass-card rounded-xl overflow-hidden flex gap-3 p-3 property-card group" data-testid="property-card">
         <div className="relative w-24 h-20 rounded-lg overflow-hidden shrink-0 bg-muted">
@@ -232,7 +233,9 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
               sizes={thumbSrcSet ? COMPACT_PROPERTY_IMAGE_SIZES : undefined}
               alt={property.title}
               loading="lazy"
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              className={`w-full h-full transition-transform duration-300 ${
+                thumbIsLogoFallback ? "object-contain p-3 bg-background" : "object-cover group-hover:scale-105"
+              }`}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center"><Home className="w-6 h-6 text-muted-foreground/30" /></div>
@@ -263,6 +266,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
 
   const mainImage = property.images?.[0];
   const mainImageSrcSet = mainImage ? getPropertyImageSrcSet(mainImage) : undefined;
+  const mainImageIsLogoFallback = mainImage?.includes("maiprop-logo");
 
   return (
     <div data-testid="property-card" className={`property-card rounded-2xl overflow-hidden group flex flex-col bg-card transition-shadow duration-300 ${
@@ -279,7 +283,9 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
             sizes={mainImageSrcSet ? PROPERTY_CARD_IMAGE_SIZES : undefined}
             alt={property.title}
             loading="lazy"
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            className={`w-full h-full transition-transform duration-500 ${
+              mainImageIsLogoFallback ? "object-contain p-8 bg-background" : "object-cover group-hover:scale-105"
+            }`}
             onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
           />
         ) : (

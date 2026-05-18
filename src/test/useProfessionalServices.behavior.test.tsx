@@ -165,12 +165,18 @@ describe("useProfessionalServices hooks", () => {
   });
 
   it("updates the current professional and reports mutation errors", async () => {
-    const okBuilder = queryBuilder({ data: null, error: null });
+    const okBuilder = queryBuilder({ data: { id: "pro-1" }, error: null });
     mocks.from.mockReturnValue(okBuilder);
     const hook = renderHook(() => useUpdateProfessional(), { wrapper });
     await hook.result.current.mutateAsync({ id: "pro-1", updates: { display_name: "Updated" } });
     expect(okBuilder.update).toHaveBeenCalledWith({ display_name: "Updated" });
+    expect(okBuilder.select).toHaveBeenCalledWith("id");
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Profile updated!");
+
+    const noRowBuilder = queryBuilder({ data: null, error: null });
+    mocks.from.mockReturnValue(noRowBuilder);
+    const noRow = renderHook(() => useUpdateProfessional(), { wrapper });
+    await expect(noRow.result.current.mutateAsync({ id: "pro-1", updates: { display_name: "No row" } })).rejects.toThrow("No editable professional profile");
 
     const failingBuilder = queryBuilder({ data: null, error: new Error("update failed") });
     mocks.from.mockReturnValue(failingBuilder);

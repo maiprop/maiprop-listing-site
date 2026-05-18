@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { Link } from "react-router-dom";
-import { Gavel, Crown, Calendar, Clock, MapPin, Euro, Heart, Share2, Flag, ExternalLink, Building2, Lock } from "lucide-react";
+import { Crown, Calendar, Clock, MapPin, Euro, Heart, Share2, Flag, ExternalLink, Building2, Lock } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import {
@@ -8,7 +8,7 @@ import {
   normalizeOwnership, getOwnershipStatus, getOwnershipPct, OWNERSHIP_BADGE,
 } from "@/lib/auctionUtils";
 import { APP_ORIGIN } from "@/lib/config";
-import { getAuctionStreetViewImageUrl } from "@/lib/auctionStreetView";
+import { AUCTION_FALLBACK_LOGO_URL, getAuctionStreetViewImageUrl } from "@/lib/auctionStreetView";
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function PremiumBadge() {
@@ -31,7 +31,12 @@ export const AuctionCard = memo(function AuctionCard({
 }) {
   const days = daysUntil(a.auction_date);
   const badge = countdownBadge(days);
-  const imgSrc = getAuctionStreetViewImageUrl(a);
+  const imgSrc = getAuctionStreetViewImageUrl(a) ?? AUCTION_FALLBACK_LOGO_URL;
+  const isLogoFallback = imgSrc === AUCTION_FALLBACK_LOGO_URL;
+  const coverFallback = typeof a.cover_image_url === "string" && a.cover_image_url.trim()
+    ? a.cover_image_url.trim()
+    : null;
+  const brokenImageFallback = coverFallback ?? AUCTION_FALLBACK_LOGO_URL;
   const isFav = favoritedIds.has(a.id);
   const ownershipStatus = normalizeOwnership(getOwnershipStatus(a.tags));
   const ownershipPct = getOwnershipPct(a.tags);
@@ -56,22 +61,33 @@ export const AuctionCard = memo(function AuctionCard({
   return (
     <div className="glass-card rounded-xl overflow-hidden border border-border hover:border-brand-gold/40 transition-all group flex flex-col">
       <Link to={`/auction/${a.id}`} state={{ auction: a }} className="relative h-44 bg-secondary overflow-hidden block">
-        {imgSrc ? (
-          <img
-            src={imgSrc}
-            alt={a.title}
-            width={480}
-            height={256}
-            decoding="async"
-            loading="lazy"
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-            onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <Gavel className="w-10 h-10 text-muted-foreground/20" />
-          </div>
-        )}
+        <img
+          src={imgSrc}
+          alt={a.title}
+          width={480}
+          height={256}
+          decoding="async"
+          loading="lazy"
+          className={`w-full h-full transition-transform duration-300 ${
+            isLogoFallback
+              ? "object-contain p-8 bg-background"
+              : "object-cover group-hover:scale-105"
+          }`}
+          onError={e => {
+            const img = e.currentTarget;
+            if (img.dataset.fallbackUsed !== "true") {
+              img.dataset.fallbackUsed = "true";
+              img.src = brokenImageFallback;
+              if (brokenImageFallback === AUCTION_FALLBACK_LOGO_URL) {
+                img.style.objectFit = "contain";
+                img.style.padding = "2rem";
+                img.style.backgroundColor = "hsl(var(--background))";
+              }
+              return;
+            }
+            img.style.display = "none";
+          }}
+        />
         <div className="absolute top-2 left-2 flex items-center gap-1.5 flex-wrap">
           {a.is_featured && (
             <span className="inline-flex items-center gap-1 bg-gradient-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded-full">

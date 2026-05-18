@@ -133,15 +133,19 @@ describe("useAuctionListings", () => {
     }));
   });
 
-  it("passes an entitlement-aware fetch limit to the OS proxy when the cache is empty", async () => {
+  it("fetches the wider auction pool before applying the entitlement cap", async () => {
     fromMock.mockReturnValue(makeBuilder(() => Promise.resolve({ data: [], error: null })));
-    invokeMock.mockResolvedValue({ data: { data: [{ id: "os-a1", title: "OS auction" }] }, error: null });
+    invokeMock.mockResolvedValue({
+      data: { data: Array.from({ length: 80 }, (_, i) => auctionRow(`os-${i}`)) },
+      error: null,
+    });
 
     const { result } = renderHookWithQuery(() => useAuctionListings(60));
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
+    expect(result.current.data).toHaveLength(60);
     expect(invokeMock).toHaveBeenCalledWith("fetch-os-auctions", expect.objectContaining({
-      body: expect.objectContaining({ pageSize: 60 }),
+      body: expect.objectContaining({ pageSize: 600 }),
     }));
   });
 
@@ -186,18 +190,22 @@ describe("useAuctionListings", () => {
     expect(builder.range).toHaveBeenNthCalledWith(2, 500, 599);
   });
 
-  it("caps database fallback pagination to the supplied entitlement limit", async () => {
+  it("fetches the portal database window before applying the supplied entitlement limit", async () => {
     invokeMock.mockRejectedValue(new Error("OS unavailable"));
-    const firstPage = Array.from({ length: 60 }, (_, i) => ({ id: `a${i}` }));
-    const builder = makeBuilder(vi.fn().mockResolvedValue({ data: firstPage, error: null }));
+    const firstPage = Array.from({ length: 500 }, (_, i) => auctionRow(`a${i}`));
+    const secondPage = Array.from({ length: 100 }, (_, i) => auctionRow(`b${i}`));
+    const builder = makeBuilder(vi.fn()
+      .mockResolvedValueOnce({ data: firstPage, error: null })
+      .mockResolvedValueOnce({ data: secondPage, error: null }));
     fromMock.mockReturnValue(builder);
 
     const { result } = renderHookWithQuery(() => useAuctionListings(60));
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(result.current.data).toHaveLength(60);
-    expect(builder.range).toHaveBeenCalledTimes(1);
-    expect(builder.range).toHaveBeenCalledWith(0, 59);
+    expect(builder.range).toHaveBeenCalledTimes(2);
+    expect(builder.range).toHaveBeenNthCalledWith(1, 0, 499);
+    expect(builder.range).toHaveBeenNthCalledWith(2, 500, 599);
   });
 
   it("falls back to a no-images query when the joined version fails", async () => {

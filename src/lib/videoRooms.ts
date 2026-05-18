@@ -1,0 +1,55 @@
+export type MaiPropVideoRoomKind = "professional" | "viewing";
+
+const KNOWN_VIDEO_PROVIDERS = [
+  { pattern: "zoom.us", name: "Zoom" },
+  { pattern: "whereby.com", name: "Whereby" },
+  { pattern: "meet.google.com", name: "Google Meet" },
+  { pattern: "teams.microsoft.com", name: "Microsoft Teams" },
+  { pattern: "webex.com", name: "Webex" },
+];
+
+export function normalizeVideoLink(videoLink: string | null | undefined) {
+  const trimmed = videoLink?.trim();
+  if (!trimmed) return null;
+
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    return url.toString();
+  } catch (_err: unknown) {
+    return null;
+  }
+}
+
+export function isExternalVideoLink(videoLink: string | null | undefined) {
+  return Boolean(normalizeVideoLink(videoLink));
+}
+
+export function getVideoPlatformName(videoLink: string | null | undefined) {
+  const normalized = normalizeVideoLink(videoLink);
+  if (!normalized) return null;
+  const provider = KNOWN_VIDEO_PROVIDERS.find(({ pattern }) => normalized.includes(pattern));
+  return provider?.name ?? "external video link";
+}
+
+export function createMaiPropVideoRoomTopic(kind: MaiPropVideoRoomKind, id: string) {
+  return `video:${kind}:${id}`;
+}
+
+export function createMaiPropVideoRoomDisplayName(kind: MaiPropVideoRoomKind, id: string) {
+  const suffix = id.slice(0, 8);
+  return `maiprop-${kind}-${suffix}`;
+}
+
+export function createProfessionalVideoRoomPath(professionalId: string) {
+  return `/video-room/${professionalId}`;
+}
+
+export function createViewingVideoRoomPath(viewingId: string) {
+  return `/video-viewing/${viewingId}`;
+}
+
+export function createAbsoluteVideoRoomUrl(path: string) {
+  if (typeof window === "undefined") return path;
+  return new URL(path, window.location.origin).toString();
+}

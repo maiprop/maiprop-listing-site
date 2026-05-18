@@ -56,8 +56,9 @@ const getSortedListingImages = (listing: HomepageAuctionListing): string[] => {
 const getHomepageAuctionImages = (listing: HomepageAuctionListing): string[] => { // skipcq: JS-R1005
   const fallbackImages = getSortedListingImages(listing);
   const streetView = getAuctionStreetViewImageUrl(listing);
-  const images = listing.cover_image_url ? [listing.cover_image_url] : fallbackImages;
-  return images.length ? images : streetView ? [streetView] : [];
+  const images = listing.cover_image_url ? [listing.cover_image_url, ...fallbackImages] : fallbackImages;
+  if (!streetView) return images;
+  return [streetView, ...images.filter((image) => image !== streetView)];
 };
 
 const toOptionalNumber = (value: unknown): number | undefined =>

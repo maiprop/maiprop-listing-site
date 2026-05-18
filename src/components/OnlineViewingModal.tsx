@@ -10,6 +10,7 @@ import { toast } from "sonner";
 const timeSlots = ["09:00", "10:00", "11:00", "12:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
 
 const platforms = [
+  { id: "maiprop", label: "mAI prop video room", icon: "Video" },
   { id: "zoom", label: "Zoom", icon: "Video" },
   { id: "meet", label: "Google Meet", icon: "Camera" },
   { id: "teams", label: "MS Teams", icon: "Briefcase" },
@@ -58,7 +59,7 @@ const OnlineViewingModal = ({ open, onClose, listing, professional }: OnlineView
 
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
-  const [platform, setPlatform] = useState("zoom");
+  const [platform, setPlatform] = useState("maiprop");
   const [name, setName] = useState(profile?.display_name || "");
   const [email, setEmail] = useState(user?.email || "");
   const [note, setNote] = useState("");
@@ -171,8 +172,8 @@ const OnlineViewingModal = ({ open, onClose, listing, professional }: OnlineView
             <div className="flex items-center gap-2 text-xs text-muted-foreground bg-primary/5 border border-primary/20 rounded-lg p-3 text-left">
               <Wifi className="w-4 h-4 text-primary shrink-0" />
               {isProperty
-                ? "The listing owner must confirm the booking and add the final meeting link before you can join."
-                : "The professional may confirm this platform, share a different link, or use the built-in maiProp room."}
+                ? "The listing owner can confirm the booking and use the built-in mAI prop video room, or add an external meeting link."
+                : "The professional may confirm this platform, share a different link, or use the built-in mAI prop video room."}
             </div>
             <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" onClick={handleClose}>Done</Button>
           </div>
