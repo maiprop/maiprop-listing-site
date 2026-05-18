@@ -137,4 +137,32 @@ describe("critical business invariants", () => {
     expect(deleteAccount).toContain("removeFolderRecursive");
     expect(deleteAccountTest).toContain("open-house-docs");
   });
+
+  it("keeps account deletion UX, privacy terms, and lifecycle coverage aligned", () => {
+    const settings = read("src/components/dashboard/SettingsSection.tsx");
+    const privacy = read("src/pages/PrivacyPolicy.tsx");
+    const terms = read("src/pages/TermsOfService.tsx");
+    const deleteAccount = read("supabase/functions/delete-account/index.ts");
+    const gdprE2E = read("e2e/gdpr-delete-account.spec.ts");
+
+    expect(settings).toContain("account-controlled platform data");
+    expect(settings).toContain("Privacy Policy");
+    expect(settings).toContain("legally required");
+
+    expect(privacy).toContain("Right to Erasure");
+    expect(privacy).toContain("overriding legal basis");
+    expect(privacy).toContain("Data Retention");
+
+    expect(terms).toContain("You may delete your account at any time");
+    expect(terms).toContain("Data retained for legal reasons will be handled as described in our Privacy Policy");
+
+    expect(deleteAccount).toContain("HARD DELETE listings");
+    expect(deleteAccount).toContain("stripe.subscriptions.cancel");
+    expect(deleteAccount).toContain("auth.admin.deleteUser");
+
+    expect(gdprE2E).toContain("blocks old sign-in");
+    expect(gdprE2E).toContain("same email should be reusable after deletion");
+    expect(gdprE2E).toContain("recreated auth user should be a fresh account");
+    expect(gdprE2E).toContain("waitForURL(/\\/dashboard|\\/onboarding/");
+  });
 });

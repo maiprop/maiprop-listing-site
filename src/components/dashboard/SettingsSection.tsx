@@ -219,7 +219,7 @@ export function SettingsSection({
           <div>
             <p className="text-sm font-medium">Delete Account</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Permanently removes your account and all associated data. This cannot be undone.
+              Permanently removes your account and account-controlled platform data. Records retained for legal reasons are handled under the Privacy Policy.
             </p>
           </div>
           <Button
@@ -238,7 +238,7 @@ export function SettingsSection({
       <ConfirmDialog
         open={deleteDialogOpen}
         title="Delete your account?"
-        description="This will permanently delete your account and all your data — listings, saved properties, messages, and transaction history. This action cannot be undone."
+        description="This will permanently delete your account and account-controlled platform data, including active listings, saved properties, messages, and profile information. Records we are legally required to retain will be handled under our Privacy Policy. This action cannot be undone."
         confirmLabel="Yes, delete my account"
         destructive
         onConfirm={handleDeleteAccount}

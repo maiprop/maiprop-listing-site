@@ -223,7 +223,7 @@ describe("Login", () => {
     await waitFor(() =>
       expect(mockSupabase.auth.signInWithOAuth).toHaveBeenCalledWith({
         provider: "google",
-        options: { redirectTo: "https://app.test/dashboard" },
+        options: { redirectTo: "https://app.test/auth/callback?intent=login&next=%2Fdashboard" },
       }),
     );
     expect(toastMock.error).toHaveBeenCalledWith("Google sign-in failed. Please try again.");
