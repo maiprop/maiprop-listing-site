@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect, type ElementType } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
@@ -11,7 +12,7 @@ import {
   ChevronDown, ChevronUp, Shield, Flame, Wifi, Car, TreePine, Phone,
   Loader2, Maximize2, BedDouble, Bath, Layers, FileImage,
 } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth, type Profile } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useIsFavorited, useToggleFavorite } from "@/hooks/useFavorites";
 import { PropertyScoresSection } from "@/components/property/PropertyScoresSection";
@@ -37,6 +38,64 @@ function EnergyBadge({ cls }: { cls: string }) {
   return (
     <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${colorClass}`}>{cls}</span>
   );
+}
+
+type RegisterInterestForm = {
+  name: string;
+  phone: string;
+  message: string;
+};
+
+type RegisterInterestPayload = {
+  listingId: string;
+  user: User;
+  profile: Profile | null;
+  form: RegisterInterestForm;
+  contactName: string;
+};
+
+function cleanOptionalText(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed || undefined;
+}
+
+function getInterestContactName(form: RegisterInterestForm, profile: Profile | null) {
+  return cleanOptionalText(form.name)
+    ?? cleanOptionalText(profile?.display_name)
+    ?? cleanOptionalText(profile?.first_name)
+    ?? "Interested buyer";
+}
+
+function getInterestPhone(form: RegisterInterestForm, profile: Profile | null) {
+  return cleanOptionalText(form.phone) ?? cleanOptionalText(profile?.phone) ?? null;
+}
+
+async function insertNewBuildLead({
+  listingId,
+  user,
+  profile,
+  form,
+  contactName,
+}: RegisterInterestPayload) {
+  await supabase.from("new_building_leads").insert({
+    new_building_id: listingId,
+    user_id: user.id,
+    email: user.email ?? "",
+    full_name: contactName,
+    phone: getInterestPhone(form, profile),
+    investment_budget: 0,
+    notes: cleanOptionalText(form.message) ?? "",
+    utm_source: "newbuild_detail_register",
+  });
+}
+
+async function notifyDeveloperInterest(ownerId: string, contactName: string, listingTitle: string) {
+  await supabase.from("notifications").insert({
+    user_id: ownerId,
+    type: "new_interest",
+    title: "New interest registered",
+    body: `${contactName} registered interest in ${listingTitle}`,
+  });
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
@@ -92,33 +151,15 @@ export default function NewBuildDetail() {
     enabled: !!id,
   });
 
-  const handleRegisterInterest = async (form: { name: string; phone: string; message: string }) => {
-    if (!id || !listing?.owner_id) return;
+  const handleRegisterInterest = async (form: RegisterInterestForm) => {
+    const ownerId = listing?.owner_id;
+    if (!id || !ownerId) return;
     if (!user) { navigate("/login"); return; }
-    const contactName = form.name || profile?.display_name || profile?.first_name || "Interested buyer";
-    const msg = [
-      `Hi, I'm interested in ${listing.title}.`,
-      form.message ? `\n\n${form.message}` : "",
-      form.phone ? `\nContact: ${form.phone}` : "",
-    ].join("").trim();
-    void msg; // message constructed for future use
-    await startConv.mutateAsync({ other_user_id: listing.owner_id, listing_id: id });
-    const { error: _leadInsertError } = await supabase.from("new_building_leads").insert({
-      new_building_id: id,
-      user_id: user.id,
-      email: user.email ?? "",
-      full_name: profile?.display_name || "",
-      phone: profile?.phone || null,
-      investment_budget: 0,
-      notes: "",
-      utm_source: "newbuild_detail_register",
-    });
-    await supabase.from("notifications").insert({
-      user_id: listing.owner_id,
-      type: "new_interest",
-      title: "New interest registered",
-      body: `${contactName} registered interest in ${listing.title}`,
-    });
+
+    const contactName = getInterestContactName(form, profile);
+    await startConv.mutateAsync({ other_user_id: ownerId, listing_id: id });
+    await insertNewBuildLead({ listingId: id, user, profile, form, contactName });
+    await notifyDeveloperInterest(ownerId, contactName, listing.title);
     toast.success("Interest registered — the developer will be in touch");
   };
 

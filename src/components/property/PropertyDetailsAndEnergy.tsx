@@ -13,6 +13,24 @@ interface Props {
   energyClass: string | null | undefined;
 }
 
+type VisibleDetailRow = {
+  label: string;
+  value: string | number;
+};
+
+function hasDisplayValue(row: DetailRowItem): row is VisibleDetailRow {
+  return row.value !== null && row.value !== undefined;
+}
+
+function getDisplayEnergyClass(energyClass: string | null | undefined): EnergyClass | null {
+  if (!energyClass || energyClass === "Exempt") return null;
+  return energyClass in ENERGY_COLORS ? (energyClass as EnergyClass) : null;
+}
+
+function getEnergyDescription(energyClass: EnergyClass | null) {
+  return ENERGY_SCALE.find((e) => e.cls === energyClass)?.desc;
+}
+
 /**
  * Property Details section: a 2-column grid of `DetailRow`s plus the optional
  * Energy Performance Certificate visualisation.
@@ -22,41 +40,36 @@ interface Props {
  * See docs/ENTERPRISE_ASSESSMENT_2026-04-27.md (Quadrant I, Top fn-size).
  */
 export function PropertyDetailsAndEnergy({ detailRows, energyClass }: Props) {
-  const displayEnergyClass =
-    energyClass && energyClass !== "Exempt" && (energyClass as EnergyClass) in ENERGY_COLORS
-      ? energyClass
-      : null;
-  const energyData = displayEnergyClass ? ENERGY_SCALE.find((e) => e.cls === displayEnergyClass) : undefined;
+  const displayEnergyClass = getDisplayEnergyClass(energyClass);
+  const visibleDetailRows = detailRows.filter(hasDisplayValue);
 
   return (
     <Section>
       <SectionHeader icon={Home} title="Property Details" />
       <div className="p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10">
-          {detailRows
-            .filter((row): row is { label: string; value: string | number } =>
-              row.value !== null && row.value !== undefined,
-            )
-            .map((row) => (
-              <DetailRow key={row.label} label={row.label} value={row.value} />
-            ))}
+          {visibleDetailRows.map((row) => (
+            <DetailRow key={row.label} label={row.label} value={row.value} />
+          ))}
         </div>
 
-        {displayEnergyClass && (
-          <EnergyCertificate energyClass={displayEnergyClass} energyDesc={energyData?.desc} />
-        )}
+        <EnergyCertificate
+          energyClass={displayEnergyClass}
+          energyDesc={getEnergyDescription(displayEnergyClass)}
+        />
       </div>
     </Section>
   );
 }
 
 interface EnergyCertificateProps {
-  energyClass: string;
+  energyClass: EnergyClass | null;
   energyDesc: string | undefined;
 }
 
 function EnergyCertificate({ energyClass, energyDesc }: EnergyCertificateProps) {
-  const cls = energyClass as EnergyClass;
+  if (!energyClass) return null;
+
   return (
     <div className="mt-6 pt-6 border-t border-border">
       <div className="flex items-center gap-2 mb-4">
@@ -72,7 +85,7 @@ function EnergyCertificate({ energyClass, energyDesc }: EnergyCertificateProps) 
       </div>
       {energyDesc && (
         <div className="flex items-center gap-2 mt-3">
-          <div className={`px-2 py-0.5 rounded text-xs font-black ${ENERGY_COLORS[cls]}`}>
+          <div className={`px-2 py-0.5 rounded text-xs font-black ${ENERGY_COLORS[energyClass]}`}>
             {energyClass}
           </div>
           <span className="text-xs text-muted-foreground">{energyDesc}</span>
