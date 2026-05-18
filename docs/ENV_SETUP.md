@@ -186,6 +186,10 @@ fail-fast behavior.
 | `ONBOARDING_TEST_PASSWORD` | staging onboarding E2E password | repo or staging environment |
 | `SUPABASE_SERVICE_ROLE_KEY` | staging-only service role for security tests and fixtures | staging environment only |
 | `MAIPROP_EDGE_TEST_AUTH_BYPASS` | explicit CI-only bypass marker for edge-function tests that exercise handler internals without live Supabase Auth | CI test environment only |
+| `PRODUCTION_DEPLOY_URLS` | optional space-separated URL override for the post-deploy production smoke check; defaults to `https://portal.maiprop.co` | deploy diagnostics only |
+| `PRODUCTION_DEPLOY_BROWSER_CHECK` | optional boolean that enables the Chromium mount check when set instead of passing `--browser` | deploy diagnostics only |
+| `PRODUCTION_DEPLOY_CHECK_ATTEMPTS` | optional retry count for the production deploy smoke check; defaults to `8` | deploy diagnostics only |
+| `PRODUCTION_DEPLOY_CHECK_DELAY_MS` | optional retry delay in milliseconds for the production deploy smoke check; defaults to `10000` | deploy diagnostics only |
 
 Additional seeded E2E accounts:
 

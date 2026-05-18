@@ -66,7 +66,7 @@ const Section = ({ title, icon: Icon, children, defaultOpen = true }: { title: s
   );
 };
 
-export default function ProjectDetail() {
+export default function ProjectDetail() { // skipcq: JS-R1005 - Project route coordinates details, media, units, leads, and owner controls.
   const { id } = useParams();
   const { user, profile } = useAuth();
   const participantType = getParticipantTypeFromProfile(profile);
@@ -100,7 +100,7 @@ export default function ProjectDetail() {
   const [unitToDelete, setUnitToDelete] = useState<string | null>(null);
   const [leadToDelete, setLeadToDelete] = useState<string | null>(null);
 
-  useEffect(() => {
+  useEffect(() => { // skipcq: JS-R1005 - Project form hydration mirrors many optional project fields.
     if (project) {
       setForm({
         name: project.name ?? undefined,
@@ -128,7 +128,7 @@ export default function ProjectDetail() {
     setForm(f => ({ ...f, [key]: value }));
   };
 
-  const handleSaveProject = async () => {
+  const handleSaveProject = async () => { // skipcq: JS-R1005 - Save path normalizes optional project fields before mutation.
     if (!id) return;
     setSaving(true);
     const updates: Record<string, unknown> = {};
@@ -139,7 +139,7 @@ export default function ProjectDetail() {
     updateProject.mutate({ id, updates }, { onSettled: () => setSaving(false) });
   };
 
-  const uploadProjectMedia = useCallback(async (file: File, mediaType: ProjectMediaType): Promise<string> => {
+  const uploadProjectMedia = useCallback(async (file: File, mediaType: ProjectMediaType): Promise<string> => { // skipcq: JS-R1005 - Upload path validates media type, storage path, and public URL together.
     if (!user || !id) throw new Error("Not authenticated");
     const allowed = mediaType === "brochure_pdf" ? PDF_MIME_TYPES : IMAGE_AND_VIDEO_MIME_TYPES;
     assertAllowedUpload(file, allowed, {
@@ -154,7 +154,7 @@ export default function ProjectDetail() {
     return data.publicUrl;
   }, [user, id]);
 
-  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>, mediaType: ProjectMediaType) => {
+  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>, mediaType: ProjectMediaType) => { // skipcq: JS-R1005 - Media input handler owns nullable file, upload, and toast fallback paths.
     const file = e.target.files?.[0];
     if (!file || !id) return;
     try {
@@ -205,7 +205,7 @@ export default function ProjectDetail() {
     updateLead.mutate({ id: leadId, projectId: id, updates });
   };
 
-  const handleBulkPriceUpdate = () => {
+  const handleBulkPriceUpdate = () => { // skipcq: JS-R1005 - Bulk price update validates inputs and applies filtered unit mutations.
     if (!id || !bulkPricePct) return;
     const pct = parseFloat(bulkPricePct);
     if (isNaN(pct) || pct === 0) return;
@@ -412,7 +412,7 @@ export default function ProjectDetail() {
               )}
             </div>
             <div className="space-y-4">
-              {units.map((u: ProjectUnit) => (
+              {units.map((u: ProjectUnit) => ( // skipcq: JS-R1005 - Unit row renders edit, delete, media, and status controls in one list branch.
                 <div key={u.id} className="glass-card rounded-xl p-4 border border-border">
                   {editingUnitId === u.id ? (
                     <UnitEditForm unit={u} onSave={(updates) => handleUpdateUnit(u.id, updates)} onCancel={() => setEditingUnitId(null)} />
@@ -584,7 +584,7 @@ const UnitEditForm = ({ unit, onSave, onCancel, isCreate }: { unit?: ProjectUnit
     cooling_system: unit?.cooling_system || "",
   });
 
-  const submit = () => {
+  const submit = () => { // skipcq: JS-R1005 - Unit editor submit maps the dense unit form into typed insert fields.
     const u: Partial<ProjectUnitInsert> = {
       unit_id: f.unit_id || undefined,
       floor: f.floor ? parseInt(String(f.floor)) : undefined,
