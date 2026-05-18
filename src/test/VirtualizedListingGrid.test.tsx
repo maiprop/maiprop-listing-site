@@ -13,6 +13,22 @@ const ITEMS: ListingGridTestItem[] = Array.from({ length: 20 }, (_, index) => ({
   title: `Listing ${index + 1}`,
 }));
 
+function mockElementClientWidth(width: number) {
+  const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+  Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+    configurable: true,
+    get: () => width,
+  });
+
+  return () => {
+    if (descriptor) {
+      Object.defineProperty(HTMLElement.prototype, "clientWidth", descriptor);
+      return;
+    }
+    Reflect.deleteProperty(HTMLElement.prototype, "clientWidth");
+  };
+}
+
 describe("VirtualizedListingGrid", () => {
   it("renders nothing for an empty item set", () => {
     renderWithProviders(
@@ -46,6 +62,29 @@ describe("VirtualizedListingGrid", () => {
     expect(Number(grid.dataset.virtualizedCount)).toBeGreaterThan(0);
     expect(Number(grid.dataset.virtualizedCount)).toBeLessThanOrEqual(20);
     expect(screen.getByText("Listing 1")).toBeInTheDocument();
+  });
+
+  it("uses the measured width for auto columns before settling layout", () => {
+    const restoreClientWidth = mockElementClientWidth(1300);
+
+    try {
+      renderWithProviders(
+        <VirtualizedListingGrid
+          items={ITEMS}
+          className="grid"
+          estimateItemHeight={100}
+          gap={10}
+          data-testid="grid"
+          renderItem={(item) => <article key={item.id}>{item.title}</article>}
+        />,
+      );
+
+      const grid = screen.getByTestId("grid");
+      expect(grid.style.minHeight).toBe("540px");
+      expect(grid).toHaveAttribute("data-total-count", "20");
+    } finally {
+      restoreClientWidth();
+    }
   });
 
   it("recalculates the visible window when a scroll parent moves", () => {

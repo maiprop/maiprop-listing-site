@@ -350,8 +350,8 @@ export default function Listings() {
               )}
             </div>
 
-            {/* ── DESKTOP FILTER BAR (unchanged) ── */}
-            <div className="hidden sm:flex gap-2 items-center overflow-x-auto scrollbar-none sm:flex-wrap">
+            {/* ── DESKTOP FILTER BAR ── */}
+            <div className="hidden sm:flex gap-2 items-center content-start overflow-x-auto scrollbar-none sm:flex-wrap">
               {/* Search */}
               <div className="shrink-0 flex-1 min-w-[200px] flex items-center gap-2 bg-secondary rounded-xl px-4 py-2.5 border border-border focus-within:border-primary transition-colors">
                 <Search className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -408,19 +408,21 @@ export default function Listings() {
                   {t("listings.saveSearch")}
                 </Button>
               )}
-              <div className="flex rounded-xl border border-border overflow-hidden shrink-0">
-                <button onClick={() => setViewMode("grid")} aria-label="Grid view" aria-pressed={viewMode === "grid"}
-                  className={`p-2.5 transition-colors ${viewMode === "grid" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
-                  <LayoutGrid className="w-4 h-4" />
-                </button>
-                <button onClick={() => setViewMode("split")} aria-label="Split view" aria-pressed={viewMode === "split"}
-                  className={`p-2.5 transition-colors ${viewMode === "split" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
-                  <Columns2 className="w-4 h-4" />
-                </button>
-                <button onClick={() => setViewMode("map")} aria-label="Map view" aria-pressed={viewMode === "map"}
-                  className={`p-2.5 transition-colors ${viewMode === "map" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
-                  <Map className="w-4 h-4" />
-                </button>
+              <div className="basis-full flex">
+                <div className="flex rounded-xl border border-border overflow-hidden shrink-0">
+                  <button onClick={() => setViewMode("grid")} aria-label="Grid view" aria-pressed={viewMode === "grid"}
+                    className={`p-2.5 transition-colors ${viewMode === "grid" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
+                    <LayoutGrid className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => setViewMode("split")} aria-label="Split view" aria-pressed={viewMode === "split"}
+                    className={`p-2.5 transition-colors ${viewMode === "split" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
+                    <Columns2 className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => setViewMode("map")} aria-label="Map view" aria-pressed={viewMode === "map"}
+                    className={`p-2.5 transition-colors ${viewMode === "map" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
+                    <Map className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
 
