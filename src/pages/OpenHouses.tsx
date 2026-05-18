@@ -18,6 +18,31 @@ import { ENERGY_CLASSES, FEATURES_RESIDENTIAL } from "@/lib/filterConfig";
 import { fmtDate, fmtTime, Pill, RangeInput, OpenHouseCard } from "@/components/open-houses/OpenHousePrimitives";
 import { cn } from "@/lib/utils";
 
+function OpenHouseCardSkeleton() {
+  return (
+    <div className="property-card rounded-2xl overflow-hidden bg-card border border-border flex flex-col">
+      <div className="aspect-[4/3] sm:aspect-[3/2] bg-secondary animate-pulse" />
+      <div className="p-4 flex flex-col gap-3">
+        <div className="space-y-2">
+          <div className="h-4 w-3/4 rounded bg-secondary animate-pulse" />
+          <div className="h-3 w-1/2 rounded bg-secondary animate-pulse" />
+        </div>
+        <div className="flex gap-2">
+          <div className="h-7 w-20 rounded-lg bg-secondary animate-pulse" />
+          <div className="h-7 w-16 rounded-lg bg-secondary animate-pulse" />
+          <div className="h-7 w-24 rounded-lg bg-secondary animate-pulse" />
+        </div>
+        <div className="h-14 rounded-xl bg-secondary animate-pulse" />
+        <div className="mt-auto pt-3 border-t border-border flex gap-2">
+          <div className="h-10 flex-1 rounded-xl bg-secondary animate-pulse" />
+          <div className="h-10 w-10 rounded-xl bg-secondary animate-pulse" />
+          <div className="h-10 w-10 rounded-xl bg-secondary animate-pulse" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function OpenHouses() {
   const [searchParams] = useSearchParams();
@@ -447,8 +472,16 @@ export default function OpenHouses() {
         {/* ── Content ────────────────────────────────────────────────────────── */}
         <div className={viewMode === "map" ? "h-[calc(100vh-13rem)]" : "container py-8"}>
           {isLoading ? (
-            <div className="flex justify-center py-20">
-              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <div className="space-y-4" aria-busy="true" aria-label="Loading open houses">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                <span>Loading open houses</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+                {Array.from({ length: 6 }, (_, index) => (
+                  <OpenHouseCardSkeleton key={index} />
+                ))}
+              </div>
             </div>
           ) : viewMode === "map" ? (
             /* ── Map view ── */
