@@ -47,8 +47,7 @@ const GRID_LOADING_SKELETON_KEYS = [
 const GRID_ESTIMATED_ROW_HEIGHT = 520;
 
 // skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
-// skipcq: JS-R1005 - Listings coordinates filters, map state, comparison, and virtualization in one route shell.
-export default function Listings() {
+export default function Listings() { // skipcq: JS-R1005 - Listings coordinates filters, map state, comparison, and virtualization in one route shell.
   const { t } = useTranslation();
 
   const [viewMode, setViewMode] = useState<"grid" | "split" | "map">("grid");
