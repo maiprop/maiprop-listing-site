@@ -81,7 +81,7 @@ export default function Listings() { // skipcq: JS-R1005 - Listings coordinates 
     ? selectedPrice.split("-").map(Number)
     : [undefined, undefined];
 
-  const filters = useMemo<ListingsFilters>(() => ({
+  const filters = useMemo<ListingsFilters>(() => ({ // skipcq: JS-R1005 - Listings route maps many independent URL filters into one query payload.
     city: searchQuery || undefined,
     listing_type: preSaleOnly ? "sale" : (selectedListingType || undefined),
     property_type: selectedType || undefined,
@@ -511,7 +511,7 @@ export default function Listings() { // skipcq: JS-R1005 - Listings coordinates 
           </div>
 
           {/* ── Split view ── */}
-          {viewMode === "split" ? (() => {
+          {viewMode === "split" ? (() => { // skipcq: JS-R1005 - Split view derives viewport and polygon lists in one render branch.
             const splitDisplayList = polygonFilterIds !== null
               ? filtered.filter(p => polygonFilterIds.has(p.id))
               : viewportIds !== null

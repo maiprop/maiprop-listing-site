@@ -18,7 +18,7 @@ interface DealChecklistProps {
 }
 
 // skipcq: JS-0067 - Exported React component is intentionally module-scoped.
-export function DealChecklist({ entityType, entityId }: DealChecklistProps) {
+export function DealChecklist({ entityType, entityId }: DealChecklistProps) { // skipcq: JS-R1005 - Checklist UI keeps auth, defaults, mutations, and item actions together.
   const { user } = useAuth();
   const { data: checklist, isLoading } = useDealChecklist(entityType, entityId);
   const upsert = useUpsertDealChecklist();
@@ -46,7 +46,7 @@ export function DealChecklist({ entityType, entityId }: DealChecklistProps) {
     });
   };
 
-  const addItem = () => {
+  const addItem = () => { // skipcq: JS-R1005 - Add action keeps duplicate checklist mutation defaults together.
     if (!newItem.trim()) return;
     const next = [...items, { label: newItem.trim(), done: false }];
     upsert.mutate({

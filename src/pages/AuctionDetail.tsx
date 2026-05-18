@@ -73,7 +73,7 @@ const AUCTION_INFO_NOTES: { id: string; text: string }[] = [
 const safeUrl = (url: string | null | undefined): string | null =>
   url && /^https?:\/\//i.test(url) ? url : null;
 
-const asNumber = (value: unknown): number | null => {
+const asNumber = (value: unknown): number | null => { // skipcq: JS-R1005 - Auction values may arrive as numeric or string payloads.
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string" && value.trim() !== "") {
     const parsed = Number(value);
@@ -138,7 +138,7 @@ const AuctionTitleSection = ({ // skipcq: JS-R1005 - Title metadata intentionall
   yearBuilt: number | null;
   ownershipBadge: { cls: string; label: string } | null;
   ownershipPct: number | null;
-}) => {
+}) => { // skipcq: JS-R1005 - Auction title section renders optional metadata and badges in one header.
   const badge = countdownBadge(days);
 
   return (

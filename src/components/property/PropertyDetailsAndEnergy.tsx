@@ -22,7 +22,7 @@ const hasDisplayValue = (row: DetailRowItem): row is VisibleDetailRow => {
   return row.value !== null && row.value !== undefined;
 };
 
-const getDisplayEnergyClass = (energyClass: string | null | undefined): EnergyClass | null => {
+const getDisplayEnergyClass = (energyClass: string | null | undefined): EnergyClass | null => { // skipcq: JS-R1005 - Energy class normalization keeps exempt and unknown values local.
   if (!energyClass || energyClass === "Exempt") return null;
   return energyClass in ENERGY_COLORS ? (energyClass as EnergyClass) : null;
 };

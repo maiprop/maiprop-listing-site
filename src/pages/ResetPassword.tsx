@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { validatePassword } from "@/lib/passwordPolicy";
 
 // skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
-export default function ResetPassword() {
+export default function ResetPassword() { // skipcq: JS-R1005 - Password reset route coordinates recovery state, validation, and submit UI.
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");

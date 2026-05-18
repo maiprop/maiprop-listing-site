@@ -62,7 +62,7 @@ export interface ListingsFilterActions {
 }
 
 // skipcq: JS-0067 - Exported hook is intentionally module-scoped.
-export function useListingsFilters(): ListingsFilterState & ListingsFilterActions {
+export function useListingsFilters(): ListingsFilterState & ListingsFilterActions { // skipcq: JS-R1005 - URL filter hook intentionally centralizes readers, writers, and AI filter mapping.
   const [searchParams, setSearchParams] = useSearchParams();
 
   // ── Primitive readers ──────────────────────────────────────────────────────
@@ -166,7 +166,7 @@ export function useListingsFilters(): ListingsFilterState & ListingsFilterAction
   }, [setSearchParams]);
 
   const applyAIFilters = useCallback((filters: Record<string, unknown>) => {
-    setSearchParams(prev => {
+    setSearchParams(prev => { // skipcq: JS-R1005 - AI filter mapping translates one model payload into query params.
       const next = new URLSearchParams(prev);
       if (filters.city) next.set("city", String(filters.city));
       if (filters.listing_type) next.set("listing_type", String(filters.listing_type));

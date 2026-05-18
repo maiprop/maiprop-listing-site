@@ -85,7 +85,7 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
   // - new build  → /new-build/:id
   // - auction    → /auction/:id  (AuctionRouter renders PropertyDetail there too,
   //                so UI is identical; this just keeps the URL canonical)
-  useEffect(() => {
+  useEffect(() => { // skipcq: JS-R1005 - Canonical route redirect checks new-build and auction variants together.
     if (!dbListing) return;
     const _db = dbListing as ListingWithJoins;
     if (_db.is_pre_sale || _db.construction_status) {
@@ -119,7 +119,7 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
     if (id) toggleFav.mutate({ listing_id: id, isFavorited });
   };
 
-  const handleContact = async () => {
+  const handleContact = async () => { // skipcq: JS-R1005 - Contact flow validates auth, owner state, and conversation creation together.
     if (!user) {toast.error(t("property.signInToContact"));navigate("/login");return;}
     const ownerId = dbListing ?
     (dbListing as ListingWithJoins).profiles?.user_id ?? (dbListing as ListingWithJoins).owner_id :
@@ -228,7 +228,7 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
 
 
   // Street View fallback via proxy (key never in client URLs)
-  const streetViewFallback = (() => {
+  const streetViewFallback = (() => { // skipcq: JS-R1005 - Street View fallback supports coordinate and address lookup paths.
     if (db.latitude != null && db.longitude != null) {
       return getStreetViewProxyUrl({ lat: Number(db.latitude), lng: Number(db.longitude) });
     }

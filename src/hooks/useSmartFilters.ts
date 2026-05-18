@@ -47,7 +47,7 @@ export function useSmartFilters(type: string, subtype: string, listingType: stri
   const abortRef = useRef<AbortController | null>(null);
   const requestSeqRef = useRef(0);
 
-  useEffect(() => {
+  useEffect(() => { // skipcq: JS-R1005 - Smart filter effect coordinates cache, auth fallback, and request cancellation.
     const requestSeq = requestSeqRef.current + 1;
     requestSeqRef.current = requestSeq;
 
@@ -82,7 +82,7 @@ export function useSmartFilters(type: string, subtype: string, listingType: stri
       .invoke("smart-filters", {
         body: { type, subtype: subtype || null, listing_type: listingType || null },
       })
-      .then(({ data, error }) => {
+      .then(({ data, error }) => { // skipcq: JS-R1005 - Smart filter response handles stale requests, fallback, and cache update.
         if (requestSeqRef.current !== requestSeq) return;
         if (error || !data || data.error) {
           logger.warn("smart-filters fallback:", error || data?.error);

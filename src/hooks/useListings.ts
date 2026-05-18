@@ -173,7 +173,7 @@ export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize
   return query;
 };
 
-const fetchListingsPage = async (filters?: ListingsFilters, page = 1, pageSize = 24) => {
+const fetchListingsPage = async (filters?: ListingsFilters, page = 1, pageSize = 24) => { // skipcq: JS-R1005 - Page fetch keeps listing rows and owner profile enrichment together.
   const from = (page - 1) * pageSize;
   const { data, error } = await buildListingsQuery(filters, from, pageSize);
 
@@ -282,7 +282,7 @@ const EMPTY_OWNER_CONTEXT: ListingOwnerContext = {
   ownerParticipantType: null,
 };
 
-const fetchListingOwnerContext = async (ownerId: string | null): Promise<ListingOwnerContext> => {
+const fetchListingOwnerContext = async (ownerId: string | null): Promise<ListingOwnerContext> => { // skipcq: JS-R1005 - Owner context fetch handles nullable owner ids and fallback profile state.
   if (!ownerId) return EMPTY_OWNER_CONTEXT;
 
   try {

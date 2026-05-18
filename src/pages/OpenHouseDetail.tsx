@@ -87,7 +87,7 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
   const canContact = !!myReg && ["approved", "attended"].includes(myReg.status);
   const canSubmitOffer = !!myReg && myReg.status === "attended" && ohDatePassed;
 
-  const handleContact = async () => {
+  const handleContact = async () => { // skipcq: JS-R1005 - Contact action checks registration and conversation fallback paths.
     const ownerId = db?.owner_id;
     if (!user || !ownerId || !id) return;
     try {

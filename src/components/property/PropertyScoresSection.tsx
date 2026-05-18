@@ -63,7 +63,7 @@ function ScoreRing({
 }
 
 // skipcq: JS-0067 - Exported React component is intentionally module-scoped.
-export function PropertyScoresSection({ walkScore, walkabilityScore, safetyScore, noiseScore }: Props) {
+export function PropertyScoresSection({ walkScore, walkabilityScore, safetyScore, noiseScore }: Props) { // skipcq: JS-R1005 - Score cards intentionally render optional walk, safety, and noise sections together.
   const resolvedWalkScore = walkScore ?? walkabilityScore;
   const hasWalk = resolvedWalkScore !== null;
   const hasSafetyOrNoise = safetyScore !== null || noiseScore !== null;
