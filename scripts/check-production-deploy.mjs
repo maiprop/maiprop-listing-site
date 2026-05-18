@@ -38,15 +38,15 @@ const delayMs = Number.parseInt(
   10,
 ) || DEFAULT_DELAY_MS;
 
-function sleep(ms) {
+const sleep = (ms) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
+};
 
-function assert(condition, message) {
+const assertOk = (condition, message) => {
   if (!condition) throw new Error(message);
-}
+};
 
-async function fetchText(url, options = {}) {
+const fetchText = async (url, options = {}) => {
   const res = await fetch(url, {
     redirect: "follow",
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
@@ -57,27 +57,27 @@ async function fetchText(url, options = {}) {
     ...options,
   });
   const text = await res.text();
-  assert(res.ok, `${url} returned HTTP ${res.status}: ${text.slice(0, 160)}`);
+  assertOk(res.ok, `${url} returned HTTP ${res.status}: ${text.slice(0, 160)}`);
   return { res, text };
-}
+};
 
-function extractModuleScripts(html) {
+const extractModuleScripts = (html) => {
   return Array.from(
     html.matchAll(
       /<script\b(?=[^>]*\btype=["']module["'])[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi,
     ),
     (match) => match[1],
   );
-}
+};
 
-function validateHtml(url, html) {
-  assert(html.includes('<div id="root"></div>'), `${url} is missing #root`);
+const validateHtml = (url, html) => {
+  assertOk(html.includes('<div id="root"></div>'), `${url} is missing #root`);
 
   const scripts = extractModuleScripts(html);
-  assert(scripts.length > 0, `${url} has no module script entrypoint`);
+  assertOk(scripts.length > 0, `${url} has no module script entrypoint`);
 
   const sourceEntrypoints = scripts.filter((src) => /^\/?src\//.test(src));
-  assert(
+  assertOk(
     sourceEntrypoints.length === 0,
     `${url} references source entrypoints instead of a production build: ${sourceEntrypoints.join(", ")}`,
   );
@@ -85,40 +85,40 @@ function validateHtml(url, html) {
   const assetEntrypoints = scripts.filter((src) =>
     /^\/assets\/[^"']+\.js(?:\?.*)?$/.test(src),
   );
-  assert(
+  assertOk(
     assetEntrypoints.length > 0,
     `${url} has no built Vite /assets/*.js module entrypoint`,
   );
 
   return assetEntrypoints[0];
-}
+};
 
-async function validateEntrypointAsset(baseUrl, assetPath) {
+const validateEntrypointAsset = async (baseUrl, assetPath) => {
   const assetUrl = new URL(assetPath, baseUrl).toString();
   const { res, text } = await fetchText(assetUrl, {
     headers: { accept: "text/javascript, application/javascript, */*" },
   });
 
   const contentType = res.headers.get("content-type") ?? "";
-  assert(
+  assertOk(
     !/application\/octet-stream/i.test(contentType),
     `${assetUrl} is served as ${contentType}; browsers reject module scripts with this MIME type`,
   );
-  assert(
+  assertOk(
     !/text\/html/i.test(contentType),
     `${assetUrl} is served as HTML instead of JavaScript`,
   );
-  assert(
+  assertOk(
     /javascript|ecmascript/i.test(contentType),
     `${assetUrl} has unexpected content-type ${contentType || "<missing>"}`,
   );
-  assert(
+  assertOk(
     !/from ["']\.\/App["'];?/.test(text),
     `${assetUrl} still looks like raw source instead of a bundled production asset`,
   );
-}
+};
 
-async function runBrowserCheck(url) {
+const runBrowserCheck = async (url) => {
   const { chromium } = await import("playwright");
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
@@ -138,7 +138,7 @@ async function runBrowserCheck(url) {
       waitUntil: "domcontentloaded",
       timeout: 45_000,
     });
-    assert(response?.ok(), `${url} browser navigation returned HTTP ${response?.status()}`);
+    assertOk(response?.ok(), `${url} browser navigation returned HTTP ${response?.status()}`);
 
     await page.waitForFunction(
       () => (document.querySelector("#root")?.textContent ?? "").trim().length > 20,
@@ -148,15 +148,15 @@ async function runBrowserCheck(url) {
     await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {});
 
     const rootText = await page.locator("#root").innerText({ timeout: 5_000 });
-    assert(rootText.trim().length > 20, `${url} rendered an empty #root`);
-    assert(moduleFailures.length === 0, moduleFailures.join("\n"));
-    assert(pageErrors.length === 0, `Page errors:\n${pageErrors.join("\n")}`);
+    assertOk(rootText.trim().length > 20, `${url} rendered an empty #root`);
+    assertOk(moduleFailures.length === 0, moduleFailures.join("\n"));
+    assertOk(pageErrors.length === 0, `Page errors:\n${pageErrors.join("\n")}`);
   } finally {
     await browser.close();
   }
-}
+};
 
-async function checkUrl(url) {
+const checkUrl = async (url) => {
   const { text: html } = await fetchText(url, {
     headers: { accept: "text/html,application/xhtml+xml" },
   });
@@ -164,10 +164,10 @@ async function checkUrl(url) {
   await validateEntrypointAsset(url, assetPath);
   if (browserCheck) await runBrowserCheck(url);
   const browserSuffix = browserCheck ? " and mounts the app" : "";
-  console.log(`[ok] ${url} serves built assets${browserSuffix}`);
-}
+  process.stdout.write(`[ok] ${url} serves built assets${browserSuffix}\n`);
+};
 
-async function checkWithRetries(url) {
+const checkWithRetries = async (url) => {
   let lastError;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
@@ -175,14 +175,14 @@ async function checkWithRetries(url) {
       return;
     } catch (error) {
       lastError = error;
-      console.warn(
-        `[warn] ${url} deploy check failed on attempt ${attempt}/${attempts}: ${error.message}`,
+      process.stderr.write(
+        `[warn] ${url} deploy check failed on attempt ${attempt}/${attempts}: ${error.message}\n`,
       );
       if (attempt < attempts) await sleep(delayMs);
     }
   }
   throw lastError;
-}
+};
 
 (async () => {
   for (const url of urls) {
