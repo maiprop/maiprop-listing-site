@@ -32,7 +32,7 @@ const ProfessionalProfileMe = lazy(() => import("./pages/ProfessionalProfileMe")
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Signup = lazy(() => import("./pages/Signup"));
 const Login = lazy(() => import("./pages/Login"));
-const AuthCallback = lazy(() => import("./pages/AuthCallback"));
+const AuthCallback = lazy(() => import("@/pages/AuthCallback"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const Messages = lazy(() => import("./pages/Messages"));
 const CreateListing = lazy(() => import("./pages/CreateListing"));

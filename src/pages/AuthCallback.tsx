@@ -4,11 +4,52 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import {
+  type OAuthCallbackParams,
   parseOAuthCallbackParams,
   shouldRouteLoginOAuthErrorToSignup,
 } from "@/lib/oauthCallback";
 
-export default function AuthCallback() {
+interface OAuthErrorRedirect {
+  path: "/signup" | "/login";
+  reason?: "account_required";
+  toastMessage?: string;
+}
+
+const hasCallbackError = (params: OAuthCallbackParams): boolean =>
+  Boolean(params.error || params.errorCode || params.errorDescription);
+
+const getOAuthErrorRedirect = (params: OAuthCallbackParams): OAuthErrorRedirect | null => {
+  if (!hasCallbackError(params)) {
+    return null;
+  }
+
+  if (params.intent === "login" && shouldRouteLoginOAuthErrorToSignup(params)) {
+    return { path: "/signup", reason: "account_required" };
+  }
+
+  return {
+    path: params.intent === "signup" ? "/signup" : "/login",
+    toastMessage: params.errorDescription || "Google sign-in failed. Please try again.",
+  };
+};
+
+const getCompletedOAuthRedirect = (
+  params: OAuthCallbackParams,
+  userId: string | undefined,
+  needsOnboarding: boolean,
+): string => {
+  if (!userId) {
+    return "/login";
+  }
+
+  if (params.intent === "signup" || needsOnboarding) {
+    return "/onboarding";
+  }
+
+  return params.next;
+};
+
+const AuthCallback = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, loading, profileLoading, needsOnboarding } = useAuth();
@@ -16,38 +57,30 @@ export default function AuthCallback() {
     () => parseOAuthCallbackParams(location.search, location.hash),
     [location.hash, location.search],
   );
-  const hasOAuthError = Boolean(params.error || params.errorCode || params.errorDescription);
+  const errorRedirect = useMemo(() => getOAuthErrorRedirect(params), [params]);
 
   useEffect(() => {
-    if (!hasOAuthError) return;
-
-    if (params.intent === "login" && shouldRouteLoginOAuthErrorToSignup(params)) {
-      navigate("/signup", {
-        replace: true,
-        state: { oauthRedirectReason: "account_required" },
-      });
+    if (!errorRedirect) {
       return;
     }
 
-    toast.error(params.errorDescription || "Google sign-in failed. Please try again.");
-    navigate(params.intent === "signup" ? "/signup" : "/login", { replace: true });
-  }, [hasOAuthError, navigate, params]);
+    if (errorRedirect.toastMessage) {
+      toast.error(errorRedirect.toastMessage);
+    }
+
+    navigate(errorRedirect.path, {
+      replace: true,
+      state: errorRedirect.reason ? { oauthRedirectReason: errorRedirect.reason } : undefined,
+    });
+  }, [errorRedirect, navigate]);
 
   useEffect(() => {
-    if (hasOAuthError || loading || profileLoading) return;
-
-    if (!user) {
-      navigate("/login", { replace: true });
+    if (errorRedirect || loading || profileLoading) {
       return;
     }
 
-    if (params.intent === "signup" || needsOnboarding) {
-      navigate("/onboarding", { replace: true });
-      return;
-    }
-
-    navigate(params.next, { replace: true });
-  }, [hasOAuthError, loading, navigate, needsOnboarding, params.intent, params.next, profileLoading, user]);
+    navigate(getCompletedOAuthRedirect(params, user?.id, needsOnboarding), { replace: true });
+  }, [errorRedirect, loading, navigate, needsOnboarding, params, profileLoading, user?.id]);
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center">
@@ -57,4 +90,6 @@ export default function AuthCallback() {
       </div>
     </div>
   );
-}
+};
+
+export default AuthCallback;

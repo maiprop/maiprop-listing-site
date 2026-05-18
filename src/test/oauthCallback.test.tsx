@@ -37,8 +37,8 @@ vi.mock("sonner", () => ({
   toast: toastMock,
 }));
 
-function renderCallback(initialPath: string) {
-  return render(
+const renderCallback = (initialPath: string) =>
+  render(
     <MemoryRouter
       initialEntries={[initialPath]}
       future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
@@ -53,7 +53,6 @@ function renderCallback(initialPath: string) {
       </Routes>
     </MemoryRouter>,
   );
-}
 
 describe("OAuth callback routing", () => {
   beforeEach(() => {

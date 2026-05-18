@@ -24,10 +24,10 @@ const canRun =
   ANON_KEY.length > 40 &&
   SERVICE_ROLE.length > 40;
 
-async function listAuthUsersByEmail(
+const listAuthUsersByEmail = async ( // skipcq: JS-R1005 - Live Auth pagination keeps deletion and same-email recreation checks in one helper.
   admin: SupabaseClient,
   email: string,
-): Promise<User[]> {
+): Promise<User[]> => {
   const matches: User[] = [];
   for (let pageIndex = 1; pageIndex <= 10; pageIndex += 1) {
     const {
@@ -41,7 +41,7 @@ async function listAuthUsersByEmail(
     if (users.length < 1000) break;
   }
   return matches;
-}
+};
 
 test.describe("GDPR — account deletion", () => {
   skipUnlessDestructiveLiveE2EAllowed();
@@ -251,9 +251,14 @@ test.describe("GDPR — account deletion", () => {
         "recreated auth user should be a fresh account, not the deleted account",
       ).not.toBe(userId);
 
-      await admin.auth.admin.updateUserById(recreatedUserId!, {
+      if (!recreatedUserId) {
+        throw new Error("Expected the recreated auth user id before confirming email.");
+      }
+
+      const { error: confirmErr } = await admin.auth.admin.updateUserById(recreatedUserId, {
         email_confirm: true,
       });
+      expect(confirmErr, `confirm recreated user: ${confirmErr?.message}`).toBeNull();
 
       // 10. The recreated account can sign in and reaches the expected
       //     first-run platform state.
