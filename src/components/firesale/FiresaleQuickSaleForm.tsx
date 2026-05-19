@@ -577,6 +577,70 @@ const PropertyMetricsFields = ({
 
 const getPhotoSelectionText = (count: number): string => `${count} photo${count !== 1 ? "s" : ""} selected`;
 
+const EmptyPhotoUploadButton = ({ fileInputRef }: { fileInputRef: RefObject<HTMLInputElement> }) => (
+  <button
+    type="button"
+    onClick={() => fileInputRef.current?.click()}
+    className="w-full flex flex-col items-center justify-center gap-2 bg-muted border-2 border-dashed border-border rounded-xl py-7 text-muted-foreground hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 group"
+  >
+    <div className="w-10 h-10 rounded-full bg-muted-foreground/10 group-hover:bg-primary/10 flex items-center justify-center transition-colors">
+      <Upload className="w-5 h-5 group-hover:text-primary transition-colors" />
+    </div>
+    <div className="text-center">
+      <p className="text-sm font-medium group-hover:text-foreground transition-colors">Click to upload photos</p>
+      <p className="text-[11px] mt-0.5">JPG, PNG - Max 10MB each</p>
+    </div>
+  </button>
+);
+
+const PhotoPreviewTile = ({
+  src,
+  index,
+  onRemovePhoto,
+}: {
+  src: string;
+  index: number;
+  onRemovePhoto: (index: number) => void;
+}) => (
+  <div className="relative group rounded-xl overflow-hidden aspect-square bg-muted border border-border">
+    <img src={src} alt="" className="w-full h-full object-cover" />
+    <button
+      type="button"
+      onClick={() => onRemovePhoto(index)}
+      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-background/90 border border-border flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive hover:border-destructive hover:text-destructive-foreground"
+    >
+      <X className="w-3 h-3" />
+    </button>
+  </div>
+);
+
+const AddPhotoTile = ({ fileInputRef }: { fileInputRef: RefObject<HTMLInputElement> }) => (
+  <button
+    type="button"
+    onClick={() => fileInputRef.current?.click()}
+    className="aspect-square rounded-xl border-2 border-dashed border-border bg-muted hover:border-primary/40 hover:bg-primary/5 flex items-center justify-center transition-all"
+  >
+    <ImageIcon className="w-5 h-5 text-muted-foreground" />
+  </button>
+);
+
+const PhotoPreviewGrid = ({
+  photoPreviews,
+  fileInputRef,
+  onRemovePhoto,
+}: {
+  photoPreviews: string[];
+  fileInputRef: RefObject<HTMLInputElement>;
+  onRemovePhoto: (index: number) => void;
+}) => (
+  <div className="grid grid-cols-3 gap-2">
+    {photoPreviews.map((src, index) => (
+      <PhotoPreviewTile key={src} src={src} index={index} onRemovePhoto={onRemovePhoto} />
+    ))}
+    {photoPreviews.length < 10 && <AddPhotoTile fileInputRef={fileInputRef} />}
+  </div>
+);
+
 const PhotoUploadField = ({
   errors,
   photoPreviews,
@@ -597,44 +661,10 @@ const PhotoUploadField = ({
     </label>
     <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={onPhotoSelect} />
     {photoPreviews.length === 0 ? (
-      <button
-        type="button"
-        onClick={() => fileInputRef.current?.click()}
-        className="w-full flex flex-col items-center justify-center gap-2 bg-muted border-2 border-dashed border-border rounded-xl py-7 text-muted-foreground hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 group"
-      >
-        <div className="w-10 h-10 rounded-full bg-muted-foreground/10 group-hover:bg-primary/10 flex items-center justify-center transition-colors">
-          <Upload className="w-5 h-5 group-hover:text-primary transition-colors" />
-        </div>
-        <div className="text-center">
-          <p className="text-sm font-medium group-hover:text-foreground transition-colors">Click to upload photos</p>
-          <p className="text-[11px] mt-0.5">JPG, PNG - Max 10MB each</p>
-        </div>
-      </button>
+      <EmptyPhotoUploadButton fileInputRef={fileInputRef} />
     ) : (
       <div className="space-y-3">
-        <div className="grid grid-cols-3 gap-2">
-          {photoPreviews.map((src, index) => (
-            <div key={src} className="relative group rounded-xl overflow-hidden aspect-square bg-muted border border-border">
-              <img src={src} alt="" className="w-full h-full object-cover" />
-              <button
-                type="button"
-                onClick={() => onRemovePhoto(index)}
-                className="absolute top-1 right-1 w-5 h-5 rounded-full bg-background/90 border border-border flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive hover:border-destructive hover:text-destructive-foreground"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          ))}
-          {photoPreviews.length < 10 && (
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="aspect-square rounded-xl border-2 border-dashed border-border bg-muted hover:border-primary/40 hover:bg-primary/5 flex items-center justify-center transition-all"
-            >
-              <ImageIcon className="w-5 h-5 text-muted-foreground" />
-            </button>
-          )}
-        </div>
+        <PhotoPreviewGrid photoPreviews={photoPreviews} fileInputRef={fileInputRef} onRemovePhoto={onRemovePhoto} />
         <p className="text-[10px] text-muted-foreground">
           {getPhotoSelectionText(photoPreviews.length)}
           {photoPreviews.length < 5 && " - add at least 5 photos to continue"}
@@ -680,6 +710,24 @@ type StepOneProps = {
   onContinue: () => void;
 };
 
+const StepOneButtonContent = ({ aiLoading }: { aiLoading: boolean }) => {
+  if (aiLoading) {
+    return (
+      <>
+        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+        Calculating AI estimate...
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Sparkles className="w-4 h-4 mr-2" />
+      Get AI Estimate &amp; Continue
+    </>
+  );
+};
+
 const QuickSaleStepOne = (props: StepOneProps) => (
   <div className="space-y-5">
     <h4 className="font-display font-semibold text-sm">Property Details</h4>
@@ -708,11 +756,7 @@ const QuickSaleStepOne = (props: StepOneProps) => (
     />
     <NotesField form={props.form} errors={props.errors} onUpdate={props.onUpdate} />
     <Button className="w-full bg-gradient-primary border-0 text-primary-foreground h-11" disabled={props.aiLoading} onClick={props.onContinue}>
-      {props.aiLoading ? (
-        <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Calculating AI estimate...</>
-      ) : (
-        <><Sparkles className="w-4 h-4 mr-2" />Get AI Estimate &amp; Continue</>
-      )}
+      <StepOneButtonContent aiLoading={props.aiLoading} />
     </Button>
   </div>
 );
@@ -815,6 +859,24 @@ type StepTwoProps = {
   onSubmit: () => void;
 };
 
+const SubmitRequestButtonContent = ({ submitting, uploadingPhotos }: { submitting: boolean; uploadingPhotos: boolean }) => {
+  if (submitting) {
+    return (
+      <>
+        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+        {uploadingPhotos ? "Uploading photos..." : "Submitting..."}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Flame className="w-4 h-4 mr-2" />
+      Submit Quick Sale Request
+    </>
+  );
+};
+
 const QuickSaleStepTwo = (props: StepTwoProps) => (
   <div className="space-y-5">
     <EstimateSummary aiEstimate={props.aiEstimate} />
@@ -836,11 +898,7 @@ const QuickSaleStepTwo = (props: StepTwoProps) => (
         disabled={!props.step2Valid || props.submitting}
         onClick={props.onSubmit}
       >
-        {props.submitting ? (
-          <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{props.uploadingPhotos ? "Uploading photos..." : "Submitting..."}</>
-        ) : (
-          <><Flame className="w-4 h-4 mr-2" />Submit Quick Sale Request</>
-        )}
+        <SubmitRequestButtonContent submitting={props.submitting} uploadingPhotos={props.uploadingPhotos} />
       </Button>
     </div>
   </div>
