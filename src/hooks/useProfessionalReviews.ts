@@ -52,7 +52,7 @@ export function computeStats(reviews: ProfessionalReview[]): ReviewStats {
 export function useProfessionalReviews(professionalId: string) {
   return useQuery({
     queryKey: ["professional-reviews", professionalId],
-    enabled: !!professionalId,
+    enabled: Boolean(professionalId),
     staleTime: CATALOG_STATIC_QUERY_STALE_TIME,
     queryFn: async (): Promise<ProfessionalReview[]> => {
       type ReviewRow = Omit<ProfessionalReview, "reviewer"> & {

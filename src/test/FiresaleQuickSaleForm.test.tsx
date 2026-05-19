@@ -242,7 +242,7 @@ describe("FiresaleQuickSaleForm", () => {
   it("debounces Nominatim autocomplete when the address ≥ 3 chars, and clears when < 3", async () => {
     vi.useFakeTimers();
     try {
-      fetchStub.mockResolvedValueOnce({ json: async () => [] } as unknown as Response);
+      fetchStub.mockResolvedValueOnce({ json: () => Promise.resolve([]) } as unknown as Response);
       render(<FiresaleQuickSaleForm />);
       fireEvent.change(screen.getByPlaceholderText(/Kifisia, Dekelia/i), {
         target: { value: "Athens" },

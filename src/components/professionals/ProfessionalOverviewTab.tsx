@@ -122,7 +122,7 @@ export function ProfessionalOverviewTab({ pro, isRealEstateAgent, professionalIs
                   <div className="text-[10px] text-muted-foreground/60 mt-0.5">Typical transaction value</div>
                 </div>
               </div>
-              {!!pro.average_portfolio_asset_size && (
+              {Boolean(pro.average_portfolio_asset_size) && (
                 <div className="mt-3 flex items-center gap-2 p-3 bg-primary/5 border border-primary/15 rounded-xl">
                   <BarChart3 className="w-4 h-4 text-primary shrink-0" />
                   <div>
@@ -284,7 +284,7 @@ export function ProfessionalOverviewTab({ pro, isRealEstateAgent, professionalIs
                   </div>
                 </div>
               )}
-              {!!pro.hourly_rate && (
+              {Boolean(pro.hourly_rate) && (
                 <div className="flex items-start gap-3 p-3 bg-secondary rounded-xl">
                   <Euro className="w-4 h-4 text-brand-gold mt-0.5 shrink-0" />
                   <div>
