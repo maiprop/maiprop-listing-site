@@ -37,61 +37,53 @@ type PreferenceRowProps = {
   control: ReactNode;
 };
 
-function CookieIconBadge() {
-  return (
-    <div className="hidden sm:flex w-10 h-10 rounded-xl bg-primary/10 items-center justify-center shrink-0 mt-0.5">
-      <Cookie className="w-5 h-5 text-primary" />
+const CookieIconBadge = () => (
+  <div className="hidden sm:flex w-10 h-10 rounded-xl bg-primary/10 items-center justify-center shrink-0 mt-0.5">
+    <Cookie className="w-5 h-5 text-primary" />
+  </div>
+);
+
+const CookieDescription = ({ t }: { t: CookieTranslator }) => (
+  <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 sm:line-clamp-none">
+    {t("cookie.description")}{" "}
+    <a href="/cookie-policy" className="text-primary underline underline-offset-2 hover:text-primary/80">
+      {t("cookie.policyLinkText")}
+    </a>
+  </p>
+);
+
+const CookieBannerHeader = ({ t, onDismiss }: { t: CookieTranslator; onDismiss: () => void }) => (
+  <div className="flex items-start gap-2 sm:gap-4 p-3 sm:p-5">
+    <CookieIconBadge />
+    <div className="flex-1 min-w-0">
+      <p className="font-display font-semibold text-sm mb-1">{t("cookie.title")}</p>
+      <CookieDescription t={t} />
     </div>
-  );
-}
+    <button
+      onClick={onDismiss}
+      aria-label={t("cookie.hidePreferences")}
+      className="p-1.5 rounded-lg hover:bg-secondary transition-colors shrink-0 text-muted-foreground hover:text-foreground"
+    >
+      <X className="w-4 h-4" aria-hidden="true" />
+    </button>
+  </div>
+);
 
-function CookieDescription({ t }: { t: CookieTranslator }) {
-  return (
-    <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 sm:line-clamp-none">
-      {t("cookie.description")}{" "}
-      <a href="/cookie-policy" className="text-primary underline underline-offset-2 hover:text-primary/80">
-        {t("cookie.policyLinkText")}
-      </a>
-    </p>
-  );
-}
-
-function CookieBannerHeader({ t, onDismiss }: { t: CookieTranslator; onDismiss: () => void }) {
-  return (
-    <div className="flex items-start gap-2 sm:gap-4 p-3 sm:p-5">
-      <CookieIconBadge />
-      <div className="flex-1 min-w-0">
-        <p className="font-display font-semibold text-sm mb-1">{t("cookie.title")}</p>
-        <CookieDescription t={t} />
-      </div>
-      <button
-        onClick={onDismiss}
-        aria-label={t("cookie.hidePreferences")}
-        className="p-1.5 rounded-lg hover:bg-secondary transition-colors shrink-0 text-muted-foreground hover:text-foreground"
-      >
-        <X className="w-4 h-4" aria-hidden="true" />
-      </button>
+const PreferenceRow = ({ title, description, control }: PreferenceRowProps) => (
+  <div className="flex items-start justify-between gap-4">
+    <div>
+      <p className="text-sm font-semibold text-foreground">{title}</p>
+      <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
     </div>
-  );
-}
+    {control}
+  </div>
+);
 
-function PreferenceRow({ title, description, control }: PreferenceRowProps) {
-  return (
-    <div className="flex items-start justify-between gap-4">
-      <div>
-        <p className="text-sm font-semibold text-foreground">{title}</p>
-        <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
-      </div>
-      {control}
-    </div>
-  );
-}
-
-function EssentialPreference({ t }: { t: CookieTranslator }) {
+const EssentialPreference = ({ t }: { t: CookieTranslator }) => {
   const control = (
     <div className="flex items-center gap-2 shrink-0">
       <span className="text-xs text-brand-emerald font-semibold">{t("cookie.essential.alwaysOn")}</span>
-      <Switch checked={true} disabled className="data-[state=checked]:bg-brand-emerald" />
+      <Switch checked disabled className="data-[state=checked]:bg-brand-emerald" />
     </div>
   );
 
@@ -102,7 +94,7 @@ function EssentialPreference({ t }: { t: CookieTranslator }) {
       control={control}
     />
   );
-}
+};
 
 type TogglePreferenceProps = {
   title: string;
@@ -111,21 +103,19 @@ type TogglePreferenceProps = {
   onCheckedChange: (checked: boolean) => void;
 };
 
-function TogglePreference({ title, description, checked, onCheckedChange }: TogglePreferenceProps) {
-  return (
-    <PreferenceRow
-      title={title}
-      description={description}
-      control={
-        <Switch
-          checked={checked}
-          onCheckedChange={onCheckedChange}
-          className="shrink-0 data-[state=checked]:bg-primary"
-        />
-      }
-    />
-  );
-}
+const TogglePreference = ({ title, description, checked, onCheckedChange }: TogglePreferenceProps) => (
+  <PreferenceRow
+    title={title}
+    description={description}
+    control={
+      <Switch
+        checked={checked}
+        onCheckedChange={onCheckedChange}
+        className="shrink-0 data-[state=checked]:bg-primary"
+      />
+    }
+  />
+);
 
 type CookiePreferencesPanelProps = {
   t: CookieTranslator;
@@ -137,7 +127,7 @@ type CookiePreferencesPanelProps = {
   onMappingChange: (checked: boolean) => void;
 };
 
-function CookiePreferencesPanel({
+const CookiePreferencesPanel = ({
   t,
   functional,
   analytics,
@@ -145,31 +135,29 @@ function CookiePreferencesPanel({
   onFunctionalChange,
   onAnalyticsChange,
   onMappingChange,
-}: CookiePreferencesPanelProps) {
-  return (
-    <div className="px-3 sm:px-5 pb-3 sm:pb-4 border-t border-border pt-3 sm:pt-4 space-y-3 sm:space-y-4 max-h-[40vh] overflow-y-auto">
-      <EssentialPreference t={t} />
-      <TogglePreference
-        title={t("cookie.functional.title")}
-        description={t("cookie.functional.description")}
-        checked={functional}
-        onCheckedChange={onFunctionalChange}
-      />
-      <TogglePreference
-        title={t("cookie.analytics.title")}
-        description={t("cookie.analytics.description")}
-        checked={analytics}
-        onCheckedChange={onAnalyticsChange}
-      />
-      <TogglePreference
-        title={t("cookie.mapping.title")}
-        description={t("cookie.mapping.description")}
-        checked={mapping}
-        onCheckedChange={onMappingChange}
-      />
-    </div>
-  );
-}
+}: CookiePreferencesPanelProps) => (
+  <div className="px-3 sm:px-5 pb-3 sm:pb-4 border-t border-border pt-3 sm:pt-4 space-y-3 sm:space-y-4 max-h-[40vh] overflow-y-auto">
+    <EssentialPreference t={t} />
+    <TogglePreference
+      title={t("cookie.functional.title")}
+      description={t("cookie.functional.description")}
+      checked={functional}
+      onCheckedChange={onFunctionalChange}
+    />
+    <TogglePreference
+      title={t("cookie.analytics.title")}
+      description={t("cookie.analytics.description")}
+      checked={analytics}
+      onCheckedChange={onAnalyticsChange}
+    />
+    <TogglePreference
+      title={t("cookie.mapping.title")}
+      description={t("cookie.mapping.description")}
+      checked={mapping}
+      onCheckedChange={onMappingChange}
+    />
+  </div>
+);
 
 type CookieActionRowProps = {
   t: CookieTranslator;
@@ -180,11 +168,11 @@ type CookieActionRowProps = {
   onAcceptAll: () => void;
 };
 
-function PreferencesToggle({
+const PreferencesToggle = ({
   t,
   expanded,
   onToggleExpanded,
-}: Pick<CookieActionRowProps, "t" | "expanded" | "onToggleExpanded">) {
+}: Pick<CookieActionRowProps, "t" | "expanded" | "onToggleExpanded">) => {
   const Icon = expanded ? ChevronUp : ChevronDown;
 
   return (
@@ -196,62 +184,58 @@ function PreferencesToggle({
       {expanded ? t("cookie.hidePreferences") : t("cookie.managePreferences")}
     </button>
   );
-}
+};
 
-function CookieActions({
+const CookieActions = ({
   t,
   expanded,
   onRejectAll,
   onSavePreferences,
   onAcceptAll,
-}: Omit<CookieActionRowProps, "onToggleExpanded">) {
-  return (
-    <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-      <Button size="sm" variant="outline" className="text-xs h-8 border-border" onClick={onRejectAll}>
-        {t("cookie.rejectOptional")}
-      </Button>
-      {expanded && (
-        <Button
-          size="sm"
-          variant="outline"
-          className="text-xs h-8 border-primary/40 text-primary hover:bg-primary/10"
-          onClick={onSavePreferences}
-        >
-          <Check className="w-3 h-3 mr-1" aria-hidden="true" /> {t("cookie.savePreferences")}
-        </Button>
-      )}
+}: Omit<CookieActionRowProps, "onToggleExpanded">) => (
+  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+    <Button size="sm" variant="outline" className="text-xs h-8 border-border" onClick={onRejectAll}>
+      {t("cookie.rejectOptional")}
+    </Button>
+    {expanded && (
       <Button
         size="sm"
-        className="text-xs h-8 bg-gradient-primary border-0 text-primary-foreground font-semibold"
-        onClick={onAcceptAll}
+        variant="outline"
+        className="text-xs h-8 border-primary/40 text-primary hover:bg-primary/10"
+        onClick={onSavePreferences}
       >
-        {t("cookie.acceptAll")}
+        <Check className="w-3 h-3 mr-1" aria-hidden="true" /> {t("cookie.savePreferences")}
       </Button>
-    </div>
-  );
-}
+    )}
+    <Button
+      size="sm"
+      className="text-xs h-8 bg-gradient-primary border-0 text-primary-foreground font-semibold"
+      onClick={onAcceptAll}
+    >
+      {t("cookie.acceptAll")}
+    </Button>
+  </div>
+);
 
-function CookieActionRow({
+const CookieActionRow = ({
   t,
   expanded,
   onToggleExpanded,
   onRejectAll,
   onSavePreferences,
   onAcceptAll,
-}: CookieActionRowProps) {
-  return (
-    <div className="flex items-center justify-between gap-2 sm:gap-3 px-3 sm:px-5 py-2.5 sm:py-4 bg-secondary/40 border-t border-border flex-wrap">
-      <PreferencesToggle t={t} expanded={expanded} onToggleExpanded={onToggleExpanded} />
-      <CookieActions
-        t={t}
-        expanded={expanded}
-        onRejectAll={onRejectAll}
-        onSavePreferences={onSavePreferences}
-        onAcceptAll={onAcceptAll}
-      />
-    </div>
-  );
-}
+}: CookieActionRowProps) => (
+  <div className="flex items-center justify-between gap-2 sm:gap-3 px-3 sm:px-5 py-2.5 sm:py-4 bg-secondary/40 border-t border-border flex-wrap">
+    <PreferencesToggle t={t} expanded={expanded} onToggleExpanded={onToggleExpanded} />
+    <CookieActions
+      t={t}
+      expanded={expanded}
+      onRejectAll={onRejectAll}
+      onSavePreferences={onSavePreferences}
+      onAcceptAll={onAcceptAll}
+    />
+  </div>
+);
 
 export function CookieConsentBanner() {
   const [visible, setVisible] = useState(false);
