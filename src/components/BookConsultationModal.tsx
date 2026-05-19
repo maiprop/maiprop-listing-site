@@ -126,6 +126,54 @@ const RemoteAvailablePill = () => (
   </span>
 );
 
+const PremiumServicePill = () => (
+  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold">Pro</span>
+);
+
+const getServiceOptionClass = (selected: boolean) =>
+  `w-full flex items-start gap-3 p-3.5 rounded-xl border text-left transition-all ${
+    selected ? "border-primary bg-primary/10" : "border-border hover:border-primary/30 bg-secondary/40"
+  }`;
+
+const getServiceIconShellClass = (selected: boolean) =>
+  `w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${selected ? "bg-primary/20" : "bg-secondary"}`;
+
+const getServiceChevronClass = (selected: boolean) =>
+  `w-4 h-4 shrink-0 mt-2 transition-colors ${selected ? "text-primary" : "text-muted-foreground/30"}`;
+
+const ServiceOptionIcon = ({ videoEnabled, selected }: { videoEnabled: boolean; selected: boolean }) => (
+  <div className={getServiceIconShellClass(selected)}>
+    {videoEnabled
+      ? <Video className="w-3.5 h-3.5 text-primary" />
+      : <Briefcase className="w-3.5 h-3.5 text-muted-foreground" />}
+  </div>
+);
+
+const ServiceRatePill = ({ service }: { service: ProfessionalService }) => (
+  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+    service.rate_amount ? "bg-brand-gold/15 text-brand-gold" : "bg-secondary text-muted-foreground"
+  }`}>
+    {service.rate_amount ? `EUR ${service.rate_amount}${PRICING_LABELS[service.pricing_model] ?? ""}` : "On Request"}
+  </span>
+);
+
+const ServiceOptionDescription = ({ description }: { description: string | null }) => {
+  const cleanDescription = stripSupervisorTestMarkers(description);
+  return cleanDescription
+    ? <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{cleanDescription}</p>
+    : null;
+};
+
+const ServiceOptionMeta = ({ service }: { service: ProfessionalService }) => (
+  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground capitalize">
+      {service.pricing_model}
+    </span>
+    {Boolean(service.video_enabled) && <RemoteAvailablePill />}
+    {Boolean(service.is_premium) && <PremiumServicePill />}
+  </div>
+);
+
 const ServiceOptionCard = ({
   service,
   selected,
@@ -135,43 +183,18 @@ const ServiceOptionCard = ({
   selected: boolean;
   onSelect: (service: ProfessionalService) => void;
 }) => {
-  const description = stripSupervisorTestMarkers(service.description);
-
   return (
-    <button
-      onClick={() => onSelect(service)}
-      className={`w-full flex items-start gap-3 p-3.5 rounded-xl border text-left transition-all ${
-        selected ? "border-primary bg-primary/10" : "border-border hover:border-primary/30 bg-secondary/40"
-      }`}
-    >
-      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
-        selected ? "bg-primary/20" : "bg-secondary"
-      }`}>
-        {service.video_enabled
-          ? <Video className="w-3.5 h-3.5 text-primary" />
-          : <Briefcase className="w-3.5 h-3.5 text-muted-foreground" />}
-      </div>
+    <button onClick={() => onSelect(service)} className={getServiceOptionClass(selected)}>
+      <ServiceOptionIcon videoEnabled={service.video_enabled} selected={selected} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <span className="text-sm font-medium">{service.service_name}</span>
-          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-            service.rate_amount ? "bg-brand-gold/15 text-brand-gold" : "bg-secondary text-muted-foreground"
-          }`}>
-            {service.rate_amount ? `EUR ${service.rate_amount}${PRICING_LABELS[service.pricing_model] ?? ""}` : "On Request"}
-          </span>
+          <ServiceRatePill service={service} />
         </div>
-        {description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{description}</p>}
-        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground capitalize">
-            {service.pricing_model}
-          </span>
-          {!!service.video_enabled && <RemoteAvailablePill />}
-          {!!service.is_premium && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold">Pro</span>
-          )}
-        </div>
+        <ServiceOptionDescription description={service.description} />
+        <ServiceOptionMeta service={service} />
       </div>
-      <ChevronRight className={`w-4 h-4 shrink-0 mt-2 transition-colors ${selected ? "text-primary" : "text-muted-foreground/30"}`} />
+      <ChevronRight className={getServiceChevronClass(selected)} />
     </button>
   );
 };

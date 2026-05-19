@@ -73,7 +73,7 @@ const getPriceRangeLabel = (selectedPrice: string) =>
 const getFeatureFilterLabel = (features: SmartFilterFeature[], key: string) =>
   features.find((option) => option.key === key)?.label.replace(/^[^\s]+ /, "") || key;
 
-const DesktopActiveFilterChips = ({
+const DesktopActiveFilterChips = ({ // skipcq: JS-R1005 - Active chips map independent URL filters into removable controls.
   selectedType,
   selectedSubtype,
   selectedPrice,
@@ -157,7 +157,7 @@ const DesktopActiveFilterChips = ({
   </div>
 );
 
-const getListingsResultLabel = ({
+const getListingsResultLabel = ({ // skipcq: JS-R1005 - Result labels intentionally branch by map, area, viewport, and pagination states.
   viewMode,
   polygonFilterIds,
   viewportIds,

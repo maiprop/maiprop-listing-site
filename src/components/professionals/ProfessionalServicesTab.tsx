@@ -25,7 +25,7 @@ const ServiceIcon = ({ videoEnabled }: { videoEnabled: boolean }) => (
 const ServiceTitle = ({ service }: { service: ProfessionalService }) => (
   <div>
     <span className="text-sm font-semibold">{service.service_name}</span>
-    {!!service.is_premium && (
+    {Boolean(service.is_premium) && (
       <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold font-medium">Pro</span>
     )}
   </div>
@@ -62,7 +62,7 @@ const ServiceMeta = ({ service }: { service: ProfessionalService }) => (
     <span className="text-[10px] px-2 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground capitalize">
       {service.pricing_model}
     </span>
-    {!!service.video_enabled && <ServiceRemotePill />}
+    {Boolean(service.video_enabled) && <ServiceRemotePill />}
   </div>
 );
 
