@@ -234,16 +234,12 @@ const AuctionFeaturePills = ({
 }: {
   yearBuilt?: string | number | null;
   sqm?: number | null;
-}) => {
-  if (!yearBuilt && !hasUsableSqm(sqm)) return null;
-
-  return (
-    <div className="flex flex-wrap items-center gap-1.5 mt-1">
-      <AuctionYearBuiltPill yearBuilt={yearBuilt} />
-      <AuctionSizePill sqm={sqm} />
-    </div>
-  );
-};
+}) => (
+  <div className="flex flex-wrap items-center gap-1.5 mt-1 empty:hidden">
+    <AuctionYearBuiltPill yearBuilt={yearBuilt} />
+    <AuctionSizePill sqm={sqm} />
+  </div>
+);
 
 const AuctionPrice = ({ amount }: { amount: number }) => (
   <div className="flex items-center justify-between pt-1">
