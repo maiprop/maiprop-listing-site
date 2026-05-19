@@ -67,9 +67,10 @@ test.describe("Auctions page", () => {
     // `expect(...).toBeVisible()` instead of a one-shot `isVisible()` so the
     // assertion polls until either an auction card, an empty-state element,
     // or any rendered card/skeleton becomes visible.
-    const contentLocator = page.locator(
-      '[data-testid="auction-card"], article, [class*="card"], [class*="empty"], [class*="no-result"], [class*="skeleton"], .text-muted-foreground'
-    );
+    const contentLocator = page.getByTestId("auction-card")
+      .or(page.getByText("No auctions match your filters"))
+      .or(page.getByText("Failed to load auctions"))
+      .or(page.locator('[aria-busy="true"]'));
 
     await expect(page.locator("main, #main-content, body").first()).toBeVisible();
     await expect(contentLocator.first()).toBeVisible({ timeout: 20_000 });
@@ -109,16 +110,17 @@ test.describe("Open Houses page", () => {
     // but `load` only waits for the bundle — data-driven content arrives later.
     // Use Playwright's auto-retrying `expect(...).toBeVisible()` so the assertion
     // polls until either a card, an empty-state element, or a skeleton becomes visible.
-    const contentLocator = page.locator(
-      "article, [class*='card'], [class*='empty'], [class*='no-result'], [class*='skeleton'], .text-muted-foreground"
-    );
+    const contentLocator = page.getByTestId("open-house-card")
+      .or(page.getByText("No open houses match your filters"))
+      .or(page.getByText("Could not load open houses"))
+      .or(page.locator('[aria-label="Loading open houses"]'));
 
     await expect(page.locator("main, #main-content, body").first()).toBeVisible();
     await expect(contentLocator.first()).toBeVisible({ timeout: 20_000 });
   });
 
   test("open-house cards include a date/time element when listings exist", async ({ page }) => {
-    const cards = page.locator("article, [class*='card']");
+    const cards = page.locator('[data-testid="open-house-card"]');
     const count = await cards.count();
     if (count === 0) {
       // No seeded data — skip the date check

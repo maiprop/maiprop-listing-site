@@ -64,16 +64,16 @@ export function CookieConsentBanner() {
     save({ accepted: true, functional, analytics, mapping, timestamp: Date.now() });
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-[100] p-4 animate-slide-up">
-      <div className="max-w-4xl mx-auto bg-card border border-border rounded-2xl shadow-elevated overflow-hidden">
+    <div className="fixed bottom-16 lg:bottom-0 left-0 right-0 z-[100] p-2 sm:p-4 animate-slide-up">
+      <div className="max-w-4xl mx-auto bg-card border border-border rounded-xl sm:rounded-2xl shadow-elevated overflow-hidden">
         {/* Main row */}
-        <div className="flex items-start gap-4 p-5">
-          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+        <div className="flex items-start gap-2 sm:gap-4 p-3 sm:p-5">
+          <div className="hidden sm:flex w-10 h-10 rounded-xl bg-primary/10 items-center justify-center shrink-0 mt-0.5">
             <Cookie className="w-5 h-5 text-primary" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-display font-semibold text-sm mb-1">{t("cookie.title")}</p>
-            <p className="text-xs text-muted-foreground leading-relaxed">
+            <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 sm:line-clamp-none">
               {t("cookie.description")}{" "}
               <a href="/cookie-policy" className="text-primary underline underline-offset-2 hover:text-primary/80">{t("cookie.policyLinkText")}</a>
             </p>
@@ -85,7 +85,7 @@ export function CookieConsentBanner() {
 
         {/* Expandable preferences */}
         {expanded && (
-          <div className="px-5 pb-4 border-t border-border pt-4 space-y-4">
+          <div className="px-3 sm:px-5 pb-3 sm:pb-4 border-t border-border pt-3 sm:pt-4 space-y-3 sm:space-y-4 max-h-[40vh] overflow-y-auto">
             {/* Essential — always on */}
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -140,7 +140,7 @@ export function CookieConsentBanner() {
         )}
 
         {/* Action row */}
-        <div className="flex items-center justify-between gap-3 px-5 py-4 bg-secondary/40 border-t border-border flex-wrap">
+        <div className="flex items-center justify-between gap-2 sm:gap-3 px-3 sm:px-5 py-2.5 sm:py-4 bg-secondary/40 border-t border-border flex-wrap">
           <button
             onClick={() => setExpanded(e => !e)}
             className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -149,7 +149,7 @@ export function CookieConsentBanner() {
             {expanded ? t("cookie.hidePreferences") : t("cookie.managePreferences")}
           </button>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
             <Button size="sm" variant="outline" className="text-xs h-8 border-border" onClick={handleRejectAll}>
               {t("cookie.rejectOptional")}
             </Button>

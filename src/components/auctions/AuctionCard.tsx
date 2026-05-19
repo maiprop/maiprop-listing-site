@@ -344,7 +344,7 @@ const AuctionCardComponent = ({ a, favoritedIds, onToggleFav }: AuctionCardProps
   const price = a.auction_starting_bid ?? a.price ?? 0;
 
   return (
-    <div className="glass-card rounded-xl overflow-hidden border border-border hover:border-brand-gold/40 transition-all group flex flex-col">
+    <div data-testid="auction-card" className="glass-card rounded-xl overflow-hidden border border-border hover:border-brand-gold/40 transition-all group flex flex-col">
       <AuctionMedia
         a={a}
         imgSrc={imgSrc}
