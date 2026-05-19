@@ -112,6 +112,7 @@ const ProfessionalServiceCard = ({
   </div>
 );
 
+// skipcq: JS-0067 - Exported profile tab component is intentionally module-scoped.
 export function ProfessionalServicesTab({ dbServices, dbAvailability, professionalIsPro, user, onOpenModal }: Props) { // skipcq: JS-R1005, JS-W1044 - Public services tab renders service, availability, and booking states together.
   return (
     <div className="space-y-5">

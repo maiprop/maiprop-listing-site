@@ -67,6 +67,7 @@ const VideoLinkField = ({ value, onChange }: { value: string; onChange: (value: 
   </div>
 );
 
+// skipcq: JS-0067 - React dashboard component is intentionally module-scoped.
 export default function ProfessionalServicesEditor() { // skipcq: JS-R1005, JS-W1044 - Services editor coordinates catalog selection, availability, video settings, and persistence.
   const { data: pro, isLoading: proLoading } = useMyProfessional();
   const { data: existingServices = [] } = useProfessionalServices(pro?.id || "");

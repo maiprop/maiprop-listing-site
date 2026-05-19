@@ -244,6 +244,7 @@ const ServiceSelectionStep = ({
   </div>
 );
 
+// skipcq: JS-0067 - React modal component is intentionally module-scoped.
 export default function BookConsultationModal({ open, onClose, allowVideoCall = true, professional }: BookConsultationModalProps) { // skipcq: JS-R1005, JS-W1044 - Booking modal coordinates service selection, scheduling, contact capture, and submission flow.
   const { user, profile } = useAuth();
   const submitConsultation = useSubmitConsultation();
