@@ -27,8 +27,8 @@ vi.mock("@/components/Navbar", () => ({ Navbar: () => <nav data-testid="navbar" 
 vi.mock("@/components/Footer", () => ({ Footer: () => <footer data-testid="footer" /> }));
 vi.mock("@/components/MapView", () => ({ MapView: () => <div data-testid="map-view" /> }));
 vi.mock("@/components/PropertyCard", () => ({
-  PropertyCard: ({ property }: { property: { title: string; city?: string } }) => (
-    <article data-testid="open-house-card">
+  PropertyCard: ({ property }: { property: { title: string; city?: string; images?: string[] } }) => (
+    <article data-testid="open-house-card" data-image={property.images?.[0] ?? ""}>
       <h2>{property.title}</h2>
       <p>{property.city}</p>
     </article>
@@ -292,6 +292,19 @@ describe("OpenHouses page behavior", () => {
     fireEvent.click(screen.getByRole("button", { name: /switch to list view/i }));
 
     expect(screen.getByText("No Map Home")).toBeInTheDocument();
+  });
+
+  it("hides supervisor test open houses and sends the logo as the empty-image fallback", async () => {
+    makeListingsQuery([
+      createListing({ id: "oh-live", title: "Real Open House", latitude: null, longitude: null }),
+      createListing({ id: "oh-test", title: "supervisor-177912 smoke test", latitude: null, longitude: null }),
+    ]);
+
+    await renderOpenHouses();
+
+    expect(await screen.findByText("Real Open House")).toBeInTheDocument();
+    expect(screen.queryByText(/supervisor-177912/i)).not.toBeInTheDocument();
+    expect(screen.getByTestId("open-house-card")).toHaveAttribute("data-image", "/images/maiprop-logo.webp");
   });
 
   it("uses the past-open-house query branch and renders the loading error retry state", async () => {

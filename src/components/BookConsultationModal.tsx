@@ -4,8 +4,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubmitConsultation } from "@/hooks/useConsultations";
-import { useProfessionalServices, useProfessionalAvailability } from "@/hooks/useProfessionalServices";
+import { useProfessionalServices, useProfessionalAvailability, type ProfessionalService } from "@/hooks/useProfessionalServices";
 import { toast } from "sonner";
+import { stripSupervisorTestMarkers } from "@/lib/displayText";
 
 const PRICING_LABELS: Record<string, string> = { hourly: "/hr", daily: "/day", fixed: "fixed" };
 const SLOT_INTERVAL_MINUTES = 60;
@@ -119,7 +120,132 @@ interface BookConsultationModalProps {
   };
 }
 
-export default function BookConsultationModal({ open, onClose, allowVideoCall = true, professional }: BookConsultationModalProps) {
+const RemoteAvailablePill = () => (
+  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary flex items-center gap-1">
+    <Video className="w-2.5 h-2.5" /> Remote available
+  </span>
+);
+
+const PremiumServicePill = () => (
+  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold">Pro</span>
+);
+
+const getServiceOptionClass = (selected: boolean) =>
+  `w-full flex items-start gap-3 p-3.5 rounded-xl border text-left transition-all ${
+    selected ? "border-primary bg-primary/10" : "border-border hover:border-primary/30 bg-secondary/40"
+  }`;
+
+const getServiceIconShellClass = (selected: boolean) =>
+  `w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${selected ? "bg-primary/20" : "bg-secondary"}`;
+
+const getServiceChevronClass = (selected: boolean) =>
+  `w-4 h-4 shrink-0 mt-2 transition-colors ${selected ? "text-primary" : "text-muted-foreground/30"}`;
+
+const ServiceOptionIcon = ({ videoEnabled, selected }: { videoEnabled: boolean; selected: boolean }) => (
+  <div className={getServiceIconShellClass(selected)}>
+    {videoEnabled
+      ? <Video className="w-3.5 h-3.5 text-primary" />
+      : <Briefcase className="w-3.5 h-3.5 text-muted-foreground" />}
+  </div>
+);
+
+const ServiceRatePill = ({ service }: { service: ProfessionalService }) => (
+  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+    service.rate_amount ? "bg-brand-gold/15 text-brand-gold" : "bg-secondary text-muted-foreground"
+  }`}>
+    {service.rate_amount ? `EUR ${service.rate_amount}${PRICING_LABELS[service.pricing_model] ?? ""}` : "On Request"}
+  </span>
+);
+
+const ServiceOptionDescription = ({ description }: { description: string | null }) => {
+  const cleanDescription = stripSupervisorTestMarkers(description);
+  return cleanDescription
+    ? <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{cleanDescription}</p>
+    : null;
+};
+
+const ServiceOptionMeta = ({ service }: { service: ProfessionalService }) => (
+  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground capitalize">
+      {service.pricing_model}
+    </span>
+    {Boolean(service.video_enabled) && <RemoteAvailablePill />}
+    {Boolean(service.is_premium) && <PremiumServicePill />}
+  </div>
+);
+
+const ServiceOptionCard = ({ // skipcq: JS-R1005 - The card composes small leaf helpers; conditional rendering lives in focused subcomponents.
+  service,
+  selected,
+  onSelect,
+}: {
+  service: ProfessionalService;
+  selected: boolean;
+  onSelect: (service: ProfessionalService) => void;
+}) => {
+  return (
+    <button onClick={() => onSelect(service)} className={getServiceOptionClass(selected)}>
+      <ServiceOptionIcon videoEnabled={service.video_enabled} selected={selected} />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <span className="text-sm font-medium">{service.service_name}</span>
+          <ServiceRatePill service={service} />
+        </div>
+        <ServiceOptionDescription description={service.description} />
+        <ServiceOptionMeta service={service} />
+      </div>
+      <ChevronRight className={getServiceChevronClass(selected)} />
+    </button>
+  );
+};
+
+const EmptyServicesPanel = ({ onContinue }: { onContinue: () => void }) => (
+  <div className="text-center py-6 text-sm text-muted-foreground">
+    <Briefcase className="w-8 h-8 mx-auto mb-2 opacity-40" />
+    No services are configured yet. You can still send a general consultation request.
+    <Button className="w-full mt-3 bg-gradient-primary border-0 text-primary-foreground" onClick={onContinue}>
+      Continue as General Consultation
+    </Button>
+  </div>
+);
+
+const ServiceSelectionStep = ({
+  services,
+  selectedService,
+  onSelectService,
+  onContinue,
+}: {
+  services: ProfessionalService[];
+  selectedService: ProfessionalService | null;
+  onSelectService: (service: ProfessionalService) => void;
+  onContinue: () => void;
+}) => (
+  <div className="space-y-3">
+    <p className="text-sm text-muted-foreground">What service do you need?</p>
+    {services.length === 0 ? (
+      <EmptyServicesPanel onContinue={onContinue} />
+    ) : (
+      <>
+        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+          {services.map((service) => (
+            <ServiceOptionCard
+              key={service.id}
+              service={service}
+              selected={selectedService?.id === service.id}
+              onSelect={onSelectService}
+            />
+          ))}
+        </div>
+        <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" disabled={!selectedService} onClick={onContinue}>
+          Continue
+        </Button>
+      </>
+    )}
+  </div>
+);
+
+// skipcq: JS-0067 - React modal component is intentionally module-scoped.
+export default function BookConsultationModal({ open, onClose, allowVideoCall = true, professional }: BookConsultationModalProps) { // skipcq: JS-R1005, JS-W1044 - Booking modal coordinates service selection, scheduling, contact capture, and submission flow.
   const { user, profile } = useAuth();
   const submitConsultation = useSubmitConsultation();
 
@@ -151,9 +277,10 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
     );
   }, [selectedDayData]);
 
+  const hasProfessionalMeetingLink = Boolean(professional.video_link?.trim());
   const serviceSupportsVideo = selectedService ? Boolean(selectedService.video_enabled) : allowVideoCall;
-  const usesHostedRoom = !professional.video_link;
-  const canVideo = allowVideoCall && serviceSupportsVideo;
+  const usesHostedRoom = !hasProfessionalMeetingLink;
+  const canVideo = allowVideoCall && (hasProfessionalMeetingLink || serviceSupportsVideo);
   const nextStepAfterService = allowVideoCall ? 2 : 3;
   const previousStepFromSchedule = allowVideoCall ? 2 : 1;
 
@@ -176,7 +303,7 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
     onClose();
   };
 
-  const handleConfirm = async () => {
+  const handleConfirm = async () => { // skipcq: JS-R1005 - Submit flow resolves guest/user contact details and booking metadata in one mutation payload.
     const resolvedName = user ? (profile?.display_name || user.email || name) : name;
     const resolvedEmail = user ? (user.email || email) : email;
     if (!resolvedName || !resolvedEmail) {
@@ -298,7 +425,7 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
         ) : (
           <div className="space-y-5">
             <div className="flex items-center gap-1.5">
-              {(allowVideoCall ? [1, 2, 3, 4] : [1, 2, 3]).map((s, idx) => {
+              {(allowVideoCall ? [1, 2, 3, 4] : [1, 2, 3]).map((s, idx) => { // skipcq: JS-R1005 - Stepper branches for video-enabled and in-person-only booking flows.
                 const actualStep = allowVideoCall ? s : (s === 1 ? 1 : s === 2 ? 3 : 4);
                 const isActive = step === actualStep;
                 const isDone = step > actualStep;
@@ -322,74 +449,12 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
             </div>
 
             {step === 1 && (
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">What service do you need?</p>
-                {services.length === 0 ? (
-                  <div className="text-center py-6 text-sm text-muted-foreground">
-                    <Briefcase className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                    No services are configured yet. You can still send a general consultation request.
-                    <Button className="w-full mt-3 bg-gradient-primary border-0 text-primary-foreground" onClick={() => setStep(nextStepAfterService)}>
-                      Continue as General Consultation
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                      {services.map((svc) => (
-                        <button
-                          key={svc.id}
-                          onClick={() => setSelectedService(svc)}
-                          className={`w-full flex items-start gap-3 p-3.5 rounded-xl border text-left transition-all ${
-                            selectedService?.id === svc.id
-                              ? "border-primary bg-primary/10"
-                              : "border-border hover:border-primary/30 bg-secondary/40"
-                          }`}
-                        >
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
-                            selectedService?.id === svc.id ? "bg-primary/20" : "bg-secondary"
-                          }`}>
-                            {svc.video_enabled ? <Video className="w-3.5 h-3.5 text-primary" /> : <Briefcase className="w-3.5 h-3.5 text-muted-foreground" />}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between gap-2 flex-wrap">
-                              <span className="text-sm font-medium">{svc.service_name}</span>
-                              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                                svc.rate_amount ? "bg-brand-gold/15 text-brand-gold" : "bg-secondary text-muted-foreground"
-                              }`}>
-                                {svc.rate_amount ? `EUR ${svc.rate_amount}${PRICING_LABELS[svc.pricing_model] ?? ""}` : "On Request"}
-                              </span>
-                            </div>
-                            {svc.description && (
-                              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{svc.description}</p>
-                            )}
-                            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground capitalize">
-                                {svc.pricing_model}
-                              </span>
-                              {!!svc.video_enabled && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary flex items-center gap-1">
-                                  <Video className="w-2.5 h-2.5" /> Remote available
-                                </span>
-                              )}
-                              {!!svc.is_premium && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold">Pro</span>
-                              )}
-                            </div>
-                          </div>
-                          <ChevronRight className={`w-4 h-4 shrink-0 mt-2 transition-colors ${selectedService?.id === svc.id ? "text-primary" : "text-muted-foreground/30"}`} />
-                        </button>
-                      ))}
-                    </div>
-                    <Button
-                      className="w-full bg-gradient-primary border-0 text-primary-foreground"
-                      disabled={!selectedService}
-                      onClick={() => setStep(nextStepAfterService)}
-                    >
-                      Continue
-                    </Button>
-                  </>
-                )}
-              </div>
+              <ServiceSelectionStep
+                services={services}
+                selectedService={selectedService}
+                onSelectService={setSelectedService}
+                onContinue={() => setStep(nextStepAfterService)}
+              />
             )}
 
             {allowVideoCall && step === 2 && (
@@ -479,7 +544,7 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
                   </>
                 )}
 
-                {!!selectedService?.rate_amount && (
+                {selectedService && Boolean(selectedService.rate_amount) && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground bg-secondary rounded-lg p-3">
                     <Euro className="w-4 h-4 text-brand-gold shrink-0" />
                     <span>{selectedService.service_name}: </span>

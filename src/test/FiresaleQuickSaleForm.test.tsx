@@ -19,7 +19,7 @@ const { useAuthMock, useSubMock, isSellSideRoleMock, functionsInvokeMock, fromMo
   functionsInvokeMock: vi.fn(),
   fromMock: vi.fn(),
   navigateMock: vi.fn(),
-  toastMock: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  toastMock: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },
 }));
 
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => useAuthMock() }));
@@ -50,6 +50,22 @@ vi.stubGlobal("fetch", fetchStub);
 import { FiresaleQuickSaleForm } from "@/components/firesale/FiresaleQuickSaleForm";
 import { isValidKaek, normalizeKaek, toFiresalePropertyType } from "@/lib/firesaleValidation";
 
+const getPropertyTypeSelect = (): HTMLSelectElement => {
+  const select = document.querySelector("select");
+  if (!(select instanceof HTMLSelectElement)) {
+    throw new Error("Expected property type select to render");
+  }
+  return select;
+};
+
+const getPhotoInput = (): HTMLInputElement => {
+  const input = document.querySelector("input[type='file']");
+  if (!(input instanceof HTMLInputElement)) {
+    throw new Error("Expected photo file input to render");
+  }
+  return input;
+};
+
 beforeEach(() => {
   useAuthMock.mockReset();
   useAuthMock.mockReturnValue({
@@ -67,6 +83,7 @@ beforeEach(() => {
   toastMock.success.mockReset();
   toastMock.error.mockReset();
   toastMock.warning.mockReset();
+  toastMock.info.mockReset();
   fetchStub.mockClear();
 });
 
@@ -94,6 +111,31 @@ describe("FiresaleQuickSaleForm", () => {
     expect(screen.getByText(/Seller account required/i)).toBeInTheDocument();
     // The banner renders a CTA button — 'Become a Seller' when logged in.
     expect(screen.getByRole("button", { name: /Become a Seller/i })).toBeInTheDocument();
+  });
+
+  it("shows a profile-loading state instead of the seller-required banner while auth is resolving", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1", email: "seller@example.com" },
+      profile: null,
+      loading: false,
+      profileLoading: true,
+    });
+    render(<FiresaleQuickSaleForm />);
+    expect(screen.getByText(/Checking seller profile/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Seller account required/i)).not.toBeInTheDocument();
+  });
+
+  it("sends a logged-in user without a loaded profile to onboarding instead of staying pending", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1", email: "seller@example.com" },
+      profile: null,
+      loading: false,
+      profileLoading: false,
+    });
+    render(<FiresaleQuickSaleForm />);
+    expect(screen.getByText(/Seller account required/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Become a Seller/i }));
+    expect(navigateMock).toHaveBeenCalledWith("/onboarding");
   });
 
   it("renders a 'Sign up as Seller' CTA when there is no user at all", () => {
@@ -126,6 +168,27 @@ describe("FiresaleQuickSaleForm", () => {
     expect(toastMock.error).toHaveBeenCalledWith("Please enter a full address (min 5 characters).");
   });
 
+  it("shows the missing-photo validation inline even before any photos are selected", () => {
+    render(<FiresaleQuickSaleForm />);
+    fireEvent.change(screen.getByPlaceholderText(/Kifisia, Dekelia/i), {
+      target: { value: "Kolonaki 12, Athens" },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/050240601001/i), {
+      target: { value: "050240601001/0/1" },
+    });
+    fireEvent.change(getPropertyTypeSelect(), { target: { value: "apartment" } });
+    fireEvent.change(screen.getByPlaceholderText(/^e\.g\. 120$/i), { target: { value: "95" } });
+    fireEvent.change(screen.getByPlaceholderText(/Your target/i), { target: { value: "350000" } });
+    fireEvent.change(screen.getByPlaceholderText(/^e\.g\. 1998$/i), { target: { value: "2010" } });
+    fireEvent.change(screen.getByPlaceholderText(/Legal issues, urgent timeline/i), {
+      target: { value: "Quick sale needed within 30 days." },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Get AI Estimate/i }));
+
+    expect(screen.getByText("Please upload at least 5 property photos.")).toBeInTheDocument();
+  });
+
   it("updates controlled state as the user fills in the address + KAEK + property type + sqm/price/year", () => {
     render(<FiresaleQuickSaleForm />);
     const address = screen.getByPlaceholderText(/Kifisia, Dekelia/i);
@@ -136,7 +199,7 @@ describe("FiresaleQuickSaleForm", () => {
     fireEvent.change(kaek, { target: { value: "050240601001/0/1" } });
     expect((kaek as HTMLInputElement).value).toBe("050240601001/0/1");
 
-    const typeSelect = document.querySelector("select") as HTMLSelectElement;
+    const typeSelect = getPropertyTypeSelect();
     fireEvent.change(typeSelect, { target: { value: "apartment" } });
     expect(typeSelect.value).toBe("apartment");
 
@@ -164,7 +227,7 @@ describe("FiresaleQuickSaleForm", () => {
       target: { value: "Kolonaki 12, Athens" },
     });
     fireEvent.change(kaek, { target: { value: "222222222222222222222222" } });
-    fireEvent.change(document.querySelector("select")!, { target: { value: "apartment" } });
+    fireEvent.change(getPropertyTypeSelect(), { target: { value: "apartment" } });
     fireEvent.change(screen.getByPlaceholderText(/^e\.g\. 120$/i), { target: { value: "95" } });
     fireEvent.change(screen.getByPlaceholderText(/Your target/i), { target: { value: "350000" } });
     fireEvent.change(screen.getByPlaceholderText(/^e\.g\. 1998$/i), { target: { value: "2010" } });
@@ -179,7 +242,7 @@ describe("FiresaleQuickSaleForm", () => {
   it("debounces Nominatim autocomplete when the address ≥ 3 chars, and clears when < 3", async () => {
     vi.useFakeTimers();
     try {
-      fetchStub.mockResolvedValueOnce({ json: async () => [] } as unknown as Response);
+      fetchStub.mockResolvedValueOnce({ json: () => Promise.resolve([]) } as unknown as Response);
       render(<FiresaleQuickSaleForm />);
       fireEvent.change(screen.getByPlaceholderText(/Kifisia, Dekelia/i), {
         target: { value: "Athens" },
@@ -198,8 +261,7 @@ describe("FiresaleQuickSaleForm", () => {
 
   it("allows photo file selection to be invoked via the hidden file input (no crash on 0 files)", () => {
     render(<FiresaleQuickSaleForm />);
-    const fileInput = document.querySelector("input[type='file']") as HTMLInputElement;
-    expect(fileInput).toBeTruthy();
+    const fileInput = getPhotoInput();
     // Simulate an empty FileList — the handler should skip cleanly.
     fireEvent.change(fileInput, { target: { files: [] } });
     // Continue stays clickable so validation can explain exactly what is missing.
@@ -212,7 +274,7 @@ describe("FiresaleQuickSaleForm", () => {
     // unmount/replacement to avoid leaking image bytes.
     vi.stubGlobal("URL", { ...URL, createObjectURL: () => "blob:preview", revokeObjectURL: () => {} });
     render(<FiresaleQuickSaleForm />);
-    const fileInput = document.querySelector("input[type='file']") as HTMLInputElement;
+    const fileInput = getPhotoInput();
     const validFile = new File(["x"], "ok.jpg", { type: "image/jpeg" });
     const invalidType = new File(["x"], "bad.txt", { type: "text/plain" });
     fireEvent.change(fileInput, { target: { files: [validFile, invalidType] } });
@@ -232,7 +294,7 @@ describe("FiresaleQuickSaleForm", () => {
     fireEvent.change(screen.getByPlaceholderText(/050240601001/i), {
       target: { value: "050240601001/0/1" },
     });
-    fireEvent.change(document.querySelector("select")!, { target: { value: "apartment" } });
+    fireEvent.change(getPropertyTypeSelect(), { target: { value: "apartment" } });
     fireEvent.change(screen.getByPlaceholderText(/^e\.g\. 120$/i), { target: { value: "95" } });
     fireEvent.change(screen.getByPlaceholderText(/Your target/i), { target: { value: "350000" } });
     fireEvent.change(screen.getByPlaceholderText(/^e\.g\. 1998$/i), { target: { value: "2010" } });
@@ -244,7 +306,7 @@ describe("FiresaleQuickSaleForm", () => {
     const files = Array.from({ length: 6 }, (_, i) =>
       new File([`x${i}`], `photo-${i}.jpg`, { type: "image/jpeg" }),
     );
-    const fileInput = document.querySelector("input[type='file']") as HTMLInputElement;
+    const fileInput = getPhotoInput();
     fireEvent.change(fileInput, { target: { files } });
     expect(screen.getByText(/6 photos selected/i)).toBeInTheDocument();
 
@@ -272,7 +334,7 @@ describe("FiresaleQuickSaleForm", () => {
     fireEvent.change(screen.getByPlaceholderText(/050240601001/i), {
       target: { value: "050240601001/0/1" },
     });
-    fireEvent.change(document.querySelector("select")!, { target: { value: "apartment" } });
+    fireEvent.change(getPropertyTypeSelect(), { target: { value: "apartment" } });
     fireEvent.change(screen.getByPlaceholderText(/^e\.g\. 120$/i), { target: { value: "95" } });
     fireEvent.change(screen.getByPlaceholderText(/Your target/i), { target: { value: "350000" } });
     fireEvent.change(screen.getByPlaceholderText(/^e\.g\. 1998$/i), { target: { value: "2010" } });
@@ -282,7 +344,7 @@ describe("FiresaleQuickSaleForm", () => {
     const files = Array.from({ length: 6 }, (_, i) =>
       new File([`x${i}`], `p${i}.jpg`, { type: "image/jpeg" }),
     );
-    fireEvent.change(document.querySelector("input[type='file']")!, { target: { files } });
+    fireEvent.change(getPhotoInput(), { target: { files } });
     fireEvent.click(screen.getByRole("button", { name: /Get AI Estimate/i }));
     await waitFor(() => expect(screen.getByText(/2\/2/)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /^Back$/i }));

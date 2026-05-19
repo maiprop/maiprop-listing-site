@@ -59,5 +59,5 @@ export function RangeInput({
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function OpenHouseCard({ card }: { listing: any; card: any }) {
-  return <PropertyCard property={card} />;
+  return <PropertyCard property={card} testId="open-house-card" />;
 }

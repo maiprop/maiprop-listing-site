@@ -3,8 +3,8 @@
  * Manages all form state, validation, photo upload, and AI estimate internally.
  */
 
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, type ChangeEvent, type RefObject } from "react";
+import { useNavigate, type NavigateFunction } from "react-router-dom";
 import {
   Flame,
   MapPin,
@@ -49,8 +49,874 @@ const propertyTypeOptions = [
 
 const NOW_YEAR = new Date().getFullYear();
 
-export function FiresaleQuickSaleForm() {
-  const { user, profile } = useAuth();
+type QuickSaleFormValues = {
+  address: string;
+  kaek: string;
+  propertyType: string;
+  sqm: string;
+  askingPrice: string;
+  constructionYear: string;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string;
+  notes: string;
+};
+
+type QuickSaleErrors = Record<string, string>;
+type QuickSaleProfile = { display_name?: string | null; first_name?: string | null; phone?: string | null; role?: string | null } | null;
+type QuickSaleUser = { id: string; email?: string | null } | null;
+type RemoteEstimateData = { estimated_value?: number | null; error?: string };
+type ErrorSetter = (errors: QuickSaleErrors) => void;
+type EstimateSetter = (estimate: number) => void;
+type QuickSaleFieldUpdater = (key: keyof QuickSaleFormValues, value: string) => void;
+type PhotoSelectHandler = (event: ChangeEvent<HTMLInputElement>) => void;
+
+const firstFilled = (...values: Array<string | null | undefined>): string =>
+  values.find((value) => Boolean(value)) ?? "";
+
+const getProfileContactName = (profile: QuickSaleProfile): string =>
+  firstFilled(profile?.display_name, profile?.first_name);
+
+const getProfilePhone = (profile: QuickSaleProfile): string => profile?.phone ?? "";
+
+const getUserEmail = (userEmail: string | null | undefined): string => userEmail ?? "";
+
+const buildInitialForm = (profile: QuickSaleProfile, userEmail: string | null | undefined): QuickSaleFormValues => ({
+  address: "",
+  kaek: "",
+  propertyType: "",
+  sqm: "",
+  askingPrice: "",
+  constructionYear: "",
+  contactName: getProfileContactName(profile),
+  contactEmail: getUserEmail(userEmail),
+  contactPhone: getProfilePhone(profile),
+  notes: "",
+});
+
+const keepFilled = (currentValue: string, fallbackValue: string | null | undefined): string =>
+  currentValue ? currentValue : fallbackValue ?? "";
+
+const syncContactFields = (
+  prev: QuickSaleFormValues,
+  profile: QuickSaleProfile,
+  userEmail: string | null | undefined,
+): QuickSaleFormValues => ({
+  ...prev,
+  contactName: keepFilled(prev.contactName, firstFilled(profile?.display_name, profile?.first_name)),
+  contactEmail: keepFilled(prev.contactEmail, userEmail),
+  contactPhone: keepFilled(prev.contactPhone, profile?.phone),
+});
+
+const validateAddress = (address: string): string | null =>
+  address.trim().length < 5 ? "Please enter a full address (min 5 characters)." : null;
+
+const validateKaekValue = (value: string): string | null => {
+  const kaek = normalizeKaek(value);
+  if (!kaek) return "KAEK is required.";
+  if (!isValidKaek(kaek)) {
+    return "KAEK must be 12 digits, optionally followed by sub-property parts, e.g. 050240601001 or 050240601001/0/1.";
+  }
+  return null;
+};
+
+const validatePropertyType = (propertyType: string): string | null => {
+  if (!propertyType) return "Property type is required.";
+  return toFiresalePropertyType(propertyType) ? null : "Property type is invalid.";
+};
+
+const validateNumberRange = (
+  value: string,
+  label: string,
+  min: number,
+  max: number,
+  rangeMessage: string,
+): string | null => {
+  const numericValue = Number(value);
+  if (!value || Number.isNaN(numericValue)) return `${label} is required.`;
+  return numericValue < min || numericValue > max ? rangeMessage : null;
+};
+
+const validateNotes = (notes: string): string | null =>
+  notes.trim().length < 3 ? "Please add a short note." : null;
+
+const validatePhotoCount = (count: number): string | null =>
+  count < 5 ? "Please upload at least 5 property photos." : null;
+
+const validateContactName = (name: string): string | null =>
+  name.trim().length < 2 ? "Full name is required." : null;
+
+const validateContactEmail = (email: string): string | null => {
+  if (!email.trim()) return "Email is required.";
+  return /\S+@\S+\.\S+/.test(email) ? null : "Email looks invalid.";
+};
+
+const validateContactPhone = (phoneValue: string): string | null => {
+  const phone = phoneValue.replace(/\s+/g, "").trim();
+  if (!phone) return "Phone number is required.";
+  return /^\+?[0-9]{8,15}$/.test(phone) ? null : "Phone number looks invalid (use digits, optionally starting with +).";
+};
+
+const collectErrors = (checks: Array<[string, string | null]>): QuickSaleErrors => {
+  const next: QuickSaleErrors = {};
+  checks.forEach(([key, message]) => {
+    if (message) next[key] = message;
+  });
+  return next;
+};
+
+const validateStep1Form = (form: QuickSaleFormValues, photoCount: number): QuickSaleErrors =>
+  collectErrors([
+    ["address", validateAddress(form.address)],
+    ["kaek", validateKaekValue(form.kaek)],
+    ["propertyType", validatePropertyType(form.propertyType)],
+    ["sqm", validateNumberRange(form.sqm, "Size (m\u00b2)", 10, 5000, "Size (m\u00b2) must be between 10 and 5000.")],
+    [
+      "askingPrice",
+      validateNumberRange(form.askingPrice, "Asking price", 5_000, 100_000_000, "Asking price must be between \u20ac5,000 and \u20ac100,000,000."),
+    ],
+    [
+      "constructionYear",
+      validateNumberRange(form.constructionYear, "Construction year", 1800, NOW_YEAR + 1, `Construction year must be between 1800 and ${NOW_YEAR + 1}.`),
+    ],
+    ["photos", validatePhotoCount(photoCount)],
+    ["notes", validateNotes(form.notes)],
+  ]);
+
+const validateStep2Form = (form: QuickSaleFormValues): QuickSaleErrors =>
+  collectErrors([
+    ["contactName", validateContactName(form.contactName)],
+    ["contactEmail", validateContactEmail(form.contactEmail)],
+    ["contactPhone", validateContactPhone(form.contactPhone)],
+  ]);
+
+const getFirstError = (errors: QuickSaleErrors): string | null => Object.values(errors)[0] ?? null;
+
+const showValidationErrors = (errors: QuickSaleErrors, setErrors: ErrorSetter): boolean => {
+  setErrors(errors);
+  const firstError = getFirstError(errors);
+  if (!firstError) return false;
+  toast.error(firstError);
+  return true;
+};
+
+const saveSellerIntent = () => {
+  try {
+    localStorage.setItem("signup_participant_type", "seller");
+  } catch (_err: unknown) {
+    /* ignore */
+  }
+};
+
+const navigateToSellerSetup = (navigate: NavigateFunction, hasUser: boolean) => {
+  if (!hasUser) {
+    navigate("/signup?type=seller");
+    return;
+  }
+  saveSellerIntent();
+  navigate("/onboarding");
+};
+
+const getSubmitUserId = (user: QuickSaleUser, navigate: NavigateFunction): string | null => {
+  if (user) return user.id;
+  navigate("/login");
+  return null;
+};
+
+const redirectBlockedSubmitter = (canSubmitQuickSale: boolean, navigate: NavigateFunction): boolean => {
+  if (canSubmitQuickSale) return false;
+  saveSellerIntent();
+  navigate("/onboarding");
+  return true;
+};
+
+const showAuthPendingToast = (authPending: boolean): boolean => {
+  if (!authPending) return false;
+  toast.info("Checking your seller profile. Please try again in a moment.");
+  return true;
+};
+
+const canSubmitQuickSaleRequest = (
+  user: QuickSaleUser,
+  profile: QuickSaleProfile,
+  authPending: boolean,
+): boolean => Boolean(user) && !authPending && profile != null && isSellSideRole(profile);
+
+const BASE_PRICE_PER_SQM: Record<string, number> = {
+  villa: 3200,
+  house: 2400,
+  apartment: 2000,
+  commercial: 2800,
+  office: 2600,
+  land: 900,
+};
+
+const getLocalEstimate = (form: QuickSaleFormValues): number =>
+  Math.round((BASE_PRICE_PER_SQM[form.propertyType] || 2000) * Number(form.sqm) * 0.92);
+
+const showAiEstimateLimitError = (
+  error: unknown,
+  data: RemoteEstimateData | null | undefined,
+) => {
+  if (isAiUsageLimitError(error, data)) toast.error("AI estimate is temporarily unavailable due to usage limits.");
+};
+
+const applyRemoteEstimate = (
+  data: RemoteEstimateData | null | undefined,
+  fnErr: unknown,
+  setAiEstimate: EstimateSetter,
+) => {
+  if (data?.estimated_value) {
+    setAiEstimate(Math.round(data.estimated_value * 0.95));
+    return;
+  }
+  showAiEstimateLimitError(fnErr, data);
+};
+
+const validateSubmissionForm = (form: QuickSaleFormValues, photoCount: number): QuickSaleErrors => ({
+  ...validateStep1Form(form, photoCount),
+  ...validateStep2Form(form),
+});
+
+const getSubmitEstimate = (aiEstimate: number | null, form: QuickSaleFormValues): number =>
+  aiEstimate ?? Math.round(Number(form.sqm) * 1900 * 0.92);
+
+const getPhotoGrade = (count: number): number => {
+  if (count >= 8) return 9;
+  if (count >= 5) return 7;
+  if (count >= 3) return 5;
+  return 3;
+};
+
+const buildMetaLines = (form: QuickSaleFormValues, photoCount: number): string[] => {
+  const metaLines: string[] = [];
+  if (form.constructionYear.trim()) metaLines.push(`Construction year: ${form.constructionYear.trim()}`);
+  if (photoCount > 0) metaLines.push(`Photo condition grade (1-10): ${getPhotoGrade(photoCount)}`);
+  if (form.kaek.trim()) metaLines.push(`KAEK: ${normalizeKaek(form.kaek)}`);
+  if (form.notes.trim()) metaLines.push(form.notes.trim());
+  return metaLines;
+};
+
+const getCityFromAddress = (address: string): string => address.split(",").pop()?.trim() || "";
+
+const getRequiredPropertyType = (propertyType: string): NonNullable<ReturnType<typeof toFiresalePropertyType>> => {
+  const mappedPropertyType = toFiresalePropertyType(propertyType);
+  if (!mappedPropertyType) throw new Error("Property type is invalid.");
+  return mappedPropertyType;
+};
+
+const insertFiresaleRequest = (
+  form: QuickSaleFormValues,
+  userId: string,
+  estimate: number,
+  propertyType: NonNullable<ReturnType<typeof toFiresalePropertyType>>,
+  metaLines: string[],
+) =>
+  supabase
+    .from("firesale_requests")
+    .insert({
+      address: form.address.trim(),
+      city: getCityFromAddress(form.address),
+      property_type: propertyType,
+      sqm: Number(form.sqm),
+      condition: null,
+      asking_price: Number(form.askingPrice),
+      contact_email: form.contactEmail.trim(),
+      contact_phone: form.contactPhone.trim() || null,
+      notes: metaLines.join("\n") || null,
+      ai_estimate: estimate,
+      user_id: userId,
+      status: "pending",
+    })
+    .select("id")
+    .single();
+
+const rollbackFiresaleRequest = async (requestId: string, userId: string) => {
+  await supabase.from("firesale_requests").delete().eq("id", requestId).eq("user_id", userId);
+};
+
+const ensurePhotosUploaded = async (
+  requestId: string | null,
+  userId: string,
+  photoCount: number,
+  uploadPhotos: (requestId: string) => Promise<string[]>,
+) => {
+  if (photoCount === 0 || !requestId) return;
+  const uploadedUrls = await uploadPhotos(requestId);
+  if (uploadedUrls.length === photoCount) return;
+  await rollbackFiresaleRequest(requestId, userId);
+  throw new Error("Photo upload failed. Your request was not submitted; please retry the upload.");
+};
+
+const submitValidatedQuickSale = async (
+  form: QuickSaleFormValues,
+  userId: string,
+  aiEstimate: number | null,
+  photoCount: number,
+  uploadPhotos: (requestId: string) => Promise<string[]>,
+): Promise<{ estimate: number; requestId: string | null }> => {
+  const estimate = getSubmitEstimate(aiEstimate, form);
+  const propertyType = getRequiredPropertyType(form.propertyType);
+  const { data, error } = await insertFiresaleRequest(form, userId, estimate, propertyType, buildMetaLines(form, photoCount));
+  if (error) throw error;
+  const requestId = data?.id || null;
+  await ensurePhotosUploaded(requestId, userId, photoCount, uploadPhotos);
+  return { estimate, requestId };
+};
+
+const QuickSaleHeader = ({ step }: { step: number }) => (
+  <div className="px-5 sm:px-7 py-5 border-b border-border bg-gradient-to-r from-destructive/5 to-transparent">
+    <div className="flex items-center gap-3">
+      <div className="w-9 h-9 rounded-xl bg-destructive/10 flex items-center justify-center">
+        <Flame className="w-4.5 h-4.5 text-destructive" />
+      </div>
+      <div>
+        <h3 className="font-display font-bold text-base">Get Your Instant Cash Offer</h3>
+        <p className="text-xs text-muted-foreground">Free - No obligation - Confidential</p>
+      </div>
+      <div className="ml-auto flex items-center gap-2">
+        {[1, 2].map((n) => (
+          <div key={n} className={`w-7 h-1.5 rounded-full transition-all ${step >= n ? "bg-primary" : "bg-border"}`} />
+        ))}
+        <span className="text-[10px] text-muted-foreground ml-1">{step}/2</span>
+      </div>
+    </div>
+  </div>
+);
+
+const SellerGateBanner = ({
+  authPending,
+  canSubmitQuickSale,
+  userExists,
+  onSellerCta,
+}: {
+  authPending: boolean;
+  canSubmitQuickSale: boolean;
+  userExists: boolean;
+  onSellerCta: () => void;
+}) => {
+  if (authPending) {
+    return (
+      <div className="rounded-xl bg-muted border border-border p-3 flex items-start gap-3">
+        <Loader2 className="w-4 h-4 text-primary mt-0.5 shrink-0 animate-spin" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold">Checking seller profile</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            We are loading your account details before enabling Quick Sale submissions.
+          </p>
+        </div>
+      </div>
+    );
+  }
+  if (canSubmitQuickSale) return null;
+
+  return (
+    <div className="rounded-xl bg-muted border border-border p-3 flex items-start gap-3">
+      <Lock className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold">Seller account required</p>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          To submit a Quick Sale request, you must have a Seller profile. It&apos;s free - Pro is not required.
+        </p>
+        <div className="mt-2">
+          <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground" onClick={onSellerCta}>
+            {userExists ? "Become a Seller" : "Sign up as Seller"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const AddressField = ({
+  form,
+  errors,
+  addressLoading,
+  addressSuggestions,
+  onUpdate,
+  onClearSuggestions,
+}: {
+  form: QuickSaleFormValues;
+  errors: QuickSaleErrors;
+  addressLoading: boolean;
+  addressSuggestions: string[];
+  onUpdate: QuickSaleFieldUpdater;
+  onClearSuggestions: () => void;
+}) => (
+  <div>
+    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+      Property Address <span className="text-destructive">*</span>
+    </label>
+    <div className="flex gap-2 bg-muted border border-border rounded-xl px-3 py-2.5 focus-within:border-primary transition-colors">
+      <MapPin className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+      <input
+        type="text"
+        placeholder="e.g. Kifisia, Dekelia 24, Athens"
+        value={form.address}
+        onChange={(e) => onUpdate("address", e.target.value)}
+        className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
+      />
+    </div>
+    {errors.address && <p className="mt-1 text-xs text-destructive">{errors.address}</p>}
+    {addressLoading && <p className="mt-1 text-[10px] text-muted-foreground">Searching address suggestions...</p>}
+    {!addressLoading && addressSuggestions.length > 0 && (
+      <div className="mt-1 bg-background border border-border rounded-xl shadow-md text-sm max-h-40 overflow-auto">
+        {addressSuggestions.map((suggestion) => (
+          <button
+            key={suggestion}
+            type="button"
+            onClick={() => {
+              onUpdate("address", suggestion);
+              onClearSuggestions();
+            }}
+            className="w-full text-left px-3 py-1.5 hover:bg-muted/80"
+          >
+            {suggestion}
+          </button>
+        ))}
+      </div>
+    )}
+  </div>
+);
+
+const KaekField = ({ form, errors, onUpdate }: { form: QuickSaleFormValues; errors: QuickSaleErrors; onUpdate: QuickSaleFieldUpdater }) => (
+  <div>
+    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+      KAEK <span className="text-destructive">*</span>{" "}
+      <span className="text-[10px] font-normal normal-case text-muted-foreground">(Greek cadastral property code)</span>
+    </label>
+    <div className="flex gap-2 bg-muted border border-border rounded-xl px-3 py-2.5 focus-within:border-primary transition-colors">
+      <Hash className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+      <input
+        type="text"
+        placeholder="e.g. 050240601001/0/1"
+        value={form.kaek}
+        maxLength={KAEK_MAX_LENGTH}
+        inputMode="numeric"
+        onChange={(e) => onUpdate("kaek", normalizeKaek(e.target.value))}
+        className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none font-mono"
+      />
+    </div>
+    <p className="mt-1 text-[10px] text-muted-foreground">
+      Greek KAEK is normally 12 digits. Add sub-property parts only when applicable, e.g. /0/1.
+    </p>
+    {errors.kaek && <p className="mt-1 text-xs text-destructive">{errors.kaek}</p>}
+  </div>
+);
+
+const PropertyMetricsFields = ({
+  form,
+  errors,
+  onUpdate,
+}: {
+  form: QuickSaleFormValues;
+  errors: QuickSaleErrors;
+  onUpdate: QuickSaleFieldUpdater;
+}) => (
+  <div className="grid grid-cols-2 gap-4">
+    <div>
+      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+        Property Type <span className="text-destructive">*</span>
+      </label>
+      <select
+        value={form.propertyType}
+        onChange={(e) => onUpdate("propertyType", e.target.value)}
+        className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none capitalize"
+      >
+        <option value="" className="bg-card">Select type...</option>
+        {propertyTypeOptions.map((type) => (
+          <option key={type.value} value={type.value} className="bg-card">{type.label}</option>
+        ))}
+      </select>
+      {errors.propertyType && <p className="mt-1 text-xs text-destructive">{errors.propertyType}</p>}
+    </div>
+    <div>
+      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+        Size (m&sup2;) <span className="text-destructive">*</span>
+      </label>
+      <input
+        type="number"
+        placeholder="e.g. 120"
+        value={form.sqm}
+        onChange={(e) => onUpdate("sqm", e.target.value)}
+        className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
+      />
+      {errors.sqm && <p className="mt-1 text-xs text-destructive">{errors.sqm}</p>}
+    </div>
+    <div className="col-span-2">
+      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+        Asking Price <span className="text-destructive">*</span>
+      </label>
+      <div className="flex gap-2 bg-muted border border-border rounded-xl px-3 py-2.5 focus-within:border-primary transition-colors">
+        <Euro className="w-4 h-4 text-muted-foreground shrink-0" />
+        <input
+          type="number"
+          placeholder="Your target EUR"
+          value={form.askingPrice}
+          onChange={(e) => onUpdate("askingPrice", e.target.value)}
+          className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
+        />
+      </div>
+      {errors.askingPrice && <p className="mt-1 text-xs text-destructive">{errors.askingPrice}</p>}
+    </div>
+    <div className="col-span-2">
+      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+        Construction Year <span className="text-destructive">*</span>
+      </label>
+      <input
+        type="number"
+        placeholder="e.g. 1998"
+        value={form.constructionYear}
+        onChange={(e) => onUpdate("constructionYear", e.target.value)}
+        className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
+      />
+      {errors.constructionYear && <p className="mt-1 text-xs text-destructive">{errors.constructionYear}</p>}
+    </div>
+  </div>
+);
+
+const getPhotoSelectionText = (count: number): string => `${count} photo${count !== 1 ? "s" : ""} selected`;
+
+const EmptyPhotoUploadButton = ({ fileInputRef }: { fileInputRef: RefObject<HTMLInputElement> }) => (
+  <button
+    type="button"
+    onClick={() => fileInputRef.current?.click()}
+    className="w-full flex flex-col items-center justify-center gap-2 bg-muted border-2 border-dashed border-border rounded-xl py-7 text-muted-foreground hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 group"
+  >
+    <div className="w-10 h-10 rounded-full bg-muted-foreground/10 group-hover:bg-primary/10 flex items-center justify-center transition-colors">
+      <Upload className="w-5 h-5 group-hover:text-primary transition-colors" />
+    </div>
+    <div className="text-center">
+      <p className="text-sm font-medium group-hover:text-foreground transition-colors">Click to upload photos</p>
+      <p className="text-[11px] mt-0.5">JPG, PNG - Max 10MB each</p>
+    </div>
+  </button>
+);
+
+const PhotoPreviewTile = ({
+  src,
+  index,
+  onRemovePhoto,
+}: {
+  src: string;
+  index: number;
+  onRemovePhoto: (index: number) => void;
+}) => (
+  <div className="relative group rounded-xl overflow-hidden aspect-square bg-muted border border-border">
+    <img src={src} alt="" className="w-full h-full object-cover" />
+    <button
+      type="button"
+      onClick={() => onRemovePhoto(index)}
+      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-background/90 border border-border flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive hover:border-destructive hover:text-destructive-foreground"
+    >
+      <X className="w-3 h-3" />
+    </button>
+  </div>
+);
+
+const AddPhotoTile = ({ fileInputRef }: { fileInputRef: RefObject<HTMLInputElement> }) => (
+  <button
+    type="button"
+    onClick={() => fileInputRef.current?.click()}
+    className="aspect-square rounded-xl border-2 border-dashed border-border bg-muted hover:border-primary/40 hover:bg-primary/5 flex items-center justify-center transition-all"
+  >
+    <ImageIcon className="w-5 h-5 text-muted-foreground" />
+  </button>
+);
+
+const PhotoPreviewGrid = ({
+  photoPreviews,
+  fileInputRef,
+  onRemovePhoto,
+}: {
+  photoPreviews: string[];
+  fileInputRef: RefObject<HTMLInputElement>;
+  onRemovePhoto: (index: number) => void;
+}) => (
+  <div className="grid grid-cols-3 gap-2">
+    {photoPreviews.map((src, index) => (
+      <PhotoPreviewTile key={src} src={src} index={index} onRemovePhoto={onRemovePhoto} />
+    ))}
+    {photoPreviews.length < 10 && <AddPhotoTile fileInputRef={fileInputRef} />}
+  </div>
+);
+
+const PhotoUploadField = ({
+  errors,
+  photoPreviews,
+  fileInputRef,
+  onPhotoSelect,
+  onRemovePhoto,
+}: {
+  errors: QuickSaleErrors;
+  photoPreviews: string[];
+  fileInputRef: RefObject<HTMLInputElement>;
+  onPhotoSelect: PhotoSelectHandler;
+  onRemovePhoto: (index: number) => void;
+}) => (
+  <div>
+    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+      Property Photos <span className="text-destructive">*</span>{" "}
+      <span className="text-[10px] font-normal normal-case text-muted-foreground">(min 5, up to 10 images)</span>
+    </label>
+    <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={onPhotoSelect} />
+    {photoPreviews.length === 0 ? (
+      <EmptyPhotoUploadButton fileInputRef={fileInputRef} />
+    ) : (
+      <div className="space-y-3">
+        <PhotoPreviewGrid photoPreviews={photoPreviews} fileInputRef={fileInputRef} onRemovePhoto={onRemovePhoto} />
+        <p className="text-[10px] text-muted-foreground">
+          {getPhotoSelectionText(photoPreviews.length)}
+          {photoPreviews.length < 5 && " - add at least 5 photos to continue"}
+        </p>
+      </div>
+    )}
+    {errors.photos && <p className="mt-1 text-xs text-destructive">{errors.photos}</p>}
+  </div>
+);
+
+const NotesField = ({ form, errors, onUpdate }: { form: QuickSaleFormValues; errors: QuickSaleErrors; onUpdate: QuickSaleFieldUpdater }) => (
+  <div>
+    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+      Additional Notes <span className="text-destructive">*</span>
+    </label>
+    <textarea
+      rows={2}
+      placeholder="Legal issues, urgent timeline, property history..."
+      value={form.notes}
+      onChange={(e) => onUpdate("notes", e.target.value)}
+      className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary resize-none transition-colors"
+    />
+    {errors.notes && <p className="mt-1 text-xs text-destructive">{errors.notes}</p>}
+  </div>
+);
+
+type StepOneProps = {
+  authPending: boolean;
+  canSubmitQuickSale: boolean;
+  userExists: boolean;
+  form: QuickSaleFormValues;
+  errors: QuickSaleErrors;
+  addressLoading: boolean;
+  addressSuggestions: string[];
+  photoPreviews: string[];
+  fileInputRef: RefObject<HTMLInputElement>;
+  aiLoading: boolean;
+  onSellerCta: () => void;
+  onUpdate: QuickSaleFieldUpdater;
+  onClearAddressSuggestions: () => void;
+  onPhotoSelect: PhotoSelectHandler;
+  onRemovePhoto: (index: number) => void;
+  onContinue: () => void;
+};
+
+const StepOneButtonContent = ({ aiLoading }: { aiLoading: boolean }) => {
+  if (aiLoading) {
+    return (
+      <>
+        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+        Calculating AI estimate...
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Sparkles className="w-4 h-4 mr-2" />
+      Get AI Estimate &amp; Continue
+    </>
+  );
+};
+
+const QuickSaleStepOne = (props: StepOneProps) => (
+  <div className="space-y-5">
+    <h4 className="font-display font-semibold text-sm">Property Details</h4>
+    <SellerGateBanner
+      authPending={props.authPending}
+      canSubmitQuickSale={props.canSubmitQuickSale}
+      userExists={props.userExists}
+      onSellerCta={props.onSellerCta}
+    />
+    <AddressField
+      form={props.form}
+      errors={props.errors}
+      addressLoading={props.addressLoading}
+      addressSuggestions={props.addressSuggestions}
+      onUpdate={props.onUpdate}
+      onClearSuggestions={props.onClearAddressSuggestions}
+    />
+    <KaekField form={props.form} errors={props.errors} onUpdate={props.onUpdate} />
+    <PropertyMetricsFields form={props.form} errors={props.errors} onUpdate={props.onUpdate} />
+    <PhotoUploadField
+      errors={props.errors}
+      photoPreviews={props.photoPreviews}
+      fileInputRef={props.fileInputRef}
+      onPhotoSelect={props.onPhotoSelect}
+      onRemovePhoto={props.onRemovePhoto}
+    />
+    <NotesField form={props.form} errors={props.errors} onUpdate={props.onUpdate} />
+    <Button className="w-full bg-gradient-primary border-0 text-primary-foreground h-11" disabled={props.aiLoading} onClick={props.onContinue}>
+      <StepOneButtonContent aiLoading={props.aiLoading} />
+    </Button>
+  </div>
+);
+
+const EstimateSummary = ({ aiEstimate }: { aiEstimate: number | null }) => {
+  if (!aiEstimate) return null;
+
+  return (
+    <div className="rounded-xl bg-gradient-to-r from-primary/10 to-accent/5 border border-primary/20 p-4 flex items-center justify-between">
+      <div>
+        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">AI Estimated Offer</p>
+        <p className="font-display font-black text-2xl text-primary">&euro;{aiEstimate.toLocaleString()}</p>
+        <p className="text-[10px] text-muted-foreground mt-0.5">Indicative - Final offer after review</p>
+      </div>
+      <div className="text-right">
+        <div className="text-xs bg-primary/10 text-primary border border-primary/20 px-2 py-1 rounded-lg font-semibold">94% confidence</div>
+        <p className="text-[10px] text-muted-foreground mt-1.5">Valid 7 days</p>
+      </div>
+    </div>
+  );
+};
+
+type ContactFieldProps = {
+  form: QuickSaleFormValues;
+  errors: QuickSaleErrors;
+  onUpdate: QuickSaleFieldUpdater;
+};
+
+const ContactNameField = ({ form, errors, onUpdate }: ContactFieldProps) => (
+  <div>
+    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+      Full Name <span className="text-destructive">*</span>
+    </label>
+    <input
+      type="text"
+      placeholder="Your name"
+      value={form.contactName}
+      onChange={(e) => onUpdate("contactName", e.target.value)}
+      className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
+    />
+    {errors.contactName && <p className="mt-1 text-xs text-destructive">{errors.contactName}</p>}
+  </div>
+);
+
+const ContactEmailField = ({ form, errors, onUpdate }: ContactFieldProps) => (
+  <div>
+    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+      Email <span className="text-destructive">*</span>
+    </label>
+    <input
+      type="email"
+      placeholder="email@example.com"
+      value={form.contactEmail}
+      onChange={(e) => onUpdate("contactEmail", e.target.value)}
+      className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
+    />
+    {errors.contactEmail && <p className="mt-1 text-xs text-destructive">{errors.contactEmail}</p>}
+  </div>
+);
+
+const ContactPhoneField = ({ form, errors, onUpdate }: ContactFieldProps) => (
+  <div>
+    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+      Phone <span className="text-destructive">*</span>
+    </label>
+    <input
+      type="tel"
+      placeholder="+30 69..."
+      value={form.contactPhone}
+      onChange={(e) => onUpdate("contactPhone", e.target.value)}
+      className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
+    />
+    {errors.contactPhone && <p className="mt-1 text-xs text-destructive">{errors.contactPhone}</p>}
+  </div>
+);
+
+const ContactMethodFields = (props: ContactFieldProps) => (
+  <div className="grid grid-cols-2 gap-4">
+    <ContactEmailField {...props} />
+    <ContactPhoneField {...props} />
+  </div>
+);
+
+const ContactFields = (props: ContactFieldProps) => (
+  <>
+    <ContactNameField {...props} />
+    <ContactMethodFields {...props} />
+  </>
+);
+
+type StepTwoProps = {
+  aiEstimate: number | null;
+  form: QuickSaleFormValues;
+  errors: QuickSaleErrors;
+  step2Valid: boolean;
+  submitting: boolean;
+  uploadingPhotos: boolean;
+  onUpdate: QuickSaleFieldUpdater;
+  onBack: () => void;
+  onSubmit: () => void;
+};
+
+const SubmitRequestButtonContent = ({ submitting, uploadingPhotos }: { submitting: boolean; uploadingPhotos: boolean }) => {
+  if (submitting) {
+    return (
+      <>
+        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+        {uploadingPhotos ? "Uploading photos..." : "Submitting..."}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Flame className="w-4 h-4 mr-2" />
+      Submit Quick Sale Request
+    </>
+  );
+};
+
+const QuickSaleStepTwo = (props: StepTwoProps) => (
+  <div className="space-y-5">
+    <EstimateSummary aiEstimate={props.aiEstimate} />
+    <h4 className="font-display font-semibold text-sm">Your Contact Details</h4>
+    <p className="text-xs text-muted-foreground -mt-3">Your information is kept strictly confidential.</p>
+    <ContactFields form={props.form} errors={props.errors} onUpdate={props.onUpdate} />
+    <div className="rounded-xl bg-muted border border-border p-3 flex items-start gap-3">
+      <Shield className="w-4 h-4 text-brand-emerald mt-0.5 shrink-0" />
+      <p className="text-xs text-muted-foreground leading-relaxed">
+        Your data is encrypted and shared{" "}
+        <strong className="text-foreground">only with pre-vetted investors</strong> under NDA. We never publish
+        your property publicly.
+      </p>
+    </div>
+    <div className="flex gap-3">
+      <Button variant="outline" className="border-border" onClick={props.onBack}>Back</Button>
+      <Button
+        className="flex-1 bg-gradient-to-r from-destructive to-destructive/80 border-0 text-destructive-foreground h-11"
+        disabled={!props.step2Valid || props.submitting}
+        onClick={props.onSubmit}
+      >
+        <SubmitRequestButtonContent submitting={props.submitting} uploadingPhotos={props.uploadingPhotos} />
+      </Button>
+    </div>
+  </div>
+);
+
+type QuickSaleFormViewProps = StepOneProps & StepTwoProps & { step: number };
+
+const QuickSaleFormView = (props: QuickSaleFormViewProps) => (
+  <div className="glass-card rounded-2xl border border-primary/20 overflow-hidden shadow-elevated animate-fade-in">
+    <QuickSaleHeader step={props.step} />
+    <div className="p-5 sm:p-7">
+      {props.step === 1 ? <QuickSaleStepOne {...props} /> : <QuickSaleStepTwo {...props} />}
+    </div>
+  </div>
+);
+
+export const FiresaleQuickSaleForm = () => { // skipcq: JS-R1005 - Quick Sale owns one compact two-step workflow; validation and persistence helpers are delegated above.
+  const { user, profile, loading: authLoading, profileLoading } = useAuth();
   const { isPro: _isPro } = useSubscription();
   const navigate = useNavigate();
 
@@ -73,34 +939,19 @@ export function FiresaleQuickSaleForm() {
     upload: uploadPhotos,
   } = photoUploader;
 
-  const canSubmitQuickSale = !!user && isSellSideRole(profile);
+  const authPending = Boolean(authLoading || profileLoading);
+  const canSubmitQuickSale = canSubmitQuickSaleRequest(user, profile, authPending);
 
-  const [form, setForm] = useState({
-    address: "",
-    kaek: "",
-    propertyType: "",
-    sqm: "",
-    askingPrice: "",
-    constructionYear: "",
-    contactName: profile?.display_name || profile?.first_name || "",
-    contactEmail: user?.email || "",
-    contactPhone: profile?.phone || "",
-    notes: "",
-  });
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [form, setForm] = useState<QuickSaleFormValues>(() => buildInitialForm(profile, user?.email));
+  const [errors, setErrors] = useState<QuickSaleErrors>({});
 
   useEffect(() => {
-    if (profile) {
-      setForm((prev) => ({
-        ...prev,
-        contactName: prev.contactName || profile.display_name || profile.first_name || "",
-        contactEmail: prev.contactEmail || user?.email || "",
-        contactPhone: prev.contactPhone || profile.phone || "",
-      }));
-    }
+    setForm((prev) => syncContactFields(prev, profile, user?.email));
   }, [profile, user]);
 
-  const upd = (k: string, v: string) => setForm((prev) => ({ ...prev, [k]: v }));
+  const upd: QuickSaleFieldUpdater = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+  const handleSellerCta = () => navigateToSellerSetup(navigate, Boolean(user));
+  const handleBack = () => setStep(1);
 
   // Address autocomplete delegated to a typed hook (debounced + abortable).
   const {
@@ -109,160 +960,54 @@ export function FiresaleQuickSaleForm() {
     clear: clearAddressSuggestions,
   } = useNominatimAddressSuggestions(form.address);
 
-  const validateStep1 = () => {
-    const next: Record<string, string> = {};
-    if (!form.address.trim() || form.address.trim().length < 5)
-      next.address = "Please enter a full address (min 5 characters).";
-    const kaek = normalizeKaek(form.kaek);
-    if (!kaek) next.kaek = "KAEK is required.";
-    else if (!isValidKaek(kaek))
-      next.kaek = "KAEK must be 12 digits, optionally followed by sub-property parts, e.g. 050240601001 or 050240601001/0/1.";
-    if (!form.propertyType) next.propertyType = "Property type is required.";
-    else if (!toFiresalePropertyType(form.propertyType)) next.propertyType = "Property type is invalid.";
-    const sqm = Number(form.sqm);
-    if (!form.sqm || Number.isNaN(sqm)) next.sqm = "Size (m²) is required.";
-    else if (sqm < 10 || sqm > 5000) next.sqm = "Size (m²) must be between 10 and 5000.";
-    const asking = Number(form.askingPrice);
-    if (!form.askingPrice || Number.isNaN(asking)) next.askingPrice = "Asking price is required.";
-    else if (asking < 5_000 || asking > 100_000_000)
-      next.askingPrice = "Asking price must be between €5,000 and €100,000,000.";
-    const year = Number(form.constructionYear);
-    if (!form.constructionYear || Number.isNaN(year)) next.constructionYear = "Construction year is required.";
-    else if (year < 1800 || year > NOW_YEAR + 1)
-      next.constructionYear = `Construction year must be between 1800 and ${NOW_YEAR + 1}.`;
-    if (photoFiles.length < 5) next.photos = "Please upload at least 5 property photos.";
-    if (!form.notes.trim() || form.notes.trim().length < 3)
-      next.notes = "Please add a short note.";
-    return next;
-  };
-
-  const validateStep2 = () => {
-    const next: Record<string, string> = {};
-    if (!form.contactName.trim() || form.contactName.trim().length < 2)
-      next.contactName = "Full name is required.";
-    if (!form.contactEmail.trim()) next.contactEmail = "Email is required.";
-    else if (!/\S+@\S+\.\S+/.test(form.contactEmail)) next.contactEmail = "Email looks invalid.";
-    const phone = form.contactPhone.replace(/\s+/g, "").trim();
-    if (!phone) next.contactPhone = "Phone number is required.";
-    else if (!/^\+?[0-9]{8,15}$/.test(phone))
-      next.contactPhone = "Phone number looks invalid (use digits, optionally starting with +).";
-    return next;
-  };
-
-  const step2Valid = Object.keys(validateStep2()).length === 0;
-
+  const step2Valid = Object.keys(validateStep2Form(form)).length === 0;
   const generateEstimate = async () => {
-    const basePerSqm: Record<string, number> = {
-      villa: 3200, house: 2400, apartment: 2000,
-      commercial: 2800, office: 2600, land: 900,
-    };
-    setAiEstimate(Math.round((basePerSqm[form.propertyType] || 2000) * Number(form.sqm) * 0.92));
+    setAiEstimate(getLocalEstimate(form));
     if (!user) { setAiLoading(false); return; }
     setAiLoading(true);
     try {
       const { data, error: fnErr } = await supabase.functions.invoke("property-valuation", {
         body: { property_type: form.propertyType, sqm: Number(form.sqm) },
       });
-      if (data?.estimated_value) {
-        setAiEstimate(Math.round(data.estimated_value * 0.95));
-      } else if (isAiUsageLimitError(fnErr, data)) {
-        toast.error("AI estimate is temporarily unavailable due to usage limits.");
-      }
+      applyRemoteEstimate(data, fnErr, setAiEstimate);
     } catch (e: unknown) {
-      if (isAiUsageLimitError(e, null)) toast.error("AI estimate is temporarily unavailable due to usage limits.");
+      showAiEstimateLimitError(e, null);
     } finally {
       setAiLoading(false);
     }
   };
-
-  const handleContinue = async () => {
+  const handleContinue = async () => { // skipcq: JS-R1005 - Step transition validates auth, seller role, form fields, and estimate generation together.
+    if (showAuthPendingToast(authPending)) return;
     if (!canSubmitQuickSale) {
-      if (!user) { navigate("/signup?type=seller"); }
-      else {
-        try { localStorage.setItem("signup_participant_type", "seller"); } catch (_err: unknown) { /* ignore */ }
-        navigate("/onboarding");
-      }
+      navigateToSellerSetup(navigate, Boolean(user));
       return;
     }
-    const v1 = validateStep1();
-    setErrors(v1);
-    if (Object.keys(v1).length > 0) { toast.error(Object.values(v1)[0] || "Please fix the highlighted fields."); return; }
+    if (showValidationErrors(validateStep1Form(form, photoFiles.length), setErrors)) return;
     await generateEstimate();
     setStep(2);
   };
-
-  const handleSubmit = async () => {
-    if (!user) { navigate("/login"); return; }
-    if (!canSubmitQuickSale) {
-      try { localStorage.setItem("signup_participant_type", "seller"); } catch (_err: unknown) { /* ignore */ }
-      navigate("/onboarding");
-      return;
-    }
-    const v1 = validateStep1();
-    const v2 = validateStep2();
-    const merged = { ...v1, ...v2 };
-    setErrors(merged);
-    if (Object.keys(merged).length > 0) { toast.error(Object.values(merged)[0] || "Please fix the highlighted fields."); return; }
-
+  const persistQuickSaleSubmission = async (userId: string) => {
     setSubmitting(true);
     try {
-      const estimate = aiEstimate || Math.round(Number(form.sqm) * 1900 * 0.92);
-      const propertyType = toFiresalePropertyType(form.propertyType);
-      if (!propertyType) throw new Error("Property type is invalid.");
-      const metaLines: string[] = [];
-      if (form.constructionYear.trim()) metaLines.push(`Construction year: ${form.constructionYear.trim()}`);
-      if (photoFiles.length > 0) {
-        const count = photoFiles.length;
-        const grade = count >= 8 ? 9 : count >= 5 ? 7 : count >= 3 ? 5 : 3;
-        metaLines.push(`Photo condition grade (1–10): ${grade}`);
-      }
-      if (form.kaek.trim()) metaLines.push(`KAEK: ${normalizeKaek(form.kaek)}`);
-      if (form.notes.trim()) metaLines.push(form.notes.trim());
-
-      const { data, error } = await supabase
-        .from("firesale_requests")
-        .insert({
-          address: form.address.trim(),
-          city: form.address.split(",").pop()?.trim() || "",
-          property_type: propertyType,
-          sqm: Number(form.sqm),
-          condition: null,
-          asking_price: Number(form.askingPrice),
-          contact_email: form.contactEmail.trim(),
-          contact_phone: form.contactPhone.trim() || null,
-          notes: metaLines.join("\n") || null,
-          ai_estimate: estimate,
-          user_id: user.id,
-          status: "pending",
-        })
-        .select("id")
-        .single();
-
-      if (error) throw error;
-
-      if (photoFiles.length > 0 && data?.id) {
-        const uploadedUrls = await uploadPhotos(data.id);
-        if (uploadedUrls.length < photoFiles.length) {
-          await supabase
-            .from("firesale_requests")
-            .delete()
-            .eq("id", data.id)
-            .eq("user_id", user.id);
-          throw new Error("Photo upload failed. Your request was not submitted; please retry the upload.");
-        }
-      }
-
+      const { estimate, requestId: submittedRequestId } = await submitValidatedQuickSale(form, userId, aiEstimate, photoFiles.length, uploadPhotos);
       setAiEstimate(estimate);
-      setRequestId(data?.id || null);
+      setRequestId(submittedRequestId);
       setSubmitted(true);
-      toast.success("Your Quick Sale™ request has been submitted!");
+      toast.success("Your Quick Sale request has been submitted!");
     } catch (err: unknown) {
       toast.error((err instanceof Error ? err.message : null) || "Submission failed. Please try again.");
     } finally {
       setSubmitting(false);
     }
   };
-
+  const handleSubmit = async () => { // skipcq: JS-R1005 - Final submit keeps auth, seller gating, validation, and persistence in one click handler.
+    const userId = getSubmitUserId(user, navigate);
+    if (!userId) return;
+    if (showAuthPendingToast(authPending)) return;
+    if (redirectBlockedSubmitter(canSubmitQuickSale, navigate)) return;
+    if (showValidationErrors(validateSubmissionForm(form, photoFiles.length), setErrors)) return;
+    await persistQuickSaleSubmission(userId);
+  };
   const handleReset = () => {
     setSubmitted(false);
     setStep(1);
@@ -283,343 +1028,30 @@ export function FiresaleQuickSaleForm() {
   }
 
   return (
-    <div className="glass-card rounded-2xl border border-primary/20 overflow-hidden shadow-elevated animate-fade-in">
-      {/* Header */}
-      <div className="px-5 sm:px-7 py-5 border-b border-border bg-gradient-to-r from-destructive/5 to-transparent">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-destructive/10 flex items-center justify-center">
-            <Flame className="w-4.5 h-4.5 text-destructive" />
-          </div>
-          <div>
-            <h3 className="font-display font-bold text-base">Get Your Instant Cash Offer</h3>
-            <p className="text-xs text-muted-foreground">Free · No obligation · Confidential</p>
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            {[1, 2].map((n) => (
-              <div key={n} className={`w-7 h-1.5 rounded-full transition-all ${step >= n ? "bg-primary" : "bg-border"}`} />
-            ))}
-            <span className="text-[10px] text-muted-foreground ml-1">{step}/2</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="p-5 sm:p-7">
-        {step === 1 && (
-          <div className="space-y-5">
-            <h4 className="font-display font-semibold text-sm">Property Details</h4>
-
-            {!canSubmitQuickSale && (
-              <div className="rounded-xl bg-muted border border-border p-3 flex items-start gap-3">
-                <Lock className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold">Seller account required</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    To submit a Quick Sale™ request, you must have a Seller profile. It's free — Pro is not required.
-                  </p>
-                  <div className="mt-2">
-                    <Button
-                      size="sm"
-                      className="bg-gradient-primary border-0 text-primary-foreground"
-                      onClick={() => {
-                        if (!user) { navigate("/signup?type=seller"); return; }
-                        try { localStorage.setItem("signup_participant_type", "seller"); } catch (_err: unknown) { /* ignore */ }
-                        navigate("/onboarding");
-                      }}
-                    >
-                      {user ? "Become a Seller" : "Sign up as Seller"}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Address */}
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                Property Address <span className="text-destructive">*</span>
-              </label>
-              <div className="flex gap-2 bg-muted border border-border rounded-xl px-3 py-2.5 focus-within:border-primary transition-colors">
-                <MapPin className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
-                <input
-                  type="text"
-                  placeholder="e.g. Kifisia, Dekelia 24, Athens"
-                  value={form.address}
-                  onChange={(e) => upd("address", e.target.value)}
-                  className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
-                />
-              </div>
-              {errors.address && <p className="mt-1 text-xs text-destructive">{errors.address}</p>}
-              {addressLoading && <p className="mt-1 text-[10px] text-muted-foreground">Searching address suggestions…</p>}
-              {!addressLoading && addressSuggestions.length > 0 && (
-                <div className="mt-1 bg-background border border-border rounded-xl shadow-md text-sm max-h-40 overflow-auto">
-                  {addressSuggestions.map((s) => (
-                    <button key={s} type="button" onClick={() => { upd("address", s); clearAddressSuggestions(); }}
-                      className="w-full text-left px-3 py-1.5 hover:bg-muted/80">
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* KAEK */}
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                KAEK <span className="text-destructive">*</span>{" "}
-                <span className="text-[10px] font-normal normal-case text-muted-foreground">(Κωδικός Αριθμός Εθνικού Κτηματολογίου)</span>
-              </label>
-              <div className="flex gap-2 bg-muted border border-border rounded-xl px-3 py-2.5 focus-within:border-primary transition-colors">
-                <Hash className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
-                <input
-                  type="text"
-                  placeholder="e.g. 050240601001/0/1"
-                  value={form.kaek}
-                  maxLength={KAEK_MAX_LENGTH}
-                  inputMode="numeric"
-                  onChange={(e) => upd("kaek", normalizeKaek(e.target.value))}
-                  className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none font-mono"
-                />
-              </div>
-              <p className="mt-1 text-[10px] text-muted-foreground">
-                Greek KAEK is normally 12 digits. Add sub-property parts only when applicable, e.g. /0/1.
-              </p>
-              {errors.kaek && <p className="mt-1 text-xs text-destructive">{errors.kaek}</p>}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                  Property Type <span className="text-destructive">*</span>
-                </label>
-                <select
-                  value={form.propertyType}
-                  onChange={(e) => upd("propertyType", e.target.value)}
-                  className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none capitalize"
-                >
-                  <option value="" className="bg-card">Select type...</option>
-                  {propertyTypeOptions.map((t) => (
-                    <option key={t.value} value={t.value} className="bg-card">{t.label}</option>
-                  ))}
-                </select>
-                {errors.propertyType && <p className="mt-1 text-xs text-destructive">{errors.propertyType}</p>}
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                  Size (m²) <span className="text-destructive">*</span>
-                </label>
-                <input
-                  type="number"
-                  placeholder="e.g. 120"
-                  value={form.sqm}
-                  onChange={(e) => upd("sqm", e.target.value)}
-                  className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
-                />
-                {errors.sqm && <p className="mt-1 text-xs text-destructive">{errors.sqm}</p>}
-              </div>
-              <div className="col-span-2">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                  Asking Price <span className="text-destructive">*</span>
-                </label>
-                <div className="flex gap-2 bg-muted border border-border rounded-xl px-3 py-2.5 focus-within:border-primary transition-colors">
-                  <Euro className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <input
-                    type="number"
-                    placeholder="Your target €"
-                    value={form.askingPrice}
-                    onChange={(e) => upd("askingPrice", e.target.value)}
-                    className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
-                  />
-                </div>
-                {errors.askingPrice && <p className="mt-1 text-xs text-destructive">{errors.askingPrice}</p>}
-              </div>
-              <div className="col-span-2">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                  Construction Year <span className="text-destructive">*</span>
-                </label>
-                <input
-                  type="number"
-                  placeholder="e.g. 1998"
-                  value={form.constructionYear}
-                  onChange={(e) => upd("constructionYear", e.target.value)}
-                  className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
-                />
-                {errors.constructionYear && <p className="mt-1 text-xs text-destructive">{errors.constructionYear}</p>}
-              </div>
-            </div>
-
-            {/* Photo upload */}
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                Property Photos <span className="text-destructive">*</span>{" "}
-                <span className="text-[10px] font-normal normal-case text-muted-foreground">(min 5, up to 10 images)</span>
-              </label>
-              <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoSelect} />
-              {photoPreviews.length === 0 ? (
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full flex flex-col items-center justify-center gap-2 bg-muted border-2 border-dashed border-border rounded-xl py-7 text-muted-foreground hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 group"
-                >
-                  <div className="w-10 h-10 rounded-full bg-muted-foreground/10 group-hover:bg-primary/10 flex items-center justify-center transition-colors">
-                    <Upload className="w-5 h-5 group-hover:text-primary transition-colors" />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-sm font-medium group-hover:text-foreground transition-colors">Click to upload photos</p>
-                    <p className="text-[11px] mt-0.5">JPG, PNG · Max 10MB each</p>
-                  </div>
-                </button>
-              ) : (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-3 gap-2">
-                    {photoPreviews.map((src, idx) => (
-                      <div key={idx} className="relative group rounded-xl overflow-hidden aspect-square bg-muted border border-border">
-                        <img src={src} alt="" className="w-full h-full object-cover" />
-                        <button
-                          type="button"
-                          onClick={() => removePhoto(idx)}
-                          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-background/90 border border-border flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive hover:border-destructive hover:text-destructive-foreground"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ))}
-                    {photoPreviews.length < 10 && (
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="aspect-square rounded-xl border-2 border-dashed border-border bg-muted hover:border-primary/40 hover:bg-primary/5 flex items-center justify-center transition-all"
-                      >
-                        <ImageIcon className="w-5 h-5 text-muted-foreground" />
-                      </button>
-                    )}
-                  </div>
-                  <p className="text-[10px] text-muted-foreground">
-                    {photoPreviews.length} photo{photoPreviews.length !== 1 ? "s" : ""} selected
-                    {photoPreviews.length < 5 && " · add at least 5 photos to continue"}
-                  </p>
-                  {errors.photos && <p className="text-xs text-destructive">{errors.photos}</p>}
-                </div>
-              )}
-            </div>
-
-            {/* Notes */}
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                Additional Notes <span className="text-destructive">*</span>
-              </label>
-              <textarea
-                rows={2}
-                placeholder="Legal issues, urgent timeline, property history..."
-                value={form.notes}
-                onChange={(e) => upd("notes", e.target.value)}
-                className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary resize-none transition-colors"
-              />
-              {errors.notes && <p className="mt-1 text-xs text-destructive">{errors.notes}</p>}
-            </div>
-
-            <Button
-              className="w-full bg-gradient-primary border-0 text-primary-foreground h-11"
-              disabled={aiLoading}
-              onClick={handleContinue}
-            >
-              {aiLoading ? (
-                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Calculating AI estimate...</>
-              ) : (
-                <><Sparkles className="w-4 h-4 mr-2" />Get AI Estimate &amp; Continue</>
-              )}
-            </Button>
-          </div>
-        )}
-
-        {step === 2 && (
-          <div className="space-y-5">
-            {aiEstimate && (
-              <div className="rounded-xl bg-gradient-to-r from-primary/10 to-accent/5 border border-primary/20 p-4 flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">AI Estimated Offer</p>
-                  <p className="font-display font-black text-2xl text-primary">€{aiEstimate.toLocaleString()}</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">Indicative · Final offer after review</p>
-                </div>
-                <div className="text-right">
-                  <div className="text-xs bg-primary/10 text-primary border border-primary/20 px-2 py-1 rounded-lg font-semibold">94% confidence</div>
-                  <p className="text-[10px] text-muted-foreground mt-1.5">Valid 7 days</p>
-                </div>
-              </div>
-            )}
-
-            <h4 className="font-display font-semibold text-sm">Your Contact Details</h4>
-            <p className="text-xs text-muted-foreground -mt-3">Your information is kept strictly confidential.</p>
-
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                  Full Name <span className="text-destructive">*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="Your name"
-                  value={form.contactName}
-                  onChange={(e) => upd("contactName", e.target.value)}
-                  className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
-                />
-                {errors.contactName && <p className="mt-1 text-xs text-destructive">{errors.contactName}</p>}
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                    Email <span className="text-destructive">*</span>
-                  </label>
-                  <input
-                    type="email"
-                    placeholder="email@example.com"
-                    value={form.contactEmail}
-                    onChange={(e) => upd("contactEmail", e.target.value)}
-                    className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
-                  />
-                  {errors.contactEmail && <p className="mt-1 text-xs text-destructive">{errors.contactEmail}</p>}
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                    Phone <span className="text-destructive">*</span>
-                  </label>
-                  <input
-                    type="tel"
-                    placeholder="+30 69..."
-                    value={form.contactPhone}
-                    onChange={(e) => upd("contactPhone", e.target.value)}
-                    className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
-                  />
-                  {errors.contactPhone && <p className="mt-1 text-xs text-destructive">{errors.contactPhone}</p>}
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-xl bg-muted border border-border p-3 flex items-start gap-3">
-              <Shield className="w-4 h-4 text-brand-emerald mt-0.5 shrink-0" />
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Your data is encrypted and shared{" "}
-                <strong className="text-foreground">only with pre-vetted investors</strong> under NDA. We never publish
-                your property publicly.
-              </p>
-            </div>
-
-            <div className="flex gap-3">
-              <Button variant="outline" className="border-border" onClick={() => setStep(1)}>Back</Button>
-              <Button
-                className="flex-1 bg-gradient-to-r from-destructive to-destructive/80 border-0 text-destructive-foreground h-11"
-                disabled={!step2Valid || submitting}
-                onClick={handleSubmit}
-              >
-                {submitting ? (
-                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{uploadingPhotos ? "Uploading photos..." : "Submitting..."}</>
-                ) : (
-                  <><Flame className="w-4 h-4 mr-2" />Submit Quick Sale™ Request</>
-                )}
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+    <QuickSaleFormView
+      step={step}
+      authPending={authPending}
+      canSubmitQuickSale={canSubmitQuickSale}
+      userExists={Boolean(user)}
+      form={form}
+      errors={errors}
+      addressLoading={addressLoading}
+      addressSuggestions={addressSuggestions}
+      photoPreviews={photoPreviews}
+      fileInputRef={fileInputRef}
+      aiLoading={aiLoading}
+      aiEstimate={aiEstimate}
+      step2Valid={step2Valid}
+      submitting={submitting}
+      uploadingPhotos={uploadingPhotos}
+      onSellerCta={handleSellerCta}
+      onUpdate={upd}
+      onClearAddressSuggestions={clearAddressSuggestions}
+      onPhotoSelect={handlePhotoSelect}
+      onRemovePhoto={removePhoto}
+      onContinue={handleContinue}
+      onBack={handleBack}
+      onSubmit={handleSubmit}
+    />
   );
-}
+};

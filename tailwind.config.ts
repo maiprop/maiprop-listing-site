@@ -158,6 +158,10 @@ export default {
           from: { opacity: "0", transform: "translateY(24px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
+        "cookie-banner-up": {
+          from: { opacity: "0", transform: "translate(-50%, 24px)" },
+          to: { opacity: "1", transform: "translate(-50%, 0)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -168,6 +172,7 @@ export default {
         shimmer: "shimmer 3s linear infinite",
         float: "float 4s ease-in-out infinite",
         "slide-up": "slide-up 0.4s ease-out forwards",
+        "cookie-banner-up": "cookie-banner-up 0.4s ease-out forwards",
       },
     },
   },

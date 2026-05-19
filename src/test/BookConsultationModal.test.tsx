@@ -140,6 +140,21 @@ describe("BookConsultationModal", () => {
     expect(screen.getByText("Not available")).toBeInTheDocument();
   });
 
+  it("allows video on a non-video service when the professional has a meeting link", () => {
+    servicesState.current = [{ ...remoteService, id: "svc-3", service_name: "Site Visit", video_enabled: false }];
+    renderWithProviders(
+      <BookConsultationModal open onClose={onClose} allowVideoCall professional={{ ...professional, video_link: "https://meet.example/pro" }} />,
+    );
+
+    fireEvent.click(screen.getByText("Site Visit"));
+    fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Video Request/i }));
+
+    expect(toastMock.info).not.toHaveBeenCalled();
+    expect(screen.queryByText("Not available")).not.toBeInTheDocument();
+    expect(screen.getByText("Professional meeting link")).toBeInTheDocument();
+  });
+
   it("routes no-video general requests directly to scheduling", () => {
     renderWithProviders(
       <BookConsultationModal open onClose={onClose} allowVideoCall={false} professional={professional} />,

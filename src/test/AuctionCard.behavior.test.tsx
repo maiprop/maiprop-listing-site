@@ -106,6 +106,25 @@ describe("AuctionCard behavior", () => {
     expect(image.src).toContain("/images/maiprop-logo.webp");
   });
 
+  it("uses cover image after Street View fails, then the maiProp logo if cover also fails", async () => {
+    const { AuctionCard } = await import("@/components/auctions/AuctionCard");
+
+    renderWithProviders(
+      <AuctionCard
+        a={auction({ cover_image_url: "https://example.test/cover.jpg" })}
+        favoritedIds={new Set()}
+        onToggleFav={vi.fn()}
+      />,
+    );
+
+    const image = screen.getByAltText("Auction Apartment") as HTMLImageElement;
+    fireEvent.error(image);
+    expect(image.src).toBe("https://example.test/cover.jpg");
+    fireEvent.error(image);
+    expect(image.src).toContain("/images/maiprop-logo.webp");
+    expect(image.style.objectFit).toBe("contain");
+  });
+
   it("uses the maiProp logo and minimal price fallback when street-view and prices are absent", async () => {
     streetViewMock.mockReturnValue(null);
     const { AuctionCard } = await import("@/components/auctions/AuctionCard");

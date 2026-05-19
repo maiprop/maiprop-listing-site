@@ -1,4 +1,5 @@
 import { useRef, useState, useMemo, lazy, Suspense, useCallback } from "react";
+import type { ReactNode } from "react";
 import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
@@ -44,10 +45,174 @@ const GRID_LOADING_SKELETON_KEYS = [
   "grid-loading-3",
   "grid-loading-4",
 ];
+const SPLIT_LOADING_SKELETON_KEYS = [
+  "split-loading-1",
+  "split-loading-2",
+  "split-loading-3",
+  "split-loading-4",
+];
+const SEARCHING_SKELETON_KEYS = [
+  "searching-loading-1",
+  "searching-loading-2",
+  "searching-loading-3",
+  "searching-loading-4",
+];
+const MORE_LOADING_SKELETON_KEYS = [
+  "more-loading-1",
+  "more-loading-2",
+  "more-loading-3",
+  "more-loading-4",
+];
 const GRID_ESTIMATED_ROW_HEIGHT = 520;
+const ACTIVE_FILTER_CHIP_CLASS = "flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0";
+const ACCENT_FILTER_CHIP_CLASS = "flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent hover:bg-accent/20 transition-colors shrink-0";
+
+type ListingsFilterSetParam = ReturnType<typeof useListingsFilters>["setParam"];
+type ListingsFilterToggleMulti = ReturnType<typeof useListingsFilters>["toggleMulti"];
+type SmartFilterFeature = { key: string; label: string };
+
+const ActiveFilterChip = ({
+  children,
+  onClick,
+  accent = false,
+}: {
+  children: ReactNode;
+  onClick: () => void;
+  accent?: boolean;
+}) => (
+  <button onClick={onClick} className={accent ? ACCENT_FILTER_CHIP_CLASS : ACTIVE_FILTER_CHIP_CLASS}>
+    {children} <X className="w-3 h-3" />
+  </button>
+);
+
+const getPriceRangeLabel = (selectedPrice: string) =>
+  [...buyPriceRanges, ...rentPriceRanges].find((range) => range.value === selectedPrice)?.label || selectedPrice;
+
+const getFeatureFilterLabel = (features: SmartFilterFeature[], key: string) =>
+  features.find((option) => option.key === key)?.label.replace(/^[^\s]+ /, "") || key;
+
+const DesktopActiveFilterChips = ({ // skipcq: JS-R1005 - Active chips map independent URL filters into removable controls.
+  selectedType,
+  selectedSubtype,
+  selectedPrice,
+  bedsRange,
+  selectedEnergyClasses,
+  selectedFeatures,
+  selectedHeating,
+  selectedConstruction,
+  offMarketOnly,
+  preSaleOnly,
+  hasVideoViewing,
+  hasVirtualTour,
+  hasMessaging,
+  minAiScore,
+  minWalkability,
+  smartFeatures,
+  setParam,
+  toggleMulti,
+  clearAllFilters,
+}: {
+  selectedType: string;
+  selectedSubtype: string;
+  selectedPrice: string;
+  bedsRange: string[];
+  selectedEnergyClasses: string[];
+  selectedFeatures: string[];
+  selectedHeating: string;
+  selectedConstruction: string;
+  offMarketOnly: boolean;
+  preSaleOnly: boolean;
+  hasVideoViewing: boolean;
+  hasVirtualTour: boolean;
+  hasMessaging: boolean;
+  minAiScore: number;
+  minWalkability: number;
+  smartFeatures: SmartFilterFeature[];
+  setParam: ListingsFilterSetParam;
+  toggleMulti: ListingsFilterToggleMulti;
+  clearAllFilters: () => void;
+}) => (
+  <div className="hidden sm:flex items-center gap-1.5 mt-3 min-h-9 flex-wrap overflow-visible rounded-xl border border-border bg-card/70 px-3 py-2 shadow-sm [&>button]:inline-flex [&>button]:h-7 [&>button]:items-center [&>button]:leading-none [&>button]:max-w-full [&>button]:min-w-0 [&>button]:whitespace-nowrap">
+    <span className="flex h-7 items-center text-xs font-medium text-muted-foreground shrink-0">Active filters:</span>
+    {selectedType && (
+      <ActiveFilterChip onClick={() => { setParam("type", ""); setParam("subtype", ""); }}>
+        {PROPERTY_TYPE_MAP[selectedType as PropertyTypeKey]?.emoji} {getTypeLabel(selectedType)}
+      </ActiveFilterChip>
+    )}
+    {selectedSubtype && selectedType && (
+      <ActiveFilterChip onClick={() => setParam("subtype", "")}>{getSubtypeLabel(selectedType, selectedSubtype)}</ActiveFilterChip>
+    )}
+    {selectedPrice && (
+      <ActiveFilterChip onClick={() => setParam("price", "")}>{getPriceRangeLabel(selectedPrice)}</ActiveFilterChip>
+    )}
+    {bedsRange[0] && <ActiveFilterChip onClick={() => setParam("beds_min", "")}>{bedsRange[0]}+ beds</ActiveFilterChip>}
+    {selectedEnergyClasses.map((energyClass) => (
+      <ActiveFilterChip key={energyClass} onClick={() => toggleMulti("energy", energyClass)}>Energy {energyClass}</ActiveFilterChip>
+    ))}
+    {selectedFeatures.map((feature) => (
+      <ActiveFilterChip key={feature} onClick={() => toggleMulti("features", feature)}>
+        {getFeatureFilterLabel(smartFeatures, feature)}
+      </ActiveFilterChip>
+    ))}
+    {selectedHeating && (
+      <ActiveFilterChip onClick={() => setParam("heating", "")}>
+        Heating: {HEATING_TYPES.find((heating) => heating.value === selectedHeating)?.label || selectedHeating}
+      </ActiveFilterChip>
+    )}
+    {selectedConstruction && (
+      <ActiveFilterChip onClick={() => setParam("construction", "")}>
+        {CONSTRUCTION_STATUSES.find((status) => status.value === selectedConstruction)?.label || selectedConstruction}
+      </ActiveFilterChip>
+    )}
+    {offMarketOnly && <ActiveFilterChip onClick={() => setParam("off_market", "")}>Off-market</ActiveFilterChip>}
+    {preSaleOnly && <ActiveFilterChip onClick={() => setParam("pre_sale", "")}>Pre-sale</ActiveFilterChip>}
+    {hasVideoViewing && <ActiveFilterChip accent onClick={() => setParam("video_viewing", "")}>Video Viewing</ActiveFilterChip>}
+    {hasVirtualTour && <ActiveFilterChip accent onClick={() => setParam("virtual_tour", "")}>Virtual Tour</ActiveFilterChip>}
+    {hasMessaging && <ActiveFilterChip accent onClick={() => setParam("messaging", "")}>Messaging</ActiveFilterChip>}
+    {minAiScore > 0 && <ActiveFilterChip accent onClick={() => setParam("min_ai_score", "")}>AI score {minAiScore}+</ActiveFilterChip>}
+    {minWalkability > 0 && <ActiveFilterChip accent onClick={() => setParam("min_walkability", "")}>Walk {minWalkability}+</ActiveFilterChip>}
+    <button onClick={clearAllFilters} className="text-xs text-muted-foreground hover:text-foreground ml-1 shrink-0">Clear all</button>
+  </div>
+);
+
+const getListingsResultLabel = ({ // skipcq: JS-R1005 - Result labels intentionally branch by map, area, viewport, and pagination states.
+  viewMode,
+  polygonFilterIds,
+  viewportIds,
+  filtered,
+  mapListings,
+  hasNextPage,
+}: {
+  viewMode: "grid" | "split" | "map";
+  polygonFilterIds: Set<string> | null;
+  viewportIds: Set<string> | null;
+  filtered: ListingCardWithRaw[];
+  mapListings: Array<{ id: string }>;
+  hasNextPage: boolean;
+}) => {
+  if (viewMode === "split" && polygonFilterIds !== null) {
+    return `${filtered.filter((property) => polygonFilterIds.has(property.id)).length} in area`;
+  }
+  if (viewMode === "split" && viewportIds !== null) {
+    return `${filtered.filter((property) => viewportIds.has(property.id)).length} in view`;
+  }
+  if (viewMode === "map") {
+    return `${mapListings.length} map result${mapListings.length !== 1 ? "s" : ""}`;
+  }
+  if (hasNextPage) {
+    return `${filtered.length} loaded propert${filtered.length === 1 ? "y" : "ies"}`;
+  }
+  return `${filtered.length} properties`;
+};
+
+const ListingsResultSummary = (props: Parameters<typeof getListingsResultLabel>[0]) => (
+  <span className="font-display font-semibold" aria-live="polite" aria-atomic="true">
+    {getListingsResultLabel(props)}
+  </span>
+);
 
 // skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
-export default function Listings() { // skipcq: JS-R1005 - Listings coordinates filters, map state, comparison, and virtualization in one route shell.
+export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings coordinates filters, map state, comparison, and virtualization in one route shell.
   const { t } = useTranslation();
 
   const [viewMode, setViewMode] = useState<"grid" | "split" | "map">("grid");
@@ -153,6 +318,59 @@ export default function Listings() { // skipcq: JS-R1005 - Listings coordinates 
       />
     </div>
   ), [compareList, isComparing, toggleCompare]);
+  const desktopActiveFilters = activeFilterCount > 0 ? (
+    <DesktopActiveFilterChips
+      selectedType={selectedType}
+      selectedSubtype={selectedSubtype}
+      selectedPrice={selectedPrice}
+      bedsRange={bedsRange}
+      selectedEnergyClasses={selectedEnergyClasses}
+      selectedFeatures={selectedFeatures}
+      selectedHeating={selectedHeating}
+      selectedConstruction={selectedConstruction}
+      offMarketOnly={offMarketOnly}
+      preSaleOnly={preSaleOnly}
+      hasVideoViewing={hasVideoViewing}
+      hasVirtualTour={hasVirtualTour}
+      hasMessaging={hasMessaging}
+      minAiScore={minAiScore}
+      minWalkability={minWalkability}
+      smartFeatures={aiFilterConfig.features}
+      setParam={setParam}
+      toggleMulti={toggleMulti}
+      clearAllFilters={clearAllFilters}
+    />
+  ) : null;
+  const resultSummary = isLoading ? (
+    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" aria-label="Loading listings" />
+  ) : (
+    <ListingsResultSummary
+      viewMode={viewMode}
+      polygonFilterIds={polygonFilterIds}
+      viewportIds={viewportIds}
+      filtered={filtered}
+      mapListings={mapListings}
+      hasNextPage={hasNextPage}
+    />
+  );
+  const statsStatus = (
+    <div className="flex items-center gap-3">
+      {resultSummary}
+      {totalLoaded === 0 && !isLoading && (
+        <span className="text-muted-foreground text-sm">No listings matched your filters</span>
+      )}
+      {viewMode === "split" && polygonFilterIds !== null && (
+        <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+          Area filter
+        </span>
+      )}
+      {viewMode === "split" && viewportIds !== null && polygonFilterIds === null && (
+        <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+          Map synced
+        </span>
+      )}
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
@@ -436,29 +654,7 @@ export default function Listings() { // skipcq: JS-R1005 - Listings coordinates 
             </div>
 
             {/* Desktop active filter chips */}
-            {activeFilterCount > 0 && (
-              <div className="hidden sm:flex items-center gap-1.5 mt-2 min-h-7 flex-wrap overflow-visible pb-0.5 [&>button]:inline-flex [&>button]:h-7 [&>button]:items-center [&>button]:leading-none [&>button]:max-w-full [&>button]:min-w-0 [&>button]:whitespace-nowrap">
-                <span className="flex h-7 items-center text-xs text-muted-foreground shrink-0">Active:</span>
-                {selectedType && <button onClick={() => { setParam("type", ""); setParam("subtype", ""); }} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">{PROPERTY_TYPE_MAP[selectedType as PropertyTypeKey]?.emoji} {getTypeLabel(selectedType)} <X className="w-3 h-3" /></button>}
-                {selectedSubtype && selectedType && <button onClick={() => setParam("subtype", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">{getSubtypeLabel(selectedType, selectedSubtype)} <X className="w-3 h-3" /></button>}
-                {selectedPrice && <button onClick={() => setParam("price", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">{[...buyPriceRanges, ...rentPriceRanges].find(r => r.value === selectedPrice)?.label || selectedPrice} <X className="w-3 h-3" /></button>}
-                {bedsRange[0] && <button onClick={() => setParam("beds_min", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">{bedsRange[0]}+ beds <X className="w-3 h-3" /></button>}
-                {selectedEnergyClasses.map(ec => <button key={ec} onClick={() => toggleMulti("energy", ec)} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">Energy {ec} <X className="w-3 h-3" /></button>)}
-                {selectedFeatures.map(f => {
-                  return <button key={f} onClick={() => toggleMulti("features", f)} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">{aiFilterConfig.features.find(o => o.key === f)?.label.replace(/^[^\s]+ /, "") || f} <X className="w-3 h-3" /></button>;
-                })}
-                {selectedHeating && <button onClick={() => setParam("heating", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">Heating: {HEATING_TYPES.find(h => h.value === selectedHeating)?.label || selectedHeating} <X className="w-3 h-3" /></button>}
-                {selectedConstruction && <button onClick={() => setParam("construction", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">{CONSTRUCTION_STATUSES.find(s => s.value === selectedConstruction)?.label || selectedConstruction} <X className="w-3 h-3" /></button>}
-                {offMarketOnly && <button onClick={() => setParam("off_market", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">🔒 Off-market <X className="w-3 h-3" /></button>}
-                {preSaleOnly && <button onClick={() => setParam("pre_sale", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">🏗️ Pre-sale <X className="w-3 h-3" /></button>}
-                {hasVideoViewing && <button onClick={() => setParam("video_viewing", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent hover:bg-accent/20 transition-colors shrink-0">🎥 Video Viewing <X className="w-3 h-3" /></button>}
-                {hasVirtualTour && <button onClick={() => setParam("virtual_tour", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent hover:bg-accent/20 transition-colors shrink-0">🔮 Virtual Tour <X className="w-3 h-3" /></button>}
-                {hasMessaging && <button onClick={() => setParam("messaging", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent hover:bg-accent/20 transition-colors shrink-0">💬 Messaging <X className="w-3 h-3" /></button>}
-                {minAiScore > 0 && <button onClick={() => setParam("min_ai_score", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent hover:bg-accent/20 transition-colors shrink-0">🤖 AI score {minAiScore}+ <X className="w-3 h-3" /></button>}
-                {minWalkability > 0 && <button onClick={() => setParam("min_walkability", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent hover:bg-accent/20 transition-colors shrink-0">🚶 Walk {minWalkability}+ <X className="w-3 h-3" /></button>}
-                <button onClick={clearAllFilters} className="text-xs text-muted-foreground hover:text-foreground ml-1 shrink-0">Clear all</button>
-              </div>
-            )}
+            {desktopActiveFilters}
           </div>
         </div>
 
@@ -471,32 +667,7 @@ export default function Listings() { // skipcq: JS-R1005 - Listings coordinates 
         <div className={`${viewMode === "split" ? "" : "container min-h-[calc(100vh-8rem)]"} py-4 sm:py-8 pb-28 lg:pb-8`}>
           {/* Stats bar */}
           <div className={`flex items-center justify-between mb-6 flex-wrap gap-3 ${viewMode === "split" ? "container" : ""}`}>
-            <div className="flex items-center gap-3">
-              {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" aria-label="Loading listings" />
-              ) : (
-                <span className="font-display font-semibold" aria-live="polite" aria-atomic="true">
-                  {viewMode === "split" && polygonFilterIds !== null
-                    ? `${filtered.filter(p => polygonFilterIds.has(p.id)).length} in area`
-                    : viewMode === "split" && viewportIds !== null
-                    ? `${filtered.filter(p => viewportIds.has(p.id)).length} in view`
-                    : `${filtered.length} properties`}
-                </span>
-              )}
-              {totalLoaded === 0 && !isLoading && (
-                <span className="text-muted-foreground text-sm">No listings matched your filters</span>
-              )}
-              {viewMode === "split" && polygonFilterIds !== null && (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-                  Area filter
-                </span>
-              )}
-              {viewMode === "split" && viewportIds !== null && polygonFilterIds === null && (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-                  Map synced
-                </span>
-              )}
-            </div>
+            {statsStatus}
             <div className="flex items-center gap-3">
               {compareList.length > 0 && (
                 <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-accent/10 border border-accent/20 text-xs text-accent font-medium">
@@ -511,7 +682,7 @@ export default function Listings() { // skipcq: JS-R1005 - Listings coordinates 
           </div>
 
           {/* ── Split view ── */}
-          {viewMode === "split" ? (() => { // skipcq: JS-R1005 - Split view derives viewport and polygon lists in one render branch.
+          {viewMode === "split" ? (() => { // skipcq: JS-R1005, JS-W1044 - Split view derives viewport and polygon lists in one render branch.
             const splitDisplayList = polygonFilterIds !== null
               ? filtered.filter(p => polygonFilterIds.has(p.id))
               : viewportIds !== null
@@ -561,7 +732,7 @@ export default function Listings() { // skipcq: JS-R1005 - Listings coordinates 
                   ref={splitListRef}
                 >
                   {isLoading
-                    ? <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <PropertyCardSkeleton key={i} />)}</div>
+                    ? <div className="space-y-3">{SPLIT_LOADING_SKELETON_KEYS.map((key) => <PropertyCardSkeleton key={key} />)}</div>
                     : isError
                     ? <EmptyState icon={Building2} title="Failed to load listings" subtitle="Please try again" action={{ label: "Retry", onClick: () => window.location.reload() }} />
                     : gridCards
@@ -632,12 +803,12 @@ export default function Listings() { // skipcq: JS-R1005 - Listings coordinates 
                  * keeps fetching pages. */}
                 {filtered.length === 0 && hasNextPage && (
                   <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-                    {Array.from({ length: 4 }).map((_, i) => <PropertyCardSkeleton key={`searching-${i}`} />)}
+                    {SEARCHING_SKELETON_KEYS.map((key) => <PropertyCardSkeleton key={key} />)}
                   </div>
                 )}
                 {isFetchingNextPage && filtered.length > 0 && (
                   <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 mt-3 sm:mt-4">
-                    {Array.from({ length: 4 }).map((_, i) => <PropertyCardSkeleton key={`more-${i}`} />)}
+                    {MORE_LOADING_SKELETON_KEYS.map((key) => <PropertyCardSkeleton key={key} />)}
                   </div>
                 )}
                 {!hasNextPage && filtered.length > 0 && (

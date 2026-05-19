@@ -5,6 +5,7 @@ import {
   Zap, CheckCircle, Crown,
 } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
+import { stripSupervisorTestMarkers } from "@/lib/displayText";
 
 type Pro = Tables<"professionals">;
 
@@ -21,15 +22,17 @@ interface Props {
   };
 }
 
+// skipcq: JS-0067 - Exported profile tab component is intentionally module-scoped.
 export function ProfessionalOverviewTab({ pro, isRealEstateAgent, professionalIsPro, agentListingsCount, agentPortfolioKpis }: Props) { // skipcq: JS-R1005 - This tab orchestrates intentionally distinct pro/basic/non-agent profile sections.
+  const cleanBio = stripSupervisorTestMarkers(pro.bio);
   return (
     <div className="space-y-5">
-      {pro.bio && (
+      {cleanBio && (
         <div className="glass-card rounded-xl p-6">
           <h2 className="font-display font-semibold mb-3 flex items-center gap-2">
             <FileText className="w-4 h-4 text-primary" /> About
           </h2>
-          <p className="text-sm text-muted-foreground leading-relaxed">{pro.bio}</p>
+          <p className="text-sm text-muted-foreground leading-relaxed">{cleanBio}</p>
         </div>
       )}
 
@@ -120,7 +123,7 @@ export function ProfessionalOverviewTab({ pro, isRealEstateAgent, professionalIs
                   <div className="text-[10px] text-muted-foreground/60 mt-0.5">Typical transaction value</div>
                 </div>
               </div>
-              {!!pro.average_portfolio_asset_size && (
+              {Boolean(pro.average_portfolio_asset_size) && (
                 <div className="mt-3 flex items-center gap-2 p-3 bg-primary/5 border border-primary/15 rounded-xl">
                   <BarChart3 className="w-4 h-4 text-primary shrink-0" />
                   <div>
@@ -282,7 +285,7 @@ export function ProfessionalOverviewTab({ pro, isRealEstateAgent, professionalIs
                   </div>
                 </div>
               )}
-              {!!pro.hourly_rate && (
+              {Boolean(pro.hourly_rate) && (
                 <div className="flex items-start gap-3 p-3 bg-secondary rounded-xl">
                   <Euro className="w-4 h-4 text-brand-gold mt-0.5 shrink-0" />
                   <div>

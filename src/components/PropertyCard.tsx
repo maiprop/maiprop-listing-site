@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   MapPin, Bed, Bath, Square, Heart, Gavel, Flame,
   Eye, TrendingUp, Video, CheckCircle,
-  Home, Calendar, Layers,
+  Calendar, Layers,
   Share2, Flag, Crown, Clock,
 } from "lucide-react";
 import { getSubtypeLabel, type PropertyTypeKey } from "@/lib/propertyTypes";
@@ -14,6 +14,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { APP_ORIGIN } from "@/lib/config";
 import { formatPrice } from "@/lib/format";
+import {
+  MAIPROP_LOGO_FALLBACK_URL,
+  isMaiPropLogoFallback,
+  switchImageToLogoFallback,
+} from "@/lib/imageFallbacks";
 
 export interface Property {
   id: string;
@@ -69,6 +74,7 @@ export interface Property {
 interface PropertyCardProps {
   property: Property;
   compact?: boolean;
+  testId?: string;
 }
 
 const energyColors: Record<string, string> = {
@@ -130,7 +136,7 @@ const getPropertyImageSrcSet = (src: string): string | undefined => {
   return srcSet || undefined;
 };
 
-export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(function PropertyCard({ property, compact = false }, _ref) { // skipcq: JS-R1005 - Card rendering branches compact, auction, and standard listing affordances in one reusable surface.
+export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(function PropertyCard({ property, compact = false, testId = "property-card" }, _ref) { // skipcq: JS-R1005, JS-W1044 - Card rendering branches compact, auction, and standard listing affordances in one reusable surface.
   const { t } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -158,7 +164,6 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
         },
       }
     : undefined;
-
   const handleShare = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -194,7 +199,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
     else toast.success(t("propertyCard.reportSubmitted"));
   };
 
-  const getBadge = () => {
+  const getBadge = () => { // skipcq: JS-R1005 - Badge priority intentionally checks mutually exclusive listing states in order.
   if (property.listingType === "auction") return { label: t("propertyCard.badges.auction"), cls: "badge-auction" };
     if (property.listingType === "open_house") return { label: t("propertyCard.badges.openHouse"), cls: "badge-open-house" };
     if (property.listingType === "firesale") return { label: t("propertyCard.badges.quickSale"), cls: "badge-firesale" };
@@ -220,26 +225,23 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
     : null;
 
   if (compact) {
-    const thumb = property.images?.[0];
-    const thumbSrcSet = thumb ? getPropertyImageSrcSet(thumb) : undefined;
-    const thumbIsLogoFallback = thumb?.includes("maiprop-logo");
+    const thumb = property.images?.[0] || MAIPROP_LOGO_FALLBACK_URL;
+    const thumbSrcSet = isMaiPropLogoFallback(thumb) ? undefined : getPropertyImageSrcSet(thumb);
+    const thumbIsLogoFallback = isMaiPropLogoFallback(thumb);
     return (
-      <Link to={detailPath} state={detailState} className="glass-card rounded-xl overflow-hidden flex gap-3 p-3 property-card group" data-testid="property-card">
+      <Link to={detailPath} state={detailState} className="glass-card rounded-xl overflow-hidden flex gap-3 p-3 property-card group" data-testid={testId}>
         <div className="relative w-24 h-20 rounded-lg overflow-hidden shrink-0 bg-muted">
-          {thumb ? (
-            <img
-              src={thumb}
-              srcSet={thumbSrcSet}
-              sizes={thumbSrcSet ? COMPACT_PROPERTY_IMAGE_SIZES : undefined}
-              alt={property.title}
-              loading="lazy"
-              className={`w-full h-full transition-transform duration-300 ${
-                thumbIsLogoFallback ? "object-contain p-3 bg-background" : "object-cover group-hover:scale-105"
-              }`}
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center"><Home className="w-6 h-6 text-muted-foreground/30" /></div>
-          )}
+          <img
+            src={thumb}
+            srcSet={thumbSrcSet}
+            sizes={thumbSrcSet ? COMPACT_PROPERTY_IMAGE_SIZES : undefined}
+            alt={property.title}
+            loading="lazy"
+            className={`w-full h-full transition-transform duration-300 ${
+              thumbIsLogoFallback ? "object-contain p-3 bg-background" : "object-cover group-hover:scale-105"
+            }`}
+            onError={(e) => switchImageToLogoFallback(e.currentTarget)}
+          />
           <div className="absolute top-1 left-1 flex gap-1 flex-wrap">
             {badges.map((b) => (
               <span key={b.label} className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${b.cls} ${b.label === "Featured" ? "inline-flex items-center gap-0.5" : ""}`}>
@@ -264,36 +266,29 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
     );
   }
 
-  const mainImage = property.images?.[0];
-  const mainImageSrcSet = mainImage ? getPropertyImageSrcSet(mainImage) : undefined;
-  const mainImageIsLogoFallback = mainImage?.includes("maiprop-logo");
+  const mainImage = property.images?.[0] || MAIPROP_LOGO_FALLBACK_URL;
+  const mainImageSrcSet = isMaiPropLogoFallback(mainImage) ? undefined : getPropertyImageSrcSet(mainImage);
+  const mainImageIsLogoFallback = isMaiPropLogoFallback(mainImage);
 
   return (
-    <div data-testid="property-card" className={`property-card rounded-2xl overflow-hidden group flex flex-col bg-card transition-shadow duration-300 ${
+    <div data-testid={testId} className={`property-card rounded-2xl overflow-hidden group flex flex-col bg-card transition-shadow duration-300 ${
       property.isFeatured
         ? "border-2 border-amber-400/70 shadow-[0_0_0_1px_rgba(251,191,36,0.15),0_4px_24px_rgba(251,191,36,0.22)] hover:shadow-[0_0_0_1px_rgba(251,191,36,0.25),0_8px_32px_rgba(251,191,36,0.35)]"
         : "border border-border"
     }`}>
       {/* Image — taller on mobile (4/3) for better thumbnail, 3/2 on larger screens */}
       <div className="relative overflow-hidden bg-secondary aspect-[4/3] sm:aspect-[3/2]">
-        {mainImage ? (
-          <img
-            src={mainImage}
-            srcSet={mainImageSrcSet}
-            sizes={mainImageSrcSet ? PROPERTY_CARD_IMAGE_SIZES : undefined}
-            alt={property.title}
-            loading="lazy"
-            className={`w-full h-full transition-transform duration-500 ${
-              mainImageIsLogoFallback ? "object-contain p-8 bg-background" : "object-cover group-hover:scale-105"
-            }`}
-            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-          />
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center gap-2">
-            <Home className="w-10 h-10 text-muted-foreground/20" />
-            <span className="text-xs text-muted-foreground/40">{t("propertyCard.noPhoto")}</span>
-          </div>
-        )}
+        <img
+          src={mainImage}
+          srcSet={mainImageSrcSet}
+          sizes={mainImageSrcSet ? PROPERTY_CARD_IMAGE_SIZES : undefined}
+          alt={property.title}
+          loading="lazy"
+          className={`w-full h-full transition-transform duration-500 ${
+            mainImageIsLogoFallback ? "object-contain p-8 bg-background" : "object-cover group-hover:scale-105"
+          }`}
+          onError={(e) => switchImageToLogoFallback(e.currentTarget)}
+        />
         {/* Soft gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
 
