@@ -20,6 +20,39 @@ export function PremiumBadge() {
   );
 }
 
+function switchAuctionImageToFallback(
+  img: HTMLImageElement,
+  coverFallback: string | null,
+  coverFallbackHref: string | null,
+) {
+  const canUseCoverFallback = Boolean(
+    coverFallback &&
+    coverFallbackHref &&
+    img.dataset.coverFallbackUsed !== "true" &&
+    !isMaiPropLogoFallback(img.src) &&
+    img.src !== coverFallbackHref,
+  );
+
+  if (canUseCoverFallback && coverFallback) {
+    img.dataset.coverFallbackUsed = "true";
+    img.removeAttribute("srcset");
+    img.src = coverFallback;
+    img.style.objectFit = "cover";
+    img.style.padding = "";
+    img.style.backgroundColor = "";
+    return;
+  }
+
+  if (img.dataset.logoFallbackUsed !== "true") {
+    img.dataset.logoFallbackUsed = "true";
+    img.src = AUCTION_FALLBACK_LOGO_URL;
+    applyLogoFallbackImageStyle(img);
+    return;
+  }
+
+  img.style.display = "none";
+}
+
 export const AuctionCard = memo(function AuctionCard({
   a,
   favoritedIds,
@@ -74,31 +107,7 @@ export const AuctionCard = memo(function AuctionCard({
               ? "object-contain p-8 bg-background"
               : "object-cover group-hover:scale-105"
           }`}
-          onError={e => {
-            const img = e.currentTarget;
-            if (
-              coverFallback &&
-              coverFallbackHref &&
-              img.dataset.coverFallbackUsed !== "true" &&
-              !isMaiPropLogoFallback(img.src) &&
-              img.src !== coverFallbackHref
-            ) {
-              img.dataset.coverFallbackUsed = "true";
-              img.removeAttribute("srcset");
-              img.src = coverFallback;
-              img.style.objectFit = "cover";
-              img.style.padding = "";
-              img.style.backgroundColor = "";
-              return;
-            }
-            if (img.dataset.logoFallbackUsed !== "true") {
-              img.dataset.logoFallbackUsed = "true";
-              img.src = AUCTION_FALLBACK_LOGO_URL;
-              applyLogoFallbackImageStyle(img);
-              return;
-            }
-            img.style.display = "none";
-          }}
+          onError={e => switchAuctionImageToFallback(e.currentTarget, coverFallback, coverFallbackHref)}
         />
         <div className="absolute top-2 left-2 flex items-center gap-1.5 flex-wrap">
           {a.is_featured && (

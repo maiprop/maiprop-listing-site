@@ -58,7 +58,7 @@ function getAuctionImage(listing: MapListing): string {
   return MAIPROP_LOGO_FALLBACK_URL;
 }
 
-export function PropertyPopup({ listing, onClose: _onClose }: { listing: MapListing; onClose: () => void }) {
+export function PropertyPopup({ listing, onClose: _onClose }: { listing: MapListing; onClose: () => void }) { // skipcq: JS-R1005 - Map popup derives compact listing, auction, and open-house metadata for one small card.
   const raw = listing._raw ?? listing;
   const image = getAuctionImage(listing);
   const isAuction = listing.listingType === "auction";
