@@ -477,7 +477,7 @@ export default function ProfessionalServicesEditor() {
                 <RefreshCw className="w-4 h-4" /> Connect Outlook
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">Calendar sync (Google/Outlook) is on our roadmap for Q2 2025. Your weekly availability above is used for bookings until then.</p>
+            <p className="text-xs text-muted-foreground">Calendar sync (Google/Outlook) is being rolled out. Your weekly availability above is used for bookings until direct sync is enabled.</p>
           </div>
 
           <div className="glass-card rounded-xl p-5 space-y-4">
@@ -485,7 +485,7 @@ export default function ProfessionalServicesEditor() {
               <Video className="w-4 h-4 text-primary" /> Video Consultation Link
             </h2>
             <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-1.5">Google Meet / Zoom / Teams URL</label>
+              <label className="text-xs font-medium text-muted-foreground block mb-1.5">External meeting URL (optional)</label>
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -494,7 +494,7 @@ export default function ProfessionalServicesEditor() {
                     className="w-full bg-secondary border border-border rounded-xl pl-9 pr-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors" />
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground mt-1.5">This link will be shared with clients who book a video consultation.</p>
+              <p className="text-xs text-muted-foreground mt-1.5">Leave blank to use the built-in mAI prop video room after a booking is confirmed.</p>
             </div>
 
             <div>

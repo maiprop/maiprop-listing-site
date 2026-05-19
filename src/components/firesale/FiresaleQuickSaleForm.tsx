@@ -50,7 +50,7 @@ const propertyTypeOptions = [
 const NOW_YEAR = new Date().getFullYear();
 
 export function FiresaleQuickSaleForm() {
-  const { user, profile } = useAuth();
+  const { user, profile, loading: authLoading, profileLoading } = useAuth();
   const { isPro: _isPro } = useSubscription();
   const navigate = useNavigate();
 
@@ -73,7 +73,8 @@ export function FiresaleQuickSaleForm() {
     upload: uploadPhotos,
   } = photoUploader;
 
-  const canSubmitQuickSale = !!user && isSellSideRole(profile);
+  const authPending = Boolean(authLoading || profileLoading || (!!user && !profile));
+  const canSubmitQuickSale = !!user && !authPending && isSellSideRole(profile);
 
   const [form, setForm] = useState({
     address: "",
@@ -176,6 +177,10 @@ export function FiresaleQuickSaleForm() {
   };
 
   const handleContinue = async () => {
+    if (authPending) {
+      toast.info("Checking your seller profile. Please try again in a moment.");
+      return;
+    }
     if (!canSubmitQuickSale) {
       if (!user) { navigate("/signup?type=seller"); }
       else {
@@ -193,6 +198,10 @@ export function FiresaleQuickSaleForm() {
 
   const handleSubmit = async () => {
     if (!user) { navigate("/login"); return; }
+    if (authPending) {
+      toast.info("Checking your seller profile. Please try again in a moment.");
+      return;
+    }
     if (!canSubmitQuickSale) {
       try { localStorage.setItem("signup_participant_type", "seller"); } catch (_err: unknown) { /* ignore */ }
       navigate("/onboarding");
@@ -308,7 +317,17 @@ export function FiresaleQuickSaleForm() {
           <div className="space-y-5">
             <h4 className="font-display font-semibold text-sm">Property Details</h4>
 
-            {!canSubmitQuickSale && (
+            {authPending ? (
+              <div className="rounded-xl bg-muted border border-border p-3 flex items-start gap-3">
+                <Loader2 className="w-4 h-4 text-primary mt-0.5 shrink-0 animate-spin" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold">Checking seller profile</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    We are loading your account details before enabling Quick Sale submissions.
+                  </p>
+                </div>
+              </div>
+            ) : !canSubmitQuickSale && (
               <div className="rounded-xl bg-muted border border-border p-3 flex items-start gap-3">
                 <Lock className="w-4 h-4 text-primary mt-0.5 shrink-0" />
                 <div className="flex-1 min-w-0">
@@ -497,9 +516,9 @@ export function FiresaleQuickSaleForm() {
                     {photoPreviews.length} photo{photoPreviews.length !== 1 ? "s" : ""} selected
                     {photoPreviews.length < 5 && " · add at least 5 photos to continue"}
                   </p>
-                  {errors.photos && <p className="text-xs text-destructive">{errors.photos}</p>}
                 </div>
               )}
+              {errors.photos && <p className="mt-1 text-xs text-destructive">{errors.photos}</p>}
             </div>
 
             {/* Notes */}

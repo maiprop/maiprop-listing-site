@@ -151,7 +151,8 @@ describe("PropertyCard behavior", () => {
 
     const image = screen.getByAltText("Athens Loft") as HTMLImageElement;
     fireEvent.error(image);
-    expect(image.style.display).toBe("none");
+    expect(image.src).toContain("/images/maiprop-logo.webp");
+    expect(image.style.objectFit).toBe("contain");
   });
 
   it("renders remaining badges, non-urgent timers, price deltas, score tiers, and report errors", async () => {
@@ -243,7 +244,7 @@ describe("PropertyCard behavior", () => {
     expect(screen.getByText("Top floor")).toBeInTheDocument();
     expect(screen.queryByText("source:sync")).not.toBeInTheDocument();
     expect(screen.getByText("propertyCard.badges.verified")).toBeInTheDocument();
-    expect(screen.getByText("propertyCard.noPhoto")).toBeInTheDocument();
+    expect(screen.getByAltText("Athens Loft")).toHaveAttribute("src", "/images/maiprop-logo.webp");
 
     fireEvent.click(screen.getByRole("button", { name: "propertyCard.actions.share" }));
     await waitFor(() => expect(toastError).toHaveBeenCalledWith("propertyCard.copyFailed"));

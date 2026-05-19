@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Briefcase, Video, Calendar, MessageSquare, Lock } from "lucide-react";
 import type { ProfessionalService, ProfessionalAvailability } from "@/hooks/useProfessionalServices";
+import { stripSupervisorTestMarkers } from "@/lib/displayText";
 
 const PRICING_LABELS: Record<string, string> = { hourly: "/hr", daily: "/day", fixed: " fixed" };
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -46,8 +47,8 @@ export function ProfessionalServicesTab({ dbServices, dbAvailability, profession
                       {svc.rate_amount ? `€${svc.rate_amount}${PRICING_LABELS[svc.pricing_model] ?? ""}` : "On Request"}
                     </span>
                   </div>
-                  {svc.description && (
-                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed line-clamp-2">{svc.description}</p>
+                  {stripSupervisorTestMarkers(svc.description) && (
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed line-clamp-2">{stripSupervisorTestMarkers(svc.description)}</p>
                   )}
                   <div className="flex items-center gap-2 mt-2 flex-wrap">
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground capitalize">

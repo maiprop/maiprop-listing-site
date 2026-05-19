@@ -1,7 +1,8 @@
 /* eslint complexity: "off" */
 import { getStreetViewProxyUrl } from "@/lib/config";
+import { MAIPROP_LOGO_FALLBACK_URL } from "@/lib/imageFallbacks";
 
-export const AUCTION_FALLBACK_LOGO_URL = "/images/maiprop-logo.webp";
+export const AUCTION_FALLBACK_LOGO_URL = MAIPROP_LOGO_FALLBACK_URL;
 
 type AuctionStreetViewInput = {
   cover_image_url?: string | null;

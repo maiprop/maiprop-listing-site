@@ -437,8 +437,8 @@ export default function Listings() { // skipcq: JS-R1005 - Listings coordinates 
 
             {/* Desktop active filter chips */}
             {activeFilterCount > 0 && (
-              <div className="hidden sm:flex items-center gap-1.5 mt-2 min-h-7 flex-wrap overflow-visible pb-0.5 [&>button]:inline-flex [&>button]:h-7 [&>button]:items-center [&>button]:leading-none [&>button]:max-w-full [&>button]:min-w-0 [&>button]:whitespace-nowrap">
-                <span className="flex h-7 items-center text-xs text-muted-foreground shrink-0">Active:</span>
+              <div className="hidden sm:flex items-center gap-1.5 mt-3 min-h-9 flex-wrap overflow-visible rounded-xl border border-border bg-card/70 px-3 py-2 shadow-sm [&>button]:inline-flex [&>button]:h-7 [&>button]:items-center [&>button]:leading-none [&>button]:max-w-full [&>button]:min-w-0 [&>button]:whitespace-nowrap">
+                <span className="flex h-7 items-center text-xs font-medium text-muted-foreground shrink-0">Active filters:</span>
                 {selectedType && <button onClick={() => { setParam("type", ""); setParam("subtype", ""); }} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">{PROPERTY_TYPE_MAP[selectedType as PropertyTypeKey]?.emoji} {getTypeLabel(selectedType)} <X className="w-3 h-3" /></button>}
                 {selectedSubtype && selectedType && <button onClick={() => setParam("subtype", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">{getSubtypeLabel(selectedType, selectedSubtype)} <X className="w-3 h-3" /></button>}
                 {selectedPrice && <button onClick={() => setParam("price", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0">{[...buyPriceRanges, ...rentPriceRanges].find(r => r.value === selectedPrice)?.label || selectedPrice} <X className="w-3 h-3" /></button>}
@@ -480,6 +480,10 @@ export default function Listings() { // skipcq: JS-R1005 - Listings coordinates 
                     ? `${filtered.filter(p => polygonFilterIds.has(p.id)).length} in area`
                     : viewMode === "split" && viewportIds !== null
                     ? `${filtered.filter(p => viewportIds.has(p.id)).length} in view`
+                    : viewMode === "map"
+                    ? `${mapListings.length} map result${mapListings.length !== 1 ? "s" : ""}`
+                    : hasNextPage
+                    ? `${filtered.length} loaded propert${filtered.length === 1 ? "y" : "ies"}`
                     : `${filtered.length} properties`}
                 </span>
               )}

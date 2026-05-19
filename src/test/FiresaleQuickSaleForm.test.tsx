@@ -19,7 +19,7 @@ const { useAuthMock, useSubMock, isSellSideRoleMock, functionsInvokeMock, fromMo
   functionsInvokeMock: vi.fn(),
   fromMock: vi.fn(),
   navigateMock: vi.fn(),
-  toastMock: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  toastMock: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },
 }));
 
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => useAuthMock() }));
@@ -67,6 +67,7 @@ beforeEach(() => {
   toastMock.success.mockReset();
   toastMock.error.mockReset();
   toastMock.warning.mockReset();
+  toastMock.info.mockReset();
   fetchStub.mockClear();
 });
 
@@ -94,6 +95,18 @@ describe("FiresaleQuickSaleForm", () => {
     expect(screen.getByText(/Seller account required/i)).toBeInTheDocument();
     // The banner renders a CTA button — 'Become a Seller' when logged in.
     expect(screen.getByRole("button", { name: /Become a Seller/i })).toBeInTheDocument();
+  });
+
+  it("shows a profile-loading state instead of the seller-required banner while auth is resolving", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1", email: "seller@example.com" },
+      profile: null,
+      loading: false,
+      profileLoading: true,
+    });
+    render(<FiresaleQuickSaleForm />);
+    expect(screen.getByText(/Checking seller profile/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Seller account required/i)).not.toBeInTheDocument();
   });
 
   it("renders a 'Sign up as Seller' CTA when there is no user at all", () => {
@@ -124,6 +137,27 @@ describe("FiresaleQuickSaleForm", () => {
     expect(btn).not.toBeDisabled();
     fireEvent.click(btn);
     expect(toastMock.error).toHaveBeenCalledWith("Please enter a full address (min 5 characters).");
+  });
+
+  it("shows the missing-photo validation inline even before any photos are selected", () => {
+    render(<FiresaleQuickSaleForm />);
+    fireEvent.change(screen.getByPlaceholderText(/Kifisia, Dekelia/i), {
+      target: { value: "Kolonaki 12, Athens" },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/050240601001/i), {
+      target: { value: "050240601001/0/1" },
+    });
+    fireEvent.change(document.querySelector("select")!, { target: { value: "apartment" } });
+    fireEvent.change(screen.getByPlaceholderText(/^e\.g\. 120$/i), { target: { value: "95" } });
+    fireEvent.change(screen.getByPlaceholderText(/Your target/i), { target: { value: "350000" } });
+    fireEvent.change(screen.getByPlaceholderText(/^e\.g\. 1998$/i), { target: { value: "2010" } });
+    fireEvent.change(screen.getByPlaceholderText(/Legal issues, urgent timeline/i), {
+      target: { value: "Quick sale needed within 30 days." },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Get AI Estimate/i }));
+
+    expect(screen.getByText("Please upload at least 5 property photos.")).toBeInTheDocument();
   });
 
   it("updates controlled state as the user fills in the address + KAEK + property type + sqm/price/year", () => {

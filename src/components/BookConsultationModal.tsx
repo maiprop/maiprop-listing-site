@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSubmitConsultation } from "@/hooks/useConsultations";
 import { useProfessionalServices, useProfessionalAvailability } from "@/hooks/useProfessionalServices";
 import { toast } from "sonner";
+import { stripSupervisorTestMarkers } from "@/lib/displayText";
 
 const PRICING_LABELS: Record<string, string> = { hourly: "/hr", daily: "/day", fixed: "fixed" };
 const SLOT_INTERVAL_MINUTES = 60;
@@ -151,9 +152,10 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
     );
   }, [selectedDayData]);
 
+  const hasProfessionalMeetingLink = Boolean(professional.video_link?.trim());
   const serviceSupportsVideo = selectedService ? Boolean(selectedService.video_enabled) : allowVideoCall;
-  const usesHostedRoom = !professional.video_link;
-  const canVideo = allowVideoCall && serviceSupportsVideo;
+  const usesHostedRoom = !hasProfessionalMeetingLink;
+  const canVideo = allowVideoCall && (hasProfessionalMeetingLink || serviceSupportsVideo);
   const nextStepAfterService = allowVideoCall ? 2 : 3;
   const previousStepFromSchedule = allowVideoCall ? 2 : 1;
 
@@ -359,8 +361,8 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
                                 {svc.rate_amount ? `EUR ${svc.rate_amount}${PRICING_LABELS[svc.pricing_model] ?? ""}` : "On Request"}
                               </span>
                             </div>
-                            {svc.description && (
-                              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{svc.description}</p>
+                            {stripSupervisorTestMarkers(svc.description) && (
+                              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{stripSupervisorTestMarkers(svc.description)}</p>
                             )}
                             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground capitalize">

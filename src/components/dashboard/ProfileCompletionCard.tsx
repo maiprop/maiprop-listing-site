@@ -28,7 +28,7 @@ export function ProfileCompletionCard({
           { label: "Add service catalog",        done: (proServices?.length ?? 0) > 0 },
           { label: "Set availability hours",     done: !!pro?.availability && Object.keys(pro?.availability ?? {}).length > 0 },
           { label: "Upload license/certificate", done: pro?.verified === true },
-          { label: "Connect video room",         done: !!pro?.video_link },
+          { label: "Review video settings",     done: true },
         ];
 
   const completed = steps.filter(s => s.done).length;

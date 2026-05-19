@@ -14,6 +14,7 @@ const MapView = lazy(() => import("@/components/MapView").then(m => ({ default: 
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getStreetViewProxyUrl } from "@/lib/config";
+import { MAIPROP_LOGO_FALLBACK_URL } from "@/lib/imageFallbacks";
 import { ENERGY_CLASSES, FEATURES_RESIDENTIAL } from "@/lib/filterConfig";
 import { fmtDate, fmtTime, Pill, RangeInput, OpenHouseCard } from "@/components/open-houses/OpenHousePrimitives";
 import { cn } from "@/lib/utils";
@@ -83,6 +84,11 @@ export default function OpenHouses() {
     { value: "land", label: "Land" },
   ];
 
+  const isProductionVisibleOpenHouse = (listing: { title?: string | null; address?: string | null; city?: string | null }) => {
+    const text = [listing.title, listing.address, listing.city].filter(Boolean).join(" ");
+    return !/\bsupervisor-\d+/i.test(text);
+  };
+
   const { data: listings = [], isLoading, isError, refetch } = useQuery({
     queryKey: ["open-houses", showPast],
     queryFn: async () => {
@@ -99,7 +105,7 @@ export default function OpenHouses() {
       }
       const { data, error } = await q.limit(200);
       if (error) throw error;
-      return (data || []).sort((a, b) => {
+      return (data || []).filter(isProductionVisibleOpenHouse).sort((a, b) => {
         const aHasImg = !!(a.cover_image_url || a.listing_images?.length);
         const bHasImg = !!(b.cover_image_url || b.listing_images?.length);
         return (bHasImg ? 1 : 0) - (aHasImg ? 1 : 0);
@@ -159,6 +165,7 @@ export default function OpenHouses() {
         ? getStreetViewProxyUrl({ lat: Number(l.latitude), lng: Number(l.longitude) })
         : null;
     if (!imgs.length && svFallback) imgs.push(svFallback);
+    if (!imgs.length) imgs.push(MAIPROP_LOGO_FALLBACK_URL);
     return {
       listing: l,
       card: {

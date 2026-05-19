@@ -3,6 +3,7 @@ import { MapPin, Square, Layers, Calendar, Building2 } from "lucide-react";
 import { getStreetViewProxyUrl } from "@/lib/config";
 import { getOwnershipStatus, getOwnershipPct } from "@/lib/auctionUtils";
 import { formatPrice } from "@/lib/format";
+import { MAIPROP_LOGO_FALLBACK_URL, isMaiPropLogoFallback, switchImageToLogoFallback } from "@/lib/imageFallbacks";
 import type { MapListing } from "./mapConfig";
 import { typeColour } from "./mapConfig";
 
@@ -54,7 +55,7 @@ function getAuctionImage(listing: MapListing): string {
     const proxyUrl = getStreetViewProxyUrl({ lat: listing.latitude, lng: listing.longitude }, "400x200");
     if (proxyUrl) return proxyUrl;
   }
-  return "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&q=60";
+  return MAIPROP_LOGO_FALLBACK_URL;
 }
 
 export function PropertyPopup({ listing, onClose: _onClose }: { listing: MapListing; onClose: () => void }) {
@@ -78,7 +79,11 @@ export function PropertyPopup({ listing, onClose: _onClose }: { listing: MapList
     : floor === 0 ? "Ground"
     : `${floor}${["st", "nd", "rd"][floor - 1] || "th"} fl.`;
 
-  const detailLink = isAuction ? `/auction/${listing.id}` : `/property/${listing.id}`;
+  const detailLink = isAuction
+    ? `/auction/${listing.id}`
+    : listing.listingType === "open_house"
+    ? `/open-house/${listing.id}`
+    : `/property/${listing.id}`;
 
   const pills: { icon: React.ReactNode; text: string }[] = [];
   if (listing.sqm && listing.sqm > 1)
@@ -96,8 +101,8 @@ export function PropertyPopup({ listing, onClose: _onClose }: { listing: MapList
           src={image}
           alt={listing.title}
           loading="lazy"
-          className="w-full h-full object-cover"
-          onError={e => { (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&q=60"; }}
+          className={`w-full h-full ${isMaiPropLogoFallback(image) ? "object-contain p-6 bg-background" : "object-cover"}`}
+          onError={e => switchImageToLogoFallback(e.currentTarget)}
         />
         {daysLeft !== null && (
           <div

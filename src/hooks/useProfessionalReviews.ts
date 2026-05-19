@@ -66,7 +66,7 @@ export function useProfessionalReviews(professionalId: string) {
         `)
         .eq("professional_id", professionalId)
         .order("created_at", { ascending: false });
-      if (error) throw error;
+      if (error) return [];
       return ((data ?? []) as unknown as ReviewRow[]).map(({ profiles, ...rest }) => ({
         ...rest,
         reviewer: profiles ?? undefined,

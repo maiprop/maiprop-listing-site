@@ -5,6 +5,7 @@ import {
   Zap, CheckCircle, Crown,
 } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
+import { stripSupervisorTestMarkers } from "@/lib/displayText";
 
 type Pro = Tables<"professionals">;
 
@@ -22,14 +23,15 @@ interface Props {
 }
 
 export function ProfessionalOverviewTab({ pro, isRealEstateAgent, professionalIsPro, agentListingsCount, agentPortfolioKpis }: Props) { // skipcq: JS-R1005 - This tab orchestrates intentionally distinct pro/basic/non-agent profile sections.
+  const cleanBio = stripSupervisorTestMarkers(pro.bio);
   return (
     <div className="space-y-5">
-      {pro.bio && (
+      {cleanBio && (
         <div className="glass-card rounded-xl p-6">
           <h2 className="font-display font-semibold mb-3 flex items-center gap-2">
             <FileText className="w-4 h-4 text-primary" /> About
           </h2>
-          <p className="text-sm text-muted-foreground leading-relaxed">{pro.bio}</p>
+          <p className="text-sm text-muted-foreground leading-relaxed">{cleanBio}</p>
         </div>
       )}
 

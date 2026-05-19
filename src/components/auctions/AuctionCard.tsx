@@ -9,6 +9,7 @@ import {
 } from "@/lib/auctionUtils";
 import { APP_ORIGIN } from "@/lib/config";
 import { AUCTION_FALLBACK_LOGO_URL, getAuctionStreetViewImageUrl } from "@/lib/auctionStreetView";
+import { applyLogoFallbackImageStyle, isMaiPropLogoFallback } from "@/lib/imageFallbacks";
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function PremiumBadge() {
@@ -36,7 +37,7 @@ export const AuctionCard = memo(function AuctionCard({
   const coverFallback = typeof a.cover_image_url === "string" && a.cover_image_url.trim()
     ? a.cover_image_url.trim()
     : null;
-  const brokenImageFallback = coverFallback ?? AUCTION_FALLBACK_LOGO_URL;
+  const coverFallbackHref = coverFallback ? new URL(coverFallback, APP_ORIGIN).href : null;
   const isFav = favoritedIds.has(a.id);
   const ownershipStatus = normalizeOwnership(getOwnershipStatus(a.tags));
   const ownershipPct = getOwnershipPct(a.tags);
@@ -75,14 +76,25 @@ export const AuctionCard = memo(function AuctionCard({
           }`}
           onError={e => {
             const img = e.currentTarget;
-            if (img.dataset.fallbackUsed !== "true") {
-              img.dataset.fallbackUsed = "true";
-              img.src = brokenImageFallback;
-              if (brokenImageFallback === AUCTION_FALLBACK_LOGO_URL) {
-                img.style.objectFit = "contain";
-                img.style.padding = "2rem";
-                img.style.backgroundColor = "hsl(var(--background))";
-              }
+            if (
+              coverFallback &&
+              coverFallbackHref &&
+              img.dataset.coverFallbackUsed !== "true" &&
+              !isMaiPropLogoFallback(img.src) &&
+              img.src !== coverFallbackHref
+            ) {
+              img.dataset.coverFallbackUsed = "true";
+              img.removeAttribute("srcset");
+              img.src = coverFallback;
+              img.style.objectFit = "cover";
+              img.style.padding = "";
+              img.style.backgroundColor = "";
+              return;
+            }
+            if (img.dataset.logoFallbackUsed !== "true") {
+              img.dataset.logoFallbackUsed = "true";
+              img.src = AUCTION_FALLBACK_LOGO_URL;
+              applyLogoFallbackImageStyle(img);
               return;
             }
             img.style.display = "none";
