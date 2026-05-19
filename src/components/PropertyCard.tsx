@@ -16,8 +16,9 @@ import { APP_ORIGIN } from "@/lib/config";
 import { formatPrice } from "@/lib/format";
 import {
   MAIPROP_LOGO_FALLBACK_URL,
+  getImageFallbackChain,
   isMaiPropLogoFallback,
-  switchImageToLogoFallback,
+  switchImageToNextFallback,
 } from "@/lib/imageFallbacks";
 
 export interface Property {
@@ -142,6 +143,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
   const navigate = useNavigate();
   const { data: isFavorited = false } = useIsFavorited(property.id);
   const toggleFav = useToggleFavorite();
+  const imageChain = getImageFallbackChain(property.images);
 
   const handleFavorite = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -225,7 +227,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
     : null;
 
   if (compact) {
-    const thumb = property.images?.[0] || MAIPROP_LOGO_FALLBACK_URL;
+    const thumb = imageChain[0] || MAIPROP_LOGO_FALLBACK_URL;
     const thumbSrcSet = isMaiPropLogoFallback(thumb) ? undefined : getPropertyImageSrcSet(thumb);
     const thumbIsLogoFallback = isMaiPropLogoFallback(thumb);
     return (
@@ -237,10 +239,11 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
             sizes={thumbSrcSet ? COMPACT_PROPERTY_IMAGE_SIZES : undefined}
             alt={property.title}
             loading="lazy"
+            data-image-fallback-index={imageChain.length ? "0" : undefined}
             className={`w-full h-full transition-transform duration-300 ${
               thumbIsLogoFallback ? "object-contain p-3 bg-background" : "object-cover group-hover:scale-105"
             }`}
-            onError={(e) => switchImageToLogoFallback(e.currentTarget)}
+            onError={(e) => switchImageToNextFallback(e.currentTarget, imageChain)}
           />
           <div className="absolute top-1 left-1 flex gap-1 flex-wrap">
             {badges.map((b) => (
@@ -266,7 +269,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
     );
   }
 
-  const mainImage = property.images?.[0] || MAIPROP_LOGO_FALLBACK_URL;
+  const mainImage = imageChain[0] || MAIPROP_LOGO_FALLBACK_URL;
   const mainImageSrcSet = isMaiPropLogoFallback(mainImage) ? undefined : getPropertyImageSrcSet(mainImage);
   const mainImageIsLogoFallback = isMaiPropLogoFallback(mainImage);
 
@@ -284,10 +287,11 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
           sizes={mainImageSrcSet ? PROPERTY_CARD_IMAGE_SIZES : undefined}
           alt={property.title}
           loading="lazy"
+          data-image-fallback-index={imageChain.length ? "0" : undefined}
           className={`w-full h-full transition-transform duration-500 ${
             mainImageIsLogoFallback ? "object-contain p-8 bg-background" : "object-cover group-hover:scale-105"
           }`}
-          onError={(e) => switchImageToLogoFallback(e.currentTarget)}
+          onError={(e) => switchImageToNextFallback(e.currentTarget, imageChain)}
         />
         {/* Soft gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent" />

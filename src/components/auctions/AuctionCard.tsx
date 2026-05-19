@@ -8,8 +8,8 @@ import {
   normalizeOwnership, getOwnershipStatus, getOwnershipPct, OWNERSHIP_BADGE,
 } from "@/lib/auctionUtils";
 import { APP_ORIGIN } from "@/lib/config";
-import { AUCTION_FALLBACK_LOGO_URL, getAuctionStreetViewImageUrl } from "@/lib/auctionStreetView";
-import { applyLogoFallbackImageStyle, isMaiPropLogoFallback } from "@/lib/imageFallbacks";
+import { AUCTION_FALLBACK_LOGO_URL, getAuctionImageList } from "@/lib/auctionStreetView";
+import { switchImageToNextFallback } from "@/lib/imageFallbacks";
 
 export const PremiumBadge = () => (
   <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gradient-primary text-primary-foreground border border-primary/30">
@@ -30,65 +30,6 @@ type OwnershipBadgeView = {
   cls: string;
   label: string;
 } | null;
-
-const getCoverFallbackHref = (coverFallback: string | null): string | null => {
-  if (!coverFallback) return null;
-  try {
-    return new URL(coverFallback, APP_ORIGIN).href;
-  } catch (_err: unknown) {
-    return null;
-  }
-};
-
-const getCoverFallback = (coverImageUrl: unknown): string | null => {
-  if (typeof coverImageUrl !== "string") return null;
-  return coverImageUrl.trim() || null;
-};
-
-const canUseCoverFallback = (
-  img: HTMLImageElement,
-  coverFallback: string | null,
-  coverFallbackHref: string | null,
-): boolean => Boolean(
-  coverFallback &&
-  coverFallbackHref &&
-  img.dataset.coverFallbackUsed !== "true" &&
-  !isMaiPropLogoFallback(img.src) &&
-  img.src !== coverFallbackHref,
-);
-
-const setCoverFallbackImage = (img: HTMLImageElement, coverFallback: string): void => {
-  img.dataset.coverFallbackUsed = "true";
-  img.removeAttribute("srcset");
-  img.src = coverFallback;
-  img.style.objectFit = "cover";
-  img.style.padding = "";
-  img.style.backgroundColor = "";
-};
-
-const setLogoFallbackImage = (img: HTMLImageElement): void => {
-  img.dataset.logoFallbackUsed = "true";
-  img.src = AUCTION_FALLBACK_LOGO_URL;
-  applyLogoFallbackImageStyle(img);
-};
-
-const switchAuctionImageToFallback = (
-  img: HTMLImageElement,
-  coverFallback: string | null,
-  coverFallbackHref: string | null,
-): void => { // skipcq: JS-R1005 - Fallback order must handle Street View, cover image, and logo states distinctly.
-  if (coverFallback && canUseCoverFallback(img, coverFallback, coverFallbackHref)) {
-    setCoverFallbackImage(img, coverFallback);
-    return;
-  }
-
-  if (img.dataset.logoFallbackUsed === "true") {
-    img.style.display = "none";
-    return;
-  }
-
-  setLogoFallbackImage(img);
-};
 
 const AuctionTopBadges = ({
   isFeatured,
@@ -136,17 +77,15 @@ const AuctionCountdown = ({ badge }: { badge: AuctionCountdownBadge }) => {
 const AuctionMedia = ({
   a,
   imgSrc,
+  imageChain,
   isLogoFallback,
-  coverFallback,
-  coverFallbackHref,
   propertyTypeLabel,
   badge,
 }: {
   a: AuctionCardProps["a"];
   imgSrc: string;
+  imageChain: string[];
   isLogoFallback: boolean;
-  coverFallback: string | null;
-  coverFallbackHref: string | null;
   propertyTypeLabel: string | null;
   badge: AuctionCountdownBadge;
 }) => (
@@ -158,12 +97,13 @@ const AuctionMedia = ({
       height={256}
       decoding="async"
       loading="lazy"
+      data-image-fallback-index={imageChain.length ? "0" : undefined}
       className={`w-full h-full transition-transform duration-300 ${
         isLogoFallback
           ? "object-contain p-8 bg-background"
           : "object-cover group-hover:scale-105"
       }`}
-      onError={e => switchAuctionImageToFallback(e.currentTarget, coverFallback, coverFallbackHref)}
+      onError={e => switchImageToNextFallback(e.currentTarget, imageChain)}
     />
     <AuctionTopBadges isFeatured={Boolean(a.is_featured)} auctionDate={a.auction_date} />
     <AuctionPropertyTypeBadge label={propertyTypeLabel} />
@@ -332,10 +272,9 @@ const AuctionActions = ({
 
 const AuctionCardComponent = ({ a, favoritedIds, onToggleFav }: AuctionCardProps) => { // skipcq: JS-R1005 - Auction cards compose independent image, ownership, date, and action affordances.
   const badge = countdownBadge(daysUntil(a.auction_date));
-  const imgSrc = getAuctionStreetViewImageUrl(a) ?? AUCTION_FALLBACK_LOGO_URL;
+  const imageChain = getAuctionImageList(a);
+  const imgSrc = imageChain[0] ?? AUCTION_FALLBACK_LOGO_URL;
   const isLogoFallback = imgSrc === AUCTION_FALLBACK_LOGO_URL;
-  const coverFallback = getCoverFallback(a.cover_image_url);
-  const coverFallbackHref = getCoverFallbackHref(coverFallback);
   const isFav = favoritedIds.has(a.id);
   const propertyTypeLabel = getPropertyTypeLabel(a);
   const ownershipStatus = normalizeOwnership(getOwnershipStatus(a.tags));
@@ -348,9 +287,8 @@ const AuctionCardComponent = ({ a, favoritedIds, onToggleFav }: AuctionCardProps
       <AuctionMedia
         a={a}
         imgSrc={imgSrc}
+        imageChain={imageChain}
         isLogoFallback={isLogoFallback}
-        coverFallback={coverFallback}
-        coverFallbackHref={coverFallbackHref}
         propertyTypeLabel={propertyTypeLabel}
         badge={badge}
       />

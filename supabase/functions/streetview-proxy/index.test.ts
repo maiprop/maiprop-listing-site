@@ -41,4 +41,38 @@ Deno.test("CORS headers present on error responses", async () => {
   assertEquals(typeof origin, "string");
 });
 
+Deno.test("Google fetch uses app Referer and returns image content", async () => {
+  Deno.env.set("GOOGLE_MAPS_API_KEY", "server-side-test-key");
+  const originalFetch = globalThis.fetch;
+  let requestedUrl = "";
+  let requestedReferer = "";
+
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    requestedUrl = String(input);
+    requestedReferer = new Headers(init?.headers).get("Referer") ?? "";
+    return Promise.resolve(
+      new Response("jpeg-bytes", {
+        status: 200,
+        headers: { "Content-Type": "image/jpeg" },
+      }),
+    );
+  }) as typeof fetch;
+
+  try {
+    const res = await handler(new Request("https://functions.supabase.co/fn?lat=37.97&lng=23.73", {
+      method: "GET",
+      headers: { origin: "http://127.0.0.1:8080" },
+    }));
+
+    assertEquals(res.status, 200);
+    assertEquals(res.headers.get("Content-Type"), "image/jpeg");
+    assertStringIncludes(requestedUrl, "maps.googleapis.com/maps/api/streetview");
+    assertStringIncludes(requestedUrl, "location=37.97,23.73");
+    assertEquals(requestedReferer, "https://portal.maiprop.co/");
+  } finally {
+    globalThis.fetch = originalFetch;
+    Deno.env.delete("GOOGLE_MAPS_API_KEY");
+  }
+});
+
 restore();

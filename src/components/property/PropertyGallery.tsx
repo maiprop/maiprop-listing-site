@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Heart, Share2, Eye, ChevronLeft, ChevronRight, Gavel } from "lucide-react";
+import { isMaiPropLogoFallback, switchImageToNextFallback } from "@/lib/imageFallbacks";
 
 interface PropertyGalleryProps {
   images: string[];
@@ -15,6 +16,7 @@ export default function PropertyGallery({
   images, listingType, isFavorited, onFavorite, onShare, viewsCount, title,
 }: PropertyGalleryProps) {
   const [currentImage, setCurrentImage] = useState(0);
+  const currentSrc = images[currentImage] || images[0];
 
   return (
     <>
@@ -22,9 +24,13 @@ export default function PropertyGallery({
       <div className="relative rounded-2xl overflow-hidden aspect-[16/9] bg-secondary group shadow-elevated">
         {images.length > 0 ? (
           <img
-            src={images[currentImage] || images[0]}
+            src={currentSrc}
             alt={title}
-            className="w-full h-full object-cover transition-opacity duration-300"
+            data-image-fallback-index={String(currentImage)}
+            className={`w-full h-full transition-opacity duration-300 ${
+              isMaiPropLogoFallback(currentSrc) ? "object-contain p-8 bg-background" : "object-cover"
+            }`}
+            onError={(event) => switchImageToNextFallback(event.currentTarget, images)}
           />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-secondary">
@@ -111,7 +117,13 @@ export default function PropertyGallery({
                   ? "ring-2 ring-primary ring-offset-2 ring-offset-background opacity-100"
                   : "opacity-50 hover:opacity-80"
               }`}>
-              <img src={img} alt="" className="w-full h-full object-cover" />
+              <img
+                src={img}
+                alt=""
+                data-image-fallback-index={String(i)}
+                className={`w-full h-full ${isMaiPropLogoFallback(img) ? "object-contain p-2 bg-background" : "object-cover"}`}
+                onError={(event) => switchImageToNextFallback(event.currentTarget, images)}
+              />
             </button>
           ))}
         </div>

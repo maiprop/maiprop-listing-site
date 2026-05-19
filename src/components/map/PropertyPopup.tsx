@@ -1,20 +1,23 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { MapPin, Square, Layers, Calendar, Building2 } from "lucide-react";
-import { getStreetViewProxyUrl } from "@/lib/config";
+import { getAuctionImageList } from "@/lib/auctionStreetView";
 import { getOwnershipStatus, getOwnershipPct } from "@/lib/auctionUtils";
 import { formatPrice } from "@/lib/format";
-import { MAIPROP_LOGO_FALLBACK_URL, isMaiPropLogoFallback, switchImageToLogoFallback } from "@/lib/imageFallbacks";
+import { MAIPROP_LOGO_FALLBACK_URL, isMaiPropLogoFallback, switchImageToNextFallback } from "@/lib/imageFallbacks";
 import type { MapListing } from "./mapConfig";
 import { typeColour } from "./mapConfig";
 
 type RawListing = Record<string, unknown> & {
+  address?: string | null;
   auction_date?: string | number | Date | null;
   auction_starting_bid?: string | number | null;
   cover_image_url?: string | null;
   floor?: string | number | null;
+  listing_images?: { sort_order?: number | null; url?: string | null }[] | null;
   price?: string | number | null;
   property_type?: string | null;
+  region?: string | null;
   tags?: unknown;
   year_built?: string | number | null;
 };
@@ -92,19 +95,20 @@ const getPropertyTypeLabel = (raw: RawListing): string => {
   return getSpecialPropertyTypeLabel(base, tags) ?? PROPERTY_TYPE_LABELS[base] ?? titleCase(base);
 };
 
-const getCoverImage = (raw: RawListing): string =>
-  typeof raw.cover_image_url === "string" ? raw.cover_image_url : "";
-
-const getStreetViewImage = (listing: MapListing): string => {
-  if (listing.latitude == null || listing.longitude == null) return "";
-  return getStreetViewProxyUrl({ lat: listing.latitude, lng: listing.longitude }, "400x200") ?? "";
-};
-
 const firstImageOrLogo = (images: string[]): string =>
   images.find((image) => image.length > 0) ?? MAIPROP_LOGO_FALLBACK_URL;
 
-const getAuctionImage = (listing: MapListing, raw: RawListing): string =>
-  firstImageOrLogo([listing.images?.[0] ?? "", getCoverImage(raw), getStreetViewImage(listing)]);
+const getAuctionImages = (listing: MapListing, raw: RawListing): string[] =>
+  getAuctionImageList({
+    cover_image_url: raw.cover_image_url,
+    images: listing.images,
+    listing_images: raw.listing_images,
+    latitude: listing.latitude,
+    longitude: listing.longitude,
+    address: raw.address,
+    city: listing.city,
+    region: raw.region,
+  }, "400x200");
 
 const getDaysLeft = (auctionDate: RawListing["auction_date"]): number | null => {
   if (!auctionDate) return null;
@@ -173,18 +177,31 @@ const AuctionCountdownBadge = ({ daysLeft }: { daysLeft: number | null }) => {
   );
 };
 
-const PopupImage = ({ image, title, daysLeft }: { image: string; title: string; daysLeft: number | null }) => (
+const PopupImage = ({
+  images,
+  title,
+  daysLeft,
+}: {
+  images: string[];
+  title: string;
+  daysLeft: number | null;
+}) => {
+  const image = firstImageOrLogo(images);
+
+  return (
   <div className="relative w-full h-28 overflow-hidden">
     <img
       src={image}
       alt={title}
       loading="lazy"
+      data-image-fallback-index={images.length ? "0" : undefined}
       className={`w-full h-full ${isMaiPropLogoFallback(image) ? "object-contain p-6 bg-background" : "object-cover"}`}
-      onError={(event) => switchImageToLogoFallback(event.currentTarget)}
+      onError={(event) => switchImageToNextFallback(event.currentTarget, images)}
     />
     <AuctionCountdownBadge daysLeft={daysLeft} />
   </div>
-);
+  );
+};
 
 const PropertyTypeBadge = ({ label }: { label: string }) => {
   if (!label) return null;
@@ -280,13 +297,13 @@ const DetailLink = ({ listing, isAuction }: { listing: MapListing; isAuction: bo
 export const PropertyPopup = ({ listing, onClose: _onClose }: { listing: MapListing; onClose: () => void }) => { // skipcq: JS-R1005 - Popup assembles auction and standard listing metadata in one map surface.
   const raw = getRawListing(listing);
   const isAuction = listing.listingType === "auction";
-  const image = getAuctionImage(listing, raw);
+  const images = getAuctionImages(listing, raw);
   const daysLeft = getDaysLeft(raw.auction_date);
   const tags = getTags(raw);
 
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden shadow-elevated" style={{ width: 220 }}>
-      <PopupImage image={image} title={listing.title} daysLeft={daysLeft} />
+      <PopupImage images={images} title={listing.title} daysLeft={daysLeft} />
 
       <div className="p-3 space-y-2">
         <p className="font-semibold text-[11px] leading-tight line-clamp-2 text-foreground">

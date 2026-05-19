@@ -11,6 +11,29 @@ import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
  */
 
 const streetviewLimiter = makeRateLimiter({ bucket: "streetview-proxy", maxRequests: 60, windowMs: 60_000 });
+const DEFAULT_GOOGLE_MAPS_REFERER = "https://portal.maiprop.co/";
+const GOOGLE_MAPS_REFERER_ORIGIN_PATTERN =
+  /^https:\/\/((www|app|portal|os)\.)?maiprop\.co$|^https:\/\/[\w-]+\.maiprop-listing-site\.pages\.dev$/;
+
+const normalizeReferer = (value: string): string => {
+  try {
+    const url = new URL(value);
+    return `${url.origin}/`;
+  } catch (_err: unknown) {
+    return DEFAULT_GOOGLE_MAPS_REFERER;
+  }
+};
+
+const getGoogleMapsReferer = (origin: string | null): string => {
+  const configured = Deno.env.get("GOOGLE_MAPS_REFERER");
+  if (configured) return normalizeReferer(configured);
+
+  if (origin && GOOGLE_MAPS_REFERER_ORIGIN_PATTERN.test(origin)) {
+    return normalizeReferer(origin);
+  }
+
+  return DEFAULT_GOOGLE_MAPS_REFERER;
+};
 
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
@@ -45,8 +68,17 @@ Deno.serve(async (req) => {
   }
 
   const googleUrl = `https://maps.googleapis.com/maps/api/streetview?size=${size}&location=${locParam}&fov=90&pitch=10&key=${key}`;
-  const imgRes = await fetchWithTimeout(googleUrl);
+  const imgRes = await fetchWithTimeout(googleUrl, {
+    headers: {
+      Referer: getGoogleMapsReferer(req.headers.get("origin")),
+    },
+  });
   if (!imgRes.ok) {
+    const upstreamBody = await imgRes.text().catch(() => "");
+    console.warn("[streetview-proxy] Google Street View unavailable", {
+      status: imgRes.status,
+      body: upstreamBody.slice(0, 240),
+    });
     return new Response(JSON.stringify({ error: "Street View unavailable" }), {
       status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
