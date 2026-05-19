@@ -244,7 +244,7 @@ const ServiceSelectionStep = ({
   </div>
 );
 
-export default function BookConsultationModal({ open, onClose, allowVideoCall = true, professional }: BookConsultationModalProps) {
+export default function BookConsultationModal({ open, onClose, allowVideoCall = true, professional }: BookConsultationModalProps) { // skipcq: JS-R1005 - Booking modal coordinates service selection, scheduling, contact capture, and submission flow.
   const { user, profile } = useAuth();
   const submitConsultation = useSubmitConsultation();
 
