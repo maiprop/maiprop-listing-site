@@ -35,6 +35,7 @@ add a row here in the same PR.
 | `BREVO_API_KEY` | `_shared/brevo.ts` (all transactional email), `process-email-queue`, `oh-registration-notify`, `invitation-notify`, `auth-email-hook`, `send-saved-search-alerts` | Supabase fn secrets | **90 days** | Platform lead |
 | `BREVO_FROM_EMAIL` / `BREVO_FROM_NAME` | Same as above | Supabase fn secrets | Only on rebrand | Platform lead |
 | `GOOGLE_MAPS_API_KEY` | `streetview-proxy` | Supabase fn secrets | **365 days** | Platform lead |
+| `GOOGLE_MAPS_REFERER` | Optional `streetview-proxy` HTTP referrer override for Google Maps API key restrictions | Supabase fn secrets | Only when the Google Maps key referrer policy changes | Platform lead |
 | `VITE_MAPBOX_TOKEN` | Browser bundle (map components) | Cloudflare Pages env | **365 days** | Platform lead |
 
 ### CI / test
