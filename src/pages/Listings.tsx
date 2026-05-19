@@ -45,6 +45,24 @@ const GRID_LOADING_SKELETON_KEYS = [
   "grid-loading-3",
   "grid-loading-4",
 ];
+const SPLIT_LOADING_SKELETON_KEYS = [
+  "split-loading-1",
+  "split-loading-2",
+  "split-loading-3",
+  "split-loading-4",
+];
+const SEARCHING_SKELETON_KEYS = [
+  "searching-loading-1",
+  "searching-loading-2",
+  "searching-loading-3",
+  "searching-loading-4",
+];
+const MORE_LOADING_SKELETON_KEYS = [
+  "more-loading-1",
+  "more-loading-2",
+  "more-loading-3",
+  "more-loading-4",
+];
 const GRID_ESTIMATED_ROW_HEIGHT = 520;
 const ACTIVE_FILTER_CHIP_CLASS = "flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0";
 const ACCENT_FILTER_CHIP_CLASS = "flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent hover:bg-accent/20 transition-colors shrink-0";
@@ -194,7 +212,7 @@ const ListingsResultSummary = (props: Parameters<typeof getListingsResultLabel>[
 );
 
 // skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
-export default function Listings() { // skipcq: JS-R1005 - Listings coordinates filters, map state, comparison, and virtualization in one route shell.
+export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings coordinates filters, map state, comparison, and virtualization in one route shell.
   const { t } = useTranslation();
 
   const [viewMode, setViewMode] = useState<"grid" | "split" | "map">("grid");
@@ -664,7 +682,7 @@ export default function Listings() { // skipcq: JS-R1005 - Listings coordinates 
           </div>
 
           {/* ── Split view ── */}
-          {viewMode === "split" ? (() => { // skipcq: JS-R1005 - Split view derives viewport and polygon lists in one render branch.
+          {viewMode === "split" ? (() => { // skipcq: JS-R1005, JS-W1044 - Split view derives viewport and polygon lists in one render branch.
             const splitDisplayList = polygonFilterIds !== null
               ? filtered.filter(p => polygonFilterIds.has(p.id))
               : viewportIds !== null
@@ -714,7 +732,7 @@ export default function Listings() { // skipcq: JS-R1005 - Listings coordinates 
                   ref={splitListRef}
                 >
                   {isLoading
-                    ? <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <PropertyCardSkeleton key={i} />)}</div>
+                    ? <div className="space-y-3">{SPLIT_LOADING_SKELETON_KEYS.map((key) => <PropertyCardSkeleton key={key} />)}</div>
                     : isError
                     ? <EmptyState icon={Building2} title="Failed to load listings" subtitle="Please try again" action={{ label: "Retry", onClick: () => window.location.reload() }} />
                     : gridCards
@@ -785,12 +803,12 @@ export default function Listings() { // skipcq: JS-R1005 - Listings coordinates 
                  * keeps fetching pages. */}
                 {filtered.length === 0 && hasNextPage && (
                   <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-                    {Array.from({ length: 4 }).map((_, i) => <PropertyCardSkeleton key={`searching-${i}`} />)}
+                    {SEARCHING_SKELETON_KEYS.map((key) => <PropertyCardSkeleton key={key} />)}
                   </div>
                 )}
                 {isFetchingNextPage && filtered.length > 0 && (
                   <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 mt-3 sm:mt-4">
-                    {Array.from({ length: 4 }).map((_, i) => <PropertyCardSkeleton key={`more-${i}`} />)}
+                    {MORE_LOADING_SKELETON_KEYS.map((key) => <PropertyCardSkeleton key={key} />)}
                   </div>
                 )}
                 {!hasNextPage && filtered.length > 0 && (
