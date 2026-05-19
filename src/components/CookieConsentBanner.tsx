@@ -16,18 +16,18 @@ export type CookieConsent = {
   timestamp: number;
 };
 
-export function getCookieConsent(): CookieConsent | null {
+export const getCookieConsent = (): CookieConsent | null => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch (_err: unknown) {
     return null;
   }
-}
+};
 
-export function saveCookieConsent(consent: CookieConsent) {
+export const saveCookieConsent = (consent: CookieConsent) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(consent));
-}
+};
 
 type CookieTranslator = ReturnType<typeof useTranslation>["t"];
 
@@ -237,7 +237,7 @@ const CookieActionRow = ({
   </div>
 );
 
-export function CookieConsentBanner() {
+export const CookieConsentBanner = () => {
   const [visible, setVisible] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [functional, setFunctional] = useState(true);
@@ -272,8 +272,9 @@ export function CookieConsentBanner() {
   const handleSavePreferences = () =>
     save({ accepted: true, functional, analytics, mapping, timestamp: Date.now() });
 
+  // skipcq: JS-0415 - The banner shell delegates header, preferences, and actions to leaf components.
   return (
-    <div className="fixed bottom-[4.5rem] lg:bottom-4 left-1/2 z-[100] w-[calc(100%-1rem)] sm:w-[calc(100%-2rem)] max-w-4xl -translate-x-1/2 animate-slide-up bg-card border border-border rounded-xl sm:rounded-2xl shadow-elevated overflow-hidden">
+    <div className="fixed bottom-[4.5rem] lg:bottom-4 left-1/2 z-[100] w-[calc(100%-1rem)] sm:w-[calc(100%-2rem)] max-w-4xl animate-cookie-banner-up bg-card border border-border rounded-xl sm:rounded-2xl shadow-elevated overflow-hidden">
       <CookieBannerHeader t={t} onDismiss={() => setVisible(false)} />
       {expanded && (
         <CookiePreferencesPanel
@@ -296,4 +297,4 @@ export function CookieConsentBanner() {
       />
     </div>
   );
-}
+};
