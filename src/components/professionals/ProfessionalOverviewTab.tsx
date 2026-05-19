@@ -22,6 +22,7 @@ interface Props {
   };
 }
 
+// skipcq: JS-0067 - Exported profile tab component is intentionally module-scoped.
 export function ProfessionalOverviewTab({ pro, isRealEstateAgent, professionalIsPro, agentListingsCount, agentPortfolioKpis }: Props) { // skipcq: JS-R1005 - This tab orchestrates intentionally distinct pro/basic/non-agent profile sections.
   const cleanBio = stripSupervisorTestMarkers(pro.bio);
   return (

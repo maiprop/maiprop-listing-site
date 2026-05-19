@@ -19,6 +19,7 @@ import { ENERGY_CLASSES, FEATURES_RESIDENTIAL } from "@/lib/filterConfig";
 import { fmtDate, fmtTime, Pill, RangeInput, OpenHouseCard } from "@/components/open-houses/OpenHousePrimitives";
 import { cn } from "@/lib/utils";
 
+// skipcq: JS-0067 - Skeleton helper is intentionally module-scoped.
 function OpenHouseCardSkeleton() {
   return (
     <div className="property-card rounded-2xl overflow-hidden bg-card border border-border flex flex-col">

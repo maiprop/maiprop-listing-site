@@ -29,6 +29,7 @@ export interface ReviewStats {
   by_star: Record<1 | 2 | 3 | 4 | 5, number>;
 }
 
+// skipcq: JS-0067 - Exported review helper is intentionally module-scoped.
 export function computeStats(reviews: ProfessionalReview[]): ReviewStats {
   if (reviews.length === 0) {
     return { avg: 0, total: 0, recommended_pct: 0, by_star: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } };
@@ -49,6 +50,7 @@ export function computeStats(reviews: ProfessionalReview[]): ReviewStats {
   };
 }
 
+// skipcq: JS-0067 - Exported hook is intentionally module-scoped.
 export function useProfessionalReviews(professionalId: string) {
   return useQuery({
     queryKey: ["professional-reviews", professionalId],
@@ -75,6 +77,7 @@ export function useProfessionalReviews(professionalId: string) {
   });
 }
 
+// skipcq: JS-0067 - Exported hook is intentionally module-scoped.
 export function useSubmitReview(professionalId: string) {
   const { user } = useAuth();
   const qc = useQueryClient();
