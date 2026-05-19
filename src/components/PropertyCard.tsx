@@ -74,6 +74,7 @@ export interface Property {
 interface PropertyCardProps {
   property: Property;
   compact?: boolean;
+  testId?: string;
 }
 
 const energyColors: Record<string, string> = {
@@ -135,7 +136,7 @@ const getPropertyImageSrcSet = (src: string): string | undefined => {
   return srcSet || undefined;
 };
 
-export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(function PropertyCard({ property, compact = false }, _ref) { // skipcq: JS-R1005, JS-W1044 - Card rendering branches compact, auction, and standard listing affordances in one reusable surface.
+export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(function PropertyCard({ property, compact = false, testId = "property-card" }, _ref) { // skipcq: JS-R1005, JS-W1044 - Card rendering branches compact, auction, and standard listing affordances in one reusable surface.
   const { t } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -163,8 +164,6 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
         },
       }
     : undefined;
-  const cardTestId = property.listingType === "open_house" ? "open-house-card" : "property-card";
-
   const handleShare = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -230,7 +229,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
     const thumbSrcSet = isMaiPropLogoFallback(thumb) ? undefined : getPropertyImageSrcSet(thumb);
     const thumbIsLogoFallback = isMaiPropLogoFallback(thumb);
     return (
-      <Link to={detailPath} state={detailState} className="glass-card rounded-xl overflow-hidden flex gap-3 p-3 property-card group" data-testid={cardTestId}>
+      <Link to={detailPath} state={detailState} className="glass-card rounded-xl overflow-hidden flex gap-3 p-3 property-card group" data-testid={testId}>
         <div className="relative w-24 h-20 rounded-lg overflow-hidden shrink-0 bg-muted">
           <img
             src={thumb}
@@ -272,7 +271,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
   const mainImageIsLogoFallback = isMaiPropLogoFallback(mainImage);
 
   return (
-    <div data-testid={cardTestId} className={`property-card rounded-2xl overflow-hidden group flex flex-col bg-card transition-shadow duration-300 ${
+    <div data-testid={testId} className={`property-card rounded-2xl overflow-hidden group flex flex-col bg-card transition-shadow duration-300 ${
       property.isFeatured
         ? "border-2 border-amber-400/70 shadow-[0_0_0_1px_rgba(251,191,36,0.15),0_4px_24px_rgba(251,191,36,0.22)] hover:shadow-[0_0_0_1px_rgba(251,191,36,0.25),0_8px_32px_rgba(251,191,36,0.35)]"
         : "border border-border"
