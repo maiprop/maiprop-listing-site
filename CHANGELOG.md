@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.1](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.0...v1.9.1) (2026-05-19)
+
+
+### Bug Fixes
+
+* update vulnerable brace-expansion lockfile entries ([1fa6b5f](https://github.com/maiprop/maiprop-listing-site/commit/1fa6b5f50182c3d5ced7d943e7d0e737b5247e05))
+
 ## [1.9.0](https://github.com/maiprop/maiprop-listing-site/compare/v1.8.1...v1.9.0) (2026-05-18)
 
 
