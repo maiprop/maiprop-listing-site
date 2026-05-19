@@ -273,29 +273,27 @@ export function CookieConsentBanner() {
     save({ accepted: true, functional, analytics, mapping, timestamp: Date.now() });
 
   return (
-    <div className="fixed bottom-16 lg:bottom-0 left-0 right-0 z-[100] p-2 sm:p-4 animate-slide-up">
-      <div className="max-w-4xl mx-auto bg-card border border-border rounded-xl sm:rounded-2xl shadow-elevated overflow-hidden">
-        <CookieBannerHeader t={t} onDismiss={() => setVisible(false)} />
-        {expanded && (
-          <CookiePreferencesPanel
-            t={t}
-            functional={functional}
-            analytics={analytics}
-            mapping={mapping}
-            onFunctionalChange={setFunctional}
-            onAnalyticsChange={setAnalytics}
-            onMappingChange={setMapping}
-          />
-        )}
-        <CookieActionRow
+    <div className="fixed bottom-[4.5rem] lg:bottom-4 left-1/2 z-[100] w-[calc(100%-1rem)] sm:w-[calc(100%-2rem)] max-w-4xl -translate-x-1/2 animate-slide-up bg-card border border-border rounded-xl sm:rounded-2xl shadow-elevated overflow-hidden">
+      <CookieBannerHeader t={t} onDismiss={() => setVisible(false)} />
+      {expanded && (
+        <CookiePreferencesPanel
           t={t}
-          expanded={expanded}
-          onToggleExpanded={() => setExpanded(expanded => !expanded)}
-          onRejectAll={handleRejectAll}
-          onSavePreferences={handleSavePreferences}
-          onAcceptAll={handleAcceptAll}
+          functional={functional}
+          analytics={analytics}
+          mapping={mapping}
+          onFunctionalChange={setFunctional}
+          onAnalyticsChange={setAnalytics}
+          onMappingChange={setMapping}
         />
-      </div>
+      )}
+      <CookieActionRow
+        t={t}
+        expanded={expanded}
+        onToggleExpanded={() => setExpanded(expanded => !expanded)}
+        onRejectAll={handleRejectAll}
+        onSavePreferences={handleSavePreferences}
+        onAcceptAll={handleAcceptAll}
+      />
     </div>
   );
 }
