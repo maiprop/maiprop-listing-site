@@ -543,7 +543,7 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
                   </>
                 )}
 
-                {!!selectedService?.rate_amount && (
+                {selectedService && Boolean(selectedService.rate_amount) && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground bg-secondary rounded-lg p-3">
                     <Euro className="w-4 h-4 text-brand-gold shrink-0" />
                     <span>{selectedService.service_name}: </span>

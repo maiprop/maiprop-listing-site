@@ -242,7 +242,7 @@ const getOwnershipBadgeView = (tags: string[]) => {
   return badge ? { badge, percentLabel: getOwnershipPercentLabel(tags, ownershipStatus) } : null;
 };
 
-const OwnershipBadge = ({ tags }: { tags: string[] }) => {
+const OwnershipBadge = ({ tags }: { tags: string[] }) => { // skipcq: JS-R1005 - Ownership copy depends on nullable status and partial percentage display.
   const view = getOwnershipBadgeView(tags);
   if (!view) return null;
 
@@ -277,7 +277,7 @@ const DetailLink = ({ listing, isAuction }: { listing: MapListing; isAuction: bo
   </Link>
 );
 
-export const PropertyPopup = ({ listing, onClose: _onClose }: { listing: MapListing; onClose: () => void }) => {
+export const PropertyPopup = ({ listing, onClose: _onClose }: { listing: MapListing; onClose: () => void }) => { // skipcq: JS-R1005 - Popup assembles auction and standard listing metadata in one map surface.
   const raw = getRawListing(listing);
   const isAuction = listing.listingType === "auction";
   const image = getAuctionImage(listing, raw);

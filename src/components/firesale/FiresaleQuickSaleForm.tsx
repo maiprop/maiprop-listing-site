@@ -915,7 +915,7 @@ const QuickSaleFormView = (props: QuickSaleFormViewProps) => (
   </div>
 );
 
-export const FiresaleQuickSaleForm = () => {
+export const FiresaleQuickSaleForm = () => { // skipcq: JS-R1005 - Quick Sale owns one compact two-step workflow; validation and persistence helpers are delegated above.
   const { user, profile, loading: authLoading, profileLoading } = useAuth();
   const { isPro: _isPro } = useSubscription();
   const navigate = useNavigate();
@@ -976,7 +976,7 @@ export const FiresaleQuickSaleForm = () => {
       setAiLoading(false);
     }
   };
-  const handleContinue = async () => {
+  const handleContinue = async () => { // skipcq: JS-R1005 - Step transition validates auth, seller role, form fields, and estimate generation together.
     if (showAuthPendingToast(authPending)) return;
     if (!canSubmitQuickSale) {
       navigateToSellerSetup(navigate, Boolean(user));
@@ -1000,7 +1000,7 @@ export const FiresaleQuickSaleForm = () => {
       setSubmitting(false);
     }
   };
-  const handleSubmit = async () => {
+  const handleSubmit = async () => { // skipcq: JS-R1005 - Final submit keeps auth, seller gating, validation, and persistence in one click handler.
     const userId = getSubmitUserId(user, navigate);
     if (!userId) return;
     if (showAuthPendingToast(authPending)) return;

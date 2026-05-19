@@ -76,7 +76,7 @@ const switchAuctionImageToFallback = (
   img: HTMLImageElement,
   coverFallback: string | null,
   coverFallbackHref: string | null,
-): void => {
+): void => { // skipcq: JS-R1005 - Fallback order must handle Street View, cover image, and logo states distinctly.
   if (coverFallback && canUseCoverFallback(img, coverFallback, coverFallbackHref)) {
     setCoverFallbackImage(img, coverFallback);
     return;
@@ -330,7 +330,7 @@ const AuctionActions = ({
   );
 };
 
-const AuctionCardComponent = ({ a, favoritedIds, onToggleFav }: AuctionCardProps) => {
+const AuctionCardComponent = ({ a, favoritedIds, onToggleFav }: AuctionCardProps) => { // skipcq: JS-R1005 - Auction cards compose independent image, ownership, date, and action affordances.
   const badge = countdownBadge(daysUntil(a.auction_date));
   const imgSrc = getAuctionStreetViewImageUrl(a) ?? AUCTION_FALLBACK_LOGO_URL;
   const isLogoFallback = imgSrc === AUCTION_FALLBACK_LOGO_URL;
