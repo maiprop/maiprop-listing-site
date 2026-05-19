@@ -47,6 +47,26 @@ interface DayAvail {
   end: string;
 }
 
+const VideoLinkField = ({ value, onChange }: { value: string; onChange: (value: string) => void }) => (
+  <div>
+    <label className="text-xs font-medium text-muted-foreground block mb-1.5">External meeting URL (optional)</label>
+    <div className="flex gap-2">
+      <div className="relative flex-1">
+        <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="https://meet.google.com/xxx-xxxx-xxx"
+          className="w-full bg-secondary border border-border rounded-xl pl-9 pr-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"
+        />
+      </div>
+    </div>
+    <p className="text-xs text-muted-foreground mt-1.5">
+      Leave blank to use the built-in mAI prop video room after a booking is confirmed.
+    </p>
+  </div>
+);
+
 export default function ProfessionalServicesEditor() {
   const { data: pro, isLoading: proLoading } = useMyProfessional();
   const { data: existingServices = [] } = useProfessionalServices(pro?.id || "");
@@ -484,18 +504,7 @@ export default function ProfessionalServicesEditor() {
             <h2 className="font-display font-semibold flex items-center gap-2">
               <Video className="w-4 h-4 text-primary" /> Video Consultation Link
             </h2>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-1.5">External meeting URL (optional)</label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <input value={videoLink} onChange={e => setVideoLink(e.target.value)}
-                    placeholder="https://meet.google.com/xxx-xxxx-xxx"
-                    className="w-full bg-secondary border border-border rounded-xl pl-9 pr-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors" />
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1.5">Leave blank to use the built-in mAI prop video room after a booking is confirmed.</p>
-            </div>
+            <VideoLinkField value={videoLink} onChange={setVideoLink} />
 
             <div>
               <label className="text-xs font-medium text-muted-foreground block mb-1.5">Calendar Notes (shown to clients)</label>

@@ -14,6 +14,104 @@ interface Props {
   onOpenModal: (key: "consult" | "msg") => void;
 }
 
+const ServiceIcon = ({ videoEnabled }: { videoEnabled: boolean }) => (
+  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${videoEnabled ? "bg-primary/10" : "bg-gradient-primary"}`}>
+    {videoEnabled
+      ? <Video className="w-4 h-4 text-primary" />
+      : <Briefcase className="w-4 h-4 text-primary-foreground" />}
+  </div>
+);
+
+const ServiceTitle = ({ service }: { service: ProfessionalService }) => (
+  <div>
+    <span className="text-sm font-semibold">{service.service_name}</span>
+    {!!service.is_premium && (
+      <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold font-medium">Pro</span>
+    )}
+  </div>
+);
+
+const ServicePrice = ({ service }: { service: ProfessionalService }) => (
+  <span className="text-sm font-bold text-brand-gold shrink-0">
+    {service.rate_amount ? `EUR ${service.rate_amount}${PRICING_LABELS[service.pricing_model] ?? ""}` : "On Request"}
+  </span>
+);
+
+const ServiceHeader = ({ service }: { service: ProfessionalService }) => (
+  <div className="flex items-start justify-between gap-3 flex-wrap">
+    <ServiceTitle service={service} />
+    <ServicePrice service={service} />
+  </div>
+);
+
+const ServiceDescription = ({ description }: { description: string | null }) => {
+  const cleanDescription = stripSupervisorTestMarkers(description);
+  return cleanDescription
+    ? <p className="text-xs text-muted-foreground mt-1 leading-relaxed line-clamp-2">{cleanDescription}</p>
+    : null;
+};
+
+const ServiceRemotePill = () => (
+  <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary flex items-center gap-1">
+    <Video className="w-2.5 h-2.5" /> Remote available
+  </span>
+);
+
+const ServiceMeta = ({ service }: { service: ProfessionalService }) => (
+  <div className="flex items-center gap-2 mt-2 flex-wrap">
+    <span className="text-[10px] px-2 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground capitalize">
+      {service.pricing_model}
+    </span>
+    {!!service.video_enabled && <ServiceRemotePill />}
+  </div>
+);
+
+const ServiceActionButton = ({
+  professionalIsPro,
+  user,
+  onOpenModal,
+}: {
+  professionalIsPro: boolean;
+  user: { id: string } | null;
+  onOpenModal: (key: "consult" | "msg") => void;
+}) => {
+  if (professionalIsPro && user) {
+    return (
+      <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground text-xs shrink-0 self-center" onClick={() => onOpenModal("consult")}>
+        Book
+      </Button>
+    );
+  }
+
+  return (
+    <Button size="sm" variant="outline" className="border-border text-xs shrink-0 self-center" onClick={() => onOpenModal("msg")}>
+      Enquire
+    </Button>
+  );
+};
+
+const ProfessionalServiceCard = ({
+  service,
+  professionalIsPro,
+  user,
+  onOpenModal,
+}: {
+  service: ProfessionalService;
+  professionalIsPro: boolean;
+  user: { id: string } | null;
+  onOpenModal: (key: "consult" | "msg") => void;
+}) => (
+  <div className="flex items-start gap-4 p-4 bg-secondary rounded-xl border border-border hover:border-primary/20 transition-colors">
+    <ServiceIcon videoEnabled={service.video_enabled} />
+    <div className="flex-1 min-w-0">
+      <ServiceHeader service={service} />
+      <ServiceDescription description={service.description} />
+      <ServiceMeta service={service} />
+    </div>
+    <ServiceActionButton professionalIsPro={professionalIsPro} user={user} onOpenModal={onOpenModal} />
+  </div>
+);
+
 export function ProfessionalServicesTab({ dbServices, dbAvailability, professionalIsPro, user, onOpenModal }: Props) {
   return (
     <div className="space-y-5">
@@ -29,50 +127,13 @@ export function ProfessionalServicesTab({ dbServices, dbAvailability, profession
         {dbServices.length > 0 ? (
           <div className="grid grid-cols-1 gap-3">
             {dbServices.map((svc) => (
-              <div key={svc.id} className="flex items-start gap-4 p-4 bg-secondary rounded-xl border border-border hover:border-primary/20 transition-colors">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${svc.video_enabled ? "bg-primary/10" : "bg-gradient-primary"}`}>
-                  {svc.video_enabled
-                    ? <Video className="w-4 h-4 text-primary" />
-                    : <Briefcase className="w-4 h-4 text-primary-foreground" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-3 flex-wrap">
-                    <div>
-                      <span className="text-sm font-semibold">{svc.service_name}</span>
-                      {!!svc.is_premium && (
-                        <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold font-medium">Pro</span>
-                      )}
-                    </div>
-                    <span className="text-sm font-bold text-brand-gold shrink-0">
-                      {svc.rate_amount ? `€${svc.rate_amount}${PRICING_LABELS[svc.pricing_model] ?? ""}` : "On Request"}
-                    </span>
-                  </div>
-                  {stripSupervisorTestMarkers(svc.description) && (
-                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed line-clamp-2">{stripSupervisorTestMarkers(svc.description)}</p>
-                  )}
-                  <div className="flex items-center gap-2 mt-2 flex-wrap">
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground capitalize">
-                      {svc.pricing_model}
-                    </span>
-                    {!!svc.video_enabled && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary flex items-center gap-1">
-                        <Video className="w-2.5 h-2.5" /> Remote available
-                      </span>
-                    )}
-                  </div>
-                </div>
-                {professionalIsPro && user ? (
-                  <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground text-xs shrink-0 self-center"
-                    onClick={() => onOpenModal("consult")}>
-                    Book
-                  </Button>
-                ) : (
-                  <Button size="sm" variant="outline" className="border-border text-xs shrink-0 self-center"
-                    onClick={() => onOpenModal("msg")}>
-                    Enquire
-                  </Button>
-                )}
-              </div>
+              <ProfessionalServiceCard
+                key={svc.id}
+                service={svc}
+                professionalIsPro={professionalIsPro}
+                user={user}
+                onOpenModal={onOpenModal}
+              />
             ))}
           </div>
         ) : (

@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubmitConsultation } from "@/hooks/useConsultations";
-import { useProfessionalServices, useProfessionalAvailability } from "@/hooks/useProfessionalServices";
+import { useProfessionalServices, useProfessionalAvailability, type ProfessionalService } from "@/hooks/useProfessionalServices";
 import { toast } from "sonner";
 import { stripSupervisorTestMarkers } from "@/lib/displayText";
 
@@ -119,6 +119,107 @@ interface BookConsultationModalProps {
     video_link?: string | null;
   };
 }
+
+const RemoteAvailablePill = () => (
+  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary flex items-center gap-1">
+    <Video className="w-2.5 h-2.5" /> Remote available
+  </span>
+);
+
+const ServiceOptionCard = ({
+  service,
+  selected,
+  onSelect,
+}: {
+  service: ProfessionalService;
+  selected: boolean;
+  onSelect: (service: ProfessionalService) => void;
+}) => {
+  const description = stripSupervisorTestMarkers(service.description);
+
+  return (
+    <button
+      onClick={() => onSelect(service)}
+      className={`w-full flex items-start gap-3 p-3.5 rounded-xl border text-left transition-all ${
+        selected ? "border-primary bg-primary/10" : "border-border hover:border-primary/30 bg-secondary/40"
+      }`}
+    >
+      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+        selected ? "bg-primary/20" : "bg-secondary"
+      }`}>
+        {service.video_enabled
+          ? <Video className="w-3.5 h-3.5 text-primary" />
+          : <Briefcase className="w-3.5 h-3.5 text-muted-foreground" />}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <span className="text-sm font-medium">{service.service_name}</span>
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+            service.rate_amount ? "bg-brand-gold/15 text-brand-gold" : "bg-secondary text-muted-foreground"
+          }`}>
+            {service.rate_amount ? `EUR ${service.rate_amount}${PRICING_LABELS[service.pricing_model] ?? ""}` : "On Request"}
+          </span>
+        </div>
+        {description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{description}</p>}
+        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground capitalize">
+            {service.pricing_model}
+          </span>
+          {!!service.video_enabled && <RemoteAvailablePill />}
+          {!!service.is_premium && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold">Pro</span>
+          )}
+        </div>
+      </div>
+      <ChevronRight className={`w-4 h-4 shrink-0 mt-2 transition-colors ${selected ? "text-primary" : "text-muted-foreground/30"}`} />
+    </button>
+  );
+};
+
+const EmptyServicesPanel = ({ onContinue }: { onContinue: () => void }) => (
+  <div className="text-center py-6 text-sm text-muted-foreground">
+    <Briefcase className="w-8 h-8 mx-auto mb-2 opacity-40" />
+    No services are configured yet. You can still send a general consultation request.
+    <Button className="w-full mt-3 bg-gradient-primary border-0 text-primary-foreground" onClick={onContinue}>
+      Continue as General Consultation
+    </Button>
+  </div>
+);
+
+const ServiceSelectionStep = ({
+  services,
+  selectedService,
+  onSelectService,
+  onContinue,
+}: {
+  services: ProfessionalService[];
+  selectedService: ProfessionalService | null;
+  onSelectService: (service: ProfessionalService) => void;
+  onContinue: () => void;
+}) => (
+  <div className="space-y-3">
+    <p className="text-sm text-muted-foreground">What service do you need?</p>
+    {services.length === 0 ? (
+      <EmptyServicesPanel onContinue={onContinue} />
+    ) : (
+      <>
+        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+          {services.map((service) => (
+            <ServiceOptionCard
+              key={service.id}
+              service={service}
+              selected={selectedService?.id === service.id}
+              onSelect={onSelectService}
+            />
+          ))}
+        </div>
+        <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" disabled={!selectedService} onClick={onContinue}>
+          Continue
+        </Button>
+      </>
+    )}
+  </div>
+);
 
 export default function BookConsultationModal({ open, onClose, allowVideoCall = true, professional }: BookConsultationModalProps) {
   const { user, profile } = useAuth();
@@ -324,74 +425,12 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
             </div>
 
             {step === 1 && (
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">What service do you need?</p>
-                {services.length === 0 ? (
-                  <div className="text-center py-6 text-sm text-muted-foreground">
-                    <Briefcase className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                    No services are configured yet. You can still send a general consultation request.
-                    <Button className="w-full mt-3 bg-gradient-primary border-0 text-primary-foreground" onClick={() => setStep(nextStepAfterService)}>
-                      Continue as General Consultation
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                      {services.map((svc) => (
-                        <button
-                          key={svc.id}
-                          onClick={() => setSelectedService(svc)}
-                          className={`w-full flex items-start gap-3 p-3.5 rounded-xl border text-left transition-all ${
-                            selectedService?.id === svc.id
-                              ? "border-primary bg-primary/10"
-                              : "border-border hover:border-primary/30 bg-secondary/40"
-                          }`}
-                        >
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
-                            selectedService?.id === svc.id ? "bg-primary/20" : "bg-secondary"
-                          }`}>
-                            {svc.video_enabled ? <Video className="w-3.5 h-3.5 text-primary" /> : <Briefcase className="w-3.5 h-3.5 text-muted-foreground" />}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between gap-2 flex-wrap">
-                              <span className="text-sm font-medium">{svc.service_name}</span>
-                              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                                svc.rate_amount ? "bg-brand-gold/15 text-brand-gold" : "bg-secondary text-muted-foreground"
-                              }`}>
-                                {svc.rate_amount ? `EUR ${svc.rate_amount}${PRICING_LABELS[svc.pricing_model] ?? ""}` : "On Request"}
-                              </span>
-                            </div>
-                            {stripSupervisorTestMarkers(svc.description) && (
-                              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{stripSupervisorTestMarkers(svc.description)}</p>
-                            )}
-                            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground capitalize">
-                                {svc.pricing_model}
-                              </span>
-                              {!!svc.video_enabled && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary flex items-center gap-1">
-                                  <Video className="w-2.5 h-2.5" /> Remote available
-                                </span>
-                              )}
-                              {!!svc.is_premium && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold">Pro</span>
-                              )}
-                            </div>
-                          </div>
-                          <ChevronRight className={`w-4 h-4 shrink-0 mt-2 transition-colors ${selectedService?.id === svc.id ? "text-primary" : "text-muted-foreground/30"}`} />
-                        </button>
-                      ))}
-                    </div>
-                    <Button
-                      className="w-full bg-gradient-primary border-0 text-primary-foreground"
-                      disabled={!selectedService}
-                      onClick={() => setStep(nextStepAfterService)}
-                    >
-                      Continue
-                    </Button>
-                  </>
-                )}
-              </div>
+              <ServiceSelectionStep
+                services={services}
+                selectedService={selectedService}
+                onSelectService={setSelectedService}
+                onContinue={() => setStep(nextStepAfterService)}
+              />
             )}
 
             {allowVideoCall && step === 2 && (
