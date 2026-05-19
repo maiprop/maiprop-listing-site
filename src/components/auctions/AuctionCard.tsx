@@ -29,8 +29,7 @@ const getCoverFallbackHref = (coverFallback: string | null): string | null => {
   }
 };
 
-// skipcq: JS-R1005 - Auction media fallback checks cover, logo, and final hide states in one DOM handler.
-const switchAuctionImageToFallback = (
+const switchAuctionImageToFallback = ( // skipcq: JS-R1005 - Auction media fallback checks cover, logo, and final hide states in one DOM handler.
   img: HTMLImageElement,
   coverFallback: string | null,
   coverFallbackHref: string | null,
@@ -63,8 +62,7 @@ const switchAuctionImageToFallback = (
   img.style.display = "none";
 };
 
-// skipcq: JS-R1005 - Auction card rendering intentionally combines optional media, ownership, date, favorite, and action states.
-export const AuctionCard = memo(function AuctionCard({
+export const AuctionCard = memo(function AuctionCard({ // skipcq: JS-R1005 - Auction card rendering intentionally combines optional media, ownership, date, favorite, and action states.
   a,
   favoritedIds,
   onToggleFav,
