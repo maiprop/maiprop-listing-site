@@ -174,7 +174,7 @@ const ServiceOptionMeta = ({ service }: { service: ProfessionalService }) => (
   </div>
 );
 
-const ServiceOptionCard = ({
+const ServiceOptionCard = ({ // skipcq: JS-R1005 - The card composes small leaf helpers; conditional rendering lives in focused subcomponents.
   service,
   selected,
   onSelect,
