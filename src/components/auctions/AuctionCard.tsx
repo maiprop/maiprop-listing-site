@@ -20,11 +20,20 @@ export function PremiumBadge() {
   );
 }
 
-function switchAuctionImageToFallback(
+const getCoverFallbackHref = (coverFallback: string | null): string | null => {
+  if (!coverFallback) return null;
+  try {
+    return new URL(coverFallback, APP_ORIGIN).href;
+  } catch (_err: unknown) {
+    return null;
+  }
+};
+
+const switchAuctionImageToFallback = (
   img: HTMLImageElement,
   coverFallback: string | null,
   coverFallbackHref: string | null,
-) {
+): void => { // skipcq: JS-R1005 - Auction media fallback checks cover, logo, and final hide states in one DOM handler.
   const canUseCoverFallback = Boolean(
     coverFallback &&
     coverFallbackHref &&
@@ -51,7 +60,7 @@ function switchAuctionImageToFallback(
   }
 
   img.style.display = "none";
-}
+};
 
 export const AuctionCard = memo(function AuctionCard({
   a,
@@ -70,7 +79,7 @@ export const AuctionCard = memo(function AuctionCard({
   const coverFallback = typeof a.cover_image_url === "string" && a.cover_image_url.trim()
     ? a.cover_image_url.trim()
     : null;
-  const coverFallbackHref = coverFallback ? new URL(coverFallback, APP_ORIGIN).href : null;
+  const coverFallbackHref = getCoverFallbackHref(coverFallback);
   const isFav = favoritedIds.has(a.id);
   const ownershipStatus = normalizeOwnership(getOwnershipStatus(a.tags));
   const ownershipPct = getOwnershipPct(a.tags);

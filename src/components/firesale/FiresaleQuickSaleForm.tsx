@@ -73,8 +73,8 @@ export function FiresaleQuickSaleForm() { // skipcq: JS-R1005 - Quick Sale keeps
     upload: uploadPhotos,
   } = photoUploader;
 
-  const authPending = Boolean(authLoading || profileLoading || (Boolean(user) && !profile));
-  const canSubmitQuickSale = Boolean(user) && !authPending && isSellSideRole(profile);
+  const authPending = Boolean(authLoading || profileLoading);
+  const canSubmitQuickSale = Boolean(user) && !authPending && profile != null && isSellSideRole(profile);
 
   const [form, setForm] = useState({
     address: "",

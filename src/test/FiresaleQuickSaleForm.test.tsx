@@ -125,6 +125,19 @@ describe("FiresaleQuickSaleForm", () => {
     expect(screen.queryByText(/Seller account required/i)).not.toBeInTheDocument();
   });
 
+  it("sends a logged-in user without a loaded profile to onboarding instead of staying pending", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1", email: "seller@example.com" },
+      profile: null,
+      loading: false,
+      profileLoading: false,
+    });
+    render(<FiresaleQuickSaleForm />);
+    expect(screen.getByText(/Seller account required/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Become a Seller/i }));
+    expect(navigateMock).toHaveBeenCalledWith("/onboarding");
+  });
+
   it("renders a 'Sign up as Seller' CTA when there is no user at all", () => {
     isSellSideRoleMock.mockReturnValue(false);
     useAuthMock.mockReturnValue({ user: null, profile: null });
