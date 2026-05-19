@@ -789,14 +789,18 @@ const ContactPhoneField = ({ form, errors, onUpdate }: ContactFieldProps) => (
   </div>
 );
 
-const ContactFields = (props: ContactFieldProps) => (
-  <div className="space-y-4">
-    <ContactNameField {...props} />
-    <div className="grid grid-cols-2 gap-4">
-      <ContactEmailField {...props} />
-      <ContactPhoneField {...props} />
-    </div>
+const ContactMethodFields = (props: ContactFieldProps) => (
+  <div className="grid grid-cols-2 gap-4">
+    <ContactEmailField {...props} />
+    <ContactPhoneField {...props} />
   </div>
+);
+
+const ContactFields = (props: ContactFieldProps) => (
+  <>
+    <ContactNameField {...props} />
+    <ContactMethodFields {...props} />
+  </>
 );
 
 type StepTwoProps = {
