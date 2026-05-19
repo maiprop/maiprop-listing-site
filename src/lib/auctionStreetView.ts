@@ -6,6 +6,8 @@ export const AUCTION_FALLBACK_LOGO_URL = MAIPROP_LOGO_FALLBACK_URL;
 
 type AuctionStreetViewInput = {
   cover_image_url?: string | null;
+  images?: (string | null | undefined)[] | null;
+  listing_images?: { sort_order?: number | null; url?: string | null }[] | null;
   latitude?: number | string | null;
   longitude?: number | string | null;
   address?: string | null;
@@ -28,6 +30,27 @@ const isInCoordinateRange = (value: number | null, min: number, max: number): va
 const getCoverImageUrl = (auction: AuctionStreetViewInput): string | null =>
   hasText(auction.cover_image_url) ? auction.cover_image_url.trim() : null;
 
+const getSortedListingImageUrls = (auction: AuctionStreetViewInput): string[] =>
+  [...(auction.listing_images ?? [])]
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    .map((image) => image.url)
+    .filter(hasText)
+    .map((url) => url.trim());
+
+const getExtraImageUrls = (auction: AuctionStreetViewInput): string[] =>
+  (auction.images ?? [])
+    .filter(hasText)
+    .map((url) => url.trim());
+
+const uniqueImageUrls = (images: Array<string | null | undefined>): string[] => {
+  const seen = new Set<string>();
+  return images.filter((image): image is string => {
+    if (!image || seen.has(image)) return false;
+    seen.add(image);
+    return true;
+  });
+};
+
 export const getAuctionStreetViewLocation = (auction: AuctionStreetViewInput): string | null => {
   const parts = [auction.address, auction.city, auction.region, "Greece"]
     .filter(hasText)
@@ -37,7 +60,7 @@ export const getAuctionStreetViewLocation = (auction: AuctionStreetViewInput): s
   return uniqueParts.length > 1 ? uniqueParts.join(", ") : null;
 };
 
-export const getAuctionStreetViewImageUrl = (
+export const getAuctionStreetViewCandidateUrl = (
   auction: AuctionStreetViewInput,
   size = "800x450",
 ): string | null => {
@@ -50,16 +73,26 @@ export const getAuctionStreetViewImageUrl = (
   const location = getAuctionStreetViewLocation(auction);
   if (location) return getStreetViewProxyUrl({ location }, size);
 
-  return getCoverImageUrl(auction) ?? AUCTION_FALLBACK_LOGO_URL;
+  return null;
+};
+
+export const getAuctionStreetViewImageUrl = (
+  auction: AuctionStreetViewInput,
+  size = "800x450",
+): string | null => {
+  return getAuctionImageList(auction, size)[0] ?? AUCTION_FALLBACK_LOGO_URL;
 };
 
 export const getAuctionImageList = (
   auction: AuctionStreetViewInput,
   size = "800x450",
 ): string[] => {
-  const imageUrl = getAuctionStreetViewImageUrl(auction, size);
-  const coverImageUrl = getCoverImageUrl(auction);
-  return [imageUrl, coverImageUrl]
-    .filter((url): url is string => Boolean(url))
-    .filter((url, index, urls) => urls.indexOf(url) === index);
+  const streetViewUrl = getAuctionStreetViewCandidateUrl(auction, size);
+  const fallbackImages = [
+    getCoverImageUrl(auction),
+    ...getSortedListingImageUrls(auction),
+    ...getExtraImageUrls(auction),
+  ];
+  const images = uniqueImageUrls([streetViewUrl, ...fallbackImages]);
+  return images.length ? images : [AUCTION_FALLBACK_LOGO_URL];
 };

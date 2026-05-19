@@ -82,4 +82,23 @@ describe("auction Street View image fallback", () => {
     expect(images[0]).toContain("/functions/v1/streetview-proxy");
     expect(images[1]).toBe("https://cdn.example/auction.jpg");
   });
+
+  it("keeps listing images behind Street View and cover fallbacks", () => {
+    const images = getAuctionImageList({
+      cover_image_url: "https://cdn.example/cover.jpg",
+      latitude: 37.98,
+      longitude: 23.72,
+      listing_images: [
+        { url: "https://cdn.example/second.jpg", sort_order: 2 },
+        { url: "https://cdn.example/first.jpg", sort_order: 1 },
+      ],
+    });
+
+    expect(images[0]).toContain("/functions/v1/streetview-proxy");
+    expect(images.slice(1)).toEqual([
+      "https://cdn.example/cover.jpg",
+      "https://cdn.example/first.jpg",
+      "https://cdn.example/second.jpg",
+    ]);
+  });
 });

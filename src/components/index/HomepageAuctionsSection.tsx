@@ -4,7 +4,7 @@ import { Gavel, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PropertyCard, type Property } from "@/components/PropertyCard";
 import { useInView } from "@/hooks/useInView";
-import { getAuctionStreetViewImageUrl } from "@/lib/auctionStreetView";
+import { getAuctionImageList } from "@/lib/auctionStreetView";
 
 type HomepageAuctionImage = {
   sort_order?: number | null;
@@ -46,19 +46,8 @@ interface Props {
   isLoading: boolean;
 }
 
-const getSortedListingImages = (listing: HomepageAuctionListing): string[] => {
-  return [...(listing.listing_images ?? [])]
-    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-    .map((img) => img.url)
-    .filter((url): url is string => typeof url === "string" && url.length > 0);
-};
-
 const getHomepageAuctionImages = (listing: HomepageAuctionListing): string[] => { // skipcq: JS-R1005
-  const fallbackImages = getSortedListingImages(listing);
-  const streetView = getAuctionStreetViewImageUrl(listing);
-  const images = listing.cover_image_url ? [listing.cover_image_url, ...fallbackImages] : fallbackImages;
-  if (!streetView) return images;
-  return [streetView, ...images.filter((image) => image !== streetView)];
+  return getAuctionImageList(listing);
 };
 
 const toOptionalNumber = (value: unknown): number | undefined =>

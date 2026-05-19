@@ -155,6 +155,33 @@ describe("PropertyCard behavior", () => {
     expect(image.style.objectFit).toBe("contain");
   });
 
+  it("falls back from auction Street View to cover imagery before the logo", async () => {
+    const { PropertyCard } = await import("@/components/PropertyCard");
+
+    renderWithProviders(
+      <PropertyCard
+        property={baseProperty({
+          listingType: "auction",
+          images: [
+            "https://street.example/auction.jpg",
+            "https://cdn.example/auction-cover.jpg",
+          ],
+        })}
+      />,
+    );
+
+    const image = screen.getByAltText("Athens Loft") as HTMLImageElement;
+    expect(image.src).toBe("https://street.example/auction.jpg");
+
+    fireEvent.error(image);
+    expect(image.src).toBe("https://cdn.example/auction-cover.jpg");
+    expect(image.style.objectFit).toBe("cover");
+
+    fireEvent.error(image);
+    expect(image.src).toContain("/images/maiprop-logo.webp");
+    expect(image.style.objectFit).toBe("contain");
+  });
+
   it("renders remaining badges, non-urgent timers, price deltas, score tiers, and report errors", async () => {
     authMock.mockReturnValue({ user: { id: "u-error" }, profile: null, loading: false });
     insertMock.mockResolvedValueOnce({ error: new Error("duplicate") });

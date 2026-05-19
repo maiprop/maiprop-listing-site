@@ -4,7 +4,7 @@ import { renderWithProviders } from "@/test/utils";
 
 const toastSuccess = vi.fn();
 const toastInfo = vi.fn();
-const streetViewMock = vi.fn();
+const imageListMock = vi.fn();
 
 vi.mock("sonner", () => ({
   toast: { success: toastSuccess, info: toastInfo },
@@ -16,7 +16,7 @@ vi.mock("@/lib/config", () => ({
 
 vi.mock("@/lib/auctionStreetView", () => ({
   AUCTION_FALLBACK_LOGO_URL: "/images/maiprop-logo.webp",
-  getAuctionStreetViewImageUrl: (auction: unknown) => streetViewMock(auction),
+  getAuctionImageList: (auction: unknown) => imageListMock(auction),
 }));
 
 const auction = (overrides: Record<string, unknown> = {}) => ({
@@ -40,7 +40,7 @@ const auction = (overrides: Record<string, unknown> = {}) => ({
 describe("AuctionCard behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    streetViewMock.mockReturnValue("https://example.test/street.jpg");
+    imageListMock.mockReturnValue(["https://example.test/street.jpg"]);
     Object.defineProperty(navigator, "share", { configurable: true, value: undefined });
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
@@ -106,7 +106,12 @@ describe("AuctionCard behavior", () => {
     expect(image.src).toContain("/images/maiprop-logo.webp");
   });
 
-  it("uses cover image after Street View fails, then the maiProp logo if cover also fails", async () => {
+  it("uses cover and listing images after Street View fails, then the maiProp logo", async () => {
+    imageListMock.mockReturnValue([
+      "https://example.test/street.jpg",
+      "https://example.test/cover.jpg",
+      "https://example.test/listing.jpg",
+    ]);
     const { AuctionCard } = await import("@/components/auctions/AuctionCard");
 
     renderWithProviders(
@@ -121,12 +126,14 @@ describe("AuctionCard behavior", () => {
     fireEvent.error(image);
     expect(image.src).toBe("https://example.test/cover.jpg");
     fireEvent.error(image);
+    expect(image.src).toBe("https://example.test/listing.jpg");
+    fireEvent.error(image);
     expect(image.src).toContain("/images/maiprop-logo.webp");
     expect(image.style.objectFit).toBe("contain");
   });
 
   it("uses the maiProp logo and minimal price fallback when street-view and prices are absent", async () => {
-    streetViewMock.mockReturnValue(null);
+    imageListMock.mockReturnValue(["/images/maiprop-logo.webp"]);
     const { AuctionCard } = await import("@/components/auctions/AuctionCard");
 
     renderWithProviders(

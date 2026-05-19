@@ -257,6 +257,8 @@ const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates aucti
   const propertyTypeLabel = getPropertyTypeLabel(auction as Parameters<typeof getPropertyTypeLabel>[0]);
   const images = getAuctionImageList({
     cover_image_url: auction.cover_image_url as string | null | undefined,
+    images: auction.images as (string | null | undefined)[] | null | undefined,
+    listing_images: auction.listing_images as { sort_order?: number | null; url?: string | null }[] | null | undefined,
     latitude: auction.latitude as number | string | null | undefined,
     longitude: auction.longitude as number | string | null | undefined,
     address,
