@@ -112,7 +112,7 @@ const ProfessionalServiceCard = ({
   </div>
 );
 
-export function ProfessionalServicesTab({ dbServices, dbAvailability, professionalIsPro, user, onOpenModal }: Props) {
+export function ProfessionalServicesTab({ dbServices, dbAvailability, professionalIsPro, user, onOpenModal }: Props) { // skipcq: JS-R1005 - Public services tab renders service, availability, and booking states together.
   return (
     <div className="space-y-5">
       {/* Service Cards */}

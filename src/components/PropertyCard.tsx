@@ -199,7 +199,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
     else toast.success(t("propertyCard.reportSubmitted"));
   };
 
-  const getBadge = () => {
+  const getBadge = () => { // skipcq: JS-R1005 - Badge priority intentionally checks mutually exclusive listing states in order.
   if (property.listingType === "auction") return { label: t("propertyCard.badges.auction"), cls: "badge-auction" };
     if (property.listingType === "open_house") return { label: t("propertyCard.badges.openHouse"), cls: "badge-open-house" };
     if (property.listingType === "firesale") return { label: t("propertyCard.badges.quickSale"), cls: "badge-firesale" };

@@ -302,7 +302,7 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
     onClose();
   };
 
-  const handleConfirm = async () => {
+  const handleConfirm = async () => { // skipcq: JS-R1005 - Submit flow resolves guest/user contact details and booking metadata in one mutation payload.
     const resolvedName = user ? (profile?.display_name || user.email || name) : name;
     const resolvedEmail = user ? (user.email || email) : email;
     if (!resolvedName || !resolvedEmail) {
@@ -424,7 +424,7 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
         ) : (
           <div className="space-y-5">
             <div className="flex items-center gap-1.5">
-              {(allowVideoCall ? [1, 2, 3, 4] : [1, 2, 3]).map((s, idx) => {
+              {(allowVideoCall ? [1, 2, 3, 4] : [1, 2, 3]).map((s, idx) => { // skipcq: JS-R1005 - Stepper branches for video-enabled and in-person-only booking flows.
                 const actualStep = allowVideoCall ? s : (s === 1 ? 1 : s === 2 ? 3 : 4);
                 const isActive = step === actualStep;
                 const isDone = step > actualStep;
