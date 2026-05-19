@@ -228,19 +228,6 @@ const AuctionSizePill = ({ sqm }: { sqm?: number | null }) => {
   );
 };
 
-const AuctionFeaturePills = ({
-  yearBuilt,
-  sqm,
-}: {
-  yearBuilt?: string | number | null;
-  sqm?: number | null;
-}) => (
-  <div className="flex flex-wrap items-center gap-1.5 mt-1 empty:hidden">
-    <AuctionYearBuiltPill yearBuilt={yearBuilt} />
-    <AuctionSizePill sqm={sqm} />
-  </div>
-);
-
 const AuctionPrice = ({ amount }: { amount: number }) => (
   <div className="flex items-center justify-between pt-1">
     <div className="flex items-center gap-1 font-display font-bold bg-gradient-primary bg-clip-text text-transparent">
@@ -375,7 +362,10 @@ const AuctionCardComponent = ({ a, favoritedIds, onToggleFav }: AuctionCardProps
         <AuctionLocation address={a.address} city={a.city} />
         <AuctionPropertyTypeChip label={propertyTypeLabel} />
         <AuctionOwnershipChip ownershipBadge={ownershipBadge} ownershipPct={ownershipPct} />
-        <AuctionFeaturePills yearBuilt={a.year_built} sqm={a.sqm} />
+        <div className="flex flex-wrap items-center gap-1.5 mt-1 empty:hidden">
+          <AuctionYearBuiltPill yearBuilt={a.year_built} />
+          <AuctionSizePill sqm={a.sqm} />
+        </div>
         <AuctionPrice amount={price} />
         <AuctionCourt court={a.auction_court} />
         <AuctionActions a={a} isFav={isFav} onToggleFav={onToggleFav} />
