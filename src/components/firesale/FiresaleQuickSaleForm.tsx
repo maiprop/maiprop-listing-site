@@ -74,6 +74,13 @@ type PhotoSelectHandler = (event: ChangeEvent<HTMLInputElement>) => void;
 const firstFilled = (...values: Array<string | null | undefined>): string =>
   values.find((value) => Boolean(value)) ?? "";
 
+const getProfileContactName = (profile: QuickSaleProfile): string =>
+  firstFilled(profile?.display_name, profile?.first_name);
+
+const getProfilePhone = (profile: QuickSaleProfile): string => profile?.phone ?? "";
+
+const getUserEmail = (userEmail: string | null | undefined): string => userEmail ?? "";
+
 const buildInitialForm = (profile: QuickSaleProfile, userEmail: string | null | undefined): QuickSaleFormValues => ({
   address: "",
   kaek: "",
@@ -81,9 +88,9 @@ const buildInitialForm = (profile: QuickSaleProfile, userEmail: string | null | 
   sqm: "",
   askingPrice: "",
   constructionYear: "",
-  contactName: firstFilled(profile?.display_name, profile?.first_name),
-  contactEmail: userEmail ?? "",
-  contactPhone: profile?.phone ?? "",
+  contactName: getProfileContactName(profile),
+  contactEmail: getUserEmail(userEmail),
+  contactPhone: getProfilePhone(profile),
   notes: "",
 });
 
@@ -298,7 +305,7 @@ const getRequiredPropertyType = (propertyType: string): NonNullable<ReturnType<t
   return mappedPropertyType;
 };
 
-const insertFiresaleRequest = async (
+const insertFiresaleRequest = (
   form: QuickSaleFormValues,
   userId: string,
   estimate: number,
@@ -409,7 +416,7 @@ const SellerGateBanner = ({
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold">Seller account required</p>
         <p className="text-xs text-muted-foreground mt-0.5">
-          To submit a Quick Sale request, you must have a Seller profile. It's free - Pro is not required.
+          To submit a Quick Sale request, you must have a Seller profile. It&apos;s free - Pro is not required.
         </p>
         <div className="mt-2">
           <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground" onClick={onSellerCta}>
@@ -607,7 +614,7 @@ const PhotoUploadField = ({
       <div className="space-y-3">
         <div className="grid grid-cols-3 gap-2">
           {photoPreviews.map((src, index) => (
-            <div key={`${src}-${index}`} className="relative group rounded-xl overflow-hidden aspect-square bg-muted border border-border">
+            <div key={src} className="relative group rounded-xl overflow-hidden aspect-square bg-muted border border-border">
               <img src={src} alt="" className="w-full h-full object-cover" />
               <button
                 type="button"
@@ -728,48 +735,66 @@ const EstimateSummary = ({ aiEstimate }: { aiEstimate: number | null }) => {
   );
 };
 
-const ContactFields = ({ form, errors, onUpdate }: { form: QuickSaleFormValues; errors: QuickSaleErrors; onUpdate: QuickSaleFieldUpdater }) => (
+type ContactFieldProps = {
+  form: QuickSaleFormValues;
+  errors: QuickSaleErrors;
+  onUpdate: QuickSaleFieldUpdater;
+};
+
+const ContactNameField = ({ form, errors, onUpdate }: ContactFieldProps) => (
+  <div>
+    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+      Full Name <span className="text-destructive">*</span>
+    </label>
+    <input
+      type="text"
+      placeholder="Your name"
+      value={form.contactName}
+      onChange={(e) => onUpdate("contactName", e.target.value)}
+      className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
+    />
+    {errors.contactName && <p className="mt-1 text-xs text-destructive">{errors.contactName}</p>}
+  </div>
+);
+
+const ContactEmailField = ({ form, errors, onUpdate }: ContactFieldProps) => (
+  <div>
+    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+      Email <span className="text-destructive">*</span>
+    </label>
+    <input
+      type="email"
+      placeholder="email@example.com"
+      value={form.contactEmail}
+      onChange={(e) => onUpdate("contactEmail", e.target.value)}
+      className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
+    />
+    {errors.contactEmail && <p className="mt-1 text-xs text-destructive">{errors.contactEmail}</p>}
+  </div>
+);
+
+const ContactPhoneField = ({ form, errors, onUpdate }: ContactFieldProps) => (
+  <div>
+    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+      Phone <span className="text-destructive">*</span>
+    </label>
+    <input
+      type="tel"
+      placeholder="+30 69..."
+      value={form.contactPhone}
+      onChange={(e) => onUpdate("contactPhone", e.target.value)}
+      className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
+    />
+    {errors.contactPhone && <p className="mt-1 text-xs text-destructive">{errors.contactPhone}</p>}
+  </div>
+);
+
+const ContactFields = (props: ContactFieldProps) => (
   <div className="space-y-4">
-    <div>
-      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-        Full Name <span className="text-destructive">*</span>
-      </label>
-      <input
-        type="text"
-        placeholder="Your name"
-        value={form.contactName}
-        onChange={(e) => onUpdate("contactName", e.target.value)}
-        className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
-      />
-      {errors.contactName && <p className="mt-1 text-xs text-destructive">{errors.contactName}</p>}
-    </div>
+    <ContactNameField {...props} />
     <div className="grid grid-cols-2 gap-4">
-      <div>
-        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-          Email <span className="text-destructive">*</span>
-        </label>
-        <input
-          type="email"
-          placeholder="email@example.com"
-          value={form.contactEmail}
-          onChange={(e) => onUpdate("contactEmail", e.target.value)}
-          className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
-        />
-        {errors.contactEmail && <p className="mt-1 text-xs text-destructive">{errors.contactEmail}</p>}
-      </div>
-      <div>
-        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-          Phone <span className="text-destructive">*</span>
-        </label>
-        <input
-          type="tel"
-          placeholder="+30 69..."
-          value={form.contactPhone}
-          onChange={(e) => onUpdate("contactPhone", e.target.value)}
-          className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
-        />
-        {errors.contactPhone && <p className="mt-1 text-xs text-destructive">{errors.contactPhone}</p>}
-      </div>
+      <ContactEmailField {...props} />
+      <ContactPhoneField {...props} />
     </div>
   </div>
 );

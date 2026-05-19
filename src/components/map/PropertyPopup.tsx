@@ -229,20 +229,32 @@ const PillList = ({ pills }: { pills: Pill[] }) => {
   );
 };
 
-const OwnershipBadge = ({ tags }: { tags: string[] }) => {
+const getOwnershipPercentLabel = (tags: string[], ownershipStatus: string): string => {
+  const ownershipPct = getOwnershipPct(tags);
+  if (ownershipPct == null) return "";
+  return ownershipStatus === "full" ? "" : ` ${ownershipPct}%`;
+};
+
+const getOwnershipBadgeView = (tags: string[]) => {
   const ownershipStatus = getOwnershipStatus(tags);
-  const ownershipBadge = ownershipStatus ? OWNERSHIP_BADGE[ownershipStatus] : null;
-  if (!ownershipStatus || !ownershipBadge) return null;
+  if (!ownershipStatus) return null;
+  const badge = OWNERSHIP_BADGE[ownershipStatus];
+  return badge ? { badge, percentLabel: getOwnershipPercentLabel(tags, ownershipStatus) } : null;
+};
+
+const OwnershipBadge = ({ tags }: { tags: string[] }) => {
+  const view = getOwnershipBadgeView(tags);
+  if (!view) return null;
 
   return (
     <div className="flex items-center gap-1 w-fit">
       <span
         className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold"
-        style={{ background: ownershipBadge.bg, color: ownershipBadge.color, border: `1px solid ${ownershipBadge.color}44` }}
+        style={{ background: view.badge.bg, color: view.badge.color, border: `1px solid ${view.badge.color}44` }}
       >
         <Building2 style={{ width: 10, height: 10 }} />
-        {ownershipBadge.label}
-        {getOwnershipPct(tags) != null && ownershipStatus !== "full" && ` ${getOwnershipPct(tags)}%`}
+        {view.badge.label}
+        {view.percentLabel}
       </span>
     </div>
   );
