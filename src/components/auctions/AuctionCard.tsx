@@ -206,6 +206,28 @@ const AuctionOwnershipChip = ({
   );
 };
 
+const hasUsableSqm = (sqm?: number | null): boolean => Boolean(sqm && sqm > 1);
+
+const AuctionYearBuiltPill = ({ yearBuilt }: { yearBuilt?: string | number | null }) => {
+  if (!yearBuilt) return null;
+
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-secondary text-foreground border border-border">
+      Built {yearBuilt}
+    </span>
+  );
+};
+
+const AuctionSizePill = ({ sqm }: { sqm?: number | null }) => {
+  if (!hasUsableSqm(sqm)) return null;
+
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-secondary text-foreground border border-border">
+      {sqm} τ.μ.
+    </span>
+  );
+};
+
 const AuctionFeaturePills = ({
   yearBuilt,
   sqm,
@@ -213,21 +235,12 @@ const AuctionFeaturePills = ({
   yearBuilt?: string | number | null;
   sqm?: number | null;
 }) => {
-  const hasUsableSqm = Boolean(sqm && sqm > 1);
-  if (!yearBuilt && !hasUsableSqm) return null;
+  if (!yearBuilt && !hasUsableSqm(sqm)) return null;
 
   return (
     <div className="flex flex-wrap items-center gap-1.5 mt-1">
-      {yearBuilt && (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-secondary text-foreground border border-border">
-          Built {yearBuilt}
-        </span>
-      )}
-      {hasUsableSqm && (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-secondary text-foreground border border-border">
-          {sqm} τ.μ.
-        </span>
-      )}
+      <AuctionYearBuiltPill yearBuilt={yearBuilt} />
+      <AuctionSizePill sqm={sqm} />
     </div>
   );
 };
