@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase as supabaseClient } from "@/integrations/supabase/client";
 import { isAiUsageLimitError } from "@/lib/aiErrorUtils";
+import { aiQuotaFromJson } from "@/hooks/useAiQuota";
 import { toast } from "sonner";
 import type { User } from "@supabase/supabase-js";
 import type { ListingWithJoins } from "@/hooks/useListings";
@@ -22,26 +23,6 @@ export interface AIInsightsQuota {
 }
 
 const AI_INSIGHTS_BUCKET = "property-valuation";
-const UNLIMITED_AI_LIMIT = 999_999;
-
-function quotaFromJson(value: unknown): AIInsightsQuota | null {
-  if (!value || typeof value !== "object") return null;
-  const row = value as Record<string, unknown>;
-  const used = typeof row.used === "number" ? row.used : Number(row.used ?? 0);
-  const limit = typeof row.limit === "number" ? row.limit : Number(row.limit ?? 0);
-  const allowed = Boolean(row.allowed);
-  const reason = typeof row.reason === "string" ? row.reason : null;
-
-  if (!Number.isFinite(used) || !Number.isFinite(limit)) return null;
-
-  return {
-    allowed,
-    reason,
-    used,
-    limit,
-    remaining: limit >= UNLIMITED_AI_LIMIT ? UNLIMITED_AI_LIMIT : Math.max(limit - used, 0),
-  };
-}
 
 export function usePropertyAIInsights(
   dbListing: ListingWithJoins | null | undefined,
@@ -74,7 +55,7 @@ export function usePropertyAIInsights(
         p_bucket: AI_INSIGHTS_BUCKET,
       });
       if (error) throw error;
-      const quota = quotaFromJson(data);
+      const quota = aiQuotaFromJson(data);
       setAiInsightsQuota(quota);
       return quota;
     } catch (_err: unknown) {
@@ -148,7 +129,7 @@ export function usePropertyAIInsights(
         });
         await refreshAiInsightsQuota();
       } else if (isAiUsageLimitError(fnErr, data)) {
-        const quotaFromError = quotaFromJson(data);
+        const quotaFromError = aiQuotaFromJson(data);
         if (quotaFromError) setAiInsightsQuota(quotaFromError);
         toast.error("You've reached your AI insights limit for this month. Upgrade to continue.");
       } else {

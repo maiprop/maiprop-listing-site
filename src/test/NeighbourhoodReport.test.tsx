@@ -11,19 +11,24 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
-const { useAuthMock, invokeMock, toastMock } = vi.hoisted(() => ({
+const { useAuthMock, invokeMock, rpcMock, toastMock } = vi.hoisted(() => ({
   useAuthMock: vi.fn(),
   invokeMock: vi.fn(),
+  rpcMock: vi.fn(),
   toastMock: { success: vi.fn(), error: vi.fn() },
 }));
 
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => useAuthMock() }));
 vi.mock("@/integrations/supabase/client", () => ({
-  supabase: { functions: { invoke: invokeMock } },
+  supabase: {
+    functions: { invoke: invokeMock },
+    rpc: (...a: unknown[]) => rpcMock(...a),
+  },
 }));
 vi.mock("@/lib/aiErrorUtils", () => ({
   getAiErrorMessage: (e: unknown, _x: unknown, fb: string) =>
     (e instanceof Error && e.message) || fb,
+  isAiMonthlyLimitError: () => false,
 }));
 vi.mock("@/components/SignInForAI", () => ({
   SignInForAI: ({ feature }: { feature: string }) => <div>Sign in for {feature}</div>,
@@ -31,6 +36,11 @@ vi.mock("@/components/SignInForAI", () => ({
 vi.mock("sonner", () => ({ toast: toastMock }));
 
 import NeighbourhoodReport from "@/components/NeighbourhoodReport";
+
+const loadReport = async () => {
+  await screen.findByText(/1 \/ 5 used/i);
+  fireEvent.click(screen.getByRole("button", { name: /Load Neighbourhood Report/i }));
+};
 
 const baseProps = {
   city: "Athens",
@@ -81,6 +91,11 @@ const fullData = {
 beforeEach(() => {
   useAuthMock.mockReset();
   invokeMock.mockReset();
+  rpcMock.mockReset();
+  rpcMock.mockResolvedValue({
+    data: { allowed: true, reason: null, used: 1, limit: 5 },
+    error: null,
+  });
   toastMock.success.mockReset();
   toastMock.error.mockReset();
   useAuthMock.mockReturnValue({ user: { id: "u-1" } });
@@ -114,8 +129,9 @@ describe("NeighbourhoodReport — fetch flows", () => {
   it("calls neighbourhood-report when listingId is provided so quota and GPT analysis are enforced", async () => {
     invokeMock.mockResolvedValue({ data: fullData, error: null });
     render(<NeighbourhoodReport {...baseProps} listingId="l-1" />);
-    fireEvent.click(screen.getByRole("button", { name: /Load Neighbourhood Report/i }));
+    await loadReport();
     await waitFor(() => expect(screen.getByText(/Plaka.*Athens/i)).toBeInTheDocument());
+    expect(rpcMock).toHaveBeenCalledWith("check_ai_quota", { p_bucket: "neighbourhood-report" });
     expect(screen.getByText(/UNESCO district/)).toBeInTheDocument();
     expect(screen.getByText(/Excellent/)).toBeInTheDocument();
     expect(invokeMock).toHaveBeenCalledTimes(1);
@@ -128,7 +144,7 @@ describe("NeighbourhoodReport — fetch flows", () => {
   it("calls neighbourhood-report directly when no listingId is given", async () => {
     invokeMock.mockResolvedValue({ data: fullData, error: null });
     render(<NeighbourhoodReport {...baseProps} />);
-    fireEvent.click(screen.getByRole("button", { name: /Load Neighbourhood Report/i }));
+    await loadReport();
     await waitFor(() => expect(screen.getByText(/Plaka.*Athens/i)).toBeInTheDocument());
     expect(invokeMock).toHaveBeenCalledTimes(1);
     expect(invokeMock).toHaveBeenCalledWith(
@@ -143,7 +159,7 @@ describe("NeighbourhoodReport — fetch flows", () => {
     let resolve!: (v: unknown) => void;
     invokeMock.mockReturnValue(new Promise((r) => { resolve = r; }));
     render(<NeighbourhoodReport {...baseProps} />);
-    fireEvent.click(screen.getByRole("button", { name: /Load Neighbourhood Report/i }));
+    await loadReport();
     expect(screen.getByText(/AI is analysing/i)).toBeInTheDocument();
     resolve({ data: fullData, error: null });
     await waitFor(() => expect(screen.getByText(/Plaka.*Athens/i)).toBeInTheDocument());
@@ -152,7 +168,7 @@ describe("NeighbourhoodReport — fetch flows", () => {
   it("renders the error pill + Retry button when invoke rejects, and Retry re-invokes", async () => {
     invokeMock.mockResolvedValueOnce({ data: null, error: new Error("AI down") });
     render(<NeighbourhoodReport {...baseProps} />);
-    fireEvent.click(screen.getByRole("button", { name: /Load Neighbourhood Report/i }));
+    await loadReport();
     await waitFor(() => expect(screen.getByText("AI down")).toBeInTheDocument());
     expect(toastMock.error).toHaveBeenCalledWith("AI down");
     invokeMock.mockResolvedValueOnce({ data: fullData, error: null });
@@ -163,8 +179,25 @@ describe("NeighbourhoodReport — fetch flows", () => {
   it("renders the error pill when the AI returns a data.error payload", async () => {
     invokeMock.mockResolvedValue({ data: { error: "rate-limit" }, error: null });
     render(<NeighbourhoodReport {...baseProps} />);
-    fireEvent.click(screen.getByRole("button", { name: /Load Neighbourhood Report/i }));
+    await loadReport();
     await waitFor(() => expect(screen.getByText("rate-limit")).toBeInTheDocument());
+  });
+
+  it("shows the quota counter and upgrade CTA instead of invoking when the monthly cap is reached", async () => {
+    rpcMock.mockResolvedValue({
+      data: { allowed: false, reason: "monthly_limit_reached", used: 5, limit: 5 },
+      error: null,
+    });
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <NeighbourhoodReport {...baseProps} />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(/5 \/ 5 used/i)).toBeInTheDocument();
+    expect(screen.getByText(/Monthly cap reached/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Upgrade/i })).toHaveAttribute("href", "/pricing");
+    expect(invokeMock).not.toHaveBeenCalled();
   });
 });
 
@@ -172,7 +205,7 @@ describe("NeighbourhoodReport — full result UI", () => {
   it("renders all sections (trend, noise, safety, walkability, projects, outlook, demographics)", async () => {
     invokeMock.mockResolvedValue({ data: fullData, error: null });
     render(<NeighbourhoodReport {...baseProps} />);
-    fireEvent.click(screen.getByRole("button", { name: /Load Neighbourhood Report/i }));
+    await loadReport();
     await waitFor(() => expect(screen.getByText(/Plaka.*Athens/i)).toBeInTheDocument());
 
     // Price per m² + YoY pill.
@@ -194,7 +227,7 @@ describe("NeighbourhoodReport — full result UI", () => {
   it("Refresh report re-invokes the edge fn", async () => {
     invokeMock.mockResolvedValue({ data: fullData, error: null });
     render(<NeighbourhoodReport {...baseProps} />);
-    fireEvent.click(screen.getByRole("button", { name: /Load Neighbourhood Report/i }));
+    await loadReport();
     await waitFor(() => expect(screen.getByText(/Refresh report/i)).toBeInTheDocument());
     invokeMock.mockClear();
     fireEvent.click(screen.getByRole("button", { name: /Refresh report/i }));
@@ -207,7 +240,7 @@ describe("NeighbourhoodReport — full result UI", () => {
       error: null,
     });
     render(<NeighbourhoodReport {...baseProps} />);
-    fireEvent.click(screen.getByRole("button", { name: /Load Neighbourhood Report/i }));
+    await loadReport();
     await waitFor(() => expect(screen.getByText(/Plaka.*Athens/i)).toBeInTheDocument());
     expect(screen.queryByText(/Walkability/)).toBeNull();
   });
@@ -218,7 +251,7 @@ describe("NeighbourhoodReport — full result UI", () => {
       error: null,
     });
     render(<NeighbourhoodReport {...baseProps} />);
-    fireEvent.click(screen.getByRole("button", { name: /Load Neighbourhood Report/i }));
+    await loadReport();
     await waitFor(() => expect(screen.getByText(/Plaka.*Athens/i)).toBeInTheDocument());
     expect(screen.queryByText(/Development Projects/i)).toBeNull();
   });

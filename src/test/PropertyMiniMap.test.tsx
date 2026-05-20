@@ -9,14 +9,19 @@
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 
-const { invokeMock, useAuthMock } = vi.hoisted(() => ({
+const { invokeMock, rpcMock, useAuthMock } = vi.hoisted(() => ({
   invokeMock: vi.fn(),
+  rpcMock: vi.fn(),
   useAuthMock: vi.fn(),
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
-  supabase: { functions: { invoke: (...a: unknown[]) => invokeMock(...a) } },
+  supabase: {
+    functions: { invoke: (...a: unknown[]) => invokeMock(...a) },
+    rpc: (...a: unknown[]) => rpcMock(...a),
+  },
 }));
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => useAuthMock() }));
 vi.mock("@/lib/config", () => ({ MAPBOX_TOKEN: "pk.test.token" }));
@@ -55,6 +60,11 @@ import PropertyMiniMap from "@/components/PropertyMiniMap";
 
 beforeEach(() => {
   invokeMock.mockReset();
+  rpcMock.mockReset();
+  rpcMock.mockResolvedValue({
+    data: { allowed: true, reason: null, used: 1, limit: 5 },
+    error: null,
+  });
   useAuthMock.mockReset();
   useAuthMock.mockReturnValue({ user: { id: "u-1" } });
 });
@@ -94,8 +104,13 @@ describe("PropertyMiniMap", () => {
 
   it("calls property-pois automatically (with address, city, lat, lng) when authenticated", async () => {
     invokeMock.mockResolvedValue({ data: { pois: [] } });
-    render(<PropertyMiniMap {...baseProps} />);
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <PropertyMiniMap {...baseProps} />
+      </MemoryRouter>,
+    );
     await waitFor(() => expect(invokeMock).toHaveBeenCalled());
+    expect(rpcMock).toHaveBeenCalledWith("check_ai_quota", { p_bucket: "property-pois" });
     expect(invokeMock.mock.calls[0]).toEqual([
       "property-pois",
       { body: { address: "Kolonaki 12", city: "Athens", lat: 37.98, lng: 23.73 } },
@@ -131,25 +146,20 @@ describe("PropertyMiniMap", () => {
     });
   });
 
-  it("extracts the real error from error.context (FunctionsHttpError pattern) instead of showing the generic SDK string", async () => {
-    // Simulate a FunctionsHttpError where .message is the generic SDK string
-    // but the real message lives in error.context (the raw Response body).
-    const contextResponse = new Response(
-      JSON.stringify({ error: "Monthly AI usage limit reached. Resets on the 1st of next month." }),
-      { status: 429, headers: { "Content-Type": "application/json" } },
+  it("shows the quota counter and upgrade CTA instead of calling property-pois when the cap is reached", async () => {
+    rpcMock.mockResolvedValue({
+      data: { allowed: false, reason: "monthly_limit_reached", used: 5, limit: 5 },
+      error: null,
+    });
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <PropertyMiniMap {...baseProps} />
+      </MemoryRouter>,
     );
-    invokeMock.mockResolvedValue({
-      data: null,
-      error: { message: "Edge Function returned a non-2xx status code", context: contextResponse },
-    });
-    render(<PropertyMiniMap {...baseProps} />);
-    await waitFor(() => expect(invokeMock).toHaveBeenCalled());
-    await waitFor(() => {
-      const card = document.body.textContent ?? "";
-      // Should show the REAL message, not the generic SDK string
-      expect(card).toMatch(/AI allowance|usage limit|Monthly AI/i);
-      expect(card).not.toMatch(/Edge Function returned a non-2xx/i);
-    });
+    expect(await screen.findByText(/5 \/ 5 used/i)).toBeInTheDocument();
+    expect(screen.getByText(/Monthly cap reached/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Upgrade/i })).toHaveAttribute("href", "/pricing");
+    expect(invokeMock).not.toHaveBeenCalled();
   });
 
   it("rejects an invalid response shape (pois !== Array) and surfaces an error", async () => {

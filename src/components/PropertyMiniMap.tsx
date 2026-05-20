@@ -22,10 +22,12 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MAPBOX_TOKEN } from "@/lib/config";
-import { getAiErrorMessage } from "@/lib/aiErrorUtils";
+import { getAiErrorMessage, isAiMonthlyLimitError } from "@/lib/aiErrorUtils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { SignInForAI } from "@/components/SignInForAI";
+import { AIQuotaStatus } from "@/components/AIQuotaStatus";
+import { isAiQuotaReached, useAiQuota } from "@/hooks/useAiQuota";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -246,6 +248,13 @@ export default function PropertyMiniMap({
     Marker: ComponentType<any>;
     NavigationControl: ComponentType<any>;
   } | null>(null);
+  const {
+    quota: poiQuota,
+    quotaLoading: poiQuotaLoading,
+    quotaChecked: poiQuotaChecked,
+    refreshQuota: refreshPoiQuota,
+  } = useAiQuota("property-pois", user, { enabled: Boolean(lat && lng) });
+  const poiQuotaReached = isAiQuotaReached(poiQuota);
 
   useEffect(() => {
     if (!MAPBOX_TOKEN || !lat || !lng || MapComponents) return;
@@ -273,21 +282,45 @@ export default function PropertyMiniMap({
     setLoadingPOIs(true);
     setPoiError(null);
     try {
+      const quota = await refreshPoiQuota();
+      if (quota && !quota.allowed) {
+        setPois(null);
+        return;
+      }
       const data = await fetchPOIs(address, city, lat, lng);
       setPois(data);
       // Compute walk score and notify parent
       const score = computeWalkScore(data);
       onWalkScoreChange?.(score);
+      await refreshPoiQuota();
     } catch (e: unknown) {
-      setPoiError(getAiErrorMessage(e, null, "Failed to load nearby places"));
+      if (isAiMonthlyLimitError(e, null)) {
+        await refreshPoiQuota();
+        setPoiError(null);
+      } else {
+        setPoiError(getAiErrorMessage(e, null, "Failed to load nearby places"));
+      }
     } finally {
       setLoadingPOIs(false);
     }
-  }, [address, city, lat, lng, user, onWalkScoreChange]);
+  }, [address, city, lat, lng, user, onWalkScoreChange, refreshPoiQuota]);
 
   useEffect(() => {
-    if (lat && lng && user) loadPOIs();
-  }, [lat, lng, user]); // eslint-disable-line
+    if (
+      !lat ||
+      !lng ||
+      !user ||
+      pois ||
+      poiError ||
+      loadingPOIs ||
+      poiQuotaLoading ||
+      !poiQuotaChecked
+    ) {
+      return;
+    }
+    if (poiQuota && !poiQuota.allowed) return;
+    void loadPOIs();
+  }, [lat, lng, user, pois, poiError, loadingPOIs, poiQuotaLoading, poiQuotaChecked, poiQuota, loadPOIs]);
 
   const filteredPOIs = pois
     ? activeCategory === "all"
@@ -478,10 +511,10 @@ export default function PropertyMiniMap({
                   <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
                 )}
               </div>
-              {pois && (
+              {pois && !poiQuotaReached && (
                 <button
                   onClick={loadPOIs}
-                  disabled={loadingPOIs}
+                  disabled={loadingPOIs || poiQuotaLoading}
                   className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
                 >
                   <RefreshCw
@@ -491,6 +524,13 @@ export default function PropertyMiniMap({
                 </button>
               )}
             </div>
+
+            <AIQuotaStatus
+              featureName="AI Nearby Places"
+              quota={poiQuota}
+              quotaLoading={poiQuotaLoading || !poiQuotaChecked}
+              className="mb-3"
+            />
 
             {/* Loading state */}
             {loadingPOIs && !pois && (
@@ -503,7 +543,7 @@ export default function PropertyMiniMap({
             )}
 
             {/* Error state */}
-            {poiError && !loadingPOIs && (
+            {poiError && !loadingPOIs && !poiQuotaReached && (
               <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-destructive/10 border border-destructive/20">
                 <p className="text-xs text-destructive">{poiError}</p>
                 <button
@@ -539,7 +579,7 @@ export default function PropertyMiniMap({
             )}
 
             {/* Empty state when no POIs yet and not loading */}
-            {!pois && !loadingPOIs && !poiError && (
+            {!pois && !loadingPOIs && !poiError && !poiQuotaReached && (
               <div className="flex flex-col items-center gap-2 py-4">
                 <p className="text-xs text-muted-foreground">
                   Loading nearby places analysis…

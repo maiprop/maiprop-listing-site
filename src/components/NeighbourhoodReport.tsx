@@ -5,11 +5,13 @@ import {
   AlertCircle, Clock,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { getAiErrorMessage } from "@/lib/aiErrorUtils";
+import { getAiErrorMessage, isAiMonthlyLimitError } from "@/lib/aiErrorUtils";
 import { useAuth } from "@/contexts/AuthContext";
 import { SignInForAI } from "@/components/SignInForAI";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { AIQuotaStatus } from "@/components/AIQuotaStatus";
+import { isAiQuotaReached, useAiQuota } from "@/hooks/useAiQuota";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -185,19 +187,34 @@ export default function NeighbourhoodReport({ city, address, region, propertyTyp
   const [data, setData] = useState<NeighbourhoodData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const {
+    quota,
+    quotaLoading,
+    quotaChecked,
+    refreshQuota,
+  } = useAiQuota("neighbourhood-report", user, { enabled: Boolean(city) });
+  const quotaReached = isAiQuotaReached(quota);
 
   const load = async () => {
     if (!user) return;
     setLoading(true);
     setError(null);
     try {
+      const currentQuota = await refreshQuota();
+      if (currentQuota && !currentQuota.allowed) return;
       const { data: result, error: fnErr } = await supabase.functions.invoke("neighbourhood-report", {
         body: { city, address, region, propertyType, lat, lng, listingId },
       });
       if (fnErr) throw fnErr;
       if (result?.error) throw new Error(result.error);
       setData(result as NeighbourhoodData);
+      await refreshQuota();
     } catch (e: unknown) {
+      if (isAiMonthlyLimitError(e, null)) {
+        await refreshQuota();
+        setError(null);
+        return;
+      }
       const msg = getAiErrorMessage(e, null, "Failed to load neighbourhood report");
       setError(msg);
       toast.error(msg);
@@ -226,9 +243,22 @@ export default function NeighbourhoodReport({ city, address, region, propertyTyp
       <div className="p-5">
         {!user && <SignInForAI feature="Neighbourhood Report" />}
 
-        {user && !data && !loading && !error && (
+        {user && (
+          <AIQuotaStatus
+            featureName="Neighbourhood Report"
+            quota={quota}
+            quotaLoading={quotaLoading || !quotaChecked}
+            className="mb-3"
+          />
+        )}
+
+        {user && !data && !loading && !error && !quotaReached && (
           <div className="text-center space-y-3 py-4">
-            <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={load}>
+            <Button
+              className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2"
+              onClick={load}
+              disabled={quotaLoading || !quotaChecked}
+            >
               <Building2 className="w-4 h-4" /> Load Neighbourhood Report
             </Button>
           </div>
@@ -240,7 +270,7 @@ export default function NeighbourhoodReport({ city, address, region, propertyTyp
           </div>
         )}
 
-        {user && error && !loading && (
+        {user && error && !loading && !quotaReached && (
           <div className="flex items-center justify-between gap-3 px-3 py-3 rounded-xl bg-destructive/10 border border-destructive/20">
             <div className="flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
@@ -407,7 +437,11 @@ export default function NeighbourhoodReport({ city, address, region, propertyTyp
             </div>
 
             {/* Refresh */}
-            <button onClick={load} className="flex items-center gap-1.5 text-[10px] text-muted-foreground hover:text-primary transition-colors w-full justify-center border-t border-border pt-3">
+            <button
+              onClick={load}
+              disabled={loading || quotaLoading || !quotaChecked || quotaReached}
+              className="flex items-center gap-1.5 text-[10px] text-muted-foreground hover:text-primary transition-colors w-full justify-center border-t border-border pt-3 disabled:cursor-not-allowed disabled:opacity-50"
+            >
               <Zap className="w-3 h-3" /> Refresh report
             </button>
 

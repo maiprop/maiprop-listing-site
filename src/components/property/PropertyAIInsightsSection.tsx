@@ -10,6 +10,7 @@ import { Section, SectionHeader } from "@/components/property/DetailPrimitives";
 import { SignInForAI } from "@/components/SignInForAI";
 import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/format";
+import { UNLIMITED_AI_LIMIT } from "@/hooks/useAiQuota";
 import type { AIInsightsQuota } from "@/hooks/usePropertyAIInsights";
 
 interface AIInsightsData {
@@ -48,8 +49,6 @@ const COMPARISON_CONFIG: Record<string, { label: string; color: string; bg: stri
     bg: "bg-destructive/10 border-destructive/20",
   },
 };
-
-const UNLIMITED_AI_LIMIT = 999_999;
 
 function formatQuotaText(quota: AIInsightsQuota | null | undefined, isPro: boolean, quotaLoading?: boolean) {
   if (quotaLoading) return "Checking AI request allowance...";
