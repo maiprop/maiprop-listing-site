@@ -30,7 +30,9 @@ VITE_SUPABASE_URL=https://<your-ref>.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=<anon-key>
 ```
 
-Find these in Supabase → Project Settings → API.
+Find these in Supabase -> Project Settings -> API. If the Supabase project has
+an activated custom domain for Auth/API traffic, `VITE_SUPABASE_URL` can be that
+origin instead, for example `https://auth.maiprop.co`.
 
 ### 3. Optional for specific features
 
@@ -81,7 +83,7 @@ See [`STAGING_SETUP.md`](./STAGING_SETUP.md) for the full walkthrough. Variables
 
 | Variable | Required | Notes |
 |---|---|---|
-| `VITE_SUPABASE_URL` | ✅ | Production Supabase ref |
+| `VITE_SUPABASE_URL` | ✅ | Production Supabase project URL, or activated Supabase custom domain for branded OAuth |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | ✅ | Anon key, public |
 | `VITE_SUPABASE_PROJECT_ID` | ✅ | Used by sitemap redirect |
 | `VITE_SENTRY_DSN` | strongly recommended | See audit item #4 |
@@ -103,6 +105,28 @@ Cloud Console, configure the key with:
 
 Do not allowlist broad patterns such as `https://*.pages.dev/*`; keep preview
 access scoped to this Cloudflare Pages project.
+
+#### Google OAuth branding
+
+The Google account chooser and consent screens are controlled by Google Auth
+Platform and the Supabase Auth callback host, not by the React login card.
+
+To replace `qvvicunqcrwpioqnvzxf.supabase.co` with Mai Prop branding:
+
+1. In Google Auth Platform -> Branding, set the app name to `mAI prop`, upload
+   `public/oauth-logo.png`, and set the public home page, privacy policy, and
+   terms URLs from `https://portal.maiprop.co`.
+2. Submit brand verification and publish the verified brand. Google does not
+   show the app name/logo to external users until branding is verified and
+   published.
+3. For a branded callback host instead of the Supabase project ref, enable a
+   Supabase Custom Domain, add a CNAME such as `auth.maiprop.co` pointing to
+   `qvvicunqcrwpioqnvzxf.supabase.co`, verify/activate it in Supabase, then add
+   both callback URLs in the Google OAuth client while rolling over:
+   `https://qvvicunqcrwpioqnvzxf.supabase.co/auth/v1/callback` and
+   `https://auth.maiprop.co/auth/v1/callback`.
+4. After the custom domain is activated, set Cloudflare Pages
+   `VITE_SUPABASE_URL=https://auth.maiprop.co` for production and redeploy.
 
 ### In Supabase (edge functions)
 
@@ -175,6 +199,7 @@ fail-fast behavior.
 | `STAGING_SUPABASE_PROJECT_ID` | staging Supabase project ref | repo or staging environment |
 | `SUPABASE_ACCESS_TOKEN` | Supabase CLI deploy/list token | repo or environment scoped to deploy jobs |
 | `SUPABASE_STAGING_DB_URL` | optional staging Postgres connection string for CI `supabase db push --db-url`; enables automatic staging DB migration before edge-function deploy | staging environment only |
+| `SUPABASE_PRODUCTION_DB_URL` | percent-encoded production Postgres connection string used only by the manual production DB migration workflow; keep scoped to the protected `production` environment | production environment |
 | `SUPABASE_PROJECT_REF` | optional project ref alias used by release-safety live inventory | manual release certification |
 | `RELEASE_SAFETY_SUPABASE_PROJECT_REF` | optional project ref override for release-safety live inventory; defaults to `supabase/config.toml` `project_id` when unset | manual release certification |
 | `SUPABASE_MANAGEMENT_API_BASE` | optional override for Supabase Management API advisor checks; defaults to `https://api.supabase.com/v1` | local/CI diagnostics only |

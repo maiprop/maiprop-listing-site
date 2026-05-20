@@ -1,0 +1,126 @@
+name: Deploy Supabase Production DB
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run only - list pending migrations without applying them"
+        required: true
+        type: boolean
+        default: true
+      confirm_apply:
+        description: "Required with dry_run=false to apply production migrations"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-production-db
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Production database migration gate
+    runs-on: ubuntu-latest
+    environment: production
+
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+      SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 2
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Check runtime
+        run: npm run check:runtime
+
+      - name: Install dependencies
+        run: npm ci
+
+      - uses: supabase/setup-cli@b60b5899c73b63a2d2d651b1e90db8d4c9392f51 # v1.6.0
+        with:
+          version: 2.98.1
+
+      - name: Validate production database secrets
+        run: |
+          required=(
+            "SUPABASE_ACCESS_TOKEN"
+            "SUPABASE_PROJECT_REF"
+            "SUPABASE_PRODUCTION_DB_URL"
+          )
+          missing=0
+          for key in "${required[@]}"; do
+            if [ -z "${!key}" ]; then
+              echo "::error::Missing required secret: $key"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Guard production apply
+        if: inputs.dry_run != true
+        run: |
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "::error::Production DB applies must run from main. Current ref: ${GITHUB_REF}"
+            exit 1
+          fi
+          if [ "${CONFIRM_APPLY}" != "true" ]; then
+            echo "::error::Set confirm_apply=true when dry_run=false."
+            exit 1
+          fi
+          {
+            echo "### Supabase production DB migration apply"
+            echo "- Ref: ${GITHUB_REF}"
+            echo "- SHA: ${GITHUB_SHA}"
+            echo "- Project ref: ${SUPABASE_PROJECT_REF}"
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          CONFIRM_APPLY: ${{ github.event.inputs.confirm_apply }}
+
+      - name: Capture migration list before
+        run: supabase migration list --db-url "$SUPABASE_PRODUCTION_DB_URL" > supabase-production-migrations-before.txt
+
+      - name: Lint production schema
+        run: supabase db lint --db-url "$SUPABASE_PRODUCTION_DB_URL" --fail-on error > supabase-production-db-lint.txt
+
+      - name: Check Supabase advisors
+        run: npm run check:supabase-advisor -- --fail-on-error --out supabase-production-advisor-summary.json
+
+      - name: Dry-run production migrations
+        if: inputs.dry_run == true
+        run: supabase db push --db-url "$SUPABASE_PRODUCTION_DB_URL" --dry-run | tee supabase-production-db-push.txt
+
+      - name: Apply production migrations
+        if: inputs.dry_run != true
+        run: supabase db push --db-url "$SUPABASE_PRODUCTION_DB_URL" --yes | tee supabase-production-db-push.txt
+
+      - name: Capture migration list after
+        if: always()
+        run: supabase migration list --db-url "$SUPABASE_PRODUCTION_DB_URL" > supabase-production-migrations-after.txt
+
+      - name: Upload production DB release evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: supabase-production-db-release-evidence
+          path: |
+            supabase-production-migrations-before.txt
+            supabase-production-migrations-after.txt
+            supabase-production-db-lint.txt
+            supabase-production-db-push.txt
+            supabase-production-advisor-summary.json
+          if-no-files-found: ignore
+          retention-days: 30

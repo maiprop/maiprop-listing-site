@@ -18,12 +18,38 @@ if (!_url || !_anonKey) {
   );
 }
 
-// Format-level validation — catches placeholder stubs before they reach the app
-const URL_RE = /^https?:\/\/[a-zA-Z0-9_-]+\.(supabase\.co|supabase\.in)(\/.*)?$/;
+// Format-level validation catches placeholder stubs before they reach the app.
+// Supabase custom domains are valid here too; they are required for branded
+// OAuth callback hosts such as https://auth.example.com.
 const JWT_RE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 const PUBLISHABLE_RE = /^sb_publishable_[A-Za-z0-9_-]+$/;
-if (!URL_RE.test(_url)) {
-  const msg = `VITE_SUPABASE_URL looks malformed: "${_url}". Expected https://<ref>.supabase.co`;
+
+function validateSupabaseOrigin(value: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return "Expected a valid URL origin such as https://<ref>.supabase.co or https://auth.example.com.";
+  }
+
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    return "Expected http or https.";
+  }
+
+  if (import.meta.env.PROD && parsed.protocol !== "https:") {
+    return "Production Supabase URLs must use https.";
+  }
+
+  if (parsed.pathname !== "/" || parsed.search || parsed.hash) {
+    return "Expected only the origin, without a path, query, or hash.";
+  }
+
+  return null;
+}
+
+const supabaseUrlError = validateSupabaseOrigin(_url);
+if (supabaseUrlError) {
+  const msg = `VITE_SUPABASE_URL looks malformed: "${_url}". ${supabaseUrlError}`;
   if (import.meta.env.DEV) console.warn("[maiProp]", msg);
   else throw new Error(msg);
 }
