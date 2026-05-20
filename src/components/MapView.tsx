@@ -22,6 +22,8 @@ export interface MapViewProps {
   onVisibleListingsChange?: (ids: Set<string>) => void;
   onPolygonFilter?: (ids: Set<string> | null) => void;
   height?: string;
+  itemLabelSingular?: string;
+  itemLabelPlural?: string;
 }
 
 const VISIBLE_RECALC_THROTTLE_MS = 120;
@@ -45,7 +47,14 @@ function boundsKey(bounds: { getWest: () => number; getSouth: () => number; getE
 }
 
 // skipcq: JS-0067 - Exported React component is intentionally module-scoped.
-export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, height }: MapViewProps) { // skipcq: JS-R1005 - MapView keeps Mapbox load state, drawing, heatmap, and visibility callbacks together.
+export function MapView({
+  listings,
+  onVisibleListingsChange,
+  onPolygonFilter,
+  height,
+  itemLabelSingular = "property",
+  itemLabelPlural = "properties",
+}: MapViewProps) { // skipcq: JS-R1005 - MapView keeps Mapbox load state, drawing, heatmap, and visibility callbacks together.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [MapComponents, setMapComponents] = useState<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -89,15 +98,25 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
       Number(l.latitude) !== 0 && Number(l.longitude) !== 0
   ), [listings]);
 
+  const areaFilterActive = polygonClosed && drawnPoints.length >= 3;
+
+  const displayMapped = useMemo(() => {
+    if (!areaFilterActive) return mapped;
+    return mapped.filter(l =>
+      l.longitude != null && l.latitude != null &&
+      pointInPolygon([Number(l.longitude), Number(l.latitude)], drawnPoints)
+    );
+  }, [areaFilterActive, drawnPoints, mapped]);
+
   const listingById = useMemo(() => new Map(mapped.map((listing) => [listing.id, listing])), [mapped]);
 
   const mapBounds = useMemo(() => { // skipcq: JS-R1005 - Bounds calculation intentionally handles all coordinate extrema in one pass.
-    if (mapped.length === 0) return null;
+    if (displayMapped.length === 0) return null;
     let minLng = Infinity;
     let minLat = Infinity;
     let maxLng = -Infinity;
     let maxLat = -Infinity;
-    for (const listing of mapped) {
+    for (const listing of displayMapped) {
       const lng = Number(listing.longitude);
       const lat = Number(listing.latitude);
       if (lng < minLng) minLng = lng;
@@ -106,10 +125,10 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
       if (lat > maxLat) maxLat = lat;
     }
     return [[minLng, minLat], [maxLng, maxLat]] as [[number, number], [number, number]];
-  }, [mapped]);
+  }, [displayMapped]);
 
-  const geoJSON = useMemo(() => buildGeoJSON(mapped), [mapped]);
-  const heatmapGeoJSON = useMemo(() => buildGeoJSON(sampleListingsForHeatmap(mapped)), [mapped]);
+  const geoJSON = useMemo(() => buildGeoJSON(displayMapped), [displayMapped]);
+  const heatmapGeoJSON = useMemo(() => buildGeoJSON(sampleListingsForHeatmap(displayMapped)), [displayMapped]);
 
   // Draw GeoJSON (reactive)
   const drawLineGJ = useMemo(() => { // skipcq: JS-R1005 - Draw line state handles hover and closed polygon variants together.
@@ -146,12 +165,9 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
 
   // Polygon match count
   const polygonMatchCount = useMemo(() => {
-    if (!polygonClosed || drawnPoints.length < 3) return 0;
-    return mapped.filter(l =>
-      l.longitude != null && l.latitude != null &&
-      pointInPolygon([Number(l.longitude), Number(l.latitude)], drawnPoints)
-    ).length;
-  }, [polygonClosed, drawnPoints, mapped]);
+    if (!areaFilterActive) return 0;
+    return displayMapped.length;
+  }, [areaFilterActive, displayMapped.length]);
 
   // ── Fit bounds ──────────────────────────────────────────────────────────────
   const fitBounds = useCallback(() => {
@@ -467,7 +483,7 @@ export function MapView({ listings, onVisibleListingsChange, onPolygonFilter, he
       {polygonClosed && (
         <div className="absolute top-14 left-1/2 -translate-x-1/2 z-10 pointer-events-none whitespace-nowrap">
           <p className="text-xs bg-primary/15 backdrop-blur-sm rounded-xl px-3 py-2 border border-primary/35 text-primary font-semibold shadow-sm">
-            {polygonMatchCount} {polygonMatchCount === 1 ? "property" : "properties"} in area
+            {polygonMatchCount} {polygonMatchCount === 1 ? itemLabelSingular : itemLabelPlural} in area
           </p>
         </div>
       )}

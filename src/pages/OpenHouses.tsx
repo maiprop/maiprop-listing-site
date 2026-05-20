@@ -75,6 +75,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
   const [cityInput, setCityInput] = useState(cityParam);
   const [viewMode, setViewMode] = useState<"grid" | "map">("grid");
   const [showPast, setShowPast] = useState(false);
+  const [polygonFilterIds, setPolygonFilterIds] = useState<Set<string> | null>(null);
 
   const YEAR_RANGES = [
     { label: "Any Year", value: "" },
@@ -157,6 +158,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
     setPropertyType(""); setMinPrice(""); setMaxPrice("");
     setMinSqm(""); setMaxSqm(""); setBedroomsMin(null);
     setEnergyClass(""); setFilterYearRange(""); setSelectedFeatures([]);
+    setPolygonFilterIds(null);
   }
 
   function toggleFeature(key: string) {
@@ -209,8 +211,13 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
     };
   });
 
+  const areaFilteredCards = useMemo(() => {
+    if (!polygonFilterIds) return cards;
+    return cards.filter(({ card }) => polygonFilterIds.has(card.id));
+  }, [cards, polygonFilterIds]);
+
   const isEmpty = listings.length === 0;
-  const displayData = isError ? [] : cards;
+  const displayData = isError ? [] : areaFilteredCards;
 
   // MapListing format for MapView
   const mapListings: MapListing[] = displayData
@@ -252,7 +259,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                     ? "Could not load open houses."
                     : isEmpty
                     ? showPast ? "No past open houses found." : "No upcoming open houses. Agents can publish from the dashboard."
-                    : `${filtered.length} event${filtered.length !== 1 ? "s" : ""} found`}
+                    : `${displayData.length} event${displayData.length !== 1 ? "s" : ""} found${polygonFilterIds ? " in selected area" : ""}`}
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -484,6 +491,20 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                 )}
               </div>
             )}
+            {polygonFilterIds && (
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-primary/25 bg-primary/8 px-3 py-2 text-xs">
+                <span className="font-medium text-primary">
+                  Area filter active · {displayData.length} open house{displayData.length !== 1 ? "s" : ""} in area
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPolygonFilterIds(null)}
+                  className="font-medium text-primary hover:underline"
+                >
+                  Clear area
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -508,6 +529,9 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                 <MapView
                   listings={mapListings}
                   height="100%"
+                  itemLabelSingular="open house"
+                  itemLabelPlural="open houses"
+                  onPolygonFilter={setPolygonFilterIds}
                 />
               </Suspense>
             ) : (

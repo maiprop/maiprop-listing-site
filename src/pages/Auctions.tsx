@@ -125,6 +125,7 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
     setFilterOwnership("");
     setFilterRound("");
     setFilterYield("");
+    setPolygonFilterIds(null);
   };
 
   const auctionStats = [
@@ -322,14 +323,25 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
               </div> :
 
           <div>
-                <p className="text-xs text-muted-foreground mb-3">
-                  Showing <span className="font-semibold text-foreground">{mappableCount}</span> pinned auction{mappableCount !== 1 ? "s" : ""} on map
-                  {visibleFiltered.length > mappableCount && ` (${visibleFiltered.length - mappableCount} without coordinates hidden)`}
+                <p className="text-xs text-muted-foreground mb-3 flex items-center gap-2 flex-wrap">
+                  <span>
+                    Showing <span className="font-semibold text-foreground">{polygonFilterIds ? polygonFilteredCount : mappableCount}</span>{" "}
+                    {polygonFilterIds ? "auction" : "pinned auction"}{(polygonFilterIds ? polygonFilteredCount : mappableCount) !== 1 ? "s" : ""}{" "}
+                    {polygonFilterIds ? "in selected area" : "on map"}
+                    {!polygonFilterIds && visibleFiltered.length > mappableCount && ` (${visibleFiltered.length - mappableCount} without coordinates hidden)`}
+                  </span>
+                  {polygonFilterIds && (
+                    <button type="button" onClick={() => setPolygonFilterIds(null)} className="text-primary hover:underline">
+                      Clear area
+                    </button>
+                  )}
                 </p>
                 <Suspense fallback={<div className="h-64 bg-muted animate-pulse rounded-lg" />}>
                   <MapView
                     listings={mapListings}
                     height="560px"
+                    itemLabelSingular="auction"
+                    itemLabelPlural="auctions"
                     onPolygonFilter={(ids) => { setPolygonFilterIds(ids); setCurrentPage(1); }}
                   />
                 </Suspense>

@@ -193,6 +193,9 @@ const getListingsResultLabel = ({ // skipcq: JS-R1005 - Result labels intentiona
   if (viewMode === "split" && polygonFilterIds !== null) {
     return `${filtered.filter((property) => polygonFilterIds.has(property.id)).length} in area`;
   }
+  if (viewMode === "map" && polygonFilterIds !== null) {
+    return `${filtered.filter((property) => polygonFilterIds.has(property.id)).length} in area`;
+  }
   if (viewMode === "split" && viewportIds !== null) {
     return `${filtered.filter((property) => viewportIds.has(property.id)).length} in view`;
   }
@@ -359,7 +362,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
       {totalLoaded === 0 && !isLoading && (
         <span className="text-muted-foreground text-sm">No listings matched your filters</span>
       )}
-      {viewMode === "split" && polygonFilterIds !== null && (
+      {(viewMode === "split" || viewMode === "map") && polygonFilterIds !== null && (
         <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
           Area filter
         </span>

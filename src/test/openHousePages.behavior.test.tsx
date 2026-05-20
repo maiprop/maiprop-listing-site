@@ -25,7 +25,29 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/components/Navbar", () => ({ Navbar: () => <nav data-testid="navbar" /> }));
 vi.mock("@/components/Footer", () => ({ Footer: () => <footer data-testid="footer" /> }));
-vi.mock("@/components/MapView", () => ({ MapView: () => <div data-testid="map-view" /> }));
+vi.mock("@/components/MapView", () => ({
+  MapView: ({
+    listings,
+    onPolygonFilter,
+    itemLabelSingular,
+    itemLabelPlural,
+  }: {
+    listings?: Array<{ id: string }>;
+    onPolygonFilter?: (ids: Set<string> | null) => void;
+    itemLabelSingular?: string;
+    itemLabelPlural?: string;
+  }) => (
+    <div
+      data-testid="map-view"
+      data-count={String(listings?.length ?? 0)}
+      data-labels={`${itemLabelSingular ?? ""}/${itemLabelPlural ?? ""}`}
+    >
+      <button type="button" onClick={() => onPolygonFilter?.(new Set(["oh-athens"]))}>
+        Apply open house area
+      </button>
+    </div>
+  ),
+}));
 vi.mock("@/components/PropertyCard", () => ({
   PropertyCard: ({ property }: { property: { title: string; city?: string; images?: string[] } }) => (
     <article data-testid="open-house-card" data-image={property.images?.[0] ?? ""}>
@@ -299,6 +321,34 @@ describe("OpenHouses page behavior", () => {
     fireEvent.click(screen.getByRole("button", { name: /switch to list view/i }));
 
     expect(screen.getByText("No Map Home")).toBeInTheDocument();
+  });
+
+  it("wires draw-area filtering through the Open Houses map and list views", async () => {
+    makeListingsQuery([
+      createListing({ id: "oh-athens", title: "Athens Apartment", city: "Athens", latitude: 37.98, longitude: 23.73 }),
+      createListing({ id: "oh-voula", title: "Voula House", city: "Voula", latitude: 37.84, longitude: 23.77 }),
+    ]);
+
+    await renderOpenHouses();
+    expect(await screen.findByText("Athens Apartment")).toBeInTheDocument();
+    expect(screen.getByText("Voula House")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /show on map/i }));
+    expect(await screen.findByTestId("map-view")).toHaveAttribute("data-count", "2");
+    expect(screen.getByTestId("map-view")).toHaveAttribute("data-labels", "open house/open houses");
+
+    fireEvent.click(screen.getByRole("button", { name: /apply open house area/i }));
+
+    expect(await screen.findByText(/area filter active/i)).toHaveTextContent("1 open house in area");
+    expect(screen.getByTestId("map-view")).toHaveAttribute("data-count", "1");
+
+    fireEvent.click(screen.getByRole("button", { name: /show as list/i }));
+
+    expect(screen.getByText("Athens Apartment")).toBeInTheDocument();
+    expect(screen.queryByText("Voula House")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /clear area/i }));
+    expect(await screen.findByText("Voula House")).toBeInTheDocument();
   });
 
   it("hides supervisor test open houses and sends the logo as the empty-image fallback", async () => {

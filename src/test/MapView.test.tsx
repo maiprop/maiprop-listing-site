@@ -32,6 +32,16 @@ interface ChildrenMockProps {
   children?: React.ReactNode;
 }
 
+interface SourceMockProps extends ChildrenMockProps {
+  id?: string;
+  data?: { features?: unknown[] };
+}
+
+interface LayerMockProps {
+  id?: string;
+  source?: string;
+}
+
 vi.mock("react-map-gl", async () => {
   const React = await vi.importActual<typeof import("react")>("react");
   const Map = React.forwardRef<{ getMap: () => null }, MapMockProps>(function MockMap(
@@ -45,11 +55,20 @@ vi.mock("react-map-gl", async () => {
       <div data-testid="map-mock" data-token={String(rest.mapboxAccessToken ?? "")}>{children}</div>
     );
   });
-  const Source = React.forwardRef<HTMLDivElement, ChildrenMockProps>(function MockSource({ children }, ref) {
-    return <div ref={ref} data-testid="map-source">{children}</div>;
+  const Source = React.forwardRef<HTMLDivElement, SourceMockProps>(function MockSource({ children, id, data }, ref) {
+    return (
+      <div
+        ref={ref}
+        data-testid="map-source"
+        data-source-id={id ?? ""}
+        data-feature-count={String(data?.features?.length ?? "")}
+      >
+        {children}
+      </div>
+    );
   });
-  const Layer = React.forwardRef<HTMLDivElement>(function MockLayer(_props, ref) {
-    return <div ref={ref} data-testid="map-layer" />;
+  const Layer = React.forwardRef<HTMLDivElement, LayerMockProps>(function MockLayer({ id, source }, ref) {
+    return <div ref={ref} data-testid="map-layer" data-layer-id={id ?? ""} data-layer-source={source ?? ""} />;
   });
   const Popup = React.forwardRef<HTMLDivElement, ChildrenMockProps>(function MockPopup({ children }, ref) {
     return <div ref={ref} data-testid="map-popup">{children}</div>;
@@ -87,6 +106,11 @@ const baseListings = [
     longitude: 23.73,
   },
 ];
+
+// skipcq: JS-0067 - Test helper is intentionally module-scoped.
+function sourceFeatureCount(id: string) {
+  return Number(document.querySelector(`[data-source-id="${id}"]`)?.getAttribute("data-feature-count") ?? "0");
+}
 
 describe("MapView", () => {
   it("renders nothing meaningful before the lazy import resolves, then renders the Map", async () => {
@@ -264,6 +288,44 @@ describe("MapView", () => {
     // Clear-area button replaces the Draw button.
     fireEvent.click(screen.getByRole("button", { name: /Clear area filter/i }));
     expect(onPolygonFilter).toHaveBeenLastCalledWith(null);
+  });
+
+  it("draw area locally filters visible map pins and active heatmap data in every MapView caller", async () => {
+    render(
+      <MapView
+        listings={[
+          { ...baseListings[0], id: "inside" },
+          {
+            id: "outside", title: "Far", price: 1, listing_type: "sale" as const,
+            property_type: "apartment", city: "x", address: "x", bedrooms: 1, bathrooms: 1,
+            sqm: 10, image_url: null, latitude: -50, longitude: -50,
+          },
+        ]}
+      />,
+    );
+
+    await waitFor(() => screen.getByTestId("map-mock"));
+    expect(sourceFeatureCount("listings")).toBe(2);
+
+    fireEvent.click(screen.getByRole("button", { name: /Toggle price heatmap/i }));
+    expect(sourceFeatureCount("heatmap-data")).toBe(2);
+
+    fireEvent.click(screen.getByRole("button", { name: /Draw area filter/i }));
+    for (const pt of [
+      { lngLat: { lng: 23.0, lat: 37.0 }, point: { x: 1, y: 1 } },
+      { lngLat: { lng: 24.5, lat: 37.0 }, point: { x: 2, y: 2 } },
+      { lngLat: { lng: 24.5, lat: 39.0 }, point: { x: 3, y: 3 } },
+      { lngLat: { lng: 23.0, lat: 39.0 }, point: { x: 4, y: 4 } },
+    ]) {
+      await act(async () => {
+        handlerHolder.onClick?.(pt);
+      });
+    }
+    fireEvent.click(screen.getByRole("button", { name: /Finish polygon/i }));
+
+    expect(screen.getByText(/1 property in area/i)).toBeInTheDocument();
+    expect(sourceFeatureCount("listings")).toBe(1);
+    expect(sourceFeatureCount("heatmap-data")).toBe(1);
   });
 
   it("shows the empty-state overlay when no listings have valid coords", async () => {
