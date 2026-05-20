@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.9.2](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.1...v1.9.2) (2026-05-20)
+
+
+### Bug Fixes
+
+* gate professional actions and meter AI insights ([7ef438d](https://github.com/maiprop/maiprop-listing-site/commit/7ef438d7501e1068346c09d9799915ec5b647cfc))
+* keep neighbourhood report quota visible ([975bfdf](https://github.com/maiprop/maiprop-listing-site/commit/975bfdf3a141039fb7573eb1eed71bc692c28762))
+* make map heatmap and area drawing consistent ([1c2177c](https://github.com/maiprop/maiprop-listing-site/commit/1c2177c47d09488320eb1c6993d9b2fa7385489a))
+* prefer Street View for auction images ([d793086](https://github.com/maiprop/maiprop-listing-site/commit/d7930866e83d58e7e962210d07653ed48c07802c))
+* show AI quota counters ([b7fb807](https://github.com/maiprop/maiprop-listing-site/commit/b7fb807689a2f9cc9b389278b13a9633dc6e2cbd))
+
 ## [1.9.1](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.0...v1.9.1) (2026-05-19)
 
 
