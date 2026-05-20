@@ -271,7 +271,14 @@ vi.mock("@/lib/config", () => ({
 }));
 
 vi.mock("@/hooks/usePropertyAIInsights", () => ({
-  usePropertyAIInsights: vi.fn().mockReturnValue({ aiInsightsData: null, aiInsightsLoading: false }),
+  usePropertyAIInsights: vi.fn().mockReturnValue({
+    aiInsightsData: null,
+    aiInsightsLoading: false,
+    aiInsightsLoaded: false,
+    aiInsightsQuota: { allowed: true, reason: null, used: 0, limit: 5, remaining: 5 },
+    aiInsightsQuotaLoading: false,
+    loadAiInsights: vi.fn(),
+  }),
 }));
 
 vi.mock("@/hooks/useSimilarListings", () => ({

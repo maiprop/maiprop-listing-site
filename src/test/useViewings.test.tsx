@@ -321,25 +321,23 @@ describe("callback request modal", () => {
     fireEvent.click(screen.getByText("Morning").closest("button") as HTMLButtonElement);
   };
 
-  it("validates guest name and email once phone and callback window are present", () => {
+  it("requires sign-in before a callback request can be submitted", () => {
     useAuthMock.mockReturnValue({ user: null, profile: null });
     render(<RequestCallbackModal open onClose={vi.fn()} professional={professional} />);
 
-    fireEvent.change(screen.getByPlaceholderText("+30 6XX XXX XXXX"), { target: { value: "+30 699 000 0000" } });
-    clickMorningWindow();
-    fireEvent.click(screen.getByRole("button", { name: /Request Callback/i }));
-
-    expect(toastMock.error).toHaveBeenCalledWith("Please fill in your name and email");
+    expect(screen.getByText(/Sign in to request a callback/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^Sign in$/i })).toHaveAttribute("href", "/login");
     expect(submitConsultationMock.mutateAsync).not.toHaveBeenCalled();
   });
 
   it("submits callback requests and shows the done state", async () => {
-    useAuthMock.mockReturnValue({ user: null, profile: null });
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1", email: "buyer@example.com" },
+      profile: { display_name: "Buyer One", phone: "" },
+    });
     submitConsultationMock.mutateAsync.mockResolvedValue({ id: "callback-1" });
     render(<RequestCallbackModal open onClose={vi.fn()} professional={professional} />);
 
-    fireEvent.change(screen.getByPlaceholderText("Full name"), { target: { value: "Guest Buyer" } });
-    fireEvent.change(screen.getByPlaceholderText("your@email.com"), { target: { value: "guest@example.com" } });
     fireEvent.change(screen.getByPlaceholderText("+30 6XX XXX XXXX"), { target: { value: "+30 699 000 0000" } });
     clickFirstGeneratedDate();
     clickMorningWindow();
@@ -349,8 +347,8 @@ describe("callback request modal", () => {
     await waitFor(() => expect(screen.getByText(/Callback request sent/i)).toBeInTheDocument());
     expect(submitConsultationMock.mutateAsync).toHaveBeenCalledWith(expect.objectContaining({
       professional_id: "pro-1",
-      requester_name: "Guest Buyer",
-      requester_email: "guest@example.com",
+      requester_name: "Buyer One",
+      requester_email: "buyer@example.com",
       requester_phone: "+30 699 000 0000",
       request_type: "callback",
       callback_time: expect.stringContaining("Morning"),

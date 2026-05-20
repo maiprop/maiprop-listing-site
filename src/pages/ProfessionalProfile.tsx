@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { useModal } from "@/hooks/useModal";
 import { useParams, Link, useSearchParams } from "react-router-dom";
 import {
@@ -154,22 +154,45 @@ export default function ProfessionalProfile() { // skipcq: JS-R1005 - Route shel
   const isRealEstateAgent = pro?.category === "real_estate_agent";
 
   const displayName = pro?.display_name || "Professional";
+  const signInReturnPath = `/professionals/${pro?.id || id || ""}`;
+  const requireSignedIn = useCallback((action: string) => {
+    toast.error(`Please sign in to ${action}.`);
+    navigate("/login", { state: { from: { pathname: signInReturnPath } } });
+  }, [navigate, signInReturnPath]);
+  const openProtectedModal = useCallback((key: "msg" | "consult" | "callback") => {
+    if (!user) {
+      const action =
+        key === "consult"
+          ? "book a consultation"
+          : key === "callback"
+            ? "request a callback"
+            : "send an inquiry";
+      requireSignedIn(action);
+      return;
+    }
+    modal.open(key);
+  }, [modal, requireSignedIn, user]);
 
   useEffect(() => {
     if (!pro || searchParams.get("contact") !== "1") return;
     if (professionalIsPro) {
-      modal.open("msg");
+      if (user) modal.open("msg");
+      else requireSignedIn("send an inquiry");
     }
     setSearchParams((params) => {
       const next = new URLSearchParams(params);
       next.delete("contact");
       return next;
     }, { replace: true });
-  }, [modal, pro, professionalIsPro, searchParams, setSearchParams]);
+  }, [modal, pro, professionalIsPro, requireSignedIn, searchParams, setSearchParams, user]);
 
   const handleOpenChat = async () => {
-    if (!user || !pro?.user_id) {
-      modal.open("msg");
+    if (!user) {
+      requireSignedIn("chat with this professional");
+      return;
+    }
+    if (!pro?.user_id) {
+      toast.error("This professional cannot receive messages yet.");
       return;
     }
     try {
@@ -289,12 +312,12 @@ export default function ProfessionalProfile() { // skipcq: JS-R1005 - Route shel
                         ) : (
                           <Button
                             className="bg-gradient-primary border-0 text-primary-foreground gap-2 w-full"
-                            onClick={() => modal.open("msg")}
+                            onClick={() => requireSignedIn("send an inquiry")}
                           >
                             <MessageSquare className="w-4 h-4" /> Send Inquiry
                           </Button>
                         )}
-                        <Button variant="outline" className="border-border gap-2 w-full" onClick={() => modal.open("consult")}>
+                        <Button variant="outline" className="border-border gap-2 w-full" onClick={() => openProtectedModal("consult")}>
                           <Calendar className="w-4 h-4" /> Book Consultation
                         </Button>
                       </>
@@ -406,7 +429,7 @@ export default function ProfessionalProfile() { // skipcq: JS-R1005 - Route shel
                   dbAvailability={dbAvailability}
                   professionalIsPro={professionalIsPro}
                   user={user}
-                  onOpenModal={(key) => modal.open(key)}
+                  onOpenModal={openProtectedModal}
                 />
               )}
 
@@ -474,15 +497,15 @@ export default function ProfessionalProfile() { // skipcq: JS-R1005 - Route shel
                       ) : (
                         <Button
                           className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2"
-                          onClick={() => modal.open("msg")}
+                          onClick={() => requireSignedIn("send an inquiry")}
                         >
                           <MessageSquare className="w-4 h-4" /> Send Inquiry
                         </Button>
                       )}
-                      <Button variant="outline" className="w-full border-border gap-2" onClick={() => modal.open("consult")}>
+                      <Button variant="outline" className="w-full border-border gap-2" onClick={() => openProtectedModal("consult")}>
                         <Calendar className="w-4 h-4" /> Book Consultation
                       </Button>
-                      <Button variant="outline" className="w-full border-border gap-2 text-muted-foreground" onClick={() => modal.open("callback")}>
+                      <Button variant="outline" className="w-full border-border gap-2 text-muted-foreground" onClick={() => openProtectedModal("callback")}>
                         <Phone className="w-4 h-4" /> Request Callback
                       </Button>
                     </>

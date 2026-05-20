@@ -64,7 +64,14 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
   }, [id, !!listing]);
 
   const db = listing as ListingWithJoins;
-  const { aiInsightsData, aiInsightsLoading } = usePropertyAIInsights(db, user, id, isPro);
+  const {
+    aiInsightsData,
+    aiInsightsLoading,
+    aiInsightsLoaded,
+    aiInsightsQuota,
+    aiInsightsQuotaLoading,
+    loadAiInsights,
+  } = usePropertyAIInsights(db, user, id, isPro);
   const myReg = registrations.find(r => r.requester_id === user?.id);
   const myOffer = offers.find(o => o.bidder_id === user?.id);
   const isOwner = !!(user?.id && db?.owner_id === user.id);
@@ -344,6 +351,10 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                 isPro={isPro}
                 loading={aiInsightsLoading}
                 data={aiInsightsData}
+                quota={aiInsightsQuota}
+                quotaLoading={aiInsightsQuotaLoading}
+                hasRequested={aiInsightsLoaded}
+                onLoad={loadAiInsights}
               />
 
               {/* Description */}

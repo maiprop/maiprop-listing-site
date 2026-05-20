@@ -597,6 +597,35 @@ describe("ProfessionalProfile focused page behavior", () => {
     expect(await screen.findByText("Sale one")).toBeInTheDocument();
     expect(screen.getByText("Rent one")).toBeInTheDocument();
   });
+
+  it("redirects anonymous viewers to login before professional inquiry, booking, or callback actions", async () => {
+    const modalOpen = vi.fn();
+    mocks.useModalMock.mockReturnValue({ isOpen: vi.fn(() => false), open: modalOpen, close: vi.fn() });
+    mocks.useProfessionalMock.mockReturnValue({
+      data: professional({ subscription_tier: "pro", display_name: "Nora Pro" }),
+      isLoading: false,
+    });
+    const { default: ProfessionalProfile } = await import("@/pages/ProfessionalProfile");
+
+    renderWithProviders(
+      <Routes>
+        <Route path="/professionals/:id" element={<ProfessionalProfile />} />
+      </Routes>,
+      { initialPath: "/professionals/pro-1" },
+    );
+
+    fireEvent.click((await screen.findAllByRole("button", { name: /Send Inquiry/i }))[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /Book Consultation/i })[0]);
+    fireEvent.click(screen.getByRole("button", { name: /Request Callback/i }));
+
+    expect(modalOpen).not.toHaveBeenCalled();
+    expect(mocks.navigateMock).toHaveBeenCalledWith("/login", {
+      state: { from: { pathname: "/professionals/pro-1" } },
+    });
+    expect(mocks.toast.error).toHaveBeenCalledWith("Please sign in to send an inquiry.");
+    expect(mocks.toast.error).toHaveBeenCalledWith("Please sign in to book a consultation.");
+    expect(mocks.toast.error).toHaveBeenCalledWith("Please sign in to request a callback.");
+  });
 });
 
 describe("Auctions focused page behavior", () => {

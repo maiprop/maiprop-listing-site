@@ -244,6 +244,18 @@ const ServiceSelectionStep = ({
   </div>
 );
 
+const SignInRequired = ({ firstName }: { firstName: string }) => (
+  <div className="space-y-4 py-4">
+    <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm text-muted-foreground">
+      <p className="font-semibold text-foreground mb-1">Sign in to book a consultation</p>
+      <p>{firstName} can receive booking requests only from signed-in mAI prop accounts.</p>
+    </div>
+    <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" asChild>
+      <a href="/login">Sign in</a>
+    </Button>
+  </div>
+);
+
 // skipcq: JS-0067 - React modal component is intentionally module-scoped.
 export default function BookConsultationModal({ open, onClose, allowVideoCall = true, professional }: BookConsultationModalProps) { // skipcq: JS-R1005, JS-W1044 - Booking modal coordinates service selection, scheduling, contact capture, and submission flow.
   const { user, profile } = useAuth();
@@ -257,8 +269,6 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
   const [bookingType, setBookingType] = useState<"in_person" | "video">("in_person");
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
-  const [name, setName] = useState(profile?.display_name || "");
-  const [email, setEmail] = useState(user?.email || "");
   const [phone, setPhone] = useState(profile?.phone || "");
   const [note, setNote] = useState("");
   const [done, setDone] = useState(false);
@@ -304,8 +314,12 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
   };
 
   const handleConfirm = async () => { // skipcq: JS-R1005 - Submit flow resolves guest/user contact details and booking metadata in one mutation payload.
-    const resolvedName = user ? (profile?.display_name || user.email || name) : name;
-    const resolvedEmail = user ? (user.email || email) : email;
+    if (!user) {
+      toast.error("Please sign in to book a consultation.");
+      return;
+    }
+    const resolvedName = profile?.display_name || user.email || "";
+    const resolvedEmail = user.email || "";
     if (!resolvedName || !resolvedEmail) {
       toast.error("Please fill in your details");
       return;
@@ -359,7 +373,9 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
           </DialogDescription>
         </DialogHeader>
 
-        {done ? (
+        {!user ? (
+          <SignInRequired firstName={firstName} />
+        ) : done ? (
           <div className="text-center py-6 space-y-4">
             <div className="w-16 h-16 rounded-full bg-brand-emerald/20 flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-8 h-8 text-brand-emerald" />
@@ -567,29 +583,6 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
 
             {step === 4 && (
               <div className="space-y-4">
-                {!user && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground block mb-1">Full Name *</label>
-                      <input
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        placeholder="Your name"
-                        className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary transition-colors"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground block mb-1">Email *</label>
-                      <input
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="your@email.com"
-                        type="email"
-                        className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary transition-colors"
-                      />
-                    </div>
-                  </div>
-                )}
                 <div>
                   <label className="text-xs font-medium text-muted-foreground block mb-1">Phone (optional)</label>
                   <input
@@ -628,7 +621,7 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
                   <Button
                     className="flex-1 bg-gradient-primary border-0 text-primary-foreground gap-2"
                     onClick={handleConfirm}
-                    disabled={submitConsultation.isPending || (!user && (!name.trim() || !email.trim()))}
+                    disabled={submitConsultation.isPending}
                   >
                     {submitConsultation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
                     Send Request

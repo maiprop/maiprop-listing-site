@@ -87,7 +87,22 @@ afterEach(() => {
 });
 
 describe("BookConsultationModal", () => {
+  it("requires sign-in before showing the booking flow", () => {
+    renderWithProviders(
+      <BookConsultationModal open onClose={onClose} allowVideoCall professional={professional} />,
+    );
+
+    expect(screen.getByText(/Sign in to book a consultation/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^Sign in$/i })).toHaveAttribute("href", "/login");
+    expect(screen.queryByText(/What service do you need/i)).not.toBeInTheDocument();
+    expect(submitConsultation.mutateAsync).not.toHaveBeenCalled();
+  });
+
   it("books a video consultation and renders calendar export options", async () => {
+    authState.current = {
+      user: { id: "u-1", email: "alex@example.com" },
+      profile: { display_name: "Alex Buyer", phone: "+30 699 000 0000" },
+    };
     servicesState.current = [remoteService];
     availabilityState.current = [
       { id: "a-1", professional_id: "pro-1", day_of_week: 0, start_time: "09:30", end_time: "11:00", is_active: true },
@@ -104,8 +119,6 @@ describe("BookConsultationModal", () => {
     fireEvent.click(screen.getAllByText("Sun")[0].closest("button") as HTMLElement);
     fireEvent.click(screen.getByText("09:30"));
     fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
-    fireEvent.change(screen.getByPlaceholderText("Your name"), { target: { value: "Alex Buyer" } });
-    fireEvent.change(screen.getByPlaceholderText("your@email.com"), { target: { value: "alex@example.com" } });
     fireEvent.change(screen.getByPlaceholderText(/specific questions/i), { target: { value: "Can we review the title?" } });
     fireEvent.click(screen.getByRole("button", { name: /Send Request/i }));
 
@@ -113,6 +126,7 @@ describe("BookConsultationModal", () => {
       professional_id: "pro-1",
       requester_name: "Alex Buyer",
       requester_email: "alex@example.com",
+      requester_phone: "+30 699 000 0000",
       service: "Remote Review",
       preferred_date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
       preferred_time: "09:30",
@@ -127,6 +141,7 @@ describe("BookConsultationModal", () => {
   });
 
   it("keeps video unavailable for services that do not support it", () => {
+    authState.current = { user: { id: "u-1", email: "buyer@example.com" }, profile: { display_name: "Buyer One" } };
     servicesState.current = [{ ...remoteService, id: "svc-2", service_name: "Site Visit", video_enabled: false }];
     renderWithProviders(
       <BookConsultationModal open onClose={onClose} allowVideoCall professional={professional} />,
@@ -141,6 +156,7 @@ describe("BookConsultationModal", () => {
   });
 
   it("allows video on a non-video service when the professional has a meeting link", () => {
+    authState.current = { user: { id: "u-1", email: "buyer@example.com" }, profile: { display_name: "Buyer One" } };
     servicesState.current = [{ ...remoteService, id: "svc-3", service_name: "Site Visit", video_enabled: false }];
     renderWithProviders(
       <BookConsultationModal open onClose={onClose} allowVideoCall professional={{ ...professional, video_link: "https://meet.example/pro" }} />,
@@ -156,6 +172,7 @@ describe("BookConsultationModal", () => {
   });
 
   it("routes no-video general requests directly to scheduling", () => {
+    authState.current = { user: { id: "u-1", email: "buyer@example.com" }, profile: { display_name: "Buyer One" } };
     renderWithProviders(
       <BookConsultationModal open onClose={onClose} allowVideoCall={false} professional={professional} />,
     );
@@ -166,6 +183,7 @@ describe("BookConsultationModal", () => {
   });
 
   it("supports general requests without availability and shows submit errors", async () => {
+    authState.current = { user: { id: "u-1", email: "buyer@example.com" }, profile: { display_name: "Buyer One" } };
     submitConsultation.mutateAsync.mockRejectedValue(new Error("network"));
     renderWithProviders(
       <BookConsultationModal open onClose={onClose} allowVideoCall professional={{ ...professional, video_link: "https://meet.example/pro" }} />,
@@ -177,9 +195,7 @@ describe("BookConsultationModal", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
 
     const send = screen.getByRole("button", { name: /Send Request/i });
-    expect(send).toBeDisabled();
-    fireEvent.change(screen.getByPlaceholderText("Your name"), { target: { value: "Guest Buyer" } });
-    fireEvent.change(screen.getByPlaceholderText("your@email.com"), { target: { value: "guest@example.com" } });
+    expect(send).not.toBeDisabled();
     fireEvent.click(send);
 
     await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith("Could not book consultation. Please try again."));

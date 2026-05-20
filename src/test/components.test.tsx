@@ -142,7 +142,16 @@ vi.mock("@/components/property/PropertyAuctionSection", () => ({ PropertyAuction
 vi.mock("@/hooks/useInView", () => ({ useInView: vi.fn().mockReturnValue([vi.fn(), false]) }));
 vi.mock("@/hooks/usePullToRefresh", () => ({ usePullToRefresh: vi.fn().mockReturnValue({ isPulling: false, pullProgress: 0 }) }));
 vi.mock("@/hooks/useSubscription", () => ({ useSubscription: vi.fn().mockReturnValue({ isPro: false, loading: false }) }));
-vi.mock("@/hooks/usePropertyAIInsights", () => ({ usePropertyAIInsights: vi.fn().mockReturnValue({ aiInsightsData: null, aiInsightsLoading: false }) }));
+vi.mock("@/hooks/usePropertyAIInsights", () => ({
+  usePropertyAIInsights: vi.fn().mockReturnValue({
+    aiInsightsData: null,
+    aiInsightsLoading: false,
+    aiInsightsLoaded: false,
+    aiInsightsQuota: { allowed: true, reason: null, used: 0, limit: 5, remaining: 5 },
+    aiInsightsQuotaLoading: false,
+    loadAiInsights: vi.fn(),
+  }),
+}));
 vi.mock("@/hooks/useSimilarListings", () => ({ useSimilarListings: vi.fn().mockReturnValue({ data: [] }) }));
 vi.mock("@/hooks/useMessages", () => ({
   useStartConversation: vi.fn().mockReturnValue({ mutateAsync: vi.fn(), isPending: false }),
@@ -415,11 +424,57 @@ describe("PropertyAIInsightsSection", () => {
           marketComparison: "above_market",
           confidenceLabel: "Low",
         }}
+        quota={{ allowed: true, reason: null, used: 2, limit: 100, remaining: 98 }}
+        quotaLoading={false}
+        hasRequested
+        onLoad={vi.fn()}
       />,
     );
 
     expect(screen.queryByText(/EUR 5440k/i)).not.toBeInTheDocument();
     expect(screen.getByText(/5\.440\.000/)).toBeInTheDocument();
+  });
+
+  it("shows a manual load button and free request counter before spending an AI call", async () => {
+    const { PropertyAIInsightsSection } = await import("@/components/property/PropertyAIInsightsSection");
+    const onLoad = vi.fn();
+
+    renderWithProviders(
+      <PropertyAIInsightsSection
+        user={{ id: "u-1" } as import("@supabase/supabase-js").User}
+        isPro={false}
+        loading={false}
+        data={null}
+        quota={{ allowed: true, reason: null, used: 2, limit: 5, remaining: 3 }}
+        quotaLoading={false}
+        hasRequested={false}
+        onLoad={onLoad}
+      />,
+    );
+
+    expect(screen.getByText(/3 of 5 Free AI insight requests remaining this month/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /load ai insights/i }));
+    expect(onLoad).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows upgrade CTA when the AI insights cap is reached", async () => {
+    const { PropertyAIInsightsSection } = await import("@/components/property/PropertyAIInsightsSection");
+
+    renderWithProviders(
+      <PropertyAIInsightsSection
+        user={{ id: "u-1" } as import("@supabase/supabase-js").User}
+        isPro={false}
+        loading={false}
+        data={null}
+        quota={{ allowed: false, reason: "monthly_limit_reached", used: 5, limit: 5, remaining: 0 }}
+        quotaLoading={false}
+        hasRequested={false}
+        onLoad={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: /upgrade to pro/i })).toHaveAttribute("href", "/pricing");
+    expect(screen.queryByRole("button", { name: /load ai insights/i })).not.toBeInTheDocument();
   });
 });
 

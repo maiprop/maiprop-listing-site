@@ -124,7 +124,14 @@ vi.mock("@/hooks/useSubscription", () => ({
   useSubscription: () => ({ isPro: false, loading: false }),
 }));
 vi.mock("@/hooks/usePropertyAIInsights", () => ({
-  usePropertyAIInsights: () => ({ aiInsightsData: null, aiInsightsLoading: false }),
+  usePropertyAIInsights: () => ({
+    aiInsightsData: null,
+    aiInsightsLoading: false,
+    aiInsightsLoaded: false,
+    aiInsightsQuota: { allowed: true, reason: null, used: 0, limit: 5, remaining: 5 },
+    aiInsightsQuotaLoading: false,
+    loadAiInsights: vi.fn(),
+  }),
 }));
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {

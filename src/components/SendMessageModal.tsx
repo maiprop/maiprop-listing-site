@@ -4,7 +4,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useStartConversation, useSendMessage } from "@/hooks/useMessages";
-import { useSubmitConsultation } from "@/hooks/useConsultations";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -19,18 +18,27 @@ interface SendMessageModalProps {
   };
 }
 
+const SignInRequired = ({ firstName }: { firstName: string }) => (
+  <div className="space-y-4 py-4">
+    <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm text-muted-foreground">
+      <p className="font-semibold text-foreground mb-1">Sign in to send an inquiry</p>
+      <p>{firstName} can receive messages only from signed-in mAI prop accounts.</p>
+    </div>
+    <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" asChild>
+      <a href="/login">Sign in</a>
+    </Button>
+  </div>
+);
+
 export default function SendMessageModal({ open, onClose, professional }: SendMessageModalProps) {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const startConversation = useStartConversation();
   const sendMessage = useSendMessage();
-  const submitConsultation = useSubmitConsultation();
 
-  const [name, setName] = useState(profile?.display_name || "");
-  const [email, setEmail] = useState(user?.email || "");
   const [message, setMessage] = useState("");
   const [done, setDone] = useState(false);
-  const isLoading = startConversation.isPending || sendMessage.isPending || submitConsultation.isPending;
+  const isLoading = startConversation.isPending || sendMessage.isPending;
 
   const proName = professional.display_name || "the professional";
   const firstName = proName.split(" ")[0];
@@ -38,30 +46,18 @@ export default function SendMessageModal({ open, onClose, professional }: SendMe
   const handleSend = async () => {
     if (!message.trim()) { toast.error("Please write a message"); return; }
 
-    if (user) {
-      try {
-        const convId = await startConversation.mutateAsync({ other_user_id: professional.user_id });
-        await sendMessage.mutateAsync({ conversation_id: convId, content: message });
-        toast.success(`Message sent to ${firstName}!`);
-        setDone(true);
-      } catch (_err: unknown) {
-        toast.error("Could not send message. Please try again.");
-      }
-    } else {
-      // Guest: save as consultation request
-      if (!name.trim() || !email.trim()) { toast.error("Please fill in your name and email"); return; }
-      try {
-        await submitConsultation.mutateAsync({
-          professional_id: professional.id,
-          requester_name: name,
-          requester_email: email,
-          request_type: "message",
-          message,
-        });
-        setDone(true);
-      } catch (_err: unknown) {
-        toast.error("Could not send message. Please try again.");
-      }
+    if (!user) {
+      toast.error("Please sign in to send an inquiry.");
+      return;
+    }
+
+    try {
+      const convId = await startConversation.mutateAsync({ other_user_id: professional.user_id });
+      await sendMessage.mutateAsync({ conversation_id: convId, content: message });
+      toast.success(`Message sent to ${firstName}!`);
+      setDone(true);
+    } catch (_err: unknown) {
+      toast.error("Could not send message. Please try again.");
     }
   };
 
@@ -86,7 +82,9 @@ export default function SendMessageModal({ open, onClose, professional }: SendMe
           </DialogDescription>
         </DialogHeader>
 
-        {done ? (
+        {!user ? (
+          <SignInRequired firstName={firstName} />
+        ) : done ? (
           <div className="text-center py-6 space-y-4">
             <div className="w-16 h-16 rounded-full bg-brand-emerald/20 flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-8 h-8 text-brand-emerald" />
@@ -95,16 +93,12 @@ export default function SendMessageModal({ open, onClose, professional }: SendMe
               <p className="font-semibold text-foreground">Your message has been sent!</p>
               <p className="text-sm text-muted-foreground mt-1">{firstName} will typically respond within 2 hours.</p>
             </div>
-            {user ? (
-              <div className="flex gap-2">
-                <Button variant="outline" className="flex-1 border-border" onClick={handleClose}>Close</Button>
-                <Button className="flex-1 bg-gradient-primary border-0 text-primary-foreground" onClick={goToMessages}>
-                  View Messages
-                </Button>
-              </div>
-            ) : (
-              <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" onClick={handleClose}>Done</Button>
-            )}
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1 border-border" onClick={handleClose}>Close</Button>
+              <Button className="flex-1 bg-gradient-primary border-0 text-primary-foreground" onClick={goToMessages}>
+                View Messages
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="space-y-4">
@@ -119,31 +113,6 @@ export default function SendMessageModal({ open, onClose, professional }: SendMe
               </div>
             </div>
 
-            {/* Guest fields */}
-            {!user && (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground block mb-1">Your Name *</label>
-                  <input
-                    value={name}
-                    onChange={e => setName(e.target.value)}
-                    placeholder="Full name"
-                    className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary transition-colors"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground block mb-1">Email *</label>
-                  <input
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder="your@email.com"
-                    type="email"
-                    className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary transition-colors"
-                  />
-                </div>
-              </div>
-            )}
-
             {/* Message */}
             <div>
               <label className="text-xs font-medium text-muted-foreground block mb-1">Message *</label>
@@ -156,12 +125,6 @@ export default function SendMessageModal({ open, onClose, professional }: SendMe
               />
               <div className="text-right text-xs text-muted-foreground mt-1">{message.length}/1000</div>
             </div>
-
-            {!user && (
-              <p className="text-xs text-muted-foreground bg-secondary rounded-lg px-3 py-2">
-                💡 <a onClick={() => navigate("/login")} className="text-primary cursor-pointer hover:underline">Sign in</a> to follow up and track your inquiries in your dashboard.
-              </p>
-            )}
 
             <div className="flex gap-2">
               <Button variant="outline" className="border-border" onClick={handleClose}>Cancel</Button>

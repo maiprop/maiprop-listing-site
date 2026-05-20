@@ -100,8 +100,15 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
   const modal = useModal<"viewing" | "auctionAlert">();
   const [walkScore, setWalkScore] = useState<number | null>(null);
 
-  // AI Market Insights — delegated to custom hook; skips API call for non-Pro users
-  const { aiInsightsData, aiInsightsLoading } = usePropertyAIInsights(
+  // AI Market Insights — quota is checked on load, and provider work only runs after user action.
+  const {
+    aiInsightsData,
+    aiInsightsLoading,
+    aiInsightsLoaded,
+    aiInsightsQuota,
+    aiInsightsQuotaLoading,
+    loadAiInsights,
+  } = usePropertyAIInsights(
     dbListing as ListingWithJoins | null,
     user,
     id,
@@ -352,6 +359,10 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
                 isPro={isPro}
                 loading={aiInsightsLoading}
                 data={aiInsightsData}
+                quota={aiInsightsQuota}
+                quotaLoading={aiInsightsQuotaLoading}
+                hasRequested={aiInsightsLoaded}
+                onLoad={loadAiInsights}
               />
 
               {/* ── Description (hidden for auctions) ── */}

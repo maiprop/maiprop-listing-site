@@ -123,7 +123,7 @@ describe("high-coverage interaction modals", () => {
     expect(onClose).toHaveBeenCalledTimes(2);
   });
 
-  it("sends messages for signed-in and guest users, validates missing fields, and opens messages", async () => {
+  it("sends messages for signed-in users, gates guests, and opens messages", async () => {
     const onClose = vi.fn();
     mocks.authState.user = { id: "user-1", email: "buyer@example.com" };
     mocks.authState.profile = { display_name: "Buyer One" };
@@ -152,20 +152,10 @@ describe("high-coverage interaction modals", () => {
         <SendMessageModal open onClose={onClose} professional={professional} />
       </MemoryRouter>,
     );
-    fireEvent.change(screen.getByPlaceholderText(/hi maria/i), { target: { value: "Guest inquiry" } });
-    fireEvent.click(screen.getByRole("button", { name: /send message/i }));
-    expect(mocks.toast.error).toHaveBeenCalledWith("Please fill in your name and email");
-    fireEvent.change(screen.getByPlaceholderText("Full name"), { target: { value: "Guest Buyer" } });
-    fireEvent.change(screen.getByPlaceholderText("your@email.com"), { target: { value: "guest@example.com" } });
-    fireEvent.click(screen.getByRole("button", { name: /send message/i }));
-    await waitFor(() =>
-      expect(mocks.submitConsultation.mutateAsync).toHaveBeenCalledWith(expect.objectContaining({
-        professional_id: "pro-1",
-        requester_name: "Guest Buyer",
-        requester_email: "guest@example.com",
-        request_type: "message",
-      })),
-    );
+    expect(screen.getByText("Sign in to send an inquiry")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /sign in/i })).toHaveAttribute("href", "/login");
+    expect(screen.queryByPlaceholderText(/hi maria/i)).not.toBeInTheDocument();
+    expect(mocks.submitConsultation.mutateAsync).not.toHaveBeenCalled();
   });
 
   it("creates and edits auction alerts with typed filters and email notification toggles", () => {

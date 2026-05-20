@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase as supabaseClient } from "@/integrations/supabase/client";
 import { isAiUsageLimitError } from "@/lib/aiErrorUtils";
 import { toast } from "sonner";
@@ -13,6 +13,36 @@ export interface AIInsightsData {
   confidenceLabel: string;
 }
 
+export interface AIInsightsQuota {
+  allowed: boolean;
+  reason: string | null;
+  used: number;
+  limit: number;
+  remaining: number;
+}
+
+const AI_INSIGHTS_BUCKET = "property-valuation";
+const UNLIMITED_AI_LIMIT = 999_999;
+
+function quotaFromJson(value: unknown): AIInsightsQuota | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  const used = typeof row.used === "number" ? row.used : Number(row.used ?? 0);
+  const limit = typeof row.limit === "number" ? row.limit : Number(row.limit ?? 0);
+  const allowed = Boolean(row.allowed);
+  const reason = typeof row.reason === "string" ? row.reason : null;
+
+  if (!Number.isFinite(used) || !Number.isFinite(limit)) return null;
+
+  return {
+    allowed,
+    reason,
+    used,
+    limit,
+    remaining: limit >= UNLIMITED_AI_LIMIT ? UNLIMITED_AI_LIMIT : Math.max(limit - used, 0),
+  };
+}
+
 export function usePropertyAIInsights(
   dbListing: ListingWithJoins | null | undefined,
   user: User | null,
@@ -22,65 +52,127 @@ export function usePropertyAIInsights(
   const [aiInsightsData, setAiInsightsData] = useState<AIInsightsData | null>(null);
   const [aiInsightsLoading, setAiInsightsLoading] = useState(false);
   const [aiInsightsLoaded, setAiInsightsLoaded] = useState(false);
+  const [aiInsightsQuota, setAiInsightsQuota] = useState<AIInsightsQuota | null>(null);
+  const [aiInsightsQuotaLoading, setAiInsightsQuotaLoading] = useState(false);
+
+  const listingId = dbListing?.id;
 
   useEffect(() => {
-    if (!dbListing || aiInsightsLoaded || !user) return;
-    setAiInsightsLoaded(true);
+    setAiInsightsData(null);
+    setAiInsightsLoaded(false);
+  }, [listingId, user?.id]);
+
+  const refreshAiInsightsQuota = useCallback(async () => {
+    if (!dbListing || !user) {
+      setAiInsightsQuota(null);
+      return null;
+    }
+
+    setAiInsightsQuotaLoading(true);
+    try {
+      const { data, error } = await supabaseClient.rpc("check_ai_quota", {
+        p_bucket: AI_INSIGHTS_BUCKET,
+      });
+      if (error) throw error;
+      const quota = quotaFromJson(data);
+      setAiInsightsQuota(quota);
+      return quota;
+    } catch (_err: unknown) {
+      setAiInsightsQuota(null);
+      return null;
+    } finally {
+      setAiInsightsQuotaLoading(false);
+    }
+  }, [dbListing, user]);
+
+  useEffect(() => {
+    void refreshAiInsightsQuota();
+  }, [refreshAiInsightsQuota]);
+
+  const loadAiInsights = useCallback(async () => {
+    if (!dbListing || !user || aiInsightsLoading) return;
+
+    const quota = await refreshAiInsightsQuota();
+    if (quota && !quota.allowed) {
+      toast.error(
+        quota.reason === "monthly_limit_reached"
+          ? "You've reached your AI insights limit for this month. Upgrade to continue."
+          : "AI insights are not included in your current plan.",
+      );
+      return;
+    }
+
     setAiInsightsLoading(true);
     const snapshot = dbListing;
-    const invokeValuation = async () => {
-      try {
-        const { data, error: fnErr } = await supabaseClient.functions.invoke("property-valuation", {
-          body: {
-            title: snapshot.title,
-            city: snapshot.city,
-            address: snapshot.address,
-            price: Number(snapshot.price),
-            sqm: Number(snapshot.sqm),
-            bedrooms: snapshot.bedrooms,
-            bathrooms: snapshot.bathrooms,
-            propertyType: snapshot.property_type,
-            listingType: snapshot.listing_type,
-            floor: snapshot.floor,
-            yearBuilt: snapshot.year_built,
-            energyClass: snapshot.energy_class,
-            pricePerSqm: snapshot.price_per_sqm ? Number(snapshot.price_per_sqm) : undefined,
-            hasParking: snapshot.has_parking,
-            hasPool: snapshot.has_pool,
-            hasElevator: snapshot.has_elevator,
-            region: snapshot.region,
-            ownershipStatus: (() => {
-              const t = (snapshot as ListingWithJoins).tags ?? [];
-              const tag = t.find((x) => x.startsWith("ownership:") && !x.startsWith("ownership_pct:"));
-              return tag ? tag.replace("ownership:", "") : undefined;
-            })(),
-            ownershipPercentage: (() => {
-              const t = (snapshot as ListingWithJoins).tags ?? [];
-              const tag = t.find((x) => x.startsWith("ownership_pct:"));
-              return tag ? Number(tag.replace("ownership_pct:", "")) : undefined;
-            })(),
-          },
-        });
-        if (data && !data.error) {
-          setAiInsightsData({
-            vsMarket: data.marketComparisonPct ?? 0,
-            rentalYield: data.rentalYieldEstimate ?? 0,
-            estimatedValue: data.estimatedValue ?? Number(snapshot.price),
-            marketComparison: data.marketComparison ?? "at_market",
-            confidenceLabel: data.confidenceLabel ?? "Medium",
-          });
-        } else if (isAiUsageLimitError(fnErr, data)) {
-          toast.error("AI insights are temporarily unavailable due to usage limits. Please try again later.");
-        }
-      } catch (e: unknown) {
-        if (isAiUsageLimitError(e, null))
-          toast.error("AI insights are temporarily unavailable due to usage limits. Please try again later.");
-      } finally {
-        setAiInsightsLoading(false);
-      }
-    };
-    invokeValuation();
-  }, [dbListing, aiInsightsLoaded, user]);
+    setAiInsightsLoaded(true);
 
-  return { aiInsightsData, aiInsightsLoading };
+    try {
+      const { data, error: fnErr } = await supabaseClient.functions.invoke("property-valuation", {
+        body: {
+          title: snapshot.title,
+          city: snapshot.city,
+          address: snapshot.address,
+          price: Number(snapshot.price),
+          sqm: Number(snapshot.sqm),
+          bedrooms: snapshot.bedrooms,
+          bathrooms: snapshot.bathrooms,
+          propertyType: snapshot.property_type,
+          listingType: snapshot.listing_type,
+          floor: snapshot.floor,
+          yearBuilt: snapshot.year_built,
+          energyClass: snapshot.energy_class,
+          pricePerSqm: snapshot.price_per_sqm ? Number(snapshot.price_per_sqm) : undefined,
+          hasParking: snapshot.has_parking,
+          hasPool: snapshot.has_pool,
+          hasElevator: snapshot.has_elevator,
+          region: snapshot.region,
+          ownershipStatus: (() => {
+            const t = (snapshot as ListingWithJoins).tags ?? [];
+            const tag = t.find((x) => x.startsWith("ownership:") && !x.startsWith("ownership_pct:"));
+            return tag ? tag.replace("ownership:", "") : undefined;
+          })(),
+          ownershipPercentage: (() => {
+            const t = (snapshot as ListingWithJoins).tags ?? [];
+            const tag = t.find((x) => x.startsWith("ownership_pct:"));
+            return tag ? Number(tag.replace("ownership_pct:", "")) : undefined;
+          })(),
+        },
+      });
+      if (data && !data.error) {
+        setAiInsightsData({
+          vsMarket: data.marketComparisonPct ?? 0,
+          rentalYield: data.rentalYieldEstimate ?? 0,
+          estimatedValue: data.estimatedValue ?? Number(snapshot.price),
+          marketComparison: data.marketComparison ?? "at_market",
+          confidenceLabel: data.confidenceLabel ?? "Medium",
+        });
+        await refreshAiInsightsQuota();
+      } else if (isAiUsageLimitError(fnErr, data)) {
+        const quotaFromError = quotaFromJson(data);
+        if (quotaFromError) setAiInsightsQuota(quotaFromError);
+        toast.error("You've reached your AI insights limit for this month. Upgrade to continue.");
+      } else {
+        toast.error("Could not load AI insights. Please try again.");
+      }
+    } catch (e: unknown) {
+      if (isAiUsageLimitError(e, null)) {
+        toast.error("You've reached your AI insights limit for this month. Upgrade to continue.");
+        await refreshAiInsightsQuota();
+      } else {
+        toast.error("Could not load AI insights. Please try again.");
+      }
+    } finally {
+      setAiInsightsLoading(false);
+    }
+  }, [aiInsightsLoading, dbListing, refreshAiInsightsQuota, user]);
+
+  return {
+    aiInsightsData,
+    aiInsightsLoading,
+    aiInsightsLoaded,
+    aiInsightsQuota,
+    aiInsightsQuotaLoading,
+    loadAiInsights,
+    refreshAiInsightsQuota,
+  };
 }

@@ -47,6 +47,31 @@ beforeEach(() => {
 });
 
 describe("useSubmitConsultation", () => {
+  it("rejects anonymous professional requests before touching Supabase", async () => {
+    useAuthMock.mockReturnValue({ user: null });
+    const consInsert = vi.fn();
+    fromMock.mockImplementation((table: string) => {
+      if (table === "consultation_requests") return { insert: consInsert };
+      throw new Error("unexpected table " + table);
+    });
+
+    const { result } = renderHook(() => useSubmitConsultation(), { wrapper: wrapper() });
+    await act(async () => {
+      await result.current
+        .mutateAsync({
+          professional_id: "p-1",
+          requester_name: "Guest",
+          requester_email: "guest@example.com",
+          request_type: "message",
+        })
+        .catch(() => {});
+    });
+
+    expect(fromMock).not.toHaveBeenCalled();
+    expect(consInsert).not.toHaveBeenCalled();
+    expect(toastMock.error).toHaveBeenCalledWith("Please sign in to contact professionals.");
+  });
+
   it("inserts the consultation row and creates a lead for the professional", async () => {
     const consInsert = vi.fn().mockResolvedValue({ error: null });
     const proSingle = vi.fn().mockResolvedValue({ data: { user_id: "pro-owner" }, error: null });

@@ -42,13 +42,23 @@ interface RequestCallbackModalProps {
   };
 }
 
+const SignInRequired = ({ firstName }: { firstName: string }) => (
+  <div className="space-y-4 py-4">
+    <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm text-muted-foreground">
+      <p className="font-semibold text-foreground mb-1">Sign in to request a callback</p>
+      <p>{firstName} can receive callback requests only from signed-in mAI prop accounts.</p>
+    </div>
+    <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" asChild>
+      <a href="/login">Sign in</a>
+    </Button>
+  </div>
+);
+
 export default function RequestCallbackModal({ open, onClose, professional }: RequestCallbackModalProps) {
   const { user, profile } = useAuth();
   const submitConsultation = useSubmitConsultation();
 
-  const [name, setName] = useState(profile?.display_name || "");
   const [phone, setPhone] = useState(profile?.phone || "");
-  const [email, setEmail] = useState(user?.email || "");
   const [selectedDate, setSelectedDate] = useState("");
   const [callbackTime, setCallbackTime] = useState("");
   const [note, setNote] = useState("");
@@ -61,11 +71,11 @@ export default function RequestCallbackModal({ open, onClose, professional }: Re
   const handleClose = () => { setDone(false); setPhone(""); setSelectedDate(""); setCallbackTime(""); setNote(""); onClose(); };
 
   const handleSubmit = async () => {
+    if (!user) { toast.error("Please sign in to request a callback."); return; }
     if (!phone.trim()) { toast.error("Please enter your phone number"); return; }
     if (!callbackTime) { toast.error("Please select a preferred callback window"); return; }
-    const resolvedName = user ? (profile?.display_name || user.email || name) : name;
-    const resolvedEmail = user ? (user.email || email) : email;
-    if (!user && (!resolvedName.trim() || !resolvedEmail.trim())) { toast.error("Please fill in your name and email"); return; }
+    const resolvedName = profile?.display_name || user.email || "";
+    const resolvedEmail = user.email || "";
 
     try {
       await submitConsultation.mutateAsync({
@@ -97,7 +107,9 @@ export default function RequestCallbackModal({ open, onClose, professional }: Re
           </DialogDescription>
         </DialogHeader>
 
-        {done ? (
+        {!user ? (
+          <SignInRequired firstName={firstName} />
+        ) : done ? (
           <div className="text-center py-6 space-y-4">
             <div className="w-16 h-16 rounded-full bg-brand-emerald/20 flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-8 h-8 text-brand-emerald" />
@@ -136,22 +148,6 @@ export default function RequestCallbackModal({ open, onClose, professional }: Re
                 <div className="text-xs text-muted-foreground">{professional.title}</div>
               </div>
             </div>
-
-            {/* Guest name + email */}
-            {!user && (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground block mb-1">Your Name *</label>
-                  <input value={name} onChange={e => setName(e.target.value)} placeholder="Full name"
-                    className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary transition-colors" />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground block mb-1">Email *</label>
-                  <input value={email} onChange={e => setEmail(e.target.value)} placeholder="your@email.com" type="email"
-                    className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary transition-colors" />
-                </div>
-              </div>
-            )}
 
             {/* Phone */}
             <div>

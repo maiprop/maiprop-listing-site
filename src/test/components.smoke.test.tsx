@@ -401,7 +401,16 @@ describe("Component smoke tests", () => {
 
   it("PropertyAIInsightsSection renders without throwing", async () => {
     const { PropertyAIInsightsSection } = await import("@/components/property/PropertyAIInsightsSection");
-    expect(() => renderWithProviders(<PropertyAIInsightsSection listingId="test" />)).not.toThrow();
+    expect(() =>
+      renderWithProviders(
+        <PropertyAIInsightsSection
+          user={null}
+          isPro={false}
+          loading={false}
+          data={null}
+        />,
+      )
+    ).not.toThrow();
   });
 
   it("PropertyScoresSection renders without throwing", async () => {

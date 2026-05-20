@@ -29,9 +29,12 @@ export function useSubmitConsultation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: ConsultationRequestInput) => {
+      if (!user) {
+        throw new Error("auth_required");
+      }
       const { error } = await supabase.from("consultation_requests").insert({
         professional_id: input.professional_id,
-        requester_id: user?.id ?? null,
+        requester_id: user.id,
         requester_name: input.requester_name,
         requester_email: input.requester_email,
         requester_phone: input.requester_phone ?? null,
@@ -88,7 +91,13 @@ export function useSubmitConsultation() {
         );
       }
     },
-    onError: () => toast.error("Could not send consultation request. Please try again."),
+    onError: (error) => {
+      if (error instanceof Error && error.message === "auth_required") {
+        toast.error("Please sign in to contact professionals.");
+        return;
+      }
+      toast.error("Could not send consultation request. Please try again.");
+    },
   });
 }
 

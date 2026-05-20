@@ -1,15 +1,16 @@
 /**
  * Displays AI Market Insights (vs-market %, rental yield, AI estimate)
  * fetched from the property-valuation edge function.
- *
- * Data loading lives in PropertyDetail.tsx; this component is pure display.
  */
 
 import type { User } from "@supabase/supabase-js";
-import { Zap, Loader2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Zap, Loader2, Sparkles, ArrowUpRight, RotateCw } from "lucide-react";
 import { Section, SectionHeader } from "@/components/property/DetailPrimitives";
 import { SignInForAI } from "@/components/SignInForAI";
+import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/format";
+import type { AIInsightsQuota } from "@/hooks/usePropertyAIInsights";
 
 interface AIInsightsData {
   vsMarket: number;
@@ -24,6 +25,10 @@ interface Props {
   isPro: boolean;
   loading: boolean;
   data: AIInsightsData | null;
+  quota?: AIInsightsQuota | null;
+  quotaLoading?: boolean;
+  hasRequested?: boolean;
+  onLoad?: () => void;
 }
 
 const COMPARISON_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
@@ -44,7 +49,30 @@ const COMPARISON_CONFIG: Record<string, { label: string; color: string; bg: stri
   },
 };
 
-export function PropertyAIInsightsSection({ user, isPro: _isPro, loading, data }: Props) {
+const UNLIMITED_AI_LIMIT = 999_999;
+
+function formatQuotaText(quota: AIInsightsQuota | null | undefined, isPro: boolean, quotaLoading?: boolean) {
+  if (quotaLoading) return "Checking AI request allowance...";
+  if (!quota) return "AI request allowance will be checked before loading.";
+  if (quota.limit >= UNLIMITED_AI_LIMIT) return "Unlimited AI insight requests this month";
+  const tier = isPro ? "Pro" : "Free";
+  return `${Math.max(quota.limit - quota.used, 0)} of ${quota.limit} ${tier} AI insight requests remaining this month`;
+}
+
+export function PropertyAIInsightsSection({
+  user,
+  isPro,
+  loading,
+  data,
+  quota,
+  quotaLoading,
+  hasRequested = false,
+  onLoad,
+}: Props) {
+  const quotaReached = !!quota && quota.limit < UNLIMITED_AI_LIMIT && quota.used >= quota.limit;
+  const loadLabel = data ? "Refresh AI insights" : "Load AI insights";
+  const quotaText = formatQuotaText(quota, isPro, quotaLoading);
+
   return (
     <Section>
       <SectionHeader
@@ -54,6 +82,42 @@ export function PropertyAIInsightsSection({ user, isPro: _isPro, loading, data }
       />
       <div className="p-5 space-y-4">
         {!user && <SignInForAI feature="AI Market Insights" />}
+
+        {user && (
+          <div className="flex flex-col gap-3 rounded-xl border border-border bg-secondary/40 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-foreground">Run AI analysis when you need it</p>
+              <p className="mt-1 text-xs text-muted-foreground">{quotaText}</p>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              {quotaReached ? (
+                <Button asChild size="sm" className="gap-2">
+                  <Link to="/pricing">
+                    Upgrade to Pro
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                  </Link>
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={onLoad}
+                  disabled={loading || quotaLoading || !onLoad}
+                  className="gap-2"
+                >
+                  {loading ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : data ? (
+                    <RotateCw className="w-3.5 h-3.5" />
+                  ) : (
+                    <Sparkles className="w-3.5 h-3.5" />
+                  )}
+                  {loading ? "Loading insights..." : loadLabel}
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
 
         {user && loading && (
           <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
@@ -97,7 +161,7 @@ export function PropertyAIInsightsSection({ user, isPro: _isPro, loading, data }
           );
         })()}
 
-        {user && !loading && !data && (
+        {user && !loading && !data && hasRequested && (
           <p className="text-xs text-muted-foreground text-center py-4">Market analysis unavailable</p>
         )}
       </div>
