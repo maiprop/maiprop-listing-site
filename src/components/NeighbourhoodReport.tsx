@@ -233,6 +233,15 @@ export default function NeighbourhoodReport({ city, address, region, propertyTyp
         <Building2 className="w-4 h-4 text-primary" />
         <div className="flex-1">
           <h3 className="font-display font-semibold text-sm">Neighbourhood Report</h3>
+          {user && data && (
+            <AIQuotaStatus
+              featureName="Neighbourhood Report"
+              quota={quota}
+              quotaLoading={quotaLoading || !quotaChecked}
+              variant="compact"
+              className="mt-1"
+            />
+          )}
           {data && <p className="text-[10px] text-muted-foreground mt-0.5">{data.areaName} · {city}</p>}
         </div>
         <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-semibold">
@@ -243,7 +252,7 @@ export default function NeighbourhoodReport({ city, address, region, propertyTyp
       <div className="p-5">
         {!user && <SignInForAI feature="Neighbourhood Report" />}
 
-        {user && (
+        {user && (!data || quotaReached) && (
           <AIQuotaStatus
             featureName="Neighbourhood Report"
             quota={quota}

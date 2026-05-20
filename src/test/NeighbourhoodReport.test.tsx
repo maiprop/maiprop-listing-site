@@ -131,6 +131,10 @@ describe("NeighbourhoodReport — fetch flows", () => {
     render(<NeighbourhoodReport {...baseProps} listingId="l-1" />);
     await loadReport();
     await waitFor(() => expect(screen.getByText(/Plaka.*Athens/i)).toBeInTheDocument());
+
+    const counter = screen.getByLabelText(/Neighbourhood Report request counter/i);
+    expect(counter).toHaveTextContent(/1 \/ 5 used/i);
+    expect(counter).toHaveTextContent(/Free 5\/mo \| Pro 100\/mo/i);
     expect(rpcMock).toHaveBeenCalledWith("check_ai_quota", { p_bucket: "neighbourhood-report" });
     expect(screen.getByText(/UNESCO district/)).toBeInTheDocument();
     expect(screen.getByText(/Excellent/)).toBeInTheDocument();
@@ -198,6 +202,22 @@ describe("NeighbourhoodReport — fetch flows", () => {
     expect(screen.getByText(/Monthly cap reached/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Upgrade/i })).toHaveAttribute("href", "/pricing");
     expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it("shows a Pro allowance counter with the Pro monthly cap", async () => {
+    rpcMock.mockResolvedValue({
+      data: { allowed: true, reason: null, used: 12, limit: 100 },
+      error: null,
+    });
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <NeighbourhoodReport {...baseProps} />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(/12 \/ 100 used/i)).toBeInTheDocument();
+    expect(screen.getByText(/88 Pro requests remaining/i)).toBeInTheDocument();
+    expect(screen.getByText(/Free: 5\/month\. Pro: 100\/month\./i)).toBeInTheDocument();
   });
 });
 

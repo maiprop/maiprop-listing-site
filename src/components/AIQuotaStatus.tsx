@@ -15,6 +15,7 @@ interface AIQuotaStatusProps {
   quota: AIQuota | null | undefined;
   quotaLoading?: boolean;
   className?: string;
+  variant?: "card" | "compact";
 }
 
 const counterText = (quota: AIQuota | null | undefined, loading?: boolean) => {
@@ -29,6 +30,7 @@ export function AIQuotaStatus({
   quota,
   quotaLoading = false,
   className = "",
+  variant = "card",
 }: AIQuotaStatusProps) {
   const quotaReached = isAiQuotaReached(quota);
   const tier = getAiQuotaTierLabel(quota);
@@ -36,6 +38,28 @@ export function AIQuotaStatus({
   const hasFiniteQuota = Boolean(quota && quota.limit < UNLIMITED_AI_LIMIT);
   const hasUnlimitedQuota = Boolean(quota && quota.limit >= UNLIMITED_AI_LIMIT);
   const planExcluded = quota?.reason === "plan_does_not_include_feature";
+
+  if (variant === "compact") {
+    return (
+      <div
+        className={`flex min-w-0 flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground ${className}`}
+        aria-label={`${featureName} request counter`}
+      >
+        {quotaLoading ? (
+          <Loader2 className="h-3 w-3 animate-spin text-primary" />
+        ) : (
+          <Gauge className="h-3 w-3 text-primary" />
+        )}
+        <span className="font-semibold text-foreground">AI requests</span>
+        <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 font-semibold text-primary">
+          {counterText(quota, quotaLoading)}
+        </span>
+        <span className="hidden sm:inline">
+          Free {FREE_AI_MONTHLY_LIMIT}/mo | Pro {PRO_AI_MONTHLY_LIMIT}/mo
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div
