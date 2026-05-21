@@ -30,19 +30,21 @@ export function HeroSection() {
   const [showAI, setShowAI] = useState(false);
   const [heroVideoReady, setHeroVideoReady] = useState(false);
 
-  // Keep the decorative video off the critical path; the poster and search UI
-  // need to win first paint on slower connections.
+  // Keep the decorative video just behind first paint, not seconds behind it.
+  // The poster protects LCP, while the short idle delay prevents the video from
+  // competing with the search UI on the first frame.
   useEffect(() => {
     if (!window.matchMedia("(min-width: 1024px)").matches) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
     if (connection?.saveData) return;
 
-    const scheduleIdle = window.requestIdleCallback ?? ((cb: IdleRequestCallback) => window.setTimeout(() => cb({ didTimeout: false, timeRemaining: () => 0 }), 1500));
+    const scheduleIdle = window.requestIdleCallback ?? ((cb: IdleRequestCallback) => window.setTimeout(() => cb({ didTimeout: false, timeRemaining: () => 0 }), 900));
     const cancelIdle = window.cancelIdleCallback ?? window.clearTimeout;
     let idleId: number | undefined;
     const timer = window.setTimeout(() => {
-      idleId = scheduleIdle(() => setHeroVideoReady(true), { timeout: 2500 });
-    }, 8000);
+      idleId = scheduleIdle(() => setHeroVideoReady(true), { timeout: 1200 });
+    }, 900);
     return () => {
       window.clearTimeout(timer);
       if (idleId !== undefined) cancelIdle(idleId);
@@ -138,7 +140,7 @@ export function HeroSection() {
             muted
             loop
             playsInline
-            preload="none"
+            preload={heroVideoReady ? "metadata" : "none"}
             poster="/hero-poster.jpg"
             aria-hidden="true"
             className="hero-video absolute inset-0 w-full h-full object-cover opacity-100 dark:opacity-70"
