@@ -53,9 +53,63 @@ const STATIC_PRICES: Record<string, number> = {
   Heraklion: 1880,
 };
 
-function Sparkline({ city, up }: { city: string; up: boolean }) {
+const MARKET_ACCENTS: Record<string, { accent: string; soft: string; chip: string }> = {
+  Athens: {
+    accent: "hsl(261 84% 66%)",
+    soft: "hsl(261 84% 66% / 0.16)",
+    chip: "linear-gradient(135deg, hsl(261 84% 55%), hsl(240 70% 48%))",
+  },
+  Thessaloniki: {
+    accent: "hsl(178 80% 58%)",
+    soft: "hsl(178 80% 58% / 0.15)",
+    chip: "linear-gradient(135deg, hsl(178 75% 37%), hsl(168 72% 42%))",
+  },
+  Mykonos: {
+    accent: "hsl(38 92% 60%)",
+    soft: "hsl(38 92% 60% / 0.16)",
+    chip: "linear-gradient(135deg, hsl(38 92% 42%), hsl(28 84% 47%))",
+  },
+  Glyfada: {
+    accent: "hsl(315 74% 64%)",
+    soft: "hsl(315 74% 64% / 0.15)",
+    chip: "linear-gradient(135deg, hsl(315 72% 48%), hsl(276 76% 54%))",
+  },
+  Rhodes: {
+    accent: "hsl(150 70% 50%)",
+    soft: "hsl(150 70% 50% / 0.14)",
+    chip: "linear-gradient(135deg, hsl(150 68% 35%), hsl(178 72% 36%))",
+  },
+  Santorini: {
+    accent: "hsl(18 88% 62%)",
+    soft: "hsl(18 88% 62% / 0.15)",
+    chip: "linear-gradient(135deg, hsl(18 82% 48%), hsl(350 76% 52%))",
+  },
+  Kifisia: {
+    accent: "hsl(238 76% 68%)",
+    soft: "hsl(238 76% 68% / 0.15)",
+    chip: "linear-gradient(135deg, hsl(238 70% 55%), hsl(261 78% 58%))",
+  },
+  Piraeus: {
+    accent: "hsl(0 72% 58%)",
+    soft: "hsl(0 72% 58% / 0.14)",
+    chip: "linear-gradient(135deg, hsl(0 72% 44%), hsl(350 75% 48%))",
+  },
+  Heraklion: {
+    accent: "hsl(48 92% 60%)",
+    soft: "hsl(48 92% 60% / 0.15)",
+    chip: "linear-gradient(135deg, hsl(48 85% 40%), hsl(32 84% 46%))",
+  },
+};
+
+const DEFAULT_MARKET_ACCENT = MARKET_ACCENTS.Athens;
+
+function getMarketAccent(city: string) {
+  return MARKET_ACCENTS[city] ?? DEFAULT_MARKET_ACCENT;
+}
+
+function Sparkline({ city, up, accent }: { city: string; up: boolean; accent: string }) {
   const d = SPARKLINES[city] ?? SPARKLINES.Athens;
-  const color = up ? "hsl(var(--brand-cyan))" : "hsl(0 70% 55%)";
+  const color = up ? accent : "hsl(0 72% 58%)";
   return (
     <svg width="40" height="20" viewBox="0 0 48 22" fill="none" className="shrink-0">
       <defs>
@@ -129,23 +183,28 @@ export function MarketTicker() {
     <div
       className="relative rounded-2xl overflow-hidden"
       style={{
-        background: "hsl(270 28% 8% / 0.55)",
+        background:
+          "linear-gradient(160deg, hsl(286 34% 9% / 0.76) 0%, hsl(270 28% 8% / 0.72) 52%, hsl(24 34% 9% / 0.70) 100%)",
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
-        border: "1px solid hsl(var(--brand-purple) / 0.16)",
-        boxShadow: "0 0 0 1px hsl(var(--brand-purple) / 0.05), 0 8px 32px -8px hsl(var(--brand-purple) / 0.14)",
+        border: "1px solid hsl(var(--brand-purple) / 0.24)",
+        boxShadow:
+          "0 0 0 1px hsl(38 92% 60% / 0.06), 0 16px 38px -12px hsl(270 80% 18% / 0.45)",
       }}
     >
       {/* Subtle ambient glow */}
       <div
         className="absolute -inset-px rounded-2xl pointer-events-none"
-        style={{ boxShadow: "0 0 26px 2px hsl(var(--brand-cyan) / 0.06)" }}
+        style={{ boxShadow: "0 0 28px 2px hsl(38 92% 60% / 0.07), inset 0 1px 0 hsl(0 0% 100% / 0.08)" }}
       />
 
       {/* Header */}
       <div
         className="flex items-center justify-between px-4 py-2 border-b"
-        style={{ borderColor: "hsl(var(--brand-purple) / 0.12)", background: "hsl(270 28% 7% / 0.35)" }}
+        style={{
+          borderColor: "hsl(38 80% 58% / 0.12)",
+          background: "linear-gradient(90deg, hsl(270 34% 8% / 0.55), hsl(24 34% 9% / 0.45))",
+        }}
       >
         <div className="flex items-center gap-2">
           <span className="relative flex w-2 h-2 shrink-0">
@@ -184,24 +243,33 @@ export function MarketTicker() {
         <div className="ticker-scroll-rows" style={{ animationPlayState: "running" }}>
           {scrollRows.map((row, i) => {
             const isFlickering = flickeringCity === row.city && i < rows.length;
+            const accent = getMarketAccent(row.city);
+            const chipBackground = row.up
+              ? accent.chip
+              : "linear-gradient(135deg, hsl(0 72% 44%), hsl(350 75% 48%))";
             return (
               <div
                 key={`${row.city}-${i}`}
                 className="flex items-center gap-2.5 px-4 transition-all duration-300"
                 style={{
                   height: "36px",
-                  background: isFlickering ? "hsl(var(--brand-purple) / 0.18)" : "hsl(270 28% 8% / 0.62)",
-                  borderBottom: "1px solid hsl(var(--brand-purple) / 0.08)",
+                  background: isFlickering ? accent.soft : "hsl(270 28% 8% / 0.48)",
+                  borderBottom: "1px solid hsl(38 32% 72% / 0.08)",
                 }}
               >
                 <span
-                  className="w-24 text-[11px] font-semibold transition-colors duration-300 truncate"
+                  className="h-4 w-1 rounded-full shrink-0"
+                  style={{ background: accent.accent, boxShadow: `0 0 10px ${accent.accent}` }}
+                  aria-hidden="true"
+                />
+                <span
+                  className="w-[5.5rem] text-[11px] font-semibold transition-colors duration-300 truncate"
                   style={{ color: isFlickering ? "hsl(0 0% 100%)" : "hsl(220 20% 88%)" }}
                 >
                   {row.city}
                 </span>
 
-                <Sparkline city={row.city} up={row.up} />
+                <Sparkline city={row.city} up={row.up} accent={accent.accent} />
 
                 <span
                   className="flex-1 text-right text-[11px] font-bold tabular-nums transition-colors duration-300"
@@ -215,11 +283,11 @@ export function MarketTicker() {
                   className="w-14 text-right text-[10px] font-black tabular-nums px-1 py-0.5 rounded"
                   style={{
                     color: "hsl(0 0% 100%)",
-                    background: !row.isLive
-                      ? "hsl(220 15% 40% / 0.7)"
-                      : row.up ? "hsl(var(--brand-cyan) / 0.92)" : "hsl(0 72% 55%)",
-                    opacity: !row.isLive ? 0.6 : 1,
+                    background: chipBackground,
+                    border: row.isLive ? "1px solid hsl(0 0% 100% / 0.18)" : "1px solid hsl(0 0% 100% / 0.10)",
+                    opacity: row.isLive ? 1 : 0.78,
                   }}
+                  title={row.isLive ? "Live market signal" : "Estimated market signal"}
                 >
                   {row.up ? "▲" : "▼"} {Math.abs(row.change).toFixed(1)}%
                 </span>
@@ -232,17 +300,20 @@ export function MarketTicker() {
       {/* Footer */}
       <div
         className="px-4 py-2 flex items-center justify-between"
-        style={{ borderTop: "1px solid hsl(270 75% 62% / 0.14)", background: "hsl(270 40% 6% / 0.3)" }}
+        style={{
+          borderTop: "1px solid hsl(38 80% 58% / 0.12)",
+          background: "linear-gradient(90deg, hsl(24 34% 9% / 0.36), hsl(270 40% 6% / 0.38))",
+        }}
       >
         <div className="flex items-center gap-1.5">
           <span className="text-[10px]">🔨</span>
-          <span className="text-[9px] font-black tracking-wider uppercase" style={{ color: "hsl(270 75% 72%)" }}>
+          <span className="text-[9px] font-black tracking-wider uppercase" style={{ color: "hsl(38 90% 70%)" }}>
             Active Auctions
           </span>
         </div>
         <span
           className="text-[11px] font-black tabular-nums px-1.5 py-0.5 rounded"
-          style={{ color: "hsl(270 75% 75%)", background: "hsl(270 75% 62% / 0.12)" }}
+          style={{ color: "hsl(38 92% 72%)", background: "hsl(38 92% 60% / 0.12)" }}
         >
           {auctionCount ?? 47}
         </span>
@@ -251,9 +322,9 @@ export function MarketTicker() {
       {/* Caption */}
       <div
         className="px-4 pb-2 pt-0.5 text-[8px] tracking-widest uppercase flex items-center gap-1.5"
-        style={{ color: "hsl(215 20% 30%)" }}
+        style={{ color: "hsl(36 22% 72% / 0.52)" }}
       >
-        <span className="w-1 h-1 rounded-full inline-block" style={{ background: "hsl(var(--brand-indigo) / 0.85)" }} />
+        <span className="w-1 h-1 rounded-full inline-block" style={{ background: "hsl(38 92% 60% / 0.85)" }} />
         €/m² · Greek Real Estate Index
       </div>
     </div>
