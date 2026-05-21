@@ -40,6 +40,8 @@ const FREE_CAP = 60;
 const AUTH_CAP = 600;
 const NATIONAL_SAMPLE_PAGE_COUNT = 3;
 const NATIONAL_SAMPLE_SOURCE_PAGE_SIZE = 600;
+const AUCTION_RESPONSE_CACHE_TTL_MS = 60_000;
+const AUCTION_RESPONSE_CACHE_MAX_ENTRIES = 32;
 const AUCTION_SAMPLE_SALT = "maiprop-auctions-national-v1";
 const TRAILING_SLASH_RE = /\/$/;
 const OS_ALLOWED_HOST_SUFFIX = ".maiprop.co";
@@ -233,6 +235,18 @@ type OsApiFailure = {
   detail: string;
 };
 
+type AuctionResponsePayload = {
+  data: MappedAuction[];
+  total: number;
+  page: number;
+  planCap: number;
+};
+
+type AuctionCacheEntry = {
+  expiresAt: number;
+  payload: AuctionResponsePayload;
+};
+
 const OPTIONAL_FILTER_KEYS = [
   "auctionDateTo",
   "propertyCategories",
@@ -244,6 +258,7 @@ const OPTIONAL_FILTER_KEYS = [
 
 const AMOUNT_FILTER_KEYS = ["auctionAmountFrom", "auctionAmountTo"] as const;
 const SORT_FILTER_KEYS = ["sortBy", "order"] as const;
+const auctionResponseCache = new Map<string, AuctionCacheEntry>();
 
 function buildTitle(a: OsAuction): string {
   const catKey = mapCategory(a.propertyCategory);
@@ -336,6 +351,85 @@ function buildAuctionTags(
   optionalTags: (string | null)[],
 ): string[] {
   return requiredTags.concat(compactTags(optionalTags));
+}
+
+function getSortedSerializableValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(getSortedSerializableValue);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map((
+          [key, nestedValue],
+        ) => [key, getSortedSerializableValue(nestedValue)]),
+    );
+  }
+
+  return value;
+}
+
+function stableJson(value: unknown): string {
+  return JSON.stringify(getSortedSerializableValue(value));
+}
+
+export function getAuctionResponseCacheKey(
+  page: number,
+  size: number,
+  planCap: number,
+  sampleAcrossGreece: boolean,
+  filterRequest: Record<string, unknown>,
+): string {
+  return stableJson({
+    filterRequest,
+    page,
+    planCap,
+    sampleAcrossGreece,
+    size,
+  });
+}
+
+function pruneAuctionResponseCache(now: number): void {
+  for (const [key, entry] of auctionResponseCache) {
+    if (entry.expiresAt <= now) auctionResponseCache.delete(key);
+  }
+
+  while (auctionResponseCache.size > AUCTION_RESPONSE_CACHE_MAX_ENTRIES) {
+    const oldestKey = auctionResponseCache.keys().next().value;
+    if (!oldestKey) return;
+    auctionResponseCache.delete(oldestKey);
+  }
+}
+
+export function clearAuctionResponseCache(): void {
+  auctionResponseCache.clear();
+}
+
+export function readAuctionResponseCache(
+  key: string,
+  now = Date.now(),
+): AuctionResponsePayload | null {
+  const entry = auctionResponseCache.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt <= now) {
+    auctionResponseCache.delete(key);
+    return null;
+  }
+  return entry.payload;
+}
+
+function writeAuctionResponseCache(
+  key: string,
+  payload: AuctionResponsePayload,
+  now = Date.now(),
+): void {
+  pruneAuctionResponseCache(now);
+  auctionResponseCache.set(key, {
+    expiresAt: now + AUCTION_RESPONSE_CACHE_TTL_MS,
+    payload,
+  });
 }
 
 function hashString(value: string): number {
@@ -988,7 +1082,7 @@ function buildAuctionResponsePayload(
   total: number,
   page: number,
   planCap: number,
-): { data: MappedAuction[]; total: number; page: number; planCap: number } {
+): AuctionResponsePayload {
   return {
     data: mapped,
     total,
@@ -1036,6 +1130,24 @@ async function handleAuctionRequest(
     const { page, size } = pagination;
     const filterRequest = buildFilterRequest(body);
     const sampleAcrossGreece = isNationalSampleRequest(body, filterRequest);
+    const cacheKey = getAuctionResponseCacheKey(
+      page,
+      size,
+      planCap,
+      sampleAcrossGreece,
+      filterRequest,
+    );
+    const cachedPayload = readAuctionResponseCache(cacheKey);
+    if (cachedPayload) {
+      log.info("returning cached auctions", {
+        count: cachedPayload.data.length,
+        total: cachedPayload.total,
+        page,
+        sample_across_greece: sampleAcrossGreece,
+      });
+      return jsonResponse(cachedPayload, corsHeaders);
+    }
+
     const osResult = sampleAcrossGreece
       ? await fetchNationalAuctionSample(
         runtimeConfig.osConfig,
@@ -1064,8 +1176,15 @@ async function handleAuctionRequest(
       source_pages: osResult.sourcePages,
       sample_across_greece: sampleAcrossGreece,
     });
+    const payload = buildAuctionResponsePayload(
+      mapped,
+      osResult.total,
+      page,
+      planCap,
+    );
+    writeAuctionResponseCache(cacheKey, payload);
     return jsonResponse(
-      buildAuctionResponsePayload(mapped, osResult.total, page, planCap),
+      payload,
       corsHeaders,
     );
   } catch (err: unknown) {

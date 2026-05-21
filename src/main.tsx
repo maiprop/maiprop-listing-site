@@ -4,6 +4,7 @@ import App from "./App";
 import "./index.css";
 import "./i18n";
 import { installChunkLoadRecovery } from "@/lib/chunkLoadRecovery";
+import { installWebVitalsMonitoring } from "@/lib/webVitals";
 
 installChunkLoadRecovery();
 
@@ -26,6 +27,7 @@ if (sentryDsn) {
   });
   // Expose to ErrorBoundary's zero-dependency hook
   (window as unknown as Record<string, unknown>).__sentryClient = Sentry;
+  installWebVitalsMonitoring();
 }
 
 // Plausible analytics — only fires when cookie consent includes analytics

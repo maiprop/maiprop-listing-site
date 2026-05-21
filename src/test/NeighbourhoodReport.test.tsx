@@ -8,7 +8,7 @@
  *     development projects, investment outlook, demographics, refresh)
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 const { useAuthMock, invokeMock, rpcMock, toastMock } = vi.hoisted(() => ({
@@ -39,7 +39,10 @@ import NeighbourhoodReport from "@/components/NeighbourhoodReport";
 
 const loadReport = async () => {
   await screen.findByText(/1 \/ 5 used/i);
-  fireEvent.click(screen.getByRole("button", { name: /Load Neighbourhood Report/i }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: /Load Neighbourhood Report/i }));
+    await Promise.resolve();
+  });
 };
 
 const baseProps = {
@@ -108,18 +111,20 @@ describe("NeighbourhoodReport — gates", () => {
     expect(screen.getByText(/Sign in for Neighbourhood Report/i)).toBeInTheDocument();
   });
 
-  it("renders the Load CTA when the user is logged in but not Pro", () => {
+  it("renders the Load CTA when the user is logged in but not Pro", async () => {
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <NeighbourhoodReport {...baseProps} isPro={false} />
       </MemoryRouter>,
     );
+    await screen.findByText(/1 \/ 5 used/i);
     expect(screen.getByRole("button", { name: /Load Neighbourhood Report/i })).toBeInTheDocument();
     expect(invokeMock).not.toHaveBeenCalled();
   });
 
-  it("renders the Load CTA when user is logged in but data hasn't been fetched", () => {
+  it("renders the Load CTA when user is logged in but data hasn't been fetched", async () => {
     render(<NeighbourhoodReport {...baseProps} />);
+    await screen.findByText(/1 \/ 5 used/i);
     expect(screen.getByRole("button", { name: /Load Neighbourhood Report/i })).toBeInTheDocument();
     expect(invokeMock).not.toHaveBeenCalled();
   });
