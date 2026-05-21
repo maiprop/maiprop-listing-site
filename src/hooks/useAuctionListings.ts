@@ -146,6 +146,7 @@ const fetchAuctionsFromOs = async (today: string, maxRows: number): Promise<Auct
       auctionDateFrom: today,
       page: 0,
       pageSize: maxRows,
+      sampleAcrossGreece: true,
       sortBy: "AUCTION_DATE",
       order: "ASC",
     },
@@ -175,22 +176,20 @@ const fetchAuctionListings = async (maxRows: number): Promise<AuctionListingRow[
   let cachedRows: AuctionListingRow[] = [];
 
   try {
-    cachedRows = await fetchFallbackAuctions(today, sourceRows);
-    if (cachedRows.length > 0) {
-      return randomizeAndLimitAuctionRows(cachedRows, maxRows);
-    }
-  } catch (dbErr: unknown) {
-    try {
-      return randomizeAndLimitAuctionRows(await fetchAuctionsFromOs(today, sourceRows), maxRows);
-    } catch (_osErr: unknown) {
-      throw dbErr;
-    }
+    const osRows = await fetchAuctionsFromOs(today, maxRows);
+    if (osRows.length > 0) return randomizeAndLimitAuctionRows(osRows, maxRows);
+  } catch (_osErr: unknown) {
+    // Cached DB rows are only a resilience fallback. The live OS proxy samples
+    // the national auction catalogue; the local cache may contain a small
+    // municipality-clustered sync window.
   }
 
   try {
-    return randomizeAndLimitAuctionRows(await fetchAuctionsFromOs(today, sourceRows), maxRows);
-  } catch (_osErr: unknown) {
-    return cachedRows;
+    cachedRows = await fetchFallbackAuctions(today, sourceRows);
+    return randomizeAndLimitAuctionRows(cachedRows, maxRows);
+  } catch (dbErr: unknown) {
+    if (cachedRows.length > 0) return randomizeAndLimitAuctionRows(cachedRows, maxRows);
+    throw dbErr;
   }
 };
 
