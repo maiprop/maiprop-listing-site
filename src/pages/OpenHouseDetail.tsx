@@ -32,6 +32,7 @@ import { buildPropertyFeatureGroups, buildDetailRows } from "@/lib/propertyFeatu
 import { PropertyDetailsAndEnergy } from "@/components/property/PropertyDetailsAndEnergy";
 import { PropertyDescriptionSection } from "@/components/property/PropertyDescriptionSection";
 import { PropertyAIInsightsSection } from "@/components/property/PropertyAIInsightsSection";
+import { PropertyValuationLockedCard } from "@/components/property/PropertyValuationLockedCard";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
 
@@ -579,7 +580,7 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
               )}
 
               {/* AI Valuation + Property Report, matching the main listing detail sidebar */}
-              {id && (
+              {id && isPro ? (
                 <PropertyValuation
                   listingId={id}
                   title={db.title}
@@ -622,6 +623,8 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                   hasLandConcession={db.has_land_concession}
                   landUse={db.land_use}
                 />
+              ) : (
+                <PropertyValuationLockedCard />
               )}
 
               {id && <PropertyReportCard listingId={id} listing={db} />}

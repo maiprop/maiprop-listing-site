@@ -859,7 +859,10 @@ describe("Page smoke tests", () => {
 
   it("OpenHouseDetail includes valuation and property report tools when listing data loads", async () => {
     const { useListing } = await import("@/hooks/useListings");
+    const { useSubscription } = await import("@/hooks/useSubscription");
     const useListingMock = useListing as ReturnType<typeof vi.fn>;
+    const useSubscriptionMock = useSubscription as ReturnType<typeof vi.fn>;
+    useSubscriptionMock.mockReturnValue({ isPro: true, loading: false });
     useListingMock.mockReturnValue({
       data: {
         id: "oh-1",
@@ -916,6 +919,7 @@ describe("Page smoke tests", () => {
     expect(await screen.findByTestId("property-valuation")).toBeInTheDocument();
     expect(screen.getByTestId("property-report-card")).toBeInTheDocument();
     useListingMock.mockReturnValue({ data: null, isLoading: false, isError: false });
+    useSubscriptionMock.mockReturnValue({ isPro: false, loading: false });
   });
 
   it("Messages page renders without throwing", async () => {
