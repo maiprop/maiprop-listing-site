@@ -107,7 +107,22 @@ describe("useAuctionListings", () => {
     expect(ordered[1].id).toBe("featured");
   });
 
-  it("returns cached database auctions before hitting the live OS proxy", async () => {
+  it("prefers the live OS proxy over cached database auctions", async () => {
+    fromMock.mockReturnValue(makeBuilder(() => Promise.resolve({
+      data: [{ id: "db-a1", title: "Cached auction" }],
+      error: null,
+    })));
+    invokeMock.mockResolvedValue({ data: { data: [{ id: "os-a1", title: "OS auction" }] }, error: null });
+
+    const { result } = renderHookWithQuery(() => useAuctionListings());
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data?.[0]).toMatchObject({ id: "os-a1" });
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it("falls back to cached database auctions when the live OS proxy fails", async () => {
+    invokeMock.mockRejectedValue(new Error("OS unavailable"));
     fromMock.mockReturnValue(makeBuilder(() => Promise.resolve({
       data: [{ id: "db-a1", title: "Cached auction" }],
       error: null,
@@ -117,23 +132,9 @@ describe("useAuctionListings", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(result.current.data?.[0]).toMatchObject({ id: "db-a1" });
-    expect(invokeMock).not.toHaveBeenCalled();
   });
 
-  it("falls back to live OS auctions when the cache is empty", async () => {
-    fromMock.mockReturnValue(makeBuilder(() => Promise.resolve({ data: [], error: null })));
-    invokeMock.mockResolvedValue({ data: { data: [{ id: "os-a1", title: "OS auction" }] }, error: null });
-
-    const { result } = renderHookWithQuery(() => useAuctionListings());
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-    expect(result.current.data?.[0]).toMatchObject({ id: "os-a1" });
-    expect(invokeMock).toHaveBeenCalledWith("fetch-os-auctions", expect.objectContaining({
-      body: expect.objectContaining({ pageSize: 600 }),
-    }));
-  });
-
-  it("fetches the wider auction pool before applying the entitlement cap", async () => {
+  it("asks the OS proxy for a national sample at the current entitlement cap", async () => {
     fromMock.mockReturnValue(makeBuilder(() => Promise.resolve({ data: [], error: null })));
     invokeMock.mockResolvedValue({
       data: { data: Array.from({ length: 80 }, (_, i) => auctionRow(`os-${i}`)) },
@@ -145,7 +146,7 @@ describe("useAuctionListings", () => {
 
     expect(result.current.data).toHaveLength(60);
     expect(invokeMock).toHaveBeenCalledWith("fetch-os-auctions", expect.objectContaining({
-      body: expect.objectContaining({ pageSize: 600 }),
+      body: expect.objectContaining({ pageSize: 60, sampleAcrossGreece: true }),
     }));
   });
 

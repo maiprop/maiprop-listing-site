@@ -23,6 +23,8 @@ const {
   getRateLimitKey,
   mapAuction,
   hasPortalProAccess,
+  getAuctionSamplePageNumbers,
+  selectDiverseAuctionSample,
 } = await import("./index.ts");
 
 Deno.test("buildFilterRequest forwards sort fields to OS", () => {
@@ -88,6 +90,44 @@ Deno.test("mapAuction drops malformed numeric fields", () => {
   assertEquals(mapped.tags.includes("ownership_pct:NaN"), false);
 });
 
+Deno.test("national auction sampling spreads page reads across the source catalogue", () => {
+  const pages = getAuctionSamplePageNumbers(8678, 60, 10, "seed");
+
+  assertEquals(pages.length, 10);
+  assertEquals(new Set(pages).size, 10);
+  assertEquals(pages[0] < 10, true);
+  assertEquals(pages.some((page) => page > 120), true);
+});
+
+Deno.test("national auction sampling avoids returning one municipality cluster first", () => {
+  const clustered = [
+    ...Array.from({ length: 10 }, (_, i) =>
+      mapAuction({
+        auctionListingId: `athens-${i}`,
+        propertyMunicipalityName: "Αθηναίων",
+        propertyPrefectureName: "Αττικής",
+      })),
+    ...Array.from({ length: 10 }, (_, i) =>
+      mapAuction({
+        auctionListingId: `crete-${i}`,
+        propertyMunicipalityName: "Ηρακλείου",
+        propertyPrefectureName: "Ηρακλείου",
+      })),
+    ...Array.from({ length: 10 }, (_, i) =>
+      mapAuction({
+        auctionListingId: `thess-${i}`,
+        propertyMunicipalityName: "Θεσσαλονίκης",
+        propertyPrefectureName: "Θεσσαλονίκης",
+      })),
+  ];
+
+  const sample = selectDiverseAuctionSample(clustered, 9, "seed");
+  const regions = new Set(sample.map((row) => row.region));
+
+  assertEquals(sample.length, 9);
+  assertEquals(regions.size, 3);
+});
+
 Deno.test("OS upstream failures return sanitized client payload", () => {
   const payload = getFetchErrorPayload({
     kind: "os-api",
@@ -132,8 +172,19 @@ Deno.test("pagination validation rejects malformed page/pageSize", () => {
   });
 });
 
-function makeEntitlementClient(profile: Record<string, unknown>, pricingRow: Record<string, unknown> | null = null) {
+function makeEntitlementClient(
+  profile: Record<string, unknown>,
+  pricingRow: Record<string, unknown> | null = null,
+  rpcProAccess: boolean | null = null,
+) {
   return {
+    rpc() {
+      return Promise.resolve(
+        rpcProAccess == null
+          ? { data: null, error: { message: "rpc unavailable" } }
+          : { data: rpcProAccess, error: null },
+      );
+    },
     from(table: string) {
       return {
         select() {
@@ -153,7 +204,9 @@ function makeEntitlementClient(profile: Record<string, unknown>, pricingRow: Rec
           return Promise.resolve({ data: null });
         },
         maybeSingle() {
-          if (table === "pricing_configs") return Promise.resolve({ data: pricingRow });
+          if (table === "pricing_configs") {
+            return Promise.resolve({ data: pricingRow });
+          }
           return Promise.resolve({ data: null });
         },
       };
@@ -172,6 +225,21 @@ Deno.test("OS portal access rejects non-investor Stripe products", async () => {
   assertEquals(await hasPortalProAccess(client as never, "user-agent"), false);
 });
 
+Deno.test("OS portal access uses canonical Pro RPC for paid portal caps", async () => {
+  const client = makeEntitlementClient(
+    {
+      role: "seller",
+      participant_type: "seller",
+      subscription_product_id: "prod_participant",
+      force_pro_access: false,
+    },
+    null,
+    true,
+  );
+
+  assertEquals(await hasPortalProAccess(client as never, "user-pro"), true);
+});
+
 Deno.test("OS portal access accepts only investor-scoped pricing products", async () => {
   const client = makeEntitlementClient({
     role: "investor",
@@ -184,7 +252,10 @@ Deno.test("OS portal access accepts only investor-scoped pricing products", asyn
     metadata: { stripe_product_id: "prod_investor" },
   });
 
-  assertEquals(await hasPortalProAccess(client as never, "user-investor"), true);
+  assertEquals(
+    await hasPortalProAccess(client as never, "user-investor"),
+    true,
+  );
 });
 
 restore();

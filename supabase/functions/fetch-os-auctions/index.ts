@@ -38,6 +38,9 @@ const limiter = makeRateLimiter({
 
 const FREE_CAP = 60;
 const AUTH_CAP = 600;
+const NATIONAL_SAMPLE_PAGE_COUNT = 3;
+const NATIONAL_SAMPLE_SOURCE_PAGE_SIZE = 600;
+const AUCTION_SAMPLE_SALT = "maiprop-auctions-national-v1";
 const TRAILING_SLASH_RE = /\/$/;
 const OS_ALLOWED_HOST_SUFFIX = ".maiprop.co";
 type SupabaseAdminClient = ReturnType<
@@ -335,6 +338,95 @@ function buildAuctionTags(
   return requiredTags.concat(compactTags(optionalTags));
 }
 
+function hashString(value: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function getAuctionSamplingSeed(date = new Date()): string {
+  return `${AUCTION_SAMPLE_SALT}:${date.toISOString().slice(0, 10)}`;
+}
+
+function getStableScore(seed: string, value: string): number {
+  return hashString(`${seed}:${value}`);
+}
+
+export function getAuctionSamplePageNumbers(
+  totalRows: number,
+  sourcePageSize: number,
+  samplePageCount: number,
+  seed = getAuctionSamplingSeed(),
+): number[] {
+  const totalPages = Math.max(1, Math.ceil(totalRows / sourcePageSize));
+  const desiredPages = Math.max(1, Math.min(samplePageCount, totalPages));
+  const pages = new Set<number>();
+
+  for (let i = 0; i < desiredPages; i += 1) {
+    const bucketStart = Math.floor((i * totalPages) / desiredPages);
+    const bucketEnd = Math.max(
+      bucketStart,
+      Math.floor(((i + 1) * totalPages) / desiredPages) - 1,
+    );
+    const bucketSize = Math.max(1, bucketEnd - bucketStart + 1);
+    pages.add(bucketStart + (getStableScore(seed, `page:${i}`) % bucketSize));
+  }
+
+  return [...pages].sort((a, b) => a - b);
+}
+
+function getAuctionGroupKey(row: MappedAuction): string {
+  return row.region || row.city || "Greece";
+}
+
+export function selectDiverseAuctionSample(
+  rows: MappedAuction[],
+  limit: number,
+  seed = getAuctionSamplingSeed(),
+): MappedAuction[] {
+  const uniqueRows = new Map<string, MappedAuction>();
+  for (const row of rows) uniqueRows.set(row.id, row);
+
+  const groups = new Map<string, MappedAuction[]>();
+  for (const row of uniqueRows.values()) {
+    const key = getAuctionGroupKey(row);
+    groups.set(key, [...(groups.get(key) ?? []), row]);
+  }
+
+  const orderedGroups = [...groups.entries()]
+    .map(([key, groupRows]) =>
+      [
+        key,
+        groupRows.sort((a, b) =>
+          getStableScore(seed, a.id) - getStableScore(seed, b.id)
+        ),
+      ] as const
+    )
+    .sort((a, b) =>
+      getStableScore(seed, `group:${a[0]}`) -
+      getStableScore(seed, `group:${b[0]}`)
+    );
+
+  const selected: MappedAuction[] = [];
+  let cursor = 0;
+  while (
+    selected.length < limit &&
+    orderedGroups.some(([, group]) => cursor < group.length)
+  ) {
+    for (const [, group] of orderedGroups) {
+      const row = group[cursor];
+      if (row) selected.push(row);
+      if (selected.length >= limit) break;
+    }
+    cursor += 1;
+  }
+
+  return selected;
+}
+
 export function mapAuction(auction: OsAuction): MappedAuction {
   const osId = String(auction.auctionListingId ?? "unknown");
   const tagKey = `os_auction:${osId}`;
@@ -468,10 +560,28 @@ async function hasInvestorProductEntitlement(
   return isOsAuctionEntitlement(data as PricingConfigPlanRow | null);
 }
 
+async function hasCanonicalProAccess(
+  sb: SupabaseAdminClient,
+  userId: string,
+): Promise<boolean | null> {
+  type RpcFn = (
+    functionName: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: unknown }>;
+  const rpc = (sb as SupabaseAdminClient & { rpc?: RpcFn }).rpc;
+  if (!rpc) return null;
+  const { data, error } = await rpc("is_pro", { p_user_id: userId });
+  if (error || typeof data !== "boolean") return null;
+  return data;
+}
+
 export async function hasPortalProAccess(
   sb: SupabaseAdminClient,
   userId: string,
 ): Promise<boolean> {
+  const canonicalProAccess = await hasCanonicalProAccess(sb, userId);
+  if (canonicalProAccess != null) return canonicalProAccess;
+
   const { data: profileRow } = await sb
     .from("profiles")
     .select("role, participant_type, subscription_product_id, force_pro_access")
@@ -480,6 +590,7 @@ export async function hasPortalProAccess(
   const profile = profileRow as ProfilePlanRow | null;
 
   if (profile?.role === "admin") return true;
+  if (profile?.force_pro_access) return true;
   if (isInvestorProfile(profile)) {
     return await hasInvestorSubscription(sb, userId) ||
       await hasInvestorProductEntitlement(sb, profile?.subscription_product_id);
@@ -649,6 +760,22 @@ async function fetchOsAuctionDetails(
     osConfig.password,
   );
 
+  return await fetchOsAuctionDetailsWithToken(
+    osConfig,
+    token,
+    page,
+    size,
+    filterRequest,
+  );
+}
+
+async function fetchOsAuctionDetailsWithToken(
+  osConfig: OsConfig,
+  token: string,
+  page: number,
+  size: number,
+  filterRequest: Record<string, unknown>,
+): Promise<OsResponse | OsAuction[]> {
   const endpoint =
     `${osConfig.url}/api/v1/auctions/filter/details?page=${page}&pageSize=${size}`;
   log.info("fetching auctions", { page, size, filter: filterRequest });
@@ -691,6 +818,99 @@ function parseOsResponse(
     ? auctions.length
     : (json.responseMetadata?.pagination?.totalElements ?? auctions.length);
   return { auctions, total };
+}
+
+function isNationalSampleRequest(
+  body: Record<string, unknown>,
+  filterRequest: Record<string, unknown>,
+): boolean {
+  return body.sampleAcrossGreece !== false &&
+    !filterRequest.prefectureId &&
+    !filterRequest.propertyMunicipalityId &&
+    !filterRequest.boundingBox;
+}
+
+async function fetchNationalAuctionSample(
+  osConfig: OsConfig,
+  responseSize: number,
+  filterRequest: Record<string, unknown>,
+): Promise<{ auctions: OsAuction[]; total: number; sourcePages: number[] }> {
+  log.info("authenticating with OS API");
+  const token = await getOsToken(
+    osConfig.url,
+    osConfig.email,
+    osConfig.password,
+  );
+  const sourcePageSize = Math.max(
+    responseSize,
+    NATIONAL_SAMPLE_SOURCE_PAGE_SIZE,
+  );
+  const firstResponse = await fetchOsAuctionDetailsWithToken(
+    osConfig,
+    token,
+    0,
+    sourcePageSize,
+    filterRequest,
+  );
+  const firstPage = parseOsResponse(firstResponse);
+  const samplePages = getAuctionSamplePageNumbers(
+    firstPage.total,
+    sourcePageSize,
+    NATIONAL_SAMPLE_PAGE_COUNT,
+  );
+  const remainingPages = samplePages.filter((page) => page !== 0);
+  const successfulPages: OsAuction[][] = [];
+  const failedPages: number[] = [];
+  const pageResults = await Promise.allSettled(
+    remainingPages.map((page) =>
+      fetchOsAuctionDetailsWithToken(
+        osConfig,
+        token,
+        page,
+        sourcePageSize,
+        filterRequest,
+      )
+    ),
+  );
+
+  pageResults.forEach((result, index) => {
+    const page = remainingPages[index];
+    if (result.status === "fulfilled") {
+      successfulPages.push(parseOsResponse(result.value).auctions);
+      return;
+    }
+    failedPages.push(page);
+    log.warn("national auction sample page failed, retrying sequentially", {
+      page,
+      error: result.reason instanceof Error
+        ? result.reason.message
+        : String(result.reason),
+    });
+  });
+
+  for (const page of failedPages) {
+    try {
+      const pageResponse = await fetchOsAuctionDetailsWithToken(
+        osConfig,
+        token,
+        page,
+        sourcePageSize,
+        filterRequest,
+      );
+      successfulPages.push(parseOsResponse(pageResponse).auctions);
+    } catch (err) {
+      log.warn("national auction sample page failed", {
+        page,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return {
+    auctions: [firstPage.auctions, ...successfulPages].flat(),
+    total: firstPage.total,
+    sourcePages: [0, ...remainingPages],
+  };
 }
 
 function isOsApiFailure(err: unknown): err is OsApiFailure {
@@ -815,18 +1035,37 @@ async function handleAuctionRequest(
     }
     const { page, size } = pagination;
     const filterRequest = buildFilterRequest(body);
-    const osResponse = await fetchOsAuctionDetails(
-      runtimeConfig.osConfig,
-      page,
-      size,
-      filterRequest,
-    );
-    const { auctions, total } = parseOsResponse(osResponse);
-    const mapped = auctions.map(mapAuction);
+    const sampleAcrossGreece = isNationalSampleRequest(body, filterRequest);
+    const osResult = sampleAcrossGreece
+      ? await fetchNationalAuctionSample(
+        runtimeConfig.osConfig,
+        size,
+        filterRequest,
+      )
+      : {
+        ...parseOsResponse(
+          await fetchOsAuctionDetails(
+            runtimeConfig.osConfig,
+            page,
+            size,
+            filterRequest,
+          ),
+        ),
+        sourcePages: [page],
+      };
+    const mapped = sampleAcrossGreece
+      ? selectDiverseAuctionSample(osResult.auctions.map(mapAuction), size)
+      : osResult.auctions.map(mapAuction);
 
-    log.info("returning auctions", { count: mapped.length, total, page });
+    log.info("returning auctions", {
+      count: mapped.length,
+      total: osResult.total,
+      page,
+      source_pages: osResult.sourcePages,
+      sample_across_greece: sampleAcrossGreece,
+    });
     return jsonResponse(
-      buildAuctionResponsePayload(mapped, total, page, planCap),
+      buildAuctionResponsePayload(mapped, osResult.total, page, planCap),
       corsHeaders,
     );
   } catch (err: unknown) {
