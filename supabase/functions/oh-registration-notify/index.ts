@@ -84,8 +84,8 @@ Deno.serve(async (req) => {
 
     const isApproved = newStatus === "approved";
     const subject = isApproved
-      ? `✅ Your registration for "${listingTitle}" has been approved`
-      : `Your registration for "${listingTitle}" was not approved`;
+      ? `Approved: Your registration for "${listingTitle}"`
+      : `Update: Your registration for "${listingTitle}" was not approved`;
 
     const rejectionNote = record.rejection_reason
       ? `<p style="color:#6b7280;margin-top:8px"><strong>Reason:</strong> ${record.rejection_reason}</p>`
@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
     <tr><td align="center">
       <table width="100%" style="max-width:560px;background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;overflow:hidden">
         <tr><td style="background:${isApproved ? "#059669" : "#dc2626"};padding:24px 32px">
-          <p style="color:rgba(255,255,255,0.8);font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin:0 0 4px">MaiProp · Open Houses</p>
+          <p style="color:rgba(255,255,255,0.8);font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin:0 0 4px">mAI prop - Open Houses</p>
           <h1 style="color:#ffffff;font-size:22px;font-weight:700;margin:0">
             ${isApproved ? "Registration Approved" : "Registration Update"}
           </h1>
@@ -117,8 +117,8 @@ Deno.serve(async (req) => {
 
           <div style="background:#f3f4f6;border-radius:8px;padding:16px 20px;margin-bottom:20px">
             <p style="color:#374151;font-size:14px;font-weight:600;margin:0 0 8px">${listingTitle}</p>
-            ${listing?.city ? `<p style="color:#6b7280;font-size:13px;margin:0 0 4px">📍 ${listing.city}</p>` : ""}
-            ${openHouseDate ? `<p style="color:#6b7280;font-size:13px;margin:0">📅 ${openHouseDate}</p>` : ""}
+            ${listing?.city ? `<p style="color:#6b7280;font-size:13px;margin:0 0 4px">Location: ${listing.city}</p>` : ""}
+            ${openHouseDate ? `<p style="color:#6b7280;font-size:13px;margin:0">Date: ${openHouseDate}</p>` : ""}
           </div>
 
           ${
@@ -126,7 +126,7 @@ Deno.serve(async (req) => {
               ? `
           <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px 18px;margin-bottom:20px">
             <p style="color:#166534;font-size:13px;margin:0">
-              ✅ You are now cleared to attend. Please bring a valid ID on the day of the event.
+              You are now cleared to attend. Please bring a valid ID on the day of the event.
               ${record.timeslot_index != null ? " Your assigned timeslot will be confirmed separately." : ""}
             </p>
           </div>`
@@ -141,14 +141,14 @@ Deno.serve(async (req) => {
 
           <a href="https://portal.maiprop.co/open-houses/${record.listing_id}"
              style="display:inline-block;background:#0f172a;color:#ffffff;font-size:14px;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none">
-            View Open House →
+            View Open House
           </a>
         </td></tr>
 
         <tr><td style="border-top:1px solid #e5e7eb;padding:16px 32px;background:#f9fafb">
           <p style="color:#9ca3af;font-size:12px;margin:0">
             You received this email because you registered for an open house on MaiProp.
-            <br>© ${new Date().getFullYear()} MaiProp. All rights reserved.
+            <br>(c) ${new Date().getFullYear()} mAI prop. All rights reserved.
           </p>
         </td></tr>
       </table>

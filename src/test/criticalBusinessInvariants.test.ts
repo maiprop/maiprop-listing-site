@@ -93,6 +93,7 @@ describe("critical business invariants", () => {
     const registrationGuard = read("supabase/migrations/20260514185213_harden_open_house_registration_updates.sql");
     const registrationCapacity = read("supabase/migrations/20260515200905_serialize_open_house_registration_capacity.sql");
     const offers = read("supabase/migrations/20260514142236_harden_open_house_offer_workflow.sql");
+    const wiring = read("supabase/migrations/20260707130000_fix_cron_and_open_house_notify_wiring.sql");
 
     expect(registration).toContain("open_house_contact_name_required");
     expect(registration).toContain("open_house_contact_email_required");
@@ -113,6 +114,33 @@ describe("critical business invariants", () => {
     expect(offers).toContain("submit_open_house_offer");
     expect(offers).toContain("accept_open_house_offer");
     expect(offers).toContain("pg_advisory_xact_lock(hashtext(v_offer.listing_id::text))");
+
+    expect(wiring).toContain("WEBHOOK_SECRET");
+    expect(wiring).toContain("CREATE OR REPLACE FUNCTION public.notify_oh_registration_status_change()");
+    expect(wiring).toContain("DROP TRIGGER IF EXISTS trg_oh_registration_notify");
+    expect(wiring).toContain("CREATE TRIGGER trg_oh_registration_notify");
+    expect(wiring).toContain("AFTER UPDATE OF status ON public.open_house_registrations");
+    expect(wiring).toContain("'Authorization', 'Bearer ' || v_webhook_secret");
+    expect(wiring).toContain("https://qvvicunqcrwpioqnvzxf.supabase.co/functions/v1/oh-registration-notify");
+  });
+
+  it("keeps scheduled saved-search alerts authenticated or unscheduled", () => {
+    const wiring = read("supabase/migrations/20260707130000_fix_cron_and_open_house_notify_wiring.sql");
+    const edgeFunction = read("supabase/functions/send-saved-search-alerts/index.ts");
+
+    expect(edgeFunction).toContain("verifyCronSecret");
+    expect(edgeFunction).toContain("Authorization");
+    expect(edgeFunction).toContain("CRON_SECRET not configured, rejecting request");
+
+    expect(wiring).toContain("CRON_SECRET");
+    expect(wiring).toContain("CREATE OR REPLACE FUNCTION public.invoke_send_saved_search_alerts_cron()");
+    expect(wiring).toContain("cron.unschedule('send-saved-search-alerts')");
+    expect(wiring).toContain("skipping saved-search alert cron invocation");
+    expect(wiring).toContain("cron.schedule(");
+    expect(wiring).toContain("SELECT public.invoke_send_saved_search_alerts_cron();");
+    expect(wiring).toContain("'Authorization', 'Bearer ' || v_cron_secret");
+    expect(wiring).toContain("https://qvvicunqcrwpioqnvzxf.supabase.co/functions/v1/send-saved-search-alerts");
+    expect(wiring).not.toContain("scheduled WITHOUT auth header");
   });
 
   it("serializes firesale reservations and account erasure covers proof documents", () => {

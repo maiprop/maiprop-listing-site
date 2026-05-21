@@ -3,7 +3,7 @@ import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
 export const FREE_AI_MONTHLY_LIMIT = 5;
-export const PRO_AI_MONTHLY_LIMIT = 100;
+export const PRO_AI_MONTHLY_LIMIT = 50;
 export const UNLIMITED_AI_LIMIT = 999_999;
 
 export interface AIQuota {

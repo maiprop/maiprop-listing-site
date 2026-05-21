@@ -1,8 +1,8 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Sparkles, Briefcase, Lock } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { useSubscription } from "@/hooks/useSubscription";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 // Lazy-import both widgets so neither 127 kB chunk is bundled into this
 // page's chunk — they load in parallel when the user lands on this route.
@@ -13,7 +13,21 @@ type Tab = "general" | "pro";
 
 export default function AIAssistantPage() {
   const { isPro } = useSubscription();
-  const [tab, setTab] = useState<Tab>("general");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabFromUrl: Tab = searchParams.get("tab") === "pro" ? "pro" : "general";
+  const [tab, setTab] = useState<Tab>(tabFromUrl);
+
+  useEffect(() => {
+    setTab(tabFromUrl);
+  }, [tabFromUrl]);
+
+  const selectTab = (nextTab: Tab) => {
+    setTab(nextTab);
+    const nextParams = new URLSearchParams(searchParams);
+    if (nextTab === "pro") nextParams.set("tab", "pro");
+    else nextParams.delete("tab");
+    setSearchParams(nextParams, { replace: true });
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -24,7 +38,7 @@ export default function AIAssistantPage() {
           {/* Tab switcher */}
           <div className="flex gap-2">
             <button
-              onClick={() => setTab("general")}
+              onClick={() => selectTab("general")}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
                 tab === "general"
                   ? "bg-primary text-primary-foreground"
@@ -32,16 +46,15 @@ export default function AIAssistantPage() {
               }`}
             >
               <Sparkles className="w-4 h-4" />
-              General
+              mAI prop AI
             </button>
             <button
-              onClick={() => isPro && setTab("pro")}
-              disabled={!isPro}
+              onClick={() => selectTab("pro")}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
                 tab === "pro"
                   ? "bg-primary text-primary-foreground"
                   : "bg-secondary text-muted-foreground hover:text-foreground border border-border"
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
+              }`}
             >
               {isPro ? <Briefcase className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
               Pro Tools

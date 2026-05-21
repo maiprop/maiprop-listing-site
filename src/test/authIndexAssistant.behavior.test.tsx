@@ -309,16 +309,16 @@ describe("AIAssistantWidget", () => {
   it("opens, minimizes, closes with Escape, and renders property suggestions", () => {
     renderWithProviders(<AIAssistantWidget propertyContext={{ title: "Sea view flat", price: 420000 }} />);
 
-    fireEvent.click(screen.getByLabelText("Open AI assistant"));
-    expect(screen.getByRole("dialog", { name: "AI Property Assistant" })).toHaveAttribute("aria-modal", "true");
+    fireEvent.click(screen.getByLabelText("Open mAI prop AI"));
+    expect(screen.getByRole("dialog", { name: "mAI prop AI" })).toHaveAttribute("aria-modal", "true");
     expect(screen.getByText("Sea view flat")).toBeInTheDocument();
     expect(screen.getByText(/Is .*420/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByTitle("Minimise"));
     expect(screen.queryByPlaceholderText("Ask about this property...")).not.toBeInTheDocument();
 
-    fireEvent.keyDown(screen.getByRole("dialog", { name: "AI Property Assistant" }), { key: "Escape" });
-    expect(screen.queryByRole("dialog", { name: "AI Property Assistant" })).not.toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole("dialog", { name: "mAI prop AI" }), { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "mAI prop AI" })).not.toBeInTheDocument();
   });
 
   it("keeps unauthenticated assistant requests in the chat instead of fetching", async () => {
@@ -344,7 +344,7 @@ describe("AIAssistantWidget", () => {
     );
     renderWithProviders(<AIAssistantWidget />);
 
-    fireEvent.click(screen.getByLabelText("Open AI assistant"));
+    fireEvent.click(screen.getByLabelText("Open mAI prop AI"));
     fireEvent.click(screen.getByRole("button", { name: "" }));
     expect(fetch).not.toHaveBeenCalled();
 
@@ -363,11 +363,11 @@ describe("AIAssistantWidget", () => {
     fireEvent.click(screen.getByRole("button", { name: "" }));
     expect(fetch).toHaveBeenCalledTimes(1);
 
-    const dialog = screen.getByRole("dialog", { name: "AI Property Assistant" });
+    const dialog = screen.getByRole("dialog", { name: "mAI prop AI" });
     const close = screen.getByTitle("Close");
     close.focus();
     fireEvent.keyDown(dialog, { key: "Tab" });
-    expect(screen.getByTitle("Clear chat")).toHaveFocus();
+    expect(screen.getByRole("link", { name: /pro tools/i })).toHaveFocus();
     fireEvent.keyDown(dialog, { key: "Tab", shiftKey: true });
     expect(close).toHaveFocus();
     input.focus();
@@ -377,7 +377,7 @@ describe("AIAssistantWidget", () => {
     resolveFetch(streamResponse(["data: [DONE]\n"]));
     await waitFor(() => expect(input).not.toBeDisabled());
     fireEvent.click(close);
-    expect(screen.queryByRole("dialog", { name: "AI Property Assistant" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "mAI prop AI" })).not.toBeInTheDocument();
   });
 
   it("streams assistant deltas, clears chat, and aborts pending work", async () => {
@@ -473,7 +473,7 @@ describe("AIAssistantWidget", () => {
   it("renders null for a closed embedded assistant", () => {
     const { container } = renderWithProviders(<AIAssistantWidget variant="embedded" />);
     fireEvent.click(screen.getByTitle("Minimise"));
-    expect(screen.getByRole("dialog", { name: "AI Property Assistant" }).className).toContain("h-[52px]");
+    expect(screen.getByRole("dialog", { name: "mAI prop AI" }).className).toContain("h-[52px]");
     fireEvent.click(screen.getByTitle("Close"));
     expect(container).toBeEmptyDOMElement();
   });

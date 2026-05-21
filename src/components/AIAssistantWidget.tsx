@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, forwardRef } from "react";
+import { Link } from "react-router-dom";
 import { Sparkles, X, Send, Loader2, Bot, User, ChevronDown, RotateCcw } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { SUPABASE_URL } from "@/lib/config";
@@ -229,12 +230,12 @@ const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(fun
         <button
           onClick={() => setOpen(true)}
           className="w-14 h-14 rounded-full bg-gradient-primary text-primary-foreground shadow-elevated flex items-center justify-center hover:scale-105 active:scale-95 transition-transform group"
-          aria-label="Open AI assistant"
+          aria-label="Open mAI prop AI"
         >
           <Sparkles className="w-6 h-6" />
           <span className="absolute inset-0 rounded-full border-2 border-primary/40 animate-ping" />
           <span className="absolute -top-8 right-0 bg-card border border-border text-foreground text-xs px-2 py-1 rounded-lg shadow whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-            AI Assistant
+            mAI prop AI
           </span>
         </button>
       </div>
@@ -250,7 +251,7 @@ const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(fun
       ref={dialogRef}
       role="dialog"
       aria-modal={!isEmbedded}
-      aria-label="AI Property Assistant"
+      aria-label="mAI prop AI"
       className={
         isEmbedded
           ? `flex flex-col overflow-hidden transition-all duration-200 rounded-2xl border border-border bg-card shadow-elevated ${minimized ? "h-[52px]" : "min-h-[420px] flex-1"}`
@@ -291,13 +292,22 @@ const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(fun
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-primary-foreground leading-tight">
-            AI Property Assistant
+            mAI prop AI
           </p>
           {propertyContext?.title && (
             <p className="text-[10px] text-primary-foreground/70 truncate">{propertyContext.title}</p>
           )}
         </div>
         <div className="flex items-center gap-1">
+          {!isEmbedded && (
+            <Link
+              to="/ai-assistant?tab=pro"
+              onClick={() => { setOpen(false); setMinimized(false); }}
+              className="px-2 py-1.5 rounded-lg bg-primary-foreground/10 hover:bg-primary-foreground/20 text-[11px] font-semibold text-primary-foreground transition-colors"
+            >
+              Pro tools
+            </Link>
+          )}
           {messages.length > 0 && (
             <button onClick={clearChat} title="Clear chat"
               className="p-1.5 rounded-lg bg-primary-foreground/10 hover:bg-primary-foreground/20 transition-colors">

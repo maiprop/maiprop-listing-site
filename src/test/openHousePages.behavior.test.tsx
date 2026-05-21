@@ -393,7 +393,7 @@ describe("OpenHouseDetail page behavior", () => {
     expect(await screen.findByRole("heading", { name: /athens loft open house/i })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: /athens loft open house/i })).toHaveAttribute("src", "https://street.example/fallback.jpg");
     expect(screen.getByText(/no appointment needed/i)).toBeInTheDocument();
-    expect(screen.getByText(/ai market insights require sign-in/i)).toBeInTheDocument();
+    expect(screen.getByText(/ai market insights requires sign-in/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /sign in to contact/i })).toHaveAttribute("href", "/login");
     expect(mocks.trackView.mutate).toHaveBeenCalledWith("oh-1");
   });
