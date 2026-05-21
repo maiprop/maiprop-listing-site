@@ -9,6 +9,11 @@
 * gate open house valuation behind pro ([61a3fd0](https://github.com/maiprop/maiprop-listing-site/commit/61a3fd0c3412ce1c0855ce33b35fb59bcb472b38))
 * **index:** improve market ticker palette and video startup ([#198](https://github.com/maiprop/maiprop-listing-site/issues/198)) ([925ab06](https://github.com/maiprop/maiprop-listing-site/commit/925ab0699237582a28f2da750c38adc67985285c))
 
+
+### Performance Improvements
+
+* defer Places search loading ([#199](https://github.com/maiprop/maiprop-listing-site/issues/199)) ([caa5a17](https://github.com/maiprop/maiprop-listing-site/commit/caa5a17104351deec41946d4aa5fb1daebd0e255))
+
 ## [1.9.3](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.2...v1.9.3) (2026-05-21)
 
 
