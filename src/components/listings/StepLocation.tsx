@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Info, Loader2 } from "lucide-react";
 import { GOOGLE_MAPS_API_KEY } from "@/lib/config";
+import { loadGoogleMapsPlaces } from "@/lib/googleMapsPlaces";
 import { FieldLabel, FieldError, FormInput as Input } from "@/components/listings/FormPrimitives";
 import type { ListingFormData } from "@/hooks/useListingForm";
 
@@ -37,10 +38,10 @@ interface Props {
 export function StepLocation({ form, set, errors, setFieldRef, connections, stepActive }: Props) {
   const [suggestions, setSuggestions] = useState<NominatimHit[]>([]);
   const [addrLoading, setAddrLoading] = useState(false);
+  const [googlePlacesRequested, setGooglePlacesRequested] = useState(false);
 
   const addressInputRef = useRef<HTMLInputElement | null>(null);
   const googleAutocompleteRef = useRef<{ getPlace: () => { address_components?: Array<{ long_name: string; short_name: string; types: string[] }>; formatted_address?: string } } | null>(null);
-  const googleScriptLoadedRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
 
   // Nominatim autocomplete (no Google key)
@@ -75,8 +76,8 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
 
   // Google Places autocomplete
   useEffect(() => {
-    if (!GOOGLE_MAPS_API_KEY || !stepActive || !addressInputRef.current || googleScriptLoadedRef.current) return;
-    const input = addressInputRef.current;
+    if (!GOOGLE_MAPS_API_KEY || !stepActive || !googlePlacesRequested) return;
+    let cancelled = false;
 
     type GPlacesAutoComplete = new (input: HTMLInputElement, opts: unknown) => {
       addListener: (event: string, cb: () => void) => void;
@@ -85,8 +86,9 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
     type GWindow = { google?: { maps?: { places?: { Autocomplete?: GPlacesAutoComplete } } } };
 
     const initGoogle = () => {
+      const input = addressInputRef.current;
       const AutocompleteClass = (window as GWindow).google?.maps?.places?.Autocomplete;
-      if (!AutocompleteClass || googleAutocompleteRef.current) return;
+      if (!input || !AutocompleteClass || googleAutocompleteRef.current) return;
       const autocomplete = new AutocompleteClass(input, {
         types: ["address"], componentRestrictions: { country: "gr" }, fields: ["address_components", "formatted_address"],
       });
@@ -108,15 +110,20 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
       googleAutocompleteRef.current = autocomplete;
     };
 
-    if ((window as GWindow).google?.maps?.places) { initGoogle(); return; }
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&loading=async`;
-    script.async = true;
-    script.onload = () => { googleScriptLoadedRef.current = true; initGoogle(); };
-    document.head.appendChild(script);
-    return () => { googleAutocompleteRef.current = null; };
+    loadGoogleMapsPlaces()
+      .then(() => {
+        if (!cancelled) initGoogle();
+      })
+      .catch(() => {
+        // Manual address entry remains available if Places cannot load.
+      });
+
+    return () => {
+      cancelled = true;
+      googleAutocompleteRef.current = null;
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stepActive]);
+  }, [stepActive, googlePlacesRequested]);
 
   const allOk = connections.supabaseOk && connections.storageOk && connections.locationOk;
 
@@ -158,6 +165,7 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
           placeholder={GOOGLE_MAPS_API_KEY ? "e.g. Voukourestiou 14, Athens" : "e.g. Voukourestiou 14"}
           value={form.address}
           onChange={e => set("address", e.target.value)}
+          onFocus={() => setGooglePlacesRequested(true)}
           className={`w-full bg-secondary border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors ${errors.address ? "border-destructive ring-1 ring-destructive/30" : "border-border"}`}
         />
         {addrLoading && (

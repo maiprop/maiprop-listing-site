@@ -58,6 +58,7 @@ export default function Index() {
         <title>mAI prop — Greek Real Estate | Buy, Rent &amp; Invest in Greece</title>
         <meta name="description" content="Browse verified Greek property listings — apartments, villas, land &amp; commercial. AI-powered search, auction alerts, and instant viewings." />
         <link rel="canonical" href="https://maiprop.co/" />
+        <link rel="preload" href="/hero-poster.jpg" as="image" />
         <meta property="og:title" content="mAI prop — Greek Real Estate | Buy, Rent &amp; Invest in Greece" />
         <meta property="og:description" content="Browse verified Greek property listings — apartments, villas, land &amp; commercial. AI-powered search, auction alerts, and instant viewings." />
         <meta property="og:url" content="https://maiprop.co/" />

@@ -604,6 +604,7 @@ describe("LocationInput", () => {
     fireEvent.click(screen.getByRole("button"));
     expect(onChange).toHaveBeenCalledWith("");
 
+    fireEvent.focus(screen.getByLabelText("Location search"));
     await waitFor(() => expect(placeChanged).toBeTypeOf("function"));
     act(() => placeChanged?.());
     expect(onChange).toHaveBeenCalledWith("Thessaloniki");
@@ -617,6 +618,9 @@ describe("LocationInput", () => {
     let placeChanged: (() => void) | undefined;
     const onChange = vi.fn();
     renderWithProviders(<LocationInput value="" onChange={onChange} onSearch={vi.fn()} />);
+
+    expect(document.head.querySelector('script[src*="maps.googleapis.com"]')).toBeNull();
+    fireEvent.focus(screen.getByLabelText("Location search"));
 
     class AutocompleteMock {
       addListener(_eventName: string, handler: () => void) {
@@ -662,6 +666,7 @@ describe("LocationInput", () => {
     const onChange = vi.fn();
     renderWithProviders(<LocationInput value="" onChange={onChange} onSearch={vi.fn()} />);
 
+    fireEvent.focus(screen.getByLabelText("Location search"));
     await waitFor(() => expect(placeChanged).toBeTypeOf("function"));
     act(() => placeChanged?.());
     act(() => placeChanged?.());
@@ -682,6 +687,9 @@ describe("LocationInput", () => {
 
   it("handles Google script load before the API exists and ignores repeated initialization", () => {
     renderWithProviders(<LocationInput value="" onChange={vi.fn()} onSearch={vi.fn()} />);
+
+    expect(document.head.querySelector('script[src*="maps.googleapis.com"]')).toBeNull();
+    fireEvent.focus(screen.getByLabelText("Location search"));
 
     const script = document.head.querySelector<HTMLScriptElement>('script[src*="maps.googleapis.com"]');
     expect(script).toBeTruthy();
