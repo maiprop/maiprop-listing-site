@@ -6,6 +6,7 @@ import { renderWithProviders } from "@/test/utils";
 import Login from "@/pages/Login";
 import ResetPassword from "@/pages/ResetPassword";
 import AIAssistantWidget from "@/components/AIAssistantWidget";
+import { HeroSection } from "@/components/index/HeroSection";
 import { PropertyTypeDropdown } from "@/components/index/PropertyTypeDropdown";
 import { LocationInput } from "@/components/index/LocationInput";
 import { supabase } from "@/integrations/supabase/client";
@@ -27,6 +28,10 @@ vi.mock("@/contexts/AuthContext", () => ({
 
 vi.mock("@/components/Navbar", () => ({
   Navbar: () => <nav data-testid="navbar" />,
+}));
+
+vi.mock("@/components/MarketTicker", () => ({
+  MarketTicker: () => <div data-testid="market-ticker" />,
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
@@ -91,6 +96,23 @@ function streamResponse(chunks: string[]) {
     }),
     { status: 200 },
   );
+}
+
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
+function stubMatchMedia({ desktop = true, reducedMotion = false }: { desktop?: boolean; reducedMotion?: boolean } = {}) {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes("min-width") ? desktop : query.includes("prefers-reduced-motion") ? reducedMotion : false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
 }
 
 beforeEach(() => {
@@ -229,6 +251,46 @@ describe("Login", () => {
     expect(toastMock.error).toHaveBeenCalledWith("Google sign-in failed. Please try again.");
     expect(screen.getByRole("alert")).toHaveTextContent("Google sign-in failed. Please try again.");
     expect(screen.getByRole("button", { name: "loginPage.googleCta" })).not.toBeDisabled();
+  });
+});
+
+describe("HeroSection", () => {
+  it("keeps the poster-only hero for first paint, then attaches video sources on desktop idle", async () => {
+    vi.useFakeTimers();
+    stubMatchMedia({ desktop: true });
+    Object.defineProperty(window, "requestIdleCallback", {
+      configurable: true,
+      value: (cb: IdleRequestCallback) =>
+        window.setTimeout(() => cb({ didTimeout: false, timeRemaining: () => 10 }), 0),
+    });
+    Object.defineProperty(window, "cancelIdleCallback", { configurable: true, value: window.clearTimeout });
+
+    const { container } = renderWithRoutes(<HeroSection />);
+    const video = container.querySelector("video")!;
+    expect(video).toHaveAttribute("poster", "/hero-poster.jpg");
+    expect(video.querySelector("source")).toBeNull();
+
+    act(() => vi.advanceTimersByTime(349));
+    expect(video.querySelector("source")).toBeNull();
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+      vi.runOnlyPendingTimers();
+      await Promise.resolve();
+    });
+
+    expect(video.querySelectorAll("source")).toHaveLength(2);
+  });
+
+  it("does not attach decorative hero video sources for reduced-motion users", () => {
+    vi.useFakeTimers();
+    stubMatchMedia({ desktop: true, reducedMotion: true });
+
+    const { container } = renderWithRoutes(<HeroSection />);
+    const video = container.querySelector("video")!;
+    act(() => vi.runOnlyPendingTimers());
+
+    expect(video.querySelector("source")).toBeNull();
   });
 });
 
@@ -604,6 +666,7 @@ describe("LocationInput", () => {
     fireEvent.click(screen.getByRole("button"));
     expect(onChange).toHaveBeenCalledWith("");
 
+    fireEvent.focus(screen.getByLabelText("Location search"));
     await waitFor(() => expect(placeChanged).toBeTypeOf("function"));
     act(() => placeChanged?.());
     expect(onChange).toHaveBeenCalledWith("Thessaloniki");
@@ -617,6 +680,9 @@ describe("LocationInput", () => {
     let placeChanged: (() => void) | undefined;
     const onChange = vi.fn();
     renderWithProviders(<LocationInput value="" onChange={onChange} onSearch={vi.fn()} />);
+
+    expect(document.head.querySelector('script[src*="maps.googleapis.com"]')).toBeNull();
+    fireEvent.focus(screen.getByLabelText("Location search"));
 
     class AutocompleteMock {
       addListener(_eventName: string, handler: () => void) {
@@ -662,6 +728,7 @@ describe("LocationInput", () => {
     const onChange = vi.fn();
     renderWithProviders(<LocationInput value="" onChange={onChange} onSearch={vi.fn()} />);
 
+    fireEvent.focus(screen.getByLabelText("Location search"));
     await waitFor(() => expect(placeChanged).toBeTypeOf("function"));
     act(() => placeChanged?.());
     act(() => placeChanged?.());
@@ -682,6 +749,9 @@ describe("LocationInput", () => {
 
   it("handles Google script load before the API exists and ignores repeated initialization", () => {
     renderWithProviders(<LocationInput value="" onChange={vi.fn()} onSearch={vi.fn()} />);
+
+    expect(document.head.querySelector('script[src*="maps.googleapis.com"]')).toBeNull();
+    fireEvent.focus(screen.getByLabelText("Location search"));
 
     const script = document.head.querySelector<HTMLScriptElement>('script[src*="maps.googleapis.com"]');
     expect(script).toBeTruthy();

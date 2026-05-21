@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import ReactDOM from "react-dom";
 import { MapPin, Clock, X } from "lucide-react";
 import { GOOGLE_MAPS_API_KEY } from "@/lib/config";
+import { loadGoogleMapsPlaces } from "@/lib/googleMapsPlaces";
 import { getRecentSearches, removeRecentSearch } from "@/lib/recentSearches";
 
 interface GMAutocompleteInstance {
@@ -23,10 +24,10 @@ export function LocationInput({
   onSearch: () => void;
 }) {
   const [focused, setFocused] = useState(false);
+  const [googlePlacesRequested, setGooglePlacesRequested] = useState(false);
   const [recents, setRecents] = useState<string[]>([]);
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const googleLoadedRef = useRef(false);
   const autocompleteRef = useRef<GMAutocompleteInstance | null>(null);
 
   const refresh = useCallback(() => setRecents(getRecentSearches()), []);
@@ -49,50 +50,50 @@ export function LocationInput({
     return () => document.removeEventListener("mousedown", handler);
   }, [refresh]);
 
-  useEffect(() => {
-    if (!GOOGLE_MAPS_API_KEY || !inputRef.current || googleLoadedRef.current) return;
+  const initGoogle = useCallback(() => {
     const input = inputRef.current;
-    const initGoogle = () => {
-       
-      const g = (window as GoogleMapsWindow).google;
-      if (!g?.maps?.places?.Autocomplete) return;
-      if (autocompleteRef.current) return;
-      const autocomplete = new g.maps.places.Autocomplete(input, {
-        types: ["(regions)"],
-        componentRestrictions: { country: "gr" },
-        fields: ["address_components", "formatted_address"],
-      });
-      autocomplete.addListener("place_changed", () => {
-        const place = autocomplete.getPlace();
-        if (!place.address_components) return;
-        const ac = place.address_components;
-         
-        const get = (t: string) => ac.find((c) => c.types.includes(t))?.long_name ?? "";
-        const city =
-          get("locality") ||
-          get("administrative_area_level_2") ||
-          get("administrative_area_level_1") ||
-          place.formatted_address ||
-          "";
-        onChange(city);
-      });
-      autocompleteRef.current = autocomplete;
-    };
-     
-    if ((window as GoogleMapsWindow).google?.maps?.places) {
-      initGoogle();
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&loading=async`;
-    script.async = true;
-    script.onload = () => {
-      googleLoadedRef.current = true;
-      initGoogle();
-    };
-    document.head.appendChild(script);
-    return () => { autocompleteRef.current = null; };
+    const g = (window as GoogleMapsWindow).google;
+    if (!input || !g?.maps?.places?.Autocomplete || autocompleteRef.current) return;
+
+    const autocomplete = new g.maps.places.Autocomplete(input, {
+      types: ["(regions)"],
+      componentRestrictions: { country: "gr" },
+      fields: ["address_components", "formatted_address"],
+    });
+    autocomplete.addListener("place_changed", () => {
+      const place = autocomplete.getPlace();
+      if (!place.address_components) return;
+      const ac = place.address_components;
+
+      const get = (t: string) => ac.find((c) => c.types.includes(t))?.long_name ?? "";
+      const city =
+        get("locality") ||
+        get("administrative_area_level_2") ||
+        get("administrative_area_level_1") ||
+        place.formatted_address ||
+        "";
+      onChange(city);
+    });
+    autocompleteRef.current = autocomplete;
   }, [onChange]);
+
+  useEffect(() => {
+    if (!googlePlacesRequested || !GOOGLE_MAPS_API_KEY) return;
+    let cancelled = false;
+
+    loadGoogleMapsPlaces()
+      .then(() => {
+        if (!cancelled) initGoogle();
+      })
+      .catch(() => {
+        // Typed search remains available when Places is blocked or unavailable.
+      });
+
+    return () => {
+      cancelled = true;
+      autocompleteRef.current = null;
+    };
+  }, [googlePlacesRequested, initGoogle]);
 
   const showDropdown = focused && recents.length > 0 && !value;
   const pos = showDropdown ? getPos() : null;
@@ -143,7 +144,7 @@ export function LocationInput({
           placeholder="City, area, or neighbourhood..."
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          onFocus={() => { refresh(); setFocused(true); }}
+          onFocus={() => { refresh(); setFocused(true); setGooglePlacesRequested(true); }}
           onKeyDown={(e) => {
             if (e.key === "Enter") { setFocused(false); onSearch(); }
             if (e.key === "Escape") setFocused(false);

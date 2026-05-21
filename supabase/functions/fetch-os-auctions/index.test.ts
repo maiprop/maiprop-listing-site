@@ -6,7 +6,12 @@ import {
   assertEquals,
   assertNotEquals,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { authedReq, captureHandler } from "../_shared/testUtils.ts";
+import {
+  authedReq,
+  captureHandler,
+  jsonBody,
+  req,
+} from "../_shared/testUtils.ts";
 
 const { handler, restore } = await captureHandler(
   import.meta.url,
@@ -25,6 +30,7 @@ const {
   hasPortalProAccess,
   getAuctionSamplePageNumbers,
   selectDiverseAuctionSample,
+  clearAuctionResponseCache,
 } = await import("./index.ts");
 
 Deno.test("buildFilterRequest forwards sort fields to OS", () => {
@@ -170,6 +176,81 @@ Deno.test("pagination validation rejects malformed page/pageSize", () => {
     page: 2,
     size: 10,
   });
+});
+
+Deno.test("handler caches identical anonymous auction reads by cap and filter", async () => {
+  clearAuctionResponseCache();
+  const globalForFetch = globalThis as typeof globalThis & {
+    fetch: typeof fetch;
+  };
+  const originalFetch = globalForFetch.fetch;
+  let detailsRequests = 0;
+
+  try {
+    globalForFetch.fetch = ((input: URL | RequestInfo, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/auth/login")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ token: "os-token" }), {
+            headers: { "content-type": "application/json" },
+            status: 200,
+          }),
+        );
+      }
+
+      if (url.includes("/api/v1/auctions/filter/details")) {
+        detailsRequests += 1;
+        const requestBody = JSON.parse(String(init?.body ?? "{}")) as Record<
+          string,
+          unknown
+        >;
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              data: [{
+                auctionListingId: "cached-auction",
+                auctionDate: requestBody.auctionDateFrom,
+                firstPriceOffer: 120_000,
+                propertyLatitude: 37.98,
+                propertyLongitude: 23.73,
+                propertyMunicipalityName: "Athens",
+                propertyPrefectureName: "Attica",
+              }],
+              responseMetadata: { pagination: { totalElements: 1 } },
+            }),
+            { headers: { "content-type": "application/json" }, status: 200 },
+          ),
+        );
+      }
+
+      return Promise.reject(new Error(`unexpected fetch ${url}`));
+    }) as typeof fetch;
+
+    const body = {
+      auctionDateFrom: "2026-05-07",
+      pageSize: 1,
+      sampleAcrossGreece: false,
+    };
+    const first = await handler(req("POST", body));
+    const second = await handler(req("POST", body));
+    const firstPayload = await jsonBody(first) as {
+      data: Array<Record<string, unknown>>;
+      page: number;
+      planCap: number;
+      total: number;
+    };
+    const secondPayload = await jsonBody(second);
+
+    assertEquals(first.status, 200);
+    assertEquals(second.status, 200);
+    assertEquals(detailsRequests, 1);
+    assertEquals(firstPayload.planCap, 60);
+    assertEquals(firstPayload.data[0].id, "cached-auction");
+    assertEquals(secondPayload, firstPayload);
+  } finally {
+    globalForFetch.fetch = originalFetch;
+    clearAuctionResponseCache();
+  }
 });
 
 function makeEntitlementClient(

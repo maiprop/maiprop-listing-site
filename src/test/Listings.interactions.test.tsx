@@ -1,14 +1,15 @@
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderWithProviders } from "@/test/utils";
 import type { ListingCardWithRaw } from "@/lib/listingsCardUtils";
 
-const { filterState, setParam, setParams, clearAllFilters, toggleMulti, pipelineState, authState } = vi.hoisted(() => {
+const { filterState, setParam, setParams, clearAllFilters, toggleMulti, pipelineState, authState, loadGoogleMapsPlaces } = vi.hoisted(() => {
   const setParam = vi.fn();
   const setParams = vi.fn();
   const clearAllFilters = vi.fn();
   const toggleMulti = vi.fn();
+  const loadGoogleMapsPlaces = vi.fn().mockResolvedValue(undefined);
   const filterState = {
     searchQuery: "",
     selectedListingType: "sale",
@@ -51,8 +52,18 @@ const { filterState, setParam, setParams, clearAllFilters, toggleMulti, pipeline
     sentinelRef: { current: null },
   };
   const authState = { user: null as null | { id: string } };
-  return { filterState, setParam, setParams, clearAllFilters, toggleMulti, pipelineState, authState };
+  return { filterState, setParam, setParams, clearAllFilters, toggleMulti, pipelineState, authState, loadGoogleMapsPlaces };
 });
+
+vi.mock("@/lib/config", () => ({
+  GOOGLE_MAPS_API_KEY: "maps-key",
+  MAPBOX_TOKEN: "",
+  getStreetViewProxyUrl: vi.fn().mockReturnValue(""),
+}));
+
+vi.mock("@/lib/googleMapsPlaces", () => ({
+  loadGoogleMapsPlaces,
+}));
 
 vi.mock("@/hooks/useListingsFilters", () => ({
   useListingsFilters: () => filterState,
@@ -221,6 +232,7 @@ describe("Listings page interactions", () => {
     pipelineState.isError = false;
     pipelineState.hasNextPage = false;
     pipelineState.isFetchingNextPage = false;
+    delete (window as typeof window & { google?: unknown }).google;
   });
 
   it("wires mobile filters, desktop view toggles, and advanced panel close", async () => {
@@ -246,6 +258,37 @@ describe("Listings page interactions", () => {
     expect(screen.getByTestId("advanced-filters")).toHaveTextContent("4 filtered");
     fireEvent.click(screen.getByRole("button", { name: "Close advanced" }));
     expect(screen.queryByTestId("advanced-filters")).not.toBeInTheDocument();
+  });
+
+  it("loads Google Places for listing search only after focus and applies the selected location", async () => {
+    let placeChanged: (() => void) | undefined;
+    class AutocompleteMock {
+      addListener(_eventName: string, handler: () => void) {
+        placeChanged = handler;
+      }
+      getPlace() {
+        return {
+          address_components: [
+            { types: ["administrative_area_level_2"], long_name: "Heraklion" },
+          ],
+          formatted_address: "Heraklion, Crete",
+        };
+      }
+    }
+    (window as typeof window & { google: unknown }).google = {
+      maps: { places: { Autocomplete: AutocompleteMock } },
+    };
+
+    const { default: Listings } = await import("@/pages/Listings");
+    renderWithProviders(<Listings />);
+
+    expect(loadGoogleMapsPlaces).not.toHaveBeenCalled();
+    fireEvent.focus(screen.getByLabelText("Search by city"));
+    await waitFor(() => expect(loadGoogleMapsPlaces).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(placeChanged).toBeTypeOf("function"));
+
+    act(() => placeChanged?.());
+    expect(setParam).toHaveBeenCalledWith("city", "Heraklion");
   });
 
   it("adds, removes, clears, and caps listings in the compare drawer", async () => {

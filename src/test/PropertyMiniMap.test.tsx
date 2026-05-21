@@ -8,7 +8,7 @@
  */
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 const { invokeMock, rpcMock, useAuthMock } = vi.hoisted(() => ({
@@ -85,6 +85,53 @@ describe("PropertyMiniMap", () => {
     await waitFor(() => expect(screen.getAllByTestId("mapbox-marker").length).toBeGreaterThan(0));
     // Wait for the auto-fetch to settle so subsequent assertions are stable.
     await waitFor(() => expect(invokeMock).toHaveBeenCalled());
+  });
+
+  it("defers Mapbox loading until the map area is near the viewport", async () => {
+    invokeMock.mockResolvedValue({ data: { pois: [] } });
+    const originalRect = HTMLElement.prototype.getBoundingClientRect;
+    const originalIntersectionObserver = window.IntersectionObserver;
+    let triggerIntersect: ((entries: Partial<IntersectionObserverEntry>[]) => void) | null = null;
+    const observe = vi.fn();
+    const disconnect = vi.fn();
+    const MockIntersectionObserver = vi.fn((callback: IntersectionObserverCallback) => {
+      triggerIntersect = (entries) => callback(entries as IntersectionObserverEntry[], {} as IntersectionObserver);
+      return { observe, unobserve: vi.fn(), disconnect, takeRecords: () => [] } as unknown as IntersectionObserver;
+    });
+
+    Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({
+        x: 0,
+        y: 2000,
+        top: 2000,
+        bottom: 2250,
+        left: 0,
+        right: 100,
+        width: 100,
+        height: 250,
+        toJSON: () => ({}),
+      }),
+    });
+    window.IntersectionObserver = MockIntersectionObserver as unknown as typeof IntersectionObserver;
+
+    try {
+      render(<PropertyMiniMap {...baseProps} />);
+      expect(await screen.findByText(/Map loads when visible/i)).toBeInTheDocument();
+      expect(screen.queryByTestId("mapbox-map")).not.toBeInTheDocument();
+      expect(observe).toHaveBeenCalled();
+
+      act(() => triggerIntersect?.([{ isIntersecting: true }]));
+      expect(await screen.findByTestId("mapbox-map")).toBeInTheDocument();
+      expect(disconnect).toHaveBeenCalled();
+      await waitFor(() => expect(invokeMock).toHaveBeenCalled());
+    } finally {
+      Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", {
+        configurable: true,
+        value: originalRect,
+      });
+      window.IntersectionObserver = originalIntersectionObserver;
+    }
   });
 
   it("falls back to the Google Maps embed when lat/lng are missing", () => {

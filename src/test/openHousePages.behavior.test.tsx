@@ -287,7 +287,7 @@ beforeEach(() => {
 
 describe("OpenHouses page behavior", () => {
   it("filters open house cards by city and property type, then clears filters", async () => {
-    makeListingsQuery([
+    const query = makeListingsQuery([
       createListing({ id: "oh-athens", title: "Athens Apartment", city: "Athens", property_type: "apartment" }),
       createListing({ id: "oh-voula", title: "Voula House", city: "Voula", property_type: "house", price: 900000 }),
     ]);
@@ -296,6 +296,10 @@ describe("OpenHouses page behavior", () => {
 
     expect(await screen.findByText("Athens Apartment")).toBeInTheDocument();
     expect(screen.getByText("Voula House")).toBeInTheDocument();
+    expect(query.select).toHaveBeenCalledWith(expect.not.stringContaining("*"));
+    expect(query.select).toHaveBeenCalledWith(expect.stringContaining("listing_images(url, sort_order)"));
+    expect(query.select).toHaveBeenCalledWith(expect.stringContaining("has_parking"));
+    expect(query.select).toHaveBeenCalledWith(expect.stringContaining("open_house_date"));
 
     fireEvent.change(screen.getByLabelText(/search open houses by city/i), { target: { value: "Athens" } });
     fireEvent.keyDown(screen.getByLabelText(/search open houses by city/i), { key: "Enter" });
