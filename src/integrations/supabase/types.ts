@@ -3586,6 +3586,7 @@ export type Database = {
         Args: { p_listing_id: string }
         Returns: undefined
       }
+      invoke_send_saved_search_alerts_cron: { Args: never; Returns: undefined }
       is_pro: { Args: { p_user_id: string }; Returns: boolean }
       move_to_dlq: {
         Args: {

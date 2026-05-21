@@ -18,7 +18,7 @@ export function SignInForAI({ feature = "AI features", className = "" }: SignInF
     >
       <div className="flex items-center gap-2 text-primary">
         <Sparkles className="w-5 h-5" />
-        <span className="font-medium text-sm">{feature} require sign-in</span>
+        <span className="font-medium text-sm">{feature} requires sign-in</span>
       </div>
       <p className="text-xs text-muted-foreground text-center max-w-[260px]">
         Sign in to use AI-powered analysis, search, and insights.

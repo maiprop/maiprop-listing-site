@@ -53,7 +53,7 @@ Deno.test("correct webhook secret passes the guard", async () => {
 
 Deno.test("missing payload fields returns early with non-500", async () => {
   const res = await handler(req("POST", {}, { authorization: "Bearer correct-secret" }));
-  // Missing record/old_record → returns { ok: false } with 200
+  // Missing record/old_record returns { ok: false } with 200.
   assertEquals([200, 400].includes(res.status), true);
 });
 
