@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.3](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.2...v1.9.3) (2026-05-21)
+
+
+### Bug Fixes
+
+* harden AI quota and notification wiring ([#193](https://github.com/maiprop/maiprop-listing-site/issues/193)) ([03fde86](https://github.com/maiprop/maiprop-listing-site/commit/03fde8673de090c818dc45e5139ca00ccce8675f))
+
 ## [1.9.2](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.1...v1.9.2) (2026-05-20)
 
 
