@@ -18,6 +18,7 @@ import { MAIPROP_LOGO_FALLBACK_URL } from "@/lib/imageFallbacks";
 import { ENERGY_CLASSES, FEATURES_RESIDENTIAL } from "@/lib/filterConfig";
 import { fmtDate, fmtTime, Pill, RangeInput, OpenHouseCard } from "@/components/open-houses/OpenHousePrimitives";
 import { cn } from "@/lib/utils";
+import type { Database } from "@/integrations/supabase/types";
 
 // skipcq: JS-0067 - Skeleton helper is intentionally module-scoped.
 function OpenHouseCardSkeleton() {
@@ -54,6 +55,82 @@ const OPEN_HOUSE_LOADING_SKELETON_KEYS = [
   "open-house-loading-5",
   "open-house-loading-6",
 ];
+
+const OPEN_HOUSE_LISTING_COLUMNS = [
+  "id",
+  "title",
+  "address",
+  "city",
+  "region",
+  "status",
+  "listing_type",
+  "property_type",
+  "price",
+  "price_per_sqm",
+  "sqm",
+  "bedrooms",
+  "bathrooms",
+  "floor",
+  "total_floors",
+  "year_built",
+  "energy_class",
+  "open_house_date",
+  "ai_score",
+  "views_count",
+  "tags",
+  "cover_image_url",
+  "latitude",
+  "longitude",
+  ...FEATURES_RESIDENTIAL.map((feature) => feature.key),
+];
+
+const OPEN_HOUSE_LISTING_SELECT = `${Array.from(new Set(OPEN_HOUSE_LISTING_COLUMNS)).join(",")},listing_images(url, sort_order)`;
+type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
+type OpenHouseListingRow = Pick<
+  ListingRow,
+  | "id"
+  | "title"
+  | "address"
+  | "city"
+  | "region"
+  | "status"
+  | "listing_type"
+  | "property_type"
+  | "price"
+  | "price_per_sqm"
+  | "sqm"
+  | "bedrooms"
+  | "bathrooms"
+  | "floor"
+  | "total_floors"
+  | "year_built"
+  | "energy_class"
+  | "open_house_date"
+  | "ai_score"
+  | "views_count"
+  | "tags"
+  | "cover_image_url"
+  | "latitude"
+  | "longitude"
+  | "has_parking"
+  | "has_elevator"
+  | "has_balcony"
+  | "has_pool"
+  | "pets_allowed"
+  | "has_furnished"
+  | "has_garden"
+  | "has_ac"
+  | "has_fireplace"
+  | "has_storage"
+  | "has_view"
+  | "has_smart_home"
+  | "has_attic"
+  | "has_double_glazing"
+  | "has_secure_door"
+  | "has_alarm"
+> & {
+  listing_images?: Array<Pick<Database["public"]["Tables"]["listing_images"]["Row"], "url" | "sort_order">> | null;
+};
 
 // skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
 export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordinates filters, map/list view, query state, and card projection in one route shell.
@@ -107,7 +184,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
       const now = new Date().toISOString();
       let q = supabase
         .from("listings")
-        .select("*, listing_images(url, sort_order)")
+        .select(OPEN_HOUSE_LISTING_SELECT)
         .eq("status", "active")
         .eq("listing_type", "open_house");
       if (showPast) {
@@ -117,7 +194,8 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
       }
       const { data, error } = await q.limit(200);
       if (error) throw error;
-      return (data || []).filter(isProductionVisibleOpenHouse).sort((a, b) => {
+      const rows = (data || []) as unknown as OpenHouseListingRow[];
+      return rows.filter(isProductionVisibleOpenHouse).sort((a, b) => {
         const aHasImg = Boolean(a.cover_image_url || a.listing_images?.length);
         const bHasImg = Boolean(b.cover_image_url || b.listing_images?.length);
         return (bHasImg ? 1 : 0) - (aHasImg ? 1 : 0);

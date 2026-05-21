@@ -253,7 +253,9 @@ export function MarketTicker() {
                 className="flex items-center gap-2.5 px-4 transition-all duration-300"
                 style={{
                   height: "36px",
-                  background: isFlickering ? accent.soft : "hsl(270 28% 8% / 0.48)",
+                  background: isFlickering
+                    ? accent.soft
+                    : `linear-gradient(90deg, ${accent.soft}, hsl(270 28% 8% / 0.50) 54%, hsl(24 30% 9% / 0.40))`,
                   borderBottom: "1px solid hsl(38 32% 72% / 0.08)",
                 }}
               >

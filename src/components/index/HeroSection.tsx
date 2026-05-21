@@ -14,6 +14,8 @@ const MarketTicker = lazy(() => import("@/components/MarketTicker").then(m => ({
 const PROFESSIONAL_SUGGESTIONS = getProfessionalSearchSuggestions();
 const HERO_VIDEO_WEBM_SRC = "/hero-bg.webm";
 const HERO_VIDEO_MP4_SRC = "/hero-bg.mp4";
+const HERO_VIDEO_START_DELAY_MS = 350;
+const HERO_VIDEO_IDLE_TIMEOUT_MS = 800;
 
 const LISTING_TYPE_MAP: Record<string, string> = {
   Buy: "sale",
@@ -39,12 +41,12 @@ export function HeroSection() {
     const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
     if (connection?.saveData) return;
 
-    const scheduleIdle = window.requestIdleCallback ?? ((cb: IdleRequestCallback) => window.setTimeout(() => cb({ didTimeout: false, timeRemaining: () => 0 }), 900));
+    const scheduleIdle = window.requestIdleCallback ?? ((cb: IdleRequestCallback) => window.setTimeout(() => cb({ didTimeout: false, timeRemaining: () => 0 }), HERO_VIDEO_IDLE_TIMEOUT_MS));
     const cancelIdle = window.cancelIdleCallback ?? window.clearTimeout;
     let idleId: number | undefined;
     const timer = window.setTimeout(() => {
-      idleId = scheduleIdle(() => setHeroVideoReady(true), { timeout: 1200 });
-    }, 900);
+      idleId = scheduleIdle(() => setHeroVideoReady(true), { timeout: HERO_VIDEO_IDLE_TIMEOUT_MS });
+    }, HERO_VIDEO_START_DELAY_MS);
     return () => {
       window.clearTimeout(timer);
       if (idleId !== undefined) cancelIdle(idleId);

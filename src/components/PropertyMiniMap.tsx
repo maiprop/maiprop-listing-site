@@ -89,6 +89,12 @@ const CATEGORY_META: Record<
 const getPoiKey = (poi: POI): string =>
   `${poi.category}-${poi.name}-${poi.distanceKm}-${poi.walkMinutes}`;
 
+const isMapNearViewport = (el: Element): boolean => {
+  const rect = el.getBoundingClientRect();
+  const viewportH = window.innerHeight || document.documentElement.clientHeight;
+  return rect.top < viewportH + 450 && rect.bottom > -250;
+};
+
 // Approximate offset for map marker placement (since we don't have real coords for POIs)
 const CATEGORY_OFFSETS: Record<POI["category"], [number, number]> = {
   school: [0.003, 0.004],
@@ -233,6 +239,7 @@ export default function PropertyMiniMap({
 }: PropertyMiniMapProps) {
   const { user } = useAuth();
   const mapRef = useRef<MapRef>(null);
+  const mapShellRef = useRef<HTMLDivElement>(null);
   const lat = latitude ? Number(latitude) : null;
   const lng = longitude ? Number(longitude) : null;
 
@@ -243,6 +250,7 @@ export default function PropertyMiniMap({
     "all",
   );
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [shouldLoadMap, setShouldLoadMap] = useState(false);
   const [MapComponents, setMapComponents] = useState<{
     Map: ComponentType<any>;
     Marker: ComponentType<any>;
@@ -257,7 +265,38 @@ export default function PropertyMiniMap({
   const poiQuotaReached = isAiQuotaReached(poiQuota);
 
   useEffect(() => {
-    if (!MAPBOX_TOKEN || !lat || !lng || MapComponents) return;
+    setShouldLoadMap(false);
+    setMapLoaded(false);
+    setMapComponents(null);
+  }, [lat, lng]);
+
+  useEffect(() => {
+    if (!MAPBOX_TOKEN || !lat || !lng || shouldLoadMap) return;
+    const el = mapShellRef.current;
+    if (!el || typeof IntersectionObserver === "undefined" || isMapNearViewport(el)) {
+      setShouldLoadMap(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry?.isIntersecting) return;
+        setShouldLoadMap(true);
+        observer.disconnect();
+      },
+      { threshold: 0.01, rootMargin: "450px 0px" },
+    );
+    observer.observe(el);
+
+    const fallback = window.setTimeout(() => setShouldLoadMap(true), 2500);
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(fallback);
+    };
+  }, [lat, lng, shouldLoadMap]);
+
+  useEffect(() => {
+    if (!MAPBOX_TOKEN || !lat || !lng || !shouldLoadMap || MapComponents) return;
     let cancelled = false;
     const loadMap = async () => {
       const mapModule = await import("react-map-gl");
@@ -274,7 +313,7 @@ export default function PropertyMiniMap({
     return () => {
       cancelled = true;
     };
-  }, [lat, lng, MapComponents]);
+  }, [lat, lng, shouldLoadMap, MapComponents]);
 
   // Auto-load POIs when coords are available (requires auth)
   const loadPOIs = useCallback(async () => {
@@ -419,7 +458,7 @@ export default function PropertyMiniMap({
       </div>
 
       {/* Mapbox mini map — fallback to Google if no token */}
-      <div className="relative h-64">
+      <div ref={mapShellRef} className="relative h-64">
         {!MAPBOX_TOKEN ? (
           <iframe
             title="map"
@@ -427,6 +466,13 @@ export default function PropertyMiniMap({
             className="w-full h-full border-0"
             src={`https://maps.google.com/maps?q=${lat},${lng}&output=embed&z=15`}
           />
+        ) : !shouldLoadMap ? (
+          <div className="w-full h-full flex items-center justify-center bg-secondary">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <MapPin className="w-3.5 h-3.5" />
+              Map loads when visible
+            </div>
+          </div>
         ) : !MapComponents ? (
           <div className="w-full h-full flex items-center justify-center bg-secondary">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
