@@ -38,7 +38,7 @@ function renderCard(props = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <PropertyReportCard listingId="listing-1" listing={listing as ListingWithJoins} {...props} />
       </MemoryRouter>
     </QueryClientProvider>,
