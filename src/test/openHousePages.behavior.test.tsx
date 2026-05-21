@@ -5,6 +5,7 @@ import { renderWithProviders } from "@/test/utils";
 
 const mocks = vi.hoisted(() => ({
   authUser: null as { id: string } | null,
+  isPro: false,
   listing: null as Record<string, unknown> | null,
   listingLoading: false,
   updateListing: { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false },
@@ -93,6 +94,9 @@ vi.mock("@/components/PropertyMiniMap", () => ({
   ),
 }));
 vi.mock("@/components/PropertyValuation", () => ({ default: () => <div data-testid="property-valuation" /> }));
+vi.mock("@/components/property/PropertyValuationLockedCard", () => ({
+  PropertyValuationLockedCard: () => <div data-testid="property-valuation-locked">Upgrade valuation to Pro</div>,
+}));
 vi.mock("@/components/NeighbourhoodReport", () => ({ default: () => <div data-testid="neighbourhood-report" /> }));
 vi.mock("@/components/property/PropertyReportCard", () => ({
   PropertyReportCard: () => <div data-testid="property-report-card" />,
@@ -143,7 +147,7 @@ vi.mock("@/hooks/useMessages", () => ({
   useStartConversation: () => mocks.startConversation,
 }));
 vi.mock("@/hooks/useSubscription", () => ({
-  useSubscription: () => ({ isPro: false, loading: false }),
+  useSubscription: () => ({ isPro: mocks.isPro, loading: false }),
 }));
 vi.mock("@/hooks/usePropertyAIInsights", () => ({
   usePropertyAIInsights: () => ({
@@ -257,6 +261,7 @@ async function renderOpenHouseDetail(initialPath = "/open-house/oh-1") {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.authUser = null;
+  mocks.isPro = false;
   mocks.listing = null;
   mocks.listingLoading = false;
   mocks.updateListing.mutate.mockReset();
@@ -394,8 +399,25 @@ describe("OpenHouseDetail page behavior", () => {
     expect(screen.getByRole("img", { name: /athens loft open house/i })).toHaveAttribute("src", "https://street.example/fallback.jpg");
     expect(screen.getByText(/no appointment needed/i)).toBeInTheDocument();
     expect(screen.getByText(/ai market insights requires sign-in/i)).toBeInTheDocument();
+    expect(screen.getByTestId("property-valuation-locked")).toBeInTheDocument();
+    expect(screen.queryByTestId("property-valuation")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /sign in to contact/i })).toHaveAttribute("href", "/login");
     expect(mocks.trackView.mutate).toHaveBeenCalledWith("oh-1");
+  });
+
+  it("uses the same Pro gate as listing and auction details for open-house valuation", async () => {
+    mocks.authUser = { id: "buyer-1" };
+    mocks.listing = createListing();
+
+    await renderOpenHouseDetail();
+
+    expect(await screen.findByTestId("property-valuation-locked")).toBeInTheDocument();
+    expect(screen.queryByTestId("property-valuation")).not.toBeInTheDocument();
+
+    mocks.isPro = true;
+    await renderOpenHouseDetail("/open-house/oh-1?pro=true");
+
+    expect(await screen.findByTestId("property-valuation")).toBeInTheDocument();
   });
 
   it("gates a pending registrant from contact and offers while passing blocked reason to the offer dialog", async () => {
