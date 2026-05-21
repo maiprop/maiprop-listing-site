@@ -38,6 +38,7 @@ declare global {
   interface Window {
     __maipropWebVitals?: BrowserVitalsState;
     __maipropReadWebVitals?: () => WebVitalsSnapshot;
+    __maipropResetInteractionVitals?: () => void;
   }
 }
 
@@ -175,6 +176,8 @@ async function installWebVitalsCollector(page: Page) {
 
     window.__maipropWebVitals = vitals;
 
+    let interactionBaseline = 0;
+
     const updateFromPerformanceEntries = () => {
       const fcpEntry = performance.getEntriesByName("first-contentful-paint").at(-1);
       if (fcpEntry) vitals.fcp = fcpEntry.startTime;
@@ -185,6 +188,7 @@ async function installWebVitalsCollector(page: Page) {
       for (const entry of performance.getEntriesByType("event")) {
         const eventEntry = entry as PerformanceEntry & { duration?: number; interactionId?: number };
         if ((eventEntry.interactionId ?? 0) <= 0) continue;
+        if (eventEntry.startTime < interactionBaseline) continue;
         vitals.inp = Math.max(vitals.inp, eventEntry.duration ?? 0);
         vitals.inpSamples = Math.max(vitals.inpSamples, vitals.eventDurations.length);
       }
@@ -220,11 +224,19 @@ async function installWebVitalsCollector(page: Page) {
     observe({ type: "event", buffered: true, durationThreshold: 16 }, (entry) => {
       const eventEntry = entry as PerformanceEntry & { duration?: number; interactionId?: number };
       if ((eventEntry.interactionId ?? 0) <= 0) return;
+      if (eventEntry.startTime < interactionBaseline) return;
       const duration = eventEntry.duration ?? 0;
       vitals.eventDurations.push(duration);
       vitals.inp = Math.max(vitals.inp, duration);
       vitals.inpSamples = vitals.eventDurations.length;
     });
+
+    window.__maipropResetInteractionVitals = () => {
+      interactionBaseline = performance.now();
+      vitals.eventDurations = [];
+      vitals.inp = 0;
+      vitals.inpSamples = 0;
+    };
 
     window.__maipropReadWebVitals = () => {
       updateFromPerformanceEntries();
@@ -262,9 +274,22 @@ async function exerciseInputForVitals(page: Page) {
       }
     });
     document.body.appendChild(probe);
+    window.__maipropResetInteractionVitals?.();
   });
 
   await page.locator("[data-web-vitals-probe]").click({ force: true });
+  await page.waitForTimeout(250);
+}
+
+async function waitForInteractionIdle(page: Page) {
+  await page.evaluate(async () => {
+    await document.fonts?.ready?.catch(() => undefined);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    await new Promise<void>((resolve) => {
+      const idle = window.requestIdleCallback ?? ((cb: IdleRequestCallback) => window.setTimeout(cb, 250));
+      idle(() => resolve(), { timeout: 2_000 });
+    });
+  });
   await page.waitForTimeout(250);
 }
 
@@ -277,6 +302,7 @@ test.describe("authenticated performance gates @perf", () => {
       await page.goto(path, { waitUntil: "domcontentloaded" });
       await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => undefined);
       await expect(page.locator("body")).toBeVisible();
+      await waitForInteractionIdle(page);
       await exerciseInputForVitals(page);
 
       const vitals = await page.evaluate(() => window.__maipropReadWebVitals?.() ?? {
