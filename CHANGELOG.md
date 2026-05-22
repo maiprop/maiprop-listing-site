@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.9.5](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.4...v1.9.5) (2026-05-22)
+
+
+### Bug Fixes
+
+* align auction detail AI report gating ([9653887](https://github.com/maiprop/maiprop-listing-site/commit/9653887ce4c663d223945ff8de4a566776e65c87))
+* live index trend colors ([9e07e0f](https://github.com/maiprop/maiprop-listing-site/commit/9e07e0fe55158325c1e46e708a7b6992f59af602))
+* polish password requirement feedback ([b63cf88](https://github.com/maiprop/maiprop-listing-site/commit/b63cf887ff9ff639dcdb713c8efe5fb905bddf93))
+* preserve auction RPC binding ([1288847](https://github.com/maiprop/maiprop-listing-site/commit/12888476e1122de718dd96f0f8fd9110b5d01668))
+* show AI consumption in billing dashboard ([167cb80](https://github.com/maiprop/maiprop-listing-site/commit/167cb80472c9a1950f93f26a5907b71c692fc164))
+* surface signup progress and failures ([9f9391e](https://github.com/maiprop/maiprop-listing-site/commit/9f9391ebd976f5facadc2fbba3d6c118c1d63c10))
+
 ## [1.9.4](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.3...v1.9.4) (2026-05-21)
 
 
