@@ -280,10 +280,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           emailRedirectTo: `${APP_ORIGIN}/onboarding`,
         },
       });
-      if (data.user && !error) {
+      const profileUpdates = {
+        ...(meta.phone ? { phone: meta.phone } : {}),
+      };
+      if (data.user && !error && Object.keys(profileUpdates).length > 0) {
         await supabase
           .from("profiles")
-          .update({ ...(meta.phone && { phone: meta.phone }) })
+          .update(profileUpdates)
           .eq("user_id", data.user.id);
       }
       // needsEmailConfirm = signup succeeded but no session yet (email confirmation required)

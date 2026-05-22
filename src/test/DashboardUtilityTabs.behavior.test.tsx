@@ -307,6 +307,10 @@ describe("dashboard utility tabs", () => {
       fireEvent.click(screen.getByRole("button", { name: /auth.signup.createAccount/i }));
       await waitFor(() => expect(mocks.toast.error).toHaveBeenCalledWith(expected));
     }
+    signUp.mockRejectedValueOnce(new Error("Network unavailable"));
+    fireEvent.click(screen.getByRole("button", { name: /auth.signup.createAccount/i }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Network unavailable"));
+    expect(screen.getByRole("button", { name: /auth.signup.createAccount/i })).toBeEnabled();
 
     mocks.useAuth.mockReturnValue({ user: { id: "u1" }, loading: false, signUp });
     renderHarness(<Signup />);

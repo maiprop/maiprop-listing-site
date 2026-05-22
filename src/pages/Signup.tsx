@@ -31,6 +31,8 @@ export default function Signup() {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [submitMessage, setSubmitMessage] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   // "confirm" = waiting for email click; "done" = session established, navigating
   const [view, setView] = useState<"form" | "confirm">("form");
   const [submittedEmail, setSubmittedEmail] = useState("");
@@ -68,30 +70,45 @@ export default function Signup() {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError(null);
+    setSubmitMessage(null);
     if (!form.email || !form.password) {
-      toast.error("Please fill in your email and password.");
+      const message = "Please fill in your email and password.";
+      setSubmitError(message);
+      toast.error(message);
       return;
     }
     if (!passwordValidation.valid) {
-      toast.error("Check the password requirements below.");
+      const message = "Check the password requirements below.";
+      setSubmitError(message);
+      toast.error(message);
       return;
     }
     trackAnalyticsEvent("signup_submitted", { method: "password" });
     setLoading(true);
-    const { error, needsEmailConfirm } = await signUp(form.email, form.password, {
-      full_name: `${form.firstName} ${form.lastName}`.trim(),
-    });
-    setLoading(false);
+    setSubmitMessage("Creating your account...");
+    try {
+      const { error, needsEmailConfirm } = await signUp(form.email, form.password, {
+        full_name: `${form.firstName} ${form.lastName}`.trim(),
+      });
     if (error) {
       const msg = error.message?.toLowerCase() ?? "";
       if (msg.includes("rate limit") || msg.includes("over_email_send_rate_limit") || msg.includes("too many")) {
-        toast.error("Too many attempts. Please wait a few minutes before trying again.");
+        const message = "Too many attempts. Please wait a few minutes before trying again.";
+        setSubmitMessage(null);
+        setSubmitError(message);
+        toast.error(message);
       } else if (msg.includes("already registered") || msg.includes("user already exists")) {
-        toast.error("An account with this email already exists.", {
+        const message = "An account with this email already exists.";
+        setSubmitMessage(null);
+        setSubmitError(message);
+        toast.error(message, {
           description: "Try signing in instead.",
           action: { label: "Sign in", onClick: () => { window.location.href = "/login"; } },
         });
       } else {
+        setSubmitMessage(null);
+        setSubmitError(error.message);
         toast.error(error.message);
       }
       trackAnalyticsEvent("signup_error", { method: "password" });
@@ -104,8 +121,21 @@ export default function Signup() {
       setView("confirm");
     } else {
       trackAnalyticsEvent("signup_completed", { method: "password" });
+      setSubmitMessage("Account created. Taking you to setup...");
+      navigate("/onboarding", { replace: true });
       // Email confirmation disabled — session exists immediately.
       // The useEffect above will fire when user is set and navigate to /onboarding.
+    }
+    } catch (err) {
+      const message = err instanceof Error && err.message
+        ? err.message
+        : "Could not create your account. Please try again.";
+      setSubmitMessage(null);
+      setSubmitError(message);
+      toast.error(message);
+      trackAnalyticsEvent("signup_error", { method: "password" });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -225,11 +255,24 @@ export default function Signup() {
                   <Button
                     type="submit"
                     className="w-full bg-gradient-primary border-0 text-primary-foreground"
-                    disabled={loading || !form.email || !form.password || !passwordValidation.valid}
+                    disabled={loading || googleLoading || !form.email || !form.password || !passwordValidation.valid}
                   >
                     {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                    {t("auth.signup.createAccount")} <ArrowRight className="w-4 h-4 ml-2" />
+                    {loading ? "Creating account..." : t("auth.signup.createAccount")}
+                    {!loading && <ArrowRight className="w-4 h-4 ml-2" />}
                   </Button>
+                  {(submitMessage || submitError) && (
+                    <div
+                      role={submitError ? "alert" : "status"}
+                      className={`rounded-xl border px-3 py-2.5 text-sm ${
+                        submitError
+                          ? "border-destructive/25 bg-destructive/10 text-destructive"
+                          : "border-primary/15 bg-primary/5 text-primary"
+                      }`}
+                    >
+                      {submitError ?? submitMessage}
+                    </div>
+                  )}
                 </form>
 
                 <p className="text-xs text-muted-foreground text-center mt-4">
