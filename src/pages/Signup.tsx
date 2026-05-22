@@ -10,6 +10,8 @@ import { buildOAuthCallbackRedirectTo } from "@/lib/oauthCallback";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import logoImg from "@/assets/logo.png";
+import { validatePassword } from "@/lib/passwordPolicy";
+import { PasswordRequirements } from "@/components/auth/PasswordRequirements";
 
 const GoogleIcon = () => (
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -35,6 +37,7 @@ export default function Signup() {
   const showedOAuthNoticeRef = useRef(false);
 
   const [form, setForm] = useState({ firstName: "", lastName: "", email: "", password: "" });
+  const passwordValidation = validatePassword(form.password);
 
   useEffect(() => {
     const state = location.state as { oauthRedirectReason?: string } | null;
@@ -65,8 +68,12 @@ export default function Signup() {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.email || !form.password || form.password.length < 8) {
-      toast.error("Please fill in all fields (min 8 chars password)");
+    if (!form.email || !form.password) {
+      toast.error("Please fill in your email and password.");
+      return;
+    }
+    if (!passwordValidation.valid) {
+      toast.error("Check the password requirements below.");
       return;
     }
     trackAnalyticsEvent("signup_submitted", { method: "password" });
@@ -212,12 +219,13 @@ export default function Signup() {
                         {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>
+                    <PasswordRequirements password={form.password} />
                   </div>
 
                   <Button
                     type="submit"
                     className="w-full bg-gradient-primary border-0 text-primary-foreground"
-                    disabled={loading || !form.email || !form.password}
+                    disabled={loading || !form.email || !form.password || !passwordValidation.valid}
                   >
                     {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                     {t("auth.signup.createAccount")} <ArrowRight className="w-4 h-4 ml-2" />

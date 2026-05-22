@@ -319,9 +319,9 @@ describe("ResetPassword", () => {
 
     fireEvent.change(screen.getByPlaceholderText("Min. 8 characters"), { target: { value: "lowercase1!" } });
     fireEvent.change(screen.getByPlaceholderText("Repeat your new password"), { target: { value: "lowercase1!" } });
-    fireEvent.click(screen.getByRole("button", { name: "Update Password" }));
 
-    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith("Password must contain at least one uppercase letter"));
+    expect(screen.getByText("One uppercase letter")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Update Password" })).toBeDisabled();
     expect(mockSupabase.auth.updateUser).not.toHaveBeenCalled();
   });
 

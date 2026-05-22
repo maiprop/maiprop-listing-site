@@ -6,6 +6,7 @@ import { Navbar } from "@/components/Navbar";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { validatePassword } from "@/lib/passwordPolicy";
+import { PasswordRequirements } from "@/components/auth/PasswordRequirements";
 
 // skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
 export default function ResetPassword() { // skipcq: JS-R1005 - Password reset route coordinates recovery state, validation, and submit UI.
@@ -16,6 +17,7 @@ export default function ResetPassword() { // skipcq: JS-R1005 - Password reset r
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [isRecovery, setIsRecovery] = useState(false);
+  const passwordValidation = validatePassword(password);
 
   useEffect(() => {
     // Supabase puts type=recovery in the URL hash after the user clicks the email link
@@ -33,7 +35,7 @@ export default function ResetPassword() { // skipcq: JS-R1005 - Password reset r
     }
     const pw = validatePassword(password);
     if (!pw.valid) {
-      toast.error(pw.error ?? "Password does not meet the requirements");
+      toast.error("Check the password requirements below.");
       return;
     }
     setLoading(true);
@@ -108,6 +110,7 @@ export default function ResetPassword() { // skipcq: JS-R1005 - Password reset r
                     {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                <PasswordRequirements password={password} />
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground block mb-1.5">Confirm Password</label>
@@ -128,7 +131,7 @@ export default function ResetPassword() { // skipcq: JS-R1005 - Password reset r
               <Button
                 type="submit"
                 className="w-full bg-gradient-primary border-0 text-primary-foreground"
-                disabled={loading || !password || !confirm || password !== confirm}
+                disabled={loading || !password || !confirm || password !== confirm || !passwordValidation.valid}
               >
                 {loading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
                 Update Password

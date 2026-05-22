@@ -282,15 +282,15 @@ describe("dashboard utility tabs", () => {
 
     fireEvent.change(screen.getByPlaceholderText("you@example.com"), { target: { value: "new@maiprop.co" } });
     fireEvent.change(screen.getByPlaceholderText("Min. 8 characters"), { target: { value: "short" } });
-    fireEvent.click(screen.getByRole("button", { name: /auth.signup.createAccount/i }));
-    expect(mocks.toast.error).toHaveBeenCalledWith("Please fill in all fields (min 8 chars password)");
+    expect(screen.getByText("At least 8 characters")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /auth.signup.createAccount/i })).toBeDisabled();
 
-    fireEvent.change(screen.getByPlaceholderText("Min. 8 characters"), { target: { value: "password123" } });
+    fireEvent.change(screen.getByPlaceholderText("Min. 8 characters"), { target: { value: "StrongPass1!" } });
     fireEvent.change(screen.getByPlaceholderText("Nikos"), { target: { value: "Nikos" } });
     fireEvent.change(screen.getByPlaceholderText("Papadopoulos"), { target: { value: "Tester" } });
     fireEvent.click(screen.getByRole("button", { name: /auth.signup.createAccount/i }));
     await screen.findByText("Check your inbox");
-    expect(signUp).toHaveBeenCalledWith("new@maiprop.co", "password123", { full_name: "Nikos Tester" });
+    expect(signUp).toHaveBeenCalledWith("new@maiprop.co", "StrongPass1!", { full_name: "Nikos Tester" });
     fireEvent.click(screen.getByRole("button", { name: /Use a different email/i }));
 
     fireEvent.click(screen.getByRole("button", { name: /auth.signup.google/i }));
