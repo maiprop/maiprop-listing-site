@@ -29,8 +29,12 @@ import { Navbar } from "@/components/Navbar";
 import PropertyGallery from "@/components/property/PropertyGallery";
 import PropertyValuation from "@/components/PropertyValuation";
 import { PropertyScoresSection } from "@/components/property/PropertyScoresSection";
+import { PropertyReportCard } from "@/components/property/PropertyReportCard";
+import { PropertyValuationLockedCard } from "@/components/property/PropertyValuationLockedCard";
 import { DetailRow, Section, SectionHeader } from "@/components/property/DetailPrimitives";
 import { useAuctionListings } from "@/hooks/useAuctionListings";
+import { useSubscription } from "@/hooks/useSubscription";
+import type { ListingWithJoins } from "@/hooks/useListings";
 import { formatDate, formatPrice } from "@/lib/format";
 import {
   OWNERSHIP_BADGE,
@@ -201,6 +205,7 @@ const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates aucti
   const { id = "" } = useParams<{ id: string }>();
   const { state } = useLocation() as { state?: { auction?: Record<string, unknown> } };
   const [walkScore, setWalkScore] = useState<number | null>(null);
+  const { isPro } = useSubscription();
 
   const auctionFromState = state?.auction ?? null;
   const { data: allAuctions = [], isLoading: auctionsLoading } = useAuctionListings(undefined, {
@@ -293,6 +298,26 @@ const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates aucti
     longitude: lng ?? undefined,
     region: region ?? undefined,
   };
+
+  const auctionReportListing = {
+    id,
+    title,
+    city,
+    address: address ?? null,
+    price: bid,
+    auction_starting_bid: bid,
+    auction_date: auctionDate ?? null,
+    sqm: sqm ?? null,
+    latitude: lat ?? null,
+    longitude: lng ?? null,
+    property_type: propertyType ?? null,
+    listing_type: "auction",
+    year_built: yearBuilt ?? null,
+    region: region ?? null,
+    cover_image_url: images[0] ?? null,
+    listing_images: images.slice(1).map((url, index) => ({ url, sort_order: index + 1 })),
+    profiles: null,
+  } as unknown as ListingWithJoins;
 
   const handleShare = async () => {
     if (navigator.share) {
@@ -473,19 +498,25 @@ const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates aucti
 
               <PropertyScoresSection walkScore={walkScore} walkabilityScore={null} safetyScore={null} noiseScore={null} />
 
-              <PropertyValuation
-                title={title}
-                city={city}
-                address={address ?? undefined}
-                price={bid}
-                sqm={sqm && sqm > 0 ? sqm : 1}
-                propertyType={propertyType}
-                listingType="auction"
-                yearBuilt={yearBuilt}
-                region={region}
-                ownershipStatus={ownershipStatus ?? undefined}
-                ownershipPercentage={ownershipPct ?? undefined}
-              />
+              {isPro ? (
+                <PropertyValuation
+                  title={title}
+                  city={city}
+                  address={address ?? undefined}
+                  price={bid}
+                  sqm={sqm && sqm > 0 ? sqm : 1}
+                  propertyType={propertyType}
+                  listingType="auction"
+                  yearBuilt={yearBuilt}
+                  region={region}
+                  ownershipStatus={ownershipStatus ?? undefined}
+                  ownershipPercentage={ownershipPct ?? undefined}
+                />
+              ) : (
+                <PropertyValuationLockedCard />
+              )}
+
+              <PropertyReportCard listingId={id} listing={auctionReportListing} />
 
               <div className="glass-card rounded-2xl border border-border overflow-hidden">
                 <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-border">

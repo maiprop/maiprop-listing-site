@@ -31,6 +31,21 @@ interface Props {
   listing?: ListingWithJoins | null;
 }
 
+const buildReportListingPayload = (listing?: ListingWithJoins | null) => {
+  if (!listing) return undefined;
+  return {
+    id: listing.id,
+    address: listing.address,
+    city: listing.city,
+    latitude: listing.latitude,
+    longitude: listing.longitude,
+    sqm: listing.sqm,
+    property_type: listing.property_type,
+    floor: listing.floor,
+    year_built: listing.year_built,
+  };
+};
+
 type ReportUnavailableRule = {
   when: (listingId: string, listing?: ListingWithJoins | null) => boolean;
   reason: string;
@@ -126,7 +141,11 @@ const usePropertyReportLoader = (listingId: string, listing?: ListingWithJoins |
 
     try {
       const { data: osRes, error } = await supabase.functions.invoke<OsReportResponse>("fetch-report-from-os", {
-        body: { listing_id: listingId, report_type: "valuation" },
+        body: {
+          listing_id: listingId,
+          report_type: "valuation",
+          listing: buildReportListingPayload(listing),
+        },
       });
       if (error) throw error;
       handleReportResponse(osRes);

@@ -68,6 +68,8 @@ type PropertyReportCacheDbRow = {
   created_by: string | null;
 };
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 type FunctionDatabase = Database & {
   public: Database["public"] & {
     Tables: Database["public"]["Tables"] & {
@@ -187,6 +189,28 @@ function buildPropertyFeatures(listing: ListingRow): PropertyFeaturesRequest | n
   };
 }
 
+function normalizeListingPayload(value: unknown): ListingRow | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const id = typeof record.id === "string" ? record.id : "external-listing";
+  return {
+    id,
+    address: typeof record.address === "string" ? record.address : null,
+    city: typeof record.city === "string" ? record.city : null,
+    latitude: coerceFiniteNumber(record.latitude),
+    longitude: coerceFiniteNumber(record.longitude),
+    sqm: coerceFiniteNumber(record.sqm),
+    property_type: typeof record.property_type === "string" ? record.property_type : null,
+    floor: coerceFiniteNumber(record.floor),
+    year_built: coerceFiniteNumber(record.year_built),
+  };
+}
+
+function getSafeReportFileName(listingId: string): string {
+  const safeId = listingId.replace(/[^a-z0-9_-]+/gi, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "external";
+  return `maiprop-property-report-${safeId}.pdf`;
+}
+
 function appendFeatures(params: URLSearchParams, features: PropertyFeaturesRequest): void {
   for (const [key, value] of Object.entries(features)) {
     if (value == null || value === "") continue;
@@ -253,6 +277,20 @@ async function chargeReportFetchIfNeeded(
   return { charged: true, alreadyPaid: false };
 }
 
+async function chargeExternalReportFetch(
+  supabase: SupabaseAdminClient,
+  userId: string,
+): Promise<{ charged: boolean; alreadyPaid: boolean }> {
+  const { error } = await supabase
+    .from("usage_property_reports")
+    .insert({ user_id: userId, listing_id: null });
+
+  if (error) {
+    throw new ReportBillingError(error.hint ?? error.message ?? "Property report charge failed");
+  }
+  return { charged: true, alreadyPaid: false };
+}
+
 function cachedReportResponse(
   cache: PropertyReportCacheRow,
   charge: { charged: boolean; alreadyPaid: boolean },
@@ -310,12 +348,14 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const {
       listing_id,
+      listing: requestListing,
       report_type,
       lang = "en",
       since,
       to,
     } = body as {
       listing_id?: string;
+      listing?: unknown;
       report_type?: string;
       lang?: string;
       since?: string;
@@ -338,8 +378,9 @@ Deno.serve(async (req) => {
     }
 
     const normalizedLang: "en" | "el" = lang === "el" ? "el" : "en";
+    const isDatabaseListing = UUID_RE.test(listing_id);
 
-    if (report_type === "valuation") {
+    if (report_type === "valuation" && isDatabaseListing) {
       const cached = await getActiveCachedReport(supabase, listing_id, normalizedLang);
       if (cached) {
         const charge = await chargeReportFetchIfNeeded(supabase, user.id, listing_id, cached.generated_at);
@@ -361,15 +402,18 @@ Deno.serve(async (req) => {
     const token = await getOsToken(OS_URL, OS_EMAIL, OS_PASS);
 
     if (report_type === "valuation") {
-      const { data: listing, error: listingError } = await supabase
-        .from("listings")
-        .select("id,address,city,latitude,longitude,sqm,property_type,floor,year_built")
-        .eq("id", listing_id)
-        .maybeSingle();
+      const { data: listing, error: listingError } = isDatabaseListing
+        ? await supabase
+          .from("listings")
+          .select("id,address,city,latitude,longitude,sqm,property_type,floor,year_built")
+          .eq("id", listing_id)
+          .maybeSingle()
+        : { data: null, error: null };
 
       if (listingError) throw listingError;
 
-      const features = listing ? buildPropertyFeatures(listing as ListingRow) : null;
+      const listingForFeatures = (listing as ListingRow | null) ?? normalizeListingPayload(requestListing);
+      const features = listingForFeatures ? buildPropertyFeatures(listingForFeatures) : null;
       if (!features) {
         return new Response(
           JSON.stringify({
@@ -410,9 +454,30 @@ Deno.serve(async (req) => {
       const html = await reportRes.text();
       const aiRes = await fetchTextIfOk(aiUrl, token, 5_000).catch(() => null);
       const ai = aiRes?.ok ? await aiRes.json().catch(() => null) : null;
+      const fileName = getSafeReportFileName(listing_id);
+
+      if (!isDatabaseListing) {
+        const charge = await chargeExternalReportFetch(supabase, user.id);
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            report: {
+              kind: "valuation-property-html",
+              html,
+              ai,
+              features,
+              fileName,
+              cache: null,
+            },
+            source: "os",
+            billing: charge,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
       const generatedAt = new Date();
       const expiresAt = new Date(generatedAt.getTime() + 30 * 24 * 60 * 60 * 1000);
-      const fileName = `maiprop-property-report-${listing_id}.pdf`;
 
       const { data: cache, error: cacheError } = await supabase
         .from("property_report_cache")

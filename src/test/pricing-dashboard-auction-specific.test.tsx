@@ -210,6 +210,12 @@ vi.mock("@/components/property/PropertyGallery", () => ({
   ),
 }));
 vi.mock("@/components/PropertyValuation", () => ({ default: () => <div data-testid="property-valuation" /> }));
+vi.mock("@/components/property/PropertyValuationLockedCard", () => ({
+  PropertyValuationLockedCard: () => <div data-testid="property-valuation-locked" />,
+}));
+vi.mock("@/components/property/PropertyReportCard", () => ({
+  PropertyReportCard: ({ listingId }: { listingId: string }) => <div data-testid="property-report-card">{listingId}</div>,
+}));
 vi.mock("@/components/property/PropertyScoresSection", () => ({ PropertyScoresSection: () => <div data-testid="scores" /> }));
 vi.mock("@/components/PropertyMiniMap", () => ({ default: () => <div data-testid="mini-map" /> }));
 vi.mock("@/components/NeighbourhoodReport", () => ({ default: () => <div data-testid="neighbourhood" /> }));
@@ -699,5 +705,35 @@ describe("Auctions focused page behavior", () => {
     const links = await screen.findAllByRole("link", { name: /Open eAuction/i });
     expect(links.length).toBeGreaterThan(0);
     expect(links[0]).toHaveAttribute("href", "https://eauction.example/listing");
+  });
+
+  it("keeps auction detail valuation Pro-gated and renders the property report card", async () => {
+    mocks.useAuctionListingsMock.mockReturnValue({
+      data: [auction()],
+      isLoading: false,
+    });
+    const { default: AuctionDetail } = await import("@/pages/AuctionDetail");
+
+    const { rerender } = renderWithProviders(
+      <Routes>
+        <Route path="/auction/:id" element={<AuctionDetail />} />
+      </Routes>,
+      { initialPath: "/auction/auction-1" },
+    );
+
+    expect(await screen.findByTestId("property-valuation-locked")).toBeInTheDocument();
+    expect(screen.queryByTestId("property-valuation")).not.toBeInTheDocument();
+    expect(screen.getByTestId("property-report-card")).toHaveTextContent("auction-1");
+
+    mocks.useSubscriptionMock.mockReturnValue({ isPro: true, loading: false, refreshSubscription: vi.fn() });
+    rerender(
+      <Routes>
+        <Route path="/auction/:id" element={<AuctionDetail />} />
+      </Routes>,
+    );
+
+    expect(await screen.findByTestId("property-valuation")).toBeInTheDocument();
+    expect(screen.queryByTestId("property-valuation-locked")).not.toBeInTheDocument();
+    expect(screen.getByTestId("property-report-card")).toBeInTheDocument();
   });
 });

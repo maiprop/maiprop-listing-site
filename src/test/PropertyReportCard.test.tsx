@@ -71,6 +71,19 @@ describe("PropertyReportCard", () => {
     renderCard();
     fireEvent.click(screen.getByRole("button", { name: /load report/i }));
 
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("fetch-report-from-os", expect.objectContaining({
+      body: expect.objectContaining({
+        listing_id: "listing-1",
+        report_type: "valuation",
+        listing: expect.objectContaining({
+          id: "listing-1",
+          city: "Athens",
+          latitude: 37.98,
+          longitude: 23.72,
+          sqm: 80,
+        }),
+      }),
+    })));
     await waitFor(() => expect(screen.getByText(/No valuation report/i)).toBeInTheDocument());
     expect(screen.getByRole("button", { name: /report unavailable/i })).toBeDisabled();
     expect(mocks.mutateAsync).not.toHaveBeenCalled();
