@@ -26,6 +26,9 @@ vi.mock("@/hooks/useSubscription", () => ({
 }));
 
 const authState = {
+  user: {
+    id: "user-1",
+  },
   profile: {
     role: "seller",
     participant_type: "seller",
@@ -46,6 +49,36 @@ vi.mock("sonner", () => ({
 describe("BillingTab add-on checkout", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.supabase?.rpc.mockImplementation((_fn: string, args?: { p_bucket?: string }) => {
+      const quotas: Record<string, { used: number; limit: number }> = {
+        "property-valuation": { used: 48, limit: 50 },
+        "neighbourhood-report": { used: 50, limit: 50 },
+        "property-pois": { used: 12, limit: 50 },
+      };
+      const quota = quotas[args?.p_bucket ?? ""] ?? { used: 0, limit: 0 };
+      return Promise.resolve({
+        data: {
+          allowed: quota.used < quota.limit,
+          reason: quota.used >= quota.limit ? "monthly_limit_reached" : null,
+          used: quota.used,
+          limit: quota.limit,
+          remaining: Math.max(quota.limit - quota.used, 0),
+        },
+        error: null,
+      });
+    });
+    mocks.supabase?.from.mockImplementation((table: string) => {
+      const rowsByTable: Record<string, Array<{ id: string }>> = {
+        usage_property_reports: [{ id: "report-1" }, { id: "report-2" }],
+        usage_priority_ads: Array.from({ length: 10 }, (_, i) => ({ id: `boost-${i}` })),
+      };
+      const query = {
+        select: vi.fn(() => query),
+        eq: vi.fn(() => query),
+        gte: vi.fn(() => Promise.resolve({ data: rowsByTable[table] ?? [], error: null })),
+      };
+      return query;
+    });
     mocks.supabase?.functions.invoke.mockImplementation((fn: string) => {
       if (fn === "get-invoices") {
         return Promise.resolve({
@@ -88,5 +121,32 @@ describe("BillingTab add-on checkout", () => {
 
     expect(screen.queryByText("Extra Agent Seat")).not.toBeInTheDocument();
     expect(screen.queryByText("API Access")).not.toBeInTheDocument();
+  });
+
+  it("shows unified AI/report consumption and wires usage add-ons to Stripe", async () => {
+    renderWithProviders(<BillingTab />);
+
+    const panel = await screen.findByRole("region", { name: /monthly ai and report usage/i });
+    expect(within(panel).getByText("AI valuations")).toBeInTheDocument();
+    expect(within(panel).getByText("48 / 50")).toBeInTheDocument();
+    expect(within(panel).getByText("Neighbourhood reports")).toBeInTheDocument();
+    expect(within(panel).getByText("50 / 50")).toBeInTheDocument();
+    expect(within(panel).getByText("Nearby places / POIs")).toBeInTheDocument();
+    expect(within(panel).getByText("Property reports")).toBeInTheDocument();
+    await waitFor(() => expect(within(panel).getByText("2 / 3")).toBeInTheDocument());
+    expect(within(panel).getByText("Priority ads / boosts")).toBeInTheDocument();
+    await waitFor(() => expect(within(panel).getByText("10 / 10")).toBeInTheDocument());
+
+    fireEvent.click(within(panel).getByRole("button", { name: /Buy Neighbourhood reports add-on/i }));
+
+    await waitFor(() => {
+      expect(mocks.supabase?.functions.invoke).toHaveBeenCalledWith("create-checkout", {
+        body: {
+          addon_key: "neighbourhood_report_single",
+          success_url: "/dashboard/billing?checkout=success",
+          cancel_url: "/dashboard/billing?checkout=cancelled",
+        },
+      });
+    });
   });
 });

@@ -33,6 +33,7 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
+import { BillingUsagePanel } from "@/components/dashboard/BillingUsagePanel";
 
 interface Invoice {
   id: string;
@@ -669,7 +670,7 @@ export default function BillingTab() { // skipcq: JS-0067
     isInvestorManagedPlan,
     isManuallyManagedPlan,
   } = useSubscription();
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const { data, isLoading, refetch, isRefetching, error } = useBillingInfo();
   const [portalLoading, setPortalLoading] = useState(false);
   const [addonLoadingKey, setAddonLoadingKey] = useState<string | null>(null);
@@ -705,12 +706,7 @@ export default function BillingTab() { // skipcq: JS-0067
     }
   };
 
-  const purchaseAddon = async (item: AddonItem) => { // skipcq: JS-R1005
-    const addonKey = resolveAddonKey(item);
-    if (!addonKey) {
-      showManualAddonToast();
-      return;
-    }
+  const purchaseAddonKey = async (addonKey: string) => {
     setAddonLoadingKey(addonKey);
     try {
       window.location.href = await createAddonCheckoutUrl(addonKey);
@@ -718,6 +714,15 @@ export default function BillingTab() { // skipcq: JS-0067
       showAddonCheckoutError(e);
       setAddonLoadingKey(null);
     }
+  };
+
+  const purchaseAddon = async (item: AddonItem) => { // skipcq: JS-R1005
+    const addonKey = resolveAddonKey(item);
+    if (!addonKey) {
+      showManualAddonToast();
+      return;
+    }
+    await purchaseAddonKey(addonKey);
   };
 
   const sub = data?.subscription ?? null;
@@ -913,6 +918,15 @@ export default function BillingTab() { // skipcq: JS-0067
           </div>
         </div>
       )}
+
+      <BillingUsagePanel
+        user={user}
+        isPro={isPro}
+        participantType={participantType}
+        addonLoadingKey={addonLoadingKey}
+        onPurchaseAddon={(addonKey) => void purchaseAddonKey(addonKey)}
+        onUpgrade={() => navigate("/pricing")}
+      />
 
       {/* Invoices */}
       <div className="glass-card rounded-2xl border border-border p-5 space-y-4">
