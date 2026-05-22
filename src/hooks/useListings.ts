@@ -19,6 +19,52 @@ type ListingRowWithOwner = Database["public"]["Tables"]["listings"]["Row"] & {
   listing_images?: { url: string; sort_order: number }[];
 };
 
+const LISTING_CARD_IMAGE_LIMIT = 3;
+const LISTING_CARD_SELECT = [
+  "id",
+  "owner_id",
+  "created_at",
+  "title",
+  "address",
+  "city",
+  "price",
+  "price_per_sqm",
+  "bedrooms",
+  "bathrooms",
+  "sqm",
+  "floor",
+  "total_floors",
+  "year_built",
+  "energy_class",
+  "cover_image_url",
+  "property_type",
+  "listing_type",
+  "open_house_date",
+  "auction_date",
+  "auction_starting_bid",
+  "ai_score",
+  "views_count",
+  "tags",
+  "has_video_tour",
+  "has_virtual_tour",
+  "is_featured",
+  "priority_placement",
+  "is_pre_sale",
+  "construction_status",
+  "walkability_score",
+  "safety_score",
+  "noise_score",
+  "latitude",
+  "longitude",
+  "has_parking",
+  "has_pool",
+  "has_elevator",
+  "has_garden",
+  "has_smart_home",
+].join(",");
+
+const LISTING_CARD_SELECT_WITH_IMAGES = `${LISTING_CARD_SELECT}, listing_images(url, sort_order)`;
+
 /**
  * A listings row augmented with joined tables and computed fields added by useListing().
  * Using this type eliminates type casting in consuming components.
@@ -88,7 +134,9 @@ export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize
   const sort = filters?.sort ?? "featured";
   let query = supabase
     .from("listings")
-    .select(`*, listing_images(url, sort_order)`);
+    .select(LISTING_CARD_SELECT_WITH_IMAGES)
+    .order("sort_order", { referencedTable: "listing_images", ascending: true })
+    .limit(LISTING_CARD_IMAGE_LIMIT, { referencedTable: "listing_images" });
 
   // Promoted listings (is_featured OR priority_placement > 0) always lead, then
   // ties broken by the user-selected sort. The client (Listings.tsx) applies
@@ -242,7 +290,7 @@ const fetchListingsPage = async (filters?: ListingsFilters, page = 1, pageSize =
   const rows = data ?? [];
 
   // Enrich with owner profiles
-  const typedRows = rows as ListingRowWithOwner[];
+  const typedRows = rows as unknown as ListingRowWithOwner[];
   const ownerIds = [
     ...new Set(typedRows.map((r) => r.owner_id).filter((id): id is string => Boolean(id))),
   ];
@@ -303,10 +351,10 @@ export const useListings = (
       const { data, error } = await buildListingsQuery(filters, 0, limit);
       if (error) throw error;
       const rows = data ?? [];
-      if (rows.length === 0) return rows as ListingWithJoins[];
+      if (rows.length === 0) return rows as unknown as ListingWithJoins[];
 
       // ORDER BY is applied server-side in buildListingsQuery; no client sort needed.
-      const typedRows = rows as ListingRowWithOwner[];
+      const typedRows = rows as unknown as ListingRowWithOwner[];
       const ownerIds = [
         ...new Set(typedRows.map((r) => r.owner_id).filter((id): id is string => Boolean(id))),
       ];

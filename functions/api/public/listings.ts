@@ -40,7 +40,49 @@ const BOOLEAN_FEATURES = new Set([
   "has_night_power", "has_solar_water",
 ]);
 
-const LISTING_SELECT = "*,listing_images(url,sort_order)";
+const LISTING_SELECT = [
+  "id",
+  "owner_id",
+  "created_at",
+  "title",
+  "address",
+  "city",
+  "price",
+  "price_per_sqm",
+  "bedrooms",
+  "bathrooms",
+  "sqm",
+  "floor",
+  "total_floors",
+  "year_built",
+  "energy_class",
+  "cover_image_url",
+  "property_type",
+  "listing_type",
+  "open_house_date",
+  "auction_date",
+  "auction_starting_bid",
+  "ai_score",
+  "views_count",
+  "tags",
+  "has_video_tour",
+  "has_virtual_tour",
+  "is_featured",
+  "priority_placement",
+  "is_pre_sale",
+  "construction_status",
+  "walkability_score",
+  "safety_score",
+  "noise_score",
+  "latitude",
+  "longitude",
+  "has_parking",
+  "has_pool",
+  "has_elevator",
+  "has_garden",
+  "has_smart_home",
+  "listing_images(url,sort_order)",
+].join(",");
 
 function appendIfPresent(params: URLSearchParams, name: string, value: string | null): void {
   if (value) params.set(name, value);
@@ -62,6 +104,8 @@ function buildListingParams(requestUrl: URL): { params: URLSearchParams; page: n
   params.set("status", "eq.active");
   params.set("offset", String(from));
   params.set("limit", String(pageSize));
+  params.set("listing_images.order", "sort_order.asc");
+  params.set("listing_images.limit", "3");
 
   if (sort === "featured") {
     params.append("order", "is_featured.desc");

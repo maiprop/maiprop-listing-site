@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight, TrendingUp, TrendingDown } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useInView } from "@/hooks/useInView";
-import { supabase } from "@/integrations/supabase/client";
+import { fetchPublicApi } from "@/lib/publicApi";
 import thessalonikiLandmark from "@/assets/thessaloniki-landmark.webp";
 
 const FALLBACK = [
@@ -13,6 +13,12 @@ const FALLBACK = [
 ] as const;
 
 type Location = { name: string; listings: number; trend: string; trendUp: boolean; image: string };
+type LocationStats = Pick<Location, "name" | "listings" | "trend" | "trendUp">;
+
+function mergeLocationStats(stats: LocationStats[] | null): Location[] {
+  const statsByCity = new Map((stats ?? []).map((city) => [city.name, city]));
+  return FALLBACK.map((fallback) => ({ ...fallback, ...statsByCity.get(fallback.name) }));
+}
 
 export function PopularLocationsSection() {
   const { ref, inView } = useInView();
@@ -22,64 +28,8 @@ export function PopularLocationsSection() {
     enabled: inView,
     staleTime: 10 * 60 * 1000,
     queryFn: async () => {
-      const cities = FALLBACK.map((c) => c.name);
-
-      const { data: cityRows, error: cityCountError } = await supabase
-        .from("listings").select("city").eq("status", "active").in("city", cities);
-      if (cityCountError) throw cityCountError;
-
-      const listingsByCity: Record<string, number> = Object.fromEntries(cities.map((c) => [c, 0]));
-      (cityRows ?? []).forEach((row) => {
-        const city = (row.city as string | null)?.trim();
-        if (city && city in listingsByCity) listingsByCity[city]++;
-      });
-
-      const now = new Date();
-      const currStart = new Date(now); currStart.setDate(currStart.getDate() - 30);
-      const prevStart = new Date(now); prevStart.setDate(prevStart.getDate() - 60);
-
-      const { data: priceData, error } = await supabase
-        .from("listings").select("city, price_per_sqm, created_at")
-        .eq("status", "active").eq("listing_type", "sale").in("city", cities)
-        .not("price_per_sqm", "is", null)
-        .gte("created_at", prevStart.toISOString()).lt("created_at", now.toISOString());
-      if (error) throw error;
-
-      const currentPrices: Record<string, number[]> = {};
-      const prevPrices: Record<string, number[]> = {};
-      (priceData ?? []).forEach((row: { city?: string; price_per_sqm?: number | string | null; created_at?: string }) => {
-        const city = (row.city as string | undefined)?.trim();
-        if (!city) return;
-        const p = row.price_per_sqm == null ? NaN : Number(row.price_per_sqm);
-        if (!Number.isFinite(p)) return;
-        const createdAt = row.created_at ? new Date(row.created_at) : null;
-        if (!createdAt) return;
-        if (createdAt >= currStart) {
-          currentPrices[city] = currentPrices[city] ?? []; currentPrices[city].push(p);
-        } else {
-          prevPrices[city] = prevPrices[city] ?? []; prevPrices[city].push(p);
-        }
-      });
-
-      const fallbackByCity = Object.fromEntries(FALLBACK.map((c) => [c.name, c])) as Record<string, Location>;
-
-      return cities.map((city) => {
-        const fallback = fallbackByCity[city];
-        const prev = prevPrices[city] ?? [];
-        const curr = currentPrices[city] ?? [];
-        let trend = fallback.trend, trendUp = fallback.trendUp;
-        if (prev.length >= 2 && curr.length >= 2) {
-          const prevAvg = prev.reduce((a, b) => a + b, 0) / prev.length;
-          const currAvg = curr.reduce((a, b) => a + b, 0) / curr.length;
-          if (Number.isFinite(prevAvg) && prevAvg > 0 && Number.isFinite(currAvg)) {
-            const pct = ((currAvg - prevAvg) / prevAvg) * 100;
-            trendUp = pct >= 0;
-            const abs = Math.abs(Math.round(pct * 10) / 10);
-            trend = `${trendUp ? "+" : "-"}${abs.toFixed(1)}%`;
-          }
-        }
-        return { ...fallback, listings: listingsByCity[city] ?? fallback.listings, trend, trendUp };
-      });
+      const stats = await fetchPublicApi<LocationStats[]>("/api/public/homepage?section=popular-locations");
+      return mergeLocationStats(stats);
     },
   });
 

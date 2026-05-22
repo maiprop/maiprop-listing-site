@@ -10,12 +10,17 @@ import { renderHook, waitFor } from "@testing-library/react";
 
 const fromMock = vi.fn();
 const invokeMock = vi.fn();
+const publicApiMock = vi.fn();
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: (...args: unknown[]) => fromMock(...args),
     functions: { invoke: (...args: unknown[]) => invokeMock(...args) },
   },
+}));
+
+vi.mock("@/lib/publicApi", () => ({
+  fetchPublicApi: (...args: unknown[]) => publicApiMock(...args),
 }));
 
 import { randomizeAuctionPresentation, useAuctionListings } from "@/hooks/useAuctionListings";
@@ -63,6 +68,8 @@ const renderHookWithQuery = <T,>(hook: () => T) => {
 beforeEach(() => {
   fromMock.mockReset();
   invokeMock.mockReset();
+  publicApiMock.mockReset();
+  publicApiMock.mockResolvedValue(null);
 });
 
 /**
@@ -78,6 +85,18 @@ const makeBuilder = (rangeImpl: () => Promise<{ data: unknown[] | null; error: u
 };
 
 describe("useAuctionListings", () => {
+  it("uses the cached public auction API before the slower OS proxy for public-sized windows", async () => {
+    publicApiMock.mockResolvedValue({ data: [auctionRow("public-a1")] });
+
+    const { result } = renderHookWithQuery(() => useAuctionListings(60));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data?.[0]).toMatchObject({ id: "public-a1" });
+    expect(publicApiMock).toHaveBeenCalledWith("/api/public/auctions?limit=60");
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
   it("uses a deterministic daily rotation instead of preserving OS municipality order", () => {
     const municipalitySorted = [
       auctionRow("athens-a", { city: "Athens" }),

@@ -122,6 +122,36 @@ export async function supabaseJson<T>(
   return (await res.json()) as T[];
 }
 
+export async function supabaseCount(
+  env: PublicApiEnv,
+  path: string,
+  searchParams: URLSearchParams,
+): Promise<number> {
+  const runtime = getSupabaseRuntime(env);
+  if (!runtime) throw new Error("missing-runtime");
+
+  const url = new URL(path, runtime.url);
+  for (const [key, value] of searchParams) {
+    url.searchParams.append(key, value);
+  }
+
+  const res = await fetch(url, {
+    method: "HEAD",
+    headers: {
+      apikey: runtime.key,
+      Authorization: `Bearer ${runtime.key}`,
+      Accept: "application/json",
+      Prefer: "count=exact",
+    },
+    cf: { cacheTtl: DEFAULT_EDGE_TTL_SECONDS, cacheEverything: true } as RequestInitCfProperties,
+  });
+  if (!res.ok) throw new Error(`Supabase count failed with ${res.status}`);
+
+  const rangeParts = res.headers.get("Content-Range")?.split("/") ?? [];
+  const total = Number(rangeParts[rangeParts.length - 1]);
+  return Number.isFinite(total) ? total : 0;
+}
+
 export function normalizedCacheUrl(requestUrl: URL, namespace: string, params: URLSearchParams): URL {
   const key = new URL(`/api/public/${namespace}`, requestUrl.origin);
   const ordered = [...params.entries()].sort(([aKey, aVal], [bKey, bVal]) => {

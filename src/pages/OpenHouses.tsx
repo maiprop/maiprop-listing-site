@@ -15,6 +15,8 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getStreetViewProxyUrl } from "@/lib/config";
 import { MAIPROP_LOGO_FALLBACK_URL } from "@/lib/imageFallbacks";
+import { CATALOG_STATIC_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
+import { fetchPublicApi } from "@/lib/publicApi";
 import { ENERGY_CLASSES, FEATURES_RESIDENTIAL } from "@/lib/filterConfig";
 import { fmtDate, fmtTime, Pill, RangeInput, OpenHouseCard } from "@/components/open-houses/OpenHousePrimitives";
 import { cn } from "@/lib/utils";
@@ -178,13 +180,27 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
     return !/\bsupervisor-\d+/i.test(text);
   };
 
+  const normalizeOpenHouseRows = (rows: OpenHouseListingRow[]) =>
+    rows.filter(isProductionVisibleOpenHouse).sort((a, b) => {
+      const aHasImg = Boolean(a.cover_image_url || a.listing_images?.length);
+      const bHasImg = Boolean(b.cover_image_url || b.listing_images?.length);
+      return (bHasImg ? 1 : 0) - (aHasImg ? 1 : 0);
+    });
+
   const { data: listings = [], isLoading, isError, refetch } = useQuery({
     queryKey: ["open-houses", showPast],
     queryFn: async () => { // skipcq: JS-R1005 - Query keeps time filtering, production cleanup, and media-first sorting together.
+      const cached = await fetchPublicApi<OpenHouseListingRow[]>(
+        `/api/public/open-houses?showPast=${showPast ? "1" : "0"}&limit=200`,
+      );
+      if (cached) return normalizeOpenHouseRows(cached);
+
       const now = new Date().toISOString();
       let q = supabase
         .from("listings")
         .select(OPEN_HOUSE_LISTING_SELECT)
+        .order("sort_order", { referencedTable: "listing_images", ascending: true })
+        .limit(3, { referencedTable: "listing_images" })
         .eq("status", "active")
         .eq("listing_type", "open_house");
       if (showPast) {
@@ -195,12 +211,9 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
       const { data, error } = await q.limit(200);
       if (error) throw error;
       const rows = (data || []) as unknown as OpenHouseListingRow[];
-      return rows.filter(isProductionVisibleOpenHouse).sort((a, b) => {
-        const aHasImg = Boolean(a.cover_image_url || a.listing_images?.length);
-        const bHasImg = Boolean(b.cover_image_url || b.listing_images?.length);
-        return (bHasImg ? 1 : 0) - (aHasImg ? 1 : 0);
-      });
+      return normalizeOpenHouseRows(rows);
     },
+    staleTime: CATALOG_STATIC_QUERY_STALE_TIME,
   });
 
   // Client-side filtering

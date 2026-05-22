@@ -133,6 +133,7 @@ describe("SEO Pages Functions", () => {
   it("leaves the shell renderable when Supabase runtime bindings are missing", async () => {
     const ctx = makeCtx("https://portal.maiprop.co/property/listing-1", { id: "listing-1" });
     ctx.env.SUPABASE_PROJECT_ID = undefined;
+    ctx.env.SUPABASE_PUBLISHABLE_KEY = undefined;
 
     const res = await propertyRequest(ctx);
     const html = await res.text();
@@ -140,6 +141,23 @@ describe("SEO Pages Functions", () => {
     expect(html).toContain('<div id="root"></div>');
     expect(html).toContain("<title>mAI prop - Greek Real Estate</title>");
     expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("accepts Vite-style Supabase runtime bindings for Pages Functions", async () => {
+    const ctx = makeCtx("https://portal.maiprop.co/property/listing-1", { id: "listing-1" });
+    ctx.env.SUPABASE_PROJECT_ID = undefined;
+    ctx.env.SUPABASE_PUBLISHABLE_KEY = undefined;
+    ctx.env.VITE_SUPABASE_URL = "https://testprojectref000000.supabase.co";
+    ctx.env.VITE_SUPABASE_PUBLISHABLE_KEY = "vite_publishable_test_key";
+
+    await propertyRequest(ctx);
+
+    const [request, init] = fetchMock().mock.calls[0];
+    expect(String(request)).toContain("https://testprojectref000000.supabase.co/rest/v1/listings");
+    expect(init.headers).toMatchObject({
+      apikey: "vite_publishable_test_key",
+      Authorization: "Bearer vite_publishable_test_key",
+    });
   });
 
   it("adds first-page listing structured data to /listings", async () => {

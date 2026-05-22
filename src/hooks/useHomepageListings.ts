@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchPublicApi } from "@/lib/publicApi";
 import type { Property } from "@/components/PropertyCard";
+import { useAuctionListings } from "@/hooks/useAuctionListings";
 
 /**
  * Homepage data hooks.
@@ -15,11 +17,12 @@ import type { Property } from "@/components/PropertyCard";
 const featuredSelect =
   "id, title, address, city, price, price_per_sqm, bedrooms, bathrooms, sqm, floor, total_floors, year_built, energy_class, cover_image_url, property_type, listing_type, ai_score, views_count, tags";
 
-const auctionSelect =
-  "id, title, address, city, price, price_per_sqm, bedrooms, bathrooms, sqm, floor, total_floors, year_built, energy_class, cover_image_url, property_type, listing_type, ai_score, views_count, tags, auction_date, auction_starting_bid, latitude, longitude";
-
 const openHouseSelect =
   "id, title, address, city, price, price_per_sqm, bedrooms, bathrooms, sqm, floor, total_floors, year_built, energy_class, cover_image_url, property_type, listing_type, ai_score, views_count, tags, open_house_date, latitude, longitude, listing_images(url, sort_order)";
+
+const HOMEPAGE_AUCTION_SOURCE_LIMIT = 60;
+const HOMEPAGE_AUCTION_DISPLAY_LIMIT = 6;
+const HOMEPAGE_PROPERTY_TYPES = ["apartment", "land"] as const;
 
 const queryTimeout = <T,>(p: Promise<T>, ms: number): Promise<T> =>
   Promise.race([p, new Promise<T>((_, rej) => setTimeout(() => rej(new Error("Request timeout")), ms))]);
@@ -70,17 +73,7 @@ export function useHomepageTypeCounts() {
       const cached = await fetchPublicApi<Record<string, number>>("/api/public/homepage?section=type-counts");
       if (cached) return cached;
 
-      const { data, error } = await supabase
-        .from("listings")
-        .select("property_type")
-        .eq("status", "active");
-      if (error) throw error;
-      const counts: Record<string, number> = {};
-      (data ?? []).forEach((row) => {
-        const k = row.property_type;
-        counts[k] = (counts[k] || 0) + 1;
-      });
-      return counts;
+      return Object.fromEntries(HOMEPAGE_PROPERTY_TYPES.map((propertyType) => [propertyType, 0]));
     },
   });
 }
@@ -97,6 +90,8 @@ export function useHomepageFeaturedListings() {
         const { data, error } = await supabase
           .from("listings")
           .select(`${featuredSelect}, listing_images(url, sort_order)`)
+          .order("sort_order", { referencedTable: "listing_images", ascending: true })
+          .limit(3, { referencedTable: "listing_images" })
           .eq("status", "active")
           .eq("listing_type", "sale")
           .order("created_at", { ascending: false })
@@ -122,43 +117,14 @@ export function useHomepageFeaturedListings() {
   });
 }
 
-/** Up to 6 upcoming-or-undated active auction listings, sorted with image-having ones first. */
+/** Uses the same 60-row auction window as the public /auctions page, then displays the leading homepage slice. */
 export function useHomepageAuctionListings() {
-  const today = new Date().toISOString().split("T")[0];
-  return useQuery({
-    queryKey: ["homepage-auctions"],
-    queryFn: async () => {
-      const cached = await fetchPublicApi<HomepageListing[]>("/api/public/homepage?section=auctions");
-      if (cached) return sortByImagePresence(cached);
-
-      const run = async () => {
-        const { data, error } = await supabase
-          .from("listings")
-          .select(`${auctionSelect}, listing_images(url, sort_order)`)
-          .eq("status", "active")
-          .eq("listing_type", "auction")
-          .or(`auction_date.gte.${today},auction_date.is.null`)
-          .order("auction_date", { ascending: true, nullsFirst: false })
-          .limit(6);
-        if (error) {
-          const fallback = await supabase
-            .from("listings")
-            .select(auctionSelect)
-            .eq("status", "active")
-            .eq("listing_type", "auction")
-            .or(`auction_date.gte.${today},auction_date.is.null`)
-            .order("auction_date", { ascending: true, nullsFirst: false })
-            .limit(6);
-          if (fallback.error) throw fallback.error;
-          return sortByImagePresence(fallback.data ?? []);
-        }
-        return sortByImagePresence(data ?? []);
-      };
-      return queryTimeout(run(), 12_000);
-    },
-    staleTime: 5 * 60 * 1000,
-    retry: 1,
-  });
+  const query = useAuctionListings(HOMEPAGE_AUCTION_SOURCE_LIMIT);
+  const data = useMemo(
+    () => (query.data ?? []).slice(0, HOMEPAGE_AUCTION_DISPLAY_LIMIT) as HomepageListing[],
+    [query.data],
+  );
+  return { ...query, data };
 }
 
 /** Up to 6 upcoming open-house listings, sorted with image-having ones first. */
@@ -173,6 +139,8 @@ export function useHomepageOpenHouseListings() {
       const { data, error } = await supabase
         .from("listings")
         .select(openHouseSelect)
+        .order("sort_order", { referencedTable: "listing_images", ascending: true })
+        .limit(3, { referencedTable: "listing_images" })
         .eq("status", "active")
         .eq("listing_type", "open_house")
         .gte("open_house_date", now)

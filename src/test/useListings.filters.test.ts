@@ -20,7 +20,7 @@ const { recorded, supabaseMock } = vi.hoisted(() => {
   // Each chainable method records the call and returns the same proxy so the
   // chain in the SUT (`.from().select().order().eq().range().eq()...`) works.
   const builder: Record<string, unknown> = {};
-  const methods = ["select", "order", "range", "eq", "ilike", "in", "gte", "lte"] as const;
+  const methods = ["select", "order", "limit", "range", "eq", "ilike", "in", "gte", "lte"] as const;
   for (const m of methods) {
     builder[m] = vi.fn((...args: unknown[]) => {
       recorded.push({ method: m, args });
@@ -53,10 +53,30 @@ function calls(method: string) {
   return recorded.filter((c) => c.method === method);
 }
 
+function parentOrderArgs() {
+  return calls("order")
+    .filter((c) => !(c.args[1] as { referencedTable?: string } | undefined)?.referencedTable)
+    .map((c) => c.args);
+}
+
 describe("buildListingsQuery — sort variants", () => {
+  it("orders and caps embedded listing images for lightweight listing cards", () => {
+    buildListingsQuery();
+
+    expect(calls("order").some((c) =>
+      c.args[0] === "sort_order" &&
+      (c.args[1] as { referencedTable?: string; ascending?: boolean }).referencedTable === "listing_images" &&
+      (c.args[1] as { ascending?: boolean }).ascending === true
+    )).toBe(true);
+    expect(calls("limit").some((c) =>
+      c.args[0] === 3 &&
+      (c.args[1] as { referencedTable?: string }).referencedTable === "listing_images"
+    )).toBe(true);
+  });
+
   it("default ('featured') applies the 3-key composite ordering with is_featured first", () => {
     buildListingsQuery();
-    const orderArgs = calls("order").map((c) => c.args);
+    const orderArgs = parentOrderArgs();
     expect(orderArgs).toEqual([
       ["is_featured", { ascending: false }],
       ["priority_placement", { ascending: false, nullsFirst: false }],
@@ -76,7 +96,7 @@ describe("buildListingsQuery — sort variants", () => {
    */
   it("'price-asc' leads with priority then is_featured, then price ascending", () => {
     buildListingsQuery({ sort: "price-asc" });
-    const orderArgs = calls("order").map((c) => c.args);
+    const orderArgs = parentOrderArgs();
     expect(orderArgs).toEqual([
       ["priority_placement", { ascending: false, nullsFirst: false }],
       ["is_featured", { ascending: false }],
@@ -86,7 +106,7 @@ describe("buildListingsQuery — sort variants", () => {
 
   it("'price-desc' leads with priority then is_featured, then price descending", () => {
     buildListingsQuery({ sort: "price-desc" });
-    const orderArgs = calls("order").map((c) => c.args);
+    const orderArgs = parentOrderArgs();
     expect(orderArgs).toEqual([
       ["priority_placement", { ascending: false, nullsFirst: false }],
       ["is_featured", { ascending: false }],
@@ -96,7 +116,7 @@ describe("buildListingsQuery — sort variants", () => {
 
   it("'newest' leads with priority then is_featured, then created_at descending", () => {
     buildListingsQuery({ sort: "newest" });
-    const orderArgs = calls("order").map((c) => c.args);
+    const orderArgs = parentOrderArgs();
     expect(orderArgs).toEqual([
       ["priority_placement", { ascending: false, nullsFirst: false }],
       ["is_featured", { ascending: false }],
@@ -106,7 +126,7 @@ describe("buildListingsQuery — sort variants", () => {
 
   it("'ai-score' leads with priority then is_featured, then ai_score with nullsFirst:false", () => {
     buildListingsQuery({ sort: "ai-score" });
-    const orderArgs = calls("order").map((c) => c.args);
+    const orderArgs = parentOrderArgs();
     expect(orderArgs).toEqual([
       ["priority_placement", { ascending: false, nullsFirst: false }],
       ["is_featured", { ascending: false }],
@@ -116,7 +136,7 @@ describe("buildListingsQuery — sort variants", () => {
 
   it("'views' leads with priority then is_featured, then views_count with nullsFirst:false", () => {
     buildListingsQuery({ sort: "views" });
-    const orderArgs = calls("order").map((c) => c.args);
+    const orderArgs = parentOrderArgs();
     expect(orderArgs).toEqual([
       ["priority_placement", { ascending: false, nullsFirst: false }],
       ["is_featured", { ascending: false }],
