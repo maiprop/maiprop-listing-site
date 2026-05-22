@@ -24,7 +24,7 @@ Local `npm run android` requires Android Studio, a JDK, and `adb` on PATH. The E
 
 ### Download APK from GitHub
 
-The `Mobile Android APK` GitHub Actions workflow builds `maiprop-android-apk` on every push to `codex/mobile-android-app`.
+The `Mobile Android APK` GitHub Actions workflow builds the `maiprop-android-apk` artifact on every push to `codex/mobile-android-app`. The GitHub artifact is an arm64 release APK for modern Android phones; use the EAS production profile when preparing a Play Store AAB.
 
 1. Open the branch in GitHub.
 2. Go to **Actions** -> **Mobile Android APK**.
