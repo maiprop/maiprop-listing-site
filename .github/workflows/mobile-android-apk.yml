@@ -12,6 +12,10 @@ on:
       - "package.json"
       - "README.md"
 
+concurrency:
+  group: mobile-android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-apk:
     name: Build downloadable APK
@@ -50,11 +54,11 @@ jobs:
         run: |
           chmod +x android/gradlew
           cd android
-          ./gradlew assembleRelease --no-daemon
+          ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: maiprop-android-apk
-          path: mobile/android/app/build/outputs/apk/release/*.apk
+          path: mobile/android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
