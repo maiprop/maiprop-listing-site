@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "maiprop-agent",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "CORS_ORIGIN": "*",
+    "OPENAI_MODEL": "gpt-4.1-mini"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "MaiPropAdvisor",
+        "class_name": "MaiPropAdvisor"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["MaiPropAdvisor"]
+    }
+  ]
+}

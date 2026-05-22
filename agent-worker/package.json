@@ -1,0 +1,21 @@
+{
+  "name": "@maiprop/agent-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@openai/agents": "^0.11.4",
+    "agents": "^0.13.2",
+    "zod": "^4.2.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260519.1",
+    "typescript": "^5.8.3",
+    "wrangler": "^4.94.0"
+  }
+}

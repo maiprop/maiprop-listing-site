@@ -116,6 +116,7 @@ The project has **two distinct backend function layers**. Use the table below to
 | Layer | Directory | Runtime | Purpose | When to add here |
 |---|---|---|---|---|
 | **Cloudflare Pages Functions** | `functions/` | Node (edge) | Routing middleware, dynamic sitemap, static-route proxying | URL rewriting, response headers, sitemap generation — anything that must run at the CDN level before the SPA loads |
+| **Cloudflare Agent Worker** | `agent-worker/` | Cloudflare Workers + Durable Objects | Stateful mobile AI advisor powered by the Cloudflare Agents SDK and OpenAI Agents SDK | Mobile decision support, persistent advisor state, agentic orchestration |
 | **Supabase Edge Functions** | `supabase/functions/` | Deno | Business logic, AI calls, Stripe payments, emails, data sync | Any function that reads/writes the database, calls external APIs, or requires auth context |
 
 **Rule of thumb:** If the function needs Supabase secrets (`SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `OPENAI_API_KEY`) it belongs in `supabase/functions/`. If it only needs to intercept/rewrite an HTTP request at the edge, it belongs in `functions/`.
@@ -135,6 +136,17 @@ The project has **two distinct backend function layers**. Use the table below to
 | `property/[id].ts` | Property detail URL pass-through |
 | `auction/[id].ts` | Auction detail URL pass-through |
 | `new-build/[id].ts` | New-build detail URL pass-through |
+
+### Mobile Agent Worker
+
+The Expo app can call the dedicated AI agent backend when `EXPO_PUBLIC_MAIPROP_AGENT_URL` is set.
+
+```bash
+npm --prefix agent-worker install
+npm run agent:dev
+```
+
+Set `OPENAI_API_KEY` as a Cloudflare Worker secret for deployed environments.
 
 ## Further Reading
 
