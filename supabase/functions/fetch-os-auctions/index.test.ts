@@ -321,6 +321,22 @@ Deno.test("OS portal access uses canonical Pro RPC for paid portal caps", async 
   assertEquals(await hasPortalProAccess(client as never, "user-pro"), true);
 });
 
+Deno.test("OS portal access preserves Supabase RPC method binding", async () => {
+  const client = {
+    rest: { bound: true },
+    rpc(this: { rest?: unknown }, functionName: string) {
+      assertEquals(Boolean(this.rest), true);
+      assertEquals(functionName, "is_pro");
+      return Promise.resolve({ data: true, error: null });
+    },
+    from() {
+      throw new Error("profile fallback should not run when canonical RPC works");
+    },
+  };
+
+  assertEquals(await hasPortalProAccess(client as never, "user-pro"), true);
+});
+
 Deno.test("OS portal access accepts only investor-scoped pricing products", async () => {
   const client = makeEntitlementClient({
     role: "investor",

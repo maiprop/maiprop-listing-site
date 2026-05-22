@@ -662,9 +662,9 @@ async function hasCanonicalProAccess(
     functionName: string,
     args: Record<string, unknown>,
   ) => Promise<{ data: unknown; error: unknown }>;
-  const rpc = (sb as SupabaseAdminClient & { rpc?: RpcFn }).rpc;
-  if (!rpc) return null;
-  const { data, error } = await rpc("is_pro", { p_user_id: userId });
+  const client = sb as SupabaseAdminClient & { rpc?: RpcFn };
+  if (!client.rpc) return null;
+  const { data, error } = await client.rpc("is_pro", { p_user_id: userId });
   if (error || typeof data !== "boolean") return null;
   return data;
 }
