@@ -28,7 +28,7 @@ export default function Index() {
     onRefresh: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["homepage-featured"] }),
-        queryClient.invalidateQueries({ queryKey: ["homepage-auctions"] }),
+        queryClient.invalidateQueries({ queryKey: ["auction-listings"] }),
         queryClient.invalidateQueries({ queryKey: ["homepage-open-houses"] }),
       ]);
     },

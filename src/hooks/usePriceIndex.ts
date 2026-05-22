@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { fetchPublicApi } from "@/lib/publicApi";
 
 export interface PriceIndexItem {
   city: string;
@@ -30,38 +30,7 @@ export function usePriceIndex() {
   return useQuery({
     queryKey: ["price-index"],
     queryFn: async () => {
-      // Query avg price_per_sqm grouped by city for active sale listings
-      const { data, error } = await supabase
-        .from("listings")
-        .select("city, price_per_sqm")
-        .eq("status", "active")
-        .eq("listing_type", "sale")
-        .not("price_per_sqm", "is", null)
-        .gt("price_per_sqm", 100); // filter out data errors
-
-      if (error || !data || data.length === 0) return FALLBACK;
-
-      // Group by city and compute avg
-      const grouped: Record<string, number[]> = {};
-      for (const row of data) {
-        const c = row.city?.trim();
-        if (!c) continue;
-        if (!grouped[c]) grouped[c] = [];
-        grouped[c].push(Number(row.price_per_sqm));
-      }
-
-      // Build results for known cities, fall back to static if no data
-      return FALLBACK.map(fb => {
-        const prices = grouped[fb.city];
-        if (!prices || prices.length < 2) return fb; // need at least 2 data points
-        const avg = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
-        return {
-          city: fb.city,
-          avg_price_per_sqm: avg,
-          listing_count: prices.length,
-          is_live: true,
-        };
-      });
+      return await fetchPublicApi<PriceIndexItem[]>("/api/public/homepage?section=price-index") ?? FALLBACK;
     },
     staleTime: 5 * 60 * 1000, // 5 min cache
     refetchOnWindowFocus: false,

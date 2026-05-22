@@ -1,11 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import { fetchPublicApi } from "@/lib/publicApi";
 
 const AUCTION_SELECT_CORE = "id, title, city, address, price, auction_starting_bid, auction_date, auction_court, property_type, cover_image_url, sqm, bedrooms, bathrooms, latitude, longitude, tags, year_built, construction_status, website_url, region, is_featured, priority_placement";
 const QUERY_TIMEOUT_MS = 15_000;
 const AUCTION_FETCH_LIMIT = 500;
 const PORTAL_AUCTION_FETCH_LIMIT = 600;
+const PUBLIC_AUCTION_CACHE_LIMIT = 60;
 const AUCTION_RANDOMIZATION_SALT = "maiprop-auctions-v1";
 const AUCTION_QUERY_STALE_TIME = 5 * 60_000;
 const AUCTION_QUERY_GC_TIME = 30 * 60_000;
@@ -159,6 +161,15 @@ const fetchAuctionsFromOs = async (today: string, maxRows: number): Promise<Auct
   return rows as AuctionListingRow[];
 };
 
+const fetchAuctionsFromPublicCache = async (maxRows: number): Promise<AuctionListingRow[]> => {
+  if (maxRows > PUBLIC_AUCTION_CACHE_LIMIT) return [];
+  const payload = await fetchPublicApi<{ data?: AuctionListingRow[] } | AuctionListingRow[]>(
+    `/api/public/auctions?limit=${maxRows}`,
+  );
+  if (Array.isArray(payload)) return payload;
+  return Array.isArray(payload?.data) ? payload.data : [];
+};
+
 const fetchFallbackAuctions = async (today: string, maxRows: number): Promise<AuctionListingRow[]> => {
   try {
     return await fetchAuctionsFromDatabase(today, true, maxRows);
@@ -174,6 +185,9 @@ const fetchAuctionListings = async (maxRows: number): Promise<AuctionListingRow[
   const today = getTodayDate();
   const sourceRows = PORTAL_AUCTION_FETCH_LIMIT;
   let cachedRows: AuctionListingRow[] = [];
+
+  const publicRows = await fetchAuctionsFromPublicCache(maxRows);
+  if (publicRows.length > 0) return randomizeAndLimitAuctionRows(publicRows, maxRows);
 
   try {
     const osRows = await fetchAuctionsFromOs(today, maxRows);

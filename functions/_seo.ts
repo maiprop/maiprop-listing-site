@@ -5,8 +5,13 @@ type AssetFetcher = {
 export interface SeoEnv {
   ASSETS?: AssetFetcher;
   SUPABASE_PROJECT_ID?: string;
+  VITE_SUPABASE_PROJECT_ID?: string;
+  SUPABASE_URL?: string;
+  VITE_SUPABASE_URL?: string;
+  VITE_SUPABASE_PROJECT_URL?: string;
   SUPABASE_PUBLISHABLE_KEY?: string;
   VITE_SUPABASE_PUBLISHABLE_KEY?: string;
+  VITE_SUPABASE_ANON_KEY?: string;
 }
 
 export type SeoListing = {
@@ -88,11 +93,26 @@ function isSafeToken(value: string, maxLength: number): boolean {
 }
 
 export function getSupabaseRuntime(env: SeoEnv): SupabaseRuntime | null {
-  const projectId = env.SUPABASE_PROJECT_ID;
-  const key = env.SUPABASE_PUBLISHABLE_KEY ?? env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  const projectId =
+    env.SUPABASE_PROJECT_ID ??
+    env.VITE_SUPABASE_PROJECT_ID ??
+    projectIdFromSupabaseUrl(env.SUPABASE_URL ?? env.VITE_SUPABASE_URL ?? env.VITE_SUPABASE_PROJECT_URL);
+  const key = env.SUPABASE_PUBLISHABLE_KEY ?? env.VITE_SUPABASE_PUBLISHABLE_KEY ?? env.VITE_SUPABASE_ANON_KEY;
   if (!projectId || !key) return null;
   if (!isLowerAlphaNumeric(projectId, 20)) return null;
   return { url: `https://${projectId}.supabase.co`, key };
+}
+
+function projectIdFromSupabaseUrl(value?: string): string | null {
+  if (!value) return null;
+  try {
+    const hostname = new URL(value).hostname;
+    const suffix = ".supabase.co";
+    if (!hostname.endsWith(suffix)) return null;
+    return hostname.slice(0, -suffix.length);
+  } catch {
+    return null;
+  }
 }
 
 export async function fetchIndexHtml(ctx: {

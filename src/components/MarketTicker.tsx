@@ -1,6 +1,6 @@
 import { usePriceIndex } from "@/hooks/usePriceIndex";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { fetchPublicApi } from "@/lib/publicApi";
 import { useState, useEffect, useRef } from "react";
 
 // ── Sparkline paths – pre-generated organic waves per city ────────────────────
@@ -117,12 +117,7 @@ export function MarketTicker() {
   const { data: auctionCount } = useQuery({
     queryKey: ["auction-count-today"],
     queryFn: async () => {
-      const { count } = await supabase
-        .from("listings")
-        .select("id", { count: "exact", head: true })
-        .eq("listing_type", "auction")
-        .eq("status", "active");
-      return count ?? 47;
+      return (await fetchPublicApi<number>("/api/public/homepage?section=auction-count")) ?? 47;
     },
     staleTime: 5 * 60 * 1000,
   });
