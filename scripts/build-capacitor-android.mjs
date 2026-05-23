@@ -20,7 +20,7 @@ function run(command, commandArgs, options = {}) {
     env: {
       ...process.env,
       CAPACITOR_BUNDLED_WEB: bundled ? "true" : "false",
-      CAPACITOR_SERVER_URL: process.env.CAPACITOR_SERVER_URL || "https://maiprop.co",
+      CAPACITOR_SERVER_URL: process.env.CAPACITOR_SERVER_URL || "https://portal.maiprop.co",
       ...(options.env ?? {}),
     },
     stdio: "inherit",

@@ -24,7 +24,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      CAPACITOR_SERVER_URL: https://maiprop.co
+      CAPACITOR_BUNDLED_WEB: "true"
+      CAPACITOR_APP_ID: co.maiprop.portal.mobile
+      CAPACITOR_APP_NAME: MaiProp Portal
+      CAPACITOR_SERVER_URL: https://portal.maiprop.co
+      VITE_APP_URL: https://portal.maiprop.co
+      VITE_PUBLIC_API_ORIGIN: https://portal.maiprop.co
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      VITE_MAPBOX_TOKEN: ${{ secrets.VITE_MAPBOX_TOKEN }}
+      VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+      VITE_STRIPE_PRO_PRODUCT_ID: ${{ secrets.VITE_STRIPE_PRO_PRODUCT_ID }}
 
     steps:
       - name: Checkout
