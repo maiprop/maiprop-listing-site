@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MaiProp</string>
+    <string name="title_activity_main">MaiProp</string>
+    <string name="package_name">co.maiprop.mobile</string>
+    <string name="custom_url_scheme">co.maiprop.mobile</string>
+</resources>

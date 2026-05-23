@@ -74,9 +74,15 @@
     "lighthouse:collect": "lhci collect",
     "lighthouse:assert": "lhci assert",
     "i18n:scan": "i18next-scanner --config i18next-scanner.config.js",
-    "prepare": "husky"
+    "prepare": "husky",
+    "cap:sync:android": "node scripts/build-capacitor-android.mjs --sync-only",
+    "android:web:apk": "node scripts/build-capacitor-android.mjs",
+    "android:web:apk:release": "node scripts/build-capacitor-android.mjs --release",
+    "android:web:apk:bundled": "node scripts/build-capacitor-android.mjs --bundled"
   },
   "dependencies": {
+    "@capacitor/android": "7.6.5",
+    "@capacitor/core": "7.6.5",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-aspect-ratio": "^1.1.8",
@@ -136,6 +142,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",
+    "@capacitor/cli": "7.6.5",
     "@cloudflare/workers-types": "^4.20260526.1",
     "@commitlint/cli": "^20.5.3",
     "@commitlint/config-conventional": "^20.5.3",
