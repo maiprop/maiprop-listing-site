@@ -12,8 +12,11 @@ gets a preview URL.
 2. Project name: `maiprop-listing-site` (must match `CF_PROJECT` in
    `.github/workflows/ci.yml`).
 3. Production branch: `main`.
-4. Build settings: leave empty — the site is built in GitHub Actions and the
-   pre-built `dist/` is uploaded by Wrangler.
+4. Build output directory: `dist`. The repository also pins this in
+   `wrangler.toml` with `pages_build_output_dir = "./dist"` so Git-connected
+   or direct Wrangler deploys do not accidentally publish the repository root.
+5. Build settings may otherwise stay empty — the site is built in GitHub
+   Actions and the pre-built `dist/` is uploaded by Wrangler.
 
 ## 2. GitHub Actions secrets
 
