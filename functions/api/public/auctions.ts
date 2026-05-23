@@ -97,14 +97,17 @@ async function fetchCachedDbAuctions(env: PublicApiEnv, limit: number): Promise<
 }
 
 export async function fetchPublicAuctionRows(env: PublicApiEnv, limit: number): Promise<AuctionRow[]> {
+  const cachedRows = await fetchCachedDbAuctions(env, limit);
+  if (cachedRows.length > 0) return sortAuctionRows(cachedRows).slice(0, limit);
+
   try {
     const osRows = await fetchOsAuctions(env, limit);
     if (osRows.length > 0) return sortAuctionRows(osRows).slice(0, limit);
   } catch {
-    // The DB cache keeps the public catalogue responsive when the live OS proxy is slow.
+    // Keep the public route responsive even when the live OS proxy is slow.
   }
 
-  return sortAuctionRows(await fetchCachedDbAuctions(env, limit)).slice(0, limit);
+  return [];
 }
 
 export async function publicAuctions(ctx: PublicApiCtx, requestUrl: URL): Promise<Response> {

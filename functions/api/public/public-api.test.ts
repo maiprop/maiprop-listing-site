@@ -325,7 +325,16 @@ describe("public open houses endpoint", () => {
 });
 
 describe("public auctions endpoint", () => {
-  it("prefers the OS proxy, sorts deterministically, and slices to the requested limit", async () => {
+  it("serves cached DB auctions first, sorts deterministically, and slices to the requested limit", async () => {
+    const rows = await fetchPublicAuctionRows(env, 1);
+    expect(rows.map((row) => row.id)).toEqual(["db-2"]);
+
+    expect(fetchUrls("/rest/v1/listings")[0]).toBeDefined();
+    expect(fetchUrls("/functions/v1/fetch-os-auctions")).toHaveLength(0);
+  });
+
+  it("uses the OS proxy only when the cached DB window is empty", async () => {
+    fetchMock().mockResolvedValueOnce(jsonRows([]));
     fetchMock().mockResolvedValueOnce(
       new Response(JSON.stringify({
         data: [
@@ -339,6 +348,8 @@ describe("public auctions endpoint", () => {
     const rows = await fetchPublicAuctionRows(env, 2);
     expect(rows.map((row) => row.id)).toEqual(["high", "featured"]);
 
+    const dbCall = fetchUrls("/rest/v1/listings")[0];
+    expect(dbCall).toBeDefined();
     const osCall = fetchUrls("/functions/v1/fetch-os-auctions")[0];
     expect(osCall).toBeDefined();
     const init = initFor("/functions/v1/fetch-os-auctions");
@@ -350,17 +361,23 @@ describe("public auctions endpoint", () => {
     });
   });
 
-  it("falls back to cached DB auctions when the OS proxy is empty or unavailable", async () => {
-    await expect(fetchPublicAuctionRows(env, 1)).resolves.toMatchObject([{ id: "db-2" }]);
+  it("returns an empty list when both the DB cache and OS proxy are empty or unavailable", async () => {
+    fetchMock().mockResolvedValueOnce(jsonRows([]));
+    await expect(fetchPublicAuctionRows(env, 1)).resolves.toEqual([]);
 
     fetchMock().mockClear();
+    fetchMock().mockResolvedValueOnce(jsonRows([]));
     fetchMock().mockRejectedValueOnce(new Error("timeout"));
-    await expect(fetchPublicAuctionRows(env, 2)).resolves.toMatchObject([{ id: "db-2" }, { id: "db-1" }]);
+    await expect(fetchPublicAuctionRows(env, 2)).resolves.toEqual([]);
+  });
+
+  it("queries cached DB auctions with bounded image payloads", async () => {
+    await expect(fetchPublicAuctionRows(env, 1)).resolves.toMatchObject([{ id: "db-2" }]);
 
     const dbUrl = fetchUrls("/rest/v1/listings")[0];
     expect(dbUrl.searchParams.get("listing_type")).toBe("eq.auction");
     expect(dbUrl.searchParams.get("listing_images.limit")).toBe("3");
-    expect(dbUrl.searchParams.get("limit")).toBe("2");
+    expect(dbUrl.searchParams.get("limit")).toBe("1");
   });
 
   it("clamps public auction requests and caches by day", async () => {
@@ -368,8 +385,8 @@ describe("public auctions endpoint", () => {
     const body = await res.json() as { data: unknown[] };
     expect(body.data).toHaveLength(2);
 
-    const osInit = initFor("/functions/v1/fetch-os-auctions");
-    expect(JSON.parse(String(osInit.body)).pageSize).toBe(60);
+    const dbUrl = fetchUrls("/rest/v1/listings")[0];
+    expect(dbUrl.searchParams.get("limit")).toBe("60");
     expect(cacheApi.put.mock.calls[0][0].url).toContain("limit=60");
     expect(cacheApi.put.mock.calls[0][0].url).toContain("day=");
   });
@@ -382,8 +399,9 @@ describe("public homepage endpoint", () => {
     expect(invalid.headers.get("Cache-Control")).toBe("no-store");
 
     await homepageRequest(makeCtx("https://portal.maiprop.co/api/public/homepage?section=auctions"));
-    const osInit = initFor("/functions/v1/fetch-os-auctions");
-    expect(JSON.parse(String(osInit.body)).pageSize).toBe(60);
+    const dbUrl = fetchUrls("/rest/v1/listings")[0];
+    expect(dbUrl.searchParams.get("listing_type")).toBe("eq.auction");
+    expect(dbUrl.searchParams.get("limit")).toBe("60");
   });
 
   it("fetches lightweight featured and open-house homepage sections", async () => {
