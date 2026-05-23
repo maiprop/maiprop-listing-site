@@ -764,6 +764,27 @@ jobs:
           else
             echo "Pages production env vars synced (site lock: disabled)"
           fi
+          toml_quote() {
+            jq -Rn --arg value "$1" '$value'
+          }
+          {
+            echo 'name = "maiprop-listing-site"'
+            echo 'pages_build_output_dir = "./dist"'
+            echo 'compatibility_date = "2026-05-19"'
+            echo
+            echo '[vars]'
+            printf 'SUPABASE_URL = %s\n' "$(toml_quote "$SUPABASE_URL")"
+            printf 'VITE_SUPABASE_URL = %s\n' "$(toml_quote "$SUPABASE_URL")"
+            printf 'SUPABASE_PROJECT_ID = %s\n' "$(toml_quote "$NORMALIZED_SUPABASE_PROJECT_ID")"
+            printf 'VITE_SUPABASE_PROJECT_ID = %s\n' "$(toml_quote "$NORMALIZED_SUPABASE_PROJECT_ID")"
+            printf 'SUPABASE_PUBLISHABLE_KEY = %s\n' "$(toml_quote "$SUPABASE_PUBLISHABLE_KEY")"
+            printf 'VITE_SUPABASE_PUBLISHABLE_KEY = %s\n' "$(toml_quote "$SUPABASE_PUBLISHABLE_KEY")"
+            printf 'VITE_SUPABASE_ANON_KEY = %s\n' "$(toml_quote "$SUPABASE_PUBLISHABLE_KEY")"
+            if [ -n "${SITE_LOCK_PASSWORD}" ]; then
+              printf 'SITE_LOCK_PASSWORD = %s\n' "$(toml_quote "$SITE_LOCK_PASSWORD")"
+            fi
+          } > wrangler.toml
+          echo "Wrangler runtime config prepared for Pages Functions deployment"
 
       - name: Install deploy smoke browser
         run: npx playwright install --with-deps chromium
