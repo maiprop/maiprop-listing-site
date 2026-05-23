@@ -402,6 +402,7 @@ describe("public auctions endpoint", () => {
     expect(JSON.parse(String(initFor("/functions/v1/fetch-os-auctions").body))).toMatchObject({
       pageSize: 60,
       sampleAcrossGreece: true,
+      fastSamplePages: [0, 40, 80, 120],
     });
   });
 
@@ -429,6 +430,7 @@ describe("public auctions endpoint", () => {
     expect(JSON.parse(String(init.body))).toMatchObject({
       pageSize: 2,
       sampleAcrossGreece: true,
+      fastSamplePages: [0, 40, 80, 120],
       sortBy: "AUCTION_DATE",
     });
   });

@@ -26,7 +26,8 @@ type EdgeAuctionPayload = {
 
 const PUBLIC_AUCTION_LIMIT_MAX = 60;
 const PUBLIC_AUCTION_CANDIDATE_LIMIT_MAX = 240;
-const OS_PROXY_TIMEOUT_MS = 2_500;
+const OS_PROXY_TIMEOUT_MS = 12_000;
+const FAST_OS_SAMPLE_PAGES = [0, 40, 80, 120];
 const UNKNOWN_LOCATION_KEY = "__unknown_location__";
 const AUCTION_SELECT =
   "id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,ai_score,views_count,tags,auction_date,auction_starting_bid,latitude,longitude,auction_court,website_url,region,is_featured,priority_placement,construction_status,listing_images(url,sort_order)";
@@ -143,6 +144,7 @@ async function fetchOsAuctions(env: PublicApiEnv, limit: number): Promise<Auctio
       page: 0,
       pageSize: limit,
       sampleAcrossGreece: true,
+      fastSamplePages: FAST_OS_SAMPLE_PAGES,
       sortBy: "AUCTION_DATE",
       order: "ASC",
     }),
