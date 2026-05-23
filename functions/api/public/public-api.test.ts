@@ -333,6 +333,78 @@ describe("public auctions endpoint", () => {
     expect(fetchUrls("/functions/v1/fetch-os-auctions")).toHaveLength(0);
   });
 
+  it("samples a wider cached DB window and diversifies organic auctions by municipality", async () => {
+    fetchMock().mockResolvedValueOnce(jsonRows([
+      ...Array.from({ length: 30 }, (_, i) => ({
+        id: `agrinio-${String(i).padStart(2, "0")}`,
+        city: "Agrinio",
+        is_featured: false,
+        priority_placement: 0,
+        auction_date: "2026-06-01",
+      })),
+      ...Array.from({ length: 30 }, (_, i) => ({
+        id: `athens-${String(i).padStart(2, "0")}`,
+        city: "Athens",
+        is_featured: false,
+        priority_placement: 0,
+        auction_date: "2026-06-01",
+      })),
+      ...Array.from({ length: 30 }, (_, i) => ({
+        id: `patras-${String(i).padStart(2, "0")}`,
+        city: "Patras",
+        is_featured: false,
+        priority_placement: 0,
+        auction_date: "2026-06-01",
+      })),
+    ]));
+
+    const rows = await fetchPublicAuctionRows(env, 60);
+    expect(rows).toHaveLength(60);
+    expect(rows.slice(0, 6).map((row) => row.city)).toEqual([
+      "Agrinio",
+      "Athens",
+      "Patras",
+      "Agrinio",
+      "Athens",
+      "Patras",
+    ]);
+
+    expect(fetchUrls("/rest/v1/listings")[0].searchParams.get("limit")).toBe("240");
+    expect(fetchUrls("/functions/v1/fetch-os-auctions")).toHaveLength(0);
+  });
+
+  it("uses the OS proxy when the cached DB window is municipality-clustered", async () => {
+    fetchMock().mockResolvedValueOnce(jsonRows(
+      Array.from({ length: 48 }, (_, i) => ({
+        id: `cached-agrinio-${i}`,
+        city: "Agrinio",
+        is_featured: false,
+        priority_placement: 0,
+        auction_date: "2026-06-01",
+      })),
+    ));
+    fetchMock().mockResolvedValueOnce(
+      new Response(JSON.stringify({
+        data: [
+          { id: "os-athens", city: "Athens", is_featured: false, priority_placement: 0, auction_date: "2026-06-01" },
+          { id: "os-patras", city: "Patras", is_featured: false, priority_placement: 0, auction_date: "2026-06-01" },
+          { id: "os-chania", city: "Chania", is_featured: false, priority_placement: 0, auction_date: "2026-06-01" },
+        ],
+      }), { headers: { "Content-Type": "application/json" } }),
+    );
+
+    const rows = await fetchPublicAuctionRows(env, 60);
+    expect(rows.map((row) => row.id)).toEqual(["os-athens", "os-chania", "os-patras"]);
+
+    expect(fetchUrls("/rest/v1/listings")[0].searchParams.get("limit")).toBe("240");
+    const osCall = fetchUrls("/functions/v1/fetch-os-auctions")[0];
+    expect(osCall).toBeDefined();
+    expect(JSON.parse(String(initFor("/functions/v1/fetch-os-auctions").body))).toMatchObject({
+      pageSize: 60,
+      sampleAcrossGreece: true,
+    });
+  });
+
   it("uses the OS proxy only when the cached DB window is empty", async () => {
     fetchMock().mockResolvedValueOnce(jsonRows([]));
     fetchMock().mockResolvedValueOnce(
@@ -386,7 +458,7 @@ describe("public auctions endpoint", () => {
     expect(body.data).toHaveLength(2);
 
     const dbUrl = fetchUrls("/rest/v1/listings")[0];
-    expect(dbUrl.searchParams.get("limit")).toBe("60");
+    expect(dbUrl.searchParams.get("limit")).toBe("240");
     expect(cacheApi.put.mock.calls[0][0].url).toContain("limit=60");
     expect(cacheApi.put.mock.calls[0][0].url).toContain("day=");
   });
@@ -401,7 +473,7 @@ describe("public homepage endpoint", () => {
     await homepageRequest(makeCtx("https://portal.maiprop.co/api/public/homepage?section=auctions"));
     const dbUrl = fetchUrls("/rest/v1/listings")[0];
     expect(dbUrl.searchParams.get("listing_type")).toBe("eq.auction");
-    expect(dbUrl.searchParams.get("limit")).toBe("60");
+    expect(dbUrl.searchParams.get("limit")).toBe("240");
   });
 
   it("fetches lightweight featured and open-house homepage sections", async () => {
