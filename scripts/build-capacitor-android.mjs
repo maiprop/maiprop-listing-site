@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { chmodSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -46,6 +46,10 @@ if (bundled) {
 run(npxCmd, ["cap", "sync", "android"]);
 
 if (!syncOnly) {
+  if (!isWindows) {
+    chmodSync(gradleCmd, 0o755);
+  }
+
   run(gradleCmd, [release ? "assembleRelease" : "assembleDebug", "--no-daemon", "--console=plain"], {
     cwd: join(root, "android"),
   });
