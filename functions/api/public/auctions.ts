@@ -29,7 +29,7 @@ const PUBLIC_AUCTION_CANDIDATE_LIMIT_MAX = 240;
 const OS_PROXY_TIMEOUT_MS = 12_000;
 const OS_DIVERSE_FALLBACK_PAGE = 80;
 const OS_DIVERSE_FALLBACK_PAGE_SIZE = 55;
-const AUCTION_CACHE_VERSION = "municipality-rotation-v2";
+const AUCTION_CACHE_VERSION = "municipality-rotation-v3";
 const UNKNOWN_LOCATION_KEY = "__unknown_location__";
 const AUCTION_SELECT =
   "id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,ai_score,views_count,tags,auction_date,auction_starting_bid,latitude,longitude,auction_court,website_url,region,is_featured,priority_placement,construction_status,listing_images(url,sort_order)";
@@ -206,9 +206,9 @@ export async function publicAuctions(ctx: PublicApiCtx, requestUrl: URL): Promis
   const cacheKey = normalizedCacheUrl(requestUrl, "auctions", cacheParams);
 
   return cachedJson(ctx, cacheKey, async () => jsonResponse({ data: await fetchPublicAuctionRows(ctx.env, limit) }), {
-    edgeTtlSeconds: 300,
-    browserTtlSeconds: 90,
-    staleSeconds: 900,
+    edgeTtlSeconds: 3_600,
+    browserTtlSeconds: 300,
+    staleSeconds: 21_600,
   });
 }
 

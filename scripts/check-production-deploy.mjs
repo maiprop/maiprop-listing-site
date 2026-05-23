@@ -127,7 +127,7 @@ const publicApiPaths = [
   "/api/public/listings?limit=1",
   "/api/public/homepage?section=featured",
   "/api/public/open-houses?limit=1",
-  "/api/public/auctions?limit=1",
+  "/api/public/auctions?limit=60",
 ];
 
 const validatePublicApiEndpoints = async (baseUrl) => {

@@ -92,9 +92,24 @@ describe("useAuctionListings", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(result.current.data?.[0]).toMatchObject({ id: "public-a1" });
-    expect(publicApiMock).toHaveBeenCalledWith("/api/public/auctions?limit=60");
+    expect(publicApiMock).toHaveBeenCalledWith("/api/public/auctions?limit=60", { timeoutMs: 8_000 });
     expect(invokeMock).not.toHaveBeenCalled();
     expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it("does not fall through to the slow live OS proxy for public-sized windows", async () => {
+    publicApiMock.mockResolvedValue(null);
+    fromMock.mockReturnValue(makeBuilder(() => Promise.resolve({
+      data: [auctionRow("db-a1")],
+      error: null,
+    })));
+
+    const { result } = renderHookWithQuery(() => useAuctionListings(60));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data?.[0]).toMatchObject({ id: "db-a1" });
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(fromMock).toHaveBeenCalled();
   });
 
   it("uses a deterministic daily rotation instead of preserving OS municipality order", () => {
@@ -160,12 +175,12 @@ describe("useAuctionListings", () => {
       error: null,
     });
 
-    const { result } = renderHookWithQuery(() => useAuctionListings(60));
+    const { result } = renderHookWithQuery(() => useAuctionListings(80));
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(result.current.data).toHaveLength(60);
+    expect(result.current.data).toHaveLength(80);
     expect(invokeMock).toHaveBeenCalledWith("fetch-os-auctions", expect.objectContaining({
-      body: expect.objectContaining({ pageSize: 60, sampleAcrossGreece: true }),
+      body: expect.objectContaining({ pageSize: 80, sampleAcrossGreece: true }),
     }));
   });
 

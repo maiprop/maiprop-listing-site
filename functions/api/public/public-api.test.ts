@@ -463,7 +463,7 @@ describe("public auctions endpoint", () => {
     expect(dbUrl.searchParams.get("limit")).toBe("240");
     expect(cacheApi.put.mock.calls[0][0].url).toContain("limit=60");
     expect(cacheApi.put.mock.calls[0][0].url).toContain("day=");
-    expect(cacheApi.put.mock.calls[0][0].url).toContain("v=municipality-rotation-v2");
+    expect(cacheApi.put.mock.calls[0][0].url).toContain("v=municipality-rotation-v3");
   });
 });
 
