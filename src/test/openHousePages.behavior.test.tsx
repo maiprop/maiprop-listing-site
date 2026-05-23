@@ -233,7 +233,9 @@ function makeListingsQuery(data: Array<Record<string, unknown>>, error: Error | 
     gte: vi.fn().mockReturnThis(),
     lt: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockResolvedValue({ data, error }),
+    limit: vi.fn((_: number, options?: { referencedTable?: string }) =>
+      options?.referencedTable ? chain : Promise.resolve({ data, error })
+    ),
   };
   mocks.from.mockReturnValue(chain);
   return chain;
