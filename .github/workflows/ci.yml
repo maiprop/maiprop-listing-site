@@ -671,11 +671,33 @@ jobs:
           SITE_LOCK_PASSWORD:        ${{ secrets.SITE_LOCK_PASSWORD }}
         run: |
           set -euo pipefail
-          if [ -z "${SUPABASE_PROJECT_ID}" ] && [ -z "${SUPABASE_URL}" ]; then
-            echo "::warning::VITE_SUPABASE_PROJECT_ID and VITE_SUPABASE_URL secrets are empty; Pages Functions will use static fallbacks"
+          if ! NORMALIZED_SUPABASE_PROJECT_ID=$(node - "$SUPABASE_PROJECT_ID" "$SUPABASE_URL" <<'NODE'
+          const [, , explicitProjectId = "", supabaseUrl = ""] = process.argv;
+          const validProjectRef = (value) => /^[a-z0-9]{20}$/.test(value);
+          if (validProjectRef(explicitProjectId)) {
+            console.log(explicitProjectId);
+            process.exit(0);
+          }
+          try {
+            const host = new URL(supabaseUrl).hostname;
+            const suffix = ".supabase.co";
+            const derived = host.endsWith(suffix) ? host.slice(0, -suffix.length) : "";
+            if (validProjectRef(derived)) {
+              console.log(derived);
+              process.exit(0);
+            }
+          } catch {
+            // Fall through to the deployment error below.
+          }
+          process.exit(1);
+          NODE
+          ); then
+            echo "::error::VITE_SUPABASE_PROJECT_ID must be a 20-character project ref or VITE_SUPABASE_URL must be a valid https://<ref>.supabase.co URL."
+            exit 1
           fi
           if [ -z "${SUPABASE_PUBLISHABLE_KEY}" ]; then
-            echo "::warning::VITE_SUPABASE_PUBLISHABLE_KEY secret is empty; SEO Functions will use the static app shell"
+            echo "::error::VITE_SUPABASE_PUBLISHABLE_KEY secret is required for production Pages Functions."
+            exit 1
           fi
 
           # Build env_vars payload. SITE_LOCK_PASSWORD is optional; when the
@@ -684,7 +706,7 @@ jobs:
           # `secret_text` stores the value encrypted-at-rest on Cloudflare's side.
           ENV_JSON=$(jq -n \
             --arg surl "$SUPABASE_URL" \
-            --arg pid "$SUPABASE_PROJECT_ID" \
+            --arg pid "$NORMALIZED_SUPABASE_PROJECT_ID" \
             --arg pkey "$SUPABASE_PUBLISHABLE_KEY" \
             --arg lock "$SITE_LOCK_PASSWORD" \
             '
@@ -693,10 +715,14 @@ jobs:
                 SUPABASE_URL: { value: $surl, type: "plain_text" },
                 VITE_SUPABASE_URL: { value: $surl, type: "plain_text" }
               } else {} end) +
-              (if $pid  != "" then { SUPABASE_PROJECT_ID: { value: $pid,  type: "plain_text"  } } else {} end) +
+              (if $pid  != "" then {
+                SUPABASE_PROJECT_ID: { value: $pid, type: "plain_text" },
+                VITE_SUPABASE_PROJECT_ID: { value: $pid, type: "plain_text" }
+              } else {} end) +
               (if $pkey != "" then {
                 SUPABASE_PUBLISHABLE_KEY: { value: $pkey, type: "plain_text" },
-                VITE_SUPABASE_PUBLISHABLE_KEY: { value: $pkey, type: "plain_text" }
+                VITE_SUPABASE_PUBLISHABLE_KEY: { value: $pkey, type: "plain_text" },
+                VITE_SUPABASE_ANON_KEY: { value: $pkey, type: "plain_text" }
               } else {} end) +
               (if $lock != "" then { SITE_LOCK_PASSWORD: { value: $lock, type: "secret_text" } } else { SITE_LOCK_PASSWORD: null } end)
             )')
@@ -713,6 +739,24 @@ jobs:
           if [ "$HTTP_CODE" != "200" ]; then
             echo "Failed to sync Pages env vars (HTTP $HTTP_CODE)"
             cat /tmp/cf_env.json
+            exit 1
+          fi
+          HTTP_CODE=$(curl -s -o /tmp/cf_env_verify.json -w "%{http_code}" \
+            -H "Authorization: Bearer $CF_API_TOKEN" \
+            "$CF_API_BASE/accounts/$CF_ACCOUNT_ID/pages/projects/$CF_PROJECT")
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Failed to verify Pages env vars (HTTP $HTTP_CODE)"
+            cat /tmp/cf_env_verify.json
+            exit 1
+          fi
+          for key in SUPABASE_URL VITE_SUPABASE_URL SUPABASE_PROJECT_ID VITE_SUPABASE_PROJECT_ID SUPABASE_PUBLISHABLE_KEY VITE_SUPABASE_PUBLISHABLE_KEY VITE_SUPABASE_ANON_KEY; do
+            if ! jq -e --arg key "$key" '.success == true and (.result.deployment_configs.production.env_vars[$key].type == "plain_text")' /tmp/cf_env_verify.json >/dev/null; then
+              echo "::error::Cloudflare Pages production env var $key was not persisted."
+              exit 1
+            fi
+          done
+          if ! jq -e --arg pid "$NORMALIZED_SUPABASE_PROJECT_ID" '.result.deployment_configs.production.env_vars.SUPABASE_PROJECT_ID.value == $pid' /tmp/cf_env_verify.json >/dev/null; then
+            echo "::error::Cloudflare Pages production SUPABASE_PROJECT_ID did not match the normalized project ref."
             exit 1
           fi
           if [ -n "${SITE_LOCK_PASSWORD}" ]; then

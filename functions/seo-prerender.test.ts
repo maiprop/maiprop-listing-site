@@ -160,6 +160,16 @@ describe("SEO Pages Functions", () => {
     });
   });
 
+  it("falls back to the Supabase URL when the explicit project id binding is malformed", async () => {
+    const ctx = makeCtx("https://portal.maiprop.co/property/listing-1", { id: "listing-1" });
+    ctx.env.SUPABASE_PROJECT_ID = "not-a-project-ref";
+    ctx.env.SUPABASE_URL = "https://testprojectref000000.supabase.co";
+
+    await propertyRequest(ctx);
+
+    expect(firstSupabaseUrl()).toContain("https://testprojectref000000.supabase.co/rest/v1/listings");
+  });
+
   it("adds first-page listing structured data to /listings", async () => {
     const res = await listingsRequest(makeCtx("https://portal.maiprop.co/listings?city=Athens"));
     const html = await res.text();

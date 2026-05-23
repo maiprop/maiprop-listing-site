@@ -93,14 +93,21 @@ function isSafeToken(value: string, maxLength: number): boolean {
 }
 
 export function getSupabaseRuntime(env: SeoEnv): SupabaseRuntime | null {
-  const projectId =
-    env.SUPABASE_PROJECT_ID ??
-    env.VITE_SUPABASE_PROJECT_ID ??
-    projectIdFromSupabaseUrl(env.SUPABASE_URL ?? env.VITE_SUPABASE_URL ?? env.VITE_SUPABASE_PROJECT_URL);
+  const projectId = getSupabaseProjectId(env);
   const key = env.SUPABASE_PUBLISHABLE_KEY ?? env.VITE_SUPABASE_PUBLISHABLE_KEY ?? env.VITE_SUPABASE_ANON_KEY;
   if (!projectId || !key) return null;
-  if (!isLowerAlphaNumeric(projectId, 20)) return null;
   return { url: `https://${projectId}.supabase.co`, key };
+}
+
+export function getSupabaseProjectId(env: SeoEnv): string | null {
+  const candidates = [
+    env.SUPABASE_PROJECT_ID,
+    env.VITE_SUPABASE_PROJECT_ID,
+    projectIdFromSupabaseUrl(env.SUPABASE_URL),
+    projectIdFromSupabaseUrl(env.VITE_SUPABASE_URL),
+    projectIdFromSupabaseUrl(env.VITE_SUPABASE_PROJECT_URL),
+  ];
+  return candidates.find((candidate): candidate is string => Boolean(candidate && isLowerAlphaNumeric(candidate, 20))) ?? null;
 }
 
 function projectIdFromSupabaseUrl(value?: string): string | null {
