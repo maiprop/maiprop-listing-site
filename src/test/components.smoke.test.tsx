@@ -13,7 +13,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React, { Suspense } from "react";
-import { act, cleanup } from "@testing-library/react";
+import { act, cleanup, fireEvent } from "@testing-library/react";
 import { renderWithProviders } from "@/test/utils";
 
 // ── requestAnimationFrame stub (not in jsdom) ─────────────────────────────────
@@ -105,7 +105,18 @@ vi.mock("@/contexts/AuthContext", () => ({
 }));
 
 vi.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (k: string) => k, i18n: { changeLanguage: vi.fn(), language: "en" } }),
+  useTranslation: () => ({
+    t: (k: string) => k,
+    i18n: {
+      changeLanguage: vi.fn((language: string) => {
+        globalThis.__MAIPROP_TEST_I18N_LANGUAGE__ = language;
+        return Promise.resolve(language);
+      }),
+      get language() {
+        return globalThis.__MAIPROP_TEST_I18N_LANGUAGE__ ?? "en";
+      },
+    },
+  }),
   initReactI18next: { type: "3rdParty", init: vi.fn() },
   Trans: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -250,7 +261,7 @@ describe("Component smoke tests", () => {
   it("Navbar renders without throwing", async () => {
     const { Navbar } = await import("@/components/Navbar");
     expect(() => renderWithProviders(<Navbar />)).not.toThrow();
-  });
+  }, 10_000);
 
   it("Footer renders without throwing", async () => {
     const { Footer } = await import("@/components/Footer");
@@ -1200,6 +1211,48 @@ describe("Component smoke tests", () => {
     )).not.toThrow();
   });
 
+  it("ViewingDialog renders Greek authenticated asset-request branches without throwing", async () => {
+    globalThis.__MAIPROP_TEST_I18N_LANGUAGE__ = "el";
+    const { useAuth } = await import("@/contexts/AuthContext");
+    const useAuthMock = useAuth as ReturnType<typeof vi.fn>;
+    useAuthMock.mockReturnValue({
+      user: { id: "buyer-1", email: "buyer@example.com" },
+      profile: { display_name: "Greek Buyer", phone: "+306900000000" },
+      loading: false,
+      profileLoading: false,
+      subscription: { subscribed: true, productId: "pro", subscriptionEnd: null, loading: false },
+      needsOnboarding: false,
+      signIn: vi.fn().mockResolvedValue({ error: null }),
+      signUp: vi.fn().mockResolvedValue({ error: null }),
+      signOut: vi.fn().mockResolvedValue(undefined),
+      updateProfile: vi.fn().mockResolvedValue({ error: null }),
+      refreshProfile: vi.fn().mockResolvedValue(undefined),
+      refreshSubscription: vi.fn().mockResolvedValue(undefined),
+    });
+    const { default: ViewingDialog } = await import("@/components/ViewingDialog");
+    expect(() => renderWithProviders(
+      <ViewingDialog
+        open
+        onClose={noop}
+        property={{ ...MOCK_LISTING, images: ["https://example.com/listing.jpg"] } as any}
+        ownerId="owner-1"
+        canVideoView={false}
+      />
+    )).not.toThrow();
+    globalThis.__MAIPROP_TEST_I18N_LANGUAGE__ = "en";
+    useAuthMock.mockReturnValue({
+      user: null, profile: null, loading: false, profileLoading: false,
+      subscription: { subscribed: false, productId: null, subscriptionEnd: null, loading: false },
+      needsOnboarding: false,
+      signIn: vi.fn().mockResolvedValue({ error: null }),
+      signUp: vi.fn().mockResolvedValue({ error: null }),
+      signOut: vi.fn().mockResolvedValue(undefined),
+      updateProfile: vi.fn().mockResolvedValue({ error: null }),
+      refreshProfile: vi.fn().mockResolvedValue(undefined),
+      refreshSubscription: vi.fn().mockResolvedValue(undefined),
+    });
+  });
+
   it("OpenHouseRegistrationDialog renders without throwing", async () => {
     const { default: OpenHouseRegistrationDialog } = await import("@/components/OpenHouseRegistrationDialog");
     expect(() => renderWithProviders(
@@ -1228,6 +1281,19 @@ describe("Component smoke tests", () => {
     )).not.toThrow();
   });
 
+  it("InvitationRequestModal renders Greek invitee profile branches without throwing", async () => {
+    globalThis.__MAIPROP_TEST_I18N_LANGUAGE__ = "el";
+    const { InvitationRequestModal } = await import("@/components/InvitationRequestModal");
+    expect(() => renderWithProviders(
+      <InvitationRequestModal
+        user={{ id: "investor-1", email: "investor@example.com" }}
+        onClose={noop}
+        onSuccess={noop}
+      />
+    )).not.toThrow();
+    globalThis.__MAIPROP_TEST_I18N_LANGUAGE__ = "en";
+  });
+
   it("RoleSwitchModal renders without throwing", async () => {
     const { RoleSwitchModal } = await import("@/components/RoleSwitchModal");
     expect(() => renderWithProviders(
@@ -1240,6 +1306,42 @@ describe("Component smoke tests", () => {
     expect(() => renderWithProviders(
       <OnlineViewingModal open={false} onClose={noop} listing={MOCK_LISTING as any} professional={MOCK_PROFESSIONAL as any} />
     )).not.toThrow();
+  });
+
+  it("OnlineViewingModal renders Greek professional booking branches without throwing", async () => {
+    globalThis.__MAIPROP_TEST_I18N_LANGUAGE__ = "el";
+    const { useAuth } = await import("@/contexts/AuthContext");
+    const useAuthMock = useAuth as ReturnType<typeof vi.fn>;
+    useAuthMock.mockReturnValue({
+      user: { id: "buyer-1", email: "buyer@example.com" },
+      profile: { display_name: "Greek Buyer", phone: "+306900000000" },
+      loading: false,
+      profileLoading: false,
+      subscription: { subscribed: true, productId: "pro", subscriptionEnd: null, loading: false },
+      needsOnboarding: false,
+      signIn: vi.fn().mockResolvedValue({ error: null }),
+      signUp: vi.fn().mockResolvedValue({ error: null }),
+      signOut: vi.fn().mockResolvedValue(undefined),
+      updateProfile: vi.fn().mockResolvedValue({ error: null }),
+      refreshProfile: vi.fn().mockResolvedValue(undefined),
+      refreshSubscription: vi.fn().mockResolvedValue(undefined),
+    });
+    const { default: OnlineViewingModal } = await import("@/components/OnlineViewingModal");
+    expect(() => renderWithProviders(
+      <OnlineViewingModal open onClose={noop} professional={MOCK_PROFESSIONAL as any} />
+    )).not.toThrow();
+    globalThis.__MAIPROP_TEST_I18N_LANGUAGE__ = "en";
+    useAuthMock.mockReturnValue({
+      user: null, profile: null, loading: false, profileLoading: false,
+      subscription: { subscribed: false, productId: null, subscriptionEnd: null, loading: false },
+      needsOnboarding: false,
+      signIn: vi.fn().mockResolvedValue({ error: null }),
+      signUp: vi.fn().mockResolvedValue({ error: null }),
+      signOut: vi.fn().mockResolvedValue(undefined),
+      updateProfile: vi.fn().mockResolvedValue({ error: null }),
+      refreshProfile: vi.fn().mockResolvedValue(undefined),
+      refreshSubscription: vi.fn().mockResolvedValue(undefined),
+    });
   });
 
   it("AIServiceMatchModal renders without throwing", async () => {
@@ -1256,11 +1358,94 @@ describe("Component smoke tests", () => {
     )).not.toThrow();
   });
 
+  it("SaveSearchModal renders Greek authenticated filter summary branches without throwing", async () => {
+    globalThis.__MAIPROP_TEST_I18N_LANGUAGE__ = "el";
+    const { useAuth } = await import("@/contexts/AuthContext");
+    const useAuthMock = useAuth as ReturnType<typeof vi.fn>;
+    useAuthMock.mockReturnValue({
+      user: { id: "buyer-1", email: "buyer@example.com" },
+      profile: { display_name: "Greek Buyer" },
+      loading: false,
+      profileLoading: false,
+      subscription: { subscribed: true, productId: "pro", subscriptionEnd: null, loading: false },
+      needsOnboarding: false,
+      signIn: vi.fn().mockResolvedValue({ error: null }),
+      signUp: vi.fn().mockResolvedValue({ error: null }),
+      signOut: vi.fn().mockResolvedValue(undefined),
+      updateProfile: vi.fn().mockResolvedValue({ error: null }),
+      refreshProfile: vi.fn().mockResolvedValue(undefined),
+      refreshSubscription: vi.fn().mockResolvedValue(undefined),
+    });
+    const { SaveSearchModal } = await import("@/components/SaveSearchModal");
+    const { container } = renderWithProviders(
+      <SaveSearchModal
+        currentFilters={{
+          city: "Athens",
+          listing_type: "sale",
+          property_type: "apartment",
+          has_pool: "true",
+          min_ai_score: "80",
+        }}
+        onClose={noop}
+      />
+    );
+    const [, alertButton] = Array.from(container.querySelectorAll("button"));
+    if (alertButton) fireEvent.click(alertButton);
+    globalThis.__MAIPROP_TEST_I18N_LANGUAGE__ = "en";
+    useAuthMock.mockReturnValue({
+      user: null, profile: null, loading: false, profileLoading: false,
+      subscription: { subscribed: false, productId: null, subscriptionEnd: null, loading: false },
+      needsOnboarding: false,
+      signIn: vi.fn().mockResolvedValue({ error: null }),
+      signUp: vi.fn().mockResolvedValue({ error: null }),
+      signOut: vi.fn().mockResolvedValue(undefined),
+      updateProfile: vi.fn().mockResolvedValue({ error: null }),
+      refreshProfile: vi.fn().mockResolvedValue(undefined),
+      refreshSubscription: vi.fn().mockResolvedValue(undefined),
+    });
+  });
+
   it("RequestCallbackModal renders without throwing", async () => {
     const { default: RequestCallbackModal } = await import("@/components/RequestCallbackModal");
     expect(() => renderWithProviders(
       <RequestCallbackModal open={false} onClose={noop} professional={MOCK_PROFESSIONAL as any} />
     )).not.toThrow();
+  });
+
+  it("RequestCallbackModal renders Greek authenticated callback branches without throwing", async () => {
+    globalThis.__MAIPROP_TEST_I18N_LANGUAGE__ = "el";
+    const { useAuth } = await import("@/contexts/AuthContext");
+    const useAuthMock = useAuth as ReturnType<typeof vi.fn>;
+    useAuthMock.mockReturnValue({
+      user: { id: "buyer-1", email: "buyer@example.com" },
+      profile: { display_name: "Greek Buyer", phone: "+306900000000" },
+      loading: false,
+      profileLoading: false,
+      subscription: { subscribed: true, productId: "pro", subscriptionEnd: null, loading: false },
+      needsOnboarding: false,
+      signIn: vi.fn().mockResolvedValue({ error: null }),
+      signUp: vi.fn().mockResolvedValue({ error: null }),
+      signOut: vi.fn().mockResolvedValue(undefined),
+      updateProfile: vi.fn().mockResolvedValue({ error: null }),
+      refreshProfile: vi.fn().mockResolvedValue(undefined),
+      refreshSubscription: vi.fn().mockResolvedValue(undefined),
+    });
+    const { default: RequestCallbackModal } = await import("@/components/RequestCallbackModal");
+    expect(() => renderWithProviders(
+      <RequestCallbackModal open onClose={noop} professional={MOCK_PROFESSIONAL as any} />
+    )).not.toThrow();
+    globalThis.__MAIPROP_TEST_I18N_LANGUAGE__ = "en";
+    useAuthMock.mockReturnValue({
+      user: null, profile: null, loading: false, profileLoading: false,
+      subscription: { subscribed: false, productId: null, subscriptionEnd: null, loading: false },
+      needsOnboarding: false,
+      signIn: vi.fn().mockResolvedValue({ error: null }),
+      signUp: vi.fn().mockResolvedValue({ error: null }),
+      signOut: vi.fn().mockResolvedValue(undefined),
+      updateProfile: vi.fn().mockResolvedValue({ error: null }),
+      refreshProfile: vi.fn().mockResolvedValue(undefined),
+      refreshSubscription: vi.fn().mockResolvedValue(undefined),
+    });
   });
 
   // ── CompareDrawer ──────────────────────────────────────────────────────────

@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, fireEvent, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import React, { Suspense } from "react";
 import { Route, Routes } from "react-router-dom";
 import { renderWithProviders } from "@/test/utils";
@@ -256,7 +256,18 @@ vi.mock("@/hooks/useCreateListingConnections", () => ({
 }));
 
 vi.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (key: string) => key, i18n: { changeLanguage: vi.fn() } }),
+  useTranslation: () => ({
+    t: (key: string) => key,
+    i18n: {
+      changeLanguage: vi.fn((language: string) => {
+        globalThis.__MAIPROP_TEST_I18N_LANGUAGE__ = language;
+        return Promise.resolve(language);
+      }),
+      get language() {
+        return globalThis.__MAIPROP_TEST_I18N_LANGUAGE__ ?? "en";
+      },
+    },
+  }),
   initReactI18next: { type: "3rdParty", init: vi.fn() },
   Trans: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -1166,6 +1177,20 @@ describe("Page smoke tests", () => {
     ).not.toThrow();
   });
 
+  it("VideoViewingRoom page renders without throwing", async () => {
+    const { default: VideoViewingRoom } = await import("@/pages/VideoViewingRoom");
+    expect(() =>
+      renderWithProviders(
+        <Suspense fallback={<div>loading</div>}>
+          <Routes>
+            <Route path="/video-viewings/:viewingId" element={<VideoViewingRoom />} />
+          </Routes>
+        </Suspense>,
+        { initialPath: "/video-viewings/viewing-smoke" }
+      )
+    ).not.toThrow();
+  });
+
   it("CreateNewBuildingListing page renders without throwing", async () => {
     const { default: CreateNewBuildingListing } = await import("@/pages/CreateNewBuildingListing");
     expect(() =>
@@ -1223,5 +1248,267 @@ describe("Page smoke tests", () => {
   it("ViewingsTab renders without throwing", async () => {
     const { default: ViewingsTab } = await import("@/pages/dashboard/ViewingsTab");
     expect(() => renderWithProviders(<ViewingsTab />)).not.toThrow();
+  });
+
+  it("Greek locale branch smoke renders high-traffic pages without throwing", async () => {
+    globalThis.__MAIPROP_TEST_I18N_LANGUAGE__ = "el";
+
+    const { useListing, useListings } = await import("@/hooks/useListings");
+    const { useListingsFilters } = await import("@/hooks/useListingsFilters");
+    const { useAuctionListings } = await import("@/hooks/useAuctionListings");
+    const { useProfessional } = await import("@/hooks/useProfessionals");
+    const useListingMock = useListing as ReturnType<typeof vi.fn>;
+    const useListingsMock = useListings as ReturnType<typeof vi.fn>;
+    const useListingsFiltersMock = useListingsFilters as ReturnType<typeof vi.fn>;
+    const useAuctionListingsMock = useAuctionListings as ReturnType<typeof vi.fn>;
+    const useProfessionalMock = useProfessional as ReturnType<typeof vi.fn>;
+
+    useListingMock.mockReturnValue({
+      data: {
+        id: "oh-el",
+        title: "Greek Open House",
+        city: "Athens",
+        address: "Solonos 1",
+        region: "Attica",
+        price: 420000,
+        sqm: 92,
+        bedrooms: 2,
+        bathrooms: 1,
+        property_type: "apartment",
+        listing_type: "open_house",
+        owner_id: "owner-1",
+        description: "Locale branch listing",
+        cover_image_url: null,
+        listing_images: [],
+        latitude: 37.98,
+        longitude: 23.73,
+        tags: [],
+        status: "active",
+        open_house_date: "2026-06-01T10:00:00.000Z",
+        floor: 2,
+        total_floors: 6,
+        year_built: 2018,
+        energy_class: "A",
+        heating_system: "autonomous_petrol",
+        price_per_sqm: 4565,
+        has_parking: true,
+        has_pool: false,
+        has_elevator: true,
+        has_garden: false,
+        has_storage: true,
+        has_balcony: true,
+        has_view: false,
+        has_furnished: false,
+        views_count: 0,
+      },
+      isLoading: false,
+      isError: false,
+    });
+    useListingsMock.mockReturnValue({
+      data: [
+        { id: "l1", price: 300000, property_type: "apartment", listing_type: "sale", city: "Athens", region: "Attica" },
+      ],
+      isLoading: false,
+    });
+    useListingsFiltersMock.mockReturnValue({
+      searchQuery: "Athens",
+      selectedListingType: "sale",
+      selectedType: "apartment",
+      selectedSubtype: "penthouse",
+      selectedPrice: "100000-500000",
+      selectedSort: "price-desc",
+      bedsRange: ["2", "4"] as [string, string],
+      bathsRange: ["1", "3"] as [string, string],
+      floorRange: ["1", "6"] as [string, string],
+      yearRange: ["2010", "2026"] as [string, string],
+      minSqm: "60",
+      maxSqm: "140",
+      selectedEnergyClasses: ["A", "B"] as string[],
+      selectedFeatures: ["has_pool", "has_parking"] as string[],
+      selectedHeating: "autonomous_petrol",
+      selectedConstruction: "renovated",
+      preSaleOnly: true,
+      offMarketOnly: true,
+      hasVideoViewing: true,
+      hasVirtualTour: true,
+      hasMessaging: true,
+      minAiScore: 80,
+      minWalkability: 70,
+      activeFilterCount: 18,
+      currentFilters: {
+        city: "Athens",
+        listing_type: "sale",
+        type: "apartment",
+        subtype: "penthouse",
+        price: "100000-500000",
+        beds_min: "2",
+        beds_max: "4",
+        baths_min: "1",
+        baths_max: "3",
+        floor_min: "1",
+        floor_max: "6",
+        year_min: "2010",
+        year_max: "2026",
+        sqm_min: "60",
+        sqm_max: "140",
+        energy: "A,B",
+        heating: "autonomous_petrol",
+        construction: "renovated",
+        pre_sale: "true",
+        off_market: "true",
+        video_viewing: "true",
+        virtual_tour: "true",
+        messaging: "true",
+        min_ai_score: "80",
+        min_walkability: "70",
+      },
+      setParam: vi.fn(),
+      setParams: vi.fn(),
+      toggleMulti: vi.fn(),
+      clearAllFilters: vi.fn(),
+      applyAIFilters: vi.fn(),
+    });
+    useAuctionListingsMock.mockReturnValue({
+      data: [{
+        id: "auction-el",
+        title: "Greek Auction",
+        city: "Athens",
+        address: "Solonos 2",
+        price: 150000,
+        auction_starting_bid: 100000,
+        auction_date: "2026-06-01",
+        auction_court: "Athens Court",
+        property_type: "apartment",
+        listing_type: "auction",
+        cover_image_url: null,
+        sqm: 80,
+        bedrooms: 2,
+        bathrooms: 1,
+        latitude: 37.9,
+        longitude: 23.7,
+        tags: [],
+        year_built: 2005,
+        is_featured: true,
+        priority_placement: 2,
+      }],
+      isLoading: false,
+    });
+    useProfessionalMock.mockReturnValue({
+      data: {
+        id: "pro-el",
+        user_id: "pro-user",
+        display_name: "Greek Pro",
+        title: "Real Estate Agent",
+        category: "real_estate_agent",
+        city: "Athens",
+        bio: "Professional profile",
+        avatar_url: null,
+        rating: 4.8,
+        reviews_count: 2,
+        verified: true,
+        hourly_rate: 90,
+        experience_years: 8,
+        specialties: ["Residential"],
+        languages: ["Greek", "English"],
+        license_number: "AG-EL",
+        website_url: null,
+        video_link: null,
+        projects_count: 15,
+        average_deal_size: null,
+        average_portfolio_asset_size: null,
+        subscription_tier: "pro",
+        calendar_notes: null,
+        notes: null,
+        created_at: "",
+        updated_at: "",
+      },
+      isLoading: false,
+    });
+
+    const pages = [
+      { module: () => import("@/pages/Listings"), path: "/listings" },
+      { module: () => import("@/pages/OpenHouses"), path: "/open-houses" },
+      { module: () => import("@/pages/Auctions"), path: "/auctions" },
+      { module: () => import("@/pages/Pricing"), path: "/pricing" },
+      { module: () => import("@/pages/Firesale"), path: "/firesale" },
+      { module: () => import("@/pages/Onboarding"), path: "/onboarding" },
+      { module: () => import("@/pages/InvestorDashboard"), path: "/investor" },
+    ] as const;
+
+    for (const page of pages) {
+      const { default: Page } = await page.module();
+      expect(() =>
+        renderWithProviders(
+          <Suspense fallback={<div>loading</div>}>
+            <Page />
+          </Suspense>,
+          { initialPath: page.path },
+        )
+      ).not.toThrow();
+      cleanup();
+    }
+
+    const { default: OpenHouseDetail } = await import("@/pages/OpenHouseDetail");
+    expect(() =>
+      renderWithProviders(
+        <Suspense fallback={<div>loading</div>}>
+          <Routes>
+            <Route path="/open-house/:id" element={<OpenHouseDetail />} />
+          </Routes>
+        </Suspense>,
+        { initialPath: "/open-house/oh-el" },
+      )
+    ).not.toThrow();
+    cleanup();
+
+    const { default: AuctionDetail } = await import("@/pages/AuctionDetail");
+    expect(() =>
+      renderWithProviders(
+        <Suspense fallback={<div>loading</div>}>
+          <Routes>
+            <Route path="/auction/:id" element={<AuctionDetail />} />
+          </Routes>
+        </Suspense>,
+        { initialPath: "/auction/auction-el" },
+      )
+    ).not.toThrow();
+    cleanup();
+
+    const { default: ProfessionalProfile } = await import("@/pages/ProfessionalProfile");
+    expect(() =>
+      renderWithProviders(
+        <Suspense fallback={<div>loading</div>}>
+          <Routes>
+            <Route path="/professionals/:id" element={<ProfessionalProfile />} />
+          </Routes>
+        </Suspense>,
+        { initialPath: "/professionals/pro-el" },
+      )
+    ).not.toThrow();
+
+    globalThis.__MAIPROP_TEST_I18N_LANGUAGE__ = "en";
+    useListingMock.mockReturnValue({ data: null, isLoading: false, isError: false });
+    useListingsMock.mockReturnValue({ data: [], isLoading: false });
+    useListingsFiltersMock.mockReturnValue({
+      searchQuery: "", selectedListingType: "", selectedType: "", selectedSubtype: "",
+      selectedPrice: "", selectedSort: "relevant",
+      bedsRange: ["", ""] as [string, string],
+      bathsRange: ["", ""] as [string, string],
+      floorRange: ["", ""] as [string, string],
+      yearRange: ["", ""] as [string, string],
+      minSqm: "", maxSqm: "",
+      selectedEnergyClasses: [] as string[],
+      selectedFeatures: [] as string[],
+      selectedHeating: "", selectedConstruction: "",
+      preSaleOnly: false, offMarketOnly: false,
+      hasVideoViewing: false, hasVirtualTour: false, hasMessaging: false,
+      minAiScore: 0, minWalkability: 0,
+      activeFilterCount: 0,
+      currentFilters: {},
+      setParam: vi.fn(), setParams: vi.fn(), toggleMulti: vi.fn(),
+      clearAllFilters: vi.fn(), applyAIFilters: vi.fn(),
+    });
+    useAuctionListingsMock.mockReturnValue({ data: [], isLoading: false });
+    useProfessionalMock.mockReturnValue({ data: null, isLoading: false });
   });
 });

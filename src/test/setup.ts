@@ -3,7 +3,13 @@ import type React from "react";
 import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
+declare global {
+  // Test-only language knob used by coverage smoke tests.
+  var __MAIPROP_TEST_I18N_LANGUAGE__: string | undefined;
+}
+
 const originalConsoleError = console.error.bind(console);
+globalThis.__MAIPROP_TEST_I18N_LANGUAGE__ ??= "en";
 
 console.error = (...args: unknown[]) => {
   const message = String(args[0] ?? "");
@@ -16,7 +22,15 @@ console.error = (...args: unknown[]) => {
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, fallback?: string) => fallback ?? key,
-    i18n: { changeLanguage: vi.fn(), language: "en" },
+    i18n: {
+      changeLanguage: vi.fn((language: string) => {
+        globalThis.__MAIPROP_TEST_I18N_LANGUAGE__ = language;
+        return Promise.resolve(language);
+      }),
+      get language() {
+        return globalThis.__MAIPROP_TEST_I18N_LANGUAGE__ ?? "en";
+      },
+    },
   }),
   Trans: ({ children }: { children: React.ReactNode }) => children,
   initReactI18next: { type: "3rdParty", init: vi.fn() },
@@ -27,6 +41,7 @@ vi.mock("react-i18next", () => ({
 // causing duplicate-element matches in queries like getByTestId.
 afterEach(() => {
   cleanup();
+  globalThis.__MAIPROP_TEST_I18N_LANGUAGE__ = "en";
 });
 
 // ── Browser API stubs required by jsdom ─────────────────────────────────────
