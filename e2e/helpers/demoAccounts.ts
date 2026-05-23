@@ -69,7 +69,7 @@ export const demoAccounts = {
     "investor.institutional@maiprop.demo",
     "E2E_INVESTOR_INSTITUTIONAL_EMAIL",
   ),
-  admin: account("admin@maiprop.demo", "E2E_ADMIN_EMAIL"),
+  admin: account("", "E2E_ADMIN_EMAIL"),
   professionalArchitect: account(
     "architect.pro@maiprop.demo",
     "E2E_PROFESSIONAL_ARCHITECT_EMAIL",

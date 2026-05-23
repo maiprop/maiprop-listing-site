@@ -119,8 +119,10 @@ const canonicalAccounts: AccountDef[] = [
   { email: "valuer.pro@maiprop.demo", role: "professional", participantType: "professional", tier: "pro", firstName: "Irini", lastName: "ProValuer", city: "Athens", professionalCategory: "valuer", professionalTitle: "Chartered Property Valuer" },
   { email: "investor.private@maiprop.demo", role: "investor", participantType: "investor", tier: "managed", firstName: "Christos", lastName: "PrivateInvestor", city: "Athens", investorTier: "private" },
   { email: "investor.institutional@maiprop.demo", role: "institutional", participantType: "institutional", tier: "managed", firstName: "Alpha", lastName: "Fund", city: "London", investorTier: "institutional" },
-  { email: "admin@maiprop.demo", role: "admin", participantType: "admin", tier: "admin", firstName: "Platform", lastName: "Admin", city: "Athens" },
 ];
+if (process.env.INCLUDE_DEMO_ADMIN === "yes") {
+  canonicalAccounts.push({ email: "admin@maiprop.demo", role: "admin", participantType: "admin", tier: "admin", firstName: "Platform", lastName: "Admin", city: "Athens" });
+}
 
 const legacyAccounts: AccountDef[] = [
   ["buyer1", "Alex", "Buyer", "buyer"], ["buyer2", "Maria", "Consumer", "buyer"], ["buyer3", "Nikos", "HomeSeeker", "buyer"],

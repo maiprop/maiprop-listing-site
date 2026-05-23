@@ -131,6 +131,16 @@ Deno.test("self-service onboarding rejects invite-only investor role before RPC"
   assert(!globalThis.__completeOnboardingScenario.calls.some((call) => call.name === "rpc"));
 });
 
+Deno.test("self-service onboarding rejects admin role before RPC", async () => {
+  resetScenario();
+  const res = await handler(authedJson({ role: "admin", participantType: "admin" }));
+  const body = await res.json();
+
+  assertEquals(res.status, 400);
+  assertEquals(body.error, "role_not_allowed");
+  assert(!globalThis.__completeOnboardingScenario.calls.some((call) => call.name === "rpc"));
+});
+
 Deno.test("self-service onboarding forwards seller role to trusted RPC", async () => {
   resetScenario();
   const res = await handler(authedJson({ role: "seller", participantType: "seller" }));

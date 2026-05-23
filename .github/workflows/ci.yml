@@ -30,11 +30,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version-file: .node-version
           cache: npm
@@ -97,7 +97,7 @@ jobs:
         run: npm sbom --sbom-format cyclonedx > sbom.cdx.json
 
       - name: Upload SBOM
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sbom
           path: sbom.cdx.json
@@ -110,11 +110,20 @@ jobs:
             exit 1
           }
 
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          GITLEAKS_VERSION=8.30.1
+          GITLEAKS_ARCHIVE="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          EXPECTED_SHA256="551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+          curl -sSLo "$GITLEAKS_ARCHIVE" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${GITLEAKS_ARCHIVE}"
+          echo "${EXPECTED_SHA256}  ${GITLEAKS_ARCHIVE}" | sha256sum -c -
+          tar -xzf "$GITLEAKS_ARCHIVE" gitleaks
+          sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
       - name: Secret scanning (gitleaks)
-        uses: gitleaks/gitleaks-action@44c470ffc35caa8b1eb3e8012ca53c2f9bea4eb5 # v2.3.8
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+        run: gitleaks git --config .gitleaks.toml --redact --verbose .
 
       - name: Deno edge function tests
         uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
@@ -135,7 +144,7 @@ jobs:
 
       - name: Upload dist artifact
         if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dist
           path: dist/
@@ -147,9 +156,9 @@ jobs:
     needs: quality
 
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version-file: .node-version
           cache: npm
@@ -184,7 +193,7 @@ jobs:
 
       - name: Upload release safety inventory
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-safety-inventory
           path: |
@@ -202,9 +211,9 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version-file: .node-version
           cache: npm
@@ -245,7 +254,7 @@ jobs:
 
       - name: Upload Playwright report
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report
           path: playwright-report/
@@ -280,9 +289,9 @@ jobs:
       E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
 
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version-file: .node-version
           cache: npm
@@ -334,7 +343,7 @@ jobs:
 
       - name: Upload Playwright report
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report-security-staging
           path: playwright-report/
@@ -360,7 +369,7 @@ jobs:
           --health-retries=10
 
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install psql client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
@@ -535,9 +544,9 @@ jobs:
       LIGHTHOUSE_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
 
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version-file: .node-version
           cache: npm
@@ -609,9 +618,9 @@ jobs:
 
     steps:
       - name: Checkout (for Pages Functions in functions/)
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version-file: .node-version
           cache: npm
@@ -649,12 +658,21 @@ jobs:
         continue-on-error: true
         run: |
           set -euo pipefail
-          PREV_ID=$(curl -sf \
+          HTTP_CODE=$(curl -sS -o /tmp/cf_prev_deployments.json -w "%{http_code}" \
             -H "Authorization: Bearer $CF_API_TOKEN" \
-            "$CF_API_BASE/accounts/$CF_ACCOUNT_ID/pages/projects/$CF_PROJECT/deployments?env=production&per_page=1" \
-            | jq -r '.result[0].id // empty')
+            "$CF_API_BASE/accounts/$CF_ACCOUNT_ID/pages/projects/$CF_PROJECT/deployments?env=production&per_page=20")
+          if [ "$HTTP_CODE" != "200" ] || ! jq -e '.success == true' /tmp/cf_prev_deployments.json >/dev/null; then
+            echo "::warning::Could not capture Cloudflare rollback candidate (HTTP $HTTP_CODE)."
+            cat /tmp/cf_prev_deployments.json
+            exit 1
+          fi
+          PREV_ID=$(jq -r '
+            .result
+            | map(select(.environment == "production" and .latest_stage.status == "success" and (.is_skipped | not)))
+            | .[0].id // empty
+          ' /tmp/cf_prev_deployments.json)
           echo "id=${PREV_ID}" >> "$GITHUB_OUTPUT"
-          echo "Previous production deployment: ${PREV_ID:-<none>}"
+          echo "Previous successful production deployment: ${PREV_ID:-<none>}"
 
       # Pages Functions run on Cloudflare Workers and read env vars from the
       # Pages *project* settings (NOT from the GitHub Actions env and NOT from
@@ -790,7 +808,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Deploy to Cloudflare Pages (production)
-        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3.15.0
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
         with:
           apiToken:   ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId:  ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -803,10 +821,21 @@ jobs:
       - name: Rollback on health check failure
         if: failure() && steps.health_check.outcome == 'failure' && steps.prev_deploy.outputs.id != ''
         run: |
-          echo "Rolling back to deployment ${{ steps.prev_deploy.outputs.id }}"
-          curl -sf -X POST \
+          set -euo pipefail
+          ROLLBACK_ID="${{ steps.prev_deploy.outputs.id }}"
+          echo "Rolling back to deployment ${ROLLBACK_ID}"
+          HTTP_CODE=$(curl -sS -o /tmp/cf_rollback.json -w "%{http_code}" -X POST \
             -H "Authorization: Bearer $CF_API_TOKEN" \
-            "$CF_API_BASE/accounts/$CF_ACCOUNT_ID/pages/projects/$CF_PROJECT/deployments/${{ steps.prev_deploy.outputs.id }}/rollback"
+            -H "Content-Type: application/json" \
+            "$CF_API_BASE/accounts/$CF_ACCOUNT_ID/pages/projects/$CF_PROJECT/deployments/${ROLLBACK_ID}/rollback")
+          if [ "$HTTP_CODE" != "200" ] || ! jq -e '.success == true' /tmp/cf_rollback.json >/dev/null; then
+            echo "::error::Cloudflare rollback failed with HTTP $HTTP_CODE"
+            cat /tmp/cf_rollback.json
+            exit 1
+          fi
+          ROLLED_BACK_ID=$(jq -r '.result.id // empty' /tmp/cf_rollback.json)
+          echo "Rollback API accepted deployment: ${ROLLED_BACK_ID:-$ROLLBACK_ID}"
+          npm run check:production-deploy -- https://portal.maiprop.co --browser --public-api
 
   deploy-supabase-staging:
     name: Deploy Supabase edge functions (staging)
@@ -817,7 +846,7 @@ jobs:
     needs: [quality, release-safety, migrations-validate]
 
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 2
 
@@ -887,7 +916,7 @@ jobs:
           SUPABASE_STAGING_DB_URL:     ${{ secrets.SUPABASE_STAGING_DB_URL }}
           SUPABASE_ACCESS_TOKEN:       ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         if: steps.supabase_changes.outputs.deploy == 'true'
         with:
           node-version-file: .node-version
@@ -941,7 +970,7 @@ jobs:
 
       - name: Upload staging live drift inventory
         if: always() && steps.supabase_changes.outputs.deploy == 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-safety-staging-live-functions
           path: release-safety-staging-live-functions.json
@@ -972,9 +1001,9 @@ jobs:
 
     steps:
       - name: Checkout (for Pages Functions in functions/)
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version-file: .node-version
           cache: npm
@@ -1000,7 +1029,7 @@ jobs:
           VITE_APP_URL:                  ${{ secrets.VITE_APP_URL }}
 
       - name: Deploy to Cloudflare Pages (PR preview)
-        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3.15.0
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
         with:
           apiToken:   ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId:  ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

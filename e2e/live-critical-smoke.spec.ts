@@ -56,8 +56,6 @@ const hasLiveSupabase =
   SUPABASE_URL.startsWith("https://") &&
   !SUPABASE_URL.includes("abcdefghijklmnop") &&
   ANON_KEY.length > 40;
-const configuredBaseUrl = env("PLAYWRIGHT_BASE_URL");
-const isProductionPortal = configuredBaseUrl.includes("portal.maiprop.co");
 const hasExplicitAdminAccount = Boolean(process.env.E2E_ADMIN_EMAIL ?? dotEnv.E2E_ADMIN_EMAIL);
 
 function skipUnlessLiveSupabase() {
@@ -69,8 +67,8 @@ function skipUnlessLiveSupabase() {
 
 function skipUnlessAdminSmokeConfigured() {
   test.skip(
-    isProductionPortal && !hasExplicitAdminAccount,
-    "Production admin smoke requires explicit E2E_ADMIN_EMAIL; do not rely on the public demo admin fallback.",
+    !hasExplicitAdminAccount,
+    "Admin smoke requires explicit E2E_ADMIN_EMAIL; do not rely on the public demo admin fallback.",
   );
 }
 

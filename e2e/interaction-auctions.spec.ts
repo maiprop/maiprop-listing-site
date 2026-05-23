@@ -470,6 +470,7 @@ test.describe("Multi-user simultaneous browsing", () => {
   }: {
     browser: Browser;
   }) => {
+    test.skip(ADMIN_EMAIL === "", "Set E2E_ADMIN_EMAIL to run admin interaction tests.");
     const baseURL = getBaseURL();
     const adminCtx = await browser.newContext({ baseURL });
     const investorCtx = await browser.newContext({ baseURL });

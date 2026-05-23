@@ -20,6 +20,9 @@
  * Investor tiers are seeded via investor_subscriptions table.
  * Professional Pro also sets professionals.subscription_tier = "pro".
  *
+ * The shared-password demo admin is excluded by default. Set
+ * INCLUDE_DEMO_ADMIN=yes only for private, non-production admin testing.
+ *
  * Preferred browser-test env keys map to this seeded matrix:
  *   E2E_BUYER_FREE_EMAIL / E2E_BUYER_FREE_PASSWORD
  *   E2E_BUYER_PRO_EMAIL / E2E_BUYER_PRO_PASSWORD
@@ -78,7 +81,9 @@ interface AccountDef {
   bio?: string;
 }
 
-const ACCOUNTS: AccountDef[] = [
+const INCLUDE_DEMO_ADMIN = process.env.INCLUDE_DEMO_ADMIN === "yes";
+
+const BASE_ACCOUNTS: AccountDef[] = [
 
   // ── Buyers ─────────────────────────────────────────────────────────────────
   {
@@ -283,15 +288,19 @@ const ACCOUNTS: AccountDef[] = [
     bio: "RICS-aligned valuer on Pro — mortgage valuations, investment analysis.",
   },
 
-  // ── Platform Admin ──────────────────────────────────────────────────────────
-  {
-    email: "admin@maiprop.demo",
-    firstName: "Platform", lastName: "Admin",
-    role: "admin", participantType: "admin",
-    isPro: true, city: "Athens",
-    bio: "Platform administrator — full access to admin panel, listings, and user management.",
-  },
 ];
+
+const DEMO_ADMIN_ACCOUNT: AccountDef = {
+  email: "admin@maiprop.demo",
+  firstName: "Platform", lastName: "Admin",
+  role: "admin", participantType: "admin",
+  isPro: true, city: "Athens",
+  bio: "Platform administrator - full access to admin panel, listings, and user management.",
+};
+
+const ACCOUNTS: AccountDef[] = INCLUDE_DEMO_ADMIN
+  ? [...BASE_ACCOUNTS, DEMO_ADMIN_ACCOUNT]
+  : BASE_ACCOUNTS;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -424,8 +433,10 @@ async function main() {
     { heading: "PROFESSIONALS — PROPERTY MANAGER", emails: ["manager.free@maiprop.demo", "manager.pro@maiprop.demo"] },
     { heading: "PROFESSIONALS — FINANCIAL ADVISOR", emails: ["advisor.pro@maiprop.demo"] },
     { heading: "PROFESSIONALS — VALUER", emails: ["valuer.pro@maiprop.demo"] },
-    { heading: "PLATFORM ADMIN", emails: ["admin@maiprop.demo"] },
   ];
+  if (INCLUDE_DEMO_ADMIN) {
+    sections.push({ heading: "PLATFORM ADMIN", emails: ["admin@maiprop.demo"] });
+  }
 
   const accountByEmail = new Map(ACCOUNTS.map(a => [a.email, a]));
 
