@@ -213,6 +213,7 @@ fail-fast behavior.
 | `MAIPROP_EDGE_TEST_AUTH_BYPASS` | explicit CI-only bypass marker for edge-function tests that exercise handler internals without live Supabase Auth | CI test environment only |
 | `PRODUCTION_DEPLOY_URLS` | optional space-separated URL override for the post-deploy production smoke check; defaults to `https://portal.maiprop.co` | deploy diagnostics only |
 | `PRODUCTION_DEPLOY_BROWSER_CHECK` | optional boolean that enables the Chromium mount check when set instead of passing `--browser` | deploy diagnostics only |
+| `PRODUCTION_DEPLOY_PUBLIC_API_CHECK` | optional boolean that enables public Pages Functions checks when set instead of passing `--public-api` | deploy diagnostics only |
 | `PRODUCTION_DEPLOY_CHECK_ATTEMPTS` | optional retry count for the production deploy smoke check; defaults to `8` | deploy diagnostics only |
 | `PRODUCTION_DEPLOY_CHECK_DELAY_MS` | optional retry delay in milliseconds for the production deploy smoke check; defaults to `10000` | deploy diagnostics only |
 | `PLAYWRIGHT_BASE_URL` | live or staging app origin used by Playwright suites that are skipped by default | E2E diagnostics only |
