@@ -22,6 +22,11 @@ const browserCheck =
   ["1", "true", "yes"].includes(
     String(process.env.PRODUCTION_DEPLOY_BROWSER_CHECK ?? "").toLowerCase(),
   );
+const publicApiCheck =
+  args.includes("--public-api") ||
+  ["1", "true", "yes"].includes(
+    String(process.env.PRODUCTION_DEPLOY_PUBLIC_API_CHECK ?? "").toLowerCase(),
+  );
 
 const urlsFromArgs = args.filter((arg) => !arg.startsWith("--"));
 const urls = urlsFromArgs.length
@@ -118,6 +123,39 @@ const validateEntrypointAsset = async (baseUrl, assetPath) => {
   );
 };
 
+const publicApiPaths = [
+  "/api/public/listings?limit=1",
+  "/api/public/homepage?section=featured",
+  "/api/public/open-houses?limit=1",
+  "/api/public/auctions?limit=1",
+];
+
+const validatePublicApiEndpoints = async (baseUrl) => {
+  for (const path of publicApiPaths) {
+    const apiUrl = new URL(path, baseUrl).toString();
+    const { res, text } = await fetchText(apiUrl, {
+      headers: { accept: "application/json" },
+    });
+    const contentType = res.headers.get("content-type") ?? "";
+    assertOk(
+      /application\/json/i.test(contentType),
+      `${apiUrl} returned ${contentType || "<missing>"} instead of JSON`,
+    );
+
+    let body;
+    try {
+      body = JSON.parse(text);
+    } catch (error) {
+      throw new Error(`${apiUrl} returned invalid JSON: ${error.message}`);
+    }
+
+    assertOk(
+      !(body && typeof body === "object" && "error" in body),
+      `${apiUrl} returned API error: ${JSON.stringify(body).slice(0, 240)}`,
+    );
+  }
+};
+
 const runBrowserCheck = async (url) => {
   const { chromium } = await import("playwright");
   const browser = await chromium.launch({ headless: true });
@@ -162,9 +200,11 @@ const checkUrl = async (url) => {
   });
   const assetPath = validateHtml(url, html);
   await validateEntrypointAsset(url, assetPath);
+  if (publicApiCheck) await validatePublicApiEndpoints(url);
   if (browserCheck) await runBrowserCheck(url);
   const browserSuffix = browserCheck ? " and mounts the app" : "";
-  process.stdout.write(`[ok] ${url} serves built assets${browserSuffix}\n`);
+  const apiSuffix = publicApiCheck ? " with public APIs online" : "";
+  process.stdout.write(`[ok] ${url} serves built assets${browserSuffix}${apiSuffix}\n`);
 };
 
 const checkWithRetries = async (url) => {

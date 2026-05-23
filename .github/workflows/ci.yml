@@ -665,13 +665,14 @@ jobs:
       # optional SITE_LOCK_PASSWORD for the pre-launch passcode gate.
       - name: Sync Cloudflare Pages runtime environment variables
         env:
+          SUPABASE_URL:              ${{ secrets.VITE_SUPABASE_URL }}
           SUPABASE_PROJECT_ID:       ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
           SUPABASE_PUBLISHABLE_KEY:  ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
           SITE_LOCK_PASSWORD:        ${{ secrets.SITE_LOCK_PASSWORD }}
         run: |
           set -euo pipefail
-          if [ -z "${SUPABASE_PROJECT_ID}" ]; then
-            echo "::warning::VITE_SUPABASE_PROJECT_ID secret is empty; sitemap function will use static fallback"
+          if [ -z "${SUPABASE_PROJECT_ID}" ] && [ -z "${SUPABASE_URL}" ]; then
+            echo "::warning::VITE_SUPABASE_PROJECT_ID and VITE_SUPABASE_URL secrets are empty; Pages Functions will use static fallbacks"
           fi
           if [ -z "${SUPABASE_PUBLISHABLE_KEY}" ]; then
             echo "::warning::VITE_SUPABASE_PUBLISHABLE_KEY secret is empty; SEO Functions will use the static app shell"
@@ -682,13 +683,21 @@ jobs:
           # any previously stored passcode instead of preserving stale state.
           # `secret_text` stores the value encrypted-at-rest on Cloudflare's side.
           ENV_JSON=$(jq -n \
+            --arg surl "$SUPABASE_URL" \
             --arg pid "$SUPABASE_PROJECT_ID" \
             --arg pkey "$SUPABASE_PUBLISHABLE_KEY" \
             --arg lock "$SITE_LOCK_PASSWORD" \
             '
             ({} +
+              (if $surl != "" then {
+                SUPABASE_URL: { value: $surl, type: "plain_text" },
+                VITE_SUPABASE_URL: { value: $surl, type: "plain_text" }
+              } else {} end) +
               (if $pid  != "" then { SUPABASE_PROJECT_ID: { value: $pid,  type: "plain_text"  } } else {} end) +
-              (if $pkey != "" then { SUPABASE_PUBLISHABLE_KEY: { value: $pkey, type: "plain_text" } } else {} end) +
+              (if $pkey != "" then {
+                SUPABASE_PUBLISHABLE_KEY: { value: $pkey, type: "plain_text" },
+                VITE_SUPABASE_PUBLISHABLE_KEY: { value: $pkey, type: "plain_text" }
+              } else {} end) +
               (if $lock != "" then { SITE_LOCK_PASSWORD: { value: $lock, type: "secret_text" } } else { SITE_LOCK_PASSWORD: null } end)
             )')
 
@@ -724,7 +733,7 @@ jobs:
 
       - name: Post-deploy health check
         id: health_check
-        run: npm run check:production-deploy -- https://portal.maiprop.co --browser
+        run: npm run check:production-deploy -- https://portal.maiprop.co --browser --public-api
 
       - name: Rollback on health check failure
         if: failure() && steps.health_check.outcome == 'failure' && steps.prev_deploy.outputs.id != ''
