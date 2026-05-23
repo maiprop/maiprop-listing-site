@@ -40,8 +40,6 @@ const FREE_CAP = 60;
 const AUTH_CAP = 600;
 const NATIONAL_SAMPLE_PAGE_COUNT = 3;
 const NATIONAL_SAMPLE_SOURCE_PAGE_SIZE = 600;
-const FAST_NATIONAL_SAMPLE_MAX_PAGES = 4;
-const FAST_NATIONAL_SAMPLE_MAX_PAGE = 200;
 const AUCTION_RESPONSE_CACHE_TTL_MS = 60_000;
 const AUCTION_RESPONSE_CACHE_MAX_ENTRIES = 32;
 const AUCTION_SAMPLE_SALT = "maiprop-auctions-national-v1";
@@ -383,10 +381,8 @@ export function getAuctionResponseCacheKey(
   planCap: number,
   sampleAcrossGreece: boolean,
   filterRequest: Record<string, unknown>,
-  fastSamplePages: number[] | null = null,
 ): string {
   return stableJson({
-    fastSamplePages,
     filterRequest,
     page,
     planCap,
@@ -471,28 +467,6 @@ export function getAuctionSamplePageNumbers(
     );
     const bucketSize = Math.max(1, bucketEnd - bucketStart + 1);
     pages.add(bucketStart + (getStableScore(seed, `page:${i}`) % bucketSize));
-  }
-
-  return [...pages].sort((a, b) => a - b);
-}
-
-export function getFastNationalSamplePages(
-  body: Record<string, unknown>,
-): number[] | null {
-  const rawPages = body.fastSamplePages;
-  if (!Array.isArray(rawPages) || rawPages.length === 0) return null;
-
-  const pages = new Set<number>([0]);
-  for (const rawPage of rawPages) {
-    const page = Number(rawPage);
-    if (
-      Number.isInteger(page) &&
-      page >= 0 &&
-      page <= FAST_NATIONAL_SAMPLE_MAX_PAGE
-    ) {
-      pages.add(page);
-    }
-    if (pages.size >= FAST_NATIONAL_SAMPLE_MAX_PAGES) break;
   }
 
   return [...pages].sort((a, b) => a - b);
@@ -1033,58 +1007,6 @@ async function fetchNationalAuctionSample(
   };
 }
 
-async function fetchFastNationalAuctionSample(
-  osConfig: OsConfig,
-  pages: number[],
-  responseSize: number,
-  filterRequest: Record<string, unknown>,
-): Promise<{ auctions: OsAuction[]; total: number; sourcePages: number[] }> {
-  log.info("authenticating with OS API");
-  const token = await getOsToken(
-    osConfig.url,
-    osConfig.email,
-    osConfig.password,
-  );
-
-  const pageResults = await Promise.allSettled(
-    pages.map((page) =>
-      fetchOsAuctionDetailsWithToken(
-        osConfig,
-        token,
-        page,
-        responseSize,
-        filterRequest,
-      )
-    ),
-  );
-
-  const successfulPages: OsAuction[][] = [];
-  const sourcePages: number[] = [];
-  let total = 0;
-  pageResults.forEach((result, index) => {
-    const page = pages[index];
-    if (result.status === "fulfilled") {
-      const parsed = parseOsResponse(result.value);
-      successfulPages.push(parsed.auctions);
-      sourcePages.push(page);
-      total = Math.max(total, parsed.total);
-      return;
-    }
-    log.warn("fast national auction sample page failed", {
-      page,
-      error: result.reason instanceof Error
-        ? result.reason.message
-        : String(result.reason),
-    });
-  });
-
-  return {
-    auctions: successfulPages.flat(),
-    total,
-    sourcePages,
-  };
-}
-
 function isOsApiFailure(err: unknown): err is OsApiFailure {
   return typeof err === "object" &&
     err !== null &&
@@ -1208,16 +1130,12 @@ async function handleAuctionRequest(
     const { page, size } = pagination;
     const filterRequest = buildFilterRequest(body);
     const sampleAcrossGreece = isNationalSampleRequest(body, filterRequest);
-    const fastSamplePages = sampleAcrossGreece
-      ? getFastNationalSamplePages(body)
-      : null;
     const cacheKey = getAuctionResponseCacheKey(
       page,
       size,
       planCap,
       sampleAcrossGreece,
       filterRequest,
-      fastSamplePages,
     );
     const cachedPayload = readAuctionResponseCache(cacheKey);
     if (cachedPayload) {
@@ -1230,14 +1148,7 @@ async function handleAuctionRequest(
       return jsonResponse(cachedPayload, corsHeaders);
     }
 
-    const osResult = fastSamplePages
-      ? await fetchFastNationalAuctionSample(
-        runtimeConfig.osConfig,
-        fastSamplePages,
-        size,
-        filterRequest,
-      )
-      : sampleAcrossGreece
+    const osResult = sampleAcrossGreece
       ? await fetchNationalAuctionSample(
         runtimeConfig.osConfig,
         size,
@@ -1264,7 +1175,6 @@ async function handleAuctionRequest(
       page,
       source_pages: osResult.sourcePages,
       sample_across_greece: sampleAcrossGreece,
-      fast_sample_pages: fastSamplePages,
     });
     const payload = buildAuctionResponsePayload(
       mapped,

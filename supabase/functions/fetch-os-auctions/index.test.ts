@@ -29,7 +29,6 @@ const {
   mapAuction,
   hasPortalProAccess,
   getAuctionSamplePageNumbers,
-  getFastNationalSamplePages,
   selectDiverseAuctionSample,
   clearAuctionResponseCache,
 } = await import("./index.ts");
@@ -133,16 +132,6 @@ Deno.test("national auction sampling avoids returning one municipality cluster f
 
   assertEquals(sample.length, 9);
   assertEquals(regions.size, 3);
-});
-
-Deno.test("fast national sampling keeps a bounded set of source pages", () => {
-  assertEquals(
-    getFastNationalSamplePages({
-      fastSamplePages: [120, "40", 999, -1, 80, 60],
-    }),
-    [0, 40, 80, 120],
-  );
-  assertEquals(getFastNationalSamplePages({}), null);
 });
 
 Deno.test("OS upstream failures return sanitized client payload", () => {

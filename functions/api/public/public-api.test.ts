@@ -400,9 +400,9 @@ describe("public auctions endpoint", () => {
     const osCall = fetchUrls("/functions/v1/fetch-os-auctions")[0];
     expect(osCall).toBeDefined();
     expect(JSON.parse(String(initFor("/functions/v1/fetch-os-auctions").body))).toMatchObject({
+      page: 80,
       pageSize: 60,
-      sampleAcrossGreece: true,
-      fastSamplePages: [0, 40, 80, 120],
+      sampleAcrossGreece: false,
     });
   });
 
@@ -428,9 +428,9 @@ describe("public auctions endpoint", () => {
     const init = initFor("/functions/v1/fetch-os-auctions");
     expect(init.method).toBe("POST");
     expect(JSON.parse(String(init.body))).toMatchObject({
+      page: 80,
       pageSize: 2,
-      sampleAcrossGreece: true,
-      fastSamplePages: [0, 40, 80, 120],
+      sampleAcrossGreece: false,
       sortBy: "AUCTION_DATE",
     });
   });
