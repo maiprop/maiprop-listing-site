@@ -401,7 +401,7 @@ describe("public auctions endpoint", () => {
     expect(osCall).toBeDefined();
     expect(JSON.parse(String(initFor("/functions/v1/fetch-os-auctions").body))).toMatchObject({
       page: 80,
-      pageSize: 60,
+      pageSize: 55,
       sampleAcrossGreece: false,
     });
   });
@@ -463,6 +463,7 @@ describe("public auctions endpoint", () => {
     expect(dbUrl.searchParams.get("limit")).toBe("240");
     expect(cacheApi.put.mock.calls[0][0].url).toContain("limit=60");
     expect(cacheApi.put.mock.calls[0][0].url).toContain("day=");
+    expect(cacheApi.put.mock.calls[0][0].url).toContain("v=municipality-rotation-v2");
   });
 });
 
