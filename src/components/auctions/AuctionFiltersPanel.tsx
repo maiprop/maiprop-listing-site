@@ -1,6 +1,7 @@
 import { SlidersHorizontal, X, Lock, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { PremiumBadge } from "@/components/auctions/AuctionCard";
 import {
   PROPERTY_TYPES,
@@ -43,6 +44,57 @@ const YIELD_OPTIONS: SelectOption[] = [
   { value: "very_high", label: "9%+ — High yield opportunity" },
 ];
 
+const AUCTION_OPTION_EL: Record<string, string> = {
+  "All Types": "Όλοι οι τύποι",
+  Apartment: "Διαμέρισμα",
+  House: "Μονοκατοικία",
+  Villa: "Βίλα",
+  "Land / Plot (any)": "Οικόπεδο / Αγροτεμάχιο",
+  "Land (no building)": "Γη χωρίς κτίσμα",
+  "Land with building": "Αγροτεμάχιο με κτίσμα",
+  "Agricultural land": "Αγροτεμάχιο",
+  "Plot with building": "Οικόπεδο με κτίσμα",
+  "Commercial (any)": "Επαγγελματικό ακίνητο",
+  "Store / Retail": "Κατάστημα",
+  Warehouse: "Αποθήκη",
+  Industrial: "Βιομηχανικός χώρος",
+  Storeroom: "Αποθηκευτικός χώρος",
+  Parking: "Θέση στάθμευσης",
+  Hotel: "Ξενοδοχείο",
+  "Other business space": "Λοιπός επαγγελματικός χώρος",
+  Office: "Γραφείο",
+  "Any First Offer Price": "Οποιαδήποτε τιμή πρώτης προσφοράς",
+  "Under €20k": "Κάτω από €20k",
+  "€20k – €50k": "€20k – €50k",
+  "€50k – €100k": "€50k – €100k",
+  "€100k – €200k": "€100k – €200k",
+  "€200k – €500k": "€200k – €500k",
+  "€500k+": "€500k+",
+  "Any Year": "Οποιοδήποτε έτος",
+  "Pre-1980": "Πριν το 1980",
+  "Post-2020": "Μετά το 2020",
+  "Any Status": "Οποιοδήποτε καθεστώς",
+  Full: "Πλήρης κυριότητα",
+  Bare: "Ψιλή κυριότητα",
+  Common: "Εξ αδιαιρέτου ποσοστό",
+  Usufruct: "Επικαρπία",
+  Vertical: "Κάθετη ιδιοκτησία",
+  Horizontal: "Οριζόντια ιδιοκτησία",
+  "Any Yield": "Οποιαδήποτε απόδοση",
+  "Under 3% — Low yield": "Κάτω από 3% — Χαμηλή απόδοση",
+  "3% – 6% — Average": "3% – 6% — Μέση απόδοση",
+  "6% – 9% — Good": "6% – 9% — Καλή απόδοση",
+  "9%+ — High yield opportunity": "9%+ — Υψηλή δυνητική απόδοση",
+};
+
+const translateOption = (option: SelectOption, isGreek: boolean): SelectOption => ({
+  ...option,
+  label: isGreek ? AUCTION_OPTION_EL[option.label] ?? option.label : option.label,
+});
+
+const translateOptions = (options: SelectOption[], isGreek: boolean): SelectOption[] =>
+  options.map((option) => translateOption(option, isGreek));
+
 /**
  * Shared wrapper: chevron indicator + a11y label association.
  * Accepts `options` as a prop (not children) to keep JSX nesting depth ≤ 4.
@@ -83,33 +135,35 @@ const PremiumFiltersGrid = ({
   filterOwnership, setFilterOwnership,
   filterRound, setFilterRound, roundOptions,
   filterYield, setFilterYield,
+  isGreek,
 }: {
   filterOwnership: string; setFilterOwnership: (v: string) => void;
   filterRound: string; setFilterRound: (v: string) => void;
   roundOptions: SelectOption[];
   filterYield: string; setFilterYield: (v: string) => void;
+  isGreek: boolean;
 }) => (
   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
     <FilterSelect
       id="filter-ownership"
-      label="Ownership Status"
+      label={isGreek ? "Καθεστώς κυριότητας" : "Ownership Status"}
       value={filterOwnership}
       onChange={setFilterOwnership}
-      options={OWNERSHIP_STATUSES}
+      options={translateOptions(OWNERSHIP_STATUSES, isGreek)}
     />
     <FilterSelect
       id="filter-round"
-      label="Auction Round"
+      label={isGreek ? "Γύρος πλειστηριασμού" : "Auction Round"}
       value={filterRound}
       onChange={setFilterRound}
       options={roundOptions}
     />
     <FilterSelect
       id="filter-yield"
-      label={<>Est. Rental Yield <span className="ml-1.5 text-[10px] text-muted-foreground/60">(city benchmark × sqm / bid)</span></>}
+      label={<>{isGreek ? "Εκτ. μισθωτική απόδοση" : "Est. Rental Yield"} <span className="ml-1.5 text-[10px] text-muted-foreground/60">{isGreek ? "(δείκτης πόλης × τ.μ. / τιμή)" : "(city benchmark × sqm / bid)"}</span></>}
       value={filterYield}
       onChange={setFilterYield}
-      options={YIELD_OPTIONS}
+      options={translateOptions(YIELD_OPTIONS, isGreek)}
     />
   </div>
 );
@@ -125,6 +179,7 @@ const ActiveFilterChips = ({
   roundOptions,
   isPro, isMaiPropOsUser,
   clearFilters,
+  isGreek,
 }: {
   filterType: string; setFilterType: (v: string) => void;
   filterBidRange: string; setFilterBidRange: (v: string) => void;
@@ -135,40 +190,41 @@ const ActiveFilterChips = ({
   roundOptions: { value: string; label: string }[];
   isPro: boolean; isMaiPropOsUser: boolean;
   clearFilters: () => void;
+  isGreek: boolean;
 }) => (
   <div className="flex items-center gap-2 mt-3 flex-wrap">
-    <span className="text-xs text-muted-foreground">Active:</span>
+    <span className="text-xs text-muted-foreground">{isGreek ? "Ενεργά:" : "Active:"}</span>
     {filterType && (
       <button onClick={() => setFilterType("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors capitalize">
-        {filterType} <X className="w-3 h-3" />
+        {translateOption(PROPERTY_TYPES.find((option) => option.value === filterType) ?? { value: filterType, label: filterType }, isGreek).label} <X className="w-3 h-3" />
       </button>
     )}
     {filterBidRange && (
       <button onClick={() => setFilterBidRange("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">
-        {BID_RANGES.find((r) => r.value === filterBidRange)?.label} <X className="w-3 h-3" />
+        {translateOption(BID_RANGES.find((r) => r.value === filterBidRange) ?? { value: filterBidRange, label: filterBidRange }, isGreek).label} <X className="w-3 h-3" />
       </button>
     )}
     {filterYearRange && (
       <button onClick={() => setFilterYearRange("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">
-        {YEAR_RANGES.find((r) => r.value === filterYearRange)?.label} <X className="w-3 h-3" />
+        {translateOption(YEAR_RANGES.find((r) => r.value === filterYearRange) ?? { value: filterYearRange, label: filterYearRange }, isGreek).label} <X className="w-3 h-3" />
       </button>
     )}
     {(isPro || isMaiPropOsUser) && filterOwnership && (
       <button onClick={() => setFilterOwnership("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent hover:bg-accent/20 transition-colors">
-        {OWNERSHIP_STATUSES.find((s) => s.value === filterOwnership)?.label} <X className="w-3 h-3" />
+        {translateOption(OWNERSHIP_STATUSES.find((s) => s.value === filterOwnership) ?? { value: filterOwnership, label: filterOwnership }, isGreek).label} <X className="w-3 h-3" />
       </button>
     )}
     {(isPro || isMaiPropOsUser) && filterRound && (
       <button onClick={() => setFilterRound("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">
-        {roundOptions.find((o) => o.value === filterRound)?.label || `Round ${filterRound}`} <X className="w-3 h-3" />
+        {roundOptions.find((o) => o.value === filterRound)?.label || (isGreek ? `Γύρος ${filterRound}` : `Round ${filterRound}`)} <X className="w-3 h-3" />
       </button>
     )}
     {(isPro || isMaiPropOsUser) && filterYield && (
       <button onClick={() => setFilterYield("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors">
-        Yield: {filterYield.replace("_", " ")} <X className="w-3 h-3" />
+        {translateOption(YIELD_OPTIONS.find((option) => option.value === filterYield) ?? { value: filterYield, label: filterYield }, isGreek).label} <X className="w-3 h-3" />
       </button>
     )}
-    <button onClick={clearFilters} className="text-xs text-muted-foreground hover:text-foreground ml-1">Clear all</button>
+    <button onClick={clearFilters} className="text-xs text-muted-foreground hover:text-foreground ml-1">{isGreek ? "Εκκαθάριση" : "Clear all"}</button>
   </div>
 );
 
@@ -198,52 +254,61 @@ export const AuctionFiltersPanel = ({ // skipcq: JS-W1044
   isMaiPropOsUser,
   activeFilterCount,
   clearFilters,
-}: AuctionFiltersPanelProps) => (
+}: AuctionFiltersPanelProps) => {
+  const { i18n } = useTranslation();
+  const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
+  const localizedRoundOptions = roundOptions.map((option) => {
+    if (!isGreek) return option;
+    if (!option.value) return { ...option, label: "Όλοι οι γύροι" };
+    return { ...option, label: option.label.replace("Auction", "πλειστηριασμός").replace("Round", "Γύρος") };
+  });
+
+  return (
   <>
     {showFilters && (
       <div className="mt-4 p-5 bg-card/95 border border-border rounded-2xl space-y-5 backdrop-blur-sm">
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold flex items-center gap-2">
-            <SlidersHorizontal className="w-4 h-4 text-primary" /> Auction Filters
+            <SlidersHorizontal className="w-4 h-4 text-primary" /> {isGreek ? "Φίλτρα πλειστηριασμών" : "Auction Filters"}
           </span>
           {activeFilterCount > 0 && (
             <button onClick={clearFilters} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
-              <X className="w-3 h-3" /> Clear all
+              <X className="w-3 h-3" /> {isGreek ? "Εκκαθάριση" : "Clear all"}
             </button>
           )}
         </div>
 
         {/* Standard filters */}
         <div>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Standard Filters</p>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{isGreek ? "Βασικά φίλτρα" : "Standard Filters"}</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <FilterSelect
               id="filter-city"
-              label="City"
+              label={isGreek ? "Πόλη" : "City"}
               value={selectedCity}
               onChange={setSelectedCity}
               options={cityOptions.map((c) => ({ value: c, label: c }))}
             />
             <FilterSelect
               id="filter-type"
-              label="Property Type"
+              label={isGreek ? "Τύπος ακινήτου" : "Property Type"}
               value={filterType}
               onChange={setFilterType}
-              options={PROPERTY_TYPES}
+              options={translateOptions(PROPERTY_TYPES, isGreek)}
             />
             <FilterSelect
               id="filter-bid"
-              label="Starting Bid"
+              label={isGreek ? "Τιμή πρώτης προσφοράς" : "First Offer Price"}
               value={filterBidRange}
               onChange={setFilterBidRange}
-              options={BID_RANGES}
+              options={translateOptions(BID_RANGES, isGreek)}
             />
             <FilterSelect
               id="filter-year"
-              label="Construction Year"
+              label={isGreek ? "Έτος κατασκευής" : "Construction Year"}
               value={filterYearRange}
               onChange={setFilterYearRange}
-              options={YEAR_RANGES}
+              options={translateOptions(YEAR_RANGES, isGreek)}
             />
           </div>
         </div>
@@ -251,7 +316,7 @@ export const AuctionFiltersPanel = ({ // skipcq: JS-W1044
         {/* Premium filters: Ownership, Round, Yield */}
         <div className="pt-4 border-t border-border -mx-5 px-5 pb-1 rounded-b-2xl">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
-            More Filters
+            {isGreek ? "Περισσότερα φίλτρα" : "More Filters"}
             {!isPro && !isMaiPropOsUser && <PremiumBadge />}
           </p>
           {isPro || isMaiPropOsUser ? (
@@ -260,19 +325,24 @@ export const AuctionFiltersPanel = ({ // skipcq: JS-W1044
               setFilterOwnership={setFilterOwnership}
               filterRound={filterRound}
               setFilterRound={setFilterRound}
-              roundOptions={roundOptions}
+              roundOptions={localizedRoundOptions}
               filterYield={filterYield}
               setFilterYield={setFilterYield}
+              isGreek={isGreek}
             />
           ) : (
             <div className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50 border border-border">
               <Lock className="w-5 h-5 text-muted-foreground shrink-0" />
               <div>
-                <p className="text-sm font-medium">Ownership Status, Auction Round &amp; Est. Rental Yield</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Upgrade to Pro to unlock these filters.</p>
+                <p className="text-sm font-medium">
+                  {isGreek ? "Καθεστώς κυριότητας, γύρος πλειστηριασμού & εκτ. μισθωτική απόδοση" : "Ownership Status, Auction Round & Est. Rental Yield"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {isGreek ? "Αναβαθμίστε σε Pro για να ξεκλειδώσετε αυτά τα φίλτρα." : "Upgrade to Pro to unlock these filters."}
+                </p>
               </div>
               <Button size="sm" variant="outline" className="border-primary/40 text-primary hover:bg-primary/10 shrink-0" asChild>
-                <Link to="/pricing">Upgrade to Pro</Link>
+                <Link to="/pricing">{isGreek ? "Αναβάθμιση σε Pro" : "Upgrade to Pro"}</Link>
               </Button>
             </div>
           )}
@@ -289,10 +359,12 @@ export const AuctionFiltersPanel = ({ // skipcq: JS-W1044
         filterOwnership={filterOwnership} setFilterOwnership={setFilterOwnership}
         filterRound={filterRound} setFilterRound={setFilterRound}
         filterYield={filterYield} setFilterYield={setFilterYield}
-        roundOptions={roundOptions}
+        roundOptions={localizedRoundOptions}
         isPro={isPro} isMaiPropOsUser={isMaiPropOsUser}
         clearFilters={clearFilters}
+        isGreek={isGreek}
       />
     )}
   </>
-);
+  );
+};

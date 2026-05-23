@@ -11,11 +11,12 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { toast } from "sonner";
 
 const VALUATION_INCLUDED = 5;
-const VALUATION_EXTRA_COST = 3; // euros
+const VALUATION_EXTRA_COST = 39; // euros, valuation_single
 const REPORT_INCLUDED = 3;
-const REPORT_EXTRA_COST = 9; // euros
+const REPORT_EXTRA_COST = 49; // euros, property_report_single
 const PRIORITY_ADS_INCLUDED = 10;
-const PRIORITY_ADS_EXTRA_COST = 5; // euros
+const PRIORITY_ADS_EXTRA_COST = 59; // euros, priority_placement
+const PROFESSIONAL_PRIORITY_AD_EXTRA_COST = 8; // euros, extra_priority_ad
 
 function startOfMonth() {
   const d = new Date();
@@ -152,4 +153,5 @@ export {
   REPORT_EXTRA_COST,
   PRIORITY_ADS_INCLUDED,
   PRIORITY_ADS_EXTRA_COST,
+  PROFESSIONAL_PRIORITY_AD_EXTRA_COST,
 };

@@ -42,11 +42,13 @@ vi.mock("@/integrations/supabase/client", () => ({
   supabase: supabaseMock,
 }));
 
-import { buildListingsQuery } from "@/hooks/useListings";
+let buildListingsQuery: typeof import("@/hooks/useListings")["buildListingsQuery"];
 
-beforeEach(() => {
+beforeEach(async () => {
+  vi.resetModules();
   recorded.length = 0;
   supabaseMock.from.mockClear();
+  ({ buildListingsQuery } = await import("@/hooks/useListings"));
 });
 
 function calls(method: string) {

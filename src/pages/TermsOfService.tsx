@@ -57,7 +57,7 @@ export default function TermsOfService() {
               <ul className="list-disc ml-6 mt-2 space-y-1">
                 <li><strong>Property Listings:</strong> Advertising residential, commercial, and land properties for sale or rent;</li>
                 <li><strong>Greek Auction Listings:</strong> Aggregation and alerts for judicial (notarial), bank repo, and public authority auctions;</li>
-                <li><strong>Firesale™ Instant Offers:</strong> AI-assisted valuation and cash offer facilitation for motivated sellers;</li>
+                <li><strong>Quick Sale™ preliminary offers:</strong> AI-assisted valuation and cash offer facilitation for motivated sellers, subject to review and transaction checks;</li>
                 <li><strong>Professional Directory:</strong> A marketplace connecting users with vetted real estate professionals;</li>
                 <li><strong>AI Tools:</strong> Property valuation estimates, neighbourhood reports, smart search, and investment analytics;</li>
                 <li><strong>Messaging:</strong> Direct communication between buyers, sellers, tenants, landlords, and professionals.</li>
@@ -111,7 +111,7 @@ export default function TermsOfService() {
 
             <section>
               <h2 className="font-display text-xl font-bold text-foreground mb-3">8. Fees & Payments</h2>
-              <p>Certain features of the Platform are subject to fees (e.g., premium listing packages, investor dashboard subscriptions, Firesale™ service fees). All fees are:</p>
+              <p>Certain features of the Platform are subject to fees (e.g., premium listing packages, investor dashboard subscriptions, Quick Sale™ service fees). All fees are:</p>
               <ul className="list-disc ml-6 mt-2 space-y-1">
                 <li>Displayed in Euros (€) inclusive of applicable Greek VAT (currently 24%);</li>
                 <li>Non-refundable unless expressly stated in the relevant service agreement or required by Greek consumer law (Law 2251/1994);</li>

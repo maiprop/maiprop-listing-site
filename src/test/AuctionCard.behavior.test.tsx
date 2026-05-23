@@ -57,7 +57,7 @@ describe("AuctionCard behavior", () => {
     );
 
     expect(screen.getByText("Featured")).toBeInTheDocument();
-    expect(screen.getAllByText(/Διαμ/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Apartment/).length).toBeGreaterThan(0);
     expect(screen.getByText("Athens Court")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /eauction/i })).toHaveAttribute("href", "https://auction.example.test");
 

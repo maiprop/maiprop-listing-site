@@ -1,11 +1,12 @@
 import { memo, type MouseEvent } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Crown, Calendar, Clock, MapPin, Euro, Heart, Share2, Flag, ExternalLink, Building2, Lock } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import {
   daysUntil, countdownBadge, getPropertyTypeLabel,
-  normalizeOwnership, getOwnershipStatus, getOwnershipPct, OWNERSHIP_BADGE,
+  normalizeOwnership, getOwnershipStatus, getOwnershipPct, getOwnershipBadge,
 } from "@/lib/auctionUtils";
 import { APP_ORIGIN } from "@/lib/config";
 import { AUCTION_FALLBACK_LOGO_URL, getAuctionImageList } from "@/lib/auctionStreetView";
@@ -34,14 +35,16 @@ type OwnershipBadgeView = {
 const AuctionTopBadges = ({
   isFeatured,
   auctionDate,
+  isGreek,
 }: {
   isFeatured: boolean;
   auctionDate?: string | null;
+  isGreek: boolean;
 }) => (
   <div className="absolute top-2 left-2 flex items-center gap-1.5 flex-wrap">
     {isFeatured && (
       <span className="inline-flex items-center gap-1 bg-gradient-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded-full">
-        <Crown className="w-2.5 h-2.5" /> Featured
+        <Crown className="w-2.5 h-2.5" /> {isGreek ? "Προβεβλημένο" : "Featured"}
       </span>
     )}
     {auctionDate && (
@@ -81,6 +84,7 @@ const AuctionMedia = ({
   isLogoFallback,
   propertyTypeLabel,
   badge,
+  isGreek,
 }: {
   a: AuctionCardProps["a"];
   imgSrc: string;
@@ -88,6 +92,7 @@ const AuctionMedia = ({
   isLogoFallback: boolean;
   propertyTypeLabel: string | null;
   badge: AuctionCountdownBadge;
+  isGreek: boolean;
 }) => (
   <Link to={`/auction/${a.id}`} state={{ auction: a }} className="relative h-44 bg-secondary overflow-hidden block">
     <img
@@ -105,7 +110,7 @@ const AuctionMedia = ({
       }`}
       onError={e => switchImageToNextFallback(e.currentTarget, imageChain)}
     />
-    <AuctionTopBadges isFeatured={Boolean(a.is_featured)} auctionDate={a.auction_date} />
+    <AuctionTopBadges isFeatured={Boolean(a.is_featured)} auctionDate={a.auction_date} isGreek={isGreek} />
     <AuctionPropertyTypeBadge label={propertyTypeLabel} />
     <AuctionCountdown badge={badge} />
   </Link>
@@ -148,12 +153,12 @@ const AuctionOwnershipChip = ({
 
 const hasUsableSqm = (sqm?: number | null): boolean => Boolean(sqm && sqm > 1);
 
-const AuctionYearBuiltPill = ({ yearBuilt }: { yearBuilt?: string | number | null }) => {
+const AuctionYearBuiltPill = ({ yearBuilt, isGreek }: { yearBuilt?: string | number | null; isGreek: boolean }) => {
   if (!yearBuilt) return null;
 
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-secondary text-foreground border border-border">
-      Built {yearBuilt}
+      {isGreek ? "Έτος" : "Built"} {yearBuilt}
     </span>
   );
 };
@@ -183,7 +188,7 @@ const AuctionCourt = ({ court }: { court?: string | null }) => {
   return <div className="text-xs text-muted-foreground truncate">{court}</div>;
 };
 
-const shareAuctionLink = async (title: string, url: string): Promise<void> => {
+const shareAuctionLink = async (title: string, url: string, isGreek: boolean): Promise<void> => {
   if (navigator.share) {
     try {
       await navigator.share({ title, url });
@@ -194,10 +199,10 @@ const shareAuctionLink = async (title: string, url: string): Promise<void> => {
   }
 
   await navigator.clipboard.writeText(url);
-  toast.success("Link copied to clipboard");
+  toast.success(isGreek ? "Ο σύνδεσμος αντιγράφηκε" : "Link copied to clipboard");
 };
 
-const ExternalAuctionLink = ({ websiteUrl }: { websiteUrl?: string | null }) => {
+const ExternalAuctionLink = ({ websiteUrl, isGreek }: { websiteUrl?: string | null; isGreek: boolean }) => {
   if (!websiteUrl) return null;
 
   return (
@@ -209,7 +214,7 @@ const ExternalAuctionLink = ({ websiteUrl }: { websiteUrl?: string | null }) => 
       className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold bg-primary/10 border border-primary/25 text-primary hover:bg-primary/20 transition-all"
     >
       <ExternalLink className="w-3 h-3" />
-      eAuction
+      {isGreek ? "Στο eAuction" : "eAuction"}
     </a>
   );
 };
@@ -218,10 +223,12 @@ const AuctionActions = ({
   a,
   isFav,
   onToggleFav,
+  isGreek,
 }: {
   a: AuctionCardProps["a"];
   isFav: boolean;
   onToggleFav: AuctionCardProps["onToggleFav"];
+  isGreek: boolean;
 }) => {
   const handleFavorite = (e: MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
@@ -230,12 +237,12 @@ const AuctionActions = ({
 
   const handleShare = async (e: MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
-    await shareAuctionLink(a.title, `${APP_ORIGIN}/auction/${a.id}`);
+    await shareAuctionLink(a.title, `${APP_ORIGIN}/auction/${a.id}`, isGreek);
   };
 
   const handleReport = (e: MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
-    toast.info("Report submitted. Our team will review it.");
+    toast.info(isGreek ? "Η αναφορά υποβλήθηκε. Η ομάδα μας θα την εξετάσει." : "Report submitted. Our team will review it.");
   };
 
   return (
@@ -245,41 +252,44 @@ const AuctionActions = ({
         className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border ${
           isFav ? "bg-rose-500/15 border-rose-500/30 text-rose-400" : "bg-secondary border-border text-muted-foreground hover:text-foreground"
         }`}
-        aria-label="Save"
+        aria-label={isGreek ? "Αποθήκευση" : "Save"}
       >
         <Heart className={`w-3.5 h-3.5 ${isFav ? "fill-current text-rose-400" : ""}`} />
-        {isFav ? "Saved" : "Save"}
+        {isFav ? (isGreek ? "Αποθηκεύτηκε" : "Saved") : (isGreek ? "Αποθήκευση" : "Save")}
       </button>
       <button
         onClick={handleShare}
         className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-secondary border border-border text-muted-foreground hover:text-foreground transition-all"
-        aria-label="Share"
+        aria-label={isGreek ? "Κοινοποίηση" : "Share"}
       >
         <Share2 className="w-3.5 h-3.5" />
-        Share
+        {isGreek ? "Κοινοποίηση" : "Share"}
       </button>
       <button
         onClick={handleReport}
         className="ml-auto p-1.5 rounded-lg text-muted-foreground/50 hover:text-muted-foreground hover:bg-secondary transition-all"
-        aria-label="Report"
+        aria-label={isGreek ? "Αναφορά" : "Report"}
       >
         <Flag className="w-3.5 h-3.5" />
       </button>
-      <ExternalAuctionLink websiteUrl={a.website_url} />
+      <ExternalAuctionLink websiteUrl={a.website_url} isGreek={isGreek} />
     </div>
   );
 };
 
 const AuctionCardComponent = ({ a, favoritedIds, onToggleFav }: AuctionCardProps) => { // skipcq: JS-R1005 - Auction cards compose independent image, ownership, date, and action affordances.
-  const badge = countdownBadge(daysUntil(a.auction_date));
+  const { i18n } = useTranslation();
+  const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
+  const locale = isGreek ? "el" : "en";
+  const badge = countdownBadge(daysUntil(a.auction_date), locale);
   const imageChain = getAuctionImageList(a);
   const imgSrc = imageChain[0] ?? AUCTION_FALLBACK_LOGO_URL;
   const isLogoFallback = imgSrc === AUCTION_FALLBACK_LOGO_URL;
   const isFav = favoritedIds.has(a.id);
-  const propertyTypeLabel = getPropertyTypeLabel(a);
+  const propertyTypeLabel = getPropertyTypeLabel(a, locale);
   const ownershipStatus = normalizeOwnership(getOwnershipStatus(a.tags));
   const ownershipPct = getOwnershipPct(a.tags);
-  const ownershipBadge = ownershipStatus ? OWNERSHIP_BADGE[ownershipStatus] : null;
+  const ownershipBadge = getOwnershipBadge(ownershipStatus, locale);
   const price = a.auction_starting_bid ?? a.price ?? 0;
 
   return (
@@ -291,6 +301,7 @@ const AuctionCardComponent = ({ a, favoritedIds, onToggleFav }: AuctionCardProps
         isLogoFallback={isLogoFallback}
         propertyTypeLabel={propertyTypeLabel}
         badge={badge}
+        isGreek={isGreek}
       />
 
       <div className="p-4 space-y-2 flex-1 flex flex-col">
@@ -301,12 +312,12 @@ const AuctionCardComponent = ({ a, favoritedIds, onToggleFav }: AuctionCardProps
         <AuctionPropertyTypeChip label={propertyTypeLabel} />
         <AuctionOwnershipChip ownershipBadge={ownershipBadge} ownershipPct={ownershipPct} />
         <div className="flex flex-wrap items-center gap-1.5 mt-1 empty:hidden">
-          <AuctionYearBuiltPill yearBuilt={a.year_built} />
+          <AuctionYearBuiltPill yearBuilt={a.year_built} isGreek={isGreek} />
           <AuctionSizePill sqm={a.sqm} />
         </div>
         <AuctionPrice amount={price} />
         <AuctionCourt court={a.auction_court} />
-        <AuctionActions a={a} isFav={isFav} onToggleFav={onToggleFav} />
+        <AuctionActions a={a} isFav={isFav} onToggleFav={onToggleFav} isGreek={isGreek} />
       </div>
     </div>
   );

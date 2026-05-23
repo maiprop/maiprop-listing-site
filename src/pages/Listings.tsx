@@ -109,6 +109,103 @@ const getPriceRangeLabel = (selectedPrice: string) =>
 const getFeatureFilterLabel = (features: SmartFilterFeature[], key: string) =>
   features.find((option) => option.key === key)?.label.replace(/^[^\s]+ /, "") || key;
 
+const PROPERTY_TYPE_LABELS_EL: Record<string, string> = {
+  apartment: "Διαμέρισμα",
+  house: "Μονοκατοικία",
+  villa: "Βίλα",
+  land: "Οικόπεδο / Αγροτεμάχιο",
+  commercial: "Επαγγελματικό ακίνητο",
+  office: "Γραφείο",
+  studio: "Γκαρσονιέρα",
+  maisonette: "Μεζονέτα",
+  warehouse: "Αποθήκη",
+  hotel: "Ξενοδοχείο",
+  mixed_use: "Κτίριο μεικτής χρήσης",
+  parking: "Θέση στάθμευσης",
+  storage: "Αποθηκευτικός χώρος",
+};
+
+const SUBTYPE_LABELS_EL: Record<string, string> = {
+  studio: "Γκαρσονιέρα",
+  "1bedroom": "1 υπνοδωμάτιο",
+  "2bedroom": "2 υπνοδωμάτια",
+  "3bedroom": "3 υπνοδωμάτια",
+  "4bedroom": "4+ υπνοδωμάτια",
+  ground_floor: "Ισόγειο",
+  basement: "Υπόγειο",
+  detached: "Μονοκατοικία",
+  semi_detached: "Ημιανεξάρτητη κατοικία",
+  terraced: "Μεζονέτα σε σειρά",
+  townhouse: "Αστική κατοικία",
+  bungalow: "Ισόγεια κατοικία",
+  buildable: "Οικοδομήσιμο οικόπεδο",
+  agricultural: "Αγροτεμάχιο",
+  coastal: "Παραθαλάσσιο",
+  forest: "Δασική έκταση",
+  industrial: "Βιομηχανική ζώνη",
+  tourism: "Τουριστική ζώνη",
+  shop: "Κατάστημα",
+  warehouse: "Αποθήκη",
+  craft_workshop: "Βιοτεχνικός χώρος",
+  hotel: "Ξενοδοχείο",
+  commercial_building: "Κτίριο επαγγελματικών χώρων",
+  hall: "Αίθουσα",
+  showroom: "Εκθεσιακός χώρος",
+  restaurant: "Εστιατόριο / καφέ",
+  clinic: "Ιατρείο",
+  mixed_use: "Κτίριο μεικτής χρήσης",
+  office_private: "Ιδιωτικό γραφείο",
+  office_open_plan: "Γραφείο ανοικτού χώρου",
+  office_coworking: "Coworking / ευέλικτος χώρος",
+  office_business: "Business centre",
+  office_floor: "Ολόκληρος όροφος",
+  other_commercial: "Λοιπός επαγγελματικός χώρος",
+  private_office: "Ιδιωτικό γραφείο",
+  open_plan: "Γραφείο ανοικτού χώρου",
+  coworking: "Coworking / ευέλικτος χώρος",
+  business_centre: "Business centre",
+  floor: "Ολόκληρος όροφος",
+  converted: "Μετατρεπόμενος χώρος",
+};
+
+const HEATING_LABELS_EL: Record<string, string> = {
+  autonomous_oil: "Αυτόνομη θέρμανση (πετρέλαιο)",
+  autonomous_gas: "Αυτόνομη θέρμανση (φυσικό αέριο)",
+  autonomous: "Αυτόνομη θέρμανση",
+  central_oil: "Κεντρική θέρμανση (πετρέλαιο)",
+  central_gas: "Κεντρική θέρμανση (φυσικό αέριο)",
+  central: "Κεντρική θέρμανση",
+  floor: "Ενδοδαπέδια θέρμανση",
+  none: "Χωρίς θέρμανση",
+  other: "Άλλη θέρμανση",
+};
+
+const CONDITION_LABELS_EL: Record<string, string> = {
+  new: "Νεόδμητο",
+  under_construction: "Υπό κατασκευή",
+  renovated: "Ανακαινισμένο",
+  needs_renovation: "Χρήζει ανακαίνισης",
+  unfinished: "Ημιτελές",
+  preserved: "Διατηρητέο",
+  neoclassical: "Νεοκλασικό",
+};
+
+const translatePropertyType = (type: string, isGreek: boolean) =>
+  isGreek ? (PROPERTY_TYPE_LABELS_EL[type] ?? getTypeLabel(type)) : getTypeLabel(type);
+
+const translateSubtype = (type: string, subtype: string, isGreek: boolean) =>
+  isGreek ? (SUBTYPE_LABELS_EL[subtype] ?? getSubtypeLabel(type, subtype)) : getSubtypeLabel(type, subtype);
+
+const translateHeating = (value: string, isGreek: boolean) => {
+  const english = HEATING_TYPES.find((heating) => heating.value === value)?.label ?? value;
+  return isGreek ? (HEATING_LABELS_EL[value] ?? english) : english;
+};
+
+const translateCondition = (value: string, isGreek: boolean) => {
+  const english = CONSTRUCTION_STATUSES.find((status) => status.value === value)?.label ?? value;
+  return isGreek ? (CONDITION_LABELS_EL[value] ?? english) : english;
+};
+
 const DesktopActiveFilterChips = ({ // skipcq: JS-R1005 - Active chips map independent URL filters into removable controls.
   selectedType,
   selectedSubtype,
@@ -129,6 +226,7 @@ const DesktopActiveFilterChips = ({ // skipcq: JS-R1005 - Active chips map indep
   setParam,
   toggleMulti,
   clearAllFilters,
+  isGreek,
 }: {
   selectedType: string;
   selectedSubtype: string;
@@ -149,23 +247,24 @@ const DesktopActiveFilterChips = ({ // skipcq: JS-R1005 - Active chips map indep
   setParam: ListingsFilterSetParam;
   toggleMulti: ListingsFilterToggleMulti;
   clearAllFilters: () => void;
+  isGreek: boolean;
 }) => (
   <div className="hidden sm:flex items-center gap-1.5 mt-3 min-h-9 flex-wrap overflow-visible rounded-xl border border-border bg-card/70 px-3 py-2 shadow-sm [&>button]:inline-flex [&>button]:h-7 [&>button]:items-center [&>button]:leading-none [&>button]:max-w-full [&>button]:min-w-0 [&>button]:whitespace-nowrap">
-    <span className="flex h-7 items-center text-xs font-medium text-muted-foreground shrink-0">Active filters:</span>
+    <span className="flex h-7 items-center text-xs font-medium text-muted-foreground shrink-0">{isGreek ? "Ενεργά φίλτρα:" : "Active filters:"}</span>
     {selectedType && (
       <ActiveFilterChip onClick={() => { setParam("type", ""); setParam("subtype", ""); }}>
-        {PROPERTY_TYPE_MAP[selectedType as PropertyTypeKey]?.emoji} {getTypeLabel(selectedType)}
+        {PROPERTY_TYPE_MAP[selectedType as PropertyTypeKey]?.emoji} {translatePropertyType(selectedType, isGreek)}
       </ActiveFilterChip>
     )}
     {selectedSubtype && selectedType && (
-      <ActiveFilterChip onClick={() => setParam("subtype", "")}>{getSubtypeLabel(selectedType, selectedSubtype)}</ActiveFilterChip>
+      <ActiveFilterChip onClick={() => setParam("subtype", "")}>{translateSubtype(selectedType, selectedSubtype, isGreek)}</ActiveFilterChip>
     )}
     {selectedPrice && (
       <ActiveFilterChip onClick={() => setParam("price", "")}>{getPriceRangeLabel(selectedPrice)}</ActiveFilterChip>
     )}
-    {bedsRange[0] && <ActiveFilterChip onClick={() => setParam("beds_min", "")}>{bedsRange[0]}+ beds</ActiveFilterChip>}
+    {bedsRange[0] && <ActiveFilterChip onClick={() => setParam("beds_min", "")}>{bedsRange[0]}+ {isGreek ? "υπνοδωμάτια" : "beds"}</ActiveFilterChip>}
     {selectedEnergyClasses.map((energyClass) => (
-      <ActiveFilterChip key={energyClass} onClick={() => toggleMulti("energy", energyClass)}>Energy {energyClass}</ActiveFilterChip>
+      <ActiveFilterChip key={energyClass} onClick={() => toggleMulti("energy", energyClass)}>{isGreek ? "Ενεργειακή κλάση" : "Energy"} {energyClass}</ActiveFilterChip>
     ))}
     {selectedFeatures.map((feature) => (
       <ActiveFilterChip key={feature} onClick={() => toggleMulti("features", feature)}>
@@ -174,22 +273,22 @@ const DesktopActiveFilterChips = ({ // skipcq: JS-R1005 - Active chips map indep
     ))}
     {selectedHeating && (
       <ActiveFilterChip onClick={() => setParam("heating", "")}>
-        Heating: {HEATING_TYPES.find((heating) => heating.value === selectedHeating)?.label || selectedHeating}
+        {isGreek ? "Θέρμανση:" : "Heating:"} {translateHeating(selectedHeating, isGreek)}
       </ActiveFilterChip>
     )}
     {selectedConstruction && (
       <ActiveFilterChip onClick={() => setParam("construction", "")}>
-        {CONSTRUCTION_STATUSES.find((status) => status.value === selectedConstruction)?.label || selectedConstruction}
+        {translateCondition(selectedConstruction, isGreek)}
       </ActiveFilterChip>
     )}
-    {offMarketOnly && <ActiveFilterChip onClick={() => setParam("off_market", "")}>Off-market</ActiveFilterChip>}
-    {preSaleOnly && <ActiveFilterChip onClick={() => setParam("pre_sale", "")}>Pre-sale</ActiveFilterChip>}
-    {hasVideoViewing && <ActiveFilterChip accent onClick={() => setParam("video_viewing", "")}>Video Viewing</ActiveFilterChip>}
-    {hasVirtualTour && <ActiveFilterChip accent onClick={() => setParam("virtual_tour", "")}>Virtual Tour</ActiveFilterChip>}
-    {hasMessaging && <ActiveFilterChip accent onClick={() => setParam("messaging", "")}>Messaging</ActiveFilterChip>}
-    {minAiScore > 0 && <ActiveFilterChip accent onClick={() => setParam("min_ai_score", "")}>AI score {minAiScore}+</ActiveFilterChip>}
-    {minWalkability > 0 && <ActiveFilterChip accent onClick={() => setParam("min_walkability", "")}>Walk {minWalkability}+</ActiveFilterChip>}
-    <button onClick={clearAllFilters} className="text-xs text-muted-foreground hover:text-foreground ml-1 shrink-0">Clear all</button>
+    {offMarketOnly && <ActiveFilterChip onClick={() => setParam("off_market", "")}>{isGreek ? "Εκτός αγοράς" : "Off-market"}</ActiveFilterChip>}
+    {preSaleOnly && <ActiveFilterChip onClick={() => setParam("pre_sale", "")}>{isGreek ? "Προπώληση" : "Pre-sale"}</ActiveFilterChip>}
+    {hasVideoViewing && <ActiveFilterChip accent onClick={() => setParam("video_viewing", "")}>{isGreek ? "Βιντεοκλήση" : "Video Viewing"}</ActiveFilterChip>}
+    {hasVirtualTour && <ActiveFilterChip accent onClick={() => setParam("virtual_tour", "")}>{isGreek ? "Εικονική περιήγηση" : "Virtual Tour"}</ActiveFilterChip>}
+    {hasMessaging && <ActiveFilterChip accent onClick={() => setParam("messaging", "")}>{isGreek ? "Μηνύματα" : "Messaging"}</ActiveFilterChip>}
+    {minAiScore > 0 && <ActiveFilterChip accent onClick={() => setParam("min_ai_score", "")}>{isGreek ? "AI βαθμός" : "AI score"} {minAiScore}+</ActiveFilterChip>}
+    {minWalkability > 0 && <ActiveFilterChip accent onClick={() => setParam("min_walkability", "")}>{isGreek ? "Περπατησιμότητα" : "Walk"} {minWalkability}+</ActiveFilterChip>}
+    <button onClick={clearAllFilters} className="text-xs text-muted-foreground hover:text-foreground ml-1 shrink-0">{isGreek ? "Καθαρισμός όλων" : "Clear all"}</button>
   </div>
 );
 
@@ -200,6 +299,7 @@ const getListingsResultLabel = ({ // skipcq: JS-R1005 - Result labels intentiona
   filtered,
   mapListings,
   hasNextPage,
+  isGreek,
 }: {
   viewMode: "grid" | "split" | "map";
   polygonFilterIds: Set<string> | null;
@@ -207,23 +307,27 @@ const getListingsResultLabel = ({ // skipcq: JS-R1005 - Result labels intentiona
   filtered: ListingCardWithRaw[];
   mapListings: Array<{ id: string }>;
   hasNextPage: boolean;
+  isGreek: boolean;
 }) => {
   if (viewMode === "split" && polygonFilterIds !== null) {
-    return `${filtered.filter((property) => polygonFilterIds.has(property.id)).length} in area`;
+    const count = filtered.filter((property) => polygonFilterIds.has(property.id)).length;
+    return isGreek ? `${count} στην περιοχή` : `${count} in area`;
   }
   if (viewMode === "map" && polygonFilterIds !== null) {
-    return `${filtered.filter((property) => polygonFilterIds.has(property.id)).length} in area`;
+    const count = filtered.filter((property) => polygonFilterIds.has(property.id)).length;
+    return isGreek ? `${count} στην περιοχή` : `${count} in area`;
   }
   if (viewMode === "split" && viewportIds !== null) {
-    return `${filtered.filter((property) => viewportIds.has(property.id)).length} in view`;
+    const count = filtered.filter((property) => viewportIds.has(property.id)).length;
+    return isGreek ? `${count} στον χάρτη` : `${count} in view`;
   }
   if (viewMode === "map") {
-    return `${mapListings.length} map result${mapListings.length !== 1 ? "s" : ""}`;
+    return isGreek ? `${mapListings.length} αποτελέσματα χάρτη` : `${mapListings.length} map result${mapListings.length !== 1 ? "s" : ""}`;
   }
   if (hasNextPage) {
-    return `${filtered.length} loaded propert${filtered.length === 1 ? "y" : "ies"}`;
+    return isGreek ? `${filtered.length} φορτωμένα ακίνητα` : `${filtered.length} loaded propert${filtered.length === 1 ? "y" : "ies"}`;
   }
-  return `${filtered.length} properties`;
+  return isGreek ? `${filtered.length} ακίνητα` : `${filtered.length} properties`;
 };
 
 const ListingsResultSummary = (props: Parameters<typeof getListingsResultLabel>[0]) => (
@@ -247,7 +351,15 @@ const getSearchValueFromGooglePlace = (place: ListingsGooglePlace) => {
 
 // skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
 export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings coordinates filters, map state, comparison, and virtualization in one route shell.
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
+  const metaTitle = isGreek
+    ? "Ακίνητα για Πώληση & Ενοικίαση στην Ελλάδα — mAI prop"
+    : "Properties for Sale & Rent in Greece — mAI prop";
+  const metaDescription = isGreek
+    ? "Αναζητήστε ακίνητα για πώληση και ενοικίαση σε όλη την Ελλάδα. Φιλτράρετε ανά πόλη, τύπο, τιμή και άλλα κριτήρια."
+    : "Search thousands of properties for sale and rent across Greece. Filter by city, type, price and more.";
+  const metaName = isGreek ? "Ακίνητα για Πώληση & Ενοικίαση στην Ελλάδα" : "Properties for Sale & Rent in Greece";
 
   const [viewMode, setViewMode] = useState<"grid" | "split" | "map">("grid");
   const [showFilters, setShowFilters] = useState(false);
@@ -410,10 +522,11 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
       setParam={setParam}
       toggleMulti={toggleMulti}
       clearAllFilters={clearAllFilters}
+      isGreek={isGreek}
     />
   ) : null;
   const resultSummary = isLoading ? (
-    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" aria-label="Loading listings" />
+    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" aria-label={isGreek ? "Φόρτωση αγγελιών" : "Loading listings"} />
   ) : (
     <ListingsResultSummary
       viewMode={viewMode}
@@ -422,22 +535,23 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
       filtered={filtered}
       mapListings={mapListings}
       hasNextPage={hasNextPage}
+      isGreek={isGreek}
     />
   );
   const statsStatus = (
     <div className="flex items-center gap-3">
       {resultSummary}
       {totalLoaded === 0 && !isLoading && (
-        <span className="text-muted-foreground text-sm">No listings matched your filters</span>
+        <span className="text-muted-foreground text-sm">{isGreek ? "Δεν βρέθηκαν αγγελίες με αυτά τα φίλτρα" : "No listings matched your filters"}</span>
       )}
       {(viewMode === "split" || viewMode === "map") && polygonFilterIds !== null && (
         <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-          Area filter
+          {isGreek ? "Φίλτρο περιοχής" : "Area filter"}
         </span>
       )}
       {viewMode === "split" && viewportIds !== null && polygonFilterIds === null && (
         <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-          Map synced
+          {isGreek ? "Συγχρονισμός χάρτη" : "Map synced"}
         </span>
       )}
     </div>
@@ -446,17 +560,17 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
   return (
     <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
       <Helmet>
-        <title>Properties for Sale &amp; Rent in Greece — mAI prop</title>
-        <meta name="description" content="Search thousands of properties for sale and rent across Greece. Filter by city, type, price and more." />
+        <title>{metaTitle}</title>
+        <meta name="description" content={metaDescription} />
         <link rel="canonical" href="https://maiprop.co/listings" />
-        <meta property="og:title" content="Properties for Sale &amp; Rent in Greece — mAI prop" />
-        <meta property="og:description" content="Search thousands of properties for sale and rent across Greece." />
+        <meta property="og:title" content={metaTitle} />
+        <meta property="og:description" content={metaDescription} />
         <meta property="og:url" content="https://maiprop.co/listings" />
         <script type="application/ld+json">{JSON.stringify({
           "@context": "https://schema.org",
           "@type": "SearchResultsPage",
-          "name": "Properties for Sale & Rent in Greece",
-          "description": "Search thousands of properties for sale and rent across Greece.",
+          "name": metaName,
+          "description": metaDescription,
           "url": "https://maiprop.co/listings",
           "provider": { "@type": "Organization", "name": "mAI prop", "url": "https://maiprop.co" },
         })}</script>
@@ -495,8 +609,8 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                   <input
                     ref={mobileSearchInputRef}
                     type="text"
-                    placeholder="City…"
-                    aria-label="Search by city"
+                    placeholder={isGreek ? "Πόλη…" : "City…"}
+                    aria-label={isGreek ? "Αναζήτηση ανά πόλη" : "Search by city"}
                     value={searchQuery}
                     onChange={e => setParam("city", e.target.value)}
                     onFocus={() => setGooglePlacesRequested(true)}
@@ -510,14 +624,14 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                 <div className="flex rounded-xl border border-border overflow-hidden shrink-0">
                   <button
                     onClick={() => setViewMode("grid")}
-                    aria-label="Grid view"
+                    aria-label={isGreek ? "Προβολή πλέγματος" : "Grid view"}
                     aria-pressed={viewMode === "grid"}
                     className={`p-2 transition-colors ${viewMode === "grid" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}>
                     <LayoutGrid className="w-4 h-4" aria-hidden="true" />
                   </button>
                   <button
                     onClick={() => setViewMode("map")}
-                    aria-label="Map view"
+                    aria-label={isGreek ? "Προβολή χάρτη" : "Map view"}
                     aria-pressed={viewMode === "map" || viewMode === "split"}
                     className={`p-2 transition-colors ${viewMode === "map" || viewMode === "split" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}>
                     <Map className="w-4 h-4" aria-hidden="true" />
@@ -526,7 +640,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                 {/* Filters button */}
                 <button
                   onClick={() => setShowFilters(!showFilters)}
-                  aria-label={activeFilterCount > 0 ? `Filters (${activeFilterCount} active)` : "Filters"}
+                  aria-label={activeFilterCount > 0 ? (isGreek ? `Φίλτρα (${activeFilterCount} ενεργά)` : `Filters (${activeFilterCount} active)`) : (isGreek ? "Φίλτρα" : "Filters")}
                   aria-expanded={showFilters}
                   className={`shrink-0 flex items-center gap-1 px-2.5 py-2 rounded-xl border text-xs font-medium transition-colors ${showFilters ? "bg-primary/10 border-primary/30 text-primary" : "bg-secondary border-border text-muted-foreground"}`}>
                   <SlidersHorizontal className="w-4 h-4" aria-hidden="true" />
@@ -579,12 +693,12 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                   </div>
                   {/* Size */}
                   <div className="space-y-1.5">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Size (m²)</span>
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isGreek ? "Εμβαδόν (τ.μ.)" : "Size (m²)"}</span>
                     <div className="flex gap-2">
-                      <input type="number" placeholder="Min m²" value={minSqm}
+                      <input type="number" placeholder={isGreek ? "Ελάχ. τ.μ." : "Min m²"} value={minSqm}
                         onChange={e => setParam("sqm_min", e.target.value)}
                         className="flex-1 px-3 py-2 text-sm rounded-lg border border-border bg-secondary text-foreground outline-none focus:border-primary" />
-                      <input type="number" placeholder="Max m²" value={maxSqm}
+                      <input type="number" placeholder={isGreek ? "Μέγ. τ.μ." : "Max m²"} value={maxSqm}
                         onChange={e => setParam("sqm_max", e.target.value)}
                         className="flex-1 px-3 py-2 text-sm rounded-lg border border-border bg-secondary text-foreground outline-none focus:border-primary" />
                     </div>
@@ -607,19 +721,19 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                   {/* Listing status */}
                   {(selectedListingType === "sale" || !selectedListingType) && (
                     <div className="space-y-1.5">
-                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</span>
+                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isGreek ? "Κατάσταση" : "Status"}</span>
                       <div className="flex gap-3 flex-wrap">
                         <label className="flex items-center gap-2 cursor-pointer">
                           <input type="checkbox" checked={offMarketOnly}
                             onChange={e => setParam("off_market", e.target.checked ? "1" : "")}
                             className="rounded border-border accent-primary" />
-                          <span className="text-sm">🔒 Off-market</span>
+                          <span className="text-sm">🔒 {isGreek ? "Εκτός αγοράς" : "Off-market"}</span>
                         </label>
                         <label className="flex items-center gap-2 cursor-pointer">
                           <input type="checkbox" checked={preSaleOnly}
                             onChange={e => setParam("pre_sale", e.target.checked ? "1" : "")}
                             className="rounded border-border accent-primary" />
-                          <span className="text-sm">🏗️ Pre-sale</span>
+                          <span className="text-sm">🏗️ {isGreek ? "Προπώληση" : "Pre-sale"}</span>
                         </label>
                       </div>
                     </div>
@@ -627,7 +741,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                   {activeFilterCount > 0 && (
                     <button onClick={clearAllFilters}
                       className="w-full py-2 text-xs text-muted-foreground border border-border rounded-lg hover:text-foreground hover:border-primary/30 transition-colors">
-                      Clear all filters
+                      {isGreek ? "Καθαρισμός όλων των φίλτρων" : "Clear all filters"}
                     </button>
                   )}
                 </div>
@@ -636,16 +750,16 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
               {/* Active filter chips — shown when panel is closed */}
               {activeFilterCount > 0 && !showFilters && (
                 <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
-                  {selectedType && <button onClick={() => { setParam("type", ""); setParam("subtype", ""); }} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{selectedType} <X className="w-3 h-3" /></button>}
-                  {selectedPrice && <button onClick={() => setParam("price", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{[...buyPriceRanges, ...rentPriceRanges].find(r => r.value === selectedPrice)?.label || selectedPrice} <X className="w-3 h-3" /></button>}
-                  {bedsRange[0] && <button onClick={() => setParam("beds_min", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{bedsRange[0]}+ beds <X className="w-3 h-3" /></button>}
-                  {(minSqm || maxSqm) && <button onClick={() => { setParam("sqm_min", ""); setParam("sqm_max", ""); }} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">Size <X className="w-3 h-3" /></button>}
-                  {hasVideoViewing && <button onClick={() => setParam("video_viewing", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent shrink-0">🎥 Video <X className="w-3 h-3" /></button>}
-                  {hasVirtualTour && <button onClick={() => setParam("virtual_tour", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent shrink-0">🔮 Virtual <X className="w-3 h-3" /></button>}
-                  {hasMessaging && <button onClick={() => setParam("messaging", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent shrink-0">💬 Messaging <X className="w-3 h-3" /></button>}
-                  {minAiScore > 0 && <button onClick={() => setParam("min_ai_score", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent shrink-0">🤖 AI {minAiScore}+ <X className="w-3 h-3" /></button>}
-                  {minWalkability > 0 && <button onClick={() => setParam("min_walkability", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent shrink-0">🚶 Walk {minWalkability}+ <X className="w-3 h-3" /></button>}
-                  <button onClick={clearAllFilters} className="text-xs text-muted-foreground shrink-0 ml-1">Clear all</button>
+                   {selectedType && <button onClick={() => { setParam("type", ""); setParam("subtype", ""); }} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{translatePropertyType(selectedType, isGreek)} <X className="w-3 h-3" /></button>}
+                   {selectedPrice && <button onClick={() => setParam("price", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{[...buyPriceRanges, ...rentPriceRanges].find(r => r.value === selectedPrice)?.label || selectedPrice} <X className="w-3 h-3" /></button>}
+                   {bedsRange[0] && <button onClick={() => setParam("beds_min", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{bedsRange[0]}+ {isGreek ? "υπνοδωμάτια" : "beds"} <X className="w-3 h-3" /></button>}
+                   {(minSqm || maxSqm) && <button onClick={() => { setParam("sqm_min", ""); setParam("sqm_max", ""); }} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{isGreek ? "Εμβαδόν" : "Size"} <X className="w-3 h-3" /></button>}
+                   {hasVideoViewing && <button onClick={() => setParam("video_viewing", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent shrink-0">🎥 {isGreek ? "Βίντεο" : "Video"} <X className="w-3 h-3" /></button>}
+                   {hasVirtualTour && <button onClick={() => setParam("virtual_tour", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent shrink-0">🔮 {isGreek ? "Εικονική περιήγηση" : "Virtual"} <X className="w-3 h-3" /></button>}
+                   {hasMessaging && <button onClick={() => setParam("messaging", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent shrink-0">💬 {isGreek ? "Μηνύματα" : "Messaging"} <X className="w-3 h-3" /></button>}
+                   {minAiScore > 0 && <button onClick={() => setParam("min_ai_score", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent shrink-0">🤖 AI {minAiScore}+ <X className="w-3 h-3" /></button>}
+                   {minWalkability > 0 && <button onClick={() => setParam("min_walkability", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent shrink-0">🚶 {isGreek ? "Περπάτημα" : "Walk"} {minWalkability}+ <X className="w-3 h-3" /></button>}
+                   <button onClick={clearAllFilters} className="text-xs text-muted-foreground shrink-0 ml-1">{isGreek ? "Καθαρισμός όλων" : "Clear all"}</button>
                 </div>
               )}
             </div>
@@ -658,8 +772,8 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                 <input
                   ref={desktopSearchInputRef}
                   type="text"
-                  placeholder="City, area, address..."
-                  aria-label="Search by city or area"
+                  placeholder={isGreek ? "Πόλη, περιοχή, διεύθυνση..." : "City, area, address..."}
+                  aria-label={isGreek ? "Αναζήτηση ανά πόλη ή περιοχή" : "Search by city or area"}
                   value={searchQuery}
                   onChange={e => setParam("city", e.target.value)}
                   onFocus={() => setGooglePlacesRequested(true)}
@@ -677,7 +791,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
               />
               <div className="relative">
                 <select value={selectedPrice} onChange={e => setParam("price", e.target.value)}
-                  aria-label="Price range"
+                  aria-label={isGreek ? "Εύρος τιμής" : "Price range"}
                   className="appearance-none bg-secondary border border-border rounded-xl px-3 py-2.5 pr-7 text-sm text-foreground cursor-pointer outline-none focus:border-primary">
                   {(selectedListingType === "rent" ? rentPriceRanges : buyPriceRanges).map(o => (
                     <option key={o.value} value={o.value} className="bg-card">{o.label}</option>
@@ -687,7 +801,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
               </div>
               <div className="relative">
                 <select value={selectedSort} onChange={e => setParam("sort", e.target.value)}
-                  aria-label="Sort by"
+                  aria-label={isGreek ? "Ταξινόμηση" : "Sort by"}
                   className="appearance-none bg-secondary border border-border rounded-xl px-3 py-2.5 pr-7 text-sm text-foreground cursor-pointer outline-none focus:border-primary">
                   {sortOptions.map(o => <option key={o.value} value={o.value} className="bg-card">{t(o.labelKey)}</option>)}
                 </select>
@@ -697,7 +811,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                 className={`border-border gap-2 shrink-0 ${showFilters ? "bg-primary/10 border-primary/30 text-primary" : ""}`}
                 onClick={() => setShowFilters(!showFilters)}>
                 <SlidersHorizontal className="w-4 h-4" />
-                More Filters
+                {isGreek ? "Περισσότερα φίλτρα" : "More Filters"}
                 {activeFilterCount > 0 && (
                   <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center">{activeFilterCount}</span>
                 )}
@@ -712,15 +826,15 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
               )}
               <div className="basis-full flex">
                 <div className="flex rounded-xl border border-border overflow-hidden shrink-0">
-                  <button onClick={() => setViewMode("grid")} aria-label="Grid view" aria-pressed={viewMode === "grid"}
+                  <button onClick={() => setViewMode("grid")} aria-label={isGreek ? "Προβολή πλέγματος" : "Grid view"} aria-pressed={viewMode === "grid"}
                     className={`p-2.5 transition-colors ${viewMode === "grid" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
                     <LayoutGrid className="w-4 h-4" />
                   </button>
-                  <button onClick={() => setViewMode("split")} aria-label="Split view" aria-pressed={viewMode === "split"}
+                  <button onClick={() => setViewMode("split")} aria-label={isGreek ? "Διπλή προβολή" : "Split view"} aria-pressed={viewMode === "split"}
                     className={`p-2.5 transition-colors ${viewMode === "split" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
                     <Columns2 className="w-4 h-4" />
                   </button>
-                  <button onClick={() => setViewMode("map")} aria-label="Map view" aria-pressed={viewMode === "map"}
+                  <button onClick={() => setViewMode("map")} aria-label={isGreek ? "Προβολή χάρτη" : "Map view"} aria-pressed={viewMode === "map"}
                     className={`p-2.5 transition-colors ${viewMode === "map" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
                     <Map className="w-4 h-4" />
                   </button>
@@ -747,11 +861,11 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
               {compareList.length > 0 && (
                 <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-accent/10 border border-accent/20 text-xs text-accent font-medium">
                   <GitCompare className="w-3.5 h-3.5" />
-                  {compareList.length} selected to compare
+                  {isGreek ? `${compareList.length} επιλεγμένα για σύγκριση` : `${compareList.length} selected to compare`}
                 </div>
               )}
               <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground gap-1.5" asChild>
-                <Link to="/listings/new"><Building2 className="w-3.5 h-3.5" /> Post Listing</Link>
+                <Link to="/listings/new"><Building2 className="w-3.5 h-3.5" /> {isGreek ? "Καταχώρηση αγγελίας" : "Post Listing"}</Link>
               </Button>
             </div>
           </div>
@@ -766,8 +880,8 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
             const gridCards = splitDisplayList.length === 0 ? (
               <div className="glass-card rounded-xl p-10 text-center mt-4">
                 <MapPin className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-                <p className="font-semibold text-sm">No properties here</p>
-                <p className="text-xs text-muted-foreground mt-1">Pan the map or clear any area filter</p>
+                <p className="font-semibold text-sm">{isGreek ? "Δεν υπάρχουν ακίνητα εδώ" : "No properties here"}</p>
+                <p className="text-xs text-muted-foreground mt-1">{isGreek ? "Μετακινήστε τον χάρτη ή καθαρίστε το φίλτρο περιοχής" : "Pan the map or clear any area filter"}</p>
               </div>
             ) : (
               <VirtualizedListingGrid
@@ -790,13 +904,13 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                     onClick={() => setMobileTab("list")}
                     className={`flex-1 py-2.5 text-sm font-medium transition-colors ${mobileTab === "list" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
                   >
-                    List ({splitDisplayList.length})
+                    {isGreek ? "Λίστα" : "List"} ({splitDisplayList.length})
                   </button>
                   <button
                     onClick={() => setMobileTab("map")}
                     className={`flex-1 py-2.5 text-sm font-medium transition-colors ${mobileTab === "map" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
                   >
-                    Map
+                    {isGreek ? "Χάρτης" : "Map"}
                   </button>
                 </div>
 
@@ -809,7 +923,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                   {isLoading
                     ? <div className="space-y-3">{SPLIT_LOADING_SKELETON_KEYS.map((key) => <PropertyCardSkeleton key={key} />)}</div>
                     : isError
-                    ? <EmptyState icon={Building2} title="Failed to load listings" subtitle="Please try again" action={{ label: "Retry", onClick: () => window.location.reload() }} />
+                    ? <EmptyState icon={Building2} title={isGreek ? "Δεν φορτώθηκαν οι αγγελίες" : "Failed to load listings"} subtitle={isGreek ? "Δοκιμάστε ξανά" : "Please try again"} action={{ label: isGreek ? "Επανάληψη" : "Retry", onClick: () => window.location.reload() }} />
                     : gridCards
                   }
                 </div>
@@ -837,9 +951,9 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
             ) : isError ? (
               <EmptyState
                 icon={Building2}
-                title="Could not load listings"
-                subtitle="Please try again later"
-                action={{ label: "Retry", onClick: () => window.location.reload() }}
+                title={isGreek ? "Δεν ήταν δυνατή η φόρτωση αγγελιών" : "Could not load listings"}
+                subtitle={isGreek ? "Δοκιμάστε ξανά αργότερα" : "Please try again later"}
+                action={{ label: isGreek ? "Επανάληψη" : "Retry", onClick: () => window.location.reload() }}
                 testId="empty-listings"
               />
             ) : filtered.length === 0 && !hasNextPage ? (
@@ -922,7 +1036,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
             style={{ boxShadow: "0 4px 24px 0 hsl(var(--foreground) / 0.18)" }}
           >
             <LayoutGrid className="w-4 h-4" />
-            Show List
+            {isGreek ? "Λίστα" : "Show List"}
           </button>
         ) : (
           <button
@@ -931,7 +1045,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
             style={{ boxShadow: "0 4px 24px 0 hsl(var(--foreground) / 0.18)" }}
           >
             <Map className="w-4 h-4" />
-            Show Map
+            {isGreek ? "Χάρτης" : "Show Map"}
             {filtered.length > 0 && (
               <span className="ml-0.5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
                 {filtered.length > 99 ? "99+" : filtered.length}

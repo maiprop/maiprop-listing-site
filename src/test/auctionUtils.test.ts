@@ -6,18 +6,34 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import {
-  getPropertyTypeLabel,
-  getOwnershipStatus,
-  getOwnershipPct,
-  normalizeOwnership,
-  ownershipMatches,
-  getAuctionRound,
-  estimateYield,
-  yieldRange,
-  countdownBadge,
-  daysUntil,
-} from "@/lib/auctionUtils";
+type AuctionUtils = typeof import("@/lib/auctionUtils");
+
+let getPropertyTypeLabel: AuctionUtils["getPropertyTypeLabel"];
+let getOwnershipStatus: AuctionUtils["getOwnershipStatus"];
+let getOwnershipPct: AuctionUtils["getOwnershipPct"];
+let normalizeOwnership: AuctionUtils["normalizeOwnership"];
+let ownershipMatches: AuctionUtils["ownershipMatches"];
+let getAuctionRound: AuctionUtils["getAuctionRound"];
+let estimateYield: AuctionUtils["estimateYield"];
+let yieldRange: AuctionUtils["yieldRange"];
+let countdownBadge: AuctionUtils["countdownBadge"];
+let daysUntil: AuctionUtils["daysUntil"];
+
+beforeEach(async () => {
+  vi.resetModules();
+  ({
+    getPropertyTypeLabel,
+    getOwnershipStatus,
+    getOwnershipPct,
+    normalizeOwnership,
+    ownershipMatches,
+    getAuctionRound,
+    estimateYield,
+    yieldRange,
+    countdownBadge,
+    daysUntil,
+  } = await import("@/lib/auctionUtils"));
+});
 
 // ── getPropertyTypeLabel ───────────────────────────────────────────────────────
 
@@ -27,7 +43,7 @@ describe("getPropertyTypeLabel", () => {
   });
 
   it("returns Greek label for house", () => {
-    expect(getPropertyTypeLabel({ property_type: "house" })).toBe("Κατοικία");
+    expect(getPropertyTypeLabel({ property_type: "house" })).toBe("Μονοκατοικία");
   });
 
   it("returns empty string when no type and no tags", () => {
@@ -36,32 +52,32 @@ describe("getPropertyTypeLabel", () => {
 
   it("resolves land subtype from land_type tag", () => {
     const label = getPropertyTypeLabel({ property_type: "land", tags: ["land_type:plot"] });
-    expect(label).toBe("Agricultural plot");
+    expect(label).toBe("Αγροτεμάχιο");
   });
 
   it("resolves land:land_with_building", () => {
     const label = getPropertyTypeLabel({ property_type: "land", tags: ["land_type:land_with_building"] });
-    expect(label).toBe("Land with Building");
+    expect(label).toBe("Αγροτεμάχιο με κτίσμα");
   });
 
   it("resolves commercial subtype from commercial_type tag", () => {
     const label = getPropertyTypeLabel({ property_type: "commercial", tags: ["commercial_type:warehouse"] });
-    expect(label).toBe("Warehouse");
+    expect(label).toBe("Αποθήκη");
   });
 
   it("resolves commercial:store", () => {
     const label = getPropertyTypeLabel({ property_type: "commercial", tags: ["commercial_type:store"] });
-    expect(label).toBe("Store / Retail");
+    expect(label).toBe("Κατάστημα");
   });
 
   it("infers 'land' from land_type tag when property_type absent", () => {
     const label = getPropertyTypeLabel({ tags: ["land_type:land"] });
-    expect(label).toBe("Land (no building)");
+    expect(label).toBe("Γη χωρίς κτίσμα");
   });
 
   it("infers 'commercial' from commercial_type tag when property_type absent", () => {
     const label = getPropertyTypeLabel({ tags: ["commercial_type:hotel"] });
-    expect(label).toBe("Hotel");
+    expect(label).toBe("Ξενοδοχείο");
   });
 
   it("title-cases unknown property types", () => {

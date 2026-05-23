@@ -23,7 +23,7 @@ export function Pill({
 }
 
 export function RangeInput({
-  label, minVal, maxVal, onMinChange, onMaxChange, prefix,
+  label, minVal, maxVal, onMinChange, onMaxChange, prefix, locale = "en",
 }: {
   label: string;
   minVal: string;
@@ -31,23 +31,27 @@ export function RangeInput({
   onMinChange: (v: string) => void;
   onMaxChange: (v: string) => void;
   prefix?: string;
+  locale?: string;
 }) {
+  const isGreek = locale.toLowerCase().startsWith("el");
+  const minLabel = isGreek ? "Ελάχιστο" : "Min";
+  const maxLabel = isGreek ? "Μέγιστο" : "Max";
   return (
     <div className="space-y-1">
       <span className="text-xs text-muted-foreground font-medium">{label}</span>
       <div className="flex gap-2">
         <input
           type="number"
-          aria-label={`${label} minimum${prefix ? ` (${prefix})` : ""}`}
-          placeholder={`Min${prefix ? " " + prefix : ""}`}
+          aria-label={`${label} ${isGreek ? "ελάχιστο" : "minimum"}${prefix ? ` (${prefix})` : ""}`}
+          placeholder={`${minLabel}${prefix ? " " + prefix : ""}`}
           value={minVal}
           onChange={(e) => onMinChange(e.target.value)}
           className="w-full px-2 py-1.5 text-xs rounded-lg border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary"
         />
         <input
           type="number"
-          aria-label={`${label} maximum${prefix ? ` (${prefix})` : ""}`}
-          placeholder={`Max${prefix ? " " + prefix : ""}`}
+          aria-label={`${label} ${isGreek ? "μέγιστο" : "maximum"}${prefix ? ` (${prefix})` : ""}`}
+          placeholder={`${maxLabel}${prefix ? " " + prefix : ""}`}
           value={maxVal}
           onChange={(e) => onMaxChange(e.target.value)}
           className="w-full px-2 py-1.5 text-xs rounded-lg border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary"

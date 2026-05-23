@@ -11,6 +11,7 @@ import { getAiErrorMessage } from "@/lib/aiErrorUtils";
 import { useAuth } from "@/contexts/AuthContext";
 import { SignInForAI } from "@/components/SignInForAI";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -154,6 +155,19 @@ const MODE_LABEL: Record<string, string> = {
   MODE_2_PUBLIC_ENRICHED: "Public-enriched",
 };
 
+const PRICING_LABEL_EL: Record<string, string> = {
+  underpriced: "Κάτω από την αγορά",
+  fair: "Εύλογη αξία",
+  overpriced: "Πάνω από την αγορά",
+};
+
+const MODE_LABEL_EL: Record<string, string> = {
+  MODE_1_LISTING_ONLY: "Μόνο στοιχεία αγγελίας",
+  MODE_2_PUBLIC_ENRICHED: "Εμπλουτισμένο με δημόσια δεδομένα",
+};
+
+const ui = (isGreek: boolean, en: string, el: string) => (isGreek ? el : en);
+
 function fmt(n: number) { return n.toLocaleString("el-GR"); }
 
 // ── Mini score bar ─────────────────────────────────────────────────────────────
@@ -182,6 +196,8 @@ function ScoreBar({ label, score, invert = false, icon }: { label: string; score
 
 export default function PropertyValuation(props: PropertyValuationProps) {
   const { user } = useAuth();
+  const { i18n } = useTranslation();
+  const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
   const queryClient = useQueryClient();
   const [result, setResult] = useState<ValuationResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -197,12 +213,12 @@ export default function PropertyValuation(props: PropertyValuationProps) {
       const { data, error } = await supabase.functions.invoke("property-valuation", { body: valuationProps });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      if (!data?.estimatedValue) throw new Error("Valuation returned no result");
+      if (!data?.estimatedValue) throw new Error(ui(isGreek, "Valuation returned no result", "Η εκτίμηση δεν επέστρεψε αποτέλεσμα"));
       setResult(data as ValuationResult);
       setExpanded(true);
       void queryClient.invalidateQueries({ queryKey: ["usage_ai_calls"] });
     } catch (e: unknown) {
-      toast.error(getAiErrorMessage(e, null, "Valuation failed"));
+      toast.error(getAiErrorMessage(e, null, ui(isGreek, "Valuation failed", "Η εκτίμηση απέτυχε")));
     } finally {
       setLoading(false);
     }
@@ -217,19 +233,23 @@ export default function PropertyValuation(props: PropertyValuationProps) {
       {/* Header */}
       <div className="flex items-center gap-2 px-5 py-3.5 bg-primary/5 border-b border-primary/20">
         <Zap className="w-4 h-4 text-primary" />
-        <h4 className="font-display font-semibold text-sm flex-1">Property Valuation</h4>
+        <h4 className="font-display font-semibold text-sm flex-1">{ui(isGreek, "Property Valuation", "Εκτίμηση αξίας ακινήτου")}</h4>
         <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary font-semibold">
           mAI Prop · 2026 Model
         </span>
       </div>
 
       <div className="p-5">
-        {!user && <SignInForAI feature="Property Valuation" />}
+        {!user && <SignInForAI feature={ui(isGreek, "Property Valuation", "Η εκτίμηση αξίας ακινήτου")} />}
         {user && !result && (
           <div className="text-center space-y-3">
 
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Type-specific AI valuation — price range, confidence, liquidity, and Greek legal/tax overlay (legal cleanliness, planning certainty, transfer readiness).
+              {ui(
+                isGreek,
+                "Type-specific AI valuation - price range, confidence, liquidity, and Greek legal/tax overlay (legal cleanliness, planning certainty, transfer readiness).",
+                "Εκτίμηση αξίας με AI ανά τύπο ακινήτου: εύρος τιμής, εμπιστοσύνη, ρευστότητα και ελληνική νομική/φορολογική επισκόπηση."
+              )}
             </p>
             <Button
               className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2"
@@ -237,10 +257,10 @@ export default function PropertyValuation(props: PropertyValuationProps) {
               disabled={loading}
             >
               {loading
-                ? <><Loader2 className="w-4 h-4 animate-spin" /> Analysing…</>
-                : <><Zap className="w-4 h-4" /> Run AI Valuation</>}
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> {ui(isGreek, "Analysing...", "Ανάλυση...")}</>
+                : <><Zap className="w-4 h-4" /> {ui(isGreek, "Run AI Valuation", "Εκτέλεση εκτίμησης AI")}</>}
             </Button>
-            <p className="text-[10px] text-muted-foreground">Free · Instant · Not a formal appraisal</p>
+            <p className="text-[10px] text-muted-foreground">{ui(isGreek, "Free - Instant - Not a formal appraisal", "Δωρεάν - Άμεση - Δεν αποτελεί επίσημη εκτίμηση")}</p>
           </div>
         )}
 
@@ -251,7 +271,9 @@ export default function PropertyValuation(props: PropertyValuationProps) {
             <div className="flex items-start gap-4">
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
-                  {result.auctionAdjustedValue ? "Auction-Adjusted Value" : "AI Estimated Value"}
+                  {result.auctionAdjustedValue
+                    ? ui(isGreek, "Auction-Adjusted Value", "Αξία προσαρμοσμένη για πλειστηριασμό")
+                    : ui(isGreek, "AI Estimated Value", "Εκτιμώμενη αξία AI")}
                 </p>
                 <p className="font-display font-black text-2xl text-foreground leading-none">
                   €{fmt(result.estimatedValue)}
@@ -260,19 +282,19 @@ export default function PropertyValuation(props: PropertyValuationProps) {
                   €{fmt(result.rangeLow)} — €{fmt(result.rangeHigh)}
                 </p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">
-                  ≈ €{fmt(result.pricePerSqmEstimate)}/sqm (market)
+                  ≈ €{fmt(result.pricePerSqmEstimate)}/{ui(isGreek, "sqm", "τ.μ.")} ({ui(isGreek, "market", "αγορά")})
                 </p>
               </div>
               <div className="flex gap-3 shrink-0">
-                <ScoreRing score={result.confidence} label="Confidence" colour={scoreColour(result.confidence)} />
-                <ScoreRing score={result.liquidityScore} label="Liquidity" colour={liquidityColour(result.liquidityScore)} />
+                <ScoreRing score={result.confidence} label={ui(isGreek, "Confidence", "Εμπιστοσύνη")} colour={scoreColour(result.confidence)} />
+                <ScoreRing score={result.liquidityScore} label={ui(isGreek, "Liquidity", "Ρευστότητα")} colour={liquidityColour(result.liquidityScore)} />
               </div>
             </div>
 
             {/* Execution value */}
             {result.executionValue && result.executionValue !== result.estimatedValue && (
               <div className="bg-secondary/60 border border-border rounded-xl px-3 py-2 text-xs flex items-center justify-between">
-                <span className="text-muted-foreground">Execution value (after costs & legal)</span>
+                <span className="text-muted-foreground">{ui(isGreek, "Execution value (after costs & legal)", "Αξία εκτέλεσης μετά από έξοδα και νομικούς παράγοντες")}</span>
                 <span className="font-bold text-foreground">€{fmt(result.executionValue)}</span>
               </div>
             )}
@@ -280,7 +302,7 @@ export default function PropertyValuation(props: PropertyValuationProps) {
             {/* Auction clean market value */}
             {result.auctionAdjustedValue && (
               <div className="bg-amber-500/8 border border-amber-500/20 rounded-xl px-3 py-2 text-xs flex items-center justify-between">
-                <span className="text-muted-foreground">Clean market value (pre-auction)</span>
+                <span className="text-muted-foreground">{ui(isGreek, "Clean market value (pre-auction)", "Καθαρή εμπορική αξία πριν τον πλειστηριασμό")}</span>
                 <span className="font-bold text-amber-400">€{fmt(result.auctionAdjustedValue)}</span>
               </div>
             )}
@@ -288,16 +310,18 @@ export default function PropertyValuation(props: PropertyValuationProps) {
             {/* Pricing position */}
             {pricing && (
               <div className={`flex items-center justify-between px-3 py-2 rounded-xl border ${pricing.bg}`}>
-                <span className={`text-xs font-semibold ${pricing.colour}`}>{pricing.label}</span>
+                <span className={`text-xs font-semibold ${pricing.colour}`}>
+                  {isGreek ? (PRICING_LABEL_EL[result.pricingPosition] ?? pricing.label) : pricing.label}
+                </span>
                 <span className={`text-xs font-bold font-mono ${pricing.colour}`}>
-                  {result.marketComparisonPct > 0 ? "+" : ""}{result.marketComparisonPct}% vs. market
+                  {result.marketComparisonPct > 0 ? "+" : ""}{result.marketComparisonPct}% {ui(isGreek, "vs. market", "έναντι αγοράς")}
                 </span>
               </div>
             )}
 
             {/* vs listed price */}
             <div className="flex items-center justify-between text-xs border-t border-border pt-3">
-              <span className="text-muted-foreground">vs. Listed Price</span>
+              <span className="text-muted-foreground">{ui(isGreek, "vs. Listed Price", "έναντι ζητούμενης τιμής")}</span>
               <span className={`font-bold font-mono ${diff >= 0 ? "text-emerald-400" : "text-red-400"}`}>
                 {diff >= 0 ? "+" : ""}€{fmt(Math.abs(diff))} ({diffPct > 0 ? "+" : ""}{diffPct}%)
               </span>
@@ -306,32 +330,32 @@ export default function PropertyValuation(props: PropertyValuationProps) {
             {/* ── LEGAL/TAX OVERLAY ── */}
             <div className="bg-secondary/40 border border-border rounded-xl p-3.5 space-y-3">
               <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <Scale className="w-3 h-3" /> Legal &amp; Tax Overlay
+                <Scale className="w-3 h-3" /> {ui(isGreek, "Legal & Tax Overlay", "Νομική & φορολογική επισκόπηση")}
                 {result.valuationMode && (
                   <span className="ml-auto font-normal text-muted-foreground/60 normal-case tracking-normal">
-                    {MODE_LABEL[result.valuationMode] || result.valuationMode}
+                    {isGreek ? (MODE_LABEL_EL[result.valuationMode] || result.valuationMode) : (MODE_LABEL[result.valuationMode] || result.valuationMode)}
                   </span>
                 )}
               </p>
               <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                 <ScoreBar
-                  label="Legal Cleanliness"
+                  label={ui(isGreek, "Legal Cleanliness", "Νομική καθαρότητα")}
                   score={result.legalCleanliness}
                   icon={<Scale className="w-3 h-3" />}
                 />
                 <ScoreBar
-                  label="Planning Certainty"
+                  label={ui(isGreek, "Planning Certainty", "Πολεοδομική βεβαιότητα")}
                   score={result.planningCertainty}
                   icon={<MapPin className="w-3 h-3" />}
                 />
                 <ScoreBar
-                  label="Tax Friction"
+                  label={ui(isGreek, "Tax Friction", "Φορολογική τριβή")}
                   score={result.taxFriction}
                   invert
                   icon={<Receipt className="w-3 h-3" />}
                 />
                 <ScoreBar
-                  label="Transfer Readiness"
+                  label={ui(isGreek, "Transfer Readiness", "Ετοιμότητα μεταβίβασης")}
                   score={result.transferReadiness}
                   icon={<FileCheck className="w-3 h-3" />}
                 />
@@ -346,7 +370,7 @@ export default function PropertyValuation(props: PropertyValuationProps) {
               )}
               {result.objectiveValueProxy && (
                 <div className="flex items-center justify-between text-[10px] border-t border-border pt-2.5">
-                  <span className="text-muted-foreground">Objective value proxy (ENFIA/tax ref)</span>
+                  <span className="text-muted-foreground">{ui(isGreek, "Objective value proxy (ENFIA/tax ref)", "Ένδειξη αντικειμενικής αξίας (ΕΝΦΙΑ/φορολογική βάση)")}</span>
                   <span className="font-semibold text-muted-foreground">≈ €{fmt(result.objectiveValueProxy)}</span>
                 </div>
               )}
@@ -355,11 +379,11 @@ export default function PropertyValuation(props: PropertyValuationProps) {
             {/* Rental yield + listing quality */}
             <div className="grid grid-cols-2 gap-2">
               <div className="flex items-center justify-between text-xs bg-secondary/50 rounded-lg px-2.5 py-2">
-                <span className="text-muted-foreground">Rental Yield</span>
-                <span className="font-semibold text-primary">{result.rentalYieldEstimate}% p.a.</span>
+                <span className="text-muted-foreground">{ui(isGreek, "Rental Yield", "Απόδοση μίσθωσης")}</span>
+                <span className="font-semibold text-primary">{result.rentalYieldEstimate}% {ui(isGreek, "p.a.", "ετησίως")}</span>
               </div>
               <div className="flex items-center justify-between text-xs bg-secondary/50 rounded-lg px-2.5 py-2">
-                <span className="text-muted-foreground">Data Quality</span>
+                <span className="text-muted-foreground">{ui(isGreek, "Data Quality", "Ποιότητα δεδομένων")}</span>
                 <span className="font-semibold" style={{ color: scoreColour(result.listingQualityScore) }}>
                   {result.listingQualityScore}/100
                 </span>
@@ -370,7 +394,7 @@ export default function PropertyValuation(props: PropertyValuationProps) {
             {result.redFlags.length > 0 && (
               <div className="bg-red-500/8 border border-red-500/20 rounded-xl p-3 space-y-1.5">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-red-400 flex items-center gap-1.5">
-                  <AlertTriangle className="w-3 h-3" /> Red Flags
+                  <AlertTriangle className="w-3 h-3" /> {ui(isGreek, "Red Flags", "Σημεία προσοχής")}
                 </p>
                 {result.redFlags.map((flag, i) => (
                   <p key={i} className="text-xs text-red-300/90 flex items-start gap-1.5">
@@ -386,8 +410,8 @@ export default function PropertyValuation(props: PropertyValuationProps) {
               className="flex items-center gap-1 text-xs text-primary hover:underline w-full justify-center"
             >
               {expanded
-                ? <><ChevronUp className="w-3 h-3" />Hide analysis</>
-                : <><ChevronDown className="w-3 h-3" />Full analysis</>}
+                ? <><ChevronUp className="w-3 h-3" />{ui(isGreek, "Hide analysis", "Απόκρυψη ανάλυσης")}</>
+                : <><ChevronDown className="w-3 h-3" />{ui(isGreek, "Full analysis", "Πλήρης ανάλυση")}</>}
             </button>
 
             {/* Expanded section */}
@@ -405,7 +429,7 @@ export default function PropertyValuation(props: PropertyValuationProps) {
 
                 {result.keyFactors.length > 0 && (
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Key Value Drivers</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">{ui(isGreek, "Key Value Drivers", "Κύριοι παράγοντες αξίας")}</p>
                     <div className="space-y-2">
                       {result.keyFactors.map((f, i) => (
                         <div key={i} className="flex items-start gap-2">
@@ -426,7 +450,7 @@ export default function PropertyValuation(props: PropertyValuationProps) {
                   <div className="flex items-start gap-2 bg-secondary rounded-xl p-3">
                     <Droplets className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Renovation Potential</p>
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-0.5">{ui(isGreek, "Renovation Potential", "Δυνατότητα ανακαίνισης")}</p>
                       <p className="text-xs text-foreground leading-relaxed">{result.renovationPotential}</p>
                     </div>
                   </div>
@@ -436,7 +460,7 @@ export default function PropertyValuation(props: PropertyValuationProps) {
                   <div className="flex items-start gap-2 bg-primary/5 border border-primary/20 rounded-xl p-3">
                     <Lightbulb className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-[10px] font-bold text-primary/70 uppercase tracking-wider mb-0.5">Highest &amp; Best Use</p>
+                      <p className="text-[10px] font-bold text-primary/70 uppercase tracking-wider mb-0.5">{ui(isGreek, "Highest & Best Use", "Βέλτιστη χρήση")}</p>
                       <p className="text-xs text-foreground leading-relaxed">{result.highestBestUseHint}</p>
                     </div>
                   </div>
@@ -446,12 +470,12 @@ export default function PropertyValuation(props: PropertyValuationProps) {
                   <Info className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />
                   <p className="text-[10px] text-muted-foreground leading-relaxed">
                     {result.confidence >= 75
-                      ? "Strong estimate — good listing data and comparable market depth."
+                      ? ui(isGreek, "Strong estimate - good listing data and comparable market depth.", "Ισχυρή εκτίμηση: καλά στοιχεία αγγελίας και επαρκές βάθος συγκρίσιμων δεδομένων.")
                       : result.confidence >= 50
-                      ? "Usable estimate — some missing fields reduce precision. Range reflects uncertainty."
-                      : "Low-confidence estimate — limited data. Treat range as indicative only."}
-                    {" "}Liquidity: {result.liquidityScore >= 65 ? "high" : result.liquidityScore >= 35 ? "moderate" : "low"} for this asset type.
-                    {" "}Legal data: {result.legalCleanliness >= 70 ? "appears clean" : result.legalCleanliness >= 45 ? "some unknowns" : "significant unknowns — verify before proceeding"}.
+                      ? ui(isGreek, "Usable estimate - some missing fields reduce precision. Range reflects uncertainty.", "Χρήσιμη εκτίμηση: ορισμένα ελλιπή στοιχεία μειώνουν την ακρίβεια. Το εύρος αποτυπώνει την αβεβαιότητα.")
+                      : ui(isGreek, "Low-confidence estimate - limited data. Treat range as indicative only.", "Εκτίμηση χαμηλής εμπιστοσύνης: περιορισμένα δεδομένα. Αντιμετωπίστε το εύρος ως ενδεικτικό.")}
+                    {" "}{ui(isGreek, "Liquidity:", "Ρευστότητα:")} {result.liquidityScore >= 65 ? ui(isGreek, "high", "υψηλή") : result.liquidityScore >= 35 ? ui(isGreek, "moderate", "μέτρια") : ui(isGreek, "low", "χαμηλή")} {ui(isGreek, "for this asset type.", "για αυτόν τον τύπο ακινήτου.")}
+                    {" "}{ui(isGreek, "Legal data:", "Νομικά δεδομένα:")} {result.legalCleanliness >= 70 ? ui(isGreek, "appears clean", "φαίνονται καθαρά") : result.legalCleanliness >= 45 ? ui(isGreek, "some unknowns", "υπάρχουν ορισμένες αβεβαιότητες") : ui(isGreek, "significant unknowns - verify before proceeding", "σημαντικές αβεβαιότητες - απαιτείται έλεγχος πριν προχωρήσετε")}.
                   </p>
                 </div>
 
@@ -461,13 +485,13 @@ export default function PropertyValuation(props: PropertyValuationProps) {
                   className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors w-full justify-center"
                 >
                   {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
-                  Refresh valuation
+                  {ui(isGreek, "Refresh valuation", "Ανανέωση εκτίμησης")}
                 </button>
               </div>
             )}
 
             <p className="text-[10px] text-muted-foreground text-center leading-relaxed">
-              AI estimate only · Not a formal appraisal · 2026 Greek market + legal overlay model
+              {ui(isGreek, "AI estimate only - Not a formal appraisal - 2026 Greek market + legal overlay model", "Μόνο εκτίμηση AI - Δεν αποτελεί επίσημη εκτίμηση - Μοντέλο ελληνικής αγοράς και νομικής επισκόπησης 2026")}
             </p>
           </div>
         )}

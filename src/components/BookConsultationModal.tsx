@@ -7,6 +7,7 @@ import { useSubmitConsultation } from "@/hooks/useConsultations";
 import { useProfessionalServices, useProfessionalAvailability, type ProfessionalService } from "@/hooks/useProfessionalServices";
 import { toast } from "sonner";
 import { stripSupervisorTestMarkers } from "@/lib/displayText";
+import { useTranslation } from "react-i18next";
 
 const PRICING_LABELS: Record<string, string> = { hourly: "/hr", daily: "/day", fixed: "fixed" };
 const SLOT_INTERVAL_MINUTES = 60;
@@ -26,7 +27,7 @@ const formatSlotTime = (minutes: number) => {
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 };
 
-const getAvailableDays = (availability: { day_of_week: number; start_time: string; end_time: string }[], count = 14) => {
+const getAvailableDays = (availability: { day_of_week: number; start_time: string; end_time: string }[], count = 14, locale = "en-GB") => {
   const days: { label: string; date: string; display: string; dayOfWeek: number; startTime: string; endTime: string }[] = [];
   const d = new Date();
   d.setDate(d.getDate() + 1);
@@ -36,9 +37,9 @@ const getAvailableDays = (availability: { day_of_week: number; start_time: strin
     const avail = availability.find((a) => a.day_of_week === dow);
     if (avail) {
       days.push({
-        label: d.toLocaleDateString("en-GB", { weekday: "short" }),
+        label: d.toLocaleDateString(locale, { weekday: "short" }),
         date: d.toISOString().split("T")[0],
-        display: d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
+        display: d.toLocaleDateString(locale, { day: "numeric", month: "short" }),
         dayOfWeek: dow,
         startTime: avail.start_time,
         endTime: avail.end_time,
@@ -199,12 +200,12 @@ const ServiceOptionCard = ({ // skipcq: JS-R1005 - The card composes small leaf 
   );
 };
 
-const EmptyServicesPanel = ({ onContinue }: { onContinue: () => void }) => (
+const EmptyServicesPanel = ({ onContinue, isGreek }: { onContinue: () => void; isGreek: boolean }) => (
   <div className="text-center py-6 text-sm text-muted-foreground">
     <Briefcase className="w-8 h-8 mx-auto mb-2 opacity-40" />
-    No services are configured yet. You can still send a general consultation request.
+    {isGreek ? "Δεν έχουν οριστεί υπηρεσίες ακόμα. Μπορείτε να στείλετε γενικό αίτημα συμβουλευτικής." : "No services are configured yet. You can still send a general consultation request."}
     <Button className="w-full mt-3 bg-gradient-primary border-0 text-primary-foreground" onClick={onContinue}>
-      Continue as General Consultation
+      {isGreek ? "Συνέχεια ως γενικό αίτημα" : "Continue as General Consultation"}
     </Button>
   </div>
 );
@@ -214,16 +215,18 @@ const ServiceSelectionStep = ({
   selectedService,
   onSelectService,
   onContinue,
+  isGreek,
 }: {
   services: ProfessionalService[];
   selectedService: ProfessionalService | null;
   onSelectService: (service: ProfessionalService) => void;
   onContinue: () => void;
+  isGreek: boolean;
 }) => (
   <div className="space-y-3">
-    <p className="text-sm text-muted-foreground">What service do you need?</p>
+    <p className="text-sm text-muted-foreground">{isGreek ? "Ποια υπηρεσία χρειάζεστε;" : "What service do you need?"}</p>
     {services.length === 0 ? (
-      <EmptyServicesPanel onContinue={onContinue} />
+      <EmptyServicesPanel onContinue={onContinue} isGreek={isGreek} />
     ) : (
       <>
         <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
@@ -237,21 +240,21 @@ const ServiceSelectionStep = ({
           ))}
         </div>
         <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" disabled={!selectedService} onClick={onContinue}>
-          Continue
+          {isGreek ? "Συνέχεια" : "Continue"}
         </Button>
       </>
     )}
   </div>
 );
 
-const SignInRequired = ({ firstName }: { firstName: string }) => (
+const SignInRequired = ({ firstName, isGreek }: { firstName: string; isGreek: boolean }) => (
   <div className="space-y-4 py-4">
     <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm text-muted-foreground">
-      <p className="font-semibold text-foreground mb-1">Sign in to book a consultation</p>
-      <p>{firstName} can receive booking requests only from signed-in mAI prop accounts.</p>
+      <p className="font-semibold text-foreground mb-1">{isGreek ? "Συνδεθείτε για να κλείσετε συμβουλευτική" : "Sign in to book a consultation"}</p>
+      <p>{isGreek ? `Ο/Η ${firstName} δέχεται αιτήματα μόνο από συνδεδεμένους λογαριασμούς mAI prop.` : `${firstName} can receive booking requests only from signed-in mAI prop accounts.`}</p>
     </div>
     <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" asChild>
-      <a href="/login">Sign in</a>
+      <a href="/login">{isGreek ? "Σύνδεση" : "Sign in"}</a>
     </Button>
   </div>
 );
@@ -259,6 +262,9 @@ const SignInRequired = ({ firstName }: { firstName: string }) => (
 // skipcq: JS-0067 - React modal component is intentionally module-scoped.
 export default function BookConsultationModal({ open, onClose, allowVideoCall = true, professional }: BookConsultationModalProps) { // skipcq: JS-R1005, JS-W1044 - Booking modal coordinates service selection, scheduling, contact capture, and submission flow.
   const { user, profile } = useAuth();
+  const { i18n } = useTranslation();
+  const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
+  const dateLocale = isGreek ? "el-GR" : "en-GB";
   const submitConsultation = useSubmitConsultation();
 
   const { data: services = [] } = useProfessionalServices(professional.id);
@@ -273,10 +279,10 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
   const [note, setNote] = useState("");
   const [done, setDone] = useState(false);
 
-  const proName = professional.display_name || "Professional";
+  const proName = professional.display_name || (isGreek ? "Επαγγελματίας" : "Professional");
   const firstName = proName.split(" ")[0];
 
-  const availableDays = useMemo(() => getAvailableDays(availability), [availability]);
+  const availableDays = useMemo(() => getAvailableDays(availability, 14, dateLocale), [availability, dateLocale]);
   const selectedDayData = availableDays.find((d) => d.date === selectedDate);
   const timeSlots = useMemo(() => {
     if (!selectedDayData) return [];
@@ -315,13 +321,13 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
 
   const handleConfirm = async () => { // skipcq: JS-R1005 - Submit flow resolves guest/user contact details and booking metadata in one mutation payload.
     if (!user) {
-      toast.error("Please sign in to book a consultation.");
+      toast.error(isGreek ? "Συνδεθείτε για να κλείσετε συμβουλευτική." : "Please sign in to book a consultation.");
       return;
     }
     const resolvedName = profile?.display_name || user.email || "";
     const resolvedEmail = user.email || "";
     if (!resolvedName || !resolvedEmail) {
-      toast.error("Please fill in your details");
+      toast.error(isGreek ? "Συμπληρώστε τα στοιχεία σας" : "Please fill in your details");
       return;
     }
 
@@ -337,27 +343,29 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
         preferred_time: selectedTime,
         message: [
           bookingType === "video"
-            ? `Video consultation requested via ${usesHostedRoom ? "mAI prop video room" : "professional meeting link"}`
-            : "In-person consultation requested",
+            ? `${isGreek ? "Αίτημα βιντεοσυμβουλευτικής μέσω" : "Video consultation requested via"} ${usesHostedRoom ? "mAI prop video room" : (isGreek ? "συνδέσμου επαγγελματία" : "professional meeting link")}`
+            : (isGreek ? "Αίτημα συμβουλευτικής με φυσική παρουσία" : "In-person consultation requested"),
           note,
         ].filter(Boolean).join("\n"),
       });
       setDone(true);
     } catch (_err: unknown) {
-      toast.error("Could not book consultation. Please try again.");
+      toast.error(isGreek ? "Δεν ήταν δυνατή η κράτηση συμβουλευτικής. Δοκιμάστε ξανά." : "Could not book consultation. Please try again.");
     }
   };
 
   const pricingLabel = selectedService
     ? selectedService.rate_amount
       ? `EUR ${selectedService.rate_amount}${PRICING_LABELS[selectedService.pricing_model] ?? ""}`
-      : "On Request"
+      : (isGreek ? "Κατόπιν αιτήματος" : "On Request")
     : null;
   const calendarEvent = getCalendarEvent(
     selectedDate,
     selectedTime,
-    `Tentative consultation with ${proName}`,
-    `${selectedService?.service_name || "Consultation"} request on maiProp. The professional still needs to confirm this session.`,
+    isGreek ? `Προσωρινή συμβουλευτική με ${proName}` : `Tentative consultation with ${proName}`,
+    isGreek
+      ? `Αίτημα ${selectedService?.service_name || "συμβουλευτικής"} στο mAI prop. Ο επαγγελματίας πρέπει να επιβεβαιώσει τη συνεδρία.`
+      : `${selectedService?.service_name || "Consultation"} request on mAI prop. The professional still needs to confirm this session.`,
   );
 
   return (
@@ -366,48 +374,48 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
         <DialogHeader>
           <DialogTitle className="font-display text-lg flex items-center gap-2">
             <Calendar className="w-5 h-5 text-primary" />
-            {done ? "Consultation Request Sent" : `Book with ${firstName}`}
+            {done ? (isGreek ? "Το αίτημα συμβουλευτικής εστάλη" : "Consultation Request Sent") : (isGreek ? `Κράτηση με ${firstName}` : `Book with ${firstName}`)}
           </DialogTitle>
           <DialogDescription className="sr-only">
-            Select a professional service, preferred time, and contact details for a consultation request.
+            {isGreek ? "Επιλέξτε επαγγελματική υπηρεσία, προτιμώμενη ώρα και στοιχεία επικοινωνίας για αίτημα συμβουλευτικής." : "Select a professional service, preferred time, and contact details for a consultation request."}
           </DialogDescription>
         </DialogHeader>
 
         {!user ? (
-          <SignInRequired firstName={firstName} />
+          <SignInRequired firstName={firstName} isGreek={isGreek} />
         ) : done ? (
           <div className="text-center py-6 space-y-4">
             <div className="w-16 h-16 rounded-full bg-brand-emerald/20 flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-8 h-8 text-brand-emerald" />
             </div>
             <div>
-              <p className="font-semibold text-foreground">Consultation request received.</p>
+              <p className="font-semibold text-foreground">{isGreek ? "Το αίτημα συμβουλευτικής καταχωρίστηκε." : "Consultation request received."}</p>
               <p className="text-sm text-muted-foreground mt-1">
-                {firstName} still needs to confirm the session details before anything is scheduled.
+                {isGreek ? `Ο/Η ${firstName} πρέπει να επιβεβαιώσει τις λεπτομέρειες πριν προγραμματιστεί οριστικά.` : `${firstName} still needs to confirm the session details before anything is scheduled.`}
               </p>
             </div>
             <div className="bg-secondary rounded-xl p-4 text-sm text-left space-y-2">
               {selectedService && (
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Service</span>
+                  <span className="text-muted-foreground">{isGreek ? "Υπηρεσία" : "Service"}</span>
                   <span className="font-medium">{selectedService.service_name}</span>
                 </div>
               )}
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Type</span>
+                <span className="text-muted-foreground">{isGreek ? "Τύπος" : "Type"}</span>
                 <span className="font-medium flex items-center gap-1">
-                  {bookingType === "video" ? <><Video className="w-3.5 h-3.5" /> Video</> : <><Users className="w-3.5 h-3.5" /> In-person</>}
+                  {bookingType === "video" ? <><Video className="w-3.5 h-3.5" /> {isGreek ? "Βίντεο" : "Video"}</> : <><Users className="w-3.5 h-3.5" /> {isGreek ? "Με φυσική παρουσία" : "In-person"}</>}
                 </span>
               </div>
               {selectedDate && (
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Date & Time</span>
-                  <span className="font-medium">{selectedDate} at {selectedTime}</span>
+                  <span className="text-muted-foreground">{isGreek ? "Ημερομηνία & ώρα" : "Date & Time"}</span>
+                  <span className="font-medium">{selectedDate} {isGreek ? "στις" : "at"} {selectedTime}</span>
                 </div>
               )}
               {pricingLabel && (
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Rate</span>
+                  <span className="text-muted-foreground">{isGreek ? "Χρέωση" : "Rate"}</span>
                   <span className="font-medium">{pricingLabel}</span>
                 </div>
               )}
@@ -415,8 +423,8 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
             {bookingType === "video" && (
               <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground text-left">
                 {usesHostedRoom
-                  ? "If the request is accepted, the professional can meet you in the built-in mAI prop video room."
-                  : "If the request is accepted, the professional will share or confirm the final meeting link."}
+                  ? (isGreek ? "Αν το αίτημα γίνει δεκτό, ο επαγγελματίας μπορεί να σας συναντήσει στην ενσωματωμένη αίθουσα βίντεο mAI prop." : "If the request is accepted, the professional can meet you in the built-in mAI prop video room.")
+                  : (isGreek ? "Αν το αίτημα γίνει δεκτό, ο επαγγελματίας θα στείλει ή θα επιβεβαιώσει τον τελικό σύνδεσμο συνάντησης." : "If the request is accepted, the professional will share or confirm the final meeting link.")}
               </div>
             )}
             {calendarEvent && (
@@ -432,11 +440,11 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
                   className="border-border"
                   onClick={() => downloadIcs("maiprop-consultation.ics", calendarEvent.ics)}
                 >
-                  Download .ics
+                  {isGreek ? "Λήψη .ics" : "Download .ics"}
                 </Button>
               </div>
             )}
-            <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" onClick={handleClose}>Done</Button>
+            <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" onClick={handleClose}>{isGreek ? "Τέλος" : "Done"}</Button>
           </div>
         ) : (
           <div className="space-y-5">
@@ -470,6 +478,7 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
                 selectedService={selectedService}
                 onSelectService={setSelectedService}
                 onContinue={() => setStep(nextStepAfterService)}
+                isGreek={isGreek}
               />
             )}
 

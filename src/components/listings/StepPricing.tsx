@@ -129,12 +129,12 @@ export function StepPricing({
         <>
           <SectionTitle>Auction Details</SectionTitle>
           <div ref={setFieldRef("auction_starting_bid") as React.Ref<HTMLDivElement>}>
-            <FieldLabel>Starting Bid (€)</FieldLabel>
+            <FieldLabel>First Offer Price (€)</FieldLabel>
             <Input type="number" value={form.auction_starting_bid} onChange={e => set("auction_starting_bid", e.target.value)} hasError={!!errors.auction_starting_bid} />
             <FieldError msg={errors.auction_starting_bid} />
           </div>
           <div><FieldLabel>Auction Date & Time</FieldLabel><Input type="datetime-local" value={form.auction_date} onChange={e => set("auction_date", e.target.value)} /></div>
-          <div><FieldLabel>Court / Platform</FieldLabel><Input placeholder="e.g. Athens Court of First Instance" value={form.auction_court} onChange={e => set("auction_court", e.target.value)} /></div>
+          <div><FieldLabel>Auction Officer / Platform</FieldLabel><Input placeholder="e.g. eAuction / notary office" value={form.auction_court} onChange={e => set("auction_court", e.target.value)} /></div>
         </>
       )}
 

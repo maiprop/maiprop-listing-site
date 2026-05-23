@@ -2,7 +2,7 @@
   "nav": {
     "listings": "Listings",
     "auctions": "Auctions",
-    "quickSale": "Quick Sale",
+    "quickSale": "Quick Sale™",
     "professionals": "Professionals",
     "openHouses": "Open Houses",
     "newBuilds": "New Builds",
@@ -25,32 +25,32 @@
     "hero": {
       "badge": "AI-Powered Real Estate",
       "title": "Greece's Smartest Property Platform",
-      "subtitle": "Discover verified listings, distressed assets, auctions and pre-market deals — powered by AI, backed by real data.",
+      "subtitle": "Discover verified listings, Greek property auctions and off-market opportunities — powered by AI, backed by real data.",
       "searchPlaceholder": "Search by area, postcode or property type…",
       "searchButton": "Search",
       "exploreListings": "Explore listings",
       "viewAuctions": "View auctions",
       "stats": {
         "activeListings": "Active listings",
-        "courtAuctions": "Court auctions",
+        "courtAuctions": "Property auctions",
         "verifiedProfessionals": "Verified professionals",
         "aiTools": "AI tools"
       }
     },
     "features": {
       "title": "Everything you need in one platform",
-      "subtitle": "From AI-powered search to court auction tracking, maiProp gives buyers, sellers and professionals an edge.",
+      "subtitle": "From AI-powered search to property auction tracking, maiProp gives buyers, sellers and professionals an edge.",
       "aiSearch": {
         "title": "AI Property Search",
         "description": "Describe what you want in plain language. Our AI finds matching properties instantly."
       },
       "auctions": {
-        "title": "Court Auction Intelligence",
-        "description": "Real-time data on court auctions across Greece. Track bidding history, comparable sales and distressed asset opportunities."
+        "title": "Property Auction Intelligence",
+        "description": "Data on electronic property auctions across Greece. Track first-offer prices, comparable sales and investment opportunities."
       },
       "quickSale": {
         "title": "Quick Sale Deal Flow",
-        "description": "Access pre-market distressed properties before they hit the open market. Exclusive to verified investors."
+        "description": "Access off-market opportunities before they hit the open market. Exclusive to approved investors."
       },
       "professionals": {
         "title": "Verified Professionals",
@@ -133,7 +133,9 @@
     "map": "Map view",
     "grid": "Grid view",
     "saveSearch": "Save search",
-    "searchSaved": "Search saved"
+    "searchSaved": "Search saved",
+    "pageTitle": "Properties for Sale & Rent",
+    "endOfResults": "No more results"
   },
   "property": {
     "overview": "Overview",
@@ -160,7 +162,7 @@
     "airConditioning": "A/C",
     "heating": "Heating",
     "askingPrice": "Asking price",
-    "minimumBid": "Minimum bid",
+    "minimumBid": "First offer price",
     "requestViewing": "Request a viewing",
     "makeOffer": "Make an offer",
     "contactAgent": "Contact agent",
@@ -212,7 +214,11 @@
     "similarListings": "Similar Listings",
     "breadcrumbHome": "Home",
     "breadcrumbAuctions": "Auctions",
-    "breadcrumbListings": "Listings"
+    "breadcrumbListings": "Listings",
+    "professionalAddons": "Professional Add-ons",
+    "professionalAddonsDescription": "Formal valuation reports, legal due diligence, and building legality checks — book accredited professionals in your area.",
+    "findProfessionalsIn": "Find valuers & lawyers in {{city}}",
+    "greece": "Greece"
   },
   "cookie": {
     "title": "We use cookies to improve your experience",
@@ -242,17 +248,17 @@
     "acceptAll": "Accept all"
   },
   "auctions": {
-    "title": "Court Auctions",
-    "subtitle": "Track live and upcoming court auction listings across Greece",
+    "title": "Property Auctions",
+    "subtitle": "Track live and upcoming electronic property auction listings across Greece",
     "upcoming": "Upcoming",
     "live": "Live now",
     "completed": "Completed",
-    "startingBid": "Starting bid",
-    "currentBid": "Current bid",
-    "bidHistory": "Bid history",
+    "startingBid": "First offer price",
+    "currentBid": "Latest available indication",
+    "bidHistory": "Available data history",
     "auctionDate": "Auction date",
-    "court": "Court",
-    "lawyer": "Lawyer",
+    "court": "Auction officer / Platform",
+    "lawyer": "Notary",
     "round": "Round",
     "deposit": "Deposit required",
     "viewDetails": "View details",
@@ -260,14 +266,14 @@
     "lastSync": "Last synced",
     "noAuctions": "No auctions found",
     "filters": {
-      "allCourts": "All courts",
+      "allCourts": "All auction officers / platforms",
       "allTypes": "All types",
       "dateRange": "Date range"
     }
   },
   "firesale": {
     "title": "Quick Sale",
-    "subtitle": "Pre-market distressed and motivated-seller properties",
+    "subtitle": "Off-market properties and motivated sellers",
     "accessRequired": "Investor access required",
     "accessDescription": "Quick Sale deal flow is exclusive to approved maiProp investors.",
     "applyForAccess": "Apply for access",
@@ -539,6 +545,7 @@
     "showLess": "Show less",
     "comingSoon": "Coming soon",
     "beta": "Beta",
+    "live": "Live",
     "learnMore": "Learn more",
     "getStarted": "Get started",
     "upgradeNow": "Upgrade now",
@@ -550,7 +557,20 @@
     "unauthorizedSubtitle": "You don't have permission to view this page.",
     "proRequired": "Pro subscription required",
     "proRequiredSubtitle": "Upgrade to access this feature.",
-    "sessionExpired": "Session expired. Please sign in again."
+    "sessionExpired": "Session expired. Please sign in again.",
+    "skipToMain": "Skip to main content",
+    "toggleTheme": "Toggle theme",
+    "buyerRenter": "Buyer / Renter",
+    "admin": "Admin",
+    "listProperty": "List Property",
+    "listing": "Listing",
+    "newBuilding": "New Building",
+    "upgrade": "Upgrade",
+    "proActive": "Pro ✓",
+    "closeMenu": "Close menu",
+    "openMenu": "Open menu",
+    "lightMode": "Light Mode",
+    "darkMode": "Dark Mode"
   },
   "footer": {
     "tagline": "Greece's AI-powered property platform",
@@ -560,7 +580,7 @@
     "company": "Company",
     "links": {
       "listings": "Listings",
-      "auctions": "Court Auctions",
+      "auctions": "Property Auctions",
       "quickSale": "Quick Sale",
       "openHouses": "Open Houses",
       "newBuilds": "New Builds",
@@ -780,7 +800,7 @@
       "commercial": "Commercial",
       "land": "Land & development",
       "mixed": "Mixed portfolio",
-      "distressed": "Distressed / opportunistic"
+      "distressed": "Off-market / opportunistic"
     },
     "dealSize": {
       "label": "Deal Size",
@@ -840,11 +860,11 @@
       },
       "3": {
         "title": "Confidential Offer",
-        "subtitle": "Guaranteed cash offer within 96 hours."
+        "subtitle": "Preliminary cash offer within 96 hours, subject to review."
       },
       "4": {
-        "title": "Close in 96h",
-        "subtitle": "Accept and close. We handle title, notary, everything."
+        "title": "Target 96h completion",
+        "subtitle": "Accept and complete when checks are clear. We coordinate title, notary, and next steps."
       }
     },
     "propertyTypes": {
@@ -878,16 +898,18 @@
   },
   "notificationsPanel": {
     "title": "Notifications",
+    "markAllRead": "Mark all read",
+    "empty": "You're all caught up!",
     "unread": "You have {{count}} unread notification{{plural}}. Check your investor dashboard for new Quick Sale deals.",
     "allClear": "No new notifications. You're all caught up!"
   },
   "footerFull": {
-    "tagline": "Greece's most advanced real estate platform. Data-driven listings, Greek auctions, instant offers, and AI-powered market insights.",
+    "tagline": "Greece's most advanced real estate platform. Data-driven listings, Greek property auctions, Quick Sale™ preliminary offers, and AI-powered market insights.",
     "platform": {
       "title": "Platform",
       "buy": "Buy Property",
       "rent": "Rent Property",
-      "auctions": "Greek Auctions",
+      "auctions": "Greek Property Auctions",
       "quickSale": "Quick Sale™",
       "professionals": "Professionals",
       "openHouses": "Open Houses",
@@ -922,7 +944,7 @@
       "landAny": "Land / Plot (any)",
       "landNoBuilding": "Land (no building)",
       "landWithBuilding": "Land with building",
-      "agricultural": "Agricultural plot",
+      "agricultural": "Agricultural land",
       "plotWithBuilding": "Plot with building",
       "commercial": "All Commercial & Offices"
     }
@@ -1014,7 +1036,7 @@
       "badge": "Investor Deal Flow — Exclusive Access",
       "title": "Private Quick Sale™",
       "titleHighlight": "Deal Pipeline",
-      "subtitle": "Off-market distressed assets, pre-foreclosures, and motivated seller properties — curated for institutional buyers and family offices.",
+      "subtitle": "Off-market, time-sensitive and motivated-seller opportunities — curated for institutional buyers and family offices.",
       "liveDeals": "{{count}} live deals",
       "requestInvitation": "Request invitation",
       "planActive": "{{tier}} Plan Active",

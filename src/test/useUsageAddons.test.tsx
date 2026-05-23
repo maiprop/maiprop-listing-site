@@ -21,6 +21,7 @@ vi.mock("sonner", () => ({ toast: mocks.toast }));
 import {
   PRIORITY_ADS_EXTRA_COST,
   PRIORITY_ADS_INCLUDED,
+  PROFESSIONAL_PRIORITY_AD_EXTRA_COST,
   REPORT_EXTRA_COST,
   REPORT_INCLUDED,
   usePriorityAdsUsage,
@@ -58,8 +59,23 @@ describe("useUsageAddons", () => {
   });
 
   it("exports add-on limits and counts valuation, report, and priority-ad usage from canonical tables", async () => {
-    expect({ VALUATION_INCLUDED, VALUATION_EXTRA_COST, REPORT_INCLUDED, REPORT_EXTRA_COST, PRIORITY_ADS_INCLUDED, PRIORITY_ADS_EXTRA_COST })
-      .toEqual({ VALUATION_INCLUDED: 5, VALUATION_EXTRA_COST: 3, REPORT_INCLUDED: 3, REPORT_EXTRA_COST: 9, PRIORITY_ADS_INCLUDED: 10, PRIORITY_ADS_EXTRA_COST: 5 });
+    expect({
+      VALUATION_INCLUDED,
+      VALUATION_EXTRA_COST,
+      REPORT_INCLUDED,
+      REPORT_EXTRA_COST,
+      PRIORITY_ADS_INCLUDED,
+      PRIORITY_ADS_EXTRA_COST,
+      PROFESSIONAL_PRIORITY_AD_EXTRA_COST,
+    }).toEqual({
+      VALUATION_INCLUDED: 5,
+      VALUATION_EXTRA_COST: 39,
+      REPORT_INCLUDED: 3,
+      REPORT_EXTRA_COST: 49,
+      PRIORITY_ADS_INCLUDED: 10,
+      PRIORITY_ADS_EXTRA_COST: 59,
+      PROFESSIONAL_PRIORITY_AD_EXTRA_COST: 8,
+    });
 
     const first = selectUsage([{ id: "a" }, { id: "b" }]);
     const second = selectUsage([{ id: "r" }]);

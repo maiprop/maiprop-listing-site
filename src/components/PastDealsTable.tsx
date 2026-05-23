@@ -58,7 +58,7 @@ export function PastDealsTable({ listingId }: PastDealsTableProps) {
   const columns = [
     { key: "round", label: "Round" },
     { key: "auction_date", label: "Date", format: (d: PastDeal) => formatDate(d.auction_date ?? d.auctionDate) },
-    { key: "starting_bid", label: "Starting Bid", format: (d: PastDeal) => formatPrice(d.starting_bid ?? d.first_price) },
+    { key: "starting_bid", label: "First Offer Price", format: (d: PastDeal) => formatPrice(d.starting_bid ?? d.first_price) },
     {
       key: "final_price",
       label: "Result",

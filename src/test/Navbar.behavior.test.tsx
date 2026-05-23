@@ -110,11 +110,11 @@ describe("Navbar behavior", () => {
     expect(screen.getByRole("link", { name: "nav.signIn" })).toHaveAttribute("href", "/login");
     expect(screen.getByRole("link", { name: "common.getStarted" })).toHaveAttribute("href", "/signup");
 
-    fireEvent.click(screen.getByRole("button", { name: /open menu/i }));
+    fireEvent.click(screen.getByRole("button", { name: "common.openMenu" }));
 
     expect(screen.getAllByRole("link", { name: "nav.signIn" }).length).toBeGreaterThan(1);
     expect(screen.getByRole("link", { name: "nav.signUp" })).toHaveAttribute("href", "/signup");
-    fireEvent.click(screen.getByRole("button", { name: /light mode/i }));
+    fireEvent.click(screen.getByRole("button", { name: "common.lightMode" }));
     expect(setThemeMock).toHaveBeenCalledWith("light");
   });
 
@@ -129,9 +129,9 @@ describe("Navbar behavior", () => {
 
     renderWithProviders(<Navbar forceScrolled />, { initialPath: "/dashboard/listings" });
 
-    expect(screen.getByRole("link", { name: /my listings/i })).toHaveAttribute("href", "/dashboard/listings");
-    expect(screen.getByRole("link", { name: /list property/i })).toHaveAttribute("href", "/listings/new");
-    expect(screen.getByRole("link", { name: /^pro/i })).toHaveAttribute("href", "/pricing");
+    expect(screen.getByRole("link", { name: "dashNav.myListings" })).toHaveAttribute("href", "/dashboard/listings");
+    expect(screen.getByRole("link", { name: "common.listProperty" })).toHaveAttribute("href", "/listings/new");
+    expect(screen.getByRole("link", { name: "common.proActive" })).toHaveAttribute("href", "/pricing");
 
     fireEvent.pointerDown(screen.getByText("Seller User"), { button: 0, ctrlKey: false });
 
@@ -148,7 +148,7 @@ describe("Navbar behavior", () => {
 
     renderWithProviders(<Navbar forceScrolled />);
 
-    fireEvent.pointerDown(await screen.findByTitle("Notifications"), { button: 0, ctrlKey: false });
+    fireEvent.pointerDown(await screen.findByTitle("notificationsPanel.title"), { button: 0, ctrlKey: false });
     fireEvent.click(await screen.findByText("New viewing"));
 
     await waitFor(() => {
@@ -178,14 +178,14 @@ describe("Navbar behavior", () => {
 
     renderWithProviders(<Navbar forceScrolled />);
 
-    fireEvent.pointerDown(await screen.findByTitle("Notifications"), { button: 0, ctrlKey: false });
+    fireEvent.pointerDown(await screen.findByTitle("notificationsPanel.title"), { button: 0, ctrlKey: false });
     expect(await screen.findByText("Quick sale")).toBeInTheDocument();
     expect(screen.getByText("Auction alert")).toBeInTheDocument();
     expect(screen.getByText("Open house")).toBeInTheDocument();
     expect(screen.getByText("Message")).toBeInTheDocument();
     expect(screen.getByText("Fallback")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /mark all read/i }));
+    fireEvent.click(screen.getByRole("button", { name: /notificationsPanel.markAllRead/i }));
 
     const updateChain = fromMock.mock.results
       .map((result) => result.value)
@@ -213,14 +213,14 @@ describe("Navbar behavior", () => {
     const { unmount } = renderWithProviders(<Navbar forceScrolled />);
 
     expect(await screen.findByText("99+")).toBeInTheDocument();
-    fireEvent.pointerDown(screen.getByTitle("Notifications"), { button: 0, ctrlKey: false });
+    fireEvent.pointerDown(screen.getByTitle("notificationsPanel.title"), { button: 0, ctrlKey: false });
     expect(await screen.findByText("Bulk 0")).toBeInTheDocument();
 
     unmount();
     notifications = [];
     renderWithProviders(<Navbar forceScrolled />);
-    fireEvent.pointerDown(await screen.findByTitle("Notifications"), { button: 0, ctrlKey: false });
-    expect(await screen.findByText("You're all caught up!")).toBeInTheDocument();
+    fireEvent.pointerDown(await screen.findByTitle("notificationsPanel.title"), { button: 0, ctrlKey: false });
+    expect(await screen.findByText("notificationsPanel.empty")).toBeInTheDocument();
   });
 
   it("uses dark-hero styling and developer/admin menus on the home route", async () => {
@@ -239,20 +239,20 @@ describe("Navbar behavior", () => {
     renderWithProviders(<Navbar />, { initialPath: "/" });
 
     expect(screen.getByRole("link", { name: "mAI prop" })).toHaveAttribute("href", "/");
-    expect(screen.getByRole("link", { name: /upgrade/i })).toHaveAttribute("href", "/pricing");
+    expect(screen.getByRole("link", { name: "common.upgrade" })).toHaveAttribute("href", "/pricing");
     const avatar = screen.getByAltText("Admin User profile photo") as HTMLImageElement;
     fireEvent.error(avatar);
     expect(avatar.style.display).toBe("none");
 
     fireEvent.pointerDown(screen.getByText("Admin User"), { button: 0, ctrlKey: false });
-    expect(await screen.findByText("Admin")).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: /admin panel/i })).toBeInTheDocument();
+    expect(await screen.findByText("common.admin")).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /nav.adminDashboard/i })).toBeInTheDocument();
 
     fireEvent.keyDown(screen.getByRole("menu", { name: "Admin User" }), { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("menu", { name: "Admin User" })).not.toBeInTheDocument());
 
-    fireEvent.pointerDown(screen.getByRole("button", { name: /list property/i }), { button: 0, ctrlKey: false });
-    expect(await screen.findByRole("menuitem", { name: /new building/i })).toBeInTheDocument();
+    fireEvent.pointerDown(screen.getByRole("button", { name: /common.listProperty/i }), { button: 0, ctrlKey: false });
+    expect(await screen.findByRole("menuitem", { name: /common.newBuilding/i })).toBeInTheDocument();
   });
 
   it("signs out from the mobile menu and returns home", async () => {
@@ -264,7 +264,7 @@ describe("Navbar behavior", () => {
 
     renderWithProviders(<Navbar forceScrolled />);
 
-    fireEvent.click(screen.getByRole("button", { name: /open menu/i }));
+    fireEvent.click(screen.getByRole("button", { name: "common.openMenu" }));
     fireEvent.click(screen.getByRole("button", { name: "nav.signOut" }));
 
     await waitFor(() => expect(signOutMock).toHaveBeenCalled());

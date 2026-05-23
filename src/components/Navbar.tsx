@@ -123,8 +123,8 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
   const navLinks = [
     { label: t("listings.types.sale"), href: "/listings?listing_type=sale" },
     { label: t("listings.types.rent"), href: "/listings?listing_type=rent" },
-    { label: t("nav.auctions"), href: "/auctions", badge: "Live" },
-    { label: `${t("nav.quickSale")}™`, href: "/firesale", accent: "flame" },
+    { label: t("nav.auctions"), href: "/auctions", badge: t("common.live") },
+    { label: t("nav.quickSale"), href: "/firesale", accent: "flame" },
     { label: t("nav.openHouses"), href: "/open-houses", accent: "dooropen" },
     { label: t("nav.professionals"), href: "/professionals", accent: "subtle" },
   ];
@@ -144,7 +144,7 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
       href="#main-content"
       className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[9999] focus:px-4 focus:py-2 focus:rounded-md focus:bg-primary focus:text-primary-foreground focus:text-sm focus:font-medium focus:shadow-lg"
     >
-      Skip to main content
+      {t("common.skipToMain")}
     </a>
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
@@ -181,7 +181,7 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
                 }`}
             >
               <Building2 className="w-3.5 h-3.5 shrink-0" />
-              My Listings
+              {t("dashNav.myListings")}
             </Link>
           )}
           {navLinks.map((link) => (
@@ -241,7 +241,7 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
                 ? "text-white/80 hover:text-white hover:bg-white/10"
                 : "text-muted-foreground hover:text-foreground hover:bg-secondary"
             }`}
-            aria-label="Toggle theme"
+            aria-label={t("common.toggleTheme")}
           >
             {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
@@ -252,7 +252,7 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
                   forceLight
                     ? "text-white/80 hover:text-white hover:bg-white/10"
                     : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-                }`} title="Messages">
+                }`} title={t("nav.messages")}>
                   <MessageSquare className="w-4 h-4" />
                   <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary" />
                 </button>
@@ -262,7 +262,7 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
                   forceLight
                     ? "text-white/80 hover:text-white hover:bg-white/10"
                     : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-                }`} title="Notifications">
+                }`} title={t("notificationsPanel.title")}>
                   <Bell className="w-4 h-4" />
                   {unreadNotifCount > 0 && (
                     <span className="absolute top-1 right-1 min-w-[14px] h-[14px] px-[3px] rounded-full bg-destructive text-[9px] font-black text-white flex items-center justify-center leading-none">
@@ -273,21 +273,21 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
                 <DropdownMenuContent align="end" className="w-80 bg-card border-border p-0 overflow-hidden">
                   <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                     <p className="text-sm font-semibold flex items-center gap-2">
-                      Notifications
+                      {t("notificationsPanel.title")}
                       {unreadNotifCount > 0 && (
                         <span className="text-[10px] font-bold bg-destructive text-white px-1.5 py-0.5 rounded-full">{unreadNotifCount}</span>
                       )}
                     </p>
                     {unreadNotifCount > 0 && (
                       <button onClick={markAllRead} className="text-xs text-primary hover:underline flex items-center gap-1">
-                        <CheckCheck className="w-3 h-3" /> Mark all read
+                        <CheckCheck className="w-3 h-3" /> {t("notificationsPanel.markAllRead")}
                       </button>
                     )}
                   </div>
                   {notifItems.length === 0 ? (
                     <div className="px-4 py-8 text-center">
                       <Bell className="w-8 h-8 text-muted-foreground/25 mx-auto mb-2" />
-                      <p className="text-xs text-muted-foreground">You&apos;re all caught up!</p>
+                      <p className="text-xs text-muted-foreground">{t("notificationsPanel.empty")}</p>
                     </div>
                   ) : (
                     <div className="divide-y divide-border max-h-80 overflow-y-auto">
@@ -332,7 +332,7 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
                   <span className={`text-sm max-w-[80px] truncate ${forceLight ? "text-white" : "text-foreground"}`}>{displayName}</span>
                   {isInvestorMode(profile) && (
                     <span className="text-[10px] font-bold text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-full">
-                      🔥 Investor
+                      🔥 {t("nav.investorDashboard")}
                     </span>
                   )}
                   <ChevronDown className={`w-3 h-3 ${forceLight ? "text-white/60" : "text-muted-foreground"}`} />
@@ -341,7 +341,7 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
                   <div className="px-3 py-2 border-b border-border">
                     <p className="text-xs font-semibold truncate">{displayName}</p>
                     <p className="text-xs text-muted-foreground capitalize">
-                    {isPlatformAdmin(profile) ? "Admin" : PARTICIPANT_LABELS[participantType as ParticipantId] ?? (profile?.role || "Buyer / Renter")}
+                    {isPlatformAdmin(profile) ? t("common.admin") : PARTICIPANT_LABELS[participantType as ParticipantId] ?? (profile?.role || t("common.buyerRenter"))}
                   </p>
                   </div>
                   <DropdownMenuItem asChild>
@@ -376,7 +376,7 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
                   {isPlatformAdmin(profile) && (
                     <DropdownMenuItem asChild>
                       <Link to="/admin" className="flex items-center gap-2 cursor-pointer">
-                        <Shield className="w-3.5 h-3.5" /> Admin Panel
+                        <Shield className="w-3.5 h-3.5" /> {t("nav.adminDashboard")}
                       </Link>
                     </DropdownMenuItem>
                   )}
@@ -395,18 +395,18 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground hover:opacity-90 gap-1.5">
-                        <Plus className="w-3.5 h-3.5" /> List Property <ChevronDown className="w-3 h-3 opacity-80" />
+                        <Plus className="w-3.5 h-3.5" /> {t("common.listProperty")} <ChevronDown className="w-3 h-3 opacity-80" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48">
                       <DropdownMenuItem asChild>
                         <Link to="/listings/new" className="flex items-center gap-2 cursor-pointer">
-                          <Home className="w-3.5 h-3.5" /> Listing
+                          <Home className="w-3.5 h-3.5" /> {t("common.listing")}
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild>
                         <Link to="/listings/new-building" className="flex items-center gap-2 cursor-pointer">
-                          <Building2 className="w-3.5 h-3.5" /> New Building
+                          <Building2 className="w-3.5 h-3.5" /> {t("common.newBuilding")}
                         </Link>
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -414,7 +414,7 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
                 ) : (
                   <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground hover:opacity-90 gap-1.5" asChild>
                     <Link to="/listings/new">
-                      <Plus className="w-3.5 h-3.5" /> List Property
+                      <Plus className="w-3.5 h-3.5" /> {t("common.listProperty")}
                     </Link>
                   </Button>
                 )
@@ -429,7 +429,7 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
                       : "bg-primary/15 border-primary/40 text-primary"
                   }`}
                 >
-                  <Zap className="w-3 h-3" /> Pro ✓
+                  <Zap className="w-3 h-3" /> {t("common.proActive")}
                 </Link>
               ) : (
                 <Link
@@ -440,7 +440,7 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
                       : "bg-primary/10 border-primary/25 text-primary hover:bg-primary/20"
                   }`}
                 >
-                  <Zap className="w-3 h-3" /> Upgrade
+                  <Zap className="w-3 h-3" /> {t("common.upgrade")}
                 </Link>
               )}
             </>
@@ -467,7 +467,7 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
             forceLight ? "text-white/80 hover:text-white" : "text-muted-foreground hover:text-foreground"
           }`}
           onClick={() => setMobileOpen(!mobileOpen)}
-          aria-label={mobileOpen ? "Close menu" : "Open menu"}
+          aria-label={mobileOpen ? t("common.closeMenu") : t("common.openMenu")}
         >
           {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
@@ -527,7 +527,7 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
               className="flex items-center gap-2 px-3 py-2.5 w-full rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
             >
               {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-              {theme === "dark" ? "Light Mode" : "Dark Mode"}
+              {theme === "dark" ? t("common.lightMode") : t("common.darkMode")}
             </button>
             <div className="px-1">
               <LanguageSwitcher />

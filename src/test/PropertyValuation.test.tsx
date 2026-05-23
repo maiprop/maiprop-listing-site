@@ -33,7 +33,7 @@ vi.mock("@/hooks/useSubscription", () => ({ useSubscription: () => useSubMock() 
 vi.mock("@/hooks/useUsageAddons", () => ({
   useValuationUsage: () => useValMock(),
   VALUATION_INCLUDED: 5,
-  VALUATION_EXTRA_COST: 9,
+  VALUATION_EXTRA_COST: 39,
 }));
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: { functions: { invoke: invokeMock } },

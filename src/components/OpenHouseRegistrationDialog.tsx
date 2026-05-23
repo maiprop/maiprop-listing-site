@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useTranslation } from "react-i18next";
 import { useMyOpenHouseRegistrations } from "@/hooks/useOpenHouseAssetControl";
 import { getPlanLimits } from "@/hooks/usePlanLimits";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
@@ -34,6 +35,12 @@ const WAIVER_TEXT = `I understand and agree that by attending this open house vi
 - Will comply with all safety instructions from the asset manager or representative
 - Accept that the property owner and platform are not liable for any personal injury or property damage
 - Consent to my ID being verified for admission`;
+
+const WAIVER_TEXT_EL = `Κατανοώ και συμφωνώ ότι με τη συμμετοχή μου σε αυτή την ανοιχτή επίσκεψη:
+- Εισέρχομαι στο ακίνητο με δική μου ευθύνη
+- Θα συμμορφωθώ με όλες τις οδηγίες ασφαλείας του υπεύθυνου ή εκπροσώπου
+- Αποδέχομαι ότι ο ιδιοκτήτης και η πλατφόρμα δεν ευθύνονται για προσωπικό τραυματισμό ή ζημία
+- Συναινώ στην ταυτοποίησή μου για την είσοδο`;
 
 const BUDGET_OPTIONS = [
   { value: "under_100k", label: "Under €100k" },
@@ -60,6 +67,8 @@ export default function OpenHouseRegistrationDialog({
   hasAssetControl,
   listingPrice,
 }: Props) {
+  const { i18n } = useTranslation();
+  const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
   const { user, profile } = useAuth();
   const { isPro } = useSubscription();
   const { data: settings } = useOpenHouseSettings(hasAssetControl ? listingId : undefined);
@@ -122,6 +131,18 @@ export default function OpenHouseRegistrationDialog({
   const rsvpLimitReached = !myReg && rsvpLimit !== null && rsvpsThisMonth >= rsvpLimit;
   const requirePOF = settings?.require_proof_of_funds ?? false;
   const requireInvestor = settings?.require_investor_declaration ?? false;
+  const budgetOptions = BUDGET_OPTIONS.map((option) => ({
+    ...option,
+    label: isGreek
+      ? ({
+          "Under €100k": "Κάτω από €100k",
+          "€100k – €200k": "€100k – €200k",
+          "€200k – €500k": "€200k – €500k",
+          "€500k – €1M": "€500k – €1M",
+          "Over €1M": "Πάνω από €1M",
+        }[option.label] ?? option.label)
+      : option.label,
+  }));
 
   // Count active registrations per timeslot to enforce per-slot capacity
   const slotCounts = timeslots.map((_, idx) =>
@@ -152,15 +173,15 @@ export default function OpenHouseRegistrationDialog({
 
   const handleContactContinue = async () => {
     if (!user) {
-      toast.error("Please sign in to register");
+      toast.error(isGreek ? "Συνδεθείτε για να κάνετε εγγραφή" : "Please sign in to register");
       return;
     }
     if (!contactName.trim() || !contactEmail.trim() || !contactPhone.trim()) {
-      toast.error("Please add your name, email, and phone number");
+      toast.error(isGreek ? "Συμπληρώστε ονοματεπώνυμο, email και τηλέφωνο" : "Please add your name, email, and phone number");
       return;
     }
     if (!contactPermission || !idConsent || !privacyAcknowledged) {
-      toast.error("Please accept the contact, ID verification, and privacy acknowledgements");
+      toast.error(isGreek ? "Αποδεχθείτε τις δηλώσεις επικοινωνίας, ταυτοποίησης και απορρήτου" : "Please accept the contact, ID verification, and privacy acknowledgements");
       return;
     }
 
@@ -191,15 +212,15 @@ export default function OpenHouseRegistrationDialog({
 
   const handleStartRegistration = async () => {
     if (!user) {
-      toast.error("Please sign in to register");
+      toast.error(isGreek ? "Συνδεθείτε για να κάνετε εγγραφή" : "Please sign in to register");
       return;
     }
     if (listingFull) {
-      toast.error("This open house is fully booked");
+      toast.error(isGreek ? "Η ανοιχτή επίσκεψη είναι πλήρης" : "This open house is fully booked");
       return;
     }
     if (rsvpLimitReached) {
-      toast.error(`You've reached your ${rsvpLimit} RSVP limit this month. Upgrade to Pro for unlimited RSVPs.`);
+      toast.error(isGreek ? `Έχετε φτάσει το όριο ${rsvpLimit} δηλώσεων συμμετοχής αυτόν τον μήνα. Αναβαθμίστε σε Pro για απεριόριστες δηλώσεις.` : `You've reached your ${rsvpLimit} RSVP limit this month. Upgrade to Pro for unlimited RSVPs.`);
       return;
     }
     setLoading(true);
@@ -232,7 +253,7 @@ export default function OpenHouseRegistrationDialog({
 
   const handleScreeningDoc = (file: File) => {
     if (file.size > 5 * 1024 * 1024) {
-      toast.error("File must be under 5 MB");
+      toast.error(isGreek ? "Το αρχείο πρέπει να είναι κάτω από 5 MB" : "File must be under 5 MB");
       return;
     }
     setScreeningDocFile(file);
@@ -249,7 +270,7 @@ export default function OpenHouseRegistrationDialog({
 
   const handleScreeningSubmit = async () => {
     if (!regId || !mortgageStatus || !budgetRange || !workingWithAgent) {
-      toast.error("Please answer all required questions");
+      toast.error(isGreek ? "Απαντήστε σε όλες τις υποχρεωτικές ερωτήσεις" : "Please answer all required questions");
       return;
     }
     setLoading(true);
@@ -268,7 +289,7 @@ export default function OpenHouseRegistrationDialog({
           updates.screening_doc_url = storedPath;
         } catch (_err: unknown) {
           // Non-fatal — proceed without doc
-          toast.warning("Screening document upload failed — submission will continue without it.");
+          toast.warning(isGreek ? "Η μεταφόρτωση του εγγράφου ελέγχου απέτυχε — η υποβολή θα συνεχιστεί χωρίς αυτό." : "Screening document upload failed — submission will continue without it.");
         }
       }
       await updateReg.mutateAsync({ id: regId, updates });
@@ -285,7 +306,7 @@ export default function OpenHouseRegistrationDialog({
     if (!regId || !idDocFile || !user?.id) return;
     const MAX_DOC_SIZE = 5 * 1024 * 1024;
     if (idDocFile.size > MAX_DOC_SIZE) {
-      toast.error("ID document must be under 5 MB");
+      toast.error(isGreek ? "Το έγγραφο ταυτοποίησης πρέπει να είναι κάτω από 5 MB" : "ID document must be under 5 MB");
       return;
     }
     setLoading(true);
@@ -299,7 +320,7 @@ export default function OpenHouseRegistrationDialog({
       });
       setStep("waiver");
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Upload failed");
+      toast.error(e instanceof Error ? e.message : (isGreek ? "Η μεταφόρτωση απέτυχε" : "Upload failed"));
     } finally {
       setLoading(false);
     }
@@ -342,9 +363,9 @@ export default function OpenHouseRegistrationDialog({
     try {
       await updateReg.mutateAsync({ id: regId, updates });
       setStep("done");
-      toast.success("Registration complete. Awaiting approval from asset manager.");
+      toast.success(isGreek ? "Η εγγραφή ολοκληρώθηκε. Αναμένεται έγκριση από τον υπεύθυνο." : "Registration complete. Awaiting approval from asset manager.");
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Update failed");
+      toast.error(e instanceof Error ? e.message : (isGreek ? "Η ενημέρωση απέτυχε" : "Update failed"));
     } finally {
       setLoading(false);
     }
@@ -393,10 +414,10 @@ export default function OpenHouseRegistrationDialog({
       <DialogContent className="bg-card border-border max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-display text-lg">
-            {step === "done" ? "Registration Submitted" : "Pre-register for Open House"}
+            {step === "done" ? (isGreek ? "Η εγγραφή υποβλήθηκε" : "Registration Submitted") : (isGreek ? "Προεγγραφή για ανοιχτή επίσκεψη" : "Pre-register for Open House")}
           </DialogTitle>
           <DialogDescription className="sr-only">
-            Submit visitor details, scheduling preferences, verification documents, and required open-house consents.
+            {isGreek ? "Υποβάλετε στοιχεία επισκέπτη, προτιμήσεις ώρας, έγγραφα ταυτοποίησης και απαιτούμενες συναινέσεις." : "Submit visitor details, scheduling preferences, verification documents, and required open-house consents."}
           </DialogDescription>
         </DialogHeader>
 
@@ -408,17 +429,17 @@ export default function OpenHouseRegistrationDialog({
             <p className="font-semibold">{listingTitle}</p>
             <p className="text-sm text-muted-foreground">
               {myReg?.status === "approved"
-                ? "You're approved to attend."
-                : "Your registration has been submitted. The asset manager will review and approve."}
+                ? (isGreek ? "Έχετε εγκριθεί για συμμετοχή." : "You're approved to attend.")
+                : (isGreek ? "Η εγγραφή σας υποβλήθηκε. Ο υπεύθυνος θα την εξετάσει και θα την εγκρίνει." : "Your registration has been submitted. The asset manager will review and approve.")}
             </p>
-            <Button className="w-full" onClick={onClose}>Done</Button>
+            <Button className="w-full" onClick={onClose}>{isGreek ? "Ολοκλήρωση" : "Done"}</Button>
           </div>
         ) : (
           <div className="space-y-5">
             {/* Progress indicator */}
             {currentStepIdx < totalSteps && totalSteps > 1 && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span>Step {currentStepIdx + 1} of {totalSteps}</span>
+                <span>{isGreek ? "Βήμα" : "Step"} {currentStepIdx + 1} {isGreek ? "από" : "of"} {totalSteps}</span>
                 <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden">
                   <div
                     className="h-full bg-primary rounded-full transition-all"
@@ -433,22 +454,22 @@ export default function OpenHouseRegistrationDialog({
               <>
                 <div className="flex items-center gap-2 mb-1">
                   <UserRound className="w-4 h-4 text-primary" />
-                  <p className="text-sm font-semibold">Visitor details</p>
+                  <p className="text-sm font-semibold">{isGreek ? "Στοιχεία επισκέπτη" : "Visitor details"}</p>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Hosts need verified contact details before they can approve access to a private viewing.
+                  {isGreek ? "Οι υπεύθυνοι χρειάζονται επαληθευμένα στοιχεία επικοινωνίας πριν εγκρίνουν πρόσβαση σε ιδιωτική επίσκεψη." : "Hosts need verified contact details before they can approve access to a private viewing."}
                 </p>
 
                 <div className="space-y-2">
                   <Label htmlFor="oh-contact-name" className="text-xs font-semibold text-muted-foreground">
-                    Full name <span className="text-destructive">*</span>
+                    {isGreek ? "Ονοματεπώνυμο" : "Full name"} <span className="text-destructive">*</span>
                   </Label>
                   <input
                     id="oh-contact-name"
                     value={contactName}
                     onChange={(e) => setContactName(e.target.value)}
                     className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm"
-                    placeholder="Your legal name"
+                    placeholder={isGreek ? "Το πλήρες νόμιμο όνομά σας" : "Your legal name"}
                   />
                 </div>
 
@@ -471,7 +492,7 @@ export default function OpenHouseRegistrationDialog({
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="oh-contact-phone" className="text-xs font-semibold text-muted-foreground">
-                      Phone <span className="text-destructive">*</span>
+                      {isGreek ? "Τηλέφωνο" : "Phone"} <span className="text-destructive">*</span>
                     </Label>
                     <div className="relative">
                       <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -489,7 +510,7 @@ export default function OpenHouseRegistrationDialog({
 
                 <div className="space-y-2">
                   <Label htmlFor="oh-visit-purpose" className="text-xs font-semibold text-muted-foreground">
-                    Reason for attending
+                    {isGreek ? "Λόγος συμμετοχής" : "Reason for attending"}
                   </Label>
                   <textarea
                     id="oh-visit-purpose"
@@ -497,7 +518,7 @@ export default function OpenHouseRegistrationDialog({
                     value={visitPurpose}
                     onChange={(e) => setVisitPurpose(e.target.value)}
                     className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm resize-none"
-                    placeholder="Buying, renting, representing a client, investment review..."
+                    placeholder={isGreek ? "Αγορά, ενοικίαση, εκπροσώπηση πελάτη, επενδυτική αξιολόγηση..." : "Buying, renting, representing a client, investment review..."}
                   />
                 </div>
 
@@ -509,7 +530,7 @@ export default function OpenHouseRegistrationDialog({
                       onChange={(e) => setContactPermission(e.target.checked)}
                       className="mt-1 rounded border-border"
                     />
-                    <span>I allow the host or their representative to contact me about this open house.</span>
+                    <span>{isGreek ? "Επιτρέπω στον υπεύθυνο ή εκπρόσωπό του να επικοινωνήσει μαζί μου για αυτή την ανοιχτή επίσκεψη." : "I allow the host or their representative to contact me about this open house."}</span>
                   </label>
                   <label className="flex items-start gap-2 text-sm cursor-pointer">
                     <input
@@ -518,7 +539,7 @@ export default function OpenHouseRegistrationDialog({
                       onChange={(e) => setIdConsent(e.target.checked)}
                       className="mt-1 rounded border-border"
                     />
-                    <span>I agree to provide ID for admission verification before attending.</span>
+                    <span>{isGreek ? "Συμφωνώ να προσκομίσω έγγραφο ταυτοποίησης για έλεγχο εισόδου πριν την επίσκεψη." : "I agree to provide ID for admission verification before attending."}</span>
                   </label>
                   <label className="flex items-start gap-2 text-sm cursor-pointer">
                     <input
@@ -527,7 +548,7 @@ export default function OpenHouseRegistrationDialog({
                       onChange={(e) => setPrivacyAcknowledged(e.target.checked)}
                       className="mt-1 rounded border-border"
                     />
-                    <span>I understand my registration details and documents are shared with the listing host for review.</span>
+                    <span>{isGreek ? "Κατανοώ ότι τα στοιχεία εγγραφής και τα έγγραφά μου κοινοποιούνται στον υπεύθυνο της αγγελίας για έλεγχο." : "I understand my registration details and documents are shared with the listing host for review."}</span>
                   </label>
                 </div>
 
@@ -537,7 +558,7 @@ export default function OpenHouseRegistrationDialog({
                   disabled={loading || !contactName.trim() || !contactEmail.trim() || !contactPhone.trim() || !contactPermission || !idConsent || !privacyAcknowledged}
                 >
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserRound className="w-4 h-4" />}
-                  Continue
+                  {isGreek ? "Συνέχεια" : "Continue"}
                 </Button>
               </>
             )}
@@ -547,7 +568,7 @@ export default function OpenHouseRegistrationDialog({
               <>
                 {hasAssetControl && timeslots.length > 0 && (
                   <div>
-                    <p className="text-xs font-semibold text-muted-foreground mb-2">Select a timeslot</p>
+                    <p className="text-xs font-semibold text-muted-foreground mb-2">{isGreek ? "Επιλέξτε ώρα" : "Select a timeslot"}</p>
                     <div className="space-y-2">
                       {timeslots.map((ts, i) => {
                         const full = slotCounts[i] >= ts.max_visitors;
@@ -566,7 +587,7 @@ export default function OpenHouseRegistrationDialog({
                           >
                             <span>{ts.start} – {ts.end}</span>
                             <span className={`ml-2 text-xs ${full ? "text-destructive font-medium" : "text-muted-foreground"}`}>
-                              {full ? "Full" : `${slotCounts[i]} / ${ts.max_visitors} booked`}
+                              {full ? (isGreek ? "Πλήρες" : "Full") : `${slotCounts[i]} / ${ts.max_visitors} ${isGreek ? "κρατήσεις" : "booked"}`}
                             </span>
                           </button>
                         );
@@ -576,12 +597,14 @@ export default function OpenHouseRegistrationDialog({
                 )}
                 {listingFull && (
                   <div className="rounded-xl bg-destructive/10 border border-destructive/25 px-4 py-3 text-sm text-destructive font-medium">
-                    This open house is fully booked — no more registrations available.
+                    {isGreek ? "Η ανοιχτή επίσκεψη είναι πλήρης — δεν υπάρχουν διαθέσιμες επιπλέον εγγραφές." : "This open house is fully booked — no more registrations available."}
                   </div>
                 )}
                 {!listingFull && rsvpLimitReached && (
                   <div className="rounded-xl bg-amber-500/10 border border-amber-500/25 px-4 py-3 text-sm text-amber-700 font-medium">
-                    You've used {rsvpsThisMonth}/{rsvpLimit} RSVPs this month. <a href="/pricing" className="underline underline-offset-2 font-semibold hover:opacity-70">Upgrade to Pro</a> for unlimited RSVPs.
+                    {isGreek ? `Έχετε χρησιμοποιήσει ${rsvpsThisMonth}/${rsvpLimit} δηλώσεις συμμετοχής αυτόν τον μήνα. ` : `You've used ${rsvpsThisMonth}/${rsvpLimit} RSVPs this month. `}
+                    <a href="/pricing" className="underline underline-offset-2 font-semibold hover:opacity-70">{isGreek ? "Αναβαθμίστε σε Pro" : "Upgrade to Pro"}</a>
+                    {isGreek ? " για απεριόριστες δηλώσεις." : " for unlimited RSVPs."}
                   </div>
                 )}
                 <Button
@@ -590,7 +613,15 @@ export default function OpenHouseRegistrationDialog({
                   disabled={loading || regsLoading || listingFull || rsvpLimitReached || (hasAssetControl && timeslots.length > 0 && timeslotIndex === null)}
                 >
                   {loading || regsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
-                  {regsLoading ? "Loading…" : myReg ? "Continue" : listingFull ? "Fully Booked" : rsvpLimitReached ? "RSVP Limit Reached" : "Register"}
+                  {regsLoading
+                    ? (isGreek ? "Φόρτωση…" : "Loading…")
+                    : myReg
+                      ? (isGreek ? "Συνέχεια" : "Continue")
+                      : listingFull
+                        ? (isGreek ? "Πλήρες" : "Fully Booked")
+                        : rsvpLimitReached
+                          ? (isGreek ? "Όριο δηλώσεων συμμετοχής" : "RSVP Limit Reached")
+                          : (isGreek ? "Εγγραφή" : "Register")}
                 </Button>
               </>
             )}
@@ -600,22 +631,22 @@ export default function OpenHouseRegistrationDialog({
               <>
                 <div className="flex items-center gap-2 mb-1">
                   <ClipboardCheck className="w-4 h-4 text-primary" />
-                  <p className="text-sm font-semibold">Pre-qualification</p>
+                  <p className="text-sm font-semibold">{isGreek ? "Προέλεγχος ενδιαφέροντος" : "Pre-qualification"}</p>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  A few quick questions help the host qualify serious buyers. Your answers are only shared with the listing host.
+                  {isGreek ? "Μερικές σύντομες ερωτήσεις βοηθούν τον υπεύθυνο να αξιολογήσει σοβαρούς ενδιαφερόμενους. Οι απαντήσεις κοινοποιούνται μόνο στον υπεύθυνο της αγγελίας." : "A few quick questions help the host qualify serious buyers. Your answers are only shared with the listing host."}
                 </p>
 
                 {/* Q1: Mortgage / funds */}
                 <div className="space-y-2">
                   <Label className="text-xs font-semibold text-muted-foreground">
-                    Are you currently pre-approved for a mortgage or have funds available? <span className="text-destructive">*</span>
+                    {isGreek ? "Έχετε προέγκριση δανείου ή διαθέσιμα κεφάλαια;" : "Are you currently pre-approved for a mortgage or have funds available?"} <span className="text-destructive">*</span>
                   </Label>
                   <div className="flex flex-wrap gap-2">
                     {[
-                      { value: "yes", label: "Yes" },
-                      { value: "no", label: "No" },
-                      { value: "exploring", label: "Exploring options" },
+                      { value: "yes", label: isGreek ? "Ναι" : "Yes" },
+                      { value: "no", label: isGreek ? "Όχι" : "No" },
+                      { value: "exploring", label: isGreek ? "Διερευνώ επιλογές" : "Exploring options" },
                     ].map((opt) => (
                       <button
                         key={opt.value}
@@ -636,14 +667,14 @@ export default function OpenHouseRegistrationDialog({
                 {/* Q2: Budget range */}
                 <div className="space-y-2">
                   <Label className="text-xs font-semibold text-muted-foreground">
-                    What is your approximate budget range? <span className="text-destructive">*</span>
+                    {isGreek ? "Ποιο είναι το ενδεικτικό εύρος προϋπολογισμού σας;" : "What is your approximate budget range?"} <span className="text-destructive">*</span>
                   </Label>
                   <Select value={budgetRange} onValueChange={setBudgetRange}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select budget range" />
+                      <SelectValue placeholder={isGreek ? "Επιλέξτε εύρος προϋπολογισμού" : "Select budget range"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {BUDGET_OPTIONS.map((opt) => (
+                      {budgetOptions.map((opt) => (
                         <SelectItem key={opt.value} value={opt.value}>
                           {opt.label}
                         </SelectItem>
@@ -655,13 +686,13 @@ export default function OpenHouseRegistrationDialog({
                 {/* Q3: Working with agent */}
                 <div className="space-y-2">
                   <Label className="text-xs font-semibold text-muted-foreground">
-                    Are you working with an agent? <span className="text-destructive">*</span>
+                    {isGreek ? "Συνεργάζεστε με μεσίτη;" : "Are you working with an agent?"} <span className="text-destructive">*</span>
                   </Label>
                   <div className="flex flex-wrap gap-2">
                     {[
-                      { value: "yes", label: "Yes" },
-                      { value: "no", label: "No" },
-                      { value: "i_am_agent", label: "I am the agent" },
+                      { value: "yes", label: isGreek ? "Ναι" : "Yes" },
+                      { value: "no", label: isGreek ? "Όχι" : "No" },
+                      { value: "i_am_agent", label: isGreek ? "Είμαι ο μεσίτης" : "I am the agent" },
                     ].map((opt) => (
                       <button
                         key={opt.value}
@@ -682,7 +713,7 @@ export default function OpenHouseRegistrationDialog({
                 {/* Q4: ID document upload (optional) */}
                 <div className="space-y-2">
                   <Label className="text-xs font-semibold text-muted-foreground">
-                    ID document upload <span className="text-muted-foreground font-normal">(optional but recommended)</span>
+                    {isGreek ? "Ανέβασμα εγγράφου ταυτοποίησης" : "ID document upload"} <span className="text-muted-foreground font-normal">{isGreek ? "(προαιρετικό αλλά συνιστάται)" : "(optional but recommended)"}</span>
                   </Label>
                   <input
                     ref={screeningDocInputRef}
@@ -701,13 +732,13 @@ export default function OpenHouseRegistrationDialog({
                     onClick={() => screeningDocInputRef.current?.click()}
                   >
                     <Upload className="w-4 h-4" />
-                    {screeningDocFile ? screeningDocFile.name : "Upload ID / passport"}
+                    {screeningDocFile ? screeningDocFile.name : (isGreek ? "Ανέβασμα ταυτότητας / διαβατηρίου" : "Upload ID / passport")}
                   </Button>
                   {screeningDocPreview && (
                     <div className="mt-2 rounded-lg overflow-hidden border border-border">
                       <img
                         src={screeningDocPreview}
-                        alt="ID preview"
+                        alt={isGreek ? "Προεπισκόπηση ταυτότητας" : "ID preview"}
                         className="w-full max-h-40 object-contain bg-secondary/40"
                       />
                     </div>
@@ -715,7 +746,7 @@ export default function OpenHouseRegistrationDialog({
                   {screeningDocFile && !screeningDocPreview && (
                     <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                       <FileCheck className="w-3.5 h-3.5 text-emerald-600" />
-                      {screeningDocFile.name} selected
+                      {screeningDocFile.name} {isGreek ? "επιλέχθηκε" : "selected"}
                     </p>
                   )}
                 </div>
@@ -726,7 +757,7 @@ export default function OpenHouseRegistrationDialog({
                   disabled={loading || !mortgageStatus || !budgetRange || !workingWithAgent}
                 >
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardCheck className="w-4 h-4" />}
-                  Continue
+                  {isGreek ? "Συνέχεια" : "Continue"}
                 </Button>
               </>
             )}
@@ -735,7 +766,7 @@ export default function OpenHouseRegistrationDialog({
             {step === "id" && (
               <>
                 <div>
-                  <p className="text-xs font-semibold text-muted-foreground mb-2">ID verification</p>
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">{isGreek ? "Ταυτοποίηση" : "ID verification"}</p>
                   <div className="flex gap-2 mb-3">
                     {(["id_card", "passport"] as const).map((t) => (
                       <button
@@ -745,7 +776,7 @@ export default function OpenHouseRegistrationDialog({
                           idDocType === t ? "border-primary bg-primary/10" : "border-border"
                         }`}
                       >
-                        {t === "id_card" ? "ID card" : "Passport"}
+                        {t === "id_card" ? (isGreek ? "Δελτίο ταυτότητας" : "ID card") : (isGreek ? "Διαβατήριο" : "Passport")}
                       </button>
                     ))}
                   </div>
@@ -758,12 +789,12 @@ export default function OpenHouseRegistrationDialog({
                   />
                   <Button variant="outline" className="w-full gap-2" onClick={() => fileInputRef.current?.click()}>
                     <Upload className="w-4 h-4" />
-                    {idDocFile ? idDocFile.name : "Upload ID document"}
+                    {idDocFile ? idDocFile.name : (isGreek ? "Ανέβασμα εγγράφου ταυτοποίησης" : "Upload ID document")}
                   </Button>
                 </div>
                 <Button className="w-full gap-2" onClick={handleIdUpload} disabled={!idDocFile || loading}>
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
-                  Continue
+                  {isGreek ? "Συνέχεια" : "Continue"}
                 </Button>
               </>
             )}
@@ -772,7 +803,7 @@ export default function OpenHouseRegistrationDialog({
             {step === "waiver" && (
               <>
                 <div className="bg-secondary rounded-xl p-4 text-sm text-muted-foreground max-h-32 overflow-y-auto">
-                  {WAIVER_TEXT}
+                  {isGreek ? WAIVER_TEXT_EL : WAIVER_TEXT}
                 </div>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -781,11 +812,11 @@ export default function OpenHouseRegistrationDialog({
                     onChange={(e) => setWaiverAccepted(e.target.checked)}
                     className="rounded border-border"
                   />
-                  <span className="text-sm">I agree to the liability waiver</span>
+                  <span className="text-sm">{isGreek ? "Συμφωνώ με τη δήλωση ευθύνης" : "I agree to the liability waiver"}</span>
                 </label>
                 <Button className="w-full gap-2" onClick={handleWaiverSign} disabled={!waiverAccepted || loading}>
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileCheck className="w-4 h-4" />}
-                  Sign & Continue
+                  {isGreek ? "Υπογραφή & συνέχεια" : "Sign & Continue"}
                 </Button>
               </>
             )}
@@ -796,7 +827,7 @@ export default function OpenHouseRegistrationDialog({
                 {requirePOF && (
                   <div>
                     <p className="text-xs font-semibold text-muted-foreground mb-2">
-                      Proof of funds {requirePOF ? "(required)" : "(optional)"}
+                      {isGreek ? "Βεβαίωση διαθέσιμων κεφαλαίων" : "Proof of funds"} {requirePOF ? (isGreek ? "(υποχρεωτικό)" : "(required)") : (isGreek ? "(προαιρετικό)" : "(optional)")}
                     </p>
                     <input
                       ref={proofInputRef}
@@ -806,11 +837,11 @@ export default function OpenHouseRegistrationDialog({
                       onChange={(e) => setProofFile(e.target.files?.[0] ?? null)}
                     />
                     <Button variant="outline" className="w-full gap-2 mb-2" onClick={() => proofInputRef.current?.click()}>
-                      <Upload className="w-4 h-4" /> {proofFile ? proofFile.name : "Upload"}
+                      <Upload className="w-4 h-4" /> {proofFile ? proofFile.name : (isGreek ? "Ανέβασμα" : "Upload")}
                     </Button>
                     <input
                       type="number"
-                      placeholder="Amount (€)"
+                      placeholder={isGreek ? "Ποσό (€)" : "Amount (€)"}
                       min="0"
                       step="0.01"
                       value={proofAmount}
@@ -827,12 +858,12 @@ export default function OpenHouseRegistrationDialog({
                       onChange={(e) => setInvestorDeclared(e.target.checked)}
                       className="rounded border-border"
                     />
-                    <span className="text-sm">I declare I am a qualified investor / serious buyer</span>
+                    <span className="text-sm">{isGreek ? "Δηλώνω ότι είμαι κατάλληλος επενδυτής / σοβαρός ενδιαφερόμενος αγοραστής" : "I declare I am a qualified investor / serious buyer"}</span>
                   </label>
                 )}
                 <Button className="w-full gap-2" onClick={handleQualifiedSubmit} disabled={loading}>
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSignature className="w-4 h-4" />}
-                  Submit
+                  {isGreek ? "Υποβολή" : "Submit"}
                 </Button>
               </>
             )}

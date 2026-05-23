@@ -81,7 +81,7 @@ function propertyTypeLabel(type: string): string {
 }
 
 function sourceLabel(source: string): string {
-  return source === "court_auction" ? "Court Auction" : "Private Sale";
+  return source === "court_auction" ? "Property Auction" : "Private Sale";
 }
 
 function typeBadgeVariant(

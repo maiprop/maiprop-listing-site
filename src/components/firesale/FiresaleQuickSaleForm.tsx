@@ -19,6 +19,8 @@ import {
   Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import i18next from "i18next";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { isSellSideRole } from "@/lib/authUtils";
@@ -46,6 +48,29 @@ const propertyTypeOptions = [
   { value: "commercial_hall", label: "🎪 Hall / Event Space" },
   { value: "commercial_mixed", label: "🔀 Mixed-Use Building" },
 ];
+
+const ui = (en: string, el: string): string =>
+  i18next.language?.toLowerCase().startsWith("el") ? el : en;
+
+const propertyTypeLabel = (value: string, label: string): string => {
+  const labels: Record<string, string> = {
+    apartment: "🏢 Διαμέρισμα",
+    house: "🏡 Μονοκατοικία",
+    villa: "🌴 Βίλα",
+    land: "🌿 Οικόπεδο / Αγροτεμάχιο",
+    office: "🖥️ Γραφείο",
+    commercial_shop: "🛍️ Κατάστημα",
+    commercial_warehouse: "📦 Αποθήκη / Αποθηκευτικός χώρος",
+    commercial_hotel: "🏨 Ξενοδοχείο / B&B",
+    commercial_restaurant: "🍽️ Εστιατόριο / Καφέ",
+    commercial_clinic: "🔬 Ιατρείο / Κλινική",
+    commercial_industrial: "🏗️ Βιομηχανικός χώρος",
+    commercial_showroom: "🖼️ Εκθεσιακός χώρος",
+    commercial_hall: "🎪 Αίθουσα / χώρος εκδηλώσεων",
+    commercial_mixed: "🔀 Κτίριο μεικτής χρήσης",
+  };
+  return i18next.language?.toLowerCase().startsWith("el") ? labels[value] ?? label : label;
+};
 
 const NOW_YEAR = new Date().getFullYear();
 
@@ -109,20 +134,23 @@ const syncContactFields = (
 });
 
 const validateAddress = (address: string): string | null =>
-  address.trim().length < 5 ? "Please enter a full address (min 5 characters)." : null;
+  address.trim().length < 5 ? ui("Please enter a full address (min 5 characters).", "Συμπληρώστε πλήρη διεύθυνση (τουλάχιστον 5 χαρακτήρες).") : null;
 
 const validateKaekValue = (value: string): string | null => {
   const kaek = normalizeKaek(value);
-  if (!kaek) return "KAEK is required.";
+  if (!kaek) return ui("KAEK is required.", "Το ΚΑΕΚ είναι υποχρεωτικό.");
   if (!isValidKaek(kaek)) {
-    return "KAEK must be 12 digits, optionally followed by sub-property parts, e.g. 050240601001 or 050240601001/0/1.";
+    return ui(
+      "KAEK must be 12 digits, optionally followed by sub-property parts, e.g. 050240601001 or 050240601001/0/1.",
+      "Το ΚΑΕΚ πρέπει να έχει 12 ψηφία, προαιρετικά με τμήματα υπο-ιδιοκτησίας, π.χ. 050240601001 ή 050240601001/0/1.",
+    );
   }
   return null;
 };
 
 const validatePropertyType = (propertyType: string): string | null => {
-  if (!propertyType) return "Property type is required.";
-  return toFiresalePropertyType(propertyType) ? null : "Property type is invalid.";
+  if (!propertyType) return ui("Property type is required.", "Ο τύπος ακινήτου είναι υποχρεωτικός.");
+  return toFiresalePropertyType(propertyType) ? null : ui("Property type is invalid.", "Ο τύπος ακινήτου δεν είναι έγκυρος.");
 };
 
 const validateNumberRange = (
@@ -133,28 +161,28 @@ const validateNumberRange = (
   rangeMessage: string,
 ): string | null => {
   const numericValue = Number(value);
-  if (!value || Number.isNaN(numericValue)) return `${label} is required.`;
+  if (!value || Number.isNaN(numericValue)) return ui(`${label} is required.`, `Το πεδίο ${label} είναι υποχρεωτικό.`);
   return numericValue < min || numericValue > max ? rangeMessage : null;
 };
 
 const validateNotes = (notes: string): string | null =>
-  notes.trim().length < 3 ? "Please add a short note." : null;
+  notes.trim().length < 3 ? ui("Please add a short note.", "Προσθέστε μια σύντομη σημείωση.") : null;
 
 const validatePhotoCount = (count: number): string | null =>
-  count < 5 ? "Please upload at least 5 property photos." : null;
+  count < 5 ? ui("Please upload at least 5 property photos.", "Ανεβάστε τουλάχιστον 5 φωτογραφίες του ακινήτου.") : null;
 
 const validateContactName = (name: string): string | null =>
-  name.trim().length < 2 ? "Full name is required." : null;
+  name.trim().length < 2 ? ui("Full name is required.", "Το ονοματεπώνυμο είναι υποχρεωτικό.") : null;
 
 const validateContactEmail = (email: string): string | null => {
-  if (!email.trim()) return "Email is required.";
-  return /\S+@\S+\.\S+/.test(email) ? null : "Email looks invalid.";
+  if (!email.trim()) return ui("Email is required.", "Το email είναι υποχρεωτικό.");
+  return /\S+@\S+\.\S+/.test(email) ? null : ui("Email looks invalid.", "Το email φαίνεται μη έγκυρο.");
 };
 
 const validateContactPhone = (phoneValue: string): string | null => {
   const phone = phoneValue.replace(/\s+/g, "").trim();
-  if (!phone) return "Phone number is required.";
-  return /^\+?[0-9]{8,15}$/.test(phone) ? null : "Phone number looks invalid (use digits, optionally starting with +).";
+  if (!phone) return ui("Phone number is required.", "Το τηλέφωνο είναι υποχρεωτικό.");
+  return /^\+?[0-9]{8,15}$/.test(phone) ? null : ui("Phone number looks invalid (use digits, optionally starting with +).", "Το τηλέφωνο φαίνεται μη έγκυρο (χρησιμοποιήστε ψηφία, προαιρετικά με +).");
 };
 
 const collectErrors = (checks: Array<[string, string | null]>): QuickSaleErrors => {
@@ -170,14 +198,14 @@ const validateStep1Form = (form: QuickSaleFormValues, photoCount: number): Quick
     ["address", validateAddress(form.address)],
     ["kaek", validateKaekValue(form.kaek)],
     ["propertyType", validatePropertyType(form.propertyType)],
-    ["sqm", validateNumberRange(form.sqm, "Size (m\u00b2)", 10, 5000, "Size (m\u00b2) must be between 10 and 5000.")],
+    ["sqm", validateNumberRange(form.sqm, ui("Size (m\u00b2)", "Εμβαδόν (τ.μ.)"), 10, 5000, ui("Size (m\u00b2) must be between 10 and 5000.", "Το εμβαδόν πρέπει να είναι μεταξύ 10 και 5000 τ.μ."))],
     [
       "askingPrice",
-      validateNumberRange(form.askingPrice, "Asking price", 5_000, 100_000_000, "Asking price must be between \u20ac5,000 and \u20ac100,000,000."),
+      validateNumberRange(form.askingPrice, ui("Asking price", "Ζητούμενη τιμή"), 5_000, 100_000_000, ui("Asking price must be between \u20ac5,000 and \u20ac100,000,000.", "Η ζητούμενη τιμή πρέπει να είναι μεταξύ €5.000 και €100.000.000.")),
     ],
     [
       "constructionYear",
-      validateNumberRange(form.constructionYear, "Construction year", 1800, NOW_YEAR + 1, `Construction year must be between 1800 and ${NOW_YEAR + 1}.`),
+      validateNumberRange(form.constructionYear, ui("Construction year", "Έτος κατασκευής"), 1800, NOW_YEAR + 1, ui(`Construction year must be between 1800 and ${NOW_YEAR + 1}.`, `Το έτος κατασκευής πρέπει να είναι μεταξύ 1800 και ${NOW_YEAR + 1}.`)),
     ],
     ["photos", validatePhotoCount(photoCount)],
     ["notes", validateNotes(form.notes)],
@@ -290,8 +318,8 @@ const getPhotoGrade = (count: number): number => {
 
 const buildMetaLines = (form: QuickSaleFormValues, photoCount: number): string[] => {
   const metaLines: string[] = [];
-  if (form.constructionYear.trim()) metaLines.push(`Construction year: ${form.constructionYear.trim()}`);
-  if (photoCount > 0) metaLines.push(`Photo condition grade (1-10): ${getPhotoGrade(photoCount)}`);
+  if (form.constructionYear.trim()) metaLines.push(`${ui("Construction year", "Έτος κατασκευής")}: ${form.constructionYear.trim()}`);
+  if (photoCount > 0) metaLines.push(`${ui("Photo condition grade (1-10)", "Βαθμός κατάστασης φωτογραφιών (1-10)")}: ${getPhotoGrade(photoCount)}`);
   if (form.kaek.trim()) metaLines.push(`KAEK: ${normalizeKaek(form.kaek)}`);
   if (form.notes.trim()) metaLines.push(form.notes.trim());
   return metaLines;
@@ -345,7 +373,7 @@ const ensurePhotosUploaded = async (
   const uploadedUrls = await uploadPhotos(requestId);
   if (uploadedUrls.length === photoCount) return;
   await rollbackFiresaleRequest(requestId, userId);
-  throw new Error("Photo upload failed. Your request was not submitted; please retry the upload.");
+  throw new Error(ui("Photo upload failed. Your request was not submitted; please retry the upload.", "Η μεταφόρτωση φωτογραφιών απέτυχε. Το αίτημα δεν υποβλήθηκε, δοκιμάστε ξανά."));
 };
 
 const submitValidatedQuickSale = async (
@@ -371,8 +399,8 @@ const QuickSaleHeader = ({ step }: { step: number }) => (
         <Flame className="w-4.5 h-4.5 text-destructive" />
       </div>
       <div>
-        <h3 className="font-display font-bold text-base">Get Your Instant Cash Offer</h3>
-        <p className="text-xs text-muted-foreground">Free - No obligation - Confidential</p>
+        <h3 className="font-display font-bold text-base">{ui("Get Your Preliminary Cash Offer", "Λάβετε προκαταρκτική προσφορά μετρητών")}</h3>
+        <p className="text-xs text-muted-foreground">{ui("Free - No obligation - Confidential", "Δωρεάν - Χωρίς υποχρέωση - Εμπιστευτικό")}</p>
       </div>
       <div className="ml-auto flex items-center gap-2">
         {[1, 2].map((n) => (
@@ -400,9 +428,9 @@ const SellerGateBanner = ({
       <div className="rounded-xl bg-muted border border-border p-3 flex items-start gap-3">
         <Loader2 className="w-4 h-4 text-primary mt-0.5 shrink-0 animate-spin" />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold">Checking seller profile</p>
+        <p className="text-sm font-semibold">{ui("Checking seller profile", "Έλεγχος προφίλ πωλητή")}</p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            We are loading your account details before enabling Quick Sale submissions.
+            {ui("We are loading your account details before enabling Quick Sale submissions.", "Φορτώνουμε τα στοιχεία λογαριασμού πριν ενεργοποιηθεί η υποβολή Quick Sale.")}
           </p>
         </div>
       </div>
@@ -414,13 +442,13 @@ const SellerGateBanner = ({
     <div className="rounded-xl bg-muted border border-border p-3 flex items-start gap-3">
       <Lock className="w-4 h-4 text-primary mt-0.5 shrink-0" />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold">Seller account required</p>
+        <p className="text-sm font-semibold">{ui("Seller account required", "Απαιτείται λογαριασμός πωλητή")}</p>
         <p className="text-xs text-muted-foreground mt-0.5">
-          To submit a Quick Sale request, you must have a Seller profile. It&apos;s free - Pro is not required.
+          {ui("To submit a Quick Sale request, you must have a Seller profile. It's free - Pro is not required.", "Για να υποβάλετε αίτημα Quick Sale, χρειάζεστε προφίλ πωλητή. Είναι δωρεάν - δεν απαιτείται Pro.")}
         </p>
         <div className="mt-2">
           <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground" onClick={onSellerCta}>
-            {userExists ? "Become a Seller" : "Sign up as Seller"}
+            {userExists ? ui("Become a Seller", "Μετάβαση σε πωλητή") : ui("Sign up as Seller", "Εγγραφή ως πωλητής")}
           </Button>
         </div>
       </div>
@@ -445,20 +473,20 @@ const AddressField = ({
 }) => (
   <div>
     <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-      Property Address <span className="text-destructive">*</span>
+      {ui("Property Address", "Διεύθυνση ακινήτου")} <span className="text-destructive">*</span>
     </label>
     <div className="flex gap-2 bg-muted border border-border rounded-xl px-3 py-2.5 focus-within:border-primary transition-colors">
       <MapPin className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
       <input
         type="text"
-        placeholder="e.g. Kifisia, Dekelia 24, Athens"
+        placeholder={ui("e.g. Kifisia, Dekelia 24, Athens", "π.χ. Κηφισιά, Δεκελείας 24, Αθήνα")}
         value={form.address}
         onChange={(e) => onUpdate("address", e.target.value)}
         className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
       />
     </div>
     {errors.address && <p className="mt-1 text-xs text-destructive">{errors.address}</p>}
-    {addressLoading && <p className="mt-1 text-[10px] text-muted-foreground">Searching address suggestions...</p>}
+    {addressLoading && <p className="mt-1 text-[10px] text-muted-foreground">{ui("Searching address suggestions...", "Αναζήτηση προτάσεων διεύθυνσης...")}</p>}
     {!addressLoading && addressSuggestions.length > 0 && (
       <div className="mt-1 bg-background border border-border rounded-xl shadow-md text-sm max-h-40 overflow-auto">
         {addressSuggestions.map((suggestion) => (
@@ -483,7 +511,7 @@ const KaekField = ({ form, errors, onUpdate }: { form: QuickSaleFormValues; erro
   <div>
     <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
       KAEK <span className="text-destructive">*</span>{" "}
-      <span className="text-[10px] font-normal normal-case text-muted-foreground">(Greek cadastral property code)</span>
+      <span className="text-[10px] font-normal normal-case text-muted-foreground">({ui("Greek cadastral property code", "Κωδικός Αριθμός Εθνικού Κτηματολογίου")})</span>
     </label>
     <div className="flex gap-2 bg-muted border border-border rounded-xl px-3 py-2.5 focus-within:border-primary transition-colors">
       <Hash className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
@@ -498,7 +526,7 @@ const KaekField = ({ form, errors, onUpdate }: { form: QuickSaleFormValues; erro
       />
     </div>
     <p className="mt-1 text-[10px] text-muted-foreground">
-      Greek KAEK is normally 12 digits. Add sub-property parts only when applicable, e.g. /0/1.
+      {ui("Greek KAEK is normally 12 digits. Add sub-property parts only when applicable, e.g. /0/1.", "Το ΚΑΕΚ έχει συνήθως 12 ψηφία. Προσθέστε τμήματα υπο-ιδιοκτησίας μόνο όταν υπάρχουν, π.χ. /0/1.")}
     </p>
     {errors.kaek && <p className="mt-1 text-xs text-destructive">{errors.kaek}</p>}
   </div>
@@ -516,23 +544,23 @@ const PropertyMetricsFields = ({
   <div className="grid grid-cols-2 gap-4">
     <div>
       <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-        Property Type <span className="text-destructive">*</span>
+        {ui("Property Type", "Τύπος ακινήτου")} <span className="text-destructive">*</span>
       </label>
       <select
         value={form.propertyType}
         onChange={(e) => onUpdate("propertyType", e.target.value)}
         className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none capitalize"
       >
-        <option value="" className="bg-card">Select type...</option>
+        <option value="" className="bg-card">{ui("Select type...", "Επιλέξτε τύπο...")}</option>
         {propertyTypeOptions.map((type) => (
-          <option key={type.value} value={type.value} className="bg-card">{type.label}</option>
+          <option key={type.value} value={type.value} className="bg-card">{propertyTypeLabel(type.value, type.label)}</option>
         ))}
       </select>
       {errors.propertyType && <p className="mt-1 text-xs text-destructive">{errors.propertyType}</p>}
     </div>
     <div>
       <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-        Size (m&sup2;) <span className="text-destructive">*</span>
+        {ui("Size (m²)", "Εμβαδόν (τ.μ.)")} <span className="text-destructive">*</span>
       </label>
       <input
         type="number"
@@ -545,13 +573,13 @@ const PropertyMetricsFields = ({
     </div>
     <div className="col-span-2">
       <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-        Asking Price <span className="text-destructive">*</span>
+        {ui("Asking Price", "Ζητούμενη τιμή")} <span className="text-destructive">*</span>
       </label>
       <div className="flex gap-2 bg-muted border border-border rounded-xl px-3 py-2.5 focus-within:border-primary transition-colors">
         <Euro className="w-4 h-4 text-muted-foreground shrink-0" />
         <input
           type="number"
-          placeholder="Your target EUR"
+          placeholder={ui("Your target EUR", "Η επιθυμητή τιμή σε EUR")}
           value={form.askingPrice}
           onChange={(e) => onUpdate("askingPrice", e.target.value)}
           className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
@@ -561,7 +589,7 @@ const PropertyMetricsFields = ({
     </div>
     <div className="col-span-2">
       <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-        Construction Year <span className="text-destructive">*</span>
+        {ui("Construction Year", "Έτος κατασκευής")} <span className="text-destructive">*</span>
       </label>
       <input
         type="number"
@@ -587,8 +615,8 @@ const EmptyPhotoUploadButton = ({ fileInputRef }: { fileInputRef: RefObject<HTML
       <Upload className="w-5 h-5 group-hover:text-primary transition-colors" />
     </div>
     <div className="text-center">
-      <p className="text-sm font-medium group-hover:text-foreground transition-colors">Click to upload photos</p>
-      <p className="text-[11px] mt-0.5">JPG, PNG - Max 10MB each</p>
+      <p className="text-sm font-medium group-hover:text-foreground transition-colors">{ui("Click to upload photos", "Πατήστε για ανέβασμα φωτογραφιών")}</p>
+      <p className="text-[11px] mt-0.5">{ui("JPG, PNG - Max 10MB each", "JPG, PNG - Μέγ. 10MB ανά αρχείο")}</p>
     </div>
   </button>
 );
@@ -656,8 +684,8 @@ const PhotoUploadField = ({
 }) => (
   <div>
     <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-      Property Photos <span className="text-destructive">*</span>{" "}
-      <span className="text-[10px] font-normal normal-case text-muted-foreground">(min 5, up to 10 images)</span>
+      {ui("Property Photos", "Φωτογραφίες ακινήτου")} <span className="text-destructive">*</span>{" "}
+      <span className="text-[10px] font-normal normal-case text-muted-foreground">{ui("(min 5, up to 10 images)", "(ελάχ. 5, έως 10 εικόνες)")}</span>
     </label>
     <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={onPhotoSelect} />
     {photoPreviews.length === 0 ? (
@@ -666,8 +694,8 @@ const PhotoUploadField = ({
       <div className="space-y-3">
         <PhotoPreviewGrid photoPreviews={photoPreviews} fileInputRef={fileInputRef} onRemovePhoto={onRemovePhoto} />
         <p className="text-[10px] text-muted-foreground">
-          {getPhotoSelectionText(photoPreviews.length)}
-          {photoPreviews.length < 5 && " - add at least 5 photos to continue"}
+          {ui(getPhotoSelectionText(photoPreviews.length), `${photoPreviews.length} φωτογραφ${photoPreviews.length === 1 ? "ία επιλέχθηκε" : "ίες επιλέχθηκαν"}`)}
+          {photoPreviews.length < 5 && ui(" - add at least 5 photos to continue", " - προσθέστε τουλάχιστον 5 φωτογραφίες για συνέχεια")}
         </p>
       </div>
     )}
@@ -678,11 +706,11 @@ const PhotoUploadField = ({
 const NotesField = ({ form, errors, onUpdate }: { form: QuickSaleFormValues; errors: QuickSaleErrors; onUpdate: QuickSaleFieldUpdater }) => (
   <div>
     <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-      Additional Notes <span className="text-destructive">*</span>
+      {ui("Additional Notes", "Πρόσθετες σημειώσεις")} <span className="text-destructive">*</span>
     </label>
     <textarea
       rows={2}
-      placeholder="Legal issues, urgent timeline, property history..."
+      placeholder={ui("Legal issues, urgent timeline, property history...", "Νομικά θέματα, επείγον χρονοδιάγραμμα, ιστορικό ακινήτου...")}
       value={form.notes}
       onChange={(e) => onUpdate("notes", e.target.value)}
       className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary resize-none transition-colors"
@@ -715,7 +743,7 @@ const StepOneButtonContent = ({ aiLoading }: { aiLoading: boolean }) => {
     return (
       <>
         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-        Calculating AI estimate...
+        {ui("Calculating AI estimate...", "Υπολογισμός AI εκτίμησης...")}
       </>
     );
   }
@@ -723,14 +751,14 @@ const StepOneButtonContent = ({ aiLoading }: { aiLoading: boolean }) => {
   return (
     <>
       <Sparkles className="w-4 h-4 mr-2" />
-      Get AI Estimate &amp; Continue
+      {ui("Get AI Estimate & Continue", "Λήψη AI εκτίμησης & συνέχεια")}
     </>
   );
 };
 
 const QuickSaleStepOne = (props: StepOneProps) => (
   <div className="space-y-5">
-    <h4 className="font-display font-semibold text-sm">Property Details</h4>
+    <h4 className="font-display font-semibold text-sm">{ui("Property Details", "Στοιχεία ακινήτου")}</h4>
     <SellerGateBanner
       authPending={props.authPending}
       canSubmitQuickSale={props.canSubmitQuickSale}
@@ -767,13 +795,13 @@ const EstimateSummary = ({ aiEstimate }: { aiEstimate: number | null }) => {
   return (
     <div className="rounded-xl bg-gradient-to-r from-primary/10 to-accent/5 border border-primary/20 p-4 flex items-center justify-between">
       <div>
-        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">AI Estimated Offer</p>
+        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">{ui("AI Estimated Offer", "AI εκτίμηση προσφοράς")}</p>
         <p className="font-display font-black text-2xl text-primary">&euro;{aiEstimate.toLocaleString()}</p>
-        <p className="text-[10px] text-muted-foreground mt-0.5">Indicative - Final offer after review</p>
+        <p className="text-[10px] text-muted-foreground mt-0.5">{ui("Indicative - Final offer after review", "Ενδεικτική - Τελική προσφορά μετά από έλεγχο")}</p>
       </div>
       <div className="text-right">
-        <div className="text-xs bg-primary/10 text-primary border border-primary/20 px-2 py-1 rounded-lg font-semibold">94% confidence</div>
-        <p className="text-[10px] text-muted-foreground mt-1.5">Valid 7 days</p>
+        <div className="text-xs bg-primary/10 text-primary border border-primary/20 px-2 py-1 rounded-lg font-semibold">{ui("94% confidence", "94% εμπιστοσύνη")}</div>
+        <p className="text-[10px] text-muted-foreground mt-1.5">{ui("Valid 7 days", "Ισχύει για 7 ημέρες")}</p>
       </div>
     </div>
   );
@@ -788,11 +816,11 @@ type ContactFieldProps = {
 const ContactNameField = ({ form, errors, onUpdate }: ContactFieldProps) => (
   <div>
     <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-      Full Name <span className="text-destructive">*</span>
+      {ui("Full Name", "Ονοματεπώνυμο")} <span className="text-destructive">*</span>
     </label>
     <input
       type="text"
-      placeholder="Your name"
+      placeholder={ui("Your name", "Το όνομά σας")}
       value={form.contactName}
       onChange={(e) => onUpdate("contactName", e.target.value)}
       className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
@@ -804,7 +832,7 @@ const ContactNameField = ({ form, errors, onUpdate }: ContactFieldProps) => (
 const ContactEmailField = ({ form, errors, onUpdate }: ContactFieldProps) => (
   <div>
     <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-      Email <span className="text-destructive">*</span>
+      {ui("Email", "Email επικοινωνίας")} <span className="text-destructive">*</span>
     </label>
     <input
       type="email"
@@ -820,7 +848,7 @@ const ContactEmailField = ({ form, errors, onUpdate }: ContactFieldProps) => (
 const ContactPhoneField = ({ form, errors, onUpdate }: ContactFieldProps) => (
   <div>
     <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-      Phone <span className="text-destructive">*</span>
+      {ui("Phone", "Τηλέφωνο")} <span className="text-destructive">*</span>
     </label>
     <input
       type="tel"
@@ -864,7 +892,7 @@ const SubmitRequestButtonContent = ({ submitting, uploadingPhotos }: { submittin
     return (
       <>
         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-        {uploadingPhotos ? "Uploading photos..." : "Submitting..."}
+        {uploadingPhotos ? ui("Uploading photos...", "Ανέβασμα φωτογραφιών...") : ui("Submitting...", "Υποβολή...")}
       </>
     );
   }
@@ -872,7 +900,7 @@ const SubmitRequestButtonContent = ({ submitting, uploadingPhotos }: { submittin
   return (
     <>
       <Flame className="w-4 h-4 mr-2" />
-      Submit Quick Sale Request
+      {ui("Submit Quick Sale Request", "Υποβολή αιτήματος Quick Sale")}
     </>
   );
 };
@@ -880,19 +908,19 @@ const SubmitRequestButtonContent = ({ submitting, uploadingPhotos }: { submittin
 const QuickSaleStepTwo = (props: StepTwoProps) => (
   <div className="space-y-5">
     <EstimateSummary aiEstimate={props.aiEstimate} />
-    <h4 className="font-display font-semibold text-sm">Your Contact Details</h4>
-    <p className="text-xs text-muted-foreground -mt-3">Your information is kept strictly confidential.</p>
+    <h4 className="font-display font-semibold text-sm">{ui("Your Contact Details", "Στοιχεία επικοινωνίας")}</h4>
+    <p className="text-xs text-muted-foreground -mt-3">{ui("Your information is kept strictly confidential.", "Τα στοιχεία σας παραμένουν αυστηρά εμπιστευτικά.")}</p>
     <ContactFields form={props.form} errors={props.errors} onUpdate={props.onUpdate} />
     <div className="rounded-xl bg-muted border border-border p-3 flex items-start gap-3">
       <Shield className="w-4 h-4 text-brand-emerald mt-0.5 shrink-0" />
       <p className="text-xs text-muted-foreground leading-relaxed">
-        Your data is encrypted and shared{" "}
-        <strong className="text-foreground">only with pre-vetted investors</strong> under NDA. We never publish
-        your property publicly.
+        {ui("Your data is encrypted and shared", "Τα δεδομένα σας κρυπτογραφούνται και κοινοποιούνται")}{" "}
+        <strong className="text-foreground">{ui("only with pre-vetted investors", "μόνο σε προελεγμένους επενδυτές")}</strong>
+        {ui(" under NDA. We never publish your property publicly.", " με συμφωνητικό εμπιστευτικότητας. Δεν δημοσιεύουμε ποτέ το ακίνητό σας δημόσια.")}
       </p>
     </div>
     <div className="flex gap-3">
-      <Button variant="outline" className="border-border" onClick={props.onBack}>Back</Button>
+      <Button variant="outline" className="border-border" onClick={props.onBack}>{ui("Back", "Πίσω")}</Button>
       <Button
         className="flex-1 bg-gradient-to-r from-destructive to-destructive/80 border-0 text-destructive-foreground h-11"
         disabled={!props.step2Valid || props.submitting}
@@ -916,6 +944,7 @@ const QuickSaleFormView = (props: QuickSaleFormViewProps) => (
 );
 
 export const FiresaleQuickSaleForm = () => { // skipcq: JS-R1005 - Quick Sale owns one compact two-step workflow; validation and persistence helpers are delegated above.
+  useTranslation();
   const { user, profile, loading: authLoading, profileLoading } = useAuth();
   const { isPro: _isPro } = useSubscription();
   const navigate = useNavigate();

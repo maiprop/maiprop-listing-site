@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 const MapView = lazy(() => import("@/components/MapView").then(m => ({ default: m.MapView })));
 import { AuctionAlertModal } from "@/components/AuctionAlertModal";
 import { useAuth } from "@/contexts/AuthContext";
@@ -50,6 +51,8 @@ const AuctionCardSkeleton = () => {
 
 const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinates filter state, map/list view state, pagination, and Pro upsells.
   const { user } = useAuth();
+  const { i18n } = useTranslation();
+  const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [selectedCity, setSelectedCity] = useState(() => searchParams.get("city") || "All Cities");
@@ -128,25 +131,52 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
     setPolygonFilterIds(null);
   };
 
+  const metaTitle = isGreek ? "Πλειστηριασμοί Ακινήτων στην Ελλάδα — mAI prop" : "Property Auctions in Greece — mAI prop";
+  const metaDescription = isGreek
+    ? "Περιηγηθείτε σε ηλεκτρονικούς πλειστηριασμούς ακινήτων στην Ελλάδα. Φιλτράρετε ανά πόλη, τύπο και τιμή πρώτης προσφοράς."
+    : "Browse Greek electronic property auctions. Filter by city, type, and first offer price.";
+  const metaName = isGreek ? "Πλειστηριασμοί Ακινήτων στην Ελλάδα" : "Greek Property Auctions";
   const auctionStats = [
-  { value: isLoading ? "—" : String(thisWeek), label: "This Week", icon: Gavel },
-  { value: isLoading ? "—" : visibleFiltered.length.toLocaleString(), label: "Visible Auctions", icon: TrendingUp },
-  { value: isLoading ? "—" : avgBid > 0 ? formatPrice(avgBid) : "—", label: "Avg Starting Bid", icon: TrendingUp }];
+  { value: isLoading ? "—" : String(thisWeek), label: isGreek ? "Αυτή την εβδομάδα" : "This Week", icon: Gavel },
+  { value: isLoading ? "—" : visibleFiltered.length.toLocaleString(), label: isGreek ? "Ορατοί πλειστηριασμοί" : "Visible Auctions", icon: TrendingUp },
+  { value: isLoading ? "—" : avgBid > 0 ? formatPrice(avgBid) : "—", label: isGreek ? "Μέση τιμή πρώτης προσφοράς" : "Avg First Offer Price", icon: TrendingUp }];
+  const mobileTypeLabels: Record<string, string> = {
+    apartment: "Διαμέρισμα",
+    house: "Μονοκατοικία",
+    villa: "Βίλα",
+    land: "Οικόπεδο / Αγροτεμάχιο",
+    commercial: "Επαγγελματικό ακίνητο",
+    office: "Γραφείο",
+  };
+  const mobileFilterTypeLabel = isGreek ? mobileTypeLabels[filterType] ?? filterType : filterType;
+  const localizeBidRangeLabel = (label?: string) => {
+    if (!isGreek || !label) return label;
+    if (label === "Any First Offer Price") return "Οποιαδήποτε τιμή πρώτης προσφοράς";
+    if (label.startsWith("Under")) return label.replace("Under", "Κάτω από");
+    return label;
+  };
+  const localizeYearRangeLabel = (label?: string) => {
+    if (!isGreek || !label) return label;
+    if (label === "Any Year") return "Οποιοδήποτε έτος";
+    if (label === "Pre-1980") return "Πριν το 1980";
+    if (label === "Post-2020") return "Μετά το 2020";
+    return label;
+  };
 
   return (
     <div className="min-h-screen bg-background">
       <Helmet>
-        <title>Property Auctions in Greece — mAI prop</title>
-        <meta name="description" content="Browse real-time Greek court property auctions. Filter by city, type, and bid range." />
+        <title>{metaTitle}</title>
+        <meta name="description" content={metaDescription} />
         <link rel="canonical" href="https://maiprop.co/auctions" />
-        <meta property="og:title" content="Property Auctions in Greece — mAI prop" />
-        <meta property="og:description" content="Real-time court auction data for Greek properties." />
+        <meta property="og:title" content={metaTitle} />
+        <meta property="og:description" content={metaDescription} />
         <meta property="og:url" content="https://maiprop.co/auctions" />
         <script type="application/ld+json">{JSON.stringify({
           "@context": "https://schema.org",
           "@type": "ItemList",
-          "name": "Greek Property Auctions",
-          "description": "Real-time court auction listings for properties across Greece.",
+          "name": metaName,
+          "description": metaDescription,
           "url": "https://maiprop.co/auctions",
           "provider": { "@type": "Organization", "name": "mAI prop", "url": "https://maiprop.co" },
         })}</script>
@@ -180,15 +210,15 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
                 onClick={() => setShowFilters((v) => !v)}
                 className={`shrink-0 h-9 flex items-center gap-1.5 px-3 rounded-xl border text-sm font-medium transition-colors ${showFilters ? "bg-primary/10 border-primary/30 text-primary" : "bg-secondary border-border text-muted-foreground"}`}>
                 <SlidersHorizontal className="w-4 h-4" />
-                Filters
+                {isGreek ? "Φίλτρα" : "Filters"}
                 {activeFilterCount > 0 && <span className="w-4 h-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center">{activeFilterCount}</span>}
               </button>
-              <div className="flex items-center gap-1 bg-secondary rounded-xl p-1 border border-border shrink-0" role="group" aria-label="View mode">
-                <button onClick={() => setViewMode("list")} aria-label="List view" aria-pressed={viewMode === "list"}
+              <div className="flex items-center gap-1 bg-secondary rounded-xl p-1 border border-border shrink-0" role="group" aria-label={isGreek ? "Τρόπος προβολής" : "View mode"}>
+                <button onClick={() => setViewMode("list")} aria-label={isGreek ? "Προβολή λίστας" : "List view"} aria-pressed={viewMode === "list"}
                   className={`px-2.5 py-1.5 rounded-lg transition-all ${viewMode === "list" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
                   <List className="w-4 h-4" />
                 </button>
-                <button onClick={() => setViewMode("map")} aria-label="Map view" aria-pressed={viewMode === "map"}
+                <button onClick={() => setViewMode("map")} aria-label={isGreek ? "Προβολή χάρτη" : "Map view"} aria-pressed={viewMode === "map"}
                   className={`px-2.5 py-1.5 rounded-lg transition-all ${viewMode === "map" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
                   <MapIcon className="w-4 h-4" />
                 </button>
@@ -200,9 +230,17 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
               <div className="border border-border rounded-xl bg-card/95 p-4 space-y-4">
                 {/* Property type */}
                 <div className="space-y-1.5">
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Property Type</span>
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isGreek ? "Τύπος ακινήτου" : "Property Type"}</span>
                   <div className="flex gap-1.5 flex-wrap">
-                    {[{ value: "", label: "All Types" }, { value: "apartment", label: "Apartment" }, { value: "house", label: "House" }, { value: "villa", label: "Villa" }, { value: "land", label: "Land" }, { value: "commercial", label: "Commercial" }, { value: "office", label: "Office" }].map(t => (
+                    {[
+                      { value: "", label: isGreek ? "Όλοι οι τύποι" : "All Types" },
+                      { value: "apartment", label: isGreek ? "Διαμέρισμα" : "Apartment" },
+                      { value: "house", label: isGreek ? "Μονοκατοικία" : "House" },
+                      { value: "villa", label: isGreek ? "Βίλα" : "Villa" },
+                      { value: "land", label: isGreek ? "Οικόπεδο / Αγροτεμάχιο" : "Land / Plot" },
+                      { value: "commercial", label: isGreek ? "Επαγγελματικό ακίνητο" : "Commercial" },
+                      { value: "office", label: isGreek ? "Γραφείο" : "Office" },
+                    ].map(t => (
                       <button key={t.value} onClick={() => setFilterType(t.value)}
                         className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${filterType === t.value ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-border hover:border-primary/40"}`}>
                         {t.label}
@@ -210,9 +248,9 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
                     ))}
                   </div>
                 </div>
-                {/* Starting bid */}
+                {/* First offer price */}
                 <div className="space-y-1.5">
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Starting Bid</span>
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isGreek ? "Τιμή πρώτης προσφοράς" : "First Offer Price"}</span>
                   <div className="flex gap-1.5 flex-wrap">
                     {BID_RANGES.map(r => (
                       <button key={r.value} onClick={() => setFilterBidRange(filterBidRange === r.value ? "" : r.value)}
@@ -224,7 +262,7 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
                 </div>
                 {/* Construction year */}
                 <div className="space-y-1.5">
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Construction Year</span>
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isGreek ? "Έτος κατασκευής" : "Construction Year"}</span>
                   <div className="flex gap-1.5 flex-wrap">
                     {YEAR_RANGES.map(r => (
                       <button key={r.value} onClick={() => setFilterYearRange(filterYearRange === r.value ? "" : r.value)}
@@ -237,7 +275,7 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
                 {activeFilterCount > 0 && (
                   <button onClick={clearFilters}
                     className="w-full py-2 text-xs text-muted-foreground border border-border rounded-lg hover:text-foreground hover:border-primary/30 transition-colors">
-                    Clear all filters
+                    {isGreek ? "Εκκαθάριση φίλτρων" : "Clear all filters"}
                   </button>
                 )}
               </div>
@@ -246,10 +284,10 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
             {/* Active filter chips — shown when panel is closed */}
             {activeFilterCount > 0 && !showFilters && (
               <div className="flex gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
-                {filterType && <button onClick={() => setFilterType("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{filterType} <X className="w-3 h-3" /></button>}
-                {filterBidRange && <button onClick={() => setFilterBidRange("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{BID_RANGES.find(r => r.value === filterBidRange)?.label} <X className="w-3 h-3" /></button>}
-                {filterYearRange && <button onClick={() => setFilterYearRange("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{YEAR_RANGES.find(r => r.value === filterYearRange)?.label} <X className="w-3 h-3" /></button>}
-                <button onClick={clearFilters} className="text-xs text-muted-foreground shrink-0 ml-1">Clear all</button>
+                {filterType && <button onClick={() => setFilterType("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{mobileFilterTypeLabel} <X className="w-3 h-3" /></button>}
+                {filterBidRange && <button onClick={() => setFilterBidRange("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{localizeBidRangeLabel(BID_RANGES.find(r => r.value === filterBidRange)?.label)} <X className="w-3 h-3" /></button>}
+                {filterYearRange && <button onClick={() => setFilterYearRange("")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{localizeYearRangeLabel(YEAR_RANGES.find(r => r.value === filterYearRange)?.label)} <X className="w-3 h-3" /></button>}
+                <button onClick={clearFilters} className="text-xs text-muted-foreground shrink-0 ml-1">{isGreek ? "Εκκαθάριση" : "Clear all"}</button>
               </div>
             )}
           </div>
@@ -262,20 +300,20 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
               className={`border-border gap-1.5 ${showFilters ? "bg-primary/10 border-primary/30 text-primary" : ""}`}
               onClick={() => setShowFilters((v) => !v)}>
               <SlidersHorizontal className="w-3.5 h-3.5" />
-              Filters
+              {isGreek ? "Φίλτρα" : "Filters"}
               {activeFilterCount > 0 &&
               <span className="w-4 h-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center font-bold">{activeFilterCount}</span>
               }
             </Button>
-            <div className="flex items-center gap-1 bg-secondary rounded-lg p-1 border border-border" role="group" aria-label="View mode">
+            <div className="flex items-center gap-1 bg-secondary rounded-lg p-1 border border-border" role="group" aria-label={isGreek ? "Τρόπος προβολής" : "View mode"}>
               <button onClick={() => setViewMode("list")} aria-pressed={viewMode === "list"}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === "list" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
-                <List className="w-3.5 h-3.5" aria-hidden="true" /> List
+                <List className="w-3.5 h-3.5" aria-hidden="true" /> {isGreek ? "Λίστα" : "List"}
               </button>
               <button onClick={() => setViewMode("map")} aria-pressed={viewMode === "map"}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === "map" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
-                <MapIcon className="w-3.5 h-3.5" aria-hidden="true" /> Map
-                {!isLoading && mappableCount > 0 && <span className="ml-0.5 text-[10px] bg-primary/15 text-primary px-1.5 py-0.5 rounded-full font-bold" aria-label={`${mappableCount} mappable`}>{mappableCount}</span>}
+                <MapIcon className="w-3.5 h-3.5" aria-hidden="true" /> {isGreek ? "Χάρτης" : "Map"}
+                {!isLoading && mappableCount > 0 && <span className="ml-0.5 text-[10px] bg-primary/15 text-primary px-1.5 py-0.5 rounded-full font-bold" aria-label={isGreek ? `${mappableCount} με τοποθεσία` : `${mappableCount} mappable`}>{mappableCount}</span>}
               </button>
             </div>
           </div>
@@ -316,23 +354,24 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
           <div className="flex flex-col items-center justify-center h-[560px] rounded-2xl bg-card border border-border gap-3">
                 <MapPin className="w-10 h-10 text-muted-foreground/30" />
                 <p className="text-sm text-muted-foreground">
-                  {visibleFiltered.length === 0 ?
-              "No auctions match the current filters." :
-              `${visibleFiltered.length} auction(s) found but none have coordinates.`}
+                  {visibleFiltered.length === 0
+                    ? (isGreek ? "Δεν υπάρχουν πλειστηριασμοί που ταιριάζουν στα φίλτρα." : "No auctions match the current filters.")
+                    : (isGreek ? `${visibleFiltered.length} πλειστηριασμοί βρέθηκαν, αλλά δεν έχουν συντεταγμένες.` : `${visibleFiltered.length} auction(s) found but none have coordinates.`)}
                 </p>
               </div> :
 
           <div>
                 <p className="text-xs text-muted-foreground mb-3 flex items-center gap-2 flex-wrap">
                   <span>
-                    Showing <span className="font-semibold text-foreground">{polygonFilterIds ? polygonFilteredCount : mappableCount}</span>{" "}
-                    {polygonFilterIds ? "auction" : "pinned auction"}{(polygonFilterIds ? polygonFilteredCount : mappableCount) !== 1 ? "s" : ""}{" "}
-                    {polygonFilterIds ? "in selected area" : "on map"}
-                    {!polygonFilterIds && visibleFiltered.length > mappableCount && ` (${visibleFiltered.length - mappableCount} without coordinates hidden)`}
+                    {isGreek ? "Εμφάνιση" : "Showing"} <span className="font-semibold text-foreground">{polygonFilterIds ? polygonFilteredCount : mappableCount}</span>{" "}
+                    {isGreek
+                      ? (polygonFilterIds ? "πλειστηριασμών στην επιλεγμένη περιοχή" : "πλειστηριασμών στον χάρτη")
+                      : `${polygonFilterIds ? "auction" : "pinned auction"}${(polygonFilterIds ? polygonFilteredCount : mappableCount) !== 1 ? "s" : ""} ${polygonFilterIds ? "in selected area" : "on map"}`}
+                    {!polygonFilterIds && visibleFiltered.length > mappableCount && (isGreek ? ` (${visibleFiltered.length - mappableCount} χωρίς συντεταγμένες δεν εμφανίζονται)` : ` (${visibleFiltered.length - mappableCount} without coordinates hidden)`)}
                   </span>
                   {polygonFilterIds && (
                     <button type="button" onClick={() => setPolygonFilterIds(null)} className="text-primary hover:underline">
-                      Clear area
+                      {isGreek ? "Εκκαθάριση περιοχής" : "Clear area"}
                     </button>
                   )}
                 </p>
@@ -340,8 +379,8 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
                   <MapView
                     listings={mapListings}
                     height="560px"
-                    itemLabelSingular="auction"
-                    itemLabelPlural="auctions"
+                    itemLabelSingular={isGreek ? "πλειστηριασμός" : "auction"}
+                    itemLabelPlural={isGreek ? "πλειστηριασμοί" : "auctions"}
                     onPolygonFilter={(ids) => { setPolygonFilterIds(ids); setCurrentPage(1); }}
                   />
                 </Suspense>
@@ -354,16 +393,20 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
         {viewMode === "list" &&
         <div className="container pb-24 lg:pb-16">
             <div className="mb-4">
-              <h2 className="font-display text-3xl sm:text-4xl font-bold text-foreground">Greek Property Auction Listings</h2>
+              <h2 className="font-display text-3xl sm:text-4xl font-bold text-foreground">
+                {isGreek ? "Αγγελίες πλειστηριασμών ακινήτων" : "Greek Property Auction Listings"}
+              </h2>
               <p className="text-sm text-muted-foreground mt-1">
-                Browse court auction opportunities with live filters and daily randomized rotation.
+                {isGreek
+                  ? "Περιηγηθείτε σε ηλεκτρονικούς πλειστηριασμούς με ζωντανά φίλτρα και καθημερινή τυχαία εναλλαγή αποτελεσμάτων."
+                  : "Browse electronic auction opportunities with live filters and daily randomized rotation."}
               </p>
             </div>
             {isLoading &&
           <div className="space-y-4" aria-busy="true" aria-live="polite">
                 <div className="flex items-center gap-3 text-muted-foreground">
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  <span className="text-sm">Loading auctions...</span>
+                  <span className="text-sm">{isGreek ? "Φόρτωση πλειστηριασμών..." : "Loading auctions..."}</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                   {Array.from({ length: AUCTIONS_PAGE_SIZE }).map((_, i) => <AuctionCardSkeleton key={i} />)}
@@ -374,19 +417,19 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
             {error &&
           <div className="text-center py-20">
                 <AlertCircle className="w-8 h-8 text-destructive mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">Failed to load auctions. Please try again.</p>
+                <p className="text-sm text-muted-foreground">{isGreek ? "Δεν ήταν δυνατή η φόρτωση των πλειστηριασμών. Παρακαλώ δοκιμάστε ξανά." : "Failed to load auctions. Please try again."}</p>
               </div>
           }
 
             {!isLoading && !error && visibleFiltered.length === 0 &&
           <div className="text-center py-20">
                 <Gavel className="w-12 h-12 text-primary/30 mx-auto mb-4" />
-                <p className="font-display font-semibold text-lg mb-2">No auctions match your filters</p>
+                <p className="font-display font-semibold text-lg mb-2">{isGreek ? "Δεν υπάρχουν πλειστηριασμοί που ταιριάζουν στα φίλτρα" : "No auctions match your filters"}</p>
                 <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                  Try adjusting your filters or selecting "All Cities".
+                  {isGreek ? "Δοκιμάστε να αλλάξετε φίλτρα ή να επιλέξετε «Όλες οι πόλεις»." : "Try adjusting your filters or selecting \"All Cities\"."}
                 </p>
                 {activeFilterCount > 0 &&
-            <Button variant="outline" className="border-border mt-4" onClick={clearFilters}>Clear Filters</Button>
+            <Button variant="outline" className="border-border mt-4" onClick={clearFilters}>{isGreek ? "Εκκαθάριση φίλτρων" : "Clear Filters"}</Button>
             }
               </div>
           }
@@ -394,12 +437,13 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
             {!isLoading && visibleFiltered.length > 0 &&
           <>
                  <p className="text-xs text-muted-foreground mb-4">
-                   Showing <span className="font-semibold text-foreground">{(currentPage - 1) * AUCTIONS_PAGE_SIZE + 1}–{Math.min(currentPage * AUCTIONS_PAGE_SIZE, polygonFilteredCount)}</span>
-                   {" of "}
-                   <span className="font-semibold text-foreground">{polygonFilteredCount}</span> auctions
-                   {polygonFilterIds && <span className="text-primary"> · area filter active</span>}
-                   {selectedCity !== "All Cities" ? ` in ${selectedCity}` : ""}
-                   {" · "}daily randomized rotation
+                   {isGreek ? "Εμφάνιση" : "Showing"} <span className="font-semibold text-foreground">{(currentPage - 1) * AUCTIONS_PAGE_SIZE + 1}–{Math.min(currentPage * AUCTIONS_PAGE_SIZE, polygonFilteredCount)}</span>
+                   {" "}
+                   {isGreek ? "από" : "of"}{" "}
+                   <span className="font-semibold text-foreground">{polygonFilteredCount}</span> {isGreek ? "πλειστηριασμούς" : "auctions"}
+                   {polygonFilterIds && <span className="text-primary"> · {isGreek ? "ενεργό φίλτρο περιοχής" : "area filter active"}</span>}
+                   {selectedCity !== "All Cities" ? (isGreek ? ` σε ${selectedCity}` : ` in ${selectedCity}`) : ""}
+                   {" · "}{isGreek ? "καθημερινή τυχαία εναλλαγή" : "daily randomized rotation"}
                  </p>
                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                    {paginated.map((a) =>
@@ -422,12 +466,12 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
                    <div className="mt-8 p-4 rounded-2xl bg-secondary border border-border flex flex-col sm:flex-row items-center gap-3 text-center sm:text-left">
                      <ExternalLink className="w-5 h-5 text-muted-foreground shrink-0" />
                      <div className="flex-1">
-                       <p className="text-sm font-medium text-foreground">Showing {AUCTIONS_MAX_PAGES_PRO * AUCTIONS_PAGE_SIZE} of {totalRaw} auctions</p>
-                       <p className="text-xs text-muted-foreground mt-0.5">Visit mAI Prop OS for the complete, unfiltered auction database.</p>
+                       <p className="text-sm font-medium text-foreground">{isGreek ? `Εμφάνιση ${AUCTIONS_MAX_PAGES_PRO * AUCTIONS_PAGE_SIZE} από ${totalRaw} πλειστηριασμούς` : `Showing ${AUCTIONS_MAX_PAGES_PRO * AUCTIONS_PAGE_SIZE} of ${totalRaw} auctions`}</p>
+                       <p className="text-xs text-muted-foreground mt-0.5">{isGreek ? "Επισκεφθείτε το mAI Prop OS για την πλήρη, μη φιλτραρισμένη βάση πλειστηριασμών." : "Visit mAI Prop OS for the complete, unfiltered auction database."}</p>
                      </div>
                      <Button size="sm" variant="outline" className="shrink-0 border-border" asChild>
                        <a href="https://os.maiprop.co" target="_blank" rel="noreferrer">
-                         Visit mAI Prop OS <ExternalLink className="w-3 h-3 ml-1.5" />
+                         {isGreek ? "Άνοιγμα mAI Prop OS" : "Visit mAI Prop OS"} <ExternalLink className="w-3 h-3 ml-1.5" />
                        </a>
                      </Button>
                    </div>
@@ -438,14 +482,14 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
                      <Gavel className="w-8 h-8 text-primary shrink-0" />
                      <div className="flex-1">
                        <p className="font-display font-semibold text-sm">
-                         See 300% more results with Pro
+                         {isGreek ? "Δείτε 300% περισσότερα αποτελέσματα με Pro" : "See 300% more results with Pro"}
                        </p>
                        <p className="text-xs text-muted-foreground mt-0.5">
-                         Pro shows 3× the free results — not all future auctions. For the full database, use mAI Prop OS.
+                         {isGreek ? "Το Pro εμφανίζει 3× περισσότερα αποτελέσματα από το δωρεάν πλάνο. Για την πλήρη βάση, χρησιμοποιήστε το mAI Prop OS." : "Pro shows 3× the free results — not all future auctions. For the full database, use mAI Prop OS."}
                        </p>
                      </div>
                      <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground font-semibold shrink-0" asChild>
-                       <Link to="/pricing">Upgrade to Pro</Link>
+                       <Link to="/pricing">{isGreek ? "Αναβάθμιση σε Pro" : "Upgrade to Pro"}</Link>
                      </Button>
                    </div>
                  }
@@ -454,13 +498,13 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
             {/* CTA */}
             <div className="mt-10 p-6 glass-card rounded-xl border border-primary/20 text-center">
               <Gavel className="w-8 h-8 text-primary mx-auto mb-3" />
-              <h3 className="font-display font-semibold mb-2">Full Auction Database</h3>
+              <h3 className="font-display font-semibold mb-2">{isGreek ? "Πλήρης βάση πλειστηριασμών" : "Full Auction Database"}</h3>
               <p className="text-sm text-muted-foreground mb-4">
-                Access 3,200+ monthly auctions with AI pre-analysis reports. Available on mAI Prop OS.
+                {isGreek ? "Αποκτήστε πρόσβαση σε 3.200+ μηνιαίους πλειστηριασμούς με AI προανάλυση. Διαθέσιμο στο mAI Prop OS." : "Access 3,200+ monthly auctions with AI pre-analysis reports. Available on mAI Prop OS."}
               </p>
               <Button className="bg-gradient-primary border-0 text-primary-foreground font-semibold" asChild>
                 <a href="https://os.maiprop.co" target="_blank" rel="noreferrer">
-                  Open mAI Prop OS <ExternalLink className="w-4 h-4 ml-2" />
+                  {isGreek ? "Άνοιγμα mAI Prop OS" : "Open mAI Prop OS"} <ExternalLink className="w-4 h-4 ml-2" />
                 </a>
               </Button>
             </div>

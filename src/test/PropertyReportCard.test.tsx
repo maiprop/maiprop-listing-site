@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => mocks.useAuth() }));
 vi.mock("@/hooks/useSubscription", () => ({ useSubscription: () => mocks.useSubscription() }));
 vi.mock("@/hooks/useUsageAddons", () => ({
-  REPORT_EXTRA_COST: 9,
+  REPORT_EXTRA_COST: 49,
   REPORT_INCLUDED: 3,
   useRecordReport: () => ({ mutateAsync: mocks.mutateAsync }),
   useReportUsage: () => mocks.useReportUsage(),

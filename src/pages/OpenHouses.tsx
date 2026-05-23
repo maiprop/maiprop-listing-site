@@ -1,6 +1,7 @@
 import { useState, useMemo, lazy, Suspense } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link, useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   Calendar, MapPin, Loader2, DoorOpen, SlidersHorizontal, X,
   ChevronDown, Search, BedDouble, LayoutGrid, Map as MapIcon,
@@ -136,6 +137,8 @@ type OpenHouseListingRow = Pick<
 
 // skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
 export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordinates filters, map/list view, query state, and card projection in one route shell.
+  const { i18n } = useTranslation();
+  const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
   const [searchParams] = useSearchParams();
   const cityParam = searchParams.get("city") || "";
 
@@ -157,22 +160,22 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
   const [polygonFilterIds, setPolygonFilterIds] = useState<Set<string> | null>(null);
 
   const YEAR_RANGES = [
-    { label: "Any Year", value: "" },
+    { label: isGreek ? "Οποιοδήποτε έτος" : "Any Year", value: "" },
     { label: "Pre-1980", value: "0-1979" },
     { label: "1980–2000", value: "1980-2000" },
     { label: "2000–2010", value: "2000-2010" },
     { label: "2010–2020", value: "2010-2020" },
-    { label: "Post-2020", value: "2020-2100" },
+    { label: isGreek ? "Μετά το 2020" : "Post-2020", value: "2020-2100" },
   ];
 
   const PROPERTY_TYPES = [
-    { value: "", label: "All types" },
-    { value: "apartment", label: "Apartment" },
-    { value: "house", label: "House" },
-    { value: "villa", label: "Villa" },
-    { value: "commercial", label: "Commercial" },
-    { value: "office", label: "Office" },
-    { value: "land", label: "Land" },
+    { value: "", label: isGreek ? "Όλοι οι τύποι" : "All types" },
+    { value: "apartment", label: isGreek ? "Διαμέρισμα" : "Apartment" },
+    { value: "house", label: isGreek ? "Μονοκατοικία" : "House" },
+    { value: "villa", label: isGreek ? "Βίλα" : "Villa" },
+    { value: "commercial", label: isGreek ? "Επαγγελματικό" : "Commercial" },
+    { value: "office", label: isGreek ? "Γραφείο" : "Office" },
+    { value: "land", label: isGreek ? "Γη / Οικόπεδο" : "Land" },
   ];
 
   const isProductionVisibleOpenHouse = (listing: { title?: string | null; address?: string | null; city?: string | null }) => {
@@ -309,6 +312,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
 
   const isEmpty = listings.length === 0;
   const displayData = isError ? [] : areaFilteredCards;
+  const pageTitle = isGreek ? "Ανοιχτές Επισκέψεις - mAI prop" : "Open Houses - mAI prop";
 
   // MapListing format for MapView
   const mapListings: MapListing[] = displayData
@@ -330,8 +334,8 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
   return (
     <div className="min-h-screen bg-background">
       <Helmet>
-        <title>Open Houses - mAI prop</title>
-        <meta property="og:title" content="Open Houses - mAI prop" />
+        <title>{pageTitle}</title>
+        <meta property="og:title" content={pageTitle} />
       </Helmet>
       <Navbar />
       <div className="pt-16">
@@ -340,17 +344,21 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
           <div className="container">
             <div className="flex items-center gap-2 mb-2">
               <DoorOpen className="w-5 h-5 text-primary" />
-              <span className="text-xs font-semibold text-primary uppercase tracking-widest">Open Houses</span>
+              <span className="text-xs font-semibold text-primary uppercase tracking-widest">{isGreek ? "Ανοιχτές Επισκέψεις" : "Open Houses"}</span>
             </div>
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div>
-                <h1 className="font-display text-2xl sm:text-3xl font-bold">{showPast ? "Past Open Houses" : "Upcoming Open Houses"}</h1>
+                <h1 className="font-display text-2xl sm:text-3xl font-bold">
+                  {showPast ? (isGreek ? "Προηγούμενες ανοιχτές επισκέψεις" : "Past Open Houses") : (isGreek ? "Προσεχείς ανοιχτές επισκέψεις" : "Upcoming Open Houses")}
+                </h1>
                 <p className="text-muted-foreground text-sm mt-1">
                   {isError
-                    ? "Could not load open houses."
+                    ? isGreek ? "Δεν ήταν δυνατή η φόρτωση των ανοιχτών επισκέψεων." : "Could not load open houses."
                     : isEmpty
-                    ? showPast ? "No past open houses found." : "No upcoming open houses. Agents can publish from the dashboard."
-                    : `${displayData.length} event${displayData.length !== 1 ? "s" : ""} found${polygonFilterIds ? " in selected area" : ""}`}
+                    ? showPast ? (isGreek ? "Δεν βρέθηκαν προηγούμενες ανοιχτές επισκέψεις." : "No past open houses found.") : (isGreek ? "Δεν υπάρχουν προσεχείς ανοιχτές επισκέψεις. Οι μεσίτες μπορούν να δημοσιεύσουν από τον πίνακα." : "No upcoming open houses. Agents can publish from the dashboard.")
+                    : isGreek
+                      ? `${displayData.length} ${displayData.length === 1 ? "εκδήλωση" : "εκδηλώσεις"} βρέθηκαν${polygonFilterIds ? " στην επιλεγμένη περιοχή" : ""}`
+                      : `${displayData.length} event${displayData.length !== 1 ? "s" : ""} found${polygonFilterIds ? " in selected area" : ""}`}
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -359,17 +367,17 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                     onClick={() => setShowPast(false)}
                     className={`px-4 py-2 font-medium transition-colors ${!showPast ? "bg-primary text-primary-foreground" : "bg-card hover:bg-muted text-muted-foreground"}`}
                   >
-                    Upcoming
+                    {isGreek ? "Προσεχείς" : "Upcoming"}
                   </button>
                   <button
                     onClick={() => setShowPast(true)}
                     className={`px-4 py-2 font-medium transition-colors ${showPast ? "bg-primary text-primary-foreground" : "bg-card hover:bg-muted text-muted-foreground"}`}
                   >
-                    Past
+                    {isGreek ? "Προηγούμενες" : "Past"}
                   </button>
                 </div>
                 <Button asChild variant="outline" className="gap-2 shrink-0">
-                  <Link to="/dashboard?tab=open-houses">My Open Houses</Link>
+                  <Link to="/dashboard?tab=open-houses">{isGreek ? "Οι ανοιχτές επισκέψεις μου" : "My Open Houses"}</Link>
                 </Button>
               </div>
             </div>
@@ -386,8 +394,8 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" aria-hidden="true" />
                 <input
                   type="text"
-                  placeholder="City…"
-                  aria-label="Search open houses by city"
+                  placeholder={isGreek ? "Πόλη..." : "City…"}
+                  aria-label={isGreek ? "Αναζήτηση ανοιχτών επισκέψεων ανά πόλη" : "Search open houses by city"}
                   value={cityInput}
                   onChange={(e) => setCityInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && setCityFilter(cityInput)}
@@ -396,10 +404,10 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
               </div>
 
               {/* View mode toggle */}
-              <div className="flex rounded-lg border border-border overflow-hidden shrink-0" role="group" aria-label="View mode">
+              <div className="flex rounded-lg border border-border overflow-hidden shrink-0" role="group" aria-label={isGreek ? "Τρόπος προβολής" : "View mode"}>
                 <button
                   onClick={() => setViewMode("grid")}
-                  aria-label="Show as list"
+                  aria-label={isGreek ? "Προβολή ως λίστα" : "Show as list"}
                   aria-pressed={viewMode === "grid"}
                   className={cn(
                     "px-2.5 py-1.5 text-xs flex items-center gap-1.5 transition-colors",
@@ -409,11 +417,11 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                   )}
                 >
                   <LayoutGrid className="w-3.5 h-3.5" aria-hidden="true" />
-                  <span className="hidden sm:inline">List</span>
+                  <span className="hidden sm:inline">{isGreek ? "Λίστα" : "List"}</span>
                 </button>
                 <button
                   onClick={() => setViewMode("map")}
-                  aria-label="Show on map"
+                  aria-label={isGreek ? "Προβολή στον χάρτη" : "Show on map"}
                   aria-pressed={viewMode === "map"}
                   className={cn(
                     "px-2.5 py-1.5 text-xs flex items-center gap-1.5 transition-colors border-l border-border",
@@ -423,14 +431,14 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                   )}
                 >
                   <MapIcon className="w-3.5 h-3.5" aria-hidden="true" />
-                  <span className="hidden sm:inline">Map</span>
+                  <span className="hidden sm:inline">{isGreek ? "Χάρτης" : "Map"}</span>
                 </button>
               </div>
 
               {/* Filters button */}
               <button
                 onClick={() => setShowAdvanced(!showAdvanced)}
-                aria-label="Toggle filters"
+                aria-label={isGreek ? "Εναλλαγή φίλτρων" : "Toggle filters"}
                 aria-expanded={showAdvanced}
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors shrink-0",
@@ -440,7 +448,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                 )}
               >
                 <SlidersHorizontal className="w-3.5 h-3.5" aria-hidden="true" />
-                <span className="hidden xs:inline">Filters</span>
+                <span className="hidden xs:inline">{isGreek ? "Φίλτρα" : "Filters"}</span>
                 {hasActiveFilters && (
                   <span className="bg-primary text-primary-foreground text-[10px] px-1.5 rounded-full">
                     {[cityFilter, propertyType, minPrice, maxPrice, minSqm, maxSqm, bedroomsMin !== null ? "1" : "", energyClass, filterYearRange, ...selectedFeatures].filter(Boolean).length}
@@ -456,7 +464,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
 
                 {/* Property Type */}
                 <div className="space-y-1 sm:col-span-2 lg:col-span-4">
-                  <span className="text-xs text-muted-foreground font-medium">Property Type</span>
+                  <span className="text-xs text-muted-foreground font-medium">{isGreek ? "Τύπος ακινήτου" : "Property Type"}</span>
                   <div className="flex gap-1.5 flex-wrap">
                     {PROPERTY_TYPES.map((t) => (
                       <Pill key={t.value} active={propertyType === t.value} onClick={() => setPropertyType(t.value)}>
@@ -468,28 +476,30 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
 
                 {/* Price */}
                 <RangeInput
-                  label="Price (€)"
+                  label={isGreek ? "Τιμή (€)" : "Price (€)"}
                   minVal={minPrice}
                   maxVal={maxPrice}
                   onMinChange={setMinPrice}
                   onMaxChange={setMaxPrice}
                   prefix="€"
+                  locale={i18n.language}
                 />
 
                 {/* Size */}
                 <RangeInput
-                  label="Size (m²)"
+                  label={isGreek ? "Εμβαδόν (τ.μ.)" : "Size (m²)"}
                   minVal={minSqm}
                   maxVal={maxSqm}
                   onMinChange={setMinSqm}
                   onMaxChange={setMaxSqm}
                   prefix="m²"
+                  locale={i18n.language}
                 />
 
                 {/* Bedrooms */}
                 <div className="space-y-1">
                   <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
-                    <BedDouble className="w-3.5 h-3.5" /> Min Bedrooms
+                    <BedDouble className="w-3.5 h-3.5" /> {isGreek ? "Ελάχιστα υπνοδωμάτια" : "Min Bedrooms"}
                   </span>
                   <div className="flex gap-1.5 flex-wrap">
                     {[null, 1, 2, 3, 4, 5].map((b) => (
@@ -503,7 +513,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                             : "bg-secondary text-muted-foreground border-border hover:border-primary/40"
                         )}
                       >
-                        {b === null ? "Any" : `${b}+`}
+                        {b === null ? (isGreek ? "Όλα" : "Any") : `${b}+`}
                       </button>
                     ))}
                   </div>
@@ -511,7 +521,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
 
                 {/* Construction year */}
                 <div className="space-y-1">
-                  <label htmlFor="oh-year-range" className="text-xs text-muted-foreground font-medium">Construction Year</label>
+                  <label htmlFor="oh-year-range" className="text-xs text-muted-foreground font-medium">{isGreek ? "Έτος κατασκευής" : "Construction Year"}</label>
                   <select
                     id="oh-year-range"
                     value={filterYearRange}
@@ -526,7 +536,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
 
                 {/* Energy class */}
                 <div className="space-y-1">
-                  <span className="text-xs text-muted-foreground font-medium">Energy Class</span>
+                  <span className="text-xs text-muted-foreground font-medium">{isGreek ? "Ενεργειακή κλάση" : "Energy Class"}</span>
                   <div className="flex gap-1 flex-wrap">
                     <button
                       onClick={() => setEnergyClass("")}
@@ -534,7 +544,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                         "px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors",
                         !energyClass ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-border"
                       )}
-                    >Any</button>
+                    >{isGreek ? "Όλα" : "Any"}</button>
                     {ENERGY_CLASSES.slice(0, 6).map((ec) => (
                       <button
                         key={ec}
@@ -550,7 +560,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
 
                 {/* Features */}
                 <div className="sm:col-span-2 lg:col-span-4 space-y-1">
-                  <span className="text-xs text-muted-foreground font-medium">Features</span>
+                  <span className="text-xs text-muted-foreground font-medium">{isGreek ? "Χαρακτηριστικά" : "Features"}</span>
                   <div className="flex flex-wrap gap-1.5">
                     {FEATURES_RESIDENTIAL.slice(0, 12).map((f) => (
                       <button
@@ -576,7 +586,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                       onClick={clearFilters}
                       className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
                     >
-                      <X className="w-3.5 h-3.5" /> Clear all filters
+                      <X className="w-3.5 h-3.5" /> {isGreek ? "Εκκαθάριση όλων των φίλτρων" : "Clear all filters"}
                     </button>
                   </div>
                 )}
@@ -585,14 +595,16 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
             {polygonFilterIds && (
               <div className="flex items-center justify-between gap-3 rounded-xl border border-primary/25 bg-primary/8 px-3 py-2 text-xs">
                 <span className="font-medium text-primary">
-                  Area filter active · {displayData.length} open house{displayData.length !== 1 ? "s" : ""} in area
+                  {isGreek
+                    ? `Φίλτρο περιοχής ενεργό · ${displayData.length} ${displayData.length === 1 ? "ανοιχτή επίσκεψη" : "ανοιχτές επισκέψεις"} στην περιοχή`
+                    : `Area filter active · ${displayData.length} open house${displayData.length !== 1 ? "s" : ""} in area`}
                 </span>
                 <button
                   type="button"
                   onClick={() => setPolygonFilterIds(null)}
                   className="font-medium text-primary hover:underline"
                 >
-                  Clear area
+                  {isGreek ? "Εκκαθάριση περιοχής" : "Clear area"}
                 </button>
               </div>
             )}
@@ -602,10 +614,10 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
         {/* ── Content ────────────────────────────────────────────────────────── */}
         <div className={viewMode === "map" ? "h-[calc(100vh-13rem)]" : "container py-8"}>
           {isLoading ? (
-            <div className="space-y-4" aria-busy="true" aria-label="Loading open houses">
+            <div className="space-y-4" aria-busy="true" aria-label={isGreek ? "Φόρτωση ανοιχτών επισκέψεων" : "Loading open houses"}>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                <span>Loading open houses</span>
+                <span>{isGreek ? "Φόρτωση ανοιχτών επισκέψεων" : "Loading open houses"}</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
                 {OPEN_HOUSE_LOADING_SKELETON_KEYS.map((key) => (
@@ -620,33 +632,33 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                 <MapView
                   listings={mapListings}
                   height="100%"
-                  itemLabelSingular="open house"
-                  itemLabelPlural="open houses"
+                  itemLabelSingular={isGreek ? "ανοιχτή επίσκεψη" : "open house"}
+                  itemLabelPlural={isGreek ? "ανοιχτές επισκέψεις" : "open houses"}
                   onPolygonFilter={setPolygonFilterIds}
                 />
               </Suspense>
             ) : (
               <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
                 <MapPin className="w-10 h-10 text-muted-foreground" />
-                <p className="text-muted-foreground text-sm">No open houses with location data to display on map.</p>
+                <p className="text-muted-foreground text-sm">{isGreek ? "Δεν υπάρχουν ανοιχτές επισκέψεις με δεδομένα τοποθεσίας για προβολή στον χάρτη." : "No open houses with location data to display on map."}</p>
                 <Button variant="outline" size="sm" onClick={() => setViewMode("grid")}>
-                  Switch to list view
+                  {isGreek ? "Μετάβαση σε λίστα" : "Switch to list view"}
                 </Button>
               </div>
             )
           ) : isError ? (
             <div className="glass-card rounded-xl p-16 text-center">
               <AlertCircle className="w-14 h-14 text-destructive mx-auto mb-4" />
-              <h2 className="font-display text-lg font-semibold mb-2">Could not load open houses</h2>
-              <p className="text-sm text-muted-foreground mb-4">Please try again.</p>
-              <Button variant="outline" onClick={() => refetch()}>Retry</Button>
+              <h2 className="font-display text-lg font-semibold mb-2">{isGreek ? "Δεν ήταν δυνατή η φόρτωση των ανοιχτών επισκέψεων" : "Could not load open houses"}</h2>
+              <p className="text-sm text-muted-foreground mb-4">{isGreek ? "Παρακαλώ δοκιμάστε ξανά." : "Please try again."}</p>
+              <Button variant="outline" onClick={() => refetch()}>{isGreek ? "Επανάληψη" : "Retry"}</Button>
             </div>
           ) : displayData.length === 0 ? (
             <div className="glass-card rounded-xl p-16 text-center">
               <Calendar className="w-14 h-14 text-muted-foreground mx-auto mb-4" />
-              <h2 className="font-display text-lg font-semibold mb-2">No open houses match your filters</h2>
-              <p className="text-sm text-muted-foreground mb-4">Try broadening your search criteria.</p>
-              <Button variant="outline" onClick={clearFilters}>Clear filters</Button>
+              <h2 className="font-display text-lg font-semibold mb-2">{isGreek ? "Δεν υπάρχουν ανοιχτές επισκέψεις που ταιριάζουν στα φίλτρα" : "No open houses match your filters"}</h2>
+              <p className="text-sm text-muted-foreground mb-4">{isGreek ? "Δοκιμάστε να διευρύνετε τα κριτήρια αναζήτησης." : "Try broadening your search criteria."}</p>
+              <Button variant="outline" onClick={clearFilters}>{isGreek ? "Εκκαθάριση φίλτρων" : "Clear filters"}</Button>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">

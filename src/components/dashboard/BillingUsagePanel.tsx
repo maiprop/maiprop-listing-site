@@ -17,6 +17,7 @@ import {
 import {
   PRIORITY_ADS_EXTRA_COST,
   PRIORITY_ADS_INCLUDED,
+  PROFESSIONAL_PRIORITY_AD_EXTRA_COST,
   REPORT_EXTRA_COST,
   REPORT_INCLUDED,
   usePriorityAdsUsage,
@@ -204,6 +205,9 @@ export function BillingUsagePanel({
   const { data: priorityCount = 0, isLoading: priorityLoading, error: priorityError } = usePriorityAdsUsage();
   const showPriorityBoosts = SELL_SIDE_PARTICIPANTS.has(participantType);
   const priorityAddonKey = participantType === "professional" ? "extra_priority_ad" : "priority_placement";
+  const priorityFootnote = participantType === "professional"
+    ? `Extra professional priority ads cost EUR ${PROFESSIONAL_PRIORITY_AD_EXTRA_COST} each.`
+    : `Priority placement costs EUR ${PRIORITY_ADS_EXTRA_COST} for 30 days; featured listings start at EUR 39.`;
 
   const reportLimit = isPro ? REPORT_INCLUDED : 0;
   const priorityLimit = isPro ? PRIORITY_ADS_INCLUDED : 0;
@@ -276,9 +280,7 @@ export function BillingUsagePanel({
       loading: priorityLoading,
       error: Boolean(priorityError),
       action: { type: "addon", addonKey: priorityAddonKey, label: "Buy boost" },
-      footnote: isPro
-        ? `Extra priority boosts cost EUR ${PRIORITY_ADS_EXTRA_COST} each.`
-        : "Buy a boost without changing your plan.",
+      footnote: isPro ? priorityFootnote : "Buy a boost without changing your plan.",
     });
   }
 
