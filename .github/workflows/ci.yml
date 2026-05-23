@@ -28,6 +28,7 @@ jobs:
   quality:
     name: Build · Lint · Test
     runs-on: ubuntu-latest
+    timeout-minutes: 35
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -154,6 +155,7 @@ jobs:
     name: Release Safety Inventory
     runs-on: ubuntu-latest
     needs: quality
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -263,6 +265,7 @@ jobs:
   e2e-security-staging:
     name: E2E Security (Staging)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     # Run automatically for release-bearing branches and same-repo PRs. Dependabot
     # PRs are excluded because repository secrets are intentionally unavailable.
     if: >
@@ -353,6 +356,7 @@ jobs:
     name: Validate Supabase migrations
     runs-on: ubuntu-latest
     needs: [quality, release-safety]
+    timeout-minutes: 15
 
     services:
       postgres:
@@ -525,6 +529,7 @@ jobs:
   lighthouse:
     name: Lighthouse CI
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     if: >
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'pull_request' &&
@@ -603,6 +608,7 @@ jobs:
   deploy:
     name: Deploy to Cloudflare Pages
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment: production
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [quality, release-safety, e2e, e2e-security-staging, migrations-validate, lighthouse]
@@ -840,6 +846,7 @@ jobs:
   deploy-supabase-staging:
     name: Deploy Supabase edge functions (staging)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # Keep deployments out of arbitrary PRs; staging receives mainline and manual
     # deployments after the quality gate passes.
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
@@ -989,6 +996,7 @@ jobs:
   deploy-staging:
     name: Deploy to Cloudflare Pages (preview)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # Skip for Dependabot PRs — secrets are unavailable to bot-generated PRs
     # by default and Wrangler will fail with "CLOUDFLARE_API_TOKEN not set".
     # Dependabot bumps are validated by quality + e2e checks; a preview deploy
