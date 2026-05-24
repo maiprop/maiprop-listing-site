@@ -7,12 +7,15 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   professional: {
     id: "pro-1",
+    user_id: "owner-1",
     display_name: "Ariadne Pro",
     avatar_url: "https://example.com/pro.png",
     title: "Architect",
     category: "Design",
     video_link: null as string | null,
   },
+  currentUserId: "owner-1",
+  consultationAuthorized: false,
   queryError: null as Error | null,
   queryPending: false,
   getUserMedia: vi.fn(),
@@ -35,7 +38,7 @@ vi.mock("react-router-dom", async () => {
 });
 
 vi.mock("@/contexts/AuthContext", () => ({
-  useAuth: () => ({ profile: { display_name: "K R" } }),
+  useAuth: () => ({ user: { id: mocks.currentUserId, email: "kr@example.com" }, profile: { display_name: "K R" } }),
 }));
 
 vi.mock("@/components/Navbar", () => ({ Navbar: () => <nav data-testid="navbar" /> }));
@@ -51,6 +54,10 @@ vi.mock("@/integrations/supabase/client", () => ({
           if (mocks.queryError) return { data: null, error: mocks.queryError };
           return { data: mocks.professional, error: null };
         }),
+        maybeSingle: vi.fn(async () => ({
+          data: mocks.consultationAuthorized ? { id: "consultation-1" } : null,
+          error: null,
+        })),
       };
       return query;
     }),
@@ -104,12 +111,15 @@ describe("BrandedVideoRoom", () => {
     vi.clearAllMocks();
     mocks.professional = {
       id: "pro-1",
+      user_id: "owner-1",
       display_name: "Ariadne Pro",
       avatar_url: "https://example.com/pro.png",
       title: "Architect",
       category: "Design",
       video_link: null,
     };
+    mocks.currentUserId = "owner-1";
+    mocks.consultationAuthorized = false;
     mocks.queryError = null;
     mocks.channel = null;
     mocks.getSession.mockResolvedValue({ data: { session: { access_token: "test-token" } } });
@@ -133,6 +143,15 @@ describe("BrandedVideoRoom", () => {
     expect(await screen.findByText("Professional not found.")).toBeInTheDocument();
     expect(screen.queryByText("permission denied")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /back to professionals/i })).toHaveAttribute("href", "/professionals");
+  });
+
+  it("blocks non-participants from professional rooms", async () => {
+    mocks.currentUserId = "buyer-without-confirmed-request";
+    mocks.consultationAuthorized = false;
+    renderRoom();
+
+    expect(await screen.findByText("Professional not found.")).toBeInTheDocument();
+    expect(screen.queryByText(/mAI prop video room/i)).not.toBeInTheDocument();
   });
 
   it("routes known external provider links through a clear handoff screen", async () => {
@@ -163,6 +182,11 @@ describe("BrandedVideoRoom", () => {
     fireEvent.click(screen.getByRole("button", { name: /Join now/i }));
     expect(await screen.findByText(/Waiting for the other participant/i)).toBeInTheDocument();
     expect(mocks.setRealtimeAuth).toHaveBeenCalledWith("test-token");
+    expect(mocks.channel).not.toBeNull();
+    const { supabase } = await import("@/integrations/supabase/client");
+    expect(supabase.channel).toHaveBeenCalledWith("video:professional:pro-1", expect.objectContaining({
+      config: expect.objectContaining({ private: true }),
+    }));
     expect(mocks.channel?.track).toHaveBeenCalledWith(expect.objectContaining({ displayName: "K R" }));
 
     fireEvent.click(screen.getByRole("button", { name: /End call/i }));

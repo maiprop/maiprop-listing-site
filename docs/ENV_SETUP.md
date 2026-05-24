@@ -94,6 +94,10 @@ See [`STAGING_SETUP.md`](./STAGING_SETUP.md) for the full walkthrough. Variables
 | `VITE_TURNSTILE_SITE_KEY` | optional | Cloudflare Turnstile |
 | `VITE_GOOGLE_MAPS_API_KEY` | optional | See browser-key restrictions below |
 
+Built-in mAI Prop video rooms do not have a public-channel fallback. They always
+join Supabase Realtime with `private: true`, so the video-room realtime RLS
+migrations must be applied before the production UI exposes hosted rooms.
+
 #### Google Maps browser-key restrictions
 
 `VITE_GOOGLE_MAPS_API_KEY` is embedded in the Vite browser bundle. In Google

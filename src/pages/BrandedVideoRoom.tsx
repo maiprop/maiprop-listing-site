@@ -17,6 +17,7 @@ import {
 
 type ProfessionalVideoProfile = {
   id: string;
+  user_id: string;
   display_name: string | null;
   avatar_url: string | null;
   title: string | null;
@@ -31,21 +32,34 @@ export default function BrandedVideoRoom() {
   const userName = profile?.display_name ?? user?.email ?? "Guest";
 
   const { data: pro, isLoading, error } = useQuery({
-    queryKey: ["professional", professionalId],
+    queryKey: ["professional-video-room", professionalId, user?.id],
     queryFn: async () => {
-      if (!professionalId) return null;
+      if (!professionalId || !user?.id) return null;
       const { data, error: queryError } = await supabase
         .from("professionals")
-        .select("id, display_name, avatar_url, title, category, video_link")
+        .select("id, user_id, display_name, avatar_url, title, category, video_link")
         .eq("id", professionalId)
         .single();
       if (queryError) throw queryError;
-      return data as ProfessionalVideoProfile;
+      const professional = data as ProfessionalVideoProfile;
+      if (professional.user_id === user.id) return professional;
+
+      const { data: consultation, error: consultationError } = await supabase
+        .from("consultation_requests")
+        .select("id")
+        .eq("professional_id", professional.id)
+        .eq("requester_id", user.id)
+        .eq("request_type", "consultation")
+        .eq("status", "confirmed")
+        .maybeSingle();
+
+      if (consultationError) throw consultationError;
+      return consultation ? professional : null;
     },
-    enabled: Boolean(professionalId),
+    enabled: Boolean(professionalId && user?.id),
   });
 
-  if (isLoading || (!pro && !error)) {
+  if (!user?.id || isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />

@@ -29,10 +29,6 @@ const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:global.stun.twilio.com:3478" },
 ];
 
-function shouldUsePrivateRealtimeRooms() {
-  return import.meta.env.VITE_MAIPROP_PRIVATE_VIDEO_ROOMS === "true";
-}
-
 function getIceServers(): RTCIceServer[] {
   const configuredTurnUrls = import.meta.env.VITE_MAIPROP_TURN_URLS as string | undefined;
   const turnUrls = configuredTurnUrls?.split(",").map((url: string) => url.trim()).filter(Boolean) ?? [];
@@ -239,7 +235,7 @@ export function useMaiPropVideoRoom({ roomId, displayName }: UseMaiPropVideoRoom
       config: {
         broadcast: { self: false },
         presence: { key: peerIdRef.current },
-        private: shouldUsePrivateRealtimeRooms(),
+        private: true,
       },
     });
 
