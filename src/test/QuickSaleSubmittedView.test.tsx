@@ -29,7 +29,8 @@ describe("QuickSaleSubmittedView", () => {
     expect(screen.getByText("ABC12345")).toBeInTheDocument();
     expect(screen.getByText("€250,000")).toBeInTheDocument();
     expect(screen.getByText("€263,158")).toBeInTheDocument();
-    expect(screen.getByText(/Deal added to private investor dashboard/)).toBeInTheDocument();
+    expect(screen.getByText(/Queued for advisor review before investor publication/)).toBeInTheDocument();
+    expect(screen.getByText(/not visible to investors until/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Submit another/i }));
     expect(onReset).toHaveBeenCalledTimes(1);

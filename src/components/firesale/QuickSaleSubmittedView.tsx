@@ -12,15 +12,15 @@ interface QuickSaleSubmittedViewProps {
   onReset: () => void;
 }
 
-const TIMELINE_STEPS = [
-  { time: "Now", label: "Request live", color: "text-primary", icon: "✅" },
-  { time: "~2h", label: "Advisor assigned", color: "text-primary", icon: "👤" },
-  { time: "24h", label: "Cash offer sent", color: "text-brand-gold", icon: "💰" },
+const REVIEW_TIMELINE_STEPS = [
+  { time: "Now", label: "Request received", color: "text-primary", icon: "OK" },
+  { time: "~2h", label: "Advisor review", color: "text-primary", icon: "AD" },
+  { time: "24h", label: "Offer decision", color: "text-brand-gold", icon: "EUR" },
 ] as const;
 
-const SUBMITTED_GUARANTEES = [
-  "Deal added to private investor dashboard",
-  "NDA-protected distribution to professional investors",
+const REVIEW_SUBMITTED_GUARANTEES = [
+  "Queued for advisor review before investor publication",
+  "Investor distribution starts only after admin approval",
   "Dedicated advisor assigned within 2h",
 ] as const;
 
@@ -38,18 +38,18 @@ export function QuickSaleSubmittedView({
   const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
   const timelineSteps = isGreek
     ? [
-        { time: "Τώρα", label: "Το αίτημα ενεργό", color: "text-primary", icon: "✅" },
-        { time: "~2ω", label: "Ανάθεση συμβούλου", color: "text-primary", icon: "👤" },
-        { time: "24ω", label: "Αποστολή προσφοράς", color: "text-brand-gold", icon: "💰" },
+        { time: "Τώρα", label: "Το αίτημα ελήφθη", color: "text-primary", icon: "OK" },
+        { time: "~2ω", label: "Έλεγχος συμβούλου", color: "text-primary", icon: "AD" },
+        { time: "24ω", label: "Απόφαση προσφοράς", color: "text-brand-gold", icon: "EUR" },
       ]
-    : TIMELINE_STEPS;
+    : REVIEW_TIMELINE_STEPS;
   const guarantees = isGreek
     ? [
-        "Το ακίνητο προστέθηκε στην ιδιωτική ροή επενδυτών",
-        "Κοινοποίηση υπό NDA σε επαγγελματίες επενδυτές",
+        "Σε σειρά ελέγχου πριν τη δημοσίευση σε επενδυτές",
+        "Η διανομή σε επενδυτές ξεκινά μόνο μετά από έγκριση",
         "Ανάθεση συμβούλου εντός περίπου 2 ωρών",
       ]
-    : SUBMITTED_GUARANTEES;
+    : REVIEW_SUBMITTED_GUARANTEES;
 
   return (
     <div className="glass-card rounded-2xl border border-primary/30 p-8 text-center shadow-elevated">
@@ -62,8 +62,13 @@ export function QuickSaleSubmittedView({
       </div>
       <h3 className="font-display font-black text-2xl mb-2">{isGreek ? "Το αίτημα υποβλήθηκε!" : "Request Submitted!"}</h3>
       <p className="text-muted-foreground text-sm mb-2 leading-relaxed">
-        {isGreek ? "Το αίτημα Quick Sale™ είναι πλέον διαθέσιμο στην ιδιωτική ροή επενδυτών." : "Your Quick Sale™ request is live in our investor deal flow."}
+        {isGreek ? "Το αίτημα Quick Sale™ ελήφθη και θα ελεγχθεί πριν κοινοποιηθεί σε επενδυτές." : "Your Quick Sale™ request was received and will be reviewed before it is released to investors."}
       </p>
+      {!isGreek && (
+        <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+          It is not visible to investors until the mAI Prop team approves publication.
+        </p>
+      )}
       {requestId && (
         <p className="text-[11px] text-muted-foreground mb-6 font-mono bg-secondary border border-border rounded-lg px-3 py-1.5 inline-block">
           {isGreek ? "Κωδικός" : "Ref"}: <span className="text-primary font-semibold">{requestId.slice(0, 8).toUpperCase()}</span>

@@ -125,8 +125,12 @@ export function MarketTicker() {
   const baseRows = DISPLAY_CITIES.map((city) => {
     const live = liveData?.find((d) => d.city === city);
     const price = live?.is_live ? live.avg_price_per_sqm : (STATIC_PRICES[city] ?? 0);
-    const trend = CITY_CHANGES[city] ?? { change: 1.0, up: true };
-    return { city, price, ...trend, isLive: live?.is_live ?? false };
+    const fallbackTrend = CITY_CHANGES[city] ?? { change: 1.0, up: true };
+    const hasLiveTrend = live?.trend_is_live && typeof live.trend_change_pct === "number";
+    const trend = hasLiveTrend
+      ? { change: Math.abs(live.trend_change_pct ?? 0), up: live.trend_up ?? ((live.trend_change_pct ?? 0) >= 0) }
+      : fallbackTrend;
+    return { city, price, ...trend, isLive: live?.is_live ?? false, trendIsLive: Boolean(hasLiveTrend) };
   });
 
   const basePriceMap = Object.fromEntries(baseRows.map((r) => [r.city, r.price]));
@@ -240,10 +244,10 @@ export function MarketTicker() {
                   style={{
                     color: "hsl(0 0% 100%)",
                     background: trend.chip,
-                    border: row.isLive ? "1px solid hsl(0 0% 100% / 0.18)" : "1px solid hsl(0 0% 100% / 0.10)",
-                    opacity: row.isLive ? 1 : 0.78,
+                    border: row.trendIsLive ? "1px solid hsl(0 0% 100% / 0.18)" : "1px solid hsl(0 0% 100% / 0.10)",
+                    opacity: row.trendIsLive ? 1 : 0.78,
                   }}
-                  title={row.isLive ? "Live market signal" : "Estimated market signal"}
+                  title={row.trendIsLive ? "Live trend from recent listings" : "Estimated market signal"}
                 >
                   {row.up ? "▲" : "▼"} {Math.abs(row.change).toFixed(1)}%
                 </span>
