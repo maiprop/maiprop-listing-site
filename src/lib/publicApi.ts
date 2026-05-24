@@ -7,9 +7,13 @@ function getPublicApiUrl(path: string): string {
   return new URL(path, PUBLIC_API_ORIGIN).toString();
 }
 
-export async function fetchPublicApi<T>(path: string): Promise<T | null> {
+type PublicApiOptions = {
+  timeoutMs?: number;
+};
+
+export async function fetchPublicApi<T>(path: string, options: PublicApiOptions = {}): Promise<T | null> {
   const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), PUBLIC_API_TIMEOUT_MS);
+  const timer = window.setTimeout(() => controller.abort(), options.timeoutMs ?? PUBLIC_API_TIMEOUT_MS);
   try {
     const response = await fetch(getPublicApiUrl(path), {
       headers: { Accept: "application/json" },

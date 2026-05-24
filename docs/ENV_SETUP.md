@@ -45,6 +45,7 @@ origin instead, for example `https://auth.maiprop.co`.
 | Production telemetry audit | `SENTRY_AUTH_TOKEN` | sentry.io → User Settings → Auth Tokens; local/read-only audit only |
 | Analytics | `VITE_PLAUSIBLE_DOMAIN` | plausible.io → Sites |
 | Street view / Places | `VITE_GOOGLE_MAPS_API_KEY` | Google Cloud Console; use a browser key restricted to local/dev referrers |
+| Native public API origin | `VITE_PUBLIC_API_ORIGIN` | Optional absolute origin for `/api/public/*` when running a native shell; defaults to `VITE_APP_URL` or same-origin browser paths |
 
 ### 4. Service-role key (server-side scripts only)
 
@@ -93,6 +94,7 @@ See [`STAGING_SETUP.md`](./STAGING_SETUP.md) for the full walkthrough. Variables
 | `VITE_STRIPE_PRICE_*` | required for billing | Production prices |
 | `VITE_TURNSTILE_SITE_KEY` | optional | Cloudflare Turnstile |
 | `VITE_GOOGLE_MAPS_API_KEY` | optional | See browser-key restrictions below |
+| `VITE_PUBLIC_API_ORIGIN` | optional | Absolute origin for `/api/public/*` when a native shell cannot use same-origin paths; browser builds use same-origin paths |
 
 Built-in mAI Prop video rooms do not have a public-channel fallback. They always
 join Supabase Realtime with `private: true`, so the video-room realtime RLS
@@ -197,6 +199,7 @@ fail-fast behavior.
 | `VITE_GOOGLE_MAPS_API_KEY` | optional browser Google Maps key; see browser-key restrictions above | production environment |
 | `VITE_PLAUSIBLE_DOMAIN` | optional analytics domain | production environment |
 | `VITE_APP_URL` | canonical app origin for production build | production environment |
+| `VITE_PUBLIC_API_ORIGIN` | optional absolute origin for cached `/api/public/*` routes in native shells; defaults to `VITE_APP_URL` | production/staging build |
 | `SITE_LOCK_PASSWORD` | optional Cloudflare Pages runtime passcode gate | production environment |
 | `STAGING_SUPABASE_URL` | staging Supabase URL for security/E2E jobs | repo or staging environment |
 | `STAGING_SUPABASE_PUBLISHABLE_KEY` | staging anon/publishable key | repo or staging environment |

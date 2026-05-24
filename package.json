@@ -57,7 +57,7 @@
     "test:perf": "npm run build && playwright test e2e/performance-gates.spec.ts --project=chromium",
     "test:e2e:live-smoke": "playwright test e2e/live-critical-smoke.spec.ts --project=chromium",
     "test:e2e:ui": "playwright test --ui",
-    "test:deno": "deno test --allow-env --allow-net --allow-read --allow-write supabase/functions/",
+    "test:deno": "node scripts/run-deno-tests.mjs",
     "check:bundle-size": "node scripts/check-bundle-size.mjs",
     "inventory:release": "node scripts/release-safety-inventory.mjs",
     "check:release-safety": "node scripts/release-safety-inventory.mjs --check",

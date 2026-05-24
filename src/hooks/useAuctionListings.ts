@@ -8,6 +8,7 @@ const QUERY_TIMEOUT_MS = 15_000;
 const AUCTION_FETCH_LIMIT = 500;
 const PORTAL_AUCTION_FETCH_LIMIT = 600;
 const PUBLIC_AUCTION_CACHE_LIMIT = 60;
+const PUBLIC_AUCTION_CACHE_TIMEOUT_MS = 8_000;
 const AUCTION_RANDOMIZATION_SALT = "maiprop-auctions-v1";
 const AUCTION_QUERY_STALE_TIME = 5 * 60_000;
 const AUCTION_QUERY_GC_TIME = 30 * 60_000;
@@ -227,6 +228,7 @@ const fetchAuctionsFromPublicCache = async (maxRows: number): Promise<AuctionLis
   if (maxRows > PUBLIC_AUCTION_CACHE_LIMIT) return [];
   const payload = await fetchPublicApi<{ data?: AuctionListingRow[] } | AuctionListingRow[]>(
     `/api/public/auctions?limit=${maxRows}`,
+    { timeoutMs: PUBLIC_AUCTION_CACHE_TIMEOUT_MS },
   );
   if (Array.isArray(payload)) return payload;
   return Array.isArray(payload?.data) ? payload.data : [];
@@ -250,6 +252,16 @@ const fetchAuctionListings = async (maxRows: number): Promise<AuctionListingRow[
 
   const publicRows = await fetchAuctionsFromPublicCache(maxRows);
   if (publicRows.length > 0) return randomizeAndLimitAuctionRows(publicRows, maxRows);
+
+  if (maxRows <= PUBLIC_AUCTION_CACHE_LIMIT) {
+    try {
+      cachedRows = await fetchFallbackAuctions(today, sourceRows);
+      return randomizeAndLimitAuctionRows(cachedRows, maxRows);
+    } catch (dbErr: unknown) {
+      if (cachedRows.length > 0) return randomizeAndLimitAuctionRows(cachedRows, maxRows);
+      throw dbErr;
+    }
+  }
 
   try {
     const osRows = await fetchAuctionsFromOs(today, maxRows);
