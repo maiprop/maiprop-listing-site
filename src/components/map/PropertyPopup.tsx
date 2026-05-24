@@ -147,6 +147,12 @@ const getDetailLink = (listing: MapListing): string => {
   return `/property/${listing.id}`;
 };
 
+const getDetailState = (listing: MapListing, raw: RawListing) => {
+  if (listing.listingType !== "auction") return undefined;
+  const auction = { ...raw, id: listing.id };
+  return { auction, listing: auction };
+};
+
 const getPills = (listing: MapListing, raw: RawListing): Pill[] => {
   const floorLabel = getFloorLabel(raw.floor);
   const pills: Array<Pill | null> = [
@@ -287,6 +293,7 @@ const CityLine = ({ city }: { city: string }) => (
 const DetailLink = ({ listing, isAuction }: { listing: MapListing; isAuction: boolean }) => (
   <Link
     to={getDetailLink(listing)}
+    state={getDetailState(listing, getRawListing(listing))}
     className="block text-center px-3 py-1.5 rounded-lg text-[11px] font-bold mt-1 transition-opacity hover:opacity-90"
     style={{ background: typeColour(listing.listingType), color: "#0a0f1a" }}
   >

@@ -2,6 +2,7 @@ import { useState, useMemo, lazy, Suspense } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import {
   Calendar, MapPin, Loader2, DoorOpen, SlidersHorizontal, X,
   ChevronDown, Search, BedDouble, LayoutGrid, Map as MapIcon,
@@ -22,6 +23,84 @@ import { ENERGY_CLASSES, FEATURES_RESIDENTIAL } from "@/lib/filterConfig";
 import { fmtDate, fmtTime, Pill, RangeInput, OpenHouseCard } from "@/components/open-houses/OpenHousePrimitives";
 import { cn } from "@/lib/utils";
 import type { Database } from "@/integrations/supabase/types";
+
+const OPEN_HOUSES_FALLBACKS: Record<string, string> = {
+  "common.retry": "Try again",
+  "openHouses.page.retryButton": "Retry",
+  "openHouses.page.pageTitle": "Open Houses - mAI prop",
+  "openHouses.page.eyebrow": "Open Houses",
+  "openHouses.page.headingUpcoming": "Upcoming Open Houses",
+  "openHouses.page.headingPast": "Past Open Houses",
+  "openHouses.page.loadError": "Could not load open houses.",
+  "openHouses.page.emptyUpcoming": "No upcoming open houses. Agents can publish from the dashboard.",
+  "openHouses.page.emptyPast": "No past open houses found.",
+  "openHouses.page.countOne": "{{count}} open house found{{areaSuffix}}",
+  "openHouses.page.countOther": "{{count}} open houses found{{areaSuffix}}",
+  "openHouses.page.countAreaSuffix": " in the selected area",
+  "openHouses.page.tabs.upcoming": "Upcoming",
+  "openHouses.page.tabs.past": "Past",
+  "openHouses.page.myOpenHouses": "My Open Houses",
+  "openHouses.page.cityPlaceholder": "City...",
+  "openHouses.page.citySearchAria": "Search open houses by city",
+  "openHouses.page.viewModeAria": "View mode",
+  "openHouses.page.showListAria": "Show as list",
+  "openHouses.page.showMapAria": "Show on map",
+  "openHouses.page.list": "List",
+  "openHouses.page.map": "Map",
+  "openHouses.page.filtersAria": "Toggle filters",
+  "openHouses.page.filters": "Filters",
+  "openHouses.page.propertyType": "Property Type",
+  "openHouses.page.price": "Price (€)",
+  "openHouses.page.size": "Size (m²)",
+  "openHouses.page.minBedrooms": "Min Bedrooms",
+  "openHouses.page.any": "Any",
+  "openHouses.page.constructionYear": "Construction Year",
+  "openHouses.page.energyClass": "Energy Class",
+  "openHouses.page.features": "Features",
+  "openHouses.page.clearAllFilters": "Clear all filters",
+  "openHouses.page.areaActiveOne": "Area filter active · {{count}} open house in area",
+  "openHouses.page.areaActiveOther": "Area filter active · {{count}} open houses in area",
+  "openHouses.page.clearArea": "Clear area",
+  "openHouses.page.loading": "Loading open houses",
+  "openHouses.page.mapLabelSingular": "open house",
+  "openHouses.page.mapLabelPlural": "open houses",
+  "openHouses.page.noMapListings": "No open houses with location data to display on map.",
+  "openHouses.page.switchToList": "Switch to list view",
+  "openHouses.page.errorTitle": "Could not load open houses",
+  "openHouses.page.retryPrompt": "Please try again.",
+  "openHouses.page.emptyFilteredTitle": "No open houses match your filters",
+  "openHouses.page.emptyFilteredPrompt": "Try broadening your search criteria.",
+  "openHouses.page.clearFilters": "Clear filters",
+  "openHouses.page.yearRanges.any": "Any Year",
+  "openHouses.page.yearRanges.post2020": "Post-2020",
+  "openHouses.page.propertyTypes.all": "All types",
+  "openHouses.page.propertyTypes.apartment": "Apartment",
+  "openHouses.page.propertyTypes.house": "House",
+  "openHouses.page.propertyTypes.villa": "Villa",
+  "openHouses.page.propertyTypes.commercial": "Commercial",
+  "openHouses.page.propertyTypes.office": "Office",
+  "openHouses.page.propertyTypes.land": "Land",
+  "openHouses.page.featureLabels.has_parking": "Parking",
+  "openHouses.page.featureLabels.has_elevator": "Elevator",
+  "openHouses.page.featureLabels.has_balcony": "Balcony",
+  "openHouses.page.featureLabels.has_pool": "Pool",
+  "openHouses.page.featureLabels.pets_allowed": "Pet friendly",
+  "openHouses.page.featureLabels.has_furnished": "Furnished",
+  "openHouses.page.featureLabels.has_garden": "Garden",
+  "openHouses.page.featureLabels.has_ac": "A/C",
+  "openHouses.page.featureLabels.has_fireplace": "Fireplace",
+  "openHouses.page.featureLabels.has_storage": "Storage",
+  "openHouses.page.featureLabels.has_view": "View",
+  "openHouses.page.featureLabels.has_smart_home": "Smart home",
+};
+
+const getTranslatedValue = (t: TFunction, key: string, fallback = OPEN_HOUSES_FALLBACKS[key] ?? key) => {
+  const value = t(key);
+  return value === key ? fallback : value;
+};
+
+const interpolateTranslation = (t: TFunction, key: string, values: Record<string, string>) =>
+  getTranslatedValue(t, key).replace(/{{\s*(\w+)\s*}}/g, (_match, name) => values[name] ?? "");
 
 // skipcq: JS-0067 - Skeleton helper is intentionally module-scoped.
 function OpenHouseCardSkeleton() {
@@ -137,8 +216,7 @@ type OpenHouseListingRow = Pick<
 
 // skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
 export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordinates filters, map/list view, query state, and card projection in one route shell.
-  const { i18n } = useTranslation();
-  const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
+  const { t, i18n } = useTranslation();
   const [searchParams] = useSearchParams();
   const cityParam = searchParams.get("city") || "";
 
@@ -160,22 +238,22 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
   const [polygonFilterIds, setPolygonFilterIds] = useState<Set<string> | null>(null);
 
   const YEAR_RANGES = [
-    { label: isGreek ? "Οποιοδήποτε έτος" : "Any Year", value: "" },
+    { label: getTranslatedValue(t, "openHouses.page.yearRanges.any"), value: "" },
     { label: "Pre-1980", value: "0-1979" },
-    { label: "1980–2000", value: "1980-2000" },
-    { label: "2000–2010", value: "2000-2010" },
-    { label: "2010–2020", value: "2010-2020" },
-    { label: isGreek ? "Μετά το 2020" : "Post-2020", value: "2020-2100" },
+    { label: "1980-2000", value: "1980-2000" },
+    { label: "2000-2010", value: "2000-2010" },
+    { label: "2010-2020", value: "2010-2020" },
+    { label: getTranslatedValue(t, "openHouses.page.yearRanges.post2020"), value: "2020-2100" },
   ];
 
   const PROPERTY_TYPES = [
-    { value: "", label: isGreek ? "Όλοι οι τύποι" : "All types" },
-    { value: "apartment", label: isGreek ? "Διαμέρισμα" : "Apartment" },
-    { value: "house", label: isGreek ? "Μονοκατοικία" : "House" },
-    { value: "villa", label: isGreek ? "Βίλα" : "Villa" },
-    { value: "commercial", label: isGreek ? "Επαγγελματικό" : "Commercial" },
-    { value: "office", label: isGreek ? "Γραφείο" : "Office" },
-    { value: "land", label: isGreek ? "Γη / Οικόπεδο" : "Land" },
+    { value: "", label: getTranslatedValue(t, "openHouses.page.propertyTypes.all") },
+    { value: "apartment", label: getTranslatedValue(t, "openHouses.page.propertyTypes.apartment") },
+    { value: "house", label: getTranslatedValue(t, "openHouses.page.propertyTypes.house") },
+    { value: "villa", label: getTranslatedValue(t, "openHouses.page.propertyTypes.villa") },
+    { value: "commercial", label: getTranslatedValue(t, "openHouses.page.propertyTypes.commercial") },
+    { value: "office", label: getTranslatedValue(t, "openHouses.page.propertyTypes.office") },
+    { value: "land", label: getTranslatedValue(t, "openHouses.page.propertyTypes.land") },
   ];
 
   const isProductionVisibleOpenHouse = (listing: { title?: string | null; address?: string | null; city?: string | null }) => {
@@ -312,7 +390,18 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
 
   const isEmpty = listings.length === 0;
   const displayData = isError ? [] : areaFilteredCards;
-  const pageTitle = isGreek ? "Ανοιχτές Επισκέψεις - mAI prop" : "Open Houses - mAI prop";
+  const pageTitle = getTranslatedValue(t, "openHouses.page.pageTitle");
+  const areaSuffix = polygonFilterIds ? getTranslatedValue(t, "openHouses.page.countAreaSuffix") : "";
+  const resultCountText = interpolateTranslation(
+    t,
+    displayData.length === 1 ? "openHouses.page.countOne" : "openHouses.page.countOther",
+    { count: String(displayData.length), areaSuffix },
+  );
+  const areaActiveText = interpolateTranslation(
+    t,
+    displayData.length === 1 ? "openHouses.page.areaActiveOne" : "openHouses.page.areaActiveOther",
+    { count: String(displayData.length) },
+  );
 
   // MapListing format for MapView
   const mapListings: MapListing[] = displayData
@@ -344,21 +433,19 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
           <div className="container">
             <div className="flex items-center gap-2 mb-2">
               <DoorOpen className="w-5 h-5 text-primary" />
-              <span className="text-xs font-semibold text-primary uppercase tracking-widest">{isGreek ? "Ανοιχτές Επισκέψεις" : "Open Houses"}</span>
+              <span className="text-xs font-semibold text-primary uppercase tracking-widest">{getTranslatedValue(t, "openHouses.page.eyebrow")}</span>
             </div>
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div>
                 <h1 className="font-display text-2xl sm:text-3xl font-bold">
-                  {showPast ? (isGreek ? "Προηγούμενες ανοιχτές επισκέψεις" : "Past Open Houses") : (isGreek ? "Προσεχείς ανοιχτές επισκέψεις" : "Upcoming Open Houses")}
+                  {showPast ? getTranslatedValue(t, "openHouses.page.headingPast") : getTranslatedValue(t, "openHouses.page.headingUpcoming")}
                 </h1>
                 <p className="text-muted-foreground text-sm mt-1">
                   {isError
-                    ? isGreek ? "Δεν ήταν δυνατή η φόρτωση των ανοιχτών επισκέψεων." : "Could not load open houses."
+                    ? getTranslatedValue(t, "openHouses.page.loadError")
                     : isEmpty
-                    ? showPast ? (isGreek ? "Δεν βρέθηκαν προηγούμενες ανοιχτές επισκέψεις." : "No past open houses found.") : (isGreek ? "Δεν υπάρχουν προσεχείς ανοιχτές επισκέψεις. Οι μεσίτες μπορούν να δημοσιεύσουν από τον πίνακα." : "No upcoming open houses. Agents can publish from the dashboard.")
-                    : isGreek
-                      ? `${displayData.length} ${displayData.length === 1 ? "εκδήλωση" : "εκδηλώσεις"} βρέθηκαν${polygonFilterIds ? " στην επιλεγμένη περιοχή" : ""}`
-                      : `${displayData.length} event${displayData.length !== 1 ? "s" : ""} found${polygonFilterIds ? " in selected area" : ""}`}
+                    ? showPast ? getTranslatedValue(t, "openHouses.page.emptyPast") : getTranslatedValue(t, "openHouses.page.emptyUpcoming")
+                    : resultCountText}
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -367,17 +454,17 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                     onClick={() => setShowPast(false)}
                     className={`px-4 py-2 font-medium transition-colors ${!showPast ? "bg-primary text-primary-foreground" : "bg-card hover:bg-muted text-muted-foreground"}`}
                   >
-                    {isGreek ? "Προσεχείς" : "Upcoming"}
+                    {getTranslatedValue(t, "openHouses.page.tabs.upcoming")}
                   </button>
                   <button
                     onClick={() => setShowPast(true)}
                     className={`px-4 py-2 font-medium transition-colors ${showPast ? "bg-primary text-primary-foreground" : "bg-card hover:bg-muted text-muted-foreground"}`}
                   >
-                    {isGreek ? "Προηγούμενες" : "Past"}
+                    {getTranslatedValue(t, "openHouses.page.tabs.past")}
                   </button>
                 </div>
                 <Button asChild variant="outline" className="gap-2 shrink-0">
-                  <Link to="/dashboard?tab=open-houses">{isGreek ? "Οι ανοιχτές επισκέψεις μου" : "My Open Houses"}</Link>
+                  <Link to="/dashboard?tab=open-houses">{getTranslatedValue(t, "openHouses.page.myOpenHouses")}</Link>
                 </Button>
               </div>
             </div>
@@ -394,8 +481,8 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" aria-hidden="true" />
                 <input
                   type="text"
-                  placeholder={isGreek ? "Πόλη..." : "City…"}
-                  aria-label={isGreek ? "Αναζήτηση ανοιχτών επισκέψεων ανά πόλη" : "Search open houses by city"}
+                  placeholder={getTranslatedValue(t, "openHouses.page.cityPlaceholder")}
+                  aria-label={getTranslatedValue(t, "openHouses.page.citySearchAria")}
                   value={cityInput}
                   onChange={(e) => setCityInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && setCityFilter(cityInput)}
@@ -404,10 +491,10 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
               </div>
 
               {/* View mode toggle */}
-              <div className="flex rounded-lg border border-border overflow-hidden shrink-0" role="group" aria-label={isGreek ? "Τρόπος προβολής" : "View mode"}>
+              <div className="flex rounded-lg border border-border overflow-hidden shrink-0" role="group" aria-label={getTranslatedValue(t, "openHouses.page.viewModeAria")}>
                 <button
                   onClick={() => setViewMode("grid")}
-                  aria-label={isGreek ? "Προβολή ως λίστα" : "Show as list"}
+                  aria-label={getTranslatedValue(t, "openHouses.page.showListAria")}
                   aria-pressed={viewMode === "grid"}
                   className={cn(
                     "px-2.5 py-1.5 text-xs flex items-center gap-1.5 transition-colors",
@@ -417,11 +504,11 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                   )}
                 >
                   <LayoutGrid className="w-3.5 h-3.5" aria-hidden="true" />
-                  <span className="hidden sm:inline">{isGreek ? "Λίστα" : "List"}</span>
+                  <span className="hidden sm:inline">{getTranslatedValue(t, "openHouses.page.list")}</span>
                 </button>
                 <button
                   onClick={() => setViewMode("map")}
-                  aria-label={isGreek ? "Προβολή στον χάρτη" : "Show on map"}
+                  aria-label={getTranslatedValue(t, "openHouses.page.showMapAria")}
                   aria-pressed={viewMode === "map"}
                   className={cn(
                     "px-2.5 py-1.5 text-xs flex items-center gap-1.5 transition-colors border-l border-border",
@@ -431,14 +518,14 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                   )}
                 >
                   <MapIcon className="w-3.5 h-3.5" aria-hidden="true" />
-                  <span className="hidden sm:inline">{isGreek ? "Χάρτης" : "Map"}</span>
+                  <span className="hidden sm:inline">{getTranslatedValue(t, "openHouses.page.map")}</span>
                 </button>
               </div>
 
               {/* Filters button */}
               <button
                 onClick={() => setShowAdvanced(!showAdvanced)}
-                aria-label={isGreek ? "Εναλλαγή φίλτρων" : "Toggle filters"}
+                aria-label={getTranslatedValue(t, "openHouses.page.filtersAria")}
                 aria-expanded={showAdvanced}
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors shrink-0",
@@ -448,7 +535,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                 )}
               >
                 <SlidersHorizontal className="w-3.5 h-3.5" aria-hidden="true" />
-                <span className="hidden xs:inline">{isGreek ? "Φίλτρα" : "Filters"}</span>
+                <span className="hidden xs:inline">{getTranslatedValue(t, "openHouses.page.filters")}</span>
                 {hasActiveFilters && (
                   <span className="bg-primary text-primary-foreground text-[10px] px-1.5 rounded-full">
                     {[cityFilter, propertyType, minPrice, maxPrice, minSqm, maxSqm, bedroomsMin !== null ? "1" : "", energyClass, filterYearRange, ...selectedFeatures].filter(Boolean).length}
@@ -464,7 +551,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
 
                 {/* Property Type */}
                 <div className="space-y-1 sm:col-span-2 lg:col-span-4">
-                  <span className="text-xs text-muted-foreground font-medium">{isGreek ? "Τύπος ακινήτου" : "Property Type"}</span>
+                  <span className="text-xs text-muted-foreground font-medium">{getTranslatedValue(t, "openHouses.page.propertyType")}</span>
                   <div className="flex gap-1.5 flex-wrap">
                     {PROPERTY_TYPES.map((t) => (
                       <Pill key={t.value} active={propertyType === t.value} onClick={() => setPropertyType(t.value)}>
@@ -476,7 +563,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
 
                 {/* Price */}
                 <RangeInput
-                  label={isGreek ? "Τιμή (€)" : "Price (€)"}
+                  label={getTranslatedValue(t, "openHouses.page.price")}
                   minVal={minPrice}
                   maxVal={maxPrice}
                   onMinChange={setMinPrice}
@@ -487,7 +574,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
 
                 {/* Size */}
                 <RangeInput
-                  label={isGreek ? "Εμβαδόν (τ.μ.)" : "Size (m²)"}
+                  label={getTranslatedValue(t, "openHouses.page.size")}
                   minVal={minSqm}
                   maxVal={maxSqm}
                   onMinChange={setMinSqm}
@@ -499,7 +586,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                 {/* Bedrooms */}
                 <div className="space-y-1">
                   <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
-                    <BedDouble className="w-3.5 h-3.5" /> {isGreek ? "Ελάχιστα υπνοδωμάτια" : "Min Bedrooms"}
+                    <BedDouble className="w-3.5 h-3.5" /> {getTranslatedValue(t, "openHouses.page.minBedrooms")}
                   </span>
                   <div className="flex gap-1.5 flex-wrap">
                     {[null, 1, 2, 3, 4, 5].map((b) => (
@@ -513,7 +600,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                             : "bg-secondary text-muted-foreground border-border hover:border-primary/40"
                         )}
                       >
-                        {b === null ? (isGreek ? "Όλα" : "Any") : `${b}+`}
+                        {b === null ? getTranslatedValue(t, "openHouses.page.any") : `${b}+`}
                       </button>
                     ))}
                   </div>
@@ -521,7 +608,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
 
                 {/* Construction year */}
                 <div className="space-y-1">
-                  <label htmlFor="oh-year-range" className="text-xs text-muted-foreground font-medium">{isGreek ? "Έτος κατασκευής" : "Construction Year"}</label>
+                  <label htmlFor="oh-year-range" className="text-xs text-muted-foreground font-medium">{getTranslatedValue(t, "openHouses.page.constructionYear")}</label>
                   <select
                     id="oh-year-range"
                     value={filterYearRange}
@@ -536,7 +623,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
 
                 {/* Energy class */}
                 <div className="space-y-1">
-                  <span className="text-xs text-muted-foreground font-medium">{isGreek ? "Ενεργειακή κλάση" : "Energy Class"}</span>
+                  <span className="text-xs text-muted-foreground font-medium">{getTranslatedValue(t, "openHouses.page.energyClass")}</span>
                   <div className="flex gap-1 flex-wrap">
                     <button
                       onClick={() => setEnergyClass("")}
@@ -544,7 +631,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                         "px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors",
                         !energyClass ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-border"
                       )}
-                    >{isGreek ? "Όλα" : "Any"}</button>
+                    >{getTranslatedValue(t, "openHouses.page.any")}</button>
                     {ENERGY_CLASSES.slice(0, 6).map((ec) => (
                       <button
                         key={ec}
@@ -560,7 +647,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
 
                 {/* Features */}
                 <div className="sm:col-span-2 lg:col-span-4 space-y-1">
-                  <span className="text-xs text-muted-foreground font-medium">{isGreek ? "Χαρακτηριστικά" : "Features"}</span>
+                  <span className="text-xs text-muted-foreground font-medium">{getTranslatedValue(t, "openHouses.page.features")}</span>
                   <div className="flex flex-wrap gap-1.5">
                     {FEATURES_RESIDENTIAL.slice(0, 12).map((f) => (
                       <button
@@ -573,7 +660,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                             : "bg-secondary text-muted-foreground border-border hover:border-primary/40"
                         )}
                       >
-                        {f.label}
+                        {getTranslatedValue(t, `openHouses.page.featureLabels.${f.key}`, f.label)}
                       </button>
                     ))}
                   </div>
@@ -586,7 +673,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                       onClick={clearFilters}
                       className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
                     >
-                      <X className="w-3.5 h-3.5" /> {isGreek ? "Εκκαθάριση όλων των φίλτρων" : "Clear all filters"}
+                      <X className="w-3.5 h-3.5" /> {getTranslatedValue(t, "openHouses.page.clearAllFilters")}
                     </button>
                   </div>
                 )}
@@ -595,16 +682,14 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
             {polygonFilterIds && (
               <div className="flex items-center justify-between gap-3 rounded-xl border border-primary/25 bg-primary/8 px-3 py-2 text-xs">
                 <span className="font-medium text-primary">
-                  {isGreek
-                    ? `Φίλτρο περιοχής ενεργό · ${displayData.length} ${displayData.length === 1 ? "ανοιχτή επίσκεψη" : "ανοιχτές επισκέψεις"} στην περιοχή`
-                    : `Area filter active · ${displayData.length} open house${displayData.length !== 1 ? "s" : ""} in area`}
+                  {areaActiveText}
                 </span>
                 <button
                   type="button"
                   onClick={() => setPolygonFilterIds(null)}
                   className="font-medium text-primary hover:underline"
                 >
-                  {isGreek ? "Εκκαθάριση περιοχής" : "Clear area"}
+                  {getTranslatedValue(t, "openHouses.page.clearArea")}
                 </button>
               </div>
             )}
@@ -614,10 +699,10 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
         {/* ── Content ────────────────────────────────────────────────────────── */}
         <div className={viewMode === "map" ? "h-[calc(100vh-13rem)]" : "container py-8"}>
           {isLoading ? (
-            <div className="space-y-4" aria-busy="true" aria-label={isGreek ? "Φόρτωση ανοιχτών επισκέψεων" : "Loading open houses"}>
+            <div className="space-y-4" aria-busy="true" aria-label={getTranslatedValue(t, "openHouses.page.loading")}>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                <span>{isGreek ? "Φόρτωση ανοιχτών επισκέψεων" : "Loading open houses"}</span>
+                <span>{getTranslatedValue(t, "openHouses.page.loading")}</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
                 {OPEN_HOUSE_LOADING_SKELETON_KEYS.map((key) => (
@@ -632,33 +717,33 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                 <MapView
                   listings={mapListings}
                   height="100%"
-                  itemLabelSingular={isGreek ? "ανοιχτή επίσκεψη" : "open house"}
-                  itemLabelPlural={isGreek ? "ανοιχτές επισκέψεις" : "open houses"}
+                  itemLabelSingular={getTranslatedValue(t, "openHouses.page.mapLabelSingular")}
+                  itemLabelPlural={getTranslatedValue(t, "openHouses.page.mapLabelPlural")}
                   onPolygonFilter={setPolygonFilterIds}
                 />
               </Suspense>
             ) : (
               <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
                 <MapPin className="w-10 h-10 text-muted-foreground" />
-                <p className="text-muted-foreground text-sm">{isGreek ? "Δεν υπάρχουν ανοιχτές επισκέψεις με δεδομένα τοποθεσίας για προβολή στον χάρτη." : "No open houses with location data to display on map."}</p>
+                <p className="text-muted-foreground text-sm">{getTranslatedValue(t, "openHouses.page.noMapListings")}</p>
                 <Button variant="outline" size="sm" onClick={() => setViewMode("grid")}>
-                  {isGreek ? "Μετάβαση σε λίστα" : "Switch to list view"}
+                  {getTranslatedValue(t, "openHouses.page.switchToList")}
                 </Button>
               </div>
             )
           ) : isError ? (
             <div className="glass-card rounded-xl p-16 text-center">
               <AlertCircle className="w-14 h-14 text-destructive mx-auto mb-4" />
-              <h2 className="font-display text-lg font-semibold mb-2">{isGreek ? "Δεν ήταν δυνατή η φόρτωση των ανοιχτών επισκέψεων" : "Could not load open houses"}</h2>
-              <p className="text-sm text-muted-foreground mb-4">{isGreek ? "Παρακαλώ δοκιμάστε ξανά." : "Please try again."}</p>
-              <Button variant="outline" onClick={() => refetch()}>{isGreek ? "Επανάληψη" : "Retry"}</Button>
+              <h2 className="font-display text-lg font-semibold mb-2">{getTranslatedValue(t, "openHouses.page.errorTitle")}</h2>
+              <p className="text-sm text-muted-foreground mb-4">{getTranslatedValue(t, "openHouses.page.retryPrompt")}</p>
+              <Button variant="outline" onClick={() => refetch()}>{getTranslatedValue(t, "openHouses.page.retryButton")}</Button>
             </div>
           ) : displayData.length === 0 ? (
             <div className="glass-card rounded-xl p-16 text-center">
               <Calendar className="w-14 h-14 text-muted-foreground mx-auto mb-4" />
-              <h2 className="font-display text-lg font-semibold mb-2">{isGreek ? "Δεν υπάρχουν ανοιχτές επισκέψεις που ταιριάζουν στα φίλτρα" : "No open houses match your filters"}</h2>
-              <p className="text-sm text-muted-foreground mb-4">{isGreek ? "Δοκιμάστε να διευρύνετε τα κριτήρια αναζήτησης." : "Try broadening your search criteria."}</p>
-              <Button variant="outline" onClick={clearFilters}>{isGreek ? "Εκκαθάριση φίλτρων" : "Clear filters"}</Button>
+              <h2 className="font-display text-lg font-semibold mb-2">{getTranslatedValue(t, "openHouses.page.emptyFilteredTitle")}</h2>
+              <p className="text-sm text-muted-foreground mb-4">{getTranslatedValue(t, "openHouses.page.emptyFilteredPrompt")}</p>
+              <Button variant="outline" onClick={clearFilters}>{getTranslatedValue(t, "openHouses.page.clearFilters")}</Button>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">

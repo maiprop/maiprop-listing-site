@@ -7,6 +7,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -20,6 +21,7 @@ import type {
   AIPriceSuggestion,
   ListingFormData,
 } from "@/hooks/listingForm.types";
+import { tFallback, tInterpolate } from "@/lib/i18nFallback";
 
 // Re-export the types so existing callers (`import { type ListingFormData }
 // from "@/hooks/useListingForm"`) keep working.
@@ -69,8 +71,11 @@ const INITIAL_FORM: ListingFormData = {
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useListingForm(options?: { allowPreSale?: boolean }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const tr = useCallback((key: string, fallback: string) => tFallback(t, key, fallback), [t]);
+  const trv = useCallback((key: string, fallback: string, values: Record<string, string | number>) => tInterpolate(t, key, fallback, values), [t]);
 
   // Form state
   const [form, setForm] = useState<ListingFormData>(INITIAL_FORM);
@@ -108,10 +113,10 @@ export function useListingForm(options?: { allowPreSale?: boolean }) {
         if (t[key]) {
           setErrors(e => {
             const inlineErrors: Record<string, string> = {};
-            if (key === "title" && !(next.title as string).trim()) inlineErrors.title = "Title is required";
-            if (key === "sqm" && !next.sqm) inlineErrors.sqm = "Property area (m²) is required";
-            if (key === "city" && !(next.city as string).trim()) inlineErrors.city = "City is required";
-            if (key === "price" && !next.price) inlineErrors.price = "Price is required";
+            if (key === "title" && !(next.title as string).trim()) inlineErrors.title = tr("createListing.validation.titleRequired", "Title is required");
+            if (key === "sqm" && !next.sqm) inlineErrors.sqm = tr("createListing.validation.areaRequired", "Property area (m²) is required");
+            if (key === "city" && !(next.city as string).trim()) inlineErrors.city = tr("createListing.validation.cityRequired", "City is required");
+            if (key === "price" && !next.price) inlineErrors.price = tr("createListing.validation.priceRequired", "Price is required");
             const n = { ...e }; delete n[key];
             return inlineErrors[key] ? { ...n, [key]: inlineErrors[key] } : n;
           });
@@ -122,7 +127,7 @@ export function useListingForm(options?: { allowPreSale?: boolean }) {
       });
       return next;
     });
-  }, []);
+  }, [tr]);
 
   const toggle = useCallback((key: string) => {
     if (!BOOLEAN_KEYS) {
@@ -169,7 +174,7 @@ export function useListingForm(options?: { allowPreSale?: boolean }) {
     const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
     const all = Array.from(files).slice(0, 20 - images.length);
     const rejections = all.filter(f => f.size > MAX_FILE_BYTES).map(f => f.name);
-    if (rejections.length) toast.error(`${rejections.join(", ")} exceed${rejections.length === 1 ? "s" : ""} the 10 MB limit`);
+    if (rejections.length) toast.error(trv(rejections.length === 1 ? "createListing.validation.fileTooLargeOne" : "createListing.validation.fileTooLargeOther", rejections.length === 1 ? "{{files}} exceeds the 10 MB limit" : "{{files}} exceed the 10 MB limit", { files: rejections.join(", ") }));
     const newFiles = all.filter(f => f.size <= MAX_FILE_BYTES);
     if (newFiles.length === 0) return;
 
@@ -199,13 +204,13 @@ export function useListingForm(options?: { allowPreSale?: boolean }) {
       } catch (err: unknown) {
         setImages(prev => prev.map(img =>
           img.id === placeholder.id
-            ? { ...img, uploading: false, error: err instanceof Error ? err.message : "Upload failed" }
+            ? { ...img, uploading: false, error: err instanceof Error ? err.message : tr("createListing.validation.uploadFailed", "Upload failed") }
             : img
         ));
-        toast.error(`Failed to upload ${newFiles[i].name}`);
+        toast.error(trv("createListing.validation.failedToUpload", "Failed to upload {{file}}", { file: newFiles[i].name }));
       }
     }
-  }, [user, images.length, uploadImage]);
+  }, [user, images.length, uploadImage, tr, trv]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -238,38 +243,38 @@ export function useListingForm(options?: { allowPreSale?: boolean }) {
   const validateStep = useCallback((s: WizardStep): Record<string, string> => {
     const newErrors: Record<string, string> = {};
     if (s === "details") {
-      if (!form.title.trim()) newErrors.title = "Title is required";
-      if (!form.sqm) newErrors.sqm = "Property area (m²) is required";
+      if (!form.title.trim()) newErrors.title = tr("createListing.validation.titleRequired", "Title is required");
+      if (!form.sqm) newErrors.sqm = tr("createListing.validation.areaRequired", "Property area (m²) is required");
     }
     if (s === "location") {
-      if (!form.city.trim()) newErrors.city = "City is required";
+      if (!form.city.trim()) newErrors.city = tr("createListing.validation.cityRequired", "City is required");
     }
     if (s === "pricing") {
       const lt = form.listing_type;
-      if (!form.price) newErrors.price = lt === "rent" ? "Monthly rent is required" : "Asking price is required";
-      if (lt === "auction" && !form.auction_starting_bid) newErrors.auction_starting_bid = "Starting bid is required";
-      if (lt === "open_house" && !form.open_house_date) newErrors.open_house_date = "Open house date & time is required";
+      if (!form.price) newErrors.price = lt === "rent" ? tr("createListing.validation.monthlyRentRequired", "Monthly rent is required") : tr("createListing.validation.askingPriceRequired", "Asking price is required");
+      if (lt === "auction" && !form.auction_starting_bid) newErrors.auction_starting_bid = tr("createListing.validation.firstOfferRequired", "First offer price is required");
+      if (lt === "open_house" && !form.open_house_date) newErrors.open_house_date = tr("createListing.validation.openHouseDateRequired", "Open house date & time is required");
     }
     return newErrors;
-  }, [form]);
+  }, [form, tr]);
 
   // ── Submit ────────────────────────────────────────────────────────────────
 
   const handleSubmit = useCallback(async (asDraft = false) => {
     if (!form.title || !form.city || !form.price || !form.sqm) {
-      toast.error("Please fill in all required fields");
+      toast.error(tr("createListing.validation.requiredFields", "Please fill in all required fields"));
       return;
     }
     if (Number(form.price) <= 0 || Number(form.sqm) <= 0) {
-      toast.error("Price and area must be greater than zero");
+      toast.error(tr("createListing.validation.priceAreaPositive", "Price and area must be greater than zero"));
       return;
     }
     if (form.listing_type === "open_house" && !form.open_house_date) {
-      toast.error("Open house date & time is required");
+      toast.error(tr("createListing.validation.openHouseDateRequired", "Open house date & time is required"));
       return;
     }
     if (!user) {
-      toast.error("You must be signed in to publish a listing");
+      toast.error(tr("createListing.validation.signInRequired", "You must be signed in to publish a listing"));
       return;
     }
     setSubmitting(true);
@@ -392,7 +397,7 @@ export function useListingForm(options?: { allowPreSale?: boolean }) {
         );
       }
 
-      toast.success(asDraft ? "Listing saved as draft!" : "Listing published successfully!");
+      toast.success(asDraft ? tr("createListing.validation.savedDraft", "Listing saved as draft!") : tr("createListing.validation.published", "Listing published successfully!"));
       const detailRoute = lt === "open_house"
         ? `/open-house/${(data as { id: string }).id}`
         : options?.allowPreSale && form.is_pre_sale
@@ -400,11 +405,11 @@ export function useListingForm(options?: { allowPreSale?: boolean }) {
         : `/property/${(data as { id: string }).id}`;
       navigate(detailRoute);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Submission failed");
+      toast.error(err instanceof Error ? err.message : tr("createListing.validation.submissionFailed", "Submission failed"));
     } finally {
       setSubmitting(false);
     }
-  }, [form, images, coverImageId, user, navigate, options?.allowPreSale]);
+  }, [form, images, coverImageId, user, navigate, options?.allowPreSale, tr]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
 

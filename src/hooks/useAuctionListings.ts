@@ -20,7 +20,7 @@ const AUCTION_QUERY_GC_TIME = 30 * 60_000;
  * listing_images is only populated when `withImages` is true (fallback
  * branch omits the join).
  */
-type AuctionListingRow = Pick<
+export type AuctionListingRow = Pick<
   Database["public"]["Tables"]["listings"]["Row"],
   | "id"
   | "title"
@@ -55,6 +55,8 @@ const getTodayDate = (): string => {
 const getAuctionSelect = (withImages: boolean): string => {
   return withImages ? `${AUCTION_SELECT_CORE}, listing_images(url, sort_order)` : AUCTION_SELECT_CORE;
 };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const normalizeAuctionFetchLimit = (maxRows?: number): number => {
   if (!Number.isFinite(maxRows)) return PORTAL_AUCTION_FETCH_LIMIT;
@@ -140,6 +142,66 @@ const fetchAuctionsFromDatabase = (
   maxRows = PORTAL_AUCTION_FETCH_LIMIT,
 ): Promise<AuctionListingRow[]> => {
   return fetchAuctionFallbackPageRange(today, withImages, 0, maxRows, []);
+};
+
+const fetchAuctionByDatabaseId = async (
+  id: string,
+  today: string,
+  withImages: boolean,
+): Promise<AuctionListingRow | null> => {
+  if (!UUID_RE.test(id)) return null;
+
+  const { data, error } = await supabase
+    .from("listings")
+    .select(getAuctionSelect(withImages))
+    .eq("id", id)
+    .eq("listing_type", "auction")
+    .eq("status", "active")
+    .or(`auction_date.gte.${today},auction_date.is.null`)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data ?? null) as unknown as AuctionListingRow | null;
+};
+
+const fetchAuctionByOsTag = async (
+  id: string,
+  today: string,
+  withImages: boolean,
+): Promise<AuctionListingRow | null> => {
+  const { data, error } = await supabase
+    .from("listings")
+    .select(getAuctionSelect(withImages))
+    .eq("listing_type", "auction")
+    .eq("status", "active")
+    .contains("tags", [`os_auction:${id}`])
+    .or(`auction_date.gte.${today},auction_date.is.null`)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data ?? null) as unknown as AuctionListingRow | null;
+};
+
+const fetchAuctionByIdFromDatabase = async (
+  id: string,
+  today: string,
+  withImages: boolean,
+): Promise<AuctionListingRow | null> => {
+  return await fetchAuctionByDatabaseId(id, today, withImages)
+    ?? await fetchAuctionByOsTag(id, today, withImages);
+};
+
+export const fetchAuctionListingById = async (id: string): Promise<AuctionListingRow | null> => {
+  const auctionId = id.trim();
+  if (!auctionId) return null;
+
+  const today = getTodayDate();
+  try {
+    return await fetchAuctionByIdFromDatabase(auctionId, today, true);
+  } catch (_withImagesErr: unknown) {
+    return fetchAuctionByIdFromDatabase(auctionId, today, false);
+  }
 };
 
 const fetchAuctionsFromOs = async (today: string, maxRows: number): Promise<AuctionListingRow[]> => {

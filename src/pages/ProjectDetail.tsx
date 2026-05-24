@@ -1,6 +1,7 @@
 ﻿import { useState, useCallback, useEffect } from "react";
 import { useModal } from "@/hooks/useModal";
 import { Link, useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   Building2, ChevronLeft, Loader2, Save, MapPin, Calendar, Image, LayoutGrid,
   Trash2, Plus, Edit2, ChevronDown, ChevronUp, FileText, Upload,
@@ -34,6 +35,7 @@ import {
   PDF_MIME_TYPES,
   assertAllowedUpload,
 } from "@/lib/uploadValidation";
+import { tFallback, tInterpolate } from "@/lib/i18nFallback";
 
 const INPUT_CLS = "w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors";
 const LABEL_CLS = "text-xs text-muted-foreground block mb-1.5 font-medium";
@@ -68,6 +70,12 @@ const Section = ({ title, icon: Icon, children, defaultOpen = true }: { title: s
 
 export default function ProjectDetail() { // skipcq: JS-R1005 - Project route coordinates details, media, units, leads, and owner controls.
   const { id } = useParams();
+  const { t } = useTranslation();
+  const tr = useCallback((key: string, fallback: string) => tFallback(t, key, fallback), [t]);
+  const trv = useCallback(
+    (key: string, fallback: string, values: Record<string, string | number>) => tInterpolate(t, key, fallback, values),
+    [t],
+  );
   const { user, profile } = useAuth();
   const participantType = getParticipantTypeFromProfile(profile);
   const isDeveloper = participantType === "developer";
@@ -140,10 +148,12 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
   };
 
   const uploadProjectMedia = useCallback(async (file: File, mediaType: ProjectMediaType): Promise<string> => { // skipcq: JS-R1005 - Upload path validates media type, storage path, and public URL together.
-    if (!user || !id) throw new Error("Not authenticated");
+    if (!user || !id) throw new Error(tr("projects.detail.errors.notAuthenticated", "Not authenticated"));
     const allowed = mediaType === "brochure_pdf" ? PDF_MIME_TYPES : IMAGE_AND_VIDEO_MIME_TYPES;
     assertAllowedUpload(file, allowed, {
-      label: mediaType === "brochure_pdf" ? "PDF brochure" : "media file",
+      label: mediaType === "brochure_pdf"
+        ? tr("projects.detail.media.pdfBrochure", "PDF brochure")
+        : tr("projects.detail.media.mediaFile", "media file"),
       maxBytes: PROJECT_MEDIA_UPLOAD_MAX_BYTES,
     });
     const ext = file.name.split(".").pop() || "jpg";
@@ -152,7 +162,7 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
     if (error) throw error;
     const { data } = supabase.storage.from("project-media").getPublicUrl(path);
     return data.publicUrl;
-  }, [user, id]);
+  }, [user, id, tr]);
 
   const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>, mediaType: ProjectMediaType) => { // skipcq: JS-R1005 - Media input handler owns nullable file, upload, and toast fallback paths.
     const file = e.target.files?.[0];
@@ -161,7 +171,7 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
       const url = await uploadProjectMedia(file, mediaType);
       addMedia.mutate({ project_id: id, url, media_type: mediaType });
     } catch (err: unknown) {
-      toast.error((err instanceof Error ? err.message : null) || "Upload failed");
+      toast.error((err instanceof Error ? err.message : null) || tr("projects.detail.errors.uploadFailed", "Upload failed"));
     }
     e.target.value = "";
   };
@@ -211,7 +221,7 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
     if (isNaN(pct) || pct === 0) return;
      
     const available = units.filter((u: ProjectUnit) => u.availability_status === "available" && u.price);
-    if (available.length === 0) { toast.error("No available units with price to update"); return; }
+    if (available.length === 0) { toast.error(tr("projects.detail.errors.noPricedUnits", "No available units with price to update")); return; }
     setBulkConfirmOpen(true);
   };
 
@@ -220,13 +230,13 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
     if (!id) return;
     const pct = parseFloat(bulkPricePct);
     if (!Number.isFinite(pct) || pct === 0) {
-      toast.error("Enter a non-zero percentage change.");
+      toast.error(tr("projects.detail.errors.nonZeroPercentage", "Enter a non-zero percentage change."));
       return;
     }
      
     const availableUnits = units.filter((u: ProjectUnit) => u.availability_status === "available" && u.price != null);
     if (availableUnits.length === 0) {
-      toast.error("No available units to update.");
+      toast.error(tr("projects.detail.errors.noAvailableUnits", "No available units to update."));
       return;
     }
     bulkUpdateUnitPrices.mutate(
@@ -235,7 +245,7 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
         onSuccess: ({ updatedCount }) => {
           modal.close();
           setBulkPricePct("");
-          toast.success(`Updated ${updatedCount} unit(s)`);
+          toast.success(trv("projects.detail.toasts.updatedUnits", "Updated {{count}} unit(s)", { count: updatedCount }));
         },
       }
     );
@@ -248,8 +258,8 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
         <main className="flex-1 flex items-center justify-center p-8 pt-24">
           <div className="text-center">
             <Building2 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <h1 className="font-display text-xl font-semibold">Sign in to manage projects</h1>
-            <Button className="mt-4" asChild><Link to="/login">Sign in</Link></Button>
+            <h1 className="font-display text-xl font-semibold">{tr("projects.auth.title", "Sign in to manage projects")}</h1>
+            <Button className="mt-4" asChild><Link to="/login">{tr("projects.auth.signIn", "Sign in")}</Link></Button>
           </div>
         </main>
         <Footer />
@@ -293,89 +303,89 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" asChild><Link to="/projects"><ChevronLeft className="w-4 h-4" /></Link></Button>
             <div>
-              <h1 className="font-display text-2xl font-bold">{project.name || "Project"}</h1>
-              <p className="text-sm text-muted-foreground">Edit project details, units, and media</p>
+              <h1 className="font-display text-2xl font-bold">{project.name || tr("projects.detail.fallbackProject", "Project")}</h1>
+              <p className="text-sm text-muted-foreground">{tr("projects.detail.subtitle", "Edit project details, units, and media")}</p>
             </div>
           </div>
           <Button onClick={handleSaveProject} disabled={saving} className="bg-gradient-primary border-0 text-primary-foreground gap-2">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            Save
+            {tr("projects.detail.actions.save", "Save")}
           </Button>
         </div>
 
         <div className="space-y-6">
           {/* 0. Developer dashboard: sales tracking & analytics */}
-          <Section title="Dashboard" icon={BarChart2} defaultOpen={true}>
+          <Section title={tr("projects.detail.sections.dashboard", "Dashboard")} icon={BarChart2} defaultOpen={true}>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="glass-card rounded-xl p-4 border border-border">
-                <span className="text-xs text-muted-foreground block">Available</span>
+                <span className="text-xs text-muted-foreground block">{tr("projects.detail.stats.available", "Available")}</span>
                 <span className="font-display text-2xl font-bold text-primary">{availableCount}</span>
               </div>
               <div className="glass-card rounded-xl p-4 border border-border">
-                <span className="text-xs text-muted-foreground block">Reserved</span>
+                <span className="text-xs text-muted-foreground block">{tr("projects.detail.stats.reserved", "Reserved")}</span>
                 <span className="font-display text-2xl font-bold text-brand-gold">{reservedCount}</span>
               </div>
               <div className="glass-card rounded-xl p-4 border border-border">
-                <span className="text-xs text-muted-foreground block">Sold</span>
+                <span className="text-xs text-muted-foreground block">{tr("projects.detail.stats.sold", "Sold")}</span>
                 <span className="font-display text-2xl font-bold text-brand-emerald">{soldCount}</span>
               </div>
               <div className="glass-card rounded-xl p-4 border border-border">
-                <span className="text-xs text-muted-foreground block">Total views</span>
+                <span className="text-xs text-muted-foreground block">{tr("projects.detail.stats.totalViews", "Total views")}</span>
                 <span className="font-display text-2xl font-bold text-primary">{totalViews}</span>
               </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-2">Sales tracking and project analytics.</p>
+            <p className="text-xs text-muted-foreground mt-2">{tr("projects.detail.stats.caption", "Sales tracking and project analytics.")}</p>
           </Section>
 
           {/* 1. Basic project info */}
-          <Section title="Basic project info" icon={FileText}>
+          <Section title={tr("projects.detail.sections.basicInfo", "Basic project info")} icon={FileText}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="sm:col-span-2"><label className={LABEL_CLS}>Project name *</label><input value={(currentForm.name as string) || ""} onChange={e => updateField("name", e.target.value)} placeholder="e.g. Marina Heights" className={INPUT_CLS} /></div>
-              <div><label className={LABEL_CLS}>Building permit number *</label><input value={(currentForm.building_permit_number as string) || ""} onChange={e => updateField("building_permit_number", e.target.value)} placeholder="e.g. 12345/2024" className={INPUT_CLS} /></div>
-              <div><label className={LABEL_CLS}>Developer company</label><input value={(currentForm.developer_company as string) || ""} onChange={e => updateField("developer_company", e.target.value)} placeholder="Company name" className={INPUT_CLS} /></div>
-              <div><label className={LABEL_CLS}>Architect / developer group</label><input value={(currentForm.architect_group as string) || ""} onChange={e => updateField("architect_group", e.target.value)} placeholder="Architect or group" className={INPUT_CLS} /></div>
-              <div><label className={LABEL_CLS}>Construction company</label><input value={(currentForm.construction_company as string) || ""} onChange={e => updateField("construction_company", e.target.value)} placeholder="Constructor" className={INPUT_CLS} /></div>
-              <div className="sm:col-span-2"><label className={LABEL_CLS}>Project description</label><textarea value={(currentForm.description as string) || ""} onChange={e => updateField("description", e.target.value)} rows={4} placeholder="Brief description of the project..." className={INPUT_CLS + " resize-none"} /></div>
+              <div className="sm:col-span-2"><label className={LABEL_CLS}>{tr("projects.detail.fields.projectName", "Project name *")}</label><input value={(currentForm.name as string) || ""} onChange={e => updateField("name", e.target.value)} placeholder={tr("projects.fields.namePlaceholder", "e.g. Marina Heights")} className={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>{tr("projects.detail.fields.permitNumber", "Building permit number *")}</label><input value={(currentForm.building_permit_number as string) || ""} onChange={e => updateField("building_permit_number", e.target.value)} placeholder={tr("projects.fields.permitPlaceholder", "e.g. 12345/2024")} className={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>{tr("projects.detail.fields.developerCompany", "Developer company")}</label><input value={(currentForm.developer_company as string) || ""} onChange={e => updateField("developer_company", e.target.value)} placeholder={tr("projects.detail.placeholders.companyName", "Company name")} className={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>{tr("projects.detail.fields.architectGroup", "Architect / developer group")}</label><input value={(currentForm.architect_group as string) || ""} onChange={e => updateField("architect_group", e.target.value)} placeholder={tr("projects.detail.placeholders.architectGroup", "Architect or group")} className={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>{tr("projects.detail.fields.constructionCompany", "Construction company")}</label><input value={(currentForm.construction_company as string) || ""} onChange={e => updateField("construction_company", e.target.value)} placeholder={tr("projects.detail.placeholders.constructor", "Constructor")} className={INPUT_CLS} /></div>
+              <div className="sm:col-span-2"><label className={LABEL_CLS}>{tr("projects.fields.projectDescription", "Project description")}</label><textarea value={(currentForm.description as string) || ""} onChange={e => updateField("description", e.target.value)} rows={4} placeholder={tr("projects.detail.placeholders.projectDescription", "Brief description of the project...")} className={INPUT_CLS + " resize-none"} /></div>
             </div>
           </Section>
 
           {/* 2. Location */}
-          <Section title="Location" icon={MapPin}>
+          <Section title={tr("projects.detail.sections.location", "Location")} icon={MapPin}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="sm:col-span-2"><label className={LABEL_CLS}>Address</label><input value={(currentForm.address as string) || ""} onChange={e => updateField("address", e.target.value)} placeholder="Street, number" className={INPUT_CLS} /></div>
-              <div><label className={LABEL_CLS}>City</label><input value={(currentForm.city as string) || ""} onChange={e => updateField("city", e.target.value)} placeholder="e.g. Athens" className={INPUT_CLS} /></div>
-              <div><label className={LABEL_CLS}>Municipality</label><input value={(currentForm.municipality as string) || ""} onChange={e => updateField("municipality", e.target.value)} placeholder="Municipality" className={INPUT_CLS} /></div>
-              <div><label className={LABEL_CLS}>Latitude</label><input type="number" step="any" value={(currentForm.latitude as number) ?? ""} onChange={e => updateField("latitude", e.target.value ? parseFloat(e.target.value) : undefined)} placeholder="e.g. 37.9838" className={INPUT_CLS} /></div>
-              <div><label className={LABEL_CLS}>Longitude</label><input type="number" step="any" value={(currentForm.longitude as number) ?? ""} onChange={e => updateField("longitude", e.target.value ? parseFloat(e.target.value) : undefined)} placeholder="e.g. 23.7275" className={INPUT_CLS} /></div>
-              <div className="sm:col-span-2"><label className={LABEL_CLS}>Area description</label><textarea value={(currentForm.area_description as string) || ""} onChange={e => updateField("area_description", e.target.value)} rows={2} placeholder="Neighbourhood, amenities, surroundings..." className={INPUT_CLS + " resize-none"} /></div>
+              <div className="sm:col-span-2"><label className={LABEL_CLS}>{tr("projects.fields.address", "Address")}</label><input value={(currentForm.address as string) || ""} onChange={e => updateField("address", e.target.value)} placeholder={tr("projects.fields.addressPlaceholder", "Street, number")} className={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>{tr("projects.fields.city", "City")}</label><input value={(currentForm.city as string) || ""} onChange={e => updateField("city", e.target.value)} placeholder={tr("projects.fields.cityPlaceholder", "e.g. Athens")} className={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>{tr("projects.detail.fields.municipality", "Municipality")}</label><input value={(currentForm.municipality as string) || ""} onChange={e => updateField("municipality", e.target.value)} placeholder={tr("projects.detail.placeholders.municipality", "Municipality")} className={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>{tr("projects.detail.fields.latitude", "Latitude")}</label><input type="number" step="any" value={(currentForm.latitude as number) ?? ""} onChange={e => updateField("latitude", e.target.value ? parseFloat(e.target.value) : undefined)} placeholder={tr("projects.detail.placeholders.latitude", "e.g. 37.9838")} className={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>{tr("projects.detail.fields.longitude", "Longitude")}</label><input type="number" step="any" value={(currentForm.longitude as number) ?? ""} onChange={e => updateField("longitude", e.target.value ? parseFloat(e.target.value) : undefined)} placeholder={tr("projects.detail.placeholders.longitude", "e.g. 23.7275")} className={INPUT_CLS} /></div>
+              <div className="sm:col-span-2"><label className={LABEL_CLS}>{tr("projects.detail.fields.areaDescription", "Area description")}</label><textarea value={(currentForm.area_description as string) || ""} onChange={e => updateField("area_description", e.target.value)} rows={2} placeholder={tr("projects.detail.placeholders.areaDescription", "Neighbourhood, amenities, surroundings...")} className={INPUT_CLS + " resize-none"} /></div>
             </div>
           </Section>
 
           {/* 3. Project timeline */}
-          <Section title="Project timeline" icon={Calendar}>
+          <Section title={tr("projects.detail.sections.timeline", "Project timeline")} icon={Calendar}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div><label className={LABEL_CLS}>Permit approval date</label><input type="date" value={(currentForm.permit_approval_date as string) || ""} onChange={e => updateField("permit_approval_date", e.target.value)} className={INPUT_CLS} /></div>
-              <div><label className={LABEL_CLS}>Construction start</label><input type="date" value={(currentForm.construction_start_date as string) || ""} onChange={e => updateField("construction_start_date", e.target.value)} className={INPUT_CLS} /></div>
-              <div><label className={LABEL_CLS}>Structural completion</label><input type="date" value={(currentForm.structural_completion_date as string) || ""} onChange={e => updateField("structural_completion_date", e.target.value)} className={INPUT_CLS} /></div>
-              <div><label className={LABEL_CLS}>Delivery date</label><input type="date" value={(currentForm.delivery_date as string) || ""} onChange={e => updateField("delivery_date", e.target.value)} className={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>{tr("projects.detail.fields.permitApprovalDate", "Permit approval date")}</label><input type="date" value={(currentForm.permit_approval_date as string) || ""} onChange={e => updateField("permit_approval_date", e.target.value)} className={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>{tr("projects.detail.fields.constructionStart", "Construction start")}</label><input type="date" value={(currentForm.construction_start_date as string) || ""} onChange={e => updateField("construction_start_date", e.target.value)} className={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>{tr("projects.detail.fields.structuralCompletion", "Structural completion")}</label><input type="date" value={(currentForm.structural_completion_date as string) || ""} onChange={e => updateField("structural_completion_date", e.target.value)} className={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>{tr("projects.detail.fields.deliveryDate", "Delivery date")}</label><input type="date" value={(currentForm.delivery_date as string) || ""} onChange={e => updateField("delivery_date", e.target.value)} className={INPUT_CLS} /></div>
             </div>
           </Section>
 
           {/* 4. Media */}
-          <Section title="Media" icon={Image}>
+          <Section title={tr("projects.detail.sections.media", "Media")} icon={Image}>
             <div className="space-y-4">
               {MEDIA_TYPES.map(({ value, label, mandatory }) => {
                 const items = media.filter((m: ProjectMedia) => m.media_type === value);
                 return (
                   <div key={value} className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-medium w-44">{label}{mandatory && " *"}</span>
+                    <span className="text-sm font-medium w-44">{tr(`projects.detail.media.types.${value}`, label)}{mandatory && " *"}</span>
                     <div className="flex flex-wrap gap-2">
                       {items.map((m: ProjectMedia) => (
                         <div key={m.id} className="flex items-center gap-1 bg-secondary rounded-lg px-2 py-1">
                           {m.media_type === "brochure_pdf" ? <FileText className="w-4 h-4" /> : <img src={m.url} alt="" className="w-10 h-10 rounded object-cover" />}
                           <button
                             type="button"
-                            aria-label={`Delete ${m.media_type.replace(/_/g, " ")}`}
+                            aria-label={trv("projects.detail.actions.deleteMedia", "Delete {{type}}", { type: tr(`projects.detail.media.types.${m.media_type}`, m.media_type.replace(/_/g, " ")) })}
                             onClick={() => {
                               if (!id) return;
                               deleteMedia.mutate({ id: m.id, projectId: id });
@@ -388,7 +398,7 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
                       ))}
                       <label className="cursor-pointer">
                         <input type="file" accept={value === "brochure_pdf" ? ".pdf" : "image/*,video/*"} className="hidden" onChange={e => handleMediaUpload(e, value)} />
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-dashed border-border text-xs font-medium hover:bg-secondary transition-colors"><Upload className="w-3.5 h-3.5" /> Add</span>
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-dashed border-border text-xs font-medium hover:bg-secondary transition-colors"><Upload className="w-3.5 h-3.5" /> {tr("projects.detail.actions.add", "Add")}</span>
                       </label>
                     </div>
                   </div>
@@ -398,16 +408,16 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
           </Section>
 
           {/* 5. Units + bulk price update */}
-          <Section title="Units (inventory & pricing)" icon={LayoutGrid}>
+          <Section title={tr("projects.detail.sections.units", "Units (inventory & pricing)")} icon={LayoutGrid}>
             <div className="flex flex-wrap gap-2 mb-4">
               <Button variant="outline" size="sm" className="border-border gap-1.5" onClick={() => modal.toggle("bulkPrice")}>
-                <DollarSign className="w-3.5 h-3.5" /> Bulk price update
+                <DollarSign className="w-3.5 h-3.5" /> {tr("projects.detail.actions.bulkPriceUpdate", "Bulk price update")}
               </Button>
               {modal.isOpen("bulkPrice") && (
                 <div className="flex items-center gap-2 flex-wrap">
-                  <input type="number" step="0.1" placeholder="e.g. 5 for +5%" value={bulkPricePct} onChange={e => setBulkPricePct(e.target.value)} className="w-24 bg-secondary border border-border rounded-lg px-2 py-1.5 text-sm" />
-                  <span className="text-xs text-muted-foreground">% increase</span>
-                  <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground" onClick={handleBulkPriceUpdate}>Apply to available</Button>
+                  <input type="number" step="0.1" placeholder={tr("projects.detail.placeholders.percentageIncrease", "e.g. 5 for +5%")} value={bulkPricePct} onChange={e => setBulkPricePct(e.target.value)} className="w-24 bg-secondary border border-border rounded-lg px-2 py-1.5 text-sm" />
+                  <span className="text-xs text-muted-foreground">{tr("projects.detail.labels.percentIncrease", "% increase")}</span>
+                  <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground" onClick={handleBulkPriceUpdate}>{tr("projects.detail.actions.applyToAvailable", "Apply to available")}</Button>
                 </div>
               )}
             </div>
@@ -419,14 +429,14 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
                   ) : (
                     <div className="flex items-center justify-between gap-4">
                       <div>
-                        <span className="font-semibold">{u.unit_id || u.unit_number || `Unit ${u.floor || "?"}-${u.unit_number || "?"}`}</span>
-                        <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${u.availability_status === "sold" ? "bg-brand-emerald/20 text-brand-emerald" : u.availability_status === "reserved" ? "bg-brand-gold/20 text-brand-gold" : "bg-primary/10 text-primary"}`}>{u.availability_status}</span>
+                        <span className="font-semibold">{u.unit_id || u.unit_number || trv("projects.detail.labels.unitFallback", "Unit {{floor}}-{{unit}}", { floor: u.floor || "?", unit: u.unit_number || "?" })}</span>
+                        <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${u.availability_status === "sold" ? "bg-brand-emerald/20 text-brand-emerald" : u.availability_status === "reserved" ? "bg-brand-gold/20 text-brand-gold" : "bg-primary/10 text-primary"}`}>{tr(`projects.detail.status.${u.availability_status}`, u.availability_status)}</span>
                         {Boolean(u.price) && <span className="ml-2 text-sm text-muted-foreground">€{Number(u.price).toLocaleString()}</span>}
                         {Boolean(u.internal_sqm) && <span className="ml-2 text-xs text-muted-foreground">{u.internal_sqm}m²</span>}
                       </div>
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" aria-label="Edit unit" onClick={() => setEditingUnitId(u.id)}><Edit2 className="w-4 h-4" /></Button>
-                        <Button variant="ghost" size="icon" aria-label="Delete unit" className="text-destructive" onClick={() => handleDeleteUnit(u.id)}><Trash2 className="w-4 h-4" /></Button>
+                        <Button variant="ghost" size="icon" aria-label={tr("projects.detail.actions.editUnit", "Edit unit")} onClick={() => setEditingUnitId(u.id)}><Edit2 className="w-4 h-4" /></Button>
+                        <Button variant="ghost" size="icon" aria-label={tr("projects.detail.actions.deleteUnit", "Delete unit")} className="text-destructive" onClick={() => handleDeleteUnit(u.id)}><Trash2 className="w-4 h-4" /></Button>
                       </div>
                     </div>
                   )}
@@ -437,51 +447,51 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
                   <UnitEditForm unit={null} onSave={handleAddUnit} onCancel={() => modal.close()} isCreate />
                 </div>
               ) : (
-                <Button variant="outline" className="border-border w-full gap-2" onClick={() => modal.open("unitForm")}><Plus className="w-4 h-4" /> Add unit</Button>
+                <Button variant="outline" className="border-border w-full gap-2" onClick={() => modal.open("unitForm")}><Plus className="w-4 h-4" /> {tr("projects.detail.actions.addUnit", "Add unit")}</Button>
               )}
             </div>
           </Section>
 
           {/* 6. Lead management */}
-          <Section title="Lead management" icon={Users}>
-            <p className="text-sm text-muted-foreground mb-3">Track and manage leads interested in this project.</p>
+          <Section title={tr("projects.detail.sections.leads", "Lead management")} icon={Users}>
+            <p className="text-sm text-muted-foreground mb-3">{tr("projects.detail.leads.caption", "Track and manage leads interested in this project.")}</p>
             {modal.isOpen("leadForm") ? (
               <div className="glass-card rounded-xl p-4 border border-primary/20 space-y-3 mb-4">
-                <input placeholder="Name *" value={leadForm.name || ""} onChange={e => setLeadForm(f => ({ ...f, name: e.target.value }))} className={INPUT_CLS} />
-                <input placeholder="Email" value={leadForm.email || ""} onChange={e => setLeadForm(f => ({ ...f, email: e.target.value }))} className={INPUT_CLS} />
-                <input placeholder="Phone" value={leadForm.phone || ""} onChange={e => setLeadForm(f => ({ ...f, phone: e.target.value }))} className={INPUT_CLS} />
-                <input placeholder="Source" value={leadForm.source || ""} onChange={e => setLeadForm(f => ({ ...f, source: e.target.value }))} className={INPUT_CLS} />
-                <input placeholder="Unit of interest" value={leadForm.unit_id || ""} onChange={e => setLeadForm(f => ({ ...f, unit_id: e.target.value }))} className={INPUT_CLS} />
-                <textarea placeholder="Notes" value={leadForm.notes || ""} onChange={e => setLeadForm(f => ({ ...f, notes: e.target.value }))} rows={2} className={INPUT_CLS + " resize-none"} />
+                <input placeholder={tr("projects.detail.leads.namePlaceholder", "Name *")} value={leadForm.name || ""} onChange={e => setLeadForm(f => ({ ...f, name: e.target.value }))} className={INPUT_CLS} />
+                <input placeholder={tr("projects.detail.leads.emailPlaceholder", "Email")} value={leadForm.email || ""} onChange={e => setLeadForm(f => ({ ...f, email: e.target.value }))} className={INPUT_CLS} />
+                <input placeholder={tr("projects.detail.leads.phonePlaceholder", "Phone")} value={leadForm.phone || ""} onChange={e => setLeadForm(f => ({ ...f, phone: e.target.value }))} className={INPUT_CLS} />
+                <input placeholder={tr("projects.detail.leads.sourcePlaceholder", "Source")} value={leadForm.source || ""} onChange={e => setLeadForm(f => ({ ...f, source: e.target.value }))} className={INPUT_CLS} />
+                <input placeholder={tr("projects.detail.leads.unitPlaceholder", "Unit of interest")} value={leadForm.unit_id || ""} onChange={e => setLeadForm(f => ({ ...f, unit_id: e.target.value }))} className={INPUT_CLS} />
+                <textarea placeholder={tr("projects.detail.leads.notesPlaceholder", "Notes")} value={leadForm.notes || ""} onChange={e => setLeadForm(f => ({ ...f, notes: e.target.value }))} rows={2} className={INPUT_CLS + " resize-none"} />
                 <div className="flex gap-2">
-                  <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground" onClick={handleAddLead}>Add lead</Button>
-                  <Button size="sm" variant="outline" className="border-border" onClick={() => { modal.close(); setLeadForm({}); }}>Cancel</Button>
+                  <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground" onClick={handleAddLead}>{tr("projects.detail.actions.addLead", "Add lead")}</Button>
+                  <Button size="sm" variant="outline" className="border-border" onClick={() => { modal.close(); setLeadForm({}); }}>{tr("projects.actions.cancel", "Cancel")}</Button>
                 </div>
               </div>
             ) : (
-              <Button variant="outline" size="sm" className="border-border gap-1.5 mb-4" onClick={() => modal.open("leadForm")}><Plus className="w-3.5 h-3.5" /> Add lead</Button>
+              <Button variant="outline" size="sm" className="border-border gap-1.5 mb-4" onClick={() => modal.open("leadForm")}><Plus className="w-3.5 h-3.5" /> {tr("projects.detail.actions.addLead", "Add lead")}</Button>
             )}
             <div className="space-y-2">
               {leads.map((l: ProjectLead) => (
                 <div key={l.id} className="glass-card rounded-xl p-3 flex items-center justify-between gap-3">
                   <div>
                     <span className="font-medium text-sm">{l.name}</span>
-                    <span className={`ml-2 text-[10px] px-2 py-0.5 rounded-full ${l.status === "converted" ? "bg-brand-emerald/20 text-brand-emerald" : l.status === "lost" ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary"}`}>{l.status}</span>
+                    <span className={`ml-2 text-[10px] px-2 py-0.5 rounded-full ${l.status === "converted" ? "bg-brand-emerald/20 text-brand-emerald" : l.status === "lost" ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary"}`}>{tr(`projects.detail.leadStatus.${l.status}`, l.status)}</span>
                     {l.email && <p className="text-xs text-muted-foreground">{l.email}</p>}
-                    {l.unit_id && <p className="text-xs text-muted-foreground">Unit: {l.unit_id}</p>}
+                    {l.unit_id && <p className="text-xs text-muted-foreground">{trv("projects.detail.leads.unitLine", "Unit: {{unit}}", { unit: l.unit_id })}</p>}
                   </div>
                   <div className="flex gap-1">
                     <select value={l.status} onChange={e => handleUpdateLead(l.id, { status: e.target.value as ProjectLeadInsert["status"] })} className="text-xs bg-secondary border border-border rounded-lg px-2 py-1">
-                      <option value="new">New</option>
-                      <option value="contacted">Contacted</option>
-                      <option value="qualified">Qualified</option>
-                      <option value="converted">Converted</option>
-                      <option value="lost">Lost</option>
+                      <option value="new">{tr("projects.detail.leadStatus.new", "New")}</option>
+                      <option value="contacted">{tr("projects.detail.leadStatus.contacted", "Contacted")}</option>
+                      <option value="qualified">{tr("projects.detail.leadStatus.qualified", "Qualified")}</option>
+                      <option value="converted">{tr("projects.detail.leadStatus.converted", "Converted")}</option>
+                      <option value="lost">{tr("projects.detail.leadStatus.lost", "Lost")}</option>
                     </select>
                     <Button
                       variant="ghost"
                       size="icon"
-                      aria-label={`Delete lead ${l.name}`}
+                      aria-label={trv("projects.detail.actions.deleteLeadNamed", "Delete lead {{name}}", { name: l.name })}
                       className="text-destructive h-8 w-8"
                       onClick={() => setLeadToDelete(l.id)}
                     >
@@ -490,20 +500,20 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
                   </div>
                 </div>
               ))}
-              {leads.length === 0 && !modal.isOpen("leadForm") && <p className="text-sm text-muted-foreground">No leads yet.</p>}
+              {leads.length === 0 && !modal.isOpen("leadForm") && <p className="text-sm text-muted-foreground">{tr("projects.detail.leads.empty", "No leads yet.")}</p>}
             </div>
           </Section>
 
           {/* 7. Linked listings */}
-          <Section title="Linked listings" icon={Building2}>
-            <p className="text-sm text-muted-foreground mb-3">Link existing listings to this project. These appear on the project showcase.</p>
+          <Section title={tr("projects.detail.sections.linkedListings", "Linked listings")} icon={Building2}>
+            <p className="text-sm text-muted-foreground mb-3">{tr("projects.detail.linkedListings.caption", "Link existing listings to this project. These appear on the project showcase.")}</p>
             {listings.length > 0 && (
               <div className="space-y-2 mb-4">
                 {listings.map((l: { id: string; title?: string | null; sqm?: number | null; price?: number | null; cover_image_url?: string | null }) => (
                   <div key={l.id} className="flex items-center gap-3 bg-secondary rounded-xl p-3">
                     {l.cover_image_url && <img src={l.cover_image_url} alt="" className="w-12 h-12 rounded-lg object-cover" />}
                     <div className="flex-1 min-w-0"><Link to={`/property/${l.id}`} className="font-medium hover:underline truncate block">{l.title}</Link><span className="text-xs text-muted-foreground">€{Number(l.price).toLocaleString()} · {l.sqm}m²</span></div>
-                    <Button variant="ghost" size="sm" onClick={() => handleUnlinkListing(l.id)}>Unlink</Button>
+                    <Button variant="ghost" size="sm" onClick={() => handleUnlinkListing(l.id)}>{tr("projects.actions.unlink", "Unlink")}</Button>
                   </div>
                 ))}
               </div>
@@ -514,8 +524,8 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
               ))}
               {myListings.filter((l) => !linkedListingIds.has(l.id)).length === 0 && (
                 <p className="text-sm text-muted-foreground">
-                  No unlinked listings. <Link to="/listings/new" className="text-primary underline">Create one</Link>
-                  {isDeveloper && <>{" · "}<Link to="/listings/new-building" className="text-primary underline">New building</Link></>}
+                  {tr("projects.empty.noUnlinked", "No unlinked listings.")} <Link to="/listings/new" className="text-primary underline">{tr("projects.empty.createOne", "Create one")}</Link>
+                  {isDeveloper && <>{" · "}<Link to="/listings/new-building" className="text-primary underline">{tr("projects.detail.linkedListings.newBuilding", "New building")}</Link></>}
                 </p>
               )}
             </div>
@@ -525,18 +535,18 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
       <Footer />
       <ConfirmDialog
         open={bulkConfirmOpen}
-        title="Apply bulk price change"
-        description={`Apply ${bulkPricePct}% price change to all available units? This cannot be undone.`}
-        confirmLabel="Apply"
+        title={tr("projects.detail.dialogs.bulkPrice.title", "Apply bulk price change")}
+        description={trv("projects.detail.dialogs.bulkPrice.description", "Apply {{pct}}% price change to all available units? This cannot be undone.", { pct: bulkPricePct })}
+        confirmLabel={tr("projects.detail.actions.apply", "Apply")}
         destructive={false}
         onConfirm={executeBulkPriceUpdate}
         onCancel={() => setBulkConfirmOpen(false)}
       />
       <ConfirmDialog
         open={Boolean(unitToDelete)}
-        title="Remove unit"
-        description="Remove this unit from the project inventory?"
-        confirmLabel="Remove"
+        title={tr("projects.detail.dialogs.removeUnit.title", "Remove unit")}
+        description={tr("projects.detail.dialogs.removeUnit.description", "Remove this unit from the project inventory?")}
+        confirmLabel={tr("projects.detail.actions.remove", "Remove")}
         onConfirm={() => {
           if (id && unitToDelete) deleteUnit.mutate({ id: unitToDelete, projectId: id });
           setUnitToDelete(null);
@@ -545,9 +555,9 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
       />
       <ConfirmDialog
         open={Boolean(leadToDelete)}
-        title="Remove lead"
-        description="Remove this lead from the project CRM?"
-        confirmLabel="Remove"
+        title={tr("projects.detail.dialogs.removeLead.title", "Remove lead")}
+        description={tr("projects.detail.dialogs.removeLead.description", "Remove this lead from the project CRM?")}
+        confirmLabel={tr("projects.detail.actions.remove", "Remove")}
         onConfirm={() => {
           if (id && leadToDelete) deleteLead.mutate({ id: leadToDelete, projectId: id });
           setLeadToDelete(null);
@@ -559,6 +569,8 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
 }
 
 const UnitEditForm = ({ unit, onSave, onCancel, isCreate }: { unit?: ProjectUnit | null; onSave: (u: Partial<ProjectUnitInsert>) => void; onCancel: () => void; isCreate?: boolean }) => { // skipcq: JS-R1005 - UnitEditForm intentionally maps one dense project-unit schema into a single editor.
+  const { t } = useTranslation();
+  const tr = (key: string, fallback: string) => tFallback(t, key, fallback);
   const [f, setF] = useState({
     unit_id: unit?.unit_id || "",
     floor: unit?.floor ?? "",
@@ -614,25 +626,25 @@ const UnitEditForm = ({ unit, onSave, onCancel, isCreate }: { unit?: ProjectUnit
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-      <div><label className={LABEL_CLS}>Unit ID</label><input value={f.unit_id} onChange={e => setF(x => ({ ...x, unit_id: e.target.value }))} placeholder="A101" className={INPUT_CLS} /></div>
-      <div><label className={LABEL_CLS}>Floor</label><input type="number" value={f.floor} onChange={e => setF(x => ({ ...x, floor: e.target.value }))} placeholder="1" className={INPUT_CLS} /></div>
-      <div><label className={LABEL_CLS}>Unit number</label><input value={f.unit_number} onChange={e => setF(x => ({ ...x, unit_number: e.target.value }))} placeholder="101" className={INPUT_CLS} /></div>
-      <div><label className={LABEL_CLS}>Status</label><select value={f.availability_status} onChange={e => setF(x => ({ ...x, availability_status: e.target.value }))} className={INPUT_CLS}><option value="available">Available</option><option value="reserved">Reserved</option><option value="sold">Sold</option></select></div>
-      <div><label className={LABEL_CLS}>Internal sqm</label><input type="number" step="0.01" value={f.internal_sqm} onChange={e => setF(x => ({ ...x, internal_sqm: e.target.value }))} placeholder="85" className={INPUT_CLS} /></div>
-      <div><label className={LABEL_CLS}>Balcony sqm</label><input type="number" step="0.01" value={f.balcony_sqm} onChange={e => setF(x => ({ ...x, balcony_sqm: e.target.value }))} placeholder="12" className={INPUT_CLS} /></div>
-      <div><label className={LABEL_CLS}>Price (€)</label><input type="number" value={f.price} onChange={e => setF(x => ({ ...x, price: e.target.value }))} placeholder="250000" className={INPUT_CLS} /></div>
-      <div><label className={LABEL_CLS}>Bedrooms</label><input type="number" value={f.bedrooms} onChange={e => setF(x => ({ ...x, bedrooms: e.target.value }))} placeholder="2" className={INPUT_CLS} /></div>
-      <div><label className={LABEL_CLS}>Bathrooms</label><input type="number" value={f.bathrooms} onChange={e => setF(x => ({ ...x, bathrooms: e.target.value }))} placeholder="2" className={INPUT_CLS} /></div>
-      <div><label className={LABEL_CLS}>Kitchen type</label><select value={f.kitchen_type} onChange={e => setF(x => ({ ...x, kitchen_type: e.target.value }))} className={INPUT_CLS}><option value="">—</option>{KITCHEN_TYPES.map(k => <option key={k} value={k}>{k}</option>)}</select></div>
-      <div><label className={LABEL_CLS}>Energy class</label><select value={f.energy_class} onChange={e => setF(x => ({ ...x, energy_class: e.target.value }))} className={INPUT_CLS}><option value="">—</option>{ENERGY_CLASSES.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+      <div><label className={LABEL_CLS}>{tr("projects.detail.unitForm.unitId", "Unit ID")}</label><input value={f.unit_id} onChange={e => setF(x => ({ ...x, unit_id: e.target.value }))} placeholder="A101" className={INPUT_CLS} /></div>
+      <div><label className={LABEL_CLS}>{tr("projects.detail.unitForm.floor", "Floor")}</label><input type="number" value={f.floor} onChange={e => setF(x => ({ ...x, floor: e.target.value }))} placeholder="1" className={INPUT_CLS} /></div>
+      <div><label className={LABEL_CLS}>{tr("projects.detail.unitForm.unitNumber", "Unit number")}</label><input value={f.unit_number} onChange={e => setF(x => ({ ...x, unit_number: e.target.value }))} placeholder="101" className={INPUT_CLS} /></div>
+      <div><label className={LABEL_CLS}>{tr("projects.detail.unitForm.status", "Status")}</label><select value={f.availability_status} onChange={e => setF(x => ({ ...x, availability_status: e.target.value }))} className={INPUT_CLS}><option value="available">{tr("projects.detail.status.available", "Available")}</option><option value="reserved">{tr("projects.detail.status.reserved", "Reserved")}</option><option value="sold">{tr("projects.detail.status.sold", "Sold")}</option></select></div>
+      <div><label className={LABEL_CLS}>{tr("projects.detail.unitForm.internalSqm", "Internal sqm")}</label><input type="number" step="0.01" value={f.internal_sqm} onChange={e => setF(x => ({ ...x, internal_sqm: e.target.value }))} placeholder="85" className={INPUT_CLS} /></div>
+      <div><label className={LABEL_CLS}>{tr("projects.detail.unitForm.balconySqm", "Balcony sqm")}</label><input type="number" step="0.01" value={f.balcony_sqm} onChange={e => setF(x => ({ ...x, balcony_sqm: e.target.value }))} placeholder="12" className={INPUT_CLS} /></div>
+      <div><label className={LABEL_CLS}>{tr("projects.detail.unitForm.price", "Price (€)")}</label><input type="number" value={f.price} onChange={e => setF(x => ({ ...x, price: e.target.value }))} placeholder="250000" className={INPUT_CLS} /></div>
+      <div><label className={LABEL_CLS}>{tr("projects.detail.unitForm.bedrooms", "Bedrooms")}</label><input type="number" value={f.bedrooms} onChange={e => setF(x => ({ ...x, bedrooms: e.target.value }))} placeholder="2" className={INPUT_CLS} /></div>
+      <div><label className={LABEL_CLS}>{tr("projects.detail.unitForm.bathrooms", "Bathrooms")}</label><input type="number" value={f.bathrooms} onChange={e => setF(x => ({ ...x, bathrooms: e.target.value }))} placeholder="2" className={INPUT_CLS} /></div>
+      <div><label className={LABEL_CLS}>{tr("projects.detail.unitForm.kitchenType", "Kitchen type")}</label><select value={f.kitchen_type} onChange={e => setF(x => ({ ...x, kitchen_type: e.target.value }))} className={INPUT_CLS}><option value="">—</option>{KITCHEN_TYPES.map(k => <option key={k} value={k}>{tr(`projects.detail.kitchenTypes.${k}`, k)}</option>)}</select></div>
+      <div><label className={LABEL_CLS}>{tr("projects.detail.unitForm.energyClass", "Energy class")}</label><select value={f.energy_class} onChange={e => setF(x => ({ ...x, energy_class: e.target.value }))} className={INPUT_CLS}><option value="">—</option>{ENERGY_CLASSES.map(c => <option key={c} value={c}>{tr(`projects.detail.energyClasses.${c}`, c)}</option>)}</select></div>
       <div className="sm:col-span-2 flex items-center gap-2 pt-2">
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.sea_view} onChange={e => setF(x => ({ ...x, sea_view: e.target.checked }))} /> Sea view</label>
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.city_view} onChange={e => setF(x => ({ ...x, city_view: e.target.checked }))} /> City view</label>
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.mountain_view} onChange={e => setF(x => ({ ...x, mountain_view: e.target.checked }))} /> Mountain view</label>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.sea_view} onChange={e => setF(x => ({ ...x, sea_view: e.target.checked }))} /> {tr("projects.detail.unitForm.seaView", "Sea view")}</label>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.city_view} onChange={e => setF(x => ({ ...x, city_view: e.target.checked }))} /> {tr("projects.detail.unitForm.cityView", "City view")}</label>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.mountain_view} onChange={e => setF(x => ({ ...x, mountain_view: e.target.checked }))} /> {tr("projects.detail.unitForm.mountainView", "Mountain view")}</label>
       </div>
       <div className="flex gap-2">
-        <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground" onClick={submit}>{isCreate ? "Add" : "Save"}</Button>
-        <Button size="sm" variant="outline" className="border-border" onClick={onCancel}>Cancel</Button>
+        <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground" onClick={submit}>{isCreate ? tr("projects.detail.actions.add", "Add") : tr("projects.detail.actions.save", "Save")}</Button>
+        <Button size="sm" variant="outline" className="border-border" onClick={onCancel}>{tr("projects.actions.cancel", "Cancel")}</Button>
       </div>
     </div>
   );

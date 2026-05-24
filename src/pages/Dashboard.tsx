@@ -1,7 +1,8 @@
 /* eslint complexity: "off" */
-import React, { useState, useEffect, useMemo, lazy, Suspense } from "react";
+import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   Plus, Heart,
   Eye, Building2, Gavel,
@@ -45,6 +46,7 @@ import { ProfileEditor } from "@/components/dashboard/ProfileEditor";
 import { SettingsSection } from "@/components/dashboard/SettingsSection";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { DashboardMobileNav } from "@/components/dashboard/DashboardMobileNav";
+import { tFallback, tInterpolate } from "@/lib/i18nFallback";
 
 // Lazy-loaded tab components — only mounted when the tab is active
 const ViewingsTab = lazy(() => import("./dashboard/ViewingsTab"));
@@ -58,6 +60,8 @@ const DataInputTab = lazy(() => import("./dashboard/DataInputTab"));
 
 /** Lazy-tab fallback with a 5-second timeout before showing a retry link */
 const TabFallback = () => {
+  const { t } = useTranslation();
+  const tr = (key: string, fallback: string) => tFallback(t, key, fallback);
   const [slow, setSlow] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setSlow(true), 5000);
@@ -68,11 +72,11 @@ const TabFallback = () => {
       <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-primary" />
       {slow ? (
         <p className="text-sm mt-2">
-          Taking longer than expected.{" "}
-          <button className="text-primary underline" onClick={() => window.location.reload()}>Refresh</button>
+          {tr("dashboard.loading.slow", "Taking longer than expected.")}{" "}
+          <button className="text-primary underline" onClick={() => window.location.reload()}>{tr("dashboard.loading.refresh", "Refresh")}</button>
         </p>
       ) : (
-        <p className="text-sm">Loading...</p>
+        <p className="text-sm">{tr("dashboard.loading.loading", "Loading...")}</p>
       )}
     </div>
   );
@@ -84,7 +88,12 @@ export default function Dashboard() { // skipcq: JS-R1005
   const { section } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  // (t no longer needed - moved to nav components)
+  const { t } = useTranslation();
+  const tr = useCallback((key: string, fallback: string) => tFallback(t, key, fallback), [t]);
+  const trv = useCallback(
+    (key: string, fallback: string, values: Record<string, string | number>) => tInterpolate(t, key, fallback, values),
+    [t],
+  );
   const { profile, user, signOut, updateProfile, refreshProfile, loading, profileLoading } = useAuth();
   const { isPro } = useSubscription();
   const { eligible: eligibleForQuickSale } = useEligibleForQuickSale();
@@ -102,9 +111,9 @@ export default function Dashboard() { // skipcq: JS-R1005
 
   const navItems = useMemo<NavItemResolved[]>(
     () => roleSwitchInProgress
-      ? [{ key: "settings", label: "Settings", icon: Settings, locked: false }]
+      ? [{ key: "settings", label: tr("dashboard.tabs.settings", "Settings"), icon: Settings, locked: false }]
       : getNavItemsForBioType(bioType, role, isPro, eligibleForQuickSale),
-    [bioType, role, isPro, eligibleForQuickSale, roleSwitchInProgress]
+    [bioType, role, isPro, eligibleForQuickSale, roleSwitchInProgress, tr]
   );
   const sectionNavItems = useMemo(() => navItems.filter(i => !("href" in i && i.href) && !i.locked), [navItems]);
   const defaultSection = (sectionNavItems[0]?.key ?? "overview") as NavKey;
@@ -166,18 +175,18 @@ export default function Dashboard() { // skipcq: JS-R1005
   const handleSignOut = async () => { await signOut(); navigate("/"); };
 
   const displayName = useMemo(
-    () => profile?.display_name || profile?.first_name || user?.email?.split("@")[0] || "User",
-    [profile, user]
+    () => profile?.display_name || profile?.first_name || user?.email?.split("@")[0] || tr("dashboard.userFallback", "User"),
+    [profile, user, tr]
   );
   const roleLabel = useMemo(
     () => roleSwitchInProgress
-      ? "Switching Account Type"
+      ? tr("dashboard.roleLabels.switching", "Switching Account Type")
       : role === "admin"
-      ? "Admin"
+      ? tr("dashboard.roleLabels.admin", "Admin")
       : hasInvestorAccess
-        ? "Investor"
-        : (PARTICIPANT_LABELS[bioType as ParticipantId] ?? "Buyer / Renter"),
-    [role, bioType, hasInvestorAccess, roleSwitchInProgress]
+        ? tr("dashboard.roleLabels.investor", "Investor")
+        : tr(`dashboard.roleLabels.${bioType ?? "buyer"}`, PARTICIPANT_LABELS[bioType as ParticipantId] ?? "Buyer / Renter"),
+    [role, bioType, hasInvestorAccess, roleSwitchInProgress, tr]
   );
 
   const isInvestorLike = hasInvestorAccess;
@@ -201,19 +210,19 @@ export default function Dashboard() { // skipcq: JS-R1005
     const activeListings = myListings.filter(l => l.status === "active").length;
     const totalViews = myListings.reduce((s, l) => s + (l.views_count || 0), 0);
     const sellSideStats = [
-      { label: "Active Listings", value: activeListings, icon: Building2, color: "text-primary" },
-      { label: "Total Views", value: totalViews, icon: Eye, color: "text-brand-emerald" },
-      { label: "Saved", value: favorites.length, icon: Heart, color: "text-destructive" },
-      { label: "Viewings", value: upcomingViewingsCount + ownViewingsCount, icon: Calendar, color: "text-brand-gold" },
+      { label: tr("dashboard.stats.activeListings", "Active Listings"), value: activeListings, icon: Building2, color: "text-primary" },
+      { label: tr("dashboard.stats.totalViews", "Total Views"), value: totalViews, icon: Eye, color: "text-brand-emerald" },
+      { label: tr("dashboard.stats.saved", "Saved"), value: favorites.length, icon: Heart, color: "text-destructive" },
+      { label: tr("dashboard.stats.viewings", "Viewings"), value: upcomingViewingsCount + ownViewingsCount, icon: Calendar, color: "text-brand-gold" },
     ];
     const statsByType: Record<string, { label: string; value: number; icon: React.ElementType; color: string }[]> = {
-      buyer:        [{ label: "Saved", value: favorites.length, icon: Heart, color: "text-destructive" }, { label: "Saved Searches", value: savedSearches.length, icon: Bookmark, color: "text-primary" }, { label: "Viewings", value: upcomingViewingsCount, icon: Calendar, color: "text-brand-gold" }, { label: "Auction Alerts", value: auctionAlerts.filter(a => a.active).length, icon: Gavel, color: "text-brand-gold" }],
+      buyer:        [{ label: tr("dashboard.stats.saved", "Saved"), value: favorites.length, icon: Heart, color: "text-destructive" }, { label: tr("dashboard.stats.savedSearches", "Saved Searches"), value: savedSearches.length, icon: Bookmark, color: "text-primary" }, { label: tr("dashboard.stats.viewings", "Viewings"), value: upcomingViewingsCount, icon: Calendar, color: "text-brand-gold" }, { label: tr("dashboard.stats.auctionAlerts", "Auction Alerts"), value: auctionAlerts.filter(a => a.active).length, icon: Gavel, color: "text-brand-gold" }],
       seller:       sellSideStats,
       agent:        sellSideStats,
       developer:    sellSideStats,
-      professional: [{ label: "Services", value: professionalServices.length, icon: Wrench, color: "text-primary" }, { label: "Pending Leads", value: pendingLeadsCount, icon: Briefcase, color: "text-brand-gold" }, { label: "Total Leads", value: leads.length, icon: Users, color: "text-primary" }],
-      investor:     [{ label: "Saved", value: favorites.length, icon: Heart, color: "text-destructive" }, { label: "Saved Searches", value: savedSearches.length, icon: Bookmark, color: "text-primary" }, { label: "Viewings", value: upcomingViewingsCount, icon: Calendar, color: "text-brand-gold" }, { label: "Auction Alerts", value: auctionAlerts.filter(a => a.active).length, icon: Gavel, color: "text-brand-gold" }],
-      institutional:[{ label: "Saved", value: favorites.length, icon: Heart, color: "text-destructive" }, { label: "Saved Searches", value: savedSearches.length, icon: Bookmark, color: "text-primary" }, { label: "Viewings", value: upcomingViewingsCount, icon: Calendar, color: "text-brand-gold" }, { label: "Auction Alerts", value: auctionAlerts.filter(a => a.active).length, icon: Gavel, color: "text-brand-gold" }],
+      professional: [{ label: tr("dashboard.stats.services", "Services"), value: professionalServices.length, icon: Wrench, color: "text-primary" }, { label: tr("dashboard.stats.pendingLeads", "Pending Leads"), value: pendingLeadsCount, icon: Briefcase, color: "text-brand-gold" }, { label: tr("dashboard.stats.totalLeads", "Total Leads"), value: leads.length, icon: Users, color: "text-primary" }],
+      investor:     [{ label: tr("dashboard.stats.saved", "Saved"), value: favorites.length, icon: Heart, color: "text-destructive" }, { label: tr("dashboard.stats.savedSearches", "Saved Searches"), value: savedSearches.length, icon: Bookmark, color: "text-primary" }, { label: tr("dashboard.stats.viewings", "Viewings"), value: upcomingViewingsCount, icon: Calendar, color: "text-brand-gold" }, { label: tr("dashboard.stats.auctionAlerts", "Auction Alerts"), value: auctionAlerts.filter(a => a.active).length, icon: Gavel, color: "text-brand-gold" }],
+      institutional:[{ label: tr("dashboard.stats.saved", "Saved"), value: favorites.length, icon: Heart, color: "text-destructive" }, { label: tr("dashboard.stats.savedSearches", "Saved Searches"), value: savedSearches.length, icon: Bookmark, color: "text-primary" }, { label: tr("dashboard.stats.viewings", "Viewings"), value: upcomingViewingsCount, icon: Calendar, color: "text-brand-gold" }, { label: tr("dashboard.stats.auctionAlerts", "Auction Alerts"), value: auctionAlerts.filter(a => a.active).length, icon: Gavel, color: "text-brand-gold" }],
       admin:        sellSideStats,
     };
     const key = role === "admin"
@@ -222,7 +231,7 @@ export default function Dashboard() { // skipcq: JS-R1005
         ? (role === "institutional" ? "institutional" : "investor")
         : (bioType ?? (role === "seller" ? "seller" : role === "professional" ? "professional" : role === "agent" ? "agent" : role === "developer" ? "developer" : "buyer"));
     return statsByType[key] ?? statsByType.buyer;
-  }, [myListings, favorites, savedSearches, auctionAlerts, upcomingViewingsCount, ownViewingsCount, professionalServices, pendingLeadsCount, leads, bioType, role, hasInvestorAccess]);
+  }, [myListings, favorites, savedSearches, auctionAlerts, upcomingViewingsCount, ownViewingsCount, professionalServices, pendingLeadsCount, leads, bioType, role, hasInvestorAccess, tr]);
 
   const planUsage = useMemo(() => {
     const monthStart = startOfCurrentMonth().toISOString();
@@ -260,8 +269,8 @@ export default function Dashboard() { // skipcq: JS-R1005
       <div className="min-h-screen bg-background">
         <Navbar />
         <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] pt-16 gap-4 text-center px-4">
-          <p className="text-muted-foreground text-sm">Your session has expired or could not be loaded.</p>
-          <Button onClick={handleSignOut}>Sign out and try again</Button>
+          <p className="text-muted-foreground text-sm">{tr("dashboard.session.expired", "Your session has expired or could not be loaded.")}</p>
+          <Button onClick={handleSignOut}>{tr("dashboard.session.signOutRetry", "Sign out and try again")}</Button>
         </div>
       </div>
     );
@@ -302,24 +311,24 @@ export default function Dashboard() { // skipcq: JS-R1005
             <div className="space-y-6">
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
-                  <h1 className="font-display text-2xl font-bold">Good morning, {displayName} 👋</h1>
+                  <h1 className="font-display text-2xl font-bold">{trv("dashboard.overview.greeting", "Good morning, {{name}}", { name: displayName })}</h1>
                   <p className="text-muted-foreground text-sm mt-1">
-                    {isInvestorLike ? "Your investment pipeline and deal opportunities." :
-                     bioType === "developer" ? "Manage your project listings and showcases." :
-                     role === "seller" || bioType === "seller" ? "Manage your listings and viewings." :
-                     isSellSide ? "Here's what's happening with your listings and leads." :
-                     role === "professional" ? "Your services and incoming client leads." :
-                     "Here's your search activity and alerts."}
+                    {isInvestorLike ? tr("dashboard.overview.subtitles.investor", "Your investment pipeline and deal opportunities.") :
+                     bioType === "developer" ? tr("dashboard.overview.subtitles.developer", "Manage your project listings and showcases.") :
+                     role === "seller" || bioType === "seller" ? tr("dashboard.overview.subtitles.seller", "Manage your listings and viewings.") :
+                     isSellSide ? tr("dashboard.overview.subtitles.sellSide", "Here's what's happening with your listings and leads.") :
+                     role === "professional" ? tr("dashboard.overview.subtitles.professional", "Your services and incoming client leads.") :
+                     tr("dashboard.overview.subtitles.buyer", "Here's your search activity and alerts.")}
                   </p>
                 </div>
                 {role === "professional" && (
                   <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={() => setActiveSection("leads")}>
-                    <Briefcase className="w-4 h-4" /> View Leads {pendingLeadsCount > 0 && `(${pendingLeadsCount})`}
+                    <Briefcase className="w-4 h-4" /> {tr("dashboard.overview.actions.viewLeads", "View Leads")} {pendingLeadsCount > 0 && `(${pendingLeadsCount})`}
                   </Button>
                 )}
                 {!isInvestorLike && !isSellerLike && (role === "buyer" || bioType === "buyer") && (
                   <Button variant="outline" className="border-border gap-2" asChild>
-                    <Link to="/listings"><Search className="w-4 h-4" /> Browse Listings</Link>
+                    <Link to="/listings"><Search className="w-4 h-4" /> {tr("dashboard.overview.actions.browseListings", "Browse Listings")}</Link>
                   </Button>
                 )}
               </div>
@@ -349,10 +358,10 @@ export default function Dashboard() { // skipcq: JS-R1005
               {/* Admin overview — unified Admin Dashboard */}
               {role === "admin" && (
                 <div className="glass-card rounded-xl p-5 border border-primary/20 bg-primary/5">
-                  <h2 className="font-display font-semibold mb-1 flex items-center gap-2 text-primary"><Shield className="w-4 h-4" /> Admin Dashboard</h2>
-                  <p className="text-sm text-muted-foreground mb-3">Quick Sale™ pipeline, subscribers, pricing, OS sync, and open house management.</p>
+                  <h2 className="font-display font-semibold mb-1 flex items-center gap-2 text-primary"><Shield className="w-4 h-4" /> {tr("dashboard.overview.admin.title", "Admin Dashboard")}</h2>
+                  <p className="text-sm text-muted-foreground mb-3">{tr("dashboard.overview.admin.subtitle", "Quick Sale pipeline, subscribers, pricing, OS sync, and open house management.")}</p>
                   <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground gap-1.5" asChild>
-                    <Link to="/admin"><Shield className="w-3.5 h-3.5" /> Open Admin</Link>
+                    <Link to="/admin"><Shield className="w-3.5 h-3.5" /> {tr("dashboard.overview.admin.openAdmin", "Open Admin")}</Link>
                   </Button>
                 </div>
               )}
@@ -361,30 +370,30 @@ export default function Dashboard() { // skipcq: JS-R1005
               {isInvestorLike && (
                 <div className="grid md:grid-cols-2 gap-5">
                   <div className="glass-card rounded-xl p-5 border border-brand-gold/20 bg-brand-gold/5">
-                    <h2 className="font-display font-semibold mb-1 flex items-center gap-2 text-brand-gold"><FolderKanban className="w-4 h-4" /> Deal Flow</h2>
-                    <p className="text-sm text-muted-foreground mb-3">Your private pipeline of off-market and Quick Sale™ opportunities.</p>
+                    <h2 className="font-display font-semibold mb-1 flex items-center gap-2 text-brand-gold"><FolderKanban className="w-4 h-4" /> {tr("dashboard.overview.investor.dealFlow", "Deal Flow")}</h2>
+                    <p className="text-sm text-muted-foreground mb-3">{tr("dashboard.overview.investor.dealFlowText", "Your private pipeline of off-market and Quick Sale opportunities.")}</p>
                     <Button size="sm" className="bg-gradient-gold border-0 text-background font-semibold gap-1.5" asChild>
-                      <Link to="/investor-dashboard"><FolderKanban className="w-3.5 h-3.5" /> Open Dashboard</Link>
+                      <Link to="/investor-dashboard"><FolderKanban className="w-3.5 h-3.5" /> {tr("dashboard.overview.actions.openDashboard", "Open Dashboard")}</Link>
                     </Button>
                   </div>
                   <div className="glass-card rounded-xl p-5 border border-brand-emerald/20 bg-brand-emerald/5">
-                    <h2 className="font-display font-semibold mb-1 flex items-center gap-2 text-brand-emerald"><Calendar className="w-4 h-4" /> Open Houses</h2>
-                    <p className="text-sm text-muted-foreground mb-3">Register for exclusive property open houses and submit sealed bids.</p>
+                    <h2 className="font-display font-semibold mb-1 flex items-center gap-2 text-brand-emerald"><Calendar className="w-4 h-4" /> {tr("dashboard.overview.investor.openHouses", "Open Houses")}</h2>
+                    <p className="text-sm text-muted-foreground mb-3">{tr("dashboard.overview.investor.openHousesText", "Register for exclusive property open houses and submit sealed bids.")}</p>
                     <Button size="sm" variant="outline" className="border-brand-emerald/40 text-brand-emerald hover:bg-brand-emerald/10 gap-1.5" onClick={() => setActiveSection("open-houses")}>
-                      <ExternalLink className="w-3.5 h-3.5" /> My Open Houses
+                      <ExternalLink className="w-3.5 h-3.5" /> {tr("dashboard.overview.investor.myOpenHouses", "My Open Houses")}
                     </Button>
                   </div>
                   <div className="glass-card rounded-xl p-5">
-                    <h2 className="font-display font-semibold mb-1 flex items-center gap-2"><Gavel className="w-4 h-4 text-brand-gold" /> Auction Alerts</h2>
-                    <p className="text-sm text-muted-foreground mb-3">Get notified when new auctions match your criteria.</p>
+                    <h2 className="font-display font-semibold mb-1 flex items-center gap-2"><Gavel className="w-4 h-4 text-brand-gold" /> {tr("dashboard.overview.auctions.title", "Auction Alerts")}</h2>
+                    <p className="text-sm text-muted-foreground mb-3">{tr("dashboard.overview.auctions.subtitle", "Get notified when new auctions match your criteria.")}</p>
                     <Button variant="outline" size="sm" className="border-brand-gold/40 text-brand-gold" onClick={() => setActiveSection("auctions")}>
-                      {auctionAlerts.length > 0 ? `Manage ${auctionAlerts.length} Alerts` : "Create Alert"}
+                      {auctionAlerts.length > 0 ? trv("dashboard.overview.auctions.manageCount", "Manage {{count}} Alerts", { count: auctionAlerts.length }) : tr("dashboard.overview.auctions.createAlert", "Create Alert")}
                     </Button>
                   </div>
                   <div className="glass-card rounded-xl p-5">
-                    <h2 className="font-display font-semibold mb-1 flex items-center gap-2"><Heart className="w-4 h-4 text-destructive" /> Saved Deals</h2>
-                    <p className="text-sm text-muted-foreground mb-3">{favorites.length > 0 ? `${favorites.length} saved — tap to view.` : "Save listings you like to compare and track."}</p>
-                    <Button variant="outline" size="sm" className="border-border" onClick={() => setActiveSection("saved")}>View Saved</Button>
+                    <h2 className="font-display font-semibold mb-1 flex items-center gap-2"><Heart className="w-4 h-4 text-destructive" /> {tr("dashboard.overview.savedDeals.title", "Saved Deals")}</h2>
+                    <p className="text-sm text-muted-foreground mb-3">{favorites.length > 0 ? trv("dashboard.overview.savedDeals.savedCount", "{{count}} saved - tap to view.", { count: favorites.length }) : tr("dashboard.overview.savedDeals.empty", "Save listings you like to compare and track.")}</p>
+                    <Button variant="outline" size="sm" className="border-border" onClick={() => setActiveSection("saved")}>{tr("dashboard.overview.actions.viewSaved", "View Saved")}</Button>
                   </div>
                 </div>
               )}
@@ -394,29 +403,29 @@ export default function Dashboard() { // skipcq: JS-R1005
                 <div className="space-y-6">
                   <div className="grid md:grid-cols-2 gap-6">
                     <div className="glass-card rounded-xl p-6 border border-destructive/20">
-                      <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Flame className="w-4 h-4 text-destructive" /> Quick Sale™ Access</h2>
+                      <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Flame className="w-4 h-4 text-destructive" /> {tr("dashboard.overview.quickSale.title", "Quick Sale Access")}</h2>
                       <p className="text-sm text-muted-foreground mb-3">
-                        {invitationRequestStatus === "pending" && "Your application for Quick Sale™ deal access is under review. We'll notify you within 48 hours."}
-                        {invitationRequestStatus === "approved" && "Your Quick Sale™ application is approved. Complete payment to activate deal-flow access."}
-                        {invitationRequestStatus === "rejected" && "Your application was not approved. You may browse auctions and saved searches."}
-                        {invitationRequestStatus === "none" && "Apply for access to exclusive Quick Sale™ deals. Invitation-only."}
+                        {invitationRequestStatus === "pending" && tr("dashboard.overview.quickSale.pending", "Your application for Quick Sale deal access is under review. We'll notify you within 48 hours.")}
+                        {invitationRequestStatus === "approved" && tr("dashboard.overview.quickSale.approved", "Your Quick Sale application is approved. Complete payment to activate deal-flow access.")}
+                        {invitationRequestStatus === "rejected" && tr("dashboard.overview.quickSale.rejected", "Your application was not approved. You may browse auctions and saved searches.")}
+                        {invitationRequestStatus === "none" && tr("dashboard.overview.quickSale.none", "Apply for access to exclusive Quick Sale deals. Invitation-only.")}
                       </p>
                       {invitationRequestStatus === "approved" ? (
-                        <Button size="sm" className="bg-gradient-gold border-0 text-background" asChild><Link to="/pricing">View Investor Plans</Link></Button>
+                        <Button size="sm" className="bg-gradient-gold border-0 text-background" asChild><Link to="/pricing">{tr("dashboard.overview.quickSale.viewInvestorPlans", "View Investor Plans")}</Link></Button>
                       ) : invitationRequestStatus === "none" ? (
-                        <Button variant="outline" size="sm" className="border-destructive/40 text-destructive" asChild><Link to="/investor-dashboard">Apply for Access</Link></Button>
+                        <Button variant="outline" size="sm" className="border-destructive/40 text-destructive" asChild><Link to="/investor-dashboard">{tr("dashboard.overview.quickSale.apply", "Apply for Access")}</Link></Button>
                       ) : null}
                     </div>
                     <div className="glass-card rounded-xl p-6">
-                      <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Heart className="w-4 h-4 text-destructive" /> Saved Properties</h2>
-                      <p className="text-sm text-muted-foreground mb-3">{favorites.length > 0 ? `${favorites.length} saved — open Saved to view.` : "Save listings you like to find them here."}</p>
-                      <Button variant="outline" size="sm" className="border-border" onClick={() => setActiveSection("saved")}>View Saved</Button>
+                      <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Heart className="w-4 h-4 text-destructive" /> {tr("dashboard.overview.savedProperties.title", "Saved Properties")}</h2>
+                      <p className="text-sm text-muted-foreground mb-3">{favorites.length > 0 ? trv("dashboard.overview.savedProperties.savedCount", "{{count}} saved - open Saved to view.", { count: favorites.length }) : tr("dashboard.overview.savedProperties.empty", "Save listings you like to find them here.")}</p>
+                      <Button variant="outline" size="sm" className="border-border" onClick={() => setActiveSection("saved")}>{tr("dashboard.overview.actions.viewSaved", "View Saved")}</Button>
                     </div>
                     <div className="glass-card rounded-xl p-6">
-                      <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Gavel className="w-4 h-4 text-brand-gold" /> Auction Alerts</h2>
-                      <p className="text-sm text-muted-foreground mb-3">Get notified when new auctions match your criteria.</p>
+                      <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Gavel className="w-4 h-4 text-brand-gold" /> {tr("dashboard.overview.auctions.title", "Auction Alerts")}</h2>
+                      <p className="text-sm text-muted-foreground mb-3">{tr("dashboard.overview.auctions.subtitle", "Get notified when new auctions match your criteria.")}</p>
                       <Button variant="outline" size="sm" className="border-brand-gold/40 text-brand-gold" onClick={() => setActiveSection("auctions")}>
-                        {auctionAlerts.length > 0 ? "Manage Alerts" : "Create Alert"}
+                        {auctionAlerts.length > 0 ? tr("dashboard.overview.auctions.manageAlerts", "Manage Alerts") : tr("dashboard.overview.auctions.createAlert", "Create Alert")}
                       </Button>
                     </div>
                     <BuyerOpenHousesCard onOpen={() => setActiveSection("open-houses")} />
@@ -426,16 +435,16 @@ export default function Dashboard() { // skipcq: JS-R1005
                     <div className="glass-card rounded-xl border border-amber-500/20 p-4 flex items-center gap-4">
                       <Flame className="w-8 h-8 text-amber-400 shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm">Investor mode</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">Get access to below-market deals, auction pipeline &amp; quick sales.</p>
+                        <p className="font-semibold text-sm">{tr("dashboard.overview.investorMode.title", "Investor mode")}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{tr("dashboard.overview.investorMode.subtitle", "Get access to below-market deals, auction pipeline & quick sales.")}</p>
                       </div>
                       <Button size="sm" className="shrink-0 text-xs h-8 bg-amber-500 hover:bg-amber-600 border-0 text-white"
                         onClick={async () => {
                           const { error } = await updateProfile({ investor_mode: true });
-                          if (error) { toast.error("Could not enable investor mode"); return; }
-                          toast.success("Investor mode enabled!");
+                          if (error) { toast.error(tr("dashboard.overview.investorMode.error", "Could not enable investor mode")); return; }
+                          toast.success(tr("dashboard.overview.investorMode.success", "Investor mode enabled!"));
                         }}>
-                        Enable
+                        {tr("dashboard.overview.investorMode.enable", "Enable")}
                       </Button>
                     </div>
                   )}
@@ -453,16 +462,16 @@ export default function Dashboard() { // skipcq: JS-R1005
                           <Building2 className="w-5 h-5 text-orange-400" />
                         </div>
                         <div className="flex-1">
-                          <h3 className="font-bold">Developer tools require Pro</h3>
+                          <h3 className="font-bold">{tr("dashboard.overview.developerPro.title", "Developer tools require Pro")}</h3>
                           <p className="text-sm text-muted-foreground mt-1 mb-3">
-                            Unlimited listings, project showcases, pre-sale management, and featured placement are all part of the Developer Pro plan.
+                            {tr("dashboard.overview.developerPro.subtitle", "Unlimited listings, project showcases, pre-sale management, and featured placement are all part of the Developer Pro plan.")}
                           </p>
                           <div className="flex gap-2">
                             <Button size="sm" className="bg-orange-500 hover:bg-orange-600 border-0 text-white" asChild>
-                              <Link to="/pricing?audience=developer">Start 7-day free trial →</Link>
+                              <Link to="/pricing?audience=developer">{tr("dashboard.overview.developerPro.trial", "Start 7-day free trial")}</Link>
                             </Button>
                             <Button size="sm" variant="outline" className="border-orange-500/30 text-orange-400" asChild>
-                              <Link to="/listings/new-building">Preview listing tools</Link>
+                              <Link to="/listings/new-building">{tr("dashboard.overview.developerPro.previewTools", "Preview listing tools")}</Link>
                             </Button>
                           </div>
                         </div>
@@ -472,15 +481,15 @@ export default function Dashboard() { // skipcq: JS-R1005
                   {!isPro && (
                     <div className="glass-card rounded-xl p-5 border border-primary/30 bg-primary/5 flex items-center justify-between flex-wrap gap-3">
                       <div>
-                        <p className="font-semibold text-sm">Unlock the full Dashboard</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">Analytics, CRM, priority ads & more with Pro.</p>
+                        <p className="font-semibold text-sm">{tr("dashboard.overview.proUpgrade.title", "Unlock the full Dashboard")}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{tr("dashboard.overview.proUpgrade.subtitle", "Analytics, CRM, priority ads & more with Pro.")}</p>
                       </div>
-                      <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground" asChild><Link to="/pricing">Upgrade to Pro</Link></Button>
+                      <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground" asChild><Link to="/pricing">{tr("dashboard.overview.proUpgrade.cta", "Upgrade to Pro")}</Link></Button>
                     </div>
                   )}
                   {myListings.length > 0 ? (
                     <div>
-                      <h2 className="font-display font-semibold mb-4">Your Active Listings</h2>
+                      <h2 className="font-display font-semibold mb-4">{tr("dashboard.overview.listings.title", "Your Active Listings")}</h2>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {myListings.slice(0, 3).map(l => (
                           <div key={l.id} className="glass-card rounded-xl overflow-hidden">
@@ -490,21 +499,21 @@ export default function Dashboard() { // skipcq: JS-R1005
                               <p className="text-xs text-muted-foreground">{l.city} · €{Number(l.price).toLocaleString()}</p>
                               <div className="flex gap-2 mt-3">
                                 <span className={`text-xs px-2 py-0.5 rounded-full ${l.status === "active" ? "bg-brand-emerald/20 text-brand-emerald" : "bg-secondary text-muted-foreground"}`}>{l.status}</span>
-                                <span className="text-xs text-muted-foreground">{l.views_count} views</span>
+                                <span className="text-xs text-muted-foreground">{trv("dashboard.overview.listings.views", "{{count}} views", { count: l.views_count || 0 })}</span>
                               </div>
                             </div>
                           </div>
                         ))}
                       </div>
-                      <Button variant="outline" className="border-border mt-3" onClick={() => setActiveSection("listings")}>View all listings</Button>
+                      <Button variant="outline" className="border-border mt-3" onClick={() => setActiveSection("listings")}>{tr("dashboard.overview.listings.viewAll", "View all listings")}</Button>
                     </div>
                   ) : (
                     <div className="glass-card rounded-xl p-10 text-center">
                       <Building2 className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-                      <p className="font-semibold">No listings yet</p>
-                      <p className="text-sm text-muted-foreground mt-1 mb-4">Create your first listing to get started</p>
+                      <p className="font-semibold">{tr("dashboard.overview.listings.emptyTitle", "No listings yet")}</p>
+                      <p className="text-sm text-muted-foreground mt-1 mb-4">{tr("dashboard.overview.listings.emptySubtitle", "Create your first listing to get started")}</p>
                       <Button className="bg-gradient-primary border-0 text-primary-foreground" onClick={() => setActiveSection("listings")}>
-                        <Plus className="w-4 h-4 mr-2" /> Create Listing
+                        <Plus className="w-4 h-4 mr-2" /> {tr("dashboard.createListing", "Create Listing")}
                       </Button>
                     </div>
                   )}
@@ -515,11 +524,11 @@ export default function Dashboard() { // skipcq: JS-R1005
                         <Search className="w-5 h-5 text-primary" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm">Looking for your next home?</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">Browse listings while you sell — all in one place.</p>
+                        <p className="font-semibold text-sm">{tr("dashboard.overview.sellerCrossSell.title", "Looking for your next home?")}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{tr("dashboard.overview.sellerCrossSell.subtitle", "Browse listings while you sell - all in one place.")}</p>
                       </div>
                       <Button size="sm" variant="outline" className="shrink-0 border-border text-xs h-8" asChild>
-                        <Link to="/listings">Browse →</Link>
+                        <Link to="/listings">{tr("dashboard.overview.sellerCrossSell.browse", "Browse")}</Link>
                       </Button>
                     </div>
                   )}
@@ -535,29 +544,29 @@ export default function Dashboard() { // skipcq: JS-R1005
                 <div className="space-y-5">
                   <div className="grid md:grid-cols-3 gap-5">
                     <div className="glass-card rounded-xl p-6">
-                      <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Wrench className="w-4 h-4 text-primary" /> My Services</h2>
-                      <p className="text-sm text-muted-foreground mb-3">{professionalServices.length > 0 ? `${professionalServices.length} service(s) configured.` : "Add the services you offer so clients can find and book you."}</p>
+                      <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Wrench className="w-4 h-4 text-primary" /> {tr("dashboard.overview.professional.servicesTitle", "My Services")}</h2>
+                      <p className="text-sm text-muted-foreground mb-3">{professionalServices.length > 0 ? trv("dashboard.overview.professional.servicesConfigured", "{{count}} service(s) configured.", { count: professionalServices.length }) : tr("dashboard.overview.professional.servicesEmpty", "Add the services you offer so clients can find and book you.")}</p>
                       <Button variant="outline" size="sm" className="border-border" onClick={() => setActiveSection("services")}>
-                        {professionalServices.length > 0 ? "Edit Services" : "Add Services"}
+                        {professionalServices.length > 0 ? tr("dashboard.overview.professional.editServices", "Edit Services") : tr("dashboard.overview.professional.addServices", "Add Services")}
                       </Button>
                     </div>
                     <div className="glass-card rounded-xl p-6 border border-brand-gold/20">
                       <h2 className="font-display font-semibold mb-3 flex items-center gap-2">
-                        <Briefcase className="w-4 h-4 text-brand-gold" /> Incoming Leads
+                        <Briefcase className="w-4 h-4 text-brand-gold" /> {tr("dashboard.overview.professional.incomingLeads", "Incoming Leads")}
                         {pendingLeadsCount > 0 && (
-                          <span className="ml-auto text-xs font-bold bg-brand-gold text-background rounded-full px-2 py-0.5">{pendingLeadsCount} new</span>
+                          <span className="ml-auto text-xs font-bold bg-brand-gold text-background rounded-full px-2 py-0.5">{trv("dashboard.overview.professional.newCount", "{{count}} new", { count: pendingLeadsCount })}</span>
                         )}
                       </h2>
-                      <p className="text-sm text-muted-foreground mb-3">{leads.length > 0 ? `${leads.length} total request(s).` : "Client consultation and callback requests will appear here."}</p>
+                      <p className="text-sm text-muted-foreground mb-3">{leads.length > 0 ? trv("dashboard.overview.professional.totalRequests", "{{count}} total request(s).", { count: leads.length }) : tr("dashboard.overview.professional.leadsEmpty", "Client consultation and callback requests will appear here.")}</p>
                       <Button variant="outline" size="sm" className="border-brand-gold/40 text-brand-gold hover:bg-brand-gold/10" onClick={() => setActiveSection("leads")}>
-                        View Leads <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+                        {tr("dashboard.overview.actions.viewLeads", "View Leads")} <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
                       </Button>
                     </div>
                     <div className="glass-card rounded-xl p-6 border border-primary/20">
-                      <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Calendar className="w-4 h-4 text-primary" /> Calendar & Calls</h2>
-                      <p className="text-sm text-muted-foreground mb-3">Manage your availability, video links, and calendar sync for client bookings.</p>
+                      <h2 className="font-display font-semibold mb-3 flex items-center gap-2"><Calendar className="w-4 h-4 text-primary" /> {tr("dashboard.overview.professional.calendarTitle", "Calendar & Calls")}</h2>
+                      <p className="text-sm text-muted-foreground mb-3">{tr("dashboard.overview.professional.calendarSubtitle", "Manage your availability, video links, and calendar sync for client bookings.")}</p>
                       <Button variant="outline" size="sm" className="border-primary/40 text-primary hover:bg-primary/10" onClick={() => setActiveSection("services")}>
-                        Configure <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+                        {tr("dashboard.overview.professional.configure", "Configure")} <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
                       </Button>
                     </div>
                   </div>
@@ -588,10 +597,10 @@ export default function Dashboard() { // skipcq: JS-R1005
           {/* ── MESSAGES ─────────────────────────────────────────────────── */}
           {activeSection === "messages" && navItems.some(i => i.key === "messages") && (
             <div className="space-y-6">
-              <h1 className="font-display text-2xl font-bold">Messages</h1>
-              <p className="text-sm text-muted-foreground -mt-2">Chat with agents and property owners.</p>
+              <h1 className="font-display text-2xl font-bold">{tr("messages.title", "Messages")}</h1>
+              <p className="text-sm text-muted-foreground -mt-2">{tr("dashboard.messages.subtitle", "Chat with agents and property owners.")}</p>
               <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
-                <Link to="/messages">Open Full Inbox</Link>
+                <Link to="/messages">{tr("dashboard.messages.openInbox", "Open Full Inbox")}</Link>
               </Button>
             </div>
           )}
@@ -633,9 +642,9 @@ export default function Dashboard() { // skipcq: JS-R1005
               <div className="space-y-6">
                 <div>
                   <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-                    <FolderKanban className="w-6 h-6 text-primary" /> Booking &amp; Calendar
+                    <FolderKanban className="w-6 h-6 text-primary" /> {tr("dashboard.booking.title", "Booking & Calendar")}
                   </h1>
-                  <p className="text-sm text-muted-foreground mt-1">Your consultations and scheduled viewings in one place.</p>
+                  <p className="text-sm text-muted-foreground mt-1">{tr("dashboard.booking.subtitle", "Your consultations and scheduled viewings in one place.")}</p>
                 </div>
                 <BookingCalendarSection
                   viewings={ownViewings}
@@ -664,7 +673,7 @@ export default function Dashboard() { // skipcq: JS-R1005
 
           {/* ── PROJECTS ─────────────────────────────────────────────────── */}
           {activeSection === "projects" && navItems.some(i => i.key === "projects") && (
-            <ProGate feature="Developer projects">
+            <ProGate feature={tr("dashboard.proFeatures.developerProjects", "Developer projects")}>
               <Suspense fallback={<TabFallback />}>
                 <ProjectsTab />
               </Suspense>
@@ -673,7 +682,7 @@ export default function Dashboard() { // skipcq: JS-R1005
 
           {/* ── PORTFOLIOS ───────────────────────────────────────────────── */}
           {activeSection === "portfolios" && navItems.some(i => i.key === "portfolios") && (
-            <ProGate feature="Portfolio management">
+            <ProGate feature={tr("dashboard.proFeatures.portfolioManagement", "Portfolio management")}>
               <Suspense fallback={<TabFallback />}>
                 <PortfoliosTab />
               </Suspense>

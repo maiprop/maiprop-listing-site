@@ -7,6 +7,7 @@
  */
 import { Suspense, lazy, useMemo, useState } from "react";
 import { Helmet } from "react-helmet-async";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -32,9 +33,12 @@ import PropertyValuation from "@/components/PropertyValuation";
 import { PropertyScoresSection } from "@/components/property/PropertyScoresSection";
 import { PropertyReportCard } from "@/components/property/PropertyReportCard";
 import { PropertyValuationLockedCard } from "@/components/property/PropertyValuationLockedCard";
+import { PropertyAIInsightsSection } from "@/components/property/PropertyAIInsightsSection";
 import { DetailRow, Section, SectionHeader } from "@/components/property/DetailPrimitives";
-import { useAuctionListings } from "@/hooks/useAuctionListings";
+import { fetchAuctionListingById, useAuctionListings } from "@/hooks/useAuctionListings";
 import { useSubscription } from "@/hooks/useSubscription";
+import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
+import { useAuth } from "@/contexts/AuthContext";
 import type { ListingWithJoins } from "@/hooks/useListings";
 import { formatDate, formatPrice } from "@/lib/format";
 import {
@@ -51,6 +55,9 @@ import { getAuctionImageList } from "@/lib/auctionStreetView";
 const AIAssistantWidget = lazy(() => import("@/components/AIAssistantWidget"));
 const PropertyMiniMap = lazy(() => import("@/components/PropertyMiniMap"));
 const NeighbourhoodReport = lazy(() => import("@/components/NeighbourhoodReport"));
+
+const AUCTION_DETAIL_LOOKUP_LIMIT = 60;
+const AUCTION_DETAIL_QUERY_STALE_TIME = 5 * 60_000;
 
 const AUCTION_INFO_NOTES: { id: string; en: string; el: string }[] = [
   {
@@ -90,6 +97,62 @@ const asNumber = (value: unknown): number | null => { // skipcq: JS-R1005 - Auct
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
+};
+
+type AuctionRouteState = {
+  auction?: Record<string, unknown>;
+  listing?: Record<string, unknown>;
+};
+
+const getStringValue = (value: unknown, fallback: string): string =>
+  typeof value === "string" && value.trim() ? value : fallback;
+
+const getNullableString = (value: unknown): string | null =>
+  typeof value === "string" && value.trim() ? value : null;
+
+const getAuctionTags = (tags: unknown): string[] =>
+  Array.isArray(tags) ? tags.filter((tag): tag is string => typeof tag === "string") : [];
+
+const getAuctionFromRouteState = (state?: AuctionRouteState): Record<string, unknown> | null => {
+  if (state?.auction) return state.auction;
+  if (state?.listing?.listing_type === "auction") return state.listing;
+  return null;
+};
+
+const buildAuctionInsightsListing = (
+  auction: Record<string, unknown>,
+  fallbackId: string,
+): ListingWithJoins => {
+  const bid = asNumber(auction.auction_starting_bid) ?? asNumber(auction.price) ?? 0;
+
+  return {
+    ...auction,
+    id: getStringValue(auction.id, fallbackId),
+    title: getStringValue(auction.title, "Auction Property"),
+    city: getStringValue(auction.city, ""),
+    address: getNullableString(auction.address),
+    price: bid,
+    auction_starting_bid: bid,
+    auction_date: getNullableString(auction.auction_date),
+    sqm: asNumber(auction.sqm) ?? 1,
+    bedrooms: asNumber(auction.bedrooms),
+    bathrooms: asNumber(auction.bathrooms),
+    floor: asNumber(auction.floor),
+    total_floors: asNumber(auction.total_floors),
+    year_built: asNumber(auction.year_built),
+    energy_class: getNullableString(auction.energy_class),
+    price_per_sqm: asNumber(auction.price_per_sqm),
+    property_type: getNullableString(auction.property_type),
+    listing_type: "auction",
+    region: getNullableString(auction.region),
+    latitude: asNumber(auction.latitude),
+    longitude: asNumber(auction.longitude),
+    tags: getAuctionTags(auction.tags),
+    listing_images: [],
+    profiles: null,
+    ownerIsPro: false,
+    ownerParticipantType: null,
+  } as unknown as ListingWithJoins;
 };
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
@@ -214,20 +277,47 @@ const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates aucti
   const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
   const locale = isGreek ? "el" : "en";
   const { id = "" } = useParams<{ id: string }>();
-  const { state } = useLocation() as { state?: { auction?: Record<string, unknown> } };
+  const { state } = useLocation() as { state?: AuctionRouteState };
   const [walkScore, setWalkScore] = useState<number | null>(null);
+  const { user } = useAuth();
   const { isPro } = useSubscription();
 
-  const auctionFromState = state?.auction ?? null;
-  const { data: allAuctions = [], isLoading: auctionsLoading } = useAuctionListings(undefined, {
+  const auctionFromState = getAuctionFromRouteState(state);
+  const { data: allAuctions = [], isLoading: auctionsLoading } = useAuctionListings(AUCTION_DETAIL_LOOKUP_LIMIT, {
     enabled: !auctionFromState,
   });
   const auctionFromCache = useMemo(
     () => allAuctions.find((auction) => auction.id === id) ?? null,
     [allAuctions, id],
   );
-  const auction = auctionFromState ?? (auctionFromCache as Record<string, unknown> | null);
-  const isLoading = !auction && auctionsLoading;
+  const { data: auctionById = null, isLoading: auctionByIdLoading } = useQuery({
+    queryKey: ["auction-listing-by-id", id],
+    queryFn: () => fetchAuctionListingById(id),
+    enabled: Boolean(id) && !auctionFromState,
+    staleTime: AUCTION_DETAIL_QUERY_STALE_TIME,
+    gcTime: AUCTION_DETAIL_QUERY_STALE_TIME,
+  });
+  const auction = auctionFromState
+    ?? (auctionFromCache as Record<string, unknown> | null)
+    ?? (auctionById as Record<string, unknown> | null);
+  const aiInsightsListing = useMemo(
+    () => auction ? buildAuctionInsightsListing(auction, id) : null,
+    [auction, id],
+  );
+  const {
+    aiInsightsData,
+    aiInsightsLoading,
+    aiInsightsLoaded,
+    aiInsightsQuota,
+    aiInsightsQuotaLoading,
+    loadAiInsights,
+  } = usePropertyAIInsights(
+    aiInsightsListing,
+    user,
+    id,
+    isPro,
+  );
+  const isLoading = !auction && (auctionsLoading || auctionByIdLoading);
 
   if (isLoading) {
     return (
@@ -387,6 +477,17 @@ const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates aucti
                 ownershipBadge={ownershipBadge}
                 ownershipPct={ownershipPct}
                 isGreek={isGreek}
+              />
+
+              <PropertyAIInsightsSection
+                user={user}
+                isPro={isPro}
+                loading={aiInsightsLoading}
+                data={aiInsightsData}
+                quota={aiInsightsQuota}
+                quotaLoading={aiInsightsQuotaLoading}
+                hasRequested={aiInsightsLoaded}
+                onLoad={loadAiInsights}
               />
 
               <Section>

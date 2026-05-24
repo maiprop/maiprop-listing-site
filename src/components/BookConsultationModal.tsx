@@ -8,9 +8,94 @@ import { useProfessionalServices, useProfessionalAvailability, type Professional
 import { toast } from "sonner";
 import { stripSupervisorTestMarkers } from "@/lib/displayText";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 
 const PRICING_LABELS: Record<string, string> = { hourly: "/hr", daily: "/day", fixed: "fixed" };
 const SLOT_INTERVAL_MINUTES = 60;
+
+const CONSULTATION_FALLBACKS: Record<string, string> = {
+  "common.at": "at",
+  "common.back": "Back",
+  "consultation.remoteAvailable": "Remote available",
+  "consultation.premiumService": "Pro",
+  "consultation.onRequest": "On request",
+  "consultation.emptyServices": "No services are configured yet. You can still send a general consultation request.",
+  "consultation.continueGeneral": "Continue as general consultation",
+  "consultation.servicePrompt": "What service do you need?",
+  "consultation.continue": "Continue",
+  "consultation.signInTitle": "Sign in to book a consultation",
+  "consultation.signInDescription": "{{name}} can receive booking requests only from signed-in mAI prop accounts.",
+  "consultation.signIn": "Sign in",
+  "consultation.professionalFallback": "Professional",
+  "consultation.toastSignIn": "Please sign in to book a consultation.",
+  "consultation.toastMissingDetails": "Please fill in your details.",
+  "consultation.toastSubmitError": "Could not book consultation. Please try again.",
+  "consultation.videoMessageHosted": "Video consultation requested via mAI prop video room",
+  "consultation.videoMessageLink": "Video consultation requested via professional meeting link",
+  "consultation.inPersonMessage": "In-person consultation requested",
+  "consultation.calendarTitle": "Tentative consultation with {{name}}",
+  "consultation.calendarDescription": "{{service}} request on mAI prop. The professional still needs to confirm this session.",
+  "consultation.genericService": "Consultation",
+  "consultation.dialogTitleDone": "Consultation request sent",
+  "consultation.dialogTitleBook": "Book with {{name}}",
+  "consultation.dialogDescription": "Select a professional service, preferred time, and contact details for a consultation request.",
+  "consultation.successTitle": "Consultation request received.",
+  "consultation.successDescription": "{{name}} still needs to confirm the session details before anything is scheduled.",
+  "consultation.service": "Service",
+  "consultation.type": "Type",
+  "consultation.video": "Video",
+  "consultation.inPerson": "In-person",
+  "consultation.dateTime": "Date & time",
+  "consultation.rate": "Rate",
+  "consultation.hostedVideoAccepted": "If the request is accepted, the professional can meet you in the built-in mAI prop video room.",
+  "consultation.externalVideoAccepted": "If the request is accepted, the professional will share or confirm the final meeting link.",
+  "consultation.downloadIcs": "Download .ics",
+  "consultation.done": "Done",
+  "consultation.steps.service": "Service",
+  "consultation.steps.type": "Type",
+  "consultation.steps.schedule": "Schedule",
+  "consultation.steps.details": "Details",
+  "consultation.meetingPrompt": "How would you like to meet?",
+  "consultation.meetInPerson": "In-Person",
+  "consultation.meetInPersonDescription": "Meet at their office or site",
+  "consultation.videoRequest": "Video Request",
+  "consultation.hostedVideoRoom": "mAI prop video room after confirmation",
+  "consultation.professionalMeetingLink": "Professional meeting link",
+  "consultation.notAvailable": "Not available",
+  "consultation.videoUnavailableToast": "This service is not available via video",
+  "consultation.noAvailability": "No availability has been set yet. You can still send a request and the professional will confirm manually.",
+  "consultation.selectDay": "Select a day",
+  "consultation.selectTime": "Select time",
+  "consultation.phoneOptional": "Phone (optional)",
+  "consultation.notesOptional": "Additional notes (optional)",
+  "consultation.notesPlaceholder": "Describe your project, address, or any specific questions...",
+  "consultation.when": "When",
+  "consultation.with": "With",
+  "consultation.sendRequest": "Send Request",
+  "consultation.pricingModels.hourly": "Hourly",
+  "consultation.pricingModels.daily": "Daily",
+  "consultation.pricingModels.fixed": "Fixed",
+  "consultation.rateSuffixes.hourly": "/hr",
+  "consultation.rateSuffixes.daily": "/day",
+  "consultation.rateSuffixes.fixed": "",
+};
+
+const getTranslatedValue = (t: TFunction, key: string, fallback = CONSULTATION_FALLBACKS[key] ?? key) => {
+  const value = t(key);
+  return value === key ? fallback : value;
+};
+
+const interpolateTranslation = (t: TFunction, key: string, values: Record<string, string>) =>
+  getTranslatedValue(t, key).replace(/{{\s*(\w+)\s*}}/g, (_match, name) => values[name] ?? "");
+
+const getPricingModelLabel = (model: string, t: TFunction) =>
+  getTranslatedValue(t, `consultation.pricingModels.${model}`, model);
+
+const getServiceRateLabel = (service: ProfessionalService, t: TFunction) => {
+  if (!service.rate_amount) return getTranslatedValue(t, "consultation.onRequest");
+  const suffix = getTranslatedValue(t, `consultation.rateSuffixes.${service.pricing_model}`, PRICING_LABELS[service.pricing_model] ?? "");
+  return `EUR ${service.rate_amount}${suffix}`;
+};
 
 const normalizeSlotMinute = (minute: number) => (minute === 30 ? 30 : 0);
 
@@ -121,15 +206,23 @@ interface BookConsultationModalProps {
   };
 }
 
-const RemoteAvailablePill = () => (
-  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary flex items-center gap-1">
-    <Video className="w-2.5 h-2.5" /> Remote available
-  </span>
-);
+const RemoteAvailablePill = () => {
+  const { t } = useTranslation();
+  return (
+    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary flex items-center gap-1">
+      <Video className="w-2.5 h-2.5" /> {getTranslatedValue(t, "consultation.remoteAvailable")}
+    </span>
+  );
+};
 
-const PremiumServicePill = () => (
-  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold">Pro</span>
-);
+const PremiumServicePill = () => {
+  const { t } = useTranslation();
+  return (
+    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold">
+      {getTranslatedValue(t, "consultation.premiumService")}
+    </span>
+  );
+};
 
 const getServiceOptionClass = (selected: boolean) =>
   `w-full flex items-start gap-3 p-3.5 rounded-xl border text-left transition-all ${
@@ -150,13 +243,16 @@ const ServiceOptionIcon = ({ videoEnabled, selected }: { videoEnabled: boolean; 
   </div>
 );
 
-const ServiceRatePill = ({ service }: { service: ProfessionalService }) => (
-  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-    service.rate_amount ? "bg-brand-gold/15 text-brand-gold" : "bg-secondary text-muted-foreground"
-  }`}>
-    {service.rate_amount ? `EUR ${service.rate_amount}${PRICING_LABELS[service.pricing_model] ?? ""}` : "On Request"}
-  </span>
-);
+const ServiceRatePill = ({ service }: { service: ProfessionalService }) => {
+  const { t } = useTranslation();
+  return (
+    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+      service.rate_amount ? "bg-brand-gold/15 text-brand-gold" : "bg-secondary text-muted-foreground"
+    }`}>
+      {getServiceRateLabel(service, t)}
+    </span>
+  );
+};
 
 const ServiceOptionDescription = ({ description }: { description: string | null }) => {
   const cleanDescription = stripSupervisorTestMarkers(description);
@@ -165,15 +261,18 @@ const ServiceOptionDescription = ({ description }: { description: string | null 
     : null;
 };
 
-const ServiceOptionMeta = ({ service }: { service: ProfessionalService }) => (
-  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground capitalize">
-      {service.pricing_model}
-    </span>
-    {Boolean(service.video_enabled) && <RemoteAvailablePill />}
-    {Boolean(service.is_premium) && <PremiumServicePill />}
-  </div>
-);
+const ServiceOptionMeta = ({ service }: { service: ProfessionalService }) => {
+  const { t } = useTranslation();
+  return (
+    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground">
+        {getPricingModelLabel(service.pricing_model, t)}
+      </span>
+      {Boolean(service.video_enabled) && <RemoteAvailablePill />}
+      {Boolean(service.is_premium) && <PremiumServicePill />}
+    </div>
+  );
+};
 
 const ServiceOptionCard = ({ // skipcq: JS-R1005 - The card composes small leaf helpers; conditional rendering lives in focused subcomponents.
   service,
@@ -200,69 +299,76 @@ const ServiceOptionCard = ({ // skipcq: JS-R1005 - The card composes small leaf 
   );
 };
 
-const EmptyServicesPanel = ({ onContinue, isGreek }: { onContinue: () => void; isGreek: boolean }) => (
-  <div className="text-center py-6 text-sm text-muted-foreground">
-    <Briefcase className="w-8 h-8 mx-auto mb-2 opacity-40" />
-    {isGreek ? "Δεν έχουν οριστεί υπηρεσίες ακόμα. Μπορείτε να στείλετε γενικό αίτημα συμβουλευτικής." : "No services are configured yet. You can still send a general consultation request."}
-    <Button className="w-full mt-3 bg-gradient-primary border-0 text-primary-foreground" onClick={onContinue}>
-      {isGreek ? "Συνέχεια ως γενικό αίτημα" : "Continue as General Consultation"}
-    </Button>
-  </div>
-);
+const EmptyServicesPanel = ({ onContinue }: { onContinue: () => void }) => {
+  const { t } = useTranslation();
+  return (
+    <div className="text-center py-6 text-sm text-muted-foreground">
+      <Briefcase className="w-8 h-8 mx-auto mb-2 opacity-40" />
+      {getTranslatedValue(t, "consultation.emptyServices")}
+      <Button className="w-full mt-3 bg-gradient-primary border-0 text-primary-foreground" onClick={onContinue}>
+        {getTranslatedValue(t, "consultation.continueGeneral")}
+      </Button>
+    </div>
+  );
+};
 
 const ServiceSelectionStep = ({
   services,
   selectedService,
   onSelectService,
   onContinue,
-  isGreek,
 }: {
   services: ProfessionalService[];
   selectedService: ProfessionalService | null;
   onSelectService: (service: ProfessionalService) => void;
   onContinue: () => void;
-  isGreek: boolean;
-}) => (
-  <div className="space-y-3">
-    <p className="text-sm text-muted-foreground">{isGreek ? "Ποια υπηρεσία χρειάζεστε;" : "What service do you need?"}</p>
-    {services.length === 0 ? (
-      <EmptyServicesPanel onContinue={onContinue} isGreek={isGreek} />
-    ) : (
-      <>
-        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-          {services.map((service) => (
-            <ServiceOptionCard
-              key={service.id}
-              service={service}
-              selected={selectedService?.id === service.id}
-              onSelect={onSelectService}
-            />
-          ))}
-        </div>
-        <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" disabled={!selectedService} onClick={onContinue}>
-          {isGreek ? "Συνέχεια" : "Continue"}
-        </Button>
-      </>
-    )}
-  </div>
-);
-
-const SignInRequired = ({ firstName, isGreek }: { firstName: string; isGreek: boolean }) => (
-  <div className="space-y-4 py-4">
-    <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm text-muted-foreground">
-      <p className="font-semibold text-foreground mb-1">{isGreek ? "Συνδεθείτε για να κλείσετε συμβουλευτική" : "Sign in to book a consultation"}</p>
-      <p>{isGreek ? `Ο/Η ${firstName} δέχεται αιτήματα μόνο από συνδεδεμένους λογαριασμούς mAI prop.` : `${firstName} can receive booking requests only from signed-in mAI prop accounts.`}</p>
+}) => {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">{getTranslatedValue(t, "consultation.servicePrompt")}</p>
+      {services.length === 0 ? (
+        <EmptyServicesPanel onContinue={onContinue} />
+      ) : (
+        <>
+          <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+            {services.map((service) => (
+              <ServiceOptionCard
+                key={service.id}
+                service={service}
+                selected={selectedService?.id === service.id}
+                onSelect={onSelectService}
+              />
+            ))}
+          </div>
+          <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" disabled={!selectedService} onClick={onContinue}>
+            {getTranslatedValue(t, "consultation.continue")}
+          </Button>
+        </>
+      )}
     </div>
-    <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" asChild>
-      <a href="/login">{isGreek ? "Σύνδεση" : "Sign in"}</a>
-    </Button>
-  </div>
-);
+  );
+};
+
+const SignInRequired = ({ firstName }: { firstName: string }) => {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-4 py-4">
+      <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm text-muted-foreground">
+        <p className="font-semibold text-foreground mb-1">{getTranslatedValue(t, "consultation.signInTitle")}</p>
+        <p>{interpolateTranslation(t, "consultation.signInDescription", { name: firstName })}</p>
+      </div>
+      <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" asChild>
+        <a href="/login">{getTranslatedValue(t, "consultation.signIn")}</a>
+      </Button>
+    </div>
+  );
+};
 
 // skipcq: JS-0067 - React modal component is intentionally module-scoped.
 export default function BookConsultationModal({ open, onClose, allowVideoCall = true, professional }: BookConsultationModalProps) { // skipcq: JS-R1005, JS-W1044 - Booking modal coordinates service selection, scheduling, contact capture, and submission flow.
   const { user, profile } = useAuth();
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
   const dateLocale = isGreek ? "el-GR" : "en-GB";
   const submitConsultation = useSubmitConsultation();
@@ -279,7 +385,7 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
   const [note, setNote] = useState("");
   const [done, setDone] = useState(false);
 
-  const proName = professional.display_name || (isGreek ? "Επαγγελματίας" : "Professional");
+  const proName = professional.display_name || getTranslatedValue(t, "consultation.professionalFallback");
   const firstName = proName.split(" ")[0];
 
   const availableDays = useMemo(() => getAvailableDays(availability, 14, dateLocale), [availability, dateLocale]);
@@ -321,13 +427,13 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
 
   const handleConfirm = async () => { // skipcq: JS-R1005 - Submit flow resolves guest/user contact details and booking metadata in one mutation payload.
     if (!user) {
-      toast.error(isGreek ? "Συνδεθείτε για να κλείσετε συμβουλευτική." : "Please sign in to book a consultation.");
+      toast.error(getTranslatedValue(t, "consultation.toastSignIn"));
       return;
     }
     const resolvedName = profile?.display_name || user.email || "";
     const resolvedEmail = user.email || "";
     if (!resolvedName || !resolvedEmail) {
-      toast.error(isGreek ? "Συμπληρώστε τα στοιχεία σας" : "Please fill in your details");
+      toast.error(getTranslatedValue(t, "consultation.toastMissingDetails"));
       return;
     }
 
@@ -343,29 +449,25 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
         preferred_time: selectedTime,
         message: [
           bookingType === "video"
-            ? `${isGreek ? "Αίτημα βιντεοσυμβουλευτικής μέσω" : "Video consultation requested via"} ${usesHostedRoom ? "mAI prop video room" : (isGreek ? "συνδέσμου επαγγελματία" : "professional meeting link")}`
-            : (isGreek ? "Αίτημα συμβουλευτικής με φυσική παρουσία" : "In-person consultation requested"),
+            ? (usesHostedRoom ? getTranslatedValue(t, "consultation.videoMessageHosted") : getTranslatedValue(t, "consultation.videoMessageLink"))
+            : getTranslatedValue(t, "consultation.inPersonMessage"),
           note,
         ].filter(Boolean).join("\n"),
       });
       setDone(true);
     } catch (_err: unknown) {
-      toast.error(isGreek ? "Δεν ήταν δυνατή η κράτηση συμβουλευτικής. Δοκιμάστε ξανά." : "Could not book consultation. Please try again.");
+      toast.error(getTranslatedValue(t, "consultation.toastSubmitError"));
     }
   };
 
   const pricingLabel = selectedService
-    ? selectedService.rate_amount
-      ? `EUR ${selectedService.rate_amount}${PRICING_LABELS[selectedService.pricing_model] ?? ""}`
-      : (isGreek ? "Κατόπιν αιτήματος" : "On Request")
+    ? getServiceRateLabel(selectedService, t)
     : null;
   const calendarEvent = getCalendarEvent(
     selectedDate,
     selectedTime,
-    isGreek ? `Προσωρινή συμβουλευτική με ${proName}` : `Tentative consultation with ${proName}`,
-    isGreek
-      ? `Αίτημα ${selectedService?.service_name || "συμβουλευτικής"} στο mAI prop. Ο επαγγελματίας πρέπει να επιβεβαιώσει τη συνεδρία.`
-      : `${selectedService?.service_name || "Consultation"} request on mAI prop. The professional still needs to confirm this session.`,
+    interpolateTranslation(t, "consultation.calendarTitle", { name: proName }),
+    interpolateTranslation(t, "consultation.calendarDescription", { service: selectedService?.service_name || getTranslatedValue(t, "consultation.genericService") }),
   );
 
   return (
@@ -374,57 +476,55 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
         <DialogHeader>
           <DialogTitle className="font-display text-lg flex items-center gap-2">
             <Calendar className="w-5 h-5 text-primary" />
-            {done ? (isGreek ? "Το αίτημα συμβουλευτικής εστάλη" : "Consultation Request Sent") : (isGreek ? `Κράτηση με ${firstName}` : `Book with ${firstName}`)}
+            {done ? getTranslatedValue(t, "consultation.dialogTitleDone") : interpolateTranslation(t, "consultation.dialogTitleBook", { name: firstName })}
           </DialogTitle>
           <DialogDescription className="sr-only">
-            {isGreek ? "Επιλέξτε επαγγελματική υπηρεσία, προτιμώμενη ώρα και στοιχεία επικοινωνίας για αίτημα συμβουλευτικής." : "Select a professional service, preferred time, and contact details for a consultation request."}
+            {getTranslatedValue(t, "consultation.dialogDescription")}
           </DialogDescription>
         </DialogHeader>
 
         {!user ? (
-          <SignInRequired firstName={firstName} isGreek={isGreek} />
+          <SignInRequired firstName={firstName} />
         ) : done ? (
           <div className="text-center py-6 space-y-4">
             <div className="w-16 h-16 rounded-full bg-brand-emerald/20 flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-8 h-8 text-brand-emerald" />
             </div>
             <div>
-              <p className="font-semibold text-foreground">{isGreek ? "Το αίτημα συμβουλευτικής καταχωρίστηκε." : "Consultation request received."}</p>
+              <p className="font-semibold text-foreground">{getTranslatedValue(t, "consultation.successTitle")}</p>
               <p className="text-sm text-muted-foreground mt-1">
-                {isGreek ? `Ο/Η ${firstName} πρέπει να επιβεβαιώσει τις λεπτομέρειες πριν προγραμματιστεί οριστικά.` : `${firstName} still needs to confirm the session details before anything is scheduled.`}
+                {interpolateTranslation(t, "consultation.successDescription", { name: firstName })}
               </p>
             </div>
             <div className="bg-secondary rounded-xl p-4 text-sm text-left space-y-2">
               {selectedService && (
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">{isGreek ? "Υπηρεσία" : "Service"}</span>
+                  <span className="text-muted-foreground">{getTranslatedValue(t, "consultation.service")}</span>
                   <span className="font-medium">{selectedService.service_name}</span>
                 </div>
               )}
               <div className="flex justify-between">
-                <span className="text-muted-foreground">{isGreek ? "Τύπος" : "Type"}</span>
+                <span className="text-muted-foreground">{getTranslatedValue(t, "consultation.type")}</span>
                 <span className="font-medium flex items-center gap-1">
-                  {bookingType === "video" ? <><Video className="w-3.5 h-3.5" /> {isGreek ? "Βίντεο" : "Video"}</> : <><Users className="w-3.5 h-3.5" /> {isGreek ? "Με φυσική παρουσία" : "In-person"}</>}
+                  {bookingType === "video" ? <><Video className="w-3.5 h-3.5" /> {getTranslatedValue(t, "consultation.video")}</> : <><Users className="w-3.5 h-3.5" /> {getTranslatedValue(t, "consultation.inPerson")}</>}
                 </span>
               </div>
               {selectedDate && (
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">{isGreek ? "Ημερομηνία & ώρα" : "Date & Time"}</span>
-                  <span className="font-medium">{selectedDate} {isGreek ? "στις" : "at"} {selectedTime}</span>
+                  <span className="text-muted-foreground">{getTranslatedValue(t, "consultation.dateTime")}</span>
+                  <span className="font-medium">{selectedDate} {getTranslatedValue(t, "common.at")} {selectedTime}</span>
                 </div>
               )}
               {pricingLabel && (
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">{isGreek ? "Χρέωση" : "Rate"}</span>
+                  <span className="text-muted-foreground">{getTranslatedValue(t, "consultation.rate")}</span>
                   <span className="font-medium">{pricingLabel}</span>
                 </div>
               )}
             </div>
             {bookingType === "video" && (
               <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground text-left">
-                {usesHostedRoom
-                  ? (isGreek ? "Αν το αίτημα γίνει δεκτό, ο επαγγελματίας μπορεί να σας συναντήσει στην ενσωματωμένη αίθουσα βίντεο mAI prop." : "If the request is accepted, the professional can meet you in the built-in mAI prop video room.")
-                  : (isGreek ? "Αν το αίτημα γίνει δεκτό, ο επαγγελματίας θα στείλει ή θα επιβεβαιώσει τον τελικό σύνδεσμο συνάντησης." : "If the request is accepted, the professional will share or confirm the final meeting link.")}
+                {usesHostedRoom ? getTranslatedValue(t, "consultation.hostedVideoAccepted") : getTranslatedValue(t, "consultation.externalVideoAccepted")}
               </div>
             )}
             {calendarEvent && (
@@ -440,11 +540,11 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
                   className="border-border"
                   onClick={() => downloadIcs("maiprop-consultation.ics", calendarEvent.ics)}
                 >
-                  {isGreek ? "Λήψη .ics" : "Download .ics"}
+                  {getTranslatedValue(t, "consultation.downloadIcs")}
                 </Button>
               </div>
             )}
-            <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" onClick={handleClose}>{isGreek ? "Τέλος" : "Done"}</Button>
+            <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" onClick={handleClose}>{getTranslatedValue(t, "consultation.done")}</Button>
           </div>
         ) : (
           <div className="space-y-5">
@@ -463,8 +563,8 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
                     </div>
                     <span className={`text-[11px] hidden sm:block ${isActive ? "text-foreground font-medium" : "text-muted-foreground"}`}>
                       {allowVideoCall
-                        ? (s === 1 ? "Service" : s === 2 ? "Type" : s === 3 ? "Schedule" : "Details")
-                        : (s === 1 ? "Service" : s === 2 ? "Schedule" : "Details")}
+                        ? (s === 1 ? getTranslatedValue(t, "consultation.steps.service") : s === 2 ? getTranslatedValue(t, "consultation.steps.type") : s === 3 ? getTranslatedValue(t, "consultation.steps.schedule") : getTranslatedValue(t, "consultation.steps.details"))
+                        : (s === 1 ? getTranslatedValue(t, "consultation.steps.service") : s === 2 ? getTranslatedValue(t, "consultation.steps.schedule") : getTranslatedValue(t, "consultation.steps.details"))}
                     </span>
                     {idx < (allowVideoCall ? 4 : 3) - 1 && <div className="flex-1 h-px bg-border" />}
                   </div>
@@ -478,13 +578,12 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
                 selectedService={selectedService}
                 onSelectService={setSelectedService}
                 onContinue={() => setStep(nextStepAfterService)}
-                isGreek={isGreek}
               />
             )}
 
             {allowVideoCall && step === 2 && (
               <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">How would you like to meet?</p>
+                <p className="text-sm text-muted-foreground">{getTranslatedValue(t, "consultation.meetingPrompt")}</p>
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     onClick={() => setBookingType("in_person")}
@@ -493,30 +592,30 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
                     }`}
                   >
                     <Users className={`w-7 h-7 mx-auto mb-2 ${bookingType === "in_person" ? "text-primary" : "text-muted-foreground"}`} />
-                    <div className="font-semibold text-sm">In-Person</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">Meet at their office or site</div>
+                    <div className="font-semibold text-sm">{getTranslatedValue(t, "consultation.meetInPerson")}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">{getTranslatedValue(t, "consultation.meetInPersonDescription")}</div>
                   </button>
                   <button
-                    onClick={() => canVideo ? setBookingType("video") : toast.info("This service is not available via video")}
+                    onClick={() => canVideo ? setBookingType("video") : toast.info(getTranslatedValue(t, "consultation.videoUnavailableToast"))}
                     className={`p-4 rounded-xl border-2 text-center transition-all relative ${
                       bookingType === "video" ? "border-primary bg-primary/10" : canVideo ? "border-border hover:border-primary/30" : "border-border opacity-50 cursor-not-allowed"
                     }`}
                   >
                     <Video className={`w-7 h-7 mx-auto mb-2 ${bookingType === "video" ? "text-primary" : "text-muted-foreground"}`} />
-                    <div className="font-semibold text-sm">Video Request</div>
+                    <div className="font-semibold text-sm">{getTranslatedValue(t, "consultation.videoRequest")}</div>
                     <div className="text-xs text-muted-foreground mt-0.5">
-                      {usesHostedRoom ? "mAI prop video room after confirmation" : "Professional meeting link"}
+                      {usesHostedRoom ? getTranslatedValue(t, "consultation.hostedVideoRoom") : getTranslatedValue(t, "consultation.professionalMeetingLink")}
                     </div>
                     {!canVideo && (
                       <div className="absolute inset-0 flex items-center justify-center rounded-xl">
-                        <span className="text-[10px] bg-secondary/90 px-2 py-1 rounded-full text-muted-foreground">Not available</span>
+                        <span className="text-[10px] bg-secondary/90 px-2 py-1 rounded-full text-muted-foreground">{getTranslatedValue(t, "consultation.notAvailable")}</span>
                       </div>
                     )}
                   </button>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" className="border-border" onClick={() => setStep(1)}>Back</Button>
-                  <Button className="flex-1 bg-gradient-primary border-0 text-primary-foreground" onClick={() => setStep(3)}>Continue</Button>
+                  <Button variant="outline" className="border-border" onClick={() => setStep(1)}>{getTranslatedValue(t, "common.back")}</Button>
+                  <Button className="flex-1 bg-gradient-primary border-0 text-primary-foreground" onClick={() => setStep(3)}>{getTranslatedValue(t, "consultation.continue")}</Button>
                 </div>
               </div>
             )}
@@ -526,12 +625,12 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
                 {availableDays.length === 0 ? (
                   <div className="text-center py-4 text-sm text-muted-foreground">
                     <Clock className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                    No availability has been set yet. You can still send a request and the professional will confirm manually.
+                    {getTranslatedValue(t, "consultation.noAvailability")}
                   </div>
                 ) : (
                   <>
                     <div>
-                      <label className="text-sm font-medium block mb-2">Select a day</label>
+                      <label className="text-sm font-medium block mb-2">{getTranslatedValue(t, "consultation.selectDay")}</label>
                       <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-44 overflow-y-auto pr-1">
                         {availableDays.map((day) => (
                           <button
@@ -550,7 +649,7 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
 
                     {selectedDate && timeSlots.length > 0 && (
                       <div>
-                        <label className="text-sm font-medium block mb-2">Select time</label>
+                        <label className="text-sm font-medium block mb-2">{getTranslatedValue(t, "consultation.selectTime")}</label>
                         <div className="grid grid-cols-4 gap-1.5">
                           {timeSlots.map((time) => (
                             <button
@@ -578,13 +677,13 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
                 )}
 
                 <div className="flex gap-2">
-                  <Button variant="outline" className="border-border" onClick={() => setStep(previousStepFromSchedule)}>Back</Button>
+                  <Button variant="outline" className="border-border" onClick={() => setStep(previousStepFromSchedule)}>{getTranslatedValue(t, "common.back")}</Button>
                   <Button
                     className="flex-1 bg-gradient-primary border-0 text-primary-foreground"
                     disabled={availableDays.length > 0 && (!selectedDate || !selectedTime)}
                     onClick={() => setStep(4)}
                   >
-                    Continue
+                    {getTranslatedValue(t, "consultation.continue")}
                   </Button>
                 </div>
               </div>
@@ -593,7 +692,7 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
             {step === 4 && (
               <div className="space-y-4">
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground block mb-1">Phone (optional)</label>
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">{getTranslatedValue(t, "consultation.phoneOptional")}</label>
                   <input
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
@@ -602,38 +701,38 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground block mb-1">Additional notes (optional)</label>
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">{getTranslatedValue(t, "consultation.notesOptional")}</label>
                   <textarea
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
                     rows={3}
-                    placeholder="Describe your project, address, or any specific questions..."
+                    placeholder={getTranslatedValue(t, "consultation.notesPlaceholder")}
                     className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary resize-none transition-colors"
                   />
                 </div>
 
                 <div className="bg-secondary rounded-xl p-3 text-xs text-muted-foreground space-y-1.5">
-                  {selectedService && <div className="flex justify-between"><span>Service</span><span className="text-foreground font-medium">{selectedService.service_name}</span></div>}
+                  {selectedService && <div className="flex justify-between"><span>{getTranslatedValue(t, "consultation.service")}</span><span className="text-foreground font-medium">{selectedService.service_name}</span></div>}
                   <div className="flex justify-between">
-                    <span>Type</span>
+                    <span>{getTranslatedValue(t, "consultation.type")}</span>
                     <span className="text-foreground font-medium flex items-center gap-1">
-                      {bookingType === "video" ? <><Video className="w-3 h-3" /> Video</> : <><Users className="w-3 h-3" /> In-Person</>}
+                      {bookingType === "video" ? <><Video className="w-3 h-3" /> {getTranslatedValue(t, "consultation.video")}</> : <><Users className="w-3 h-3" /> {getTranslatedValue(t, "consultation.inPerson")}</>}
                     </span>
                   </div>
-                  {selectedDate && <div className="flex justify-between"><span>When</span><span className="text-foreground font-medium">{selectedDate} at {selectedTime}</span></div>}
-                  {pricingLabel && <div className="flex justify-between"><span>Rate</span><span className="text-foreground font-medium">{pricingLabel}</span></div>}
-                  <div className="flex justify-between"><span>With</span><span className="text-foreground font-medium">{proName}</span></div>
+                  {selectedDate && <div className="flex justify-between"><span>{getTranslatedValue(t, "consultation.when")}</span><span className="text-foreground font-medium">{selectedDate} {getTranslatedValue(t, "common.at")} {selectedTime}</span></div>}
+                  {pricingLabel && <div className="flex justify-between"><span>{getTranslatedValue(t, "consultation.rate")}</span><span className="text-foreground font-medium">{pricingLabel}</span></div>}
+                  <div className="flex justify-between"><span>{getTranslatedValue(t, "consultation.with")}</span><span className="text-foreground font-medium">{proName}</span></div>
                 </div>
 
                 <div className="flex gap-2">
-                  <Button variant="outline" className="border-border" onClick={() => setStep(3)}>Back</Button>
+                  <Button variant="outline" className="border-border" onClick={() => setStep(3)}>{getTranslatedValue(t, "common.back")}</Button>
                   <Button
                     className="flex-1 bg-gradient-primary border-0 text-primary-foreground gap-2"
                     onClick={handleConfirm}
                     disabled={submitConsultation.isPending}
                   >
                     {submitConsultation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
-                    Send Request
+                    {getTranslatedValue(t, "consultation.sendRequest")}
                   </Button>
                 </div>
               </div>

@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect, type ElementType } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { Navbar } from "@/components/Navbar";
@@ -31,6 +32,7 @@ import { FloorPlanSection } from "@/components/new-build/FloorPlanSection";
 import { ConstructionSpecs } from "@/components/new-build/ConstructionSpecs";
 import { UnitShowcase } from "@/components/new-build/UnitShowcase";
 import { RegisterInterestCard } from "@/components/new-build/RegisterInterestCard";
+import { tFallback, tInterpolate } from "@/lib/i18nFallback";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const EnergyBadge = ({ cls }: { cls: string }) => {
@@ -59,13 +61,6 @@ const cleanOptionalText = (value: string | null | undefined) => {
   return trimmed || undefined;
 };
 
-const getInterestContactName = (form: RegisterInterestForm, profile: Profile | null) => { // skipcq: JS-R1005 - Lead capture name fallback keeps form and profile sources together.
-  return cleanOptionalText(form.name)
-    ?? cleanOptionalText(profile?.display_name)
-    ?? cleanOptionalText(profile?.first_name)
-    ?? "Interested buyer";
-};
-
 const getInterestPhone = (form: RegisterInterestForm, profile: Profile | null) => {
   return cleanOptionalText(form.phone) ?? cleanOptionalText(profile?.phone) ?? null;
 };
@@ -89,12 +84,12 @@ const insertNewBuildLead = async ({
   });
 };
 
-const notifyDeveloperInterest = async (ownerId: string, contactName: string, listingTitle: string) => {
+const notifyDeveloperInterest = async (ownerId: string, title: string, body: string) => {
   await supabase.from("notifications").insert({
     user_id: ownerId,
     type: "new_interest",
-    title: "New interest registered",
-    body: `${contactName} registered interest in ${listingTitle}`,
+    title,
+    body,
   });
 };
 
@@ -103,6 +98,10 @@ const notifyDeveloperInterest = async (ownerId: string, contactName: string, lis
 export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detail coordinates listing data, lead capture, media, and analytics affordances.
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { t } = useTranslation();
+  const tr = (key: string, fallback: string) => tFallback(t, key, fallback);
+  const trv = (key: string, fallback: string, values: Record<string, string | number>) =>
+    tInterpolate(t, key, fallback, values);
   const { user, profile } = useAuth();
   const { isPro } = useSubscription();
   const startConv = useStartConversation();
@@ -113,13 +112,13 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
   const { data: isFavorited = false } = useIsFavorited(id ?? "");
   const toggleFav = useToggleFavorite();
   const handleFavorite = () => {
-    if (!user) { toast.error("Sign in to save properties"); return; }
+    if (!user) { toast.error(tr("property.signInToSave", "Sign in to save properties")); return; }
     if (id) toggleFav.mutate({ listing_id: id, isFavorited });
   };
   const handleShare = async () => {
     const url = window.location.href;
     if (navigator.share) { try { await navigator.share({ title: listing?.title, url }); } catch (_err: unknown) { /* cancelled */ } }
-    else { await navigator.clipboard.writeText(url); toast.success("Link copied to clipboard"); }
+    else { await navigator.clipboard.writeText(url); toast.success(tr("property.linkCopied", "Link copied to clipboard")); }
   };
 
   // AI Market Insights
@@ -157,11 +156,21 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
     if (!id || !ownerId) return;
     if (!user) { navigate("/login"); return; }
 
-    const contactName = getInterestContactName(form, profile);
+    const contactName = cleanOptionalText(form.name)
+      ?? cleanOptionalText(profile?.display_name)
+      ?? cleanOptionalText(profile?.first_name)
+      ?? tr("newBuildDetail.fallbackInterestedBuyer", "Interested buyer");
     await startConv.mutateAsync({ other_user_id: ownerId, listing_id: id });
     await insertNewBuildLead({ listingId: id, user, profile, form, contactName });
-    await notifyDeveloperInterest(ownerId, contactName, listing.title);
-    toast.success("Interest registered — the developer will be in touch");
+    await notifyDeveloperInterest(
+      ownerId,
+      tr("newBuildDetail.notifications.interestTitle", "New interest registered"),
+      trv("newBuildDetail.notifications.interestBody", "{{contactName}} registered interest in {{listingTitle}}", {
+        contactName,
+        listingTitle: listing.title,
+      }),
+    );
+    toast.success(tr("newBuildDetail.toasts.interestRegistered", "Interest registered — the developer will be in touch"));
   };
 
   const handleContact = async () => {
@@ -172,7 +181,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
       const convId = await startConv.mutateAsync({ other_user_id: listing.owner_id, listing_id: id });
       navigate(`/messages?conv=${convId}`);
     } catch (_err: unknown) {
-      toast.error("Could not start conversation");
+      toast.error(tr("property.errorStartConversation", "Could not start conversation"));
     } finally {
       setContactLoading(false);
     }
@@ -229,8 +238,8 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
     <div className="min-h-screen bg-background">
       <Navbar />
       <div className="pt-24 text-center px-4">
-        <p className="text-muted-foreground">Property not found.</p>
-        <Link to="/listings"><Button variant="outline" className="mt-4">Back to listings</Button></Link>
+        <p className="text-muted-foreground">{tr("property.errorLoad", "Property not found.")}</p>
+        <Link to="/listings"><Button variant="outline" className="mt-4">{tr("property.backToListings", "Back to listings")}</Button></Link>
       </div>
     </div>
   );
@@ -257,7 +266,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
             to="/listings?pre_sale=1"
             className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
-            <ArrowLeft className="w-4 h-4" /> Back to new builds
+            <ArrowLeft className="w-4 h-4" /> {tr("newBuildDetail.backToNewBuilds", "Back to new builds")}
           </Link>
         </div>
 
@@ -280,11 +289,11 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                     <div className="flex flex-wrap items-center gap-2 mb-2">
                       {listing.construction_status && (
                         <span className="text-[10px] font-bold uppercase tracking-widest bg-orange-500/15 text-orange-600 rounded-full px-2 py-0.5 capitalize">
-                          {listing.construction_status.replace(/_/g, " ")}
+                          {tr(`newBuildDetail.phases.${listing.construction_status}`, listing.construction_status.replace(/_/g, " "))}
                         </span>
                       )}
                       {listing.is_pre_sale && (
-                        <span className="text-[10px] font-bold uppercase tracking-widest bg-primary/15 text-primary rounded-full px-2 py-0.5">Pre-sale</span>
+                        <span className="text-[10px] font-bold uppercase tracking-widest bg-primary/15 text-primary rounded-full px-2 py-0.5">{tr("newBuildDetail.badges.preSale", "Pre-sale")}</span>
                       )}
                       {listing.energy_class && <EnergyBadge cls={listing.energy_class} />}
                     </div>
@@ -300,7 +309,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                     </div>
                     {listing.price_per_sqm != null && (
                       <div className="text-xs text-muted-foreground mt-0.5">
-                        {formatPrice(Number(listing.price_per_sqm))} per m²
+                        {trv("newBuildDetail.pricePerSqm", "{{price}} per m²", { price: formatPrice(Number(listing.price_per_sqm)) })}
                       </div>
                     )}
                   </div>
@@ -315,27 +324,27 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                   )}
                   {listing.bedrooms != null && (
                     <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
-                      <BedDouble className="w-3.5 h-3.5 text-primary" />{listing.bedrooms} bed
+                      <BedDouble className="w-3.5 h-3.5 text-primary" />{trv("newBuildDetail.stats.bed", "{{count}} bed", { count: listing.bedrooms })}
                     </div>
                   )}
                   {listing.bathrooms != null && (
                     <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
-                      <Bath className="w-3.5 h-3.5 text-primary" />{listing.bathrooms} bath
+                      <Bath className="w-3.5 h-3.5 text-primary" />{trv("newBuildDetail.stats.bath", "{{count}} bath", { count: listing.bathrooms })}
                     </div>
                   )}
                   {!!listing.total_floors && (
                     <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
-                      <Layers className="w-3.5 h-3.5 text-primary" />{listing.total_floors} floors
+                      <Layers className="w-3.5 h-3.5 text-primary" />{trv("newBuildDetail.stats.floors", "{{count}} floors", { count: listing.total_floors })}
                     </div>
                   )}
                   {listing.year_built != null && (
                     <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
-                      <Calendar className="w-3.5 h-3.5 text-primary" />Delivery {listing.year_built}
+                      <Calendar className="w-3.5 h-3.5 text-primary" />{trv("newBuildDetail.stats.delivery", "Delivery {{year}}", { year: listing.year_built })}
                     </div>
                   )}
                   {listing.energy_class && (
                     <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
-                      <Zap className="w-3.5 h-3.5 text-primary" />Energy {listing.energy_class}
+                      <Zap className="w-3.5 h-3.5 text-primary" />{trv("newBuildDetail.stats.energy", "Energy {{class}}", { class: listing.energy_class })}
                     </div>
                   )}
                   {listing.heating_system && (
@@ -369,53 +378,53 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                   <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
                     <Zap className="w-3.5 h-3.5 text-primary" />
                   </div>
-                  <h4 className="font-display font-semibold text-sm">AI Market Insights</h4>
-                  <span className="ml-auto text-[10px] text-muted-foreground">Powered by mAI Prop OS</span>
+                  <h4 className="font-display font-semibold text-sm">{tr("newBuildDetail.ai.title", "AI Market Insights")}</h4>
+                  <span className="ml-auto text-[10px] text-muted-foreground">{tr("newBuildDetail.ai.poweredBy", "Powered by mAI Prop OS")}</span>
                 </div>
                 <div className="p-5">
                   {user && aiInsightsLoading && (
                     <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span className="text-xs">Analysing market data…</span>
+                      <span className="text-xs">{tr("newBuildDetail.ai.analysing", "Analysing market data...")}</span>
                     </div>
                   )}
                   {user && !aiInsightsLoading && aiInsightsData && (() => {
                     const cmpCfg: Record<string, { label: string; color: string; bg: string }> = {
-                      below_market: { label: "Below Market", color: "text-emerald-400", bg: "bg-emerald-400/10 border-emerald-400/20" },
-                      at_market:    { label: "At Market",    color: "text-yellow-400",  bg: "bg-yellow-400/10 border-yellow-400/20" },
-                      above_market: { label: "Above Market", color: "text-destructive",  bg: "bg-destructive/10 border-destructive/20" },
+                      below_market: { label: tr("newBuildDetail.ai.comparison.belowMarket", "Below Market"), color: "text-emerald-400", bg: "bg-emerald-400/10 border-emerald-400/20" },
+                      at_market:    { label: tr("newBuildDetail.ai.comparison.atMarket", "At Market"),    color: "text-yellow-400",  bg: "bg-yellow-400/10 border-yellow-400/20" },
+                      above_market: { label: tr("newBuildDetail.ai.comparison.aboveMarket", "Above Market"), color: "text-destructive",  bg: "bg-destructive/10 border-destructive/20" },
                     };
                     const cmp = cmpCfg[aiInsightsData.marketComparison] ?? cmpCfg.at_market;
                     return (
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div className={`rounded-xl border p-4 flex flex-col gap-1 ${cmp.bg}`}>
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">vs Market</p>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{tr("newBuildDetail.ai.vsMarket", "vs Market")}</p>
                           <span className={`font-display font-black text-3xl ${cmp.color}`}>
                             {aiInsightsData.vsMarket > 0 ? "+" : ""}{aiInsightsData.vsMarket}%
                           </span>
                           <p className={`text-[10px] font-semibold ${cmp.color}`}>{cmp.label}</p>
                         </div>
                         <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Rental Yield</p>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{tr("newBuildDetail.ai.rentalYield", "Rental Yield")}</p>
                           <span className="font-display font-black text-3xl text-primary">{aiInsightsData.rentalYield}%</span>
-                          <p className="text-[10px] text-muted-foreground">Est. gross annual yield</p>
+                          <p className="text-[10px] text-muted-foreground">{tr("newBuildDetail.ai.grossYield", "Est. gross annual yield")}</p>
                         </div>
                         <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">AI Estimate</p>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{tr("newBuildDetail.ai.estimate", "AI Estimate")}</p>
                           <span className="font-display font-black text-3xl text-foreground">
                             {formatCurrency(aiInsightsData.estimatedValue)}
                           </span>
-                          <p className="text-[10px] text-muted-foreground">Confidence: {aiInsightsData.confidenceLabel}</p>
+                          <p className="text-[10px] text-muted-foreground">{trv("newBuildDetail.ai.confidence", "Confidence: {{confidence}}", { confidence: aiInsightsData.confidenceLabel })}</p>
                         </div>
                       </div>
                     );
                   })()}
                   {user && !aiInsightsLoading && !aiInsightsData && (
-                    <p className="text-xs text-muted-foreground text-center py-4">Market analysis unavailable</p>
+                    <p className="text-xs text-muted-foreground text-center py-4">{tr("newBuildDetail.ai.unavailable", "Market analysis unavailable")}</p>
                   )}
                   {!user && (
                     <p className="text-xs text-muted-foreground text-center py-4">
-                      <Link to="/login" className="text-primary hover:underline">Sign in</Link> to view AI market analysis
+                      <Link to="/login" className="text-primary hover:underline">{tr("nav.signIn", "Sign in")}</Link> {tr("newBuildDetail.ai.signInSuffix", "to view AI market analysis")}
                     </p>
                   )}
                 </div>
@@ -425,7 +434,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
               {listing.description && (
                 <div className="glass-card rounded-2xl border border-border overflow-hidden">
                   <div className="flex items-center gap-2.5 px-5 py-4 border-b border-border">
-                    <h4 className="font-display font-semibold text-sm">Project Description</h4>
+                    <h4 className="font-display font-semibold text-sm">{tr("newBuildDetail.description.title", "Project Description")}</h4>
                   </div>
                   <div className="p-6">
                     <div className={`text-sm text-muted-foreground leading-relaxed whitespace-pre-line ${!descExpanded ? "line-clamp-4" : ""}`}>
@@ -437,8 +446,8 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                         className="flex items-center gap-1 text-xs text-primary mt-3 hover:underline font-medium"
                       >
                         {descExpanded
-                          ? (<><ChevronUp className="w-3 h-3" />Show less</>)
-                          : (<><ChevronDown className="w-3 h-3" />Read more</>)
+                          ? (<><ChevronUp className="w-3 h-3" />{tr("newBuildDetail.description.showLess", "Show less")}</>)
+                          : (<><ChevronDown className="w-3 h-3" />{tr("newBuildDetail.description.readMore", "Read more")}</>)
                         }
                       </button>
                     )}
@@ -455,7 +464,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                       <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
                         <Zap className="w-3.5 h-3.5 text-primary" />
                       </div>
-                      <h4 className="font-display font-semibold text-sm">Energy Performance Certificate</h4>
+                      <h4 className="font-display font-semibold text-sm">{tr("newBuildDetail.energy.title", "Energy Performance Certificate")}</h4>
                     </div>
                     <div className="p-6">
                       <div className="flex gap-1 items-end mb-2">
@@ -497,22 +506,22 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                 const externalFeatures: { icon?: ElementType; label: string }[] = [];
                 const constructionFeatures: { icon?: ElementType; label: string }[] = [];
 
-                if (listing.has_elevator) internalFeatures.push({ icon: Building2, label: "Elevator" });
-                if (listing.has_ac) internalFeatures.push({ icon: Thermometer, label: "Air Conditioning" });
-                if (listing.has_solar_water) internalFeatures.push({ icon: Zap, label: "Solar Water Heating" });
-                if (listing.has_storage) internalFeatures.push({ icon: Home, label: "Storage Space" });
-                if (listing.has_security) internalFeatures.push({ icon: Shield, label: "Security System" });
-                if (listing.has_fireplace) internalFeatures.push({ icon: Flame, label: "Fireplace" });
-                if (listing.has_underfloor_heating) internalFeatures.push({ icon: Thermometer, label: "Underfloor Heating" });
-                if (listing.has_smart_home) internalFeatures.push({ icon: Wifi, label: "Smart Home" });
+                if (listing.has_elevator) internalFeatures.push({ icon: Building2, label: tr("newBuildDetail.features.elevator", "Elevator") });
+                if (listing.has_ac) internalFeatures.push({ icon: Thermometer, label: tr("newBuildDetail.features.airConditioning", "Air Conditioning") });
+                if (listing.has_solar_water) internalFeatures.push({ icon: Zap, label: tr("newBuildDetail.features.solarWater", "Solar Water Heating") });
+                if (listing.has_storage) internalFeatures.push({ icon: Home, label: tr("newBuildDetail.features.storage", "Storage Space") });
+                if (listing.has_security) internalFeatures.push({ icon: Shield, label: tr("newBuildDetail.features.security", "Security System") });
+                if (listing.has_fireplace) internalFeatures.push({ icon: Flame, label: tr("newBuildDetail.features.fireplace", "Fireplace") });
+                if (listing.has_underfloor_heating) internalFeatures.push({ icon: Thermometer, label: tr("newBuildDetail.features.underfloorHeating", "Underfloor Heating") });
+                if (listing.has_smart_home) internalFeatures.push({ icon: Wifi, label: tr("newBuildDetail.features.smartHome", "Smart Home") });
 
-                if (listing.has_parking) externalFeatures.push({ icon: Car, label: "Parking Space" });
-                if (listing.has_garden) externalFeatures.push({ icon: TreePine, label: "Garden" });
-                if (listing.has_pool) externalFeatures.push({ label: "Swimming Pool" });
-                if (listing.has_view) externalFeatures.push({ icon: Eye, label: "View" });
+                if (listing.has_parking) externalFeatures.push({ icon: Car, label: tr("newBuildDetail.features.parking", "Parking Space") });
+                if (listing.has_garden) externalFeatures.push({ icon: TreePine, label: tr("newBuildDetail.features.garden", "Garden") });
+                if (listing.has_pool) externalFeatures.push({ label: tr("newBuildDetail.features.pool", "Swimming Pool") });
+                if (listing.has_view) externalFeatures.push({ icon: Eye, label: tr("newBuildDetail.features.view", "View") });
 
-                if (listing.has_video_tour) constructionFeatures.push({ label: "Video Tour" });
-                if (listing.has_virtual_tour) constructionFeatures.push({ label: "Virtual Tour" });
+                if (listing.has_video_tour) constructionFeatures.push({ label: tr("newBuildDetail.features.videoTour", "Video Tour") });
+                if (listing.has_virtual_tour) constructionFeatures.push({ label: tr("newBuildDetail.features.virtualTour", "Virtual Tour") });
 
                 const total = internalFeatures.length + externalFeatures.length + constructionFeatures.length;
                 if (total === 0) return null;
@@ -522,13 +531,13 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                       <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
                         <Check className="w-3.5 h-3.5 text-primary" />
                       </div>
-                      <h4 className="font-display font-semibold text-sm">Features & Amenities</h4>
-                      <span className="ml-auto text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full border border-border">{total} features</span>
+                      <h4 className="font-display font-semibold text-sm">{tr("newBuildDetail.features.title", "Features & Amenities")}</h4>
+                      <span className="ml-auto text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full border border-border">{trv("newBuildDetail.features.count", "{{count}} features", { count: total })}</span>
                     </div>
                     <div className="p-6 space-y-6">
-                      <FeatureSection title="Internal" features={internalFeatures} accent="bg-primary" />
-                      <FeatureSection title="External" features={externalFeatures} accent="bg-brand-emerald" />
-                      <FeatureSection title="Construction" features={constructionFeatures} accent="bg-accent" />
+                      <FeatureSection title={tr("newBuildDetail.features.internal", "Internal")} features={internalFeatures} accent="bg-primary" />
+                      <FeatureSection title={tr("newBuildDetail.features.external", "External")} features={externalFeatures} accent="bg-brand-emerald" />
+                      <FeatureSection title={tr("newBuildDetail.features.construction", "Construction")} features={constructionFeatures} accent="bg-accent" />
                     </div>
                   </div>
                 );
@@ -599,7 +608,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                 {owner?.phone && (
                   <a href={`tel:${owner.phone}`} className="block">
                     <Button variant="outline" className="w-full gap-2">
-                      <Phone className="w-4 h-4" /> Call developer
+                      <Phone className="w-4 h-4" /> {tr("newBuildDetail.sidebar.callDeveloper", "Call developer")}
                     </Button>
                   </a>
                 )}
@@ -607,7 +616,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                 {/* Developer card */}
                 {owner && (
                   <div className="bg-card border border-border rounded-2xl p-4">
-                    <p className="text-xs text-muted-foreground mb-3 uppercase tracking-wide font-medium">Developer</p>
+                    <p className="text-xs text-muted-foreground mb-3 uppercase tracking-wide font-medium">{tr("newBuildDetail.sidebar.developer", "Developer")}</p>
                     <div className="flex items-center gap-3">
                       {owner.avatar_url ? (
                         <img src={owner.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover" />
@@ -617,8 +626,8 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                         </div>
                       )}
                       <div>
-                        <p className="font-semibold text-sm">{owner.display_name ?? "Developer"}</p>
-                        <p className="text-xs text-muted-foreground">Verified developer</p>
+                        <p className="font-semibold text-sm">{owner.display_name ?? tr("newBuildDetail.sidebar.developer", "Developer")}</p>
+                        <p className="text-xs text-muted-foreground">{tr("newBuildDetail.sidebar.verifiedDeveloper", "Verified developer")}</p>
                       </div>
                     </div>
                   </div>
@@ -626,63 +635,64 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
 
                 {/* Quick stats */}
                 <div className="bg-card border border-border rounded-2xl p-4 space-y-2.5">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-3">Project info</p>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-3">{tr("newBuildDetail.sidebar.projectInfo", "Project info")}</p>
                   {listing.construction_status && (() => {
-                    const phaseLabel = CONSTRUCTION_PHASES.find(p => p.key === listing.construction_status)?.label
+                    const rawPhaseLabel = CONSTRUCTION_PHASES.find(p => p.key === listing.construction_status)?.label
                       ?? listing.construction_status.replace(/_/g, " ");
+                    const phaseLabel = tr(`newBuildDetail.phases.${listing.construction_status}`, rawPhaseLabel);
                     return (
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Phase</span>
+                        <span className="text-muted-foreground">{tr("newBuildDetail.sidebar.phase", "Phase")}</span>
                         <span className="font-medium text-orange-600 capitalize">{phaseLabel}</span>
                       </div>
                     );
                   })()}
                   {listing.year_built && (
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Expected completion</span>
+                      <span className="text-muted-foreground">{tr("newBuildDetail.sidebar.expectedCompletion", "Expected completion")}</span>
                       <span className="font-medium">{listing.year_built}</span>
                     </div>
                   )}
                   {listing.energy_class && (
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Energy class</span>
+                      <span className="text-muted-foreground">{tr("newBuildDetail.sidebar.energyClass", "Energy class")}</span>
                       <EnergyBadge cls={listing.energy_class} />
                     </div>
                   )}
                   {!!listing.total_floors && (
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Total floors</span>
+                      <span className="text-muted-foreground">{tr("newBuildDetail.sidebar.totalFloors", "Total floors")}</span>
                       <span className="font-medium">{listing.total_floors}</span>
                     </div>
                   )}
                   {listing.bedrooms != null && (
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Unit bedrooms</span>
+                      <span className="text-muted-foreground">{tr("newBuildDetail.sidebar.unitBedrooms", "Unit bedrooms")}</span>
                       <span className="font-medium">{listing.bedrooms}</span>
                     </div>
                   )}
                   {listing.sqm != null && (
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Unit area from</span>
+                      <span className="text-muted-foreground">{tr("newBuildDetail.sidebar.unitAreaFrom", "Unit area from")}</span>
                       <span className="font-medium">{listing.sqm} m²</span>
                     </div>
                   )}
                   {listing.has_parking && (
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Parking</span>
-                      <span className="font-medium text-primary">Included</span>
+                      <span className="text-muted-foreground">{tr("newBuildDetail.sidebar.parking", "Parking")}</span>
+                      <span className="font-medium text-primary">{tr("newBuildDetail.sidebar.included", "Included")}</span>
                     </div>
                   )}
                   {listing.has_elevator != null && (
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Elevator</span>
-                      <span className="font-medium">{listing.has_elevator ? "Yes" : "No"}</span>
+                      <span className="text-muted-foreground">{tr("newBuildDetail.sidebar.elevator", "Elevator")}</span>
+                      <span className="font-medium">{listing.has_elevator ? tr("common.yes", "Yes") : tr("common.no", "No")}</span>
                     </div>
                   )}
                   {listing.has_pool && (
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Pool</span>
-                      <span className="font-medium text-primary">Common area</span>
+                      <span className="text-muted-foreground">{tr("newBuildDetail.sidebar.pool", "Pool")}</span>
+                      <span className="font-medium text-primary">{tr("newBuildDetail.sidebar.commonArea", "Common area")}</span>
                     </div>
                   )}
                 </div>
@@ -694,7 +704,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                   className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-border bg-secondary text-foreground text-sm font-medium hover:border-primary/40 hover:bg-primary/5 transition-all"
                 >
                   {contactLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileImage className="w-4 h-4 text-primary" />}
-                  Request floor plans
+                  {tr("newBuildDetail.sidebar.requestFloorPlans", "Request floor plans")}
                 </button>
 
               {/* Walk Score + Safety + Noise */}

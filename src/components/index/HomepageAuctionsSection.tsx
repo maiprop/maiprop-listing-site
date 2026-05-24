@@ -107,6 +107,7 @@ const toAuctionCardProperty = (listing: HomepageAuctionListing): Property => ({
   ...getAuctionPriceFields(listing),
   ...getAuctionDetails(listing),
   ...getAuctionMetadata(listing),
+  _raw: listing,
 });
 
 const LoadingCard = () => (
