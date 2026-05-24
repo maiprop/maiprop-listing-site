@@ -25,6 +25,7 @@ describe("interaction lead auto-capture migration", () => {
   });
 
   it("captures new-build registrations into CRM and project lead records", () => {
+    expect(newBuildLeadMigration).toContain("CREATE TABLE IF NOT EXISTS public.new_building_leads");
     expect(newBuildLeadMigration).toContain("private.create_new_build_project_leads");
     expect(newBuildLeadMigration).toContain("new_building_leads_create_project_leads");
     expect(newBuildLeadMigration).toContain("existing.source = 'listing_inquiry'");

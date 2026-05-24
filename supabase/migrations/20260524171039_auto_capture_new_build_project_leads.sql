@@ -4,6 +4,24 @@
 
 CREATE SCHEMA IF NOT EXISTS private;
 
+-- Fresh migration replays reach this file before the later schema-alignment
+-- migration that originally introduced new_building_leads. Bootstrap the table
+-- here so the trigger can be attached safely; the later migration keeps its
+-- CREATE TABLE IF NOT EXISTS, indexes, and RLS policies idempotent.
+CREATE TABLE IF NOT EXISTS public.new_building_leads (
+  id                 UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  new_building_id    UUID        NOT NULL REFERENCES public.listings(id) ON DELETE CASCADE,
+  user_id            UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  email              TEXT        NOT NULL,
+  full_name          TEXT        NOT NULL DEFAULT '',
+  phone              TEXT,
+  investment_budget  NUMERIC     NOT NULL DEFAULT 0,
+  notes              TEXT        NOT NULL DEFAULT '',
+  utm_source         TEXT,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE OR REPLACE FUNCTION private.create_new_build_project_leads()
 RETURNS trigger
 LANGUAGE plpgsql
