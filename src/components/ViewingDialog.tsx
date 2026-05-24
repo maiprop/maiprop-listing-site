@@ -23,17 +23,17 @@ const timeSlots = [
 ];
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-function buildDynamicDays(dayNames: string[]): { label: string; date: string; iso: string }[] {
+function buildDynamicDays(dayNames: string[], locale = "en-GB", isGreek = false): { label: string; date: string; iso: string }[] {
   const days: { label: string; date: string; iso: string }[] = [];
   const now = new Date();
   for (let i = 1; i <= 7; i++) {
     const d = new Date(now);
     d.setDate(d.getDate() + i);
-    const month = d.toLocaleString("en-GB", { month: "short" });
+    const month = d.toLocaleString(locale, { month: "short" });
     const dayNum = d.getDate();
     days.push({
       label: dayNames[d.getDay()],
-      date: `${month} ${dayNum}`,
+      date: isGreek ? `${dayNum} ${month}` : `${month} ${dayNum}`,
       iso: d.toISOString().slice(0, 10),
     });
   }
@@ -42,7 +42,9 @@ function buildDynamicDays(dayNames: string[]): { label: string; date: string; is
 
 export default function ViewingDialog({ open, onClose, property, ownerId, canVideoView = true }: ViewingDialogProps) {
   const { user, profile } = useAuth();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isGreek = i18n?.language?.toLowerCase().startsWith("el") ?? false;
+  const dateLocale = isGreek ? "el-GR" : "en-GB";
   const [viewType, setViewType] = useState<"in-person" | "video">("in-person");
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [selectedIso, setSelectedIso] = useState<string | null>(null);
@@ -62,7 +64,7 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
   ], [t]);
   // `open` intentionally included to recompute fresh dates each time dialog opens
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const days = useMemo(() => buildDynamicDays(translatedDayNames), [open, translatedDayNames]);
+  const days = useMemo(() => buildDynamicDays(translatedDayNames, dateLocale, isGreek), [open, translatedDayNames, dateLocale, isGreek]);
 
   const handleDaySelect = (day: { label: string; date: string; iso: string }) => {
     setSelectedDay(day.date);
@@ -71,10 +73,10 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
   };
 
   const handleBook = async () => {
-    if (!user) { toast.error("Please sign in to request a viewing"); return; }
-    if (!ownerId) { toast.error("Could not determine property owner."); return; }
+    if (!user) { toast.error(isGreek ? "Συνδεθείτε για να ζητήσετε επίσκεψη" : "Please sign in to request a viewing"); return; }
+    if (!ownerId) { toast.error(isGreek ? "Δεν ήταν δυνατός ο εντοπισμός του ιδιοκτήτη." : "Could not determine property owner."); return; }
     if (!selectedIso || !selectedTime) {
-      toast.error("Please select a date and time");
+      toast.error(isGreek ? "Επιλέξτε ημερομηνία και ώρα" : "Please select a date and time");
       return;
     }
     setLoading(true);
@@ -90,11 +92,11 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
     } as never);
     setLoading(false);
     if (viewErr) {
-      toast.error("Could not submit viewing request. Please try again.");
+      toast.error(isGreek ? "Δεν ήταν δυνατή η υποβολή αιτήματος επίσκεψης. Δοκιμάστε ξανά." : "Could not submit viewing request. Please try again.");
       return;
     }
     // Create lead for listing owner (best-effort — failure does not block confirmation)
-    const requesterName = profile?.display_name || profile?.first_name || "Viewing request";
+    const requesterName = profile?.display_name || profile?.first_name || (isGreek ? "Αίτημα επίσκεψης" : "Viewing request");
     const { error: leadErr } = await supabase.from("leads").insert({
       owner_id: ownerId,
       source: "viewing",
@@ -102,13 +104,13 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
       name: requesterName,
       email: user.email || null,
       phone: profile?.phone || null,
-      message: `Viewing request: ${viewType} on ${selectedDay} at ${selectedTime}${note.trim() ? ` — ${note.trim()}` : ""}`,
+      message: `${isGreek ? "Αίτημα επίσκεψης" : "Viewing request"}: ${viewType} ${isGreek ? "στις" : "on"} ${selectedDay} ${isGreek ? "ώρα" : "at"} ${selectedTime}${note.trim() ? ` — ${note.trim()}` : ""}`,
       status: "new",
       follow_up_at: scheduledAt.toISOString(),
     } as never);
     if (leadErr) logger.warn("[ViewingDialog] Lead create failed (non-blocking):", leadErr.message);
     setConfirmed(true);
-    toast.success("Viewing request submitted! The property owner will be notified.");
+    toast.success(isGreek ? "Το αίτημα επίσκεψης υποβλήθηκε. Ο ιδιοκτήτης θα ειδοποιηθεί." : "Viewing request submitted! The property owner will be notified.");
   };
 
   return (
@@ -119,7 +121,7 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
             {confirmed ? t("viewingDialog.successTitle") : t("viewingDialog.title")}
           </DialogTitle>
           <DialogDescription className="sr-only">
-            Choose a viewing type, date, time, and optional note for this property.
+            {isGreek ? "Επιλέξτε τύπο επίσκεψης, ημερομηνία, ώρα και προαιρετική σημείωση για αυτό το ακίνητο." : "Choose a viewing type, date, time, and optional note for this property."}
           </DialogDescription>
         </DialogHeader>
 
@@ -131,7 +133,7 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
             <div>
               <p className="font-semibold">{property.title}</p>
               <p className="text-sm text-muted-foreground mt-1">
-                {viewType === "video" ? "📹 Video viewing" : "🏠 In-person viewing"} on {selectedDay} at {selectedTime}
+                {viewType === "video" ? (isGreek ? "📹 Βιντεοκλήση" : "📹 Video viewing") : (isGreek ? "🏠 Επίσκεψη με φυσική παρουσία" : "🏠 In-person viewing")} {isGreek ? "στις" : "on"} {selectedDay} {isGreek ? "ώρα" : "at"} {selectedTime}
               </p>
             </div>
             <div className="bg-secondary rounded-xl p-4 text-sm text-left space-y-2">
@@ -183,14 +185,14 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
                   }`}
                 >
                   <Video className="w-4 h-4" />
-                  {t("viewingDialog.video")}{!canVideoView && " (Pro or buyers)"}
+                  {t("viewingDialog.video")}{!canVideoView && (isGreek ? " (Pro ή αγοραστές)" : " (Pro or buyers)")}
                 </button>
               </div>
             </div>
 
             {/* Day selection */}
             <div>
-              <label className="text-sm font-medium block mb-2">Select Day</label>
+              <label className="text-sm font-medium block mb-2">{isGreek ? "Επιλογή ημέρας" : "Select Day"}</label>
               <div className="grid grid-cols-7 gap-1">
                 {days.map(day => (
                   <button
@@ -203,7 +205,7 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
                     }`}
                   >
                     <div className="font-semibold">{day.label}</div>
-                    <div className="mt-0.5 opacity-70">{day.date.split(" ")[1]}</div>
+                    <div className="mt-0.5 opacity-70">{isGreek ? day.date.split(" ")[0] : day.date.split(" ")[1]}</div>
                   </button>
                 ))}
               </div>
@@ -212,7 +214,7 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
             {/* Time slots */}
             {selectedDay && (
               <div>
-                <label className="text-sm font-medium block mb-2">Select Time</label>
+                <label className="text-sm font-medium block mb-2">{isGreek ? "Επιλογή ώρας" : "Select Time"}</label>
                 <div className="grid grid-cols-3 gap-2">
                   {timeSlots.map(time => (
                     <button
@@ -233,9 +235,9 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
 
             {/* Note */}
             <div>
-              <label className="text-sm font-medium block mb-2">Note (optional)</label>
+              <label className="text-sm font-medium block mb-2">{isGreek ? "Σημείωση (προαιρετικά)" : "Note (optional)"}</label>
               <textarea
-                placeholder="Any specific requirements or questions..."
+                placeholder={isGreek ? "Τυχόν ειδικές απαιτήσεις ή ερωτήσεις..." : "Any specific requirements or questions..."}
                 className="w-full bg-secondary border border-border rounded-xl p-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary resize-none"
                 rows={2}
                 value={note}
@@ -250,7 +252,7 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
             >
               {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               <Calendar className="w-4 h-4 mr-2" />
-              Confirm Booking
+              {isGreek ? "Επιβεβαίωση κράτησης" : "Confirm Booking"}
             </Button>
           </div>
         )}

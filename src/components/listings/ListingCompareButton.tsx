@@ -1,5 +1,6 @@
 import { Check, GitCompare } from "lucide-react";
 import type { ListingCard } from "@/types";
+import { useTranslation } from "react-i18next";
 
 interface ListingCompareButtonProps<TListing extends ListingCard> {
   listing: TListing;
@@ -14,6 +15,8 @@ export const ListingCompareButton = <TListing extends ListingCard>({
   isLimitReached,
   onToggle,
 }: ListingCompareButtonProps<TListing>) => {
+  const { i18n } = useTranslation();
+  const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
   const disabled = !isSelected && isLimitReached;
 
   return (
@@ -31,7 +34,7 @@ export const ListingCompareButton = <TListing extends ListingCard>({
       }`}
     >
       {isSelected ? <Check className="w-3 h-3" /> : <GitCompare className="w-3 h-3" />}
-      Compare
+      {isGreek ? "Σύγκριση" : "Compare"}
     </button>
   );
 };

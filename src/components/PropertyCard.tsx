@@ -158,13 +158,16 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
     : (property.isPreSale || property.constructionStatus)
     ? `/new-build/${property.id}`
     : `/property/${property.id}`;
-  const detailState = property._raw && typeof property._raw === "object"
+  const rawListing = property._raw && typeof property._raw === "object"
     ? {
-        listing: {
-          ...(property._raw as Record<string, unknown>),
-          ownerParticipantType: property.ownerParticipantType ?? (property._raw as Record<string, unknown>).ownerParticipantType,
-        },
+        ...(property._raw as Record<string, unknown>),
+        ownerParticipantType: property.ownerParticipantType ?? (property._raw as Record<string, unknown>).ownerParticipantType,
       }
+    : null;
+  const detailState = rawListing
+    ? property.listingType === "auction"
+      ? { auction: rawListing, listing: rawListing }
+      : { listing: rawListing }
     : undefined;
   const handleShare = async (e: React.MouseEvent) => {
     e.preventDefault();

@@ -45,7 +45,7 @@ export default function PropertyGallery({
             <span className="badge-auction text-xs font-bold px-3 py-1.5 rounded-full shadow">AUCTION</span>
           )}
           {listingType === "firesale" && (
-            <span className="badge-firesale text-xs font-bold px-3 py-1.5 rounded-full shadow">FIRESALE</span>
+            <span className="badge-firesale text-xs font-bold px-3 py-1.5 rounded-full shadow">Quick Sale™</span>
           )}
           {listingType === "rent" && (
             <span className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1.5 rounded-full shadow">FOR RENT</span>

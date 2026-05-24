@@ -417,7 +417,7 @@ const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(fun
               </button>
             </div>
             <p className="text-[10px] text-muted-foreground mt-1.5 text-center">
-              Powered by Lovable AI · Answers may not be fully accurate
+              Powered by mAI prop AI · Answers may not be fully accurate
             </p>
           </div>
         </>

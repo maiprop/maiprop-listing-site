@@ -506,7 +506,7 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
               <PropertyValuationLockedCard />
               )}
 
-              {/* ④ Property Report — Pro only, 3 free/month, €9 each extra */}
+              {/* ④ Property Report — Pro only, 3 free/month, EUR 49 each extra */}
               <PropertyReportCard listingId={db.id} listing={db} />
 
               {/* Professional add-ons — valuation & legal */}
@@ -515,15 +515,19 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
                   <div className="w-7 h-7 rounded-lg bg-brand-gold/10 flex items-center justify-center">
                     <Scale className="w-3.5 h-3.5 text-brand-gold" />
                   </div>
-                  <h4 className="font-display font-semibold text-sm">Professional Add-ons</h4>
+                  <h4 className="font-display font-semibold text-sm">{t("property.professionalAddons", { defaultValue: "Professional Add-ons" })}</h4>
                 </div>
                 <div className="p-5">
-                  <p className="text-xs text-muted-foreground mb-3">Formal valuation reports, legal due diligence, and building legality checks — book accredited professionals in your area.</p>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    {t("property.professionalAddonsDescription", {
+                      defaultValue: "Formal valuation reports, legal due diligence, and building legality checks — book accredited professionals in your area.",
+                    })}
+                  </p>
                   <Link
                     to={`/professionals${city ? `?search=${encodeURIComponent(city)}` : ""}`}
                     className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
                     
-                    Find valuers &amp; lawyers in {city || "Greece"} <ExternalLink className="w-3.5 h-3.5" />
+                    {t("property.findProfessionalsIn", { city: city || t("property.greece", { defaultValue: "Greece" }), defaultValue: "Find valuers & lawyers in {{city}}" })} <ExternalLink className="w-3.5 h-3.5" />
                   </Link>
                 </div>
               </div>

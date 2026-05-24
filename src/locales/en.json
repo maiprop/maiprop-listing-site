@@ -2,7 +2,7 @@
   "nav": {
     "listings": "Listings",
     "auctions": "Auctions",
-    "quickSale": "Quick Sale",
+    "quickSale": "Quick Sale™",
     "professionals": "Professionals",
     "openHouses": "Open Houses",
     "newBuilds": "New Builds",
@@ -25,32 +25,32 @@
     "hero": {
       "badge": "AI-Powered Real Estate",
       "title": "Greece's Smartest Property Platform",
-      "subtitle": "Discover verified listings, distressed assets, auctions and pre-market deals — powered by AI, backed by real data.",
+      "subtitle": "Discover verified listings, Greek property auctions and off-market opportunities — powered by AI, backed by real data.",
       "searchPlaceholder": "Search by area, postcode or property type…",
       "searchButton": "Search",
       "exploreListings": "Explore listings",
       "viewAuctions": "View auctions",
       "stats": {
         "activeListings": "Active listings",
-        "courtAuctions": "Court auctions",
+        "courtAuctions": "Property auctions",
         "verifiedProfessionals": "Verified professionals",
         "aiTools": "AI tools"
       }
     },
     "features": {
       "title": "Everything you need in one platform",
-      "subtitle": "From AI-powered search to court auction tracking, maiProp gives buyers, sellers and professionals an edge.",
+      "subtitle": "From AI-powered search to property auction tracking, maiProp gives buyers, sellers and professionals an edge.",
       "aiSearch": {
         "title": "AI Property Search",
         "description": "Describe what you want in plain language. Our AI finds matching properties instantly."
       },
       "auctions": {
-        "title": "Court Auction Intelligence",
-        "description": "Real-time data on court auctions across Greece. Track bidding history, comparable sales and distressed asset opportunities."
+        "title": "Property Auction Intelligence",
+        "description": "Data on electronic property auctions across Greece. Track first-offer prices, comparable sales and investment opportunities."
       },
       "quickSale": {
         "title": "Quick Sale Deal Flow",
-        "description": "Access pre-market distressed properties before they hit the open market. Exclusive to verified investors."
+        "description": "Access off-market opportunities before they hit the open market. Exclusive to approved investors."
       },
       "professionals": {
         "title": "Verified Professionals",
@@ -133,7 +133,9 @@
     "map": "Map view",
     "grid": "Grid view",
     "saveSearch": "Save search",
-    "searchSaved": "Search saved"
+    "searchSaved": "Search saved",
+    "pageTitle": "Properties for Sale & Rent",
+    "endOfResults": "No more results"
   },
   "property": {
     "overview": "Overview",
@@ -160,7 +162,7 @@
     "airConditioning": "A/C",
     "heating": "Heating",
     "askingPrice": "Asking price",
-    "minimumBid": "Minimum bid",
+    "minimumBid": "First offer price",
     "requestViewing": "Request a viewing",
     "makeOffer": "Make an offer",
     "contactAgent": "Contact agent",
@@ -212,7 +214,11 @@
     "similarListings": "Similar Listings",
     "breadcrumbHome": "Home",
     "breadcrumbAuctions": "Auctions",
-    "breadcrumbListings": "Listings"
+    "breadcrumbListings": "Listings",
+    "professionalAddons": "Professional Add-ons",
+    "professionalAddonsDescription": "Formal valuation reports, legal due diligence, and building legality checks — book accredited professionals in your area.",
+    "findProfessionalsIn": "Find valuers & lawyers in {{city}}",
+    "greece": "Greece"
   },
   "cookie": {
     "title": "We use cookies to improve your experience",
@@ -242,17 +248,17 @@
     "acceptAll": "Accept all"
   },
   "auctions": {
-    "title": "Court Auctions",
-    "subtitle": "Track live and upcoming court auction listings across Greece",
+    "title": "Property Auctions",
+    "subtitle": "Track live and upcoming electronic property auction listings across Greece",
     "upcoming": "Upcoming",
     "live": "Live now",
     "completed": "Completed",
-    "startingBid": "Starting bid",
-    "currentBid": "Current bid",
-    "bidHistory": "Bid history",
+    "startingBid": "First offer price",
+    "currentBid": "Latest available indication",
+    "bidHistory": "Available data history",
     "auctionDate": "Auction date",
-    "court": "Court",
-    "lawyer": "Lawyer",
+    "court": "Auction officer / Platform",
+    "lawyer": "Notary",
     "round": "Round",
     "deposit": "Deposit required",
     "viewDetails": "View details",
@@ -260,14 +266,14 @@
     "lastSync": "Last synced",
     "noAuctions": "No auctions found",
     "filters": {
-      "allCourts": "All courts",
+      "allCourts": "All auction officers / platforms",
       "allTypes": "All types",
       "dateRange": "Date range"
     }
   },
   "firesale": {
     "title": "Quick Sale",
-    "subtitle": "Pre-market distressed and motivated-seller properties",
+    "subtitle": "Off-market properties and motivated sellers",
     "accessRequired": "Investor access required",
     "accessDescription": "Quick Sale deal flow is exclusive to approved maiProp investors.",
     "applyForAccess": "Apply for access",
@@ -334,7 +340,85 @@
     "requirements": "Requirements",
     "idRequired": "ID required",
     "pofRequired": "Proof of funds required",
-    "waiverRequired": "NDA / waiver required"
+    "waiverRequired": "NDA / waiver required",
+    "page": {
+      "pageTitle": "Open houses - mAI prop",
+      "eyebrow": "Open houses",
+      "headingUpcoming": "Upcoming open houses",
+      "headingPast": "Past open houses",
+      "loadError": "Could not load open houses.",
+      "emptyUpcoming": "No upcoming open houses. Agents can publish from the dashboard.",
+      "emptyPast": "No past open houses found.",
+      "countOne": "{{count}} open house found{{areaSuffix}}",
+      "countOther": "{{count}} open houses found{{areaSuffix}}",
+      "countAreaSuffix": " in the selected area",
+      "tabs": {
+        "upcoming": "Upcoming",
+        "past": "Past"
+      },
+      "myOpenHouses": "My open houses",
+      "cityPlaceholder": "City...",
+      "citySearchAria": "Search by city",
+      "viewModeAria": "View mode",
+      "showListAria": "Show list view",
+      "showMapAria": "Show map view",
+      "list": "List",
+      "map": "Map",
+      "filtersAria": "Open filters",
+      "filters": "Filters",
+      "propertyType": "Property type",
+      "price": "Price (€)",
+      "size": "Size (m²)",
+      "minBedrooms": "Min bedrooms",
+      "any": "Any",
+      "constructionYear": "Construction year",
+      "energyClass": "Energy class",
+      "features": "Features",
+      "clearAllFilters": "Clear all filters",
+      "areaActiveOne": "Area filter active · {{count}} open house in area",
+      "areaActiveOther": "Area filter active · {{count}} open houses in area",
+      "clearArea": "Clear area",
+      "loading": "Loading open houses",
+      "mapItemOne": "1 open house",
+      "mapItemOther": "{{count}} open houses",
+      "noMapListings": "No open houses with location data to show on the map.",
+      "switchToList": "Switch to list",
+      "errorTitle": "Unable to load open houses",
+      "retryPrompt": "Please try again.",
+      "retryButton": "Retry",
+      "emptyFilteredTitle": "No open houses match your filters",
+      "emptyFilteredPrompt": "Try broadening your search criteria.",
+      "clearFilters": "Clear filters",
+      "yearRanges": {
+        "any": "Any year",
+        "post2020": "Post-2020"
+      },
+      "propertyTypes": {
+        "all": "All types",
+        "apartment": "Apartment",
+        "house": "House",
+        "villa": "Villa",
+        "commercial": "Commercial",
+        "office": "Office",
+        "land": "Land"
+      },
+      "mapLabelSingular": "open house",
+      "mapLabelPlural": "open houses",
+      "featureLabels": {
+        "has_parking": "Parking",
+        "has_elevator": "Elevator",
+        "has_balcony": "Balcony",
+        "has_pool": "Pool",
+        "pets_allowed": "Pet friendly",
+        "has_furnished": "Furnished",
+        "has_garden": "Garden",
+        "has_ac": "A/C",
+        "has_fireplace": "Fireplace",
+        "has_storage": "Storage",
+        "has_view": "View",
+        "has_smart_home": "Smart home"
+      }
+    }
   },
   "dashboard": {
     "title": "Dashboard",
@@ -343,7 +427,10 @@
     "savedProperties": "Saved Properties",
     "viewings": "Viewings",
     "offers": "Offers",
-    "messages": "Messages",
+    "messages": {
+      "subtitle": "Chat with agents and property owners.",
+      "openInbox": "Open Full Inbox"
+    },
     "analytics": "Analytics",
     "subscription": "Subscription",
     "settings": "Settings",
@@ -360,7 +447,147 @@
       "saved": "Saved",
       "viewings": "Viewings",
       "analytics": "Analytics",
-      "subscription": "Subscription"
+      "subscription": "Subscription",
+      "settings": "Settings"
+    },
+    "userFallback": "User",
+    "loading": {
+      "slow": "Taking longer than expected.",
+      "refresh": "Refresh",
+      "loading": "Loading..."
+    },
+    "roleLabels": {
+      "switching": "Switching Account Type",
+      "admin": "Admin",
+      "investor": "Investor",
+      "buyer": "Buyer / Renter",
+      "seller": "Seller",
+      "agent": "Agent",
+      "developer": "Developer",
+      "professional": "Professional",
+      "institutional": "Institutional Investor"
+    },
+    "session": {
+      "expired": "Your session has expired or could not be loaded.",
+      "signOutRetry": "Sign out and try again"
+    },
+    "stats": {
+      "activeListings": "Active Listings",
+      "totalViews": "Total Views",
+      "saved": "Saved",
+      "viewings": "Viewings",
+      "savedSearches": "Saved Searches",
+      "auctionAlerts": "Auction Alerts",
+      "services": "Services",
+      "pendingLeads": "Pending Leads",
+      "totalLeads": "Total Leads"
+    },
+    "overview": {
+      "greeting": "Good morning, {{name}}",
+      "subtitles": {
+        "investor": "Your investment pipeline and deal opportunities.",
+        "developer": "Manage your project listings and showcases.",
+        "seller": "Manage your listings and viewings.",
+        "sellSide": "Here's what's happening with your listings and leads.",
+        "professional": "Your services and incoming client leads.",
+        "buyer": "Here's your search activity and alerts."
+      },
+      "actions": {
+        "viewLeads": "View Leads",
+        "browseListings": "Browse Listings",
+        "openDashboard": "Open Dashboard",
+        "viewSaved": "View Saved"
+      },
+      "admin": {
+        "title": "Admin Dashboard",
+        "subtitle": "Quick Sale pipeline, subscribers, pricing, OS sync, and open house management.",
+        "openAdmin": "Open Admin"
+      },
+      "investor": {
+        "dealFlow": "Deal Flow",
+        "dealFlowText": "Your private pipeline of off-market and Quick Sale opportunities.",
+        "openHouses": "Open Houses",
+        "openHousesText": "Register for exclusive property open houses and submit sealed bids.",
+        "myOpenHouses": "My Open Houses"
+      },
+      "auctions": {
+        "title": "Auction Alerts",
+        "subtitle": "Get notified when new auctions match your criteria.",
+        "manageCount": "Manage {{count}} Alerts",
+        "createAlert": "Create Alert",
+        "manageAlerts": "Manage Alerts"
+      },
+      "savedDeals": {
+        "title": "Saved Deals",
+        "savedCount": "{{count}} saved - tap to view.",
+        "empty": "Save listings you like to compare and track."
+      },
+      "quickSale": {
+        "title": "Quick Sale Access",
+        "pending": "Your application for Quick Sale deal access is under review. We'll notify you within 48 hours.",
+        "approved": "Your Quick Sale application is approved. Complete payment to activate deal-flow access.",
+        "rejected": "Your application was not approved. You may browse auctions and saved searches.",
+        "none": "Apply for access to exclusive Quick Sale deals. Invitation-only.",
+        "viewInvestorPlans": "View Investor Plans",
+        "apply": "Apply for Access"
+      },
+      "savedProperties": {
+        "title": "Saved Properties",
+        "savedCount": "{{count}} saved - open Saved to view.",
+        "empty": "Save listings you like to find them here."
+      },
+      "investorMode": {
+        "title": "Investor mode",
+        "subtitle": "Get access to below-market deals, auction pipeline & quick sales.",
+        "error": "Could not enable investor mode",
+        "success": "Investor mode enabled!",
+        "enable": "Enable"
+      },
+      "developerPro": {
+        "title": "Developer tools require Pro",
+        "subtitle": "Unlimited listings, project showcases, pre-sale management, and featured placement are all part of the Developer Pro plan.",
+        "trial": "Start 7-day free trial",
+        "previewTools": "Preview listing tools"
+      },
+      "proUpgrade": {
+        "title": "Unlock the full Dashboard",
+        "subtitle": "Analytics, CRM, priority ads & more with Pro.",
+        "cta": "Upgrade to Pro"
+      },
+      "listings": {
+        "title": "Your Active Listings",
+        "views": "{{count}} views",
+        "viewAll": "View all listings",
+        "emptyTitle": "No listings yet",
+        "emptySubtitle": "Create your first listing to get started"
+      },
+      "sellerCrossSell": {
+        "title": "Looking for your next home?",
+        "subtitle": "Browse listings while you sell - all in one place.",
+        "browse": "Browse"
+      },
+      "professional": {
+        "servicesTitle": "My Services",
+        "servicesConfigured": "{{count}} service(s) configured.",
+        "servicesEmpty": "Add the services you offer so clients can find and book you.",
+        "editServices": "Edit Services",
+        "addServices": "Add Services",
+        "incomingLeads": "Incoming Leads",
+        "newCount": "{{count}} new",
+        "totalRequests": "{{count}} total request(s).",
+        "leadsEmpty": "Client consultation and callback requests will appear here.",
+        "calendarTitle": "Calendar & Calls",
+        "calendarSubtitle": "Manage your availability, video links, and calendar sync for client bookings.",
+        "configure": "Configure"
+      }
+    },
+    "booking": {
+      "title": "Booking & Calendar",
+      "subtitle": "Your consultations and scheduled viewings in one place."
+    },
+    "proFeatures": {
+      "developerProjects": "Developer projects",
+      "portfolioManagement": "Portfolio management"
     }
   },
   "pricing": {
@@ -539,6 +766,7 @@
     "showLess": "Show less",
     "comingSoon": "Coming soon",
     "beta": "Beta",
+    "live": "Live",
     "learnMore": "Learn more",
     "getStarted": "Get started",
     "upgradeNow": "Upgrade now",
@@ -550,7 +778,21 @@
     "unauthorizedSubtitle": "You don't have permission to view this page.",
     "proRequired": "Pro subscription required",
     "proRequiredSubtitle": "Upgrade to access this feature.",
-    "sessionExpired": "Session expired. Please sign in again."
+    "sessionExpired": "Session expired. Please sign in again.",
+    "skipToMain": "Skip to main content",
+    "toggleTheme": "Toggle theme",
+    "buyerRenter": "Buyer / Renter",
+    "admin": "Admin",
+    "listProperty": "List Property",
+    "listing": "Listing",
+    "newBuilding": "New Building",
+    "upgrade": "Upgrade",
+    "proActive": "Pro ✓",
+    "closeMenu": "Close menu",
+    "openMenu": "Open menu",
+    "lightMode": "Light Mode",
+    "darkMode": "Dark Mode",
+    "at": "at"
   },
   "footer": {
     "tagline": "Greece's AI-powered property platform",
@@ -560,7 +802,7 @@
     "company": "Company",
     "links": {
       "listings": "Listings",
-      "auctions": "Court Auctions",
+      "auctions": "Property Auctions",
       "quickSale": "Quick Sale",
       "openHouses": "Open Houses",
       "newBuilds": "New Builds",
@@ -780,7 +1022,7 @@
       "commercial": "Commercial",
       "land": "Land & development",
       "mixed": "Mixed portfolio",
-      "distressed": "Distressed / opportunistic"
+      "distressed": "Off-market / opportunistic"
     },
     "dealSize": {
       "label": "Deal Size",
@@ -840,11 +1082,11 @@
       },
       "3": {
         "title": "Confidential Offer",
-        "subtitle": "Guaranteed cash offer within 96 hours."
+        "subtitle": "Preliminary cash offer within 96 hours, subject to review."
       },
       "4": {
-        "title": "Close in 96h",
-        "subtitle": "Accept and close. We handle title, notary, everything."
+        "title": "Target 96h completion",
+        "subtitle": "Accept and complete when checks are clear. We coordinate title, notary, and next steps."
       }
     },
     "propertyTypes": {
@@ -878,16 +1120,18 @@
   },
   "notificationsPanel": {
     "title": "Notifications",
+    "markAllRead": "Mark all read",
+    "empty": "You're all caught up!",
     "unread": "You have {{count}} unread notification{{plural}}. Check your investor dashboard for new Quick Sale deals.",
     "allClear": "No new notifications. You're all caught up!"
   },
   "footerFull": {
-    "tagline": "Greece's most advanced real estate platform. Data-driven listings, Greek auctions, instant offers, and AI-powered market insights.",
+    "tagline": "Greece's most advanced real estate platform. Data-driven listings, Greek property auctions, Quick Sale™ preliminary offers, and AI-powered market insights.",
     "platform": {
       "title": "Platform",
       "buy": "Buy Property",
       "rent": "Rent Property",
-      "auctions": "Greek Auctions",
+      "auctions": "Greek Property Auctions",
       "quickSale": "Quick Sale™",
       "professionals": "Professionals",
       "openHouses": "Open Houses",
@@ -922,7 +1166,7 @@
       "landAny": "Land / Plot (any)",
       "landNoBuilding": "Land (no building)",
       "landWithBuilding": "Land with building",
-      "agricultural": "Agricultural plot",
+      "agricultural": "Agricultural land",
       "plotWithBuilding": "Plot with building",
       "commercial": "All Commercial & Offices"
     }
@@ -1014,7 +1258,7 @@
       "badge": "Investor Deal Flow — Exclusive Access",
       "title": "Private Quick Sale™",
       "titleHighlight": "Deal Pipeline",
-      "subtitle": "Off-market distressed assets, pre-foreclosures, and motivated seller properties — curated for institutional buyers and family offices.",
+      "subtitle": "Off-market, time-sensitive and motivated-seller opportunities — curated for institutional buyers and family offices.",
       "liveDeals": "{{count}} live deals",
       "requestInvitation": "Request invitation",
       "planActive": "{{tier}} Plan Active",
@@ -1058,6 +1302,1639 @@
       "pendingCTA": "Application pending",
       "pendingCTANote": "No action needed — we'll reach out once your application is reviewed.",
       "reApplyNote": "Submit a new application for consideration."
+    }
+  },
+  "consultation": {
+    "remoteAvailable": "Remote available",
+    "premiumService": "Pro",
+    "onRequest": "On request",
+    "emptyServices": "No services are configured yet. You can still send a general consultation request.",
+    "continueGeneral": "Continue as general consultation",
+    "servicePrompt": "What service do you need?",
+    "continue": "Continue",
+    "signInTitle": "Sign in to book a consultation",
+    "signInDescription": "{{name}} can receive booking requests only from signed-in mAI prop accounts.",
+    "signIn": "Sign in",
+    "professionalFallback": "Professional",
+    "toastSignIn": "Please sign in to book a consultation.",
+    "toastMissingDetails": "Please fill in your details.",
+    "toastSubmitError": "Could not book consultation. Please try again.",
+    "videoMessageHosted": "Video consultation requested via mAI prop video room",
+    "videoMessageLink": "Video consultation requested via professional meeting link",
+    "inPersonMessage": "In-person consultation requested",
+    "calendarTitle": "Tentative consultation with {{name}}",
+    "calendarDescription": "{{service}} request on mAI prop. The professional still needs to confirm this session.",
+    "genericService": "Consultation",
+    "dialogTitleDone": "Consultation request sent",
+    "dialogTitleBook": "Book with {{name}}",
+    "dialogDescription": "Select a professional service, preferred time, and contact details for a consultation request.",
+    "successTitle": "Consultation request received.",
+    "successDescription": "{{name}} still needs to confirm the session details before anything is scheduled.",
+    "service": "Service",
+    "type": "Type",
+    "video": "Video",
+    "inPerson": "In person",
+    "dateTime": "Date & time",
+    "rate": "Rate",
+    "hostedVideoAccepted": "mAI prop video room accepted",
+    "externalVideoAccepted": "Professional meeting link accepted",
+    "downloadIcs": "Download .ics",
+    "done": "Done",
+    "steps": {
+      "service": "Service",
+      "type": "Type",
+      "schedule": "Schedule",
+      "details": "Details"
+    },
+    "meetingPrompt": "How would you like to meet?",
+    "meetInPerson": "In person",
+    "meetInPersonDescription": "Meet at their office or site",
+    "videoRequest": "Video request",
+    "hostedVideoRoom": "mAI prop video room after confirmation",
+    "professionalMeetingLink": "Professional meeting link",
+    "notAvailable": "Not available",
+    "videoUnavailableToast": "This service is not available via video",
+    "noAvailability": "No availability has been set yet. Send a request and the professional will propose a time.",
+    "selectDay": "Select a day",
+    "selectTime": "Select time",
+    "phoneOptional": "Phone (optional)",
+    "notesOptional": "Additional notes (optional)",
+    "notesPlaceholder": "Describe your project, goals, or property...",
+    "when": "When",
+    "with": "With",
+    "sendRequest": "Send request",
+    "pricingModels": {
+      "hourly": "Hourly",
+      "daily": "Daily",
+      "fixed": "Fixed"
+    },
+    "rateSuffixes": {
+      "hourly": "/hr",
+      "daily": "/day",
+      "fixed": ""
+    }
+  },
+  "createListing": {
+    "title": "Create New Listing",
+    "stepProgress": "Step {{current}} of {{total}} - {{label}}",
+    "steps": {
+      "type": "Type",
+      "details": "Details",
+      "features": "Features",
+      "location": "Location",
+      "pricing": "Pricing",
+      "photos": "Photos"
+    },
+    "plan": {
+      "pro": "Pro",
+      "free": "Free"
+    },
+    "guard": {
+      "sellSideOnly": "Creating listings is for sellers, agents, institutions, and developers. Switch your participant type in Settings.",
+      "redirecting": "Redirecting..."
+    },
+    "limit": {
+      "title": "Listing Limit Reached",
+      "description": "You have reached the {{limit}}-listing limit on your current plan ({{plan}}). Upgrade to add more listings.",
+      "upgradePlan": "Upgrade Plan",
+      "backToDashboard": "Back to Dashboard"
+    },
+    "draft": {
+      "autoSaved": "Draft auto-saved",
+      "savedDraft": "You have a saved draft",
+      "restore": "Restore",
+      "discard": "Discard"
+    },
+    "actions": {
+      "cancel": "Cancel",
+      "back": "Back",
+      "next": "Next",
+      "saveDraft": "Save Draft",
+      "publishing": "Publishing...",
+      "publish": "Publish Listing"
+    },
+    "type": {
+      "heading": "What are you listing?",
+      "listingType": "Listing Type",
+      "sale": "For Sale",
+      "saleDesc": "Sell your property",
+      "rent": "For Rent",
+      "rentDesc": "Monthly or long-term",
+      "openHouse": "Open House",
+      "openHouseDesc": "Public viewing event",
+      "preSale": "Pre-sale / Off-plan",
+      "preSaleDesc": "New development before completion",
+      "newBuildDetails": "New Build Details",
+      "constructionPhase": "Construction Phase",
+      "selectPhase": "Select phase...",
+      "progressHint": "Shown on the project page with a progress indicator",
+      "deliveryYear": "Estimated Delivery Year",
+      "expectedCompletionHint": "Shown as \"Expected completion\"",
+      "newBuildNoticeBefore": "Your listing will appear in the",
+      "newBuilds": "New Builds",
+      "newBuildNoticeAfter": "section with a dedicated project showcase page.",
+      "offMarket": "Off-market",
+      "offMarketDesc": "Exclusive - not publicly advertised",
+      "propertyType": "Property Type",
+      "subtype": "Subtype",
+      "optional": "(optional)",
+      "phases": {
+        "planning": "Planning / Permits",
+        "foundation": "Foundation stage",
+        "underConstruction": "Under construction",
+        "toppingOut": "Topping out (structure done)",
+        "shellComplete": "Shell complete (fitting out)",
+        "completedNew": "Completed / New"
+      }
+    },
+    "details": {
+      "heading": "Property Details",
+      "title": "Title",
+      "titlePlaceholder": "e.g. Modern 2-bed apartment in Kolonaki",
+      "description": "Description",
+      "descriptionPlaceholder": "Describe the property in detail - highlights, condition, location perks, investment potential...",
+      "generating": "Generating...",
+      "regenerateWithAi": "Regenerate with AI",
+      "writeWithAi": "Write with AI",
+      "aiAreaHint": "Fill in Area (m²) below for better AI results",
+      "area": "Area (m²)",
+      "yearBuilt": "Year Built",
+      "rooms": "Rooms",
+      "bedrooms": "Bedrooms",
+      "bathrooms": "Bathrooms",
+      "kitchens": "Kitchens",
+      "livingRooms": "Living Rooms",
+      "levels": "Levels",
+      "floorSection": "Floor",
+      "floor": "Floor",
+      "totalFloorsInBuilding": "Total Floors in Building",
+      "systemsCondition": "Systems & condition",
+      "heating": "Heating",
+      "condition": "Condition",
+      "commercialDetails": "Commercial Details",
+      "subtype": "Subtype",
+      "plotSurface": "Plot Surface (m²)",
+      "floorHeight": "Floor Height (m)",
+      "wcCount": "WC Count",
+      "totalFloors": "Total Floors",
+      "landDetails": "Land Details",
+      "facadeLength": "Facade Length (m)",
+      "plotDepth": "Plot Depth (m)",
+      "coverageRatio": "Coverage Ratio (%)",
+      "maxBuildingAllowance": "Max Building Allowance (m²)",
+      "distanceFromSea": "Distance from Sea (m)",
+      "distanceFromCity": "Distance from City (m)",
+      "slope": "Slope",
+      "zoneType": "Zone Type",
+      "roadType": "Road Type",
+      "energy": "Energy",
+      "energyClass": "Energy Class"
+    },
+    "features": {
+      "heading": "Features & Amenities",
+      "internal": "Internal",
+      "external": "External",
+      "constructionCharacteristics": "Construction Characteristics",
+      "suitableFor": "Suitable For",
+      "landClassification": "Land Classification",
+      "utilities": "Utilities",
+      "items": {
+        "elevator": "Elevator",
+        "airConditioning": "Air Conditioning",
+        "solarWaterHeating": "Solar Water Heating",
+        "storageSpace": "Storage Space",
+        "secureDoor": "Secure Door",
+        "alarm": "Alarm",
+        "cctv": "CCTV",
+        "securitySystem": "Security System",
+        "fireplace": "Fireplace",
+        "underfloorHeating": "Underfloor Heating",
+        "furnished": "Furnished",
+        "doubleGlazing": "Double Glazing",
+        "windowScreens": "Window Screens",
+        "attic": "Attic",
+        "internalStaircase": "Internal Staircase",
+        "smartHome": "Smart Home",
+        "nightPowerRate": "Night Power Rate",
+        "satelliteReceiver": "Satellite Receiver",
+        "painted": "Painted",
+        "equipped": "Equipped",
+        "threePhasePower": "3-Phase Power",
+        "structuredCabling": "Structured Cabling",
+        "parking": "Parking",
+        "balcony": "Balcony",
+        "garden": "Garden",
+        "pool": "Pool",
+        "view": "View",
+        "facade": "Facade",
+        "awning": "Awning",
+        "disabilityAccess": "Disability Access",
+        "cornerProperty": "Corner Property",
+        "penthouse": "Penthouse",
+        "loadingDock": "Loading Dock",
+        "neoclassical": "Neoclassical",
+        "preservedBuilding": "Preserved Building",
+        "virtualTour": "Virtual Tour",
+        "videoTour": "Video Tour",
+        "students": "Students",
+        "holidayHome": "Holiday Home",
+        "investment": "Investment",
+        "commercialUse": "Commercial Use",
+        "buildable": "Buildable",
+        "withinCityPlan": "Within City Plan",
+        "withinSettlement": "Within Settlement",
+        "landConcession": "Land Concession",
+        "cornerPlot": "Corner Plot",
+        "waterSupply": "Water Supply",
+        "electricitySupply": "Electricity Supply",
+        "tourismDevelopment": "Tourism Development",
+        "commercial": "Commercial"
+      }
+    },
+    "location": {
+      "checkingConnections": "Checking connections...",
+      "allConnected": "All required services connected",
+      "needsAttention": "Some services need attention",
+      "supabase": "Supabase",
+      "connected": "Connected",
+      "unavailable": "Unavailable",
+      "storage": "Storage (listing images)",
+      "ready": "Ready",
+      "autocomplete": "Location autocomplete",
+      "notAvailable": "Not available",
+      "heading": "Location",
+      "city": "City",
+      "cityPlaceholder": "e.g. Athens",
+      "streetAddress": "Street Address",
+      "googleHint": "(start typing for Google suggestions)",
+      "addressGooglePlaceholder": "e.g. Voukourestiou 14, Athens",
+      "addressPlaceholder": "e.g. Voukourestiou 14",
+      "searchingAddress": "Searching address...",
+      "regionMunicipality": "Region / Municipality",
+      "postalCode": "Postal Code",
+      "cadastreNumber": "Cadastre Number",
+      "optional": "Optional",
+      "enfiaZone": "ENFIA Zone",
+      "enfiaPlaceholder": "e.g. Zone 3",
+      "privacyHint": "Exact coordinates will be requested separately. Address is shown approximately on the map for privacy."
+    },
+    "pricing": {
+      "heading": "Pricing",
+      "aiEstimate": "AI Market Estimate",
+      "analysing": "Analysing...",
+      "reestimate": "Re-estimate",
+      "getEstimate": "Get AI Estimate",
+      "aiHint": "Get an AI-powered price estimate based on your property details and current Greek market data.",
+      "analysingArea": "Analysing Greek market data for {{area}}...",
+      "yourArea": "your area",
+      "min": "Min",
+      "suggested": "Suggested",
+      "max": "Max",
+      "confidence": "Confidence",
+      "confidenceLevels": {
+        "high": "high",
+        "medium": "medium",
+        "low": "low"
+      },
+      "useThisPrice": "Use this price",
+      "monthlyRent": "Monthly Rent (€)",
+      "askingPrice": "Asking Price (€)",
+      "rentalTerms": "Rental Terms",
+      "securityDeposit": "Security Deposit (months)",
+      "sharedExpenses": "Avg Monthly Shared Expenses (€)",
+      "minRentalPeriod": "Min Rental Period (months)",
+      "availableFrom": "Available From",
+      "noAgentFee": "No Agent Fee",
+      "petsAllowed": "Pets Allowed",
+      "shortTermRental": "Short-term / Airbnb",
+      "auctionDetails": "Auction Details",
+      "firstOfferPrice": "First Offer Price (€)",
+      "auctionDateTime": "Auction Date & Time",
+      "auctionOfficerPlatform": "Auction Officer / Platform",
+      "auctionOfficerPlaceholder": "e.g. eAuction / notary office",
+      "openHouseDetails": "Open House Details",
+      "dateTime": "Date & Time",
+      "agentListing": "Agent Listing",
+      "exclusiveHint": "Mark this as an exclusive listing (you are the sole agent).",
+      "exclusive": "Exclusive",
+      "featuredListing": "Featured Listing (Pro)",
+      "featuredHint": "Get priority placement in search results with a featured badge.",
+      "featuredBadge": "Featured badge",
+      "priority": "Priority (0-10)"
+    },
+    "photos": {
+      "heading": "Property Photos",
+      "subtitle": "Upload up to 20 photos. Drag to reorder. Click \"Set as cover\" to choose the main photo.",
+      "dropPrompt": "Drop photos here or click to upload",
+      "fileHint": "JPG, PNG, WEBP - up to 10MB each - max 20 photos",
+      "uploadedOne": "{{count}} photo uploaded",
+      "uploadedOther": "{{count}} photos uploaded",
+      "dragToReorder": "Drag to reorder",
+      "coverAlt": "Cover",
+      "coverSelected": "Cover photo selected",
+      "coverHint": "This image will be the main thumbnail",
+      "visibilityHint": "Adding photos increases listing visibility by up to 3x. You can still publish without photos."
+    },
+    "validation": {
+      "titleRequired": "Title is required",
+      "areaRequired": "Property area (m²) is required",
+      "cityRequired": "City is required",
+      "priceRequired": "Price is required",
+      "monthlyRentRequired": "Monthly rent is required",
+      "askingPriceRequired": "Asking price is required",
+      "firstOfferRequired": "First offer price is required",
+      "openHouseDateRequired": "Open house date & time is required",
+      "requiredFields": "Please fill in all required fields",
+      "priceAreaPositive": "Price and area must be greater than zero",
+      "signInRequired": "You must be signed in to publish a listing",
+      "fileTooLargeOne": "{{files}} exceeds the 10 MB limit",
+      "fileTooLargeOther": "{{files}} exceed the 10 MB limit",
+      "uploadFailed": "Upload failed",
+      "failedToUpload": "Failed to upload {{file}}",
+      "savedDraft": "Listing saved as draft!",
+      "published": "Listing published successfully!",
+      "submissionFailed": "Submission failed"
+    },
+    "options": {
+      "select": "Select...",
+      "heating": {
+        "autonomous_oil": "Autonomous (oil)",
+        "autonomous_gas": "Autonomous (gas)",
+        "autonomous": "Autonomous (other)",
+        "central_oil": "Central (oil)",
+        "central_gas": "Central (gas)",
+        "central": "Central (other)",
+        "floor": "Underfloor",
+        "none": "None",
+        "other": "Other"
+      },
+      "condition": {
+        "new": "New",
+        "under_construction": "Under construction",
+        "renovated": "Renovated",
+        "needs_renovation": "Needs renovation",
+        "unfinished": "Unfinished",
+        "preserved": "Preserved",
+        "neoclassical": "Neoclassical"
+      },
+      "commercialSubtypes": {
+        "shop": "shop",
+        "office": "office",
+        "warehouse": "warehouse",
+        "hotel": "hotel",
+        "restaurant": "restaurant",
+        "showroom": "showroom",
+        "clinic": "clinic",
+        "industrial": "industrial",
+        "other": "other"
+      },
+      "slopes": {
+        "flat": "flat",
+        "slight": "slight",
+        "steep": "steep"
+      },
+      "zoneTypes": {
+        "residential": "residential",
+        "agricultural": "agricultural",
+        "tourist": "tourist",
+        "industrial": "industrial",
+        "commercial": "commercial",
+        "mixed": "mixed"
+      },
+      "roadTypes": {
+        "asphalt": "asphalt",
+        "paved": "paved",
+        "dirt": "dirt"
+      }
+    },
+    "propertyTypes": {
+      "apartment": {
+        "label": "Apartment",
+        "description": "Flats & apartments in buildings - studios to penthouses"
+      },
+      "house": {
+        "label": "House",
+        "description": "Detached, semi-detached, and terraced homes"
+      },
+      "villa": {
+        "label": "Villa",
+        "description": "Luxury stand-alone villas - often with pools and sea views"
+      },
+      "land": {
+        "label": "Land",
+        "description": "Buildable plots, agricultural land, and beachfront parcels"
+      },
+      "commercial": {
+        "label": "Commercial",
+        "description": "Retail shops, warehouses, offices, clinics, showrooms & more"
+      },
+      "office": {
+        "label": "Office",
+        "description": "Private offices, coworking spaces, and business centres"
+      },
+      "studio": {
+        "label": "Studio",
+        "description": "Open-plan studio apartments - ideal for singles or short-term rental"
+      },
+      "maisonette": {
+        "label": "Maisonette",
+        "description": "Split-level apartments spanning two floors"
+      },
+      "warehouse": {
+        "label": "Warehouse",
+        "description": "Industrial, storage, and logistics warehouse space"
+      },
+      "hotel": {
+        "label": "Hotel / B&B",
+        "description": "Operational hotels, boutique properties, and B&Bs"
+      },
+      "mixed_use": {
+        "label": "Mixed-Use",
+        "description": "Buildings combining residential and commercial uses"
+      },
+      "parking": {
+        "label": "Parking",
+        "description": "Covered or open parking spaces and garages"
+      },
+      "storage": {
+        "label": "Storage",
+        "description": "Storage units and cellar spaces"
+      }
+    },
+    "subtypes": {
+      "studio": {
+        "label": "Studio",
+        "description": "Open-plan single room, ideal for singles or short-term rental"
+      },
+      "1bedroom": {
+        "label": "1-Bedroom",
+        "description": "Compact flat with separate sleeping area"
+      },
+      "2bedroom": {
+        "label": "2-Bedroom",
+        "description": "Popular choice for couples and small families"
+      },
+      "3bedroom": {
+        "label": "3-Bedroom",
+        "description": "Spacious family apartment"
+      },
+      "4bedroom": {
+        "label": "4+ Bedrooms",
+        "description": "Large family or multi-room apartment"
+      },
+      "ground_floor": {
+        "label": "Ground Floor",
+        "description": "Street-level unit, often with private garden access"
+      },
+      "basement": {
+        "label": "Basement",
+        "description": "Lower-ground level"
+      },
+      "detached": {
+        "label": "Detached",
+        "description": "Freestanding single-family home on its own plot"
+      },
+      "semi_detached": {
+        "label": "Semi-Detached",
+        "description": "Paired home sharing one party wall"
+      },
+      "terraced": {
+        "label": "Terraced / Row",
+        "description": "Mid-terrace home in a row of similar properties"
+      },
+      "townhouse": {
+        "label": "Townhouse",
+        "description": "Multi-storey home in an urban setting"
+      },
+      "bungalow": {
+        "label": "Bungalow",
+        "description": "Single-storey home, accessible and easy to maintain"
+      },
+      "buildable": {
+        "label": "Buildable Plot",
+        "description": "Within city plan - approved for residential construction"
+      },
+      "agricultural": {
+        "label": "Agricultural",
+        "description": "Farming or olive grove land, sometimes buildable"
+      },
+      "coastal": {
+        "label": "Coastal / Seafront",
+        "description": "Adjacent to sea or beach"
+      },
+      "forest": {
+        "label": "Forest / Woodland",
+        "description": "Wooded land, often outside city plan"
+      },
+      "industrial": {
+        "label": "Industrial Zone",
+        "description": "VIPE / VIPA industrial plot for commercial use"
+      },
+      "tourism": {
+        "label": "Tourism Zone",
+        "description": "Approved for tourist development (hotel, resort)"
+      },
+      "shop": {
+        "label": "Retail Shop",
+        "description": "Street-level commercial space for retail or services"
+      },
+      "warehouse": {
+        "label": "Warehouse / Storage",
+        "description": "Storage or logistics space"
+      },
+      "craft_workshop": {
+        "label": "Craft / Workshop",
+        "description": "Light production or artisan workshop"
+      },
+      "hotel": {
+        "label": "Hotel / B&B",
+        "description": "Hospitality property with multiple rooms"
+      },
+      "commercial_building": {
+        "label": "Commercial Building",
+        "description": "Multi-unit professional building"
+      },
+      "hall": {
+        "label": "Hall / Event Space",
+        "description": "Large hall for events, ceremonies, or conferences"
+      },
+      "showroom": {
+        "label": "Showroom / Exhibition",
+        "description": "Open-plan display or exhibition space"
+      },
+      "restaurant": {
+        "label": "Restaurant / Cafe",
+        "description": "Food & beverage premises, often with fitted kitchen"
+      },
+      "clinic": {
+        "label": "Clinic / Medical",
+        "description": "Purpose-built medical or dental practice"
+      },
+      "mixed_use": {
+        "label": "Mixed-Use Building",
+        "description": "Ground-floor commercial with residential above"
+      },
+      "office_private": {
+        "label": "Office - Private",
+        "description": "Dedicated closed office space for a single team"
+      },
+      "office_open_plan": {
+        "label": "Office - Open Plan",
+        "description": "Flexible open layout - ideal for growing teams"
+      },
+      "office_coworking": {
+        "label": "Coworking / Flex",
+        "description": "Shared space with month-to-month flexibility"
+      },
+      "office_business": {
+        "label": "Business Centre",
+        "description": "Serviced offices with reception and meeting rooms"
+      },
+      "office_floor": {
+        "label": "Whole Floor",
+        "description": "Full building floor - prestige address"
+      },
+      "other_commercial": {
+        "label": "Other",
+        "description": "Other commercial property type"
+      },
+      "private_office": {
+        "label": "Private Office",
+        "description": "Dedicated closed space for a single team"
+      },
+      "open_plan": {
+        "label": "Open Plan",
+        "description": "Flexible open layout - ideal for growing teams"
+      },
+      "coworking": {
+        "label": "Coworking / Flex",
+        "description": "Shared space with month-to-month flexibility"
+      },
+      "business_centre": {
+        "label": "Business Centre",
+        "description": "Serviced offices with reception and meeting rooms"
+      },
+      "floor": {
+        "label": "Whole Floor",
+        "description": "Full building floor - prestige address"
+      },
+      "converted": {
+        "label": "Converted Space",
+        "description": "Repurposed residential or industrial space"
+      }
+    }
+  },
+  "newBuildingListing": {
+    "title": "New Building Listing",
+    "stepProgress": "Step {{current}} of {{total}} - {{label}}",
+    "steps": {
+      "building": "Building",
+      "unit": "Unit",
+      "media": "Media",
+      "listing": "Listing",
+      "photos": "Photos"
+    },
+    "plan": {
+      "developerPro": "Developer Pro",
+      "free": "Free"
+    },
+    "guard": {
+      "developersOnly": "New building listings are for developers only. Switch your account type in Settings.",
+      "redirecting": "Redirecting..."
+    },
+    "limit": {
+      "title": "Listing Limit Reached",
+      "description": "You have reached the {{limit}}-listing limit on your current plan ({{plan}}). Upgrade to add more listings.",
+      "upgradePlan": "Upgrade Plan",
+      "backToDashboard": "Back to Dashboard"
+    },
+    "building": {
+      "heading": "Building & Project Details",
+      "projectName": "Project name",
+      "projectNamePlaceholder": "e.g. Marina Heights",
+      "permitNumber": "Building permit number",
+      "permitPlaceholder": "e.g. 12345/2024",
+      "city": "City",
+      "cityPlaceholder": "e.g. Athens",
+      "developerCompany": "Developer company",
+      "companyPlaceholder": "Company name",
+      "architectGroup": "Architect / group",
+      "architectPlaceholder": "Architect or group",
+      "constructionCompany": "Construction company",
+      "constructorPlaceholder": "Constructor",
+      "municipality": "Municipality",
+      "municipalityPlaceholder": "Municipality",
+      "address": "Address",
+      "addressPlaceholder": "Street, number",
+      "latitude": "Latitude",
+      "longitude": "Longitude",
+      "projectDescription": "Project description",
+      "descriptionPlaceholder": "Brief description...",
+      "areaDescription": "Area description",
+      "areaDescriptionPlaceholder": "Neighbourhood, amenities...",
+      "permitApprovalDate": "Permit approval date",
+      "constructionStart": "Construction start",
+      "structuralCompletion": "Structural completion",
+      "deliveryDate": "Delivery date"
+    },
+    "unit": {
+      "heading": "Unit Details",
+      "subtitle": "Details for the specific unit you are listing.",
+      "unitId": "Unit ID",
+      "floor": "Floor",
+      "unitNumber": "Unit number",
+      "internalSqm": "Internal sqm",
+      "balconySqm": "Balcony sqm",
+      "price": "Price (€)",
+      "bedrooms": "Bedrooms",
+      "bathrooms": "Bathrooms",
+      "livingRooms": "Living rooms",
+      "storageSqm": "Storage sqm",
+      "parkingSqm": "Parking sqm",
+      "kitchenType": "Kitchen type",
+      "energyClass": "Energy class",
+      "heating": "Heating",
+      "heatingPlaceholder": "e.g. heat pump",
+      "cooling": "Cooling",
+      "coolingPlaceholder": "e.g. AC",
+      "parkingPrice": "Parking price (€)",
+      "storagePrice": "Storage price (€)",
+      "seaView": "Sea view",
+      "cityView": "City view",
+      "mountainView": "Mountain view",
+      "vatIncluded": "VAT included",
+      "kitchenTypes": {
+        "open": "open",
+        "closed": "closed",
+        "semi-open": "semi-open",
+        "kitchenette": "kitchenette",
+        "none": "none"
+      }
+    },
+    "media": {
+      "heading": "Project Media (Optional)",
+      "subtitle": "Upload renderings, floor plans, brochures, etc. You can add more later from the project page.",
+      "pdfBrochure": "PDF brochure",
+      "mediaFile": "media file",
+      "types": {
+        "rendering": "Building renderings",
+        "floor_plan": "Floor plans",
+        "site_plan": "Site plan",
+        "brochure_pdf": "Project brochure (PDF)",
+        "drone": "Drone photos",
+        "walkthrough": "3D walkthrough",
+        "progress": "Construction progress",
+        "video": "Video"
+      }
+    },
+    "listing": {
+      "heading": "Listing Info",
+      "subtitle": "Title and description for the listing. A default title was suggested from your project and unit.",
+      "title": "Listing title",
+      "titlePlaceholder": "e.g. Marina Heights - Unit A101",
+      "description": "Description",
+      "descriptionPlaceholder": "Describe the unit, building amenities, finishes..."
+    },
+    "photos": {
+      "heading": "Listing Photos",
+      "subtitle": "Upload photos for your listing. Drag to reorder. Click \"Set as cover\" on the main photo.",
+      "dropPrompt": "Drop photos or click to upload",
+      "fileHint": "JPG, PNG, WEBP - max 20",
+      "cover": "Cover",
+      "setAsCover": "Set as cover"
+    },
+    "actions": {
+      "back": "Back",
+      "next": "Next",
+      "creating": "Creating...",
+      "createListing": "Create Listing"
+    },
+    "links": {
+      "regularListing": "Create a regular listing",
+      "myProjects": "My projects"
+    },
+    "validation": {
+      "mustBeLoggedIn": "Must be logged in",
+      "uploadFailed": "Upload failed",
+      "failedToUpload": "Failed to upload {{file}}: {{message}}",
+      "projectNameRequired": "Project name is required",
+      "permitRequired": "Building permit number is required",
+      "cityRequired": "City is required",
+      "internalSqmRequired": "Internal sqm is required",
+      "priceRequired": "Price is required",
+      "bedroomsRequired": "Bedrooms are required",
+      "bathroomsRequired": "Bathrooms are required",
+      "titleRequired": "Listing title is required",
+      "photoRequired": "At least one photo is required",
+      "coverRequired": "Set a cover photo",
+      "projectFieldsRequired": "Fill in required project fields",
+      "unitFieldsRequired": "Fill in required unit fields",
+      "created": "New building listing created!",
+      "createFailed": "Failed to create new building listing. Please try again.",
+      "unsupportedFile": "Unsupported file"
+    }
+  },
+  "projects": {
+    "title": "Projects",
+    "subtitle": "Showcase development projects and link listings",
+    "newBuildingListing": "New Building Listing",
+    "newProject": "New Project",
+    "auth": {
+      "title": "Sign in to manage projects",
+      "subtitle": "Create and showcase your development projects",
+      "signIn": "Sign in"
+    },
+    "validation": {
+      "nameRequired": "Project name is required"
+    },
+    "create": {
+      "title": "Create project"
+    },
+    "fields": {
+      "name": "Name",
+      "namePlaceholder": "e.g. Marina Heights",
+      "description": "Description",
+      "descriptionPlaceholder": "Brief description...",
+      "city": "City",
+      "cityPlaceholder": "e.g. Athens",
+      "address": "Address",
+      "addressPlaceholder": "Street, number",
+      "permit": "Building permit number",
+      "permitPlaceholder": "e.g. 12345/2024",
+      "projectName": "Project name",
+      "projectNamePlaceholder": "Project name",
+      "projectDescription": "Project description"
+    },
+    "actions": {
+      "create": "Create",
+      "cancel": "Cancel",
+      "editFull": "Edit full",
+      "doneEditing": "Done editing",
+      "quickEdit": "Quick edit",
+      "deleteProject": "Delete project",
+      "unlink": "Unlink",
+      "backToDashboard": "Back to Dashboard"
+    },
+    "empty": {
+      "title": "No projects yet",
+      "subtitle": "Create a project to group and showcase your listings",
+      "cta": "Create your first project",
+      "noUnlinked": "No unlinked listings.",
+      "createOne": "Create one"
+    },
+    "labels": {
+      "permit": "Permit",
+      "listingsInProject": "Listings in this project",
+      "linkListings": "Link your listings"
+    },
+    "deleteDialog": {
+      "title": "Delete project",
+      "description": "Delete this project? Linked listings will be unlinked.",
+      "confirm": "Delete"
+    },
+    "detail": {
+      "fallbackProject": "Project",
+      "subtitle": "Edit project details, units, and media",
+      "sections": {
+        "dashboard": "Dashboard",
+        "basicInfo": "Basic project info",
+        "location": "Location",
+        "timeline": "Project timeline",
+        "media": "Media",
+        "units": "Units (inventory & pricing)",
+        "leads": "Lead management",
+        "linkedListings": "Linked listings"
+      },
+      "stats": {
+        "available": "Available",
+        "reserved": "Reserved",
+        "sold": "Sold",
+        "totalViews": "Total views",
+        "caption": "Sales tracking and project analytics."
+      },
+      "fields": {
+        "projectName": "Project name *",
+        "permitNumber": "Building permit number *",
+        "developerCompany": "Developer company",
+        "architectGroup": "Architect / developer group",
+        "constructionCompany": "Construction company",
+        "municipality": "Municipality",
+        "latitude": "Latitude",
+        "longitude": "Longitude",
+        "areaDescription": "Area description",
+        "permitApprovalDate": "Permit approval date",
+        "constructionStart": "Construction start",
+        "structuralCompletion": "Structural completion",
+        "deliveryDate": "Delivery date"
+      },
+      "placeholders": {
+        "companyName": "Company name",
+        "architectGroup": "Architect or group",
+        "constructor": "Constructor",
+        "projectDescription": "Brief description of the project...",
+        "municipality": "Municipality",
+        "latitude": "e.g. 37.9838",
+        "longitude": "e.g. 23.7275",
+        "areaDescription": "Neighbourhood, amenities, surroundings...",
+        "percentageIncrease": "e.g. 5 for +5%"
+      },
+      "media": {
+        "pdfBrochure": "PDF brochure",
+        "mediaFile": "media file",
+        "types": {
+          "rendering": "Building renderings",
+          "floor_plan": "Floor plans",
+          "site_plan": "Site plan",
+          "brochure_pdf": "Project brochure (PDF)",
+          "drone": "Drone photos",
+          "walkthrough": "3D walkthrough",
+          "progress": "Construction progress",
+          "video": "Video"
+        }
+      },
+      "labels": {
+        "percentIncrease": "% increase",
+        "unitFallback": "Unit {{floor}}-{{unit}}"
+      },
+      "status": {
+        "available": "Available",
+        "reserved": "Reserved",
+        "sold": "Sold"
+      },
+      "actions": {
+        "save": "Save",
+        "add": "Add",
+        "apply": "Apply",
+        "remove": "Remove",
+        "deleteMedia": "Delete {{type}}",
+        "bulkPriceUpdate": "Bulk price update",
+        "applyToAvailable": "Apply to available",
+        "editUnit": "Edit unit",
+        "deleteUnit": "Delete unit",
+        "addUnit": "Add unit",
+        "addLead": "Add lead",
+        "deleteLeadNamed": "Delete lead {{name}}"
+      },
+      "leads": {
+        "caption": "Track and manage leads interested in this project.",
+        "namePlaceholder": "Name *",
+        "emailPlaceholder": "Email",
+        "phonePlaceholder": "Phone",
+        "sourcePlaceholder": "Source",
+        "unitPlaceholder": "Unit of interest",
+        "notesPlaceholder": "Notes",
+        "unitLine": "Unit: {{unit}}",
+        "empty": "No leads yet."
+      },
+      "leadStatus": {
+        "new": "New",
+        "contacted": "Contacted",
+        "qualified": "Qualified",
+        "converted": "Converted",
+        "lost": "Lost"
+      },
+      "linkedListings": {
+        "caption": "Link existing listings to this project. These appear on the project showcase.",
+        "newBuilding": "New building"
+      },
+      "dialogs": {
+        "bulkPrice": {
+          "title": "Apply bulk price change",
+          "description": "Apply {{pct}}% price change to all available units? This cannot be undone."
+        },
+        "removeUnit": {
+          "title": "Remove unit",
+          "description": "Remove this unit from the project inventory?"
+        },
+        "removeLead": {
+          "title": "Remove lead",
+          "description": "Remove this lead from the project CRM?"
+        }
+      },
+      "errors": {
+        "notAuthenticated": "Not authenticated",
+        "uploadFailed": "Upload failed",
+        "noPricedUnits": "No available units with price to update",
+        "nonZeroPercentage": "Enter a non-zero percentage change.",
+        "noAvailableUnits": "No available units to update."
+      },
+      "toasts": {
+        "updatedUnits": "Updated {{count}} unit(s)"
+      },
+      "unitForm": {
+        "unitId": "Unit ID",
+        "floor": "Floor",
+        "unitNumber": "Unit number",
+        "status": "Status",
+        "internalSqm": "Internal sqm",
+        "balconySqm": "Balcony sqm",
+        "price": "Price (€)",
+        "bedrooms": "Bedrooms",
+        "bathrooms": "Bathrooms",
+        "kitchenType": "Kitchen type",
+        "energyClass": "Energy class",
+        "seaView": "Sea view",
+        "cityView": "City view",
+        "mountainView": "Mountain view"
+      },
+      "kitchenTypes": {
+        "open": "Open",
+        "closed": "Closed",
+        "semi-open": "Semi-open",
+        "kitchenette": "Kitchenette",
+        "none": "None"
+      },
+      "energyClasses": {
+        "A+": "A+",
+        "A": "A",
+        "B+": "B+",
+        "B": "B",
+        "C": "C",
+        "D": "D",
+        "E": "E",
+        "F": "F",
+        "G": "G",
+        "Exempt": "Exempt"
+      }
+    }
+  },
+  "newBuildDetail": {
+    "backToNewBuilds": "Back to new builds",
+    "fallbackInterestedBuyer": "Interested buyer",
+    "pricePerSqm": "{{price}} per m²",
+    "badges": {
+      "preSale": "Pre-sale"
+    },
+    "stats": {
+      "bed": "{{count}} bed",
+      "bath": "{{count}} bath",
+      "floors": "{{count}} floors",
+      "delivery": "Delivery {{year}}",
+      "energy": "Energy {{class}}"
+    },
+    "phases": {
+      "planning": "Planning & Permits",
+      "foundation": "Foundation",
+      "under_construction": "Structural Work",
+      "topping_out": "Topping Out",
+      "shell_complete": "Fitting Out",
+      "new": "Completed"
+    },
+    "notifications": {
+      "interestTitle": "New interest registered",
+      "interestBody": "{{contactName}} registered interest in {{listingTitle}}"
+    },
+    "toasts": {
+      "interestRegistered": "Interest registered — the developer will be in touch"
+    },
+    "ai": {
+      "title": "AI Market Insights",
+      "poweredBy": "Powered by mAI Prop OS",
+      "analysing": "Analysing market data...",
+      "vsMarket": "vs Market",
+      "rentalYield": "Rental Yield",
+      "grossYield": "Est. gross annual yield",
+      "estimate": "AI Estimate",
+      "confidence": "Confidence: {{confidence}}",
+      "unavailable": "Market analysis unavailable",
+      "signInSuffix": "to view AI market analysis",
+      "comparison": {
+        "belowMarket": "Below Market",
+        "atMarket": "At Market",
+        "aboveMarket": "Above Market"
+      }
+    },
+    "description": {
+      "title": "Project Description",
+      "showLess": "Show less",
+      "readMore": "Read more"
+    },
+    "energy": {
+      "title": "Energy Performance Certificate"
+    },
+    "features": {
+      "title": "Features & Amenities",
+      "count": "{{count}} features",
+      "internal": "Internal",
+      "external": "External",
+      "construction": "Construction",
+      "elevator": "Elevator",
+      "airConditioning": "Air Conditioning",
+      "solarWater": "Solar Water Heating",
+      "storage": "Storage Space",
+      "security": "Security System",
+      "fireplace": "Fireplace",
+      "underfloorHeating": "Underfloor Heating",
+      "smartHome": "Smart Home",
+      "parking": "Parking Space",
+      "garden": "Garden",
+      "pool": "Swimming Pool",
+      "view": "View",
+      "videoTour": "Video Tour",
+      "virtualTour": "Virtual Tour"
+    },
+    "sidebar": {
+      "callDeveloper": "Call developer",
+      "developer": "Developer",
+      "verifiedDeveloper": "Verified developer",
+      "projectInfo": "Project info",
+      "phase": "Phase",
+      "expectedCompletion": "Expected completion",
+      "energyClass": "Energy class",
+      "totalFloors": "Total floors",
+      "unitBedrooms": "Unit bedrooms",
+      "unitAreaFrom": "Unit area from",
+      "parking": "Parking",
+      "included": "Included",
+      "elevator": "Elevator",
+      "pool": "Pool",
+      "commonArea": "Common area",
+      "requestFloorPlans": "Request floor plans"
+    },
+    "interestCard": {
+      "submittedTitle": "Interest registered!",
+      "submittedBody": "The developer has been notified. Expect a response within 1-2 business days with unit availability and pricing.",
+      "messageCopy": "A copy of your enquiry has been sent to your messages",
+      "startingFrom": "Starting from",
+      "title": "Register your interest",
+      "signInBody": "Sign in to register interest and receive full unit availability, floor plans and pricing from the developer.",
+      "signInCta": "Sign in to Register Interest",
+      "preSaleNote": "Pre-sale pricing - early buyers may access preferential rates",
+      "body": "Receive unit availability, floor plans and pricing directly from the developer.",
+      "namePlaceholder": "Your name",
+      "phonePlaceholder": "Phone number (optional)",
+      "messagePlaceholder": "What are you looking for? (optional)",
+      "submit": "Register Interest",
+      "privacyNote": "Your enquiry is sent directly to the developer. No spam, no middlemen."
+    }
+  },
+  "legalPages": {
+    "privacy": {
+      "eyebrow": "Legal",
+      "title": "Privacy Policy",
+      "updated": "Last updated: 9 March 2026. Effective immediately upon publication.",
+      "sections": [
+        {
+          "title": "1. Introduction & Identity of the Controller",
+          "paragraphs": [
+            "maiProp is a real estate technology platform operated by maiProp Ltd, a company incorporated in Greece and registered with the Hellenic Companies Register (GEMI). We act as data controller under the EU General Data Protection Regulation (GDPR) 2016/679 and Greek Law 4624/2019.",
+            "Contact: privacy@maiprop.co, +30 210 123 4567, Kifissias Ave. 44, 15125 Athens, Greece. Our Data Protection Officer can be reached at dpo@maiprop.co."
+          ]
+        },
+        {
+          "title": "2. Scope of This Policy",
+          "paragraphs": [
+            "This Privacy Policy applies to personal data collected through the maiProp website, mobile applications, APIs, embedded widgets, third-party services we operate, and offline interactions such as property viewings, phone consultations, or support. It does not apply to third-party websites linked from our platform."
+          ],
+          "list": [
+            "The maiProp website and subdomains such as os.maiprop.co and properties.maiprop.co.",
+            "Mobile applications for iOS and Android, where applicable.",
+            "API integrations, embedded widgets, marketplace tools, and platform services.",
+            "Offline interactions with our staff, partners, or agents."
+          ]
+        },
+        {
+          "title": "3. Categories of Personal Data We Collect",
+          "paragraphs": [
+            "We collect different categories of data depending on how you use the platform. We do not intentionally collect special category data such as health, biometric, racial, political, or sexual orientation data."
+          ],
+          "table": {
+            "headers": [
+              "Category",
+              "Examples",
+              "Source"
+            ],
+            "rows": [
+              [
+                "Identity Data",
+                "Name, username, date of birth",
+                "Provided by you"
+              ],
+              [
+                "Contact Data",
+                "Email, phone, postal address",
+                "Provided by you"
+              ],
+              [
+                "Account Credentials",
+                "Hashed password, OAuth tokens",
+                "Generated at registration"
+              ],
+              [
+                "Profile Data",
+                "Photo, bio, certifications, role",
+                "Provided by you"
+              ],
+              [
+                "Transaction Data",
+                "Listings, offer requests, auction alerts, Quick Sale applications",
+                "Platform activity"
+              ],
+              [
+                "Usage and Technical Data",
+                "Pages visited, filters, IP address, browser, device, time zone",
+                "Automatically collected"
+              ],
+              [
+                "Communications Data",
+                "Messages, support tickets, consultation requests",
+                "Platform interactions"
+              ],
+              [
+                "Payment Data",
+                "Billing name and card metadata handled by Stripe",
+                "Provided by you"
+              ]
+            ]
+          }
+        },
+        {
+          "title": "4. Legal Bases for Processing",
+          "paragraphs": [
+            "We process personal data only where a lawful basis applies under GDPR Article 6."
+          ],
+          "list": [
+            "Performance of a contract: account management, listing services, viewing scheduling, messaging, and paid services.",
+            "Legitimate interests: fraud prevention, platform security, analytics, service improvement, and direct marketing to existing customers with opt-out.",
+            "Legal obligation: tax, accounting, AML/KYC, court orders, and other Greek or EU legal requirements.",
+            "Consent: optional marketing, non-essential cookies, and optional AI personalisation features.",
+            "Vital interests: emergencies where protection of life or safety is required."
+          ]
+        },
+        {
+          "title": "5. How We Use Your Data",
+          "paragraphs": [
+            "We use personal data to operate and improve the platform and to comply with applicable obligations. We do not sell personal data to third parties for their own marketing purposes."
+          ],
+          "list": [
+            "Create and manage accounts, verify identity, and prevent duplicate or fraudulent accounts.",
+            "Display, manage, and promote property listings and project showcases.",
+            "Facilitate viewings, Open House workflows, auction alerts, Quick Sale offers, and consultations.",
+            "Power AI search, property valuation, neighbourhood reports, and smart filters.",
+            "Process payments, send transactional notifications, respond to support, and resolve disputes.",
+            "Detect fraud, abuse, security incidents, and enforce our Terms of Service."
+          ]
+        },
+        {
+          "title": "6. Data Sharing & Third-Party Recipients",
+          "paragraphs": [
+            "We share data only where needed to provide the service, comply with law, or protect users and the platform."
+          ],
+          "list": [
+            "Service providers such as infrastructure, email, payment, analytics, AI, and mapping vendors under GDPR-compliant data processing terms.",
+            "Other platform users where needed for listings, messages, viewings, offers, and professional directory profiles.",
+            "Greek authorities, courts, tax bodies, law enforcement, and regulators where legally required.",
+            "Business transfer recipients in connection with a merger, acquisition, restructuring, or sale of assets, with notice where required.",
+            "Aggregated or anonymised market statistics that cannot identify you."
+          ]
+        },
+        {
+          "title": "7. International Data Transfers",
+          "paragraphs": [
+            "Data is primarily stored and processed in the European Economic Area. Where transfers outside the EEA occur, we use appropriate safeguards such as EU Standard Contractual Clauses, adequacy decisions, and data minimisation. You may request details by contacting privacy@maiprop.co."
+          ]
+        },
+        {
+          "title": "8. Data Retention",
+          "paragraphs": [
+            "We retain personal data only for as long as necessary for the purpose collected or as required by law."
+          ],
+          "list": [
+            "Account data: for the account lifetime and up to 5 years after closure where tax or AML duties apply.",
+            "Listing and transaction data: up to 7 years after a transaction or relevant activity.",
+            "Messages and communications: normally 3 years unless a dispute requires longer retention.",
+            "Usage and analytics data: up to 26 months in identifiable form, then anonymised.",
+            "Payment records: up to 10 years under accounting and VAT requirements.",
+            "AI interaction logs: up to 90 days in identifiable form for safety and abuse monitoring, then anonymised."
+          ]
+        },
+        {
+          "title": "9. Your Rights Under GDPR",
+          "paragraphs": [
+            "You may exercise your rights free of charge by contacting privacy@maiprop.co. We respond to verified requests within 30 calendar days, extendable to 90 days for complex requests with notice."
+          ],
+          "list": [
+            "Access, rectification, erasure, restriction, portability, and objection.",
+            "Withdrawal of consent where processing is based on consent.",
+            "Objection to direct marketing at any time.",
+            "Human review of AI-assisted recommendations where relevant.",
+            "Complaint to the Hellenic Data Protection Authority at www.dpa.gr."
+          ]
+        },
+        {
+          "title": "10. Cookies & Tracking Technologies",
+          "paragraphs": [
+            "We use cookies and similar technologies as described in our Cookie Policy. You can manage preferences through the consent banner or browser settings. Declining non-essential cookies does not affect core platform access."
+          ]
+        },
+        {
+          "title": "11. AI & Machine Learning",
+          "paragraphs": [
+            "maiProp uses AI for property valuation, search, neighbourhood analysis, filters, chat assistance, and investment analytics. These systems support human decisions and may contain errors."
+          ],
+          "list": [
+            "Models use aggregated and anonymised real estate data where possible.",
+            "Search queries and interaction data may be used in anonymised or pseudonymised form to improve performance.",
+            "AI tools do not make legally significant decisions about you without human oversight.",
+            "You may opt out of optional AI personalisation by contacting us."
+          ]
+        },
+        {
+          "title": "12. Security",
+          "paragraphs": [
+            "We use appropriate technical and organisational measures including TLS encryption, access controls, staff MFA, vulnerability assessments, infrastructure safeguards, and incident response procedures. No system is completely secure. If you suspect unauthorised access, contact security@maiprop.co immediately."
+          ]
+        },
+        {
+          "title": "13. Children's Privacy",
+          "paragraphs": [
+            "The platform is not directed to children under 16. We do not knowingly collect personal data from minors. If we become aware that such data was collected without appropriate consent, we will delete it promptly."
+          ]
+        },
+        {
+          "title": "14. Changes to This Policy",
+          "paragraphs": [
+            "We may update this Policy from time to time. Material changes will be notified by email or prominent platform notice at least 30 days before taking effect where required. Continued use after the effective date means acceptance of the revised Policy."
+          ]
+        },
+        {
+          "title": "15. Contact Us",
+          "list": [
+            "Privacy email: privacy@maiprop.co",
+            "DPO: dpo@maiprop.co",
+            "Post: maiProp Ltd, Privacy Team, Kifissias Ave. 44, 15125 Athens, Greece",
+            "Phone: +30 210 123 4567, Monday to Friday, 09:00 to 17:00 EET"
+          ]
+        }
+      ]
+    },
+    "terms": {
+      "eyebrow": "Legal",
+      "title": "Terms of Service",
+      "updated": "Last updated: 9 March 2026. These terms govern your use of the maiProp platform. Please read them carefully.",
+      "sections": [
+        {
+          "title": "1. Acceptance of Terms",
+          "paragraphs": [
+            "By accessing or using maiProp, you agree to these Terms of Service, our Privacy Policy, and our Cookie Policy. The platform is operated by maiProp Ltd in Greece. If you do not agree, you must stop using the platform. If you use the platform for a business, you confirm that you can bind that business to these Terms."
+          ]
+        },
+        {
+          "title": "2. Eligibility",
+          "paragraphs": [
+            "You must be at least 18 years old and legally capable under Greek law to use the platform."
+          ],
+          "list": [
+            "Your registration information must be accurate and current.",
+            "Your use must comply with applicable law.",
+            "You must not be subject to sanctions that prohibit transactions on the platform."
+          ]
+        },
+        {
+          "title": "3. Account Registration & Security",
+          "paragraphs": [
+            "Some features require an account. You are responsible for your credentials and all activity under your account. Notify security@maiprop.co immediately if you suspect unauthorised access. You may not share accounts, create duplicate accounts to bypass limits, or circumvent suspensions."
+          ]
+        },
+        {
+          "title": "4. Platform Services",
+          "paragraphs": [
+            "maiProp is a technology intermediary, not a real estate agent, broker, auctioneer, or financial advisor. We do not act as a party to property transactions and do not verify legal title, planning status, or property condition."
+          ],
+          "list": [
+            "Property listings for sale or rent.",
+            "Greek auction listing aggregation and alerts.",
+            "Quick Sale preliminary offers and AI-assisted valuation workflows.",
+            "Professional directory and marketplace services.",
+            "AI tools for search, valuation, neighbourhood reports, and analytics.",
+            "Messaging between users and professionals."
+          ]
+        },
+        {
+          "title": "5. Listing Standards & Prohibited Content",
+          "paragraphs": [
+            "Listings and submitted content must be accurate, lawful, and connected to a real property that the lister owns, is authorised to market, or has been engaged to list."
+          ],
+          "list": [
+            "No fraudulent, fictitious, duplicate, discriminatory, defamatory, obscene, threatening, or unlawful content.",
+            "No undisclosed encumbrances, disputes, or misleading property information intended to deceive buyers.",
+            "No phishing, scraping, data harvesting, or infringement of third-party rights.",
+            "We may remove non-compliant listings at our discretion without prior notice."
+          ]
+        },
+        {
+          "title": "6. AI-Generated Content & Valuations",
+          "paragraphs": [
+            "AI outputs are for informational and indicative purposes only. They are not professional valuations, legal advice, financial advice, tax advice, investment advice, or binding offers. You should independently verify information and seek professional advice before acting."
+          ]
+        },
+        {
+          "title": "7. Greek Auctions - Special Provisions",
+          "paragraphs": [
+            "Auction information is aggregated from public sources and may be incomplete or outdated. maiProp is not an e-auction platform and does not facilitate actual bidding."
+          ],
+          "list": [
+            "Participation in Greek judicial auctions is subject to specific legal requirements.",
+            "You are responsible for due diligence, legal advice, and checking title, encumbrances, possession, and disputes.",
+            "Auction properties may carry risks including encumbrances, occupancy issues, or pending proceedings."
+          ]
+        },
+        {
+          "title": "8. Fees & Payments",
+          "paragraphs": [
+            "Some features are paid, including premium listing packages, subscriptions, and Quick Sale services. Fees are displayed in Euros, include applicable Greek VAT where stated, and are processed through Stripe. Fees are non-refundable unless required by law or expressly stated. Contact billing@maiprop.co within 30 days if you believe a charge is incorrect."
+          ]
+        },
+        {
+          "title": "9. Intellectual Property",
+          "paragraphs": [
+            "Platform content, branding, software, databases, AI models, design, text, and aggregated market data belong to maiProp Ltd or its licensors. By submitting listings, photos, or content, you grant maiProp a worldwide, royalty-free, non-exclusive licence to display, reproduce, adapt, and distribute that content on the platform and in marketing for as long as reasonably needed."
+          ]
+        },
+        {
+          "title": "10. Limitation of Liability",
+          "paragraphs": [
+            "To the fullest extent permitted by law, the platform is provided as is and as available. maiProp is not liable for indirect, incidental, special, consequential, punitive, or similar damages, loss of profits, data, goodwill, or property value. Our aggregate liability is limited to the greater of fees paid in the 12 months before the claim or EUR 100. Nothing limits liability that cannot be limited under Greek or EU law."
+          ]
+        },
+        {
+          "title": "11. Indemnification",
+          "paragraphs": [
+            "You agree to defend and indemnify maiProp Ltd, its directors, employees, contractors, and partners against claims, losses, liabilities, damages, and reasonable legal fees arising from your breach, unlawful conduct, submitted content, platform transactions, negligence, or wilful misconduct."
+          ]
+        },
+        {
+          "title": "12. Termination & Suspension",
+          "paragraphs": [
+            "We may suspend or terminate accounts without prior notice for breaches, verified fraud reports, legal requirements, court orders, or security risks. You may delete your account from dashboard settings. Termination does not remove payment obligations for services already rendered, and legally required records may be retained."
+          ]
+        },
+        {
+          "title": "13. Governing Law & Dispute Resolution",
+          "paragraphs": [
+            "These Terms are governed by the laws of Greece and the EU. Disputes are subject to the exclusive jurisdiction of the courts of Athens, Greece, without prejudice to mandatory consumer protection rights. EU consumers may use the EU Online Dispute Resolution platform."
+          ]
+        },
+        {
+          "title": "14. Changes to Terms",
+          "paragraphs": [
+            "We may update these Terms. Material changes will be notified by email or platform notice at least 30 days before taking effect where required. Continued use after the effective date means acceptance of the updated Terms."
+          ]
+        },
+        {
+          "title": "15. Miscellaneous",
+          "list": [
+            "These Terms, the Privacy Policy, and Cookie Policy form the entire agreement.",
+            "If any provision is unlawful or unenforceable, the rest remains effective.",
+            "Failure to enforce a provision is not a waiver.",
+            "You may not assign rights without written consent. We may assign rights to an affiliate or in a business transfer.",
+            "The English version controls. Greek translations may be provided for convenience."
+          ]
+        },
+        {
+          "title": "16. Contact",
+          "paragraphs": [
+            "For questions about these Terms, contact legal@maiprop.co or maiProp Ltd, Kifissias Ave. 44, 15125 Athens, Greece."
+          ]
+        }
+      ]
+    },
+    "cookie": {
+      "eyebrow": "Legal",
+      "title": "Cookie Policy",
+      "updated": "Last updated: 9 March 2026. This policy explains how maiProp uses cookies and similar technologies.",
+      "sections": [
+        {
+          "title": "1. What Are Cookies?",
+          "paragraphs": [
+            "Cookies are small text files placed on your device when you visit a website. They help recognise your device, remember preferences, and provide features. Cookies may be session cookies deleted when you close your browser or persistent cookies stored until expiry or deletion.",
+            "We also use similar technologies such as web beacons, pixel tags, local storage, session storage, and privacy-respecting analytics scripts. We refer to all of these as cookies in this Policy."
+          ]
+        },
+        {
+          "title": "2. Legal Framework",
+          "paragraphs": [
+            "Our cookie practices comply with the EU ePrivacy Directive as implemented in Greece, GDPR, Hellenic Data Protection Authority guidance, and applicable EU case law. We require explicit opt-in consent before setting non-strictly-necessary cookies. You may withdraw consent at any time."
+          ]
+        },
+        {
+          "title": "3. Categories of Cookies We Use",
+          "subsections": [
+            {
+              "title": "3.1 Strictly Necessary Cookies",
+              "paragraphs": [
+                "These are essential for the platform to work and cannot be disabled."
+              ],
+              "table": {
+                "headers": [
+                  "Cookie Name",
+                  "Purpose",
+                  "Duration"
+                ],
+                "rows": [
+                  [
+                    "sb-auth-token",
+                    "Supabase authentication session token that keeps you logged in",
+                    "Session"
+                  ],
+                  [
+                    "sb-refresh-token",
+                    "Refreshes authentication without re-login",
+                    "7 days"
+                  ],
+                  [
+                    "maiprop-csrf",
+                    "CSRF protection for form submissions",
+                    "Session"
+                  ],
+                  [
+                    "maiprop-consent",
+                    "Stores cookie consent preferences",
+                    "1 year"
+                  ],
+                  [
+                    "maiprop-theme",
+                    "Stores light or dark theme preference",
+                    "1 year"
+                  ]
+                ]
+              }
+            },
+            {
+              "title": "3.2 Functional Cookies",
+              "paragraphs": [
+                "These improve experience and are enabled only with your consent."
+              ],
+              "table": {
+                "headers": [
+                  "Cookie Name",
+                  "Purpose",
+                  "Duration"
+                ],
+                "rows": [
+                  [
+                    "maiprop-recent-searches",
+                    "Stores recent searches for quick access",
+                    "30 days"
+                  ],
+                  [
+                    "maiprop-map-prefs",
+                    "Stores map view, zoom, and layers",
+                    "90 days"
+                  ],
+                  [
+                    "maiprop-filter-prefs",
+                    "Remembers listing filters",
+                    "30 days"
+                  ],
+                  [
+                    "maiprop-language",
+                    "Stores language preference",
+                    "1 year"
+                  ],
+                  [
+                    "maiprop-compare",
+                    "Temporarily saves comparison properties",
+                    "Session"
+                  ]
+                ]
+              }
+            },
+            {
+              "title": "3.3 Analytics Cookies",
+              "paragraphs": [
+                "These help us understand platform usage and improve features. They are enabled only with consent."
+              ],
+              "table": {
+                "headers": [
+                  "Provider",
+                  "Purpose",
+                  "Duration"
+                ],
+                "rows": [
+                  [
+                    "PostHog",
+                    "Product analytics, page views, feature usage, funnels",
+                    "1 year"
+                  ],
+                  [
+                    "Mixpanel",
+                    "Event tracking for platform improvements with IP anonymisation",
+                    "1 year"
+                  ],
+                  [
+                    "Hotjar",
+                    "Optional UX research recordings and heatmaps when opted in",
+                    "365 days"
+                  ]
+                ]
+              }
+            },
+            {
+              "title": "3.4 Mapping Cookies",
+              "paragraphs": [
+                "Interactive maps use Mapbox. Mapbox may set cookies to optimise tile loading and map performance when you interact with map features."
+              ],
+              "table": {
+                "headers": [
+                  "Provider",
+                  "Purpose",
+                  "Duration"
+                ],
+                "rows": [
+                  [
+                    "Mapbox",
+                    "Map tile caching and interaction telemetry for map performance",
+                    "1 year"
+                  ]
+                ]
+              }
+            },
+            {
+              "title": "3.5 Marketing & Retargeting Cookies",
+              "paragraphs": [
+                "We do not currently use third-party advertising or retargeting cookies. If introduced later, this Policy will be updated and consent will be requested before such cookies are set."
+              ]
+            }
+          ]
+        },
+        {
+          "title": "4. Third-Party Embeds",
+          "paragraphs": [
+            "Some pages may embed external websites or services. Embedded services may set their own cookies under their own policies. We do not control cookies set by third-party iframes."
+          ]
+        },
+        {
+          "title": "5. How to Manage Your Cookie Preferences",
+          "paragraphs": [
+            "You can manage cookies through our consent banner, footer Cookie Settings link, or browser settings. Blocking strictly necessary cookies may prevent the platform from working correctly. Browser help is available from Google Chrome, Mozilla Firefox, Apple Safari, and Microsoft Edge support pages."
+          ]
+        },
+        {
+          "title": "6. Do Not Track",
+          "paragraphs": [
+            "Some browsers transmit Do Not Track signals. We honour those signals where technically feasible by not setting analytics or functional cookies without explicit banner consent. Strictly necessary cookies are exempt."
+          ]
+        },
+        {
+          "title": "7. Cookie Consent Records",
+          "paragraphs": [
+            "We keep a record of consent choices, including what you consented to, when, and the policy version in effect. Records are retained for 1 year after the last consent interaction. You can request a copy at privacy@maiprop.co."
+          ]
+        },
+        {
+          "title": "8. Changes to This Policy",
+          "paragraphs": [
+            "We update this Policy when cookies are added, removed, or changed. Material changes will be communicated through the consent banner and renewed consent will be requested where required."
+          ]
+        },
+        {
+          "title": "9. Contact",
+          "paragraphs": [
+            "For questions about cookies or rights requests, contact privacy@maiprop.co. To lodge a complaint, contact the Hellenic Data Protection Authority at www.dpa.gr or +30 210 6475600."
+          ]
+        }
+      ]
     }
   }
 }

@@ -10,6 +10,7 @@ import {
   useSubmitOpenHouseOffer,
 } from "@/hooks/useOpenHouseAssetControl";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   open: boolean;
@@ -33,6 +34,9 @@ export default function OpenHouseOfferDialog({
   offerBlockedReason,
 }: Props) {
   const { user } = useAuth();
+  const { i18n } = useTranslation();
+  const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
+  const dateLocale = isGreek ? "el-GR" : "en-GB";
   const { data: settings } = useOpenHouseSettings(listingId);
   const { data: offers = [] } = useOpenHouseOffers(listingId);
   const submitOffer = useSubmitOpenHouseOffer();
@@ -61,30 +65,30 @@ export default function OpenHouseOfferDialog({
     const diff = offerDeadline.getTime() - now.getTime();
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const days = Math.floor(hours / 24);
-    if (days > 0) return `${days} day${days > 1 ? "s" : ""} left`;
-    if (hours > 0) return `${hours} hour${hours > 1 ? "s" : ""} left`;
+    if (days > 0) return isGreek ? `Απομένουν ${days} ημέρες` : `${days} day${days > 1 ? "s" : ""} left`;
+    if (hours > 0) return isGreek ? `Απομένουν ${hours} ώρες` : `${hours} hour${hours > 1 ? "s" : ""} left`;
     const mins = Math.floor(diff / (1000 * 60));
-    return mins > 0 ? `${mins} min left` : "Closing soon";
+    return mins > 0 ? (isGreek ? `Απομένουν ${mins} λεπτά` : `${mins} min left`) : (isGreek ? "Κλείνει σύντομα" : "Closing soon");
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [offerDeadline, isExpired, tick]);
+  }, [offerDeadline, isExpired, tick, isGreek]);
 
   useEffect(() => {
     if (open && !amount && listingPrice) setAmount(String(listingPrice));
   }, [open, listingPrice, amount]);
 
-  const handleSubmit = async () => {
+    const handleSubmit = async () => {
     if (!user) {
-      toast.error("Sign in to submit an offer");
+      toast.error(isGreek ? "Συνδεθείτε για να υποβάλετε προσφορά" : "Sign in to submit an offer");
       return;
     }
     const num = parseFloat(amount);
     if (isNaN(num) || num <= 0) {
-      toast.error("Enter a valid amount");
+      toast.error(isGreek ? "Πληκτρολογήστε έγκυρο ποσό" : "Enter a valid amount");
       return;
     }
     try {
       await submitOffer.mutateAsync({ listingId, amount: num, message: message || undefined });
-      toast.success("Offer submitted successfully");
+      toast.success(isGreek ? "Η προσφορά υποβλήθηκε επιτυχώς" : "Offer submitted successfully");
       onClose();
     } catch (_err: unknown) {
       // handled by mutation onError
@@ -97,9 +101,9 @@ export default function OpenHouseOfferDialog({
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="bg-card border-border max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-display text-lg">Submit Offer</DialogTitle>
+          <DialogTitle className="font-display text-lg">{isGreek ? "Υποβολή προσφοράς" : "Submit Offer"}</DialogTitle>
           <DialogDescription className="sr-only">
-            Review offer eligibility and submit a sealed offer for this open-house listing.
+            {isGreek ? "Ελέγξτε την επιλεξιμότητα και υποβάλετε σφραγισμένη προσφορά για την ανοιχτή επίσκεψη." : "Review offer eligibility and submit a sealed offer for this open-house listing."}
           </DialogDescription>
         </DialogHeader>
 
@@ -117,7 +121,7 @@ export default function OpenHouseOfferDialog({
             <div className={`flex items-center justify-between gap-2 p-3 rounded-xl ${isExpired ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary"}`}>
               <span className="flex items-center gap-2 text-sm font-medium">
                 <Clock className="w-4 h-4" />
-                {isExpired ? "Deadline passed" : `Deadline: ${offerDeadline.toLocaleString("en-GB")}`}
+                {isExpired ? (isGreek ? "Η προθεσμία έχει λήξει" : "Deadline passed") : `${isGreek ? "Προθεσμία" : "Deadline"}: ${offerDeadline.toLocaleString(dateLocale)}`}
               </span>
               {countdown && !isExpired && <span className="text-xs font-bold tabular-nums">{countdown}</span>}
             </div>
@@ -125,14 +129,14 @@ export default function OpenHouseOfferDialog({
 
           {myOffer ? (
             <div className="rounded-xl border border-border p-4">
-              <p className="text-sm font-medium">Your offer: €{Number(myOffer.amount).toLocaleString()}</p>
-              <p className="text-xs text-muted-foreground mt-1">Status: {myOffer.status}</p>
-              {myOffer.status === "submitted" && <p className="text-xs mt-1">Sealed until reveal</p>}
+              <p className="text-sm font-medium">{isGreek ? "Η προσφορά σας" : "Your offer"}: €{Number(myOffer.amount).toLocaleString(dateLocale)}</p>
+              <p className="text-xs text-muted-foreground mt-1">{isGreek ? "Κατάσταση" : "Status"}: {myOffer.status}</p>
+              {myOffer.status === "submitted" && <p className="text-xs mt-1">{isGreek ? "Σφραγισμένη έως την αποκάλυψη" : "Sealed until reveal"}</p>}
             </div>
           ) : (
             <>
               <div>
-                <label className="text-xs font-semibold text-muted-foreground block mb-2">Amount (€)</label>
+                <label className="text-xs font-semibold text-muted-foreground block mb-2">{isGreek ? "Ποσό (€)" : "Amount (€)"}</label>
                 <input
                   type="number"
                   min="0"
@@ -145,11 +149,11 @@ export default function OpenHouseOfferDialog({
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-muted-foreground block mb-2">Message (optional)</label>
+                <label className="text-xs font-semibold text-muted-foreground block mb-2">{isGreek ? "Μήνυμα (προαιρετικά)" : "Message (optional)"}</label>
                 <textarea
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
-                  placeholder="Add any conditions or notes..."
+                  placeholder={isGreek ? "Προσθέστε τυχόν όρους ή σημειώσεις..." : "Add any conditions or notes..."}
                   className="w-full px-3 py-2 rounded-xl border border-border bg-background text-sm resize-none h-20"
                   disabled={isExpired || isBlocked}
                 />
@@ -160,7 +164,7 @@ export default function OpenHouseOfferDialog({
                 disabled={submitOffer.isPending || isExpired || isBlocked}
               >
                 {submitOffer.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Euro className="w-4 h-4" />}
-                Submit Sealed Offer
+                {isGreek ? "Υποβολή σφραγισμένης προσφοράς" : "Submit Sealed Offer"}
               </Button>
             </>
           )}

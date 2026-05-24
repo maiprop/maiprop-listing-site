@@ -3,6 +3,7 @@ import { BarChart2, Star, Check, Lock, Clock, Flame, ChevronRight, ArrowRight } 
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEligibleForQuickSale } from "@/hooks/useEligibleForQuickSale";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   invitationStatus: "none" | "pending" | "rejected";
@@ -13,6 +14,52 @@ export function FiresaleInvestorPanel({ invitationStatus, onRequestInvitation }:
   const { user } = useAuth();
   const { eligible } = useEligibleForQuickSale();
   const navigate = useNavigate();
+  const { i18n } = useTranslation();
+  const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
+
+  const buyerProfiles = isGreek
+    ? [
+        { type: "Family Offices", desc: "Ελληνικά και κυπριακά κεφάλαια για συναλλαγές μεγαλύτερης κλίμακας", icon: "🏛️" },
+        { type: "Επενδυτικά κεφάλαια", desc: "Διεθνή funds με εστίαση στην αγορά ακινήτων", icon: "📈" },
+        { type: "Private Equity", desc: "Στρατηγικές διακράτησης και αναβάθμισης ακινήτων", icon: "💼" },
+        { type: "Ιδιώτες υψηλής καθαρής αξίας", desc: "Ιδιώτες επενδυτές με διαθέσιμα κεφάλαια", icon: "👤" },
+      ]
+    : [
+        { type: "Family Offices", desc: "Greek & Cypriot capital deploying at scale", icon: "🏛️" },
+        { type: "Hedge Funds", desc: "International RE-focused alternative funds", icon: "📈" },
+        { type: "Private Equity", desc: "Buy-to-hold and value-add strategies", icon: "💼" },
+        { type: "HNWIs", desc: "Ultra-high-net-worth private individuals", icon: "👤" },
+      ];
+
+  const comparisonRows = isGreek
+    ? [
+        { label: "Χρόνος για προκαταρκτική προσφορά", firesale: "Στόχος 96 ώρες", trad: "3-6 μήνες", icon: "⚡" },
+        { label: "Επισκέψεις", firesale: "Γρήγορες και ιδιωτικές", trad: "10-30 ανοικτές ημέρες", icon: "🔑" },
+        { label: "Διαπραγματεύσεις", firesale: "Περιορισμένες", trad: "Εβδομάδες παζαριών", icon: "🤝" },
+        { label: "Βεβαιότητα διαδικασίας", firesale: "Μετά από έλεγχο", trad: "~60% πιθανότητα", icon: "🎯" },
+        { label: "Νομικά & συμβολαιογράφος", firesale: "Συντονισμένη διαδικασία", trad: "Το οργανώνετε εσείς", icon: "📋" },
+      ]
+    : [
+        { label: "Time to preliminary offer", firesale: "Target 96 hours", trad: "3-6 months", icon: "⚡" },
+        { label: "Viewings", firesale: "Fast & private", trad: "10-30 open days", icon: "🔑" },
+        { label: "Negotiations", firesale: "Limited", trad: "Weeks of back-forth", icon: "🤝" },
+        { label: "Process certainty", firesale: "Subject to review", trad: "~60% chance", icon: "🎯" },
+        { label: "Legal & notary", firesale: "Coordinated process", trad: "You arrange it", icon: "📋" },
+      ];
+
+  const investorFeatures = isGreek
+    ? [
+        "Ζωντανή ροή ευκαιριών γρήγορης πώλησης",
+        "Αναφορές εκτίμησης αξίας με AI",
+        "Στοιχεία επικοινωνίας πωλητή",
+        "Αναλυτικά χαρτοφυλακίου",
+      ]
+    : [
+        "Live quick sale deal feed",
+        "AI valuation reports",
+        "Seller contact details",
+        "Portfolio analytics",
+      ];
 
   return (
     <div className="space-y-4">
@@ -24,18 +71,13 @@ export function FiresaleInvestorPanel({ invitationStatus, onRequestInvitation }:
             <div className="w-7 h-7 rounded-lg bg-brand-gold/15 flex items-center justify-center">
               <Star className="w-3.5 h-3.5 text-brand-gold fill-current" />
             </div>
-            <h4 className="font-display font-bold text-sm">Who Buys Your Property</h4>
+            <h4 className="font-display font-bold text-sm">{isGreek ? "Ποιοι αγοράζουν το ακίνητό σας" : "Who Buys Your Property"}</h4>
           </div>
           <p className="text-[10px] text-muted-foreground mb-4 ml-9">
-            Pre-vetted, capital-ready buyers — no time-wasters.
+            {isGreek ? "Προελεγμένοι αγοραστές με διαθέσιμα κεφάλαια, χωρίς άσκοπες επαφές." : "Pre-vetted, capital-ready buyers - no time-wasters."}
           </p>
           <div className="space-y-2">
-            {[
-              { type: "Family Offices", desc: "Greek & Cypriot capital deploying at scale", icon: "🏛️" },
-              { type: "Hedge Funds", desc: "International RE-focused alternative funds", icon: "📈" },
-              { type: "Private Equity", desc: "Buy-to-hold and value-add strategies", icon: "💼" },
-              { type: "HNWIs", desc: "Ultra-high-net-worth private individuals", icon: "👤" },
-            ].map((b) => (
+            {buyerProfiles.map((b) => (
               <div
                 key={b.type}
                 className="flex items-center gap-3 rounded-xl bg-brand-gold/5 border border-brand-gold/10 px-3 py-2.5 hover:border-brand-gold/30 transition-colors"
@@ -58,15 +100,9 @@ export function FiresaleInvestorPanel({ invitationStatus, onRequestInvitation }:
           <div className="px-4 py-3 flex items-center justify-center gap-1.5 text-destructive border-x border-border">
             <Flame className="w-3 h-3" /> Quick Sale™
           </div>
-          <div className="px-4 py-3 text-center text-muted-foreground/60">Traditional</div>
+          <div className="px-4 py-3 text-center text-muted-foreground/60">{isGreek ? "Παραδοσιακή διαδικασία" : "Traditional"}</div>
         </div>
-        {[
-          { label: "Time to offer", firesale: "96 hours", trad: "3–6 months", icon: "⚡" },
-          { label: "Viewings", firesale: "Fast & private", trad: "10–30 open days", icon: "🔑" },
-          { label: "Negotiations", firesale: "None", trad: "Weeks of back-forth", icon: "🤝" },
-          { label: "Certainty of sale", firesale: "Guaranteed", trad: "~60% chance", icon: "🎯" },
-          { label: "Legal & notary", firesale: "Fully managed", trad: "You arrange it", icon: "📋" },
-        ].map((r, i) => (
+        {comparisonRows.map((r, i) => (
           <div
             key={r.label}
             className={`grid grid-cols-3 text-xs items-stretch ${i < 4 ? "border-b border-border" : ""}`}
@@ -91,19 +127,16 @@ export function FiresaleInvestorPanel({ invitationStatus, onRequestInvitation }:
         <div className="relative">
           <div className="flex items-center gap-2 mb-3">
             <Lock className="w-4 h-4 text-accent" />
-            <span className="text-xs font-bold text-accent uppercase tracking-widest">For Investors</span>
+            <span className="text-xs font-bold text-accent uppercase tracking-widest">{isGreek ? "Για επενδυτές" : "For Investors"}</span>
           </div>
-          <h4 className="font-display font-bold text-base mb-2">Access the Deal Flow</h4>
+          <h4 className="font-display font-bold text-base mb-2">{isGreek ? "Πρόσβαση σε επενδυτικές ευκαιρίες" : "Access the Deal Flow"}</h4>
           <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
-            Off-market properties before they hit the market. Access is by invitation only — request an invitation on the Investor Dashboard.
+            {isGreek
+              ? "Ακίνητα εκτός αγοράς πριν προβληθούν δημόσια. Η πρόσβαση δίνεται μόνο κατόπιν πρόσκλησης από το επενδυτικό dashboard."
+              : "Off-market properties before they hit the market. Access is by invitation only - request an invitation on the Investor Dashboard."}
           </p>
           <div className="space-y-1.5 mb-4">
-            {[
-              "Live quick sale deal feed",
-              "AI valuation reports",
-              "Seller contact details",
-              "Portfolio analytics",
-            ].map((f) => (
+            {investorFeatures.map((f) => (
               <div key={f} className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Check className="w-3 h-3 text-accent shrink-0" />
                 {f}
@@ -116,27 +149,31 @@ export function FiresaleInvestorPanel({ invitationStatus, onRequestInvitation }:
               onClick={() => navigate("/investor-dashboard")}
             >
               <BarChart2 className="w-3.5 h-3.5" />
-              View Investor Dashboard
+              {isGreek ? "Άνοιγμα επενδυτικού dashboard" : "View Investor Dashboard"}
               <ChevronRight className="w-3.5 h-3.5 ml-auto" />
             </Button>
           ) : user && invitationStatus === "pending" ? (
             <div className="rounded-xl bg-brand-gold/10 border border-brand-gold/30 px-4 py-3 flex items-center gap-3">
               <Clock className="w-4 h-4 text-brand-gold shrink-0" />
               <p className="text-[11px] text-brand-gold font-semibold leading-snug">
-                Application under review — we'll contact you within 48h.
+                {isGreek ? "Η αίτηση εξετάζεται. Θα επικοινωνήσουμε μαζί σας εντός 48 ωρών." : "Application under review - we'll contact you within 48h."}
               </p>
             </div>
           ) : user && !eligible ? (
             <div className="space-y-2">
               {invitationStatus === "rejected" && (
-                <p className="text-[11px] text-destructive">Your previous application wasn't approved. You may re-apply.</p>
+                <p className="text-[11px] text-destructive">
+                  {isGreek ? "Η προηγούμενη αίτησή σας δεν εγκρίθηκε. Μπορείτε να υποβάλετε νέα αίτηση." : "Your previous application wasn't approved. You may re-apply."}
+                </p>
               )}
               <Button
                 className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2 text-xs h-10"
                 onClick={onRequestInvitation}
               >
                 <ArrowRight className="w-3.5 h-3.5" />
-                {invitationStatus === "rejected" ? "Re-apply for Access" : "Request an Invitation"}
+                {invitationStatus === "rejected"
+                  ? (isGreek ? "Νέα αίτηση πρόσβασης" : "Re-apply for Access")
+                  : (isGreek ? "Αίτηση πρόσκλησης" : "Request an Invitation")}
               </Button>
             </div>
           ) : (
@@ -145,7 +182,7 @@ export function FiresaleInvestorPanel({ invitationStatus, onRequestInvitation }:
               onClick={() => navigate("/login", { state: { from: "/investor-dashboard" } })}
             >
               <ArrowRight className="w-3.5 h-3.5" />
-              Sign In & Request Access
+              {isGreek ? "Σύνδεση και αίτηση πρόσβασης" : "Sign In & Request Access"}
             </Button>
           )}
         </div>

@@ -70,7 +70,7 @@ describe("InvitationRequestModal", () => {
     fireEvent.change(screen.getByDisplayValue("Select (optional)"), { target: { value: "10m-50m" } });
     fireEvent.change(screen.getByDisplayValue("How did you hear about us?"), { target: { value: "referral" } });
     fireEvent.change(screen.getByPlaceholderText(/Athens/i), { target: { value: "Athens, Greece" } });
-    fireEvent.change(screen.getByPlaceholderText(/focus on distressed/i), { target: { value: "Need quick-sale pipeline" } });
+    fireEvent.change(screen.getByPlaceholderText(/focus on off-market/i), { target: { value: "Need quick-sale pipeline" } });
     fireEvent.click(screen.getByRole("checkbox"));
     fireEvent.click(screen.getByRole("button", { name: /submit request/i }));
 

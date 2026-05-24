@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { PropertyCard } from "@/components/PropertyCard";
 import { useInView } from "@/hooks/useInView";
 import { getStreetViewProxyUrl } from "@/lib/config";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   listings: any[];
@@ -12,6 +13,9 @@ interface Props {
 
 export function HomepageOpenHousesSection({ listings }: Props) {
   const { ref, inView } = useInView();
+  const { i18n } = useTranslation();
+  const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
+  const dateLocale = isGreek ? "el-GR" : "en-GB";
 
   return (
     <section className="py-10 sm:py-16 bg-background">
@@ -19,13 +23,13 @@ export function HomepageOpenHousesSection({ listings }: Props) {
         <div className={`flex items-center justify-between mb-6 sm:mb-8 reveal ${inView ? "in-view" : ""}`}>
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">Open Houses</span>
+              <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">{isGreek ? "Ανοιχτές επισκέψεις" : "Open Houses"}</span>
             </div>
-            <h2 className="font-display text-xl sm:text-2xl font-bold">Scheduled viewings — no appointment needed</h2>
+            <h2 className="font-display text-xl sm:text-2xl font-bold">{isGreek ? "Προγραμματισμένες επισκέψεις σε ακίνητα" : "Scheduled viewings — no appointment needed"}</h2>
           </div>
           <Button variant="outline" size="sm" className="border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 text-xs" asChild>
             <Link to="/open-houses">
-              All Open Houses <ArrowRight className="w-3 h-3 ml-1" />
+              {isGreek ? "Όλες οι ανοιχτές επισκέψεις" : "All Open Houses"} <ArrowRight className="w-3 h-3 ml-1" />
             </Link>
           </Button>
         </div>
@@ -65,7 +69,7 @@ export function HomepageOpenHousesSection({ listings }: Props) {
                   type: l.property_type,
                   listingType: "open_house",
                   auctionDate: l.open_house_date
-                    ? new Date(l.open_house_date).toLocaleDateString("en-GB", {
+                    ? new Date(l.open_house_date).toLocaleDateString(dateLocale, {
                         weekday: "short",
                         day: "numeric",
                         month: "short",
@@ -84,8 +88,8 @@ export function HomepageOpenHousesSection({ listings }: Props) {
           })}
           {listings.length === 0 && (
             <div className="col-span-full py-12 text-center text-muted-foreground">
-              <p className="text-sm font-medium">Open houses coming soon — check back shortly.</p>
-              <p className="text-xs mt-1">New open house viewings are added regularly.</p>
+              <p className="text-sm font-medium">{isGreek ? "Οι ανοιχτές επισκέψεις έρχονται σύντομα." : "Open houses coming soon — check back shortly."}</p>
+              <p className="text-xs mt-1">{isGreek ? "Νέες επισκέψεις προστίθενται τακτικά." : "New open house viewings are added regularly."}</p>
             </div>
           )}
         </div>

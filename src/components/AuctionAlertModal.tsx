@@ -3,6 +3,7 @@ import { Bell, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useCreateAuctionAlert, useUpdateAuctionAlert, type AuctionAlert } from "@/hooks/useAuctionAlerts";
+import { useTranslation } from "react-i18next";
 
 const PROPERTY_TYPES = [
   { value: "", label: "All Types" },
@@ -24,6 +25,8 @@ interface Props {
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function AuctionAlertModal({ open, onClose, editAlert }: Props) {
+  const { i18n } = useTranslation();
+  const isGreek = i18n?.language?.toLowerCase().startsWith("el") ?? false;
   const isEdit = !!editAlert;
   const [city, setCity] = useState(editAlert?.city ?? "");
   const [courtName, setCourtName] = useState(editAlert?.court_name ?? "");
@@ -35,6 +38,20 @@ export function AuctionAlertModal({ open, onClose, editAlert }: Props) {
   const create = useCreateAuctionAlert();
   const update = useUpdateAuctionAlert();
   const pending = create.isPending || update.isPending;
+  const propertyTypes = PROPERTY_TYPES.map((type) => ({
+    ...type,
+    label: isGreek
+      ? ({
+          "All Types": "Όλοι οι τύποι",
+          Apartment: "Διαμέρισμα",
+          House: "Μονοκατοικία",
+          Villa: "Βίλα",
+          Land: "Οικόπεδο / Αγροτεμάχιο",
+          Commercial: "Επαγγελματικό ακίνητο",
+          Office: "Γραφείο",
+        }[type.label] ?? type.label)
+      : type.label,
+  }));
 
   const handleSubmit = async () => {
     const payload = {
@@ -58,30 +75,30 @@ export function AuctionAlertModal({ open, onClose, editAlert }: Props) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 font-display">
             <Bell className="w-4 h-4 text-brand-gold" />
-            {isEdit ? "Edit Auction Alert" : "Create Auction Alert"}
+            {isEdit ? (isGreek ? "Επεξεργασία ειδοποίησης πλειστηριασμού" : "Edit Auction Alert") : (isGreek ? "Νέα ειδοποίηση πλειστηριασμού" : "Create Auction Alert")}
           </DialogTitle>
           <DialogDescription className="sr-only">
-            Configure saved auction filters and email notifications.
+            {isGreek ? "Ρυθμίστε αποθηκευμένα φίλτρα πλειστηριασμών και ειδοποιήσεις email." : "Configure saved auction filters and email notifications."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 pt-1">
           {/* City */}
           <div>
-            <label className="text-xs text-muted-foreground font-medium block mb-1.5">City</label>
+            <label className="text-xs text-muted-foreground font-medium block mb-1.5">{isGreek ? "Πόλη" : "City"}</label>
             <select
               value={city}
               onChange={e => setCity(e.target.value)}
               className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary"
             >
-              <option value="">All Cities</option>
+              <option value="">{isGreek ? "Όλες οι πόλεις" : "All Cities"}</option>
               {CITIES.filter(c => c).map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
 
-          {/* Court / Region */}
+          {/* Auction officer / platform */}
           <div>
-            <label className="text-xs text-muted-foreground font-medium block mb-1.5">Court / Region (optional)</label>
+            <label className="text-xs text-muted-foreground font-medium block mb-1.5">{isGreek ? "Υπάλληλος πλειστηριασμού / Πλατφόρμα (προαιρετικά)" : "Auction Officer / Platform (optional)"}</label>
             <input
               value={courtName}
               onChange={e => setCourtName(e.target.value)}
@@ -92,25 +109,25 @@ export function AuctionAlertModal({ open, onClose, editAlert }: Props) {
 
           {/* Property type */}
           <div>
-            <label className="text-xs text-muted-foreground font-medium block mb-1.5">Property Type</label>
+            <label className="text-xs text-muted-foreground font-medium block mb-1.5">{isGreek ? "Τύπος ακινήτου" : "Property Type"}</label>
             <select
               value={propertyType}
               onChange={e => setPropertyType(e.target.value)}
               className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary"
             >
-              {PROPERTY_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              {propertyTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </div>
 
-          {/* Price range */}
+          {/* First offer price range */}
           <div>
-            <label className="text-xs text-muted-foreground font-medium block mb-1.5">Starting Bid Range (€)</label>
+            <label className="text-xs text-muted-foreground font-medium block mb-1.5">{isGreek ? "Εύρος τιμής πρώτης προσφοράς (€)" : "First Offer Price Range (€)"}</label>
             <div className="flex items-center gap-2">
               <input
                 type="number"
                 value={minPrice}
                 onChange={e => setMinPrice(e.target.value)}
-                placeholder="Min"
+                placeholder={isGreek ? "Ελάχ." : "Min"}
                 className="flex-1 bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary"
               />
               <span className="text-muted-foreground text-xs shrink-0">–</span>
@@ -118,7 +135,7 @@ export function AuctionAlertModal({ open, onClose, editAlert }: Props) {
                 type="number"
                 value={maxPrice}
                 onChange={e => setMaxPrice(e.target.value)}
-                placeholder="Max"
+                placeholder={isGreek ? "Μέγ." : "Max"}
                 className="flex-1 bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary"
               />
             </div>
@@ -132,18 +149,18 @@ export function AuctionAlertModal({ open, onClose, editAlert }: Props) {
             >
               <div className={`w-4 h-4 rounded-full bg-background transition-transform ${emailNotify ? "translate-x-4" : "translate-x-0"}`} />
             </div>
-            <span className="text-sm font-medium">Email notifications</span>
+            <span className="text-sm font-medium">{isGreek ? "Ειδοποιήσεις email" : "Email notifications"}</span>
           </label>
 
           <div className="flex gap-2 pt-2">
-            <Button variant="outline" className="border-border flex-1" onClick={onClose}>Cancel</Button>
+            <Button variant="outline" className="border-border flex-1" onClick={onClose}>{isGreek ? "Άκυρο" : "Cancel"}</Button>
             <Button
               className="bg-gradient-gold border-0 text-background font-semibold flex-1"
               onClick={handleSubmit}
               disabled={pending}
             >
               {pending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              {isEdit ? "Save Changes" : "Create Alert"}
+              {isEdit ? (isGreek ? "Αποθήκευση" : "Save Changes") : (isGreek ? "Δημιουργία" : "Create Alert")}
             </Button>
           </div>
         </div>

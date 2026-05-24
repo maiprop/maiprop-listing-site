@@ -7,6 +7,7 @@ import { Sparkles, Check, ChevronRight, Loader2, ArrowRight, Home, User, Buildin
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { colorMap } from "@/lib/onboardingConfig";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   pendingCardId: string | null;
@@ -41,52 +42,54 @@ export function PickTypeStep({
   onProfessionalImmediate,
   onConfirm,
 }: Props) {
+  const { i18n } = useTranslation();
+  const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
   const flatCards: FlatCard[] = [
     {
       id: "buyer",
       icon: Home,
       color: "blue",
-      label: "Home Buyer / Renter",
-      tagline: "Find your perfect property",
-      desc: "Search listings, compare properties, book viewings, and get AI-powered insights to help you make the right move.",
-      features: ["Browse listings", "Book viewings", "Saved searches & alerts", "Neighbourhood reports"],
+      label: isGreek ? "Αγοραστής / Ενοικιαστής" : "Home Buyer / Renter",
+      tagline: isGreek ? "Βρείτε το κατάλληλο ακίνητο" : "Find your perfect property",
+      desc: isGreek ? "Αναζητήστε αγγελίες, συγκρίνετε ακίνητα, κλείστε επισκέψεις και χρησιμοποιήστε AI αναλύσεις για καλύτερη απόφαση." : "Search listings, compare properties, book viewings, and get AI-powered insights to help you make the right move.",
+      features: isGreek ? ["Περιήγηση σε αγγελίες", "Κράτηση επισκέψεων", "Αποθηκευμένες αναζητήσεις & ειδοποιήσεις", "Αναφορές περιοχής"] : ["Browse listings", "Book viewings", "Saved searches & alerts", "Neighbourhood reports"],
     },
     {
       id: "seller",
       icon: User,
       color: "violet",
-      label: "Private Seller / Landlord",
-      tagline: "List & manage your property",
-      desc: "List your property, manage viewing requests, and connect directly with serious buyers or tenants.",
-      features: ["List your property", "Manage viewing requests", "AI listing description", "Message buyers directly"],
+      label: isGreek ? "Πωλητής / Εκμισθωτής" : "Private Seller / Landlord",
+      tagline: isGreek ? "Καταχωρήστε και διαχειριστείτε το ακίνητό σας" : "List & manage your property",
+      desc: isGreek ? "Δημοσιεύστε το ακίνητό σας, διαχειριστείτε αιτήματα επίσκεψης και επικοινωνήστε απευθείας με σοβαρούς ενδιαφερόμενους." : "List your property, manage viewing requests, and connect directly with serious buyers or tenants.",
+      features: isGreek ? ["Καταχώρηση ακινήτου", "Διαχείριση επισκέψεων", "AI περιγραφή αγγελίας", "Άμεση επικοινωνία"] : ["List your property", "Manage viewing requests", "AI listing description", "Message buyers directly"],
     },
     {
       id: "agent",
       icon: Building2,
       color: "cyan",
-      label: "Real Estate Agent / Agency",
-      tagline: "Manage clients, ads & projects",
-      desc: "List properties for clients, manage your leads and contacts, and track your portfolio performance.",
-      features: ["Property listings", "CRM & contacts", "Lead management", "Performance analytics"],
+      label: isGreek ? "Μεσίτης ακινήτων / Γραφείο" : "Real Estate Agent / Agency",
+      tagline: isGreek ? "Διαχειριστείτε πελάτες, αγγελίες & έργα" : "Manage clients, ads & projects",
+      desc: isGreek ? "Καταχωρήστε ακίνητα πελατών, διαχειριστείτε επαφές και υποψήφιους πελάτες και παρακολουθήστε την απόδοση του χαρτοφυλακίου σας." : "List properties for clients, manage your leads and contacts, and track your portfolio performance.",
+      features: isGreek ? ["Αγγελίες ακινήτων", "Διαχείριση πελατολογίου & επαφών", "Διαχείριση υποψήφιων πελατών", "Αναλυτικά απόδοσης"] : ["Property listings", "CRM & contacts", "Lead management", "Performance analytics"],
     },
     {
       id: "developer",
       icon: Briefcase,
       color: "orange",
-      label: "Developer / Builder",
-      tagline: "Showcase new projects",
-      desc: "Create project pages for new builds, manage pre-sale listings, and handle buyer inquiries in one place.",
-      features: ["Project showcase pages", "Pre-sale listings", "Buyer inquiry management", "Project analytics"],
+      label: isGreek ? "Κατασκευαστής / εταιρεία ανάπτυξης ακινήτων" : "Developer / Builder",
+      tagline: isGreek ? "Προβάλετε νέα έργα" : "Showcase new projects",
+      desc: isGreek ? "Δημιουργήστε σελίδες έργων για νέες κατασκευές, διαχειριστείτε αγγελίες προπώλησης και αιτήματα αγοραστών." : "Create project pages for new builds, manage pre-sale listings, and handle buyer inquiries in one place.",
+      features: isGreek ? ["Σελίδες έργων", "Αγγελίες προπώλησης", "Διαχείριση αιτημάτων", "Αναλυτικά έργου"] : ["Project showcase pages", "Pre-sale listings", "Buyer inquiry management", "Project analytics"],
       immediate: onDeveloperImmediate,
     },
     {
       id: "professional",
       icon: Wrench,
       color: "rose",
-      label: "Service Professional",
-      tagline: "Get found. Get hired.",
-      desc: "Architect, lawyer, notary, contractor and more — publish your services and receive client leads directly.",
-      features: ["Directory listing", "Service catalog & pricing", "Client leads", "Verified badge"],
+      label: isGreek ? "Επαγγελματίας υπηρεσιών ακινήτων" : "Service Professional",
+      tagline: isGreek ? "Βρείτε πελάτες. Αναλάβετε έργα." : "Get found. Get hired.",
+      desc: isGreek ? "Αρχιτέκτονας, δικηγόρος, συμβολαιογράφος, εργολάβος και άλλοι επαγγελματίες μπορούν να δημοσιεύσουν υπηρεσίες και να λαμβάνουν αιτήματα πελατών." : "Architect, lawyer, notary, contractor and more — publish your services and receive client leads directly.",
+      features: isGreek ? ["Καταχώρηση στον κατάλογο", "Κατάλογος υπηρεσιών & τιμές", "Αιτήματα πελατών", "Επαληθευμένο προφίλ"] : ["Directory listing", "Service catalog & pricing", "Client leads", "Verified badge"],
       immediate: onProfessionalImmediate,
     },
   ];
@@ -95,13 +98,13 @@ export function PickTypeStep({
     <div>
       <div className="text-center mb-8">
         <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5 text-xs font-medium text-primary mb-4">
-          <Sparkles className="w-3.5 h-3.5" /> Personalise your experience
+          <Sparkles className="w-3.5 h-3.5" /> {isGreek ? "Προσαρμόστε την εμπειρία σας" : "Personalise your experience"}
         </div>
         <h1 className="font-display font-bold text-2xl md:text-3xl text-foreground mb-2">
-          How are you using maiProp?
+          {isGreek ? "Πώς χρησιμοποιείτε το mAI prop;" : "How are you using mAI prop?"}
         </h1>
         <p className="text-muted-foreground text-sm max-w-sm mx-auto">
-          Choose your profile. You can update it in settings later.
+          {isGreek ? "Επιλέξτε προφίλ. Μπορείτε να το αλλάξετε αργότερα από τις ρυθμίσεις." : "Choose your profile. You can update it in settings later."}
         </p>
       </div>
 
@@ -167,7 +170,7 @@ export function PickTypeStep({
             ) : (
               <ArrowRight className="w-4 h-4 mr-2" />
             )}
-            Continue as {flatCards.find((c) => c.id === pendingCardId)?.label}
+            {isGreek ? "Συνέχεια ως" : "Continue as"} {flatCards.find((c) => c.id === pendingCardId)?.label}
           </Button>
         </div>
       )}

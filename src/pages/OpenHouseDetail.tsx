@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useModal } from "@/hooks/useModal";
 import { useParams, Link, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   MapPin, Bed, Bath, Square, Calendar, ChevronLeft, ChevronRight, Eye,
   Pencil, Pause, Play, Trash2, Loader2, MessageCircle, Euro, Users, LayoutDashboard,
@@ -38,6 +39,9 @@ import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
 
 // skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
 export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house detail coordinates listing data, registration, offers, and owner controls.
+  const { i18n } = useTranslation();
+  const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
+  const dateLocale = isGreek ? "el-GR" : "en-GB";
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -80,13 +84,13 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
   const toggleFav = useToggleFavorite();
   const isFavorited = !!id && favorites.some(f => f.listing_id === id);
   const handleFavorite = () => {
-    if (!user) { toast.error("Sign in to save properties"); return; }
+    if (!user) { toast.error(isGreek ? "Συνδεθείτε για να αποθηκεύσετε ακίνητα" : "Sign in to save properties"); return; }
     if (id) toggleFav.mutate({ listing_id: id, isFavorited });
   };
   const handleShare = async () => {
     const url = window.location.href;
     if (navigator.share) { try { await navigator.share({ title: db?.title, url }); } catch (_err: unknown) { /* share cancelled or not supported */ } }
-    else { await navigator.clipboard.writeText(url); toast.success("Link copied"); }
+    else { await navigator.clipboard.writeText(url); toast.success(isGreek ? "Ο σύνδεσμος αντιγράφηκε" : "Link copied"); }
   };
 
   // UX: Contact only after approval; Offer only after attended + open house date passed
@@ -102,7 +106,7 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
       const convId = await startConversation.mutateAsync({ other_user_id: ownerId, listing_id: id });
       navigate("/messages", { state: { openConversationId: convId } });
     } catch (_err: unknown) {
-      toast.error("Could not start conversation");
+      toast.error(isGreek ? "Δεν ήταν δυνατή η έναρξη συνομιλίας" : "Could not start conversation");
     }
   };
 
@@ -128,9 +132,9 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
         updates: { open_house_date: new Date(dateInput).toISOString() },
       });
       setEditingDate(false);
-      toast.success("Open house date updated");
+      toast.success(isGreek ? "Η ημερομηνία της ανοιχτής επίσκεψης ενημερώθηκε" : "Open house date updated");
     } catch (_err: unknown) {
-      toast.error("Could not update date");
+      toast.error(isGreek ? "Δεν ήταν δυνατή η ενημέρωση της ημερομηνίας" : "Could not update date");
     }
   };
 
@@ -138,7 +142,7 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
     if (!id) return;
     const next = db?.status === "active" ? "paused" : "active";
     updateListing.mutate({ id, updates: { status: next } });
-    toast.success(next === "active" ? "Listing activated" : "Listing paused");
+    toast.success(next === "active" ? (isGreek ? "Η αγγελία ενεργοποιήθηκε" : "Listing activated") : (isGreek ? "Η αγγελία τέθηκε σε παύση" : "Listing paused"));
   };
 
   const handleDelete = () => {
@@ -159,14 +163,14 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
         <Navbar />
         <div className="flex-1 flex items-center justify-center px-4 pt-20 pb-12">
           <div className="text-center max-w-md">
-            <h2 className="font-display font-bold text-xl mb-3">Listing not found</h2>
+            <h2 className="font-display font-bold text-xl mb-3">{isGreek ? "Η αγγελία δεν βρέθηκε" : "Listing not found"}</h2>
             <p className="text-muted-foreground text-sm mb-6">
-              This open house listing does not exist or has been removed.
+              {isGreek ? "Η συγκεκριμένη ανοιχτή επίσκεψη δεν υπάρχει ή έχει αφαιρεθεί." : "This open house listing does not exist or has been removed."}
             </p>
             <Button variant="outline" asChild>
               <Link to="/open-houses">
                 <ChevronLeft className="w-4 h-4 mr-1" />
-                Back to Open Houses
+                {isGreek ? "Πίσω στις ανοιχτές επισκέψεις" : "Back to Open Houses"}
               </Link>
             </Button>
           </div>
@@ -202,9 +206,9 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
         {/* Breadcrumb — same as PropertyDetail */}
         <div className="container py-2 sm:py-3">
           <div className="flex items-center gap-1 sm:gap-1.5 text-xs text-muted-foreground overflow-x-auto scrollbar-none">
-            <Link to="/" className="hover:text-foreground transition-colors shrink-0">Home</Link>
+            <Link to="/" className="hover:text-foreground transition-colors shrink-0">{isGreek ? "Αρχική" : "Home"}</Link>
             <ChevronRight className="w-3 h-3 shrink-0" />
-            <Link to="/open-houses" className="hover:text-foreground transition-colors shrink-0">Open Houses</Link>
+            <Link to="/open-houses" className="hover:text-foreground transition-colors shrink-0">{isGreek ? "Ανοιχτές επισκέψεις" : "Open Houses"}</Link>
             <ChevronRight className="w-3 h-3 shrink-0" />
             <span className="text-foreground truncate font-medium">{db.title}</span>
           </div>
@@ -214,21 +218,21 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
           {/* Owner manage bar */}
           {isOwner && (
             <div className="flex flex-wrap gap-2 mb-6 p-4 rounded-xl bg-card border border-border">
-              <span className="text-xs font-semibold text-muted-foreground uppercase self-center mr-2">Manage</span>
+              <span className="text-xs font-semibold text-muted-foreground uppercase self-center mr-2">{isGreek ? "Διαχείριση" : "Manage"}</span>
               <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setEditingDate(!editingDate)}>
-                <Pencil className="w-3.5 h-3.5" /> Edit date
+                <Pencil className="w-3.5 h-3.5" /> {isGreek ? "Αλλαγή ημερομηνίας" : "Edit date"}
               </Button>
               <Button size="sm" variant="outline" className="gap-1.5" onClick={toggleStatus}>
-                {db.status === "active" ? <><Pause className="w-3.5 h-3.5" /> Pause</> : <><Play className="w-3.5 h-3.5" /> Activate</>}
+                {db.status === "active" ? <><Pause className="w-3.5 h-3.5" /> {isGreek ? "Παύση" : "Pause"}</> : <><Play className="w-3.5 h-3.5" /> {isGreek ? "Ενεργοποίηση" : "Activate"}</>}
               </Button>
               <Button size="sm" variant="outline" className="gap-1.5 text-destructive border-destructive/40 hover:bg-destructive/10" onClick={handleDelete}>
-                <Trash2 className="w-3.5 h-3.5" /> Delete
+                <Trash2 className="w-3.5 h-3.5" /> {isGreek ? "Διαγραφή" : "Delete"}
               </Button>
               {isOwner && editingDate && (
                 <div className="flex flex-wrap items-center gap-2 w-full mt-2 p-3 rounded-lg bg-primary/5 border border-primary/20">
                   <input type="datetime-local" value={dateInput} onChange={(e) => setDateInput(e.target.value)} className="px-3 py-2 rounded-lg border border-border bg-background text-sm" />
-                  <Button size="sm" onClick={saveDate} disabled={updateListing.isPending}>{updateListing.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}</Button>
-                  <Button size="sm" variant="ghost" onClick={() => setEditingDate(false)}>Cancel</Button>
+                  <Button size="sm" onClick={saveDate} disabled={updateListing.isPending}>{updateListing.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : (isGreek ? "Αποθήκευση" : "Save")}</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setEditingDate(false)}>{isGreek ? "Άκυρο" : "Cancel"}</Button>
                 </div>
               )}
             </div>
@@ -251,29 +255,29 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-secondary">
                     <Home className="w-12 h-12 text-muted-foreground/30" />
-                    <p className="text-xs text-muted-foreground">No photos</p>
+                    <p className="text-xs text-muted-foreground">{isGreek ? "Δεν υπάρχουν φωτογραφίες" : "No photos"}</p>
                   </div>
                 )}
                 <div className="absolute top-4 left-4 flex gap-2">
                   <span className="bg-gradient-primary text-primary-foreground text-xs font-bold px-3 py-1.5 rounded-full shadow-sm">
-                    OPEN HOUSE
+                    {isGreek ? "ΑΝΟΙΧΤΗ ΕΠΙΣΚΕΨΗ" : "OPEN HOUSE"}
                   </span>
                 </div>
                 {imgs.length > 1 && (
                   <>
-                    <button className="absolute left-3 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[44px] flex items-center justify-center p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 transition-all shadow-lg" onClick={() => setCurrentImage((p) => (p - 1 + imgs.length) % imgs.length)} aria-label="Previous">
+                    <button className="absolute left-3 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[44px] flex items-center justify-center p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 transition-all shadow-lg" onClick={() => setCurrentImage((p) => (p - 1 + imgs.length) % imgs.length)} aria-label={isGreek ? "Προηγούμενη" : "Previous"}>
                       <ChevronLeft className="w-4 h-4" />
                     </button>
-                    <button className="absolute right-3 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[44px] flex items-center justify-center p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 transition-all shadow-lg" onClick={() => setCurrentImage((p) => (p + 1) % imgs.length)} aria-label="Next">
+                    <button className="absolute right-3 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[44px] flex items-center justify-center p-2.5 rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 transition-all shadow-lg" onClick={() => setCurrentImage((p) => (p + 1) % imgs.length)} aria-label={isGreek ? "Επόμενη" : "Next"}>
                       <ChevronRight className="w-4 h-4" />
                     </button>
                   </>
                 )}
                 <div className="absolute top-4 right-4 flex gap-2">
-                  <button className={`min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full backdrop-blur-md shadow transition-all ${isFavorited ? "bg-destructive text-white" : "bg-background/70 hover:bg-background/90"}`} onClick={handleFavorite} aria-label={isFavorited ? "Remove from saved" : "Save property"}>
+                  <button className={`min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full backdrop-blur-md shadow transition-all ${isFavorited ? "bg-destructive text-white" : "bg-background/70 hover:bg-background/90"}`} onClick={handleFavorite} aria-label={isFavorited ? (isGreek ? "Αφαίρεση από αποθηκευμένα" : "Remove from saved") : (isGreek ? "Αποθήκευση ακινήτου" : "Save property")}>
                     <Heart className={`w-4 h-4 ${isFavorited ? "fill-white" : ""}`} />
                   </button>
-                  <button onClick={handleShare} className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 shadow transition-all" aria-label="Share">
+                  <button onClick={handleShare} className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full bg-background/70 backdrop-blur-md hover:bg-background/90 shadow transition-all" aria-label={isGreek ? "Κοινοποίηση" : "Share"}>
                     <Share2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -281,7 +285,7 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                   <>
                     <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-background/60 to-transparent pointer-events-none" />
                     <div className="absolute bottom-3 right-4 bg-background/70 backdrop-blur-md px-2.5 py-1 rounded-full text-xs font-medium">{currentImage + 1} / {imgs.length}</div>
-                    <div className="absolute bottom-3 left-4 flex items-center gap-1.5 bg-background/70 backdrop-blur-md px-2.5 py-1 rounded-full text-xs"><Eye className="w-3 h-3 text-muted-foreground" />{db.views_count || 0} views</div>
+                    <div className="absolute bottom-3 left-4 flex items-center gap-1.5 bg-background/70 backdrop-blur-md px-2.5 py-1 rounded-full text-xs"><Eye className="w-3 h-3 text-muted-foreground" />{db.views_count || 0} {isGreek ? "προβολές" : "views"}</div>
                   </>
                 )}
               </div>
@@ -301,7 +305,7 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-2">
                       <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground bg-muted px-2 py-0.5 rounded-full border border-border capitalize">{db.property_type}</span>
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/30">Open House</span>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/30">{isGreek ? "Ανοιχτή επίσκεψη" : "Open House"}</span>
                     </div>
                     <h1 className="font-display text-2xl md:text-3xl font-bold leading-tight">{db.title}</h1>
                     <div className="flex items-center gap-1.5 mt-2 text-sm text-muted-foreground">
@@ -311,15 +315,15 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                   </div>
                   <div className="text-right shrink-0">
                     <div className="font-display text-3xl font-black text-foreground">€{price.toLocaleString()}</div>
-                    {!!pricePerSqm && <div className="text-xs text-muted-foreground mt-0.5">€{pricePerSqm.toLocaleString()} per m²</div>}
+                    {!!pricePerSqm && <div className="text-xs text-muted-foreground mt-0.5">€{pricePerSqm.toLocaleString()} {isGreek ? "ανά τ.μ." : "per m²"}</div>}
                   </div>
                 </div>
                 {/* Key stats bar — same as PropertyDetail */}
                 <div className="flex items-center gap-2 flex-wrap">
-                  {db.bedrooms != null && <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium"><Bed className="w-3.5 h-3.5 text-primary" />{db.bedrooms} bed</div>}
-                  {db.bathrooms != null && <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium"><Bath className="w-3.5 h-3.5 text-primary" />{db.bathrooms} bath</div>}
+                  {db.bedrooms != null && <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium"><Bed className="w-3.5 h-3.5 text-primary" />{db.bedrooms} {isGreek ? "υπν." : "bed"}</div>}
+                  {db.bathrooms != null && <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium"><Bath className="w-3.5 h-3.5 text-primary" />{db.bathrooms} {isGreek ? "μπάν." : "bath"}</div>}
                   <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium"><Square className="w-3.5 h-3.5 text-primary" />{sqm} m²</div>
-                  {db.floor != null && <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium"><Layers className="w-3.5 h-3.5 text-primary" />{db.floor === 0 ? "Ground" : `${db.floor}${db.total_floors ? ` of ${db.total_floors}` : ""}`}</div>}
+                  {db.floor != null && <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium"><Layers className="w-3.5 h-3.5 text-primary" />{db.floor === 0 ? (isGreek ? "Ισόγειο" : "Ground") : `${db.floor}${db.total_floors ? (isGreek ? ` από ${db.total_floors}` : ` of ${db.total_floors}`) : ""}`}</div>}
                   {db.year_built != null && <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium"><Calendar className="w-3.5 h-3.5 text-primary" />{db.year_built}</div>}
                   {db.heating_system && <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium"><Thermometer className="w-3.5 h-3.5 text-primary" />{HEATING_TYPES.find((h) => h.value === db.heating_system)?.label ?? db.heating_system.replace(/_/g, " ")}</div>}
                   {db.construction_status && <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium"><Building2 className="w-3.5 h-3.5 text-primary" />{CONDITION_OPTIONS.find((c) => c.value === db.construction_status)?.label ?? db.construction_status.replace(/_/g, " ")}</div>}
@@ -329,17 +333,19 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
               {/* Open House date Section */}
               {openHouseDate && (
                 <Section>
-                  <SectionHeader icon={Calendar} title="Open House" />
+                  <SectionHeader icon={Calendar} title={isGreek ? "Ανοιχτή επίσκεψη" : "Open House"} />
                   <div className="p-6">
                     <div className="flex items-center gap-4">
                       <Calendar className="w-12 h-12 text-emerald-600 shrink-0" />
                       <div>
                         <p className="font-display text-lg font-bold text-foreground">
-                          {openHouseDate.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                          {openHouseDate.toLocaleDateString(dateLocale, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
                         </p>
                         <p className="text-sm text-muted-foreground mt-0.5">
-                          {openHouseDate.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
-                          {hasAssetControl ? " — Pre-register to book a timeslot" : " — No appointment needed"}
+                          {openHouseDate.toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit" })}
+                          {hasAssetControl
+                            ? (isGreek ? " — Απαιτείται προεγγραφή για κράτηση ώρας" : " — Pre-register to book a timeslot")
+                            : (isGreek ? " — Δεν απαιτείται ραντεβού" : " — No appointment needed")}
                         </p>
                       </div>
                     </div>
@@ -372,14 +378,14 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                 if (total === 0) return null;
                 return (
                   <Section>
-                    <SectionHeader icon={Check} title="Features & Amenities" badge={
-                      <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full border border-border">{total} features</span>
+                  <SectionHeader icon={Check} title={isGreek ? "Χαρακτηριστικά & παροχές" : "Features & Amenities"} badge={
+                      <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full border border-border">{total} {isGreek ? "χαρακτηριστικά" : "features"}</span>
                     } />
                     <div className="p-6 space-y-6">
-                      <FeatureSection title="Internal" features={internalFeatures} accent="bg-primary" />
-                      <FeatureSection title="External" features={externalFeatures} accent="bg-brand-emerald" />
-                      <FeatureSection title="Construction" features={constructionFeatures} accent="bg-accent" />
-                      <FeatureSection title="Suitable For" features={suitabilityFeatures} accent="bg-brand-gold" />
+                      <FeatureSection title={isGreek ? "Εσωτερικά" : "Internal"} features={internalFeatures} accent="bg-primary" />
+                      <FeatureSection title={isGreek ? "Εξωτερικά" : "External"} features={externalFeatures} accent="bg-brand-emerald" />
+                      <FeatureSection title={isGreek ? "Κατασκευή" : "Construction"} features={constructionFeatures} accent="bg-accent" />
+                      <FeatureSection title={isGreek ? "Κατάλληλο για" : "Suitable For"} features={suitabilityFeatures} accent="bg-brand-gold" />
                     </div>
                   </Section>
                 );
@@ -411,11 +417,11 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
 
               {/* Professionals */}
               <Section>
-                <SectionHeader icon={Wrench} title="Professional Add-ons" />
+                <SectionHeader icon={Wrench} title={isGreek ? "Υπηρεσίες επαγγελματιών" : "Professional Add-ons"} />
                 <div className="p-5">
-                  <p className="text-xs text-muted-foreground mb-3">Formal valuation reports, legal due diligence, and building legality checks.</p>
+                  <p className="text-xs text-muted-foreground mb-3">{isGreek ? "Επίσημες εκθέσεις εκτίμησης, νομικός έλεγχος και έλεγχοι νομιμότητας κτιρίου." : "Formal valuation reports, legal due diligence, and building legality checks."}</p>
                   <Link to={`/professionals${city ? `?search=${encodeURIComponent(city)}` : ""}`} className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
-                    Find professionals <ExternalLink className="w-4 h-4" />
+                    {isGreek ? "Βρείτε επαγγελματίες" : "Find professionals"} <ExternalLink className="w-4 h-4" />
                   </Link>
                 </div>
               </Section>
@@ -427,14 +433,14 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                 <div className="font-display text-2xl font-bold text-primary mb-1">
                   €{price.toLocaleString()}
                 </div>
-                {sqm > 0 && <p className="text-xs text-muted-foreground">€{Math.round(price / sqm).toLocaleString()}/m²</p>}
+                {sqm > 0 && <p className="text-xs text-muted-foreground">€{Math.round(price / sqm).toLocaleString()}/{isGreek ? "τ.μ." : "m²"}</p>}
 
                 {/* Registration / offer flow — gate by approval & attendance */}
                 {!isOwner && user && (
                   <div className="mt-4 space-y-2">
                     {!canSubmitOffer && myReg?.status === "attended" && !ohDatePassed && openHouseDate && (
                       <p className="text-[11px] text-muted-foreground">
-                        Offer submission opens after {openHouseDate.toLocaleDateString("en-GB")} {openHouseDate.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                        {isGreek ? "Η υποβολή προσφορών ανοίγει μετά τις" : "Offer submission opens after"} {openHouseDate.toLocaleDateString(dateLocale)} {openHouseDate.toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit" })}
                       </p>
                     )}
                     {/* Pre-register — hidden once an offer is submitted */}
@@ -446,11 +452,11 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                           className="w-full rounded-lg px-3 py-2 text-left text-xs bg-secondary/50 hover:bg-secondary border border-border transition-colors flex items-center gap-2"
                         >
                           <Users className="w-3.5 h-3.5 shrink-0" />
-                          Registration {myReg.status === "approved" ? "approved ✓" : myReg.status === "attended" ? "attended ✓" : "pending ⏳"} · View details
+                          {isGreek ? "Εγγραφή" : "Registration"} {myReg.status === "approved" ? (isGreek ? "εγκρίθηκε ✓" : "approved ✓") : myReg.status === "attended" ? (isGreek ? "παρουσία ✓" : "attended ✓") : (isGreek ? "σε αναμονή ⏳" : "pending ⏳")} · {isGreek ? "Λεπτομέρειες" : "View details"}
                         </button>
                       ) : (
                         <Button className="w-full gap-2" onClick={() => modal.open("reg")}>
-                          <Users className="w-4 h-4" /> Pre-register for Open House
+                          <Users className="w-4 h-4" /> {isGreek ? "Προεγγραφή για ανοιχτή επίσκεψη" : "Pre-register for Open House"}
                         </Button>
                       )
                     )}
@@ -462,7 +468,7 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                         className="w-full rounded-lg px-3 py-2 text-left text-xs bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 transition-colors flex items-center gap-2"
                       >
                         <Euro className="w-3.5 h-3.5 shrink-0" />
-                        Offer submitted ({myOffer.status === "submitted" ? "sealed" : `€${Number(myOffer.amount).toLocaleString()}`}) · View
+                        {isGreek ? "Προσφορά υποβλήθηκε" : "Offer submitted"} ({myOffer.status === "submitted" ? (isGreek ? "σφραγισμένη" : "sealed") : `€${Number(myOffer.amount).toLocaleString()}`}) · {isGreek ? "Προβολή" : "View"}
                       </button>
                     ) : (
                       <Button
@@ -471,26 +477,30 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                         onClick={() => modal.open("offer")}
                         disabled={!canSubmitOffer}
                       >
-                        <Euro className="w-4 h-4" /> Submit Offer
+                        <Euro className="w-4 h-4" /> {isGreek ? "Υποβολή προσφοράς" : "Submit Offer"}
                         {!canSubmitOffer && <Lock className="w-3 h-3 opacity-50" />}
                       </Button>
                     )}
                     {canContact ? (
                       <Button variant="outline" className="w-full gap-2" onClick={handleContact} disabled={startConversation.isPending}>
                         {startConversation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageCircle className="w-4 h-4" />}
-                        Contact
+                        {isGreek ? "Επικοινωνία" : "Contact"}
                       </Button>
                     ) : (
                       <div className="rounded-lg px-3 py-2 text-[11px] text-muted-foreground border border-border bg-muted/30 flex items-center gap-1.5">
                         <Lock className="w-3 h-3 shrink-0" />
-                        {!myReg ? "Pre-register first to contact" : myReg.status === "pending" ? "Contact unlocks after approval" : "Attend first to contact"}
+                        {!myReg
+                          ? (isGreek ? "Προεγγραφείτε πρώτα για επικοινωνία" : "Pre-register first to contact")
+                          : myReg.status === "pending"
+                            ? (isGreek ? "Η επικοινωνία ανοίγει μετά την έγκριση" : "Contact unlocks after approval")
+                            : (isGreek ? "Η επικοινωνία ανοίγει μετά την επίσκεψη" : "Attend first to contact")}
                       </div>
                     )}
                   </div>
                 )}
                 {!isOwner && !user && (
                   <Button className="w-full mt-4 gap-2" asChild>
-                    <Link to="/login">Sign in to contact</Link>
+                    <Link to="/login">{isGreek ? "Σύνδεση για επικοινωνία" : "Sign in to contact"}</Link>
                   </Button>
                 )}
 
@@ -499,11 +509,11 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                   <div className="mt-4 space-y-2">
                     <Button className="w-full gap-2" asChild>
                       <Link to="/dashboard?tab=open-houses">
-                        <LayoutDashboard className="w-4 h-4" /> Manage in Dashboard
+                        <LayoutDashboard className="w-4 h-4" /> {isGreek ? "Διαχείριση στον πίνακα" : "Manage in Dashboard"}
                       </Link>
                     </Button>
                     <p className="text-xs text-muted-foreground text-center">
-                      View registrations, approve visitors & manage sealed offers
+                      {isGreek ? "Δείτε εγγραφές, εγκρίνετε επισκέπτες και διαχειριστείτε σφραγισμένες προσφορές" : "View registrations, approve visitors & manage sealed offers"}
                     </p>
                   </div>
                 )}
@@ -529,8 +539,8 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                     </svg>
                     <div>
                       <p className="text-sm font-bold" style={{ color: colour }}>{label}</p>
-                      <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Walk Score</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">Based on nearby amenities</p>
+                      <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">{isGreek ? "Βαθμός πεζής πρόσβασης" : "Walk Score"}</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{isGreek ? "Με βάση κοντινές παροχές" : "Based on nearby amenities"}</p>
                     </div>
                   </div>
                 );
@@ -542,7 +552,7 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                   {db?.safety_score != null && (() => {
                     const s = Number(db.safety_score);
                     const colour = s >= 70 ? "#22c55e" : s >= 40 ? "#f59e0b" : "#ef4444";
-                    const safetyLabel = s >= 70 ? "Safe area" : s >= 40 ? "Moderate" : "Caution";
+                    const safetyLabel = s >= 70 ? (isGreek ? "Ασφαλής περιοχή" : "Safe area") : s >= 40 ? (isGreek ? "Μέτρια" : "Moderate") : (isGreek ? "Προσοχή" : "Caution");
                     const r = 20, c = 2 * Math.PI * r;
                     return (
                       <div className="flex items-center gap-3">
@@ -555,7 +565,7 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                         </svg>
                         <div>
                           <p className="text-sm font-bold" style={{ color: colour }}>{safetyLabel}</p>
-                          <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Safety Score</p>
+                          <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">{isGreek ? "Δείκτης ασφάλειας" : "Safety Score"}</p>
                         </div>
                       </div>
                     );
@@ -563,7 +573,7 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                   {db?.noise_score != null && (() => {
                     const n = Number(db.noise_score);
                     const colour = n <= 3 ? "#22c55e" : n <= 6 ? "#f59e0b" : "#ef4444";
-                    const noiseLabel = n <= 3 ? "Quiet" : n <= 6 ? "Moderate" : "Noisy";
+                    const noiseLabel = n <= 3 ? (isGreek ? "Ήσυχα" : "Quiet") : n <= 6 ? (isGreek ? "Μέτρια" : "Moderate") : (isGreek ? "Θορυβώδης" : "Noisy");
                     return (
                       <div className="flex items-center gap-3">
                         <div className="w-[52px] h-[52px] rounded-full border-4 flex items-center justify-center shrink-0" style={{ borderColor: colour }}>
@@ -571,7 +581,7 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                         </div>
                         <div>
                           <p className="text-sm font-bold" style={{ color: colour }}>{noiseLabel}</p>
-                          <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Noise Level</p>
+                          <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">{isGreek ? "Επίπεδο θορύβου" : "Noise Level"}</p>
                         </div>
                       </div>
                     );
@@ -649,22 +659,22 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
         listingPrice={price}
         canSubmit={canSubmitOffer}
         offerBlockedReason={
-          !myReg ? "Pre-register and get approved first" :
-          myReg.status === "pending" ? "Awaiting approval" :
-          myReg.status !== "attended" ? "Attend the open house to unlock offer submission" :
-          !ohDatePassed ? `Offers open after ${openHouseDate?.toLocaleString("en-GB")}` : undefined
+          !myReg ? (isGreek ? "Προεγγραφείτε και λάβετε έγκριση πρώτα" : "Pre-register and get approved first") :
+          myReg.status === "pending" ? (isGreek ? "Αναμονή έγκρισης" : "Awaiting approval") :
+          myReg.status !== "attended" ? (isGreek ? "Παρακολουθήστε την ανοιχτή επίσκεψη για να ανοίξει η προσφορά" : "Attend the open house to unlock offer submission") :
+          !ohDatePassed ? (isGreek ? `Οι προσφορές ανοίγουν μετά τις ${openHouseDate?.toLocaleString(dateLocale)}` : `Offers open after ${openHouseDate?.toLocaleString("en-GB")}`) : undefined
         }
       />
       <ConfirmDialog
         open={deleteConfirmOpen}
-        title="Delete open house listing"
-        description="Delete this open house listing and remove it from open house discovery?"
-        confirmLabel="Delete"
+        title={isGreek ? "Διαγραφή ανοιχτής επίσκεψης" : "Delete open house listing"}
+        description={isGreek ? "Να διαγραφεί αυτή η ανοιχτή επίσκεψη και να αφαιρεθεί από την αναζήτηση;" : "Delete this open house listing and remove it from open house discovery?"}
+        confirmLabel={isGreek ? "Διαγραφή" : "Delete"}
         onConfirm={() => {
           if (!id) return;
           deleteListing.mutate(id, {
             onSuccess: () => {
-              toast.success("Listing deleted");
+              toast.success(isGreek ? "Η αγγελία διαγράφηκε" : "Listing deleted");
               navigate("/open-houses");
             },
           });

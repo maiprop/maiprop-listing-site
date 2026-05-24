@@ -35,7 +35,7 @@ const MODULE_FEATURES: Record<string, ModuleFeature[]> = {
   "auctions": [
     { label: "Browse court auctions",            free: "60 listings",    pro: "600 listings" },
     { label: "Opening bid & property type",      free: true,             pro: true },
-    { label: "Court name & date",                free: true,             pro: true },
+    { label: "Auction officer/platform & date",  free: true,             pro: true },
     { label: "Full auction dossier",             free: false,            pro: true },
     { label: "Auction alerts",                   free: "1 alert",        pro: "5 alerts" },
     { label: "Historical bid data",              free: false,            pro: true },

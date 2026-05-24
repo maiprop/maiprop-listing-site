@@ -237,4 +237,71 @@ describe("OpenHouseRegistrationDialog", () => {
       updates: expect.not.objectContaining({ screening_doc_url: expect.anything() }),
     });
   });
+
+  it("covers the Greek high-value asset-control workflow without changing limits", async () => {
+    globalThis.__MAIPROP_TEST_I18N_LANGUAGE__ = "el";
+    useOpenHouseSettingsMock.mockReturnValue({
+      data: {
+        ...baseSettings,
+        require_proof_of_funds: true,
+        require_investor_declaration: true,
+      },
+    });
+    renderDialog({ listingPrice: 250000 });
+
+    fireEvent.change(document.querySelector("#oh-contact-name") as HTMLInputElement, {
+      target: { value: "Buyer One" },
+    });
+    fireEvent.change(document.querySelector("#oh-contact-email") as HTMLInputElement, {
+      target: { value: "buyer@example.com" },
+    });
+    fireEvent.change(document.querySelector("#oh-contact-phone") as HTMLInputElement, {
+      target: { value: "+306900000000" },
+    });
+    screen.getAllByRole("checkbox").forEach((box) => fireEvent.click(box));
+    fireEvent.click(screen.getByRole("button", { name: /Συνέχεια/i }));
+
+    fireEvent.click(await screen.findByRole("button", { name: /10:00/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Εγγραφή/i }));
+
+    await screen.findByLabelText("budget range");
+    let buttons = screen.getAllByRole("button");
+    fireEvent.click(buttons[0]);
+    fireEvent.change(screen.getByLabelText("budget range"), { target: { value: "200k_500k" } });
+    buttons = screen.getAllByRole("button");
+    fireEvent.click(buttons[4]);
+    fireEvent.click(screen.getByRole("button", { name: /Συνέχεια/i }));
+
+    await waitFor(() =>
+      expect(updateRegMock.mutateAsync).toHaveBeenCalledWith({
+        id: "reg-new",
+        updates: expect.objectContaining({
+          mortgage_status: "yes",
+          budget_range: "200k_500k",
+          working_with_agent: "no",
+        }),
+      }),
+    );
+
+    const idInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(idInput, { target: { files: [new File(["id"], "id.pdf", { type: "application/pdf" })] } });
+    fireEvent.click(screen.getByRole("button", { name: /Συνέχεια/i }));
+
+    await waitFor(() => expect(screen.getAllByRole("checkbox")).toHaveLength(1));
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: /Υπογραφή/i }));
+
+    await waitFor(() => expect(document.querySelector('input[type="number"]')).not.toBeNull());
+    const proofInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(proofInput, { target: { files: [new File(["pof"], "proof.pdf", { type: "application/pdf" })] } });
+    fireEvent.change(document.querySelector('input[type="number"]') as HTMLInputElement, {
+      target: { value: "300000" },
+    });
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: /Υποβολή/i }));
+
+    await waitFor(() => expect(uploadOpenHouseDocMock).toHaveBeenCalledTimes(2));
+    expect(toastMock.success).toHaveBeenCalled();
+    globalThis.__MAIPROP_TEST_I18N_LANGUAGE__ = "en";
+  });
 });

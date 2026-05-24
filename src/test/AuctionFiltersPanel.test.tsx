@@ -121,9 +121,9 @@ describe("AuctionFiltersPanel — accessibility", () => {
     expect(document.getElementById("filter-type")).toBeInTheDocument();
   });
 
-  it("Starting Bid label is associated with its select", () => {
+  it("First Offer Price label is associated with its select", () => {
     renderPanel({ showFilters: true });
-    expect(screen.getByText("Starting Bid")).toHaveAttribute("for", "filter-bid");
+    expect(screen.getByText("First Offer Price")).toHaveAttribute("for", "filter-bid");
     expect(document.getElementById("filter-bid")).toBeInTheDocument();
   });
 
@@ -212,7 +212,7 @@ describe("AuctionFiltersPanel — active filter chips", () => {
     renderPanel({ showFilters: false, activeFilterCount: 1, filterType: "house", setFilterType });
     // The chip button contains "house" text and an X icon
     const chips = screen.getAllByRole("button");
-    const typeChip = chips.find((b) => b.textContent?.includes("house"));
+    const typeChip = chips.find((b) => b.textContent?.toLowerCase().includes("house"));
     if (!typeChip) throw new Error("house chip button not found");
     fireEvent.click(typeChip);
     expect(setFilterType).toHaveBeenCalledWith("");

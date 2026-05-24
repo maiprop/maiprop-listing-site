@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Building2, Plus, Loader2, MapPin, Edit2, Trash2, ChevronRight,
@@ -15,11 +16,13 @@ import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { ProGate } from "@/components/gates/ProGate";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import type { Tables } from "@/integrations/supabase/types";
+import { tFallback } from "@/lib/i18nFallback";
 
 type ProjectListing = { id: string; title: string; cover_image_url?: string | null; price?: number | null };
 type ProjectWithListings = Tables<"projects"> & { listings?: ProjectListing[] };
 
 const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delete project UI state together with its ProGate surface.
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { user, profile } = useAuth();
   const participantType = getParticipantTypeFromProfile(profile);
@@ -30,6 +33,7 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
   const updateProject = useUpdateProject();
   const deleteProject = useDeleteProject();
   const updateListing = useUpdateListing();
+  const tr = (key: string, fallback: string) => tFallback(t, key, fallback);
 
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -42,7 +46,7 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
 
   const handleCreate = () => {
     if (!newName.trim()) {
-      toast.error("Project name is required");
+      toast.error(tr("projects.validation.nameRequired", "Project name is required"));
       return;
     }
     createProject.mutate(
@@ -84,10 +88,10 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
         <main className="flex-1 flex items-center justify-center p-8">
           <div className="text-center">
             <Building2 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <h1 className="font-display text-xl font-semibold">Sign in to manage projects</h1>
-            <p className="text-sm text-muted-foreground mt-2">Create and showcase your development projects</p>
+            <h1 className="font-display text-xl font-semibold">{tr("projects.auth.title", "Sign in to manage projects")}</h1>
+            <p className="text-sm text-muted-foreground mt-2">{tr("projects.auth.subtitle", "Create and showcase your development projects")}</p>
             <Button className="mt-4" asChild>
-              <Link to="/login">Sign in</Link>
+              <Link to="/login">{tr("projects.auth.signIn", "Sign in")}</Link>
             </Button>
           </div>
         </main>
@@ -103,77 +107,77 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
         <ProGate>
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="font-display text-2xl font-bold">Projects</h1>
-            <p className="text-sm text-muted-foreground mt-1">Showcase development projects and link listings</p>
+            <h1 className="font-display text-2xl font-bold">{tr("projects.title", "Projects")}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{tr("projects.subtitle", "Showcase development projects and link listings")}</p>
           </div>
           <div className="flex gap-2">
             {isDeveloper && (
               <Button variant="outline" className="border-border" asChild>
-                <Link to="/listings/new-building">New Building Listing</Link>
+                <Link to="/listings/new-building">{tr("projects.newBuildingListing", "New Building Listing")}</Link>
               </Button>
             )}
             <Button onClick={() => setShowCreate(true)} className="bg-gradient-primary border-0 text-primary-foreground gap-2">
-              <Plus className="w-4 h-4" /> New Project
+              <Plus className="w-4 h-4" /> {tr("projects.newProject", "New Project")}
             </Button>
           </div>
         </div>
 
         {showCreate && (
           <div className="glass-card rounded-xl p-6 mb-6 border border-border">
-            <h3 className="font-display font-semibold mb-4">Create project</h3>
+            <h3 className="font-display font-semibold mb-4">{tr("projects.create.title", "Create project")}</h3>
             <div className="space-y-4">
               <div>
-                <label className="text-xs text-muted-foreground block mb-1.5">Name *</label>
+                <label className="text-xs text-muted-foreground block mb-1.5">{tr("projects.fields.name", "Name")} *</label>
                 <input
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  placeholder="e.g. Marina Heights"
+                  placeholder={tr("projects.fields.namePlaceholder", "e.g. Marina Heights")}
                   className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground block mb-1.5">Description</label>
+                <label className="text-xs text-muted-foreground block mb-1.5">{tr("projects.fields.description", "Description")}</label>
                 <textarea
                   value={newDesc}
                   onChange={(e) => setNewDesc(e.target.value)}
-                  placeholder="Brief description..."
+                  placeholder={tr("projects.fields.descriptionPlaceholder", "Brief description...")}
                   rows={2}
                   className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm resize-none text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground block mb-1.5">City</label>
+                <label className="text-xs text-muted-foreground block mb-1.5">{tr("projects.fields.city", "City")}</label>
                 <input
                   value={newCity}
                   onChange={(e) => setNewCity(e.target.value)}
-                  placeholder="e.g. Athens"
+                  placeholder={tr("projects.fields.cityPlaceholder", "e.g. Athens")}
                   className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground block mb-1.5">Address</label>
+                <label className="text-xs text-muted-foreground block mb-1.5">{tr("projects.fields.address", "Address")}</label>
                 <input
                   value={newAddress}
                   onChange={(e) => setNewAddress(e.target.value)}
-                  placeholder="Street, number"
+                  placeholder={tr("projects.fields.addressPlaceholder", "Street, number")}
                   className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground block mb-1.5">Building permit number *</label>
+                <label className="text-xs text-muted-foreground block mb-1.5">{tr("projects.fields.permit", "Building permit number")} *</label>
                 <input
                   value={newPermit}
                   onChange={(e) => setNewPermit(e.target.value)}
-                  placeholder="e.g. 12345/2024"
+                  placeholder={tr("projects.fields.permitPlaceholder", "e.g. 12345/2024")}
                   className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"
                 />
               </div>
               <div className="flex gap-2">
                 <Button onClick={handleCreate} disabled={createProject.isPending} className="bg-gradient-primary border-0 text-primary-foreground">
                   {createProject.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  Create
+                  {tr("projects.actions.create", "Create")}
                 </Button>
-                <Button variant="outline" className="border-border" onClick={() => setShowCreate(false)}>Cancel</Button>
+                <Button variant="outline" className="border-border" onClick={() => setShowCreate(false)}>{tr("projects.actions.cancel", "Cancel")}</Button>
               </div>
             </div>
           </div>
@@ -186,9 +190,9 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
         ) : projects.length === 0 ? (
           <div className="glass-card rounded-xl p-12 text-center">
             <FolderOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <h2 className="font-semibold">No projects yet</h2>
-            <p className="text-sm text-muted-foreground mt-2">Create a project to group and showcase your listings</p>
-            <Button className="mt-4 bg-gradient-primary border-0 text-primary-foreground" onClick={() => setShowCreate(true)}>Create your first project</Button>
+            <h2 className="font-semibold">{tr("projects.empty.title", "No projects yet")}</h2>
+            <p className="text-sm text-muted-foreground mt-2">{tr("projects.empty.subtitle", "Create a project to group and showcase your listings")}</p>
+            <Button className="mt-4 bg-gradient-primary border-0 text-primary-foreground" onClick={() => setShowCreate(true)}>{tr("projects.empty.cta", "Create your first project")}</Button>
           </div>
         ) : (
           <div className="space-y-6">
@@ -210,16 +214,16 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
                           <input
                             defaultValue={p.name}
                             onBlur={(e) => handleUpdate(p.id, { name: e.target.value })}
-                            placeholder="Project name"
+                            placeholder={tr("projects.fields.projectNamePlaceholder", "Project name")}
                             className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-sm font-semibold text-foreground outline-none focus:border-primary transition-colors"
-                            aria-label="Project name"
+                            aria-label={tr("projects.fields.projectName", "Project name")}
                           />
                           <input
                             defaultValue={p.description || ""}
                             onBlur={(e) => handleUpdate(p.id, { description: e.target.value })}
-                            placeholder="Description"
+                            placeholder={tr("projects.fields.description", "Description")}
                             className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-sm text-foreground outline-none focus:border-primary transition-colors"
-                            aria-label="Project description"
+                            aria-label={tr("projects.fields.projectDescription", "Project description")}
                           />
                         </div>
                       ) : (
@@ -230,7 +234,7 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
                               p.status === "completed" ? "bg-brand-emerald/20 text-brand-emerald" :
                               "bg-muted text-muted-foreground"
                             }`}>{p.status}</span>
-                            {p.building_permit_number && <span className="text-xs text-muted-foreground">Permit: {p.building_permit_number}</span>}
+                            {p.building_permit_number && <span className="text-xs text-muted-foreground">{tr("projects.labels.permit", "Permit")}: {p.building_permit_number}</span>}
                           </div>
                           {(p.description || p.city || p.developer_company) && (
                             <p className="text-sm text-muted-foreground mt-1">
@@ -248,13 +252,13 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
                     </div>
                     <div className="flex items-center gap-1">
                       <Button variant="outline" size="sm" className="border-border" asChild>
-                        <Link to={`/projects/${p.id}`}>Edit full</Link>
+                        <Link to={`/projects/${p.id}`}>{tr("projects.actions.editFull", "Edit full")}</Link>
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
                         onClick={() => setEditingId(isEditing ? null : p.id)}
-                        aria-label={isEditing ? "Done editing" : "Quick edit"}
+                        aria-label={isEditing ? tr("projects.actions.doneEditing", "Done editing") : tr("projects.actions.quickEdit", "Quick edit")}
                       >
                         <Edit2 className="w-4 h-4" />
                       </Button>
@@ -262,7 +266,7 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
                         variant="ghost"
                         size="icon"
                         onClick={() => handleDelete(p.id)}
-                        aria-label="Delete project"
+                        aria-label={tr("projects.actions.deleteProject", "Delete project")}
                         className="text-destructive hover:text-destructive"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -272,7 +276,7 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
 
                   {listings.length > 0 && (
                     <div className="border-t border-border px-5 py-4">
-                      <h4 className="text-xs font-medium text-muted-foreground mb-3">Listings in this project</h4>
+                      <h4 className="text-xs font-medium text-muted-foreground mb-3">{tr("projects.labels.listingsInProject", "Listings in this project")}</h4>
                       <div className="flex flex-wrap gap-2">
                         {listings.map((l) => (
                           <div
@@ -293,7 +297,7 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
                               size="sm"
                               onClick={() => handleUnlinkListing(l.id)}
                             >
-                              Unlink
+                              {tr("projects.actions.unlink", "Unlink")}
                             </Button>
                           </div>
                         ))}
@@ -302,7 +306,7 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
                   )}
 
                   <div className="border-t border-border px-5 py-4 bg-muted/30">
-                    <h4 className="text-xs font-medium text-muted-foreground mb-2">Link your listings</h4>
+                    <h4 className="text-xs font-medium text-muted-foreground mb-2">{tr("projects.labels.linkListings", "Link your listings")}</h4>
                     <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
                       {myListings
                         .filter((l) => l.project_id !== p.id)
@@ -318,7 +322,7 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
                         ))}
                       {myListings.filter((l) => l.project_id !== p.id).length === 0 && (
                         <p className="text-xs text-muted-foreground">
-                          No unlinked listings. <Link to="/listings/new" className="underline text-primary">Create one</Link>
+                          {tr("projects.empty.noUnlinked", "No unlinked listings.")} <Link to="/listings/new" className="underline text-primary">{tr("projects.empty.createOne", "Create one")}</Link>
                         </p>
                       )}
                     </div>
@@ -332,7 +336,7 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
         <div className="mt-8">
           <Button variant="outline" className="border-border" asChild>
             <Link to="/dashboard" className="gap-2">
-              <ChevronRight className="w-4 h-4 rotate-180" /> Back to Dashboard
+              <ChevronRight className="w-4 h-4 rotate-180" /> {tr("projects.actions.backToDashboard", "Back to Dashboard")}
             </Link>
           </Button>
         </div>
@@ -341,9 +345,9 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
       <Footer />
       <ConfirmDialog
         open={Boolean(projectToDelete)}
-        title="Delete project"
-        description="Delete this project? Linked listings will be unlinked."
-        confirmLabel="Delete"
+        title={tr("projects.deleteDialog.title", "Delete project")}
+        description={tr("projects.deleteDialog.description", "Delete this project? Linked listings will be unlinked.")}
+        confirmLabel={tr("projects.deleteDialog.confirm", "Delete")}
         onConfirm={() => {
           if (projectToDelete) deleteProject.mutate(projectToDelete);
           setProjectToDelete(null);

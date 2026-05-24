@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { AUCTIONS_PAGE_SIZE } from "@/hooks/useAuctionsPipeline";
+import { useTranslation } from "react-i18next";
 
 interface AuctionPaginationProps {
   currentPage: number;
@@ -15,6 +16,9 @@ export function AuctionPagination({
   polygonFilteredCount,
   setCurrentPage,
 }: AuctionPaginationProps) {
+  const { i18n } = useTranslation();
+  const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
+
   if (totalPages <= 1) return null;
 
   const scrollTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
@@ -41,7 +45,7 @@ export function AuctionPagination({
         disabled={currentPage === 1}
         onClick={() => { setCurrentPage((p) => Math.max(1, p - 1)); scrollTop(); }}
       >
-        ← Previous
+        ← {isGreek ? "Προηγούμενη" : "Previous"}
       </Button>
 
       {pages.map((p, idx) =>
@@ -67,11 +71,13 @@ export function AuctionPagination({
         disabled={currentPage === totalPages}
         onClick={() => { setCurrentPage((p) => Math.min(totalPages, p + 1)); scrollTop(); }}
       >
-        Next →
+        {isGreek ? "Επόμενη" : "Next"} →
       </Button>
 
       <span className="w-full text-center text-xs text-muted-foreground mt-1">
-        Page {currentPage} of {totalPages} · {polygonFilteredCount} results · {AUCTIONS_PAGE_SIZE} per page
+        {isGreek
+          ? `Σελίδα ${currentPage} από ${totalPages} · ${polygonFilteredCount} αποτελέσματα · ${AUCTIONS_PAGE_SIZE} ανά σελίδα`
+          : `Page ${currentPage} of ${totalPages} · ${polygonFilteredCount} results · ${AUCTIONS_PAGE_SIZE} per page`}
       </span>
     </div>
   );

@@ -12,7 +12,7 @@ export const PROPERTY_TYPES = [
   { value: "land", label: "Land / Plot (any)" },
   { value: "land:land", label: "Land (no building)" },
   { value: "land:land_with_building", label: "Land with building" },
-  { value: "land:plot", label: "Agricultural plot" },
+  { value: "land:plot", label: "Agricultural land" },
   { value: "land:plot_with_building", label: "Plot with building" },
   { value: "commercial", label: "Commercial (any)" },
   { value: "commercial:store", label: "Store / Retail" },
@@ -25,17 +25,51 @@ export const PROPERTY_TYPES = [
   { value: "office", label: "Office" },
 ];
 
-const PROPERTY_TYPE_GR: Record<string, string> = {
-  apartment: "Διαμέρισμα",
-  house: "Κατοικία",
-  villa: "Βίλα",
-  land: "Γη",
-  commercial: "Επαγγελματικός",
-  office: "Γραφείο",
+const isGreekLocale = (locale?: string): boolean => locale?.toLowerCase().startsWith("el") ?? true;
+
+const PROPERTY_TYPE_LABELS: Record<"el" | "en", Record<string, string>> = {
+  el: {
+    apartment: "Διαμέρισμα",
+    house: "Μονοκατοικία",
+    villa: "Βίλα",
+    land: "Οικόπεδο / Αγροτεμάχιο",
+    commercial: "Επαγγελματικό ακίνητο",
+    office: "Γραφείο",
+    plot_with_building: "Οικόπεδο με κτίσμα",
+    land_with_building: "Αγροτεμάχιο με κτίσμα",
+    land_no_building: "Γη χωρίς κτίσμα",
+    agricultural_land: "Αγροτεμάχιο",
+    store: "Κατάστημα",
+    warehouse: "Αποθήκη",
+    industrial: "Βιομηχανικός χώρος",
+    storeroom: "Αποθηκευτικός χώρος",
+    parking: "Θέση στάθμευσης",
+    hotel: "Ξενοδοχείο",
+    other_business_space: "Λοιπός επαγγελματικός χώρος",
+  },
+  en: {
+    apartment: "Apartment",
+    house: "House",
+    villa: "Villa",
+    land: "Land / Plot",
+    commercial: "Commercial property",
+    office: "Office",
+    plot_with_building: "Plot with building",
+    land_with_building: "Land with building",
+    land_no_building: "Land without building",
+    agricultural_land: "Agricultural land",
+    store: "Store / Retail",
+    warehouse: "Warehouse",
+    industrial: "Industrial",
+    storeroom: "Storeroom",
+    parking: "Parking",
+    hotel: "Hotel",
+    other_business_space: "Other business space",
+  },
 };
 
 export const BID_RANGES = [
-  { label: "Any Price", value: "" },
+  { label: "Any First Offer Price", value: "" },
   { label: "Under €20k", value: "0-20000" },
   { label: "€20k – €50k", value: "20000-50000" },
   { label: "€50k – €100k", value: "50000-100000" },
@@ -72,9 +106,26 @@ export const OWNERSHIP_BADGE: Record<string, { label: string; cls: string }> = {
   horizontal: { label: "Οριζόντια ιδιοκτησία", cls: "bg-secondary text-foreground border-border" },
 };
 
+const OWNERSHIP_LABELS_EN: Record<string, string> = {
+  full: "Full ownership",
+  bare: "Bare ownership",
+  common: "Undivided share",
+  usufruct: "Usufruct",
+  vertical: "Vertical ownership",
+  horizontal: "Horizontal ownership",
+};
+
+export function getOwnershipBadge(status: string | null | undefined, locale = "el"): { label: string; cls: string } | null {
+  if (!status) return null;
+  const base = OWNERSHIP_BADGE[status];
+  if (!base) return null;
+  return isGreekLocale(locale) ? base : { ...base, label: OWNERSHIP_LABELS_EN[status] ?? base.label };
+}
+
 // ── Utility functions ─────────────────────────────────────────────────────────
 
-export function getPropertyTypeLabel(a: { property_type?: string; tags?: string[] | null }): string {
+export function getPropertyTypeLabel(a: { property_type?: string; tags?: string[] | null }, locale = "el"): string {
+  const labels = isGreekLocale(locale) ? PROPERTY_TYPE_LABELS.el : PROPERTY_TYPE_LABELS.en;
   let base = a.property_type || "";
   if (!base && a.tags?.length) {
     if (a.tags.some(t => t.startsWith("land_type:"))) base = "land";
@@ -85,12 +136,12 @@ export function getPropertyTypeLabel(a: { property_type?: string; tags?: string[
     if (landTag) {
       const subtype = landTag.replace("land_type:", "");
       const mapping: Record<string, string> = {
-        plot_with_building: "Plot with Building",
-        land_with_building: "Land with Building",
-        land: "Land (no building)",
-        plot: "Agricultural plot",
+        plot_with_building: "plot_with_building",
+        land_with_building: "land_with_building",
+        land: "land_no_building",
+        plot: "agricultural_land",
       };
-      if (mapping[subtype]) return mapping[subtype];
+      if (mapping[subtype]) return labels[mapping[subtype]];
     }
   }
   if (base === "commercial" && a.tags?.length) {
@@ -98,19 +149,19 @@ export function getPropertyTypeLabel(a: { property_type?: string; tags?: string[
     if (commTag) {
       const subtype = commTag.replace("commercial_type:", "");
       const mapping: Record<string, string> = {
-        store: "Store / Retail",
-        warehouse: "Warehouse",
-        industrial: "Industrial",
-        storeroom: "Storeroom",
-        parking: "Parking",
-        hotel: "Hotel",
-        other_business_space: "Other business space",
+        store: "store",
+        warehouse: "warehouse",
+        industrial: "industrial",
+        storeroom: "storeroom",
+        parking: "parking",
+        hotel: "hotel",
+        other_business_space: "other_business_space",
       };
-      if (mapping[subtype]) return mapping[subtype];
+      if (mapping[subtype]) return labels[mapping[subtype]];
     }
   }
   if (!base) return "";
-  return PROPERTY_TYPE_GR[base] ?? base.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  return labels[base] ?? base.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 }
 
 export function getOwnershipStatus(tags?: string[] | null): string | null {
@@ -213,9 +264,10 @@ export function daysUntil(dateStr?: string | null): number {
   return Math.max(0, Math.ceil((d.getTime() - now.getTime()) / 86_400_000));
 }
 
-export function countdownBadge(days: number): { label: string; cls: string } | null {
-  if (days <= 0) return { label: "Today!",    cls: "bg-destructive text-destructive-foreground" };
-  if (days === 1) return { label: "Tomorrow", cls: "bg-gradient-primary text-primary-foreground" };
-  if (days <= 7)  return { label: `${days} days left`, cls: "bg-primary text-primary-foreground" };
+export function countdownBadge(days: number, locale = "en"): { label: string; cls: string } | null {
+  const greek = isGreekLocale(locale);
+  if (days <= 0) return { label: greek ? "Σήμερα" : "Today!",    cls: "bg-destructive text-destructive-foreground" };
+  if (days === 1) return { label: greek ? "Αύριο" : "Tomorrow", cls: "bg-gradient-primary text-primary-foreground" };
+  if (days <= 7)  return { label: greek ? `Σε ${days} ημέρες` : `${days} days left`, cls: "bg-primary text-primary-foreground" };
   return null;
 }

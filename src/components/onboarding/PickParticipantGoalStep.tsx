@@ -1,4 +1,5 @@
-import { Home, User, Check, ChevronRight, Loader2 } from "lucide-react";
+import { Check, ChevronRight, Home, Loader2, User } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { colorMap } from "@/lib/onboardingConfig";
 
@@ -6,20 +7,20 @@ const options = [
   {
     id: "buyer" as const,
     label: "I'm Looking to Buy or Rent",
-    desc: "Find your next home in Greece — AI-powered search, verified listings, instant viewings.",
+    desc: "Find your next home in Greece - AI-powered search, verified listings, instant viewings.",
     icon: Home,
     color: "blue",
     features: ["Browse all listings", "Book viewings instantly", "Save searches & price alerts", "AI property insights & mortgage calculator"],
-    benefit: "Join 12,000+ buyers finding their perfect Greek property",
+    benefit: "Join buyers finding their perfect Greek property",
   },
   {
     id: "seller" as const,
     label: "I'm Selling or Renting Out My Property",
-    desc: "Reach serious buyers directly — list in minutes, manage everything from your dashboard.",
+    desc: "Reach serious buyers directly - list in minutes, manage everything from your dashboard.",
     icon: User,
     color: "violet",
     features: ["Publish your listing in 5 minutes", "AI-written listing description", "Viewing request manager", "Direct messaging with buyers"],
-    benefit: "Sellers on maiProp get 3× more qualified enquiries",
+    benefit: "Sellers on mAI prop get more qualified enquiries",
   },
 ];
 
@@ -30,17 +31,41 @@ interface Props {
 }
 
 export function PickParticipantGoalStep({ loading, authLoading, onGoal }: Props) {
+  const { i18n } = useTranslation();
+  const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
+  const localizedOptions = options.map((option) => {
+    if (!isGreek) return option;
+    if (option.id === "buyer") {
+      return {
+        ...option,
+        label: "Θέλω να αγοράσω ή να ενοικιάσω",
+        desc: "Βρείτε το επόμενο ακίνητό σας στην Ελλάδα με AI αναζήτηση, επαληθευμένες αγγελίες και άμεσες επισκέψεις.",
+        features: ["Περιήγηση σε όλες τις αγγελίες", "Κράτηση επισκέψεων", "Αποθηκευμένες αναζητήσεις & ειδοποιήσεις τιμής", "AI αναλύσεις ακινήτου"],
+        benefit: "Γίνετε μέλος της κοινότητας αγοραστών και ενοικιαστών του mAI prop",
+      };
+    }
+    return {
+      ...option,
+      label: "Θέλω να πουλήσω ή να ενοικιάσω το ακίνητό μου",
+      desc: "Προσεγγίστε σοβαρούς ενδιαφερόμενους - καταχωρήστε αγγελία σε λίγα λεπτά και διαχειριστείτε τα πάντα από τον πίνακά σας.",
+      features: ["Δημοσίευση αγγελίας σε λίγα λεπτά", "AI περιγραφή αγγελίας", "Διαχείριση αιτημάτων επίσκεψης", "Άμεση επικοινωνία"],
+      benefit: "Οι πωλητές στο mAI prop λαμβάνουν πιο στοχευμένα αιτήματα",
+    };
+  });
+
   return (
     <div>
       <div className="text-center mb-8">
         <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5 text-xs font-medium text-primary mb-4">
-          <Home className="w-3.5 h-3.5" /> One more thing
+          <Home className="w-3.5 h-3.5" /> {isGreek ? "Μία ακόμη επιλογή" : "One more thing"}
         </div>
-        <h1 className="font-display font-bold text-2xl md:text-3xl text-foreground mb-2">What do you want to do?</h1>
-        <p className="text-muted-foreground text-sm max-w-sm mx-auto">You can do both later — just pick what matters most right now.</p>
+        <h1 className="font-display font-bold text-2xl md:text-3xl text-foreground mb-2">{isGreek ? "Τι θέλετε να κάνετε;" : "What do you want to do?"}</h1>
+        <p className="text-muted-foreground text-sm max-w-sm mx-auto">
+          {isGreek ? "Μπορείτε να κάνετε και τα δύο αργότερα - επιλέξτε αυτό που έχει προτεραιότητα τώρα." : "You can do both later - just pick what matters most right now."}
+        </p>
       </div>
       <div className="grid grid-cols-1 gap-4 mb-4">
-        {options.map(opt => {
+        {localizedOptions.map(opt => {
           const c = colorMap[opt.color];
           return (
             <button
@@ -82,7 +107,9 @@ export function PickParticipantGoalStep({ loading, authLoading, onGoal }: Props)
           );
         })}
       </div>
-      <p className="text-center text-xs text-muted-foreground">You can always list a property later from your dashboard.</p>
+      <p className="text-center text-xs text-muted-foreground">
+        {isGreek ? "Μπορείτε πάντα να καταχωρήσετε ακίνητο αργότερα από τον πίνακά σας." : "You can always list a property later from your dashboard."}
+      </p>
     </div>
   );
 }

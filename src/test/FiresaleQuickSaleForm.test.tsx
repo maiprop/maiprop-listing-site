@@ -100,7 +100,7 @@ describe("FiresaleQuickSaleForm", () => {
 
   it("renders the step-1 form header + step indicator", () => {
     render(<FiresaleQuickSaleForm />);
-    expect(screen.getByText(/Get Your Instant Cash Offer/i)).toBeInTheDocument();
+    expect(screen.getByText(/Get Your Preliminary Cash Offer/i)).toBeInTheDocument();
     expect(screen.getByText(/1\/2/)).toBeInTheDocument();
     expect(screen.getByText(/Property Details/i)).toBeInTheDocument();
   });

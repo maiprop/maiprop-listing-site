@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useBookViewing } from "@/hooks/useViewings";
 import { useSubmitConsultation } from "@/hooks/useConsultations";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 const timeSlots = ["09:00", "10:00", "11:00", "12:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
 
@@ -17,7 +18,7 @@ const platforms = [
   { id: "whatsapp", label: "WhatsApp Video", icon: "MessageCircle" },
 ];
 
-const getNextDays = (count: number) => {
+const getNextDays = (count: number, locale = "en-GB") => {
   const days = [];
   const d = new Date();
   d.setDate(d.getDate() + 1);
@@ -25,9 +26,9 @@ const getNextDays = (count: number) => {
     const dow = d.getDay();
     if (dow !== 0 && dow !== 6) {
       days.push({
-        label: d.toLocaleDateString("en-GB", { weekday: "short" }),
+        label: d.toLocaleDateString(locale, { weekday: "short" }),
         date: d.toISOString().split("T")[0],
-        display: d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
+        display: d.toLocaleDateString(locale, { day: "numeric", month: "short" }),
       });
     }
     d.setDate(d.getDate() + 1);
@@ -54,6 +55,9 @@ interface OnlineViewingModalProps {
 
 const OnlineViewingModal = ({ open, onClose, listing, professional }: OnlineViewingModalProps) => {
   const { user, profile } = useAuth();
+  const { i18n } = useTranslation();
+  const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
+  const dateLocale = isGreek ? "el-GR" : "en-GB";
   const bookViewing = useBookViewing();
   const submitConsultation = useSubmitConsultation();
 
@@ -65,9 +69,9 @@ const OnlineViewingModal = ({ open, onClose, listing, professional }: OnlineView
   const [note, setNote] = useState("");
   const [done, setDone] = useState(false);
 
-  const days = getNextDays(6);
+  const days = getNextDays(6, dateLocale);
   const isProperty = !!listing;
-  const entityName = listing?.title ?? professional?.display_name ?? "Professional";
+  const entityName = listing?.title ?? professional?.display_name ?? (isGreek ? "Επαγγελματίας" : "Professional");
   const isLoading = bookViewing.isPending || submitConsultation.isPending;
 
   const handleClose = () => {
@@ -80,20 +84,20 @@ const OnlineViewingModal = ({ open, onClose, listing, professional }: OnlineView
 
   const handleBook = async () => {
     if (!selectedDate || !selectedTime) {
-      toast.error("Please select a date and time");
+      toast.error(isGreek ? "Επιλέξτε ημερομηνία και ώρα" : "Please select a date and time");
       return;
     }
     const resolvedName = user ? (profile?.display_name || user.email || name) : name;
     const resolvedEmail = user ? (user.email || email) : email;
     if (!user && (!resolvedName.trim() || !resolvedEmail.trim())) {
-      toast.error("Please fill in your name and email");
+      toast.error(isGreek ? "Συμπληρώστε όνομα και email" : "Please fill in your name and email");
       return;
     }
 
     try {
       if (listing) {
         if (!user) {
-          toast.error("Please sign in to request a video viewing");
+          toast.error(isGreek ? "Συνδεθείτε για να ζητήσετε βιντεοκλήση" : "Please sign in to request a video viewing");
           return;
         }
         await bookViewing.mutateAsync({
@@ -117,12 +121,12 @@ const OnlineViewingModal = ({ open, onClose, listing, professional }: OnlineView
           ].filter(Boolean).join("\n"),
         });
       } else {
-        toast.error("Please sign in to request a video viewing");
+        toast.error(isGreek ? "Συνδεθείτε για να ζητήσετε βιντεοκλήση" : "Please sign in to request a video viewing");
         return;
       }
       setDone(true);
     } catch (_err: unknown) {
-      toast.error("Could not submit the request. Please try again.");
+      toast.error(isGreek ? "Δεν ήταν δυνατή η υποβολή του αιτήματος. Δοκιμάστε ξανά." : "Could not submit the request. Please try again.");
     }
   };
 
@@ -135,10 +139,10 @@ const OnlineViewingModal = ({ open, onClose, listing, professional }: OnlineView
         <DialogHeader>
           <DialogTitle className="font-display text-lg flex items-center gap-2">
             <Video className="w-5 h-5 text-primary" />
-            {done ? "Video Request Sent" : "Request a Video Viewing"}
+            {done ? (isGreek ? "Το αίτημα βιντεοκλήσης εστάλη" : "Video Request Sent") : (isGreek ? "Αίτημα βιντεοκλήσης" : "Request a Video Viewing")}
           </DialogTitle>
           <DialogDescription className="sr-only">
-            Choose a date, time, and preferred platform for a video viewing request.
+            {isGreek ? "Επιλέξτε ημερομηνία, ώρα και προτιμώμενη πλατφόρμα για το αίτημα βιντεοκλήσης." : "Choose a date, time, and preferred platform for a video viewing request."}
           </DialogDescription>
         </DialogHeader>
 
@@ -148,34 +152,34 @@ const OnlineViewingModal = ({ open, onClose, listing, professional }: OnlineView
               <CheckCircle2 className="w-8 h-8 text-brand-emerald" />
             </div>
             <div>
-              <p className="font-semibold text-foreground">Video request submitted.</p>
+              <p className="font-semibold text-foreground">{isGreek ? "Το αίτημα βιντεοκλήσης υποβλήθηκε." : "Video request submitted."}</p>
               <p className="text-sm text-muted-foreground mt-1">
-                The host still needs to confirm the time and delivery details before the session is live.
+                {isGreek ? "Ο οικοδεσπότης πρέπει να επιβεβαιώσει την ώρα και τις λεπτομέρειες πριν ενεργοποιηθεί η συνεδρία." : "The host still needs to confirm the time and delivery details before the session is live."}
               </p>
             </div>
             <div className="bg-secondary rounded-xl p-4 text-sm space-y-2">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">{isProperty ? "Property" : "With"}</span>
+                <span className="text-muted-foreground">{isProperty ? (isGreek ? "Ακίνητο" : "Property") : (isGreek ? "Με" : "With")}</span>
                 <span className="font-medium truncate max-w-[180px]">{entityName}</span>
               </div>
               {selectedDayDisplay && (
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Date & Time</span>
-                  <span className="font-medium">{selectedDayDisplay.display} at {selectedTime}</span>
+                  <span className="text-muted-foreground">{isGreek ? "Ημερομηνία & ώρα" : "Date & Time"}</span>
+                  <span className="font-medium">{selectedDayDisplay.display} {isGreek ? "στις" : "at"} {selectedTime}</span>
                 </div>
               )}
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Preferred Platform</span>
+                <span className="text-muted-foreground">{isGreek ? "Προτιμώμενη πλατφόρμα" : "Preferred Platform"}</span>
                 <span className="font-medium">{selectedPlatform?.label}</span>
               </div>
             </div>
             <div className="flex items-center gap-2 text-xs text-muted-foreground bg-primary/5 border border-primary/20 rounded-lg p-3 text-left">
               <Wifi className="w-4 h-4 text-primary shrink-0" />
               {isProperty
-                ? "The listing owner can confirm the booking and use the built-in mAI prop video room, or add an external meeting link."
-                : "The professional may confirm this platform, share a different link, or use the built-in mAI prop video room."}
+                ? (isGreek ? "Ο ιδιοκτήτης μπορεί να επιβεβαιώσει την κράτηση και να χρησιμοποιήσει την ενσωματωμένη αίθουσα βίντεο mAI prop ή να προσθέσει εξωτερικό σύνδεσμο." : "The listing owner can confirm the booking and use the built-in mAI prop video room, or add an external meeting link.")
+                : (isGreek ? "Ο επαγγελματίας μπορεί να επιβεβαιώσει αυτή την πλατφόρμα, να στείλει διαφορετικό σύνδεσμο ή να χρησιμοποιήσει την ενσωματωμένη αίθουσα βίντεο mAI prop." : "The professional may confirm this platform, share a different link, or use the built-in mAI prop video room.")}
             </div>
-            <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" onClick={handleClose}>Done</Button>
+            <Button className="w-full bg-gradient-primary border-0 text-primary-foreground" onClick={handleClose}>{isGreek ? "Τέλος" : "Done"}</Button>
           </div>
         ) : (
           <div className="space-y-4">
@@ -201,7 +205,7 @@ const OnlineViewingModal = ({ open, onClose, listing, professional }: OnlineView
             </div>
 
             <div>
-              <label className="text-sm font-medium block mb-2">Preferred Video Platform</label>
+              <label className="text-sm font-medium block mb-2">{isGreek ? "Προτιμώμενη πλατφόρμα βίντεο" : "Preferred Video Platform"}</label>
               <div className="grid grid-cols-2 gap-2">
                 {platforms.map((p) => (
                   <button
@@ -219,7 +223,7 @@ const OnlineViewingModal = ({ open, onClose, listing, professional }: OnlineView
             </div>
 
             <div>
-              <label className="text-sm font-medium block mb-2">Select Date</label>
+              <label className="text-sm font-medium block mb-2">{isGreek ? "Επιλογή ημερομηνίας" : "Select Date"}</label>
               <div className="grid grid-cols-3 gap-2">
                 {days.map((day) => (
                   <button
@@ -238,7 +242,7 @@ const OnlineViewingModal = ({ open, onClose, listing, professional }: OnlineView
 
             {selectedDate && (
               <div>
-                <label className="text-sm font-medium block mb-2">Select Time</label>
+                <label className="text-sm font-medium block mb-2">{isGreek ? "Επιλογή ώρας" : "Select Time"}</label>
                 <div className="grid grid-cols-3 gap-2">
                   {timeSlots.map((time) => (
                     <button
@@ -258,11 +262,11 @@ const OnlineViewingModal = ({ open, onClose, listing, professional }: OnlineView
             {!user && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground block mb-1">Your Name *</label>
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">{isGreek ? "Ονοματεπώνυμο *" : "Your Name *"}</label>
                   <input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="Full name"
+                    placeholder={isGreek ? "Ονοματεπώνυμο" : "Full name"}
                     className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary transition-colors"
                   />
                 </div>
@@ -280,21 +284,21 @@ const OnlineViewingModal = ({ open, onClose, listing, professional }: OnlineView
             )}
 
             <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-1">Message (optional)</label>
+              <label className="text-xs font-medium text-muted-foreground block mb-1">{isGreek ? "Μήνυμα (προαιρετικά)" : "Message (optional)"}</label>
               <textarea
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 rows={2}
-                placeholder="Any questions or specific areas you'd like to focus on..."
+                placeholder={isGreek ? "Ερωτήσεις ή συγκεκριμένα σημεία που θέλετε να δείτε..." : "Any questions or specific areas you'd like to focus on..."}
                 className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary resize-none transition-colors"
               />
             </div>
 
             <div className="flex gap-2">
-              <Button variant="outline" className="border-border" onClick={handleClose}>Cancel</Button>
+              <Button variant="outline" className="border-border" onClick={handleClose}>{isGreek ? "Άκυρο" : "Cancel"}</Button>
               <Button className="flex-1 bg-gradient-primary border-0 text-primary-foreground gap-2" onClick={handleBook} disabled={isLoading || !selectedDate || !selectedTime}>
                 {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Video className="w-4 h-4" />}
-                Request Video Viewing
+                {isGreek ? "Αίτημα βιντεοκλήσης" : "Request Video Viewing"}
               </Button>
             </div>
           </div>

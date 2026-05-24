@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
+import { useTranslation } from "react-i18next";
 
 const INVESTMENT_FOCUS_OPTIONS = [
   { value: "", label: "Select focus" },
@@ -14,7 +15,7 @@ const INVESTMENT_FOCUS_OPTIONS = [
   { value: "commercial", label: "Commercial" },
   { value: "land", label: "Land & development" },
   { value: "mixed", label: "Mixed portfolio" },
-  { value: "distressed", label: "Distressed / opportunistic" },
+  { value: "distressed", label: "Off-market / opportunistic" },
 ];
 
 const DEAL_SIZE_OPTIONS = [
@@ -70,6 +71,8 @@ interface Props {
 }
 
 export function InvitationRequestModal({ user, onClose, onSuccess }: Props) {
+  const { i18n } = useTranslation();
+  const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
   const dialogRef = useFocusTrap<HTMLDivElement>({ onEscape: onClose });
   const [email, setEmail] = useState(user?.email ?? "");
   const [fullName, setFullName] = useState("");
@@ -93,6 +96,29 @@ export function InvitationRequestModal({ user, onClose, onSuccess }: Props) {
   const selectCls = "w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors appearance-none";
   const textareaCls = "w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors resize-none";
   const labelCls = "block text-xs text-muted-foreground mb-1.5";
+  const translateOption = (value: string, label: string): string => {
+    if (!isGreek) return label;
+    const labels: Record<string, string> = {
+      "": label.startsWith("Select focus") ? "Επιλέξτε στόχευση" : label.startsWith("Select range") ? "Επιλέξτε εύρος" : label.startsWith("Select vehicle") ? "Επιλέξτε όχημα" : label.startsWith("Select") ? "Επιλέξτε" : label,
+      residential: "Κατοικίες",
+      commercial: "Επαγγελματικά",
+      land: "Γη & ανάπτυξη",
+      mixed: "Μεικτό χαρτοφυλάκιο",
+      distressed: "Εκτός αγοράς / ευκαιριακά",
+      personal: "Ιδιώτης / υψηλής καθαρής αξίας",
+      family_office: "Family office",
+      fund: "Επενδυτικό fund / private equity",
+      institutional: "Θεσμικός επενδυτής",
+      developer: "Κατασκευαστής / εταιρεία ανάπτυξης",
+      referral: "Σύσταση",
+      search: "Αναζήτηση / online",
+      linkedin: "LinkedIn",
+      event: "Εκδήλωση / συνέδριο",
+      press: "Τύπος / media",
+      other: "Άλλο",
+    };
+    return labels[value] ?? label.replace("years", "έτη").replace("Under", "Κάτω από").replace("Over", "Πάνω από");
+  };
 
   const FormSection = ({ icon: Icon, title, children }: { icon: React.ElementType; title: string; children: React.ReactNode }) => (
     <div className="glass-card rounded-xl border border-border p-5">
@@ -111,9 +137,9 @@ export function InvitationRequestModal({ user, onClose, onSuccess }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedEmail = email.trim().toLowerCase();
-    if (!trimmedEmail) { toast.error("Please enter your email"); return; }
-    if (!fullName.trim()) { toast.error("Please enter your full name"); return; }
-    if (!termsAccepted) { toast.error("Please accept the terms and privacy policy"); return; }
+    if (!trimmedEmail) { toast.error(isGreek ? "Συμπληρώστε το email σας" : "Please enter your email"); return; }
+    if (!fullName.trim()) { toast.error(isGreek ? "Συμπληρώστε το ονοματεπώνυμό σας" : "Please enter your full name"); return; }
+    if (!termsAccepted) { toast.error(isGreek ? "Αποδεχθείτε τους όρους και την πολιτική απορρήτου" : "Please accept the terms and privacy policy"); return; }
     setLoading(true);
     try {
        
@@ -139,7 +165,7 @@ export function InvitationRequestModal({ user, onClose, onSuccess }: Props) {
       if (error) throw error;
       onSuccess();
     } catch (err: unknown) {
-      toast.error((err as Error)?.message ?? "Could not submit request");
+      toast.error((err as Error)?.message ?? (isGreek ? "Δεν ήταν δυνατή η υποβολή αιτήματος" : "Could not submit request"));
     } finally {
       setLoading(false);
     }
@@ -151,7 +177,7 @@ export function InvitationRequestModal({ user, onClose, onSuccess }: Props) {
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label="Request Quick Sale access"
+        aria-label={isGreek ? "Αίτηση πρόσβασης Quick Sale" : "Request Quick Sale access"}
         tabIndex={-1}
         className="w-full max-w-2xl max-h-[90vh] flex flex-col glass-card rounded-2xl border border-border shadow-elevated overflow-hidden"
         onClick={e => e.stopPropagation()}
@@ -164,10 +190,10 @@ export function InvitationRequestModal({ user, onClose, onSuccess }: Props) {
               </div>
               <div>
                 <h3 className="font-display text-xl font-bold">
-                  Request <span className="gradient-text-primary">Quick Sale™</span> Access
+                  {isGreek ? "Αίτηση πρόσβασης" : "Request"} <span className="gradient-text-primary">Quick Sale™</span>
                 </h3>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  Exclusive investor deal flow — by invitation only.
+                  {isGreek ? "Ιδιωτική ροή επενδυτικών ευκαιριών — μόνο με πρόσκληση." : "Exclusive investor deal flow — by invitation only."}
                 </p>
               </div>
             </div>
@@ -181,100 +207,102 @@ export function InvitationRequestModal({ user, onClose, onSuccess }: Props) {
           <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
 
             <div className="rounded-xl border border-border bg-card/50 p-4">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Custom Quick Sale™ Access</p>
-              <p className="text-sm text-foreground font-medium">Investor dashboard access is reviewed and priced individually.</p>
+              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">{isGreek ? "Εξατομικευμένη πρόσβαση Quick Sale™" : "Custom Quick Sale™ Access"}</p>
+              <p className="text-sm text-foreground font-medium">{isGreek ? "Η πρόσβαση στον επενδυτικό πίνακα εξετάζεται και τιμολογείται εξατομικευμένα." : "Investor dashboard access is reviewed and priced individually."}</p>
               <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
-                After your application is approved, our team sends a custom payment link that matches your deal flow needs, verification level, and access scope. There are no public fixed monthly tiers.
+                {isGreek
+                  ? "Μετά την έγκριση της αίτησης, η ομάδα μας στέλνει εξατομικευμένο σύνδεσμο πληρωμής ανάλογα με τις ανάγκες ροής ευκαιριών, το επίπεδο επαλήθευσης και το εύρος πρόσβασης. Δεν υπάρχουν δημόσια σταθερά μηνιαία πακέτα."
+                  : "After your application is approved, our team sends a custom payment link that matches your deal flow needs, verification level, and access scope. There are no public fixed monthly tiers."}
               </p>
             </div>
 
-            <FormSection icon={Users} title="Contact information">
+            <FormSection icon={Users} title={isGreek ? "Στοιχεία επικοινωνίας" : "Contact information"}>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
-                  <label className={labelCls}>Email address *</label>
+                  <label className={labelCls}>Email *</label>
                   <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@company.com" className={inputCls} required />
                 </div>
                 <div>
-                  <label className={labelCls}>Full name *</label>
-                  <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="John Smith" className={inputCls} required />
+                  <label className={labelCls}>{isGreek ? "Ονοματεπώνυμο" : "Full name"} *</label>
+                  <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} placeholder={isGreek ? "Ονοματεπώνυμο" : "John Smith"} className={inputCls} required />
                 </div>
                 <div>
-                  <label className={labelCls}>Phone number</label>
+                  <label className={labelCls}>{isGreek ? "Τηλέφωνο" : "Phone number"}</label>
                   <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+30 210 123 4567" className={inputCls} />
                 </div>
                 <div>
-                  <label className={labelCls}>LinkedIn profile</label>
+                  <label className={labelCls}>{isGreek ? "Προφίλ LinkedIn" : "LinkedIn profile"}</label>
                   <input type="url" value={linkedinUrl} onChange={e => setLinkedinUrl(e.target.value)} placeholder="https://linkedin.com/in/..." className={inputCls} />
                 </div>
               </div>
             </FormSection>
 
-            <FormSection icon={Briefcase} title="Professional profile">
+            <FormSection icon={Briefcase} title={isGreek ? "Επαγγελματικό προφίλ" : "Professional profile"}>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
-                  <label className={labelCls}>Company / fund name *</label>
-                  <input type="text" value={company} onChange={e => setCompany(e.target.value)} placeholder="Acme Capital Partners" className={inputCls} required />
+                  <label className={labelCls}>{isGreek ? "Εταιρεία / fund" : "Company / fund name"} *</label>
+                  <input type="text" value={company} onChange={e => setCompany(e.target.value)} placeholder={isGreek ? "Επωνυμία εταιρείας ή fund" : "Acme Capital Partners"} className={inputCls} required />
                 </div>
                 <div>
-                  <label className={labelCls}>Job title / role</label>
-                  <input type="text" value={jobTitle} onChange={e => setJobTitle(e.target.value)} placeholder="Managing Partner, Investment Director" className={inputCls} />
+                  <label className={labelCls}>{isGreek ? "Θέση / ρόλος" : "Job title / role"}</label>
+                  <input type="text" value={jobTitle} onChange={e => setJobTitle(e.target.value)} placeholder={isGreek ? "Διευθύνων εταίρος, επενδυτικός διευθυντής" : "Managing Partner, Investment Director"} className={inputCls} />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className={labelCls}>Company website</label>
+                  <label className={labelCls}>{isGreek ? "Ιστότοπος εταιρείας" : "Company website"}</label>
                   <input type="url" value={companyWebsite} onChange={e => setCompanyWebsite(e.target.value)} placeholder="https://..." className={inputCls} />
                 </div>
               </div>
             </FormSection>
 
-            <FormSection icon={BarChart2} title="Investment profile">
+            <FormSection icon={BarChart2} title={isGreek ? "Επενδυτικό προφίλ" : "Investment profile"}>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
-                  <label className={labelCls}>Primary investment focus</label>
+                  <label className={labelCls}>{isGreek ? "Κύρια επενδυτική στόχευση" : "Primary investment focus"}</label>
                   <select value={investmentFocus} onChange={e => setInvestmentFocus(e.target.value)} className={selectCls}>
-                    {INVESTMENT_FOCUS_OPTIONS.map(o => <option key={o.value || "empty"} value={o.value}>{o.label}</option>)}
+                    {INVESTMENT_FOCUS_OPTIONS.map(o => <option key={o.value || "empty"} value={o.value}>{translateOption(o.value, o.label)}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className={labelCls}>Typical deal size</label>
+                  <label className={labelCls}>{isGreek ? "Συνήθες μέγεθος συναλλαγής" : "Typical deal size"}</label>
                   <select value={dealSizeRange} onChange={e => setDealSizeRange(e.target.value)} className={selectCls}>
-                    {DEAL_SIZE_OPTIONS.map(o => <option key={o.value || "empty"} value={o.value}>{o.label}</option>)}
+                    {DEAL_SIZE_OPTIONS.map(o => <option key={o.value || "empty"} value={o.value}>{translateOption(o.value, o.label)}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className={labelCls}>Investment vehicle</label>
+                  <label className={labelCls}>{isGreek ? "Επενδυτικό όχημα" : "Investment vehicle"}</label>
                   <select value={investmentVehicle} onChange={e => setInvestmentVehicle(e.target.value)} className={selectCls}>
-                    {INVESTMENT_VEHICLE_OPTIONS.map(o => <option key={o.value || "empty"} value={o.value}>{o.label}</option>)}
+                    {INVESTMENT_VEHICLE_OPTIONS.map(o => <option key={o.value || "empty"} value={o.value}>{translateOption(o.value, o.label)}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className={labelCls}>Years of RE experience</label>
+                  <label className={labelCls}>{isGreek ? "Έτη εμπειρίας σε ακίνητα" : "Years of RE experience"}</label>
                   <select value={yearsExperience} onChange={e => setYearsExperience(e.target.value)} className={selectCls}>
-                    {YEARS_EXPERIENCE_OPTIONS.map(o => <option key={o.value || "empty"} value={o.value}>{o.label}</option>)}
+                    {YEARS_EXPERIENCE_OPTIONS.map(o => <option key={o.value || "empty"} value={o.value}>{translateOption(o.value, o.label)}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className={labelCls}>AUM range (optional)</label>
+                  <label className={labelCls}>{isGreek ? "Εύρος AUM (προαιρετικά)" : "AUM range (optional)"}</label>
                   <select value={aumRange} onChange={e => setAumRange(e.target.value)} className={selectCls}>
-                    {AUM_OPTIONS.map(o => <option key={o.value || "empty"} value={o.value}>{o.label}</option>)}
+                    {AUM_OPTIONS.map(o => <option key={o.value || "empty"} value={o.value}>{translateOption(o.value, o.label)}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className={labelCls}>How did you hear about us?</label>
+                  <label className={labelCls}>{isGreek ? "Πώς μάθατε για εμάς;" : "How did you hear about us?"}</label>
                   <select value={source} onChange={e => setSource(e.target.value)} className={selectCls}>
-                    {SOURCE_OPTIONS.map(o => <option key={o.value || "empty"} value={o.value}>{o.label}</option>)}
+                    {SOURCE_OPTIONS.map(o => <option key={o.value || "empty"} value={o.value}>{translateOption(o.value, o.label)}</option>)}
                   </select>
                 </div>
                 <div className="sm:col-span-2">
-                  <label className={labelCls}>Geographic focus / target markets</label>
-                  <input type="text" value={geographicFocus} onChange={e => setGeographicFocus(e.target.value)} placeholder="e.g. Athens, Greek mainland, Balkans, Europe" className={inputCls} />
+                  <label className={labelCls}>{isGreek ? "Γεωγραφική στόχευση / αγορές" : "Geographic focus / target markets"}</label>
+                  <input type="text" value={geographicFocus} onChange={e => setGeographicFocus(e.target.value)} placeholder={isGreek ? "π.χ. Αθήνα, ηπειρωτική Ελλάδα, Βαλκάνια, Ευρώπη" : "e.g. Athens, Greek mainland, Balkans, Europe"} className={inputCls} />
                 </div>
               </div>
             </FormSection>
 
-            <FormSection icon={MessageCircle} title="Additional information">
+            <FormSection icon={MessageCircle} title={isGreek ? "Πρόσθετες πληροφορίες" : "Additional information"}>
               <div>
-                <label className={labelCls}>Tell us about your investment strategy and why you are interested in Quick Sale™ (optional)</label>
-                <textarea value={message} onChange={e => setMessage(e.target.value)} rows={4} placeholder="E.g. focus on distressed residential, value-add commercial, off-market deals, target yields..." className={textareaCls} />
+                <label className={labelCls}>{isGreek ? "Περιγράψτε την επενδυτική στρατηγική σας και γιατί σας ενδιαφέρει το Quick Sale™ (προαιρετικά)" : "Tell us about your investment strategy and why you are interested in Quick Sale™ (optional)"}</label>
+                <textarea value={message} onChange={e => setMessage(e.target.value)} rows={4} placeholder={isGreek ? "π.χ. εκτός αγοράς κατοικίες, value-add επαγγελματικά, χρονικά ευαίσθητες ευκαιρίες..." : "E.g. focus on off-market residential, value-add commercial, time-sensitive deals, target yields..."} className={textareaCls} />
               </div>
             </FormSection>
 
@@ -282,11 +310,11 @@ export function InvitationRequestModal({ user, onClose, onSuccess }: Props) {
               <label className="flex items-start gap-3 cursor-pointer">
                 <input type="checkbox" checked={termsAccepted} onChange={e => setTermsAccepted(e.target.checked)} className="mt-1 rounded border-border text-primary focus:ring-primary w-4 h-4" />
                 <span className="text-xs text-muted-foreground">
-                  I confirm that the information provided is accurate. I agree to the{" "}
-                  <Link to="/privacy-policy" target="_blank" className="text-primary hover:underline">Privacy Policy</Link>
-                  {" "}and{" "}
-                  <Link to="/terms-of-service" target="_blank" className="text-primary hover:underline">Terms of Service</Link>
-                  . I understand that Quick Sale™ access is discretionary and that mAI Prop may contact me regarding this request.
+                  {isGreek ? "Επιβεβαιώνω ότι οι πληροφορίες είναι ακριβείς. Συμφωνώ με την " : "I confirm that the information provided is accurate. I agree to the "}
+                  <Link to="/privacy-policy" target="_blank" className="text-primary hover:underline">{isGreek ? "Πολιτική Απορρήτου" : "Privacy Policy"}</Link>
+                  {isGreek ? " και τους " : " and "}
+                  <Link to="/terms-of-service" target="_blank" className="text-primary hover:underline">{isGreek ? "Όρους Χρήσης" : "Terms of Service"}</Link>
+                  {isGreek ? ". Κατανοώ ότι η πρόσβαση Quick Sale™ είναι διακριτική και ότι το mAI Prop μπορεί να επικοινωνήσει μαζί μου σχετικά με αυτό το αίτημα." : ". I understand that Quick Sale™ access is discretionary and that mAI Prop may contact me regarding this request."}
                 </span>
               </label>
             </div>
@@ -294,10 +322,10 @@ export function InvitationRequestModal({ user, onClose, onSuccess }: Props) {
 
           <div className="shrink-0 px-6 py-4 border-t border-border bg-card/60 flex gap-3">
             <Button type="submit" className="flex-1 h-11 font-semibold bg-gradient-primary border-0 text-primary-foreground" disabled={loading}>
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Submit request"}
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : (isGreek ? "Υποβολή αιτήματος" : "Submit request")}
             </Button>
             <Button type="button" variant="outline" onClick={onClose} className="h-11 border-border">
-              Cancel
+              {isGreek ? "Άκυρο" : "Cancel"}
             </Button>
           </div>
         </form>

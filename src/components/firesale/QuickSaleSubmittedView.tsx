@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Check, BarChart2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "react-i18next";
 
 interface QuickSaleSubmittedViewProps {
   /** Reference id surfaced by the insert; first 8 chars are shown to the user. */
@@ -33,6 +34,22 @@ export function QuickSaleSubmittedView({
   onReset,
 }: QuickSaleSubmittedViewProps) {
   const navigate = useNavigate();
+  const { i18n } = useTranslation();
+  const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
+  const timelineSteps = isGreek
+    ? [
+        { time: "Τώρα", label: "Το αίτημα ενεργό", color: "text-primary", icon: "✅" },
+        { time: "~2ω", label: "Ανάθεση συμβούλου", color: "text-primary", icon: "👤" },
+        { time: "24ω", label: "Αποστολή προσφοράς", color: "text-brand-gold", icon: "💰" },
+      ]
+    : TIMELINE_STEPS;
+  const guarantees = isGreek
+    ? [
+        "Το ακίνητο προστέθηκε στην ιδιωτική ροή επενδυτών",
+        "Κοινοποίηση υπό NDA σε επαγγελματίες επενδυτές",
+        "Ανάθεση συμβούλου εντός περίπου 2 ωρών",
+      ]
+    : SUBMITTED_GUARANTEES;
 
   return (
     <div className="glass-card rounded-2xl border border-primary/30 p-8 text-center shadow-elevated">
@@ -43,17 +60,17 @@ export function QuickSaleSubmittedView({
           </div>
         </div>
       </div>
-      <h3 className="font-display font-black text-2xl mb-2">Request Submitted! 🎉</h3>
+      <h3 className="font-display font-black text-2xl mb-2">{isGreek ? "Το αίτημα υποβλήθηκε!" : "Request Submitted!"}</h3>
       <p className="text-muted-foreground text-sm mb-2 leading-relaxed">
-        Your Quick Sale™ request is live in our investor deal flow.
+        {isGreek ? "Το αίτημα Quick Sale™ είναι πλέον διαθέσιμο στην ιδιωτική ροή επενδυτών." : "Your Quick Sale™ request is live in our investor deal flow."}
       </p>
       {requestId && (
         <p className="text-[11px] text-muted-foreground mb-6 font-mono bg-secondary border border-border rounded-lg px-3 py-1.5 inline-block">
-          Ref: <span className="text-primary font-semibold">{requestId.slice(0, 8).toUpperCase()}</span>
+          {isGreek ? "Κωδικός" : "Ref"}: <span className="text-primary font-semibold">{requestId.slice(0, 8).toUpperCase()}</span>
         </p>
       )}
       <div className="grid grid-cols-3 gap-3 mb-6">
-        {TIMELINE_STEPS.map((s) => (
+        {timelineSteps.map((s) => (
           <div key={s.label} className="rounded-xl bg-secondary border border-border p-3 text-center">
             <div className="text-lg mb-1">{s.icon}</div>
             <p className={`font-display font-black text-sm ${s.color}`}>{s.time}</p>
@@ -62,14 +79,14 @@ export function QuickSaleSubmittedView({
         ))}
       </div>
       <div className="rounded-xl bg-gradient-to-r from-primary/10 to-accent/5 border border-primary/20 p-5 mb-6">
-        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1.5">AI Offer Estimate</p>
+        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1.5">{isGreek ? "AI εκτίμηση προσφοράς" : "AI Offer Estimate"}</p>
         <p className="font-display font-black text-4xl text-primary mb-1">€{aiEstimate?.toLocaleString()}</p>
-        <p className="text-xs text-muted-foreground">Indicative · Subject to final due diligence</p>
+        <p className="text-xs text-muted-foreground">{isGreek ? "Ενδεικτική · Υπόκειται σε τελικό έλεγχο" : "Indicative · Subject to final due diligence"}</p>
         <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-primary/10">
           {[
-            { label: "Est. Market", value: `€${Math.round((aiEstimate || 0) / 0.95).toLocaleString()}` },
-            { label: "Discount", value: "~5%" },
-            { label: "Close", value: "48–72h" },
+            { label: isGreek ? "Εκτ. αγοράς" : "Est. Market", value: `€${Math.round((aiEstimate || 0) / 0.95).toLocaleString()}` },
+            { label: isGreek ? "Έκπτωση" : "Discount", value: "~5%" },
+            { label: isGreek ? "Ολοκλήρωση" : "Close", value: "48–72h" },
           ].map((s) => (
             <div key={s.label} className="text-center">
               <p className="font-bold text-sm">{s.value}</p>
@@ -79,19 +96,19 @@ export function QuickSaleSubmittedView({
         </div>
       </div>
       <div className="space-y-2 text-xs text-muted-foreground text-left mb-6">
-        {SUBMITTED_GUARANTEES.map((t) => (
+        {guarantees.map((t) => (
           <div key={t} className="flex items-center gap-2">
             <Check className="w-3 h-3 text-primary shrink-0" /> {t}
           </div>
         ))}
       </div>
       <div className="flex gap-3">
-        <Button variant="outline" className="flex-1 border-border" onClick={onReset}>Submit another</Button>
+        <Button variant="outline" className="flex-1 border-border" onClick={onReset}>{isGreek ? "Νέα υποβολή" : "Submit another"}</Button>
         <Button
           className="flex-1 bg-gradient-primary border-0 text-primary-foreground gap-2"
           onClick={() => navigate("/investor-dashboard")}
         >
-          <BarChart2 className="w-3.5 h-3.5" /> Track Status
+          <BarChart2 className="w-3.5 h-3.5" /> {isGreek ? "Παρακολούθηση" : "Track Status"}
         </Button>
       </div>
     </div>
