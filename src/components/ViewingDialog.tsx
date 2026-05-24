@@ -2,12 +2,11 @@ import { useState, useMemo } from "react";
 import { Calendar, Video, MapPin, Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { logger } from "@/lib/logger";
 import { useTranslation } from "react-i18next";
 import type { Property } from "@/components/PropertyCard";
+import { useBookViewing } from "@/hooks/useViewings";
 
 interface ViewingDialogProps {
   open: boolean;
@@ -41,7 +40,7 @@ function buildDynamicDays(dayNames: string[], locale = "en-GB", isGreek = false)
 }
 
 export default function ViewingDialog({ open, onClose, property, ownerId, canVideoView = true }: ViewingDialogProps) {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const { t, i18n } = useTranslation();
   const isGreek = i18n?.language?.toLowerCase().startsWith("el") ?? false;
   const dateLocale = isGreek ? "el-GR" : "en-GB";
@@ -51,7 +50,8 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [confirmed, setConfirmed] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const bookViewing = useBookViewing();
+  const loading = bookViewing.isPending;
 
   const translatedDayNames = useMemo(() => [
     t("viewingDialog.days.sun"),
@@ -79,38 +79,19 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
       toast.error(isGreek ? "Επιλέξτε ημερομηνία και ώρα" : "Please select a date and time");
       return;
     }
-    setLoading(true);
     const scheduledAt = new Date(`${selectedIso}T${selectedTime}:00`);
-    const { error: viewErr } = await supabase.from("viewings").insert({
-      listing_id: property.id,
-      requester_id: user.id,
-      owner_id: ownerId,
-      viewing_type: viewType === "video" ? "video" : "in_person",
-      status: "pending",
-      scheduled_at: scheduledAt.toISOString(),
-      note: note.trim() || null,
-    } as never);
-    setLoading(false);
-    if (viewErr) {
-      toast.error(isGreek ? "Δεν ήταν δυνατή η υποβολή αιτήματος επίσκεψης. Δοκιμάστε ξανά." : "Could not submit viewing request. Please try again.");
+    try {
+      await bookViewing.mutateAsync({
+        listing_id: property.id,
+        owner_id: ownerId,
+        viewing_type: viewType === "video" ? "video" : "in_person",
+        scheduled_at: scheduledAt.toISOString(),
+        note: note.trim() || undefined,
+      });
+    } catch (_err: unknown) {
       return;
     }
-    // Create lead for listing owner (best-effort — failure does not block confirmation)
-    const requesterName = profile?.display_name || profile?.first_name || (isGreek ? "Αίτημα επίσκεψης" : "Viewing request");
-    const { error: leadErr } = await supabase.from("leads").insert({
-      owner_id: ownerId,
-      source: "viewing",
-      listing_id: property.id,
-      name: requesterName,
-      email: user.email || null,
-      phone: profile?.phone || null,
-      message: `${isGreek ? "Αίτημα επίσκεψης" : "Viewing request"}: ${viewType} ${isGreek ? "στις" : "on"} ${selectedDay} ${isGreek ? "ώρα" : "at"} ${selectedTime}${note.trim() ? ` — ${note.trim()}` : ""}`,
-      status: "new",
-      follow_up_at: scheduledAt.toISOString(),
-    } as never);
-    if (leadErr) logger.warn("[ViewingDialog] Lead create failed (non-blocking):", leadErr.message);
     setConfirmed(true);
-    toast.success(isGreek ? "Το αίτημα επίσκεψης υποβλήθηκε. Ο ιδιοκτήτης θα ειδοποιηθεί." : "Viewing request submitted! The property owner will be notified.");
   };
 
   return (

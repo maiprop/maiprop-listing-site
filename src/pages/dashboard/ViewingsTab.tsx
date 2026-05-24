@@ -1,6 +1,6 @@
-import { Loader2, Calendar, ExternalLink, Lock, Video } from "lucide-react";
+import { Loader2, Calendar, Check, ExternalLink, Lock, Video, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useViewings, useUpdateViewing } from "@/hooks/useViewings";
+import { useViewings, useUpdateViewing, useUpdateViewingStatus } from "@/hooks/useViewings";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { Link, useNavigate } from "react-router-dom";
@@ -12,11 +12,24 @@ type Viewing = Tables<"viewings"> & { listings?: { title: string; city: string |
 
 const FREE_VIEWING_CAP = 3;
 
-function ViewingCard({ v, isOwner, profile, updateViewing }: { v: Viewing; isOwner: boolean; profile: Profile | null; updateViewing: ReturnType<typeof useUpdateViewing> }) {
+function ViewingCard({
+  v,
+  isOwner,
+  profile,
+  updateViewing,
+  updateStatus,
+}: {
+  v: Viewing;
+  isOwner: boolean;
+  profile: Profile | null;
+  updateViewing: ReturnType<typeof useUpdateViewing>;
+  updateStatus: ReturnType<typeof useUpdateViewingStatus>;
+}) {
   const isVideo = v.viewing_type === "video";
   const hasVideoLink = !!v.video_link;
   const roomPath = createViewingVideoRoomPath(v.id);
   const canJoinMaiPropRoom = isVideo && !hasVideoLink && v.status === "confirmed";
+  const isPending = v.status === "pending";
   return (
     <div className="glass-card rounded-xl p-4 flex flex-wrap items-start gap-4">
       <div className={`w-2 h-10 rounded-full shrink-0 ${
@@ -33,6 +46,29 @@ function ViewingCard({ v, isOwner, profile, updateViewing }: { v: Viewing; isOwn
         }`}>
           {v.status}
         </span>
+        {isOwner && isPending && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              className="h-8 gap-1.5 bg-brand-emerald hover:bg-brand-emerald/90 text-white"
+              disabled={updateStatus.isPending}
+              onClick={() => updateStatus.mutate({ id: v.id, status: "confirmed" })}
+            >
+              <Check className="w-3.5 h-3.5" />
+              Confirm
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/10"
+              disabled={updateStatus.isPending}
+              onClick={() => updateStatus.mutate({ id: v.id, status: "cancelled" })}
+            >
+              <X className="w-3.5 h-3.5" />
+              Decline
+            </Button>
+          </div>
+        )}
         {isVideo && isOwner && !hasVideoLink && v.status === "confirmed" && (
           <div className="mt-2 flex items-center gap-2 flex-wrap">
             <input
@@ -85,6 +121,7 @@ export default function ViewingsTab() {
   const { data: viewings = [], isLoading: viewingsLoading } = useViewings("requester");
   const { data: ownViewings = [] } = useViewings("owner");
   const updateViewing = useUpdateViewing();
+  const updateStatus = useUpdateViewingStatus();
 
   const all = [...viewings, ...ownViewings];
   const byDate = all.reduce((acc: Record<string, Viewing[]>, v) => {
@@ -130,7 +167,7 @@ export default function ViewingsTab() {
                   freeCount++;
                   const locked = !isPro && freeCount > FREE_VIEWING_CAP;
                   if (locked) return null;
-                  return <ViewingCard key={v.id} v={v} isOwner={isOwner} profile={profile} updateViewing={updateViewing} />;
+                  return <ViewingCard key={v.id} v={v} isOwner={isOwner} profile={profile} updateViewing={updateViewing} updateStatus={updateStatus} />;
                 }).filter(Boolean);
                 if (!dateCards.length) return null;
                 return (

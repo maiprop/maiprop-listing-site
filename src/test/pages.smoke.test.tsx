@@ -163,6 +163,7 @@ vi.mock("@/hooks/useLeads", () => ({
 vi.mock("@/hooks/useViewings", () => ({
   useViewings: vi.fn().mockReturnValue({ data: [], isLoading: false }),
   useUpdateViewing: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn() }),
+  useUpdateViewingStatus: vi.fn().mockReturnValue({ mutate: vi.fn(), isPending: false }),
 }));
 
 vi.mock("@/hooks/useContacts", () => ({
@@ -197,6 +198,7 @@ vi.mock("@/hooks/useConsultations", () => ({
   useMyConsultationRequests: vi.fn().mockReturnValue({ data: [], isLoading: false }),
   useCreateConsultationRequest: vi.fn().mockReturnValue({ mutate: vi.fn() }),
   useSubmitConsultation: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
+  useUpdateConsultationRequest: vi.fn().mockReturnValue({ mutate: vi.fn(), isPending: false }),
 }));
 
 vi.mock("@/hooks/useEligibleForQuickSale", () => ({

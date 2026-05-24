@@ -170,7 +170,10 @@ vi.mock("@/hooks/useLeads", () => ({
   useUpdateLead: vi.fn().mockReturnValue({ mutateAsync: vi.fn() }),
   useDeleteLead: vi.fn().mockReturnValue({ mutateAsync: vi.fn() }),
 }));
-vi.mock("@/hooks/useViewings", () => ({ useViewings: vi.fn().mockReturnValue({ data: [], isLoading: false }) }));
+vi.mock("@/hooks/useViewings", () => ({
+  useViewings: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+  useUpdateViewingStatus: vi.fn().mockReturnValue({ mutate: vi.fn(), isPending: false }),
+}));
 vi.mock("@/hooks/useContacts", () => ({
   useContacts: vi.fn().mockReturnValue({ data: [], isLoading: false }),
   useContactTasks: vi.fn().mockReturnValue({ data: [], isLoading: false }),
@@ -193,6 +196,7 @@ vi.mock("@/hooks/useAuctionAlerts", () => ({
 vi.mock("@/hooks/useConsultations", () => ({
   useMyConsultationRequests: vi.fn().mockReturnValue({ data: [], isLoading: false }),
   useCreateConsultationRequest: vi.fn().mockReturnValue({ mutate: vi.fn() }),
+  useUpdateConsultationRequest: vi.fn().mockReturnValue({ mutate: vi.fn(), isPending: false }),
 }));
 vi.mock("@/hooks/useEligibleForQuickSale", () => ({ useEligibleForQuickSale: vi.fn().mockReturnValue({ eligible: false }) }));
 vi.mock("@/hooks/usePlanLimits", () => ({

@@ -72,17 +72,10 @@ describe("useSubmitConsultation", () => {
     expect(toastMock.error).toHaveBeenCalledWith("Please sign in to contact professionals.");
   });
 
-  it("inserts the consultation row and creates a lead for the professional", async () => {
+  it("inserts the consultation row and lets the database trigger create the CRM lead", async () => {
     const consInsert = vi.fn().mockResolvedValue({ error: null });
-    const proSingle = vi.fn().mockResolvedValue({ data: { user_id: "pro-owner" }, error: null });
-    const leadInsert = vi.fn().mockReturnValue({
-      then: (cb: (r: { error: null }) => unknown) => Promise.resolve(cb({ error: null })),
-    });
     fromMock.mockImplementation((table: string) => {
       if (table === "consultation_requests") return { insert: consInsert };
-      if (table === "professionals")
-        return { select: () => ({ eq: () => ({ single: proSingle }) }) };
-      if (table === "leads") return { insert: leadInsert };
       throw new Error("unexpected table " + table);
     });
 
@@ -108,67 +101,7 @@ describe("useSubmitConsultation", () => {
       requester_phone: null,
       service: null,
     }));
-    expect(leadInsert).toHaveBeenCalledWith(expect.objectContaining({
-      owner_id: "pro-owner",
-      source: "callback",
-      professional_id: "p-1",
-      name: "Bob",
-      email: "bob@example.com",
-      status: "new",
-    }));
     expect(toastMock.success).toHaveBeenCalledWith("Callback request sent.");
-  });
-
-  it("does not insert a lead when the professional row is missing", async () => {
-    const consInsert = vi.fn().mockResolvedValue({ error: null });
-    const proSingle = vi.fn().mockResolvedValue({ data: null, error: null });
-    const leadInsert = vi.fn();
-    fromMock.mockImplementation((table: string) => {
-      if (table === "consultation_requests") return { insert: consInsert };
-      if (table === "professionals")
-        return { select: () => ({ eq: () => ({ single: proSingle }) }) };
-      if (table === "leads") return { insert: leadInsert };
-      throw new Error("unexpected " + table);
-    });
-    const { result } = renderHook(() => useSubmitConsultation(), { wrapper: wrapper() });
-    await act(async () => {
-      await result.current.mutateAsync({
-        professional_id: "p-1",
-        requester_name: "Alice",
-        requester_email: "a@x.com",
-        request_type: "consultation",
-      });
-    });
-    expect(leadInsert).not.toHaveBeenCalled();
-    expect(toastMock.success).toHaveBeenCalledWith("Consultation request sent.");
-  });
-
-  it("shows a partial-success warning when the professional lead record cannot be created", async () => {
-    const consInsert = vi.fn().mockResolvedValue({ error: null });
-    const proSingle = vi.fn().mockResolvedValue({ data: { user_id: "pro-owner" }, error: null });
-    const leadInsert = vi.fn().mockReturnValue({
-      then: (cb: (r: { error: Error }) => unknown) => Promise.resolve(cb({ error: new Error("lead failed") })),
-    });
-    fromMock.mockImplementation((table: string) => {
-      if (table === "consultation_requests") return { insert: consInsert };
-      if (table === "professionals") return { select: () => ({ eq: () => ({ single: proSingle }) }) };
-      if (table === "leads") return { insert: leadInsert };
-      throw new Error("unexpected table " + table);
-    });
-
-    const { result } = renderHook(() => useSubmitConsultation(), { wrapper: wrapper() });
-    await act(async () => {
-      await result.current.mutateAsync({
-        professional_id: "p-1",
-        requester_name: "Casey",
-        requester_email: "casey@example.com",
-        request_type: "message",
-      });
-    });
-
-    expect(toastMock.warning).toHaveBeenCalledWith(
-      "Message request sent. The professional CRM record could not be created automatically.",
-    );
   });
 
   it("toasts an error when consultation insert fails", async () => {

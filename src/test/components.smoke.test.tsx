@@ -592,6 +592,33 @@ describe("Component smoke tests", () => {
     )).not.toThrow();
   });
 
+  it("BookingCalendarSection lets professionals accept and decline pending consultations", async () => {
+    const { BookingCalendarSection } = await import("@/components/dashboard/BookingCalendarSection");
+    const updateConsultation = vi.fn();
+    const { getByRole } = renderWithProviders(
+      <BookingCalendarSection
+        viewings={[]}
+        leads={[{
+          id: "consult-1",
+          requester_name: "Buyer One",
+          request_type: "consultation",
+          service: "Architect",
+          preferred_date: "2026-05-21",
+          status: "pending",
+        }]}
+        onGoToLeads={noop}
+        onGoToViewings={noop}
+        onGoToServices={noop}
+        onUpdateConsultation={updateConsultation}
+      />
+    );
+
+    fireEvent.click(getByRole("button", { name: /accept/i }));
+    expect(updateConsultation).toHaveBeenCalledWith("consult-1", "confirmed");
+    fireEvent.click(getByRole("button", { name: /decline/i }));
+    expect(updateConsultation).toHaveBeenCalledWith("consult-1", "cancelled");
+  });
+
   it("BuyerOpenHousesCard renders without throwing", async () => {
     const { BuyerOpenHousesCard } = await import("@/components/dashboard/BuyerOpenHousesCard");
     expect(() => renderWithProviders(<BuyerOpenHousesCard />)).not.toThrow();
