@@ -142,6 +142,21 @@ describe("OpenHouseRegistrationDialog", () => {
     expect(await screen.findByRole("button", { name: /fully booked/i })).toBeDisabled();
   });
 
+  it("normalizes non-array timeslot payloads instead of crashing on the timeslot step", async () => {
+    useOpenHouseSettingsMock.mockReturnValue({
+      data: {
+        ...baseSettings,
+        timeslots: { slots: [{ start: "12:00", end: "13:00", max_visitors: "2" }] },
+      },
+    });
+    renderDialog();
+
+    acceptContactPacket();
+    fireEvent.click(screen.getByRole("button", { name: /continue/i }));
+
+    expect(await screen.findByRole("button", { name: /12:00/i })).toBeInTheDocument();
+  });
+
   it("shows monthly RSVP limit messaging for free buyers", async () => {
     const thisMonth = new Date();
     useMyOpenHouseRegistrationsMock.mockReturnValue({

@@ -26,7 +26,7 @@ import { useViewings } from "@/hooks/useViewings";
 import { useSavedSearches } from "@/hooks/useSavedSearches";
 import { useAuctionAlerts } from "@/hooks/useAuctionAlerts";
 import { useMyProfessional, useProfessionalServices } from "@/hooks/useProfessionalServices";
-import { useMyConsultationRequests } from "@/hooks/useConsultations";
+import { useMyConsultationRequests, useUpdateConsultationRequest } from "@/hooks/useConsultations";
 import ProfessionalServicesEditor from "@/components/ProfessionalServicesEditor";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -171,6 +171,7 @@ export default function Dashboard() { // skipcq: JS-R1005
   const { data: myProfessional } = useMyProfessional();
   const { data: professionalServices = [] } = useProfessionalServices(myProfessional?.id || "");
   const { data: leads = [], isLoading: _leadsLoading } = useMyConsultationRequests();
+  const updateConsultationRequest = useUpdateConsultationRequest();
 
   const handleSignOut = async () => { await signOut(); navigate("/"); };
 
@@ -652,6 +653,8 @@ export default function Dashboard() { // skipcq: JS-R1005
                   onGoToLeads={() => setActiveSection("leads")}
                   onGoToViewings={() => setActiveSection("viewings")}
                   onGoToServices={() => setActiveSection("services")}
+                  onUpdateConsultation={(id, status) => updateConsultationRequest.mutate({ id, updates: { status } })}
+                  consultationUpdating={updateConsultationRequest.isPending}
                 />
               </div>
             </ProGate>

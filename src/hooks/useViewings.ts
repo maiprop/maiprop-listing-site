@@ -52,6 +52,7 @@ export function useBookViewing() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["viewings"] });
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
       toast.success("Viewing booked successfully!");
     },
     onError: (err: Error) => {

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Calendar } from "lucide-react";
+import { Calendar, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -15,12 +15,16 @@ export function BookingCalendarSection({
   onGoToLeads,
   onGoToViewings,
   onGoToServices,
+  onUpdateConsultation,
+  consultationUpdating = false,
 }: {
   viewings: any[];
   leads: any[];
   onGoToLeads: () => void;
   onGoToViewings: () => void;
   onGoToServices: () => void;
+  onUpdateConsultation?: (id: string, status: "confirmed" | "cancelled") => void;
+  consultationUpdating?: boolean;
 }) {
   const items: AgendaItem[] = [
     ...viewings
@@ -120,6 +124,29 @@ export function BookingCalendarSection({
                           >
                             {it.item.status}
                           </span>
+                          {it.item.status === "pending" && onUpdateConsultation && (
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <Button
+                                size="sm"
+                                className="h-8 gap-1.5 bg-brand-emerald hover:bg-brand-emerald/90 text-white"
+                                disabled={consultationUpdating}
+                                onClick={() => onUpdateConsultation(it.item.id, "confirmed")}
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                Accept
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/10"
+                                disabled={consultationUpdating}
+                                onClick={() => onUpdateConsultation(it.item.id, "cancelled")}
+                              >
+                                <X className="w-3.5 h-3.5" />
+                                Decline
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       </>
                     )}

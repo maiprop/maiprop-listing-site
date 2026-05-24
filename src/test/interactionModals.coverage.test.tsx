@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   startConversation: { isPending: false, mutateAsync: vi.fn() },
   sendMessage: { isPending: false, mutateAsync: vi.fn() },
   submitConsultation: { isPending: false, mutateAsync: vi.fn() },
+  bookViewing: { isPending: false, mutateAsync: vi.fn() },
   createAuctionAlert: { isPending: false, mutate: vi.fn() },
   updateAuctionAlert: { isPending: false, mutate: vi.fn() },
   logger: { warn: vi.fn() },
@@ -41,6 +42,7 @@ vi.mock("@/hooks/useMessages", () => ({
   useSendMessage: () => mocks.sendMessage,
 }));
 vi.mock("@/hooks/useConsultations", () => ({ useSubmitConsultation: () => mocks.submitConsultation }));
+vi.mock("@/hooks/useViewings", () => ({ useBookViewing: () => mocks.bookViewing }));
 vi.mock("@/hooks/useAuctionAlerts", () => ({
   useCreateAuctionAlert: () => mocks.createAuctionAlert,
   useUpdateAuctionAlert: () => mocks.updateAuctionAlert,
@@ -67,6 +69,8 @@ beforeEach(() => {
   mocks.startConversation.mutateAsync.mockResolvedValue("conv-1");
   mocks.sendMessage.mutateAsync.mockResolvedValue(undefined);
   mocks.submitConsultation.mutateAsync.mockResolvedValue(undefined);
+  mocks.bookViewing.isPending = false;
+  mocks.bookViewing.mutateAsync.mockResolvedValue({ id: "viewing-1" });
   mocks.createAuctionAlert.mutate.mockImplementation((_payload, options) => options?.onSuccess?.());
   mocks.updateAuctionAlert.mutate.mockImplementation((_payload, options) => options?.onSuccess?.());
   mocks.fromMock.mockReturnValue({ insert: vi.fn().mockResolvedValue({ error: null }) });
@@ -199,7 +203,7 @@ describe("high-coverage interaction modals", () => {
     }), expect.any(Object));
   });
 
-  it("books viewings, handles auth/owner/date failures, video disabled state, and non-blocking lead errors", async () => {
+  it("books viewings through the shared booking hook and handles validation failures", async () => {
     const onClose = vi.fn();
     const { rerender } = render(<ViewingDialog open onClose={onClose} property={property} ownerId="owner-1" canVideoView={false} />);
 
@@ -217,9 +221,6 @@ describe("high-coverage interaction modals", () => {
     fireEvent.click(screen.getAllByRole("button", { name: /confirm booking/i }).at(-1)!);
     expect(mocks.toast.error).toHaveBeenCalledWith("Could not determine property owner.");
 
-    const insertViewings = vi.fn().mockResolvedValue({ error: null });
-    const insertLeads = vi.fn().mockResolvedValue({ error: { message: "lead failed" } });
-    mocks.fromMock.mockImplementation((table: string) => ({ insert: table === "viewings" ? insertViewings : insertLeads }));
     rerender(<ViewingDialog open onClose={onClose} property={property} ownerId="owner-1" canVideoView />);
     fireEvent.click(screen.getByRole("button", { name: /^video$/i }));
     fireEvent.click(screen.getAllByText(/mon|tue|wed|thu|fri|sat|sun/i)[0]);
@@ -227,14 +228,12 @@ describe("high-coverage interaction modals", () => {
     fireEvent.change(screen.getByPlaceholderText(/requirements/i), { target: { value: "Need remote tour" } });
     fireEvent.click(screen.getAllByRole("button", { name: /confirm booking/i }).at(-1)!);
 
-    await waitFor(() => expect(insertViewings).toHaveBeenCalledWith(expect.objectContaining({
+    await waitFor(() => expect(mocks.bookViewing.mutateAsync).toHaveBeenCalledWith(expect.objectContaining({
       listing_id: "listing-1",
-      requester_id: "user-1",
       owner_id: "owner-1",
       viewing_type: "video",
       note: "Need remote tour",
     })));
-    expect(mocks.logger.warn).toHaveBeenCalledWith("[ViewingDialog] Lead create failed (non-blocking):", "lead failed");
     expect(await screen.findByText("successTitle")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /done/i }));
     expect(onClose).toHaveBeenCalled();

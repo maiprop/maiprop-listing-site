@@ -22,6 +22,7 @@ const {
   viewingsRequesterState,
   viewingsOwnerState,
   updateViewingMutate,
+  updateViewingStatusMutate,
   savedSearchesState,
   deleteSavedSearchMutate,
   toggleSavedSearchAlertMutate,
@@ -45,6 +46,7 @@ const {
   viewingsRequesterState: { data: [] as Array<Record<string, unknown>>, isLoading: false },
   viewingsOwnerState: { data: [] as Array<Record<string, unknown>>, isLoading: false },
   updateViewingMutate: vi.fn(),
+  updateViewingStatusMutate: vi.fn(),
   savedSearchesState: { data: [] as Array<Record<string, unknown>>, isLoading: false },
   deleteSavedSearchMutate: vi.fn(),
   toggleSavedSearchAlertMutate: vi.fn(),
@@ -73,6 +75,7 @@ vi.mock("@/hooks/useFavorites", () => ({ useFavorites: () => favoritesState }));
 vi.mock("@/hooks/useViewings", () => ({
   useViewings: (scope: string) => (scope === "owner" ? viewingsOwnerState : viewingsRequesterState),
   useUpdateViewing: () => ({ mutate: updateViewingMutate }),
+  useUpdateViewingStatus: () => ({ mutate: updateViewingStatusMutate, isPending: false }),
 }));
 vi.mock("@/hooks/useSavedSearches", () => ({
   useSavedSearches: () => savedSearchesState,
@@ -270,6 +273,22 @@ describe("dashboard tab behavior", () => {
     const linkInput = screen.getByPlaceholderText(/Paste video call link/i);
     fireEvent.keyDown(linkInput, { key: "Enter" });
     expect(updateViewingMutate).toHaveBeenCalledWith({ id: "owner-1", updates: { video_link: "https://whereby.test/agent" } });
+  });
+
+  it("lets listing owners confirm or decline pending viewing requests", () => {
+    subscriptionState.isPro = true;
+    viewingsRequesterState.data = [];
+    viewingsOwnerState.data = [
+      { id: "owner-pending", scheduled_at: "2026-05-16T10:00:00Z", status: "pending", viewing_type: "video", video_link: null, listings: { title: "Pending Video" } },
+    ];
+
+    renderWithProviders(<ViewingsTab />);
+
+    fireEvent.click(screen.getByRole("button", { name: /confirm/i }));
+    expect(updateViewingStatusMutate).toHaveBeenCalledWith({ id: "owner-pending", status: "confirmed" });
+
+    fireEvent.click(screen.getByRole("button", { name: /decline/i }));
+    expect(updateViewingStatusMutate).toHaveBeenCalledWith({ id: "owner-pending", status: "cancelled" });
   });
 
   it("filters special listings and mutates featured, priority, status, and delete actions", () => {
