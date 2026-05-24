@@ -13,7 +13,15 @@ let subscriptionState = { isPro: false };
 let eligibleState = { eligible: false };
 let themeState = { theme: "dark", resolvedTheme: "dark" };
 
-let notifications = [
+let notifications: Array<{
+  id: string;
+  title: string;
+  body: string;
+  type: string;
+  read: boolean;
+  created_at: string;
+  link?: string | null;
+}> = [
   {
     id: "n1",
     title: "New viewing",
@@ -21,6 +29,7 @@ let notifications = [
     type: "viewing",
     read: false,
     created_at: new Date(Date.now() - 60_000).toISOString(),
+    link: "/dashboard?tab=viewings",
   },
 ];
 
@@ -98,6 +107,7 @@ describe("Navbar behavior", () => {
         type: "viewing",
         read: false,
         created_at: new Date(Date.now() - 60_000).toISOString(),
+        link: "/dashboard?tab=viewings",
       },
     ];
   });
@@ -160,6 +170,7 @@ describe("Navbar behavior", () => {
     expect(updateChain.update).toHaveBeenCalledWith({ read: true });
     expect(updateChain.eq).toHaveBeenCalledWith("id", "n1");
     expect(updateChain.eq).toHaveBeenCalledWith("user_id", "u-notif");
+    expect(navigateMock).toHaveBeenCalledWith("/dashboard?tab=viewings");
   });
 
   it("renders notification variants and marks all unread rows read", async () => {

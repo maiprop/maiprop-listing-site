@@ -23,6 +23,7 @@ import { getParticipantTypeFromProfile, isInvestorMode, PARTICIPANT_LABELS, type
 import { formatTimeAgo } from "@/lib/format";
 import { isPlatformAdmin, isSellSideRole } from "@/lib/authUtils";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { sanitizeRedirectPath } from "@/lib/authRedirect";
 
 // Pages that have a full-width dark hero image at the top
 const DARK_HERO_ROUTES = ["/"];
@@ -59,14 +60,14 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
     refetchInterval: 120_000,
   });
 
-  type NotifItem = { id: string; title: string; body: string | null; type: string; read: boolean; created_at: string };
+  type NotifItem = { id: string; title: string; body: string | null; type: string; read: boolean; created_at: string; link: string | null };
   const { data: notifItems = [] } = useQuery<NotifItem[]>({
     queryKey: ["notifications_list", user?.id],
     queryFn: async () => {
       if (!user) return [];
       const { data } = await supabase
         .from("notifications")
-        .select("id, title, body, type, read, created_at")
+        .select("id, title, body, type, read, created_at, link")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
         .limit(10);
@@ -85,6 +86,11 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
     await supabase.from("notifications").update({ read: true }).eq("id", id).eq("user_id", user.id);
     queryClient.invalidateQueries({ queryKey: ["notifications_unread", user.id] });
     queryClient.invalidateQueries({ queryKey: ["notifications_list", user.id] });
+  };
+
+  const handleNotificationClick = async (item: NotifItem) => {
+    await markNotifRead(item.id);
+    if (item.link) navigate(sanitizeRedirectPath(item.link, "/dashboard"));
   };
 
   const markAllRead = async () => {
@@ -294,7 +300,7 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
                       {notifItems.map((n) => (
                         <button
                           key={n.id}
-                          onClick={() => markNotifRead(n.id)}
+                          onClick={() => handleNotificationClick(n)}
                           className={`w-full text-left px-4 py-3 hover:bg-muted/40 transition-colors ${!n.read ? "bg-primary/5" : ""}`}
                         >
                           <div className="flex items-start gap-2.5">

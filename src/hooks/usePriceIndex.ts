@@ -6,6 +6,9 @@ export interface PriceIndexItem {
   avg_price_per_sqm: number;
   listing_count: number;
   is_live: boolean;
+  trend_change_pct?: number | null;
+  trend_up?: boolean | null;
+  trend_is_live?: boolean;
 }
 
 const FALLBACK: PriceIndexItem[] = [
@@ -17,15 +20,6 @@ const FALLBACK: PriceIndexItem[] = [
   { city: "Rhodes", avg_price_per_sqm: 2340, listing_count: 0, is_live: false },
 ];
 
-const CITY_TRENDS: Record<string, string> = {
-  Athens: "+4.2%",
-  Thessaloniki: "+2.8%",
-  Mykonos: "+7.1%",
-  Santorini: "+5.3%",
-  Crete: "+1.4%",
-  Rhodes: "+3.6%",
-};
-
 export function usePriceIndex() {
   return useQuery({
     queryKey: ["price-index"],
@@ -36,5 +30,3 @@ export function usePriceIndex() {
     refetchOnWindowFocus: false,
   });
 }
-
-export { CITY_TRENDS };
