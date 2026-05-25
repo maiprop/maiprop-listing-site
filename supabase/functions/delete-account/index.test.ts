@@ -88,6 +88,7 @@ Deno.test("account deletion notifications cover affected listing parties and con
     "viewer-user",
   ]);
   assert(notifications.every((row) => row.user_id !== "owner-user"));
+  assert(notifications.every((row) => !String(row.body).includes("Sea View House")));
   assert(notifications.some((row) => row.title === "Saved listing removed"));
   assert(notifications.some((row) => row.title === "Conversation closed"));
 });
