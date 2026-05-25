@@ -40,8 +40,8 @@ describe("getPlanLimitErrorMessage", () => {
   });
 
   it("returns message for contact and open-house RSVP limits", () => {
-    expect(getPlanLimitErrorMessage(new Error("contact_limit_reached"))).toMatch(/plan limit/i);
-    expect(getPlanLimitErrorMessage(new Error("open_house_rsvp_limit_reached"))).toMatch(/plan limit/i);
+    expect(getPlanLimitErrorMessage(new Error("contact_limit_reached"))).toMatch(/monthly contact limit/i);
+    expect(getPlanLimitErrorMessage(new Error("open_house_rsvp_limit_reached"))).toMatch(/monthly open-house RSVP limit/i);
   });
 
   it("returns null for unrelated error", () => {

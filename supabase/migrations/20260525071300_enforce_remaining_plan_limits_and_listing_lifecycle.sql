@@ -20,19 +20,26 @@ REVOKE ALL ON SCHEMA private FROM anon, authenticated;
 
 CREATE OR REPLACE FUNCTION private.remaining_plan_limit_role(p_user_id UUID)
 RETURNS TEXT
-LANGUAGE sql
+LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
-  SELECT CASE COALESCE(p.role::TEXT, 'individual')
-    WHEN 'individual' THEN 'buyer'
-    WHEN 'seller_landlord' THEN 'seller'
-    ELSE p.role::TEXT
-  END
+DECLARE
+  v_role TEXT;
+BEGIN
+  SELECT COALESCE(NULLIF(p.participant_type::TEXT, ''), NULLIF(p.role::TEXT, ''))
+  INTO v_role
   FROM public.profiles p
   WHERE p.user_id = p_user_id
   LIMIT 1;
+
+  RETURN CASE COALESCE(v_role, 'buyer')
+    WHEN 'individual' THEN 'buyer'
+    WHEN 'seller_landlord' THEN 'seller'
+    ELSE COALESCE(v_role, 'buyer')
+  END;
+END;
 $$;
 
 COMMENT ON FUNCTION private.remaining_plan_limit_role(UUID) IS
@@ -183,11 +190,52 @@ $$;
 COMMENT ON FUNCTION private.is_property_contact_conversation(UUID, UUID, UUID, UUID) IS
   'Returns true when a conversation should consume a monthly property/sell-side contact allowance for the supplied user.';
 
+CREATE OR REPLACE FUNCTION private.count_monthly_property_contact_threads(
+  p_user_id UUID,
+  p_month_start TIMESTAMPTZ,
+  p_exclude_conversation_id UUID DEFAULT NULL
+)
+RETURNS INTEGER
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT COUNT(*)::INTEGER
+  FROM public.conversations c
+  JOIN LATERAL (
+    SELECT m.sender_id, m.created_at
+    FROM public.messages m
+    WHERE m.conversation_id = c.id
+    ORDER BY m.created_at ASC, m.id ASC
+    LIMIT 1
+  ) first_message ON TRUE
+  WHERE (c.participant_a = p_user_id OR c.participant_b = p_user_id)
+    AND first_message.sender_id = p_user_id
+    AND first_message.created_at >= p_month_start
+    AND (
+      p_exclude_conversation_id IS NULL
+      OR c.id IS DISTINCT FROM p_exclude_conversation_id
+    )
+    AND private.is_property_contact_conversation(
+      c.participant_a,
+      c.participant_b,
+      c.listing_id,
+      p_user_id
+    );
+$$;
+
+COMMENT ON FUNCTION private.count_monthly_property_contact_threads(UUID, TIMESTAMPTZ, UUID) IS
+  'Counts contact allowance usage by first outbound property-contact message, excluding ongoing or inbound-started threads.';
+
 CREATE INDEX IF NOT EXISTS idx_conversations_participant_a_created_at
   ON public.conversations(participant_a, created_at);
 
 CREATE INDEX IF NOT EXISTS idx_conversations_participant_b_created_at
   ON public.conversations(participant_b, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_messages_conversation_created_id
+  ON public.messages(conversation_id, created_at, id);
 
 CREATE OR REPLACE FUNCTION public.check_conversation_contact_monthly_limit()
 RETURNS TRIGGER
@@ -220,16 +268,12 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  SELECT COUNT(*)::INTEGER
-    INTO v_count
-  FROM public.conversations c
-  WHERE c.created_at >= v_month_start
-    AND private.is_property_contact_conversation(
-      c.participant_a,
-      c.participant_b,
-      c.listing_id,
-      v_uid
-    );
+  PERFORM pg_advisory_xact_lock(
+    hashtextextended('contact_limit:' || v_uid::TEXT || ':' || to_char(v_month_start, 'YYYY-MM'), 0)
+  );
+
+  SELECT private.count_monthly_property_contact_threads(v_uid, v_month_start)
+  INTO v_count;
 
   IF v_count >= v_limit THEN
     RAISE EXCEPTION 'contact_limit_reached'
@@ -269,7 +313,6 @@ BEGIN
     SELECT 1
     FROM public.messages m
     WHERE m.conversation_id = NEW.conversation_id
-      AND m.sender_id = NEW.sender_id
     LIMIT 1
   ) THEN
     RETURN NEW;
@@ -298,17 +341,12 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  SELECT COUNT(*)::INTEGER
-    INTO v_count
-  FROM public.conversations c
-  WHERE c.created_at >= v_month_start
-    AND c.id IS DISTINCT FROM NEW.conversation_id
-    AND private.is_property_contact_conversation(
-      c.participant_a,
-      c.participant_b,
-      c.listing_id,
-      v_uid
-    );
+  PERFORM pg_advisory_xact_lock(
+    hashtextextended('contact_limit:' || v_uid::TEXT || ':' || to_char(v_month_start, 'YYYY-MM'), 0)
+  );
+
+  SELECT private.count_monthly_property_contact_threads(v_uid, v_month_start, NEW.conversation_id)
+  INTO v_count;
 
   IF v_count >= v_limit THEN
     RAISE EXCEPTION 'contact_limit_reached'
@@ -349,10 +387,19 @@ BEGIN
     RETURN NEW;
   END IF;
 
+  IF NEW.requester_id IS DISTINCT FROM auth.uid() THEN
+    RAISE EXCEPTION 'open_house_rsvp_requester_mismatch'
+      USING HINT = 'Open-house RSVPs must be created for the authenticated user';
+  END IF;
+
   v_limit := public.get_open_house_rsvp_monthly_limit(NEW.requester_id);
   IF v_limit >= 999 THEN
     RETURN NEW;
   END IF;
+
+  PERFORM pg_advisory_xact_lock(
+    hashtextextended('open_house_rsvp:' || NEW.requester_id::TEXT || ':' || to_char(v_month_start, 'YYYY-MM'), 0)
+  );
 
   SELECT COUNT(*)::INTEGER
     INTO v_count
@@ -412,7 +459,11 @@ BEGIN
       '.'
     ),
     'price_alert',
-    '/property/' || NEW.id::TEXT
+    CASE
+      WHEN NEW.listing_type = 'auction' THEN '/auction/' || NEW.id::TEXT
+      WHEN NEW.listing_type = 'open_house' THEN '/open-house/' || NEW.id::TEXT
+      ELSE '/property/' || NEW.id::TEXT
+    END
   )
   FROM public.favorites f
   WHERE f.listing_id = NEW.id
@@ -533,6 +584,7 @@ BEGIN
       concat(v_title, ' is now ', v_status, '.'),
       'listing',
       CASE
+        WHEN NEW.listing_type = 'auction' THEN '/auction/' || NEW.id::TEXT
         WHEN NEW.listing_type = 'open_house' THEN '/open-house/' || NEW.id::TEXT
         ELSE '/property/' || NEW.id::TEXT
       END
@@ -572,5 +624,6 @@ REVOKE ALL ON FUNCTION public.check_open_house_rsvp_monthly_limit() FROM PUBLIC,
 
 REVOKE ALL ON FUNCTION private.remaining_plan_limit_role(UUID) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION private.is_property_contact_conversation(UUID, UUID, UUID, UUID) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION private.count_monthly_property_contact_threads(UUID, TIMESTAMPTZ, UUID) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION private.notify_favorite_price_drop() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION private.handle_listing_terminal_status() FROM PUBLIC, anon, authenticated;
