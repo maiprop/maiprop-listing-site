@@ -350,12 +350,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Skip live staging type freshness for PRs
-        if: github.event_name == 'pull_request'
-        run: echo "PR migrations are validated by local migration replay; live staging type freshness runs after staging deployment on main/manual runs."
+      - name: Skip live staging type freshness without staged DB changes
+        if: needs.deploy-supabase-staging.outputs.db_changes != 'true'
+        run: echo "Live staging type freshness runs only after the staging database migration path is required."
 
       - name: Check generated Supabase types against staging
-        if: github.event_name != 'pull_request'
+        if: needs.deploy-supabase-staging.outputs.db_changes == 'true'
         run: node scripts/check-supabase-types-freshness.cjs --strict
 
       - name: Install Playwright browsers
@@ -867,13 +867,16 @@ jobs:
           npm run check:production-deploy -- https://portal.maiprop.co --browser --public-api
 
   deploy-supabase-staging:
-    name: Deploy Supabase edge functions (staging)
+    name: Prepare Supabase staging
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # Keep deployments out of arbitrary PRs; staging receives mainline and manual
-    # deployments after the quality gate passes.
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    # deployments after the quality gate passes. PRs still run this job as a
+    # no-op prerequisite so staging security checks have one ordering point.
     needs: [quality, release-safety, migrations-validate]
+    outputs:
+      deploy: ${{ steps.supabase_changes.outputs.deploy }}
+      db_changes: ${{ steps.supabase_changes.outputs.db_changes }}
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -887,7 +890,15 @@ jobs:
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "deploy=true" >> "$GITHUB_OUTPUT"
-            echo "Manual run: Supabase staging deploy enabled."
+            echo "db_changes=true" >> "$GITHUB_OUTPUT"
+            echo "Manual run: full Supabase staging deploy enabled."
+            exit 0
+          fi
+
+          if [ "${{ github.event_name }}" != "push" ] || [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "db_changes=false" >> "$GITHUB_OUTPUT"
+            echo "Not a mainline push: Supabase staging deploy skipped."
             exit 0
           fi
 
@@ -903,13 +914,21 @@ jobs:
           if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
             echo "::warning::Could not inspect the previous commit; enabling Supabase staging deploy."
             echo "deploy=true" >> "$GITHUB_OUTPUT"
+            echo "db_changes=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           changed_files="$(git diff --name-only "$base" "${{ github.sha }}" || true)"
           echo "$changed_files"
 
-          if grep -Eq '^(supabase/|deno\.json|deno\.lock)$' <<< "$changed_files"; then
+          if grep -Eq '^supabase/migrations/' <<< "$changed_files"; then
+            echo "db_changes=true" >> "$GITHUB_OUTPUT"
+            echo "Supabase migration changes detected: staging database push required."
+          else
+            echo "db_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if grep -Eq '^(supabase/|deno\.(json|lock)$)' <<< "$changed_files"; then
             echo "deploy=true" >> "$GITHUB_OUTPUT"
             echo "Supabase changes detected: staging deploy enabled."
           else
@@ -919,7 +938,7 @@ jobs:
 
       - name: Skip Supabase staging deploy
         if: steps.supabase_changes.outputs.deploy != 'true'
-        run: echo "No Supabase migration/function changes in this push; skipping staging deploy."
+        run: echo "Supabase staging deploy not required for this event or file set."
 
       - name: Validate required staging secrets
         if: steps.supabase_changes.outputs.deploy == 'true'
@@ -938,8 +957,9 @@ jobs:
           if [ "$missing" -ne 0 ]; then
             exit 1
           fi
-          if [ -z "$SUPABASE_STAGING_DB_URL" ]; then
-            echo "::warning::SUPABASE_STAGING_DB_URL is not set; staging database migration push will be skipped."
+          if [ "${{ steps.supabase_changes.outputs.db_changes }}" = "true" ] && [ -z "$SUPABASE_STAGING_DB_URL" ]; then
+            echo "::error::SUPABASE_STAGING_DB_URL is required when Supabase migrations change; staging cannot be verified against stale schema."
+            exit 1
           fi
         env:
           STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
@@ -967,26 +987,25 @@ jobs:
           version: 2.98.1
 
       - name: Check staging database migration secret
-        if: steps.supabase_changes.outputs.deploy == 'true'
+        if: steps.supabase_changes.outputs.db_changes == 'true'
         id: staging_db
         run: |
-          if [ -n "$SUPABASE_STAGING_DB_URL" ]; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Skipping staging database migration push because SUPABASE_STAGING_DB_URL is not configured."
+          if [ -z "$SUPABASE_STAGING_DB_URL" ]; then
+            echo "::error::SUPABASE_STAGING_DB_URL is required when Supabase migrations change."
+            exit 1
           fi
+          echo "available=true" >> "$GITHUB_OUTPUT"
         env:
           SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
 
       - name: Dry-run staging database migrations
-        if: steps.supabase_changes.outputs.deploy == 'true' && steps.staging_db.outputs.available == 'true'
+        if: steps.supabase_changes.outputs.db_changes == 'true'
         run: supabase db push --db-url "$SUPABASE_STAGING_DB_URL" --dry-run
         env:
           SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
 
       - name: Apply database migrations to staging
-        if: steps.supabase_changes.outputs.deploy == 'true' && steps.staging_db.outputs.available == 'true'
+        if: steps.supabase_changes.outputs.db_changes == 'true'
         run: supabase db push --db-url "$SUPABASE_STAGING_DB_URL" --yes
         env:
           SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
