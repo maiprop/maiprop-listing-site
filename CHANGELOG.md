@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.9.7](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.6...v1.9.7) (2026-05-25)
+
+
+### Bug Fixes
+
+* notify audit and open house flows ([#212](https://github.com/maiprop/maiprop-listing-site/issues/212)) ([661d40a](https://github.com/maiprop/maiprop-listing-site/commit/661d40a6503eabaca7737e18506c85e9ab0c2bdc))
+* unify lead capture and admin submissions ([#213](https://github.com/maiprop/maiprop-listing-site/issues/213)) ([b33edab](https://github.com/maiprop/maiprop-listing-site/commit/b33edabdda3de7334cb87da9d0e2b5f004e4a55d))
+
 ## [1.9.6](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.5...v1.9.6) (2026-05-25)
 
 
