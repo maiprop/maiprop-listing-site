@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Mail, Building2, Phone } from "lucide-react";
+import { Building2, MapPin } from "lucide-react";
 import { useSubmitContactForm } from "@/hooks/useContactSubmissions";
 
 export default function Contact() {
@@ -55,24 +55,17 @@ export default function Contact() {
               <div className="rounded-xl border border-border p-5 space-y-4">
                 <h2 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">{t("contact.getInTouch")}</h2>
                 <div className="flex items-start gap-3">
-                  <Mail className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-                  <div>
-                    <p className="font-medium text-sm">{t("contact.generalEmail")}</p>
-                    <a href="mailto:hello@maiprop.co" className="text-sm text-primary hover:underline">hello@maiprop.co</a>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
                   <Building2 className="w-5 h-5 text-primary mt-0.5 shrink-0" />
                   <div>
-                    <p className="font-medium text-sm">{t("contact.enterpriseEmail")}</p>
-                    <a href="mailto:enterprise@maiprop.co" className="text-sm text-primary hover:underline">enterprise@maiprop.co</a>
+                    <p className="font-medium text-sm">mAI prop</p>
+                    <p className="text-sm text-muted-foreground">Data Estate PC</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <Phone className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                  <MapPin className="w-5 h-5 text-primary mt-0.5 shrink-0" />
                   <div>
-                    <p className="font-medium text-sm">{t("contact.phone")}</p>
-                    <p className="text-sm text-muted-foreground">+30 210 000 0000</p>
+                    <p className="font-medium text-sm">{t("contact.registeredAddress")}</p>
+                    <p className="text-sm text-muted-foreground">Akadimias 32, 106 72, Athens, Greece</p>
                   </div>
                 </div>
               </div>

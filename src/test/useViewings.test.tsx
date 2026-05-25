@@ -9,11 +9,12 @@ import { render, renderHook, waitFor, act, screen, fireEvent } from "@testing-li
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
-const { useAuthMock, fromMock, toastMock, submitConsultationMock } = vi.hoisted(() => ({
+const { useAuthMock, fromMock, toastMock, submitConsultationMock, planLimitMessageMock } = vi.hoisted(() => ({
   useAuthMock: vi.fn(),
   fromMock: vi.fn(),
   toastMock: { success: vi.fn(), error: vi.fn() },
   submitConsultationMock: { mutateAsync: vi.fn(), isPending: false },
+  planLimitMessageMock: vi.fn<(err: unknown) => string | null>(() => null),
 }));
 
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => useAuthMock() }));
@@ -21,7 +22,7 @@ vi.mock("@/integrations/supabase/client", () => ({
   supabase: { from: (...a: unknown[]) => fromMock(...a) },
 }));
 vi.mock("sonner", () => ({ toast: toastMock }));
-vi.mock("@/lib/planLimitErrors", () => ({ getPlanLimitErrorMessage: () => null }));
+vi.mock("@/lib/planLimitErrors", () => ({ getPlanLimitErrorMessage: (err: unknown) => planLimitMessageMock(err) }));
 vi.mock("@/hooks/useConsultations", () => ({
   useSubmitConsultation: () => submitConsultationMock,
 }));
@@ -47,6 +48,8 @@ beforeEach(() => {
   fromMock.mockReset();
   toastMock.success.mockReset();
   toastMock.error.mockReset();
+  planLimitMessageMock.mockReset();
+  planLimitMessageMock.mockReturnValue(null);
   submitConsultationMock.mutateAsync.mockReset();
   submitConsultationMock.isPending = false;
   useAuthMock.mockReturnValue({ user: { id: "u-1" } });
@@ -150,6 +153,42 @@ describe("useBookViewing", () => {
       }).catch(() => {});
     });
     expect(toastMock.error).toHaveBeenCalledWith("limit reached");
+  });
+
+  it("shows an upgrade CTA when the viewing plan limit is reached", async () => {
+    planLimitMessageMock.mockReturnValue("You've used your free viewing this month. Upgrade to Pro to book more viewings.");
+    const single = vi.fn().mockResolvedValue({ data: null, error: { message: "viewing_limit_reached", code: "P0001" } });
+    fromMock.mockReturnValue({ insert: () => ({ select: () => ({ single }) }) });
+    const { result } = renderHook(() => useBookViewing(), { wrapper: wrapper() });
+    await act(async () => {
+      await result.current.mutateAsync({
+        listing_id: "l", owner_id: "o", viewing_type: "in_person", scheduled_at: "x",
+      }).catch(() => {});
+    });
+
+    expect(toastMock.error).toHaveBeenCalledWith(
+      "You've used your free viewing this month. Upgrade to Pro to book more viewings.",
+      expect.objectContaining({
+        action: expect.objectContaining({
+          label: "Upgrade to Pro",
+          onClick: expect.any(Function),
+        }),
+      }),
+    );
+  });
+
+  it("does not show a buyer upgrade CTA when the owner is the capped account", async () => {
+    planLimitMessageMock.mockReturnValue("The listing owner has reached their monthly viewing limit. Please contact the owner or try another listing.");
+    const single = vi.fn().mockResolvedValue({ data: null, error: { message: "viewing_limit_reached", hint: "Listing owner has reached viewing limit." } });
+    fromMock.mockReturnValue({ insert: () => ({ select: () => ({ single }) }) });
+    const { result } = renderHook(() => useBookViewing(), { wrapper: wrapper() });
+    await act(async () => {
+      await result.current.mutateAsync({
+        listing_id: "l", owner_id: "o", viewing_type: "in_person", scheduled_at: "x",
+      }).catch(() => {});
+    });
+
+    expect(toastMock.error).toHaveBeenCalledWith("The listing owner has reached their monthly viewing limit. Please contact the owner or try another listing.");
   });
 });
 

@@ -111,7 +111,7 @@ export function QuickSaleSubmittedView({
         <Button variant="outline" className="flex-1 border-border" onClick={onReset}>{isGreek ? "Νέα υποβολή" : "Submit another"}</Button>
         <Button
           className="flex-1 bg-gradient-primary border-0 text-primary-foreground gap-2"
-          onClick={() => navigate("/investor-dashboard")}
+          onClick={() => navigate("/dashboard")}
         >
           <BarChart2 className="w-3.5 h-3.5" /> {isGreek ? "Παρακολούθηση" : "Track Status"}
         </Button>

@@ -160,28 +160,17 @@ export function useExpressInterest() {
         const path = `${uid}/firesale/${dealId}/proof_${crypto.randomUUID()}.${ext}`;
         const { data: uploaded, error: uploadError } = await supabase.storage
           .from("open-house-docs")
-          .upload(path, proofFile, { upsert: true });
+          .upload(path, proofFile, { upsert: false });
         if (uploadError) throw uploadError;
         proof_of_funds_url = uploaded.path;
       }
 
-      const status: InterestStatus = proof_of_funds_url || proofAmount ? "prioritized" : "interested";
-
-      const { data, error } = await supabase
-        .from("firesale_interest")
-        .upsert(
-          {
-            deal_id: dealId,
-            investor_id: uid,
-            status,
-            message: message || null,
-            proof_amount: proofAmount ? parseFloat(proofAmount) : null,
-            ...(proof_of_funds_url ? { proof_of_funds_url } : {}),
-          },
-          { onConflict: "deal_id,investor_id" },
-        )
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc("submit_firesale_interest", {
+        p_deal_id: dealId,
+        p_message: message || undefined,
+        p_proof_amount: proofAmount ? parseFloat(proofAmount) : undefined,
+        p_proof_of_funds_url: proof_of_funds_url,
+      });
 
       if (error) throw error;
       return data;

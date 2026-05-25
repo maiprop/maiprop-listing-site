@@ -68,7 +68,7 @@ async function sendNotificationEmail(params: {
   rejection_reason?: string;
 }) {
   const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return;
+  if (!session) throw new Error("Admin session expired before email notification");
 
   const { error } = await supabase.functions.invoke("invitation-notify", {
     body: params,
@@ -76,7 +76,7 @@ async function sendNotificationEmail(params: {
   });
 
   if (error) {
-    logger.warn("Email notification failed (non-fatal):", error.message);
+    throw new Error(error.message || "Email notification failed");
   }
 }
 
@@ -147,15 +147,28 @@ export default function AdminInvitationRequests() {
       });
       const grantedRole = review.result?.granted_role ?? "investor";
 
-      sendNotificationEmail({
+      const emailSent = await sendNotificationEmail({
         type: "approved",
         email: req.email,
         full_name: req.full_name,
         tier,
-      });
+      }).then(
+        () => true,
+        (emailError: unknown) => {
+          logger.warn(
+            "Invitation approval email failed:",
+            emailError instanceof Error ? emailError.message : emailError,
+          );
+          return false;
+        },
+      );
 
       qc.invalidateQueries({ queryKey: ["admin-invitation-requests"] });
-      toast.success(`✅ Approved — role: ${grantedRole}, subscription: ${tier} (1 year) — email sent`);
+      if (emailSent) {
+        toast.success(`Approved — role: ${grantedRole}, subscription: ${tier} (1 year) — email sent`);
+      } else {
+        toast.warning(`Approved — role: ${grantedRole}, subscription: ${tier} (1 year) — email failed`);
+      }
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Could not approve");
     } finally {
@@ -178,16 +191,29 @@ export default function AdminInvitationRequests() {
         rejectionReason: reason || undefined,
       });
 
-      sendNotificationEmail({
+      const emailSent = await sendNotificationEmail({
         type: "rejected",
         email: req.email,
         full_name: req.full_name,
         rejection_reason: reason || undefined,
-      });
+      }).then(
+        () => true,
+        (emailError: unknown) => {
+          logger.warn(
+            "Invitation rejection email failed:",
+            emailError instanceof Error ? emailError.message : emailError,
+          );
+          return false;
+        },
+      );
 
       qc.invalidateQueries({ queryKey: ["admin-invitation-requests"] });
       setRejectingId(null);
-      toast.success("Request rejected" + (reason ? " — email sent with reason" : " — email sent"));
+      if (emailSent) {
+        toast.success("Request rejected" + (reason ? " — email sent with reason" : " — email sent"));
+      } else {
+        toast.warning("Request rejected — email failed");
+      }
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Could not reject");
     } finally {

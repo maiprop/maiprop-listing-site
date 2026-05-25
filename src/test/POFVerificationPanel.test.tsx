@@ -8,8 +8,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
-const { fromMock, toastMock } = vi.hoisted(() => ({
+const { fromMock, getOpenHouseDocSignedUrlMock, toastMock } = vi.hoisted(() => ({
   fromMock: vi.fn(),
+  getOpenHouseDocSignedUrlMock: vi.fn(),
   toastMock: { success: vi.fn(), error: vi.fn() },
 }));
 
@@ -17,6 +18,9 @@ vi.mock("@/integrations/supabase/client", () => ({
   supabase: { from: (...a: unknown[]) => fromMock(...a) },
 }));
 vi.mock("sonner", () => ({ toast: toastMock }));
+vi.mock("@/hooks/useOpenHouseAssetControl", () => ({
+  getOpenHouseDocSignedUrl: (...a: unknown[]) => getOpenHouseDocSignedUrlMock(...a),
+}));
 
 import { POFVerificationPanel } from "@/components/POFVerificationPanel";
 
@@ -26,6 +30,7 @@ type Row = {
   proof_of_funds_url: string | null;
   proof_amount: number | null;
   pof_verified_status: "unreviewed" | "verified" | "rejected" | null;
+  pof_rejection_reason: string | null;
   created_at: string | null;
   listing_id: string;
   rejection_reason: string | null;
@@ -57,6 +62,7 @@ const baseRow = (overrides: Partial<Row> = {}): Row => ({
   proof_of_funds_url: "https://docs/pof.pdf",
   proof_amount: 250_000,
   pof_verified_status: "unreviewed",
+  pof_rejection_reason: null,
   created_at: "2026-04-01T00:00:00Z",
   listing_id: "l-1",
   rejection_reason: null,
@@ -66,8 +72,11 @@ const baseRow = (overrides: Partial<Row> = {}): Row => ({
 
 beforeEach(() => {
   fromMock.mockReset();
+  getOpenHouseDocSignedUrlMock.mockReset();
+  getOpenHouseDocSignedUrlMock.mockResolvedValue("https://signed.example/pof.pdf");
   toastMock.success.mockReset();
   toastMock.error.mockReset();
+  vi.spyOn(window, "open").mockImplementation(() => null);
 });
 
 describe("POFVerificationPanel", () => {
@@ -77,7 +86,7 @@ describe("POFVerificationPanel", () => {
     await waitFor(() => screen.getByText(/No\s+unreviewed/i));
   });
 
-  it("displays a hydrated row with investor name + euro amount + 'View Doc' link", async () => {
+  it("opens hydrated POF rows through signed document URLs", async () => {
     withRows([baseRow()]);
     render(<POFVerificationPanel />);
     await waitFor(() => screen.getByText(/Investor user-a/));
@@ -87,7 +96,9 @@ describe("POFVerificationPanel", () => {
     expect(
       screen.getAllByText((_, node) => /250[\s.,\u00a0]?000/.test(node?.textContent ?? "")).length,
     ).toBeGreaterThan(0);
-    expect(screen.getByRole("link", { name: /View Doc/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /View Doc/i }));
+    await waitFor(() => expect(getOpenHouseDocSignedUrlMock).toHaveBeenCalledWith("https://docs/pof.pdf"));
+    expect(window.open).toHaveBeenCalledWith("https://signed.example/pof.pdf", "_blank", "noopener,noreferrer");
   });
 
   it("falls back to 'Demo Doc' (disabled) when the URL is missing", async () => {
@@ -214,7 +225,7 @@ describe("POFVerificationPanel", () => {
   it("switches between tabs and shows verified/rejected only on their tabs", async () => {
     withRows([
       baseRow({ id: "v1", pof_verified_status: "verified", proof_amount: 100_000 }),
-      baseRow({ id: "r1", pof_verified_status: "rejected", proof_amount: 50_000, rejection_reason: "stale" }),
+      baseRow({ id: "r1", pof_verified_status: "rejected", proof_amount: 50_000, pof_rejection_reason: "stale" }),
     ]);
     render(<POFVerificationPanel />);
     // Default tab = unreviewed → empty

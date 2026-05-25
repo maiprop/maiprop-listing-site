@@ -42,6 +42,9 @@ export type AdminDeal = {
   contact_phone: string | null;
   notes: string | null;
   admin_notes: string | null;
+  seller_response: string | null;
+  seller_response_price: number | null;
+  seller_responded_at: string | null;
   created_at: string;
 };
 
@@ -191,9 +194,24 @@ export function InvestorQueue({ dealId }: { dealId: string }) {
 
 // ── AdminDealRow ──────────────────────────────────────────────────────────────
 
-export function AdminDealRow({ deal, onUpdate }: { deal: AdminDeal; onUpdate: (id: string, status: string, notes: string, offerPrice?: number) => Promise<void> }) {
+export function AdminDealRow({
+  deal,
+  onUpdate,
+}: {
+  deal: AdminDeal;
+  onUpdate: (
+    id: string,
+    status: string,
+    notes: string,
+    offerPrice?: number,
+    sellerResponse?: string,
+    sellerResponsePrice?: number,
+  ) => Promise<void>;
+}) {
   const [expanded, setExpanded] = useState(false);
-  const { response: sellerResponse, cleanNotes } = parseSellerResponse(deal.admin_notes);
+  const legacySellerResponse = parseSellerResponse(deal.admin_notes);
+  const sellerResponse = deal.seller_response?.toUpperCase() ?? legacySellerResponse.response;
+  const cleanNotes = legacySellerResponse.response ? legacySellerResponse.cleanNotes : (deal.admin_notes ?? "");
   const [editNotes, setEditNotes] = useState(cleanNotes);
   const [saving, setSaving] = useState(false);
   const [showOfferModal, setShowOfferModal] = useState(false);
@@ -210,16 +228,14 @@ export function AdminDealRow({ deal, onUpdate }: { deal: AdminDeal; onUpdate: (i
 
   const handleSave = async () => {
     setSaving(true);
-    const prefix = sellerResponse ? `[SELLER:${sellerResponse}] ` : "";
-    await onUpdate(deal.id, deal.status, prefix + editNotes);
+    await onUpdate(deal.id, deal.status, editNotes);
     setSaving(false);
   };
 
   const handleStatusChange = async (newStatus: string) => {
     if (newStatus === "offer_sent") { setShowOfferModal(true); return; }
     setSaving(true);
-    const prefix = sellerResponse ? `[SELLER:${sellerResponse}] ` : "";
-    await onUpdate(deal.id, newStatus, prefix + editNotes);
+    await onUpdate(deal.id, newStatus, editNotes);
     setSaving(false);
   };
 
@@ -235,10 +251,9 @@ export function AdminDealRow({ deal, onUpdate }: { deal: AdminDeal; onUpdate: (i
   const handleSellerResponse = async (resp: "ACCEPTED" | "COUNTERED" | "REJECTED") => {
     if (resp === "COUNTERED" && !showCounterInput) { setShowCounterInput(true); return; }
     setSaving(true);
-    const newNotes = `[SELLER:${resp}] ${editNotes}`;
     const newStatus = resp === "ACCEPTED" ? "closed" : resp === "REJECTED" ? "reviewed" : "offer_sent";
     const counterVal = resp === "COUNTERED" && counterPrice ? Number(counterPrice) : undefined;
-    await onUpdate(deal.id, newStatus, newNotes, counterVal);
+    await onUpdate(deal.id, newStatus, editNotes, counterVal, resp.toLowerCase(), counterVal);
     setShowCounterInput(false);
     setSaving(false);
   };

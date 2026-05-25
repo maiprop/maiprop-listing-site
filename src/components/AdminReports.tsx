@@ -8,11 +8,12 @@
 import { Suspense, useState } from "react";
 import {
   Building2, Users, Flame, DoorOpen, Flag, ExternalLink,
-  Download, Loader2, CheckCircle, TrendingUp,
+  Download, Loader2, CheckCircle, TrendingUp, PauseCircle, Ban,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -46,6 +47,18 @@ type PlatformStats = {
 type Tab = "overview" | "reports";
 type ReportFilter = "all" | "pending" | "resolved";
 
+type ResolveListingReportRpc = (
+  fn: "admin_resolve_listing_report",
+  args: { p_report_id: string },
+) => Promise<{ data: unknown; error: Error | null }>;
+
+type ModerationRpc = (
+  fn: "admin_suspend_reported_listing" | "admin_ban_reported_content_owner",
+  args: { p_report_id: string; p_reason?: string },
+) => Promise<{ data: unknown; error: Error | null }>;
+
+type ModerationAction = "suspend_listing" | "ban_owner";
+type PendingModeration = { action: ModerationAction; report: ReportRow } | null;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────────
 function firstOfMonth(): string {
@@ -309,6 +322,7 @@ function StatCard({
 function ContentReportsTab() {
   const qc = useQueryClient();
   const [filter, setFilter] = useState<ReportFilter>("all");
+  const [pendingModeration, setPendingModeration] = useState<PendingModeration>(null);
 
   const { data: reports = [], isLoading: loading } = useQuery<ReportRow[]>({
     queryKey: ["admin-content-reports"],
@@ -331,10 +345,8 @@ function ContentReportsTab() {
 
   const resolveMutation = useMutation({
     mutationFn: async (id: string) => {
-       
-      const { error } = await supabase.from("listing_reports")
-        .update({ status: "resolved" })
-        .eq("id", id);
+      const rpc = supabase.rpc as unknown as ResolveListingReportRpc;
+      const { error } = await rpc("admin_resolve_listing_report", { p_report_id: id });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -346,10 +358,51 @@ function ContentReportsTab() {
 
   const handleResolve = (id: string) => resolveMutation.mutate(id);
 
+  const moderationMutation = useMutation({
+    mutationFn: async ({ action, report }: { action: ModerationAction; report: ReportRow }) => {
+      const rpc = supabase.rpc as unknown as ModerationRpc;
+      const reason = `Action taken from content report ${report.id}`;
+      const fn = action === "suspend_listing"
+        ? "admin_suspend_reported_listing"
+        : "admin_ban_reported_content_owner";
+      const { error } = await rpc(fn, { p_report_id: report.id, p_reason: reason });
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ["admin-content-reports"] });
+      toast.success(
+        variables.action === "suspend_listing"
+          ? "Listing suspended and report resolved"
+          : "Owner banned and report resolved",
+      );
+    },
+    onError: () => toast.error("Moderation action failed"),
+  });
+
+  const confirmModeration = () => {
+    if (!pendingModeration) return;
+    moderationMutation.mutate(pendingModeration);
+    setPendingModeration(null);
+  };
+
   const filtered = reports.filter((r) => filter === "all" || r.status === filter);
 
   return (
     <div className="space-y-4">
+      <ConfirmDialog
+        open={!!pendingModeration}
+        title={pendingModeration?.action === "ban_owner" ? "Ban reported content owner?" : "Suspend reported listing?"}
+        description={
+          pendingModeration?.action === "ban_owner"
+            ? "This marks the content owner as banned, turns off investor mode, resolves the report, and notifies the user."
+            : "This pauses the listing, resolves the report, and notifies the owner."
+        }
+        confirmLabel={pendingModeration?.action === "ban_owner" ? "Ban owner" : "Suspend listing"}
+        destructive
+        onConfirm={confirmModeration}
+        onCancel={() => setPendingModeration(null)}
+      />
+
       {/* Header & filter */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
@@ -397,7 +450,7 @@ function ContentReportsTab() {
                   <th className="text-left px-4 py-3 font-medium">Reporter</th>
                   <th className="text-left px-4 py-3 font-medium">Date</th>
                   <th className="text-left px-4 py-3 font-medium">Status</th>
-                  <th className="text-left px-4 py-3 font-medium w-28" />
+                  <th className="text-left px-4 py-3 font-medium min-w-44" />
                 </tr>
               </thead>
               <tbody>
@@ -432,6 +485,24 @@ function ContentReportsTab() {
                           >
                             <CheckCircle className="w-3 h-3" />
                             Resolve
+                          </button>
+                        )}
+                        {r.status === "pending" && r.entity_type === "listing" && (
+                          <button
+                            onClick={() => setPendingModeration({ action: "suspend_listing", report: r })}
+                            className="inline-flex items-center gap-1 text-xs text-amber-600 hover:underline"
+                          >
+                            <PauseCircle className="w-3 h-3" />
+                            Suspend
+                          </button>
+                        )}
+                        {r.status === "pending" && (
+                          <button
+                            onClick={() => setPendingModeration({ action: "ban_owner", report: r })}
+                            className="inline-flex items-center gap-1 text-xs text-destructive hover:underline"
+                          >
+                            <Ban className="w-3 h-3" />
+                            Ban owner
                           </button>
                         )}
                       </div>

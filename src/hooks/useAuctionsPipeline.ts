@@ -3,7 +3,9 @@ import type { MapListing } from "@/components/MapView";
 import { useAuctionListings } from "@/hooks/useAuctionListings";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
+import { getPlanLimits } from "@/hooks/usePlanLimits";
 import { isPlatformAdmin } from "@/lib/authUtils";
+import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 import {
   ownershipMatches,
   getAuctionRound,
@@ -73,9 +75,12 @@ export function useAuctionsPipeline(opts: UseAuctionsPipelineOptions) {
   const { isPro } = useSubscription();
   const isMaiPropOsUser = isPlatformAdmin(profile);
 
-  /** Per-tier page cap. OS users have no cap. */
-  const pageCap = isMaiPropOsUser ? Infinity : isPro ? AUCTIONS_MAX_PAGES_PRO : AUCTIONS_MAX_PAGES_FREE;
-  const maxItems = Number.isFinite(pageCap) ? pageCap * AUCTIONS_PAGE_SIZE : Infinity;
+  /** Per-plan auction cap. OS users and high-trust plans have no cap. */
+  const participantType = getParticipantTypeFromProfile(profile);
+  const configuredAuctionLimit = isMaiPropOsUser
+    ? null
+    : getPlanLimits(participantType, isPro ? "pro" : "free").auctionListingsVisible;
+  const maxItems = configuredAuctionLimit ?? Infinity;
   const fetchLimit = Number.isFinite(maxItems) ? maxItems : undefined;
 
   const { data: auctions = [], isLoading, error } = useAuctionListings(fetchLimit);

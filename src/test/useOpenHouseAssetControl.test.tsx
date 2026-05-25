@@ -32,6 +32,7 @@ vi.mock("sonner", () => ({ toast: toastMock }));
 
 import {
   useOpenHouseSettings,
+  useOpenHouseCapacity,
   useUpsertOpenHouseSettings,
   useOpenHouseRegistrations,
   useMyOpenHouseRegistrations,
@@ -42,6 +43,7 @@ import {
   useSubmitOpenHouseOffer,
   useUpdateOpenHouseOffer,
   useAcceptOpenHouseOffer,
+  useReopenOpenHouseOfferSelection,
   useRevealAllOffers,
   uploadOpenHouseDoc,
   getOpenHouseDocSignedUrl,
@@ -104,6 +106,24 @@ describe("useOpenHouseSettings", () => {
 });
 
 // ─── useUpsertOpenHouseSettings ─────────────────────────────────────────────
+
+describe("useOpenHouseCapacity", () => {
+  it("fetches aggregate capacity through the server RPC", async () => {
+    rpcMock.mockResolvedValue({
+      data: [{
+        listing_id: "l-1",
+        active_total: 3,
+        max_total_visitors: 5,
+        slot_counts: [{ slot_index: 0, active_count: 2, max_visitors: 2, full: true }],
+      }],
+      error: null,
+    });
+    const { result } = renderHookWithQuery(() => useOpenHouseCapacity("l-1"));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(rpcMock).toHaveBeenCalledWith("get_open_house_capacity", { p_listing_id: "l-1" });
+    expect(result.current.data?.slot_counts[0]).toMatchObject({ slot_index: 0, active_count: 2, full: true });
+  });
+});
 
 describe("useUpsertOpenHouseSettings", () => {
   it("upserts the settings row and shows a success toast", async () => {
@@ -271,6 +291,7 @@ describe("useUpdateOpenHouseRegistration", () => {
     id_verified_at?: string | null;
     waiver_signed_at?: string | null;
     proof_of_funds_url?: string | null;
+    pof_verified_status?: string | null;
     proof_amount?: number | null;
     investor_declaration_signed_at?: string | null;
     mortgage_status?: string | null;
@@ -313,6 +334,7 @@ describe("useUpdateOpenHouseRegistration", () => {
       id_verified_at: "2026-01-01T10:00:00.000Z",
       waiver_signed_at: "2026-01-01T10:05:00.000Z",
       proof_of_funds_url: null,
+      pof_verified_status: null,
       proof_amount: null,
       investor_declaration_signed_at: null,
       mortgage_status: null,
@@ -367,6 +389,95 @@ describe("useUpdateOpenHouseRegistration", () => {
         .catch(() => {});
     });
     expect(toastMock.error).toHaveBeenCalledWith("Only the host can approve, reject, or mark attendance.");
+  });
+
+  it("blocks owner approval until required proof of funds is verified", async () => {
+    mockRegUpdate({
+      requester_id: "buyer-77",
+      status: "pending",
+      timeslot_index: 0,
+      contact_name: "Buyer One",
+      contact_email: "buyer@example.com",
+      contact_phone: "+306900000000",
+      contact_permission_at: "2026-01-01T09:00:00.000Z",
+      id_verification_consent_at: "2026-01-01T09:00:00.000Z",
+      privacy_acknowledged_at: "2026-01-01T09:00:00.000Z",
+      id_doc_url: "docs/id.pdf",
+      id_verified_at: "2026-01-01T10:00:00.000Z",
+      waiver_signed_at: "2026-01-01T10:05:00.000Z",
+      proof_of_funds_url: "docs/pof.pdf",
+      pof_verified_status: "unreviewed",
+      proof_amount: 300000,
+      investor_declaration_signed_at: null,
+      mortgage_status: null,
+      budget_range: null,
+      working_with_agent: null,
+      listings: {
+        owner_id: "u-1",
+        price: 150000,
+        open_house_settings: {
+          timeslots: [],
+          require_proof_of_funds: true,
+          min_proof_amount: 200000,
+          require_investor_declaration: false,
+        },
+      },
+    });
+    const { result } = renderHookWithQuery(() => useUpdateOpenHouseRegistration());
+    await act(async () => {
+      await result.current
+        .mutateAsync({ id: "r-1", updates: { status: "approved" } })
+        .catch(() => {});
+    });
+    expect(toastMock.error).toHaveBeenCalledWith(
+      expect.stringContaining("Proof of funds not verified"),
+    );
+  });
+
+  it("allows owner approval when proof of funds is verified in the same update", async () => {
+    const { updateMock } = mockRegUpdate({
+      requester_id: "buyer-77",
+      status: "pending",
+      timeslot_index: 0,
+      contact_name: "Buyer One",
+      contact_email: "buyer@example.com",
+      contact_phone: "+306900000000",
+      contact_permission_at: "2026-01-01T09:00:00.000Z",
+      id_verification_consent_at: "2026-01-01T09:00:00.000Z",
+      privacy_acknowledged_at: "2026-01-01T09:00:00.000Z",
+      id_doc_url: "docs/id.pdf",
+      id_verified_at: "2026-01-01T10:00:00.000Z",
+      waiver_signed_at: "2026-01-01T10:05:00.000Z",
+      proof_of_funds_url: "docs/pof.pdf",
+      pof_verified_status: "unreviewed",
+      proof_amount: 300000,
+      investor_declaration_signed_at: null,
+      mortgage_status: null,
+      budget_range: null,
+      working_with_agent: null,
+      listings: {
+        owner_id: "u-1",
+        price: 150000,
+        open_house_settings: {
+          timeslots: [],
+          require_proof_of_funds: true,
+          min_proof_amount: 200000,
+          require_investor_declaration: false,
+        },
+      },
+    });
+    const { result } = renderHookWithQuery(() => useUpdateOpenHouseRegistration());
+    await act(async () => {
+      await result.current.mutateAsync({
+        id: "r-1",
+        updates: { pof_verified_status: "verified", status: "approved" },
+      });
+    });
+    expect(updateMock).toHaveBeenCalledWith({
+      pof_verified_status: "verified",
+      status: "approved",
+    });
+    expect(toastMock.success).toHaveBeenCalledWith("Updated");
   });
 
   it("blocks requesters from moving themselves into another timeslot", async () => {
@@ -460,6 +571,22 @@ describe("useSubmitOpenHouseOffer", () => {
         await result.current.mutateAsync({ listingId: "l-1", amount: 1 });
       }),
     ).rejects.toBeInstanceOf(Error);
+  });
+
+  it("maps the verified-POF server guard to user-facing offer copy", async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: new Error("proof_of_funds_must_be_verified"),
+    });
+    const { result } = renderHookWithQuery(() => useSubmitOpenHouseOffer());
+    await act(async () => {
+      await result.current
+        .mutateAsync({ listingId: "l-1", amount: 350_000 })
+        .catch(() => {});
+    });
+    expect(toastMock.error).toHaveBeenCalledWith(
+      "Proof of funds must be verified before you can submit an offer.",
+    );
   });
 });
 
@@ -601,6 +728,18 @@ describe("useAcceptOpenHouseOffer", () => {
 });
 
 // ─── useRevealAllOffers ─────────────────────────────────────────────────────
+
+describe("useReopenOpenHouseOfferSelection", () => {
+  it("reopens winner selection through the server RPC", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: null });
+    const { result } = renderHookWithQuery(() => useReopenOpenHouseOfferSelection());
+    await act(async () => {
+      await result.current.mutateAsync({ listingId: "l-1" });
+    });
+    expect(rpcMock).toHaveBeenCalledWith("reopen_open_house_offer_selection", { p_listing_id: "l-1" });
+    expect(toastMock.success).toHaveBeenCalledWith("Winner selection reopened");
+  });
+});
 
 describe("useRevealAllOffers", () => {
   it("flips every submitted offer to revealed in one batch", async () => {

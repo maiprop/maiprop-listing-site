@@ -774,6 +774,9 @@ export type Database = {
           offer_price: number | null
           property_type: Database["public"]["Enums"]["property_type"] | null
           published_to_investors: boolean
+          seller_responded_at: string | null
+          seller_response: string | null
+          seller_response_price: number | null
           sqm: number
           status: string
           updated_at: string
@@ -795,6 +798,9 @@ export type Database = {
           offer_price?: number | null
           property_type?: Database["public"]["Enums"]["property_type"] | null
           published_to_investors?: boolean
+          seller_responded_at?: string | null
+          seller_response?: string | null
+          seller_response_price?: number | null
           sqm: number
           status?: string
           updated_at?: string
@@ -816,6 +822,9 @@ export type Database = {
           offer_price?: number | null
           property_type?: Database["public"]["Enums"]["property_type"] | null
           published_to_investors?: boolean
+          seller_responded_at?: string | null
+          seller_response?: string | null
+          seller_response_price?: number | null
           sqm?: number
           status?: string
           updated_at?: string
@@ -826,8 +835,11 @@ export type Database = {
       firesale_requests_investor_feed: {
         Row: {
           address: string
+          ai_estimate: number | null
           asking_price: number | null
+          bedrooms: number | null
           city: string
+          condition: string | null
           created_at: string
           id: string
           property_type: Database["public"]["Enums"]["property_type"] | null
@@ -836,8 +848,11 @@ export type Database = {
         }
         Insert: {
           address: string
+          ai_estimate?: number | null
           asking_price?: number | null
+          bedrooms?: number | null
           city: string
+          condition?: string | null
           created_at: string
           id: string
           property_type?: Database["public"]["Enums"]["property_type"] | null
@@ -846,8 +861,11 @@ export type Database = {
         }
         Update: {
           address?: string
+          ai_estimate?: number | null
           asking_price?: number | null
+          bedrooms?: number | null
           city?: string
+          condition?: string | null
           created_at?: string
           id?: string
           property_type?: Database["public"]["Enums"]["property_type"] | null
@@ -1834,6 +1852,7 @@ export type Database = {
           listing_id: string
           mortgage_status: string | null
           note: string | null
+          pof_rejection_reason: string | null
           pof_verified_status: string | null
           privacy_acknowledged_at: string | null
           proof_amount: number | null
@@ -1869,6 +1888,7 @@ export type Database = {
           listing_id: string
           mortgage_status?: string | null
           note?: string | null
+          pof_rejection_reason?: string | null
           pof_verified_status?: string | null
           privacy_acknowledged_at?: string | null
           proof_amount?: number | null
@@ -1904,6 +1924,7 @@ export type Database = {
           listing_id?: string
           mortgage_status?: string | null
           note?: string | null
+          pof_rejection_reason?: string | null
           pof_verified_status?: string | null
           privacy_acknowledged_at?: string | null
           proof_amount?: number | null
@@ -2339,6 +2360,10 @@ export type Database = {
       }
       profiles: {
         Row: {
+          account_moderated_at: string | null
+          account_moderated_by: string | null
+          account_moderation_reason: string | null
+          account_status: string
           avatar_url: string | null
           bio: string | null
           city: string | null
@@ -2363,6 +2388,10 @@ export type Database = {
           website_url: string | null
         }
         Insert: {
+          account_moderated_at?: string | null
+          account_moderated_by?: string | null
+          account_moderation_reason?: string | null
+          account_status?: string
           avatar_url?: string | null
           bio?: string | null
           city?: string | null
@@ -2387,6 +2416,10 @@ export type Database = {
           website_url?: string | null
         }
         Update: {
+          account_moderated_at?: string | null
+          account_moderated_by?: string | null
+          account_moderation_reason?: string | null
+          account_status?: string
           avatar_url?: string | null
           bio?: string | null
           city?: string | null
@@ -3343,6 +3376,8 @@ export type Database = {
           p_admin_notes?: string
           p_deal_id: string
           p_offer_price?: number
+          p_seller_response?: string
+          p_seller_response_price?: number
           p_status: string
         }
         Returns: {
@@ -3668,6 +3703,38 @@ export type Database = {
           p_transaction_type: string
         }
         Returns: string
+      }
+      submit_firesale_interest: {
+        Args: {
+          p_deal_id: string
+          p_message?: string | null
+          p_proof_amount?: number | null
+          p_proof_of_funds_url?: string | null
+        }
+        Returns: {
+          admin_note: string | null
+          created_at: string
+          deal_id: string
+          id: string
+          investor_id: string
+          last_status_changed_at: string
+          message: string | null
+          proof_amount: number | null
+          proof_of_funds_url: string | null
+          proof_of_funds_verified_at: string | null
+          proof_of_funds_verified_by: string | null
+          reservation_expires_at: string | null
+          reserved_at: string | null
+          reserved_by: string | null
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "firesale_interest"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       submit_open_house_offer: {
         Args: {

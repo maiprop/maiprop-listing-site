@@ -9,6 +9,7 @@ const {
   getPlanLimitsMock,
   useOpenHouseSettingsMock,
   useOpenHouseRegistrationsMock,
+  useOpenHouseCapacityMock,
   useMyOpenHouseRegistrationsMock,
   useCreateOpenHouseRegistrationMock,
   useUpdateOpenHouseRegistrationMock,
@@ -22,6 +23,7 @@ const {
   getPlanLimitsMock: vi.fn(),
   useOpenHouseSettingsMock: vi.fn(),
   useOpenHouseRegistrationsMock: vi.fn(),
+  useOpenHouseCapacityMock: vi.fn(),
   useMyOpenHouseRegistrationsMock: vi.fn(),
   useCreateOpenHouseRegistrationMock: vi.fn(),
   useUpdateOpenHouseRegistrationMock: vi.fn(),
@@ -52,6 +54,7 @@ vi.mock("@/components/ui/select", () => ({
 vi.mock("@/hooks/useOpenHouseAssetControl", () => ({
   useOpenHouseSettings: (...a: unknown[]) => useOpenHouseSettingsMock(...a),
   useOpenHouseRegistrations: (...a: unknown[]) => useOpenHouseRegistrationsMock(...a),
+  useOpenHouseCapacity: (...a: unknown[]) => useOpenHouseCapacityMock(...a),
   useMyOpenHouseRegistrations: () => useMyOpenHouseRegistrationsMock(),
   useCreateOpenHouseRegistration: () => useCreateOpenHouseRegistrationMock(),
   useUpdateOpenHouseRegistration: () => useUpdateOpenHouseRegistrationMock(),
@@ -101,6 +104,7 @@ beforeEach(() => {
   getPlanLimitsMock.mockReturnValue({ openHouseRsvp: 3 });
   useOpenHouseSettingsMock.mockReturnValue({ data: baseSettings });
   useOpenHouseRegistrationsMock.mockReturnValue({ data: [], isLoading: false });
+  useOpenHouseCapacityMock.mockReturnValue({ data: null });
   useMyOpenHouseRegistrationsMock.mockReturnValue({ data: [] });
   createRegMock.mutateAsync.mockReset();
   createRegMock.mutateAsync.mockResolvedValue({ id: "reg-new" });
@@ -131,9 +135,12 @@ describe("OpenHouseRegistrationDialog", () => {
 
   it("shows fully-booked capacity messaging and disables registration", async () => {
     useOpenHouseSettingsMock.mockReturnValue({ data: { ...baseSettings, max_total_visitors: 1 } });
-    useOpenHouseRegistrationsMock.mockReturnValue({
-      isLoading: false,
-      data: [{ id: "reg-other", requester_id: "someone-else", status: "approved", timeslot_index: 0 }],
+    useOpenHouseCapacityMock.mockReturnValue({
+      data: {
+        active_total: 1,
+        max_total_visitors: 1,
+        slot_counts: [{ slot_index: 0, active_count: 1, max_visitors: 2, full: false }],
+      },
     });
     renderDialog();
 
@@ -251,6 +258,24 @@ describe("OpenHouseRegistrationDialog", () => {
       id: "reg-new",
       updates: expect.not.objectContaining({ screening_doc_url: expect.anything() }),
     });
+  });
+
+  it("continues high-value non-asset-control registrations to ID and waiver steps", async () => {
+    useOpenHouseSettingsMock.mockReturnValue({ data: null });
+    renderDialog({ hasAssetControl: false, listingPrice: 250000 });
+
+    acceptContactPacket();
+    fireEvent.click(screen.getByRole("button", { name: /continue/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /register/i }));
+
+    await screen.findByText(/Pre-qualification/i);
+    fireEvent.click(screen.getAllByRole("button", { name: "Yes" })[0]);
+    fireEvent.change(screen.getByLabelText("budget range"), { target: { value: "200k_500k" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "No" })[1]);
+    fireEvent.click(screen.getByRole("button", { name: /continue/i }));
+
+    expect(await screen.findByText(/ID verification/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Registration Submitted/i)).not.toBeInTheDocument();
   });
 
   it("covers the Greek high-value asset-control workflow without changing limits", async () => {

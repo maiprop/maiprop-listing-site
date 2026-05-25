@@ -5,15 +5,15 @@
 
 import { lazy, Suspense, useState, useEffect } from "react";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
-import { Shield, Flame, Users, Wifi, SlidersHorizontal, ArrowLeft, DoorOpen, FolderKanban, MailPlus, FileText, Star, BadgeCheck, Wallet } from "lucide-react";
+import { Shield, Flame, Users, Wifi, SlidersHorizontal, ArrowLeft, DoorOpen, FolderKanban, MailPlus, FileText, Star, BadgeCheck, Wallet, Inbox, Megaphone } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { useMyListings } from "@/hooks/useListings";
 import { Button } from "@/components/ui/button";
 
-type AdminTab = "pipeline" | "investor-screening" | "subscribers" | "pricing" | "os-sync" | "open-houses" | "reports" | "invitations" | "featured" | "pro-verification" | "pof-review";
+type AdminTab = "pipeline" | "investor-screening" | "subscribers" | "pricing" | "os-sync" | "open-houses" | "reports" | "invitations" | "featured" | "pro-verification" | "pof-review" | "contact-inbox" | "broadcasts";
 
-const VALID_TABS = ["pipeline", "investor-screening", "subscribers", "pricing", "os-sync", "open-houses", "reports", "invitations", "featured", "pro-verification", "pof-review"];
+const VALID_TABS = ["pipeline", "investor-screening", "subscribers", "pricing", "os-sync", "open-houses", "reports", "invitations", "featured", "pro-verification", "pof-review", "contact-inbox", "broadcasts"];
 const AdminFiresalePipeline = lazy(() => import("@/components/AdminFiresalePipeline"));
 const AdminInvestorScreening = lazy(() => import("@/components/AdminInvestorScreening"));
 const AdminSubscribers = lazy(() => import("@/components/AdminSubscribers"));
@@ -25,6 +25,8 @@ const AdminFeaturedListings = lazy(() => import("@/components/AdminFeaturedListi
 const AdminProfessionalVerification = lazy(() => import("@/components/AdminProfessionalVerification").then((m) => ({ default: m.AdminProfessionalVerification })));
 const POFVerificationPanel = lazy(() => import("@/components/POFVerificationPanel").then((m) => ({ default: m.POFVerificationPanel })));
 const AdminReports = lazy(() => import("@/components/AdminReports"));
+const AdminContactSubmissions = lazy(() => import("@/components/AdminContactSubmissions"));
+const AdminBroadcastNotifications = lazy(() => import("@/components/AdminBroadcastNotifications"));
 
 function AdminTabFallback() {
   return (
@@ -61,7 +63,9 @@ export default function AdminDashboard() {
     { key: "open-houses", label: "Open Houses", icon: DoorOpen },
     { key: "subscribers", label: "Subscribers", icon: Users },
     { key: "reports", label: "Reports", icon: FileText },
+    { key: "contact-inbox", label: "Contact Inbox", icon: Inbox },
     { key: "invitations", label: "Invitations", icon: MailPlus },
+    { key: "broadcasts", label: "Broadcasts", icon: Megaphone },
     { key: "pricing", label: "Pricing", icon: SlidersHorizontal },
     { key: "os-sync", label: "OS Sync", icon: Wifi },
     { key: "featured", label: "Featured Ads", icon: Star },
@@ -126,6 +130,8 @@ export default function AdminDashboard() {
           {activeTab === "os-sync" && <AdminPanel />}
           {activeTab === "invitations" && <AdminInvitationRequests />}
           {activeTab === "reports" && <AdminReports />}
+          {activeTab === "contact-inbox" && <AdminContactSubmissions />}
+          {activeTab === "broadcasts" && <AdminBroadcastNotifications />}
           {activeTab === "featured" && <AdminFeaturedListings />}
           {activeTab === "pro-verification" && <AdminProfessionalVerification />}
           {activeTab === "pof-review" && <POFVerificationPanel />}

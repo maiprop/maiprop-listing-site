@@ -6,6 +6,14 @@ import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 import type { TablesUpdate } from "@/integrations/supabase/types";
 import { FAST_CHANGING_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 
+const getFallbackErrorMessage = (err: unknown) => {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === "object" && typeof (err as { message?: unknown }).message === "string") {
+    return (err as { message: string }).message;
+  }
+  return "Could not book viewing. Please try again.";
+};
+
 /**
  * Returns viewings for the current user.
  * @param role "requester" — viewings the user booked; "owner" — viewings on their listings.
@@ -55,9 +63,23 @@ export function useBookViewing() {
       queryClient.invalidateQueries({ queryKey: ["leads"] });
       toast.success("Viewing booked successfully!");
     },
-    onError: (err: Error) => {
+    onError: (err: unknown) => {
       const msg = getPlanLimitErrorMessage(err);
-      toast.error(msg ?? err.message);
+      if (msg) {
+        if (msg.toLowerCase().includes("listing owner")) {
+          toast.error(msg);
+          return;
+        }
+        toast.error(msg, {
+          description: "Choose the buyer plan that fits your monthly viewing needs.",
+          action: {
+            label: "Upgrade to Pro",
+            onClick: () => { window.location.href = "/pricing?audience=buyer"; },
+          },
+        });
+        return;
+      }
+      toast.error(getFallbackErrorMessage(err));
     },
   });
 }

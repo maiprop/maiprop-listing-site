@@ -42,7 +42,7 @@ export const SECTIONS: ApiSection[] = [
         rateLimit: "10 requests / minute per IP",
         requestBody: JSON.stringify(
           {
-            address: "Kifissias 44, Marousi, 15125",
+            address: "Akadimias 32, 106 72, Athens, Greece",
             area_sqm: 95,
             bedrooms: 3,
             floor: 2,
@@ -284,8 +284,8 @@ export const SECTIONS: ApiSection[] = [
         requestBody: JSON.stringify(
           {
             price_id: "price_1RCgMK...",
-            success_url: "https://maiprop.gr/dashboard?upgrade=success",
-            cancel_url: "https://maiprop.gr/dashboard",
+            success_url: "/dashboard?upgrade=success",
+            cancel_url: "/dashboard",
           },
           null,
           2

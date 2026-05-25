@@ -24,6 +24,7 @@ import {
   useCreateOpenHouseRegistration,
   useUpdateOpenHouseRegistration,
   useOpenHouseRegistrations,
+  useOpenHouseCapacity,
   uploadOpenHouseDoc,
   type OHIdDocType,
   type OHTimeslot,
@@ -92,6 +93,7 @@ export default function OpenHouseRegistrationDialog({
   const { isPro } = useSubscription();
   const { data: settings } = useOpenHouseSettings(hasAssetControl ? listingId : undefined);
   const { data: registrations = [], isLoading: regsLoading } = useOpenHouseRegistrations(listingId, false);
+  const { data: capacity } = useOpenHouseCapacity(listingId);
   const { data: myAllRegs = [] } = useMyOpenHouseRegistrations();
   const createReg = useCreateOpenHouseRegistration();
   const updateReg = useUpdateOpenHouseRegistration();
@@ -163,18 +165,18 @@ export default function OpenHouseRegistrationDialog({
       : option.label,
   }));
 
-  // Count active registrations per timeslot to enforce per-slot capacity
-  const slotCounts = timeslots.map((_, idx) =>
-    registrations.filter((r: { timeslot_index: number | null; status: string }) =>
-      r.timeslot_index === idx && r.status !== "cancelled" && r.status !== "rejected"
-    ).length
-  );
-
-  // Total active registrations for max_total_visitors check
-  const totalActive = registrations.filter(
+  const visibleActiveRegistrations = registrations.filter(
     (r: { status: string }) => r.status !== "cancelled" && r.status !== "rejected"
-  ).length;
-  const maxTotal = settings?.max_total_visitors ?? null;
+  );
+  const slotCounts = timeslots.map((_, idx) => {
+    const serverSlot = capacity?.slot_counts.find((slot) => slot.slot_index === idx);
+    return serverSlot?.active_count ?? visibleActiveRegistrations.filter(
+      (r: { timeslot_index: number | null }) => r.timeslot_index === idx
+    ).length;
+  });
+
+  const totalActive = capacity?.active_total ?? visibleActiveRegistrations.length;
+  const maxTotal = capacity?.max_total_visitors ?? settings?.max_total_visitors ?? null;
   const listingFull = maxTotal !== null && totalActive >= maxTotal && !myReg;
 
   // Determine step order based on configuration
@@ -312,8 +314,7 @@ export default function OpenHouseRegistrationDialog({
         }
       }
       await updateReg.mutateAsync({ id: regId, updates });
-      if (hasAssetControl) setStep("id");
-      else setStep("done");
+      setStep("id");
     } catch (_err: unknown) {
       // handled by mutation
     } finally {

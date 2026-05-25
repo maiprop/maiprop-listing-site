@@ -6,7 +6,13 @@ import { captureHandler, req, authedReq } from "../_shared/testUtils.ts";
 
 const moduleUrl = new URL("./index.ts", import.meta.url).href;
 const { handler, restore } = await captureHandler(import.meta.url, "./index.ts");
-const { USER_FOLDER_BUCKETS, removeFolderRecursive } = await import(moduleUrl);
+const {
+  USER_FOLDER_BUCKETS,
+  dedupeDeletionNotifications,
+  insertDeletionNotifications,
+  notifyAccountDeletionAffectedParties,
+  removeFolderRecursive,
+} = await import(moduleUrl);
 
 Deno.test("OPTIONS preflight returns 200", async () => {
   const res = await handler(req("OPTIONS"));
@@ -38,6 +44,90 @@ Deno.test("user-folder cleanup bucket allowlist covers only user-id-prefixed sto
     "open-house-docs",
   ]);
   assertEquals(USER_FOLDER_BUCKETS.includes("firesale-photos" as never), false);
+});
+
+Deno.test("account deletion notifications cover affected listing parties and conversations", async () => {
+  const inserted: Array<Array<Record<string, unknown>>> = [];
+  const rowsByTable: Record<string, unknown[]> = {
+    listings: [{ id: "listing-1", title: "Sea View House" }],
+    favorites: [{ user_id: "saved-user", listing_id: "listing-1" }],
+    viewings: [{ requester_id: "viewer-user", listing_id: "listing-1" }],
+    open_house_registrations: [{ requester_id: "registrant-user", listing_id: "listing-1" }],
+    open_house_offers: [{ bidder_id: "bidder-user", listing_id: "listing-1" }],
+    conversations: [{ participant_a: "owner-user", participant_b: "chat-user" }],
+  };
+  const supabase = {
+    from: (table: string) => ({
+      select() {
+        return this;
+      },
+      eq() {
+        return Promise.resolve({ data: rowsByTable[table] ?? [], error: null });
+      },
+      in() {
+        return Promise.resolve({ data: rowsByTable[table] ?? [], error: null });
+      },
+      or() {
+        return Promise.resolve({ data: rowsByTable[table] ?? [], error: null });
+      },
+      insert(rows: Array<Record<string, unknown>>) {
+        inserted.push(rows);
+        return Promise.resolve({ error: null });
+      },
+    }),
+  };
+
+  await notifyAccountDeletionAffectedParties(supabase as never, "owner-user");
+
+  const notifications = inserted.flat();
+  assertEquals(notifications.map((row) => row.user_id).sort(), [
+    "bidder-user",
+    "chat-user",
+    "registrant-user",
+    "saved-user",
+    "viewer-user",
+  ]);
+  assert(notifications.every((row) => row.user_id !== "owner-user"));
+  assert(notifications.some((row) => row.title === "Saved listing removed"));
+  assert(notifications.some((row) => row.title === "Conversation closed"));
+});
+
+Deno.test("notification inserts dedupe rows and fall back when link column is missing", async () => {
+  const inserted: Array<Array<Record<string, unknown>>> = [];
+  let calls = 0;
+  const supabase = {
+    from: () => ({
+      select() {
+        return this;
+      },
+      eq() {
+        return Promise.resolve({ data: [], error: null });
+      },
+      in() {
+        return Promise.resolve({ data: [], error: null });
+      },
+      or() {
+        return Promise.resolve({ data: [], error: null });
+      },
+      insert(rows: Array<Record<string, unknown>>) {
+        calls += 1;
+        inserted.push(rows);
+        return Promise.resolve({
+          error: calls === 1 ? { code: "42703", message: "column link does not exist" } : null,
+        });
+      },
+    }),
+  };
+  const notifications = dedupeDeletionNotifications([
+    { user_id: "u-1", title: "T", body: "B", type: "message", link: "/messages" },
+    { user_id: "u-1", title: "T", body: "B", type: "message", link: "/messages" },
+  ]);
+
+  assertEquals(notifications.length, 1);
+  await insertDeletionNotifications(supabase as never, notifications);
+
+  assertEquals(inserted.length, 2);
+  assertEquals(inserted[1][0].link, undefined);
 });
 
 Deno.test("storage cleanup includes open-house proof documents under the user folder", async () => {

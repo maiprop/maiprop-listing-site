@@ -238,7 +238,7 @@ describe("NewBuildDetail", () => {
       expect(startConversationMock).toHaveBeenCalledWith({ other_user_id: "owner-1", listing_id: "listing-1" }),
     );
     expect(fromMock).toHaveBeenCalledWith("new_building_leads");
-    expect(fromMock).toHaveBeenCalledWith("notifications");
+    expect(fromMock).not.toHaveBeenCalledWith("notifications");
     expect(toastMock.success).toHaveBeenCalledWith("Interest registered — the developer will be in touch");
   });
 

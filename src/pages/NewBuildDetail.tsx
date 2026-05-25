@@ -33,6 +33,7 @@ import { ConstructionSpecs } from "@/components/new-build/ConstructionSpecs";
 import { UnitShowcase } from "@/components/new-build/UnitShowcase";
 import { RegisterInterestCard } from "@/components/new-build/RegisterInterestCard";
 import { tFallback, tInterpolate } from "@/lib/i18nFallback";
+import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const EnergyBadge = ({ cls }: { cls: string }) => {
@@ -81,15 +82,6 @@ const insertNewBuildLead = async ({
     investment_budget: 0,
     notes: cleanOptionalText(form.message) ?? "",
     utm_source: "newbuild_detail_register",
-  });
-};
-
-const notifyDeveloperInterest = async (ownerId: string, title: string, body: string) => {
-  await supabase.from("notifications").insert({
-    user_id: ownerId,
-    type: "new_interest",
-    title,
-    body,
   });
 };
 
@@ -162,14 +154,6 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
       ?? tr("newBuildDetail.fallbackInterestedBuyer", "Interested buyer");
     await startConv.mutateAsync({ other_user_id: ownerId, listing_id: id });
     await insertNewBuildLead({ listingId: id, user, profile, form, contactName });
-    await notifyDeveloperInterest(
-      ownerId,
-      tr("newBuildDetail.notifications.interestTitle", "New interest registered"),
-      trv("newBuildDetail.notifications.interestBody", "{{contactName}} registered interest in {{listingTitle}}", {
-        contactName,
-        listingTitle: listing.title,
-      }),
-    );
     toast.success(tr("newBuildDetail.toasts.interestRegistered", "Interest registered — the developer will be in touch"));
   };
 
@@ -180,8 +164,8 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
     try {
       const convId = await startConv.mutateAsync({ other_user_id: listing.owner_id, listing_id: id });
       navigate(`/messages?conv=${convId}`);
-    } catch (_err: unknown) {
-      toast.error(tr("property.errorStartConversation", "Could not start conversation"));
+    } catch (err: unknown) {
+      toast.error(getPlanLimitErrorMessage(err) ?? tr("property.errorStartConversation", "Could not start conversation"));
     } finally {
       setContactLoading(false);
     }

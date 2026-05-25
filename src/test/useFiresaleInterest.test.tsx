@@ -134,12 +134,9 @@ describe("useFiresaleInterestQueue", () => {
 });
 
 describe("useExpressInterest", () => {
-  it("uploads proof and upserts a prioritized row", async () => {
+  it("uploads proof and submits proof-backed interest through the workflow RPC", async () => {
     uploadMock.mockResolvedValue({ data: { path: "inv-1/firesale/d-1/proof_uuid-1.pdf" }, error: null });
-    const single = vi.fn().mockResolvedValue({ data: { id: "i-1" }, error: null });
-    const select = vi.fn().mockReturnValue({ single });
-    const upsert = vi.fn().mockReturnValue({ select });
-    fromMock.mockReturnValue({ upsert });
+    rpcMock.mockResolvedValueOnce({ data: { id: "i-1" }, error: null });
 
     const { result } = renderHook(() => useExpressInterest(), { wrapper: wrapper() });
     const file = new File(["x"], "proof.pdf", { type: "application/pdf" });
@@ -157,34 +154,30 @@ describe("useExpressInterest", () => {
     expect(uploadMock).toHaveBeenCalledWith(
       "inv-1/firesale/d-1/proof_uuid-1.pdf",
       file,
-      { upsert: true },
+      { upsert: false },
     );
-    expect(upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        deal_id: "d-1",
-        investor_id: "inv-1",
-        status: "prioritized",
-        proof_amount: 1500000,
-        proof_of_funds_url: "inv-1/firesale/d-1/proof_uuid-1.pdf",
-      }),
-      { onConflict: "deal_id,investor_id" },
-    );
+    expect(rpcMock).toHaveBeenCalledWith("submit_firesale_interest", {
+      p_deal_id: "d-1",
+      p_message: "Ready to move",
+      p_proof_amount: 1500000,
+      p_proof_of_funds_url: "inv-1/firesale/d-1/proof_uuid-1.pdf",
+    });
   });
 
   it("uses interested status when no proof is provided", async () => {
-    const single = vi.fn().mockResolvedValue({ data: { id: "i-1" }, error: null });
-    const upsert = vi.fn().mockReturnValue({ select: () => ({ single }) });
-    fromMock.mockReturnValue({ upsert });
+    rpcMock.mockResolvedValueOnce({ data: { id: "i-1" }, error: null });
 
     const { result } = renderHook(() => useExpressInterest(), { wrapper: wrapper() });
     await act(async () => {
       await result.current.mutateAsync({ dealId: "d-1", message: "No docs yet" });
     });
 
-    expect(upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "interested" }),
-      { onConflict: "deal_id,investor_id" },
-    );
+    expect(rpcMock).toHaveBeenCalledWith("submit_firesale_interest", {
+      p_deal_id: "d-1",
+      p_message: "No docs yet",
+      p_proof_amount: undefined,
+      p_proof_of_funds_url: undefined,
+    });
   });
 });
 

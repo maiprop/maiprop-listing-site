@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Mail, MapPin, ExternalLink } from "lucide-react";
+import { MapPin } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 export function Footer() {
@@ -72,14 +72,10 @@ export function Footer() {
               )}
             </ul>
             <div className="mt-4 space-y-1">
-              <a href="mailto:hello@maiprop.co" className="flex min-h-6 items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
-                <Mail className="w-3 h-3" aria-hidden="true" /> hello@maiprop.co
-              </a>
-              <a href="mailto:hello@maiprop.com" className="flex min-h-6 items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
-                <Mail className="w-3 h-3" aria-hidden="true" /> hello@maiprop.com
-              </a>
+              <span className="flex min-h-6 items-center text-xs font-medium text-foreground">mAI prop</span>
+              <span className="flex min-h-6 items-center text-xs text-muted-foreground">Data Estate PC</span>
               <span className="flex min-h-6 items-center gap-2 text-xs text-muted-foreground">
-                <MapPin className="w-3 h-3" aria-hidden="true" /> {t("footerFull.location")}
+                <MapPin className="w-3 h-3" aria-hidden="true" /> Akadimias 32, 106 72, Athens, Greece
               </span>
             </div>
           </div>
@@ -92,32 +88,22 @@ export function Footer() {
           <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground whitespace-nowrap">Our Products</span>
           <div className="flex flex-wrap items-center gap-3">
             {/* maiProp OS */}
-            <a
-              href="https://os.maiprop.co"
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary border border-border hover:border-primary/40 hover:bg-primary/5 transition-all group">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary border border-border">
               <span className="text-base leading-none">🖥️</span>
               <div>
-                <div className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors leading-tight">mΑΙ prop os </div>
+                <div className="text-xs font-semibold text-foreground leading-tight">mAI prop OS</div>
                 <div className="text-[10px] text-muted-foreground leading-tight">Operator platform</div>
               </div>
-              <ExternalLink className="w-3 h-3 text-muted-foreground group-hover:text-primary transition-colors ml-0.5" />
-            </a>
+            </div>
 
             {/* mai Properties */}
-            <a
-              href="https://properties.maiprop.co"
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary border border-border hover:border-brand-gold/40 hover:bg-brand-gold/5 transition-all group">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary border border-border">
               <span className="text-base leading-none">🏛️</span>
               <div>
-                <div className="text-xs font-semibold text-foreground group-hover:text-brand-gold transition-colors leading-tight">mAI properties</div>
+                <div className="text-xs font-semibold text-foreground leading-tight">mAI properties</div>
                 <div className="text-[10px] text-muted-foreground leading-tight">Investment properties</div>
               </div>
-              <ExternalLink className="w-3 h-3 text-muted-foreground group-hover:text-brand-gold transition-colors ml-0.5" />
-            </a>
+            </div>
 
             {/* maiProp (current) */}
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20">
@@ -134,9 +120,7 @@ export function Footer() {
           <span>{t("footer.copyright", { year: new Date().getFullYear() })}</span>
           <div className="flex items-center gap-1">
             <span>Powered by</span>
-            <a href="https://os.maiprop.co" target="_blank" rel="noreferrer" className="flex items-center gap-1 text-primary hover:underline">
-              mAI Prop OS <ExternalLink className="w-3 h-3" />
-            </a>
+            <span className="text-primary">mAI prop OS</span>
           </div>
         </div>
       </div>

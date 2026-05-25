@@ -33,6 +33,7 @@ import { buildPropertyFeatureGroups, buildDetailRows } from "@/lib/propertyFeatu
 const AIAssistantWidget = lazy(() => import("@/components/AIAssistantWidget"));
 import { AuctionAlertModal } from "@/components/AuctionAlertModal";
 import { getStreetViewProxyUrl } from "@/lib/config";
+import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 import { dbListingToCard } from "@/lib/listingUtils";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 import PropertyGallery from "@/components/property/PropertyGallery";
@@ -136,7 +137,9 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
     try {
       const convId = await startConversation.mutateAsync({ other_user_id: ownerId, listing_id: id });
       navigate("/messages", { state: { openConversationId: convId } });
-    } catch (_err: unknown) {toast.error(t("property.errorStartConversation"));}
+    } catch (err: unknown) {
+      toast.error(getPlanLimitErrorMessage(err) ?? t("property.errorStartConversation"));
+    }
   };
 
   if (isLoading) {
