@@ -201,22 +201,22 @@ fail-fast behavior.
 | `VITE_APP_URL` | canonical app origin for production build | production environment |
 | `VITE_PUBLIC_API_ORIGIN` | optional absolute origin for cached `/api/public/*` routes in native shells; defaults to `VITE_APP_URL` | production/staging build |
 | `SITE_LOCK_PASSWORD` | optional Cloudflare Pages runtime passcode gate | production environment |
-| `STAGING_SUPABASE_URL` | staging Supabase URL for security/E2E jobs | repo or staging environment |
-| `STAGING_SUPABASE_PUBLISHABLE_KEY` | staging anon/publishable key | repo or staging environment |
-| `STAGING_SUPABASE_PROJECT_ID` | staging Supabase project ref | repo or staging environment |
+| `STAGING_SUPABASE_URL` | optional isolated staging Supabase URL for security/E2E jobs; when absent, live-safe jobs fall back to production vars | repo or staging environment |
+| `STAGING_SUPABASE_PUBLISHABLE_KEY` | optional isolated staging anon/publishable key | repo or staging environment |
+| `STAGING_SUPABASE_PROJECT_ID` | optional isolated staging Supabase project ref; if it matches `VITE_SUPABASE_PROJECT_ID`, CI treats the setup as production-only and skips staging deploys | repo or staging environment |
 | `SUPABASE_ACCESS_TOKEN` | Supabase CLI deploy/list token | repo or environment scoped to deploy jobs |
-| `SUPABASE_STAGING_DB_URL` | optional staging Postgres connection string for CI `supabase db push --db-url`; enables automatic staging DB migration before edge-function deploy | staging environment only |
+| `SUPABASE_STAGING_DB_URL` | optional isolated staging Postgres connection string for CI `supabase db push --db-url`; only required when `STAGING_SUPABASE_PROJECT_ID` points to a real non-production staging project and migrations change | staging environment only |
 | `SUPABASE_PRODUCTION_DB_URL` | percent-encoded production Postgres connection string used only by the manual production DB migration workflow; keep scoped to the protected `production` environment | production environment |
 | `SUPABASE_PROJECT_REF` | optional project ref alias used by release-safety live inventory | manual release certification |
 | `RELEASE_SAFETY_SUPABASE_PROJECT_REF` | optional project ref override for release-safety live inventory; defaults to `supabase/config.toml` `project_id` when unset | manual release certification |
 | `SUPABASE_MANAGEMENT_API_BASE` | optional override for Supabase Management API advisor checks; defaults to `https://api.supabase.com/v1` | local/CI diagnostics only |
 | `SENTRY_AUTH_TOKEN` | optional read-only token for local production telemetry checks; never required by app runtime | local operator shell only |
-| `RLS_USER_A_EMAIL` | staging RLS test user A | repo or staging environment |
-| `RLS_USER_B_EMAIL` | staging RLS test user B | repo or staging environment |
-| `RLS_USER_PASSWORD` | shared staging RLS test password | repo or staging environment |
-| `ONBOARDING_TEST_EMAIL` | staging onboarding E2E user | repo or staging environment |
-| `ONBOARDING_TEST_PASSWORD` | staging onboarding E2E password | repo or staging environment |
-| `SUPABASE_SERVICE_ROLE_KEY` | staging-only service role for security tests and fixtures | staging environment only |
+| `RLS_USER_A_EMAIL` | live-safe RLS test user A | repo or staging environment |
+| `RLS_USER_B_EMAIL` | live-safe RLS test user B | repo or staging environment |
+| `RLS_USER_PASSWORD` | shared live-safe RLS test password | repo or staging environment |
+| `ONBOARDING_TEST_EMAIL` | live-safe onboarding E2E user | repo or staging environment |
+| `ONBOARDING_TEST_PASSWORD` | live-safe onboarding E2E password | repo or staging environment |
+| `SUPABASE_SERVICE_ROLE_KEY` | service role for security tests and fixtures; destructive checks stay disabled unless an isolated staging project is configured | staging environment only |
 | `MAIPROP_EDGE_TEST_AUTH_BYPASS` | explicit CI-only bypass marker for edge-function tests that exercise handler internals without live Supabase Auth | CI test environment only |
 | `PRODUCTION_DEPLOY_URLS` | optional space-separated URL override for the post-deploy production smoke check; defaults to `https://portal.maiprop.co` | deploy diagnostics only |
 | `PRODUCTION_DEPLOY_BROWSER_CHECK` | optional boolean that enables the Chromium mount check when set instead of passing `--browser` | deploy diagnostics only |
