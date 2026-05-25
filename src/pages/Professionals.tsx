@@ -164,7 +164,7 @@ const categoryInfo: Record<string, { emoji: string; label: string; group: string
   smart_home_installer: { emoji: "📱", label: "Smart Home", group: "construction" },
 };
 
-export function limitProfessionalsPerCategory<T extends { category?: string | null }>(
+function limitProfessionalsPerCategory<T extends { category?: string | null }>(
   professionals: T[],
   limit: number | null | undefined,
 ): T[] {
