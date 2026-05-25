@@ -50,6 +50,25 @@ const BUDGET_OPTIONS = [
   { value: "over_1m", label: "Over €1M" },
 ];
 
+function normalizeTimeslots(rawTimeslots: unknown, fallbackMaxVisitors: number): OHTimeslot[] {
+  const raw = Array.isArray(rawTimeslots)
+    ? rawTimeslots
+    : Array.isArray((rawTimeslots as { slots?: unknown[] } | null)?.slots)
+      ? (rawTimeslots as { slots: unknown[] }).slots
+      : [];
+
+  return raw.flatMap((slot) => {
+    const candidate = slot as Partial<OHTimeslot> | null;
+    if (!candidate?.start || !candidate?.end) return [];
+    const maxVisitors = Number(candidate.max_visitors ?? fallbackMaxVisitors);
+    return [{
+      start: String(candidate.start),
+      end: String(candidate.end),
+      max_visitors: Number.isFinite(maxVisitors) && maxVisitors > 0 ? maxVisitors : Math.max(1, fallbackMaxVisitors),
+    }];
+  });
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -108,7 +127,7 @@ export default function OpenHouseRegistrationDialog({
   const proofInputRef = useRef<HTMLInputElement>(null);
   const screeningDocInputRef = useRef<HTMLInputElement>(null);
 
-  const timeslots = (settings?.timeslots ?? []) as OHTimeslot[];
+  const timeslots = normalizeTimeslots(settings?.timeslots, settings?.max_visitors_per_slot ?? 1);
   const myReg = registrations.find((r: { requester_id: string }) => r.requester_id === user?.id);
   const regId = registrationId || myReg?.id;
   const hasContactPacket = !!(

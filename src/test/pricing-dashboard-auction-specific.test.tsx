@@ -78,7 +78,10 @@ vi.mock("@/hooks/useFavorites", () => ({
   useFavorites: () => ({ data: [], isLoading: false }),
   useToggleFavorite: () => ({ mutate: vi.fn() }),
 }));
-vi.mock("@/hooks/useViewings", () => ({ useViewings: () => ({ data: [], isLoading: false }) }));
+vi.mock("@/hooks/useViewings", () => ({
+  useViewings: () => ({ data: [], isLoading: false }),
+  useUpdateViewingStatus: () => ({ mutate: vi.fn(), isPending: false }),
+}));
 vi.mock("@/hooks/useSavedSearches", () => ({ useSavedSearches: () => ({ data: [], isLoading: false }) }));
 vi.mock("@/hooks/useAuctionAlerts", () => ({ useAuctionAlerts: () => ({ data: [], isLoading: false }) }));
 vi.mock("@/hooks/useProfessionalServices", () => ({
@@ -91,6 +94,7 @@ vi.mock("@/hooks/useConsultations", () => ({
     data: [{ id: "lead-1", status: "pending" }, { id: "lead-2", status: "closed" }],
     isLoading: false,
   }),
+  useUpdateConsultationRequest: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 vi.mock("@/hooks/usePlanLimits", () => ({
   startOfCurrentMonth: () => new Date("2026-05-01T00:00:00.000Z"),

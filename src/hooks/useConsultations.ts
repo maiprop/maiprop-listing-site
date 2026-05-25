@@ -2,7 +2,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { logger } from "@/lib/logger";
 import { FAST_CHANGING_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 
 export type ConsultationRequestInput = {
@@ -46,50 +45,12 @@ export function useSubmitConsultation() {
         message: input.message ?? null,
       });
       if (error) throw error;
-      // Create lead for professional. Lead creation is best-effort: a failure
-      // here doesn't roll back the consultation_requests insert (the user-
-      // facing action), but we want to surface it so the professional knows
-      // their CRM may be missing the row. Return whether the lead was saved
-      // so onSuccess can pick exactly one toast (success vs partial-success)
-      // instead of firing both.
-      let leadSaved = true;
-      const { data: pro } = await supabase
-        .from("professionals")
-        .select("user_id")
-        .eq("id", input.professional_id)
-        .single();
-      if (pro?.user_id) {
-        const { error: leadErr } = await supabase.from("leads").insert({
-          owner_id: pro.user_id,
-          source:
-            input.request_type === "callback"
-              ? "callback"
-              : input.request_type === "message"
-                ? "message"
-                : "consultation",
-          professional_id: input.professional_id,
-          name: input.requester_name,
-          email: input.requester_email,
-          phone: input.requester_phone ?? null,
-          message: input.message ?? null,
-          status: "new",
-        });
-        if (leadErr) {
-          logger.warn("Lead create:", leadErr);
-          leadSaved = false;
-        }
-      }
-      return { leadSaved, requestType: input.request_type };
+      return { requestType: input.request_type };
     },
-    onSuccess: ({ leadSaved, requestType }) => {
+    onSuccess: ({ requestType }) => {
       qc.invalidateQueries({ queryKey: ["consultation-requests"] });
-      if (leadSaved) {
-        toast.success(getSuccessToastLabel(requestType));
-      } else {
-        toast.warning(
-          `${getSuccessToastLabel(requestType)} The professional CRM record could not be created automatically.`,
-        );
-      }
+      qc.invalidateQueries({ queryKey: ["leads"] });
+      toast.success(getSuccessToastLabel(requestType));
     },
     onError: (error) => {
       if (error instanceof Error && error.message === "auth_required") {

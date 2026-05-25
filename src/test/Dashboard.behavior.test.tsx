@@ -59,6 +59,7 @@ vi.mock("@/hooks/useListings", () => ({ useMyListings: () => listingsState }));
 vi.mock("@/hooks/useFavorites", () => ({ useFavorites: () => favoritesState }));
 vi.mock("@/hooks/useViewings", () => ({
   useViewings: (scope: string) => (scope === "owner" ? ownerViewingsState : requesterViewingsState),
+  useUpdateViewingStatus: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 vi.mock("@/hooks/useSavedSearches", () => ({ useSavedSearches: () => savedSearchesState }));
 vi.mock("@/hooks/useAuctionAlerts", () => ({ useAuctionAlerts: () => auctionAlertsState }));
@@ -66,7 +67,10 @@ vi.mock("@/hooks/useProfessionalServices", () => ({
   useMyProfessional: () => professionalState,
   useProfessionalServices: () => servicesState,
 }));
-vi.mock("@/hooks/useConsultations", () => ({ useMyConsultationRequests: () => leadsState }));
+vi.mock("@/hooks/useConsultations", () => ({
+  useMyConsultationRequests: () => leadsState,
+  useUpdateConsultationRequest: () => ({ mutate: vi.fn(), isPending: false }),
+}));
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: () => ({

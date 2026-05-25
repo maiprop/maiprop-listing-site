@@ -138,6 +138,18 @@ function installSupabaseFetch(): FetchMock {
         ]);
       }
 
+      if (select === "id,city,price_per_sqm,created_at") {
+        const previousWindow = new Date();
+        previousWindow.setDate(previousWindow.getDate() - 45);
+        return jsonRows([
+          { id: "p1", city: "Athens", price_per_sqm: 2100, created_at: new Date().toISOString() },
+          { id: "p2", city: "Athens", price_per_sqm: "2300", created_at: new Date().toISOString() },
+          { id: "p3", city: "Athens", price_per_sqm: 1800, created_at: previousWindow.toISOString() },
+          { id: "p4", city: "Athens", price_per_sqm: 1900, created_at: previousWindow.toISOString() },
+          { id: "p5", city: "Thessaloniki", price_per_sqm: 1600, created_at: new Date().toISOString() },
+        ]);
+      }
+
       if (select === "city,price_per_sqm") {
         return jsonRows([
           { city: "Athens", price_per_sqm: 2100 },
@@ -501,12 +513,18 @@ describe("public homepage endpoint", () => {
 
     fetchMock().mockClear();
     const priceIndex = await homepageRequest(makeCtx("https://portal.maiprop.co/api/public/homepage?section=price-index"));
-    const rows = await priceIndex.json() as Array<{ city: string; avg_price_per_sqm: number; is_live: boolean }>;
+    const rows = await priceIndex.json() as Array<{ city: string; avg_price_per_sqm: number; is_live: boolean; trend_change_pct: number | null; trend_up: boolean | null; trend_is_live: boolean }>;
     expect(rows.find((row) => row.city === "Athens")).toMatchObject({
       avg_price_per_sqm: 2200,
       is_live: true,
+      trend_change_pct: 18.9,
+      trend_up: true,
+      trend_is_live: true,
     });
-    expect(fetchUrls("/rest/v1/listings")[0].searchParams.get("limit")).toBe("1000");
+    const priceIndexUrl = fetchUrls("/rest/v1/listings")[0];
+    expect(priceIndexUrl.searchParams.get("limit")).toBe("1000");
+    expect(priceIndexUrl.searchParams.get("select")).toBe("id,city,price_per_sqm,created_at");
+    expect(priceIndexUrl.searchParams.get("city")).toContain("Athens");
   });
 
   it("builds popular location trends from counts and bounded recent price samples", async () => {

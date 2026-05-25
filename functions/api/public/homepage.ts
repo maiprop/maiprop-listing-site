@@ -33,12 +33,12 @@ const SECTIONS = [
 ] as const;
 const COUNTED_PROPERTY_TYPES = ["apartment", "land"] as const;
 const PRICE_INDEX_FALLBACK = [
-  { city: "Athens", avg_price_per_sqm: 2180, listing_count: 0, is_live: false },
-  { city: "Thessaloniki", avg_price_per_sqm: 1640, listing_count: 0, is_live: false },
-  { city: "Mykonos", avg_price_per_sqm: 6200, listing_count: 0, is_live: false },
-  { city: "Santorini", avg_price_per_sqm: 5100, listing_count: 0, is_live: false },
-  { city: "Crete", avg_price_per_sqm: 1890, listing_count: 0, is_live: false },
-  { city: "Rhodes", avg_price_per_sqm: 2340, listing_count: 0, is_live: false },
+  { city: "Athens", avg_price_per_sqm: 2180, listing_count: 0, is_live: false, trend_change_pct: null, trend_up: null, trend_is_live: false },
+  { city: "Thessaloniki", avg_price_per_sqm: 1640, listing_count: 0, is_live: false, trend_change_pct: null, trend_up: null, trend_is_live: false },
+  { city: "Mykonos", avg_price_per_sqm: 6200, listing_count: 0, is_live: false, trend_change_pct: null, trend_up: null, trend_is_live: false },
+  { city: "Santorini", avg_price_per_sqm: 5100, listing_count: 0, is_live: false, trend_change_pct: null, trend_up: null, trend_is_live: false },
+  { city: "Crete", avg_price_per_sqm: 1890, listing_count: 0, is_live: false, trend_change_pct: null, trend_up: null, trend_is_live: false },
+  { city: "Rhodes", avg_price_per_sqm: 2340, listing_count: 0, is_live: false, trend_change_pct: null, trend_up: null, trend_is_live: false },
 ] as const;
 const POPULAR_LOCATION_FALLBACK = [
   { name: "Athens", listings: 24860, trend: "+1.2%", trendUp: true },
@@ -127,32 +127,58 @@ async function fetchPopularLocations(env: PublicApiEnv) {
 }
 
 async function fetchPriceIndex(env: PublicApiEnv) {
+  const now = new Date();
+  const currStart = new Date(now);
+  currStart.setDate(currStart.getDate() - 30);
+  const prevStart = new Date(now);
+  prevStart.setDate(prevStart.getDate() - 60);
+  const cities = PRICE_INDEX_FALLBACK.map((fallback) => fallback.city);
   const params = new URLSearchParams();
-  params.set("select", "city,price_per_sqm");
+  params.set("select", "id,city,price_per_sqm,created_at");
   params.set("status", "eq.active");
   params.set("listing_type", "eq.sale");
+  params.set("city", `in.(${cities.join(",")})`);
   params.append("price_per_sqm", "not.is.null");
   params.append("price_per_sqm", "gt.100");
+  params.set("created_at", `gte.${prevStart.toISOString()}`);
+  params.append("created_at", `lt.${now.toISOString()}`);
   params.set("limit", "1000");
   const rows = await supabaseJson<ListingRow>(env, "/rest/v1/listings", params);
 
-  const grouped: Record<string, number[]> = {};
+  const currentPrices: Record<string, number[]> = {};
+  const previousPrices: Record<string, number[]> = {};
   for (const row of rows) {
     const city = row.city?.trim();
     const price = row.price_per_sqm == null ? NaN : Number(row.price_per_sqm);
-    if (!city || !Number.isFinite(price)) continue;
-    grouped[city] = grouped[city] ?? [];
-    grouped[city].push(price);
+    const createdAt = row.created_at ? new Date(row.created_at) : null;
+    if (!city || !Number.isFinite(price) || !createdAt) continue;
+    const bucket = createdAt >= currStart ? currentPrices : previousPrices;
+    bucket[city] = bucket[city] ?? [];
+    bucket[city].push(price);
   }
 
   return PRICE_INDEX_FALLBACK.map((fallback) => {
-    const prices = grouped[fallback.city];
-    if (!prices || prices.length < 2) return fallback;
+    const current = currentPrices[fallback.city] ?? [];
+    const previous = previousPrices[fallback.city] ?? [];
+    if (current.length < 2) return fallback;
+    const currentAvg = current.reduce((sum, price) => sum + price, 0) / current.length;
+    let trendChangePct: number | null = null;
+    let trendUp: boolean | null = null;
+    if (previous.length >= 2) {
+      const previousAvg = previous.reduce((sum, price) => sum + price, 0) / previous.length;
+      if (Number.isFinite(previousAvg) && previousAvg > 0) {
+        trendChangePct = Math.round(((currentAvg - previousAvg) / previousAvg) * 1000) / 10;
+        trendUp = trendChangePct >= 0;
+      }
+    }
     return {
       city: fallback.city,
-      avg_price_per_sqm: Math.round(prices.reduce((sum, price) => sum + price, 0) / prices.length),
-      listing_count: prices.length,
+      avg_price_per_sqm: Math.round(currentAvg),
+      listing_count: current.length,
       is_live: true,
+      trend_change_pct: trendChangePct,
+      trend_up: trendUp,
+      trend_is_live: trendChangePct !== null,
     };
   });
 }
