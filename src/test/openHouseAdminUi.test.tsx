@@ -131,6 +131,12 @@ function renderPanel(props: Partial<React.ComponentProps<typeof OpenHouseAssetCo
   return render(<OpenHouseAssetControlPanel listingId="listing-1" isOwner listingPrice={350000} {...props} />);
 }
 
+function getActionButtons(name: RegExp, exactText: string) {
+  return screen
+    .getAllByRole("button", { name })
+    .filter((button) => button.textContent?.trim() === exactText);
+}
+
 beforeEach(() => {
   useAuthMock.mockReturnValue({ user: { id: "owner-1" } });
   useOpenHouseSettingsMock.mockReturnValue({ data: settings, isLoading: false });
@@ -178,7 +184,7 @@ describe("OpenHouseAssetControlPanel", () => {
   it("blocks incomplete approval but allows verify, approve, reject, and attendance actions", () => {
     renderPanel();
 
-    fireEvent.click(screen.getAllByRole("button", { name: /approve/i })[0]);
+    fireEvent.click(getActionButtons(/approve/i, "Approve")[0]);
     expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/Approval blocked/));
 
     fireEvent.click(screen.getByRole("button", { name: /verify id/i }));
@@ -187,7 +193,7 @@ describe("OpenHouseAssetControlPanel", () => {
       updates: { id_verified_at: expect.any(String) },
     });
 
-    fireEvent.click(screen.getAllByRole("button", { name: /approve/i })[1]);
+    fireEvent.click(getActionButtons(/approve/i, "Approve")[1]);
     expect(updateRegMock.mutate).toHaveBeenCalledWith({
       id: "reg-complete",
       updates: expect.objectContaining({
@@ -197,7 +203,7 @@ describe("OpenHouseAssetControlPanel", () => {
       }),
     });
 
-    fireEvent.click(screen.getAllByRole("button", { name: /reject/i })[0]);
+    fireEvent.click(getActionButtons(/reject/i, "Reject")[0]);
     fireEvent.change(screen.getByPlaceholderText(/Timeslot full/i), { target: { value: "Incomplete documents" } });
     fireEvent.click(screen.getByRole("button", { name: /confirm rejection/i }));
     expect(updateRegMock.mutate).toHaveBeenCalledWith({
@@ -209,6 +215,47 @@ describe("OpenHouseAssetControlPanel", () => {
     expect(updateRegMock.mutate).toHaveBeenCalledWith({
       id: "reg-approved",
       updates: expect.objectContaining({ status: "attended", attended_at: expect.any(String) }),
+    });
+  });
+
+  it("lets hosts review proof of funds before approval", () => {
+    useOpenHouseRegistrationsMock.mockReturnValue({
+      isLoading: false,
+      data: [
+        {
+          ...completeRegistration,
+          id: "reg-pof-pending",
+          contact_name: "POF Pending Buyer",
+          pof_verified_status: "unreviewed",
+        },
+      ],
+    });
+
+    renderPanel();
+
+    expect(screen.getByText(/Proof of funds not verified/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /verify pof/i }));
+    expect(updateRegMock.mutate).toHaveBeenCalledWith({
+      id: "reg-pof-pending",
+      updates: { pof_verified_status: "verified", pof_rejection_reason: null },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /reject pof/i }));
+    expect(screen.getByRole("dialog", { name: /proof of funds rejection reason/i })).toBeInTheDocument();
+    const confirmPofRejection = screen.getByRole("button", { name: /confirm pof rejection/i });
+    expect(confirmPofRejection).toBeDisabled();
+    fireEvent.change(screen.getByPlaceholderText(/Document expired/i), {
+      target: { value: "Document expired" },
+    });
+    expect(confirmPofRejection).not.toBeDisabled();
+    fireEvent.click(confirmPofRejection);
+    expect(updateRegMock.mutate).toHaveBeenCalledWith({
+      id: "reg-pof-pending",
+      updates: {
+        pof_verified_status: "rejected",
+        pof_rejection_reason: "Document expired",
+      },
     });
   });
 

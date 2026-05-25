@@ -67,9 +67,15 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
   const [offersOpen, setOffersOpen] = useState(true);
   const [rejectTarget, setRejectTarget] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [pofRejectTarget, setPofRejectTarget] = useState<string | null>(null);
+  const [pofRejectReason, setPofRejectReason] = useState("");
   const rejectDialogRef = useFocusTrap<HTMLDivElement>({
     active: Boolean(rejectTarget),
     onEscape: () => setRejectTarget(null),
+  });
+  const pofRejectDialogRef = useFocusTrap<HTMLDivElement>({
+    active: Boolean(pofRejectTarget),
+    onEscape: () => setPofRejectTarget(null),
   });
 
   const { user } = useAuth();
@@ -110,6 +116,26 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
     });
     setRejectTarget(null);
     setRejectReason("");
+  };
+
+  const handleVerifyPof = (registrationId: string) => {
+    updateReg.mutate({
+      id: registrationId,
+      updates: { pof_verified_status: "verified", pof_rejection_reason: null },
+    });
+  };
+
+  const handlePofRejectConfirm = () => {
+    if (!pofRejectTarget) return;
+    updateReg.mutate({
+      id: pofRejectTarget,
+      updates: {
+        pof_verified_status: "rejected",
+        pof_rejection_reason: pofRejectReason.trim(),
+      },
+    });
+    setPofRejectTarget(null);
+    setPofRejectReason("");
   };
 
   const handleViewDoc = async (path: string) => {
@@ -296,9 +322,10 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
                     </div>
                     {(() => {
                       const canVerifyId = Boolean(r.id_doc_url && !r.id_verified_at && r.status !== "cancelled");
+                      const canReviewPof = Boolean(r.proof_of_funds_url && r.status === "pending" && r.pof_verified_status !== "verified");
                       const canReview = r.status === "pending";
                       const canMarkAttended = r.status === "approved";
-                      if (!canVerifyId && !canReview && !canMarkAttended) return null;
+                      if (!canVerifyId && !canReviewPof && !canReview && !canMarkAttended) return null;
                       return (
                         <div className="flex gap-2 flex-wrap">
                           {canVerifyId && (
@@ -310,6 +337,28 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
                             >
                               <FileCheck className="w-3.5 h-3.5" /> Verify ID
                             </Button>
+                          )}
+                          {canReviewPof && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1 text-emerald-600 border-emerald-500/40"
+                                onClick={() => handleVerifyPof(r.id)}
+                              >
+                                <Wallet className="w-3.5 h-3.5" /> Verify POF
+                              </Button>
+                              {r.pof_verified_status !== "rejected" && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1 text-destructive border-destructive/40"
+                                  onClick={() => { setPofRejectTarget(r.id); setPofRejectReason(""); }}
+                                >
+                                  <X className="w-3.5 h-3.5" /> Reject POF
+                                </Button>
+                              )}
+                            </>
                           )}
                           {canReview && (
                             <>
@@ -377,6 +426,48 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
                 <X className="w-4 h-4" /> Confirm Rejection
               </Button>
               <Button variant="outline" onClick={() => setRejectTarget(null)}>Cancel</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* POF reject reason dialog */}
+      {pofRejectTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div
+            ref={pofRejectDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Proof of funds rejection reason"
+            tabIndex={-1}
+            className="bg-card border border-border rounded-2xl w-full max-w-md shadow-2xl overflow-hidden"
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <h3 className="font-semibold text-foreground">Reject Proof of Funds</h3>
+              <button onClick={() => setPofRejectTarget(null)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-6 py-4 space-y-3">
+              <p className="text-sm text-muted-foreground">Provide a reason so the applicant can upload a corrected document.</p>
+              <textarea
+                rows={3}
+                value={pofRejectReason}
+                onChange={(e) => setPofRejectReason(e.target.value)}
+                placeholder="e.g. Document expired, amount insufficient, unclear source of funds..."
+                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-destructive resize-none"
+              />
+            </div>
+            <div className="px-6 py-4 border-t border-border flex gap-2">
+              <Button
+                className="flex-1 gap-1.5 bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive/20"
+                variant="ghost"
+                disabled={!pofRejectReason.trim()}
+                onClick={handlePofRejectConfirm}
+              >
+                <X className="w-4 h-4" /> Confirm POF Rejection
+              </Button>
+              <Button variant="outline" onClick={() => setPofRejectTarget(null)}>Cancel</Button>
             </div>
           </div>
         </div>
