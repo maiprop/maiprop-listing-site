@@ -125,7 +125,7 @@ describe("critical business invariants", () => {
   });
 
   it("keeps remaining plan limits and listing lifecycle effects enforced server-side", () => {
-    const enforcement = read("supabase/migrations/20260707140000_enforce_remaining_plan_limits_and_listing_lifecycle.sql");
+    const enforcement = read("supabase/migrations/20260525071300_enforce_remaining_plan_limits_and_listing_lifecycle.sql");
 
     expect(enforcement).toContain("CREATE OR REPLACE FUNCTION public.get_contact_monthly_limit");
     expect(enforcement).toContain("CREATE TRIGGER trg_check_conversation_contact_monthly_limit");

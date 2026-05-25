@@ -18,6 +18,26 @@ REVOKE ALL ON SCHEMA private FROM anon, authenticated;
 -- Plan-limit helpers for the formerly decorative limits.
 -- ---------------------------------------------------------------------------
 
+CREATE OR REPLACE FUNCTION private.remaining_plan_limit_role(p_user_id UUID)
+RETURNS TEXT
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT CASE COALESCE(p.role::TEXT, 'individual')
+    WHEN 'individual' THEN 'buyer'
+    WHEN 'seller_landlord' THEN 'seller'
+    ELSE p.role::TEXT
+  END
+  FROM public.profiles p
+  WHERE p.user_id = p_user_id
+  LIMIT 1;
+$$;
+
+COMMENT ON FUNCTION private.remaining_plan_limit_role(UUID) IS
+  'Normalizes legacy and current profile roles for remaining plan-limit enforcement.';
+
 CREATE OR REPLACE FUNCTION public.get_contact_monthly_limit(p_user_id UUID)
 RETURNS INTEGER
 LANGUAGE plpgsql
@@ -26,11 +46,11 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-  v_role public.user_role;
+  v_role TEXT;
 BEGIN
-  v_role := public.authoritative_role(p_user_id);
+  v_role := private.remaining_plan_limit_role(p_user_id);
 
-  IF v_role = 'buyer'::public.user_role THEN
+  IF v_role = 'buyer' THEN
     RETURN CASE WHEN public.is_pro(p_user_id) THEN 999 ELSE 1 END;
   END IF;
 
@@ -49,11 +69,11 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-  v_role public.user_role;
+  v_role TEXT;
 BEGIN
-  v_role := public.authoritative_role(p_user_id);
+  v_role := private.remaining_plan_limit_role(p_user_id);
 
-  IF v_role = 'buyer'::public.user_role THEN
+  IF v_role = 'buyer' THEN
     RETURN CASE WHEN public.is_pro(p_user_id) THEN 999 ELSE 3 END;
   END IF;
 
@@ -72,11 +92,11 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-  v_role public.user_role;
+  v_role TEXT;
 BEGIN
-  v_role := public.authoritative_role(p_user_id);
+  v_role := private.remaining_plan_limit_role(p_user_id);
 
-  IF v_role = 'buyer'::public.user_role THEN
+  IF v_role = 'buyer' THEN
     RETURN CASE WHEN public.is_pro(p_user_id) THEN 999 ELSE 5 END;
   END IF;
 
@@ -95,11 +115,11 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-  v_role public.user_role;
+  v_role TEXT;
 BEGIN
-  v_role := public.authoritative_role(p_user_id);
+  v_role := private.remaining_plan_limit_role(p_user_id);
 
-  IF v_role IN ('buyer'::public.user_role, 'seller'::public.user_role, 'agent'::public.user_role) THEN
+  IF v_role IN ('buyer', 'seller', 'agent') THEN
     RETURN CASE WHEN public.is_pro(p_user_id) THEN 600 ELSE 60 END;
   END IF;
 
@@ -128,7 +148,7 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_other_user_id UUID;
-  v_other_role public.user_role;
+  v_other_role TEXT;
 BEGIN
   IF p_user_id IS NULL THEN
     RETURN FALSE;
@@ -154,13 +174,9 @@ BEGIN
     RETURN FALSE;
   END IF;
 
-  v_other_role := public.authoritative_role(v_other_user_id);
+  v_other_role := private.remaining_plan_limit_role(v_other_user_id);
 
-  RETURN v_other_role IN (
-    'seller'::public.user_role,
-    'agent'::public.user_role,
-    'developer'::public.user_role
-  );
+  RETURN v_other_role IN ('seller', 'agent', 'developer');
 END;
 $$;
 
@@ -554,6 +570,7 @@ REVOKE ALL ON FUNCTION public.check_conversation_contact_monthly_limit() FROM PU
 REVOKE ALL ON FUNCTION public.check_message_contact_monthly_limit() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.check_open_house_rsvp_monthly_limit() FROM PUBLIC, anon, authenticated;
 
+REVOKE ALL ON FUNCTION private.remaining_plan_limit_role(UUID) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION private.is_property_contact_conversation(UUID, UUID, UUID, UUID) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION private.notify_favorite_price_drop() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION private.handle_listing_terminal_status() FROM PUBLIC, anon, authenticated;
