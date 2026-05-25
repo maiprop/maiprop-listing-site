@@ -1,5 +1,51 @@
 # Changelog
 
+## [1.9.6](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.5...v1.9.6) (2026-05-25)
+
+
+### Bug Fixes
+
+* add host pof review controls ([#216](https://github.com/maiprop/maiprop-listing-site/issues/216)) ([949d9b8](https://github.com/maiprop/maiprop-listing-site/commit/949d9b8b162944ced7edb87f286183ae94357da1))
+* allow safe CSP style attributes ([3f4bf50](https://github.com/maiprop/maiprop-listing-site/commit/3f4bf504fe0039a25902a558ad8e69ded7b6d59d))
+* apply web fixes without mobile app ([16bb0fe](https://github.com/maiprop/maiprop-listing-site/commit/16bb0fe83cc794be4fe0d49e4669e03e4f92a5ea))
+* avoid slow public auction OS fallback ([5c6634d](https://github.com/maiprop/maiprop-listing-site/commit/5c6634d5c7169796d983c528a145574c56fdb286))
+* bootstrap new-build lead trigger table ([7e02768](https://github.com/maiprop/maiprop-listing-site/commit/7e027683dc0b1a0c32e04c8fbfe947727f1b5be8))
+* capture new-build project leads ([02877d8](https://github.com/maiprop/maiprop-listing-site/commit/02877d8879333323ff1070cd887f9034dfd07692))
+* clean audit findings and workflow guards ([#210](https://github.com/maiprop/maiprop-listing-site/issues/210)) ([4ffe800](https://github.com/maiprop/maiprop-listing-site/commit/4ffe8000244dac3cd54359178674b994408809bd))
+* diversify public auction cache ([7675b3b](https://github.com/maiprop/maiprop-listing-site/commit/7675b3b0224e7dec6723f082c8a4582941652790))
+* enforce remaining plan limits ([5fd6962](https://github.com/maiprop/maiprop-listing-site/commit/5fd696251691baca9e0727e38739347cac7ca029))
+* harden cloudflare supabase runtime bindings ([aae25f4](https://github.com/maiprop/maiprop-listing-site/commit/aae25f40daf594415a0ec516c9e4fbbdb67dcafb))
+* harden CSP and CI timeouts ([4360b44](https://github.com/maiprop/maiprop-listing-site/commit/4360b4495ea08455924055d5d7fcabb3a25f3a64))
+* harden deployment readiness gates ([39ff255](https://github.com/maiprop/maiprop-listing-site/commit/39ff255ff9d1597b139229a333f2ad2ab1b68b12))
+* harden live deployment smoke checks ([d0151f0](https://github.com/maiprop/maiprop-listing-site/commit/d0151f0b8d8ce14473fb43455179f0c01834beb4))
+* harden role review and agent workflows ([60cc43b](https://github.com/maiprop/maiprop-listing-site/commit/60cc43b8ece0e54d9cddc67aeac338c273428077))
+* harden subscription lifecycle gating ([e00d3b7](https://github.com/maiprop/maiprop-listing-site/commit/e00d3b78b8980fb781c497b80c7ae242f85a3ef4))
+* harden video room authorization ([46287b3](https://github.com/maiprop/maiprop-listing-site/commit/46287b3ddd63719797cc13a699005c6a61f8b525))
+* normalize viewing and consultation scheduling ([a029d65](https://github.com/maiprop/maiprop-listing-site/commit/a029d65d4b76ec752278c202255aae1528fdbd4d))
+* order staging deploy before security checks ([#219](https://github.com/maiprop/maiprop-listing-site/issues/219)) ([6585efd](https://github.com/maiprop/maiprop-listing-site/commit/6585efd80947d7a3797f3c411d094b8cee1f9fd1))
+* pass pages function vars through wrangler ([6cc00a5](https://github.com/maiprop/maiprop-listing-site/commit/6cc00a5720865a11f7e58051ab2ff54b7ea9dc7c))
+* pin Cloudflare Pages output directory ([b22b3d7](https://github.com/maiprop/maiprop-listing-site/commit/b22b3d7d35cd26c4869b0ddf62c48108b4d2d693))
+* polish Greek localization and auction routing ([8013c50](https://github.com/maiprop/maiprop-listing-site/commit/8013c50d0b0bdb0698685278e38ae0a5975b345f))
+* polish localization and auction performance ([18860d6](https://github.com/maiprop/maiprop-listing-site/commit/18860d6c0bc9fd440c45471ebfd0bd68062e0258))
+* refine greek pricing localization ([94f1537](https://github.com/maiprop/maiprop-listing-site/commit/94f1537c7f23b80ff4187739e4c04d460bfd28e1))
+* repair main migration replay ([#218](https://github.com/maiprop/maiprop-listing-site/issues/218)) ([bfe3982](https://github.com/maiprop/maiprop-listing-site/commit/bfe39821962da982ee3127df4a24cd4ddf59486e))
+* repair migration replay ordering ([196a640](https://github.com/maiprop/maiprop-listing-site/commit/196a6404e08bd5668f54590ca6aac6bcb955698d))
+* restore bidirectional workflow fulfillment ([4fa3480](https://github.com/maiprop/maiprop-listing-site/commit/4fa3480391f2c4d8b76ed320a1e77560dc4e5b83))
+* restore bidirectional workflow fulfillment ([7f5f936](https://github.com/maiprop/maiprop-listing-site/commit/7f5f936ed7ce35a5932b7a061ca1f03284412641))
+* serve public auctions from cache first ([f015391](https://github.com/maiprop/maiprop-listing-site/commit/f01539199a392acd85107790a0a3697b8b668cec))
+* speed up public auction national sampling ([861a3af](https://github.com/maiprop/maiprop-listing-site/commit/861a3af31951cb1476057ebd572b4c37cad13985))
+* stabilize auction municipality rotation fallback ([c7ed113](https://github.com/maiprop/maiprop-listing-site/commit/c7ed11340f7ea4a08c9393b3b84c54af9a81c4f5))
+* support production-only Supabase CI ([#221](https://github.com/maiprop/maiprop-listing-site/issues/221)) ([20e7314](https://github.com/maiprop/maiprop-listing-site/commit/20e7314539b418b204514ba5f050c85394eb555e))
+* trigger supabase staging deploys ([3745afa](https://github.com/maiprop/maiprop-listing-site/commit/3745afa894e4fbed9ee62ea8dd29309e996fe240))
+* use stable auction fallback page ([d9e1e72](https://github.com/maiprop/maiprop-listing-site/commit/d9e1e7297a11bfad7d1d51662238fc8acefbb1a3))
+* wire interaction notifications ([2997231](https://github.com/maiprop/maiprop-listing-site/commit/2997231f89e3aba45684d302056eee0fa8197dda))
+* wire interaction notifications ([d8de5eb](https://github.com/maiprop/maiprop-listing-site/commit/d8de5eb1daec41c04cf2376e34d285ff6781e76b))
+
+
+### Performance Improvements
+
+* improve public catalogue performance ([6a9ee70](https://github.com/maiprop/maiprop-listing-site/commit/6a9ee70d2dcd4ba04edd0bf3442b2305f4bd8db8))
+
 ## [1.9.5](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.4...v1.9.5) (2026-05-22)
 
 
