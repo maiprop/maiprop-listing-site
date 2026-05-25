@@ -328,6 +328,7 @@ export type Database = {
           due_at: string | null
           id: string
           notes: string | null
+          reminder_sent_at: string | null
           title: string
           updated_at: string
           user_id: string
@@ -339,6 +340,7 @@ export type Database = {
           due_at?: string | null
           id?: string
           notes?: string | null
+          reminder_sent_at?: string | null
           title: string
           updated_at?: string
           user_id: string
@@ -350,6 +352,7 @@ export type Database = {
           due_at?: string | null
           id?: string
           notes?: string | null
+          reminder_sent_at?: string | null
           title?: string
           updated_at?: string
           user_id?: string
@@ -2259,12 +2262,14 @@ export type Database = {
           projects_count: number | null
           rating: number | null
           reviews_count: number | null
+          rejection_reason: string | null
           specialties: string[] | null
           subscription_tier: string | null
           title: string
           updated_at: string
           user_id: string
           verified: boolean
+          verified_at: string | null
           video_link: string | null
           website_url: string | null
         }
@@ -2288,12 +2293,14 @@ export type Database = {
           projects_count?: number | null
           rating?: number | null
           reviews_count?: number | null
+          rejection_reason?: string | null
           specialties?: string[] | null
           subscription_tier?: string | null
           title: string
           updated_at?: string
           user_id: string
           verified?: boolean
+          verified_at?: string | null
           video_link?: string | null
           website_url?: string | null
         }
@@ -2317,12 +2324,14 @@ export type Database = {
           projects_count?: number | null
           rating?: number | null
           reviews_count?: number | null
+          rejection_reason?: string | null
           specialties?: string[] | null
           subscription_tier?: string | null
           title?: string
           updated_at?: string
           user_id?: string
           verified?: boolean
+          verified_at?: string | null
           video_link?: string | null
           website_url?: string | null
         }

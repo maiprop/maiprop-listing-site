@@ -351,7 +351,6 @@ vi.mock("@/hooks/useAuctionListings", () => ({
 }));
 
 vi.mock("@/hooks/useFiresaleInterest", () => ({
-  useMyFiresaleInterest: vi.fn().mockReturnValue({ data: null, isLoading: false }),
   useMyFiresaleInterests: vi.fn().mockReturnValue({ data: [], isLoading: false }),
   useFiresaleInterestQueue: vi.fn().mockReturnValue({ data: [], isLoading: false }),
   useExpressInterest: vi.fn().mockReturnValue({ mutate: vi.fn(), isPending: false }),

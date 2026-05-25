@@ -10,6 +10,9 @@ import { toast } from "sonner";
 import { isPlatformAdmin } from "@/lib/authUtils";
 import { SlidersHorizontal, Save, Plus, Loader2, Shield, Euro, Trash2, Sparkles, X as XIcon, CreditCard, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
+import type { Database, Json } from "@/integrations/supabase/types";
+
+type PricingConfigUpsert = Database["public"]["Tables"]["pricing_configs"]["Insert"];
 
 type PricingConfig = {
   id: string;
@@ -25,7 +28,7 @@ type PricingConfig = {
   amount: number;
   is_active: boolean;
   sort_order: number;
-  metadata: Record<string, unknown> | null;
+  metadata: Json | null;
 };
 
 /** Predefined sections so admin can manage all pricings: users, professionals, agents, valuation, investors, ad-hoc */
@@ -153,12 +156,12 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
   const { data: configs = [], isLoading } = usePricingConfigs();
   const mutation = useMutation({
     mutationFn: async (items: PricingConfig[]) => {
-      const payload = items.map(({ id, created_at: _created_at, updated_at: _updated_at, ...rest }) => ({
+      const payload: PricingConfigUpsert[] = items.map(({ id, created_at: _created_at, updated_at: _updated_at, ...rest }) => ({
         id,
         ...rest,
-        metadata: (rest.metadata ?? {}) as never,
+        metadata: rest.metadata ?? {},
       }));
-      const { error } = await supabase.from("pricing_configs").upsert(payload as never, { onConflict: "id" });
+      const { error } = await supabase.from("pricing_configs").upsert(payload, { onConflict: "id" });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -187,13 +190,13 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
   const seedMutation = useMutation({
     mutationFn: async () => {
       const now = new Date().toISOString();
-      const rows: PricingConfig[] = DEFAULT_SEED.map((row) => ({
+      const rows: PricingConfigUpsert[] = DEFAULT_SEED.map((row) => ({
         ...row,
         id: crypto.randomUUID(),
         created_at: now,
         updated_at: now,
       }));
-      const { error } = await supabase.from("pricing_configs").upsert(rows as never, { onConflict: "id" });
+      const { error } = await supabase.from("pricing_configs").upsert(rows, { onConflict: "id" });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -322,7 +325,11 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
     qc.setQueryData<PricingConfig[]>(["admin-pricing-configs"], (prev = []) =>
       prev.map((row) => {
         if (row.id !== id) return row;
-        const meta = { ...(row.metadata || {}), [key]: value || undefined };
+        const currentMetadata: Record<string, Json | undefined> =
+          row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+            ? row.metadata
+            : {};
+        const meta: Json = { ...currentMetadata, [key]: value || undefined };
         return { ...row, metadata: meta };
       }),
     );

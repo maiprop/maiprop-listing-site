@@ -1,5 +1,14 @@
 # Code Health Tracking
 
+## Audit Follow-up (2026-05-24)
+
+Completed cleanup from the dead-code/type-safety audit:
+
+- Removed unused exports: `useTogglePriceAlert`, `useMyFiresaleInterest`, and `useBulkUpdateConsultationRequests`.
+- Kept `sortFiresaleInterestQueue` as a private live helper inside `useFiresaleInterestQueue`.
+- Added contact-task due reminders through `private.send_due_contact_task_notifications()` and hourly pg_cron wiring.
+- Removed all production `as never` casts under `src/`; Supabase payloads now use generated table/RPC types.
+
 ## Fat Components (F1/F2)
 
 Pages over 600 LOC have been reviewed. All use extracted sub-components already:

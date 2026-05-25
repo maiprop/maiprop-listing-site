@@ -76,15 +76,15 @@ export default function OpenHouseAnalytics({ listingId }: { listingId: string })
       try {
         const [regRes, offerRes, settingsRes] = await Promise.all([
           supabase
-            .from("open_house_registrations" as never)
+            .from("open_house_registrations")
             .select("id, listing_id, timeslot_index, status, mortgage_status, created_at")
             .eq("listing_id", listingId),
           supabase
-            .from("open_house_offers" as never)
+            .from("open_house_offers")
             .select("id, listing_id, created_at")
             .eq("listing_id", listingId),
           supabase
-            .from("open_house_settings" as never)
+            .from("open_house_settings")
             .select("timeslots")
             .eq("listing_id", listingId)
             .maybeSingle(),

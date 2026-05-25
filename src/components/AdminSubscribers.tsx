@@ -13,6 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { SUBSCRIPTION_STATUS_COLORS } from "@/lib/statusColors";
 import { logger } from "@/lib/logger";
+import type { Database } from "@/integrations/supabase/types";
 
 function TransferAdminForm({ onSuccess }: { onSuccess: () => Promise<void> }) {
   const [email, setEmail] = useState("");
@@ -75,6 +76,7 @@ type Subscription = {
 };
 
 type AdminSubscription = Subscription & { display_name?: string | null; email?: string | null };
+type SubscriptionUpdate = Pick<Database["public"]["Tables"]["investor_subscriptions"]["Update"], "tier" | "status" | "expires_at">;
 
 function daysUntilExpiry(expiresAt: string | null): number | null {
   if (!expiresAt) return null;
@@ -125,10 +127,10 @@ function useAdminSubscriptions() {
 function useUpdateSubscription() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ subId, updates }: { subId: string; updates: Partial<Subscription> }) => {
+    mutationFn: async ({ subId, updates }: { subId: string; updates: SubscriptionUpdate }) => {
       const { error } = await supabase
         .from("investor_subscriptions")
-        .update(updates as never)
+        .update(updates)
         .eq("id", subId);
       if (error) throw error;
     },
@@ -150,7 +152,7 @@ export default function AdminSubscribers() {
   const [editTier, setEditTier] = useState<string>("");
   const [editExpiry, setEditExpiry] = useState<string>("");
 
-  const handleSubUpdate = (subId: string, updates: Partial<Subscription>) => {
+  const handleSubUpdate = (subId: string, updates: SubscriptionUpdate) => {
     updateSub.mutate({ subId, updates }, { onSuccess: () => setEditingSubId(null) });
   };
 

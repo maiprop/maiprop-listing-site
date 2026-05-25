@@ -301,7 +301,7 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
     {
       const { error } = await supabase
         .from("open_house_registrations")
-        .update({ pof_verified_status: "verified" } as never)
+        .update({ pof_verified_status: "verified" })
         .eq("id", id);
       if (error) {
         toast.error("Failed to verify. Please try again.");
@@ -326,7 +326,7 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
         .update({
           pof_verified_status: "rejected",
           rejection_reason: reason,
-        } as never)
+        })
         .eq("id", rejectTarget);
       if (error) {
         toast.error("Failed to reject. Please try again.");

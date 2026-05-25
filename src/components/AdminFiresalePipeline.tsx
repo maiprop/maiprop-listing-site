@@ -39,12 +39,12 @@ function useUpdateAdminDeal() {
       admin_notes: string;
       offerPrice?: number;
     }) => {
-      const { data, error } = await supabase.rpc("admin_update_firesale_pipeline_deal" as never, {
+      const { data, error } = await supabase.rpc("admin_update_firesale_pipeline_deal", {
         p_deal_id: id,
         p_status: status,
         p_admin_notes: admin_notes,
-        p_offer_price: offerPrice ?? null,
-      } as never);
+        p_offer_price: offerPrice,
+      });
       if (error) throw error;
 
       const result = Array.isArray(data) ? data[0] : data;

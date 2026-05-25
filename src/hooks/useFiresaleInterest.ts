@@ -72,7 +72,7 @@ function getQueueRank(entry: FiresaleInterestEntry, now = Date.now()) {
 }
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-export function sortFiresaleInterestQueue(entries: FiresaleInterestEntry[], now = Date.now()) {
+function sortFiresaleInterestQueue(entries: FiresaleInterestEntry[], now = Date.now()) {
   return [...entries].sort((a, b) => {
     const rankDiff = getQueueRank(a, now) - getQueueRank(b, now);
     if (rankDiff !== 0) return rankDiff;
@@ -90,29 +90,6 @@ async function releaseExpiredReservations(dealId?: string) {
     p_deal_id: dealId,
   });
   if (error) throw error;
-}
-
-// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-export function useMyFiresaleInterest(dealId: string | undefined) {
-  return useQuery({
-    queryKey: ["firesale_interest_mine", dealId],
-    queryFn: async () => {
-      const uid = (await supabase.auth.getUser()).data.user?.id;
-      if (!uid || !dealId) return null;
-
-      await releaseExpiredReservations(dealId);
-
-      const { data } = await supabase
-        .from("firesale_interest")
-        .select(INTEREST_SELECT)
-        .eq("deal_id", dealId)
-        .eq("investor_id", uid)
-        .maybeSingle();
-
-      return data as FiresaleInterestEntry | null;
-    },
-    enabled: !!dealId,
-  });
 }
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.

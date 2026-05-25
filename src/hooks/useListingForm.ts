@@ -14,6 +14,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import type { UploadedImage } from "@/types";
 import { useListingDraft } from "@/hooks/useListingDraft";
 import { useListingAI } from "@/hooks/useListingAI";
+import type { Database } from "@/integrations/supabase/types";
 import type {
   PropertyType,
   ListingType,
@@ -26,6 +27,7 @@ import { tFallback, tInterpolate } from "@/lib/i18nFallback";
 // Re-export the types so existing callers (`import { type ListingFormData }
 // from "@/hooks/useListingForm"`) keep working.
 export type { PropertyType, ListingType, WizardStep, AIPriceSuggestion, ListingFormData };
+type ListingInsert = Database["public"]["Tables"]["listings"]["Insert"];
 
 /**
  * Set of keys on `ListingFormData` whose values are booleans — derived once
@@ -287,7 +289,7 @@ export function useListingForm(options?: { allowPreSale?: boolean }) {
       const coverImg = images.find(img => img.id === coverImageId);
       const coverImageUrl = coverImg?.url || undefined;
 
-      const payload: Record<string, unknown> = {
+      const payload: ListingInsert = {
         title: form.title,
         description: form.description || undefined,
         city: form.city,
@@ -377,11 +379,13 @@ export function useListingForm(options?: { allowPreSale?: boolean }) {
         is_featured: form.is_featured ?? false,
         priority_placement: Number(form.priority_placement) || 0,
         tags: form.is_exclusive ? (["exclusive"] as string[]) : undefined,
+        owner_id: user.id,
+        status: asDraft ? "draft" : "active",
       };
 
       const { data, error } = await supabase
         .from("listings")
-        .insert({ ...payload, owner_id: user.id, status: asDraft ? "draft" : "active" } as never)
+        .insert(payload)
         .select()
         .single();
       if (error) throw error;

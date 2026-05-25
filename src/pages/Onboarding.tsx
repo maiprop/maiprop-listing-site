@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Home } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
 import { APP_ORIGIN } from "@/lib/config";
@@ -12,7 +13,7 @@ import { RoleSwitchModal } from "@/components/RoleSwitchModal";
 import { classifySwitch, getPlanForParticipant } from "@/lib/rolePlanMap";
 import type { ParticipantId } from "@/lib/participantConfig";
 import {
-  participants, DEFAULT_AVAILABILITY, colorMap,
+  participants, DEFAULT_AVAILABILITY, colorMap, PRO_CATEGORIES,
   type OnboardingStep, type ParticipantType, type SelectedService, type DayAvailability, type RoleKey,
 } from "@/lib/onboardingConfig";
 import { canRestoreDraftStep, isOnboardingStep, resolveStepsFor } from "@/lib/onboardingFlow";
@@ -42,6 +43,13 @@ const extractStripeError = (data: unknown): string | null => {
   const value = (data as { stripe_error?: unknown }).stripe_error;
   return typeof value === "string" && value.length > 0 ? value : null;
 };
+
+type ProfessionalCategory = Database["public"]["Enums"]["professional_category"];
+type ProfessionalInsert = Database["public"]["Tables"]["professionals"]["Insert"];
+type ProfessionalUpdate = Database["public"]["Tables"]["professionals"]["Update"];
+
+const isProfessionalCategory = (category: string): category is ProfessionalCategory =>
+  PRO_CATEGORIES.some((item) => item.value === category);
 
 const parseServiceRate = (rate: string): number | null => {
   if (rate.trim() === "") return null;
@@ -563,7 +571,7 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
   };
 
   const handleCategoryNext = () => {
-    if (!proCategory) { toast.error("Please select your professional category"); return; }
+    if (!isProfessionalCategory(proCategory)) { toast.error("Please select your professional category"); return; }
     setStep("pro-verify");
   };
 
@@ -573,6 +581,7 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
     // remainder of this handler can never run with `user === null`. The
     // explicit guard satisfies the type checker without changing behaviour.
     if (!user) return;
+    if (!isProfessionalCategory(proCategory)) { toast.error("Please select your professional category"); return; }
     const errs: Record<string, string> = {};
     if (!proForm.businessName.trim()) errs.businessName = "Business name is required";
     if (!proForm.phone.trim()) errs.phone = "Phone number is required";
@@ -581,18 +590,20 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
 
     setLoading(true);
 
+    const professionalPayload: ProfessionalInsert = {
+      user_id: user.id,
+      title: proForm.businessName,
+      category: proCategory,
+      display_name: user.user_metadata?.full_name || proForm.businessName,
+      city: "",
+      // AFM (Greek tax ID) stored in license_number when no dedicated field exists.
+      // licenseNumber field takes priority if the user filled it in.
+      license_number: proForm.licenseNumber || proForm.taxId || null,
+    };
+
     const { data: proData, error } = await supabase
       .from("professionals")
-      .upsert({
-        user_id: user.id,
-        title: proForm.businessName,
-        category: proCategory as never,
-        display_name: user.user_metadata?.full_name || proForm.businessName,
-        city: "",
-        // AFM (Greek tax ID) stored in license_number when no dedicated field exists.
-        // licenseNumber field takes priority if the user filled it in.
-        license_number: proForm.licenseNumber || proForm.taxId || null,
-      } as never, { onConflict: "user_id" })
+      .upsert(professionalPayload, { onConflict: "user_id" })
       .select()
       .single();
 
@@ -662,8 +673,12 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
   const canSaveVideoSettings = () => Boolean(user && professionalId);
 
   const persistVideoSettings = async (targetUserId: string, targetProfessionalId: string): Promise<boolean> => {
+    const videoSettings: ProfessionalUpdate = {
+      video_link: videoLink || null,
+      calendar_notes: calendarNotes || null,
+    };
     const { error } = await supabase.from("professionals")
-      .update({ video_link: videoLink || null, calendar_notes: calendarNotes || null } as never)
+      .update(videoSettings)
       .eq("id", targetProfessionalId)
       .eq("user_id", targetUserId);
     if (!error) return true;

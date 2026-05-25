@@ -4,8 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useCreateAuctionAlert, useUpdateAuctionAlert, type AuctionAlert } from "@/hooks/useAuctionAlerts";
 import { useTranslation } from "react-i18next";
+import type { Database } from "@/integrations/supabase/types";
 
-const PROPERTY_TYPES = [
+type AuctionAlertPropertyType = Database["public"]["Enums"]["property_type"];
+
+const PROPERTY_TYPES: { value: "" | AuctionAlertPropertyType; label: string }[] = [
   { value: "", label: "All Types" },
   { value: "apartment", label: "Apartment" },
   { value: "house", label: "House" },
@@ -30,7 +33,7 @@ export function AuctionAlertModal({ open, onClose, editAlert }: Props) {
   const isEdit = !!editAlert;
   const [city, setCity] = useState(editAlert?.city ?? "");
   const [courtName, setCourtName] = useState(editAlert?.court_name ?? "");
-  const [propertyType, setPropertyType] = useState<string>(editAlert?.property_type ?? "");
+  const [propertyType, setPropertyType] = useState<"" | AuctionAlertPropertyType>(editAlert?.property_type ?? "");
   const [minPrice, setMinPrice] = useState(editAlert?.min_price != null ? String(editAlert.min_price) : "");
   const [maxPrice, setMaxPrice] = useState(editAlert?.max_price != null ? String(editAlert.max_price) : "");
   const [emailNotify, setEmailNotify] = useState(editAlert?.email_notify ?? true);
@@ -57,7 +60,7 @@ export function AuctionAlertModal({ open, onClose, editAlert }: Props) {
     const payload = {
       city: city || null,
       court_name: courtName || null,
-      property_type: (propertyType || null) as never,
+      property_type: propertyType || null,
       min_price: minPrice ? Number(minPrice) : null,
       max_price: maxPrice ? Number(maxPrice) : null,
       email_notify: emailNotify,
@@ -112,7 +115,7 @@ export function AuctionAlertModal({ open, onClose, editAlert }: Props) {
             <label className="text-xs text-muted-foreground font-medium block mb-1.5">{isGreek ? "Τύπος ακινήτου" : "Property Type"}</label>
             <select
               value={propertyType}
-              onChange={e => setPropertyType(e.target.value)}
+              onChange={e => setPropertyType(e.target.value as "" | AuctionAlertPropertyType)}
               className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary"
             >
               {propertyTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
