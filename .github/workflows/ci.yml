@@ -279,11 +279,11 @@ jobs:
       always() &&
       !cancelled() &&
       needs.quality.result == 'success' &&
-      needs.release-safety.result == 'success' &&
-      needs.migrations-validate.result == 'success' &&
+      needs['release-safety'].result == 'success' &&
+      needs['migrations-validate'].result == 'success' &&
       (
-        needs.deploy-supabase-staging.result == 'success' ||
-        (github.event_name == 'pull_request' && needs.deploy-supabase-staging.result == 'skipped')
+        needs['deploy-supabase-staging'].result == 'success' ||
+        (github.event_name == 'pull_request' && needs['deploy-supabase-staging'].result == 'skipped')
       ) &&
       (
         github.event_name == 'workflow_dispatch' ||
@@ -311,16 +311,52 @@ jobs:
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 50
+
+      - name: Detect PR Supabase deployment changes
+        id: pr_supabase_changes
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          base="${{ github.event.pull_request.base.sha }}"
+
+          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=50 origin "${{ github.base_ref }}" || true
+          fi
+
+          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "::warning::Could not inspect the PR base; running staging security checks."
+            echo "has_supabase_changes=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed_files="$(git diff --name-only "$base" "${{ github.sha }}" || true)"
+          echo "$changed_files"
+
+          if grep -Eq '^(supabase/|deno\.json$|deno\.lock$)' <<< "$changed_files"; then
+            echo "has_supabase_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_supabase_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Defer live staging security checks
+        if: steps.pr_supabase_changes.outputs.has_supabase_changes == 'true'
+        run: |
+          echo "This PR changes Supabase deployment files, so live staging security checks are deferred until the mainline staging deploy applies those changes." | tee -a "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true'
         with:
           node-version-file: .node-version
           cache: npm
 
       - name: Check runtime
+        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true'
         run: npm run check:runtime
 
       - name: Validate required staging secrets
+        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true'
         run: |
           required=(
             "VITE_SUPABASE_URL"
@@ -348,23 +384,27 @@ jobs:
           fi
 
       - name: Install dependencies
+        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true'
         run: npm ci
 
       - name: Skip live staging type freshness without staged DB changes
-        if: needs.deploy-supabase-staging.outputs.db_changes != 'true'
+        if: needs['deploy-supabase-staging'].outputs.db_changes != 'true'
         run: echo "Live staging type freshness runs only after the staging database migration path is required."
 
       - name: Check generated Supabase types against staging
-        if: needs.deploy-supabase-staging.outputs.db_changes == 'true'
+        if: needs['deploy-supabase-staging'].outputs.db_changes == 'true'
         run: node scripts/check-supabase-types-freshness.cjs --strict
 
       - name: Install Playwright browsers
+        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true'
         run: npx playwright install --with-deps chromium
 
       - name: Build app
+        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true'
         run: npm run build
 
       - name: Run staging RLS + onboarding + GDPR security tests
+        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true'
         run: npx playwright test --project=chromium e2e/rls-security.spec.ts e2e/onboarding-role-selection.spec.ts e2e/gdpr-delete-account.spec.ts
 
       - name: Upload Playwright report
