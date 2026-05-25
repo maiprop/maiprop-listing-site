@@ -291,6 +291,24 @@ describe("dashboard tab behavior", () => {
     expect(updateViewingStatusMutate).toHaveBeenCalledWith({ id: "owner-pending", status: "cancelled" });
   });
 
+  it("deduplicates a viewing that appears as both requester and owner", () => {
+    const row = {
+      id: "self-viewing",
+      scheduled_at: "2026-05-16T10:00:00Z",
+      status: "pending",
+      viewing_type: "in_person",
+      listings: { title: "Self-booked tour" },
+    };
+    viewingsRequesterState.data = [row];
+    viewingsOwnerState.data = [row];
+
+    renderWithProviders(<ViewingsTab />);
+
+    expect(screen.getAllByText("Self-booked tour")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: /confirm/i }));
+    expect(updateViewingStatusMutate).toHaveBeenCalledWith({ id: "self-viewing", status: "confirmed" });
+  });
+
   it("filters special listings and mutates featured, priority, status, and delete actions", () => {
     listingsState.data = [
       {

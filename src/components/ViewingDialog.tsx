@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import type { Property } from "@/components/PropertyCard";
 import { useBookViewing } from "@/hooks/useViewings";
+import { createLocalDateTimeIso, formatLocalDateInput } from "@/lib/localDateTime";
 
 interface ViewingDialogProps {
   open: boolean;
@@ -33,7 +34,7 @@ function buildDynamicDays(dayNames: string[], locale = "en-GB", isGreek = false)
     days.push({
       label: dayNames[d.getDay()],
       date: isGreek ? `${dayNum} ${month}` : `${month} ${dayNum}`,
-      iso: d.toISOString().slice(0, 10),
+      iso: formatLocalDateInput(d),
     });
   }
   return days;
@@ -79,13 +80,12 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
       toast.error(isGreek ? "Επιλέξτε ημερομηνία και ώρα" : "Please select a date and time");
       return;
     }
-    const scheduledAt = new Date(`${selectedIso}T${selectedTime}:00`);
     try {
       await bookViewing.mutateAsync({
         listing_id: property.id,
         owner_id: ownerId,
         viewing_type: viewType === "video" ? "video" : "in_person",
-        scheduled_at: scheduledAt.toISOString(),
+        scheduled_at: createLocalDateTimeIso(selectedIso, selectedTime),
         note: note.trim() || undefined,
       });
     } catch (_err: unknown) {

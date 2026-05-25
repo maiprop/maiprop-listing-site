@@ -1,7 +1,7 @@
 /**
  * Tests for the four hooks in `@/hooks/useConsultations`. The hooks call
- * supabase via various chains (insert, select+single, update+eq+single,
- * update+in). Each chain is mocked per-test.
+ * supabase via various chains (insert, select+single, update+eq+single).
+ * Each chain is mocked per-test.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, waitFor, act } from "@testing-library/react";
@@ -26,7 +26,6 @@ import {
   useSubmitConsultation,
   useMyConsultationRequests,
   useUpdateConsultationRequest,
-  useBulkUpdateConsultationRequests,
 } from "@/hooks/useConsultations";
 
 const wrapper = () => {
@@ -104,6 +103,31 @@ describe("useSubmitConsultation", () => {
     expect(toastMock.success).toHaveBeenCalledWith("Callback request sent.");
   });
 
+  it("normalizes blank preferred schedule fields before insert", async () => {
+    const consInsert = vi.fn().mockResolvedValue({ error: null });
+    fromMock.mockImplementation((table: string) => {
+      if (table === "consultation_requests") return { insert: consInsert };
+      throw new Error("unexpected table " + table);
+    });
+
+    const { result } = renderHook(() => useSubmitConsultation(), { wrapper: wrapper() });
+    await act(async () => {
+      await result.current.mutateAsync({
+        professional_id: "p-1",
+        requester_name: "Bob",
+        requester_email: "bob@example.com",
+        request_type: "consultation",
+        preferred_date: "",
+        preferred_time: " ",
+      });
+    });
+
+    expect(consInsert).toHaveBeenCalledWith(expect.objectContaining({
+      preferred_date: null,
+      preferred_time: null,
+    }));
+  });
+
   it("toasts an error when consultation insert fails", async () => {
     const consInsert = vi.fn().mockResolvedValue({ error: new Error("denied") });
     fromMock.mockImplementation((_t: string) => ({ insert: consInsert }));
@@ -118,7 +142,6 @@ describe("useSubmitConsultation", () => {
     expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/Could not send/i));
   });
 });
-
 describe("useMyConsultationRequests", () => {
   it("returns empty when the user has no professional row", async () => {
     const proSingle = vi.fn().mockResolvedValue({ data: null, error: null });
@@ -203,47 +226,6 @@ describe("useUpdateConsultationRequest", () => {
     const { result } = renderHook(() => useUpdateConsultationRequest(), { wrapper: wrapper() });
     await act(async () => {
       await result.current.mutateAsync({ id: "c-1", updates: {} }).catch(() => {});
-    });
-    expect(update).not.toHaveBeenCalled();
-    expect(toastMock.error).toHaveBeenCalled();
-  });
-});
-
-describe("useBulkUpdateConsultationRequests", () => {
-  it("updates many ids with ownership filter and toasts success", async () => {
-    const eqProf = vi.fn().mockResolvedValue({ error: null });
-    const inFn = vi.fn().mockReturnValue({ eq: eqProf });
-    const update = vi.fn().mockReturnValue({ in: inFn });
-    mockFromBy({ update });
-    const { result } = renderHook(() => useBulkUpdateConsultationRequests(), { wrapper: wrapper() });
-    await act(async () => {
-      await result.current.mutateAsync({
-        ids: ["a", "b", "c"],
-        updates: { lead_status: "won" },
-      });
-    });
-    expect(update).toHaveBeenCalledWith({ lead_status: "won" });
-    expect(inFn).toHaveBeenCalledWith("id", ["a", "b", "c"]);
-    expect(eqProf).toHaveBeenCalledWith("professional_id", "p-99");
-    expect(toastMock.success).toHaveBeenCalledWith(expect.stringMatching(/updated/i));
-  });
-
-  it("toasts error on failure", async () => {
-    const eqProf = vi.fn().mockResolvedValue({ error: new Error("rls") });
-    mockFromBy({ update: () => ({ in: () => ({ eq: eqProf }) }) });
-    const { result } = renderHook(() => useBulkUpdateConsultationRequests(), { wrapper: wrapper() });
-    await act(async () => {
-      await result.current.mutateAsync({ ids: ["a"], updates: {} }).catch(() => {});
-    });
-    expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/Could not update/i));
-  });
-
-  it("rejects when caller has no professional profile (no row touched)", async () => {
-    const update = vi.fn();
-    mockFromBy({ update }, null);
-    const { result } = renderHook(() => useBulkUpdateConsultationRequests(), { wrapper: wrapper() });
-    await act(async () => {
-      await result.current.mutateAsync({ ids: ["a"], updates: {} }).catch(() => {});
     });
     expect(update).not.toHaveBeenCalled();
     expect(toastMock.error).toHaveBeenCalled();

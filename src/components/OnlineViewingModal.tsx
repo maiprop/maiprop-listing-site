@@ -7,6 +7,7 @@ import { useBookViewing } from "@/hooks/useViewings";
 import { useSubmitConsultation } from "@/hooks/useConsultations";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
+import { createLocalDateTimeIso, formatLocalDateInput } from "@/lib/localDateTime";
 
 const timeSlots = ["09:00", "10:00", "11:00", "12:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
 
@@ -27,7 +28,7 @@ const getNextDays = (count: number, locale = "en-GB") => {
     if (dow !== 0 && dow !== 6) {
       days.push({
         label: d.toLocaleDateString(locale, { weekday: "short" }),
-        date: d.toISOString().split("T")[0],
+        date: formatLocalDateInput(d),
         display: d.toLocaleDateString(locale, { day: "numeric", month: "short" }),
       });
     }
@@ -104,7 +105,7 @@ const OnlineViewingModal = ({ open, onClose, listing, professional }: OnlineView
           listing_id: listing.id,
           owner_id: listing.owner_id,
           viewing_type: "video",
-          scheduled_at: `${selectedDate}T${selectedTime}:00.000Z`,
+          scheduled_at: createLocalDateTimeIso(selectedDate, selectedTime),
           note: note || undefined,
         });
       } else if (professional) {
