@@ -312,6 +312,12 @@ Deno.test("status returns ban/quota metrics and starts RPC plus entries query", 
       (call.args as { table?: string }).table === "agent_data_inputs"
     ),
   );
+  assert(
+    globalThis.__agentDataInputScenario.calls.some((call) =>
+      call.name === "select" &&
+      String((call.args as { columns?: string }).columns).includes("discount_pct")
+    ),
+  );
 });
 
 Deno.test("DB quota implementation serializes concurrent monthly-count checks", async () => {

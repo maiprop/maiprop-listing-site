@@ -18,6 +18,21 @@ const ROLE_PERMISSIONS: Record<ParticipantId, { label: string; can: string[] }> 
   institutional: { label: "Institutional",       can: ["Bulk listings", "Portfolio management", "Institutional deal flow", "Dedicated support"] },
 };
 
+const ROLE_SWITCH_ERROR_MESSAGES: Record<string, string> = {
+  profile_not_found: "Your profile record was not found. Please sign out, sign back in, and try again. If the problem persists, contact support.",
+  not_authenticated: "Your session has expired. Please sign in again.",
+  profile_update_failed: "Failed to update your profile. Please try again in a moment.",
+  active_firesale_commitment_blocks_role_switch: "You have an active Quick Sale reservation or commitment. Resolve it before switching account type.",
+  accepted_open_house_offer_blocks_role_switch: "You have an accepted open-house offer. Resolve it before switching account type.",
+  role_switch_user_id_required: "Could not identify your account for role switching. Please sign out and back in.",
+};
+
+const stripeErrorFromResponse = (data: unknown): string | null => {
+  if (!data || typeof data !== "object") return null;
+  const value = (data as { stripe_error?: unknown }).stripe_error;
+  return typeof value === "string" && value.length > 0 ? value : null;
+};
+
 export function SettingsSection({
   roleLabel,
   onUpdate: _onUpdate,
@@ -37,11 +52,40 @@ export function SettingsSection({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  const logRoleSwitchStart = async (): Promise<void> => {
+    if (!currentType || !hasActiveSub) return;
+
+    try {
+      const { data, error } = await supabase.functions.invoke("log-role-switch", {
+        body: {
+          from_type: currentType,
+          to_type: "",
+          switch_kind: "same-tier",
+          had_active_sub: true,
+          cancel_subscription: true,
+        },
+      });
+      if (error) {
+        logger.warn("[SettingsSection] log-role-switch start failed:", error.message);
+        toast.warning("We couldn't cancel your active subscription automatically. Please manage it from your billing settings.");
+        return;
+      }
+      if (stripeErrorFromResponse(data)) {
+        toast.warning("We couldn't cancel your active subscription automatically. Please manage it from your billing settings.");
+      }
+    } catch (err: unknown) {
+      logger.warn("[SettingsSection] log-role-switch start threw:", err instanceof Error ? err.message : err);
+      toast.warning("We couldn't cancel your active subscription automatically. Please manage it from your billing settings.");
+    }
+  };
+
   // Role switch is initiated via the begin_role_switch RPC, which atomically:
   //   - clears participant_type + bio,
   //   - stamps profiles.role_switch_in_progress_at,
-  //   - soft-archives role-specific public-facing rows (professionals, projects)
-  //     so the user disappears from the public directory immediately.
+  //   - pauses/cancels active role-specific public and counterparty workflows.
+  // Paid subscriptions are cancelled immediately after the sentinel is created;
+  // onboarding later records the final destination and reuses the same idempotent
+  // Stripe path.
   // The subsequent /onboarding flow finalises the switch with
   // complete_onboarding_role_for_user(), which clears the sentinel and
   // unarchives the destination role's rows (idempotent).
@@ -61,11 +105,6 @@ export function SettingsSection({
     type RpcCaller = (name: "begin_role_switch") => Promise<{ error: { message: string } | null }>;
     const { error } = await (supabase.rpc as unknown as RpcCaller)("begin_role_switch");
     if (error) {
-      const ROLE_SWITCH_ERROR_MESSAGES: Record<string, string> = {
-        profile_not_found:   "Your profile record was not found. Please sign out, sign back in, and try again. If the problem persists, contact support.",
-        not_authenticated:   "Your session has expired. Please sign in again.",
-        profile_update_failed: "Failed to update your profile. Please try again in a moment.",
-      };
       const friendlyMsg = ROLE_SWITCH_ERROR_MESSAGES[error.message]
         ?? "Could not start role switch. Please try again or contact support.";
       toast.error(friendlyMsg);
@@ -73,6 +112,7 @@ export function SettingsSection({
       setSwitching(false);
       return;
     }
+    await logRoleSwitchStart();
     await refreshProfile();
     setSwitching(false);
     toast.success("Account type cleared — redirecting to setup…");

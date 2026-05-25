@@ -11,6 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
 export type AgentDataInputStatus = "pending" | "verified" | "rejected";
+export type AgentDataInputSide = "buyer" | "seller" | "both";
 
 export interface AgentDataInput {
   id: string;
@@ -21,6 +22,7 @@ export interface AgentDataInput {
   property_postal_code: string | null;
   property_type: string | null;
   transaction_type: "sale" | "rent";
+  agent_side: AgentDataInputSide;
   closing_price: number;
   kaek: string | null;
   buyer_name: string | null;
@@ -51,6 +53,7 @@ export interface SubmitAgentDataInputArgs {
   property_address: string;
   property_city: string;
   transaction_type: "sale" | "rent";
+  agent_side: AgentDataInputSide;
   closing_price: number;
   property_postal_code?: string | null;
   property_type?: string | null;
@@ -77,10 +80,12 @@ type EdgeEntry = {
   postal_code: string | null;
   property_type: string | null;
   transaction_type: "sale" | "rental";
+  agent_side?: AgentDataInputSide | null;
   sale_price: number;
   closing_date: string;
   status: AgentDataInputStatus | "flagged";
   rejection_reason: string | null;
+  discount_pct?: number | string | null;
   discount_applied_at?: string | null;
   discount_invoice_id?: string | null;
   created_at: string;
@@ -102,11 +107,21 @@ const edgeTransactionType = (value: EdgeEntry["transaction_type"]): "sale" | "re
 const edgeStatus = (value: EdgeEntry["status"]): AgentDataInputStatus =>
   value === "flagged" ? "rejected" : value;
 
+const edgeAgentSide = (value: EdgeEntry["agent_side"]): AgentDataInputSide => {
+  if (value === "buyer" || value === "seller" || value === "both") return value;
+  return "seller";
+};
+
 const entryUserId = (entry: EdgeEntry, fallbackUserId: string): string => entry.user_id ?? fallbackUserId;
 
 const entryCity = (entry: EdgeEntry): string => entry.city ?? "";
 
 const entryUpdatedAt = (entry: EdgeEntry): string => entry.reviewed_at ?? entry.created_at;
+
+const entryDiscountPct = (entry: EdgeEntry): number => {
+  const value = Number(entry.discount_pct ?? 0);
+  return Number.isFinite(value) ? value : 0;
+};
 
 const normalizeEntry = (entry: EdgeEntry, userId: string): AgentDataInput => { // skipcq: JS-R1005 - Keep the edge response adapter centralized so the legacy dashboard shape does not drift.
   return {
@@ -118,6 +133,7 @@ const normalizeEntry = (entry: EdgeEntry, userId: string): AgentDataInput => { /
     property_postal_code: nullable(entry.postal_code),
     property_type: nullable(entry.property_type),
     transaction_type: edgeTransactionType(entry.transaction_type),
+    agent_side: edgeAgentSide(entry.agent_side),
     closing_price: Number(entry.sale_price),
     kaek: null,
     buyer_name: null,
@@ -127,7 +143,7 @@ const normalizeEntry = (entry: EdgeEntry, userId: string): AgentDataInput => { /
     rejection_reason: entry.rejection_reason,
     reviewed_at: entry.reviewed_at,
     reviewed_by: null,
-    discount_pct: 0,
+    discount_pct: entryDiscountPct(entry),
     applied_to_invoice_at: nullable(entry.discount_applied_at),
     stripe_credit_id: nullable(entry.discount_invoice_id),
     stripe_credit_amount_cents: null,
@@ -154,7 +170,7 @@ const buildSubmitPayload = (args: SubmitAgentDataInputArgs) => ({
   kaek: nullable(args.kaek),
   property_type: normalizePropertyType(args.property_type),
   transaction_type: edgeSubmitTransactionType(args.transaction_type),
-  agent_side: "seller",
+  agent_side: args.agent_side,
   sale_price: args.closing_price,
   closing_date: args.closed_at,
   buyer_name: nullable(args.buyer_name),

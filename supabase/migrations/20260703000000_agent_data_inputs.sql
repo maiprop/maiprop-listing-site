@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS public.agent_data_inputs (
 
   -- Discount accounting. `discount_applied` flips to true the first time this
   -- entry is credited toward a Stripe invoice (via apply_verified_data_input_discount).
+  discount_pct          NUMERIC(5,3) NOT NULL DEFAULT 0.5,
   discount_applied      BOOLEAN NOT NULL DEFAULT FALSE,
   discount_applied_at   TIMESTAMPTZ,
   discount_invoice_id   TEXT,
@@ -128,6 +129,7 @@ BEGIN
     NEW.rejection_reason    := OLD.rejection_reason;
     NEW.reviewed_at         := OLD.reviewed_at;
     NEW.reviewed_by         := OLD.reviewed_by;
+    NEW.discount_pct        := OLD.discount_pct;
     NEW.discount_applied    := OLD.discount_applied;
     NEW.discount_applied_at := OLD.discount_applied_at;
     NEW.discount_invoice_id := OLD.discount_invoice_id;
@@ -192,6 +194,7 @@ BEGIN
   NEW.discount_applied := FALSE;
   NEW.discount_applied_at := NULL;
   NEW.discount_invoice_id := NULL;
+  NEW.discount_pct := public.agent_data_input_discount_pct_per_input();
   NEW.reviewed_at := NULL;
   NEW.reviewed_by := NULL;
   NEW.rejection_reason := NULL;
@@ -333,7 +336,9 @@ BEGIN
       COUNT(*) FILTER (WHERE status = 'verified')::INT AS total_verified,
       COUNT(*) FILTER (WHERE status = 'rejected' OR status = 'flagged')::INT AS total_rejected,
       COUNT(*) FILTER (WHERE status = 'verified' AND discount_applied = FALSE)::INT
-        AS pending_discount_count
+        AS pending_discount_count,
+      COALESCE(SUM(discount_pct) FILTER (WHERE status = 'verified' AND discount_applied = FALSE), 0)::NUMERIC
+        AS pending_discount_pct
     FROM public.agent_data_inputs
     WHERE user_id = p_user_id
   ),
@@ -349,7 +354,7 @@ BEGIN
     public.agent_data_input_max_per_month(),
     public.agent_data_input_discount_pct_per_input(),
     LEAST(
-      c.pending_discount_count * public.agent_data_input_discount_pct_per_input(),
+      c.pending_discount_pct,
       public.agent_data_input_max_per_month() * public.agent_data_input_discount_pct_per_input()
     )::NUMERIC AS pending_discount_pct,
     c.pending_discount_count,
@@ -377,15 +382,15 @@ RETURNS TABLE (applied_count INT, applied_pct NUMERIC)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_max_per_month INT     := public.agent_data_input_max_per_month();
-  v_pct_per       NUMERIC := public.agent_data_input_discount_pct_per_input();
   v_applied       INT;
+  v_applied_pct   NUMERIC;
 BEGIN
   IF p_user_id IS NULL OR p_invoice_id IS NULL OR length(p_invoice_id) = 0 THEN
     RAISE EXCEPTION 'invalid_arguments';
   END IF;
 
   WITH eligible AS (
-    SELECT id FROM public.agent_data_inputs
+    SELECT id, discount_pct FROM public.agent_data_inputs
      WHERE user_id = p_user_id
        AND status = 'verified'
        AND discount_applied = FALSE
@@ -400,13 +405,18 @@ BEGIN
            discount_invoice_id = p_invoice_id
       FROM eligible e
      WHERE t.id = e.id
-     RETURNING 1
+     RETURNING e.discount_pct
   )
-  SELECT COUNT(*)::INT INTO v_applied FROM upd;
+  SELECT COUNT(*)::INT, COALESCE(SUM(discount_pct), 0)::NUMERIC
+    INTO v_applied, v_applied_pct
+    FROM upd;
 
   RETURN QUERY
   SELECT v_applied,
-         LEAST(v_applied * v_pct_per, v_max_per_month * v_pct_per)::NUMERIC;
+         LEAST(
+           v_applied_pct,
+           v_max_per_month * public.agent_data_input_discount_pct_per_input()
+         )::NUMERIC;
 END;
 $$;
 
@@ -476,8 +486,9 @@ $$;
 
 -- 7. Grants ------------------------------------------------------------------
 
+REVOKE ALL ON FUNCTION public.admin_review_agent_data_input(UUID, TEXT, TEXT, BOOLEAN, UUID) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_agent_data_input_status(UUID)            TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_agent_monthly_input_count(UUID)          TO authenticated;
-GRANT EXECUTE ON FUNCTION public.admin_review_agent_data_input(UUID, TEXT, TEXT, BOOLEAN, UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_review_agent_data_input(UUID, TEXT, TEXT, BOOLEAN, UUID) TO authenticated, service_role;
 -- apply_verified_data_input_discount is intentionally NOT granted to authenticated;
 -- only service_role (used by the stripe-webhook edge function) may call it.

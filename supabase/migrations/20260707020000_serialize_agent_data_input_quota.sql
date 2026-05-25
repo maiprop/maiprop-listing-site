@@ -1,6 +1,10 @@
 -- Serialize agent data input quota checks so concurrent submissions cannot
 -- both observe the same monthly count and exceed the 20/month business limit.
 
+DROP FUNCTION IF EXISTS public.submit_agent_data_input(
+  DATE, TEXT, TEXT, TEXT, NUMERIC, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT
+);
+
 CREATE OR REPLACE FUNCTION public.submit_agent_data_input(
   p_closed_at DATE,
   p_property_address TEXT,
@@ -12,7 +16,8 @@ CREATE OR REPLACE FUNCTION public.submit_agent_data_input(
   p_kaek TEXT DEFAULT NULL,
   p_buyer_name TEXT DEFAULT NULL,
   p_seller_name TEXT DEFAULT NULL,
-  p_notes TEXT DEFAULT NULL
+  p_notes TEXT DEFAULT NULL,
+  p_agent_side TEXT DEFAULT 'seller'
 )
 RETURNS UUID
 LANGUAGE plpgsql
@@ -27,6 +32,7 @@ DECLARE
   v_transaction_type TEXT;
   v_month_start TIMESTAMPTZ;
   v_month_bucket DATE;
+  v_agent_side TEXT := lower(trim(coalesce(p_agent_side, 'seller')));
 BEGIN
   IF v_user IS NULL THEN
     RAISE EXCEPTION 'Not authenticated' USING ERRCODE = '42501';
@@ -48,6 +54,9 @@ BEGIN
 
   IF p_transaction_type NOT IN ('sale', 'rent', 'rental') THEN
     RAISE EXCEPTION 'transaction_type must be sale or rent' USING ERRCODE = '22023';
+  END IF;
+  IF v_agent_side NOT IN ('buyer', 'seller', 'both') THEN
+    RAISE EXCEPTION 'agent_side must be buyer, seller, or both' USING ERRCODE = '22023';
   END IF;
   IF p_closing_price IS NULL OR p_closing_price < 0 THEN
     RAISE EXCEPTION 'closing_price must be >= 0' USING ERRCODE = '22023';
@@ -95,7 +104,8 @@ BEGIN
     closing_date,
     buyer_name,
     seller_name,
-    notes
+    notes,
+    discount_pct
   ) VALUES (
     v_user,
     p_property_address,
@@ -104,12 +114,13 @@ BEGIN
     p_kaek,
     COALESCE(p_property_type, 'other'),
     v_transaction_type,
-    'seller',
+    v_agent_side,
     p_closing_price,
     p_closed_at,
     p_buyer_name,
     p_seller_name,
-    p_notes
+    p_notes,
+    public.agent_data_input_discount_pct_per_input()
   )
   RETURNING id INTO v_id;
 
@@ -118,8 +129,8 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.submit_agent_data_input(
-  DATE, TEXT, TEXT, TEXT, NUMERIC, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT
+  DATE, TEXT, TEXT, TEXT, NUMERIC, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT
 ) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.submit_agent_data_input(
-  DATE, TEXT, TEXT, TEXT, NUMERIC, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT
+  DATE, TEXT, TEXT, TEXT, NUMERIC, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT
 ) TO authenticated, service_role;

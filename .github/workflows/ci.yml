@@ -273,14 +273,27 @@ jobs:
     timeout-minutes: 20
     # Run automatically for release-bearing branches and same-repo PRs. Dependabot
     # PRs are excluded because repository secrets are intentionally unavailable.
+    # Main/manual runs wait for the staging Supabase deployment so live schema
+    # checks compare against an environment that has had migrations applied.
     if: >
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'push' ||
-      (github.event_name == 'pull_request' &&
-        github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
-        github.actor != 'dependabot[bot]' &&
-        github.event.pull_request.draft == false)
-    needs: [quality, release-safety]
+      always() &&
+      !cancelled() &&
+      needs.quality.result == 'success' &&
+      needs.release-safety.result == 'success' &&
+      needs.migrations-validate.result == 'success' &&
+      (
+        needs.deploy-supabase-staging.result == 'success' ||
+        (github.event_name == 'pull_request' && needs.deploy-supabase-staging.result == 'skipped')
+      ) &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        github.event_name == 'push' ||
+        (github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
+          github.actor != 'dependabot[bot]' &&
+          github.event.pull_request.draft == false)
+      )
+    needs: [quality, release-safety, migrations-validate, deploy-supabase-staging]
     env:
       CI: true
       VITE_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
@@ -337,8 +350,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Skip live staging type freshness for PRs
+        if: github.event_name == 'pull_request'
+        run: echo "PR migrations are validated by local migration replay; live staging type freshness runs after staging deployment on main/manual runs."
+
       - name: Check generated Supabase types against staging
-        run: node scripts/check-supabase-types-freshness.cjs
+        if: github.event_name != 'pull_request'
+        run: node scripts/check-supabase-types-freshness.cjs --strict
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium

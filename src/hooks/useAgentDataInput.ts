@@ -24,6 +24,7 @@ export type DataInputStatusEntry = {
   closing_date: string;
   status: "pending" | "verified" | "rejected" | "flagged";
   rejection_reason: string | null;
+  discount_pct: number;
   discount_applied: boolean;
   discount_applied_at: string | null;
   discount_invoice_id: string | null;

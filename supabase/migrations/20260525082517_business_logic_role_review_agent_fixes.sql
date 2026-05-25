@@ -47,6 +47,7 @@ DECLARE
   v_conversation RECORD;
   v_counterparty UUID;
   v_count INTEGER := 0;
+  v_updated INTEGER := 0;
 BEGIN
   FOR v_conversation IN
     SELECT id, participant_a, participant_b
@@ -68,7 +69,8 @@ BEGIN
     WHERE id = v_conversation.id
       AND closed_at IS NULL;
 
-    GET DIAGNOSTICS v_count = ROW_COUNT;
+    GET DIAGNOSTICS v_updated = ROW_COUNT;
+    v_count := v_count + v_updated;
 
     PERFORM private.insert_interaction_notification(
       v_counterparty,
@@ -128,7 +130,8 @@ BEGIN
   IF EXISTS (
     SELECT 1
     FROM public.open_house_offers o
-    WHERE o.bidder_id = p_user_id
+    JOIN public.listings l ON l.id = o.listing_id
+    WHERE (o.bidder_id = p_user_id OR l.owner_id = p_user_id)
       AND o.status = 'accepted'
   ) THEN
     RAISE EXCEPTION 'accepted_open_house_offer_blocks_role_switch';
@@ -178,7 +181,9 @@ BEGIN
     END LOOP;
 
     UPDATE public.open_house_offers
-    SET status = 'withdrawn'::public.oh_offer_status
+    SET status = 'rejected'::public.oh_offer_status,
+        decided_by = p_user_id,
+        decided_at = now()
     WHERE listing_id = v_listing.id
       AND status IN ('submitted'::public.oh_offer_status, 'revealed'::public.oh_offer_status);
 
