@@ -13,6 +13,11 @@ on:
         required: true
         type: boolean
         default: false
+      include_all:
+        description: "Include pending local migrations that are older than the newest recorded remote migration"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -31,6 +36,7 @@ jobs:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
       SUPABASE_PRODUCTION_DB_URL: ${{ secrets.SUPABASE_PRODUCTION_DB_URL }}
+      INCLUDE_ALL_MIGRATIONS: ${{ github.event.inputs.include_all }}
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -101,11 +107,21 @@ jobs:
 
       - name: Dry-run production migrations
         if: inputs.dry_run == true
-        run: supabase db push --db-url "$SUPABASE_PRODUCTION_DB_URL" --dry-run | tee supabase-production-db-push.txt
+        run: |
+          args=(--db-url "$SUPABASE_PRODUCTION_DB_URL")
+          if [ "$INCLUDE_ALL_MIGRATIONS" = "true" ]; then
+            args+=(--include-all)
+          fi
+          supabase db push "${args[@]}" --dry-run | tee supabase-production-db-push.txt
 
       - name: Apply production migrations
         if: inputs.dry_run != true
-        run: supabase db push --db-url "$SUPABASE_PRODUCTION_DB_URL" --yes | tee supabase-production-db-push.txt
+        run: |
+          args=(--db-url "$SUPABASE_PRODUCTION_DB_URL")
+          if [ "$INCLUDE_ALL_MIGRATIONS" = "true" ]; then
+            args+=(--include-all)
+          fi
+          supabase db push "${args[@]}" --yes | tee supabase-production-db-push.txt
 
       - name: Capture migration list after
         if: always()
