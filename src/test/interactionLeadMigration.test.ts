@@ -12,6 +12,11 @@ const newBuildLeadMigration = readFileSync(
   "utf8",
 );
 
+const canonicalLeadMigration = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/20260525082323_canonical_lead_upsert_and_contact_inbox.sql"),
+  "utf8",
+);
+
 describe("interaction lead auto-capture migration", () => {
   it("captures viewings, consultations, and conversations without opening leads RLS", () => {
     expect(migration).toContain("SECURITY DEFINER");
@@ -32,5 +37,23 @@ describe("interaction lead auto-capture migration", () => {
     expect(newBuildLeadMigration).toContain("source = 'project_inquiry'");
     expect(newBuildLeadMigration).toContain("INSERT INTO public.project_leads");
     expect(newBuildLeadMigration).toContain("REVOKE ALL ON FUNCTION private.create_new_build_project_leads()");
+  });
+
+  it("dedupes auto-captured leads through the canonical CRM helper", () => {
+    expect(canonicalLeadMigration).toContain("private.upsert_owner_lead");
+    expect(canonicalLeadMigration).toContain("private.merge_duplicate_auto_leads");
+    expect(canonicalLeadMigration).toContain("idx_leads_auto_unique_email_context");
+    expect(canonicalLeadMigration).toContain("idx_leads_auto_unique_phone_context");
+    expect(canonicalLeadMigration).toContain("private.capture_viewing_owner_lead");
+    expect(canonicalLeadMigration).toContain("private.capture_consultation_owner_lead");
+    expect(canonicalLeadMigration).toContain("private.capture_conversation_owner_lead");
+  });
+
+  it("bridges project leads and platform submissions without turning them into browser-side CRM writes", () => {
+    expect(canonicalLeadMigration).toContain("project_leads_sync_owner_lead");
+    expect(canonicalLeadMigration).toContain("private.sync_project_lead_to_owner_lead");
+    expect(canonicalLeadMigration).toContain("contact_submissions_status_check");
+    expect(canonicalLeadMigration).toContain("Platform admin can update submissions");
+    expect(canonicalLeadMigration).toContain("CREATE TABLE IF NOT EXISTS public.contact_submissions");
   });
 });

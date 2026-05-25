@@ -283,39 +283,51 @@ export type Database = {
       }
       contact_submissions: {
         Row: {
+          admin_notes: string | null
           company: string | null
           created_at: string
           document_type: string | null
           email: string
+          handled_at: string | null
+          handled_by: string | null
           id: string
           listing_title: string | null
           message: string | null
           name: string | null
           share_to_email: string | null
+          status: string
           type: string
         }
         Insert: {
+          admin_notes?: string | null
           company?: string | null
           created_at?: string
           document_type?: string | null
           email: string
+          handled_at?: string | null
+          handled_by?: string | null
           id?: string
           listing_title?: string | null
           message?: string | null
           name?: string | null
           share_to_email?: string | null
+          status?: string
           type?: string
         }
         Update: {
+          admin_notes?: string | null
           company?: string | null
           created_at?: string
           document_type?: string | null
           email?: string
+          handled_at?: string | null
+          handled_by?: string | null
           id?: string
           listing_title?: string | null
           message?: string | null
           name?: string | null
           share_to_email?: string | null
+          status?: string
           type?: string
         }
         Relationships: []
