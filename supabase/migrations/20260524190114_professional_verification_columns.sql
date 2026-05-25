@@ -4,6 +4,7 @@
 
 ALTER TABLE public.professionals
   ADD COLUMN IF NOT EXISTS rejection_reason TEXT,
+  ADD COLUMN IF NOT EXISTS notes TEXT,
   ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ;
 
 UPDATE public.professionals
