@@ -327,6 +327,9 @@ CREATE TRIGGER trg_open_house_pof_notify
   WHEN (OLD.pof_verified_status IS DISTINCT FROM NEW.pof_verified_status)
   EXECUTE FUNCTION private.notify_open_house_pof_status_change();
 
+ALTER TABLE public.professionals
+  ADD COLUMN IF NOT EXISTS notes TEXT;
+
 CREATE OR REPLACE FUNCTION private.notify_professional_verification_change()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -377,6 +380,9 @@ CREATE TRIGGER trg_professional_verification_notify
   AFTER UPDATE OF verified, rejection_reason, notes ON public.professionals
   FOR EACH ROW
   EXECUTE FUNCTION private.notify_professional_verification_change();
+
+ALTER TABLE public.listings
+  ADD COLUMN IF NOT EXISTS featured_until TIMESTAMPTZ;
 
 CREATE OR REPLACE FUNCTION private.notify_featured_listing_change()
 RETURNS trigger

@@ -382,6 +382,24 @@ GRANT EXECUTE ON FUNCTION public.begin_role_switch() TO authenticated;
 -- Professional reviews: client gate, moderation, notifications, responses.
 -- ---------------------------------------------------------------------------
 
+CREATE TABLE IF NOT EXISTS public.professional_reviews (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  professional_id UUID NOT NULL REFERENCES public.professionals(id) ON DELETE CASCADE,
+  reviewer_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  rating SMALLINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  title TEXT,
+  body TEXT,
+  service_type TEXT,
+  property_city TEXT,
+  transaction_year SMALLINT,
+  recommended BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (professional_id, reviewer_id)
+);
+
+ALTER TABLE public.professional_reviews ENABLE ROW LEVEL SECURITY;
+
 CREATE OR REPLACE FUNCTION public.can_review_professional(
   p_professional_id UUID,
   p_reviewer_id UUID
@@ -655,6 +673,51 @@ CREATE INDEX IF NOT EXISTS idx_professional_review_responses_professional
 -- ---------------------------------------------------------------------------
 -- Agent data input: one review RPC semantic, true agent side, row discount.
 -- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS public.agent_data_inputs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  property_address TEXT NOT NULL CHECK (length(property_address) BETWEEN 5 AND 300),
+  city TEXT,
+  postal_code TEXT,
+  kaek TEXT,
+  property_type TEXT NOT NULL CHECK (property_type IN ('apartment', 'house', 'commercial', 'land', 'other')),
+  transaction_type TEXT NOT NULL CHECK (transaction_type IN ('sale', 'rental')),
+  agent_side TEXT NOT NULL CHECK (agent_side IN ('buyer', 'seller', 'both')),
+  sale_price NUMERIC(14, 2) NOT NULL CHECK (sale_price > 0 AND sale_price < 1000000000),
+  closing_date DATE NOT NULL CHECK (closing_date <= CURRENT_DATE AND closing_date >= CURRENT_DATE - INTERVAL '5 years'),
+  buyer_name TEXT,
+  seller_name TEXT,
+  notes TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'verified', 'rejected', 'flagged')),
+  rejection_reason TEXT,
+  reviewed_at TIMESTAMPTZ,
+  reviewed_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  discount_applied BOOLEAN NOT NULL DEFAULT false,
+  discount_applied_at TIMESTAMPTZ,
+  discount_invoice_id TEXT,
+  discount_pct NUMERIC(5, 3) NOT NULL DEFAULT 0.5,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.agent_data_input_bans (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  banned_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  banned_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  reason TEXT
+);
+
+ALTER TABLE public.agent_data_inputs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.agent_data_input_bans ENABLE ROW LEVEL SECURITY;
+
+CREATE OR REPLACE FUNCTION public.agent_data_input_discount_pct_per_input()
+RETURNS NUMERIC
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT 0.5::NUMERIC
+$$;
 
 ALTER TABLE public.agent_data_inputs
   ADD COLUMN IF NOT EXISTS discount_pct NUMERIC(5, 3) NOT NULL DEFAULT 0.5;

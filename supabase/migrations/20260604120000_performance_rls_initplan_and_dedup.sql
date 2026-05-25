@@ -160,6 +160,8 @@ CREATE POLICY "conversations_insert" ON public.conversations FOR INSERT
 -- ── messages ──────────────────────────────────────────────────────────────────
 DROP POLICY IF EXISTS "Participants can view messages" ON public.messages;
 DROP POLICY IF EXISTS "Participants can send messages" ON public.messages;
+DROP POLICY IF EXISTS "messages_select" ON public.messages;
+DROP POLICY IF EXISTS "messages_insert" ON public.messages;
 
 CREATE POLICY "messages_select" ON public.messages FOR SELECT
   USING (
