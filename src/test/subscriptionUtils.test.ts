@@ -19,8 +19,12 @@ describe("isActiveSubscription", () => {
     expect(isActiveSubscription("trialing")).toBe(isActiveSubscription("active"));
   });
 
-  it("returns false for non-billable statuses", () => {
-    for (const status of ["past_due", "canceled", "incomplete", "incomplete_expired", "unpaid", "paused"]) {
+  it("keeps access for Stripe payment-recovery grace state", () => {
+    expect(isActiveSubscription("past_due")).toBe(true);
+  });
+
+  it("returns false for terminal or non-provisioned statuses", () => {
+    for (const status of ["canceled", "incomplete", "incomplete_expired", "unpaid", "paused"]) {
       expect(isActiveSubscription(status), `expected ${status} to be inactive`).toBe(false);
     }
   });
@@ -46,8 +50,11 @@ describe("isProSubscription", () => {
 
   it("returns false for canceled subscription object", () => {
     expect(isProSubscription({ status: "canceled" })).toBe(false);
-    expect(isProSubscription({ status: "past_due" })).toBe(false);
     expect(isProSubscription({ status: "incomplete" })).toBe(false);
+  });
+
+  it("returns true for past_due subscription object while Stripe retries collection", () => {
+    expect(isProSubscription({ status: "past_due" })).toBe(true);
   });
 });
 

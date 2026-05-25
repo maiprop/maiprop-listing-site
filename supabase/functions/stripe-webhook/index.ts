@@ -9,13 +9,17 @@
  *   customer.subscription.updated   → update product / status
  *   customer.subscription.deleted   → clear subscription
  *   invoice.created                  → apply Agent Data Input discount to draft
- *   invoice.payment_failed           → clear subscription (grace period expired)
+ *   invoice.payment_failed           → keep grace access, resync status
  */
 
 import Stripe from "npm:stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { createLogger } from "../_shared/logger.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import {
+  hasProvisionedSubscriptionAccess,
+  shouldRevokeSubscriptionAccess,
+} from "../_shared/subscriptionStatus.ts";
 import { shouldSkipProfileEntitlementSync } from "./addonGuard.ts";
 
 const log = createLogger("stripe-webhook");
@@ -78,7 +82,11 @@ Deno.serve(async (req) => {
   try {
     switch (event.type) {
       case "customer.subscription.created":
-      case "customer.subscription.updated": {
+      case "customer.subscription.updated":
+      case "customer.subscription.paused":
+      case "customer.subscription.pending_update_applied":
+      case "customer.subscription.pending_update_expired":
+      case "customer.subscription.resumed": {
         const sub = event.data.object as Stripe.Subscription;
         await syncSubscription(supabase, stripe, sub);
         break;
@@ -86,15 +94,13 @@ Deno.serve(async (req) => {
 
       case "customer.subscription.deleted": {
         const sub = event.data.object as Stripe.Subscription;
-        await clearSubscription(supabase, stripe, sub.customer as string);
+        await clearSubscription(supabase, stripe, sub);
         break;
       }
 
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice;
-        if (invoice.customer) {
-          await clearSubscription(supabase, stripe, invoice.customer as string);
-        }
+        await syncInvoiceSubscription(supabase, stripe, invoice, "invoice.payment_failed");
         break;
       }
 
@@ -139,9 +145,19 @@ Deno.serve(async (req) => {
         // Fires on every successful recurring charge. Re-sync to handle plan upgrades
         // where the subscription object may already be updated before this fires.
         const invoice = event.data.object as Stripe.Invoice;
-        const subscriptionId = (invoice as unknown as { subscription?: string | Stripe.Subscription | null }).subscription;
-        if (subscriptionId && invoice.customer) {
-          const sub = await stripe.subscriptions.retrieve(subscriptionId as string);
+        await syncInvoiceSubscription(supabase, stripe, invoice, "invoice.payment_succeeded");
+        break;
+      }
+
+      case "subscription_schedule.aborted":
+      case "subscription_schedule.canceled":
+      case "subscription_schedule.completed":
+      case "subscription_schedule.released":
+      case "subscription_schedule.updated": {
+        const schedule = event.data.object as Stripe.SubscriptionSchedule;
+        const subscriptionId = getScheduleSubscriptionId(schedule);
+        if (subscriptionId) {
+          const sub = await stripe.subscriptions.retrieve(subscriptionId);
           await syncSubscription(supabase, stripe, sub);
         }
         break;
@@ -189,6 +205,26 @@ function normalizeAudience(raw: string | null | undefined): string | null {
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function firstSubscriptionItem(sub: Stripe.Subscription) {
   return sub.items.data[0] ?? null;
+}
+
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
+function getInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
+  const legacySubscription = (invoice as unknown as { subscription?: string | Stripe.Subscription | null }).subscription;
+  if (typeof legacySubscription === "string") return legacySubscription;
+  if (legacySubscription && typeof legacySubscription === "object") return legacySubscription.id;
+
+  const parentSubscription =
+    (invoice as unknown as { parent?: { subscription_details?: { subscription?: string | null } | null } | null })
+      .parent?.subscription_details?.subscription;
+  return parentSubscription ?? null;
+}
+
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
+function getScheduleSubscriptionId(schedule: Stripe.SubscriptionSchedule): string | null {
+  const subscription = schedule.subscription;
+  if (typeof subscription === "string") return subscription;
+  if (subscription && typeof subscription === "object") return subscription.id;
+  return null;
 }
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
@@ -256,8 +292,14 @@ async function syncSubscription(
     return;
   }
 
-  const isActive = sub.status === "active" || sub.status === "trialing";
-  const entitlement = isActive ? await resolveSubscriptionEntitlement(supabase, sub) : null;
+  const hasAccess = hasProvisionedSubscriptionAccess(sub.status);
+  const shouldRevoke = shouldRevokeSubscriptionAccess(sub.status);
+  const userId = customer.metadata?.user_id as string | undefined
+    ?? await resolveUserIdByEmail(supabase, customer.email ?? null);
+  const hasManualAccess = shouldRevoke && userId
+    ? await hasManualProAccess(supabase, userId)
+    : false;
+  const entitlement = hasAccess ? await resolveSubscriptionEntitlement(supabase, sub) : null;
   const productId = entitlement?.productId ?? null;
 
   const { error } = await supabase
@@ -282,15 +324,25 @@ async function syncSubscription(
   // by create-checkout. The BEFORE UPDATE trigger
   // public.professionals_guard_subscription_tier permits service-role writes
   // because auth.uid() is NULL on edge-function calls without a user JWT.
-  await syncProfessionalTier(supabase, sub, isActive, entitlement);
+  await syncProfessionalTier(supabase, sub, hasAccess || hasManualAccess, entitlement);
+
+  if (shouldRevoke && userId && !hasManualAccess) {
+    await applySubscriptionLapseControls(supabase, userId, sub.status);
+  } else if (shouldRevoke && hasManualAccess) {
+    log.info("terminal Stripe status received but manual/admin entitlement remains active", {
+      user_id: userId,
+      status: sub.status,
+    });
+  }
 }
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 async function clearSubscription(
   supabase: SupabaseAdminClient,
   stripe: Stripe,
-  customerId: string,
+  sub: Stripe.Subscription,
 ) {
+  const customerId = sub.customer as string;
   const customer = await stripe.customers.retrieve(customerId) as Stripe.Customer;
   const filter = resolveProfileFilter(customer);
   if (!filter) {
@@ -309,10 +361,22 @@ async function clearSubscription(
     log.info("cleared subscription", { filter });
   }
 
-  // Demote any professional row owned by this customer back to 'free'.
   const userId = customer.metadata?.user_id as string | undefined
     ?? await resolveUserIdByEmail(supabase, customer.email ?? null);
-  if (userId) {
+
+  if (!userId) return;
+
+  if (await hasManualProAccess(supabase, userId)) {
+    await syncProfessionalTier(supabase, sub, true, null);
+    log.info("deleted Stripe subscription cleared product but kept manual/admin Pro access", {
+      user_id: userId,
+      sub_id: sub.id,
+    });
+    return;
+  }
+
+  // Demote any professional row owned by this customer back to 'free'.
+  {
     const { error: profErr } = await supabase
       .from("professionals")
       .update({ subscription_tier: "free" })
@@ -321,6 +385,8 @@ async function clearSubscription(
       log.error("failed to clear professional tier", { user_id: userId, err: String(profErr.message ?? profErr) });
     }
   }
+
+  await applySubscriptionLapseControls(supabase, userId, "deleted");
 }
 
 /** Update professionals.subscription_tier when the subscription is a professional plan. */
@@ -351,6 +417,84 @@ async function syncProfessionalTier(
   } else {
     log.info("updated professional tier", { user_id: userId, tier, plan_key: planKey });
   }
+}
+
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
+async function syncInvoiceSubscription(
+  supabase: SupabaseAdminClient,
+  stripe: Stripe,
+  invoice: Stripe.Invoice,
+  eventType: string,
+) {
+  const subscriptionId = getInvoiceSubscriptionId(invoice);
+  if (!subscriptionId) {
+    log.info("invoice has no subscription to sync", {
+      event_type: eventType,
+      invoice_id: invoice.id,
+      customer_id: invoice.customer ?? null,
+    });
+    return;
+  }
+
+  const sub = await stripe.subscriptions.retrieve(subscriptionId);
+  await syncSubscription(supabase, stripe, sub);
+}
+
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
+async function hasManualProAccess(
+  supabase: SupabaseAdminClient,
+  userId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("role, is_platform_admin, force_pro_access")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    log.error("failed to check manual/admin Pro access", {
+      user_id: userId,
+      err: String(error.message ?? error),
+    });
+    return false;
+  }
+
+  const profile = data as {
+    role?: string | null;
+    is_platform_admin?: boolean | null;
+    force_pro_access?: boolean | null;
+  } | null;
+  return Boolean(
+    profile?.force_pro_access ||
+      profile?.is_platform_admin ||
+      profile?.role === "admin",
+  );
+}
+
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
+async function applySubscriptionLapseControls(
+  supabase: SupabaseAdminClient,
+  userId: string,
+  status: string,
+) {
+  const { data, error } = await supabase.rpc("apply_subscription_lapse_controls", {
+    p_user_id: userId,
+  });
+
+  if (error) {
+    log.error("subscription lapse controls failed", {
+      user_id: userId,
+      status,
+      err: String(error.message ?? error),
+    });
+    return;
+  }
+
+  log.info("subscription lapse controls applied", {
+    user_id: userId,
+    status,
+    result: data ?? null,
+  });
 }
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.

@@ -62,6 +62,15 @@ SET search_path = public
 AS $$
   SELECT
     public.has_platform_admin(p_user_id)
+    OR COALESCE(
+      (
+        SELECT p.force_pro_access
+        FROM public.profiles p
+        WHERE p.user_id = p_user_id
+        LIMIT 1
+      ),
+      FALSE
+    )
     OR public.has_audience_scoped_pro_entitlement(p_user_id)
     OR EXISTS (
       SELECT 1
