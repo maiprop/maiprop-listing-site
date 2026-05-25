@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
   useDeleteAuctionAlert: vi.fn(),
   useUpdateAuctionAlert: vi.fn(),
   usePrivateOwnerAdAlert: vi.fn(),
-  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
+  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
   analytics: vi.fn(),
 }));
 
@@ -56,7 +56,7 @@ vi.mock("@/components/AuctionAlertModal", () => ({
 }));
 vi.mock("@/components/Navbar", () => ({ Navbar: () => <nav /> }));
 vi.mock("@/lib/analytics", () => ({ trackAnalyticsEvent: (...args: unknown[]) => mocks.analytics(...args) }));
-vi.mock("@/lib/logger", () => ({ logger: { error: vi.fn() } }));
+vi.mock("@/lib/logger", () => ({ logger: { error: vi.fn(), warn: vi.fn() } }));
 vi.mock("sonner", () => ({ toast: mocks.toast }));
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
@@ -242,6 +242,14 @@ describe("dashboard utility tabs", () => {
     fireEvent.click(screen.getByRole("button", { name: /Switch Participant Type/i }));
     fireEvent.click(screen.getByRole("button", { name: /switch my type/i }));
     await waitFor(() => expect(mocks.rpc).toHaveBeenCalledWith("begin_role_switch"));
+    expect(mocks.invoke).toHaveBeenCalledWith("log-role-switch", {
+      body: expect.objectContaining({
+        from_type: "agent",
+        to_type: "",
+        had_active_sub: true,
+        cancel_subscription: true,
+      }),
+    });
     expect(sessionStorage.getItem("role_switch_ctx")).toContain("agent");
     expect(refreshProfile).toHaveBeenCalled();
     expect(mocks.navigate).toHaveBeenCalledWith("/onboarding");

@@ -349,12 +349,6 @@ BEGIN
         AND NEW.rejection_reason IS DISTINCT FROM OLD.rejection_reason THEN
     v_title := 'Professional verification rejected';
     v_body := concat_ws(' ', 'Your professional verification was rejected.', NULLIF(NEW.rejection_reason, ''));
-  ELSIF NEW.notes IS DISTINCT FROM OLD.notes
-        AND COALESCE(NEW.notes, '') <> ''
-        AND NEW.verified IS DISTINCT FROM TRUE
-        AND NEW.rejection_reason IS NULL THEN
-    v_title := 'Professional verification needs more information';
-    v_body := concat_ws(' ', 'The verification team requested more information.', NULLIF(NEW.notes, ''));
   ELSE
     RETURN NEW;
   END IF;
@@ -377,7 +371,7 @@ REVOKE ALL ON FUNCTION private.notify_professional_verification_change() FROM an
 
 DROP TRIGGER IF EXISTS trg_professional_verification_notify ON public.professionals;
 CREATE TRIGGER trg_professional_verification_notify
-  AFTER UPDATE OF verified, rejection_reason, notes ON public.professionals
+  AFTER UPDATE OF verified, rejection_reason ON public.professionals
   FOR EACH ROW
   EXECUTE FUNCTION private.notify_professional_verification_change();
 
@@ -405,9 +399,6 @@ BEGIN
       WHEN NEW.is_featured THEN concat_ws(' ', 'Your listing', COALESCE(NULLIF(NEW.title, ''), NEW.id::TEXT), 'is now featured.')
       ELSE concat_ws(' ', 'Your listing', COALESCE(NULLIF(NEW.title, ''), NEW.id::TEXT), 'is no longer featured.')
     END;
-  ELSIF NEW.featured_until IS DISTINCT FROM OLD.featured_until AND NEW.is_featured THEN
-    v_title := 'Featured listing expiry updated';
-    v_body := concat_ws(' ', 'The featured expiry was updated for', COALESCE(NULLIF(NEW.title, ''), NEW.id::TEXT) || '.');
   ELSIF NEW.priority_placement IS DISTINCT FROM OLD.priority_placement THEN
     v_title := 'Listing priority updated';
     v_body := concat_ws(' ', 'The priority placement was updated for', COALESCE(NULLIF(NEW.title, ''), NEW.id::TEXT) || '.');
@@ -433,7 +424,7 @@ REVOKE ALL ON FUNCTION private.notify_featured_listing_change() FROM anon, authe
 
 DROP TRIGGER IF EXISTS trg_featured_listing_notify ON public.listings;
 CREATE TRIGGER trg_featured_listing_notify
-  AFTER UPDATE OF is_featured, featured_until, priority_placement ON public.listings
+  AFTER UPDATE OF is_featured, priority_placement ON public.listings
   FOR EACH ROW
   EXECUTE FUNCTION private.notify_featured_listing_change();
 

@@ -168,6 +168,7 @@ CREATE POLICY "messages_select" ON public.messages FOR SELECT
     EXISTS (
       SELECT 1 FROM public.conversations c
       WHERE c.id = conversation_id
+        AND c.closed_at IS NULL
         AND (c.participant_a = (select auth.uid()) OR c.participant_b = (select auth.uid()))
     )
   );
@@ -178,6 +179,7 @@ CREATE POLICY "messages_insert" ON public.messages FOR INSERT
     AND EXISTS (
       SELECT 1 FROM public.conversations c
       WHERE c.id = conversation_id
+        AND c.closed_at IS NULL
         AND (c.participant_a = (select auth.uid()) OR c.participant_b = (select auth.uid()))
     )
   );

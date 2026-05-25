@@ -31,6 +31,7 @@ import {
   useAgentDataInputQuota,
   useSubmitAgentDataInput,
   type AgentDataInputStatus,
+  type AgentDataInputSide,
 } from "@/hooks/useAgentDataInputs";
 
 const PROPERTY_TYPES = [
@@ -50,6 +51,7 @@ interface FormState {
   property_postal_code: string;
   property_type: string;
   transaction_type: "sale" | "rent";
+  agent_side: AgentDataInputSide;
   closing_price: string;
   kaek: string;
   buyer_name: string;
@@ -64,6 +66,7 @@ const EMPTY_FORM: FormState = {
   property_postal_code: "",
   property_type: "",
   transaction_type: "sale",
+  agent_side: "seller",
   closing_price: "",
   kaek: "",
   buyer_name: "",
@@ -89,8 +92,11 @@ export default function DataInputTab() {
     [inputs],
   );
   const projectedDiscountPct = useMemo(
-    () => (verifiedCount * 0.5).toFixed(1),
-    [verifiedCount],
+    () => inputs
+      .filter((i) => i.status === "verified" && !i.applied_to_invoice_at)
+      .reduce((sum, i) => sum + i.discount_pct, 0)
+      .toFixed(1),
+    [inputs],
   );
   const totalCreditCents = useMemo(
     () => inputs.reduce((sum, i) => sum + (i.stripe_credit_amount_cents ?? 0), 0),
@@ -118,6 +124,7 @@ export default function DataInputTab() {
         property_postal_code: form.property_postal_code.trim() || null,
         property_type: form.property_type || null,
         transaction_type: form.transaction_type,
+        agent_side: form.agent_side,
         closing_price: closingPrice,
         kaek: form.kaek.trim() || null,
         buyer_name: form.buyer_name.trim() || null,
@@ -332,6 +339,24 @@ export default function DataInputTab() {
             </div>
 
             <div className="space-y-1.5">
+              <Label htmlFor="agent_side">Agent side *</Label>
+              <Select
+                value={form.agent_side}
+                onValueChange={(v) => handleChange("agent_side", v as AgentDataInputSide)}
+                disabled={submittingDisabled}
+              >
+                <SelectTrigger id="agent_side">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="seller">Seller side</SelectItem>
+                  <SelectItem value="buyer">Buyer side</SelectItem>
+                  <SelectItem value="both">Both sides</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
               <Label htmlFor="kaek">KAEK (cadastral code)</Label>
               <Input
                 id="kaek"
@@ -435,7 +460,7 @@ export default function DataInputTab() {
                         <td className="px-4 py-3">
                           <div className="font-medium">{i.property_address}</div>
                           <div className="text-xs text-muted-foreground">
-                            {i.property_city}{i.property_postal_code ? `, ${i.property_postal_code}` : ""} · {i.transaction_type}
+                            {i.property_city}{i.property_postal_code ? `, ${i.property_postal_code}` : ""} · {i.transaction_type} · {i.agent_side}
                           </div>
                         </td>
                         <td className="px-4 py-3 text-right whitespace-nowrap">

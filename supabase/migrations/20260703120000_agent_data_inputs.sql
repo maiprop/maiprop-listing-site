@@ -348,7 +348,8 @@ SET search_path = public
 AS $$
 DECLARE
   v_caller UUID := auth.uid();
-  v_row public.agent_data_inputs;
+  v_decision TEXT;
+  v_ban BOOLEAN := FALSE;
 BEGIN
   IF v_caller IS NULL THEN
     RAISE EXCEPTION 'Not authenticated' USING ERRCODE = '42501';
@@ -361,41 +362,19 @@ BEGIN
       USING ERRCODE = '22023';
   END IF;
 
-  SELECT * INTO v_row FROM public.agent_data_inputs WHERE id = p_id FOR UPDATE;
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Data input % not found', p_id USING ERRCODE = 'P0002';
-  END IF;
-  IF v_row.status <> 'pending' THEN
-    RAISE EXCEPTION 'Data input % already reviewed (%)', p_id, v_row.status
-      USING ERRCODE = '22023';
-  END IF;
-
   IF p_action = 'verify' THEN
-    UPDATE public.agent_data_inputs
-       SET status = 'verified',
-           reviewed_at = now(),
-           reviewed_by = v_caller
-     WHERE id = p_id
-    RETURNING * INTO v_row;
+    v_decision := 'verified';
+  ELSIF p_action = 'reject' THEN
+    v_decision := 'rejected';
   ELSE
-    UPDATE public.agent_data_inputs
-       SET status = 'rejected',
-           rejection_reason = p_reason,
-           reviewed_at = now(),
-           reviewed_by = v_caller
-     WHERE id = p_id
-    RETURNING * INTO v_row;
-
-    IF p_action = 'reject_and_ban' THEN
-      INSERT INTO public.agent_data_input_bans (user_id, banned_by, reason)
-      VALUES (v_row.user_id, v_caller, COALESCE(p_reason, 'Fabricated data input'))
-      ON CONFLICT (user_id) DO NOTHING;
-    END IF;
+    v_decision := 'rejected';
+    v_ban := TRUE;
   END IF;
 
-  RETURN v_row;
+  RETURN public.admin_review_agent_data_input(p_id, v_decision, p_reason, v_ban, v_caller);
 END;
 $$;
 
 REVOKE ALL ON FUNCTION public.admin_review_agent_data_input(UUID, TEXT, TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.admin_review_agent_data_input(UUID, TEXT, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_review_agent_data_input(UUID, TEXT, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.admin_review_agent_data_input(UUID, TEXT, TEXT, BOOLEAN, UUID) TO authenticated, service_role;

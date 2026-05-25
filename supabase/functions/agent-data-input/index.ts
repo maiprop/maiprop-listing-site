@@ -178,7 +178,7 @@ Deno.serve(async (req) => {
         supabase.rpc("get_agent_data_input_status", { p_user_id: user.id }),
         (supabase.from as any)("agent_data_inputs")
           .select(
-            "id, property_address, city, postal_code, property_type, transaction_type, agent_side, sale_price, closing_date, status, rejection_reason, discount_applied, discount_applied_at, discount_invoice_id, created_at, reviewed_at",
+            "id, property_address, city, postal_code, property_type, transaction_type, agent_side, sale_price, closing_date, status, rejection_reason, discount_pct, discount_applied, discount_applied_at, discount_invoice_id, created_at, reviewed_at",
           )
           .eq("user_id", user.id)
           .order("created_at", { ascending: false })
@@ -218,7 +218,7 @@ Deno.serve(async (req) => {
       const { data, error } = await (supabase.from as any)("agent_data_inputs")
         .insert({ ...result.value, user_id: user.id })
         .select(
-          "id, property_address, city, property_type, transaction_type, agent_side, sale_price, closing_date, status, created_at",
+          "id, property_address, city, property_type, transaction_type, agent_side, sale_price, closing_date, status, discount_pct, created_at",
         )
         .single();
 
