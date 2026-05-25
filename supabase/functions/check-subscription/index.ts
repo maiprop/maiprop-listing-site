@@ -8,6 +8,7 @@ import {
 import { AuthError, verifyBearerToken } from "../_shared/auth.ts";
 import { createLogger } from "../_shared/logger.ts";
 import { resolveSubscriptionEntitlement } from "../_shared/entitlements.ts";
+import { hasProvisionedSubscriptionAccess } from "../_shared/subscriptionStatus.ts";
 
 const log = createLogger("check-subscription");
 const checkSubLimiter = makeRateLimiter({
@@ -25,7 +26,7 @@ export type FallbackSubscriptionState = {
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function isStripeSubscribed(status: string | null | undefined) {
-  return status === "active" || status === "trialing";
+  return hasProvisionedSubscriptionAccess(status);
 }
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.

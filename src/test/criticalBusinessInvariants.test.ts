@@ -9,6 +9,7 @@ describe("critical business invariants", () => {
     const checkout = read("supabase/functions/create-checkout/index.ts");
     const webhook = read("supabase/functions/stripe-webhook/index.ts");
     const hardening = read("supabase/migrations/20260707070000_audience_scoped_pro_entitlements.sql");
+    const lifecycle = read("supabase/migrations/20260525171000_subscription_lifecycle_grace_and_lapse.sql");
     const grants = read("supabase/migrations/20260707060000_explicit_data_api_grants.sql");
     const authContext = read("src/contexts/AuthContext.tsx");
 
@@ -23,6 +24,7 @@ describe("critical business invariants", () => {
     expect(webhook).toContain("plan_key: entitlement?.planKey");
 
     expect(hardening).toContain("CREATE OR REPLACE FUNCTION public.is_pro(p_user_id uuid)");
+    expect(hardening).toContain("SELECT p.force_pro_access");
     expect(hardening).toContain("public.has_audience_scoped_pro_entitlement(p_user_id)");
     expect(hardening).toContain("pc.audience = public.profile_pricing_audience");
     expect(hardening).toContain("pc.key = ANY (ARRAY['pro', 'agent_basic', 'developer_pro', 'professional_basic'])");
@@ -31,6 +33,8 @@ describe("critical business invariants", () => {
     );
     expect(hardening).toContain("pc.metadata->>'stripe_product_id' = p.subscription_product_id");
     expect(hardening).not.toContain("JOIN public.pro_product_ids pp");
+    expect(lifecycle).toContain("SELECT p.force_pro_access");
+    expect(lifecycle).toContain("public.apply_subscription_lapse_controls");
 
     expect(grants).toContain("authenticated must not update public.profiles.force_pro_access");
     expect(authContext).toContain("force_pro_access");
@@ -69,6 +73,20 @@ describe("critical business invariants", () => {
     expect(checkout).toContain('mode: "mock"');
     expect(pricing).toContain('searchParams.get("billing_mode") === "mock"');
     expect(pricing).toContain("Mock checkout completed. No live payment or subscription entitlement was created.");
+  });
+
+  it("keeps Stripe payment recovery from revoking Pro before terminal lapse", () => {
+    const webhook = read("supabase/functions/stripe-webhook/index.ts");
+    const checkSubscription = read("supabase/functions/check-subscription/index.ts");
+    const statusPolicy = read("supabase/functions/_shared/subscriptionStatus.ts");
+
+    expect(statusPolicy).toContain('"past_due"');
+    expect(statusPolicy).toContain("PROVISIONED_ACCESS_STATUSES");
+    expect(webhook).toContain("syncInvoiceSubscription(supabase, stripe, invoice, \"invoice.payment_failed\")");
+    expect(webhook).toContain("hasProvisionedSubscriptionAccess(sub.status)");
+    expect(webhook).toContain("shouldRevokeSubscriptionAccess(sub.status)");
+    expect(webhook).toContain("apply_subscription_lapse_controls");
+    expect(checkSubscription).toContain("hasProvisionedSubscriptionAccess(status)");
   });
 
   it("enforces signed-in AI quota for costly public AI endpoints", () => {
