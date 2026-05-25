@@ -36,6 +36,7 @@ import { PropertyAIInsightsSection } from "@/components/property/PropertyAIInsig
 import { PropertyValuationLockedCard } from "@/components/property/PropertyValuationLockedCard";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
+import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 
 // skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
 export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house detail coordinates listing data, registration, offers, and owner controls.
@@ -105,8 +106,8 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
     try {
       const convId = await startConversation.mutateAsync({ other_user_id: ownerId, listing_id: id });
       navigate("/messages", { state: { openConversationId: convId } });
-    } catch (_err: unknown) {
-      toast.error(isGreek ? "Δεν ήταν δυνατή η έναρξη συνομιλίας" : "Could not start conversation");
+    } catch (err: unknown) {
+      toast.error(getPlanLimitErrorMessage(err) ?? (isGreek ? "Δεν ήταν δυνατή η έναρξη συνομιλίας" : "Could not start conversation"));
     }
   };
 

@@ -7,6 +7,10 @@ import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { AIServiceMatchModal } from "@/components/AIServiceMatchModal";
 import { useProfessionals } from "@/hooks/useProfessionals";
+import { useAuth } from "@/contexts/AuthContext";
+import { useSubscription } from "@/hooks/useSubscription";
+import { getPlanLimits } from "@/hooks/usePlanLimits";
+import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { Link } from "react-router-dom";
 
 // ─── Category Groups ──────────────────────────────────────────────────────────
@@ -160,11 +164,29 @@ const categoryInfo: Record<string, { emoji: string; label: string; group: string
   smart_home_installer: { emoji: "📱", label: "Smart Home", group: "construction" },
 };
 
+function limitProfessionalsPerCategory<T extends { category?: string | null }>(
+  professionals: T[],
+  limit: number | null | undefined,
+): T[] {
+  if (limit == null) return professionals;
+  if (limit <= 0) return [];
+
+  const seenByCategory = new Map<string, number>();
+  return professionals.filter((professional) => {
+    const category = professional.category || "__uncategorized";
+    const seen = seenByCategory.get(category) ?? 0;
+    if (seen >= limit) return false;
+    seenByCategory.set(category, seen + 1);
+    return true;
+  });
+}
 
 export default function Professionals() {
   const [searchParams, setSearchParams] = useSearchParams();
   const categoryFromUrl = searchParams.get("category");
   const searchFromUrl = searchParams.get("search") || "";
+  const { profile } = useAuth();
+  const { isPro } = useSubscription();
 
   const [selectedGroup, setSelectedGroup] = useState<string | null>(() => {
     if (!categoryFromUrl) return null;
@@ -219,8 +241,13 @@ export default function Professionals() {
   : undefined;
 
   const { data: professionals = [], isLoading } = useProfessionals(dbCategory);
+  const participantType = getParticipantTypeFromProfile(profile);
+  const professionalsPerCategory = getPlanLimits(
+    participantType,
+    isPro ? "pro" : "free",
+  ).professionalsPerCategory;
 
-  const filtered = (Array.isArray(professionals) ? professionals : []).filter((p) => {
+  const categoryFiltered = (Array.isArray(professionals) ? professionals : []).filter((p) => {
     // Category from URL (e.g. from homepage search) — exact match
     if (categoryFromUrl) {
       if (p.category !== categoryFromUrl) return false;
@@ -228,7 +255,10 @@ export default function Professionals() {
       const group = categoryGroups.find((g) => g.id === selectedGroup);
       if (group && !group.categories.includes(p.category)) return false;
     }
-    // Text search
+    return true;
+  });
+  const cappedProfessionals = limitProfessionalsPerCategory(categoryFiltered, professionalsPerCategory);
+  const visibleProfessionals = cappedProfessionals.filter((p) => {
     const q = search.toLowerCase();
     if (!q) return true;
     return (
@@ -425,16 +455,16 @@ export default function Professionals() {
           <div className="flex items-center justify-center py-20">
               <Loader2 className="w-6 h-6 animate-spin text-primary" />
             </div> :
-          filtered.length === 0 ?
+          visibleProfessionals.length === 0 ?
           <div className="text-center py-20 text-muted-foreground">
               <p className="text-lg font-medium mb-1">No professionals found</p>
               <p className="text-sm">Try adjusting your search or category filter</p>
             </div> :
 
           <>
-              <p className="text-sm text-muted-foreground mb-4" aria-live="polite" aria-atomic="true">{filtered.length} professional{filtered.length !== 1 ? "s" : ""} found{activeGroup ? ` in ${activeGroup.label}` : ""}</p>
+              <p className="text-sm text-muted-foreground mb-4" aria-live="polite" aria-atomic="true">{visibleProfessionals.length} professional{visibleProfessionals.length !== 1 ? "s" : ""} found{activeGroup ? ` in ${activeGroup.label}` : ""}</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                {filtered.map((pro) => {
+                {visibleProfessionals.map((pro) => {
                 const name = pro.display_name || "Professional";
                 const catData = categoryInfo[pro.category] || { emoji: "👤", label: pro.category, group: "" };
                 const group = categoryGroups.find((g) => g.id === catData.group);

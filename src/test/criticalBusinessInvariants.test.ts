@@ -124,6 +124,35 @@ describe("critical business invariants", () => {
     expect(wiring).toContain("https://qvvicunqcrwpioqnvzxf.supabase.co/functions/v1/oh-registration-notify");
   });
 
+  it("keeps remaining plan limits and listing lifecycle effects enforced server-side", () => {
+    const enforcement = read("supabase/migrations/20260525071300_enforce_remaining_plan_limits_and_listing_lifecycle.sql");
+
+    expect(enforcement).toContain("CREATE OR REPLACE FUNCTION public.get_contact_monthly_limit");
+    expect(enforcement).toContain("NULLIF(p.participant_type::TEXT, '')");
+    expect(enforcement).toContain("CREATE OR REPLACE FUNCTION private.count_monthly_property_contact_threads");
+    expect(enforcement).toContain("first_message.sender_id = p_user_id");
+    expect(enforcement).toContain("hashtextextended('contact_limit:'");
+    expect(enforcement).toContain("CREATE TRIGGER trg_check_conversation_contact_monthly_limit");
+    expect(enforcement).toContain("CREATE TRIGGER trg_check_message_contact_monthly_limit");
+    expect(enforcement).toContain("contact_limit_reached");
+
+    expect(enforcement).toContain("CREATE OR REPLACE FUNCTION public.get_open_house_rsvp_monthly_limit");
+    expect(enforcement).toContain("CREATE TRIGGER trg_check_open_house_rsvp_monthly_limit");
+    expect(enforcement).toContain("hashtextextended('open_house_rsvp:'");
+    expect(enforcement).toContain("open_house_rsvp_limit_reached");
+
+    expect(enforcement).toContain("CREATE OR REPLACE FUNCTION private.notify_favorite_price_drop");
+    expect(enforcement).toContain("CREATE TRIGGER listing_price_drop_notify_favorites");
+    expect(enforcement).toContain("'price_alert'");
+    expect(enforcement).toContain("WHEN NEW.listing_type = 'auction' THEN '/auction/' || NEW.id::TEXT");
+
+    expect(enforcement).toContain("CREATE OR REPLACE FUNCTION private.handle_listing_terminal_status");
+    expect(enforcement).toContain("CREATE TRIGGER listing_terminal_status_lifecycle");
+    expect(enforcement).toContain("UPDATE public.viewings v");
+    expect(enforcement).toContain("UPDATE public.open_house_registrations r");
+    expect(enforcement).toContain("Saved listing update");
+  });
+
   it("keeps scheduled saved-search alerts authenticated or unscheduled", () => {
     const wiring = read("supabase/migrations/20260707130000_fix_cron_and_open_house_notify_wiring.sql");
     const edgeFunction = read("supabase/functions/send-saved-search-alerts/index.ts");
