@@ -53,6 +53,7 @@ describe("useRejectProfessional()", () => {
     expect(update).toHaveBeenCalledWith({
       verified: false,
       rejection_reason: "not a real CV",
+      verified_at: null,
     });
     expect(eq).toHaveBeenCalledWith("id", "p1");
   });
@@ -120,6 +121,7 @@ describe("useApproveProfessional()", () => {
       verified: true,
       license_number: "LIC-1",
       rejection_reason: null,
+      verified_at: expect.any(String),
     });
   });
 

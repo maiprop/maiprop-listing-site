@@ -33,6 +33,7 @@ describe("getOpenHouseApprovalBlockers", () => {
         id_verified_at: null,
         waiver_signed_at: null,
         proof_of_funds_url: null,
+        pof_verified_status: null,
         proof_amount: null,
         investor_declaration_signed_at: null,
         mortgage_status: null,
@@ -73,6 +74,7 @@ describe("getOpenHouseApprovalBlockers", () => {
         id_verified_at: new Date().toISOString(),
         waiver_signed_at: new Date().toISOString(),
         proof_of_funds_url: "docs/pof.pdf",
+        pof_verified_status: "verified",
         proof_amount: 300000,
         investor_declaration_signed_at: new Date().toISOString(),
         mortgage_status: "cash",
@@ -100,6 +102,7 @@ describe("getOpenHouseApprovalBlockers", () => {
         id_verified_at: new Date().toISOString(),
         waiver_signed_at: new Date().toISOString(),
         proof_of_funds_url: "docs/pof.pdf",
+        pof_verified_status: "verified",
         proof_amount: 250000,
         investor_declaration_signed_at: new Date().toISOString(),
         mortgage_status: null,
@@ -130,6 +133,7 @@ describe("getOpenHouseApprovalBlockers", () => {
         id_verified_at: new Date().toISOString(),
         waiver_signed_at: new Date().toISOString(),
         proof_of_funds_url: "docs/pof.pdf",
+        pof_verified_status: "verified",
         proof_amount: 150000,
         investor_declaration_signed_at: new Date().toISOString(),
         mortgage_status: "cash",
@@ -141,5 +145,33 @@ describe("getOpenHouseApprovalBlockers", () => {
     );
 
     expect(blockers).toEqual(["Proof of funds is below the minimum 200,000"]);
+  });
+
+  it("blocks approval when proof of funds has not been verified", () => {
+    const blockers = getOpenHouseApprovalBlockers(
+      {
+        timeslot_index: 0,
+        contact_name: "Buyer One",
+        contact_email: "buyer@example.com",
+        contact_phone: "+306900000000",
+        contact_permission_at: new Date().toISOString(),
+        id_verification_consent_at: new Date().toISOString(),
+        privacy_acknowledged_at: new Date().toISOString(),
+        id_doc_url: "docs/id.pdf",
+        id_verified_at: new Date().toISOString(),
+        waiver_signed_at: new Date().toISOString(),
+        proof_of_funds_url: "docs/pof.pdf",
+        pof_verified_status: "unreviewed",
+        proof_amount: 300000,
+        investor_declaration_signed_at: new Date().toISOString(),
+        mortgage_status: "cash",
+        budget_range: "200k_500k",
+        working_with_agent: "no",
+      },
+      baseSettings,
+      350000
+    );
+
+    expect(blockers).toContain("Proof of funds not verified");
   });
 });

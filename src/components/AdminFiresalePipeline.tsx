@@ -17,7 +17,7 @@ function useAdminDeals() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("firesale_requests")
-        .select("id, address, city, property_type, sqm, bedrooms, condition, ai_estimate, asking_price, offer_price, status, contact_email, contact_phone, notes, admin_notes, created_at")
+        .select("id, address, city, property_type, sqm, bedrooms, condition, ai_estimate, asking_price, offer_price, status, contact_email, contact_phone, notes, admin_notes, seller_response, seller_response_price, seller_responded_at, created_at")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data || []) as AdminDeal[];
@@ -33,18 +33,24 @@ function useUpdateAdminDeal() {
       status,
       admin_notes,
       offerPrice,
+      sellerResponse,
+      sellerResponsePrice,
     }: {
       id: string;
       status: string;
       admin_notes: string;
       offerPrice?: number;
+      sellerResponse?: string;
+      sellerResponsePrice?: number;
     }) => {
-      const { data, error } = await supabase.rpc("admin_update_firesale_pipeline_deal" as never, {
+      const { data, error } = await supabase.rpc("admin_update_firesale_pipeline_deal", {
         p_deal_id: id,
         p_status: status,
         p_admin_notes: admin_notes,
-        p_offer_price: offerPrice ?? null,
-      } as never);
+        p_offer_price: offerPrice,
+        p_seller_response: sellerResponse,
+        p_seller_response_price: sellerResponsePrice,
+      });
       if (error) throw error;
 
       const result = Array.isArray(data) ? data[0] : data;
@@ -53,7 +59,7 @@ function useUpdateAdminDeal() {
     onSuccess: (result, { status }) => {
       qc.invalidateQueries({ queryKey: ["admin-firesale-deals"] });
       if (status === "offer_sent") {
-        toast.success(`Offer sent — ${result.notified} investor${result.notified !== 1 ? "s" : ""} notified`);
+        toast.success(`Offer sent — ${result.notified} notification${result.notified !== 1 ? "s" : ""} queued`);
       } else {
         toast.success(status === "closed" ? "Deal closed!" : "Deal updated");
       }
@@ -67,8 +73,15 @@ export default function AdminFiresalePipeline() {
   const { data: adminDeals = [], isLoading, refetch } = useAdminDeals();
   const updateDeal = useUpdateAdminDeal();
 
-  const handleAdminUpdate = async (id: string, status: string, admin_notes: string, offerPrice?: number) => {
-    updateDeal.mutate({ id, status, admin_notes, offerPrice });
+  const handleAdminUpdate = async (
+    id: string,
+    status: string,
+    admin_notes: string,
+    offerPrice?: number,
+    sellerResponse?: string,
+    sellerResponsePrice?: number,
+  ) => {
+    updateDeal.mutate({ id, status, admin_notes, offerPrice, sellerResponse, sellerResponsePrice });
   };
 
   const adminStats = {

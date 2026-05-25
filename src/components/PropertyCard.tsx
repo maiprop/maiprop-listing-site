@@ -200,7 +200,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
       entity_id: property.id,
       reporter_id: user.id,
     });
-    if (error) toast.error(t("propertyCard.copyFailed"));
+    if (error) toast.error(t("propertyCard.errorReport"));
     else toast.success(t("propertyCard.reportSubmitted"));
   };
 

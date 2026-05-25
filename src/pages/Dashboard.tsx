@@ -82,6 +82,90 @@ const TabFallback = () => {
   );
 };
 
+type SellerQuickSaleRequest = {
+  id: string;
+  address: string;
+  city: string;
+  property_type: string | null;
+  asking_price: number | null;
+  offer_price: number | null;
+  status: string;
+  seller_response: string | null;
+  seller_response_price: number | null;
+  seller_responded_at: string | null;
+  created_at: string;
+};
+
+const QUICK_SALE_STATUS_BADGES: Record<string, { label: string; className: string }> = {
+  pending: { label: "Pending", className: "bg-brand-gold/15 text-brand-gold border-brand-gold/20" },
+  reviewed: { label: "Reviewed", className: "bg-primary/15 text-primary border-primary/20" },
+  offer_sent: { label: "Offer Sent", className: "bg-accent/15 text-accent border-accent/20" },
+  closed: { label: "Closed", className: "bg-brand-emerald/15 text-brand-emerald border-brand-emerald/20" },
+};
+
+function formatQuickSaleMoney(value: number | null | undefined) {
+  if (value == null) return null;
+  return `€${Number(value).toLocaleString()}`;
+}
+
+function SellerQuickSalePanel({ requests }: { requests: SellerQuickSaleRequest[] }) {
+  return (
+    <div className="glass-card rounded-xl border border-destructive/20 p-5">
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div>
+          <h2 className="font-display font-semibold flex items-center gap-2">
+            <Flame className="w-4 h-4 text-destructive" /> Quick Sale Requests
+          </h2>
+          <p className="text-xs text-muted-foreground mt-1">Track your submitted Quick Sale pipeline status.</p>
+        </div>
+        <Button size="sm" variant="outline" className="border-destructive/30 text-destructive gap-1.5 shrink-0" asChild>
+          <Link to="/firesale">New Request <ArrowRight className="w-3.5 h-3.5" /></Link>
+        </Button>
+      </div>
+
+      {requests.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+          No Quick Sale requests yet.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {requests.slice(0, 4).map((request) => {
+            const badge = QUICK_SALE_STATUS_BADGES[request.status] ?? QUICK_SALE_STATUS_BADGES.pending;
+            const offer = formatQuickSaleMoney(request.offer_price);
+            const response = request.seller_response ? request.seller_response.replace("_", " ") : null;
+            return (
+              <div key={request.id} className="rounded-lg border border-border bg-background/60 px-3 py-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`text-[10px] font-bold uppercase tracking-widest border px-2 py-0.5 rounded-full ${badge.className}`}>
+                    {badge.label}
+                  </span>
+                  {response && (
+                    <span className="text-[10px] font-bold uppercase tracking-widest border px-2 py-0.5 rounded-full bg-muted text-muted-foreground border-border">
+                      Seller {response}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-start justify-between gap-3 mt-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold truncate">{request.address}, {request.city}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 capitalize">
+                      {request.property_type || "property"} · Submitted {new Date(request.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-[10px] text-muted-foreground">{offer ? "Offer" : "Asking"}</p>
+                    <p className="text-sm font-bold">{offer ?? formatQuickSaleMoney(request.asking_price) ?? "TBD"}</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 export default function Dashboard() { // skipcq: JS-R1005
@@ -174,6 +258,10 @@ export default function Dashboard() { // skipcq: JS-R1005
   const updateConsultationRequest = useUpdateConsultationRequest();
 
   const handleSignOut = async () => { await signOut(); navigate("/"); };
+  const handleDashboardSelect = useCallback((key: NavKey) => {
+    setActiveSection(key);
+    navigate(key === "overview" ? "/dashboard" : `/dashboard/${key}`);
+  }, [navigate]);
 
   const displayName = useMemo(
     () => profile?.display_name || profile?.first_name || user?.email?.split("@")[0] || tr("dashboard.userFallback", "User"),
@@ -193,6 +281,20 @@ export default function Dashboard() { // skipcq: JS-R1005
   const isInvestorLike = hasInvestorAccess;
   const isSellSide = role === "agent" || role === "developer";
   const isSellerLike = role === "seller" || bioType === "seller" || isSellSide;
+  const { data: quickSaleRequests = [] } = useQuery<SellerQuickSaleRequest[]>({
+    queryKey: ["seller-quick-sale-requests", user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data, error } = await supabase
+        .from("firesale_requests")
+        .select("id, address, city, property_type, asking_price, offer_price, status, seller_response, seller_response_price, seller_responded_at, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data || []) as SellerQuickSaleRequest[];
+    },
+    enabled: !!user && isSellerLike,
+  });
 
   const upcomingViewingsCount = useMemo(
     () => viewings.filter(v => v.status === "confirmed" || v.status === "pending").length,
@@ -285,7 +387,7 @@ export default function Dashboard() { // skipcq: JS-R1005
         <DashboardSidebar
           navItems={navItems}
           activeSection={activeSection}
-          onSelect={setActiveSection}
+          onSelect={handleDashboardSelect}
           onSignOut={handleSignOut}
           displayName={displayName}
           roleLabel={roleLabel}
@@ -299,13 +401,13 @@ export default function Dashboard() { // skipcq: JS-R1005
         <DashboardMobileNav
           navItems={navItems}
           activeSection={activeSection}
-          onSelect={setActiveSection}
+          onSelect={handleDashboardSelect}
           onSignOut={handleSignOut}
           pendingLeadsCount={pendingLeadsCount}
         />
 
         {/* Main content */}
-        <main className="flex-1 p-4 sm:p-6 max-w-full overflow-hidden pb-28 md:pb-6">
+        <main className="flex-1 p-4 sm:p-6 max-w-full overflow-hidden pb-4 md:pb-6 max-md:h-[calc(100svh-4rem-var(--dashboard-mobile-nav-h,56px)-env(safe-area-inset-bottom,0px))] max-md:overflow-y-auto">
 
           {/* ── OVERVIEW ───────────────────────────────────────────────────── */}
           {activeSection === "overview" && navItems.some(i => i.key === "overview") && (
@@ -488,6 +590,7 @@ export default function Dashboard() { // skipcq: JS-R1005
                       <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground" asChild><Link to="/pricing">{tr("dashboard.overview.proUpgrade.cta", "Upgrade to Pro")}</Link></Button>
                     </div>
                   )}
+                  <SellerQuickSalePanel requests={quickSaleRequests} />
                   {myListings.length > 0 ? (
                     <div>
                       <h2 className="font-display font-semibold mb-4">{tr("dashboard.overview.listings.title", "Your Active Listings")}</h2>

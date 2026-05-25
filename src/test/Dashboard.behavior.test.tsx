@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type React from "react";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderWithProviders } from "@/test/utils";
 import Dashboard from "@/pages/Dashboard";
 
@@ -191,6 +191,24 @@ describe("Dashboard behavior", () => {
     expect(screen.getByText("Saved searches: 2")).toBeInTheDocument();
     expect(screen.getByText("Looking for Property")).toBeInTheDocument();
     expect(screen.getAllByText("Auction Alerts").length).toBeGreaterThan(0);
+  });
+
+  it("counts seller active listings from the same listing rows shown in the overview", () => {
+    authState.profile = { id: "p-1", role: "seller", participant_type: "seller", first_name: "Sofia" };
+    listingsState.data = [
+      { id: "l-1", status: "active", title: "Athens Flat", city: "Athens", price: 250000, views_count: 9 },
+      { id: "l-2", status: "active", title: "Piraeus Loft", city: "Piraeus", price: 310000, views_count: 4 },
+      { id: "l-3", status: "active", title: "Chania Villa", city: "Chania", price: 640000, views_count: 12 },
+    ];
+
+    renderWithProviders(<Dashboard />);
+
+    const activeListingsStat = screen.getByText("Active Listings").closest(".glass-card");
+    expect(activeListingsStat).not.toBeNull();
+    expect(within(activeListingsStat as HTMLElement).getByText("3")).toBeInTheDocument();
+    expect(screen.getByText("Athens Flat")).toBeInTheDocument();
+    expect(screen.getByText("Piraeus Loft")).toBeInTheDocument();
+    expect(screen.getByText("Chania Villa")).toBeInTheDocument();
   });
 
   it("honors a route tab when it is available for the current role", async () => {

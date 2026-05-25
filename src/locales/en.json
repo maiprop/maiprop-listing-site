@@ -39,7 +39,7 @@
     },
     "features": {
       "title": "Everything you need in one platform",
-      "subtitle": "From AI-powered search to property auction tracking, maiProp gives buyers, sellers and professionals an edge.",
+      "subtitle": "From AI-powered search to property auction tracking, mAI prop gives buyers, sellers and professionals an edge.",
       "aiSearch": {
         "title": "AI Property Search",
         "description": "Describe what you want in plain language. Our AI finds matching properties instantly."
@@ -67,7 +67,7 @@
     },
     "cta": {
       "title": "Ready to find your next property?",
-      "subtitle": "Join thousands of buyers, sellers and professionals using maiProp.",
+      "subtitle": "Join thousands of buyers, sellers and professionals using mAI prop.",
       "getStarted": "Get started free",
       "viewPricing": "View pricing"
     },
@@ -275,7 +275,7 @@
     "title": "Quick Sale",
     "subtitle": "Off-market properties and motivated sellers",
     "accessRequired": "Investor access required",
-    "accessDescription": "Quick Sale deal flow is exclusive to approved maiProp investors.",
+    "accessDescription": "Quick Sale deal flow is exclusive to approved mAI prop investors.",
     "applyForAccess": "Apply for access",
     "dealStatus": {
       "new": "New",
@@ -615,7 +615,7 @@
   "auth": {
     "login": {
       "title": "Welcome back",
-      "subtitle": "Sign in to your maiProp account",
+      "subtitle": "Sign in to your mAI prop account",
       "email": "Email",
       "password": "Password",
       "forgotPassword": "Forgot password?",
@@ -627,7 +627,7 @@
     },
     "signup": {
       "title": "Create your account",
-      "subtitle": "Join maiProp and start your property journey",
+      "subtitle": "Join mAI prop and start your property journey",
       "firstName": "First name",
       "lastName": "Last name",
       "email": "Email",
@@ -681,7 +681,7 @@
     "general": "General"
   },
   "contact": {
-    "title": "Contact maiProp",
+    "title": "Contact mAI prop",
     "subtitle": "For enterprise plans, institutional access, API partnerships or any other enquiry.",
     "name": "Name",
     "email": "Email",
@@ -699,6 +699,7 @@
     "generalEmail": "Email",
     "enterpriseEmail": "Enterprise & API",
     "phone": "Phone (GR)",
+    "registeredAddress": "Registered address",
     "suitableFor": "Suitable for",
     "orgTypes": {
       "banks": "Banks & financial institutions",
@@ -818,7 +819,7 @@
       "contact": "Contact",
       "blog": "Blog"
     },
-    "copyright": "© {{year}} maiProp. All rights reserved.",
+    "copyright": "© {{year}} mAI prop. All rights reserved.",
     "madeIn": "Made in Greece"
   },
   "language": {
@@ -866,6 +867,7 @@
     "linkCopied": "Link copied!",
     "copyFailed": "Could not copy link",
     "signInToReport": "Sign in to report",
+    "errorReport": "Could not submit report",
     "reportSubmitted": "Report submitted. Our team will review it."
   },
   "listingsPage": {
@@ -2417,17 +2419,17 @@
         {
           "title": "1. Introduction & Identity of the Controller",
           "paragraphs": [
-            "maiProp is a real estate technology platform operated by maiProp Ltd, a company incorporated in Greece and registered with the Hellenic Companies Register (GEMI). We act as data controller under the EU General Data Protection Regulation (GDPR) 2016/679 and Greek Law 4624/2019.",
-            "Contact: privacy@maiprop.co, +30 210 123 4567, Kifissias Ave. 44, 15125 Athens, Greece. Our Data Protection Officer can be reached at dpo@maiprop.co."
+            "mAI prop is a real estate technology platform operated by Data Estate PC, a company incorporated in Greece and registered with the Hellenic Companies Register (GEMI). We act as data controller under the EU General Data Protection Regulation (GDPR) 2016/679 and Greek Law 4624/2019.",
+            "Controller: Data Estate PC, Akadimias 32, 106 72, Athens, Greece."
           ]
         },
         {
           "title": "2. Scope of This Policy",
           "paragraphs": [
-            "This Privacy Policy applies to personal data collected through the maiProp website, mobile applications, APIs, embedded widgets, third-party services we operate, and offline interactions such as property viewings, phone consultations, or support. It does not apply to third-party websites linked from our platform."
+            "This Privacy Policy applies to personal data collected through the mAI prop website, mobile applications, APIs, embedded widgets, third-party services we operate, and offline interactions such as property viewings, phone consultations, or support. It does not apply to third-party websites linked from our platform."
           ],
           "list": [
-            "The maiProp website and subdomains such as os.maiprop.co and properties.maiprop.co.",
+            "The mAI prop website and platform services.",
             "Mobile applications for iOS and Android, where applicable.",
             "API integrations, embedded widgets, marketplace tools, and platform services.",
             "Offline interactions with our staff, partners, or agents."
@@ -2531,7 +2533,7 @@
         {
           "title": "7. International Data Transfers",
           "paragraphs": [
-            "Data is primarily stored and processed in the European Economic Area. Where transfers outside the EEA occur, we use appropriate safeguards such as EU Standard Contractual Clauses, adequacy decisions, and data minimisation. You may request details by contacting privacy@maiprop.co."
+            "Data is primarily stored and processed in the European Economic Area. Where transfers outside the EEA occur, we use appropriate safeguards such as EU Standard Contractual Clauses, adequacy decisions, and data minimisation. You may request details through the contact form or by post at Data Estate PC, Akadimias 32, 106 72, Athens, Greece."
           ]
         },
         {
@@ -2551,7 +2553,7 @@
         {
           "title": "9. Your Rights Under GDPR",
           "paragraphs": [
-            "You may exercise your rights free of charge by contacting privacy@maiprop.co. We respond to verified requests within 30 calendar days, extendable to 90 days for complex requests with notice."
+            "You may exercise your rights free of charge through the contact form or by post at Data Estate PC, Akadimias 32, 106 72, Athens, Greece. We respond to verified requests within 30 calendar days, extendable to 90 days for complex requests with notice."
           ],
           "list": [
             "Access, rectification, erasure, restriction, portability, and objection.",
@@ -2570,7 +2572,7 @@
         {
           "title": "11. AI & Machine Learning",
           "paragraphs": [
-            "maiProp uses AI for property valuation, search, neighbourhood analysis, filters, chat assistance, and investment analytics. These systems support human decisions and may contain errors."
+            "mAI prop uses AI for property valuation, search, neighbourhood analysis, filters, chat assistance, and investment analytics. These systems support human decisions and may contain errors."
           ],
           "list": [
             "Models use aggregated and anonymised real estate data where possible.",
@@ -2582,7 +2584,7 @@
         {
           "title": "12. Security",
           "paragraphs": [
-            "We use appropriate technical and organisational measures including TLS encryption, access controls, staff MFA, vulnerability assessments, infrastructure safeguards, and incident response procedures. No system is completely secure. If you suspect unauthorised access, contact security@maiprop.co immediately."
+            "We use appropriate technical and organisational measures including TLS encryption, access controls, staff MFA, vulnerability assessments, infrastructure safeguards, and incident response procedures. No system is completely secure. If you suspect unauthorised access, use the contact form or write to Data Estate PC, Akadimias 32, 106 72, Athens, Greece immediately."
           ]
         },
         {
@@ -2600,10 +2602,8 @@
         {
           "title": "15. Contact Us",
           "list": [
-            "Privacy email: privacy@maiprop.co",
-            "DPO: dpo@maiprop.co",
-            "Post: maiProp Ltd, Privacy Team, Kifissias Ave. 44, 15125 Athens, Greece",
-            "Phone: +30 210 123 4567, Monday to Friday, 09:00 to 17:00 EET"
+            "Data controller: Data Estate PC",
+            "Post: Akadimias 32, 106 72, Athens, Greece"
           ]
         }
       ]
@@ -2611,12 +2611,12 @@
     "terms": {
       "eyebrow": "Legal",
       "title": "Terms of Service",
-      "updated": "Last updated: 9 March 2026. These terms govern your use of the maiProp platform. Please read them carefully.",
+      "updated": "Last updated: 9 March 2026. These terms govern your use of the mAI prop platform. Please read them carefully.",
       "sections": [
         {
           "title": "1. Acceptance of Terms",
           "paragraphs": [
-            "By accessing or using maiProp, you agree to these Terms of Service, our Privacy Policy, and our Cookie Policy. The platform is operated by maiProp Ltd in Greece. If you do not agree, you must stop using the platform. If you use the platform for a business, you confirm that you can bind that business to these Terms."
+            "By accessing or using mAI prop, you agree to these Terms of Service, our Privacy Policy, and our Cookie Policy. The platform is operated by Data Estate PC in Greece. If you do not agree, you must stop using the platform. If you use the platform for a business, you confirm that you can bind that business to these Terms."
           ]
         },
         {
@@ -2633,13 +2633,13 @@
         {
           "title": "3. Account Registration & Security",
           "paragraphs": [
-            "Some features require an account. You are responsible for your credentials and all activity under your account. Notify security@maiprop.co immediately if you suspect unauthorised access. You may not share accounts, create duplicate accounts to bypass limits, or circumvent suspensions."
+            "Some features require an account. You are responsible for your credentials and all activity under your account. Use the contact form immediately if you suspect unauthorised access. You may not share accounts, create duplicate accounts to bypass limits, or circumvent suspensions."
           ]
         },
         {
           "title": "4. Platform Services",
           "paragraphs": [
-            "maiProp is a technology intermediary, not a real estate agent, broker, auctioneer, or financial advisor. We do not act as a party to property transactions and do not verify legal title, planning status, or property condition."
+            "mAI prop is a technology intermediary, not a real estate agent, broker, auctioneer, or financial advisor. We do not act as a party to property transactions and do not verify legal title, planning status, or property condition."
           ],
           "list": [
             "Property listings for sale or rent.",
@@ -2671,7 +2671,7 @@
         {
           "title": "7. Greek Auctions - Special Provisions",
           "paragraphs": [
-            "Auction information is aggregated from public sources and may be incomplete or outdated. maiProp is not an e-auction platform and does not facilitate actual bidding."
+            "Auction information is aggregated from public sources and may be incomplete or outdated. mAI prop is not an e-auction platform and does not facilitate actual bidding."
           ],
           "list": [
             "Participation in Greek judicial auctions is subject to specific legal requirements.",
@@ -2682,25 +2682,25 @@
         {
           "title": "8. Fees & Payments",
           "paragraphs": [
-            "Some features are paid, including premium listing packages, subscriptions, and Quick Sale services. Fees are displayed in Euros, include applicable Greek VAT where stated, and are processed through Stripe. Fees are non-refundable unless required by law or expressly stated. Contact billing@maiprop.co within 30 days if you believe a charge is incorrect."
+            "Some features are paid, including premium listing packages, subscriptions, and Quick Sale services. Fees are displayed in Euros, include applicable Greek VAT where stated, and are processed through Stripe. Fees are non-refundable unless required by law or expressly stated. Use the contact form within 30 days if you believe a charge is incorrect."
           ]
         },
         {
           "title": "9. Intellectual Property",
           "paragraphs": [
-            "Platform content, branding, software, databases, AI models, design, text, and aggregated market data belong to maiProp Ltd or its licensors. By submitting listings, photos, or content, you grant maiProp a worldwide, royalty-free, non-exclusive licence to display, reproduce, adapt, and distribute that content on the platform and in marketing for as long as reasonably needed."
+            "Platform content, branding, software, databases, AI models, design, text, and aggregated market data belong to Data Estate PC or its licensors. By submitting listings, photos, or content, you grant mAI prop a worldwide, royalty-free, non-exclusive licence to display, reproduce, adapt, and distribute that content on the platform and in marketing for as long as reasonably needed."
           ]
         },
         {
           "title": "10. Limitation of Liability",
           "paragraphs": [
-            "To the fullest extent permitted by law, the platform is provided as is and as available. maiProp is not liable for indirect, incidental, special, consequential, punitive, or similar damages, loss of profits, data, goodwill, or property value. Our aggregate liability is limited to the greater of fees paid in the 12 months before the claim or EUR 100. Nothing limits liability that cannot be limited under Greek or EU law."
+            "To the fullest extent permitted by law, the platform is provided as is and as available. mAI prop is not liable for indirect, incidental, special, consequential, punitive, or similar damages, loss of profits, data, goodwill, or property value. Our aggregate liability is limited to the greater of fees paid in the 12 months before the claim or EUR 100. Nothing limits liability that cannot be limited under Greek or EU law."
           ]
         },
         {
           "title": "11. Indemnification",
           "paragraphs": [
-            "You agree to defend and indemnify maiProp Ltd, its directors, employees, contractors, and partners against claims, losses, liabilities, damages, and reasonable legal fees arising from your breach, unlawful conduct, submitted content, platform transactions, negligence, or wilful misconduct."
+            "You agree to defend and indemnify Data Estate PC, its directors, employees, contractors, and partners against claims, losses, liabilities, damages, and reasonable legal fees arising from your breach, unlawful conduct, submitted content, platform transactions, negligence, or wilful misconduct."
           ]
         },
         {
@@ -2734,7 +2734,7 @@
         {
           "title": "16. Contact",
           "paragraphs": [
-            "For questions about these Terms, contact legal@maiprop.co or maiProp Ltd, Kifissias Ave. 44, 15125 Athens, Greece."
+            "For questions about these Terms, contact Data Estate PC, Akadimias 32, 106 72, Athens, Greece."
           ]
         }
       ]
@@ -2742,7 +2742,7 @@
     "cookie": {
       "eyebrow": "Legal",
       "title": "Cookie Policy",
-      "updated": "Last updated: 9 March 2026. This policy explains how maiProp uses cookies and similar technologies.",
+      "updated": "Last updated: 9 March 2026. This policy explains how mAI prop uses cookies and similar technologies.",
       "sections": [
         {
           "title": "1. What Are Cookies?",
@@ -2919,7 +2919,7 @@
         {
           "title": "7. Cookie Consent Records",
           "paragraphs": [
-            "We keep a record of consent choices, including what you consented to, when, and the policy version in effect. Records are retained for 1 year after the last consent interaction. You can request a copy at privacy@maiprop.co."
+            "We keep a record of consent choices, including what you consented to, when, and the policy version in effect. Records are retained for 1 year after the last consent interaction. You can request a copy through the contact form or by post at Data Estate PC, Akadimias 32, 106 72, Athens, Greece."
           ]
         },
         {
@@ -2931,7 +2931,7 @@
         {
           "title": "9. Contact",
           "paragraphs": [
-            "For questions about cookies or rights requests, contact privacy@maiprop.co. To lodge a complaint, contact the Hellenic Data Protection Authority at www.dpa.gr or +30 210 6475600."
+            "For questions about cookies or rights requests, use the contact form or write to Data Estate PC, Akadimias 32, 106 72, Athens, Greece. To lodge a complaint, contact the Hellenic Data Protection Authority at www.dpa.gr."
           ]
         }
       ]

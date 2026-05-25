@@ -141,6 +141,7 @@ vi.mock("@/hooks/useFavorites", () => ({
 vi.mock("@/hooks/useOpenHouseAssetControl", () => ({
   useOpenHouseSettings: () => ({ data: mocks.openHouseSettings, isLoading: false }),
   useOpenHouseRegistrations: () => ({ data: mocks.registrations, isLoading: false }),
+  useOpenHouseCapacity: () => ({ data: null, isLoading: false }),
   useOpenHouseOffers: () => ({ data: mocks.offers, isLoading: false }),
 }));
 vi.mock("@/hooks/useMessages", () => ({

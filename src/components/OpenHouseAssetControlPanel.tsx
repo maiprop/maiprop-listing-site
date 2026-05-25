@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import {
   Users, Euro, ChevronDown, ChevronUp, Check, X, Loader2, Settings, Calendar, TrendingUp,
   FileCheck, FileText, Wallet, Shield, ExternalLink, Mail, Phone, UserRound,
+  RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -13,6 +14,7 @@ import {
   useUpdateOpenHouseRegistration,
   useUpdateOpenHouseOffer,
   useAcceptOpenHouseOffer,
+  useReopenOpenHouseOfferSelection,
   useRevealAllOffers,
   getOpenHouseDocSignedUrl,
   getOpenHouseApprovalBlockers,
@@ -40,6 +42,24 @@ const STATUS_LABELS: Record<OHRegistrationStatus, string> = {
   cancelled: "Cancelled",
 };
 
+function getProofOfFundsDisplay(registration: OpenHouseRegistration) {
+  if (!registration.proof_of_funds_url) {
+    return { label: "POF -", className: "text-muted-foreground" };
+  }
+
+  const amount = registration.proof_amount ? `EUR ${Number(registration.proof_amount).toLocaleString()} ` : "POF ";
+
+  if (registration.pof_verified_status === "verified") {
+    return { label: `${amount}verified`, className: "text-emerald-600" };
+  }
+
+  if (registration.pof_verified_status === "rejected") {
+    return { label: `${amount}rejected`, className: "text-destructive" };
+  }
+
+  return { label: `${amount}pending review`, className: "text-amber-700" };
+}
+
 // skipcq: JS-0067 - Exported React component is intentionally module-scoped.
 export default function OpenHouseAssetControlPanel({ listingId, isOwner, listingPrice }: Props) { // skipcq: JS-R1005 - Owner control panel coordinates settings, approvals, documents, and offers in one surface.
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -61,6 +81,7 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
   const updateReg = useUpdateOpenHouseRegistration();
   const updateOffer = useUpdateOpenHouseOffer();
   const acceptOffer = useAcceptOpenHouseOffer();
+  const reopenSelection = useReopenOpenHouseOfferSelection();
   const revealAll = useRevealAllOffers();
 
   if (!isOwner) return null;
@@ -107,6 +128,8 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
   const validOffers = offers.filter((o: OpenHouseOffer) => o.status !== "withdrawn").map((o: OpenHouseOffer) => Number(o.amount));
   const highestBid = validOffers.length > 0 ? Math.max(...validOffers) : null;
   const conversionRate = approvedCount ? ((attendedCount / approvedCount) * 100).toFixed(1) : "0";
+  const offerDeadlinePassed = settings?.offer_deadline ? new Date(settings.offer_deadline).getTime() <= Date.now() : false;
+  const offerRevealLocked = Boolean(settings?.offer_deadline && !offerDeadlinePassed);
 
   return (
     <div className="space-y-4">
@@ -254,8 +277,8 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
                         <span className={cn("inline-flex items-center gap-0.5", r.waiver_signed_at ? "text-emerald-600" : "text-muted-foreground")}>
                           <FileText className="w-3 h-3" /> {r.waiver_signed_at ? "Waiver ✓" : "Waiver —"}
                         </span>
-                        <span className={cn("inline-flex items-center gap-0.5", r.proof_of_funds_url ? "text-emerald-600" : "text-muted-foreground")}>
-                          <Wallet className="w-3 h-3" /> {r.proof_of_funds_url ? (r.proof_amount ? `€${Number(r.proof_amount).toLocaleString()} ✓` : "POF ✓") : "POF —"}
+                        <span className={cn("inline-flex items-center gap-0.5", getProofOfFundsDisplay(r).className)}>
+                          <Wallet className="w-3 h-3" /> {getProofOfFundsDisplay(r).label}
                         </span>
                         <span className={cn("inline-flex items-center gap-0.5", r.investor_declaration_signed_at ? "text-emerald-600" : "text-muted-foreground")}>
                           <Shield className="w-3 h-3" /> {r.investor_declaration_signed_at ? "Investor ✓" : "Investor —"}
@@ -271,34 +294,44 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
                         );
                       })()}
                     </div>
-                    {r.status === "pending" && (
-                      <div className="flex gap-2 flex-wrap">
-                        {r.id_doc_url && !r.id_verified_at && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="gap-1 text-primary border-primary/40"
-                            onClick={() => updateReg.mutate({ id: r.id, updates: { id_verified_at: new Date().toISOString() } })}
-                          >
-                            <FileCheck className="w-3.5 h-3.5" /> Verify ID
-                          </Button>
-                        )}
-                        <Button size="sm" variant="outline" className="gap-1 text-emerald-600 border-emerald-500/40"
-                          onClick={() => handleApprove(r)}>
-                          <Check className="w-3.5 h-3.5" /> Approve
-                        </Button>
-                        <Button size="sm" variant="outline" className="gap-1 text-destructive border-destructive/40"
-                          onClick={() => { setRejectTarget(r.id); setRejectReason(""); }}>
-                          <X className="w-3.5 h-3.5" /> Reject
-                        </Button>
-                      </div>
-                    )}
-                    {r.status === "approved" && (
-                      <Button size="sm" variant="outline"
-                        onClick={() => updateReg.mutate({ id: r.id, updates: { status: "attended", attended_at: new Date().toISOString() } })}>
-                        Mark attended
-                      </Button>
-                    )}
+                    {(() => {
+                      const canVerifyId = Boolean(r.id_doc_url && !r.id_verified_at && r.status !== "cancelled");
+                      const canReview = r.status === "pending";
+                      const canMarkAttended = r.status === "approved";
+                      if (!canVerifyId && !canReview && !canMarkAttended) return null;
+                      return (
+                        <div className="flex gap-2 flex-wrap">
+                          {canVerifyId && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1 text-primary border-primary/40"
+                              onClick={() => updateReg.mutate({ id: r.id, updates: { id_verified_at: new Date().toISOString() } })}
+                            >
+                              <FileCheck className="w-3.5 h-3.5" /> Verify ID
+                            </Button>
+                          )}
+                          {canReview && (
+                            <>
+                              <Button size="sm" variant="outline" className="gap-1 text-emerald-600 border-emerald-500/40"
+                                onClick={() => handleApprove(r)}>
+                                <Check className="w-3.5 h-3.5" /> Approve
+                              </Button>
+                              <Button size="sm" variant="outline" className="gap-1 text-destructive border-destructive/40"
+                                onClick={() => { setRejectTarget(r.id); setRejectReason(""); }}>
+                                <X className="w-3.5 h-3.5" /> Reject
+                              </Button>
+                            </>
+                          )}
+                          {canMarkAttended && (
+                            <Button size="sm" variant="outline"
+                              onClick={() => updateReg.mutate({ id: r.id, updates: { status: "attended", attended_at: new Date().toISOString() } })}>
+                              Mark attended
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>
@@ -368,7 +401,14 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
         {offersOpen && (
           <div className="border-t border-border">
             {offers.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground text-sm">No bids yet</div>
+              <div className="p-8 text-center text-muted-foreground text-sm space-y-1">
+                <p>No bids yet</p>
+                <p className="text-xs">
+                  {offerDeadlinePassed
+                    ? "The deadline has passed with no bids. Extend the deadline or contact attended buyers before closing the open house."
+                    : "Submitted offers will appear here after attendees place sealed bids."}
+                </p>
+              </div>
             ) : (
               <>
                 {/* Bulk actions bar */}
@@ -380,7 +420,7 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
                         size="sm"
                         variant="outline"
                         className="h-7 text-xs gap-1"
-                        disabled={revealAll.isPending}
+                        disabled={revealAll.isPending || offerRevealLocked}
                         onClick={() =>
                           revealAll.mutate({
                             listingId,
@@ -400,7 +440,7 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
                   const winner = offers.find(o => o.status === "accepted");
                   if (!winner) return null;
                   return (
-                    <div className="mx-4 mt-4 mb-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 flex items-center justify-between">
+                    <div className="mx-4 mt-4 mb-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                       <div>
                         <p className="text-xs font-bold text-emerald-700 uppercase tracking-widest mb-0.5">Winning Bid</p>
                         <p className="font-display font-black text-xl text-emerald-700">€{Number(winner.amount).toLocaleString()}</p>
@@ -408,7 +448,19 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
                           {winner.profiles?.display_name || "Bidder"}
                         </p>
                       </div>
-                      <Check className="w-8 h-8 text-emerald-500" />
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 gap-1 text-xs border-emerald-500/40 text-emerald-700"
+                          disabled={reopenSelection.isPending}
+                          onClick={() => reopenSelection.mutate({ listingId })}
+                        >
+                          {reopenSelection.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />}
+                          Reopen selection
+                        </Button>
+                        <Check className="w-8 h-8 text-emerald-500" />
+                      </div>
                     </div>
                   );
                 })()}
@@ -436,7 +488,7 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
                         <div className="flex gap-2 shrink-0">
                           {isSealed && (
                             <Button size="sm" variant="outline" className="h-7 text-xs"
-                              disabled={updateOffer.isPending}
+                              disabled={updateOffer.isPending || offerRevealLocked}
                               onClick={() => updateOffer.mutate({ id: o.id, status: "revealed" })}>
                               Reveal
                             </Button>
@@ -484,6 +536,7 @@ function OpenHouseSettingsForm({ // skipcq: JS-R1005 - Settings form owns relate
 }) {
   const [timeslots, setTimeslots] = useState<OHTimeslot[]>(settings?.timeslots ?? []);
   const [maxPerSlot, setMaxPerSlot] = useState(settings?.max_visitors_per_slot ?? 10);
+  const [maxTotal, setMaxTotal] = useState(settings?.max_total_visitors != null ? String(settings.max_total_visitors) : "");
   const [brokerRequired, setBrokerRequired] = useState(settings?.broker_required ?? false);
   const [requirePOF, setRequirePOF] = useState(settings?.require_proof_of_funds ?? false);
   const [minProof, setMinProof] = useState(String(settings?.min_proof_amount ?? ""));
@@ -497,6 +550,7 @@ function OpenHouseSettingsForm({ // skipcq: JS-R1005 - Settings form owns relate
     if (settings) {
       setTimeslots(settings.timeslots ?? []);
       setMaxPerSlot(settings.max_visitors_per_slot ?? 10);
+      setMaxTotal(settings.max_total_visitors != null ? String(settings.max_total_visitors) : "");
       setBrokerRequired(settings.broker_required ?? false);
       setRequirePOF(settings.require_proof_of_funds ?? false);
       setMinProof(String(settings.min_proof_amount ?? ""));
@@ -510,6 +564,7 @@ function OpenHouseSettingsForm({ // skipcq: JS-R1005 - Settings form owns relate
     onSave({
       timeslots,
       max_visitors_per_slot: maxPerSlot,
+      max_total_visitors: maxTotal ? Math.max(1, parseInt(maxTotal, 10) || 1) : null,
       broker_required: brokerRequired,
       require_proof_of_funds: requirePOF,
       min_proof_amount: minProof ? parseFloat(minProof) : null,
@@ -547,6 +602,17 @@ function OpenHouseSettingsForm({ // skipcq: JS-R1005 - Settings form owns relate
         <label className="text-xs font-semibold text-muted-foreground block mb-2">Max visitors per slot</label>
         <input type="number" value={maxPerSlot} onChange={e => setMaxPerSlot(parseInt(e.target.value) || 0)}
           className="w-24 px-2 py-1.5 rounded-lg border border-border text-sm" />
+      </div>
+      <div>
+        <label className="text-xs font-semibold text-muted-foreground block mb-2">Total visitor cap</label>
+        <input
+          type="number"
+          min={1}
+          placeholder="No total cap"
+          value={maxTotal}
+          onChange={e => setMaxTotal(e.target.value)}
+          className="w-36 px-2 py-1.5 rounded-lg border border-border text-sm"
+        />
       </div>
       <label className="flex items-center gap-2 cursor-pointer">
         <input type="checkbox" checked={brokerRequired} onChange={e => setBrokerRequired(e.target.checked)} className="rounded" />

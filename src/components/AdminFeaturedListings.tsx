@@ -230,7 +230,7 @@ export default function AdminFeaturedListings() {
       try {
         const { error: updateError } = await supabase
           .from("listings")
-          .update({ featured_until: newVal } as never)
+          .update({ featured_until: newVal })
           .eq("id", listing.id);
         if (updateError) throw updateError;
         await queryClient.invalidateQueries({ queryKey: ["admin-featured-listings"] });

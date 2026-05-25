@@ -85,15 +85,6 @@ const insertNewBuildLead = async ({
   });
 };
 
-const notifyDeveloperInterest = async (ownerId: string, title: string, body: string) => {
-  await supabase.from("notifications").insert({
-    user_id: ownerId,
-    type: "new_interest",
-    title,
-    body,
-  });
-};
-
 // ── Main page ─────────────────────────────────────────────────────────────────
 // skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
 export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detail coordinates listing data, lead capture, media, and analytics affordances.
@@ -163,14 +154,6 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
       ?? tr("newBuildDetail.fallbackInterestedBuyer", "Interested buyer");
     await startConv.mutateAsync({ other_user_id: ownerId, listing_id: id });
     await insertNewBuildLead({ listingId: id, user, profile, form, contactName });
-    await notifyDeveloperInterest(
-      ownerId,
-      tr("newBuildDetail.notifications.interestTitle", "New interest registered"),
-      trv("newBuildDetail.notifications.interestBody", "{{contactName}} registered interest in {{listingTitle}}", {
-        contactName,
-        listingTitle: listing.title,
-      }),
-    );
     toast.success(tr("newBuildDetail.toasts.interestRegistered", "Interest registered — the developer will be in touch"));
   };
 
@@ -596,7 +579,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
             </div>
 
             {/* ── Right: sticky sidebar ───────────────────────────── */}
-            <div className="sticky top-24 space-y-4 self-start">
+            <div className="space-y-4 self-start lg:sticky lg:top-24">
                 {/* Register Interest card */}
                 <RegisterInterestCard
                   listing={listing as Record<string, unknown>}

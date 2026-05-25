@@ -481,7 +481,7 @@ export default function ProfessionalProfile() { // skipcq: JS-R1005 - Route shel
             {/* ── Sidebar ── */}
             <div className="space-y-4">
               {/* Contact card */}
-              <div className="glass-card rounded-xl p-5 border border-primary/20 sticky top-24">
+              <div className="glass-card rounded-xl p-5 border border-primary/20 lg:sticky lg:top-24">
                 <h3 className="font-display font-semibold mb-4">Contact {displayName.split(" ")[0]}</h3>
                 <div className="space-y-2.5">
                     {professionalIsPro ? (

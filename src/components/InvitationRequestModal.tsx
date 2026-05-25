@@ -228,7 +228,7 @@ export function InvitationRequestModal({ user, onClose, onSuccess }: Props) {
                 </div>
                 <div>
                   <label className={labelCls}>{isGreek ? "Τηλέφωνο" : "Phone number"}</label>
-                  <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+30 210 123 4567" className={inputCls} />
+                  <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder={isGreek ? "Τηλέφωνο" : "Phone number"} className={inputCls} />
                 </div>
                 <div>
                   <label className={labelCls}>{isGreek ? "Προφίλ LinkedIn" : "LinkedIn profile"}</label>

@@ -13,14 +13,16 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-const { fromMock, toastMock } = vi.hoisted(() => ({
+const { fromMock, rpcMock, toastMock } = vi.hoisted(() => ({
   fromMock: vi.fn(),
+  rpcMock: vi.fn(),
   toastMock: { success: vi.fn(), error: vi.fn() },
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: (...a: unknown[]) => fromMock(...a),
+    rpc: (...a: unknown[]) => rpcMock(...a),
   },
 }));
 vi.mock("sonner", () => ({ toast: toastMock }));
@@ -74,6 +76,8 @@ const makeWrapper = () => {
 
 beforeEach(() => {
   fromMock.mockReset();
+  rpcMock.mockReset();
+  rpcMock.mockResolvedValue({ data: { id: "r-1", status: "resolved" }, error: null });
   toastMock.success.mockReset();
   toastMock.error.mockReset();
   // Default: every .from() call yields zero counts / empty rows.
@@ -151,6 +155,9 @@ describe("AdminReports", () => {
       .getAllByRole("button", { name: /Resolve/i })
       .find((b) => b.textContent?.trim() === "Resolve")!;
     fireEvent.click(resolveBtn);
+    await waitFor(() =>
+      expect(rpcMock).toHaveBeenCalledWith("admin_resolve_listing_report", { p_report_id: "r-1" }),
+    );
     await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith(expect.stringMatching(/resolved/i)));
   });
 

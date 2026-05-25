@@ -351,7 +351,6 @@ vi.mock("@/hooks/useAuctionListings", () => ({
 }));
 
 vi.mock("@/hooks/useFiresaleInterest", () => ({
-  useMyFiresaleInterest: vi.fn().mockReturnValue({ data: null, isLoading: false }),
   useMyFiresaleInterests: vi.fn().mockReturnValue({ data: [], isLoading: false }),
   useFiresaleInterestQueue: vi.fn().mockReturnValue({ data: [], isLoading: false }),
   useExpressInterest: vi.fn().mockReturnValue({ mutate: vi.fn(), isPending: false }),
@@ -378,6 +377,7 @@ vi.mock("@/hooks/useOpenHouseAssetControl", () => ({
   useOpenHouseSettings: vi.fn().mockReturnValue({ data: null, isLoading: false }),
   useUpsertOpenHouseSettings: vi.fn().mockReturnValue({ mutate: vi.fn() }),
   useOpenHouseRegistrations: vi.fn().mockReturnValue({ data: [], isLoading: false }),
+  useOpenHouseCapacity: vi.fn().mockReturnValue({ data: null, isLoading: false }),
   useMyOpenHouseRegistrations: vi.fn().mockReturnValue({ data: [], isLoading: false }),
   useCreateOpenHouseRegistration: vi.fn().mockReturnValue({ mutate: vi.fn() }),
   useUpdateOpenHouseRegistration: vi.fn().mockReturnValue({ mutate: vi.fn() }),
@@ -386,6 +386,7 @@ vi.mock("@/hooks/useOpenHouseAssetControl", () => ({
   useSubmitOpenHouseOffer: vi.fn().mockReturnValue({ mutate: vi.fn() }),
   useUpdateOpenHouseOffer: vi.fn().mockReturnValue({ mutate: vi.fn() }),
   useAcceptOpenHouseOffer: vi.fn().mockReturnValue({ mutate: vi.fn() }),
+  useReopenOpenHouseOfferSelection: vi.fn().mockReturnValue({ mutate: vi.fn() }),
   useRevealAllOffers: vi.fn().mockReturnValue({ mutate: vi.fn() }),
   uploadOpenHouseDoc: vi.fn().mockResolvedValue(""),
   getOpenHouseDocSignedUrl: vi.fn().mockResolvedValue(""),

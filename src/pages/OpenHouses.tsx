@@ -421,7 +421,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
     }));
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
       <Helmet>
         <title>{pageTitle}</title>
         <meta property="og:title" content={pageTitle} />
@@ -697,7 +697,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
         </div>
 
         {/* ── Content ────────────────────────────────────────────────────────── */}
-        <div className={viewMode === "map" ? "h-[calc(100vh-13rem)]" : "container py-8"}>
+        <div className={viewMode === "map" ? "mobile-map-panel" : "container py-8 pb-mobile-nav-room lg:pb-8"}>
           {isLoading ? (
             <div className="space-y-4" aria-busy="true" aria-label={getTranslatedValue(t, "openHouses.page.loading")}>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">

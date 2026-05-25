@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { stripSupervisorTestMarkers } from "@/lib/displayText";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
+import { formatLocalDateInput } from "@/lib/localDateTime";
 
 const PRICING_LABELS: Record<string, string> = { hourly: "/hr", daily: "/day", fixed: "fixed" };
 const SLOT_INTERVAL_MINUTES = 60;
@@ -123,7 +124,7 @@ const getAvailableDays = (availability: { day_of_week: number; start_time: strin
     if (avail) {
       days.push({
         label: d.toLocaleDateString(locale, { weekday: "short" }),
-        date: d.toISOString().split("T")[0],
+        date: formatLocalDateInput(d),
         display: d.toLocaleDateString(locale, { day: "numeric", month: "short" }),
         dayOfWeek: dow,
         startTime: avail.start_time,

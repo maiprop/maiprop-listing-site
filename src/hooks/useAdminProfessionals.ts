@@ -10,8 +10,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { ProCard } from "@/components/admin/ProVerificationComponents";
+import type { Database } from "@/integrations/supabase/types";
 
 const KEY = ["admin-professionals"] as const;
+type ProfessionalUpdate = Database["public"]["Tables"]["professionals"]["Update"];
 
 // Narrow shape of the row this admin queue actually needs. Keeping a local
 // type instead of importing the full Tables<"professionals"> means the
@@ -34,9 +36,6 @@ export function useProfessionalsAdmin() {
   return useQuery<ProCard[]>({
     queryKey: KEY,
     queryFn: async () => {
-      // `rejection_reason` and `verified_at` exist in production but aren't
-      // yet reflected in the generated Database types, hence the cast
-      // through `unknown` rather than directly to ProAdminRow[].
       const { data, error } = await supabase
         .from("professionals")
         .select(
@@ -87,7 +86,8 @@ export function useApproveProfessional() {
           verified: true,
           license_number: licenseNumber || null,
           rejection_reason: null,
-        } as never)
+          verified_at: new Date().toISOString(),
+        } satisfies ProfessionalUpdate)
         .eq("id", id);
       if (error) throw error;
     },
@@ -99,8 +99,8 @@ export function useApproveProfessional() {
  * Save admin notes against a professional record without changing their
  * verification status. Used by the "Request more info" path.
  *
- * The `notes` column is not in the generated schema yet, so we cast the
- * update payload narrowly here rather than at every call site.
+ * The generated schema includes the admin-only `notes` column, so the
+ * payload remains checked against the Supabase update type.
  */
 export function useUpdateProfessionalNotes() {
   const qc = useQueryClient();
@@ -108,7 +108,7 @@ export function useUpdateProfessionalNotes() {
     mutationFn: async ({ id, notes }: { id: string; notes: string }) => {
       const { error } = await supabase
         .from("professionals")
-        .update({ notes: notes || null } as never)
+        .update({ notes: notes || null } satisfies ProfessionalUpdate)
         .eq("id", id);
       if (error) throw error;
     },
@@ -135,7 +135,11 @@ export function useRejectProfessional() {
       const reason = trimmed.length > 0 ? trimmed : "Rejected by admin";
       const { error } = await supabase
         .from("professionals")
-        .update({ verified: false, rejection_reason: reason } as never)
+        .update({
+          verified: false,
+          rejection_reason: reason,
+          verified_at: null,
+        } satisfies ProfessionalUpdate)
         .eq("id", id);
       if (error) throw error;
     },

@@ -480,14 +480,14 @@ Name:  [Full Name]
 ΑΦΜ:   [XXXXXXXXX]
 AMA (Short-Let Registry No.): [XXXXXXXX] — as registered with AADE
 Address: [Full Address]
-Contact: [Phone] | [Email]
+Contact: [Email]
 
 GUEST (Μισθωτής)
 ----------------
 Name:      [Full Name]
 Passport / ID: [XXXX]
 Nationality:   [Country]
-Contact:       [Phone] | [Email]
+Contact:       [Email]
 
 PROPERTY
 --------
@@ -907,7 +907,7 @@ FROM (Investor / Principal):
   [Full Name / Fund / Company]
   [Address]
   ΑΦΜ / Registration: [XXXXXXXXX]
-  Contact: [Name, Phone, Email]
+  Contact: [Name, Email]
   ("the Principal")
 
 TO (Agent / Broker / Finder):

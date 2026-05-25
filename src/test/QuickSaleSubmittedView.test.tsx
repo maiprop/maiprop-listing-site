@@ -36,13 +36,13 @@ describe("QuickSaleSubmittedView", () => {
     expect(onReset).toHaveBeenCalledTimes(1);
   });
 
-  it("routes sellers to the investor dashboard tracking view", () => {
+  it("routes sellers to their dashboard tracking view", () => {
     renderWithProviders(
       <QuickSaleSubmittedView requestId={null} aiEstimate={null} onReset={vi.fn()} />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: /Track Status/i }));
-    expect(navigateMock).toHaveBeenCalledWith("/investor-dashboard");
+    expect(navigateMock).toHaveBeenCalledWith("/dashboard");
     expect(screen.queryByText(/Ref:/)).not.toBeInTheDocument();
   });
 });

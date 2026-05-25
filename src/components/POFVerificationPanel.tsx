@@ -26,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
+import { getOpenHouseDocSignedUrl } from "@/hooks/useOpenHouseAssetControl";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -40,6 +41,7 @@ interface PofEntry {
   listing_id: string;
   status: PofStatus;
   rejection_reason?: string;
+  pof_rejection_reason?: string;
 }
 
 /**
@@ -54,6 +56,7 @@ interface PofRowFromDb {
   proof_of_funds_url: string | null;
   proof_amount: number | null;
   pof_verified_status: PofStatus | null;
+  pof_rejection_reason: string | null;
   created_at: string | null;
   listing_id: string;
   rejection_reason: string | null;
@@ -162,11 +165,14 @@ function RejectDialog({ investorName, onConfirm, onCancel }: RejectDialogProps) 
 
 interface PofRowProps {
   entry: PofEntry;
+  onViewDoc: (path: string) => void;
   onVerify: (id: string) => void;
   onReject: (id: string) => void;
 }
 
-function PofRow({ entry, onVerify, onReject }: PofRowProps) {
+function PofRow({ entry, onViewDoc, onVerify, onReject }: PofRowProps) {
+  const rejectionReason = entry.pof_rejection_reason ?? entry.rejection_reason;
+
   return (
     <div className="flex flex-wrap items-center gap-3 px-4 py-4 border-b border-border last:border-0 hover:bg-muted/10 transition-colors">
       {/* Avatar */}
@@ -183,22 +189,21 @@ function PofRow({ entry, onVerify, onReject }: PofRowProps) {
           </span>
           <span>Uploaded {fmtDate(entry.uploaded_at)}</span>
         </div>
-        {entry.rejection_reason && (
-          <p className="text-xs text-red-500 mt-0.5 italic">Reason: &ldquo;{entry.rejection_reason}&rdquo;</p>
+        {rejectionReason && (
+          <p className="text-xs text-red-500 mt-0.5 italic">Reason: &ldquo;{rejectionReason}&rdquo;</p>
         )}
       </div>
 
       {/* Document link */}
       {entry.proof_of_funds_url && entry.proof_of_funds_url !== "#" ? (
-        <a
-          href={entry.proof_of_funds_url}
-          target="_blank"
-          rel="noopener noreferrer"
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 gap-1 shrink-0"
+          onClick={() => onViewDoc(entry.proof_of_funds_url)}
         >
-          <Button size="sm" variant="outline" className="h-7 gap-1 shrink-0">
-            <ExternalLink className="w-3 h-3" /> View Doc
-          </Button>
-        </a>
+          <ExternalLink className="w-3 h-3" /> View Doc
+        </Button>
       ) : (
         <Button size="sm" variant="outline" className="h-7 gap-1 shrink-0" disabled>
           <AlertCircle className="w-3 h-3" /> Demo Doc
@@ -250,7 +255,7 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
     try {
       let query = supabase
         .from("open_house_registrations")
-        .select("id, requester_id, proof_of_funds_url, proof_amount, pof_verified_status, created_at, listing_id, rejection_reason, status")
+        .select("id, requester_id, proof_of_funds_url, proof_amount, pof_verified_status, pof_rejection_reason, created_at, listing_id, rejection_reason, status")
         .not("proof_of_funds_url", "is", null)
         .order("created_at", { ascending: false })
         .limit(100);
@@ -280,6 +285,7 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
             listing_id: r.listing_id,
             status,
             rejection_reason: r.rejection_reason ?? undefined,
+            pof_rejection_reason: r.pof_rejection_reason ?? undefined,
           };
         });
         setEntries(mapped);
@@ -301,7 +307,7 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
     {
       const { error } = await supabase
         .from("open_house_registrations")
-        .update({ pof_verified_status: "verified" } as never)
+        .update({ pof_verified_status: "verified", pof_rejection_reason: null } as never)
         .eq("id", id);
       if (error) {
         toast.error("Failed to verify. Please try again.");
@@ -325,7 +331,7 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
         .from("open_house_registrations")
         .update({
           pof_verified_status: "rejected",
-          rejection_reason: reason,
+          pof_rejection_reason: reason,
         } as never)
         .eq("id", rejectTarget);
       if (error) {
@@ -336,11 +342,20 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
 
     setEntries((prev) =>
       prev.map((e) =>
-        e.id === rejectTarget ? { ...e, status: "rejected", rejection_reason: reason } : e
+        e.id === rejectTarget ? { ...e, status: "rejected", pof_rejection_reason: reason } : e
       )
     );
     toast.success(`POF rejected for ${entry.investor_name}.`);
     setRejectTarget(null);
+  }
+
+  async function handleViewDoc(path: string): Promise<void> {
+    try {
+      const url = await getOpenHouseDocSignedUrl(path);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (_err: unknown) {
+      toast.error("Could not open document");
+    }
   }
 
   // ── Derived stats ─────────────────────────────────────────────────────────
@@ -472,6 +487,7 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
               <PofRow
                 key={entry.id}
                 entry={entry}
+                onViewDoc={handleViewDoc}
                 onVerify={handleVerify}
                 onReject={(id) => setRejectTarget(id)}
               />

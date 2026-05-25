@@ -51,10 +51,10 @@ function useSetDealStatus() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, published }: { id: string; published: boolean }) => {
-      const { error } = await supabase.rpc("admin_set_firesale_investor_publication" as never, {
+      const { error } = await supabase.rpc("admin_set_firesale_investor_publication", {
         p_deal_id: id,
         p_published: published,
-      } as never);
+      });
       if (error) throw error;
     },
     onSuccess: (_, { published }) => {

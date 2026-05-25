@@ -49,6 +49,35 @@ export const USER_FOLDER_BUCKETS = [
   "open-house-docs",
 ] as const;
 
+type DbError = { code?: string; message?: string } | null;
+type QueryResult<T> = { data: T[] | null; error: DbError };
+type InsertResult = { error: DbError };
+type TableQuery = {
+  select: (columns: string) => TableQuery;
+  eq: (column: string, value: unknown) => TableQuery & PromiseLike<QueryResult<unknown>>;
+  in: (column: string, values: string[]) => TableQuery & PromiseLike<QueryResult<unknown>>;
+  or: (filter: string) => TableQuery & PromiseLike<QueryResult<unknown>>;
+  insert: (rows: Array<Record<string, unknown>>) => Promise<InsertResult>;
+};
+type DeletionNotificationClient = {
+  from: (table: string) => TableQuery;
+};
+
+type OwnedListing = { id: string; title: string | null };
+type FavoriteRow = { user_id: string | null; listing_id: string | null };
+type ViewingRow = { requester_id: string | null; listing_id: string | null };
+type OpenHouseRegistrationRow = { requester_id: string | null; listing_id: string | null };
+type OpenHouseOfferRow = { bidder_id: string | null; listing_id: string | null };
+type ConversationRow = { participant_a: string | null; participant_b: string | null };
+
+export type DeletionNotification = {
+  user_id: string;
+  title: string;
+  body: string;
+  type: string;
+  link?: string;
+};
+
 Deno.serve(async (req) => { // skipcq: JS-R1005 - Account deletion coordinates auth, storage cleanup, DB removal, and error reporting in order.
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
@@ -78,6 +107,16 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - Account deletion coordinates a
 
   try {
     const user = await verifyBearerToken(req, supabase);
+
+    await notifyAccountDeletionAffectedParties(
+      supabase as unknown as DeletionNotificationClient,
+      user.id,
+    ).catch((notifyErr: unknown) => {
+      log.warn("account deletion notification prep failed", {
+        user_id: user.id,
+        err: notifyErr instanceof Error ? notifyErr.message : String(notifyErr),
+      });
+    });
 
     // 1) HARD DELETE listings BEFORE the auth row is removed. The FK was dropped
     //    in 20260309120114, so this must run explicitly. Cascades clean up
@@ -184,6 +223,197 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - Account deletion coordinates a
     });
   }
 });
+
+function listingTitle(listingTitles: Map<string, string>, listingId: string | null | undefined): string {
+  if (!listingId) return "A listing";
+  return listingTitles.get(listingId) ?? "A listing";
+}
+
+function addDeletionNotification(
+  notifications: DeletionNotification[],
+  deletedUserId: string,
+  userId: string | null | undefined,
+  title: string,
+  body: string,
+  type: string,
+  link: string,
+) {
+  if (!userId || userId === deletedUserId) return;
+  notifications.push({ user_id: userId, title, body, type, link });
+}
+
+async function selectRows<T>(
+  label: string,
+  query: PromiseLike<QueryResult<T>>,
+): Promise<T[]> {
+  const { data, error } = await query;
+  if (error) {
+    log.warn("account deletion notification lookup failed", { table: label, err: error.message });
+    return [];
+  }
+  return data ?? [];
+}
+
+export function dedupeDeletionNotifications(
+  notifications: DeletionNotification[],
+): DeletionNotification[] {
+  const seen = new Set<string>();
+  return notifications.filter((notification) => {
+    const key = [
+      notification.user_id,
+      notification.title,
+      notification.body,
+      notification.type,
+      notification.link ?? "",
+    ].join("\u0000");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export async function insertDeletionNotifications(
+  supabase: DeletionNotificationClient,
+  notifications: DeletionNotification[],
+): Promise<void> {
+  const rows = dedupeDeletionNotifications(notifications);
+  if (rows.length === 0) return;
+
+  const rowsWithLink: Array<Record<string, unknown>> = rows.map((notification) => ({ ...notification }));
+  const { error } = await supabase.from("notifications").insert(rowsWithLink);
+  if (!error) return;
+
+  const linkColumnMissing = error.code === "42703" || /column .*link/i.test(error.message ?? "");
+  if (!linkColumnMissing) throw new Error(error.message ?? "notification_insert_failed");
+
+  const rowsWithoutLink: Array<Record<string, unknown>> = rows.map(({ link: _link, ...row }) => row);
+  const { error: fallbackError } = await supabase.from("notifications").insert(rowsWithoutLink);
+  if (fallbackError) throw new Error(fallbackError.message ?? "notification_insert_failed");
+}
+
+export async function notifyAccountDeletionAffectedParties(
+  supabase: DeletionNotificationClient,
+  deletedUserId: string,
+): Promise<void> {
+  const listings = await selectRows<OwnedListing>(
+    "listings",
+    supabase
+      .from("listings")
+      .select("id, title")
+      .eq("owner_id", deletedUserId) as unknown as PromiseLike<QueryResult<OwnedListing>>,
+  );
+  const listingIds = listings.map((listing) => listing.id).filter(Boolean);
+  const listingTitles = new Map(
+    listings.map((listing) => [listing.id, listing.title?.trim() || "A listing"]),
+  );
+  const notifications: DeletionNotification[] = [];
+
+  if (listingIds.length > 0) {
+    const favorites = await selectRows<FavoriteRow>(
+      "favorites",
+      supabase
+        .from("favorites")
+        .select("user_id, listing_id")
+        .in("listing_id", listingIds) as unknown as PromiseLike<QueryResult<FavoriteRow>>,
+    );
+    for (const favorite of favorites) {
+      const title = listingTitle(listingTitles, favorite.listing_id);
+      addDeletionNotification(
+        notifications,
+        deletedUserId,
+        favorite.user_id,
+        "Saved listing removed",
+        `${title} is no longer available because the account was deleted.`,
+        "listing_removed",
+        "/dashboard?tab=saved",
+      );
+    }
+
+    const viewings = await selectRows<ViewingRow>(
+      "viewings",
+      supabase
+        .from("viewings")
+        .select("requester_id, listing_id")
+        .in("listing_id", listingIds) as unknown as PromiseLike<QueryResult<ViewingRow>>,
+    );
+    for (const viewing of viewings) {
+      const title = listingTitle(listingTitles, viewing.listing_id);
+      addDeletionNotification(
+        notifications,
+        deletedUserId,
+        viewing.requester_id,
+        "Viewing cancelled",
+        `Your viewing for ${title} was cancelled because the account was deleted.`,
+        "viewing",
+        "/dashboard?tab=viewings",
+      );
+    }
+
+    const registrations = await selectRows<OpenHouseRegistrationRow>(
+      "open_house_registrations",
+      supabase
+        .from("open_house_registrations")
+        .select("requester_id, listing_id")
+        .in("listing_id", listingIds) as unknown as PromiseLike<QueryResult<OpenHouseRegistrationRow>>,
+    );
+    for (const registration of registrations) {
+      const title = listingTitle(listingTitles, registration.listing_id);
+      addDeletionNotification(
+        notifications,
+        deletedUserId,
+        registration.requester_id,
+        "Open house registration closed",
+        `Your open house registration for ${title} was closed because the account was deleted.`,
+        "open_house",
+        "/dashboard?tab=open-houses",
+      );
+    }
+
+    const offers = await selectRows<OpenHouseOfferRow>(
+      "open_house_offers",
+      supabase
+        .from("open_house_offers")
+        .select("bidder_id, listing_id")
+        .in("listing_id", listingIds) as unknown as PromiseLike<QueryResult<OpenHouseOfferRow>>,
+    );
+    for (const offer of offers) {
+      const title = listingTitle(listingTitles, offer.listing_id);
+      addDeletionNotification(
+        notifications,
+        deletedUserId,
+        offer.bidder_id,
+        "Open house bid closed",
+        `Your bid for ${title} was closed because the account was deleted.`,
+        "open_house_offer",
+        "/dashboard?tab=open-houses",
+      );
+    }
+  }
+
+  const conversations = await selectRows<ConversationRow>(
+    "conversations",
+    supabase
+      .from("conversations")
+      .select("participant_a, participant_b")
+      .or(`participant_a.eq.${deletedUserId},participant_b.eq.${deletedUserId}`) as unknown as PromiseLike<QueryResult<ConversationRow>>,
+  );
+  for (const conversation of conversations) {
+    const otherUserId = conversation.participant_a === deletedUserId
+      ? conversation.participant_b
+      : conversation.participant_a;
+    addDeletionNotification(
+      notifications,
+      deletedUserId,
+      otherUserId,
+      "Conversation closed",
+      "A conversation was closed because the other account was deleted.",
+      "message",
+      "/messages",
+    );
+  }
+
+  await insertDeletionNotifications(supabase, notifications);
+}
 
 /**
  * Recursively delete every object inside `prefix` of `bucket`.

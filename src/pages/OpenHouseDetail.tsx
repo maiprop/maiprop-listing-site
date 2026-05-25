@@ -33,10 +33,10 @@ import { buildPropertyFeatureGroups, buildDetailRows } from "@/lib/propertyFeatu
 import { PropertyDetailsAndEnergy } from "@/components/property/PropertyDetailsAndEnergy";
 import { PropertyDescriptionSection } from "@/components/property/PropertyDescriptionSection";
 import { PropertyAIInsightsSection } from "@/components/property/PropertyAIInsightsSection";
+import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 import { PropertyValuationLockedCard } from "@/components/property/PropertyValuationLockedCard";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
-import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 
 // skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
 export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house detail coordinates listing data, registration, offers, and owner controls.
@@ -98,7 +98,8 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
   const openHouseDate = db?.open_house_date ? new Date(db.open_house_date) : null;
   const ohDatePassed = openHouseDate ? openHouseDate < new Date() : false;
   const canContact = !!myReg && ["approved", "attended"].includes(myReg.status);
-  const canSubmitOffer = !!myReg && myReg.status === "attended" && ohDatePassed;
+  const pofVerifiedForOffer = !assetSettings?.require_proof_of_funds || myReg?.pof_verified_status === "verified";
+  const canSubmitOffer = !!myReg && myReg.status === "attended" && ohDatePassed && pofVerifiedForOffer;
 
   const handleContact = async () => { // skipcq: JS-R1005 - Contact action checks registration and conversation fallback paths.
     const ownerId = db?.owner_id;
@@ -444,6 +445,11 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                         {isGreek ? "Η υποβολή προσφορών ανοίγει μετά τις" : "Offer submission opens after"} {openHouseDate.toLocaleDateString(dateLocale)} {openHouseDate.toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit" })}
                       </p>
                     )}
+                    {!canSubmitOffer && myReg?.status === "attended" && ohDatePassed && assetSettings?.require_proof_of_funds && myReg.pof_verified_status !== "verified" && (
+                      <p className="text-[11px] text-muted-foreground">
+                        {isGreek ? "Η βεβαίωση διαθέσιμων κεφαλαίων πρέπει να επαληθευτεί πριν υποβάλετε προσφορά." : "Proof of funds must be verified before you can submit an offer."}
+                      </p>
+                    )}
                     {/* Pre-register — hidden once an offer is submitted */}
                     {!myOffer && (
                       myReg ? (
@@ -663,6 +669,7 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
           !myReg ? (isGreek ? "Προεγγραφείτε και λάβετε έγκριση πρώτα" : "Pre-register and get approved first") :
           myReg.status === "pending" ? (isGreek ? "Αναμονή έγκρισης" : "Awaiting approval") :
           myReg.status !== "attended" ? (isGreek ? "Παρακολουθήστε την ανοιχτή επίσκεψη για να ανοίξει η προσφορά" : "Attend the open house to unlock offer submission") :
+          assetSettings?.require_proof_of_funds && myReg.pof_verified_status !== "verified" ? (isGreek ? "Πρέπει να επαληθευτεί η βεβαίωση διαθέσιμων κεφαλαίων πριν υποβάλετε προσφορά" : "Proof of funds must be verified before you can submit an offer") :
           !ohDatePassed ? (isGreek ? `Οι προσφορές ανοίγουν μετά τις ${openHouseDate?.toLocaleString(dateLocale)}` : `Offers open after ${openHouseDate?.toLocaleString("en-GB")}`) : undefined
         }
       />

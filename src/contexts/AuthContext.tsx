@@ -19,6 +19,10 @@ import { validatePassword } from "@/lib/passwordPolicy";
 
 export type Profile = Tables<"profiles"> & {
   role_switch_in_progress_at?: string | null;
+  account_status?: "active" | "suspended" | "banned" | null;
+  account_moderation_reason?: string | null;
+  account_moderated_at?: string | null;
+  account_moderated_by?: string | null;
 };
 
 export interface SubscriptionState {
@@ -104,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data } = await supabase
       .from("profiles")
       .select(
-        "user_id, display_name, avatar_url, role, bio, first_name, last_name, city, country, phone, website_url, is_platform_admin, verified, created_at, updated_at, id, participant_type, investor_mode, subscription_product_id, force_pro_access, role_switch_in_progress_at",
+        "user_id, display_name, avatar_url, role, bio, first_name, last_name, city, country, phone, website_url, is_platform_admin, verified, created_at, updated_at, id, participant_type, investor_mode, subscription_product_id, force_pro_access, role_switch_in_progress_at, account_status, account_moderation_reason, account_moderated_at, account_moderated_by",
       )
       .eq("user_id", userId)
       .single();

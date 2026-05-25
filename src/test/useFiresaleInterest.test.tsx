@@ -33,10 +33,8 @@ vi.mock("sonner", () => ({ toast: toastMock }));
 import {
   hasPriorityProof,
   isActiveReservation,
-  sortFiresaleInterestQueue,
   useExpressInterest,
   useFiresaleInterestQueue,
-  useMyFiresaleInterest,
   useMyFiresaleInterests,
   useUpdateInterestStatus,
 } from "@/hooks/useFiresaleInterest";
@@ -72,46 +70,6 @@ describe("queue helpers", () => {
     expect(isActiveReservation({ status: "reserved", reservation_expires_at: null })).toBe(false);
     expect(isActiveReservation({ status: "engaged", reservation_expires_at: null })).toBe(true);
     expect(isActiveReservation({ status: "won", reservation_expires_at: "2000-01-01T00:00:00.000Z" })).toBe(true);
-  });
-
-  it("sorts active holds first, then prioritized, then proof-backed interested rows", () => {
-    const rows = [
-      { id: "late", status: "interested", proof_of_funds_url: null, proof_amount: null, proof_of_funds_verified_at: null, reservation_expires_at: null, created_at: "2026-01-03" },
-      { id: "reserved", status: "reserved", proof_of_funds_url: null, proof_amount: null, proof_of_funds_verified_at: null, reservation_expires_at: "2999-01-01T00:00:00.000Z", created_at: "2026-01-04" },
-      { id: "expired-reservation", status: "reserved", proof_of_funds_url: null, proof_amount: null, proof_of_funds_verified_at: null, reservation_expires_at: "2000-01-01T00:00:00.000Z", created_at: "2026-01-05" },
-      { id: "prio", status: "prioritized", proof_of_funds_url: "proof.pdf", proof_amount: 500000, proof_of_funds_verified_at: null, reservation_expires_at: null, created_at: "2026-01-02" },
-      { id: "proof", status: "interested", proof_of_funds_url: "proof.pdf", proof_amount: 1000000, proof_of_funds_verified_at: null, reservation_expires_at: null, created_at: "2026-01-01" },
-    ] as never[];
-
-    expect(sortFiresaleInterestQueue(rows).map((row) => row.id)).toEqual([
-      "reserved",
-      "prio",
-      "proof",
-      "late",
-      "expired-reservation",
-    ]);
-  });
-});
-
-describe("useMyFiresaleInterest", () => {
-  it("returns undefined when disabled", async () => {
-    const { result } = renderHook(() => useMyFiresaleInterest(undefined), { wrapper: wrapper() });
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-    expect(result.current.data).toBeUndefined();
-  });
-
-  it("scopes query to deal and investor after releasing expiries", async () => {
-    const maybeSingle = vi.fn().mockResolvedValue({ data: { id: "i-1", deal_id: "d-1", investor_id: "inv-1" } });
-    const eq2 = vi.fn().mockReturnValue({ maybeSingle });
-    const eq1 = vi.fn().mockReturnValue({ eq: eq2 });
-    fromMock.mockReturnValue({ select: () => ({ eq: eq1 }) });
-
-    const { result } = renderHook(() => useMyFiresaleInterest("d-1"), { wrapper: wrapper() });
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-    expect(rpcMock).toHaveBeenCalledWith("release_expired_firesale_reservations", { p_deal_id: "d-1" });
-    expect(eq1).toHaveBeenCalledWith("deal_id", "d-1");
-    expect(eq2).toHaveBeenCalledWith("investor_id", "inv-1");
   });
 });
 
@@ -176,12 +134,9 @@ describe("useFiresaleInterestQueue", () => {
 });
 
 describe("useExpressInterest", () => {
-  it("uploads proof and upserts a prioritized row", async () => {
+  it("uploads proof and submits proof-backed interest through the workflow RPC", async () => {
     uploadMock.mockResolvedValue({ data: { path: "inv-1/firesale/d-1/proof_uuid-1.pdf" }, error: null });
-    const single = vi.fn().mockResolvedValue({ data: { id: "i-1" }, error: null });
-    const select = vi.fn().mockReturnValue({ single });
-    const upsert = vi.fn().mockReturnValue({ select });
-    fromMock.mockReturnValue({ upsert });
+    rpcMock.mockResolvedValueOnce({ data: { id: "i-1" }, error: null });
 
     const { result } = renderHook(() => useExpressInterest(), { wrapper: wrapper() });
     const file = new File(["x"], "proof.pdf", { type: "application/pdf" });
@@ -199,34 +154,30 @@ describe("useExpressInterest", () => {
     expect(uploadMock).toHaveBeenCalledWith(
       "inv-1/firesale/d-1/proof_uuid-1.pdf",
       file,
-      { upsert: true },
+      { upsert: false },
     );
-    expect(upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        deal_id: "d-1",
-        investor_id: "inv-1",
-        status: "prioritized",
-        proof_amount: 1500000,
-        proof_of_funds_url: "inv-1/firesale/d-1/proof_uuid-1.pdf",
-      }),
-      { onConflict: "deal_id,investor_id" },
-    );
+    expect(rpcMock).toHaveBeenCalledWith("submit_firesale_interest", {
+      p_deal_id: "d-1",
+      p_message: "Ready to move",
+      p_proof_amount: 1500000,
+      p_proof_of_funds_url: "inv-1/firesale/d-1/proof_uuid-1.pdf",
+    });
   });
 
   it("uses interested status when no proof is provided", async () => {
-    const single = vi.fn().mockResolvedValue({ data: { id: "i-1" }, error: null });
-    const upsert = vi.fn().mockReturnValue({ select: () => ({ single }) });
-    fromMock.mockReturnValue({ upsert });
+    rpcMock.mockResolvedValueOnce({ data: { id: "i-1" }, error: null });
 
     const { result } = renderHook(() => useExpressInterest(), { wrapper: wrapper() });
     await act(async () => {
       await result.current.mutateAsync({ dealId: "d-1", message: "No docs yet" });
     });
 
-    expect(upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "interested" }),
-      { onConflict: "deal_id,investor_id" },
-    );
+    expect(rpcMock).toHaveBeenCalledWith("submit_firesale_interest", {
+      p_deal_id: "d-1",
+      p_message: "No docs yet",
+      p_proof_amount: undefined,
+      p_proof_of_funds_url: undefined,
+    });
   });
 });
 

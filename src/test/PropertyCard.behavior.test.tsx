@@ -215,7 +215,7 @@ describe("PropertyCard behavior", () => {
     expect(screen.getByText("Agent One")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "propertyCard.actions.report" }));
-    await waitFor(() => expect(toastError).toHaveBeenCalledWith("propertyCard.copyFailed"));
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith("propertyCard.errorReport"));
 
     rerender(
       <PropertyCard

@@ -13,6 +13,7 @@ const {
   useUpdateOpenHouseRegistrationMock,
   useUpdateOpenHouseOfferMock,
   useAcceptOpenHouseOfferMock,
+  useReopenOpenHouseOfferSelectionMock,
   useRevealAllOffersMock,
   useMyOpenHouseRegistrationsMock,
   useMyOpenHouseOffersMock,
@@ -20,6 +21,7 @@ const {
   updateRegMock,
   updateOfferMock,
   acceptOfferMock,
+  reopenSelectionMock,
   revealAllMock,
   upsertSettingsMock,
   toastMock,
@@ -32,6 +34,7 @@ const {
   useUpdateOpenHouseRegistrationMock: vi.fn(),
   useUpdateOpenHouseOfferMock: vi.fn(),
   useAcceptOpenHouseOfferMock: vi.fn(),
+  useReopenOpenHouseOfferSelectionMock: vi.fn(),
   useRevealAllOffersMock: vi.fn(),
   useMyOpenHouseRegistrationsMock: vi.fn(),
   useMyOpenHouseOffersMock: vi.fn(),
@@ -39,6 +42,7 @@ const {
   updateRegMock: { mutate: vi.fn(), isPending: false },
   updateOfferMock: { mutate: vi.fn(), isPending: false },
   acceptOfferMock: { mutate: vi.fn(), isPending: false },
+  reopenSelectionMock: { mutate: vi.fn(), isPending: false },
   revealAllMock: { mutate: vi.fn(), isPending: false },
   upsertSettingsMock: { mutate: vi.fn(), isPending: false },
   toastMock: { error: vi.fn(), success: vi.fn() },
@@ -59,6 +63,7 @@ vi.mock("@/hooks/useOpenHouseAssetControl", async () => {
     useUpdateOpenHouseRegistration: () => useUpdateOpenHouseRegistrationMock(),
     useUpdateOpenHouseOffer: () => useUpdateOpenHouseOfferMock(),
     useAcceptOpenHouseOffer: () => useAcceptOpenHouseOfferMock(),
+    useReopenOpenHouseOfferSelection: () => useReopenOpenHouseOfferSelectionMock(),
     useRevealAllOffers: () => useRevealAllOffersMock(),
     useMyOpenHouseRegistrations: () => useMyOpenHouseRegistrationsMock(),
     useMyOpenHouseOffers: () => useMyOpenHouseOffersMock(),
@@ -101,6 +106,7 @@ const completeRegistration = {
   id_verified_at: "2026-01-01T00:00:00.000Z",
   waiver_signed_at: "2026-01-01T00:00:00.000Z",
   proof_of_funds_url: "docs/pof.pdf",
+  pof_verified_status: "verified",
   proof_amount: 300000,
   investor_declaration_signed_at: "2026-01-01T00:00:00.000Z",
   mortgage_status: "yes",
@@ -147,6 +153,7 @@ beforeEach(() => {
   useUpdateOpenHouseRegistrationMock.mockReturnValue(updateRegMock);
   useUpdateOpenHouseOfferMock.mockReturnValue(updateOfferMock);
   useAcceptOpenHouseOfferMock.mockReturnValue(acceptOfferMock);
+  useReopenOpenHouseOfferSelectionMock.mockReturnValue(reopenSelectionMock);
   useRevealAllOffersMock.mockReturnValue(revealAllMock);
   useMyOpenHouseRegistrationsMock.mockReturnValue({ data: [], isLoading: false });
   useMyOpenHouseOffersMock.mockReturnValue({ data: [], isLoading: false });
@@ -154,6 +161,7 @@ beforeEach(() => {
   updateRegMock.mutate.mockReset();
   updateOfferMock.mutate.mockReset();
   acceptOfferMock.mutate.mockReset();
+  reopenSelectionMock.mutate.mockReset();
   revealAllMock.mutate.mockReset();
   upsertSettingsMock.mutate.mockReset();
   toastMock.error.mockReset();
@@ -214,6 +222,7 @@ describe("OpenHouseAssetControlPanel", () => {
     fireEvent.change(timeInputs[1], { target: { value: "10:30" } });
     fireEvent.change(screen.getAllByPlaceholderText("Max")[0], { target: { value: "3" } });
     fireEvent.change(screen.getAllByDisplayValue("2")[0], { target: { value: "4" } });
+    fireEvent.change(screen.getByPlaceholderText(/No total cap/i), { target: { value: "8" } });
     fireEvent.click(screen.getByLabelText(/broker/i));
     fireEvent.click(screen.getByLabelText(/require proof of funds/i));
     fireEvent.click(screen.getByLabelText(/require proof of funds/i));
@@ -231,6 +240,7 @@ describe("OpenHouseAssetControlPanel", () => {
       listingId: "listing-1",
       settings: expect.objectContaining({
         min_proof_amount: 250000,
+        max_total_visitors: 8,
         require_proof_of_funds: true,
         require_investor_declaration: true,
         broker_required: true,
@@ -256,6 +266,8 @@ describe("OpenHouseAssetControlPanel", () => {
     expect(screen.getByText(/Winner selected/i)).toBeInTheDocument();
     expect(screen.getByText(/Winning Bid/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /reveal all bids/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /reopen selection/i }));
+    expect(reopenSelectionMock.mutate).toHaveBeenCalledWith({ listingId: "listing-1" });
   });
 
   it("exercises offer reveal, accept, reject, and bulk reveal actions when no winner exists", () => {

@@ -211,7 +211,7 @@ export default function InvestorDashboard() {
             .neq("status", "pending")
         : supabase
             .from("firesale_requests_investor_feed")
-            .select("id, address, city, property_type, sqm, asking_price, status, created_at");
+            .select("id, address, city, property_type, sqm, bedrooms, condition, ai_estimate, asking_price, status, created_at");
 
       const { data, error } = await query.order("created_at", { ascending: false }).limit(50);
       if (error) throw error;

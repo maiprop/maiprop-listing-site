@@ -204,7 +204,7 @@ export default function CreateListing() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
       <Navbar />
       <div className="pt-16">
         {/* Auto-saved indicator */}

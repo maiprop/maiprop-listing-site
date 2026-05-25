@@ -144,7 +144,7 @@ export function useContactTasks(contactId: string | null) {
       if (!contactId || !user) return [];
       const { data, error } = await supabase
         .from("contact_tasks")
-        .select("id, contact_id, user_id, title, notes, due_at, completed_at, created_at, updated_at")
+        .select("id, contact_id, user_id, title, notes, due_at, completed_at, reminder_sent_at, created_at, updated_at")
         .eq("contact_id", contactId)
         .eq("user_id", user.id)
         .order("due_at", { ascending: true, nullsFirst: true });

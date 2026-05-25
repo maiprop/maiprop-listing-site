@@ -24,6 +24,7 @@ const LISTING_CARD_SELECT = [
   "id",
   "owner_id",
   "created_at",
+  "status",
   "title",
   "address",
   "city",

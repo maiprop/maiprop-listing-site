@@ -31,6 +31,8 @@ export function useSubmitConsultation() {
       if (!user) {
         throw new Error("auth_required");
       }
+      const preferredDate = input.preferred_date?.trim() || null;
+      const preferredTime = input.preferred_time?.trim() || null;
       const { error } = await supabase.from("consultation_requests").insert({
         professional_id: input.professional_id,
         requester_id: user.id,
@@ -39,8 +41,8 @@ export function useSubmitConsultation() {
         requester_phone: input.requester_phone ?? null,
         request_type: input.request_type,
         service: input.service ?? null,
-        preferred_date: input.preferred_date ?? null,
-        preferred_time: input.preferred_time ?? null,
+        preferred_date: preferredDate,
+        preferred_time: preferredTime,
         callback_time: input.callback_time ?? null,
         message: input.message ?? null,
       });
@@ -134,35 +136,6 @@ export function useUpdateConsultationRequest() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["consultation-requests"] });
       toast.success("Request updated");
-    },
-    onError: () => toast.error("Could not update consultation. Please try again."),
-  });
-}
-
-export function useBulkUpdateConsultationRequests() {
-  const { user } = useAuth();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({
-      ids,
-      updates,
-    }: {
-      ids: string[];
-      updates: { status?: string; lead_status?: string };
-    }) => {
-      const proId = await getCurrentProfessionalId(user?.id);
-      if (!proId) throw new Error("Not authorised: no professional profile");
-
-      const { error } = await supabase
-        .from("consultation_requests")
-        .update(updates)
-        .in("id", ids)
-        .eq("professional_id", proId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["consultation-requests"] });
-      toast.success("Requests updated");
     },
     onError: () => toast.error("Could not update consultation. Please try again."),
   });

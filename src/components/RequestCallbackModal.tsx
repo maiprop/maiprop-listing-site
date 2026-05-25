@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubmitConsultation } from "@/hooks/useConsultations";
 import { toast } from "sonner";
+import { formatLocalDateInput } from "@/lib/localDateTime";
 
 const callbackWindows = [
   { label: "Morning", labelEl: "Πρωί", time: "09:00 - 12:00" },
@@ -24,7 +25,7 @@ function getNextDays(count: number, locale: string) {
     if (dow !== 0 && dow !== 6) {
       days.push({
         label: d.toLocaleDateString(locale, { weekday: "short" }),
-        date: d.toISOString().split("T")[0],
+        date: formatLocalDateInput(d),
         display: d.toLocaleDateString(locale, { day: "numeric", month: "short" }),
       });
     }

@@ -123,7 +123,9 @@ export default function ViewingsTab() {
   const updateViewing = useUpdateViewing();
   const updateStatus = useUpdateViewingStatus();
 
-  const all = [...viewings, ...ownViewings];
+  const all = Array.from(new Map<string, Viewing>(
+    [...viewings, ...ownViewings].map((v: Viewing) => [v.id, v])
+  ).values());
   const byDate = all.reduce((acc: Record<string, Viewing[]>, v) => {
     const d = new Date(v.scheduled_at).toLocaleDateString("en-GB");
     if (!acc[d]) acc[d] = [];

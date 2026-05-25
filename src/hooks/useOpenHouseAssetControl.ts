@@ -36,6 +36,18 @@ type AcceptOpenHouseOfferRpc = (
     p_offer_id: string;
   },
 ) => Promise<{ data: OpenHouseOffer | null; error: Error | null }>;
+type ReopenOpenHouseOfferSelectionRpc = (
+  fn: "reopen_open_house_offer_selection",
+  args: {
+    p_listing_id: string;
+  },
+) => Promise<{ data: null; error: Error | null }>;
+type GetOpenHouseCapacityRpc = (
+  fn: "get_open_house_capacity",
+  args: {
+    p_listing_id: string;
+  },
+) => Promise<{ data: OpenHouseCapacityRow[] | null; error: Error | null }>;
 
 /** Listing summary attached to "my" registrations and offers via the listing_id join. */
 type OHListingSummary = Pick<
@@ -53,6 +65,7 @@ export type OHTimeslot = { start: string; end: string; max_visitors: number };
 export type OHRegistrationStatus = "pending" | "approved" | "rejected" | "attended" | "cancelled";
 export type OHIdDocType = "id_card" | "passport";
 export type OHOfferStatus = "submitted" | "revealed" | "accepted" | "rejected" | "withdrawn";
+export type OHPofVerifiedStatus = "unreviewed" | "verified" | "rejected";
 
 export interface OpenHouseSettings {
   id: string;
@@ -69,6 +82,24 @@ export interface OpenHouseSettings {
   created_at: string;
   updated_at: string;
 }
+
+export interface OpenHouseCapacitySlot {
+  slot_index: number;
+  active_count: number;
+  max_visitors: number | null;
+  full: boolean;
+}
+
+export interface OpenHouseCapacity {
+  listing_id: string;
+  active_total: number;
+  max_total_visitors: number | null;
+  slot_counts: OpenHouseCapacitySlot[];
+}
+
+type OpenHouseCapacityRow = Omit<OpenHouseCapacity, "slot_counts"> & {
+  slot_counts: OpenHouseCapacitySlot[] | string | null;
+};
 
 export interface OpenHouseRegistration {
   id: string;
@@ -88,6 +119,8 @@ export interface OpenHouseRegistration {
   waiver_signed_at: string | null;
   waiver_url: string | null;
   proof_of_funds_url: string | null;
+  pof_verified_status: OHPofVerifiedStatus | null;
+  pof_rejection_reason: string | null;
   proof_amount: number | null;
   investor_declaration_signed_at: string | null;
   status: OHRegistrationStatus;
@@ -135,6 +168,7 @@ type RegistrationContext = Pick<
   | "id_verified_at"
   | "waiver_signed_at"
   | "proof_of_funds_url"
+  | "pof_verified_status"
   | "proof_amount"
   | "investor_declaration_signed_at"
   | "mortgage_status"
@@ -206,6 +240,8 @@ export function getOpenHouseApprovalBlockers(
   if (settings?.require_proof_of_funds) {
     if (!registration.proof_of_funds_url) {
       blockers.push("Proof of funds missing");
+    } else if (registration.pof_verified_status !== "verified") {
+      blockers.push("Proof of funds not verified");
     }
     if (settings.min_proof_amount && Number(registration.proof_amount ?? 0) < Number(settings.min_proof_amount)) {
       blockers.push(`Proof of funds is below the minimum ${Number(settings.min_proof_amount).toLocaleString()}`);
@@ -231,6 +267,36 @@ export function useOpenHouseSettings(listingId: string | undefined) {
         .maybeSingle();
       if (error) throw error;
       return data as OpenHouseSettings | null;
+    },
+    enabled: !!listingId,
+  });
+}
+
+export function useOpenHouseCapacity(listingId: string | undefined) {
+  return useQuery({
+    queryKey: ["open_house_capacity", listingId],
+    queryFn: async () => {
+      if (!listingId) return null;
+      const rpc = supabase.rpc as unknown as GetOpenHouseCapacityRpc;
+      const { data, error } = await rpc("get_open_house_capacity", { p_listing_id: listingId });
+      if (error) throw error;
+      const row = data?.[0];
+      if (!row) return null;
+      const parsedSlots =
+        typeof row.slot_counts === "string"
+          ? (JSON.parse(row.slot_counts) as OpenHouseCapacitySlot[])
+          : row.slot_counts ?? [];
+      return {
+        listing_id: row.listing_id,
+        active_total: Number(row.active_total ?? 0),
+        max_total_visitors: row.max_total_visitors ?? null,
+        slot_counts: parsedSlots.map((slot) => ({
+          slot_index: Number(slot.slot_index),
+          active_count: Number(slot.active_count ?? 0),
+          max_visitors: slot.max_visitors == null ? null : Number(slot.max_visitors),
+          full: Boolean(slot.full),
+        })),
+      } satisfies OpenHouseCapacity;
     },
     enabled: !!listingId,
   });
@@ -425,6 +491,7 @@ export function useUpdateOpenHouseRegistration() {
         waiver_signed_at: string;
         waiver_url: string;
         proof_of_funds_url: string;
+        pof_verified_status: OHPofVerifiedStatus;
         proof_amount: number;
         investor_declaration_signed_at: string;
         status: OHRegistrationStatus;
@@ -432,6 +499,7 @@ export function useUpdateOpenHouseRegistration() {
         approved_at: string;
         attended_at: string;
         rejection_reason: string;
+        pof_rejection_reason: string | null;
         // Pre-qualification screening fields
         mortgage_status: string;
         budget_range: string;
@@ -463,6 +531,8 @@ export function useUpdateOpenHouseRegistration() {
           id_verified_at,
           waiver_signed_at,
           proof_of_funds_url,
+          pof_verified_status,
+          pof_rejection_reason,
           proof_amount,
           investor_declaration_signed_at,
           mortgage_status,
@@ -505,6 +575,8 @@ export function useUpdateOpenHouseRegistration() {
         id_verified_at?: string | null;
         waiver_signed_at?: string | null;
         proof_of_funds_url?: string | null;
+        pof_verified_status?: OHPofVerifiedStatus | null;
+        pof_rejection_reason?: string | null;
         proof_amount?: number | null;
         investor_declaration_signed_at?: string | null;
         mortgage_status?: string | null;
@@ -534,6 +606,7 @@ export function useUpdateOpenHouseRegistration() {
           "attended_at",
           "rejection_reason",
           "pof_verified_status",
+          "pof_rejection_reason",
           "timeslot_index",
         ] as const;
         if (!requesterStatusAllowed || ownerOnlyFields.some((field) => field in updates)) {
@@ -554,6 +627,7 @@ export function useUpdateOpenHouseRegistration() {
           id_verified_at: updates.id_verified_at ?? lookup?.id_verified_at ?? null,
           waiver_signed_at: updates.waiver_signed_at ?? lookup?.waiver_signed_at ?? null,
           proof_of_funds_url: updates.proof_of_funds_url ?? lookup?.proof_of_funds_url ?? null,
+          pof_verified_status: updates.pof_verified_status ?? lookup?.pof_verified_status ?? null,
           proof_amount: updates.proof_amount ?? lookup?.proof_amount ?? null,
           investor_declaration_signed_at: updates.investor_declaration_signed_at ?? lookup?.investor_declaration_signed_at ?? null,
           mortgage_status: updates.mortgage_status ?? lookup?.mortgage_status ?? null,
@@ -658,7 +732,16 @@ export function useSubmitOpenHouseOffer() {
         p_message: message || null,
         p_currency: "EUR",
       });
-      if (error) throw error;
+      if (error) {
+        const offerMessages: Record<string, string> = {
+          proof_of_funds_must_be_verified: "Proof of funds must be verified before you can submit an offer.",
+          only_attendees_can_submit_offers: "Attend the open house before submitting an offer.",
+          offers_unlock_after_open_house: "Offers unlock after the open house has taken place.",
+          sealed_bid_deadline_passed: "The sealed-bid deadline has passed.",
+          sealed_bids_disabled_for_open_house: "Sealed bids are disabled for this open house.",
+        };
+        throw new Error(offerMessages[error.message] ?? error.message);
+      }
       return data;
     },
     onSuccess: (_, v) => {
@@ -792,10 +875,39 @@ export function useAcceptOpenHouseOffer() {
     },
     onSuccess: (_, v) => {
       qc.invalidateQueries({ queryKey: ["open_house_offers", v.listingId] });
+      qc.invalidateQueries({ queryKey: ["listing", v.listingId] });
+      qc.invalidateQueries({ queryKey: ["listings"] });
+      qc.invalidateQueries({ queryKey: ["listings-paginated"] });
       toast.success("Offer accepted — other bids automatically rejected");
     },
     onError: (err: unknown) => {
       const msg = err instanceof Error ? err.message : "Failed to accept offer. Please try again.";
+      toast.error(msg);
+    },
+  });
+}
+
+/** Reopen a winner selection so the host can choose a runner-up if a deal falls through. */
+export function useReopenOpenHouseOfferSelection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ listingId }: { listingId: string }) => {
+      const uid = (await supabase.auth.getUser()).data.user?.id;
+      if (!uid) throw new Error("Not authenticated");
+      void uid;
+      const rpc = supabase.rpc as unknown as ReopenOpenHouseOfferSelectionRpc;
+      const { error } = await rpc("reopen_open_house_offer_selection", { p_listing_id: listingId });
+      if (error) throw error;
+    },
+    onSuccess: (_, v) => {
+      qc.invalidateQueries({ queryKey: ["open_house_offers", v.listingId] });
+      qc.invalidateQueries({ queryKey: ["listing", v.listingId] });
+      qc.invalidateQueries({ queryKey: ["listings"] });
+      qc.invalidateQueries({ queryKey: ["listings-paginated"] });
+      toast.success("Winner selection reopened");
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : "Failed to reopen winner selection.";
       toast.error(msg);
     },
   });

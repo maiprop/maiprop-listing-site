@@ -100,39 +100,6 @@ export function useToggleFavorite() {
   });
 }
 
-export function useTogglePriceAlert() {
-  const queryClient = useQueryClient();
-  const { user } = useAuth();
-  const { t } = useTranslation();
-
-  return useMutation({
-    mutationFn: async ({
-      listing_id,
-      priceAlert,
-      price,
-    }: {
-      listing_id: string;
-      priceAlert: boolean;
-      price?: number;
-    }) => {
-      if (!user) throw new Error("Must be logged in");
-      const { error } = await supabase
-        .from("favorites")
-        .update({
-          price_alert: priceAlert,
-          price_when_saved: priceAlert ? price ?? null : null,
-        })
-        .eq("user_id", user.id)
-        .eq("listing_id", listing_id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["favorites"] });
-      toast.success(t("toasts.favorites.priceAlertUpdated"));
-    },
-    onError: () => toast.error(t("toasts.favorites.priceAlertError")),
-  });
-}
 
 /** Derives favorited state from the useFavorites() cache — no extra DB query per card. */
 export function useIsFavorited(listing_id: string) {
