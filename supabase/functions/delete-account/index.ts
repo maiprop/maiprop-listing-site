@@ -63,7 +63,7 @@ type DeletionNotificationClient = {
   from: (table: string) => TableQuery;
 };
 
-type OwnedListing = { id: string; title: string | null };
+type OwnedListing = { id: string };
 type FavoriteRow = { user_id: string | null; listing_id: string | null };
 type ViewingRow = { requester_id: string | null; listing_id: string | null };
 type OpenHouseRegistrationRow = { requester_id: string | null; listing_id: string | null };
@@ -224,11 +224,6 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - Account deletion coordinates a
   }
 });
 
-function listingTitle(listingTitles: Map<string, string>, listingId: string | null | undefined): string {
-  if (!listingId) return "A listing";
-  return listingTitles.get(listingId) ?? "A listing";
-}
-
 function addDeletionNotification(
   notifications: DeletionNotification[],
   deletedUserId: string,
@@ -299,13 +294,10 @@ export async function notifyAccountDeletionAffectedParties(
     "listings",
     supabase
       .from("listings")
-      .select("id, title")
+      .select("id")
       .eq("owner_id", deletedUserId) as unknown as PromiseLike<QueryResult<OwnedListing>>,
   );
   const listingIds = listings.map((listing) => listing.id).filter(Boolean);
-  const listingTitles = new Map(
-    listings.map((listing) => [listing.id, listing.title?.trim() || "A listing"]),
-  );
   const notifications: DeletionNotification[] = [];
 
   if (listingIds.length > 0) {
@@ -317,13 +309,12 @@ export async function notifyAccountDeletionAffectedParties(
         .in("listing_id", listingIds) as unknown as PromiseLike<QueryResult<FavoriteRow>>,
     );
     for (const favorite of favorites) {
-      const title = listingTitle(listingTitles, favorite.listing_id);
       addDeletionNotification(
         notifications,
         deletedUserId,
         favorite.user_id,
         "Saved listing removed",
-        `${title} is no longer available because the account was deleted.`,
+        "A listing you saved is no longer available.",
         "listing_removed",
         "/dashboard?tab=saved",
       );
@@ -337,13 +328,12 @@ export async function notifyAccountDeletionAffectedParties(
         .in("listing_id", listingIds) as unknown as PromiseLike<QueryResult<ViewingRow>>,
     );
     for (const viewing of viewings) {
-      const title = listingTitle(listingTitles, viewing.listing_id);
       addDeletionNotification(
         notifications,
         deletedUserId,
         viewing.requester_id,
         "Viewing cancelled",
-        `Your viewing for ${title} was cancelled because the account was deleted.`,
+        "Your viewing was cancelled because the listing is no longer available.",
         "viewing",
         "/dashboard?tab=viewings",
       );
@@ -357,13 +347,12 @@ export async function notifyAccountDeletionAffectedParties(
         .in("listing_id", listingIds) as unknown as PromiseLike<QueryResult<OpenHouseRegistrationRow>>,
     );
     for (const registration of registrations) {
-      const title = listingTitle(listingTitles, registration.listing_id);
       addDeletionNotification(
         notifications,
         deletedUserId,
         registration.requester_id,
         "Open house registration closed",
-        `Your open house registration for ${title} was closed because the account was deleted.`,
+        "Your open house registration was closed because the listing is no longer available.",
         "open_house",
         "/dashboard?tab=open-houses",
       );
@@ -377,13 +366,12 @@ export async function notifyAccountDeletionAffectedParties(
         .in("listing_id", listingIds) as unknown as PromiseLike<QueryResult<OpenHouseOfferRow>>,
     );
     for (const offer of offers) {
-      const title = listingTitle(listingTitles, offer.listing_id);
       addDeletionNotification(
         notifications,
         deletedUserId,
         offer.bidder_id,
         "Open house bid closed",
-        `Your bid for ${title} was closed because the account was deleted.`,
+        "Your open house bid was closed because the listing is no longer available.",
         "open_house_offer",
         "/dashboard?tab=open-houses",
       );
@@ -406,7 +394,7 @@ export async function notifyAccountDeletionAffectedParties(
       deletedUserId,
       otherUserId,
       "Conversation closed",
-      "A conversation was closed because the other account was deleted.",
+      "A conversation was closed because the other account is no longer available.",
       "message",
       "/messages",
     );
