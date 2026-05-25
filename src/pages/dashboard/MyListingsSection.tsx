@@ -252,7 +252,7 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
                 </span>
                 <button
                   onClick={() => toggleListingStatus(l.id, l.status)}
-                  className="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
+                  className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
                   aria-label={
                     l.status === "active"
                       ? "Pause listing"
@@ -267,7 +267,7 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
                 </button>
                 <button
                   onClick={() => setConfirmDeleteId(l.id)}
-                  className="p-2 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive"
+                  className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive"
                   aria-label="Delete listing"
                 >
                   <Trash2 className="w-4 h-4" />

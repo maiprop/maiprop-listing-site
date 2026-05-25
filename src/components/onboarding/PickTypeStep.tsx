@@ -95,7 +95,7 @@ export function PickTypeStep({
   ];
 
   return (
-    <div>
+    <div className={cn(pendingCardId && "pb-24 md:pb-0")}>
       <div className="text-center mb-8">
         <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5 text-xs font-medium text-primary mb-4">
           <Sparkles className="w-3.5 h-3.5" /> {isGreek ? "Προσαρμόστε την εμπειρία σας" : "Personalise your experience"}
@@ -159,7 +159,7 @@ export function PickTypeStep({
       </div>
 
       {pendingCardId && !flatCards.find((c) => c.id === pendingCardId)?.immediate && (
-        <div className="mt-5">
+        <div className="fixed inset-x-4 bottom-4 z-40 md:static md:inset-auto md:z-auto md:mt-5">
           <Button
             className="w-full bg-gradient-primary border-0 text-primary-foreground"
             disabled={loading || authLoading}

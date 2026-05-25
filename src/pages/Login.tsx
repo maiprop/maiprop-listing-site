@@ -100,7 +100,7 @@ export default function Login() { // skipcq: JS-R1005 - Auth route coordinates c
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
-      <main id="main-content" className="flex-1 flex items-center justify-center pt-16 px-4">
+      <main id="main-content" className="flex-1 flex items-center justify-center pt-16 px-4 pb-40 sm:pb-16">
         <div className="w-full max-w-sm">
           <div className="glass-card rounded-2xl p-8 border border-border">
 

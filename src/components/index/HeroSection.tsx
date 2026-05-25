@@ -228,7 +228,7 @@ export function HeroSection() {
                   }}
                 >
                   {/* Tabs */}
-                  <div className="flex gap-0.5 px-2 pt-2 overflow-x-auto scrollbar-none">
+                  <div className="grid grid-cols-2 gap-1 px-2 pt-2 sm:flex sm:gap-0.5 sm:overflow-x-auto sm:scrollbar-none">
                     {[
                       { label: "Buy", emoji: "🏠" },
                       { label: "Rent", emoji: "🔑" },
@@ -238,7 +238,7 @@ export function HeroSection() {
                       <button
                         key={label}
                         onClick={() => setSearchType(label)}
-                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold font-display transition-all shrink-0 whitespace-nowrap min-h-[36px] ${
+                        className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold font-display transition-all min-w-0 sm:shrink-0 whitespace-nowrap min-h-[36px] ${
                           searchType === label
                             ? "bg-primary text-primary-foreground shadow-sm"
                             : "text-muted-foreground hover:text-foreground hover:bg-secondary/80"

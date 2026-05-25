@@ -164,7 +164,7 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
       <Helmet>
         <title>{metaTitle}</title>
         <meta name="description" content={metaDescription} />
@@ -345,13 +345,13 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
 
         {/* ── MAP VIEW ── */}
         {viewMode === "map" &&
-        <div className="container pb-6">
+        <div className="container pb-mobile-nav-room lg:pb-6">
             {isLoading ?
-          <div className="flex items-center justify-center h-[560px] rounded-2xl bg-card border border-border">
+          <div className="flex items-center justify-center mobile-map-panel rounded-2xl bg-card border border-border">
                 <Loader2 className="w-6 h-6 animate-spin text-primary" />
               </div> :
           mappableCount === 0 ?
-          <div className="flex flex-col items-center justify-center h-[560px] rounded-2xl bg-card border border-border gap-3">
+          <div className="flex flex-col items-center justify-center mobile-map-panel rounded-2xl bg-card border border-border gap-3">
                 <MapPin className="w-10 h-10 text-muted-foreground/30" />
                 <p className="text-sm text-muted-foreground">
                   {visibleFiltered.length === 0
@@ -378,7 +378,7 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
                 <Suspense fallback={<div className="h-64 bg-muted animate-pulse rounded-lg" />}>
                   <MapView
                     listings={mapListings}
-                    height="560px"
+                    height="clamp(360px, calc(100svh - 12rem - var(--bottom-nav-h, 56px) - env(safe-area-inset-bottom, 0px)), 560px)"
                     itemLabelSingular={isGreek ? "πλειστηριασμός" : "auction"}
                     itemLabelPlural={isGreek ? "πλειστηριασμοί" : "auctions"}
                     onPolygonFilter={(ids) => { setPolygonFilterIds(ids); setCurrentPage(1); }}

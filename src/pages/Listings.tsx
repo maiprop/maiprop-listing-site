@@ -585,10 +585,10 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
 
             {/* ── MOBILE FILTER BAR ── */}
             <div className="sm:hidden space-y-2">
-              {/* Row 1: Buy/Rent tabs + view toggle + filter button */}
-              <div className="flex gap-2 items-center">
+              {/* Row 1: listing type + compact actions */}
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 items-center">
                 {/* Buy / Rent pills */}
-                <div className="flex gap-1 bg-secondary border border-border rounded-xl p-1 shrink-0">
+                <div className="flex gap-1 bg-secondary border border-border rounded-xl p-1 min-w-0 overflow-x-auto scrollbar-none">
                   {listingTypeOptions.map(o => (
                     <button
                       key={o.value}
@@ -603,8 +603,38 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                     </button>
                   ))}
                 </div>
+                <div className="flex items-center justify-end gap-2 shrink-0">
+                  {/* View toggle */}
+                  <div className="flex rounded-xl border border-border overflow-hidden shrink-0">
+                    <button
+                      onClick={() => setViewMode("grid")}
+                      aria-label={isGreek ? "Προβολή πλέγματος" : "Grid view"}
+                      aria-pressed={viewMode === "grid"}
+                      className={`p-2 transition-colors ${viewMode === "grid" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}>
+                      <LayoutGrid className="w-4 h-4" aria-hidden="true" />
+                    </button>
+                    <button
+                      onClick={() => setViewMode("map")}
+                      aria-label={isGreek ? "Προβολή χάρτη" : "Map view"}
+                      aria-pressed={viewMode === "map" || viewMode === "split"}
+                      className={`p-2 transition-colors ${viewMode === "map" || viewMode === "split" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}>
+                      <Map className="w-4 h-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                  {/* Filters button */}
+                  <button
+                    onClick={() => setShowFilters(!showFilters)}
+                    aria-label={activeFilterCount > 0 ? (isGreek ? `Φίλτρα (${activeFilterCount} ενεργά)` : `Filters (${activeFilterCount} active)`) : (isGreek ? "Φίλτρα" : "Filters")}
+                    aria-expanded={showFilters}
+                    className={`shrink-0 flex items-center gap-1 px-2.5 py-2 rounded-xl border text-xs font-medium transition-colors ${showFilters ? "bg-primary/10 border-primary/30 text-primary" : "bg-secondary border-border text-muted-foreground"}`}>
+                    <SlidersHorizontal className="w-4 h-4" aria-hidden="true" />
+                    {activeFilterCount > 0 && (
+                      <span className="w-4 h-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center" aria-hidden="true">{activeFilterCount}</span>
+                    )}
+                  </button>
+                </div>
                 {/* Search */}
-                <div className="flex-1 flex items-center gap-2 bg-secondary rounded-xl px-3 py-2 border border-border focus-within:border-primary transition-colors min-w-0">
+                <div className="col-span-2 flex items-center gap-2 bg-secondary rounded-xl px-3 py-2 border border-border focus-within:border-primary transition-colors min-w-0">
                   <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                   <input
                     ref={mobileSearchInputRef}
@@ -617,37 +647,9 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                     className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none min-w-0"
                   />
                   {searchQuery && (
-                    <button onClick={() => setParam("city", "")}><X className="w-3 h-3 text-muted-foreground" /></button>
+                    <button onClick={() => setParam("city", "")} className="min-h-8 min-w-8 inline-flex items-center justify-center rounded-lg"><X className="w-3 h-3 text-muted-foreground" /></button>
                   )}
                 </div>
-                {/* View toggle */}
-                <div className="flex rounded-xl border border-border overflow-hidden shrink-0">
-                  <button
-                    onClick={() => setViewMode("grid")}
-                    aria-label={isGreek ? "Προβολή πλέγματος" : "Grid view"}
-                    aria-pressed={viewMode === "grid"}
-                    className={`p-2 transition-colors ${viewMode === "grid" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}>
-                    <LayoutGrid className="w-4 h-4" aria-hidden="true" />
-                  </button>
-                  <button
-                    onClick={() => setViewMode("map")}
-                    aria-label={isGreek ? "Προβολή χάρτη" : "Map view"}
-                    aria-pressed={viewMode === "map" || viewMode === "split"}
-                    className={`p-2 transition-colors ${viewMode === "map" || viewMode === "split" ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}>
-                    <Map className="w-4 h-4" aria-hidden="true" />
-                  </button>
-                </div>
-                {/* Filters button */}
-                <button
-                  onClick={() => setShowFilters(!showFilters)}
-                  aria-label={activeFilterCount > 0 ? (isGreek ? `Φίλτρα (${activeFilterCount} ενεργά)` : `Filters (${activeFilterCount} active)`) : (isGreek ? "Φίλτρα" : "Filters")}
-                  aria-expanded={showFilters}
-                  className={`shrink-0 flex items-center gap-1 px-2.5 py-2 rounded-xl border text-xs font-medium transition-colors ${showFilters ? "bg-primary/10 border-primary/30 text-primary" : "bg-secondary border-border text-muted-foreground"}`}>
-                  <SlidersHorizontal className="w-4 h-4" aria-hidden="true" />
-                  {activeFilterCount > 0 && (
-                    <span className="w-4 h-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center" aria-hidden="true">{activeFilterCount}</span>
-                  )}
-                </button>
               </div>
 
               {/* Filters dropdown panel */}
@@ -694,13 +696,13 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                   {/* Size */}
                   <div className="space-y-1.5">
                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isGreek ? "Εμβαδόν (τ.μ.)" : "Size (m²)"}</span>
-                    <div className="flex gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                       <input type="number" placeholder={isGreek ? "Ελάχ. τ.μ." : "Min m²"} value={minSqm}
                         onChange={e => setParam("sqm_min", e.target.value)}
-                        className="flex-1 px-3 py-2 text-sm rounded-lg border border-border bg-secondary text-foreground outline-none focus:border-primary" />
+                        className="w-full min-w-0 px-3 py-2 text-sm rounded-lg border border-border bg-secondary text-foreground outline-none focus:border-primary" />
                       <input type="number" placeholder={isGreek ? "Μέγ. τ.μ." : "Max m²"} value={maxSqm}
                         onChange={e => setParam("sqm_max", e.target.value)}
-                        className="flex-1 px-3 py-2 text-sm rounded-lg border border-border bg-secondary text-foreground outline-none focus:border-primary" />
+                        className="w-full min-w-0 px-3 py-2 text-sm rounded-lg border border-border bg-secondary text-foreground outline-none focus:border-primary" />
                     </div>
                   </div>
                   {/* Bedrooms */}
@@ -853,7 +855,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
         )}
 
         {/* Results */}
-        <div className={`${viewMode === "split" ? "" : "container min-h-[calc(100vh-8rem)]"} py-4 sm:py-8 pb-28 lg:pb-8`}>
+        <div className={`${viewMode === "split" ? "" : "container min-h-[calc(100svh-8rem)]"} py-4 sm:py-8 pb-mobile-nav-room lg:pb-8`}>
           {/* Stats bar */}
           <div className={`flex items-center justify-between mb-6 flex-wrap gap-3 ${viewMode === "split" ? "container" : ""}`}>
             {statsStatus}
@@ -917,7 +919,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                 {/* Left: scrollable grid — hidden on mobile when map tab active */}
                 <div className={`md:w-[420px] shrink-0 overflow-y-auto px-4 space-y-3 pb-8 border-r border-border
                   ${mobileTab === "map" ? "hidden md:block" : "block"}
-                  md:h-full h-[60vh]`}
+                  md:h-full h-[min(60svh,calc(100svh-var(--bottom-nav-h,56px)-10rem))]`}
                   ref={splitListRef}
                 >
                   {isLoading
@@ -929,7 +931,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                 </div>
 
                 {/* Right: map — hidden on mobile when list tab active */}
-                <div className={`flex-1 ${mobileTab === "list" ? "hidden md:block" : "block"} md:h-full h-[calc(100vh-12rem)]`}>
+                <div className={`flex-1 ${mobileTab === "list" ? "hidden md:block" : "block"} md:h-full h-[calc(100svh-var(--bottom-nav-h,56px)-env(safe-area-inset-bottom,0px)-10rem)] min-h-[360px]`}>
                   <MapGate consent={consent} accept={accept} height="100%">
                     <Suspense fallback={<div className="h-64 bg-muted animate-pulse rounded-lg" />}>
                       <MapView
@@ -1009,12 +1011,13 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
             )
           ) : (
             /* Full map view */
-            <MapGate consent={consent} accept={accept}>
+            <MapGate consent={consent} accept={accept} height="clamp(360px, calc(100svh - var(--bottom-nav-h, 56px) - env(safe-area-inset-bottom, 0px) - 9.5rem), 620px)">
               <Suspense fallback={<div className="h-64 bg-muted animate-pulse rounded-lg" />}>
                 <MapView
                   listings={mapListings}
                   onVisibleListingsChange={setViewportIds}
                   onPolygonFilter={setPolygonFilterIds}
+                  height="clamp(360px, calc(100svh - var(--bottom-nav-h, 56px) - env(safe-area-inset-bottom, 0px) - 9.5rem), 620px)"
                 />
               </Suspense>
             </MapGate>
@@ -1025,35 +1028,21 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
       <Footer />
 
       {/* Floating Map / List pill — mobile only, above bottom nav */}
+      {!showFilters && viewMode === "map" && (
       <div
         className="md:hidden fixed left-1/2 -translate-x-1/2 z-50 animate-fade-in"
         style={{ bottom: "calc(var(--bottom-nav-h, 56px) + env(safe-area-inset-bottom, 0px) + 12px)" }}
       >
-        {viewMode === "map" ? (
-          <button
-            onClick={() => setViewMode("grid")}
-            className="flex items-center gap-2 pl-4 pr-5 py-3 rounded-full shadow-elevated bg-foreground text-background text-sm font-semibold transition-all active:scale-95"
-            style={{ boxShadow: "0 4px 24px 0 hsl(var(--foreground) / 0.18)" }}
-          >
-            <LayoutGrid className="w-4 h-4" />
-            {isGreek ? "Λίστα" : "Show List"}
-          </button>
-        ) : (
-          <button
-            onClick={() => setViewMode("map")}
-            className="flex items-center gap-2 pl-4 pr-5 py-3 rounded-full shadow-elevated bg-foreground text-background text-sm font-semibold transition-all active:scale-95"
-            style={{ boxShadow: "0 4px 24px 0 hsl(var(--foreground) / 0.18)" }}
-          >
-            <Map className="w-4 h-4" />
-            {isGreek ? "Χάρτης" : "Show Map"}
-            {filtered.length > 0 && (
-              <span className="ml-0.5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
-                {filtered.length > 99 ? "99+" : filtered.length}
-              </span>
-            )}
-          </button>
-        )}
+        <button
+          onClick={() => setViewMode("grid")}
+          className="flex items-center gap-2 pl-4 pr-5 py-3 rounded-full shadow-elevated bg-foreground text-background text-sm font-semibold transition-all active:scale-95"
+          style={{ boxShadow: "0 4px 24px 0 hsl(var(--foreground) / 0.18)" }}
+        >
+          <LayoutGrid className="w-4 h-4" />
+          {isGreek ? "Λίστα" : "Show List"}
+        </button>
       </div>
+      )}
 
       {/* Compare drawer */}
       <Suspense fallback={null}>

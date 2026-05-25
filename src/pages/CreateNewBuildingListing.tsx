@@ -323,7 +323,7 @@ export default function CreateNewBuildingListing() {
   );
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
       <Navbar />
       <div className="pt-16">
         <div className="border-b border-border bg-card py-5">
