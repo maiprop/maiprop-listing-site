@@ -20,8 +20,8 @@ const LIMIT_ERROR_MESSAGES: Record<string, string> = {
   viewing_limit_reached: "You've used your free viewing this month. Upgrade to Pro to book more viewings.",
   listing_limit_reached: "You've reached your active listing limit. Upgrade to Pro for more listings.",
   listing_not_allowed: "Your current plan does not include this listing type. Upgrade to Pro to continue.",
-  contact_limit_reached: "You've reached your contact limit. Upgrade to Pro for more introductions.",
-  open_house_rsvp_limit_reached: "You've reached your open-house RSVP limit. Upgrade to Pro for more registrations.",
+  contact_limit_reached: "You've reached your monthly contact limit. Upgrade to Pro for more property contacts.",
+  open_house_rsvp_limit_reached: "You've reached your monthly open-house RSVP limit. Upgrade to Pro for unlimited RSVPs.",
 };
 
 function collectErrorText(value: unknown): string {

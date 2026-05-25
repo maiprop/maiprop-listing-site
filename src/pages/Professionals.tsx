@@ -164,7 +164,7 @@ const categoryInfo: Record<string, { emoji: string; label: string; group: string
   smart_home_installer: { emoji: "📱", label: "Smart Home", group: "construction" },
 };
 
-export function limitProfessionalsPerCategory<T extends { category?: string | null }>(
+function limitProfessionalsPerCategory<T extends { category?: string | null }>(
   professionals: T[],
   limit: number | null | undefined,
 ): T[] {
@@ -247,7 +247,7 @@ export default function Professionals() {
     isPro ? "pro" : "free",
   ).professionalsPerCategory;
 
-  const filtered = (Array.isArray(professionals) ? professionals : []).filter((p) => {
+  const categoryFiltered = (Array.isArray(professionals) ? professionals : []).filter((p) => {
     // Category from URL (e.g. from homepage search) — exact match
     if (categoryFromUrl) {
       if (p.category !== categoryFromUrl) return false;
@@ -255,7 +255,10 @@ export default function Professionals() {
       const group = categoryGroups.find((g) => g.id === selectedGroup);
       if (group && !group.categories.includes(p.category)) return false;
     }
-    // Text search
+    return true;
+  });
+  const cappedProfessionals = limitProfessionalsPerCategory(categoryFiltered, professionalsPerCategory);
+  const visibleProfessionals = cappedProfessionals.filter((p) => {
     const q = search.toLowerCase();
     if (!q) return true;
     return (
@@ -265,7 +268,6 @@ export default function Professionals() {
       (p.city || "").toLowerCase().includes(q));
 
   });
-  const visibleProfessionals = limitProfessionalsPerCategory(filtered, professionalsPerCategory);
 
   const activeGroup = selectedGroup ? categoryGroups.find((g) => g.id === selectedGroup) : null;
 

@@ -40,11 +40,6 @@ describe("getPlanLimitErrorMessage", () => {
     expect(result).toMatch(/search alert limit/i);
   });
 
-  it("returns message for contact and open-house RSVP limits", () => {
-    expect(getPlanLimitErrorMessage(new Error("contact_limit_reached"))).toMatch(/contact limit/i);
-    expect(getPlanLimitErrorMessage(new Error("open_house_rsvp_limit_reached"))).toMatch(/rsvp limit/i);
-  });
-
   it("parses Supabase/PostgREST error objects instead of stringifying them", () => {
     const result = getPlanLimitErrorMessage({
       message: "viewing_limit_reached",
@@ -64,6 +59,11 @@ describe("getPlanLimitErrorMessage", () => {
 
     expect(result).toMatch(/listing owner/i);
     expect(result).not.toMatch(/free viewing/i);
+  });
+
+  it("returns message for contact and open-house RSVP limits", () => {
+    expect(getPlanLimitErrorMessage(new Error("contact_limit_reached"))).toMatch(/monthly contact limit/i);
+    expect(getPlanLimitErrorMessage(new Error("open_house_rsvp_limit_reached"))).toMatch(/monthly open-house RSVP limit/i);
   });
 
   it("returns null for unrelated error", () => {

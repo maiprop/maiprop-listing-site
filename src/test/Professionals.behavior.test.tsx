@@ -235,6 +235,33 @@ describe("Professionals page behavior", () => {
     expect(screen.getByText(/5 professionals found in Design & Planning/i)).toBeInTheDocument();
   });
 
+  it("does not let search reveal professionals outside the free per-category window", async () => {
+    useProfessionalsMock.mockReturnValue({
+      data: Array.from({ length: 6 }, (_, index) => ({
+        id: `architect-search-${index + 1}`,
+        display_name: `Architect ${index + 1}`,
+        title: "Architect",
+        category: "architect",
+        city: "Athens",
+        rating: 4,
+        reviews_count: 1,
+        projects_count: 1,
+        experience_years: 5,
+        specialties: [],
+        subscription_tier: "free",
+        verified: false,
+      })),
+      isLoading: false,
+    });
+    const { default: Professionals } = await import("@/pages/Professionals");
+
+    renderWithProviders(<Professionals />, { initialPath: "/professionals?category=architect" });
+    fireEvent.change(screen.getByLabelText(/search professionals/i), { target: { value: "Architect 6" } });
+
+    expect(screen.queryByText("Architect 6")).not.toBeInTheDocument();
+    expect(screen.getByText("No professionals found")).toBeInTheDocument();
+  });
+
   it("keeps Pro directory browsing unlimited", async () => {
     useSubscriptionMock.mockReturnValue({ isPro: true });
     useProfessionalsMock.mockReturnValue({
