@@ -80,4 +80,13 @@ describe("useAuctionsPipeline auction fetch limits", () => {
 
     expect(useAuctionListingsMock).toHaveBeenCalledWith(undefined);
   });
+
+  it("uses the plan-config unlimited auction window for investor profiles", () => {
+    useAuthMock.mockReturnValue({ profile: { role: "investor", participant_type: "investor" } });
+    useSubscriptionMock.mockReturnValue({ isPro: true });
+
+    renderHook(() => useAuctionsPipeline(defaultOpts));
+
+    expect(useAuctionListingsMock).toHaveBeenCalledWith(undefined);
+  });
 });

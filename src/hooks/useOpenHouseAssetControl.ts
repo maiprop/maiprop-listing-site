@@ -381,6 +381,7 @@ export function useCreateOpenHouseRegistration() {
           open_house_timeslot_invalid: "That timeslot is no longer available. Please choose another slot.",
           open_house_registration_closed: "Registration for this open house is closed.",
           open_house_not_active: "This open house is not accepting registrations.",
+          open_house_rsvp_limit_reached: "You've reached your monthly RSVP limit. Upgrade to Pro for unlimited open-house RSVPs.",
         };
         if (error.message && capacityMessages[error.message]) {
           throw new Error(capacityMessages[error.message]);

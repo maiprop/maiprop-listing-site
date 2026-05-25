@@ -3,10 +3,20 @@ import { fireEvent, screen } from "@testing-library/react";
 import { renderWithProviders } from "@/test/utils";
 
 const useProfessionalsMock = vi.fn();
+const useAuthMock = vi.fn();
+const useSubscriptionMock = vi.fn();
 const modalNavigateMock = vi.fn<(category: string) => void>();
 
 vi.mock("@/hooks/useProfessionals", () => ({
   useProfessionals: () => useProfessionalsMock(),
+}));
+
+vi.mock("@/contexts/AuthContext", () => ({
+  useAuth: () => useAuthMock(),
+}));
+
+vi.mock("@/hooks/useSubscription", () => ({
+  useSubscription: () => useSubscriptionMock(),
 }));
 
 vi.mock("@/components/Navbar", () => ({ Navbar: () => <nav data-testid="navbar" /> }));
@@ -72,6 +82,8 @@ describe("Professionals page behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useProfessionalsMock.mockReturnValue({ data: pros, isLoading: false });
+    useAuthMock.mockReturnValue({ user: null, profile: null });
+    useSubscriptionMock.mockReturnValue({ isPro: false });
   });
 
   it("filters by URL category and links pro contact actions directly to contact mode", async () => {
@@ -193,5 +205,60 @@ describe("Professionals page behavior", () => {
     rerender(<Professionals />);
     fireEvent.change(screen.getByLabelText(/search professionals/i), { target: { value: "not-found" } });
     expect(screen.getByText("No professionals found")).toBeInTheDocument();
+  });
+
+  it("limits free buyer directory browsing to the configured per-category window", async () => {
+    useProfessionalsMock.mockReturnValue({
+      data: Array.from({ length: 6 }, (_, index) => ({
+        id: `architect-${index + 1}`,
+        display_name: `Architect ${index + 1}`,
+        title: "Architect",
+        category: "architect",
+        city: "Athens",
+        rating: 4,
+        reviews_count: 1,
+        projects_count: 1,
+        experience_years: 5,
+        specialties: [],
+        subscription_tier: "free",
+        verified: false,
+      })),
+      isLoading: false,
+    });
+    const { default: Professionals } = await import("@/pages/Professionals");
+
+    renderWithProviders(<Professionals />, { initialPath: "/professionals?category=architect" });
+
+    expect(screen.getByText("Architect 1")).toBeInTheDocument();
+    expect(screen.getByText("Architect 5")).toBeInTheDocument();
+    expect(screen.queryByText("Architect 6")).not.toBeInTheDocument();
+    expect(screen.getByText(/5 professionals found in Design & Planning/i)).toBeInTheDocument();
+  });
+
+  it("keeps Pro directory browsing unlimited", async () => {
+    useSubscriptionMock.mockReturnValue({ isPro: true });
+    useProfessionalsMock.mockReturnValue({
+      data: Array.from({ length: 6 }, (_, index) => ({
+        id: `architect-pro-${index + 1}`,
+        display_name: `Pro Architect ${index + 1}`,
+        title: "Architect",
+        category: "architect",
+        city: "Athens",
+        rating: 4,
+        reviews_count: 1,
+        projects_count: 1,
+        experience_years: 5,
+        specialties: [],
+        subscription_tier: "free",
+        verified: false,
+      })),
+      isLoading: false,
+    });
+    const { default: Professionals } = await import("@/pages/Professionals");
+
+    renderWithProviders(<Professionals />, { initialPath: "/professionals?category=architect" });
+
+    expect(screen.getByText("Pro Architect 6")).toBeInTheDocument();
+    expect(screen.getByText(/6 professionals found in Design & Planning/i)).toBeInTheDocument();
   });
 });

@@ -33,6 +33,7 @@ import { ConstructionSpecs } from "@/components/new-build/ConstructionSpecs";
 import { UnitShowcase } from "@/components/new-build/UnitShowcase";
 import { RegisterInterestCard } from "@/components/new-build/RegisterInterestCard";
 import { tFallback, tInterpolate } from "@/lib/i18nFallback";
+import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const EnergyBadge = ({ cls }: { cls: string }) => {
@@ -180,8 +181,8 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
     try {
       const convId = await startConv.mutateAsync({ other_user_id: listing.owner_id, listing_id: id });
       navigate(`/messages?conv=${convId}`);
-    } catch (_err: unknown) {
-      toast.error(tr("property.errorStartConversation", "Could not start conversation"));
+    } catch (err: unknown) {
+      toast.error(getPlanLimitErrorMessage(err) ?? tr("property.errorStartConversation", "Could not start conversation"));
     } finally {
       setContactLoading(false);
     }

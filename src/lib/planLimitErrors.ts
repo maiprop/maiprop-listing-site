@@ -9,6 +9,8 @@ const LIMIT_ERROR_PATTERNS = [
   "viewing_limit_reached",
   "listing_limit_reached",
   "listing_not_allowed",
+  "contact_limit_reached",
+  "open_house_rsvp_limit_reached",
 ];
 
 export function getPlanLimitErrorMessage(err: unknown): string | null {
