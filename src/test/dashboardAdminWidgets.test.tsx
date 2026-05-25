@@ -53,6 +53,7 @@ vi.mock("@/pages/AdminPricing", () => ({ AdminPricingContent: () => <div data-te
 vi.mock("@/components/AdminProfessionalVerification", () => ({ AdminProfessionalVerification: () => <div data-testid="admin-pro-verification" /> }));
 vi.mock("@/components/POFVerificationPanel", () => ({ POFVerificationPanel: () => <div data-testid="admin-pof-review" /> }));
 vi.mock("@/components/AdminReports", () => ({ default: () => <div data-testid="admin-reports" /> }));
+vi.mock("@/components/AdminContactSubmissions", () => ({ default: () => <div data-testid="admin-contact-submissions" /> }));
 
 import AdminDashboard from "@/pages/AdminDashboard";
 import AdminFeaturedListings from "@/components/AdminFeaturedListings";
@@ -169,7 +170,7 @@ beforeEach(() => {
   toastMock.success.mockReset();
   toastMock.error.mockReset();
   toastMock.info.mockReset();
-  useAuthMock.mockReturnValue({ profile: { role: "admin" }, refreshProfile: vi.fn().mockResolvedValue(undefined) });
+  useAuthMock.mockReturnValue({ user: { id: "admin-user" }, profile: { role: "admin" }, refreshProfile: vi.fn().mockResolvedValue(undefined) });
   useMyListingsMock.mockReturnValue({ data: [], isLoading: false });
   getSessionMock.mockResolvedValue({ data: { session: { access_token: "token" } } });
   getUserMock.mockResolvedValue({ data: { user: { id: "admin-user" } } });
@@ -194,6 +195,12 @@ describe("AdminDashboard tab routing", () => {
     renderAdminRoute("/admin?tab=featured");
 
     expect(await screen.findByText(/Featured Listings/i)).toBeInTheDocument();
+  });
+
+  it("routes platform contact submissions to the admin inbox tab", async () => {
+    renderAdminRoute("/admin?tab=contact-inbox");
+
+    expect(await screen.findByTestId("admin-contact-submissions")).toBeInTheDocument();
   });
 });
 
