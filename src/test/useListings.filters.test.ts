@@ -65,6 +65,10 @@ describe("buildListingsQuery — sort variants", () => {
   it("orders and caps embedded listing images for lightweight listing cards", () => {
     buildListingsQuery();
 
+    const selectedColumns = String(calls("select")[0].args[0])
+      .split(",")
+      .map((column) => column.trim());
+    expect(selectedColumns).toContain("status");
     expect(calls("order").some((c) =>
       c.args[0] === "sort_order" &&
       (c.args[1] as { referencedTable?: string; ascending?: boolean }).referencedTable === "listing_images" &&

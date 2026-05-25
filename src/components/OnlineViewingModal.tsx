@@ -126,7 +126,10 @@ const OnlineViewingModal = ({ open, onClose, listing, professional }: OnlineView
       }
       setDone(true);
     } catch (_err: unknown) {
-      toast.error(isGreek ? "Δεν ήταν δυνατή η υποβολή του αιτήματος. Δοκιμάστε ξανά." : "Could not submit the request. Please try again.");
+      if (!listing) {
+        toast.error(isGreek ? "Δεν ήταν δυνατή η υποβολή του αιτήματος. Δοκιμάστε ξανά." : "Could not submit the request. Please try again.");
+      }
+      return;
     }
   };
 
