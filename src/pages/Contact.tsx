@@ -38,7 +38,7 @@ export default function Contact() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
       <Navbar />
       <div className="pt-28 pb-20">
         <div className="container max-w-5xl">

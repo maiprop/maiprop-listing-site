@@ -258,6 +258,10 @@ export default function Dashboard() { // skipcq: JS-R1005
   const updateConsultationRequest = useUpdateConsultationRequest();
 
   const handleSignOut = async () => { await signOut(); navigate("/"); };
+  const handleDashboardSelect = useCallback((key: NavKey) => {
+    setActiveSection(key);
+    navigate(key === "overview" ? "/dashboard" : `/dashboard/${key}`);
+  }, [navigate]);
 
   const displayName = useMemo(
     () => profile?.display_name || profile?.first_name || user?.email?.split("@")[0] || tr("dashboard.userFallback", "User"),
@@ -383,7 +387,7 @@ export default function Dashboard() { // skipcq: JS-R1005
         <DashboardSidebar
           navItems={navItems}
           activeSection={activeSection}
-          onSelect={setActiveSection}
+          onSelect={handleDashboardSelect}
           onSignOut={handleSignOut}
           displayName={displayName}
           roleLabel={roleLabel}
@@ -397,13 +401,13 @@ export default function Dashboard() { // skipcq: JS-R1005
         <DashboardMobileNav
           navItems={navItems}
           activeSection={activeSection}
-          onSelect={setActiveSection}
+          onSelect={handleDashboardSelect}
           onSignOut={handleSignOut}
           pendingLeadsCount={pendingLeadsCount}
         />
 
         {/* Main content */}
-        <main className="flex-1 p-4 sm:p-6 max-w-full overflow-hidden pb-28 md:pb-6">
+        <main className="flex-1 p-4 sm:p-6 max-w-full overflow-hidden pb-4 md:pb-6 max-md:h-[calc(100svh-4rem-var(--dashboard-mobile-nav-h,56px)-env(safe-area-inset-bottom,0px))] max-md:overflow-y-auto">
 
           {/* ── OVERVIEW ───────────────────────────────────────────────────── */}
           {activeSection === "overview" && navItems.some(i => i.key === "overview") && (

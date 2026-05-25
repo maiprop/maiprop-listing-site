@@ -78,15 +78,18 @@ export function CompareDrawer({
   if (listings.length === 0) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-[55] shadow-elevated">
+    <div
+      className="fixed left-0 right-0 z-[45] shadow-elevated"
+      style={{ bottom: "calc(var(--bottom-nav-h, 56px) + env(safe-area-inset-bottom, 0px))" }}
+    >
       {/* ── collapsed bar ── */}
-      <div className="bg-card border-t border-border px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="bg-card border-t border-border px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <span className="font-semibold text-sm">
             Compare{" "}
             <span className="text-primary font-bold">{listings.length}</span>/3 properties
           </span>
-          <div className="flex gap-2">
+          <div className="flex gap-2 overflow-x-auto scrollbar-none min-w-0">
             {listings.map(l => (
               <div key={l.id} className="relative group flex items-center gap-1.5 px-2 py-1 rounded-lg bg-secondary border border-border text-xs font-medium truncate max-w-[140px]">
                 <span className="truncate">{l.title}</span>
@@ -101,7 +104,7 @@ export function CompareDrawer({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-end gap-2 shrink-0">
           <button onClick={onClear} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
             Clear all
           </button>

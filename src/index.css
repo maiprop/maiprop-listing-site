@@ -85,6 +85,8 @@
     --sidebar-accent-foreground: 25 15% 30%;
     --sidebar-border: 36 15% 87%;
     --sidebar-ring: 261 70% 48%;
+    --bottom-nav-h: 56px;
+    --dashboard-mobile-nav-h: 56px;
   }
 
   /* ─── DARK MODE ─── */
@@ -455,6 +457,33 @@
 /* Reserve space for the fixed mobile bottom nav (h-14) + safe-area inset */
 .pb-bottom-nav {
   padding-bottom: calc(var(--bottom-nav-h, 56px) + env(safe-area-inset-bottom, 0px));
+}
+
+.pb-mobile-nav-room {
+  padding-bottom: calc(var(--bottom-nav-h, 56px) + env(safe-area-inset-bottom, 0px) + 1.5rem);
+}
+
+.pb-dashboard-mobile-nav {
+  padding-bottom: calc(var(--dashboard-mobile-nav-h, 56px) + env(safe-area-inset-bottom, 0px) + 1rem);
+}
+
+.mobile-map-panel {
+  height: clamp(
+    360px,
+    calc(100svh - 12rem - var(--bottom-nav-h, 56px) - env(safe-area-inset-bottom, 0px)),
+    560px
+  );
+}
+
+@media (min-width: 1024px) {
+  .pb-mobile-nav-room,
+  .pb-dashboard-mobile-nav {
+    padding-bottom: 1.5rem;
+  }
+
+  .mobile-map-panel {
+    height: 560px;
+  }
 }
 
 /* ── Firesale hero animated glow orbs ─────────────────────────────────── */

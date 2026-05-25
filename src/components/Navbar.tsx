@@ -481,7 +481,7 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
 
       {/* Mobile dropdown */}
       {mobileOpen && (
-        <div className="lg:hidden bg-card/95 backdrop-blur-xl border-b border-border px-4 py-4 space-y-1">
+        <div className="lg:hidden fixed top-16 left-0 right-0 z-50 max-h-[calc(100svh-4rem-var(--bottom-nav-h,56px)-env(safe-area-inset-bottom,0px))] overflow-y-auto bg-card/95 backdrop-blur-xl border-b border-border px-4 py-4 space-y-1 shadow-elevated">
           {navLinks.map((link) => (
             <Link
               key={link.href}

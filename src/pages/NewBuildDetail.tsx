@@ -579,7 +579,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
             </div>
 
             {/* ── Right: sticky sidebar ───────────────────────────── */}
-            <div className="sticky top-24 space-y-4 self-start">
+            <div className="space-y-4 self-start lg:sticky lg:top-24">
                 {/* Register Interest card */}
                 <RegisterInterestCard
                   listing={listing as Record<string, unknown>}

@@ -404,7 +404,7 @@ export function MapView({
       </MapComponents.Map>
 
       {/* ── Toolbar (top right) ── */}
-      <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 flex-wrap justify-end">
+      <div className="absolute top-3 left-3 right-3 sm:left-auto z-10 flex items-center gap-1.5 flex-wrap justify-end">
         <button
           onClick={() => setShowHeatmap(v => !v)}
           title="Toggle price heatmap"
@@ -468,8 +468,8 @@ export function MapView({
 
       {/* Draw hint */}
       {drawMode && !polygonClosed && (
-        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-10 pointer-events-none whitespace-nowrap">
-          <p className="text-xs bg-card/90 backdrop-blur-sm rounded-xl px-3 py-2 border border-primary/30 text-primary font-medium shadow-sm">
+        <div className="absolute top-24 sm:top-14 left-1/2 -translate-x-1/2 z-10 pointer-events-none w-[calc(100%-1.5rem)] sm:w-auto">
+          <p className="text-xs bg-card/90 backdrop-blur-sm rounded-xl px-3 py-2 border border-primary/30 text-primary font-medium shadow-sm text-center">
             {drawnPoints.length === 0
               ? "Click map to start drawing"
               : drawnPoints.length < 3
@@ -481,8 +481,8 @@ export function MapView({
 
       {/* Polygon match count */}
       {polygonClosed && (
-        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-10 pointer-events-none whitespace-nowrap">
-          <p className="text-xs bg-primary/15 backdrop-blur-sm rounded-xl px-3 py-2 border border-primary/35 text-primary font-semibold shadow-sm">
+        <div className="absolute top-24 sm:top-14 left-1/2 -translate-x-1/2 z-10 pointer-events-none w-[calc(100%-1.5rem)] sm:w-auto">
+          <p className="text-xs bg-primary/15 backdrop-blur-sm rounded-xl px-3 py-2 border border-primary/35 text-primary font-semibold shadow-sm text-center">
             {polygonMatchCount} {polygonMatchCount === 1 ? itemLabelSingular : itemLabelPlural} in area
           </p>
         </div>
