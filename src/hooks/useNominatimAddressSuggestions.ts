@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 const NOMINATIM_DEBOUNCE_MS = 400;
-const NOMINATIM_MIN_QUERY_LEN = 3;
+const NOMINATIM_MIN_QUERY_LEN = 2;
 const NOMINATIM_LIMIT = 5;
 
 export interface NominatimAddressSuggestion {
@@ -33,7 +33,7 @@ export interface NominatimAddressSuggestion {
  * Address-autocomplete hook backed by OpenStreetMap Nominatim.
  *
  * Behaviour:
- *  - Returns `[]` when the query is shorter than 3 characters.
+ *  - Returns `[]` when the query is shorter than 2 characters.
  *  - Debounces by 400 ms — typing fast does not fire a request per keystroke.
  *  - Aborts the in-flight fetch when the query changes or the component
  *    unmounts, so suggestions never overwrite a more-recent query.
