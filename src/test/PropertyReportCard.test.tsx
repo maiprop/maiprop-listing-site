@@ -88,4 +88,23 @@ describe("PropertyReportCard", () => {
     expect(screen.getByRole("button", { name: /report unavailable/i })).toBeDisabled();
     expect(mocks.mutateAsync).not.toHaveBeenCalled();
   });
+
+  it("shows HTML download and browser PDF actions when OS returns report html", async () => {
+    mocks.invoke.mockResolvedValue({
+      data: {
+        ok: true,
+        report: {
+          html: "<html><body>Report</body></html>",
+          fileName: "maiprop-property-report-listing-1.html",
+        },
+      },
+      error: null,
+    });
+
+    renderCard();
+    fireEvent.click(screen.getByRole("button", { name: /load report/i }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: /download html/i })).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /print \/ save pdf/i })).toBeInTheDocument();
+  });
 });
