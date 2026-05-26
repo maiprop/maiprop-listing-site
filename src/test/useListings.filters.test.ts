@@ -246,17 +246,37 @@ describe("buildListingsQuery — categorical / feature filters", () => {
     expect(eqByCol.commercial_subtype).toBe("office");
   });
 
-  it("applies is_pre_sale / is_off_market only when explicitly true", () => {
-    buildListingsQuery({ is_pre_sale: true, is_off_market: true });
-    const eqs = calls("eq").filter((c) => c.args[0] === "is_pre_sale" || c.args[0] === "is_off_market");
-    expect(eqs).toHaveLength(2);
-    eqs.forEach((c) => expect(c.args[1]).toBe(true));
+  it("hides off-market rows from the public catalogue by default", () => {
+    buildListingsQuery();
+    expect(calls("eq").some((c) => c.args[0] === "is_off_market" && c.args[1] === false)).toBe(true);
   });
 
-  it("ignores is_pre_sale:false / is_off_market:false (only true is meaningful)", () => {
+  it("does not expose public off-market searches", () => {
+    buildListingsQuery({ is_off_market: true });
+    expect(calls("eq").some((c) => c.args[0] === "is_off_market" && c.args[1] === false)).toBe(true);
+    expect(calls("eq").some((c) => c.args[0] === "is_off_market" && c.args[1] === true)).toBe(false);
+    expect(calls("eq").some((c) => c.args[0] === "id" && c.args[1] === "00000000-0000-0000-0000-000000000000")).toBe(true);
+  });
+
+  it("allows owner-scoped off-market filtering for dashboards", () => {
+    buildListingsQuery({ owner_id: "owner-1", is_off_market: true });
+    expect(calls("eq").some((c) => c.args[0] === "owner_id" && c.args[1] === "owner-1")).toBe(true);
+    expect(calls("eq").some((c) => c.args[0] === "is_off_market" && c.args[1] === true)).toBe(true);
+    expect(calls("eq").some((c) => c.args[0] === "is_off_market" && c.args[1] === false)).toBe(false);
+  });
+
+  it("keeps public owner-profile listings from exposing off-market rows", () => {
+    buildListingsQuery({ owner_id: "owner-1", is_off_market: true }, 0, 24, { publicScope: true });
+    expect(calls("eq").some((c) => c.args[0] === "owner_id" && c.args[1] === "owner-1")).toBe(true);
+    expect(calls("eq").some((c) => c.args[0] === "is_off_market" && c.args[1] === false)).toBe(true);
+    expect(calls("eq").some((c) => c.args[0] === "is_off_market" && c.args[1] === true)).toBe(false);
+    expect(calls("eq").some((c) => c.args[0] === "id" && c.args[1] === "00000000-0000-0000-0000-000000000000")).toBe(true);
+  });
+
+  it("ignores is_pre_sale:false and keeps the public off-market guard", () => {
     buildListingsQuery({ is_pre_sale: false, is_off_market: false });
     expect(calls("eq").some((c) => c.args[0] === "is_pre_sale")).toBe(false);
-    expect(calls("eq").some((c) => c.args[0] === "is_off_market")).toBe(false);
+    expect(calls("eq").some((c) => c.args[0] === "is_off_market" && c.args[1] === false)).toBe(true);
   });
 
   it("applies energy_class via .in() when array is non-empty", () => {

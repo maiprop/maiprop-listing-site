@@ -188,6 +188,33 @@ beforeEach(() => {
 });
 
 describe("NewBuildDetail", () => {
+  it("loads owner profile separately instead of relying on a missing listings.owner_id foreign key", async () => {
+    const listingMaybeSingle = vi.fn().mockResolvedValue({ data: listing, error: null });
+    const listingEq = vi.fn().mockReturnValue({ maybeSingle: listingMaybeSingle });
+    const listingSelect = vi.fn().mockReturnValue({ eq: listingEq });
+    const profileMaybeSingle = vi.fn().mockResolvedValue({
+      data: { user_id: "owner-1", display_name: "Mai Developer", avatar_url: null },
+      error: null,
+    });
+    const profileEq = vi.fn().mockReturnValue({ maybeSingle: profileMaybeSingle });
+    const profileSelect = vi.fn().mockReturnValue({ eq: profileEq });
+    fromMock.mockImplementation((table: string) => {
+      if (table === "listings") return { select: listingSelect };
+      if (table === "profiles_public") return { select: profileSelect };
+      return { insert: vi.fn().mockResolvedValue({ error: null }) };
+    });
+
+    renderPage();
+    const queryOptions = useQueryMock.mock.calls[0][0] as { queryFn: () => Promise<typeof listing & { profiles?: unknown }> };
+    const result = await queryOptions.queryFn();
+
+    expect(listingSelect).toHaveBeenCalledWith(expect.stringContaining("listing_images"));
+    expect(listingSelect.mock.calls[0][0]).not.toContain("profiles:owner_id");
+    expect(fromMock).toHaveBeenCalledWith("profiles_public");
+    expect(profileSelect).toHaveBeenCalledWith("user_id, display_name, avatar_url");
+    expect(result.profiles).toEqual({ user_id: "owner-1", display_name: "Mai Developer", avatar_url: null });
+  });
+
   it("renders loading and not-found branches", () => {
     useQueryMock.mockReturnValue({ data: null, isLoading: true, error: null });
     const loading = renderPage();

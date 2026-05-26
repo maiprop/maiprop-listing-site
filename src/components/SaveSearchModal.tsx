@@ -27,7 +27,6 @@ const FILTER_LABELS_EL: Record<string, string> = {
   energy: "Ενεργειακή κλάση",
   heating: "Θέρμανση",
   construction: "Κατάσταση",
-  off_market: "Εκτός αγοράς",
   pre_sale: "Προπώληση",
   video_viewing: "Βιντεοκλήση",
   virtual_tour: "Εικονική περιήγηση",

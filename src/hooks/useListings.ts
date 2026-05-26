@@ -125,14 +125,19 @@ export type ListingsFilters = {
   sort?: "featured" | "newest" | "price-asc" | "price-desc" | "ai-score" | "views";
 };
 
+type ListingsQueryScope = {
+  publicScope?: boolean;
+};
+
 /**
  * Builds the Supabase query used by `useListings` / `useListingsPaginated`.
  * Exported so unit tests can verify each filter branch without requiring a
  * full hook + react-query wrapper. The shape of the returned object mirrors
  * the supabase-js query builder so consumers can `await` it directly.
  */
-export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize = 24) => { // skipcq: JS-R1005 - Listing filters intentionally map one public search model onto Supabase query clauses.
+export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize = 24, scope: ListingsQueryScope = {}) => { // skipcq: JS-R1005 - Listing filters intentionally map one public search model onto Supabase query clauses.
   const sort = filters?.sort ?? "featured";
+  const ownerScoped = Boolean(filters?.owner_id) && !scope.publicScope;
   let query = supabase
     .from("listings")
     .select(LISTING_CARD_SELECT_WITH_IMAGES)
@@ -179,10 +184,14 @@ export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize
   if (filters?.property_type) query = query.eq("property_type", filters.property_type as Enums<"property_type">);
   if (filters?.owner_id) query = query.eq("owner_id", filters.owner_id);
   // Always apply status filter; for owner queries don't default to 'active' so all own listings show
-  if (filters?.owner_id) {
+  if (ownerScoped) {
     if (filters?.status) query = query.eq("status", filters.status as Enums<"listing_status">);
   } else {
     query = query.eq("status", (filters?.status || "active") as Enums<"listing_status">);
+    query = query.eq("is_off_market", false);
+    if (filters?.is_off_market === true) {
+      query = query.eq("id", "00000000-0000-0000-0000-000000000000");
+    }
   }
 
   // Numeric filters
@@ -202,7 +211,7 @@ export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize
   if (filters?.construction_status) query = query.eq("construction_status", filters.construction_status);
   if (filters?.commercial_subtype) query = query.eq("commercial_subtype", filters.commercial_subtype);
   if (filters?.is_pre_sale === true) query = query.eq("is_pre_sale", true);
-  if (filters?.is_off_market === true) query = query.eq("is_off_market", true);
+  if (ownerScoped && filters?.is_off_market === true) query = query.eq("is_off_market", true);
   if (filters?.energy_class?.length) query = query.in("energy_class", filters.energy_class);
 
   // Feature booleans — only allow known DB column names to prevent column injection
@@ -278,14 +287,19 @@ function publicListingsPath(filters: ListingsFilters | undefined, page: number, 
   return `/api/public/listings?${params.toString()}`;
 }
 
-const fetchListingsPage = async (filters?: ListingsFilters, page = 1, pageSize = 24) => { // skipcq: JS-R1005 - Page fetch keeps listing rows and owner profile enrichment together.
+type UseListingsOptions = {
+  enabled?: boolean;
+  publicScope?: boolean;
+};
+
+const fetchListingsPage = async (filters?: ListingsFilters, page = 1, pageSize = 24, options: UseListingsOptions = {}) => { // skipcq: JS-R1005 - Page fetch keeps listing rows and owner profile enrichment together.
   if (shouldUsePublicListingsApi(filters)) {
     const cached = await fetchPublicApi<PublicListingsResponse>(publicListingsPath(filters, page, pageSize));
     if (cached) return cached;
   }
 
   const from = (page - 1) * pageSize;
-  const { data, error } = await buildListingsQuery(filters, from, pageSize);
+  const { data, error } = await buildListingsQuery(filters, from, pageSize, { publicScope: options.publicScope });
 
   if (error) throw error;
   const rows = data ?? [];
@@ -318,16 +332,16 @@ export const PAGE_SIZE = 24;
 
 export const useListingsPaginated = (
   filters?: ListingsFilters,
-  options?: { enabled?: boolean },
+  options?: UseListingsOptions,
 ) => {
   return useInfiniteQuery({
-    queryKey: ["listings-paginated", filters],
-    queryFn: ({ pageParam = 1 }) => fetchListingsPage(filters, pageParam, PAGE_SIZE),
+    queryKey: ["listings-paginated", filters, { publicScope: Boolean(options?.publicScope) }],
+    queryFn: ({ pageParam = 1 }) => fetchListingsPage(filters, pageParam, PAGE_SIZE, options),
     getNextPageParam: (lastPage, allPages) =>
       lastPage.hasMore ? allPages.length + 1 : undefined,
     initialPageParam: 1,
     enabled: options?.enabled ?? true,
-    staleTime: filters?.owner_id ? USER_SCOPED_QUERY_STALE_TIME : CATALOG_STATIC_QUERY_STALE_TIME,
+    staleTime: filters?.owner_id && !options?.publicScope ? USER_SCOPED_QUERY_STALE_TIME : CATALOG_STATIC_QUERY_STALE_TIME,
   });
 };
 
@@ -336,12 +350,12 @@ export const MAP_FETCH_LIMIT = 200;
 
 export const useListings = (
   filters?: ListingsFilters,
-  options?: { enabled?: boolean }
+  options?: UseListingsOptions
 ) => {
   return useQuery({
-    queryKey: ["listings", filters],
+    queryKey: ["listings", filters, { publicScope: Boolean(options?.publicScope) }],
     enabled: options?.enabled ?? true,
-    staleTime: filters?.owner_id ? USER_SCOPED_QUERY_STALE_TIME : CATALOG_STATIC_QUERY_STALE_TIME,
+    staleTime: filters?.owner_id && !options?.publicScope ? USER_SCOPED_QUERY_STALE_TIME : CATALOG_STATIC_QUERY_STALE_TIME,
     queryFn: async () => { // skipcq: JS-R1005 - Owner profile enrichment keeps the map fetch result self-contained.
       const limit = filters?.limit ?? MAP_FETCH_LIMIT;
       if (shouldUsePublicListingsApi(filters)) {
@@ -349,7 +363,7 @@ export const useListings = (
         if (cached) return cached.data;
       }
 
-      const { data, error } = await buildListingsQuery(filters, 0, limit);
+      const { data, error } = await buildListingsQuery(filters, 0, limit, { publicScope: options?.publicScope });
       if (error) throw error;
       const rows = data ?? [];
       if (rows.length === 0) return rows as unknown as ListingWithJoins[];

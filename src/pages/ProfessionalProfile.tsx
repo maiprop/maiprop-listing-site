@@ -82,7 +82,7 @@ export default function ProfessionalProfile() { // skipcq: JS-R1005 - Route shel
   const queryClient = useQueryClient();
   const { data: agentListings = [] } = useListings(
     { owner_id: pro?.user_id, status: "active" },
-    { enabled: !!pro?.user_id && pro?.category === "real_estate_agent" }
+    { enabled: !!pro?.user_id && pro?.category === "real_estate_agent", publicScope: true }
   );
   const saleListings = agentListings.filter((l) => l.listing_type !== "rent");
   const rentListings = agentListings.filter((l) => l.listing_type === "rent");

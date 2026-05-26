@@ -106,6 +106,7 @@ function buildListingParams(requestUrl: URL): { params: URLSearchParams; page: n
   params.set("limit", String(pageSize));
   params.set("listing_images.order", "sort_order.asc");
   params.set("listing_images.limit", "3");
+  params.set("is_off_market", "eq.false");
 
   if (sort === "featured") {
     params.append("order", "is_featured.desc");
@@ -157,7 +158,9 @@ function buildListingParams(requestUrl: URL): { params: URLSearchParams; page: n
   if (commercialSubtype) params.set("commercial_subtype", `eq.${commercialSubtype}`);
 
   if (requestUrl.searchParams.get("is_pre_sale") === "true") params.set("is_pre_sale", "eq.true");
-  if (requestUrl.searchParams.get("is_off_market") === "true") params.set("is_off_market", "eq.true");
+  if (requestUrl.searchParams.get("is_off_market") === "true") {
+    params.set("id", "eq.00000000-0000-0000-0000-000000000000");
+  }
 
   const energy = requestUrl.searchParams
     .getAll("energy_class")

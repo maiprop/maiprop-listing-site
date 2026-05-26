@@ -614,6 +614,15 @@ describe("PropertyDetail", () => {
     mockUseAuth.mockReturnValue({ user: null, profile: null, loading: false });
   });
 
+  it("does not route ordinary sale or rent listings to new-build just because they have a condition", async () => {
+    const { shouldUseNewBuildRoute } = await import("@/pages/PropertyDetail");
+
+    expect(shouldUseNewBuildRoute({ is_pre_sale: false, listing_type: "sale", construction_status: "renovated" } as never)).toBe(false);
+    expect(shouldUseNewBuildRoute({ is_pre_sale: false, listing_type: "rent", construction_status: "new" } as never)).toBe(false);
+    expect(shouldUseNewBuildRoute({ is_pre_sale: true, listing_type: "sale" })).toBe(true);
+    expect(shouldUseNewBuildRoute({ is_pre_sale: false, listing_type: "new_build" })).toBe(true);
+  });
+
   it("renders loading spinner while fetching", async () => {
     const { useListing } = await import("@/hooks/useListings");
     (useListing as ReturnType<typeof vi.fn>).mockReturnValue({ data: null, isLoading: true, isError: false, error: null });

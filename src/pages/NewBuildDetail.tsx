@@ -128,17 +128,31 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
         .from("listings")
         .select(`
           *,
-          profiles:owner_id(user_id, display_name, avatar_url, phone),
           listing_images(url, sort_order)
         `)
         .eq("id", id)
         .maybeSingle();
       if (error) throw error;
-      return (data ?? null) as typeof data & {
+
+      let ownerProfile: { user_id: string; display_name: string | null; avatar_url: string | null } | null = null;
+      if (data?.owner_id) {
+        const { data: profile } = await supabase
+          .from("profiles_public")
+          .select("user_id, display_name, avatar_url")
+          .eq("user_id", data.owner_id)
+          .maybeSingle();
+        ownerProfile = profile ?? null;
+      }
+
+      return data ? {
+        ...data,
+        profiles: ownerProfile,
+      } as typeof data & {
+        profiles?: typeof ownerProfile;
         walkability_score?: number | null;
         safety_score?: number | null;
         noise_score?: number | null;
-      } | null;
+      } : null;
     },
     enabled: !!id,
   });

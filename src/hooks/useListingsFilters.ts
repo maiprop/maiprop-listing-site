@@ -33,7 +33,6 @@ export interface ListingsFilterState {
   selectedHeating: string;
   selectedConstruction: string;
   preSaleOnly: boolean;
-  offMarketOnly: boolean;
   // Pro filters
   hasVideoViewing: boolean;
   hasVirtualTour: boolean;
@@ -90,7 +89,6 @@ export function useListingsFilters(): ListingsFilterState & ListingsFilterAction
   const selectedHeating = getParam("heating");
   const selectedConstruction = getParam("construction");
   const preSaleOnly = searchParams.get("pre_sale") === "1";
-  const offMarketOnly = searchParams.get("off_market") === "1";
   const hasVideoViewing = searchParams.get("video_viewing") === "1";
   const hasVirtualTour = searchParams.get("virtual_tour") === "1";
   const hasMessaging = searchParams.get("messaging") === "1";
@@ -110,7 +108,6 @@ export function useListingsFilters(): ListingsFilterState & ListingsFilterAction
     floorRange[0], floorRange[1], yearRange[0], yearRange[1],
     minSqm, maxSqm, selectedHeating, selectedConstruction,
     preSaleOnly || undefined,
-    offMarketOnly || undefined,
     ...selectedEnergyClasses, ...selectedFeatures,
     hasVideoViewing || undefined, hasVirtualTour || undefined,
     hasMessaging || undefined,
@@ -121,7 +118,7 @@ export function useListingsFilters(): ListingsFilterState & ListingsFilterAction
   const isRent = selectedListingType === "rent";
 
   const currentFilters = Object.fromEntries(
-    [...searchParams.entries()].filter(([, v]) => v)
+    [...searchParams.entries()].filter(([key, v]) => key !== "off_market" && v)
   );
 
   // ── Actions ────────────────────────────────────────────────────────────────
@@ -200,7 +197,7 @@ export function useListingsFilters(): ListingsFilterState & ListingsFilterAction
     searchQuery, selectedListingType, selectedType, selectedSubtype,
     selectedPrice, selectedSort, bedsRange, bathsRange, floorRange,
     yearRange, minSqm, maxSqm, selectedEnergyClasses, selectedFeatures,
-    selectedHeating, selectedConstruction, preSaleOnly, offMarketOnly,
+    selectedHeating, selectedConstruction, preSaleOnly,
     hasVideoViewing, hasVirtualTour, hasMessaging, minAiScore, minWalkability,
     // Derived
     activeFilterCount, proFilterCount, isRent, currentFilters,

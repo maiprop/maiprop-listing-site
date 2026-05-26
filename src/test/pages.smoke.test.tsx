@@ -130,7 +130,7 @@ vi.mock("@/hooks/useListingsFilters", () => ({
     selectedEnergyClasses: [] as string[],
     selectedFeatures: [] as string[],
     selectedHeating: "", selectedConstruction: "",
-    preSaleOnly: false, offMarketOnly: false,
+    preSaleOnly: false,
     hasVideoViewing: false, hasVirtualTour: false, hasMessaging: false,
     minAiScore: 0, minWalkability: 0,
     activeFilterCount: 0,
@@ -1125,6 +1125,10 @@ describe("Page smoke tests", () => {
     expect(screen.getAllByText(/Typology Mix/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Main Area of Service/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Main Deal Type/i).length).toBeGreaterThan(0);
+    expect(useListingsMock).toHaveBeenCalledWith(
+      { owner_id: "agent-user", status: "active" },
+      { enabled: true, publicScope: true },
+    );
     useProfessionalMock.mockReturnValue({ data: null, isLoading: false });
     useListingsMock.mockReturnValue({ data: [], isLoading: false });
   });
@@ -1331,13 +1335,12 @@ describe("Page smoke tests", () => {
       selectedHeating: "autonomous_petrol",
       selectedConstruction: "renovated",
       preSaleOnly: true,
-      offMarketOnly: true,
       hasVideoViewing: true,
       hasVirtualTour: true,
       hasMessaging: true,
       minAiScore: 80,
       minWalkability: 70,
-      activeFilterCount: 18,
+      activeFilterCount: 17,
       currentFilters: {
         city: "Athens",
         listing_type: "sale",
@@ -1358,7 +1361,6 @@ describe("Page smoke tests", () => {
         heating: "autonomous_petrol",
         construction: "renovated",
         pre_sale: "true",
-        off_market: "true",
         video_viewing: "true",
         virtual_tour: "true",
         messaging: "true",
@@ -1503,7 +1505,7 @@ describe("Page smoke tests", () => {
       selectedEnergyClasses: [] as string[],
       selectedFeatures: [] as string[],
       selectedHeating: "", selectedConstruction: "",
-      preSaleOnly: false, offMarketOnly: false,
+      preSaleOnly: false,
       hasVideoViewing: false, hasVirtualTour: false, hasMessaging: false,
       minAiScore: 0, minWalkability: 0,
       activeFilterCount: 0,
