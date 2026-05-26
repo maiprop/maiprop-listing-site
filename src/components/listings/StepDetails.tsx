@@ -81,7 +81,7 @@ export function StepDetails({ form, set, errors, setFieldRef, aiDescLoading, han
       {isResidential(pt) && (
         <>
           <SectionTitle>{tr("createListing.details.rooms", "Rooms")}</SectionTitle>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 min-[420px]:grid-cols-3 gap-3">
             <div><FieldLabel>{tr("createListing.details.bedrooms", "Bedrooms")}</FieldLabel><Input type="number" placeholder="2" value={form.bedrooms} onChange={e => set("bedrooms", e.target.value)} /></div>
             <div><FieldLabel>{tr("createListing.details.bathrooms", "Bathrooms")}</FieldLabel><Input type="number" placeholder="1" value={form.bathrooms} onChange={e => set("bathrooms", e.target.value)} /></div>
             <div><FieldLabel>WC</FieldLabel><Input type="number" placeholder="1" value={form.wc_count} onChange={e => set("wc_count", e.target.value)} /></div>
@@ -161,7 +161,7 @@ export function StepDetails({ form, set, errors, setFieldRef, aiDescLoading, han
             <div><FieldLabel>{tr("createListing.details.distanceFromSea", "Distance from Sea (m)")}</FieldLabel><Input type="number" placeholder="500" value={form.distance_from_sea} onChange={e => set("distance_from_sea", e.target.value)} /></div>
             <div><FieldLabel>{tr("createListing.details.distanceFromCity", "Distance from City (m)")}</FieldLabel><Input type="number" placeholder="2000" value={form.distance_from_city} onChange={e => set("distance_from_city", e.target.value)} /></div>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 min-[420px]:grid-cols-3 gap-3">
             <div>
               <FieldLabel>{tr("createListing.details.slope", "Slope")}</FieldLabel>
               <Select value={form.slope} onChange={e => set("slope", e.target.value)}>

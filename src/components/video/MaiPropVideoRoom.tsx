@@ -171,7 +171,7 @@ export function MaiPropVideoRoom({
           </div>
 
           <div className="px-6 py-5 space-y-4">
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 min-[420px]:grid-cols-3 gap-3">
               <div className="rounded-lg border border-border bg-muted/30 px-3 py-3 text-center">
                 <Clock className="w-4 h-4 text-muted-foreground mx-auto mb-1" />
                 <p className="text-sm font-bold text-foreground">{formatTimer(elapsedSeconds)}</p>

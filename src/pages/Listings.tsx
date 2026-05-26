@@ -194,7 +194,7 @@ const DesktopActiveFilterChips = ({ // skipcq: JS-R1005 - Active chips map indep
   clearAllFilters: () => void;
   isGreek: boolean;
 }) => (
-  <div className="hidden sm:flex items-center gap-1.5 mt-3 min-h-9 flex-wrap overflow-visible rounded-xl border border-border bg-card/70 px-3 py-2 shadow-sm [&>button]:inline-flex [&>button]:h-7 [&>button]:items-center [&>button]:leading-none [&>button]:max-w-full [&>button]:min-w-0 [&>button]:whitespace-nowrap">
+  <div className="hidden sm:flex w-full items-center gap-2 min-h-9 flex-wrap overflow-hidden rounded-xl border border-border bg-card/70 px-3 py-2 shadow-sm [&>button]:inline-flex [&>button]:min-h-7 [&>button]:items-center [&>button]:leading-none [&>button]:max-w-full [&>button]:min-w-0 [&>button]:whitespace-nowrap">
     <span className="flex h-7 items-center text-xs font-medium text-muted-foreground shrink-0">{isGreek ? "Ενεργά φίλτρα:" : "Active filters:"}</span>
     {selectedType && (
       <ActiveFilterChip onClick={() => { setParam("type", ""); setParam("subtype", ""); }}>
@@ -473,7 +473,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
         <h1 className="sr-only">{t("listings.pageTitle", "Properties for Sale & Rent")}</h1>
         {/* Filter bar — sticky only on sm+ to avoid consuming 104px of viewport on mobile */}
         <div className="bg-card border-b border-border sm:sticky sm:top-16 z-40">
-          <div className="container py-2 sm:py-4 space-y-2 sm:space-y-0">
+          <div className="container py-2 sm:py-4 space-y-2 sm:space-y-3">
 
             {/* ── MOBILE FILTER BAR ── */}
             <div className="sm:hidden space-y-2">
@@ -630,11 +630,13 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
 
               {/* Active filter chips — shown when panel is closed */}
               {activeFilterCount > 0 && !showFilters && (
-                <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
+                <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none rounded-xl border border-border bg-card/70 px-2 py-2 shadow-sm">
                    {selectedType && <button onClick={() => { setParam("type", ""); setParam("subtype", ""); }} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{translatePropertyType(selectedType, isGreek)} <X className="w-3 h-3" /></button>}
+                   {selectedSubtype && selectedType && <button onClick={() => setParam("subtype", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{translateSubtype(selectedType, selectedSubtype, isGreek)} <X className="w-3 h-3" /></button>}
                    {selectedPrice && <button onClick={() => setParam("price", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{[...buyPriceRanges, ...rentPriceRanges].find(r => r.value === selectedPrice)?.label || selectedPrice} <X className="w-3 h-3" /></button>}
                    {bedsRange[0] && <button onClick={() => setParam("beds_min", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{bedsRange[0]}+ {isGreek ? "υπνοδωμάτια" : "beds"} <X className="w-3 h-3" /></button>}
                    {(minSqm || maxSqm) && <button onClick={() => { setParam("sqm_min", ""); setParam("sqm_max", ""); }} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{isGreek ? "Εμβαδόν" : "Size"} <X className="w-3 h-3" /></button>}
+                   {preSaleOnly && <button onClick={() => setParam("pre_sale", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{isGreek ? "Προπώληση" : "Pre-sale"} <X className="w-3 h-3" /></button>}
                    {hasVideoViewing && <button onClick={() => setParam("video_viewing", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent shrink-0">🎥 {isGreek ? "Βίντεο" : "Video"} <X className="w-3 h-3" /></button>}
                    {hasVirtualTour && <button onClick={() => setParam("virtual_tour", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent shrink-0">🔮 {isGreek ? "Εικονική περιήγηση" : "Virtual"} <X className="w-3 h-3" /></button>}
                    {hasMessaging && <button onClick={() => setParam("messaging", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent shrink-0">💬 {isGreek ? "Μηνύματα" : "Messaging"} <X className="w-3 h-3" /></button>}
@@ -646,7 +648,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
             </div>
 
             {/* ── DESKTOP FILTER BAR ── */}
-            <div className="hidden sm:flex gap-2 items-center content-start overflow-x-auto scrollbar-none sm:flex-wrap">
+            <div className="hidden sm:flex gap-2 items-center content-start overflow-visible sm:flex-wrap">
               {/* Search */}
               <LocationSearchField
                 value={searchQuery}

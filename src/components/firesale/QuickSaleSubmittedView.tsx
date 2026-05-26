@@ -74,7 +74,7 @@ export function QuickSaleSubmittedView({
           {isGreek ? "Κωδικός" : "Ref"}: <span className="text-primary font-semibold">{requestId.slice(0, 8).toUpperCase()}</span>
         </p>
       )}
-      <div className="grid grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-1 min-[420px]:grid-cols-3 gap-3 mb-6">
         {timelineSteps.map((s) => (
           <div key={s.label} className="rounded-xl bg-secondary border border-border p-3 text-center">
             <div className="text-lg mb-1">{s.icon}</div>
@@ -87,7 +87,7 @@ export function QuickSaleSubmittedView({
         <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1.5">{isGreek ? "AI εκτίμηση προσφοράς" : "AI Offer Estimate"}</p>
         <p className="font-display font-black text-4xl text-primary mb-1">€{aiEstimate?.toLocaleString()}</p>
         <p className="text-xs text-muted-foreground">{isGreek ? "Ενδεικτική · Υπόκειται σε τελικό έλεγχο" : "Indicative · Subject to final due diligence"}</p>
-        <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-primary/10">
+        <div className="grid grid-cols-1 min-[420px]:grid-cols-3 gap-3 mt-4 pt-4 border-t border-primary/10">
           {[
             { label: isGreek ? "Εκτ. αγοράς" : "Est. Market", value: `€${Math.round((aiEstimate || 0) / 0.95).toLocaleString()}` },
             { label: isGreek ? "Έκπτωση" : "Discount", value: "~5%" },
@@ -107,7 +107,7 @@ export function QuickSaleSubmittedView({
           </div>
         ))}
       </div>
-      <div className="flex gap-3">
+      <div className="flex flex-col min-[420px]:flex-row gap-3">
         <Button variant="outline" className="flex-1 border-border" onClick={onReset}>{isGreek ? "Νέα υποβολή" : "Submit another"}</Button>
         <Button
           className="flex-1 bg-gradient-primary border-0 text-primary-foreground gap-2"

@@ -369,7 +369,7 @@ export function AdminDealRow({
           {deal.status === "closed" && (
             <div className="rounded-xl border border-brand-emerald/30 bg-brand-emerald/5 p-4 space-y-3">
               <div className="flex items-center gap-2"><p className="text-sm font-bold text-brand-emerald">Deal Closed!</p></div>
-              <div className="grid grid-cols-3 gap-2 text-xs">
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-3 gap-2 text-xs">
                 <div className="bg-background rounded-lg p-2 text-center"><p className="text-muted-foreground mb-0.5">Asking</p><p className="font-bold">€{(deal.asking_price || 0).toLocaleString()}</p></div>
                 <div className="bg-background rounded-lg p-2 text-center"><p className="text-muted-foreground mb-0.5">Closed At</p><p className="font-bold text-brand-emerald">€{(deal.offer_price || deal.asking_price || 0).toLocaleString()}</p></div>
                 {!!deal.ai_estimate && !!deal.offer_price && <div className="bg-background rounded-lg p-2 text-center"><p className="text-muted-foreground mb-0.5">Saved vs. Market</p><p className="font-bold text-primary">€{(deal.ai_estimate - deal.offer_price).toLocaleString()}</p></div>}
