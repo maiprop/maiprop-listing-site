@@ -99,10 +99,11 @@ describe("useAuctionListings", () => {
 
   it("does not fall through to the slow live OS proxy for public-sized windows", async () => {
     publicApiMock.mockResolvedValue(null);
-    fromMock.mockReturnValue(makeBuilder(() => Promise.resolve({
+    const builder = makeBuilder(() => Promise.resolve({
       data: [auctionRow("db-a1")],
       error: null,
-    })));
+    }));
+    fromMock.mockReturnValue(builder);
 
     const { result } = renderHookWithQuery(() => useAuctionListings(60));
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -110,6 +111,7 @@ describe("useAuctionListings", () => {
     expect(result.current.data?.[0]).toMatchObject({ id: "db-a1" });
     expect(invokeMock).not.toHaveBeenCalled();
     expect(fromMock).toHaveBeenCalled();
+    expect(builder.eq).toHaveBeenCalledWith("is_off_market", false);
   });
 
   it("uses a deterministic daily rotation instead of preserving OS municipality order", () => {

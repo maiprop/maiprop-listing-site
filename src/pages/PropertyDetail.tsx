@@ -47,6 +47,10 @@ import { PropertyDescriptionSection } from "@/components/property/PropertyDescri
 import { PropertyValuationLockedCard } from "@/components/property/PropertyValuationLockedCard";
 import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
 
+export const shouldUseNewBuildRoute = (
+  listing: Pick<ListingWithJoins, "is_pre_sale" | "listing_type"> | null | undefined,
+) => Boolean(listing?.is_pre_sale || listing?.listing_type === "new_build");
+
 // ─── Main component ──────────────────────────────────────────────────────────
 const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates listing data, media, modals, and gated owner actions in one page shell.
   const { id } = useParams<{id: string;}>();
@@ -89,7 +93,7 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
   useEffect(() => { // skipcq: JS-R1005 - Canonical route redirect checks new-build and auction variants together.
     if (!dbListing) return;
     const _db = dbListing as ListingWithJoins;
-    if (_db.is_pre_sale || _db.construction_status) {
+    if (shouldUseNewBuildRoute(_db)) {
       navigate(`/new-build/${id}`, { replace: true });
       return;
     }

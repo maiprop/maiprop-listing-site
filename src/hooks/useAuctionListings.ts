@@ -109,6 +109,7 @@ const fetchAuctionPageFromDatabase = async (
     .select(getAuctionSelect(withImages))
     .eq("listing_type", "auction")
     .eq("status", "active")
+    .eq("is_off_market", false)
     .or(`auction_date.gte.${today},auction_date.is.null`)
     .order("is_featured", { ascending: false })
     .order("priority_placement", { ascending: false })
@@ -158,6 +159,7 @@ const fetchAuctionByDatabaseId = async (
     .eq("id", id)
     .eq("listing_type", "auction")
     .eq("status", "active")
+    .eq("is_off_market", false)
     .or(`auction_date.gte.${today},auction_date.is.null`)
     .maybeSingle();
 
@@ -175,6 +177,7 @@ const fetchAuctionByOsTag = async (
     .select(getAuctionSelect(withImages))
     .eq("listing_type", "auction")
     .eq("status", "active")
+    .eq("is_off_market", false)
     .contains("tags", [`os_auction:${id}`])
     .or(`auction_date.gte.${today},auction_date.is.null`)
     .limit(1)

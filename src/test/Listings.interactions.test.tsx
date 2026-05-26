@@ -28,7 +28,6 @@ const { filterState, setParam, setParams, clearAllFilters, toggleMulti, pipeline
     selectedHeating: "",
     selectedConstruction: "",
     preSaleOnly: false,
-    offMarketOnly: false,
     hasVideoViewing: false,
     hasVirtualTour: false,
     hasMessaging: false,
@@ -216,7 +215,6 @@ describe("Listings page interactions", () => {
       selectedConstruction: "",
       minSqm: "",
       maxSqm: "",
-      offMarketOnly: false,
       preSaleOnly: false,
       hasVideoViewing: false,
       hasVirtualTour: false,
@@ -379,9 +377,8 @@ describe("Listings page interactions", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "3+" })[0]);
     expect(setParam).toHaveBeenCalledWith("beds_min", "3");
 
-    fireEvent.click(screen.getByLabelText(/off-market/i));
     fireEvent.click(screen.getByLabelText(/pre-sale/i));
-    expect(setParam).toHaveBeenCalledWith("off_market", "1");
+    expect(screen.queryByLabelText(/off-market/i)).not.toBeInTheDocument();
     expect(setParam).toHaveBeenCalledWith("pre_sale", "1");
 
     fireEvent.click(screen.getByRole("button", { name: "Clear all filters" }));
@@ -409,14 +406,13 @@ describe("Listings page interactions", () => {
       selectedFeatures: ["pool"],
       selectedHeating: "autonomous",
       selectedConstruction: "new",
-      offMarketOnly: true,
       preSaleOnly: true,
       hasVideoViewing: true,
       hasVirtualTour: true,
       hasMessaging: true,
       minAiScore: 75,
       minWalkability: 65,
-      activeFilterCount: 10,
+      activeFilterCount: 9,
     });
 
     const reload = vi.fn();
@@ -465,7 +461,6 @@ describe("Listings page interactions", () => {
       /pool/i,
       /Heating:/i,
       /new/i,
-      /off-market/i,
       /pre-sale/i,
       /video viewing/i,
       /virtual tour/i,

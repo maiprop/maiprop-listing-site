@@ -283,7 +283,8 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
         .order("sort_order", { referencedTable: "listing_images", ascending: true })
         .limit(3, { referencedTable: "listing_images" })
         .eq("status", "active")
-        .eq("listing_type", "open_house");
+        .eq("listing_type", "open_house")
+        .eq("is_off_market", false);
       if (showPast) {
         q = q.lt("open_house_date", now).order("open_house_date", { ascending: false });
       } else {

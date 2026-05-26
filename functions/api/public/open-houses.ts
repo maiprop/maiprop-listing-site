@@ -14,6 +14,7 @@ import { getSupabaseRuntime } from "../../_seo";
 type OpenHouseRow = Record<string, unknown>;
 
 const OPEN_HOUSE_LIMIT_MAX = 200;
+const OPEN_HOUSE_CACHE_VERSION = "off-market-v2";
 const OPEN_HOUSE_SELECT = [
   "id",
   "title",
@@ -68,6 +69,7 @@ async function fetchOpenHouses(env: PublicApiEnv, showPast: boolean, limit: numb
   params.set("select", OPEN_HOUSE_SELECT);
   params.set("status", "eq.active");
   params.set("listing_type", "eq.open_house");
+  params.set("is_off_market", "eq.false");
   params.set("limit", String(limit));
   params.set("listing_images.order", "sort_order.asc");
   params.set("listing_images.limit", "3");
@@ -91,6 +93,7 @@ async function publicOpenHouses(ctx: PublicApiCtx, requestUrl: URL): Promise<Res
   const cacheParams = new URLSearchParams([
     ["showPast", showPast ? "1" : "0"],
     ["limit", String(limit)],
+    ["v", OPEN_HOUSE_CACHE_VERSION],
   ]);
   const cacheKey = normalizedCacheUrl(requestUrl, "open-houses", cacheParams);
 

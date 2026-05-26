@@ -162,7 +162,6 @@ const DesktopActiveFilterChips = ({ // skipcq: JS-R1005 - Active chips map indep
   selectedFeatures,
   selectedHeating,
   selectedConstruction,
-  offMarketOnly,
   preSaleOnly,
   hasVideoViewing,
   hasVirtualTour,
@@ -183,7 +182,6 @@ const DesktopActiveFilterChips = ({ // skipcq: JS-R1005 - Active chips map indep
   selectedFeatures: string[];
   selectedHeating: string;
   selectedConstruction: string;
-  offMarketOnly: boolean;
   preSaleOnly: boolean;
   hasVideoViewing: boolean;
   hasVirtualTour: boolean;
@@ -228,7 +226,6 @@ const DesktopActiveFilterChips = ({ // skipcq: JS-R1005 - Active chips map indep
         {translateCondition(selectedConstruction, isGreek)}
       </ActiveFilterChip>
     )}
-    {offMarketOnly && <ActiveFilterChip onClick={() => setParam("off_market", "")}>{isGreek ? "Εκτός αγοράς" : "Off-market"}</ActiveFilterChip>}
     {preSaleOnly && <ActiveFilterChip onClick={() => setParam("pre_sale", "")}>{isGreek ? "Προπώληση" : "Pre-sale"}</ActiveFilterChip>}
     {hasVideoViewing && <ActiveFilterChip accent onClick={() => setParam("video_viewing", "")}>{isGreek ? "Βιντεοκλήση" : "Video Viewing"}</ActiveFilterChip>}
     {hasVirtualTour && <ActiveFilterChip accent onClick={() => setParam("virtual_tour", "")}>{isGreek ? "Εικονική περιήγηση" : "Virtual Tour"}</ActiveFilterChip>}
@@ -310,7 +307,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
     searchQuery, selectedListingType, selectedType, selectedSubtype,
     selectedPrice, selectedSort, bedsRange, bathsRange, floorRange,
     yearRange, minSqm, maxSqm, selectedEnergyClasses, selectedFeatures,
-    selectedHeating, selectedConstruction, preSaleOnly, offMarketOnly,
+    selectedHeating, selectedConstruction, preSaleOnly,
     hasVideoViewing, hasVirtualTour, hasMessaging, minAiScore, minWalkability,
     activeFilterCount, currentFilters,
     setParam, setParams, toggleMulti, clearAllFilters, applyAIFilters,
@@ -331,7 +328,6 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
     listing_type: preSaleOnly ? "sale" : (selectedListingType || undefined),
     property_type: selectedType || undefined,
     is_pre_sale: preSaleOnly || undefined,
-    is_off_market: offMarketOnly || undefined,
     price_min: priceMin || undefined,
     price_max: priceMax || undefined,
     beds_min: bedsRange[0] ? Number(bedsRange[0]) : undefined,
@@ -351,7 +347,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
     features: selectedFeatures.length > 0 ? selectedFeatures : undefined,
     sort: (selectedSort as ListingsFilters["sort"]) || undefined,
   }), [
-    searchQuery, preSaleOnly, selectedListingType, selectedType, offMarketOnly,
+    searchQuery, preSaleOnly, selectedListingType, selectedType,
     priceMin, priceMax, bedsRange, bathsRange, floorRange, yearRange,
     minSqm, maxSqm, selectedEnergyClasses, selectedHeating, selectedConstruction,
     selectedSubtype, selectedFeatures, selectedSort,
@@ -408,7 +404,6 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
       selectedFeatures={selectedFeatures}
       selectedHeating={selectedHeating}
       selectedConstruction={selectedConstruction}
-      offMarketOnly={offMarketOnly}
       preSaleOnly={preSaleOnly}
       hasVideoViewing={hasVideoViewing}
       hasVirtualTour={hasVirtualTour}
@@ -615,12 +610,6 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                     <div className="space-y-1.5">
                       <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isGreek ? "Κατάσταση" : "Status"}</span>
                       <div className="flex gap-3 flex-wrap">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input type="checkbox" checked={offMarketOnly}
-                            onChange={e => setParam("off_market", e.target.checked ? "1" : "")}
-                            className="rounded border-border accent-primary" />
-                          <span className="text-sm">🔒 {isGreek ? "Εκτός αγοράς" : "Off-market"}</span>
-                        </label>
                         <label className="flex items-center gap-2 cursor-pointer">
                           <input type="checkbox" checked={preSaleOnly}
                             onChange={e => setParam("pre_sale", e.target.checked ? "1" : "")}

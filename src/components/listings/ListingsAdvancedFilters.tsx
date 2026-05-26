@@ -146,7 +146,7 @@ export function ListingsAdvancedFilters({ filteredCount, onClose }: Props) {
   const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
   const {
     selectedListingType, selectedType, selectedSubtype,
-    offMarketOnly, preSaleOnly,
+    preSaleOnly,
     minSqm, maxSqm, bedsRange, bathsRange, floorRange, yearRange,
     selectedEnergyClasses, selectedFeatures, selectedHeating, selectedConstruction,
     hasVideoViewing, hasVirtualTour, hasMessaging,
@@ -176,16 +176,6 @@ export function ListingsAdvancedFilters({ filteredCount, onClose }: Props) {
           <div className="mb-6 pb-5 border-b border-border">
             <p className="text-xs font-semibold text-foreground/60 uppercase tracking-wider mb-3">{ui(isGreek, "Listing Status", "Κατάσταση αγγελίας")}</p>
             <div className="flex flex-wrap gap-3">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={offMarketOnly}
-                  onChange={e => setParam("off_market", e.target.checked ? "1" : "")}
-                  className="rounded border-border accent-primary"
-                />
-                <span className="text-sm font-medium">🔒 {ui(isGreek, "Off-market only", "Μόνο εκτός αγοράς")}</span>
-                <span className="text-xs text-muted-foreground hidden sm:inline">{ui(isGreek, "Exclusive, not publicly advertised", "Αποκλειστικές αγγελίες, χωρίς δημόσια προβολή")}</span>
-              </label>
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
                   type="checkbox"

@@ -29,7 +29,7 @@ const PUBLIC_AUCTION_CANDIDATE_LIMIT_MAX = 240;
 const OS_PROXY_TIMEOUT_MS = 12_000;
 const OS_DIVERSE_FALLBACK_PAGE = 80;
 const OS_DIVERSE_FALLBACK_PAGE_SIZE = 55;
-const AUCTION_CACHE_VERSION = "municipality-rotation-v3";
+const AUCTION_CACHE_VERSION = "municipality-rotation-v4";
 const UNKNOWN_LOCATION_KEY = "__unknown_location__";
 const AUCTION_SELECT =
   "id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,ai_score,views_count,tags,auction_date,auction_starting_bid,latitude,longitude,auction_court,website_url,region,is_featured,priority_placement,construction_status,listing_images(url,sort_order)";
@@ -167,6 +167,7 @@ async function fetchCachedDbAuctions(env: PublicApiEnv, limit: number): Promise<
   params.set("select", AUCTION_SELECT);
   params.set("status", "eq.active");
   params.set("listing_type", "eq.auction");
+  params.set("is_off_market", "eq.false");
   params.set("or", `(auction_date.gte.${todayIsoDate()},auction_date.is.null)`);
   params.append("order", "is_featured.desc");
   params.append("order", "priority_placement.desc.nullslast");

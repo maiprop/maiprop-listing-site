@@ -11,7 +11,6 @@ const { state, setParam, toggleMulti, clearAllFilters } = vi.hoisted(() => {
     selectedListingType: "sale",
     selectedType: "apartment",
     selectedSubtype: "",
-    offMarketOnly: false,
     preSaleOnly: false,
     minSqm: "",
     maxSqm: "",
@@ -74,7 +73,6 @@ describe("ListingsAdvancedFilters interactions", () => {
     Object.assign(state, {
       selectedListingType: "sale",
       selectedType: "apartment",
-      offMarketOnly: false,
       preSaleOnly: false,
       minSqm: "",
       maxSqm: "",
@@ -103,8 +101,7 @@ describe("ListingsAdvancedFilters interactions", () => {
     fireEvent.click(screen.getByLabelText("Close filters"));
     expect(onClose).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByText(/off-market only/i));
-    expect(setParam).toHaveBeenCalledWith("off_market", "1");
+    expect(screen.queryByText(/off-market only/i)).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText(/Min m/), { target: { value: "70" } });
     fireEvent.change(screen.getByPlaceholderText(/Max m/), { target: { value: "150" } });

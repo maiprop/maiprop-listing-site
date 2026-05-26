@@ -91,12 +91,19 @@ CREATE POLICY "profiles_update" ON public.profiles FOR UPDATE
 
 -- ── listings ─────────────────────────────────────────────────────────────────
 DROP POLICY IF EXISTS "Active listings are public" ON public.listings;
+DROP POLICY IF EXISTS "listings_select"        ON public.listings;
 DROP POLICY IF EXISTS "Owners can insert listings"  ON public.listings;
 DROP POLICY IF EXISTS "Owners can update listings"  ON public.listings;
 DROP POLICY IF EXISTS "Owners can delete listings"  ON public.listings;
 
 CREATE POLICY "listings_select" ON public.listings FOR SELECT
-  USING (status = 'active'::public.listing_status OR (select auth.uid()) = owner_id);
+  USING (
+    (
+      status = 'active'::public.listing_status
+      AND COALESCE(is_off_market, false) = false
+    )
+    OR (select auth.uid()) = owner_id
+  );
 
 CREATE POLICY "listings_insert" ON public.listings FOR INSERT
   WITH CHECK ((select auth.uid()) = owner_id);

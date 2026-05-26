@@ -38,6 +38,7 @@ const SECTIONS = [
   "price-index",
   "auction-count",
 ] as const;
+const HOMEPAGE_CACHE_VERSION = "off-market-v2";
 const COUNTED_PROPERTY_TYPES = ["apartment", "land"] as const;
 const PRICE_INDEX_FALLBACK = [
   { city: "Athens", avg_price_per_sqm: 2180, listing_count: 0, is_live: false, trend_change_pct: null, trend_up: null, trend_is_live: false },
@@ -83,6 +84,7 @@ async function fetchPopularLocations(env: PublicApiEnv) {
       const params = new URLSearchParams();
       params.set("select", "id");
       params.set("status", "eq.active");
+      params.set("is_off_market", "eq.false");
       params.set("city", `eq.${city}`);
       return [city, await supabaseCount(env, "/rest/v1/listings", params)] as const;
     }),
@@ -99,6 +101,7 @@ async function fetchPopularLocations(env: PublicApiEnv) {
   params.set("select", "city,price_per_sqm,created_at");
   params.set("status", "eq.active");
   params.set("listing_type", "eq.sale");
+  params.set("is_off_market", "eq.false");
   params.set("city", `in.(${cities.join(",")})`);
   params.append("price_per_sqm", "not.is.null");
   params.set("created_at", `gte.${prevStart.toISOString()}`);
@@ -152,6 +155,7 @@ async function fetchPriceIndex(env: PublicApiEnv) {
   params.set("select", "id,city,price_per_sqm,created_at");
   params.set("status", "eq.active");
   params.set("listing_type", "eq.sale");
+  params.set("is_off_market", "eq.false");
   params.set("city", `in.(${cities.join(",")})`);
   params.append("price_per_sqm", "not.is.null");
   params.append("price_per_sqm", "gt.100");
@@ -205,6 +209,7 @@ async function fetchSection(env: PublicApiEnv, section: (typeof SECTIONS)[number
         const params = new URLSearchParams();
         params.set("select", "id");
         params.set("status", "eq.active");
+        params.set("is_off_market", "eq.false");
         params.set("property_type", `eq.${propertyType}`);
         return [propertyType, await supabaseCount(env, "/rest/v1/listings", params)] as const;
       }),
@@ -214,6 +219,7 @@ async function fetchSection(env: PublicApiEnv, section: (typeof SECTIONS)[number
 
   const params = new URLSearchParams();
   params.set("status", "eq.active");
+  params.set("is_off_market", "eq.false");
   params.set("limit", "6");
 
   if (section === "featured") {
@@ -272,7 +278,10 @@ async function publicHomepage(ctx: PublicApiCtx, requestUrl: URL): Promise<Respo
     return publicAuctions(ctx, auctionUrl);
   }
 
-  const cacheParams = new URLSearchParams([["section", section]]);
+  const cacheParams = new URLSearchParams([
+    ["section", section],
+    ["v", HOMEPAGE_CACHE_VERSION],
+  ]);
   const cacheKey = normalizedCacheUrl(requestUrl, "homepage", cacheParams);
   return cachedJson(ctx, cacheKey, async () => jsonResponse(await fetchSection(ctx.env, section)), {
     edgeTtlSeconds: 180,

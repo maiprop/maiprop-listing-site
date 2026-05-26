@@ -296,6 +296,7 @@ describe("public listings endpoint", () => {
     expect(listingsUrl.searchParams.get("offset")).toBe("200");
     expect(listingsUrl.searchParams.get("city")).toBe("ilike.*Athens*");
     expect(listingsUrl.searchParams.get("listing_type")).toBe("eq.sale");
+    expect(listingsUrl.searchParams.get("is_off_market")).toBe("eq.false");
     expect(listingsUrl.searchParams.get("listing_images.limit")).toBe("3");
     expect(listingsUrl.searchParams.get("has_pool")).toBe("eq.true");
     expect(listingsUrl.searchParams.get("has_alarm")).toBe("eq.true");
@@ -309,13 +310,23 @@ describe("public listings endpoint", () => {
   it("uses the default public catalogue scope unless auctions are explicitly included", async () => {
     await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?sort=price-desc"));
     expect(fetchUrls("/rest/v1/listings")[0].searchParams.get("listing_type")).toBe("in.(sale,rent,firesale)");
+    expect(fetchUrls("/rest/v1/listings")[0].searchParams.get("is_off_market")).toBe("eq.false");
     expect(fetchUrls("/rest/v1/listings")[0].searchParams.getAll("order")).toContain("price.desc");
 
     fetchMock().mockClear();
     await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?includeAuctions=true&sort=views"));
     const url = fetchUrls("/rest/v1/listings")[0];
     expect(url.searchParams.has("listing_type")).toBe(false);
+    expect(url.searchParams.get("is_off_market")).toBe("eq.false");
     expect(url.searchParams.getAll("order")).toContain("views_count.desc.nullslast");
+  });
+
+  it("does not expose off-market rows through public listing search", async () => {
+    await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?is_off_market=true"));
+
+    const url = fetchUrls("/rest/v1/listings")[0];
+    expect(url.searchParams.get("is_off_market")).toBe("eq.false");
+    expect(url.searchParams.get("id")).toBe("eq.00000000-0000-0000-0000-000000000000");
   });
 
   it("rejects non-GET requests and missing runtime bindings", async () => {
@@ -337,6 +348,7 @@ describe("public open houses endpoint", () => {
     const url = fetchUrls("/rest/v1/listings")[0];
     expect(url.searchParams.get("limit")).toBe("200");
     expect(url.searchParams.get("listing_type")).toBe("eq.open_house");
+    expect(url.searchParams.get("is_off_market")).toBe("eq.false");
     expect(url.searchParams.get("open_house_date")).toMatch(/^gte\./);
     expect(url.searchParams.get("order")).toBe("open_house_date.asc");
     expect(url.searchParams.get("listing_images.limit")).toBe("3");
@@ -347,9 +359,11 @@ describe("public open houses endpoint", () => {
 
     const url = fetchUrls("/rest/v1/listings")[0];
     expect(url.searchParams.get("limit")).toBe("12");
+    expect(url.searchParams.get("is_off_market")).toBe("eq.false");
     expect(url.searchParams.get("open_house_date")).toMatch(/^lt\./);
     expect(url.searchParams.get("order")).toBe("open_house_date.desc");
     expect(cacheApi.put.mock.calls[0][0].url).toContain("showPast=1");
+    expect(cacheApi.put.mock.calls[0][0].url).toContain("v=off-market-v2");
   });
 });
 
@@ -479,6 +493,7 @@ describe("public auctions endpoint", () => {
 
     const dbUrl = fetchUrls("/rest/v1/listings")[0];
     expect(dbUrl.searchParams.get("listing_type")).toBe("eq.auction");
+    expect(dbUrl.searchParams.get("is_off_market")).toBe("eq.false");
     expect(dbUrl.searchParams.get("listing_images.limit")).toBe("3");
     expect(dbUrl.searchParams.get("limit")).toBe("1");
   });
@@ -492,7 +507,7 @@ describe("public auctions endpoint", () => {
     expect(dbUrl.searchParams.get("limit")).toBe("240");
     expect(cacheApi.put.mock.calls[0][0].url).toContain("limit=60");
     expect(cacheApi.put.mock.calls[0][0].url).toContain("day=");
-    expect(cacheApi.put.mock.calls[0][0].url).toContain("v=municipality-rotation-v3");
+    expect(cacheApi.put.mock.calls[0][0].url).toContain("v=municipality-rotation-v4");
   });
 });
 
@@ -505,6 +520,7 @@ describe("public homepage endpoint", () => {
     await homepageRequest(makeCtx("https://portal.maiprop.co/api/public/homepage?section=auctions"));
     const dbUrl = fetchUrls("/rest/v1/listings")[0];
     expect(dbUrl.searchParams.get("listing_type")).toBe("eq.auction");
+    expect(dbUrl.searchParams.get("is_off_market")).toBe("eq.false");
     expect(dbUrl.searchParams.get("limit")).toBe("240");
   });
 
@@ -515,7 +531,9 @@ describe("public homepage endpoint", () => {
     let url = fetchUrls("/rest/v1/listings")[0];
     expect(url.searchParams.get("limit")).toBe("12");
     expect(url.searchParams.get("listing_type")).toBe("eq.sale");
+    expect(url.searchParams.get("is_off_market")).toBe("eq.false");
     expect(url.searchParams.get("listing_images.limit")).toBe("3");
+    expect(cacheApi.put.mock.calls[0][0].url).toContain("v=off-market-v2");
 
     fetchMock().mockClear();
     const openHouses = await homepageRequest(makeCtx("https://portal.maiprop.co/api/public/homepage?section=open-houses"));
@@ -523,6 +541,7 @@ describe("public homepage endpoint", () => {
     expect(openHouseRows.map((row) => row.id)).toEqual(["open-1", "open-2"]);
     url = fetchUrls("/rest/v1/listings")[0];
     expect(url.searchParams.get("listing_type")).toBe("eq.open_house");
+    expect(url.searchParams.get("is_off_market")).toBe("eq.false");
     expect(url.searchParams.get("open_house_date")).toMatch(/^gte\./);
     expect(url.searchParams.get("limit")).toBe("12");
     expect(url.searchParams.get("listing_images.limit")).toBe("3");
@@ -546,6 +565,7 @@ describe("public homepage endpoint", () => {
     const priceIndexUrl = fetchUrls("/rest/v1/listings")[0];
     expect(priceIndexUrl.searchParams.get("limit")).toBe("1000");
     expect(priceIndexUrl.searchParams.get("select")).toBe("id,city,price_per_sqm,created_at");
+    expect(priceIndexUrl.searchParams.get("is_off_market")).toBe("eq.false");
     expect(priceIndexUrl.searchParams.get("city")).toContain("Athens");
   });
 
@@ -556,5 +576,6 @@ describe("public homepage endpoint", () => {
 
     const listingsSample = fetchUrls("/rest/v1/listings").find((url) => url.searchParams.get("select") === "city,price_per_sqm,created_at");
     expect(listingsSample?.searchParams.get("limit")).toBe("1000");
+    expect(listingsSample?.searchParams.get("is_off_market")).toBe("eq.false");
   });
 });

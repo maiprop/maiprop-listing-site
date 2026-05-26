@@ -61,6 +61,7 @@ export function useHomepageFeaturedListings() {
           .limit(3, { referencedTable: "listing_images" })
           .eq("status", "active")
           .eq("listing_type", "sale")
+          .eq("is_off_market", false)
           .order("created_at", { ascending: false })
           .limit(12);
         if (error) {
@@ -70,6 +71,7 @@ export function useHomepageFeaturedListings() {
             .select(featuredSelect)
             .eq("status", "active")
             .eq("listing_type", "sale")
+            .eq("is_off_market", false)
             .order("created_at", { ascending: false })
             .limit(12);
           if (fallback.error) throw fallback.error;
@@ -110,6 +112,7 @@ export function useHomepageOpenHouseListings() {
         .limit(3, { referencedTable: "listing_images" })
         .eq("status", "active")
         .eq("listing_type", "open_house")
+        .eq("is_off_market", false)
         .gte("open_house_date", now)
         .order("open_house_date", { ascending: true })
         .limit(12);
