@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.9.8](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.7...v1.9.8) (2026-05-26)
+
+
+### Bug Fixes
+
+* scope video consultation rooms ([#233](https://github.com/maiprop/maiprop-listing-site/issues/233)) ([41f2c07](https://github.com/maiprop/maiprop-listing-site/commit/41f2c0788564e99828c46ad224ffa03f5c936c01))
+* use current video room migration timestamp ([#235](https://github.com/maiprop/maiprop-listing-site/issues/235)) ([142a8b1](https://github.com/maiprop/maiprop-listing-site/commit/142a8b11ca50932c42f49447ead44a13e5b834a9))
+
 ## [1.9.7](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.6...v1.9.7) (2026-05-25)
 
 
