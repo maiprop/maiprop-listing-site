@@ -80,10 +80,14 @@ export default function AdminBroadcastNotifications() {
 
       <form onSubmit={submit} className="rounded-lg border border-border bg-card p-5 space-y-4 max-w-2xl">
         <div>
-          <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5 block">
+          <label
+            htmlFor="broadcast-segment"
+            className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5 block"
+          >
             Audience
           </label>
           <select
+            id="broadcast-segment"
             value={segment}
             onChange={(event) => setSegment(event.target.value as Segment)}
             className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus:border-primary"
@@ -95,10 +99,14 @@ export default function AdminBroadcastNotifications() {
         </div>
 
         <div>
-          <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5 block">
+          <label
+            htmlFor="broadcast-title"
+            className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5 block"
+          >
             Title
           </label>
           <Input
+            id="broadcast-title"
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             maxLength={120}
@@ -107,10 +115,14 @@ export default function AdminBroadcastNotifications() {
         </div>
 
         <div>
-          <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5 block">
+          <label
+            htmlFor="broadcast-body"
+            className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5 block"
+          >
             Message
           </label>
           <Textarea
+            id="broadcast-body"
             value={body}
             onChange={(event) => setBody(event.target.value)}
             rows={5}
@@ -120,12 +132,16 @@ export default function AdminBroadcastNotifications() {
         </div>
 
         <div>
-          <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5 block">
+          <label
+            htmlFor="broadcast-link"
+            className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5 block"
+          >
             Link
           </label>
           <div className="relative">
             <LinkIcon className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
             <Input
+              id="broadcast-link"
               value={link}
               onChange={(event) => setLink(event.target.value)}
               className="pl-9"

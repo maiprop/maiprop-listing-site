@@ -46,11 +46,25 @@ export const sortByImagePresence = <T extends HasHomepageImages>(rows: T[]): T[]
     return (bHasImg ? 1 : 0) - (aHasImg ? 1 : 0);
   });
 
-export const isSupervisorFixture = (row: Pick<HomepageListing, "title" | "address">): boolean =>
-  [row.title, row.address].some((value) => typeof value === "string" && /\bsupervisor-\d+\b/i.test(value));
+const PUBLIC_FIXTURE_PATTERNS = [
+  /\bsupervisor-\d+\b/i,
+  /\bE2E-FULL-PUBLISH-[A-Z0-9-]*\b/i,
+  /\bqa-full-publish\b/i,
+  /\bDevin Test\b/i,
+  /\bTest Free Listing\b/i,
+];
+
+const hasPublicFixtureMarker = (value: unknown): boolean => {
+  if (typeof value === "string") return PUBLIC_FIXTURE_PATTERNS.some((pattern) => pattern.test(value));
+  if (Array.isArray(value)) return value.some((item) => hasPublicFixtureMarker(item));
+  return false;
+};
+
+export const isPublicFixtureListing = (row: Pick<HomepageListing, "title" | "address" | "tags">): boolean =>
+  [row.title, row.address, row.tags].some((value) => hasPublicFixtureMarker(value));
 
 export const publicHomepageRows = (rows: HomepageListing[], limit = 6): HomepageListing[] =>
-  rows.filter((row) => !isSupervisorFixture(row)).slice(0, limit);
+  rows.filter((row) => !isPublicFixtureListing(row)).slice(0, limit);
 
 export const homepageListingImages = (listing: HasHomepageImages): string[] => {
   const images = listing.cover_image_url ? [listing.cover_image_url] : [];

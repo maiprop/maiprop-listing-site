@@ -44,6 +44,7 @@ add a row here in the same PR.
 |---|---|---|---|---|
 | `LHCI_GITHUB_APP_TOKEN` | Lighthouse CI workflow | GH repo secrets | **365 days** | CI owner |
 | `E2E_TEST_EMAIL` / `E2E_TEST_PASSWORD` | Playwright e2e | GH repo secrets | On demo-account password change | CI owner |
+| `CLOUDFLARE_API_TOKEN` | GitHub Actions Cloudflare Pages deploys, env sync, rollback | GH repo secrets | **90 days** or on compromise | Platform lead |
 | `VITE_STRIPE_PRICE_*` (8 IDs) | `rolePlanMap.ts` fallbacks | Cloudflare Pages env | Only if Stripe products replaced | Finance lead |
 
 ---
@@ -71,6 +72,26 @@ Record each rotation here. Entries are append-only.
 5. **Revoke** the old value upstream.
 6. **Append** a row to the rotation log above in the same commit as any
    config change.
+
+### Cloudflare Pages deploy token
+
+Use this for `CLOUDFLARE_API_TOKEN`, especially after any chat, log, or
+terminal exposure.
+
+1. Create a new Cloudflare API token from the dashboard using the **Edit
+   Cloudflare Pages** template, scoped to the correct account and Pages
+   project.
+2. Update the GitHub repository secret `CLOUDFLARE_API_TOKEN`.
+3. Run a same-repo PR preview deploy or production workflow dispatch to
+   prove the token can deploy and sync Pages runtime variables.
+4. Revoke the exposed token in Cloudflare immediately after the new token is
+   verified.
+5. Review Cloudflare Audit Logs for the exposure window.
+6. Run:
+   ```powershell
+   npm run check:production-deploy -- https://portal.maiprop.co --public-api
+   ```
+7. Append the completed rotation to the log above.
 
 ### Zero-downtime: `SUPABASE_SERVICE_ROLE_KEY`
 

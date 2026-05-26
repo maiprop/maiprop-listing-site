@@ -33,7 +33,7 @@ describe("useCreateListingConnections", () => {
       limit: vi.fn().mockResolvedValue({ data: [{ id: "listing-1" }], error: null }),
     });
     storageFromMock.mockReturnValue({
-      list: vi.fn().mockResolvedValue({ data: [], error: null }),
+      getPublicUrl: vi.fn().mockReturnValue({ data: { publicUrl: "https://cdn/listing-images/check" } }),
     });
 
     const { result } = renderHook(() => useCreateListingConnections());

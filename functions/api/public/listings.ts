@@ -13,6 +13,7 @@ import {
   type PublicApiEnv,
 } from "./_cache";
 import { getSupabaseRuntime } from "../../_seo";
+import { publicListingRows } from "./_fixture-content";
 
 type ListingRow = {
   id: string;
@@ -200,9 +201,10 @@ async function publicListings(ctx: PublicApiCtx, requestUrl: URL): Promise<Respo
 
   return cachedJson(ctx, cacheKey, async () => {
     const rows = await supabaseJson<ListingRow>(ctx.env, "/rest/v1/listings", params);
-    const ownerIds = rows.map((row) => row.owner_id).filter((id): id is string => typeof id === "string");
+    const cleanRows = publicListingRows(rows);
+    const ownerIds = cleanRows.map((row) => row.owner_id).filter((id): id is string => typeof id === "string");
     const profiles = await fetchOwnerProfiles(ctx.env, ownerIds);
-    const data = rows.map((row) => ({
+    const data = cleanRows.map((row) => ({
       ...row,
       profiles: row.owner_id ? profiles.get(row.owner_id) ?? null : null,
     }));

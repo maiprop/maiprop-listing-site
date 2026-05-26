@@ -161,6 +161,7 @@ function installSupabaseFetch(): FetchMock {
       if (listingType === "eq.open_house") {
         return jsonRows([
           { id: "open-test", title: "supervisor-177912 open house", cover_image_url: "test", listing_images: [] },
+          { id: "open-e2e", title: "E2E-FULL-PUBLISH-20260526T161856Z open house", tags: ["qa-full-publish"], cover_image_url: "test", listing_images: [] },
           { id: "open-1", cover_image_url: null, listing_images: [{ url: "img", sort_order: 1 }] },
           { id: "open-2", cover_image_url: "cover", listing_images: [] },
         ]);
@@ -173,6 +174,7 @@ function installSupabaseFetch(): FetchMock {
       ) {
         return jsonRows([
           { id: "listing-test", owner_id: "owner-1", title: "supervisor-177912 maisonette", address: "supervisor-177912 Test Street" },
+          { id: "listing-e2e", owner_id: "owner-1", title: "E2E-FULL-PUBLISH-20260526T161856Z maisonette", tags: ["qa-full-publish"] },
           { id: "listing-1", owner_id: "owner-1", title: "Athens flat" },
           { id: "listing-2", owner_id: "owner-2", title: "Piraeus loft" },
         ]);
@@ -327,6 +329,33 @@ describe("public listings endpoint", () => {
     const url = fetchUrls("/rest/v1/listings")[0];
     expect(url.searchParams.get("is_off_market")).toBe("eq.false");
     expect(url.searchParams.get("id")).toBe("eq.00000000-0000-0000-0000-000000000000");
+  });
+
+  it("filters production-blocked fixture records before attaching public owner profiles", async () => {
+    const mock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/rest/v1/listings") {
+        return jsonRows([
+          { id: "listing-supervisor", owner_id: "owner-fixture", title: "supervisor-177912 smoke" },
+          { id: "listing-e2e", owner_id: "owner-fixture", title: "E2E-FULL-PUBLISH-20260526T161856Z test", tags: ["qa-full-publish"] },
+          { id: "listing-clean", owner_id: "owner-clean", title: "Athens flat" },
+        ]);
+      }
+      if (url.pathname === "/rest/v1/profiles_public") {
+        return jsonRows([
+          { user_id: "owner-clean", display_name: "Maria Agent", avatar_url: null, role: "agent" },
+        ]);
+      }
+      return jsonRows([]);
+    }) as unknown as FetchMock;
+    globalThis.fetch = mock as unknown as typeof fetch;
+
+    const res = await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?limit=3"));
+    const body = await res.json() as { data: Array<{ id: string; profiles: unknown }> };
+
+    expect(body.data.map((row) => row.id)).toEqual(["listing-clean"]);
+    expect(body.data[0].profiles).toMatchObject({ display_name: "Maria Agent" });
+    expect(fetchUrls("/rest/v1/profiles_public")[0].searchParams.get("user_id")).toBe("in.(owner-clean)");
   });
 
   it("rejects non-GET requests and missing runtime bindings", async () => {
