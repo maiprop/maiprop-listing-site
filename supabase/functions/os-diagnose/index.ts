@@ -10,6 +10,11 @@ import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { createLogger } from "../_shared/logger.ts";
+import {
+  asSupabaseAuthAdminClient,
+  type AdminProfile,
+  type SupabaseAuthAdminClient,
+} from "../_shared/supabaseClientTypes.ts";
 
 const log = createLogger("os-diagnose");
 
@@ -17,7 +22,7 @@ const limiter = makeRateLimiter({ bucket: "os-diagnose", maxRequests: 5, windowM
 
 async function requireAgent(
   req: Request,
-  sb: ReturnType<typeof createClient>,
+  sb: SupabaseAuthAdminClient,
   corsHeaders: Record<string, string>,
 ): Promise<Response | null> {
   const authHeader = req.headers.get("Authorization");
@@ -33,7 +38,8 @@ async function requireAgent(
       status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-  const { data: profile } = await sb.from("profiles").select("role").eq("user_id", user.id).single();
+  const { data: profileRaw } = await sb.from("profiles").select("role").eq("user_id", user.id).single();
+  const profile = profileRaw as AdminProfile | null;
   if (profile?.role !== "admin") {
     return new Response(JSON.stringify({ error: "Platform admin required" }), {
       status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -99,7 +105,7 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
-  const authErr = await requireAgent(req, supabase, corsHeaders);
+  const authErr = await requireAgent(req, asSupabaseAuthAdminClient(supabase), corsHeaders);
   if (authErr) return authErr;
 
   const OS_URL = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "") ?? "";

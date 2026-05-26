@@ -6,7 +6,8 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    - cron: "0 3 * * *"
+    # Weekly drift check; pushes and PRs cover normal change validation.
+    - cron: "0 3 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -15,7 +16,7 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
 
 env:
   # Format-valid stubs — real secrets are never committed.
@@ -44,7 +45,7 @@ jobs:
         run: npm run check:runtime
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --prefer-offline --no-audit
 
       - name: Security audit (production deps only)
         run: npm audit --omit=dev --audit-level=high
@@ -54,6 +55,12 @@ jobs:
 
       - name: Type-check & build
         run: npm run build
+
+      - name: Type-check Cloudflare Pages Functions
+        run: npm run typecheck:functions
+
+      - name: Type-check Remotion video runtime
+        run: npm run typecheck:remotion
 
       - name: Check bundle size
         run: npm run check:bundle-size
@@ -66,6 +73,9 @@ jobs:
 
       - name: Check public edge function protections
         run: npm run check:public-functions
+
+      - name: Check type-debt ratchet
+        run: npm run check:type-debt
 
       - name: Lint
         run: npm run lint
@@ -102,7 +112,7 @@ jobs:
         with:
           name: sbom
           path: sbom.cdx.json
-          retention-days: 14
+          retention-days: 3
 
       - name: License compliance check
         run: |
@@ -131,6 +141,9 @@ jobs:
         with:
           deno-version: 2.7.12
 
+      - name: Type-check Supabase Edge Functions
+        run: npm run check:edge-functions
+
       - name: Run Deno tests
         working-directory: supabase/functions
         run: |
@@ -144,7 +157,7 @@ jobs:
           done
 
       - name: Upload dist artifact
-        if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dist
@@ -169,7 +182,7 @@ jobs:
         run: npm run check:runtime
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --prefer-offline --no-audit
 
       - name: Check release safety inventory
         run: npm run check:release-safety -- --out release-safety-inventory.json
@@ -207,13 +220,16 @@ jobs:
             release-safety-inventory*.json
             supabase-advisor-summary.json
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 3
 
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
-    # Only run on push to main or when a PR targets main and is not a draft
-    if: github.event_name == 'push' || github.event.pull_request.draft == false
+    # Run on main pushes, manual full CI, and non-draft PRs.
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
     needs: [quality, release-safety]
     timeout-minutes: 15
 
@@ -229,7 +245,7 @@ jobs:
         run: npm run check:runtime
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --prefer-offline --no-audit
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
@@ -265,7 +281,7 @@ jobs:
         with:
           name: playwright-report
           path: playwright-report/
-          retention-days: 7
+          retention-days: 3
 
   e2e-security-staging:
     name: E2E Security (Live-safe)
@@ -385,7 +401,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true'
-        run: npm ci
+        run: npm ci --prefer-offline --no-audit
 
       - name: Skip live type freshness without staged DB changes
         if: needs['deploy-supabase-staging'].outputs.db_changes != 'true'
@@ -417,7 +433,7 @@ jobs:
         with:
           name: playwright-report-security-staging
           path: playwright-report/
-          retention-days: 7
+          retention-days: 3
 
   migrations-validate:
     name: Validate Supabase migrations
@@ -627,7 +643,7 @@ jobs:
         run: npm run check:runtime
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --prefer-offline --no-audit
 
       - name: Validate Lighthouse authenticated audit secrets
         id: lighthouse-secrets
@@ -702,7 +718,7 @@ jobs:
         run: npm run check:runtime
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --prefer-offline --no-audit
 
       # Production build uses *real* Supabase + optional service secrets so the
       # deployed bundle can actually talk to the live backend. The earlier
@@ -1059,7 +1075,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
-        run: npm ci
+        run: npm ci --prefer-offline --no-audit
 
       - name: Setup Supabase CLI
         if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
@@ -1105,7 +1121,7 @@ jobs:
           name: release-safety-staging-live-functions
           path: release-safety-staging-live-functions.json
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 7
 
       - name: Deploy edge functions to staging
         if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
@@ -1127,6 +1143,7 @@ jobs:
     if: >
       github.event_name == 'pull_request' &&
       github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
       github.actor != 'dependabot[bot]'
     needs: [quality, release-safety]
 
@@ -1143,7 +1160,7 @@ jobs:
         run: npm run check:runtime
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --prefer-offline --no-audit
 
       - name: Build app with staging environment
         run: npm run build

@@ -1,4 +1,4 @@
-# MaiProp API Documentation
+# mAI prop API Documentation
 
 ## Edge Functions (Supabase / Deno)
 
@@ -9,7 +9,7 @@ The authoritative API specification lives in
 
 Once the site is deployed, the spec is rendered via Redoc at:
 
-- **Production**: <https://maiprop.co/api-docs.html>
+- **Production**: hosted at `/api-docs.html` on the configured deployment domain
 - **Staging**: available via Cloudflare Pages preview deploy
 
 The YAML is copied into `public/docs/` at build time by the `prebuild` hook

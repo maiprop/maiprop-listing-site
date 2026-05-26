@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,9 +5,10 @@ import { PropertyCard } from "@/components/PropertyCard";
 import { useInView } from "@/hooks/useInView";
 import { getStreetViewProxyUrl } from "@/lib/config";
 import { useTranslation } from "react-i18next";
+import { homepageListingImages, type HomepageListing } from "@/lib/homepageListings";
 
 interface Props {
-  listings: any[];
+  listings: HomepageListing[];
 }
 
 export function HomepageOpenHousesSection({ listings }: Props) {
@@ -37,12 +37,8 @@ export function HomepageOpenHousesSection({ listings }: Props) {
           ref={ref}
           className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 reveal reveal-delay-1 ${inView ? "in-view" : ""}`}
         >
-          {listings.slice(0, 4).map((l: any) => {
-            const imgs: string[] = l.cover_image_url ? [l.cover_image_url] : [];
-            if (!imgs.length && l.listing_images?.length) {
-              const sorted = [...l.listing_images].sort((a: any, b: any) => a.sort_order - b.sort_order);
-              sorted.forEach((img: any) => imgs.push(img.url));
-            }
+          {listings.slice(0, 4).map((l) => {
+            const imgs = homepageListingImages(l);
             const svFallback =
               l.latitude != null && l.longitude != null
                 ? getStreetViewProxyUrl({ lat: Number(l.latitude), lng: Number(l.longitude) })
@@ -58,15 +54,15 @@ export function HomepageOpenHousesSection({ listings }: Props) {
                   city: l.city,
                   price: Number(l.price),
                   pricePerSqm: l.price_per_sqm ? Number(l.price_per_sqm) : undefined,
-                  bedrooms: l.bedrooms,
-                  bathrooms: l.bathrooms,
+                  bedrooms: l.bedrooms ?? undefined,
+                  bathrooms: l.bathrooms ?? undefined,
                   sqm: Number(l.sqm),
-                  floor: l.floor,
-                  totalFloors: l.total_floors,
-                  yearBuilt: l.year_built,
-                  energyClass: l.energy_class,
+                  floor: l.floor ?? undefined,
+                  totalFloors: l.total_floors ?? undefined,
+                  yearBuilt: l.year_built ?? undefined,
+                  energyClass: l.energy_class ?? undefined,
                   images: imgs,
-                  type: l.property_type,
+                  type: l.property_type ?? "apartment",
                   listingType: "open_house",
                   auctionDate: l.open_house_date
                     ? new Date(l.open_house_date).toLocaleDateString(dateLocale, {
@@ -77,8 +73,8 @@ export function HomepageOpenHousesSection({ listings }: Props) {
                         minute: "2-digit",
                       })
                     : undefined,
-                  aiScore: l.ai_score,
-                  views: l.views_count,
+                  aiScore: l.ai_score ?? undefined,
+                  views: l.views_count ?? undefined,
                   tags: l.tags || [],
                   isPreSale: l.is_pre_sale ?? false,
                   constructionStatus: l.construction_status ?? undefined,

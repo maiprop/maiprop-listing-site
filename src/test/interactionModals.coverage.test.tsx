@@ -214,7 +214,7 @@ describe("high-coverage interaction modals", () => {
     expect(mocks.toast.error).toHaveBeenCalledWith("Please sign in to request a viewing");
 
     mocks.authState.user = { id: "user-1", email: "buyer@example.com" };
-    mocks.authState.profile = { first_name: "Buyer", phone: "+30210" };
+    mocks.authState.profile = { first_name: "Buyer", phone: "phone-redacted" };
     rerender(<ViewingDialog open onClose={onClose} property={property} ownerId="" />);
     fireEvent.click(screen.getAllByText(/mon|tue|wed|thu|fri|sat|sun/i)[0]);
     fireEvent.click(screen.getByText("09:00"));

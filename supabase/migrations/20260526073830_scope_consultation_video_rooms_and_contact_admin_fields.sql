@@ -85,7 +85,7 @@ BEGIN
         USING (
           COALESCE(NULLIF(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role', '') = 'authenticated'
           AND realtime.messages.extension IN ('broadcast', 'presence')
-          AND COALESCE(NULLIF(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub', '') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+          AND COALESCE(NULLIF(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub', '') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
           AND (
             (
               (
@@ -96,7 +96,7 @@ BEGIN
               AND NULLIF(
                 REGEXP_REPLACE((SELECT realtime.topic()), '^(realtime:)?(private:)?video:viewing:', ''),
                 ''
-              ) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+              ) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
               AND EXISTS (
                 SELECT 1
                 FROM public.viewings v
@@ -120,7 +120,7 @@ BEGIN
               AND NULLIF(
                 REGEXP_REPLACE((SELECT realtime.topic()), '^(realtime:)?(private:)?video:consultation:', ''),
                 ''
-              ) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+              ) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
               AND EXISTS (
                 SELECT 1
                 FROM public.consultation_requests cr
@@ -147,7 +147,7 @@ BEGIN
               AND NULLIF(
                 REGEXP_REPLACE((SELECT realtime.topic()), '^(realtime:)?(private:)?video:professional:', ''),
                 ''
-              ) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+              ) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
               AND EXISTS (
                 SELECT 1
                 FROM public.professionals p
@@ -171,7 +171,7 @@ BEGIN
         WITH CHECK (
           COALESCE(NULLIF(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role', '') = 'authenticated'
           AND realtime.messages.extension IN ('broadcast', 'presence')
-          AND COALESCE(NULLIF(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub', '') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+          AND COALESCE(NULLIF(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub', '') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
           AND (
             (
               (

@@ -136,7 +136,7 @@ const listing = {
   description: "A".repeat(240),
   latitude: 37.94,
   longitude: 23.64,
-  profiles: { display_name: "Mai Developer", avatar_url: null, phone: "+302100000000" },
+  profiles: { display_name: "Mai Developer", avatar_url: null, phone: "phone-redacted" },
   walkability_score: 70,
   safety_score: 80,
   noise_score: 20,

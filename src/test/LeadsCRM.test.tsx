@@ -32,7 +32,7 @@ const baseLead = (overrides: Record<string, unknown> = {}) => ({
   id: "lead-1",
   name: "Alice Buyer",
   email: "alice@example.com",
-  phone: "+30 210 0001",
+  phone: "phone-redacted",
   message: "Interested in Athens 3-bed",
   notes: "Met at open house",
   source: "manual",

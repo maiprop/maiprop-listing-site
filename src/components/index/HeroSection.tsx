@@ -208,15 +208,15 @@ export function HeroSection() {
                 className="font-display font-black leading-[1.1] mb-4 sm:mb-6 text-white break-words"
                 style={{ fontSize: "clamp(1.4rem, 6.5vw, 4.5rem)" }}
               >
-                Find your perfect<br className="sm:hidden" /> property in Greece
-                <div className="mt-1">
+                Find your perfect<br className="sm:hidden" /> property in Greece{" "}
+                <span className="mt-1 block">
                   <span
                     className="bg-gradient-to-r from-white via-brand-cyan to-brand-purple bg-clip-text text-transparent drop-shadow-[0_2px_14px_rgba(0,0,0,0.65)]"
                     style={{ fontSize: "clamp(1.5rem, 7vw, 4.8rem)" }}
                   >
                     with AI precision
                   </span>
-                </div>
+                </span>
               </h1>
 
               {/* ── Search Card ── */}

@@ -42,7 +42,7 @@ const contact = (overrides: Record<string, unknown> = {}) => ({
   id: "contact-1",
   name: "Alex Buyer",
   email: "alex@example.com",
-  phone: "+302100000000",
+  phone: "phone-redacted",
   source: "portal",
   notes: "Needs sea view",
   deal_stage: "new",

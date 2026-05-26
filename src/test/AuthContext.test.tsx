@@ -259,7 +259,7 @@ describe("AuthProvider auth API methods", () => {
     await act(async () => {
       outcome = await result.current.signUp("new@x.com", "ValidPass1!@#", {
         full_name: "New User",
-        phone: "+30 210 0000",
+        phone: "phone-redacted",
       });
     });
     expect(outcome.error).toBeNull();
@@ -267,7 +267,7 @@ describe("AuthProvider auth API methods", () => {
   });
 
   describe("signUp password policy (go-live audit FINDING-1)", () => {
-    const meta = { full_name: "New User", phone: "+30 210 0000" };
+    const meta = { full_name: "New User", phone: "phone-redacted" };
 
     async function signUpWith(password: string) {
       const { result } = renderHook(() => useAuth(), { wrapper: wrap });

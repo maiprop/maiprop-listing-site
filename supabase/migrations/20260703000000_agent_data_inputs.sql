@@ -99,7 +99,7 @@ RETURNS INTEGER LANGUAGE sql IMMUTABLE AS $$
 $$;
 
 CREATE OR REPLACE FUNCTION public.agent_data_input_discount_pct_per_input()
-RETURNS NUMERIC LANGUAGE sql IMMUTABLE AS $$
+RETURNS NUMERIC LANGUAGE sql IMMUTABLE SET search_path = public AS $$
   SELECT 0.5::NUMERIC
 $$;
 

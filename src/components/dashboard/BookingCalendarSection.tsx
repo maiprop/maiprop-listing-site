@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Calendar, Check, Video, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -6,13 +5,42 @@ import { createProfessionalVideoRoomPath } from "@/lib/videoRooms";
 
 import { VIEWING_STATUS_COLORS as LEAD_STATUS_COLORS } from "@/lib/statusColors";
 
-type AgendaItem =
-  | { type: "viewing"; date: string; item: any }
-  | { type: "lead"; date: string; item: any };
+export type BookingCalendarViewing = {
+  id: string;
+  scheduled_at?: string | null;
+  status?: string | null;
+  viewing_type?: string | null;
+  listings?: { title?: string | null } | null;
+};
 
-function isVideoConsultation(item: any) {
+export type BookingCalendarLead = {
+  id: string;
+  preferred_date?: string | null;
+  status?: string | null;
+  requester_name?: string | null;
+  request_type?: string | null;
+  service?: string | null;
+  meeting_type?: string | null;
+  message?: string | null;
+  professional_id?: string | null;
+};
+
+type ScheduledViewing = BookingCalendarViewing & { scheduled_at: string; status: string };
+type ScheduledLead = BookingCalendarLead & { preferred_date: string; status: string };
+
+type AgendaItem =
+  | { type: "viewing"; date: string; item: ScheduledViewing }
+  | { type: "lead"; date: string; item: ScheduledLead };
+
+function isVideoConsultation(item: BookingCalendarLead) {
   return item.meeting_type === "video" || /video consultation requested/i.test(item.message ?? "");
 }
+
+const isScheduledViewing = (viewing: BookingCalendarViewing): viewing is ScheduledViewing =>
+  Boolean(viewing.scheduled_at && viewing.status && ["pending", "confirmed"].includes(viewing.status));
+
+const isScheduledLead = (lead: BookingCalendarLead): lead is ScheduledLead =>
+  Boolean(lead.preferred_date && lead.status && ["pending", "reviewed", "confirmed"].includes(lead.status));
 
 export function BookingCalendarSection({
   viewings,
@@ -23,8 +51,8 @@ export function BookingCalendarSection({
   onUpdateConsultation,
   consultationUpdating = false,
 }: {
-  viewings: any[];
-  leads: any[];
+  viewings: BookingCalendarViewing[];
+  leads: BookingCalendarLead[];
   onGoToLeads: () => void;
   onGoToViewings: () => void;
   onGoToServices: () => void;
@@ -33,15 +61,15 @@ export function BookingCalendarSection({
 }) {
   const items: AgendaItem[] = [
     ...viewings
-      .filter((v: any) => v.scheduled_at && ["pending", "confirmed"].includes(v.status))
-      .map((v: any) => ({
+      .filter(isScheduledViewing)
+      .map((v) => ({
         type: "viewing" as const,
         date: new Date(v.scheduled_at).toISOString().split("T")[0],
         item: v,
       })),
     ...leads
-      .filter((l: any) => l.preferred_date && ["pending", "reviewed", "confirmed"].includes(l.status))
-      .map((l: any) => ({ type: "lead" as const, date: l.preferred_date, item: l })),
+      .filter(isScheduledLead)
+      .map((l) => ({ type: "lead" as const, date: l.preferred_date, item: l })),
   ];
 
   const byDate = items.reduce<Record<string, AgendaItem[]>>((acc, it) => {

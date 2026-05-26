@@ -61,12 +61,15 @@ environment. They should be run against local, development, or staging projects.
 | `npm run seed:listing-images` | Attaches listing images. | Review storage bucket and public URL settings first. |
 | `npm run seed:demo-accounts` | Creates curated demo accounts. | Keep credentials out of public docs if they differ from local defaults. |
 | `scripts/seed-production-listings.ts` | Seeds production-style listing data. | Requires explicit production approval and prod-guard override if used against production. |
+| `npm run check:edge-functions` | Runs `deno check` against every Supabase Edge Function `index.ts`. | Catches deployed-runtime type errors that are not covered by Node/Vite typecheck. |
+| `npm run check:type-debt` | Enforces the explicit-`any` / ts-ignore ratchet in `scripts/type-debt-baseline.json`. | Run `node scripts/check-type-debt.mjs --update-baseline` only after intentionally reducing or accepting the count. |
 
 ## Maintenance and Destructive Utilities
 
 | File | Purpose | Notes |
 | --- | --- | --- |
 | `scripts/delete-past-auctions.mjs` | Deletes or cleans up past auction data. | Destructive; confirm target project and backup status first. |
+| `npm run cleanup:production-fixtures` | Dry-runs inventory of synthetic `supervisor-*` listing fixtures; `-- --apply` can delete them with explicit production confirmations. | Destructive only with `--apply`, `I_KNOW_THIS_IS_PROD=yes`, and `CONFIRM_FIXTURE_CLEANUP=delete-supervisor-listings`. |
 | `scripts/wipe-all-listings.mjs` | Removes listing data. | Highly destructive; use only for reset scenarios with explicit approval. |
 | `scripts/suppress-any-legacy.mjs` | Legacy TypeScript cleanup helper. | Use only when intentionally suppressing legacy `any` debt. |
 | `scripts/_seed-env.ts` | Shared Supabase URL and service-role env resolver for seeders. | Fails fast when required env vars are missing. |

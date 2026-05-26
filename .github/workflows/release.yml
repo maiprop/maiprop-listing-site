@@ -9,6 +9,10 @@ permissions:
   issues: write
   pull-requests: write
 
+concurrency:
+  group: release-please-main
+  cancel-in-progress: true
+
 jobs:
   release-please:
     runs-on: ubuntu-latest

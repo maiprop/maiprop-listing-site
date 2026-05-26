@@ -8,6 +8,14 @@ import {
 } from "../_shared/rateLimit.ts";
 import { isStripeMockMode } from "../_shared/stripeMode.ts";
 
+type PriceWithRecurring = Stripe.Price & {
+  recurring?: { interval?: string | null } | null;
+};
+
+type SubscriptionWithPeriodEnd = Stripe.Subscription & {
+  current_period_end?: number | null;
+};
+
 const log = createLogger("get-invoices");
 const limiter = makeRateLimiter({
   bucket: "get-invoices",
@@ -201,19 +209,21 @@ Deno.serve(async (req) => {
     }
 
     const price = subscription?.items.data[0]?.price;
+    const recurringInterval = (price as PriceWithRecurring | undefined)?.recurring?.interval ?? "month";
+    const currentPeriodEnd = (subscription as SubscriptionWithPeriodEnd | null)?.current_period_end ?? null;
     const product = price?.product as Stripe.Product | null | undefined;
     const normalizedSubscription = subscription
       ? {
         id: subscription.id,
         status: subscription.status,
-        current_period_end: new Date(subscription.current_period_end * 1000)
-          .toISOString(),
+        current_period_end: currentPeriodEnd
+          ? new Date(currentPeriodEnd * 1000).toISOString()
+          : null,
         cancel_at_period_end: subscription.cancel_at_period_end,
         plan_name: product?.name ?? "Pro",
         amount: price?.unit_amount ? price.unit_amount / 100 : null,
         currency: price?.currency?.toUpperCase() ?? "EUR",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- recurring is missing from the Stripe.Price type for this API version
-        interval: (price as any)?.recurring?.interval ?? "month",
+        interval: recurringInterval,
       }
       : null;
 

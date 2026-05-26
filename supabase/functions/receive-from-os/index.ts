@@ -3,10 +3,12 @@ import { verifyHmacSignature, HmacVerifyError } from "../_shared/webhookHmac.ts"
 import { errorResponse, unavailableResponse } from "../_shared/response.ts";
 import { createLogger } from "../_shared/logger.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import {
+  asLooseSupabaseClient,
+  type LooseSupabaseClient,
+} from "../_shared/supabaseClientTypes.ts";
 
 const log = createLogger("receive-from-os");
-
-type SupabaseSrv = ReturnType<typeof createClient>;
 
 // OS webhook payload envelope. The OS API doesn't ship typed schemas, so we
 // shape the inbound JSON as discriminated unions of "data" payloads keyed by
@@ -90,15 +92,15 @@ Deno.serve(async (req) => {
 
     let result: HandlerResult;
     if (entity_type === "listing") {
-      result = await handleListing(supabase, event, data);
+      result = await handleListing(asLooseSupabaseClient(supabase), event, data);
     } else if (entity_type === "lead" || entity_type === "consultation") {
-      result = await handleLead(supabase, event, data);
+      result = await handleLead(asLooseSupabaseClient(supabase), event, data);
     } else if (entity_type === "profile") {
-      result = await handleProfile(supabase, event, data);
+      result = await handleProfile(asLooseSupabaseClient(supabase), event, data);
     } else {
       // Unknown entity type – log and acknowledge (not an error, just unsupported)
       await logSync(
-        supabase,
+        asLooseSupabaseClient(supabase),
         "os_to_hub",
         entity_type,
         pickId(data, "id") ?? pickId(data, "externalId") ?? "unknown",
@@ -113,7 +115,7 @@ Deno.serve(async (req) => {
     }
 
     await logSync(
-      supabase,
+      asLooseSupabaseClient(supabase),
       "os_to_hub",
       entity_type,
       pickId(data, "id") ?? pickId(data, "externalId") ?? result.id ?? "unknown",
@@ -137,7 +139,7 @@ Deno.serve(async (req) => {
 // ─── Handlers ────────────────────────────────────────────────────────────────
 
 async function handleListing(
-  supabase: SupabaseSrv,
+  supabase: LooseSupabaseClient,
   event: string,
   data: Record<string, unknown>,
 ): Promise<HandlerResult> {
@@ -188,11 +190,12 @@ async function handleListing(
     if (!externalId) return { processed: false, error: "externalId or id required for upsert" };
 
     // Check if listing with this externalId already exists (via tags)
-    const { data: existing } = await supabase
+    const { data: existingRaw } = await supabase
       .from("listings")
       .select("id")
       .contains("tags", [`os_id:${externalId}`])
       .maybeSingle();
+    const existing = existingRaw as { id: string } | null;
 
     if (existing) {
       const { error } = await supabase
@@ -205,12 +208,13 @@ async function handleListing(
 
     // Insert new, tag with os_id for future dedup
     const insertTags = [...(tags ?? []), `os_id:${externalId}`];
-    const { data: inserted, error } = await supabase
+    const { data: insertedRaw, error } = await supabase
       .from("listings")
       .insert({ ...mapped, tags: insertTags })
       .select("id")
       .single();
     if (error) return { processed: false, error: error.message };
+    const inserted = insertedRaw as { id: string };
     return { processed: true, id: inserted.id };
   }
 
@@ -228,7 +232,7 @@ async function handleListing(
 }
 
 async function handleLead(
-  supabase: SupabaseSrv,
+  supabase: LooseSupabaseClient,
   event: string,
   data: Record<string, unknown>,
 ): Promise<HandlerResult> {
@@ -237,10 +241,8 @@ async function handleLead(
     if (!professionalId) {
       return { processed: false, error: "professionalId is required for lead sync" };
     }
-    // `consultation_requests` columns may not be in the generated types in
-    // every branch; cast through the narrow `from` overload bridge.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: inserted, error } = await (supabase.from as any)("consultation_requests")
+    const { data: inserted, error } = await supabase
+      .from("consultation_requests")
       .insert({
         professional_id: professionalId,
         requester_name: pickStr(data, "name") ?? pickStr(data, "contactName") ?? "Unknown",
@@ -260,7 +262,7 @@ async function handleLead(
 }
 
 async function handleProfile(
-  supabase: SupabaseSrv,
+  supabase: LooseSupabaseClient,
   _event: string,
   data: Record<string, unknown>,
 ): Promise<HandlerResult> {
@@ -285,7 +287,7 @@ async function handleProfile(
 // ─── Sync Logger ─────────────────────────────────────────────────────────────
 
 async function logSync(
-  supabase: SupabaseSrv,
+  supabase: LooseSupabaseClient,
   direction: string,
   entity_type: string,
   entity_id: string,
@@ -299,8 +301,7 @@ async function logSync(
   // Wrap in try/catch so a logging failure (schema mismatch, transient DB
   // issue) never aborts the webhook response — matches `poll-os-auctions`.
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase.from as any)("sync_log").insert({
+    await supabase.from("sync_log").insert({
       direction,
       entity_type,
       entity_id,

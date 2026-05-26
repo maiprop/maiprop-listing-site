@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
-  title: MaiProp Supabase Edge Functions
+  title: mAI prop Supabase Edge Functions
   description: |
-    HTTP endpoints exposed by Supabase Edge Functions for the MaiProp platform.
+    HTTP endpoints exposed by Supabase Edge Functions for the mAI prop platform.
     All functions run on Deno runtime and are hosted at
     `https://<project>.supabase.co/functions/v1/<name>`.
 
@@ -11,7 +11,7 @@ info:
     - `verify_jwt = false`: public or custom-auth (HMAC, webhook signatures, etc.).
   version: 1.0.0
   contact:
-    name: MaiProp Engineering
+    name: mAI prop Engineering
 
 servers:
   - url: https://qvvicunqcrwpioqnvzxf.supabase.co/functions/v1

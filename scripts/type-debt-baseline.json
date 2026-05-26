@@ -1,0 +1,459 @@
+{
+  "generated_at": "2026-05-26T15:53:50.569Z",
+  "total": 121,
+  "by_pattern": {
+    "no-explicit-any-disable": 43,
+    "explicit-any": 78,
+    "ts-ignore": 0
+  },
+  "files": [
+    {
+      "file": "supabase/functions/_shared/testUtils.ts",
+      "total": 11,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 1
+        },
+        {
+          "name": "explicit-any",
+          "count": 10
+        }
+      ]
+    },
+    {
+      "file": "supabase/functions/full-sync-from-os/index.ts",
+      "total": 10,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 1
+        },
+        {
+          "name": "explicit-any",
+          "count": 9
+        }
+      ]
+    },
+    {
+      "file": "src/components/MapView.tsx",
+      "total": 8,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 4
+        },
+        {
+          "name": "explicit-any",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "file": "supabase/functions/create-checkout/index.ts",
+      "total": 7,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 2
+        },
+        {
+          "name": "explicit-any",
+          "count": 5
+        }
+      ]
+    },
+    {
+      "file": "src/components/LeadsCRM.tsx",
+      "total": 6,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 1
+        },
+        {
+          "name": "explicit-any",
+          "count": 5
+        }
+      ]
+    },
+    {
+      "file": "supabase/functions/apply-data-input-credit/index.ts",
+      "total": 6,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 3
+        },
+        {
+          "name": "explicit-any",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "file": "src/components/PropertyMiniMap.tsx",
+      "total": 5,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 1
+        },
+        {
+          "name": "explicit-any",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "file": "src/components/CompareDrawer.tsx",
+      "total": 4,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 2
+        },
+        {
+          "name": "explicit-any",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "file": "src/components/dashboard/ProfileCompletionCard.tsx",
+      "total": 4,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 1
+        },
+        {
+          "name": "explicit-any",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "file": "src/components/professionals/ProfileComponents.tsx",
+      "total": 4,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 2
+        },
+        {
+          "name": "explicit-any",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "file": "src/lib/listingUtils.ts",
+      "total": 4,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 1
+        },
+        {
+          "name": "explicit-any",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "file": "supabase/functions/_shared/proGate.ts",
+      "total": 4,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 2
+        },
+        {
+          "name": "explicit-any",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "file": "supabase/functions/poll-os-auctions/index.ts",
+      "total": 4,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 2
+        },
+        {
+          "name": "explicit-any",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "file": "src/components/open-houses/OpenHousePrimitives.tsx",
+      "total": 3,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 1
+        },
+        {
+          "name": "explicit-any",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "file": "supabase/functions/_shared/entitlements.ts",
+      "total": 3,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 1
+        },
+        {
+          "name": "explicit-any",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "file": "supabase/functions/agent-data-input/index.ts",
+      "total": 3,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 1
+        },
+        {
+          "name": "explicit-any",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "file": "supabase/functions/check-subscription/index.ts",
+      "total": 3,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 1
+        },
+        {
+          "name": "explicit-any",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "file": "supabase/functions/stripe-webhook/index.ts",
+      "total": 3,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 2
+        },
+        {
+          "name": "explicit-any",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "supabase/functions/sync-stripe-pricing/index.ts",
+      "total": 3,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 1
+        },
+        {
+          "name": "explicit-any",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "file": "src/components/auctions/AuctionCard.tsx",
+      "total": 2,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 1
+        },
+        {
+          "name": "explicit-any",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "src/components/CompareAIReports.tsx",
+      "total": 2,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 1
+        },
+        {
+          "name": "explicit-any",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "src/components/dashboard/ProfessionalProfileCompletion.tsx",
+      "total": 2,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 1
+        },
+        {
+          "name": "explicit-any",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "src/components/index/AISearchModal.tsx",
+      "total": 2,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 1
+        },
+        {
+          "name": "explicit-any",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "src/components/map/mapConfig.ts",
+      "total": 2,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 1
+        },
+        {
+          "name": "explicit-any",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "src/components/new-build/ConstructionSpecs.tsx",
+      "total": 2,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 1
+        },
+        {
+          "name": "explicit-any",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "src/components/new-build/RegisterInterestCard.tsx",
+      "total": 2,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 1
+        },
+        {
+          "name": "explicit-any",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "src/components/new-build/UnitShowcase.tsx",
+      "total": 2,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 1
+        },
+        {
+          "name": "explicit-any",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "src/components/OpenHouseOfferDialog.tsx",
+      "total": 2,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 1
+        },
+        {
+          "name": "explicit-any",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "src/components/ProfessionalServicesEditor.tsx",
+      "total": 2,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 1
+        },
+        {
+          "name": "explicit-any",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "supabase/functions/_shared/auditLog.ts",
+      "total": 2,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 1
+        },
+        {
+          "name": "explicit-any",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "supabase/functions/auth-email-hook/index.ts",
+      "total": 2,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 1
+        },
+        {
+          "name": "explicit-any",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "supabase/functions/neighbourhood-report/index.ts",
+      "total": 2,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 1
+        },
+        {
+          "name": "explicit-any",
+          "count": 1
+        }
+      ]
+    }
+  ]
+}

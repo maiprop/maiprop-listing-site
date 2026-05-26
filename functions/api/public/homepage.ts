@@ -22,6 +22,13 @@ type ListingRow = Record<string, unknown> & {
   created_at?: string | null;
 };
 
+type PopularLocation = {
+  name: string;
+  listings: number;
+  trend: string;
+  trendUp: boolean;
+};
+
 const SECTIONS = [
   "type-counts",
   "featured",
@@ -40,12 +47,12 @@ const PRICE_INDEX_FALLBACK = [
   { city: "Crete", avg_price_per_sqm: 1890, listing_count: 0, is_live: false, trend_change_pct: null, trend_up: null, trend_is_live: false },
   { city: "Rhodes", avg_price_per_sqm: 2340, listing_count: 0, is_live: false, trend_change_pct: null, trend_up: null, trend_is_live: false },
 ] as const;
-const POPULAR_LOCATION_FALLBACK = [
+const POPULAR_LOCATION_FALLBACK: PopularLocation[] = [
   { name: "Athens", listings: 24860, trend: "+1.2%", trendUp: true },
   { name: "Thessaloniki", listings: 8240, trend: "+0.8%", trendUp: true },
   { name: "Mykonos", listings: 1820, trend: "+2.3%", trendUp: true },
   { name: "Santorini", listings: 1240, trend: "+1.9%", trendUp: true },
-] as const;
+];
 
 const featuredSelect =
   "id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,ai_score,views_count,tags,listing_images(url,sort_order)";
@@ -59,6 +66,14 @@ function sortByImagePresence<T extends ListingRow>(rows: T[]): T[] {
     const bHasImg = Boolean(b.cover_image_url || b.listing_images?.length);
     return Number(bHasImg) - Number(aHasImg);
   });
+}
+
+function isSupervisorFixture(row: ListingRow): boolean {
+  return [row.title, row.address].some((value) => typeof value === "string" && /\bsupervisor-\d+\b/i.test(value));
+}
+
+function publicHomepageRows<T extends ListingRow>(rows: T[], limit = 6): T[] {
+  return rows.filter((row) => !isSupervisorFixture(row)).slice(0, limit);
 }
 
 async function fetchPopularLocations(env: PublicApiEnv) {
@@ -207,7 +222,8 @@ async function fetchSection(env: PublicApiEnv, section: (typeof SECTIONS)[number
     params.set("order", "created_at.desc");
     params.set("listing_images.order", "sort_order.asc");
     params.set("listing_images.limit", "3");
-    return supabaseJson<ListingRow>(env, "/rest/v1/listings", params);
+    params.set("limit", "12");
+    return publicHomepageRows(await supabaseJson<ListingRow>(env, "/rest/v1/listings", params));
   }
 
   if (section === "auction-count") {
@@ -231,7 +247,8 @@ async function fetchSection(env: PublicApiEnv, section: (typeof SECTIONS)[number
   params.set("order", "open_house_date.asc");
   params.set("listing_images.order", "sort_order.asc");
   params.set("listing_images.limit", "3");
-  return sortByImagePresence(await supabaseJson<ListingRow>(env, "/rest/v1/listings", params));
+  params.set("limit", "12");
+  return sortByImagePresence(publicHomepageRows(await supabaseJson<ListingRow>(env, "/rest/v1/listings", params)));
 }
 
 async function publicHomepage(ctx: PublicApiCtx, requestUrl: URL): Promise<Response> {

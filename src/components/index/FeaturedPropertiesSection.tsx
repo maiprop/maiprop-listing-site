@@ -1,12 +1,12 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { PropertyCard } from "@/components/PropertyCard";
 import { PropertyCardSkeleton } from "@/components/PropertyCardSkeleton";
 import { useInView } from "@/hooks/useInView";
+import { homepageListingImages, type HomepageListing } from "@/lib/homepageListings";
 
 interface Props {
-  listings: any[];
+  listings: HomepageListing[];
   isLoading: boolean;
   isError: boolean;
 }
@@ -28,12 +28,8 @@ export function FeaturedPropertiesSection({ listings, isLoading, isError }: Prop
             ? Array.from({ length: 4 }).map((_, i) => <PropertyCardSkeleton key={i} />)
             : isError
             ? <p className="col-span-4 py-8 text-center text-sm text-muted-foreground">Could not load featured listings.</p>
-            : listings.map((l: any) => {
-                const imgs: string[] = l.cover_image_url ? [l.cover_image_url] : [];
-                if (!imgs.length && l.listing_images?.length) {
-                  const sorted = [...l.listing_images].sort((a: any, b: any) => a.sort_order - b.sort_order);
-                  sorted.forEach((img: any) => imgs.push(img.url));
-                }
+            : listings.map((l) => {
+                const imgs = homepageListingImages(l);
                 return (
                   <PropertyCard
                     key={l.id}
@@ -44,18 +40,18 @@ export function FeaturedPropertiesSection({ listings, isLoading, isError }: Prop
                       city: l.city,
                       price: Number(l.price),
                       pricePerSqm: l.price_per_sqm ? Number(l.price_per_sqm) : undefined,
-                      bedrooms: l.bedrooms,
-                      bathrooms: l.bathrooms,
+                      bedrooms: l.bedrooms ?? undefined,
+                      bathrooms: l.bathrooms ?? undefined,
                       sqm: Number(l.sqm),
-                      floor: l.floor,
-                      totalFloors: l.total_floors,
-                      yearBuilt: l.year_built,
-                      energyClass: l.energy_class,
+                      floor: l.floor ?? undefined,
+                      totalFloors: l.total_floors ?? undefined,
+                      yearBuilt: l.year_built ?? undefined,
+                      energyClass: l.energy_class ?? undefined,
                       images: imgs,
-                      type: l.property_type,
-                      listingType: l.listing_type,
-                      aiScore: l.ai_score,
-                      views: l.views_count,
+                      type: l.property_type ?? "apartment",
+                      listingType: l.listing_type ?? "sale",
+                      aiScore: l.ai_score ?? undefined,
+                      views: l.views_count ?? undefined,
                       tags: l.tags || [],
                       isPreSale: l.is_pre_sale ?? false,
                       constructionStatus: l.construction_status ?? undefined,

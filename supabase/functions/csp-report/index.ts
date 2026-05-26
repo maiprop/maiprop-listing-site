@@ -14,7 +14,8 @@ const limiter = makeRateLimiter({
 });
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return handleCors(req);
+  const cors = handleCors(req);
+  if (cors) return cors;
   const headers = getCorsHeaders(req);
 
   if (req.method !== "POST") {

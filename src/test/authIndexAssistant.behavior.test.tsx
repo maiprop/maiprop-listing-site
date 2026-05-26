@@ -255,6 +255,16 @@ describe("Login", () => {
 });
 
 describe("HeroSection", () => {
+  it("keeps the hero heading readable for accessible text extraction", () => {
+    stubMatchMedia({ desktop: false });
+
+    renderWithRoutes(<HeroSection />);
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      "Find your perfect property in Greece with AI precision",
+    );
+  });
+
   it("keeps the poster-only hero for first paint, then attaches video sources on desktop idle", async () => {
     vi.useFakeTimers();
     stubMatchMedia({ desktop: true });
