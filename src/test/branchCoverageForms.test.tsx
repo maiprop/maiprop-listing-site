@@ -202,6 +202,10 @@ describe("branch-heavy form and role components", () => {
     expect(set).toHaveBeenCalledWith("region", "Attica");
     expect(set).toHaveBeenCalledWith("postal_code", "10674");
 
+    fireEvent.focus(screen.getByPlaceholderText("Attica"));
+    fireEvent.click(screen.getByRole("option", { name: "Athens" }));
+    expect(set).toHaveBeenCalledWith("region", "Athens");
+
     fetchMock.mockRestore();
   }, 10000);
 

@@ -409,7 +409,17 @@ export default function CreateNewBuildingListing() {
                   <div><label className={LABEL_CLS}>{tr("newBuildingListing.building.developerCompany", "Developer company")}</label><input value={project.developer_company} onChange={e => setProjectField("developer_company", e.target.value)} placeholder={tr("newBuildingListing.building.companyPlaceholder", "Company name")} className={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>{tr("newBuildingListing.building.architectGroup", "Architect / group")}</label><input value={project.architect_group} onChange={e => setProjectField("architect_group", e.target.value)} placeholder={tr("newBuildingListing.building.architectPlaceholder", "Architect or group")} className={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>{tr("newBuildingListing.building.constructionCompany", "Construction company")}</label><input value={project.construction_company} onChange={e => setProjectField("construction_company", e.target.value)} placeholder={tr("newBuildingListing.building.constructorPlaceholder", "Constructor")} className={INPUT_CLS} /></div>
-                  <div><label className={LABEL_CLS}>{tr("newBuildingListing.building.municipality", "Municipality")}</label><input value={project.municipality} onChange={e => setProjectField("municipality", e.target.value)} placeholder={tr("newBuildingListing.building.municipalityPlaceholder", "Δήμος")} className={INPUT_CLS} /></div>
+                  <div>
+                    <label className={LABEL_CLS}>{tr("newBuildingListing.building.municipality", "Municipality")}</label>
+                    <LocationAutocompleteInput
+                      mode="city"
+                      value={project.municipality}
+                      onChange={(value) => setProjectField("municipality", value)}
+                      onSuggestionSelect={(selection) => setProjectField("municipality", selection.municipality || selection.city || selection.value)}
+                      placeholder={tr("newBuildingListing.building.municipalityPlaceholder", "Δήμος")}
+                      inputClassName={INPUT_CLS}
+                    />
+                  </div>
                   <div className="sm:col-span-2"><label className={LABEL_CLS}>{tr("newBuildingListing.building.address", "Address")}</label><LocationAutocompleteInput mode="address" value={project.address} onChange={(value) => setProjectField("address", value)} onSuggestionSelect={applyProjectLocationSelection} placeholder={tr("newBuildingListing.building.addressPlaceholder", "Street, number")} inputClassName={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>{tr("newBuildingListing.building.latitude", "Latitude")}</label><input type="number" step="any" value={project.latitude} onChange={e => setProjectField("latitude", e.target.value)} placeholder="37.9838" className={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>{tr("newBuildingListing.building.longitude", "Longitude")}</label><input type="number" step="any" value={project.longitude} onChange={e => setProjectField("longitude", e.target.value)} placeholder="23.7275" className={INPUT_CLS} /></div>

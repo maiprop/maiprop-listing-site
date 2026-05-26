@@ -3,6 +3,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import type { Profile } from "@/contexts/AuthContext";
+import { LocationAutocompleteInput } from "@/components/location/LocationAutocompleteInput";
 
 export function ProfileEditor({
   profile,
@@ -61,11 +62,21 @@ export function ProfileEditor({
         ].map(([label, key]) => (
           <div key={key}>
             <label className="text-xs text-muted-foreground block mb-1.5">{label}</label>
-            <input
-              value={form[key as keyof ProfileForm]}
-              onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-              className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"
-            />
+            {key === "city" ? (
+              <LocationAutocompleteInput
+                mode="city"
+                aria-label={label}
+                value={form.city}
+                onChange={(value) => setForm(f => ({ ...f, city: value }))}
+                inputClassName="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"
+              />
+            ) : (
+              <input
+                value={form[key as keyof ProfileForm]}
+                onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"
+              />
+            )}
           </div>
         ))}
         {onSwitchToSettings && (

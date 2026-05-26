@@ -367,7 +367,17 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2"><label className={LABEL_CLS}>{tr("projects.fields.address", "Address")}</label><LocationAutocompleteInput mode="address" value={(currentForm.address as string) || ""} onChange={(value) => updateField("address", value)} onSuggestionSelect={applyProjectLocationSelection} placeholder={tr("projects.fields.addressPlaceholder", "Street, number")} inputClassName={INPUT_CLS} /></div>
               <div><label className={LABEL_CLS}>{tr("projects.fields.city", "City")}</label><LocationAutocompleteInput mode="city" value={(currentForm.city as string) || ""} onChange={(value) => updateField("city", value)} onSuggestionSelect={(selection) => { if (selection.municipality) updateField("municipality", selection.municipality); }} placeholder={tr("projects.fields.cityPlaceholder", "e.g. Athens")} inputClassName={INPUT_CLS} /></div>
-              <div><label className={LABEL_CLS}>{tr("projects.detail.fields.municipality", "Municipality")}</label><input value={(currentForm.municipality as string) || ""} onChange={e => updateField("municipality", e.target.value)} placeholder={tr("projects.detail.placeholders.municipality", "Municipality")} className={INPUT_CLS} /></div>
+              <div>
+                <label className={LABEL_CLS}>{tr("projects.detail.fields.municipality", "Municipality")}</label>
+                <LocationAutocompleteInput
+                  mode="city"
+                  value={(currentForm.municipality as string) || ""}
+                  onChange={(value) => updateField("municipality", value)}
+                  onSuggestionSelect={(selection) => updateField("municipality", selection.municipality || selection.city || selection.value)}
+                  placeholder={tr("projects.detail.placeholders.municipality", "Municipality")}
+                  inputClassName={INPUT_CLS}
+                />
+              </div>
               <div><label className={LABEL_CLS}>{tr("projects.detail.fields.latitude", "Latitude")}</label><input type="number" step="any" value={(currentForm.latitude as number) ?? ""} onChange={e => updateField("latitude", e.target.value ? parseFloat(e.target.value) : undefined)} placeholder={tr("projects.detail.placeholders.latitude", "e.g. 37.9838")} className={INPUT_CLS} /></div>
               <div><label className={LABEL_CLS}>{tr("projects.detail.fields.longitude", "Longitude")}</label><input type="number" step="any" value={(currentForm.longitude as number) ?? ""} onChange={e => updateField("longitude", e.target.value ? parseFloat(e.target.value) : undefined)} placeholder={tr("projects.detail.placeholders.longitude", "e.g. 23.7275")} className={INPUT_CLS} /></div>
               <div className="sm:col-span-2"><label className={LABEL_CLS}>{tr("projects.detail.fields.areaDescription", "Area description")}</label><textarea value={(currentForm.area_description as string) || ""} onChange={e => updateField("area_description", e.target.value)} rows={2} placeholder={tr("projects.detail.placeholders.areaDescription", "Neighbourhood, amenities, surroundings...")} className={INPUT_CLS + " resize-none"} /></div>

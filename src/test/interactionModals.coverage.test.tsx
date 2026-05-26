@@ -166,9 +166,10 @@ describe("high-coverage interaction modals", () => {
     const onClose = vi.fn();
     const { unmount } = render(<AuctionAlertModal open onClose={onClose} />);
 
-    const [citySelect, typeSelect] = screen.getAllByRole("combobox");
-    fireEvent.change(citySelect, { target: { value: "Αθήνα" } });
+    fireEvent.focus(screen.getByLabelText("City"));
+    fireEvent.click(screen.getByRole("option", { name: "Athens" }));
     fireEvent.change(screen.getByPlaceholderText(/ειρηνοδικείο/i), { target: { value: "Athens Court" } });
+    const [typeSelect] = screen.getAllByRole("combobox");
     fireEvent.change(typeSelect, { target: { value: "villa" } });
     fireEvent.change(screen.getByPlaceholderText("Min"), { target: { value: "100000" } });
     fireEvent.change(screen.getByPlaceholderText("Max"), { target: { value: "450000" } });
@@ -178,7 +179,7 @@ describe("high-coverage interaction modals", () => {
     fireEvent.click(screen.getByRole("button", { name: /create alert/i }));
 
     expect(mocks.createAuctionAlert.mutate).toHaveBeenCalledWith(expect.objectContaining({
-      city: "Αθήνα",
+      city: "Athens",
       court_name: "Athens Court",
       property_type: "villa",
       min_price: 100000,
