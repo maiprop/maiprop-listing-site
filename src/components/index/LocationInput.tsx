@@ -1,20 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import ReactDOM from "react-dom";
 import { MapPin, Clock, Loader2, X } from "lucide-react";
-import { GOOGLE_MAPS_API_KEY } from "@/lib/config";
-import { loadGoogleMapsPlaces } from "@/lib/googleMapsPlaces";
 import { useNominatimAddressSuggestions } from "@/hooks/useNominatimAddressSuggestions";
 import { getRecentSearches, removeRecentSearch } from "@/lib/recentSearches";
 import { getPopularLocationSuggestions, mergeLocationSuggestions } from "@/lib/locationSuggestions";
-
-interface GMAutocompleteInstance {
-  addListener(eventName: string, handler: () => void): void;
-  getPlace(): { address_components?: Array<{ types: string[]; long_name: string }>; formatted_address?: string };
-}
-
-type GoogleMapsWindow = typeof window & {
-  google?: { maps?: { places?: { Autocomplete: new (el: HTMLInputElement, opts: object) => GMAutocompleteInstance } } };
-};
 
 export function LocationInput({
   value,
@@ -26,15 +15,12 @@ export function LocationInput({
   onSearch: (value?: string) => void;
 }) {
   const [focused, setFocused] = useState(false);
-  const [googlePlacesRequested, setGooglePlacesRequested] = useState(false);
-  const [googlePlacesUnavailable, setGooglePlacesUnavailable] = useState(!GOOGLE_MAPS_API_KEY);
   const [recents, setRecents] = useState<string[]>([]);
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const autocompleteRef = useRef<GMAutocompleteInstance | null>(null);
   const query = value.trim();
   const popularSuggestions = useMemo(() => getPopularLocationSuggestions(query), [query]);
-  const shouldUseNominatim = Boolean(query) && (googlePlacesUnavailable || popularSuggestions.length === 0);
+  const shouldUseNominatim = Boolean(query) && popularSuggestions.length === 0;
   const { suggestions: nominatimSuggestions, loading: suggestionsLoading, clear: clearSuggestions } =
     useNominatimAddressSuggestions(shouldUseNominatim ? query : "");
 
@@ -70,55 +56,6 @@ export function LocationInput({
   useEffect(() => {
     if (document.activeElement === inputRef.current) setFocused(true);
   }, [value]);
-
-  const initGoogle = useCallback(() => {
-    const input = inputRef.current;
-    const g = (window as GoogleMapsWindow).google;
-    if (!input || !g?.maps?.places?.Autocomplete || autocompleteRef.current) return;
-
-    const autocomplete = new g.maps.places.Autocomplete(input, {
-      types: ["(regions)"],
-      componentRestrictions: { country: "gr" },
-      fields: ["address_components", "formatted_address"],
-    });
-    autocomplete.addListener("place_changed", () => {
-      const place = autocomplete.getPlace();
-      if (!place.address_components) return;
-      const ac = place.address_components;
-
-      const get = (t: string) => ac.find((c) => c.types.includes(t))?.long_name ?? "";
-      const city =
-        get("locality") ||
-        get("postal_town") ||
-        get("administrative_area_level_3") ||
-        get("administrative_area_level_2") ||
-        get("administrative_area_level_1") ||
-        place.formatted_address ||
-        "";
-      onChange(city);
-      setFocused(false);
-      clearSuggestions();
-    });
-    autocompleteRef.current = autocomplete;
-  }, [clearSuggestions, onChange]);
-
-  useEffect(() => {
-    if (!googlePlacesRequested || !GOOGLE_MAPS_API_KEY) return;
-    let cancelled = false;
-
-    loadGoogleMapsPlaces()
-      .then(() => {
-        if (!cancelled) initGoogle();
-      })
-      .catch(() => {
-        if (!cancelled) setGooglePlacesUnavailable(true);
-      });
-
-    return () => {
-      cancelled = true;
-      autocompleteRef.current = null;
-    };
-  }, [googlePlacesRequested, initGoogle]);
 
   const chooseLocation = (location: string) => {
     onChange(location);
@@ -203,23 +140,37 @@ export function LocationInput({
     <div ref={wrapRef} className="flex-1 min-w-0 relative">
       <div className="flex items-center gap-2 px-4 py-2.5 h-full min-h-[44px]">
         <MapPin className="w-4 h-4 text-primary shrink-0" />
-        <input
-          ref={inputRef}
-          type="text"
-          placeholder="City, area, or neighbourhood..."
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onFocus={() => { refresh(); setFocused(true); setGooglePlacesRequested(true); }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") { setFocused(false); onSearch(value); }
-            if (e.key === "Escape") setFocused(false);
-          }}
-          aria-label="Location search"
-          className="flex-1 bg-transparent text-sm font-medium text-foreground placeholder:text-muted-foreground outline-none min-w-0"
-          autoComplete="off"
-        />
+        <div className="relative flex-1 min-w-0 overflow-hidden">
+          <input
+            ref={inputRef}
+            type="text"
+            placeholder="City, area, or neighbourhood..."
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onFocus={() => { refresh(); setFocused(true); }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { setFocused(false); onSearch(value); }
+              if (e.key === "Escape") setFocused(false);
+            }}
+            aria-label="Location search"
+            aria-autocomplete="list"
+            aria-expanded={showDropdown}
+            className="block w-full min-w-0 truncate bg-transparent text-sm font-medium leading-5 text-foreground placeholder:text-muted-foreground outline-none"
+            autoComplete="new-password"
+            autoCorrect="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            enterKeyHint="search"
+          />
+        </div>
         {value && (
-          <button onClick={() => onChange("")} className="text-muted-foreground hover:text-foreground transition-colors">
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => onChange("")}
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+            aria-label="Clear location"
+          >
             <X className="w-3.5 h-3.5" />
           </button>
         )}

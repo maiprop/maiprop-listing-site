@@ -665,103 +665,56 @@ describe("LocationInput", () => {
     expect(onSearch).toHaveBeenCalledTimes(2);
   });
 
-  it("clears typed values, hides recents with Escape/outside click, and accepts Google autocomplete cities", async () => {
-    let placeChanged: (() => void) | undefined;
-    class AutocompleteMock {
-      addListener(_eventName: string, handler: () => void) {
-        placeChanged = handler;
-      }
-      getPlace() {
-        return {
-          address_components: [
-            { types: ["administrative_area_level_2"], long_name: "Thessaloniki" },
-          ],
-          formatted_address: "Fallback address",
-        };
-      }
-    }
-    (window as typeof window & { google: unknown }).google = {
-      maps: { places: { Autocomplete: AutocompleteMock } },
-    };
+  it("clears typed values, hides recents with Escape/outside click, and opts out of mobile browser autocomplete chrome", () => {
     localStorage.setItem("maiprop_recent_searches", JSON.stringify(["Athens"]));
     const onChange = vi.fn();
-    renderWithProviders(<LocationInput value="Patras" onChange={onChange} onSearch={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole("button"));
+    function ControlledLocationInput() {
+      const [value, setValue] = React.useState("Patras");
+      return (
+        <LocationInput
+          value={value}
+          onChange={(nextValue) => {
+            setValue(nextValue);
+            onChange(nextValue);
+          }}
+          onSearch={vi.fn()}
+        />
+      );
+    }
+
+    renderWithProviders(<ControlledLocationInput />);
+
+    const input = screen.getByLabelText("Location search");
+    expect(input).toHaveAttribute("autocomplete", "new-password");
+    expect(input).toHaveAttribute("autocorrect", "off");
+    expect(input).toHaveAttribute("autocapitalize", "none");
+    expect(input).toHaveAttribute("spellcheck", "false");
+    expect(input).toHaveAttribute("enterkeyhint", "search");
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear location" }));
     expect(onChange).toHaveBeenCalledWith("");
+    expect(input).toHaveValue("");
 
-    fireEvent.focus(screen.getByLabelText("Location search"));
-    await waitFor(() => expect(placeChanged).toBeTypeOf("function"));
-    act(() => placeChanged?.());
-    expect(onChange).toHaveBeenCalledWith("Thessaloniki");
-
-    fireEvent.keyDown(screen.getByLabelText("Location search"), { key: "Escape" });
+    fireEvent.focus(input);
+    expect(screen.getByText("Recent Searches")).toBeInTheDocument();
+    fireEvent.keyDown(input, { key: "Escape" });
     fireEvent.mouseDown(document.body);
     expect(screen.queryByText("Recent Searches")).not.toBeInTheDocument();
   });
 
-  it("initializes Google from an injected script and handles missing place details", async () => {
-    let placeChanged: (() => void) | undefined;
-    const onChange = vi.fn();
-    renderWithProviders(<LocationInput value="" onChange={onChange} onSearch={vi.fn()} />);
+  it("does not inject a native Google Places dropdown for the homepage field", () => {
+    renderWithProviders(<LocationInput value="" onChange={vi.fn()} onSearch={vi.fn()} />);
 
     expect(document.head.querySelector('script[src*="maps.googleapis.com"]')).toBeNull();
     fireEvent.focus(screen.getByLabelText("Location search"));
-
-    class AutocompleteMock {
-      addListener(_eventName: string, handler: () => void) {
-        placeChanged = handler;
-      }
-      getPlace() {
-        return {};
-      }
-    }
-    (window as typeof window & { google: unknown }).google = {
-      maps: { places: { Autocomplete: AutocompleteMock } },
-    };
-    const script = document.head.querySelector<HTMLScriptElement>('script[src*="maps.googleapis.com"]');
-    expect(script).toBeTruthy();
-    act(() => {
-      script?.onload?.(new Event("load"));
-    });
-    await waitFor(() => expect(placeChanged).toBeTypeOf("function"));
-    act(() => placeChanged?.());
-    expect(onChange).not.toHaveBeenCalled();
+    expect(document.head.querySelector('script[src*="maps.googleapis.com"]')).toBeNull();
   });
 
-  it("falls back through Google address components and keeps recents open for portal clicks", async () => {
-    const places = [
-      { address_components: [{ types: ["locality"], long_name: "Voula" }], formatted_address: "Formatted" },
-      { address_components: [{ types: ["administrative_area_level_1"], long_name: "Attica" }], formatted_address: "Formatted" },
-      { address_components: [], formatted_address: "Formatted" },
-      { address_components: [], formatted_address: "" },
-    ];
-    let placeChanged: (() => void) | undefined;
-    class AutocompleteMock {
-      addListener(_eventName: string, handler: () => void) {
-        placeChanged = handler;
-      }
-      getPlace() {
-        return places.shift();
-      }
-    }
-    (window as typeof window & { google: unknown }).google = {
-      maps: { places: { Autocomplete: AutocompleteMock } },
-    };
+  it("keeps recents open for guarded input and portal clicks", () => {
     localStorage.setItem("maiprop_recent_searches", JSON.stringify(["Athens"]));
     const onChange = vi.fn();
     renderWithProviders(<LocationInput value="" onChange={onChange} onSearch={vi.fn()} />);
-
-    fireEvent.focus(screen.getByLabelText("Location search"));
-    await waitFor(() => expect(placeChanged).toBeTypeOf("function"));
-    act(() => placeChanged?.());
-    act(() => placeChanged?.());
-    act(() => placeChanged?.());
-    act(() => placeChanged?.());
-    expect(onChange).toHaveBeenNthCalledWith(1, "Voula");
-    expect(onChange).toHaveBeenNthCalledWith(2, "Attica");
-    expect(onChange).toHaveBeenNthCalledWith(3, "Formatted");
-    expect(onChange).toHaveBeenNthCalledWith(4, "");
 
     fireEvent.focus(screen.getByLabelText("Location search"));
     expect(screen.getByText("Recent Searches")).toBeInTheDocument();
@@ -769,21 +722,19 @@ describe("LocationInput", () => {
     expect(screen.getByText("Recent Searches")).toBeInTheDocument();
     fireEvent.mouseDown(screen.getByText("Athens"));
     expect(screen.getByText("Recent Searches")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Athens"));
+    expect(onChange).toHaveBeenCalledWith("Athens");
   });
 
-  it("handles Google script load before the API exists and ignores repeated initialization", () => {
+  it("keeps repeated focus stable without injecting Google scripts", () => {
     renderWithProviders(<LocationInput value="" onChange={vi.fn()} onSearch={vi.fn()} />);
 
     expect(document.head.querySelector('script[src*="maps.googleapis.com"]')).toBeNull();
     fireEvent.focus(screen.getByLabelText("Location search"));
+    fireEvent.blur(screen.getByLabelText("Location search"));
+    fireEvent.focus(screen.getByLabelText("Location search"));
 
-    const script = document.head.querySelector<HTMLScriptElement>('script[src*="maps.googleapis.com"]');
-    expect(script).toBeTruthy();
-    act(() => {
-      script?.onload?.(new Event("load"));
-      script?.onload?.(new Event("load"));
-    });
-
+    expect(document.head.querySelector('script[src*="maps.googleapis.com"]')).toBeNull();
     expect(screen.getByLabelText("Location search")).toBeInTheDocument();
   });
 });

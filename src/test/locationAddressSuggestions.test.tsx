@@ -74,6 +74,53 @@ describe("location address suggestions", () => {
     expect(await screen.findByRole("button", { name: ADDRESS_SUGGESTION })).toBeInTheDocument();
   });
 
+  it("keeps the homepage location field isolated from mobile browser autocomplete overlays", () => {
+    function ControlledLocationInput() {
+      const [value, setValue] = useState("");
+      return <LocationInput value={value} onChange={setValue} onSearch={vi.fn()} />;
+    }
+
+    render(<ControlledLocationInput />);
+    const input = screen.getByLabelText("Location search");
+
+    expect(input).toHaveAttribute("autocomplete", "new-password");
+    expect(input).toHaveAttribute("autocorrect", "off");
+    expect(input).toHaveAttribute("autocapitalize", "none");
+    expect(input).toHaveAttribute("spellcheck", "false");
+    expect(input).toHaveAttribute("enterkeyhint", "search");
+
+    fireEvent.change(input, { target: { value: "Κα" } });
+    expect(screen.getByRole("button", { name: "Clear location" })).toBeInTheDocument();
+  });
+
+  it("shows Greek location options from a two-character mobile prefix", async () => {
+    const greekSuggestion = "Καλλιθέα, Νότιος Τομέας Αθηνών, Αττική, Ελλάδα";
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([{ display_name: greekSuggestion }])),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    function ControlledLocationInput() {
+      const [value, setValue] = useState("");
+      return <LocationInput value={value} onChange={setValue} onSearch={vi.fn()} />;
+    }
+
+    render(<ControlledLocationInput />);
+    fireEvent.focus(screen.getByLabelText("Location search"));
+    fireEvent.change(screen.getByLabelText("Location search"), { target: { value: "Κα" } });
+
+    await act(async () => {
+      vi.advanceTimersByTime(450);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    vi.useRealTimers();
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(String(fetchMock.mock.calls[0][0])).toContain("q=%CE%9A%CE%B1");
+    expect(await screen.findByRole("button", { name: greekSuggestion })).toBeInTheDocument();
+  });
+
   it("shows address suggestions in the listings location filter when the user types a street address", async () => {
     const fetchMock = mockAddressFetch();
 
