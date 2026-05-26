@@ -200,6 +200,10 @@ fail-fast behavior.
 | `VITE_PLAUSIBLE_DOMAIN` | optional analytics domain | production environment |
 | `VITE_APP_URL` | canonical app origin for production build | production environment |
 | `VITE_PUBLIC_API_ORIGIN` | optional absolute origin for cached `/api/public/*` routes in native shells; defaults to `VITE_APP_URL` | production/staging build |
+| `CAPACITOR_BUNDLED_WEB` | set to `true` for APK builds that bundle the Vite output instead of opening a remote URL | Android WebView APK workflow |
+| `CAPACITOR_APP_ID` | Android package id override; default is `co.maiprop.portal.mobile` | Android WebView APK workflow |
+| `CAPACITOR_APP_NAME` | Android app label override; default is `MaiProp Portal` | Android WebView APK workflow |
+| `CAPACITOR_SERVER_URL` | remote web origin for non-bundled Capacitor builds; default is `https://portal.maiprop.co` | Android WebView APK workflow |
 | `SITE_LOCK_PASSWORD` | optional Cloudflare Pages runtime passcode gate | production environment |
 | `STAGING_SUPABASE_URL` | optional isolated staging Supabase URL for security/E2E jobs; when absent, live-safe jobs fall back to production vars | repo or staging environment |
 | `STAGING_SUPABASE_PUBLISHABLE_KEY` | optional isolated staging anon/publishable key | repo or staging environment |
