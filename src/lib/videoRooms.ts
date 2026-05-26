@@ -1,4 +1,4 @@
-export type MaiPropVideoRoomKind = "professional" | "viewing";
+export type MaiPropVideoRoomKind = "consultation" | "professional" | "viewing";
 
 const KNOWN_VIDEO_PROVIDERS = [
   { pattern: "zoom.us", name: "Zoom" },
@@ -14,7 +14,7 @@ export function normalizeVideoLink(videoLink: string | null | undefined) {
 
   try {
     const url = new URL(trimmed);
-    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    if (url.protocol !== "https:") return null;
     return url.toString();
   } catch (_err: unknown) {
     return null;
@@ -41,8 +41,8 @@ export function createMaiPropVideoRoomDisplayName(kind: MaiPropVideoRoomKind, id
   return `maiprop-${kind}-${suffix}`;
 }
 
-export function createProfessionalVideoRoomPath(professionalId: string) {
-  return `/video-room/${professionalId}`;
+export function createProfessionalVideoRoomPath(professionalId: string, consultationId?: string | null) {
+  return consultationId ? `/video-room/${professionalId}/${consultationId}` : `/video-room/${professionalId}`;
 }
 
 export function createViewingVideoRoomPath(viewingId: string) {

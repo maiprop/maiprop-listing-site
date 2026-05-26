@@ -68,6 +68,20 @@ export default function VideoViewingRoom() {
     );
   }
 
+  if (viewing.status !== "confirmed") {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="pt-24 text-center px-4">
+          <p className="text-muted-foreground">Video viewing is not ready yet.</p>
+          <Link to="/dashboard?tab=viewings">
+            <Button variant="outline" className="mt-4">Back to Viewings</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const externalVideoLink = normalizeVideoLink(viewing.video_link);
   const platformName = getVideoPlatformName(viewing.video_link);
   const roomPath = createViewingVideoRoomPath(viewing.id);

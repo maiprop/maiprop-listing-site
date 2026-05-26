@@ -227,6 +227,7 @@ export type Database = {
           created_at: string
           id: string
           lead_status: string | null
+          meeting_type: string | null
           message: string | null
           notes: string | null
           preferred_date: string | null
@@ -246,6 +247,7 @@ export type Database = {
           created_at?: string
           id?: string
           lead_status?: string | null
+          meeting_type?: string | null
           message?: string | null
           notes?: string | null
           preferred_date?: string | null
@@ -265,6 +267,7 @@ export type Database = {
           created_at?: string
           id?: string
           lead_status?: string | null
+          meeting_type?: string | null
           message?: string | null
           notes?: string | null
           preferred_date?: string | null

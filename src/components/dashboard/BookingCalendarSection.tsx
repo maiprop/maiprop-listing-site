@@ -1,13 +1,18 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Calendar, Check, X } from "lucide-react";
+import { Calendar, Check, Video, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { createProfessionalVideoRoomPath } from "@/lib/videoRooms";
 
 import { VIEWING_STATUS_COLORS as LEAD_STATUS_COLORS } from "@/lib/statusColors";
 
 type AgendaItem =
   | { type: "viewing"; date: string; item: any }
   | { type: "lead"; date: string; item: any };
+
+function isVideoConsultation(item: any) {
+  return item.meeting_type === "video" || /video consultation requested/i.test(item.message ?? "");
+}
 
 export function BookingCalendarSection({
   viewings,
@@ -124,6 +129,18 @@ export function BookingCalendarSection({
                           >
                             {it.item.status}
                           </span>
+                          {it.item.status === "confirmed" && isVideoConsultation(it.item) && it.item.professional_id && (
+                            <Button
+                              asChild
+                              size="sm"
+                              className="mt-3 h-8 gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90"
+                            >
+                              <a href={createProfessionalVideoRoomPath(it.item.professional_id, it.item.id)}>
+                                <Video className="w-3.5 h-3.5" />
+                                Join room
+                              </a>
+                            </Button>
+                          )}
                           {it.item.status === "pending" && onUpdateConsultation && (
                             <div className="mt-3 flex flex-wrap gap-2">
                               <Button

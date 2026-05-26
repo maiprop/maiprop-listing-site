@@ -10,6 +10,7 @@ export type ConsultationRequestInput = {
   requester_email: string;
   requester_phone?: string;
   request_type: "consultation" | "callback" | "message";
+  meeting_type?: "in_person" | "video";
   service?: string;
   preferred_date?: string;
   preferred_time?: string;
@@ -40,6 +41,7 @@ export function useSubmitConsultation() {
         requester_email: input.requester_email,
         requester_phone: input.requester_phone ?? null,
         request_type: input.request_type,
+        meeting_type: input.request_type === "consultation" ? input.meeting_type ?? "in_person" : null,
         service: input.service ?? null,
         preferred_date: preferredDate,
         preferred_time: preferredTime,
@@ -80,7 +82,7 @@ export function useMyConsultationRequests() {
 
       const { data, error } = await supabase
         .from("consultation_requests")
-        .select("id, professional_id, requester_id, requester_name, requester_email, requester_phone, request_type, service, message, preferred_date, preferred_time, callback_time, status, lead_status, notes, created_at, updated_at")
+        .select("id, professional_id, requester_id, requester_name, requester_email, requester_phone, request_type, meeting_type, service, message, preferred_date, preferred_time, callback_time, status, lead_status, notes, created_at, updated_at")
         .eq("professional_id", pro.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
