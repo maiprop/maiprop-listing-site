@@ -686,6 +686,8 @@ describe("LocationInput", () => {
     renderWithProviders(<ControlledLocationInput />);
 
     const input = screen.getByLabelText("Location search");
+    expect(input).toHaveAttribute("role", "combobox");
+    expect(input).toHaveAttribute("aria-expanded", "false");
     expect(input).toHaveAttribute("autocomplete", "new-password");
     expect(input).toHaveAttribute("autocorrect", "off");
     expect(input).toHaveAttribute("autocapitalize", "none");
@@ -698,6 +700,7 @@ describe("LocationInput", () => {
 
     fireEvent.focus(input);
     expect(screen.getByText("Recent Searches")).toBeInTheDocument();
+    expect(input).toHaveAttribute("aria-expanded", "true");
     fireEvent.keyDown(input, { key: "Escape" });
     fireEvent.mouseDown(document.body);
     expect(screen.queryByText("Recent Searches")).not.toBeInTheDocument();

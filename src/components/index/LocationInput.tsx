@@ -153,6 +153,7 @@ export function LocationInput({
               if (e.key === "Escape") setFocused(false);
             }}
             aria-label="Location search"
+            role="combobox"
             aria-autocomplete="list"
             aria-expanded={showDropdown}
             className="block w-full min-w-0 truncate bg-transparent text-sm font-medium leading-5 text-foreground placeholder:text-muted-foreground outline-none"
