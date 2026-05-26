@@ -69,7 +69,7 @@ environment. They should be run against local, development, or staging projects.
 | File | Purpose | Notes |
 | --- | --- | --- |
 | `scripts/delete-past-auctions.mjs` | Deletes or cleans up past auction data. | Destructive; confirm target project and backup status first. |
-| `npm run cleanup:production-fixtures` | Dry-runs inventory of synthetic `supervisor-*` listing fixtures; `-- --apply` can delete them with explicit production confirmations. | Destructive only with `--apply`, `I_KNOW_THIS_IS_PROD=yes`, and `CONFIRM_FIXTURE_CLEANUP=delete-supervisor-listings`. |
+| `npm run cleanup:production-fixtures` | Dry-runs inventory of synthetic public listing fixtures, including supervisor and E2E publish records; `-- --apply` can delete them with explicit production confirmations. | Destructive only with `--apply`, `I_KNOW_THIS_IS_PROD=yes`, and `CONFIRM_FIXTURE_CLEANUP=delete-public-fixture-listings`. |
 | `scripts/wipe-all-listings.mjs` | Removes listing data. | Highly destructive; use only for reset scenarios with explicit approval. |
 | `scripts/suppress-any-legacy.mjs` | Legacy TypeScript cleanup helper. | Use only when intentionally suppressing legacy `any` debt. |
 | `scripts/_seed-env.ts` | Shared Supabase URL and service-role env resolver for seeders. | Fails fast when required env vars are missing. |

@@ -43,8 +43,8 @@ export function useCreateListingConnections(): CreateListingConnections {
 
       if (supabaseOk) {
         try {
-          const { error: storageError } = await supabase.storage.from("listing-images").list("", { limit: 1 });
-          storageOk = !storageError;
+          const { data } = supabase.storage.from("listing-images").getPublicUrl("__connection-check__");
+          storageOk = Boolean(data.publicUrl);
         } catch (_err: unknown) {
           storageOk = false;
         }

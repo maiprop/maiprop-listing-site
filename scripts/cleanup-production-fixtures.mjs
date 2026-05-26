@@ -1,18 +1,37 @@
 /**
- * Inventory or delete synthetic supervisor test listings from Supabase.
+ * Inventory or delete synthetic public fixture listings from Supabase.
  *
  * Dry-run is the default and is read-only. Deletion requires:
- *   I_KNOW_THIS_IS_PROD=yes CONFIRM_FIXTURE_CLEANUP=delete-supervisor-listings node scripts/cleanup-production-fixtures.mjs --apply
+ *   I_KNOW_THIS_IS_PROD=yes CONFIRM_FIXTURE_CLEANUP=delete-public-fixture-listings node scripts/cleanup-production-fixtures.mjs --apply
  */
 import { createClient } from "@supabase/supabase-js";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertNotProduction } from "./_prod-guard.mjs";
+import { findPublicApiFixtureMarker } from "./public-api-fixture-guard.mjs";
 
 const SCRIPT_NAME = "cleanup-production-fixtures.mjs";
-const CONFIRM_VALUE = "delete-supervisor-listings";
+const CONFIRM_VALUE = "delete-public-fixture-listings";
 const APPLY = process.argv.includes("--apply");
+const SELECT_COLUMNS = "id,title,address,description,city,status,listing_type,is_featured,tags,created_at";
+const FIXTURE_TEXT_OR_FILTER = [
+  "title.ilike.%supervisor-%",
+  "address.ilike.%supervisor-%",
+  "description.ilike.%supervisor-%",
+  "title.ilike.%E2E-FULL-PUBLISH-%",
+  "address.ilike.%E2E-FULL-PUBLISH-%",
+  "description.ilike.%E2E-FULL-PUBLISH-%",
+  "title.ilike.%qa-full-publish%",
+  "address.ilike.%qa-full-publish%",
+  "description.ilike.%qa-full-publish%",
+  "title.ilike.%Devin Test%",
+  "address.ilike.%Devin Test%",
+  "description.ilike.%Devin Test%",
+  "title.ilike.%Test Free Listing%",
+  "address.ilike.%Test Free Listing%",
+  "description.ilike.%Test Free Listing%",
+].join(",");
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
 const envPath = join(root, ".env");
@@ -47,40 +66,60 @@ if (APPLY) {
 
 const supabase = createClient(url, serviceKey, { auth: { persistSession: false } });
 
-async function fetchSupervisorListings() {
-  const { data, error } = await supabase
+async function fetchFixtureListings() {
+  const textResult = await supabase
     .from("listings")
-    .select("id,title,address,city,status,listing_type,is_featured,created_at")
-    .or("title.ilike.%supervisor-%,address.ilike.%supervisor-%")
+    .select(SELECT_COLUMNS)
+    .or(FIXTURE_TEXT_OR_FILTER)
     .order("created_at", { ascending: false })
     .limit(500);
 
-  if (error) throw error;
-  return data ?? [];
+  if (textResult.error) throw textResult.error;
+
+  const tagResult = await supabase
+    .from("listings")
+    .select(SELECT_COLUMNS)
+    .contains("tags", ["qa-full-publish"])
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  if (tagResult.error) throw tagResult.error;
+
+  const byId = new Map();
+  for (const row of [...(textResult.data ?? []), ...(tagResult.data ?? [])]) {
+    if (findPublicApiFixtureMarker(row)) byId.set(row.id, row);
+  }
+
+  return [...byId.values()].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
 }
 
 function summarize(rows) {
   const byStatus = new Map();
   const byType = new Map();
+  const byMarker = new Map();
   for (const row of rows) {
     byStatus.set(row.status ?? "(null)", (byStatus.get(row.status ?? "(null)") ?? 0) + 1);
     byType.set(row.listing_type ?? "(null)", (byType.get(row.listing_type ?? "(null)") ?? 0) + 1);
+    const marker = findPublicApiFixtureMarker(row)?.marker ?? "unknown";
+    byMarker.set(marker, (byMarker.get(marker) ?? 0) + 1);
   }
   return {
     total: rows.length,
     featured: rows.filter((row) => row.is_featured).length,
+    by_marker: Object.fromEntries(byMarker),
     by_status: Object.fromEntries(byStatus),
     by_listing_type: Object.fromEntries(byType),
   };
 }
 
 async function run() {
-  const rows = await fetchSupervisorListings();
+  const rows = await fetchFixtureListings();
   const summary = summarize(rows);
   console.log(JSON.stringify({ mode: APPLY ? "apply" : "dry-run", summary }, null, 2));
 
   for (const row of rows.slice(0, 25)) {
-    console.log(`- ${row.id} | ${row.status}/${row.listing_type} | ${row.title || row.address || "(untitled)"}`);
+    const marker = findPublicApiFixtureMarker(row)?.marker ?? "unknown";
+    console.log(`- ${row.id} | ${marker} | ${row.status}/${row.listing_type} | ${row.title || row.address || "(untitled)"}`);
   }
   if (rows.length > 25) console.log(`... ${rows.length - 25} more row(s) omitted`);
 
@@ -93,7 +132,7 @@ async function run() {
   const { error: listingDeleteError } = await supabase.from("listings").delete().in("id", ids);
   if (listingDeleteError) throw listingDeleteError;
 
-  console.log(`Deleted ${ids.length} supervisor fixture listing(s).`);
+  console.log(`Deleted ${ids.length} public fixture listing(s).`);
 }
 
 run().catch((err) => {

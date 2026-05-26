@@ -6,13 +6,13 @@ Generated from the deployment, Supabase, Cloudflare, CI/CD, UI/UX, dependency, m
 
 | Area | Grade | Summary |
 | --- | --- | --- |
-| Overall release readiness | B- | Main repo/deploy gates are passing; local shell runtime still mismatches the repo pin. |
+| Overall release readiness | B | Main repo/deploy gates, live production smoke, and audit coverage are passing; local shell runtime still mismatches the repo pin. |
 | Repo and CI | B- | CI now covers app, Pages Functions, Remotion, and Supabase Edge runtime typechecks. |
-| Supabase | C+ | Live shape is coherent; first advisor cleanup landed, larger advisor debt remains. |
-| Cloudflare Pages and Functions | C+ | Deploys work, but Function headers/env/typecheck gaps remain. |
+| Supabase | B | Live advisor debt is now mostly intentional app-facing SECURITY DEFINER RPCs and remaining RLS policy consolidation; broad anon exposure/storage listing/search_path/auth-initplan findings were removed. |
+| Cloudflare Pages and Functions | B- | Deploys work and public API smoke now catches fixture leakage; preview env/canonical-host gaps remain. |
 | Maintainability | B- | Type-debt ratchet exists and one large page slice was split; several giant modules remain. |
-| Scalability | C+ | Good frontend chunking/cache, database policy/index debt remains. |
-| UI/UX | B- design, B- live polish | Homepage test data and H1 copy are fixed; deeper accessibility pass remains. |
+| Scalability | B- | Good frontend chunking/cache; Supabase performance advisor is down to remaining RLS policy consolidation. |
+| UI/UX | B- design, B live polish | Homepage fixture data and H1 copy are fixed; deeper accessibility pass remains. |
 | Dependencies | B- | Clean production audit, but major upgrades and edge import drift need planning. |
 
 ## Progress Log
@@ -126,6 +126,95 @@ Known remaining:
 
 - `npm run check:runtime` still fails locally because this shell is Node 24/npm 11 while the repo pin is Node 20/npm 10.
 
+### 2026-05-26 Sixth Health Batch
+
+Completed:
+
+- Applied live Supabase advisor cleanup in `20260707140000_harden_supabase_advisor_security.sql` after the production-applied future migration chain:
+  - pinned `agent_data_input_discount_pct_per_input()` search path,
+  - removed broad public `storage.objects` SELECT/list policies for `avatars` and `listing-images`,
+  - locked trigger/cron/internal SECURITY DEFINER functions to `service_role`,
+  - removed anon/default EXECUTE from app-facing SECURITY DEFINER RPCs,
+  - wrapped Realtime video-room JWT claim lookups in scalar `SELECT` expressions.
+- Repaired linked Supabase migration history for `20260707140000` and recorded it in `scripts/applied-future-migrations.json`.
+- Changed the Create Listing storage health probe so it no longer depends on listing the public `listing-images` bucket.
+- Added regression coverage for the Supabase advisor cleanup migration and storage health probe.
+
+Verified:
+
+- Live Supabase security advisor improved from 67 findings to 44:
+  - `function_search_path_mutable`: 1 -> 0
+  - `public_bucket_allows_listing`: 2 -> 0
+  - anon SECURITY DEFINER executable: 10 -> 1 (`get_open_house_capacity`, intentionally public)
+  - authenticated SECURITY DEFINER executable: 53 -> 42
+  - leaked password protection: 1 remains dashboard/plan-level.
+- Live Supabase performance advisor improved from 96 findings to 94:
+  - `auth_rls_initplan`: 2 -> 0
+  - `multiple_permissive_policies`: 94 remains.
+- `npm run lint:migrations:chronology`
+- `npx vitest run src/test/supabaseAdvisorCleanupMigration.test.ts src/test/useCreateListingConnections.test.tsx src/test/criticalBusinessInvariants.test.ts src/test/openHouseRegistrationMutationGuard.test.ts src/test/openHouseOfferMigration.test.ts`
+- `npm run lint`
+- `npm run check:deployable-runtimes`
+- `npm run build`
+
+### 2026-05-26 Seventh Health Batch
+
+Completed:
+
+- Applied live Supabase RLS consolidation in `20260707143000_consolidate_public_media_rls.sql`.
+- Replaced owner `ALL` policies on `listing_images`, `open_house_settings`, `project_media`, and `project_units` with explicit INSERT/UPDATE/DELETE owner policies, leaving the existing public SELECT policies intact.
+- Repaired linked Supabase migration history for `20260707143000` and recorded it in `scripts/applied-future-migrations.json`.
+- Added a Cloudflare API token exposure incident record and a documented `CLOUDFLARE_API_TOKEN` rotation procedure.
+
+Verified:
+
+- Live Supabase performance advisor improved from 94 findings to 70:
+  - `multiple_permissive_policies`: 94 -> 70.
+- Live Supabase security advisor remained at 44:
+  - anon SECURITY DEFINER executable: 1 (`get_open_house_capacity`, intentionally public)
+  - authenticated SECURITY DEFINER executable: 42
+  - leaked password protection: 1 remains dashboard/plan-level.
+- Live policy catalog for the four consolidated tables now has one SELECT policy plus write-specific owner policies.
+
+Known remaining:
+
+- `npm run check:runtime` still fails locally because this shell is Node 24/npm 11 while the repo pin is Node 20/npm 10.
+
+### 2026-05-26 Fifth Health Batch
+
+Completed:
+
+- Cleaned the second wave of live production fixture content: deleted 9 active synthetic listings (`E2E-FULL-PUBLISH-*`, `Test Free Listing`, and `Devin Test`) with the guarded cleanup script, then verified the dry-run inventory returned `total: 0`.
+- Broadened production fixture defenses beyond `supervisor-*`:
+  - public Pages APIs now filter blocked fixture markers before homepage/listings responses,
+  - client homepage fallback filtering uses the same marker family,
+  - production deploy smoke checks fail when public JSON contains blocked fixture markers.
+- Expanded `cleanup-production-fixtures.mjs` so dry-runs inventory fixture records by marker, status, and listing type, including `qa-full-publish` tag matches.
+- Added deploy-guard and public API regression coverage for the fixture denylist.
+- Fixed the audit coverage blocker by adding focused tests for `AdminBroadcastNotifications` and linking labels to their form controls.
+
+Verified:
+
+- `npm run cleanup:production-fixtures` (dry-run after apply: `total: 0`)
+- `npm run check:production-deploy -- https://portal.maiprop.co --public-api`
+- Browser smoke on `https://portal.maiprop.co/` (no fixture markers, no console errors)
+- `npm run check:deployable-runtimes`
+- `npm run lint`
+- `npm run test:coverage` (198 files, 1,939 tests)
+- `npm run check:audit-coverage` (`zero_covered_runtime_files: 0`)
+- `npm run build`
+- `npm run check:bundle-size`
+- `npm run check:release-safety`
+- `npm run check:public-functions`
+- `npm run check:secrets`
+- `npm run check:type-debt`
+- `npm audit --omit=dev --audit-level=moderate`
+- `npm run lint:migrations:chronology`
+
+Known remaining:
+
+- `npm run check:runtime` still fails locally because this shell is Node 24/npm 11 while the repo pin is Node 20/npm 10.
+
 ## P0 - Release Blockers
 
 | Issue | Evidence | Health Impact | Recommended Fix |
@@ -152,6 +241,7 @@ Known remaining:
 | Issue | Evidence | Health Impact | Recommended Fix |
 | --- | --- | --- | --- |
 | Fixed: Live homepage showed synthetic `supervisor-*` listings. | Browser audit on `https://portal.maiprop.co/`; cleanup found 17 active rows. | Users saw test data on the first page, reducing marketplace credibility. | Done. Guarded cleanup deleted 17 rows and follow-up inventory returned `total: 0`; live public homepage API now returns 0 supervisor matches. |
+| Fixed: Live public APIs exposed newer synthetic fixture families. | Re-audit found `E2E-FULL-PUBLISH-*`, `qa-full-publish`, `Test Free Listing`, and `Devin Test` content in public homepage/listing data. | Users and crawlers could still see synthetic marketplace content after the first supervisor cleanup. | Done. Guarded cleanup deleted 9 rows, dry-run inventory returned `total: 0`, public APIs/client fallback filter all blocked markers, and production deploy smoke now fails on fixture JSON. |
 | Fixed: Homepage H1 had missing spacing: `Greecewith AI precision`. | Browser DOM audit. | Visible copy polish issue on first viewport. | Done. Heading composition was fixed and covered by a text regression test. |
 | One unnamed link exists on the live homepage. | Browser audit found 1 unnamed link. | Minor accessibility/navigation issue. | Add text or `aria-label` to the link. |
 | Street View image in auction card reported natural size 0 in audit. | Browser audit largest image list. | Possible broken/late-loading auction imagery. | Verify fallback image loading and add browser test around auction image fallback. |
@@ -160,14 +250,12 @@ Known remaining:
 
 | Issue | Evidence | Health Impact | Recommended Fix |
 | --- | --- | --- | --- |
-| Partially fixed: Supabase advisor has 236 warnings. | Live advisor summary: 67 security, 169 performance. | No high/critical findings, but not production-excellent posture. | First security batch is in migration. Re-run live advisors after deploy and continue by warning class. |
-| Partially fixed: SECURITY DEFINER functions are broadly executable. | Advisor: 53 authenticated, 10 anon SECURITY DEFINER executable warnings. | Increases blast radius if a function has weak internal checks. | Trigger-only functions are restricted in migration. User-facing/admin RPCs still need per-flow review before revoking. |
-| Public buckets allow listing. | Advisor: `avatars`, `listing-images`. | Public enumeration can leak metadata. | Disable listing where possible or document why public listing is required. |
+| Partially fixed: Supabase advisor has 114 warnings. | Live advisor summary after seventh batch: 44 security, 70 performance. | No high/critical findings, but not production-excellent posture. | Continue by consolidating RLS policies and moving selected app-facing RPCs behind Edge Functions/private schema where practical. |
+| Partially fixed: SECURITY DEFINER functions are broadly executable. | Advisor after sixth batch: 42 authenticated, 1 anon SECURITY DEFINER executable warnings. | Increases blast radius if a function has weak internal checks. | Trigger-only/internal functions are locked down. Remaining warnings are mostly app-facing RPCs and require per-flow refactors before revoking. |
+| Fixed: Public buckets allowed listing. | Advisor previously flagged `avatars`, `listing-images`; current live advisor returns 0 `public_bucket_allows_listing` findings. | Public enumeration can leak metadata. | Done. Public URL access remains; bucket list/read policies were removed. |
 | Fixed in migration: One mutable function `search_path` warning. | Advisor `function_search_path_mutable`. | SQL function resolution can be unsafe. | Done for `agent_data_input_discount_pct_per_input()` in the current bridge migration and future fresh-build migration. |
-| Unindexed foreign keys. | Advisor: 7 unindexed FK warnings. | Deletes/updates and joins can degrade as data grows. | Add indexes for active FK paths after checking write cost. |
-| Multiple permissive RLS policies. | Advisor: 94 warnings. | Policy evaluation overhead and harder reasoning. | Consolidate overlapping policies table by table. |
-| RLS auth initplan warnings. | Advisor: 2 warnings. | Avoidable repeated auth expression work. | Wrap auth calls in SELECT where recommended by Supabase. |
-| Many unused indexes. | Advisor: 66 warnings. | Write overhead and storage waste. | Review with production query history before dropping. |
+| Partially fixed: Multiple permissive RLS policies. | Advisor: 70 warnings, down from 94 after consolidating the public media/open-house owner `ALL` policies. | Policy evaluation overhead and harder reasoning. | Continue consolidating overlapping policies table by table, especially leads, marketing leads, messages, open house offers/registrations, role switch history, and admin/owner public content policies. |
+| Fixed: RLS auth initplan warnings. | Advisor previously flagged 2 Realtime video-room policies; current live advisor returns 0 `auth_rls_initplan` findings. | Avoidable repeated auth expression work. | Done. Recreated video-room policies with scalar `SELECT current_setting(...)` wrappers. |
 
 ## P2 - Maintainability
 
@@ -194,6 +282,7 @@ Known remaining:
 | --- | --- | --- | --- |
 | Partially improved: CI workflow is large and dense. | `.github/workflows/ci.yml` is about 47 KB. | Harder to reason about failures and permissions. | Install steps are lighter and deployable runtime gates are broader now. Split deploy, quality, security, preview, and migration checks when practical. |
 | Fixed: CI did not catch every deployable runtime type surface. | App build covered Vite; Pages Functions now had a typecheck; Supabase Edge and Remotion were not first-class gates. | Edge/runtime-specific type failures could ship without Vite noticing. | Done. CI now checks Remotion and all Supabase Edge Function entrypoints via `deno check`; package has `check:deployable-runtimes`. |
+| Fixed: Audit coverage gate failed on a zero-covered runtime component. | `npm run check:audit-coverage`; `src/components/AdminBroadcastNotifications.tsx` had 0% runtime line coverage. | Audit health checks could not pass cleanly and admin broadcast behavior was unprotected. | Done. Added behavior coverage for validation, success, and RPC failure; gate now reports `zero_covered_runtime_files: 0`. |
 | Branch protection docs may be stale vs actual checks. | `docs/BRANCH_PROTECTION.md` lists selected required checks. | Required gates can drift from intended gates. | Update docs after finalizing CI changes. |
 | Production Docker docs/build path can be misleading. | Docker health can pass even with placeholder build args. | Container artifact can be "healthy" but functionally misconfigured. | Either harden Docker production config or mark it as non-primary/local-only. |
 | PR preview deploy is not fully fork-safe/reproducible. | CI preview path uses staging secrets and lacks same env sync as production. | Fork PRs or manual previews can fail unpredictably. | Guard preview deploys to same-repo PRs and expose skipped state clearly. |

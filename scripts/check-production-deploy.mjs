@@ -10,6 +10,9 @@
  * React mounted into #root.
  */
 
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { findPublicApiFixtureMarker } from "./public-api-fixture-guard.mjs";
+
 const DEFAULT_URLS = ["https://portal.maiprop.co"];
 const DEFAULT_ATTEMPTS = 8;
 const DEFAULT_DELAY_MS = 10_000;
@@ -153,6 +156,12 @@ const validatePublicApiEndpoints = async (baseUrl) => {
       !(body && typeof body === "object" && "error" in body),
       `${apiUrl} returned API error: ${JSON.stringify(body).slice(0, 240)}`,
     );
+
+    const fixtureMarker = findPublicApiFixtureMarker(body);
+    assertOk(
+      fixtureMarker === null,
+      `${apiUrl} returned production-blocked fixture content (${fixtureMarker?.marker}) at ${fixtureMarker?.path}: ${fixtureMarker?.value}`,
+    );
   }
 };
 
@@ -224,13 +233,21 @@ const checkWithRetries = async (url) => {
   throw lastError;
 };
 
-(async () => {
+const main = async () => {
   for (const url of urls) {
     await checkWithRetries(url);
   }
 
   process.stdout.write("All production deploy checks passed\n");
-})().catch((error) => {
-  process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-  process.exitCode = 1;
-});
+};
+
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(fileURLToPath(import.meta.url)).href &&
+  process.argv[1].endsWith("check-production-deploy.mjs")
+) {
+  main().catch((error) => {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    process.exitCode = 1;
+  });
+}

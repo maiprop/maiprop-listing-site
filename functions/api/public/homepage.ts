@@ -12,6 +12,7 @@ import {
 } from "./_cache";
 import { getSupabaseRuntime } from "../../_seo";
 import { publicAuctions } from "./auctions";
+import { publicListingRows } from "./_fixture-content";
 
 type ListingRow = Record<string, unknown> & {
   property_type?: string | null;
@@ -67,14 +68,6 @@ function sortByImagePresence<T extends ListingRow>(rows: T[]): T[] {
     const bHasImg = Boolean(b.cover_image_url || b.listing_images?.length);
     return Number(bHasImg) - Number(aHasImg);
   });
-}
-
-function isSupervisorFixture(row: ListingRow): boolean {
-  return [row.title, row.address].some((value) => typeof value === "string" && /\bsupervisor-\d+\b/i.test(value));
-}
-
-function publicHomepageRows<T extends ListingRow>(rows: T[], limit = 6): T[] {
-  return rows.filter((row) => !isSupervisorFixture(row)).slice(0, limit);
 }
 
 async function fetchPopularLocations(env: PublicApiEnv) {
@@ -229,7 +222,7 @@ async function fetchSection(env: PublicApiEnv, section: (typeof SECTIONS)[number
     params.set("listing_images.order", "sort_order.asc");
     params.set("listing_images.limit", "3");
     params.set("limit", "12");
-    return publicHomepageRows(await supabaseJson<ListingRow>(env, "/rest/v1/listings", params));
+    return publicListingRows(await supabaseJson<ListingRow>(env, "/rest/v1/listings", params), 6);
   }
 
   if (section === "auction-count") {
@@ -254,7 +247,7 @@ async function fetchSection(env: PublicApiEnv, section: (typeof SECTIONS)[number
   params.set("listing_images.order", "sort_order.asc");
   params.set("listing_images.limit", "3");
   params.set("limit", "12");
-  return sortByImagePresence(publicHomepageRows(await supabaseJson<ListingRow>(env, "/rest/v1/listings", params)));
+  return sortByImagePresence(publicListingRows(await supabaseJson<ListingRow>(env, "/rest/v1/listings", params), 6));
 }
 
 async function publicHomepage(ctx: PublicApiCtx, requestUrl: URL): Promise<Response> {
