@@ -24,6 +24,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { LocationAutocompleteInput, type LocationAutocompleteSelection } from "@/components/location/LocationAutocompleteInput";
 import { cn } from "@/lib/utils";
 import { formatPrice, formatPriceFromCents, formatDate } from "@/lib/format";
 import {
@@ -105,6 +106,14 @@ export default function DataInputTab() {
 
   const handleChange = <K extends keyof FormState>(k: K, v: FormState[K]) => {
     setForm(prev => ({ ...prev, [k]: v }));
+  };
+  const applyPropertyAddressSelection = (selection: LocationAutocompleteSelection) => {
+    setForm(prev => ({
+      ...prev,
+      property_address: selection.addressLine || selection.value,
+      property_city: selection.city || prev.property_city,
+      property_postal_code: selection.postalCode || prev.property_postal_code,
+    }));
   };
 
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -271,25 +280,30 @@ export default function DataInputTab() {
 
             <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="property_address">Property address *</Label>
-              <Input
+              <LocationAutocompleteInput
+                mode="address"
                 id="property_address"
                 required
                 disabled={submittingDisabled}
                 value={form.property_address}
-                onChange={(e) => handleChange("property_address", e.target.value)}
+                onChange={(value) => handleChange("property_address", value)}
+                onSuggestionSelect={applyPropertyAddressSelection}
                 placeholder="e.g. Ermou 12"
+                inputClassName="flex min-h-[44px] h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:h-10 md:min-h-0 md:text-sm"
               />
             </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="property_city">City *</Label>
-              <Input
+              <LocationAutocompleteInput
+                mode="city"
                 id="property_city"
                 required
                 disabled={submittingDisabled}
                 value={form.property_city}
-                onChange={(e) => handleChange("property_city", e.target.value)}
+                onChange={(value) => handleChange("property_city", value)}
                 placeholder="e.g. Athens"
+                inputClassName="flex min-h-[44px] h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:h-10 md:min-h-0 md:text-sm"
               />
             </div>
 

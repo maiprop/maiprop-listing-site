@@ -48,3 +48,80 @@ export function mergeLocationSuggestions(...groups: Array<Array<string | null | 
 
   return merged;
 }
+
+type NominatimLike = {
+  display_name: string;
+  lat?: string;
+  lon?: string;
+  address?: {
+    house_number?: string;
+    road?: string;
+    pedestrian?: string;
+    footway?: string;
+    residential?: string;
+    path?: string;
+    suburb?: string;
+    neighbourhood?: string;
+    city_district?: string;
+    municipality?: string;
+    city?: string;
+    town?: string;
+    village?: string;
+    county?: string;
+    state_district?: string;
+    state?: string;
+    postcode?: string;
+  };
+};
+
+const firstAddressPart = (...values: Array<string | null | undefined>) =>
+  values.find((value) => Boolean(value?.trim()))?.trim() ?? "";
+
+export function getNominatimAddressLine(suggestion: NominatimLike): string {
+  const address = suggestion.address;
+  if (!address) return suggestion.display_name;
+
+  const street = firstAddressPart(
+    address.road,
+    address.pedestrian,
+    address.footway,
+    address.residential,
+    address.path,
+  );
+  return [address.house_number, street].filter(Boolean).join(" ") || suggestion.display_name;
+}
+
+export function getNominatimCity(suggestion: NominatimLike): string {
+  const address = suggestion.address;
+  if (!address) return "";
+
+  return firstAddressPart(
+    address.city,
+    address.town,
+    address.village,
+    address.municipality,
+    address.city_district,
+    address.suburb,
+    address.county,
+    address.state,
+  );
+}
+
+export function getNominatimMunicipality(suggestion: NominatimLike): string {
+  const address = suggestion.address;
+  if (!address) return "";
+
+  return firstAddressPart(
+    address.municipality,
+    address.city_district,
+    address.suburb,
+    address.neighbourhood,
+    address.county,
+    address.state_district,
+    address.state,
+  );
+}
+
+export function getNominatimPostalCode(suggestion: NominatimLike): string {
+  return suggestion.address?.postcode?.trim() ?? "";
+}

@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { useTranslation } from "react-i18next";
+import { LocationAutocompleteInput } from "@/components/location/LocationAutocompleteInput";
 
 const INVESTMENT_FOCUS_OPTIONS = [
   { value: "", label: "Select focus" },
@@ -294,7 +295,7 @@ export function InvitationRequestModal({ user, onClose, onSuccess }: Props) {
                 </div>
                 <div className="sm:col-span-2">
                   <label className={labelCls}>{isGreek ? "Γεωγραφική στόχευση / αγορές" : "Geographic focus / target markets"}</label>
-                  <input type="text" value={geographicFocus} onChange={e => setGeographicFocus(e.target.value)} placeholder={isGreek ? "π.χ. Αθήνα, ηπειρωτική Ελλάδα, Βαλκάνια, Ευρώπη" : "e.g. Athens, Greek mainland, Balkans, Europe"} className={inputCls} />
+                  <LocationAutocompleteInput mode="city" value={geographicFocus} onChange={setGeographicFocus} placeholder={isGreek ? "π.χ. Αθήνα, ηπειρωτική Ελλάδα, Βαλκάνια, Ευρώπη" : "e.g. Athens, Greek mainland, Balkans, Europe"} inputClassName={inputCls} />
                 </div>
               </div>
             </FormSection>

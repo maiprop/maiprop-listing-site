@@ -21,6 +21,7 @@ import { CATALOG_STATIC_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 import { fetchPublicApi } from "@/lib/publicApi";
 import { ENERGY_CLASSES, FEATURES_RESIDENTIAL } from "@/lib/filterConfig";
 import { fmtDate, fmtTime, Pill, RangeInput, OpenHouseCard } from "@/components/open-houses/OpenHousePrimitives";
+import { LocationAutocompleteInput } from "@/components/location/LocationAutocompleteInput";
 import { cn } from "@/lib/utils";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -480,14 +481,20 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
               {/* City search */}
               <div className="relative flex-1 min-w-0">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" aria-hidden="true" />
-                <input
-                  type="text"
+                <LocationAutocompleteInput
+                  mode="city"
                   placeholder={getTranslatedValue(t, "openHouses.page.cityPlaceholder")}
                   aria-label={getTranslatedValue(t, "openHouses.page.citySearchAria")}
                   value={cityInput}
-                  onChange={(e) => setCityInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && setCityFilter(cityInput)}
-                  className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                  onChange={setCityInput}
+                  onSuggestionSelect={(selection) => {
+                    setCityInput(selection.value);
+                    setCityFilter(selection.value);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") setCityFilter(e.currentTarget.value);
+                  }}
+                  inputClassName="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
 

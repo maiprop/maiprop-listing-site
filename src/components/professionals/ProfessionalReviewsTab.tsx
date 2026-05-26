@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Star, ThumbsUp, PenLine, X, Loader2, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { LocationAutocompleteInput } from "@/components/location/LocationAutocompleteInput";
 import { useProfessionalReviews, useSubmitReview } from "@/hooks/useProfessionalReviews";
 import type { ReviewStats } from "@/hooks/useProfessionalReviews";
 import { StarRating, getReviewServiceTypes } from "./ProfileComponents";
@@ -110,11 +111,12 @@ export function ProfessionalReviewsTab({ professionalId, proCategory, displayNam
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
-            <input
+            <LocationAutocompleteInput
+              mode="city"
               value={draftCity}
-              onChange={e => setDraftCity(e.target.value)}
+              onChange={setDraftCity}
               placeholder="City"
-              className="bg-secondary border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+              inputClassName="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
           <input

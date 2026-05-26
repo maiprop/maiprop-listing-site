@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { LocationInput } from "@/components/index/LocationInput";
 import { LocationSearchField } from "@/components/listings/LocationSearchField";
+import { LocationAutocompleteInput } from "@/components/location/LocationAutocompleteInput";
 
 vi.mock("@/lib/config", () => ({
   GOOGLE_MAPS_API_KEY: "maps-key",
@@ -13,6 +14,18 @@ vi.mock("@/lib/googleMapsPlaces", () => ({
 }));
 
 const ADDRESS_SUGGESTION = "Voukourestiou 14, Athens, Attica, Greece";
+const STRUCTURED_ADDRESS_SUGGESTION = {
+  display_name: ADDRESS_SUGGESTION,
+  lat: "37.9779",
+  lon: "23.7354",
+  address: {
+    road: "Voukourestiou",
+    house_number: "14",
+    city: "Athens",
+    municipality: "Municipality of Athens",
+    postcode: "10671",
+  },
+};
 
 function mockAddressFetch() {
   const fetchMock = vi.fn().mockResolvedValue(
@@ -84,5 +97,77 @@ describe("location address suggestions", () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain("countrycodes=gr");
     expect(String(fetchMock.mock.calls[0][0])).toContain("Voukourestiou%2014");
     expect(await screen.findByRole("button", { name: ADDRESS_SUGGESTION })).toBeInTheDocument();
+  });
+
+  it("shows popular city options in shared location input fields", () => {
+    function ControlledCityField() {
+      const [value, setValue] = useState("");
+      return (
+        <>
+          <label htmlFor="project-city">Project city</label>
+          <LocationAutocompleteInput
+            id="project-city"
+            mode="city"
+            value={value}
+            onChange={setValue}
+            inputClassName="border"
+          />
+        </>
+      );
+    }
+
+    render(<ControlledCityField />);
+
+    fireEvent.focus(screen.getByLabelText("Project city"));
+    fireEvent.click(screen.getByRole("option", { name: "Athens" }));
+
+    expect(screen.getByLabelText("Project city")).toHaveValue("Athens");
+  });
+
+  it("returns structured details when a shared address field suggestion is selected", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([STRUCTURED_ADDRESS_SUGGESTION])),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const onSuggestionSelect = vi.fn();
+
+    function ControlledAddressField() {
+      const [value, setValue] = useState("");
+      return (
+        <>
+          <label htmlFor="project-address">Project address</label>
+          <LocationAutocompleteInput
+            id="project-address"
+            mode="address"
+            value={value}
+            onChange={setValue}
+            onSuggestionSelect={onSuggestionSelect}
+            inputClassName="border"
+          />
+        </>
+      );
+    }
+
+    render(<ControlledAddressField />);
+    fireEvent.focus(screen.getByLabelText("Project address"));
+    fireEvent.change(screen.getByLabelText("Project address"), { target: { value: "Voukourestiou 14" } });
+
+    await act(async () => {
+      vi.advanceTimersByTime(450);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    vi.useRealTimers();
+
+    fireEvent.click(await screen.findByRole("option", { name: ADDRESS_SUGGESTION }));
+
+    expect(screen.getByLabelText("Project address")).toHaveValue("14 Voukourestiou");
+    expect(onSuggestionSelect).toHaveBeenCalledWith(expect.objectContaining({
+      city: "Athens",
+      municipality: "Municipality of Athens",
+      postalCode: "10671",
+      latitude: "37.9779",
+      longitude: "23.7354",
+    }));
   });
 });
