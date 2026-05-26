@@ -4,6 +4,7 @@ import { Loader2, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useMyProfessional, useUpdateProfessional } from "@/hooks/useProfessionalServices";
+import { LocationAutocompleteInput } from "@/components/location/LocationAutocompleteInput";
 
 const getSaveErrorMessage = (error: unknown) => {
   if (error instanceof Error && error.message) return error.message;
@@ -104,7 +105,16 @@ export function ProfessionalProfileEditor({
         ] as const).map(([label, key, placeholder, type]) => (
           <div key={key}>
             <label className="text-xs font-medium text-muted-foreground block mb-1.5">{label}</label>
-            {type === "textarea" ? (
+            {key === "city" ? (
+              <LocationAutocompleteInput
+                mode="city"
+                aria-label={label}
+                value={form.city}
+                onChange={(value) => setForm(f => ({ ...f, city: value }))}
+                placeholder={placeholder}
+                inputClassName="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm"
+              />
+            ) : type === "textarea" ? (
               <textarea
                 value={form[key as keyof ProForm]}
                 onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}

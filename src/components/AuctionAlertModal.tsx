@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useCreateAuctionAlert, useUpdateAuctionAlert, type AuctionAlert } from "@/hooks/useAuctionAlerts";
 import { useTranslation } from "react-i18next";
 import type { Database } from "@/integrations/supabase/types";
+import { LocationAutocompleteInput } from "@/components/location/LocationAutocompleteInput";
 
 type AuctionAlertPropertyType = Database["public"]["Enums"]["property_type"];
 
@@ -17,8 +18,6 @@ const PROPERTY_TYPES: { value: "" | AuctionAlertPropertyType; label: string }[] 
   { value: "commercial", label: "Commercial" },
   { value: "office", label: "Office" },
 ];
-
-const CITIES = ["", "Αθήνα", "Θεσσαλονίκη", "Πειραιάς", "Πάτρα", "Ηράκλειο", "Λάρισα", "Βόλος"];
 
 interface Props {
   open: boolean;
@@ -89,14 +88,14 @@ export function AuctionAlertModal({ open, onClose, editAlert }: Props) {
           {/* City */}
           <div>
             <label className="text-xs text-muted-foreground font-medium block mb-1.5">{isGreek ? "Πόλη" : "City"}</label>
-            <select
+            <LocationAutocompleteInput
+              mode="city"
+              aria-label={isGreek ? "Πόλη" : "City"}
               value={city}
-              onChange={e => setCity(e.target.value)}
-              className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary"
-            >
-              <option value="">{isGreek ? "Όλες οι πόλεις" : "All Cities"}</option>
-              {CITIES.filter(c => c).map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
+              onChange={setCity}
+              placeholder={isGreek ? "Όλες οι πόλεις" : "All Cities"}
+              inputClassName="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary"
+            />
           </div>
 
           {/* Auction officer / platform */}

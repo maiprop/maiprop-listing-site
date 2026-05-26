@@ -166,7 +166,17 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <div><FieldLabel>{tr("createListing.location.regionMunicipality", "Region / Municipality")}</FieldLabel><Input placeholder="Attica" value={form.region} onChange={e => set("region", e.target.value)} /></div>
+        <div>
+          <FieldLabel>{tr("createListing.location.regionMunicipality", "Region / Municipality")}</FieldLabel>
+          <LocationAutocompleteInput
+            mode="city"
+            placeholder="Attica"
+            value={form.region}
+            onChange={(value) => set("region", value)}
+            onSuggestionSelect={(selection) => set("region", selection.municipality || selection.city || selection.value)}
+            inputClassName="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
+          />
+        </div>
         <div><FieldLabel>{tr("createListing.location.postalCode", "Postal Code")}</FieldLabel><Input placeholder="10674" value={form.postal_code} onChange={e => set("postal_code", e.target.value)} /></div>
       </div>
       <div className="grid grid-cols-2 gap-3">
