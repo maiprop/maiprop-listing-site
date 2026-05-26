@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { ProGate } from "@/components/gates/ProGate";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { LocationAutocompleteInput, type LocationAutocompleteSelection } from "@/components/location/LocationAutocompleteInput";
 import type { Tables } from "@/integrations/supabase/types";
 import { tFallback } from "@/lib/i18nFallback";
 
@@ -43,6 +44,11 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
   const [newAddress, setNewAddress] = useState("");
   const [newPermit, setNewPermit] = useState("");
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
+
+  const applyNewProjectAddressSelection = (selection: LocationAutocompleteSelection) => {
+    setNewAddress(selection.addressLine || selection.value);
+    if (selection.city) setNewCity(selection.city);
+  };
 
   const handleCreate = () => {
     if (!newName.trim()) {
@@ -147,20 +153,23 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
               </div>
               <div>
                 <label className="text-xs text-muted-foreground block mb-1.5">{tr("projects.fields.city", "City")}</label>
-                <input
+                <LocationAutocompleteInput
+                  mode="city"
                   value={newCity}
-                  onChange={(e) => setNewCity(e.target.value)}
+                  onChange={setNewCity}
                   placeholder={tr("projects.fields.cityPlaceholder", "e.g. Athens")}
-                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"
+                  inputClassName="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"
                 />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground block mb-1.5">{tr("projects.fields.address", "Address")}</label>
-                <input
+                <LocationAutocompleteInput
+                  mode="address"
                   value={newAddress}
-                  onChange={(e) => setNewAddress(e.target.value)}
+                  onChange={setNewAddress}
+                  onSuggestionSelect={applyNewProjectAddressSelection}
                   placeholder={tr("projects.fields.addressPlaceholder", "Street, number")}
-                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"
+                  inputClassName="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"
                 />
               </div>
               <div>

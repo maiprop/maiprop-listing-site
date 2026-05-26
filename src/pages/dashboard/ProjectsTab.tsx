@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { LocationAutocompleteInput } from "@/components/location/LocationAutocompleteInput";
 import {
   useProjects,
   useCreateProject,
@@ -99,11 +100,12 @@ export default function ProjectsTab() {
             </div>
             <div>
               <label className="text-xs text-muted-foreground block mb-1.5">City</label>
-              <input
+              <LocationAutocompleteInput
+                mode="city"
                 value={newCity}
-                onChange={(e) => setNewCity(e.target.value)}
+                onChange={setNewCity}
                 placeholder="e.g. Athens"
-                className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"
+                inputClassName="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"
               />
             </div>
             <div className="md:col-span-2">

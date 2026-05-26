@@ -2,6 +2,7 @@ import { Building2, Briefcase, Phone, FileText, ArrowRight, Loader2 } from "luci
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ProField } from "@/components/onboarding/ProField";
+import { LocationAutocompleteInput } from "@/components/location/LocationAutocompleteInput";
 
 const DEV_TYPES = [
   { value: "residential",          label: "Residential",          desc: "Apartments, houses, villas" },
@@ -53,12 +54,12 @@ export function DeveloperSetupStep({ form, errors, loading, authLoading, onField
         </ProField>
 
         <ProField label="Primary City / Region" required error={errors.city} icon={<Phone className="w-4 h-4 text-muted-foreground" />}>
-          <input
-            type="text"
+          <LocationAutocompleteInput
+            mode="city"
             placeholder="e.g. Athens"
             value={form.city}
-            onChange={e => onFieldChange("city", e.target.value)}
-            className={cn(
+            onChange={(value) => onFieldChange("city", value)}
+            inputClassName={cn(
               "w-full bg-secondary border rounded-xl pl-9 pr-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors",
               errors.city ? "border-destructive" : "border-border"
             )}

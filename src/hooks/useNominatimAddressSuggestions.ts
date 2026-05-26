@@ -4,6 +4,31 @@ const NOMINATIM_DEBOUNCE_MS = 400;
 const NOMINATIM_MIN_QUERY_LEN = 3;
 const NOMINATIM_LIMIT = 5;
 
+export interface NominatimAddressSuggestion {
+  display_name: string;
+  lat?: string;
+  lon?: string;
+  address?: {
+    house_number?: string;
+    road?: string;
+    pedestrian?: string;
+    footway?: string;
+    residential?: string;
+    path?: string;
+    suburb?: string;
+    neighbourhood?: string;
+    city_district?: string;
+    municipality?: string;
+    city?: string;
+    town?: string;
+    village?: string;
+    county?: string;
+    state_district?: string;
+    state?: string;
+    postcode?: string;
+  };
+}
+
 /**
  * Address-autocomplete hook backed by OpenStreetMap Nominatim.
  *
@@ -18,7 +43,7 @@ const NOMINATIM_LIMIT = 5;
  * for Greek/English result text.
  */
 export function useNominatimAddressSuggestions(query: string) {
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [rawSuggestions, setRawSuggestions] = useState<NominatimAddressSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -30,7 +55,7 @@ export function useNominatimAddressSuggestions(query: string) {
       abortRef.current = null;
     }
     if (q.length < NOMINATIM_MIN_QUERY_LEN) {
-      setSuggestions([]);
+      setRawSuggestions([]);
       setLoading(false);
       return;
     }
@@ -50,13 +75,15 @@ export function useNominatimAddressSuggestions(query: string) {
         );
         const json = await res.json().catch(() => []);
         if (Array.isArray(json)) {
-          setSuggestions(json.map((r: { display_name: string }) => r.display_name));
+          setRawSuggestions(
+            json.filter((r: Partial<NominatimAddressSuggestion>) => typeof r.display_name === "string"),
+          );
         } else {
-          setSuggestions([]);
+          setRawSuggestions([]);
         }
       } catch (_err: unknown) {
         // Aborted or network failure — never surface to the user, just clear.
-        setSuggestions([]);
+        setRawSuggestions([]);
       } finally {
         setLoading(false);
       }
@@ -68,7 +95,8 @@ export function useNominatimAddressSuggestions(query: string) {
   }, [query]);
 
   /** Imperative reset — used after the user picks a suggestion. */
-  const clear = () => setSuggestions([]);
+  const clear = () => setRawSuggestions([]);
+  const suggestions = rawSuggestions.map((suggestion) => suggestion.display_name);
 
-  return { suggestions, loading, clear };
+  return { suggestions, rawSuggestions, loading, clear };
 }

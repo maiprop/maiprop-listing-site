@@ -4,6 +4,9 @@ import { useTranslation } from "react-i18next";
 import { GOOGLE_MAPS_API_KEY } from "@/lib/config";
 import { loadGoogleMapsPlaces } from "@/lib/googleMapsPlaces";
 import { FieldLabel, FieldError, FormInput as Input } from "@/components/listings/FormPrimitives";
+import { LocationAutocompleteInput } from "@/components/location/LocationAutocompleteInput";
+import { useNominatimAddressSuggestions } from "@/hooks/useNominatimAddressSuggestions";
+import { getNominatimAddressLine, getNominatimCity, getNominatimMunicipality, getNominatimPostalCode } from "@/lib/locationSuggestions";
 import type { ListingFormData } from "@/hooks/useListingForm";
 import { tFallback } from "@/lib/i18nFallback";
 
@@ -13,19 +16,6 @@ interface ConnectionStatus {
   storageOk: boolean;
   locationOk: boolean;
   locationSource?: string;
-}
-
-interface NominatimHit {
-  display_name: string;
-  address?: {
-    road?: string;
-    house_number?: string;
-    city?: string;
-    town?: string;
-    village?: string;
-    state?: string;
-    postcode?: string;
-  };
 }
 
 interface Props {
@@ -39,43 +29,13 @@ interface Props {
 
 export function StepLocation({ form, set, errors, setFieldRef, connections, stepActive }: Props) {
   const { t } = useTranslation();
-  const [suggestions, setSuggestions] = useState<NominatimHit[]>([]);
-  const [addrLoading, setAddrLoading] = useState(false);
   const [googlePlacesRequested, setGooglePlacesRequested] = useState(false);
 
   const addressInputRef = useRef<HTMLInputElement | null>(null);
   const googleAutocompleteRef = useRef<{ getPlace: () => { address_components?: Array<{ long_name: string; short_name: string; types: string[] }>; formatted_address?: string } } | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-
-  // Nominatim autocomplete (no Google key)
-  useEffect(() => {
-    if (GOOGLE_MAPS_API_KEY) { setSuggestions([]); return; }
-    const q = [form.address, form.city].filter(Boolean).join(", ").trim();
-    if (abortRef.current) { abortRef.current.abort(); abortRef.current = null; }
-    if (q.length < 3) { setSuggestions([]); setAddrLoading(false); return; }
-    const controller = new AbortController();
-    abortRef.current = controller;
-    setAddrLoading(true);
-    const t = setTimeout(async () => {
-      try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&countrycodes=gr&q=${encodeURIComponent(q)}`,
-          { headers: { "Accept-Language": "el,en", "User-Agent": "maiprop-listing-site" }, signal: controller.signal }
-        );
-        const json = await res.json().catch(() => []) as Array<{ display_name: string; address: NominatimHit["address"] }>;
-        if (!controller.signal.aborted && Array.isArray(json)) {
-          setSuggestions(json.map(r => ({ display_name: r.display_name, address: r.address })));
-        } else {
-          setSuggestions([]);
-        }
-      } catch (_err: unknown) {
-        if (!controller.signal.aborted) setSuggestions([]);
-      } finally {
-        if (!controller.signal.aborted) setAddrLoading(false);
-      }
-    }, 400);
-    return () => { clearTimeout(t); controller.abort(); };
-  }, [form.address, form.city]);
+  const nominatimQuery = GOOGLE_MAPS_API_KEY ? "" : [form.address, form.city].filter(Boolean).join(", ");
+  const { rawSuggestions: suggestions, loading: addrLoading, clear: clearAddressSuggestions } =
+    useNominatimAddressSuggestions(nominatimQuery);
 
   // Google Places autocomplete
   useEffect(() => {
@@ -157,7 +117,13 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
 
       <div ref={setFieldRef("city") as React.Ref<HTMLDivElement>}>
         <FieldLabel required>{tr("createListing.location.city", "City")}</FieldLabel>
-        <Input placeholder={tr("createListing.location.cityPlaceholder", "e.g. Athens")} value={form.city} onChange={e => set("city", e.target.value)} hasError={!!errors.city} />
+        <LocationAutocompleteInput
+          mode="city"
+          placeholder={tr("createListing.location.cityPlaceholder", "e.g. Athens")}
+          value={form.city}
+          onChange={(value) => set("city", value)}
+          inputClassName={`w-full bg-secondary border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors ${errors.city ? "border-destructive ring-1 ring-destructive/30" : "border-border"}`}
+        />
         <FieldError msg={errors.city} />
       </div>
 
@@ -182,13 +148,14 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
             {suggestions.map((s, i) => (
               <button key={i} type="button"
                 onClick={() => {
-                  set("address", s.address?.road ? [s.address.house_number, s.address.road].filter(Boolean).join(" ") : s.display_name);
-                  if (s.address?.city) set("city", s.address.city);
-                  else if (s.address?.town) set("city", s.address.town);
-                  else if (s.address?.village) set("city", s.address.village);
-                  if (s.address?.state) set("region", s.address.state);
-                  if (s.address?.postcode) set("postal_code", s.address.postcode);
-                  setSuggestions([]);
+                  set("address", getNominatimAddressLine(s));
+                  const city = getNominatimCity(s);
+                  const municipality = getNominatimMunicipality(s);
+                  const postalCode = getNominatimPostalCode(s);
+                  if (city) set("city", city);
+                  if (municipality) set("region", municipality);
+                  if (postalCode) set("postal_code", postalCode);
+                  clearAddressSuggestions();
                 }}
                 className="w-full text-left px-3 py-2 hover:bg-muted/80 border-b border-border last:border-0 first:rounded-t-xl last:rounded-b-xl">
                 {s.display_name}

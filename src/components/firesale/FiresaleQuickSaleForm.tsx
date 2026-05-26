@@ -25,10 +25,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { isSellSideRole } from "@/lib/authUtils";
 import { useSubscription } from "@/hooks/useSubscription";
-import { useNominatimAddressSuggestions } from "@/hooks/useNominatimAddressSuggestions";
+import { useNominatimAddressSuggestions, type NominatimAddressSuggestion } from "@/hooks/useNominatimAddressSuggestions";
 import { useFiresalePhotoUploader } from "@/hooks/useFiresalePhotoUploader";
 import { isAiUsageLimitError } from "@/lib/aiErrorUtils";
 import { KAEK_MAX_LENGTH, isValidKaek, normalizeKaek, toFiresalePropertyType } from "@/lib/firesaleValidation";
+import { getNominatimCity } from "@/lib/locationSuggestions";
 import { toast } from "sonner";
 import { QuickSaleSubmittedView } from "@/components/firesale/QuickSaleSubmittedView";
 
@@ -76,6 +77,7 @@ const NOW_YEAR = new Date().getFullYear();
 
 type QuickSaleFormValues = {
   address: string;
+  city: string;
   kaek: string;
   propertyType: string;
   sqm: string;
@@ -108,6 +110,7 @@ const getUserEmail = (userEmail: string | null | undefined): string => userEmail
 
 const buildInitialForm = (profile: QuickSaleProfile, userEmail: string | null | undefined): QuickSaleFormValues => ({
   address: "",
+  city: "",
   kaek: "",
   propertyType: "",
   sqm: "",
@@ -344,7 +347,7 @@ const insertFiresaleRequest = (
     .from("firesale_requests")
     .insert({
       address: form.address.trim(),
-      city: getCityFromAddress(form.address),
+      city: form.city.trim() || getCityFromAddress(form.address),
       property_type: propertyType,
       sqm: Number(form.sqm),
       condition: null,
@@ -462,13 +465,15 @@ const AddressField = ({
   addressLoading,
   addressSuggestions,
   onUpdate,
+  onSelectSuggestion,
   onClearSuggestions,
 }: {
   form: QuickSaleFormValues;
   errors: QuickSaleErrors;
   addressLoading: boolean;
-  addressSuggestions: string[];
+  addressSuggestions: NominatimAddressSuggestion[];
   onUpdate: QuickSaleFieldUpdater;
+  onSelectSuggestion: (suggestion: NominatimAddressSuggestion) => void;
   onClearSuggestions: () => void;
 }) => (
   <div>
@@ -491,15 +496,15 @@ const AddressField = ({
       <div className="mt-1 bg-background border border-border rounded-xl shadow-md text-sm max-h-40 overflow-auto">
         {addressSuggestions.map((suggestion) => (
           <button
-            key={suggestion}
+            key={suggestion.display_name}
             type="button"
             onClick={() => {
-              onUpdate("address", suggestion);
+              onSelectSuggestion(suggestion);
               onClearSuggestions();
             }}
             className="w-full text-left px-3 py-1.5 hover:bg-muted/80"
           >
-            {suggestion}
+            {suggestion.display_name}
           </button>
         ))}
       </div>
@@ -726,12 +731,13 @@ type StepOneProps = {
   form: QuickSaleFormValues;
   errors: QuickSaleErrors;
   addressLoading: boolean;
-  addressSuggestions: string[];
+  addressSuggestions: NominatimAddressSuggestion[];
   photoPreviews: string[];
   fileInputRef: RefObject<HTMLInputElement>;
   aiLoading: boolean;
   onSellerCta: () => void;
   onUpdate: QuickSaleFieldUpdater;
+  onSelectAddressSuggestion: (suggestion: NominatimAddressSuggestion) => void;
   onClearAddressSuggestions: () => void;
   onPhotoSelect: PhotoSelectHandler;
   onRemovePhoto: (index: number) => void;
@@ -771,6 +777,7 @@ const QuickSaleStepOne = (props: StepOneProps) => (
       addressLoading={props.addressLoading}
       addressSuggestions={props.addressSuggestions}
       onUpdate={props.onUpdate}
+      onSelectSuggestion={props.onSelectAddressSuggestion}
       onClearSuggestions={props.onClearAddressSuggestions}
     />
     <KaekField form={props.form} errors={props.errors} onUpdate={props.onUpdate} />
@@ -984,10 +991,17 @@ export const FiresaleQuickSaleForm = () => { // skipcq: JS-R1005 - Quick Sale ow
 
   // Address autocomplete delegated to a typed hook (debounced + abortable).
   const {
-    suggestions: addressSuggestions,
+    rawSuggestions: addressSuggestions,
     loading: addressLoading,
     clear: clearAddressSuggestions,
   } = useNominatimAddressSuggestions(form.address);
+  const handleAddressSuggestionSelect = (suggestion: NominatimAddressSuggestion) => {
+    setForm((prev) => ({
+      ...prev,
+      address: suggestion.display_name,
+      city: getNominatimCity(suggestion) || prev.city,
+    }));
+  };
 
   const step2Valid = Object.keys(validateStep2Form(form)).length === 0;
   const generateEstimate = async () => {
@@ -1043,7 +1057,7 @@ export const FiresaleQuickSaleForm = () => { // skipcq: JS-R1005 - Quick Sale ow
     setAiEstimate(null);
     setRequestId(null);
     resetPhotos();
-    setForm((f) => ({ ...f, address: "", kaek: "", propertyType: "", sqm: "", askingPrice: "", notes: "" }));
+    setForm((f) => ({ ...f, address: "", city: "", kaek: "", propertyType: "", sqm: "", askingPrice: "", notes: "" }));
   };
 
   if (submitted) {
@@ -1075,6 +1089,7 @@ export const FiresaleQuickSaleForm = () => { // skipcq: JS-R1005 - Quick Sale ow
       uploadingPhotos={uploadingPhotos}
       onSellerCta={handleSellerCta}
       onUpdate={upd}
+      onSelectAddressSuggestion={handleAddressSuggestionSelect}
       onClearAddressSuggestions={clearAddressSuggestions}
       onPhotoSelect={handlePhotoSelect}
       onRemovePhoto={removePhoto}
