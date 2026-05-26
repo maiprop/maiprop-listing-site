@@ -159,7 +159,7 @@
     "husky": "^9.1.7",
     "i18next-scanner": "^4.6.0",
     "jsdom": "^29.1.1",
-    "postcss": "^8.5.14",
+    "postcss": "^8.5.15",
     "rollup-plugin-visualizer": "^6.0.11",
     "sharp": "^0.34.5",
     "supabase": "^2.98.1",
