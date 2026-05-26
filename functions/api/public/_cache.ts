@@ -7,6 +7,15 @@ export type PublicApiCtx = Parameters<PagesFunction<PublicApiEnv>>[0];
 const DEFAULT_EDGE_TTL_SECONDS = 120;
 const DEFAULT_BROWSER_TTL_SECONDS = 30;
 const DEFAULT_STALE_SECONDS = 300;
+const SECURITY_HEADERS = {
+  "X-Frame-Options": "DENY",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": 'camera=(self "https://meet.jit.si"), microphone=(self "https://meet.jit.si"), display-capture=(self "https://meet.jit.si"), autoplay=(self "https://meet.jit.si"), geolocation=(self)',
+  "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
+  "Cross-Origin-Opener-Policy": "same-origin",
+  "Cross-Origin-Resource-Policy": "same-origin",
+} as const;
 
 type CacheOptions = {
   edgeTtlSeconds?: number;
@@ -26,6 +35,12 @@ function applyCacheHeaders(headers: Headers, cache: CacheOptions, force = false)
   }
 }
 
+function applySecurityHeaders(headers: Headers): void {
+  for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
+    if (!headers.has(name)) headers.set(name, value);
+  }
+}
+
 export function jsonResponse(
   body: unknown,
   init: ResponseInit = {},
@@ -34,6 +49,7 @@ export function jsonResponse(
   const headers = new Headers(init.headers);
   headers.set("Content-Type", "application/json; charset=utf-8");
   applyCacheHeaders(headers, cache);
+  applySecurityHeaders(headers);
   return new Response(JSON.stringify(body), {
     ...init,
     headers,
@@ -80,6 +96,7 @@ export async function cachedJson(
     if (hit) {
       const headers = new Headers(hit.headers);
       headers.set("X-Maiprop-Cache", "HIT");
+      applySecurityHeaders(headers);
       return new Response(hit.body, { status: hit.status, headers });
     }
   }
@@ -88,6 +105,7 @@ export async function cachedJson(
   const headers = new Headers(response.headers);
   if (response.ok) applyCacheHeaders(headers, cache, true);
   headers.set("X-Maiprop-Cache", cacheApi ? "MISS" : "BYPASS");
+  applySecurityHeaders(headers);
   const body = await response.text();
   const outbound = new Response(body, { status: response.status, headers });
 

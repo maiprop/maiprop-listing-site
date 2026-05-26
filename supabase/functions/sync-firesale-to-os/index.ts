@@ -11,6 +11,13 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { createLogger } from "../_shared/logger.ts";
 import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import {
+  asLooseSupabaseClient,
+  asSupabaseAuthAdminClient,
+  type AdminProfile,
+  type LooseSupabaseClient,
+  type SupabaseAuthAdminClient,
+} from "../_shared/supabaseClientTypes.ts";
 
 const log = createLogger("sync-firesale-to-os");
 
@@ -48,7 +55,7 @@ async function getOsToken(baseUrl: string, email: string, password: string): Pro
 
 // ── Sync logger ───────────────────────────────────────────────────────────────
 async function logSync(
-  supabase: ReturnType<typeof createClient>,
+  supabase: LooseSupabaseClient,
   entity_id: string,
   status: string,
   error_message?: string | null,
@@ -57,8 +64,7 @@ async function logSync(
 ): Promise<void> {
   // `sync_log` is unregistered in the generated Supabase types; cast through
   // the narrow `from` overload bridge that the rest of this codebase uses.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (supabase.from as any)("sync_log").insert({
+  await supabase.from("sync_log").insert({
     direction: "hub_to_os",
     entity_type: "firesale",
     entity_id, status,
@@ -93,7 +99,7 @@ type FiresaleRow = {
 // ── Require agent role to prevent unauthenticated sync / PII exposure ───────────
 async function requireAgent(
   req: Request,
-  sb: ReturnType<typeof createClient>,
+  sb: SupabaseAuthAdminClient,
   corsHeaders: Record<string, string>,
 ): Promise<Response | null> {
   const authHeader = req.headers.get("Authorization");
@@ -109,7 +115,8 @@ async function requireAgent(
       status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-  const { data: profile } = await sb.from("profiles").select("role").eq("user_id", user.id).single();
+  const { data: profileRaw } = await sb.from("profiles").select("role").eq("user_id", user.id).single();
+  const profile = profileRaw as AdminProfile | null;
   if (profile?.role !== "admin") {
     return new Response(JSON.stringify({ error: "Platform admin required" }), {
       status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -128,7 +135,7 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  const authErr = await requireAgent(req, supabase, corsHeaders);
+  const authErr = await requireAgent(req, asSupabaseAuthAdminClient(supabase), corsHeaders);
   if (authErr) return authErr;
 
   const OS_URL   = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "");
@@ -147,15 +154,16 @@ Deno.serve(async (req) => {
 
     // Fetch firesale request — `firesale_requests` isn't in the generated
     // Supabase types; cast through the narrow `from` overload bridge.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: fsRaw, error: fsErr } = await (supabase.from as any)("firesale_requests")
+    const db = asLooseSupabaseClient(supabase);
+    const { data: fsRaw, error: fsErr } = await db
+      .from("firesale_requests")
       .select("*")
       .eq("id", firesale_id)
       .single();
     const fs = fsRaw as FiresaleRow | null;
 
     if (fsErr || !fs) {
-      await logSync(supabase, firesale_id, "error", "Firesale request not found");
+      await logSync(db, firesale_id, "error", "Firesale request not found");
       return new Response(JSON.stringify({ error: "Firesale request not found" }), {
         status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -195,7 +203,7 @@ Deno.serve(async (req) => {
 
     // No credentials → queue as skipped
     if (!OS_URL || !OS_EMAIL || !OS_PASS) {
-      await logSync(supabase, firesale_id, "skipped",
+      await logSync(db, firesale_id, "skipped",
         "OS credentials not configured", osPayload);
       return new Response(JSON.stringify({
         ok: true, status: "skipped",
@@ -220,7 +228,7 @@ Deno.serve(async (req) => {
 
     if (!osRes.ok) {
       const errText = await osRes.text();
-      await logSync(supabase, firesale_id, "error",
+      await logSync(db, firesale_id, "error",
         `OS returned ${osRes.status}: ${errText}`, osPayload);
       return new Response(JSON.stringify({ error: `OS sync failed: ${osRes.status}: ${errText}` }), {
         status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -228,7 +236,7 @@ Deno.serve(async (req) => {
     }
 
     const osResult = await osRes.json().catch(() => ({}));
-    await logSync(supabase, firesale_id, "success", null, osPayload, 1);
+    await logSync(db, firesale_id, "success", null, osPayload, 1);
 
     return new Response(JSON.stringify({ ok: true, osResult }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

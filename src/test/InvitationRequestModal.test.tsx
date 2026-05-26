@@ -58,7 +58,7 @@ describe("InvitationRequestModal", () => {
     renderModal();
 
     fireEvent.change(screen.getByPlaceholderText("John Smith"), { target: { value: "Investor One" } });
-    fireEvent.change(screen.getByPlaceholderText("Phone number"), { target: { value: "+302101234567" } });
+    fireEvent.change(screen.getByPlaceholderText("Phone number"), { target: { value: "phone-redacted" } });
     fireEvent.change(screen.getByPlaceholderText("https://linkedin.com/in/..."), { target: { value: "https://linkedin.com/in/investor" } });
     fireEvent.change(screen.getByPlaceholderText("Acme Capital Partners"), { target: { value: "Acme Capital" } });
     fireEvent.change(screen.getByPlaceholderText("Managing Partner, Investment Director"), { target: { value: "Partner" } });

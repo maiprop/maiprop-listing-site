@@ -70,7 +70,7 @@ beforeEach(() => {
   useAuthMock.mockReset();
   useAuthMock.mockReturnValue({
     user: { id: "u-1", email: "seller@example.com" },
-    profile: { first_name: "Alice", phone: "+30 210 000" },
+    profile: { first_name: "Alice", phone: "phone-redacted" },
   });
   useSubMock.mockReset();
   useSubMock.mockReturnValue({ isPro: false });

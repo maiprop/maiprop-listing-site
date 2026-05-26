@@ -5,7 +5,7 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 5
     # Dependabot groups security updates separately from version updates — both
     # production and dev dependencies are scanned. `npm audit --omit=dev` in CI
     # covers only runtime, so this is what catches dev-only vulnerabilities

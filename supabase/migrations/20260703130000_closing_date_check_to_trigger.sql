@@ -36,3 +36,6 @@ DROP TRIGGER IF EXISTS trg_agent_data_inputs_closing_date
 CREATE TRIGGER trg_agent_data_inputs_closing_date
   BEFORE INSERT ON public.agent_data_inputs
   FOR EACH ROW EXECUTE FUNCTION public.agent_data_inputs_validate_closing_date();
+
+REVOKE ALL ON FUNCTION public.agent_data_inputs_validate_closing_date() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.agent_data_inputs_validate_closing_date() TO service_role;

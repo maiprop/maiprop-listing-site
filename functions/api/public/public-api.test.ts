@@ -160,8 +160,21 @@ function installSupabaseFetch(): FetchMock {
 
       if (listingType === "eq.open_house") {
         return jsonRows([
+          { id: "open-test", title: "supervisor-177912 open house", cover_image_url: "test", listing_images: [] },
           { id: "open-1", cover_image_url: null, listing_images: [{ url: "img", sort_order: 1 }] },
           { id: "open-2", cover_image_url: "cover", listing_images: [] },
+        ]);
+      }
+
+      if (
+        listingType === "eq.sale" &&
+        url.searchParams.get("limit") === "12" &&
+        url.searchParams.get("listing_images.limit") === "3"
+      ) {
+        return jsonRows([
+          { id: "listing-test", owner_id: "owner-1", title: "supervisor-177912 maisonette", address: "supervisor-177912 Test Street" },
+          { id: "listing-1", owner_id: "owner-1", title: "Athens flat" },
+          { id: "listing-2", owner_id: "owner-2", title: "Piraeus loft" },
         ]);
       }
 
@@ -194,6 +207,8 @@ describe("public API cache helpers", () => {
     expect(cached.headers.get("Content-Type")).toBe("application/json; charset=utf-8");
     expect(cached.headers.get("Cache-Control")).toBe("public, max-age=30, stale-while-revalidate=300");
     expect(cached.headers.get("CDN-Cache-Control")).toBe("public, max-age=120, stale-while-revalidate=300");
+    expect(cached.headers.get("Strict-Transport-Security")).toContain("max-age=63072000");
+    expect(cached.headers.get("X-Content-Type-Options")).toBe("nosniff");
     expect(cached.headers.get("X-Test")).toBe("1");
     expect(await cached.json()).toEqual({ ok: true });
 
@@ -253,6 +268,8 @@ describe("public API cache helpers", () => {
 
     const second = await openHousesRequest(makeCtx("https://portal.maiprop.co/api/public/open-houses?limit=2"));
     expect(second.headers.get("X-Maiprop-Cache")).toBe("HIT");
+    expect(second.headers.get("X-Frame-Options")).toBe("DENY");
+    expect(second.headers.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
     expect(await second.json()).toEqual(await first.clone().json());
     expect(fetchUrls("/rest/v1/listings")).toHaveLength(1);
     expect(cacheApi.put).toHaveBeenCalledTimes(1);
@@ -492,17 +509,22 @@ describe("public homepage endpoint", () => {
   });
 
   it("fetches lightweight featured and open-house homepage sections", async () => {
-    await homepageRequest(makeCtx("https://portal.maiprop.co/api/public/homepage?section=featured"));
+    const featured = await homepageRequest(makeCtx("https://portal.maiprop.co/api/public/homepage?section=featured"));
+    const featuredRows = await featured.json() as Array<{ id: string }>;
+    expect(featuredRows.map((row) => row.id)).toEqual(["listing-1", "listing-2"]);
     let url = fetchUrls("/rest/v1/listings")[0];
-    expect(url.searchParams.get("limit")).toBe("6");
+    expect(url.searchParams.get("limit")).toBe("12");
     expect(url.searchParams.get("listing_type")).toBe("eq.sale");
     expect(url.searchParams.get("listing_images.limit")).toBe("3");
 
     fetchMock().mockClear();
-    await homepageRequest(makeCtx("https://portal.maiprop.co/api/public/homepage?section=open-houses"));
+    const openHouses = await homepageRequest(makeCtx("https://portal.maiprop.co/api/public/homepage?section=open-houses"));
+    const openHouseRows = await openHouses.json() as Array<{ id: string }>;
+    expect(openHouseRows.map((row) => row.id)).toEqual(["open-1", "open-2"]);
     url = fetchUrls("/rest/v1/listings")[0];
     expect(url.searchParams.get("listing_type")).toBe("eq.open_house");
     expect(url.searchParams.get("open_house_date")).toMatch(/^gte\./);
+    expect(url.searchParams.get("limit")).toBe("12");
     expect(url.searchParams.get("listing_images.limit")).toBe("3");
   });
 

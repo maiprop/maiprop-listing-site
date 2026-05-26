@@ -83,6 +83,9 @@ END $$;
 COMMENT ON FUNCTION public.invoke_send_saved_search_alerts_cron() IS
   'Invokes send-saved-search-alerts with CRON_SECRET from Vault/app settings; skips outbound calls if the secret is missing.';
 
+REVOKE ALL ON FUNCTION public.invoke_send_saved_search_alerts_cron() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.invoke_send_saved_search_alerts_cron() TO service_role;
+
 CREATE OR REPLACE FUNCTION public.notify_oh_registration_status_change()
 RETURNS trigger
 LANGUAGE plpgsql

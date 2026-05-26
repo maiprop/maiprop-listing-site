@@ -25,7 +25,7 @@ const lead = (overrides: Record<string, unknown> = {}) => ({
   id: "lead-1",
   name: "Maya Buyer",
   email: "maya@example.com",
-  phone: "+302100000001",
+  phone: "phone-redacted",
   message: "Interested in the listing",
   notes: "Prefers sea view",
   source: "listing_inquiry",

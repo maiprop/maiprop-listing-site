@@ -1,5 +1,4 @@
 import { useRef, useState, useMemo, lazy, Suspense, useCallback } from "react";
-import type { ReactNode } from "react";
 import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
@@ -25,6 +24,16 @@ import { MapGate } from "@/components/listings/MapGate";
 import { ListingCompareButton } from "@/components/listings/ListingCompareButton";
 import { VirtualizedListingGrid } from "@/components/listings/VirtualizedListingGrid";
 import { LocationSearchField } from "@/components/listings/LocationSearchField";
+import {
+  ActiveFilterChip,
+} from "@/components/listings/ListingsUiPrimitives";
+import {
+  GRID_ESTIMATED_ROW_HEIGHT,
+  GRID_LOADING_SKELETON_KEYS,
+  MORE_LOADING_SKELETON_KEYS,
+  SEARCHING_SKELETON_KEYS,
+  SPLIT_LOADING_SKELETON_KEYS,
+} from "@/lib/listingsUiConstants";
 
 import type { ListingsFilters } from "@/hooks/useListings";
 import { useListingsFilters } from "@/hooks/useListingsFilters";
@@ -39,59 +48,14 @@ import {
   buyPriceRanges, rentPriceRanges, listingTypeOptions, sortOptions,
 } from "@/lib/listingsConfig";
 import { mapListingFromCard } from "@/lib/listingsPerformance";
-
-const GRID_LOADING_SKELETON_KEYS = [
-  "grid-loading-1",
-  "grid-loading-2",
-  "grid-loading-3",
-  "grid-loading-4",
-];
-const SPLIT_LOADING_SKELETON_KEYS = [
-  "split-loading-1",
-  "split-loading-2",
-  "split-loading-3",
-  "split-loading-4",
-];
-const SEARCHING_SKELETON_KEYS = [
-  "searching-loading-1",
-  "searching-loading-2",
-  "searching-loading-3",
-  "searching-loading-4",
-];
-const MORE_LOADING_SKELETON_KEYS = [
-  "more-loading-1",
-  "more-loading-2",
-  "more-loading-3",
-  "more-loading-4",
-];
-const GRID_ESTIMATED_ROW_HEIGHT = 520;
-const ACTIVE_FILTER_CHIP_CLASS = "flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 transition-colors shrink-0";
-const ACCENT_FILTER_CHIP_CLASS = "flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent hover:bg-accent/20 transition-colors shrink-0";
+import {
+  getFeatureFilterLabel,
+  getPriceRangeLabel,
+  type SmartFilterFeature,
+} from "@/lib/listingsFilterHelpers";
 
 type ListingsFilterSetParam = ReturnType<typeof useListingsFilters>["setParam"];
 type ListingsFilterToggleMulti = ReturnType<typeof useListingsFilters>["toggleMulti"];
-type SmartFilterFeature = { key: string; label: string };
-
-const ActiveFilterChip = ({
-  children,
-  onClick,
-  accent = false,
-}: {
-  children: ReactNode;
-  onClick: () => void;
-  accent?: boolean;
-}) => (
-  <button onClick={onClick} className={accent ? ACCENT_FILTER_CHIP_CLASS : ACTIVE_FILTER_CHIP_CLASS}>
-    {children} <X className="w-3 h-3" />
-  </button>
-);
-
-const getPriceRangeLabel = (selectedPrice: string) =>
-  [...buyPriceRanges, ...rentPriceRanges].find((range) => range.value === selectedPrice)?.label || selectedPrice;
-
-const getFeatureFilterLabel = (features: SmartFilterFeature[], key: string) =>
-  features.find((option) => option.key === key)?.label.replace(/^[^\s]+ /, "") || key;
-
 const PROPERTY_TYPE_LABELS_EL: Record<string, string> = {
   apartment: "Διαμέρισμα",
   house: "Μονοκατοικία",

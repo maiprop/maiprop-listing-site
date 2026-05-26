@@ -1,4 +1,4 @@
-# maiProp — Greek Real Estate Platform
+# mAI prop - Greek Real Estate Platform
 
 A full-stack property listing and investment platform for the Greek market. Built with Vite + React 18 + TypeScript, Supabase (Postgres + Auth + Edge Functions), and Tailwind CSS.
 

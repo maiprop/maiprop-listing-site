@@ -38,4 +38,12 @@ describe("video room authorization hardening", () => {
     expect(migration).toContain("p.user_id = COALESCE");
     expect(migration).not.toContain("WHERE cr.professional_id = p.id");
   });
+
+  it("uses the full UUID shape in realtime policy regex checks", () => {
+    const malformedUuidPattern = String.raw`[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`;
+    const fullUuidPattern = String.raw`[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`;
+
+    expect(migration).not.toContain(malformedUuidPattern);
+    expect(migration.split(fullUuidPattern).length - 1).toBeGreaterThanOrEqual(6);
+  });
 });

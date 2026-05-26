@@ -45,6 +45,7 @@ export type Database = {
           discount_applied: boolean
           discount_applied_at: string | null
           discount_invoice_id: string | null
+          discount_pct: number
           id: string
           kaek: string | null
           notes: string | null
@@ -70,6 +71,7 @@ export type Database = {
           discount_applied?: boolean
           discount_applied_at?: string | null
           discount_invoice_id?: string | null
+          discount_pct?: number
           id?: string
           kaek?: string | null
           notes?: string | null
@@ -95,6 +97,7 @@ export type Database = {
           discount_applied?: boolean
           discount_applied_at?: string | null
           discount_invoice_id?: string | null
+          discount_pct?: number
           id?: string
           kaek?: string | null
           notes?: string | null
@@ -3303,6 +3306,7 @@ export type Database = {
           discount_applied: boolean
           discount_applied_at: string | null
           discount_invoice_id: string | null
+          discount_pct: number
           id: string
           kaek: string | null
           notes: string | null
@@ -3705,6 +3709,7 @@ export type Database = {
       }
       submit_agent_data_input: {
         Args: {
+          p_agent_side?: string
           p_buyer_name?: string
           p_closed_at: string
           p_closing_price: number
