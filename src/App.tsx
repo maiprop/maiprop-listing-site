@@ -129,6 +129,7 @@ const App = () => (
                       <Route path="/professionals/me" element={<ProtectedRoute><ErrorBoundary><ProfessionalProfileMe /></ErrorBoundary></ProtectedRoute>} />
                       <Route path="/professionals/:id" element={<ErrorBoundary><ProfessionalProfile /></ErrorBoundary>} />
                       <Route path="/video-room/:professionalId" element={<ProtectedRoute><ErrorBoundary><BrandedVideoRoom /></ErrorBoundary></ProtectedRoute>} />
+                      <Route path="/video-room/:professionalId/:consultationId" element={<ProtectedRoute><ErrorBoundary><BrandedVideoRoom /></ErrorBoundary></ProtectedRoute>} />
                       <Route path="/video-viewing/:viewingId" element={<ProtectedRoute><ErrorBoundary><VideoViewingRoom /></ErrorBoundary></ProtectedRoute>} />
                       <Route path="/new-build/:id" element={<ErrorBoundary><NewBuildDetail /></ErrorBoundary>} />
                       <Route path="/open-houses" element={<ErrorBoundary><OpenHouses /></ErrorBoundary>} />

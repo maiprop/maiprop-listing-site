@@ -125,6 +125,30 @@ describe("useSubmitConsultation", () => {
     expect(consInsert).toHaveBeenCalledWith(expect.objectContaining({
       preferred_date: null,
       preferred_time: null,
+      meeting_type: "in_person",
+    }));
+  });
+
+  it("persists video meeting type for consultation room authorization", async () => {
+    const consInsert = vi.fn().mockResolvedValue({ error: null });
+    fromMock.mockImplementation((table: string) => {
+      if (table === "consultation_requests") return { insert: consInsert };
+      throw new Error("unexpected table " + table);
+    });
+
+    const { result } = renderHook(() => useSubmitConsultation(), { wrapper: wrapper() });
+    await act(async () => {
+      await result.current.mutateAsync({
+        professional_id: "p-1",
+        requester_name: "Bob",
+        requester_email: "bob@example.com",
+        request_type: "consultation",
+        meeting_type: "video",
+      });
+    });
+
+    expect(consInsert).toHaveBeenCalledWith(expect.objectContaining({
+      meeting_type: "video",
     }));
   });
 

@@ -619,6 +619,30 @@ describe("Component smoke tests", () => {
     expect(updateConsultation).toHaveBeenCalledWith("consult-1", "cancelled");
   });
 
+  it("BookingCalendarSection exposes scoped join links for confirmed video consultations", async () => {
+    const { BookingCalendarSection } = await import("@/components/dashboard/BookingCalendarSection");
+    const { getByRole } = renderWithProviders(
+      <BookingCalendarSection
+        viewings={[]}
+        leads={[{
+          id: "consult-1",
+          professional_id: "pro-1",
+          requester_name: "Buyer One",
+          request_type: "consultation",
+          meeting_type: "video",
+          service: "Architect",
+          preferred_date: "2026-05-21",
+          status: "confirmed",
+        }]}
+        onGoToLeads={noop}
+        onGoToViewings={noop}
+        onGoToServices={noop}
+      />
+    );
+
+    expect(getByRole("link", { name: /join room/i })).toHaveAttribute("href", "/video-room/pro-1/consult-1");
+  });
+
   it("BuyerOpenHousesCard renders without throwing", async () => {
     const { BuyerOpenHousesCard } = await import("@/components/dashboard/BuyerOpenHousesCard");
     expect(() => renderWithProviders(<BuyerOpenHousesCard />)).not.toThrow();

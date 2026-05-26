@@ -14,6 +14,20 @@ const mocks = vi.hoisted(() => ({
     category: "Design",
     video_link: null as string | null,
   },
+  consultationId: null as string | null,
+  consultation: {
+    id: "consultation-1",
+    professional_id: "pro-1",
+    requester_id: "buyer-1",
+    requester_name: "Buyer One",
+    requester_email: "buyer@example.com",
+    service: "Feasibility review",
+    preferred_date: "2026-06-01",
+    preferred_time: "10:00",
+    request_type: "consultation",
+    status: "confirmed",
+    meeting_type: "video",
+  },
   currentUserId: "owner-1",
   consultationAuthorized: false,
   queryError: null as Error | null,
@@ -32,7 +46,7 @@ vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
   return {
     ...actual,
-    useParams: () => ({ professionalId: "pro-1" }),
+    useParams: () => ({ professionalId: "pro-1", consultationId: mocks.consultationId ?? undefined }),
     useNavigate: () => mocks.navigate,
   };
 });
@@ -46,18 +60,20 @@ vi.mock("sonner", () => ({ toast: { success: mocks.toastSuccess, error: mocks.to
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
-    from: vi.fn(() => {
+    from: vi.fn((table: string) => {
       const query = {
         select: vi.fn(() => query),
         eq: vi.fn(() => query),
-        single: vi.fn(async () => {
-          if (mocks.queryError) return { data: null, error: mocks.queryError };
-          return { data: mocks.professional, error: null };
+        maybeSingle: vi.fn(async () => {
+          if (table === "professionals") {
+            if (mocks.queryError) return { data: null, error: mocks.queryError };
+            return { data: mocks.professional, error: null };
+          }
+          return {
+            data: mocks.consultationAuthorized && mocks.consultation.meeting_type === "video" ? mocks.consultation : null,
+            error: null,
+          };
         }),
-        maybeSingle: vi.fn(async () => ({
-          data: mocks.consultationAuthorized ? { id: "consultation-1" } : null,
-          error: null,
-        })),
       };
       return query;
     }),
@@ -118,6 +134,20 @@ describe("BrandedVideoRoom", () => {
       category: "Design",
       video_link: null,
     };
+    mocks.consultationId = null;
+    mocks.consultation = {
+      id: "consultation-1",
+      professional_id: "pro-1",
+      requester_id: "buyer-1",
+      requester_name: "Buyer One",
+      requester_email: "buyer@example.com",
+      service: "Feasibility review",
+      preferred_date: "2026-06-01",
+      preferred_time: "10:00",
+      request_type: "consultation",
+      status: "confirmed",
+      meeting_type: "video",
+    };
     mocks.currentUserId = "owner-1";
     mocks.consultationAuthorized = false;
     mocks.queryError = null;
@@ -148,6 +178,47 @@ describe("BrandedVideoRoom", () => {
   it("blocks non-participants from professional rooms", async () => {
     mocks.currentUserId = "buyer-without-confirmed-request";
     mocks.consultationAuthorized = false;
+    renderRoom();
+
+    expect(await screen.findByText("Professional not found.")).toBeInTheDocument();
+    expect(screen.queryByText(/mAI prop video room/i)).not.toBeInTheDocument();
+  });
+
+  it("blocks buyers from the legacy professional-wide room even with another confirmed consultation", async () => {
+    mocks.currentUserId = "buyer-1";
+    mocks.consultationAuthorized = true;
+    renderRoom();
+
+    expect(await screen.findByText("Professional not found.")).toBeInTheDocument();
+    expect(screen.queryByText(/mAI prop video room/i)).not.toBeInTheDocument();
+  });
+
+  it("scopes buyer access and signaling to a confirmed video consultation", async () => {
+    mocks.currentUserId = "buyer-1";
+    mocks.consultationId = "consultation-1";
+    mocks.consultationAuthorized = true;
+    renderRoom();
+
+    expect(await screen.findByText(/mAI prop video room/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Feasibility review - 2026-06-01 10:00/i).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: /Copy link/i }));
+    await waitFor(() => expect(mocks.writeText).toHaveBeenCalledWith(expect.stringMatching(/\/video-room\/pro-1\/consultation-1$/)));
+
+    fireEvent.click(screen.getByRole("button", { name: /Join now/i }));
+    await screen.findByText(/Waiting for the other participant/i);
+    const { supabase } = await import("@/integrations/supabase/client");
+    expect(supabase.channel).toHaveBeenCalledWith("video:consultation:consultation-1", expect.objectContaining({
+      config: expect.objectContaining({ private: true }),
+    }));
+  });
+
+  it("rejects scoped in-person consultations before exposing the room", async () => {
+    mocks.currentUserId = "buyer-1";
+    mocks.consultationId = "consultation-1";
+    mocks.consultationAuthorized = true;
+    mocks.consultation.meeting_type = "in_person";
+
     renderRoom();
 
     expect(await screen.findByText("Professional not found.")).toBeInTheDocument();

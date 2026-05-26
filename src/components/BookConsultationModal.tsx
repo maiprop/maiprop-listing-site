@@ -445,6 +445,7 @@ export default function BookConsultationModal({ open, onClose, allowVideoCall = 
         requester_email: resolvedEmail,
         requester_phone: phone || undefined,
         request_type: "consultation",
+        meeting_type: bookingType,
         service: selectedService?.service_name,
         preferred_date: selectedDate,
         preferred_time: selectedTime,

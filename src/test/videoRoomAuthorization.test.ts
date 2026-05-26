@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const migration = readFileSync(
-  resolve(process.cwd(), "supabase/migrations/20260524165932_harden_video_room_authorization.sql"),
+  resolve(process.cwd(), "supabase/migrations/20260707140000_scope_consultation_video_rooms_and_contact_admin_fields.sql"),
   "utf8",
 );
 
@@ -24,12 +24,18 @@ describe("video room authorization hardening", () => {
     expect(migration).toContain(") IN (v.owner_id, v.requester_id)");
   });
 
-  it("requires professional ownership or confirmed consultation participation for professional rooms", () => {
-    expect(migration).toContain("p.user_id = COALESCE");
-    expect(migration).toContain("FROM public.consultation_requests cr");
-    expect(migration).toContain("cr.requester_id = COALESCE");
+  it("requires scoped confirmed video consultation participation for consultation rooms", () => {
+    expect(migration).toContain("video:consultation:%");
+    expect(migration).toContain("cr.id = NULLIF");
+    expect(migration).toContain("JOIN public.professionals p ON p.id = cr.professional_id");
     expect(migration).toContain("cr.request_type = 'consultation'");
     expect(migration).toContain("cr.status = 'confirmed'");
-    expect(migration).not.toMatch(/\(SELECT realtime\.topic\(\)\) LIKE 'video:professional:%'\s+OR\s+\(SELECT realtime\.topic\(\)\) LIKE 'private:video:professional:%'\s+OR\s+\(SELECT realtime\.topic\(\)\) LIKE 'realtime:private:video:professional:%'\s+OR\s+\(/);
+    expect(migration).toContain("cr.meeting_type = 'video'");
+    expect(migration).toContain("OR cr.requester_id = COALESCE");
+  });
+
+  it("keeps legacy professional rooms owner-only", () => {
+    expect(migration).toContain("p.user_id = COALESCE");
+    expect(migration).not.toContain("WHERE cr.professional_id = p.id");
   });
 });
