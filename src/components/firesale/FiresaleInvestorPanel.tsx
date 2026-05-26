@@ -95,26 +95,26 @@ export function FiresaleInvestorPanel({ invitationStatus, onRequestInvitation }:
 
       {/* Comparison table */}
       <div className="reveal in-view reveal-delay-1 glass-card rounded-2xl border border-border overflow-hidden transition-all duration-300 hover:border-primary/20 hover:shadow-elevated">
-        <div className="grid grid-cols-3 bg-muted/60 border-b border-border text-[10px] font-bold uppercase tracking-widest">
-          <div className="px-4 py-3 text-muted-foreground"></div>
-          <div className="px-4 py-3 flex items-center justify-center gap-1.5 text-destructive border-x border-border">
+        <div className="grid grid-cols-2 min-[430px]:grid-cols-[minmax(96px,1.05fr)_minmax(104px,1fr)_minmax(86px,0.9fr)] bg-muted/60 border-b border-border text-[10px] font-bold uppercase tracking-widest">
+          <div className="hidden min-[430px]:block px-3 py-3 text-muted-foreground"></div>
+          <div className="px-3 py-3 flex items-center justify-center gap-1.5 text-destructive border-r border-border min-[430px]:border-x text-center leading-snug">
             <Flame className="w-3 h-3" /> Quick Sale™
           </div>
-          <div className="px-4 py-3 text-center text-muted-foreground/60">{isGreek ? "Παραδοσιακή διαδικασία" : "Traditional"}</div>
+          <div className="px-3 py-3 text-center text-muted-foreground/60 leading-snug">{isGreek ? "Παραδοσιακή διαδικασία" : "Traditional"}</div>
         </div>
         {comparisonRows.map((r, i) => (
           <div
             key={r.label}
-            className={`grid grid-cols-3 text-xs items-stretch ${i < 4 ? "border-b border-border" : ""}`}
+            className={`grid grid-cols-2 min-[430px]:grid-cols-[minmax(96px,1.05fr)_minmax(104px,1fr)_minmax(86px,0.9fr)] text-[11px] sm:text-xs items-stretch ${i < 4 ? "border-b border-border" : ""}`}
           >
-            <div className="px-4 py-3 flex items-center gap-2 text-muted-foreground">
+            <div className="col-span-2 min-[430px]:col-span-1 min-w-0 px-3 py-3 flex items-center gap-1.5 text-muted-foreground border-b border-border/60 min-[430px]:border-b-0">
               <span className="text-sm leading-none">{r.icon}</span>
-              <span className="font-medium">{r.label}</span>
+              <span className="font-medium leading-snug break-words">{r.label}</span>
             </div>
-            <div className="px-4 py-3 flex items-center justify-center border-x border-border bg-destructive/3">
+            <div className="min-w-0 px-3 py-3 flex items-center justify-center border-r border-border min-[430px]:border-x bg-destructive/3">
               <span className="font-bold text-foreground text-center leading-tight">{r.firesale}</span>
             </div>
-            <div className="px-4 py-3 flex items-center justify-center">
+            <div className="min-w-0 px-3 py-3 flex items-center justify-center">
               <span className="text-muted-foreground/60 line-through text-center leading-tight">{r.trad}</span>
             </div>
           </div>

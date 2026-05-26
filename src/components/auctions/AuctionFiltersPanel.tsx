@@ -331,17 +331,21 @@ export const AuctionFiltersPanel = ({ // skipcq: JS-W1044
               isGreek={isGreek}
             />
           ) : (
-            <div className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50 border border-border">
-              <Lock className="w-5 h-5 text-muted-foreground shrink-0" />
-              <div>
-                <p className="text-sm font-medium">
-                  {isGreek ? "Καθεστώς κυριότητας, γύρος πλειστηριασμού & εκτ. μισθωτική απόδοση" : "Ownership Status, Auction Round & Est. Rental Yield"}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {isGreek ? "Αναβαθμίστε σε Pro για να ξεκλειδώσετε αυτά τα φίλτρα." : "Upgrade to Pro to unlock these filters."}
-                </p>
+            <div className="flex flex-col gap-4 p-4 rounded-xl bg-secondary/50 border border-border sm:flex-row sm:items-center">
+              <div className="flex min-w-0 flex-1 gap-3">
+                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card/70">
+                  <Lock className="w-4 h-4 text-muted-foreground" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium leading-snug">
+                    {isGreek ? "Καθεστώς κυριότητας, γύρος πλειστηριασμού & εκτ. μισθωτική απόδοση" : "Ownership Status, Auction Round & Est. Rental Yield"}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                    {isGreek ? "Αναβαθμίστε σε Pro για να ξεκλειδώσετε αυτά τα φίλτρα." : "Upgrade to Pro to unlock these filters."}
+                  </p>
+                </div>
               </div>
-              <Button size="sm" variant="outline" className="border-primary/40 text-primary hover:bg-primary/10 shrink-0" asChild>
+              <Button size="sm" variant="outline" className="w-full border-primary/40 text-primary hover:bg-primary/10 sm:w-auto sm:shrink-0" asChild>
                 <Link to="/pricing">{isGreek ? "Αναβάθμιση σε Pro" : "Upgrade to Pro"}</Link>
               </Button>
             </div>

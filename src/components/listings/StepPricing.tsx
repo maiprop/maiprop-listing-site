@@ -71,7 +71,7 @@ export function StepPricing({
 
         {aiPriceSuggestion && (
           <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-3 text-center">
+            <div className="grid grid-cols-1 min-[420px]:grid-cols-3 gap-3 text-center">
               <div className="rounded-lg bg-background/50 px-2 py-2">
                 <div className="text-[10px] text-muted-foreground mb-0.5 uppercase tracking-wide">{tr("createListing.pricing.min", "Min")}</div>
                 <div className="text-sm font-bold text-foreground">€{aiPriceSuggestion.min.toLocaleString()}</div>

@@ -172,7 +172,7 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
         </Link>
 
         {/* Desktop nav */}
-        <nav className="hidden lg:flex items-center gap-0.5">
+        <nav className="hidden xl:flex items-center gap-0.5">
           {user && canListProperty && (
             <Link
               to="/dashboard/listings"
@@ -238,7 +238,7 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
         </nav>
 
         {/* Right actions */}
-        <div className="hidden lg:flex items-center gap-1">
+        <div className="hidden xl:flex items-center gap-1">
           <LanguageSwitcher />
           <button
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
@@ -469,7 +469,7 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
 
         {/* Mobile menu button — 44px touch target */}
         <button
-          className={`lg:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg transition-colors ${
+          className={`xl:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg transition-colors ${
             forceLight ? "text-white/80 hover:text-white" : "text-muted-foreground hover:text-foreground"
           }`}
           onClick={() => setMobileOpen(!mobileOpen)}
@@ -481,7 +481,7 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
 
       {/* Mobile dropdown */}
       {mobileOpen && (
-        <div className="lg:hidden fixed top-16 left-0 right-0 z-50 max-h-[calc(100svh-4rem-var(--bottom-nav-h,56px)-env(safe-area-inset-bottom,0px))] overflow-y-auto bg-card/95 backdrop-blur-xl border-b border-border px-4 py-4 space-y-1 shadow-elevated">
+        <div className="xl:hidden fixed top-16 left-0 right-0 z-50 max-h-[calc(100svh-4rem-var(--bottom-nav-h,56px)-env(safe-area-inset-bottom,0px))] overflow-y-auto bg-card/95 backdrop-blur-xl border-b border-border px-4 py-4 space-y-1 shadow-elevated">
           {navLinks.map((link) => (
             <Link
               key={link.href}

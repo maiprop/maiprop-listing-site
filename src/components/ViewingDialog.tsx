@@ -196,7 +196,7 @@ export default function ViewingDialog({ open, onClose, property, ownerId, canVid
             {selectedDay && (
               <div>
                 <label className="text-sm font-medium block mb-2">{isGreek ? "Επιλογή ώρας" : "Select Time"}</label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 min-[420px]:grid-cols-3 gap-2">
                   {timeSlots.map(time => (
                     <button
                       key={time}

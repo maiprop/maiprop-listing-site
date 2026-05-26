@@ -228,7 +228,7 @@ const OnlineViewingModal = ({ open, onClose, listing, professional }: OnlineView
 
             <div>
               <label className="text-sm font-medium block mb-2">{isGreek ? "Επιλογή ημερομηνίας" : "Select Date"}</label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 min-[420px]:grid-cols-3 gap-2">
                 {days.map((day) => (
                   <button
                     key={day.date}
@@ -247,7 +247,7 @@ const OnlineViewingModal = ({ open, onClose, listing, professional }: OnlineView
             {selectedDate && (
               <div>
                 <label className="text-sm font-medium block mb-2">{isGreek ? "Επιλογή ώρας" : "Select Time"}</label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 min-[420px]:grid-cols-3 gap-2">
                   {timeSlots.map((time) => (
                     <button
                       key={time}
