@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import ReactDOM from "react-dom";
-import { MapPin, Clock, X } from "lucide-react";
+import { MapPin, Clock, Loader2, X } from "lucide-react";
 import { GOOGLE_MAPS_API_KEY } from "@/lib/config";
 import { loadGoogleMapsPlaces } from "@/lib/googleMapsPlaces";
+import { useNominatimAddressSuggestions } from "@/hooks/useNominatimAddressSuggestions";
 import { getRecentSearches, removeRecentSearch } from "@/lib/recentSearches";
+import { getPopularLocationSuggestions, mergeLocationSuggestions } from "@/lib/locationSuggestions";
 
 interface GMAutocompleteInstance {
   addListener(eventName: string, handler: () => void): void;
@@ -21,16 +23,31 @@ export function LocationInput({
 }: {
   value: string;
   onChange: (v: string) => void;
-  onSearch: () => void;
+  onSearch: (value?: string) => void;
 }) {
   const [focused, setFocused] = useState(false);
   const [googlePlacesRequested, setGooglePlacesRequested] = useState(false);
+  const [googlePlacesUnavailable, setGooglePlacesUnavailable] = useState(!GOOGLE_MAPS_API_KEY);
   const [recents, setRecents] = useState<string[]>([]);
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<GMAutocompleteInstance | null>(null);
+  const query = value.trim();
+  const popularSuggestions = useMemo(() => getPopularLocationSuggestions(query), [query]);
+  const shouldUseNominatim = Boolean(query) && (googlePlacesUnavailable || popularSuggestions.length === 0);
+  const { suggestions: nominatimSuggestions, loading: suggestionsLoading, clear: clearSuggestions } =
+    useNominatimAddressSuggestions(shouldUseNominatim ? query : "");
 
   const refresh = useCallback(() => setRecents(getRecentSearches()), []);
+
+  const locationSuggestions = useMemo(
+    () => mergeLocationSuggestions(
+      popularSuggestions,
+      shouldUseNominatim ? [query] : [],
+      shouldUseNominatim ? nominatimSuggestions : [],
+    ).filter((suggestion) => !recents.some((recent) => recent.toLowerCase() === suggestion.toLowerCase())).slice(0, 8),
+    [nominatimSuggestions, popularSuggestions, query, recents, shouldUseNominatim],
+  );
 
   const getPos = () => {
     if (!wrapRef.current) return { top: 0, left: 0, width: 300 };
@@ -50,6 +67,10 @@ export function LocationInput({
     return () => document.removeEventListener("mousedown", handler);
   }, [refresh]);
 
+  useEffect(() => {
+    if (document.activeElement === inputRef.current) setFocused(true);
+  }, [value]);
+
   const initGoogle = useCallback(() => {
     const input = inputRef.current;
     const g = (window as GoogleMapsWindow).google;
@@ -68,14 +89,18 @@ export function LocationInput({
       const get = (t: string) => ac.find((c) => c.types.includes(t))?.long_name ?? "";
       const city =
         get("locality") ||
+        get("postal_town") ||
+        get("administrative_area_level_3") ||
         get("administrative_area_level_2") ||
         get("administrative_area_level_1") ||
         place.formatted_address ||
         "";
       onChange(city);
+      setFocused(false);
+      clearSuggestions();
     });
     autocompleteRef.current = autocomplete;
-  }, [onChange]);
+  }, [clearSuggestions, onChange]);
 
   useEffect(() => {
     if (!googlePlacesRequested || !GOOGLE_MAPS_API_KEY) return;
@@ -86,7 +111,7 @@ export function LocationInput({
         if (!cancelled) initGoogle();
       })
       .catch(() => {
-        // Typed search remains available when Places is blocked or unavailable.
+        if (!cancelled) setGooglePlacesUnavailable(true);
       });
 
     return () => {
@@ -95,7 +120,16 @@ export function LocationInput({
     };
   }, [googlePlacesRequested, initGoogle]);
 
-  const showDropdown = focused && recents.length > 0 && !value;
+  const chooseLocation = (location: string) => {
+    onChange(location);
+    clearSuggestions();
+    setFocused(false);
+    onSearch(location);
+  };
+
+  const showRecents = focused && recents.length > 0 && !query;
+  const showLocationSuggestions = focused && (!showRecents || Boolean(query)) && (locationSuggestions.length > 0 || suggestionsLoading);
+  const showDropdown = showRecents || showLocationSuggestions;
   const pos = showDropdown ? getPos() : null;
 
   const dropdown =
@@ -105,32 +139,63 @@ export function LocationInput({
         style={{ position: "absolute", top: pos.top, left: pos.left, width: pos.width, zIndex: 9999 }}
         className="bg-card border border-border rounded-2xl shadow-elevated overflow-hidden"
       >
-        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-secondary/40">
-          <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Recent Searches</span>
-        </div>
-        {recents.map((r) => (
-          <div
-            key={r}
-            className="flex items-center group px-4 py-2.5 hover:bg-secondary transition-colors cursor-pointer"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => { onChange(r); setFocused(false); onSearch(); }}
-          >
-            <Clock className="w-3.5 h-3.5 text-muted-foreground mr-3 shrink-0" />
-            <span className="flex-1 text-sm text-foreground truncate">{r}</span>
-            <button
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={(ev) => {
-                ev.stopPropagation();
-                removeRecentSearch(r);
-                refresh();
-              }}
-              className="opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-border transition-all text-muted-foreground hover:text-foreground"
-            >
-              <X className="w-3 h-3" />
-            </button>
-          </div>
-        ))}
+        {showRecents && (
+          <>
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-secondary/40">
+              <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Recent Searches</span>
+            </div>
+            {recents.map((r) => (
+              <div
+                key={r}
+                className="flex items-center group px-4 py-2.5 hover:bg-secondary transition-colors cursor-pointer"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => chooseLocation(r)}
+              >
+                <Clock className="w-3.5 h-3.5 text-muted-foreground mr-3 shrink-0" />
+                <span className="flex-1 text-sm text-foreground truncate">{r}</span>
+                <button
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={(ev) => {
+                    ev.stopPropagation();
+                    removeRecentSearch(r);
+                    refresh();
+                  }}
+                  className="opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-border transition-all text-muted-foreground hover:text-foreground"
+                  aria-label={`Remove ${r} from recent searches`}
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </>
+        )}
+        {showLocationSuggestions && (
+          <>
+            <div className={`${showRecents ? "border-t" : ""} flex items-center gap-2 px-4 py-2.5 border-b border-border bg-secondary/40`}>
+              {suggestionsLoading ? (
+                <Loader2 className="w-3.5 h-3.5 text-muted-foreground animate-spin" />
+              ) : (
+                <MapPin className="w-3.5 h-3.5 text-muted-foreground" />
+              )}
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                {query ? "Location Suggestions" : "Popular Locations"}
+              </span>
+            </div>
+            {locationSuggestions.map((suggestion) => (
+              <button
+                key={suggestion}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => chooseLocation(suggestion)}
+                className="flex w-full items-center px-4 py-2.5 text-left hover:bg-secondary transition-colors"
+              >
+                <MapPin className="w-3.5 h-3.5 text-muted-foreground mr-3 shrink-0" />
+                <span className="flex-1 text-sm text-foreground truncate">{suggestion}</span>
+              </button>
+            ))}
+          </>
+        )}
       </div>
     ) : null;
 
@@ -146,7 +211,7 @@ export function LocationInput({
           onChange={(e) => onChange(e.target.value)}
           onFocus={() => { refresh(); setFocused(true); setGooglePlacesRequested(true); }}
           onKeyDown={(e) => {
-            if (e.key === "Enter") { setFocused(false); onSearch(); }
+            if (e.key === "Enter") { setFocused(false); onSearch(value); }
             if (e.key === "Escape") setFocused(false);
           }}
           aria-label="Location search"

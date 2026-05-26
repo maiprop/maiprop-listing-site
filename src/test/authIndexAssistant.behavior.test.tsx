@@ -619,6 +619,19 @@ describe("PropertyTypeDropdown", () => {
 });
 
 describe("LocationInput", () => {
+  it("shows popular locations when there is no search history and searches the selected option", () => {
+    const onChange = vi.fn();
+    const onSearch = vi.fn();
+    renderWithProviders(<LocationInput value="" onChange={onChange} onSearch={onSearch} />);
+
+    fireEvent.focus(screen.getByLabelText("Location search"));
+    expect(screen.getByText("Popular Locations")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Thessaloniki"));
+    expect(onChange).toHaveBeenCalledWith("Thessaloniki");
+    expect(onSearch).toHaveBeenCalledWith("Thessaloniki");
+  });
+
   it("shows recent searches, selects one, removes one, and searches on Enter", () => {
     localStorage.setItem("maiprop_recent_searches", JSON.stringify(["Athens", "Chania"]));
     const onChange = vi.fn();
@@ -630,6 +643,7 @@ describe("LocationInput", () => {
 
     fireEvent.click(screen.getByText("Athens"));
     expect(onChange).toHaveBeenCalledWith("Athens");
+    expect(onSearch).toHaveBeenCalledWith("Athens");
     expect(onSearch).toHaveBeenCalledTimes(1);
 
     fireEvent.focus(screen.getByLabelText("Location search"));

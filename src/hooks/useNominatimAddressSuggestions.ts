@@ -14,8 +14,8 @@ const NOMINATIM_LIMIT = 5;
  *    unmounts, so suggestions never overwrite a more-recent query.
  *  - Silently returns `[]` on any network or parse error.
  *
- * Nominatim is a free service. We send a stable `User-Agent` and
- * `Accept-Language: el,en` to bias toward Greek results.
+ * Nominatim is a free service. The query is restricted to Greece and asks
+ * for Greek/English result text.
  */
 export function useNominatimAddressSuggestions(query: string) {
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -40,11 +40,10 @@ export function useNominatimAddressSuggestions(query: string) {
     const timeout = setTimeout(async () => {
       try {
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=${NOMINATIM_LIMIT}&q=${encodeURIComponent(q)}`,
+          `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=${NOMINATIM_LIMIT}&countrycodes=gr&q=${encodeURIComponent(q)}`,
           {
             headers: {
               "Accept-Language": "el,en",
-              "User-Agent": "maiprop-listing-site-firesale-autocomplete",
             },
             signal: controller.signal,
           },

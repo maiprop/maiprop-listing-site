@@ -1,10 +1,10 @@
-import { useRef, useState, useMemo, lazy, Suspense, useCallback, useEffect } from "react";
+import { useRef, useState, useMemo, lazy, Suspense, useCallback } from "react";
 import type { ReactNode } from "react";
 import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import {
-  Search, SlidersHorizontal, MapPin, LayoutGrid, Map,
+  SlidersHorizontal, MapPin, LayoutGrid, Map,
   X, ArrowUpDown, Loader2, Bookmark, GitCompare,
   Columns2, ChevronDown, Building2,
 } from "lucide-react";
@@ -24,6 +24,7 @@ import { PropertyTypeButton } from "@/components/listings/PropertyTypeButton";
 import { MapGate } from "@/components/listings/MapGate";
 import { ListingCompareButton } from "@/components/listings/ListingCompareButton";
 import { VirtualizedListingGrid } from "@/components/listings/VirtualizedListingGrid";
+import { LocationSearchField } from "@/components/listings/LocationSearchField";
 
 import type { ListingsFilters } from "@/hooks/useListings";
 import { useListingsFilters } from "@/hooks/useListingsFilters";
@@ -31,8 +32,6 @@ import { useListingsPipeline } from "@/hooks/useListingsPipeline";
 import type { ListingCardWithRaw } from "@/lib/listingsCardUtils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCookieConsent } from "@/hooks/useCookieConsent";
-import { GOOGLE_MAPS_API_KEY } from "@/lib/config";
-import { loadGoogleMapsPlaces } from "@/lib/googleMapsPlaces";
 import { getTypeLabel, getSubtypeLabel, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
 import { HEATING_TYPES, CONSTRUCTION_STATUSES } from "@/lib/filterConfig";
 import { useSmartFilters } from "@/hooks/useSmartFilters";
@@ -72,22 +71,6 @@ const ACCENT_FILTER_CHIP_CLASS = "flex items-center gap-1 px-2 py-1 rounded-full
 type ListingsFilterSetParam = ReturnType<typeof useListingsFilters>["setParam"];
 type ListingsFilterToggleMulti = ReturnType<typeof useListingsFilters>["toggleMulti"];
 type SmartFilterFeature = { key: string; label: string };
-type ListingsGooglePlace = {
-  address_components?: Array<{ types: string[]; long_name: string }>;
-  formatted_address?: string;
-};
-type ListingsGoogleWindow = typeof window & {
-  google?: {
-    maps?: {
-      places?: {
-        Autocomplete: new (el: HTMLInputElement, opts: object) => {
-          addListener(eventName: string, handler: () => void): void;
-          getPlace(): ListingsGooglePlace;
-        };
-      };
-    };
-  };
-};
 
 const ActiveFilterChip = ({
   children,
@@ -336,19 +319,6 @@ const ListingsResultSummary = (props: Parameters<typeof getListingsResultLabel>[
   </span>
 );
 
-const getSearchValueFromGooglePlace = (place: ListingsGooglePlace) => {
-  const components = place.address_components ?? [];
-  const get = (type: string) => components.find((item) => item.types.includes(type))?.long_name ?? "";
-  const city =
-    get("locality") ||
-    get("postal_town") ||
-    get("administrative_area_level_3") ||
-    get("administrative_area_level_2") ||
-    get("administrative_area_level_1");
-  const street = [get("street_number"), get("route")].filter(Boolean).join(" ");
-  return city || street || place.formatted_address || "";
-};
-
 // skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
 export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings coordinates filters, map state, comparison, and virtualization in one route shell.
   const { t, i18n } = useTranslation();
@@ -369,10 +339,6 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
   const [polygonFilterIds, setPolygonFilterIds] = useState<Set<string> | null>(null);
   const [mobileTab, setMobileTab] = useState<"list" | "map">("list");
   const splitListRef = useRef<HTMLDivElement | null>(null);
-  const mobileSearchInputRef = useRef<HTMLInputElement | null>(null);
-  const desktopSearchInputRef = useRef<HTMLInputElement | null>(null);
-  const initializedSearchInputs = useRef<WeakSet<HTMLInputElement>>(new WeakSet());
-  const [googlePlacesRequested, setGooglePlacesRequested] = useState(false);
   const { user } = useAuth();
   const { consent, accept } = useCookieConsent();
 
@@ -385,39 +351,6 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
     activeFilterCount, currentFilters,
     setParam, setParams, toggleMulti, clearAllFilters, applyAIFilters,
   } = useListingsFilters();
-
-  const initGoogleSearchAutocomplete = useCallback((input: HTMLInputElement | null) => {
-    const Autocomplete = (window as ListingsGoogleWindow).google?.maps?.places?.Autocomplete;
-    if (!input || !Autocomplete || initializedSearchInputs.current.has(input)) return;
-
-    const autocomplete = new Autocomplete(input, {
-      types: ["geocode"],
-      componentRestrictions: { country: "gr" },
-      fields: ["address_components", "formatted_address"],
-    });
-    autocomplete.addListener("place_changed", () => {
-      const value = getSearchValueFromGooglePlace(autocomplete.getPlace()).trim();
-      if (value) setParam("city", value);
-    });
-    initializedSearchInputs.current.add(input);
-  }, [setParam]);
-
-  useEffect(() => {
-    if (!googlePlacesRequested || !GOOGLE_MAPS_API_KEY) return;
-    let cancelled = false;
-
-    loadGoogleMapsPlaces()
-      .then(() => {
-        if (cancelled) return;
-        initGoogleSearchAutocomplete(mobileSearchInputRef.current);
-        initGoogleSearchAutocomplete(desktopSearchInputRef.current);
-      })
-      .catch(() => {
-        // Plain typed city/area/address filtering remains available.
-      });
-
-    return () => { cancelled = true; };
-  }, [googlePlacesRequested, initGoogleSearchAutocomplete]);
 
   // AI-powered smart filters — fetch once per type/subtype combo, cached in memory
   const { config: aiFilterConfig } = useSmartFilters(
@@ -634,21 +567,14 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                   </button>
                 </div>
                 {/* Search */}
-                <div className="col-span-2 flex items-center gap-2 bg-secondary rounded-xl px-3 py-2 border border-border focus-within:border-primary transition-colors min-w-0">
-                  <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                  <input
-                    ref={mobileSearchInputRef}
-                    type="text"
-                    placeholder={isGreek ? "Πόλη…" : "City…"}
-                    aria-label={isGreek ? "Αναζήτηση ανά πόλη" : "Search by city"}
+                <div className="col-span-2">
+                  <LocationSearchField
                     value={searchQuery}
-                    onChange={e => setParam("city", e.target.value)}
-                    onFocus={() => setGooglePlacesRequested(true)}
-                    className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none min-w-0"
+                    onChange={(nextValue) => setParam("city", nextValue)}
+                    placeholder={isGreek ? "Πόλη…" : "City…"}
+                    ariaLabel={isGreek ? "Αναζήτηση ανά πόλη" : "Search by city"}
+                    compact
                   />
-                  {searchQuery && (
-                    <button onClick={() => setParam("city", "")} className="min-h-8 min-w-8 inline-flex items-center justify-center rounded-lg"><X className="w-3 h-3 text-muted-foreground" /></button>
-                  )}
                 </div>
               </div>
 
@@ -769,22 +695,12 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
             {/* ── DESKTOP FILTER BAR ── */}
             <div className="hidden sm:flex gap-2 items-center content-start overflow-x-auto scrollbar-none sm:flex-wrap">
               {/* Search */}
-              <div className="shrink-0 flex-1 min-w-[200px] flex items-center gap-2 bg-secondary rounded-xl px-4 py-2.5 border border-border focus-within:border-primary transition-colors">
-                <Search className="w-4 h-4 text-muted-foreground shrink-0" />
-                <input
-                  ref={desktopSearchInputRef}
-                  type="text"
-                  placeholder={isGreek ? "Πόλη, περιοχή, διεύθυνση..." : "City, area, address..."}
-                  aria-label={isGreek ? "Αναζήτηση ανά πόλη ή περιοχή" : "Search by city or area"}
-                  value={searchQuery}
-                  onChange={e => setParam("city", e.target.value)}
-                  onFocus={() => setGooglePlacesRequested(true)}
-                  className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none min-w-0"
-                />
-                {searchQuery && (
-                  <button onClick={() => setParam("city", "")}><X className="w-3.5 h-3.5 text-muted-foreground" /></button>
-                )}
-              </div>
+              <LocationSearchField
+                value={searchQuery}
+                onChange={(nextValue) => setParam("city", nextValue)}
+                placeholder={isGreek ? "Πόλη, περιοχή, διεύθυνση..." : "City, area, address..."}
+                ariaLabel={isGreek ? "Αναζήτηση ανά πόλη ή περιοχή" : "Search by city or area"}
+              />
               <ListingTypeButton value={selectedListingType} onChange={v => setParam("listing_type", v)} />
               <PropertyTypeButton
                 value={selectedType}
