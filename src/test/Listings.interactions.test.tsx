@@ -239,7 +239,13 @@ describe("Listings page interactions", () => {
     const { default: Listings } = await import("@/pages/Listings");
     renderWithProviders(<Listings />);
 
-    fireEvent.change(screen.getByLabelText("Search by city"), { target: { value: "Athens" } });
+    const cityInput = screen.getByLabelText("Search by city");
+    fireEvent.focus(cityInput);
+    expect(screen.getByText("Popular Locations")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Athens"));
+    expect(setParam).toHaveBeenCalledWith("city", "Athens");
+
+    fireEvent.change(cityInput, { target: { value: "Athens" } });
     expect(setParam).toHaveBeenCalledWith("city", "Athens");
 
     fireEvent.click(screen.getAllByRole("button", { name: "Grid view" })[0]);

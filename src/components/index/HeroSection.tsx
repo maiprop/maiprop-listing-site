@@ -53,7 +53,8 @@ export function HeroSection() {
     };
   }, []);
 
-  const handleSearch = () => {
+  const handleSearch = (locationOverride?: string) => {
+    const locationQuery = (locationOverride ?? searchQuery).trim();
     if (searchType === "Professionals") {
       const q = (professionalService || searchQuery).trim().toLowerCase();
       const params = new URLSearchParams();
@@ -68,9 +69,9 @@ export function HeroSection() {
     const lt = LISTING_TYPE_MAP[searchType];
     if (lt === "firesale") { navigate("/firesale"); return; }
     if (lt === "auction") { navigate("/auctions"); return; }
-    if (searchQuery.trim()) addRecentSearch(searchQuery.trim());
+    if (locationQuery) addRecentSearch(locationQuery);
     const params = new URLSearchParams();
-    if (searchQuery) params.set("city", searchQuery);
+    if (locationQuery) params.set("city", locationQuery);
     if (selectedPropertyType) params.set("type", selectedPropertyType);
     if (lt) params.set("listing_type", lt);
     navigate(`/listings?${params.toString()}`);
@@ -290,7 +291,7 @@ export function HeroSection() {
                       )}
                       <Button
                         size="default"
-                        onClick={handleSearch}
+                        onClick={() => handleSearch()}
                         aria-label={searchType === "Professionals" ? "Search professionals" : "Search properties"}
                         className={`bg-primary hover:opacity-90 border-0 text-primary-foreground rounded-xl font-semibold shrink-0 px-4 min-h-[44px] ${searchType === "Professionals" ? "flex-1" : ""}`}
                       >
