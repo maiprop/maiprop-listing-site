@@ -273,15 +273,16 @@ describe("ProjectDetail", () => {
     fireEvent.change(screen.getByPlaceholderText("A101"), { target: { value: "B201" } });
     fireEvent.change(screen.getByPlaceholderText("1"), { target: { value: "2" } });
     fireEvent.change(screen.getByPlaceholderText("101"), { target: { value: "201" } });
-    fireEvent.change(screen.getAllByRole("combobox")[0], { target: { value: "reserved" } });
+    const [statusSelect, kitchenSelect, energySelect] = Array.from(document.querySelectorAll("select")) as HTMLSelectElement[];
+    fireEvent.change(statusSelect, { target: { value: "reserved" } });
     fireEvent.change(screen.getByPlaceholderText("85"), { target: { value: "100" } });
     fireEvent.change(screen.getByPlaceholderText("12"), { target: { value: "16" } });
     fireEvent.change(screen.getByPlaceholderText("250000"), { target: { value: "500000" } });
     screen.getAllByPlaceholderText("2").forEach((input, index) => {
       fireEvent.change(input, { target: { value: String(index + 2) } });
     });
-    fireEvent.change(screen.getAllByRole("combobox")[1], { target: { value: "open" } });
-    fireEvent.change(screen.getAllByRole("combobox")[2], { target: { value: "A+" } });
+    fireEvent.change(kitchenSelect, { target: { value: "open" } });
+    fireEvent.change(energySelect, { target: { value: "A+" } });
     screen.getAllByRole("checkbox").forEach((checkbox) => fireEvent.click(checkbox));
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
 

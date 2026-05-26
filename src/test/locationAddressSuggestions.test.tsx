@@ -165,10 +165,14 @@ describe("location address suggestions", () => {
 
     render(<ControlledCityField />);
 
-    fireEvent.focus(screen.getByLabelText("Project city"));
+    const input = screen.getByRole("combobox", { name: "Project city" });
+    expect(input).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.focus(input);
+    expect(input).toHaveAttribute("aria-expanded", "true");
     fireEvent.click(screen.getByRole("option", { name: "Athens" }));
 
-    expect(screen.getByLabelText("Project city")).toHaveValue("Athens");
+    expect(input).toHaveValue("Athens");
   });
 
   it("returns structured details when a shared address field suggestion is selected", async () => {

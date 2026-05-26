@@ -130,6 +130,7 @@ export function LocationAutocompleteInput({
 
   const items = mode === "address" ? addressItems : cityItems;
   const showDropdown = focused && !disabled && (items.length > 0 || loading);
+  const listboxId = `${inputId}-listbox`;
 
   const getPos = () => {
     if (!wrapRef.current) return { top: 0, left: 0, width: 300 };
@@ -147,6 +148,7 @@ export function LocationAutocompleteInput({
   const pos = showDropdown ? getPos() : null;
   const dropdown = showDropdown && pos ? (
     <div
+      id={listboxId}
       ref={dropdownRef}
       style={{ position: "absolute", top: pos.top, left: pos.left, width: pos.width, zIndex: 9999 }}
       className={cn("bg-card border border-border rounded-xl shadow-elevated overflow-hidden", dropdownClassName)}
@@ -197,7 +199,9 @@ export function LocationAutocompleteInput({
           if (event.defaultPrevented) return;
           if (event.key === "Escape") setFocused(false);
         }}
+        role="combobox"
         aria-autocomplete="list"
+        aria-controls={showDropdown ? listboxId : undefined}
         aria-expanded={showDropdown}
         autoComplete="off"
         className={inputClassName}

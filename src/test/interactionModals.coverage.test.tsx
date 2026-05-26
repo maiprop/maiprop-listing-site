@@ -169,7 +169,7 @@ describe("high-coverage interaction modals", () => {
     fireEvent.focus(screen.getByLabelText("City"));
     fireEvent.click(screen.getByRole("option", { name: "Athens" }));
     fireEvent.change(screen.getByPlaceholderText(/ειρηνοδικείο/i), { target: { value: "Athens Court" } });
-    const [typeSelect] = screen.getAllByRole("combobox");
+    const typeSelect = document.querySelector("select") as HTMLSelectElement;
     fireEvent.change(typeSelect, { target: { value: "villa" } });
     fireEvent.change(screen.getByPlaceholderText("Min"), { target: { value: "100000" } });
     fireEvent.change(screen.getByPlaceholderText("Max"), { target: { value: "450000" } });
