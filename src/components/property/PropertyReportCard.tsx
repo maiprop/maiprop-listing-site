@@ -1,6 +1,6 @@
 /* eslint complexity: "off" */
 import { useState, type ReactNode } from "react";
-import { ClipboardList, Download, Loader2, Zap } from "lucide-react";
+import { ClipboardList, Download, Loader2, Printer, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -80,8 +80,25 @@ const UNAVAILABLE_RULES: ReportUnavailableRule[] = [
 const isGreek = () => i18next.language?.toLowerCase().startsWith("el") ?? false;
 const ui = (en: string, el: string) => (isGreek() ? el : en);
 
+const getHtmlReportFileName = (fileName: string): string => {
+  if (/\.html?$/i.test(fileName)) return fileName;
+  return fileName.replace(/\.[a-z0-9]+$/i, "") + ".html";
+};
+
+const downloadHtmlReport = (html: string, fileName: string) => {
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = getHtmlReportFileName(fileName);
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+};
+
 const openPrintablePdf = (html: string, fileName: string) => {
-  const title = fileName.replace(/\.pdf$/i, "");
+  const title = fileName.replace(/\.[a-z0-9]+$/i, "");
   const printScript = `
     <script>
       window.addEventListener("load", function() {
@@ -116,7 +133,7 @@ const getPrintableReport = (osRes: OsReportResponse | null | undefined, listingI
   if (!osRes?.ok || !html) return null;
   return {
     html,
-    fileName: osRes.report?.fileName ?? `maiprop-property-report-${listingId}.pdf`,
+    fileName: osRes.report?.fileName ?? `maiprop-property-report-${listingId}.html`,
   };
 };
 
@@ -204,7 +221,7 @@ const UnavailableContent = ({ reason }: { reason: string }) => (
       <ClipboardList className="w-4 h-4" />
       {ui("Report unavailable", "Η αναφορά δεν είναι διαθέσιμη")}
     </Button>
-    <p className="text-[10px] text-muted-foreground">{ui("A downloadable OS report is required for PDF export", "Απαιτείται αναφορά από το OS για εξαγωγή PDF")}</p>
+    <p className="text-[10px] text-muted-foreground">{ui("A downloadable OS HTML report is required for HTML/PDF export", "Απαιτείται αναφορά HTML από το OS για εξαγωγή HTML/PDF")}</p>
   </div>
 );
 
@@ -213,14 +230,24 @@ const LoadedReportContent = ({ osReport }: { osReport: OsPrintableReport }) => (
     <p className="text-xs text-muted-foreground leading-relaxed">
       {ui("MAIProp OS generated the printable property report for this listing.", "Το mAI Prop OS δημιούργησε εκτυπώσιμη αναφορά ακινήτου για αυτή την αγγελία.")}
     </p>
-    <Button
-      className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2"
-      onClick={() => openPrintablePdf(osReport.html, osReport.fileName)}
-    >
-      <Download className="w-4 h-4" />
-      {ui("Export PDF", "Εξαγωγή PDF")}
-    </Button>
-    <p className="text-[10px] text-muted-foreground">{ui("Source: MAIProp OS - Browser PDF export", "Πηγή: mAI Prop OS - Εξαγωγή PDF από τον browser")}</p>
+    <div className="grid grid-cols-1 gap-2">
+      <Button
+        className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2"
+        onClick={() => downloadHtmlReport(osReport.html, osReport.fileName)}
+      >
+        <Download className="w-4 h-4" />
+        {ui("Download HTML", "Λήψη HTML")}
+      </Button>
+      <Button
+        className="w-full gap-2"
+        variant="outline"
+        onClick={() => openPrintablePdf(osReport.html, osReport.fileName)}
+      >
+        <Printer className="w-4 h-4" />
+        {ui("Print / Save PDF", "Εκτύπωση / Αποθήκευση PDF")}
+      </Button>
+    </div>
+    <p className="text-[10px] text-muted-foreground">{ui("Source: MAIProp OS - HTML report", "Πηγή: mAI Prop OS - Αναφορά HTML")}</p>
   </div>
 );
 

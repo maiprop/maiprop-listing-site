@@ -106,7 +106,7 @@ Reads from Hub table `firesale_requests`.
 
 ## 5. `fetch-report-from-os` – Get report from OS API (report ↔ listing)
 
-**Purpose:** Fetch a report from the OS for a given listing. For `report_type: "valuation"` the function builds the OS `PropertyFeaturesRequest` from the Hub listing and fetches the printable HTML property report, which the UI opens through the browser PDF export flow. Successful OS reports are cached for 30 days in `property_report_cache`.
+**Purpose:** Fetch a report from the OS for a given listing. For `report_type: "valuation"` the function builds the OS `PropertyFeaturesRequest` from the Hub listing and fetches the printable HTML property report from `GET /api/v1/reports/valuation/property`. The UI can download that HTML report or open it through the browser print/save-to-PDF flow. Successful OS reports are cached for 30 days in `property_report_cache`.
 
 **Request:**  
 `body: { listing_id: string, report_type: "valuation" | "neighbourhood" }`
@@ -121,14 +121,14 @@ Reads from Hub table `firesale_requests`.
 
 **Response:**  
 
-- Valuation success: `{ ok: true, report: { kind: "valuation-property-html", html, ai, features, fileName }, source: "os" }`.
+- Valuation success: `{ ok: true, report: { kind: "valuation-property-html", html, ai, features, fileName }, source: "os" }` where `fileName` is an `.html` file name.
 - Legacy success: `{ ok: true, report: <payload>, source: "os" }` when the OS returns a report.
 - `{ ok: true, report: null, source: "os" }` when the OS has no report (e.g. 404).  
 - `{ ok: false, error }` on failure.
 
 **Frontend:**  
 
-- `PropertyReportCard` calls `fetch-report-from-os`. If OS returns printable report HTML, the user gets an `Export PDF` action. If OS has no report, the card enters a disabled "Report unavailable" state.
+- `PropertyReportCard` calls `fetch-report-from-os`. If OS returns printable report HTML, the user gets `Download HTML` and browser `Print / Save PDF` actions. If OS has no report, the card enters a disabled "Report unavailable" state.
 - Charging is handled server-side by `fetch-report-from-os`: the first user fetch for a cached report generation inserts `usage_property_reports`; repeated fetches by the same user for that cached generation are not charged. Other users who fetch the same cached report are charged once.
 
 ---

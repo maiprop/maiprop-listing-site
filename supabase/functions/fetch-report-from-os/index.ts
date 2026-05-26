@@ -20,6 +20,7 @@ import type { Database, Json } from "../../../src/integrations/supabase/types.ts
 
 const log = createLogger("fetch-report-from-os");
 const limiter = makeRateLimiter({ bucket: "fetch-report-from-os", maxRequests: 20, windowMs: 60_000 });
+const OS_HTML_REPORT_TIMEOUT_MS = 60_000;
 
 type ListingRow = {
   id: string;
@@ -120,6 +121,10 @@ function errorMessage(err: unknown): string {
   }
 }
 
+function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === "AbortError";
+}
+
 async function fetchWithTimeout(
   url: string,
   options: RequestInit,
@@ -208,7 +213,12 @@ function normalizeListingPayload(value: unknown): ListingRow | null {
 
 function getSafeReportFileName(listingId: string): string {
   const safeId = listingId.replace(/[^a-z0-9_-]+/gi, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "external";
-  return `maiprop-property-report-${safeId}.pdf`;
+  return `maiprop-property-report-${safeId}.html`;
+}
+
+function getHtmlReportFileName(fileName: string): string {
+  if (/\.html?$/i.test(fileName)) return fileName;
+  return fileName.replace(/\.[a-z0-9]+$/i, "") + ".html";
 }
 
 function appendFeatures(params: URLSearchParams, features: PropertyFeaturesRequest): void {
@@ -305,7 +315,7 @@ function cachedReportResponse(
         html: cache.html,
         ai: cache.ai,
         features: cache.features,
-        fileName: cache.file_name,
+        fileName: getHtmlReportFileName(cache.file_name),
         cache: {
           id: cache.id,
           cached,
@@ -433,7 +443,22 @@ Deno.serve(async (req) => {
 
       const reportUrl = `${OS_URL}/api/v1/reports/valuation/property?${params.toString()}`;
       const aiUrl = `${OS_URL}/api/v1/reports/valuation/property/ai?${params.toString()}`;
-      const reportRes = await fetchTextIfOk(reportUrl, token);
+      const reportRes = await fetchTextIfOk(reportUrl, token, OS_HTML_REPORT_TIMEOUT_MS).catch((err: unknown) => {
+        if (!isAbortError(err)) throw err;
+        log.warn("OS valuation HTML report timed out", { timeout_ms: OS_HTML_REPORT_TIMEOUT_MS });
+        return null;
+      });
+      if (!reportRes) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            report: null,
+            source: "os",
+            reason: "OS HTML report generation timed out. Please try again.",
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
 
       if (reportRes.status === 404 || reportRes.status === 204) {
         return new Response(
