@@ -12,11 +12,12 @@
 import { test, expect } from "@playwright/test";
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import WebSocket from "ws";
+import { cleanEnvValue } from "./helpers/env";
 import { skipUnlessDestructiveLiveE2EAllowed } from "./helpers/liveSafety";
 
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL ?? "";
-const ANON_KEY = process.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "";
-const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+const SUPABASE_URL = cleanEnvValue(process.env.VITE_SUPABASE_URL);
+const ANON_KEY = cleanEnvValue(process.env.VITE_SUPABASE_PUBLISHABLE_KEY);
+const SERVICE_ROLE = cleanEnvValue(process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 const canRun =
   SUPABASE_URL.startsWith("https://") &&
@@ -215,6 +216,17 @@ test.describe("GDPR — account deletion", () => {
           email.toLowerCase(),
         );
       }
+
+      // Supabase Auth deletion removes the user, but any client-side tokens
+      // already held by the browser can still be present until the app clears
+      // them. Start the reuse check from a clean browser auth state so the
+      // signup page cannot be redirected by a stale deleted-user session.
+      await page.context().clearCookies();
+      await page.goto("/");
+      await page.evaluate(() => {
+        localStorage.clear();
+        sessionStorage.clear();
+      });
 
       // 9. A deleted user may create a fresh account with the same email.
       //    This verifies deletion did not leave an auth uniqueness blocker while
