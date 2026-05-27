@@ -216,6 +216,17 @@ test.describe("GDPR — account deletion", () => {
         );
       }
 
+      // Supabase Auth deletion removes the user, but any client-side tokens
+      // already held by the browser can still be present until the app clears
+      // them. Start the reuse check from a clean browser auth state so the
+      // signup page cannot be redirected by a stale deleted-user session.
+      await page.context().clearCookies();
+      await page.goto("/");
+      await page.evaluate(() => {
+        localStorage.clear();
+        sessionStorage.clear();
+      });
+
       // 9. A deleted user may create a fresh account with the same email.
       //    This verifies deletion did not leave an auth uniqueness blocker while
       //    still proving the old credentials no longer work. Use admin
