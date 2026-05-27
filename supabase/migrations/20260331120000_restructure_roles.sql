@@ -77,16 +77,7 @@ CREATE POLICY "Admins can insert investor subscriptions"
 -- listings: owner_id = auth.uid() - no role check for insert. CreateListing is app-gated.
 -- We rely on app logic + participantType. DB doesn't restrict listing creation by role in the same way.
 
--- 8. Migrate existing users: institutional/developer with role=agent and bio __type:institutional/__type:developer
--- Set their role to institutional or developer
-UPDATE public.profiles
-SET role = 'institutional'::public.user_role
-WHERE role::text = 'agent' AND bio LIKE '__type:institutional%';
-
-UPDATE public.profiles
-SET role = 'developer'::public.user_role
-WHERE role::text = 'agent' AND bio LIKE '__type:developer%';
-
-UPDATE public.profiles
-SET role = 'investor'::public.user_role
-WHERE role::text = 'individual' AND bio LIKE '__type:investor%';
+-- 8. Legacy role backfills intentionally do not run in this migration.
+-- PostgreSQL forbids using newly added enum values before the surrounding
+-- transaction commits, so fresh environment bootstraps must not cast or assign
+-- investor/institutional/developer in the same file that creates those values.

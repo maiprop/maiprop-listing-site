@@ -23,7 +23,8 @@ supabase functions deploy --project-ref <staging-ref>
 Seed demo accounts into staging:
 
 ```bash
-SUPABASE_SERVICE_ROLE_KEY=<staging-service-key> \
+SUPABASE_SERVICE_ROLE_KEY=<staging-service-role-jwt> \
+E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS=<staging-ref> \
   VITE_SUPABASE_URL=https://<staging-ref>.supabase.co \
   npx tsx scripts/seed-demo-accounts.ts
 ```
@@ -42,6 +43,7 @@ SUPABASE_SERVICE_ROLE_KEY=<staging-service-key> \
 
 - Settings -> Environments -> create `staging` env. No reviewers required.
 - Add required `staging` secrets: `STAGING_SUPABASE_URL`, `STAGING_SUPABASE_PUBLISHABLE_KEY`, `STAGING_SUPABASE_PROJECT_ID`, `SUPABASE_ACCESS_TOKEN`, `SUPABASE_SERVICE_ROLE_KEY`, and seeded E2E account credentials.
+- Use the staging `service_role` JWT API key for `SUPABASE_SERVICE_ROLE_KEY`; the newer `sb_secret_*` key is not accepted by the PostgREST fixture paths used by live E2E.
 - Required when migrations change: add `SUPABASE_STAGING_DB_URL`, the percent-encoded Postgres connection string used by CI to run `supabase db push --db-url` before deploying staging edge functions. Without it, CI fails the staging migration path instead of deploying functions against a stale schema.
 - `STAGING_SUPABASE_PROJECT_ID`, `STAGING_SUPABASE_URL`, and `STAGING_SUPABASE_PUBLISHABLE_KEY` must all point to the same non-production project. CI skips staging DB/function deploys and Cloudflare preview deploys when any staging secret matches production or the URL project ref does not match the configured project id.
 

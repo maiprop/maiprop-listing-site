@@ -220,7 +220,7 @@ fail-fast behavior.
 | `RLS_USER_PASSWORD` | shared live-safe RLS test password | repo or staging environment |
 | `ONBOARDING_TEST_EMAIL` | live-safe onboarding E2E user | repo or staging environment |
 | `ONBOARDING_TEST_PASSWORD` | live-safe onboarding E2E password | repo or staging environment |
-| `SUPABASE_SERVICE_ROLE_KEY` | service role for security tests and fixtures; destructive checks stay disabled unless an isolated staging project is configured | staging environment only |
+| `SUPABASE_SERVICE_ROLE_KEY` | staging `service_role` JWT API key for security tests and fixtures; destructive checks stay disabled unless an isolated staging project is configured; do not use the `sb_secret_*` key for PostgREST-backed fixtures | staging environment only |
 | `MAIPROP_EDGE_TEST_AUTH_BYPASS` | explicit CI-only bypass marker for edge-function tests that exercise handler internals without live Supabase Auth | CI test environment only |
 | `PRODUCTION_DEPLOY_URLS` | optional space-separated URL override for the post-deploy production smoke check; defaults to `https://portal.maiprop.co` | deploy diagnostics only |
 | `PRODUCTION_DEPLOY_BROWSER_CHECK` | optional boolean that enables the Chromium mount check when set instead of passing `--browser` | deploy diagnostics only |
@@ -256,6 +256,7 @@ Destructive tests are disabled by default:
 |---|---|
 | `E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS` | must be `true` before destructive live E2E can run |
 | `E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS` | comma-separated allowlist of isolated Supabase refs for destructive E2E |
+| `SAFE_SUPABASE_PROJECT_REFS` | comma-separated non-production project refs allowed by guarded seed scripts when the Supabase host does not contain `staging`, `dev`, `local`, or `test` |
 | `I_KNOW_THIS_IS_PROD` | manual override for guarded production seed scripts; use only during an approved production operation |
 
 Checkout redirect origin allowlists:

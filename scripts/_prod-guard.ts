@@ -12,6 +12,7 @@
  *   - SUPABASE_URL matches the known production project ref
  *   - NODE_ENV === "production"
  *   - The URL host does NOT contain "staging", "dev", "local", or "test"
+ *     and the project ref is not explicitly allowlisted for non-production use
  *
  * To override (e.g., you really do want to seed prod), set
  * `I_KNOW_THIS_IS_PROD=yes` in the environment. This is logged loudly.
@@ -23,6 +24,20 @@ const PRODUCTION_SUPABASE_REFS = new Set<string>([
 ]);
 
 const SAFE_HOST_SUBSTRINGS = ["staging", "dev", "local", "test", "127.0.0.1"];
+
+function getExplicitlyAllowedNonProdRefs(): Set<string> {
+  const values = [
+    process.env.SAFE_SUPABASE_PROJECT_REFS,
+    process.env.E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS,
+  ];
+
+  return new Set(
+    values
+      .flatMap((value) => value?.split(",") ?? [])
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
+}
 
 export function assertNotProduction(
   supabaseUrl: string | undefined,
@@ -47,10 +62,12 @@ export function assertNotProduction(
   }
 
   const isKnownProd = PRODUCTION_SUPABASE_REFS.has(ref);
+  const isExplicitlyAllowedNonProd = getExplicitlyAllowedNonProdRefs().has(ref);
   const looksSafe = SAFE_HOST_SUBSTRINGS.some((s) => host.includes(s));
   const nodeEnvProd = process.env.NODE_ENV === "production";
 
-  const appearsProduction = isKnownProd || nodeEnvProd || !looksSafe;
+  const appearsProduction = isKnownProd || nodeEnvProd ||
+    (!looksSafe && !isExplicitlyAllowedNonProd);
 
   if (!appearsProduction) return;
 

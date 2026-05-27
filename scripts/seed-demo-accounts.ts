@@ -89,14 +89,14 @@ const BASE_ACCOUNTS: AccountDef[] = [
   {
     email: "buyer.free@maiprop.demo",
     firstName: "Yannis", lastName: "FreeBuyer",
-    role: "individual", participantType: "buyer",
+    role: "buyer", participantType: "buyer",
     isPro: false, city: "Athens",
     bio: "First-time buyer, free plan. Can browse listings and book viewings.",
   },
   {
     email: "buyer.pro@maiprop.demo",
     firstName: "Niki", lastName: "ProBuyer",
-    role: "individual", participantType: "buyer",
+    role: "buyer", participantType: "buyer",
     isPro: true, city: "Athens",
     bio: "Active buyer on Pro — full professional directory access, advanced search.",
   },
@@ -105,14 +105,14 @@ const BASE_ACCOUNTS: AccountDef[] = [
   {
     email: "seller.free@maiprop.demo",
     firstName: "Kostas", lastName: "FreeSeller",
-    role: "seller_landlord", participantType: "seller",
+    role: "seller", participantType: "seller",
     isPro: false, city: "Thessaloniki",
     bio: "Private owner selling an apartment. Free plan (2-listing limit).",
   },
   {
     email: "seller.pro@maiprop.demo",
     firstName: "Maria", lastName: "ProSeller",
-    role: "seller_landlord", participantType: "seller",
+    role: "seller", participantType: "seller",
     isPro: true, city: "Glyfada",
     bio: "Multi-property landlord on Pro — unlimited listings, analytics, featured ads.",
   },
@@ -161,7 +161,7 @@ const BASE_ACCOUNTS: AccountDef[] = [
   {
     email: "investor.institutional@maiprop.demo",
     firstName: "Alpha", lastName: "Fund",
-    role: "institutional", participantType: "investor",
+    role: "institutional", participantType: "institutional",
     isPro: true, investorMode: true, investorTier: "institutional", city: "London",
     bio: "Institutional fund — Pro + institutional subscription. Full deal pipeline, bulk acquisition, NDA access.",
   },
@@ -344,7 +344,6 @@ async function setProfile(userId: string, acc: AccountDef): Promise<void> {
     display_name: `${acc.firstName} ${acc.lastName}`,
     city: acc.city,
     bio: acc.bio ?? null,
-    participant_type: acc.participantType,
     investor_mode: acc.investorMode ?? false,
     subscription_product_id: acc.isPro ? PRO_PRODUCT_ID : null,
   };
@@ -404,7 +403,7 @@ async function main() {
     const user = await getOrCreateUser(acc);
     if (!user) { console.log("✗"); failed++; continue; }
 
-    if (acc.role !== "individual") await setRole(user.id, acc.role);
+    await setRole(user.id, acc.role);
     await setProfile(user.id, acc);
     if (acc.investorTier) await setInvestorSubscription(user.id, acc.investorTier);
     if (acc.professionalCategory) await ensureProfessional(user.id, acc);

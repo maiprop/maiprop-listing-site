@@ -9,7 +9,8 @@ and local usage stay aligned.
 - Treat any script using `SUPABASE_SERVICE_ROLE_KEY` as database-mutating.
 - Seed and destructive scripts use `scripts/_seed-env.ts` and
   `scripts/_prod-guard.ts`; they require a Supabase URL plus service-role key
-  and block production-looking hosts unless `I_KNOW_THIS_IS_PROD=yes` is set.
+  and block production-looking hosts unless the project ref is explicitly
+  allowlisted as non-production or `I_KNOW_THIS_IS_PROD=yes` is set.
 - Do not paste service-role keys, webhook secrets, or provider keys into logs,
   screenshots, PR descriptions, or chat.
 - Inventory and check scripts are generally read-only. The exception is an
