@@ -1012,6 +1012,20 @@ jobs:
             exit 0
           fi
 
+          missing=()
+          [ -z "$STAGING_SUPABASE_URL" ] && missing+=("STAGING_SUPABASE_URL")
+          [ -z "$STAGING_SUPABASE_PUBLISHABLE_KEY" ] && missing+=("STAGING_SUPABASE_PUBLISHABLE_KEY")
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::warning::Supabase staging project ref is set, but required staging runtime secrets are missing: ${missing[*]}."
+            echo "isolated_staging=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Supabase staging"
+              echo "Staging project ref is configured, but required staging runtime secrets are missing: ${missing[*]}."
+              echo "Staging DB/function deploy and preview deploy steps are skipped until the runtime points to the same isolated project."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
           if [ -n "$PRODUCTION_SUPABASE_PROJECT_ID" ] && [ "$STAGING_SUPABASE_PROJECT_ID" = "$PRODUCTION_SUPABASE_PROJECT_ID" ]; then
             echo "::warning::STAGING_SUPABASE_PROJECT_ID matches production; skipping staging DB/function deploy steps to avoid mutating production under a staging label."
             echo "isolated_staging=false" >> "$GITHUB_OUTPUT"
@@ -1023,11 +1037,71 @@ jobs:
             exit 0
           fi
 
+          if [ -n "$PRODUCTION_SUPABASE_URL" ] && [ "$STAGING_SUPABASE_URL" = "$PRODUCTION_SUPABASE_URL" ]; then
+            echo "::warning::STAGING_SUPABASE_URL matches production; skipping staging DB/function deploy steps to keep preview traffic off production."
+            echo "isolated_staging=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Supabase staging"
+              echo "STAGING_SUPABASE_URL matches production. Staging and preview deploy steps are skipped."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if [ -n "$PRODUCTION_SUPABASE_PUBLISHABLE_KEY" ] && [ "$STAGING_SUPABASE_PUBLISHABLE_KEY" = "$PRODUCTION_SUPABASE_PUBLISHABLE_KEY" ]; then
+            echo "::warning::STAGING_SUPABASE_PUBLISHABLE_KEY matches production; skipping staging DB/function deploy steps to keep preview traffic off production."
+            echo "isolated_staging=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Supabase staging"
+              echo "STAGING_SUPABASE_PUBLISHABLE_KEY matches production. Staging and preview deploy steps are skipped."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if ! STAGING_URL_PROJECT_ID=$(node - "$STAGING_SUPABASE_URL" <<'NODE'
+          const [, , supabaseUrl = ""] = process.argv;
+          const validProjectRef = (value) => /^[a-z0-9]{20}$/.test(value);
+          try {
+            const host = new URL(supabaseUrl).hostname;
+            const suffix = ".supabase.co";
+            const derived = host.endsWith(suffix) ? host.slice(0, -suffix.length) : "";
+            if (validProjectRef(derived)) {
+              console.log(derived);
+              process.exit(0);
+            }
+          } catch {
+            // Fall through to the deployment warning below.
+          }
+          process.exit(1);
+          NODE
+          ); then
+            echo "::warning::STAGING_SUPABASE_URL must be a valid https://<ref>.supabase.co URL; skipping staging deploy steps."
+            echo "isolated_staging=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Supabase staging"
+              echo "STAGING_SUPABASE_URL is not a valid Supabase project URL. Staging and preview deploy steps are skipped."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if [ "$STAGING_URL_PROJECT_ID" != "$STAGING_SUPABASE_PROJECT_ID" ]; then
+            echo "::warning::STAGING_SUPABASE_URL project ref does not match STAGING_SUPABASE_PROJECT_ID; skipping staging deploy steps."
+            echo "isolated_staging=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Supabase staging"
+              echo "STAGING_SUPABASE_URL and STAGING_SUPABASE_PROJECT_ID point to different projects. Staging and preview deploy steps are skipped."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
           echo "isolated_staging=true" >> "$GITHUB_OUTPUT"
           echo "Isolated staging Supabase project detected."
         env:
-          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
-          PRODUCTION_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+          STAGING_SUPABASE_PROJECT_ID:         ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_SUPABASE_URL:                ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_PUBLISHABLE_KEY:    ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          PRODUCTION_SUPABASE_PROJECT_ID:      ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+          PRODUCTION_SUPABASE_URL:             ${{ secrets.VITE_SUPABASE_URL }}
+          PRODUCTION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
 
       - name: Skip Supabase prep
         if: steps.supabase_changes.outputs.deploy != 'true'
@@ -1042,6 +1116,8 @@ jobs:
         run: |
           required=(
             "STAGING_SUPABASE_PROJECT_ID"
+            "STAGING_SUPABASE_URL"
+            "STAGING_SUPABASE_PUBLISHABLE_KEY"
             "SUPABASE_ACCESS_TOKEN"
           )
           missing=0
@@ -1059,9 +1135,11 @@ jobs:
             exit 1
           fi
         env:
-          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
-          SUPABASE_STAGING_DB_URL:     ${{ secrets.SUPABASE_STAGING_DB_URL }}
-          SUPABASE_ACCESS_TOKEN:       ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_ID:      ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_SUPABASE_URL:             ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_STAGING_DB_URL:          ${{ secrets.SUPABASE_STAGING_DB_URL }}
+          SUPABASE_ACCESS_TOKEN:            ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
@@ -1139,13 +1217,15 @@ jobs:
     # Skip for Dependabot PRs — secrets are unavailable to bot-generated PRs
     # by default and Wrangler will fail with "CLOUDFLARE_API_TOKEN not set".
     # Dependabot bumps are validated by quality + e2e checks; a preview deploy
-    # adds no value there. Human PRs still get full preview deploys.
+    # adds no value there. Human PRs get previews only when the Supabase
+    # runtime has been proven to point at an isolated staging project.
     if: >
       github.event_name == 'pull_request' &&
       github.event.pull_request.draft == false &&
       github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
-      github.actor != 'dependabot[bot]'
-    needs: [quality, release-safety]
+      github.actor != 'dependabot[bot]' &&
+      needs['deploy-supabase-staging'].outputs.isolated_staging == 'true'
+    needs: [quality, release-safety, deploy-supabase-staging]
 
     steps:
       - name: Checkout (for Pages Functions in functions/)

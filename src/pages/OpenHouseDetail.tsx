@@ -36,7 +36,8 @@ import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 import { PropertyValuationLockedCard } from "@/components/property/PropertyValuationLockedCard";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
-import { PropertyHeroSpecsBar, buildListingHeroSpecs } from "@/components/property/PropertyHeroSpecsBar";
+import { PropertyHeroSpecsBar } from "@/components/property/PropertyHeroSpecsBar";
+import { buildListingHeroSpecs } from "@/components/property/propertyHeroSpecs";
 
 // skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
 export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house detail coordinates listing data, registration, offers, and owner controls.

@@ -46,10 +46,7 @@ import { PropertyDetailsAndEnergy } from "@/components/property/PropertyDetailsA
 import { PropertyDescriptionSection } from "@/components/property/PropertyDescriptionSection";
 import { PropertyValuationLockedCard } from "@/components/property/PropertyValuationLockedCard";
 import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
-
-export const shouldUseNewBuildRoute = (
-  listing: Pick<ListingWithJoins, "is_pre_sale" | "listing_type"> | null | undefined,
-) => Boolean(listing?.is_pre_sale || listing?.listing_type === "new_build");
+import { shouldUseNewBuildRoute } from "@/lib/listingRoutes";
 
 // ─── Main component ──────────────────────────────────────────────────────────
 const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates listing data, media, modals, and gated owner actions in one page shell.

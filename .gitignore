@@ -46,12 +46,22 @@ coverage/
 playwright-report/
 test-results/
 .lighthouseci/
+qa-artifacts/
+qa-screenshots/
 
 # Lighthouse run outputs and CI debug screenshots (regenerable)
 lh-*.json
 *-ci-debug*.png
 *-ci-debug*.json
 coverage_output.txt
+
+# Local mobile and video packaging outputs (regenerable)
+android/
+remotion-video/public/app-screens/
+remotion-video/public/brand/maiprop-logo.png
+remotion-video/public/cinematic/
+remotion-video/public/live-captures/
+remotion-video/public/walkthrough/
 
 # Generated at build time by `npm run api-docs:copy` (prebuild hook)
 # Source of truth is docs/api/edge-functions.openapi.yaml

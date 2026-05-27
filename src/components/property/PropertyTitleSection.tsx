@@ -2,7 +2,8 @@ import { LayoutGrid, MapPin, Zap } from "lucide-react";
 import { getSubtypeLabel } from "@/lib/propertyTypes";
 import { ENERGY_COLORS } from "@/types";
 import type { ListingWithJoins } from "@/hooks/useListings";
-import { PropertyHeroSpecsBar, buildListingHeroSpecs } from "@/components/property/PropertyHeroSpecsBar";
+import { PropertyHeroSpecsBar } from "@/components/property/PropertyHeroSpecsBar";
+import { buildListingHeroSpecs } from "@/components/property/propertyHeroSpecs";
 
 interface Props {
   db: ListingWithJoins;
