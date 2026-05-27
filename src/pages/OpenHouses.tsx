@@ -20,7 +20,14 @@ import { MAIPROP_LOGO_FALLBACK_URL } from "@/lib/imageFallbacks";
 import { CATALOG_STATIC_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 import { fetchPublicApi } from "@/lib/publicApi";
 import { ENERGY_CLASSES, FEATURES_RESIDENTIAL } from "@/lib/filterConfig";
-import { fmtDate, fmtTime, Pill, RangeInput, OpenHouseCard } from "@/components/open-houses/OpenHousePrimitives";
+import {
+  fmtDate,
+  fmtTime,
+  Pill,
+  RangeInput,
+  OpenHouseCard,
+  OPEN_HOUSE_CARD_LAYOUT_CLASS,
+} from "@/components/open-houses/OpenHousePrimitives";
 import { LocationAutocompleteInput } from "@/components/location/LocationAutocompleteInput";
 import { cn } from "@/lib/utils";
 import type { Database } from "@/integrations/supabase/types";
@@ -106,9 +113,9 @@ const interpolateTranslation = (t: TFunction, key: string, values: Record<string
 // skipcq: JS-0067 - Skeleton helper is intentionally module-scoped.
 function OpenHouseCardSkeleton() {
   return (
-    <div className="property-card rounded-2xl overflow-hidden bg-card border border-border flex flex-col">
+    <div className="property-card min-h-[33rem] sm:min-h-[34rem] lg:min-h-[33rem] rounded-2xl overflow-hidden bg-card border border-border flex flex-col">
       <div className="aspect-[4/3] sm:aspect-[3/2] bg-secondary animate-pulse" />
-      <div className="p-4 flex flex-col gap-3">
+      <div className="p-4 flex flex-1 flex-col gap-3">
         <div className="space-y-2">
           <div className="h-4 w-3/4 rounded bg-secondary animate-pulse" />
           <div className="h-3 w-1/2 rounded bg-secondary animate-pulse" />
@@ -429,7 +436,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
         <meta property="og:title" content={pageTitle} />
       </Helmet>
       <Navbar />
-      <div className="pt-16">
+      <div className="pt-16 min-h-screen">
         {/* Hero header */}
         <div className="border-b border-border bg-card/60 py-8">
           <div className="container">
@@ -442,7 +449,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                 <h1 className="font-display text-2xl sm:text-3xl font-bold">
                   {showPast ? getTranslatedValue(t, "openHouses.page.headingPast") : getTranslatedValue(t, "openHouses.page.headingUpcoming")}
                 </h1>
-                <p className="text-muted-foreground text-sm mt-1">
+                <p className="text-muted-foreground text-sm mt-1 min-h-5">
                   {isError
                     ? getTranslatedValue(t, "openHouses.page.loadError")
                     : isEmpty
@@ -712,9 +719,11 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                 <Loader2 className="w-4 h-4 animate-spin text-primary" />
                 <span>{getTranslatedValue(t, "openHouses.page.loading")}</span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 items-stretch">
                 {OPEN_HOUSE_LOADING_SKELETON_KEYS.map((key) => (
-                  <OpenHouseCardSkeleton key={key} />
+                  <div key={key} className={OPEN_HOUSE_CARD_LAYOUT_CLASS}>
+                    <OpenHouseCardSkeleton />
+                  </div>
                 ))}
               </div>
             </div>
@@ -754,7 +763,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
               <Button variant="outline" onClick={clearFilters}>{getTranslatedValue(t, "openHouses.page.clearFilters")}</Button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 items-stretch">
               {displayData.map(({ listing, card }) => (
                 <OpenHouseCard key={card.id} listing={listing} card={card} />
               ))}

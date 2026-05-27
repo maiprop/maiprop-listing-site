@@ -486,6 +486,7 @@ vi.mock("@/components/open-houses/OpenHousePrimitives", () => ({
   fmtTime: vi.fn().mockReturnValue(""),
   Pill: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   RangeInput: () => <input />,
+  OPEN_HOUSE_CARD_LAYOUT_CLASS: "h-full",
   OpenHouseCard: () => <div data-testid="open-house-card" />,
 }));
 
