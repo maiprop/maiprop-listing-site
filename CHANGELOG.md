@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.9.9](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.8...v1.9.9) (2026-06-02)
+
+
+### Bug Fixes
+
+* complete deployment audit hardening ([4937064](https://github.com/maiprop/maiprop-listing-site/commit/49370648a4357049f61b79a5856575ab0431b241))
+* export OS property reports as HTML ([6aa4677](https://github.com/maiprop/maiprop-listing-site/commit/6aa4677a05dcb10c4ae78eb0b1c1cc8e974a5968))
+* harden deployment health gates ([841a7b7](https://github.com/maiprop/maiprop-listing-site/commit/841a7b7622ce791e0685ddcdfa1dd00b15d96afc))
+* harden security alerts and role-switch audit ([2281aac](https://github.com/maiprop/maiprop-listing-site/commit/2281aacb4da0dae661af586484f43320d74eeaae))
+* harden Supabase staging bootstrap ([2a02186](https://github.com/maiprop/maiprop-listing-site/commit/2a02186b9ac72716fd4bf6bb001d05aa0369aeb1))
+* lock down private listing visibility ([f574dab](https://github.com/maiprop/maiprop-listing-site/commit/f574dab46e5523009b2e0e3a4e570945a7bfe006))
+* mobile location input suggestions glitch ([86db0ba](https://github.com/maiprop/maiprop-listing-site/commit/86db0baa9bd86e0af14151d38114592b98ca1400))
+* repair location search a11y ([3b46f47](https://github.com/maiprop/maiprop-listing-site/commit/3b46f47e5d372e1acb50126e3aad4573e2afc1af))
+* stabilize open houses layout ([#255](https://github.com/maiprop/maiprop-listing-site/issues/255)) ([f2aa28b](https://github.com/maiprop/maiprop-listing-site/commit/f2aa28bf7e38ddfbb6fab16cf4dc7afacae97ffd))
+* surface auction floor details ([#254](https://github.com/maiprop/maiprop-listing-site/issues/254)) ([1e92ac4](https://github.com/maiprop/maiprop-listing-site/commit/1e92ac43e04e137c6be99c2528ab42a65ecc5a36))
+* wire final location fields ([2c56816](https://github.com/maiprop/maiprop-listing-site/commit/2c56816b15f84400cb9de33b196b8f8c18086b6f))
+* wire location suggestions ([002dd43](https://github.com/maiprop/maiprop-listing-site/commit/002dd43ef156261d75eb929a73920175c5282c5a))
+* wire remaining location inputs ([dbd00b4](https://github.com/maiprop/maiprop-listing-site/commit/dbd00b47de97a6d15b49c1b33eafc6353ff8e40f))
+
 ## [1.9.8](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.7...v1.9.8) (2026-05-26)
 
 
