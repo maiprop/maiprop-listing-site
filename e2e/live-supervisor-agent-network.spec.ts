@@ -9,6 +9,7 @@ import { expect, test, type APIRequestContext, type Page } from "@playwright/tes
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { cleanEnvValue } from "./helpers/env";
 
 type Tier = "free" | "pro" | "managed" | "admin";
 type Role =
@@ -73,7 +74,7 @@ const dotEnv = readDotEnv();
 
 const env = (...keys: string[]): string => {
   for (const key of keys) {
-    const value = process.env[key] ?? dotEnv[key];
+    const value = cleanEnvValue(process.env[key] ?? dotEnv[key]);
     if (value) return value;
   }
   return "";
@@ -89,9 +90,9 @@ const SERVICE_ROLE = env("SUPABASE_SERVICE_ROLE_KEY");
 const projectRef = SUPABASE_URL.match(/^https:\/\/([a-z0-9]{20})\.supabase\.co/i)?.[1] ?? "";
 
 const enabled =
-  Boolean(process.env.PLAYWRIGHT_BASE_URL) &&
-  process.env.E2E_RUN_SUPERVISOR_NETWORK === "true" &&
-  process.env.I_KNOW_THIS_IS_PROD === "yes" &&
+  Boolean(cleanEnvValue(process.env.PLAYWRIGHT_BASE_URL)) &&
+  cleanEnvValue(process.env.E2E_RUN_SUPERVISOR_NETWORK) === "true" &&
+  cleanEnvValue(process.env.I_KNOW_THIS_IS_PROD) === "yes" &&
   SUPABASE_URL.startsWith("https://") &&
   ANON_KEY.length > 40 &&
   SERVICE_ROLE.length > 40;

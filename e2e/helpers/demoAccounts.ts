@@ -1,3 +1,5 @@
+import { cleanEnvValue, readCleanEnv } from "./env";
+
 const firstDefined = (
   ...values: Array<string | undefined>
 ): string | undefined => {
@@ -6,7 +8,7 @@ const firstDefined = (
 
 const readEnv = (...keys: string[]): string | undefined => {
   for (const key of keys) {
-    const value = process.env[key];
+    const value = cleanEnvValue(process.env[key]);
     if (value && value !== "") return value;
   }
   return undefined;
@@ -155,8 +157,8 @@ export const seededDemoAccountsEnabled = (
   ...requiredEnvKeys: string[]
 ): boolean => {
   if (process.env.E2E_USE_SEEDED_DEMO_ACCOUNTS === "true") return true;
-  const supabaseUrl = process.env.VITE_SUPABASE_URL ?? "";
-  const supabaseKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "";
+  const supabaseUrl = readCleanEnv("VITE_SUPABASE_URL");
+  const supabaseKey = readCleanEnv("VITE_SUPABASE_PUBLISHABLE_KEY");
   if (
     !supabaseUrl ||
     supabaseUrl.includes("abcdefghijklmnop") ||
@@ -165,5 +167,5 @@ export const seededDemoAccountsEnabled = (
   ) {
     return false;
   }
-  return requiredEnvKeys.every((key) => Boolean(process.env[key]));
+  return requiredEnvKeys.every((key) => Boolean(readCleanEnv(key)));
 };

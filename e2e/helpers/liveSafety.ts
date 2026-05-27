@@ -1,4 +1,5 @@
 import { test } from "@playwright/test";
+import { readCleanEnv } from "./env";
 
 const KNOWN_PRODUCTION_PROJECT_REFS = new Set(["qvvicunqcrwpioqnvzxf"]);
 
@@ -17,20 +18,20 @@ const deny = (reason: string): DestructiveLiveE2EDecision => ({
 });
 
 const getAllowedDestructiveProjectRefs = (): string[] =>
-  (process.env.E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS ?? "")
+  readCleanEnv("E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS")
     .split(",")
     .map((ref) => ref.trim())
     .filter(Boolean);
 
 export const getSupabaseProjectRef = (
-  url = process.env.VITE_SUPABASE_URL ?? "",
+  url = readCleanEnv("VITE_SUPABASE_URL"),
 ): string | null => {
   const match = url.match(/^https:\/\/([a-z0-9]{20})\.supabase\.co/i);
   return match?.[1] ?? null;
 };
 
 const requireDestructiveLiveE2EFlag: DestructiveLiveE2ECheck = () =>
-  process.env.E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS === "true"
+  readCleanEnv("E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS") === "true"
     ? null
     : deny(
         "Set E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS=true only for an isolated test project.",

@@ -15,6 +15,7 @@ import {
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { demoAccounts, demoPasswords } from "./helpers/demoAccounts";
+import { cleanEnvValue } from "./helpers/env";
 
 function readDotEnv(): Record<string, string> {
   const envPath = resolve(process.cwd(), ".env");
@@ -39,7 +40,7 @@ const dotEnv = readDotEnv();
 
 function env(...keys: string[]): string {
   for (const key of keys) {
-    const value = process.env[key] ?? dotEnv[key];
+    const value = cleanEnvValue(process.env[key] ?? dotEnv[key]);
     if (value) return value;
   }
   return "";
@@ -56,7 +57,9 @@ const hasLiveSupabase =
   SUPABASE_URL.startsWith("https://") &&
   !SUPABASE_URL.includes("abcdefghijklmnop") &&
   ANON_KEY.length > 40;
-const hasExplicitAdminAccount = Boolean(process.env.E2E_ADMIN_EMAIL ?? dotEnv.E2E_ADMIN_EMAIL);
+const hasExplicitAdminAccount = Boolean(
+  cleanEnvValue(process.env.E2E_ADMIN_EMAIL ?? dotEnv.E2E_ADMIN_EMAIL),
+);
 
 function skipUnlessLiveSupabase() {
   test.skip(
