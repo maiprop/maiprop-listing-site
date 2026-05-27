@@ -380,7 +380,7 @@ export default function Professionals() {
               {/* Slider — horizontally scrollable */}
               <div
                 ref={categoryScrollRef}
-                className="flex gap-2 overflow-x-auto scrollbar-none pb-1 flex-1 min-w-0 scroll-smooth snap-x snap-mandatory"
+                className="flex gap-2 overflow-x-auto scrollbar-none pb-1 flex-1 min-w-0"
               >
               <button
                 onClick={() => selectGroup(null)}
@@ -396,7 +396,7 @@ export default function Professionals() {
                   if (selectedGroup === "agents") selectGroup(null);
                   else selectGroup("agents");
                 }}
-                className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-sm font-semibold border transition-all shrink-0 snap-start ${
+                className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-sm font-semibold border transition-all shrink-0 ${
                  selectedGroup === "agents" ?
                  "bg-primary/10 border-primary/20 text-primary" :
                 "border-border bg-secondary/50 text-muted-foreground hover:text-foreground"}`}
@@ -411,7 +411,7 @@ export default function Professionals() {
                   if (selectedGroup === group.id) selectGroup(null);
                   else selectGroup(group.id);
                 }}
-                className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-sm font-semibold border transition-all shrink-0 snap-start ${
+                className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-sm font-semibold border transition-all shrink-0 ${
                 selectedGroup === group.id ?
                 `${group.bg} ${group.border} ${group.color}` :
                 "border-border bg-secondary/50 text-muted-foreground hover:text-foreground"}`

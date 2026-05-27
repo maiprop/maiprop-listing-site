@@ -10,8 +10,9 @@
  * PRs with only CI stub env).
  */
 import { test, expect } from "@playwright/test";
+import { readCleanEnv } from "./helpers/env";
 
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL ?? "";
+const SUPABASE_URL = readCleanEnv("VITE_SUPABASE_URL");
 const TEST_EMAIL = process.env.E2E_TEST_EMAIL ?? "buyer.free@maiprop.demo";
 const TEST_PASSWORD = process.env.E2E_TEST_PASSWORD ?? "Demo2025!";
 

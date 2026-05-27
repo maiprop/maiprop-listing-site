@@ -248,7 +248,11 @@ jobs:
         run: npm ci --prefer-offline --no-audit
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        timeout-minutes: 4
+        # Hosted Ubuntu runners already include Chromium's runtime libraries for
+        # our CI smoke tests. Avoid --with-deps here because it enters apt and
+        # can stall on external package mirrors before tests ever start.
+        run: npx playwright install chromium
 
       - name: Build app
         run: npm run build
@@ -417,7 +421,11 @@ jobs:
 
       - name: Install Playwright browsers
         if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true'
-        run: npx playwright install --with-deps chromium
+        timeout-minutes: 4
+        # Hosted Ubuntu runners already include Chromium's runtime libraries for
+        # our CI smoke tests. Avoid --with-deps here because it enters apt and
+        # can stall on external package mirrors before tests ever start.
+        run: npx playwright install chromium
 
       - name: Build app
         if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true'
@@ -676,8 +684,9 @@ jobs:
 
       - name: Install Lighthouse browser
         if: steps.lighthouse-secrets.outputs.enabled == 'true'
+        timeout-minutes: 4
         run: |
-          npx playwright install chromium --with-deps
+          npx playwright install chromium
           CHROME_PATH=$(node -e 'const { chromium } = require("playwright"); process.stdout.write(chromium.executablePath())')
           test -x "$CHROME_PATH"
           echo "CHROME_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
@@ -894,7 +903,10 @@ jobs:
           echo "Wrangler runtime config prepared for Pages Functions deployment"
 
       - name: Install deploy smoke browser
-        run: npx playwright install --with-deps chromium
+        timeout-minutes: 4
+        # Keep production deploy checks from waiting on apt mirrors; the browser
+        # binary is enough on hosted Ubuntu for the post-deploy smoke test.
+        run: npx playwright install chromium
 
       - name: Deploy to Cloudflare Pages (production)
         uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
