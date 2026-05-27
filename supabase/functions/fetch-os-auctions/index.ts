@@ -197,6 +197,8 @@ type MappedAuction = {
   sqm: number;
   bedrooms: null;
   bathrooms: null;
+  floor: number | null;
+  total_floors: number | null;
   latitude: number | null;
   longitude: number | null;
   tags: string[];
@@ -286,6 +288,11 @@ function getNumberOrNull(value?: number | string): number | null {
   if (value == null) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getIntegerOrNull(value?: number | string): number | null {
+  const parsed = getNumberOrNull(value);
+  return parsed == null ? null : Math.round(parsed);
 }
 
 function getNumberOrDefault(
@@ -557,6 +564,8 @@ export function mapAuction(auction: OsAuction): MappedAuction {
     sqm: getNumberOrDefault(auction.propertySquareMeters, 1),
     bedrooms: null,
     bathrooms: null,
+    floor: getIntegerOrNull(auction.propertyFloor),
+    total_floors: getIntegerOrNull(auction.numberOfFloors),
     latitude: lat,
     longitude: lng,
     tags: buildAuctionTags(requiredTags, optionalTags),

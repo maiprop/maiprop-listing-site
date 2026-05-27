@@ -12,17 +12,20 @@ import { Link, useLocation, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   AlertCircle,
+  Bath,
+  BedDouble,
   Building2,
   Calendar,
   ChevronLeft,
   Clock,
   ExternalLink,
   Gavel,
-  LayoutGrid,
+  Layers,
   Loader2,
   MapPin,
   Scale,
   Square,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -34,7 +37,14 @@ import { PropertyScoresSection } from "@/components/property/PropertyScoresSecti
 import { PropertyReportCard } from "@/components/property/PropertyReportCard";
 import { PropertyValuationLockedCard } from "@/components/property/PropertyValuationLockedCard";
 import { PropertyAIInsightsSection } from "@/components/property/PropertyAIInsightsSection";
-import { DetailRow, Section, SectionHeader } from "@/components/property/DetailPrimitives";
+import { Section, SectionHeader } from "@/components/property/DetailPrimitives";
+import { PropertyDetailsAndEnergy } from "@/components/property/PropertyDetailsAndEnergy";
+import {
+  PropertyHeroSpecsBar,
+  formatAreaSpec,
+  formatFloorSpec,
+  type HeroSpecItem,
+} from "@/components/property/PropertyHeroSpecsBar";
 import { fetchAuctionListingById, useAuctionListings } from "@/hooks/useAuctionListings";
 import { useSubscription } from "@/hooks/useSubscription";
 import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
@@ -99,6 +109,14 @@ const asNumber = (value: unknown): number | null => { // skipcq: JS-R1005 - Auct
   return null;
 };
 
+const firstNumber = (...values: unknown[]): number | null => {
+  for (const value of values) {
+    const numberValue = asNumber(value);
+    if (numberValue !== null) return numberValue;
+  }
+  return null;
+};
+
 type AuctionRouteState = {
   auction?: Record<string, unknown>;
   listing?: Record<string, unknown>;
@@ -137,8 +155,8 @@ const buildAuctionInsightsListing = (
     sqm: asNumber(auction.sqm) ?? 1,
     bedrooms: asNumber(auction.bedrooms),
     bathrooms: asNumber(auction.bathrooms),
-    floor: asNumber(auction.floor),
-    total_floors: asNumber(auction.total_floors),
+    floor: firstNumber(auction.floor, auction.propertyFloor, auction.property_floor),
+    total_floors: firstNumber(auction.total_floors, auction.totalFloors, auction.numberOfFloors, auction.number_of_floors),
     year_built: asNumber(auction.year_built),
     energy_class: getNullableString(auction.energy_class),
     price_per_sqm: asNumber(auction.price_per_sqm),
@@ -177,16 +195,6 @@ const AuctionBreadcrumb = ({ title, isGreek }: { title: string; isGreek: boolean
 };
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-const StatChip = ({ icon, label }: { icon: React.ReactNode; label: string }) => {
-  return (
-    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
-      <span className="text-primary shrink-0">{icon}</span>
-      {label}
-    </div>
-  );
-};
-
-// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 const AuctionTitleSection = ({ // skipcq: JS-R1005 - Title metadata intentionally renders compact optional auction badges in one reusable header block.
   title,
   city,
@@ -196,7 +204,12 @@ const AuctionTitleSection = ({ // skipcq: JS-R1005 - Title metadata intentionall
   auctionDate,
   days,
   sqm,
+  bedrooms,
+  bathrooms,
+  floor,
+  totalFloors,
   yearBuilt,
+  energyClass,
   ownershipBadge,
   ownershipPct,
   isGreek,
@@ -209,12 +222,36 @@ const AuctionTitleSection = ({ // skipcq: JS-R1005 - Title metadata intentionall
   auctionDate?: string | null;
   days: number;
   sqm: number | null;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  floor: number | null;
+  totalFloors: number | null;
   yearBuilt: number | null;
+  energyClass: string | null;
   ownershipBadge: { cls: string; label: string } | null;
   ownershipPct: number | null;
   isGreek: boolean;
 }) => { // skipcq: JS-R1005 - Auction title section renders optional metadata and badges in one header.
   const badge = countdownBadge(days, isGreek ? "el" : "en");
+  const missingLabel = isGreek ? "\u0394\u03b5\u03bd \u03c0\u03b1\u03c1\u03ad\u03c7\u03b5\u03c4\u03b1\u03b9" : "Not provided";
+  const timeToAuction = days < 999
+    ? days === 0
+      ? (isGreek ? "Σήμερα" : "Today")
+      : (isGreek ? `Σε ${days} ημέρες` : `${days} day${days !== 1 ? "s" : ""} to go`)
+    : null;
+  const floorValue = formatFloorSpec(floor, totalFloors) ?? missingLabel;
+  const specItems: HeroSpecItem[] = [
+    { key: "surface", label: "Surface", value: sqm != null && sqm > 1 ? formatAreaSpec(sqm) : null, icon: Square, emphasis: true },
+    { key: "bedrooms", label: "Bedrooms", value: bedrooms, icon: BedDouble },
+    { key: "bathrooms", label: "Bathrooms", value: bathrooms, icon: Bath },
+    { key: "floor", label: "Floor", value: floorValue, icon: Layers },
+    { key: "built", label: "Built", value: yearBuilt, icon: Building2 },
+    { key: "energy", label: "Energy", value: energyClass && energyClass !== "Exempt" ? energyClass : null, icon: Zap, emphasis: true },
+    { key: "auction-date", label: "Auction", value: auctionDate ? formatDate(auctionDate) : null, icon: Calendar, emphasis: true },
+    { key: "countdown", label: "Timing", value: timeToAuction, icon: Clock },
+    { key: "ownership", label: "Ownership", value: ownershipBadge?.label ?? null, icon: Building2 },
+    { key: "ownership-share", label: "Share", value: ownershipPct != null && ownershipPct < 100 ? `${ownershipPct}%` : null, icon: Scale },
+  ];
 
   return (
     <div className="space-y-4">
@@ -248,26 +285,7 @@ const AuctionTitleSection = ({ // skipcq: JS-R1005 - Title metadata intentionall
         </div>
       </div>
 
-      <div className="flex items-center gap-2 flex-wrap">
-        {sqm != null && sqm > 1 && <StatChip icon={<Square className="w-3.5 h-3.5" />} label={`${sqm} ${isGreek ? "τ.μ." : "m2"}`} />}
-        {auctionDate && <StatChip icon={<Calendar className="w-3.5 h-3.5" />} label={`${isGreek ? "Πλειστηριασμός" : "Auction"}: ${formatDate(auctionDate)}`} />}
-        {days < 999 && (
-          <StatChip
-            icon={<Clock className="w-3.5 h-3.5" />}
-            label={days === 0 ? (isGreek ? "Σήμερα" : "Today") : (isGreek ? `Σε ${days} ημέρες` : `${days} day${days !== 1 ? "s" : ""} to go`)}
-          />
-        )}
-        {yearBuilt != null && <StatChip icon={<Building2 className="w-3.5 h-3.5" />} label={`${isGreek ? "Έτος κατασκευής" : "Construction year"} ${yearBuilt}`} />}
-        {ownershipBadge && (
-          <div className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border ${ownershipBadge.cls}`}>
-            <Building2 className="w-3.5 h-3.5 shrink-0" />
-            {ownershipBadge.label}
-          </div>
-        )}
-        {ownershipPct != null && ownershipPct < 100 && (
-          <StatChip icon={<Building2 className="w-3.5 h-3.5" />} label={`${ownershipPct}%`} />
-        )}
-      </div>
+      <PropertyHeroSpecsBar items={specItems} />
     </div>
   );
 };
@@ -355,7 +373,12 @@ const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates aucti
   const auctionDate = auction.auction_date as string | null | undefined;
   const bid = asNumber(auction.auction_starting_bid) ?? asNumber(auction.price) ?? 0;
   const sqm = asNumber(auction.sqm);
+  const bedrooms = asNumber(auction.bedrooms);
+  const bathrooms = asNumber(auction.bathrooms);
+  const floor = firstNumber(auction.floor, auction.propertyFloor, auction.property_floor);
+  const totalFloors = firstNumber(auction.total_floors, auction.totalFloors, auction.numberOfFloors, auction.number_of_floors);
   const yearBuilt = asNumber(auction.year_built);
+  const energyClass = getNullableString(auction.energy_class);
   const lat = asNumber(auction.latitude);
   const lng = asNumber(auction.longitude);
   const websiteUrl = safeUrl(auction.website_url as string | null | undefined);
@@ -377,16 +400,42 @@ const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates aucti
   const ownershipPct = getOwnershipPct(tags);
   const ownershipBadge = getOwnershipBadge(ownershipStatus, locale);
   const canonicalUrl = `https://maiprop.co/auction/${id}`;
+  const missingDetailLabel = isGreek ? "\u0394\u03b5\u03bd \u03c0\u03b1\u03c1\u03ad\u03c7\u03b5\u03c4\u03b1\u03b9" : "Not provided";
+  const floorDetailValue = formatFloorSpec(floor, totalFloors) ?? missingDetailLabel;
   const ogDescription = isGreek
     ? `Πλειστηριασμός: ${title}. Τιμή πρώτης προσφοράς ${formatPrice(bid)}. Πόλη: ${city}.`
     : `Auction: ${title}. First offer price ${formatPrice(bid)}. City: ${city}.`;
 
-  const detailRows: { label: string; value: string | number }[] = [];
-  if (propertyTypeLabel) detailRows.push({ label: isGreek ? "Τύπος ακινήτου" : "Property Type", value: propertyTypeLabel });
-  if (sqm && sqm > 1) detailRows.push({ label: isGreek ? "Εμβαδόν" : "Surface", value: `${sqm} ${isGreek ? "τ.μ." : "m2"}` });
-  if (auctionDate) detailRows.push({ label: isGreek ? "Ημερομηνία πλειστηριασμού" : "Auction Date", value: formatDate(auctionDate) });
-  if (yearBuilt) detailRows.push({ label: isGreek ? "Έτος κατασκευής" : "Construction Year", value: yearBuilt });
-  if (region) detailRows.push({ label: isGreek ? "Περιφέρεια" : "Region", value: region });
+  const detailGroups = [
+    {
+      title: isGreek ? "Βασικά" : "Core",
+      rows: [
+        { label: isGreek ? "Τύπος ακινήτου" : "Property Type", value: propertyTypeLabel },
+        { label: isGreek ? "Εμβαδόν" : "Surface", value: sqm && sqm > 1 ? formatAreaSpec(sqm) : null },
+        { label: isGreek ? "Υπνοδωμάτια" : "Bedrooms", value: bedrooms },
+        { label: isGreek ? "Μπάνια" : "Bathrooms", value: bathrooms },
+        { label: isGreek ? "Όροφος" : "Floor", value: floorDetailValue },
+        { label: isGreek ? "Έτος κατασκευής" : "Construction Year", value: yearBuilt },
+        { label: isGreek ? "Ενεργειακή κλάση" : "Energy Class", value: energyClass },
+      ],
+    },
+    {
+      title: isGreek ? "Πλειστηριασμός" : "Auction",
+      rows: [
+        { label: isGreek ? "Ημερομηνία πλειστηριασμού" : "Auction Date", value: auctionDate ? formatDate(auctionDate) : null },
+        { label: isGreek ? "Τιμή πρώτης προσφοράς" : "First Offer Price", value: formatPrice(bid) },
+        { label: isGreek ? "Καθεστώς κυριότητας" : "Ownership Status", value: ownershipBadge?.label ?? null },
+        { label: isGreek ? "Ποσοστό κυριότητας" : "Ownership Share", value: ownershipPct != null && ownershipPct < 100 ? `${ownershipPct}%` : null },
+      ],
+    },
+    {
+      title: isGreek ? "Τοποθεσία" : "Location",
+      rows: [
+        { label: isGreek ? "Περιφέρεια" : "Region", value: region },
+        { label: isGreek ? "Πόλη" : "City", value: city },
+      ],
+    },
+  ];
 
   const propertyContext = {
     title,
@@ -394,9 +443,13 @@ const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates aucti
     address: address ?? undefined,
     price: bid || undefined,
     sqm: sqm ?? undefined,
+    bedrooms: bedrooms ?? undefined,
+    bathrooms: bathrooms ?? undefined,
     propertyType: propertyType ?? undefined,
     listingType: "auction" as const,
+    floor: floor ?? undefined,
     yearBuilt: yearBuilt ?? undefined,
+    energyClass: energyClass ?? undefined,
     latitude: lat ?? undefined,
     longitude: lng ?? undefined,
     region: region ?? undefined,
@@ -411,11 +464,16 @@ const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates aucti
     auction_starting_bid: bid,
     auction_date: auctionDate ?? null,
     sqm: sqm ?? null,
+    bedrooms,
+    bathrooms,
+    floor,
+    total_floors: totalFloors,
     latitude: lat ?? null,
     longitude: lng ?? null,
     property_type: propertyType ?? null,
     listing_type: "auction",
     year_built: yearBuilt ?? null,
+    energy_class: energyClass,
     region: region ?? null,
     cover_image_url: images[0] ?? null,
     listing_images: images.slice(1).map((url, index) => ({ url, sort_order: index + 1 })),
@@ -473,7 +531,12 @@ const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates aucti
                 auctionDate={auctionDate}
                 days={days}
                 sqm={sqm}
+                bedrooms={bedrooms}
+                bathrooms={bathrooms}
+                floor={floor}
+                totalFloors={totalFloors}
                 yearBuilt={yearBuilt}
+                energyClass={energyClass}
                 ownershipBadge={ownershipBadge}
                 ownershipPct={ownershipPct}
                 isGreek={isGreek}
@@ -543,14 +606,7 @@ const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates aucti
                 </div>
               </Section>
 
-              {detailRows.length > 0 && (
-                <Section>
-                  <SectionHeader icon={LayoutGrid} title={isGreek ? "Στοιχεία ακινήτου" : "Property Details"} />
-                  <div className="p-5">
-                    {detailRows.map((row) => <DetailRow key={row.label} label={row.label} value={row.value} />)}
-                  </div>
-                </Section>
-              )}
+              <PropertyDetailsAndEnergy detailGroups={detailGroups} energyClass={energyClass} />
 
               {lat != null && lng != null && (
                 <div className="rounded-2xl overflow-hidden">

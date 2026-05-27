@@ -82,6 +82,8 @@ Deno.test("mapAuction drops malformed numeric fields", () => {
     propertyLatitude: "not-lat",
     propertyLongitude: "23.7",
     propertySquareMeters: "not-sqm",
+    propertyFloor: "not-floor",
+    numberOfFloors: "not-total-floors",
     constructionYear: "not-year",
     firstPriceOffer: "not-price",
     ownershipPercentage: "not-ownership",
@@ -90,10 +92,23 @@ Deno.test("mapAuction drops malformed numeric fields", () => {
   assertEquals(mapped.price, 0);
   assertEquals(mapped.cover_image_url, null);
   assertEquals(mapped.sqm, 1);
+  assertEquals(mapped.floor, null);
+  assertEquals(mapped.total_floors, null);
   assertEquals(mapped.latitude, null);
   assertEquals(mapped.longitude, 23.7);
   assertEquals(mapped.year_built, null);
   assertEquals(mapped.tags.includes("ownership_pct:NaN"), false);
+});
+
+Deno.test("mapAuction forwards floor information when OS provides it", () => {
+  const mapped = mapAuction({
+    auctionListingId: 43,
+    propertyFloor: "2",
+    numberOfFloors: "5",
+  });
+
+  assertEquals(mapped.floor, 2);
+  assertEquals(mapped.total_floors, 5);
 });
 
 Deno.test("national auction sampling spreads page reads across the source catalogue", () => {

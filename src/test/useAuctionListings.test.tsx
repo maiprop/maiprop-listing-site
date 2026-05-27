@@ -42,6 +42,8 @@ const auctionRow = (id: string, overrides: Partial<AuctionRow> = {}): AuctionRow
     sqm: 0,
     bedrooms: null,
     bathrooms: null,
+    floor: null,
+    total_floors: null,
     latitude: null,
     longitude: null,
     tags: null,
@@ -86,7 +88,7 @@ const makeBuilder = (rangeImpl: () => Promise<{ data: unknown[] | null; error: u
 
 describe("useAuctionListings", () => {
   it("uses the cached public auction API before the slower OS proxy for public-sized windows", async () => {
-    publicApiMock.mockResolvedValue({ data: [auctionRow("public-a1")] });
+    publicApiMock.mockResolvedValue({ data: [auctionRow("public-a1", { floor: 1 })] });
 
     const { result } = renderHookWithQuery(() => useAuctionListings(60));
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -100,7 +102,7 @@ describe("useAuctionListings", () => {
   it("does not fall through to the slow live OS proxy for public-sized windows", async () => {
     publicApiMock.mockResolvedValue(null);
     const builder = makeBuilder(() => Promise.resolve({
-      data: [auctionRow("db-a1")],
+      data: [auctionRow("db-a1", { floor: 1 })],
       error: null,
     }));
     fromMock.mockReturnValue(builder);
@@ -112,6 +114,20 @@ describe("useAuctionListings", () => {
     expect(invokeMock).not.toHaveBeenCalled();
     expect(fromMock).toHaveBeenCalled();
     expect(builder.eq).toHaveBeenCalledWith("is_off_market", false);
+  });
+
+  it("prefers live OS rows when the public cache is missing floor metadata", async () => {
+    publicApiMock.mockResolvedValue({ data: [auctionRow("public-a1", { floor: null, total_floors: null })] });
+    invokeMock.mockResolvedValue({ data: { data: [auctionRow("os-a1", { floor: 2, total_floors: 5 })] }, error: null });
+
+    const { result } = renderHookWithQuery(() => useAuctionListings(60));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data?.[0]).toMatchObject({ id: "os-a1", floor: 2, total_floors: 5 });
+    expect(invokeMock).toHaveBeenCalledWith("fetch-os-auctions", expect.objectContaining({
+      body: expect.objectContaining({ pageSize: 60, sampleAcrossGreece: true }),
+    }));
+    expect(fromMock).not.toHaveBeenCalled();
   });
 
   it("uses a deterministic daily rotation instead of preserving OS municipality order", () => {
