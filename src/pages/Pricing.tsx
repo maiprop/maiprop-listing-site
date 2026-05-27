@@ -537,46 +537,51 @@ export default function Pricing() {
             </p>
 
             {/* Billing toggle */}
-            <div className="flex items-center justify-center gap-3 mb-6">
-              <button
-                type="button"
-                onClick={() => setBillingCycle("monthly")}
-                className={cn(
-                  "text-sm font-medium transition-colors",
-                  billingCycle === "monthly" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
-                )}
-                aria-pressed={billingCycle === "monthly"}
+            <div className="mb-6 flex justify-center">
+              <div
+                role="radiogroup"
+                aria-label={isGreekLocale(i18n.language) ? "Κύκλος χρέωσης" : "Billing cycle"}
+                className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary/80 p-1 shadow-sm"
               >
-                {tr("Monthly")}
-              </button>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={billingCycle === "annual"}
-                aria-label={isGreekLocale(i18n.language) ? `Κύκλος χρέωσης: ${billingCycle === "annual" ? "ετήσια" : "μηνιαία"}` : `Billing cycle: ${billingCycle}`}
-                onClick={() => setBillingCycle(c => c === "monthly" ? "annual" : "monthly")}
-                className={cn(
-                  "relative w-12 h-6 rounded-full transition-colors duration-200 border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
-                  billingCycle === "annual" ? "bg-primary border-primary" : "bg-secondary border-border"
-                )}
-              >
-                <span className={cn(
-                  "absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 pointer-events-none",
-                  billingCycle === "annual" ? "translate-x-6" : "translate-x-0.5"
-                )} />
-              </button>
-              <button
-                type="button"
-                onClick={() => setBillingCycle("annual")}
-                className={cn(
-                  "text-sm font-medium flex items-center gap-1.5 transition-colors",
-                  billingCycle === "annual" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
-                )}
-                aria-pressed={billingCycle === "annual"}
-              >
-                {tr("Annual")}
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">{tr("2 months FREE")}</span>
-              </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={billingCycle === "monthly"}
+                  onClick={() => setBillingCycle("monthly")}
+                  className={cn(
+                    "h-10 rounded-full px-4 text-sm font-semibold transition-all",
+                    billingCycle === "monthly"
+                      ? "bg-background text-foreground shadow-card"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {tr("Monthly")}
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={billingCycle === "annual"}
+                  onClick={() => setBillingCycle("annual")}
+                  className={cn(
+                    "flex h-10 items-center gap-2 rounded-full px-3 text-sm font-semibold transition-all sm:px-4",
+                    billingCycle === "annual"
+                      ? "bg-primary text-primary-foreground shadow-card"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {tr("Annual")}
+                  <span
+                    className={cn(
+                      "rounded-full border px-1.5 py-0.5 text-[10px] font-bold leading-none",
+                      billingCycle === "annual"
+                        ? "border-primary-foreground/30 bg-primary-foreground/15 text-primary-foreground"
+                        : "border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+                    )}
+                  >
+                    {tr("2 months FREE")}
+                  </span>
+                </button>
+              </div>
             </div>
 
             {/* Audience tab strip */}
@@ -690,8 +695,8 @@ export default function Pricing() {
                     {isGreekLocale(i18n.language) ? "ή " : "or "}
                     <button onClick={() => setBillingCycle("annual")} className="underline hover:text-foreground">
                       {isGreekLocale(i18n.language)
-                        ? `€${Math.round(basePlan.annualPrice / 12)}/μήνα με ετήσια χρέωση`
-                        : `€${Math.round(basePlan.annualPrice / 12)}/mo billed annually`}
+                        ? `€${Math.round(dbAnnualPrice / 12)}/μήνα με ετήσια χρέωση`
+                        : `€${Math.round(dbAnnualPrice / 12)}/mo billed annually`}
                     </button>
                     {" "}
                     {isGreekLocale(i18n.language) ? `(εξοικονόμηση €${annualSaving}/έτος)` : `(save €${annualSaving}/yr)`}

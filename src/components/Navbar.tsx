@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import logoImg from "@/assets/logo.png";
 import logoDarkImg from "@/assets/logo-dark.png";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Bell, MessageSquare, Menu, X, ChevronDown, Plus, LogOut, LayoutDashboard, Building2, Sun, Moon, Home, Flame, DoorOpen, Search, Zap, Gavel, Calendar, CheckCheck, Shield } from "lucide-react";
+import { Bell, MessageSquare, Menu, X, ChevronDown, LogOut, LayoutDashboard, Building2, Sun, Moon, Flame, DoorOpen, Search, Zap, Gavel, Calendar, CheckCheck, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "next-themes";
 import {
@@ -27,6 +27,8 @@ import { sanitizeRedirectPath } from "@/lib/authRedirect";
 
 // Pages that have a full-width dark hero image at the top
 const DARK_HERO_ROUTES = ["/"];
+type NavAccent = "flame" | "dooropen" | "subtle";
+type NavLinkItem = { label: string; href: string; badge?: string; accent?: NavAccent };
 
 export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = {}) => { // skipcq: JS-R1005
   const [scrolled, setScrolled] = useState(forceScrolled);
@@ -39,7 +41,6 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
   const { t } = useTranslation();
 
   const participantType = getParticipantTypeFromProfile(profile);
-  const isDeveloper = profile?.role === "developer" || isPlatformAdmin(profile);
   const canListProperty = isSellSideRole(profile) || isPlatformAdmin(profile);
   const { eligible: eligibleForQuickSale } = useEligibleForQuickSale();
 
@@ -126,7 +127,7 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
     return path !== "/" || location.pathname === "/";
   };
 
-  const navLinks = [
+  const navLinks: NavLinkItem[] = [
     { label: t("listings.types.sale"), href: "/listings?listing_type=sale" },
     { label: t("listings.types.rent"), href: "/listings?listing_type=rent" },
     { label: t("nav.auctions"), href: "/auctions", badge: t("common.live") },
@@ -134,7 +135,6 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
     { label: t("nav.openHouses"), href: "/open-houses", accent: "dooropen" },
     { label: t("nav.professionals"), href: "/professionals", accent: "subtle" },
   ];
-
   const displayName = profile?.display_name || profile?.first_name || user?.email?.split("@")[0] || "Account";
   const initials = displayName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
 
@@ -161,40 +161,28 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
             : "bg-background/60 backdrop-blur-md border-b border-border/30"
       }`}
     >
-      <div className="container flex items-center justify-between h-16 px-4 sm:px-6">
+      <div className="container flex items-center justify-between h-16 gap-3 px-4 sm:px-6">
         {/* Logo */}
         <Link to="/" className="flex items-center shrink-0">
           <img
             src={useLightLogo ? logoDarkImg : logoImg}
             alt="mAI prop"
-            className="h-10 w-auto object-contain transition-all duration-300"
+            className="h-9 w-auto object-contain transition-all duration-300"
           />
         </Link>
 
         {/* Desktop nav */}
-        <nav className="hidden xl:flex items-center gap-0.5">
-          {user && canListProperty && (
-            <Link
-              to="/dashboard/listings"
-              className={`relative px-3 py-2 text-sm font-medium rounded-md transition-colors flex items-center gap-1.5
-                ${isActive("/dashboard/listings")
-                  ? forceLight
-                    ? "text-white bg-white/20"
-                    : "text-primary bg-primary/10"
-                  : forceLight
-                    ? "text-white/80 hover:text-white hover:bg-white/10"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-                }`}
-            >
-              <Building2 className="w-3.5 h-3.5 shrink-0" />
-              {t("dashNav.myListings")}
-            </Link>
-          )}
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              to={link.href}
-              className={`relative px-3 py-2 text-sm font-medium rounded-md transition-colors flex items-center gap-1.5
+        <nav className="hidden xl:flex flex-1 min-w-0 items-center justify-center px-2" aria-label="Primary">
+          <div className={`flex max-w-full min-w-0 items-center gap-1 rounded-full border p-1 shadow-sm ${
+            forceLight
+              ? "border-white/20 bg-black/10"
+              : "border-border/70 bg-background/75"
+          }`}>
+            {navLinks.map((link) => (
+              <Link
+                key={link.href}
+                to={link.href}
+                className={`relative flex h-9 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-sm font-semibold transition-colors
                 ${isActive(link.href)
                   ? link.accent === "flame"
                     ? "text-destructive bg-destructive/10"
@@ -219,52 +207,47 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
                             ? "text-white/80 hover:text-white hover:bg-white/10"
                             : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                 }`}
-            >
-              {link.accent === "flame" && <span className="text-sm">🔥</span>}
-              {link.accent === "dooropen" && <DoorOpen className="w-3.5 h-3.5 shrink-0" />}
-              {link.label}
-              {link.badge && (
-                <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold animate-pulse ${
-                  forceLight ? "bg-white/20 text-white" : "bg-primary/15 text-primary"
-                }`}>
-                  {link.badge}
-                </span>
-              )}
-              {link.accent === "subtle" && (
-                <span className={`w-1.5 h-1.5 rounded-full ml-0.5 ${forceLight ? "bg-white/50" : "bg-accent/60"}`} />
-              )}
-            </Link>
-          ))}
+              >
+                {link.accent === "flame" && <Flame className="w-3.5 h-3.5 shrink-0 flame-flicker" />}
+                {link.accent === "dooropen" && <DoorOpen className="w-3.5 h-3.5 shrink-0" />}
+                {link.label}
+                {link.badge && (
+                  <span className={`status-live text-[10px] px-1.5 py-0.5 rounded-full font-bold leading-none ${
+                    forceLight ? "bg-white/20 text-white" : "bg-primary/15 text-primary"
+                  }`}>
+                    {link.badge}
+                  </span>
+                )}
+                {link.accent === "subtle" && (
+                  <span className={`w-1.5 h-1.5 rounded-full ml-0.5 ${forceLight ? "bg-white/50" : "bg-accent/60"}`} />
+                )}
+              </Link>
+            ))}
+          </div>
         </nav>
 
         {/* Right actions */}
-        <div className="hidden xl:flex items-center gap-1">
-          <LanguageSwitcher />
-          <button
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            className={`p-2 rounded-lg transition-colors ${
-              forceLight
-                ? "text-white/80 hover:text-white hover:bg-white/10"
-                : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-            }`}
-            aria-label={t("common.toggleTheme")}
-          >
-            {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          </button>
+        <div className="hidden xl:flex shrink-0 items-center justify-end gap-2">
+          <div className={`flex h-10 items-center gap-0.5 rounded-full border px-1 ${
+            forceLight ? "border-white/15 bg-white/10" : "border-border/70 bg-background/75"
+          }`}>
+            <LanguageSwitcher />
+            <button
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
+                forceLight
+                  ? "text-white/80 hover:text-white hover:bg-white/10"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+              }`}
+              aria-label={t("common.toggleTheme")}
+            >
+              {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
+          </div>
           {user ? (
             <>
-              <Link to="/messages">
-                <button className={`relative p-2 rounded-lg transition-colors ${
-                  forceLight
-                    ? "text-white/80 hover:text-white hover:bg-white/10"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-                }`} title={t("nav.messages")}>
-                  <MessageSquare className="w-4 h-4" />
-                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary" />
-                </button>
-              </Link>
               <DropdownMenu>
-                <DropdownMenuTrigger className={`relative p-2 rounded-lg transition-colors outline-none ${
+                <DropdownMenuTrigger className={`relative flex h-10 w-10 items-center justify-center rounded-full transition-colors outline-none ${
                   forceLight
                     ? "text-white/80 hover:text-white hover:bg-white/10"
                     : "text-muted-foreground hover:text-foreground hover:bg-secondary"
@@ -327,28 +310,34 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
               </DropdownMenu>
 
               <DropdownMenu>
-                <DropdownMenuTrigger className={`flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors outline-none ${
-                  forceLight ? "hover:bg-white/10" : "hover:bg-secondary"
+                <DropdownMenuTrigger className={`flex h-10 items-center gap-2 rounded-full border px-1.5 pr-2.5 transition-colors outline-none ${
+                  forceLight ? "border-white/15 bg-white/10 hover:bg-white/15" : "border-border/70 bg-background/75 hover:bg-secondary"
                 }`}>
                   <div className="w-7 h-7 rounded-full bg-gradient-primary flex items-center justify-center text-xs font-bold text-primary-foreground">
                     {profile?.avatar_url
                       ? <img src={profile.avatar_url} alt={`${displayName} profile photo`} className="w-full h-full rounded-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                       : initials}
                   </div>
-                  <span className={`text-sm max-w-[80px] truncate ${forceLight ? "text-white" : "text-foreground"}`}>{displayName}</span>
-                  {isInvestorMode(profile) && (
-                    <span className="text-[10px] font-bold text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-full">
-                      🔥 {t("nav.investorDashboard")}
-                    </span>
-                  )}
+                  <span className={`hidden max-w-[96px] truncate text-sm font-semibold 2xl:inline ${forceLight ? "text-white" : "text-foreground"}`}>{displayName}</span>
                   <ChevronDown className={`w-3 h-3 ${forceLight ? "text-white/60" : "text-muted-foreground"}`} />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-52 bg-card border-border">
                   <div className="px-3 py-2 border-b border-border">
-                    <p className="text-xs font-semibold truncate">{displayName}</p>
+                    <p className="text-sm font-semibold truncate">{displayName}</p>
                     <p className="text-xs text-muted-foreground capitalize">
-                    {isPlatformAdmin(profile) ? t("common.admin") : PARTICIPANT_LABELS[participantType as ParticipantId] ?? (profile?.role || t("common.buyerRenter"))}
-                  </p>
+                      {isPlatformAdmin(profile) ? t("common.admin") : PARTICIPANT_LABELS[participantType as ParticipantId] ?? (profile?.role || t("common.buyerRenter"))}
+                    </p>
+                    <Link
+                      to="/pricing"
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2 py-1 text-[11px] font-bold text-primary hover:bg-primary/15"
+                    >
+                      <Zap className="w-3 h-3" /> {isPro ? t("common.proActive") : t("common.upgrade")}
+                    </Link>
+                    {isInvestorMode(profile) && (
+                      <p className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-1 text-[10px] font-bold text-destructive">
+                        <Flame className="w-3 h-3" /> {t("nav.investorDashboard")}
+                      </p>
+                    )}
                   </div>
                   <DropdownMenuItem asChild>
                     <Link to="/dashboard" className="flex items-center gap-2 cursor-pointer">
@@ -396,51 +385,11 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {canListProperty && (
-                isDeveloper ? (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground hover:opacity-90 gap-1.5">
-                        <Plus className="w-3.5 h-3.5" /> {t("common.listProperty")} <ChevronDown className="w-3 h-3 opacity-80" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuItem asChild>
-                        <Link to="/listings/new" className="flex items-center gap-2 cursor-pointer">
-                          <Home className="w-3.5 h-3.5" /> {t("common.listing")}
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <Link to="/listings/new-building" className="flex items-center gap-2 cursor-pointer">
-                          <Building2 className="w-3.5 h-3.5" /> {t("common.newBuilding")}
-                        </Link>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                ) : (
-                  <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground hover:opacity-90 gap-1.5" asChild>
-                    <Link to="/listings/new">
-                      <Plus className="w-3.5 h-3.5" /> {t("common.listProperty")}
-                    </Link>
-                  </Button>
-                )
-              )}
-              {/* Pro badge / CTA */}
-              {isPro ? (
+              {/* Keep the upgrade CTA visible, while active Pro status lives in the account menu. */}
+              {!isPro && (
                 <Link
                   to="/pricing"
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
-                    forceLight
-                      ? "bg-white/20 border-white/40 text-white"
-                      : "bg-primary/15 border-primary/40 text-primary"
-                  }`}
-                >
-                  <Zap className="w-3 h-3" /> {t("common.proActive")}
-                </Link>
-              ) : (
-                <Link
-                  to="/pricing"
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all hover:scale-105 ${
+                  className={`flex h-10 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-xs font-bold transition-all ${
                     forceLight
                       ? "bg-white/15 border-white/30 text-white/90 hover:bg-white/25"
                       : "bg-primary/10 border-primary/25 text-primary hover:bg-primary/20"
@@ -455,12 +404,12 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
               <Button
                 variant="ghost"
                 size="sm"
-                className={forceLight ? "text-white/90 hover:text-white hover:bg-white/10" : "text-muted-foreground hover:text-foreground"}
+                className={`h-10 rounded-full ${forceLight ? "text-white/90 hover:text-white hover:bg-white/10" : "text-muted-foreground hover:text-foreground"}`}
                 asChild
               >
                 <Link to="/login">{t("nav.signIn")}</Link>
               </Button>
-              <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground hover:opacity-90" asChild>
+              <Button size="sm" className="h-10 rounded-full bg-gradient-primary border-0 text-primary-foreground hover:opacity-90" asChild>
                 <Link to="/signup">{t("common.getStarted")}</Link>
               </Button>
             </>
