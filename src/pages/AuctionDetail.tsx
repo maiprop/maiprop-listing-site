@@ -41,10 +41,12 @@ import { Section, SectionHeader } from "@/components/property/DetailPrimitives";
 import { PropertyDetailsAndEnergy } from "@/components/property/PropertyDetailsAndEnergy";
 import {
   PropertyHeroSpecsBar,
+} from "@/components/property/PropertyHeroSpecsBar";
+import {
   formatAreaSpec,
   formatFloorSpec,
   type HeroSpecItem,
-} from "@/components/property/PropertyHeroSpecsBar";
+} from "@/components/property/propertyHeroSpecs";
 import { fetchAuctionListingById, useAuctionListings } from "@/hooks/useAuctionListings";
 import { useSubscription } from "@/hooks/useSubscription";
 import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";

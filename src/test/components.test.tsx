@@ -615,7 +615,7 @@ describe("PropertyDetail", () => {
   });
 
   it("does not route ordinary sale or rent listings to new-build just because they have a condition", async () => {
-    const { shouldUseNewBuildRoute } = await import("@/pages/PropertyDetail");
+    const { shouldUseNewBuildRoute } = await import("@/lib/listingRoutes");
 
     expect(shouldUseNewBuildRoute({ is_pre_sale: false, listing_type: "sale", construction_status: "renovated" } as never)).toBe(false);
     expect(shouldUseNewBuildRoute({ is_pre_sale: false, listing_type: "rent", construction_status: "new" } as never)).toBe(false);
