@@ -12,11 +12,12 @@
 import { test, expect } from "@playwright/test";
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import WebSocket from "ws";
+import { cleanEnvValue } from "./helpers/env";
 import { skipUnlessDestructiveLiveE2EAllowed } from "./helpers/liveSafety";
 
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL ?? "";
-const ANON_KEY = process.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "";
-const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+const SUPABASE_URL = cleanEnvValue(process.env.VITE_SUPABASE_URL);
+const ANON_KEY = cleanEnvValue(process.env.VITE_SUPABASE_PUBLISHABLE_KEY);
+const SERVICE_ROLE = cleanEnvValue(process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 const canRun =
   SUPABASE_URL.startsWith("https://") &&
