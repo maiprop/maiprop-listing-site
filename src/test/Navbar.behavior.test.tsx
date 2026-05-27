@@ -139,10 +139,13 @@ describe("Navbar behavior", () => {
 
     renderWithProviders(<Navbar forceScrolled />, { initialPath: "/dashboard/listings" });
 
+    expect(screen.getByRole("link", { name: "nav.quickSale" })).toHaveAttribute("href", "/firesale");
+
     fireEvent.pointerDown(screen.getByText("Seller User"), { button: 0, ctrlKey: false });
 
     expect(await screen.findByText("Selling / Renting Out")).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: /dashboard.myListings/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /common.proActive/i })).toHaveAttribute("href", "/pricing");
+    expect(screen.getByRole("menuitem", { name: /dashboard.myListings/i })).toHaveAttribute("href", "/dashboard/listings");
     expect(screen.getByRole("menuitem", { name: /nav.quickSale/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "common.proActive" })).toHaveAttribute("href", "/pricing");
   });
@@ -255,11 +258,14 @@ describe("Navbar behavior", () => {
 
     fireEvent.pointerDown(screen.getByText("Admin User"), { button: 0, ctrlKey: false });
     expect(await screen.findByText("common.admin")).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /dashboard.myListings/i })).toHaveAttribute("href", "/dashboard/listings");
+    expect(screen.getByRole("menuitem", { name: /nav.messages/i })).toHaveAttribute("href", "/messages");
     expect(screen.getByRole("menuitem", { name: /nav.adminDashboard/i })).toBeInTheDocument();
 
     fireEvent.keyDown(screen.getByRole("menu", { name: "Admin User" }), { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("menu", { name: "Admin User" })).not.toBeInTheDocument());
 
+    expect(screen.queryByRole("button", { name: /common.listProperty/i })).not.toBeInTheDocument();
   });
 
   it("signs out from the mobile menu and returns home", async () => {
