@@ -1,7 +1,7 @@
 import { memo, type MouseEvent } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Crown, Calendar, Clock, MapPin, Euro, Heart, Share2, Flag, ExternalLink, Building2, Lock } from "lucide-react";
+import { Crown, Calendar, Clock, MapPin, Euro, Heart, Share2, Flag, ExternalLink, Building2, Lock, Layers } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import {
@@ -153,12 +153,78 @@ const AuctionOwnershipChip = ({
 
 const hasUsableSqm = (sqm?: number | null): boolean => Boolean(sqm && sqm > 1);
 
+const toFiniteNumber = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === "") return null;
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+};
+
+const getFirstFiniteNumber = (...values: unknown[]): number | null => {
+  for (const value of values) {
+    const numberValue = toFiniteNumber(value);
+    if (numberValue !== null) return numberValue;
+  }
+  return null;
+};
+
+const getAuctionFloor = (auction: AuctionCardProps["a"]): number | null =>
+  getFirstFiniteNumber(auction.floor, auction.propertyFloor, auction.property_floor);
+
+const getAuctionTotalFloors = (auction: AuctionCardProps["a"]): number | null =>
+  getFirstFiniteNumber(auction.total_floors, auction.totalFloors, auction.numberOfFloors, auction.number_of_floors);
+
+const formatAuctionFloorValue = (floorValue: unknown, totalFloorsValue: unknown, isGreek: boolean): string | null => {
+  const floor = toFiniteNumber(floorValue);
+  if (floor === null) return null;
+
+  const totalFloors = toFiniteNumber(totalFloorsValue);
+  const base = floor === -1
+    ? (isGreek ? "\u03a5\u03c0\u03cc\u03b3\u03b5\u03b9\u03bf" : "Basement")
+    : floor === 0
+      ? (isGreek ? "\u0399\u03c3\u03cc\u03b3\u03b5\u03b9\u03bf" : "Ground")
+      : String(floor);
+  return totalFloors !== null ? `${base} / ${totalFloors}` : base;
+};
+
+const formatAuctionFloor = (floorValue: unknown, totalFloorsValue: unknown, isGreek: boolean): string | null => {
+  const value = formatAuctionFloorValue(floorValue, totalFloorsValue, isGreek);
+  if (!value) return null;
+  const label = isGreek ? "\u038c\u03c1\u03bf\u03c6\u03bf\u03c2" : "Floor";
+  return `${label} ${value}`;
+};
+
+const formatAuctionArea = (sqm: unknown, isGreek: boolean, missingLabel: string): string => {
+  const area = toFiniteNumber(sqm);
+  if (area === null || area <= 1) return missingLabel;
+  return `${area.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${isGreek ? "\u03c4.\u03bc." : "m2"}`;
+};
+
 const AuctionYearBuiltPill = ({ yearBuilt, isGreek }: { yearBuilt?: string | number | null; isGreek: boolean }) => {
   if (!yearBuilt) return null;
 
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-secondary text-foreground border border-border">
       {isGreek ? "Έτος" : "Built"} {yearBuilt}
+    </span>
+  );
+};
+
+const AuctionFloorPill = ({
+  floor,
+  totalFloors,
+  isGreek,
+}: {
+  floor?: string | number | null;
+  totalFloors?: string | number | null;
+  isGreek: boolean;
+}) => {
+  const floorLabel = formatAuctionFloor(floor, totalFloors, isGreek);
+  if (!floorLabel) return null;
+
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-secondary text-foreground border border-border">
+      <Layers className="w-2.5 h-2.5 text-primary" />
+      {floorLabel}
     </span>
   );
 };
@@ -172,6 +238,38 @@ const AuctionSizePill = ({ sqm }: { sqm?: number | null }) => {
     </span>
   );
 };
+
+type AuctionDetailGroup = {
+  title: string;
+  rows: { label: string; value: string | number }[];
+};
+
+const AuctionGroupedDetails = ({ groups }: { groups: AuctionDetailGroup[] }) => (
+  <div className="space-y-2 border-y border-border/60 py-2.5">
+    {groups.map((group) => (
+      <div key={group.title} className="space-y-1.5">
+        <div className="flex items-center gap-2">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            {group.title}
+          </p>
+          <div className="h-px flex-1 bg-border/70" />
+        </div>
+        <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+          {group.rows.map((row) => (
+            <div key={`${group.title}-${row.label}`} className="min-w-0">
+              <dt className="truncate text-[10px] font-medium text-muted-foreground">
+                {row.label}
+              </dt>
+              <dd className="truncate text-xs font-semibold text-foreground" title={String(row.value)}>
+                {row.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    ))}
+  </div>
+);
 
 const AuctionPrice = ({ amount }: { amount: number }) => (
   <div className="flex items-center justify-between pt-1">
@@ -291,6 +389,27 @@ const AuctionCardComponent = ({ a, favoritedIds, onToggleFav }: AuctionCardProps
   const ownershipPct = getOwnershipPct(a.tags);
   const ownershipBadge = getOwnershipBadge(ownershipStatus, locale);
   const price = a.auction_starting_bid ?? a.price ?? 0;
+  const floor = getAuctionFloor(a);
+  const totalFloors = getAuctionTotalFloors(a);
+  const missingLabel = isGreek ? "\u0394\u03b5\u03bd \u03c0\u03b1\u03c1\u03ad\u03c7\u03b5\u03c4\u03b1\u03b9" : "Not provided";
+  const auctionDateLabel = a.auction_date ? format(new Date(a.auction_date), "dd MMM yyyy") : missingLabel;
+  const groupedDetails: AuctionDetailGroup[] = [
+    {
+      title: isGreek ? "\u0391\u03ba\u03af\u03bd\u03b7\u03c4\u03bf" : "Property",
+      rows: [
+        { label: isGreek ? "\u038c\u03c1\u03bf\u03c6\u03bf\u03c2" : "Floor", value: formatAuctionFloorValue(floor, totalFloors, isGreek) ?? missingLabel },
+        { label: isGreek ? "\u0395\u03bc\u03b2\u03b1\u03b4\u03cc\u03bd" : "Surface", value: formatAuctionArea(a.sqm, isGreek, missingLabel) },
+        { label: isGreek ? "\u0388\u03c4\u03bf\u03c2" : "Built", value: a.year_built ?? missingLabel },
+      ],
+    },
+    {
+      title: isGreek ? "\u03a0\u03bb\u03b5\u03b9\u03c3\u03c4\u03b7\u03c1\u03b9\u03b1\u03c3\u03bc\u03cc\u03c2" : "Auction",
+      rows: [
+        { label: isGreek ? "\u0397\u03bc/\u03bd\u03af\u03b1" : "Date", value: auctionDateLabel },
+        { label: isGreek ? "\u039a\u03c5\u03c1\u03b9\u03cc\u03c4\u03b7\u03c4\u03b1" : "Ownership", value: ownershipBadge?.label ?? missingLabel },
+      ],
+    },
+  ];
 
   return (
     <div data-testid="auction-card" className="glass-card rounded-xl overflow-hidden border border-border hover:border-brand-gold/40 transition-all group flex flex-col">
@@ -313,8 +432,10 @@ const AuctionCardComponent = ({ a, favoritedIds, onToggleFav }: AuctionCardProps
         <AuctionOwnershipChip ownershipBadge={ownershipBadge} ownershipPct={ownershipPct} />
         <div className="flex flex-wrap items-center gap-1.5 mt-1 empty:hidden">
           <AuctionYearBuiltPill yearBuilt={a.year_built} isGreek={isGreek} />
+          <AuctionFloorPill floor={floor} totalFloors={totalFloors} isGreek={isGreek} />
           <AuctionSizePill sqm={a.sqm} />
         </div>
+        <AuctionGroupedDetails groups={groupedDetails} />
         <AuctionPrice amount={price} />
         <AuctionCourt court={a.auction_court} />
         <AuctionActions a={a} isFav={isFav} onToggleFav={onToggleFav} isGreek={isGreek} />

@@ -3,9 +3,9 @@ import { useModal } from "@/hooks/useModal";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
-  MapPin, Bed, Bath, Square, Calendar, ChevronLeft, ChevronRight, Eye,
+  MapPin, Calendar, ChevronLeft, ChevronRight, Eye,
   Pencil, Pause, Play, Trash2, Loader2, MessageCircle, Euro, Users, LayoutDashboard,
-  Home, Wrench, Lock, ExternalLink, Heart, Share2, Layers, Thermometer, Building2,
+  Home, Wrench, Lock, ExternalLink, Heart, Share2,
   Check,
 } from "lucide-react";
 import { walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
@@ -26,10 +26,9 @@ import { useOpenHouseSettings, useOpenHouseRegistrations, useOpenHouseOffers } f
 import { useStartConversation } from "@/hooks/useMessages";
 import { useSubscription } from "@/hooks/useSubscription";
 import { toast } from "sonner";
-import { HEATING_TYPES, CONDITION_OPTIONS } from "@/lib/filterConfig";
 import { getStreetViewProxyUrl } from "@/lib/config";
 import { Section, SectionHeader, FeatureSection } from "@/components/property/DetailPrimitives";
-import { buildPropertyFeatureGroups, buildDetailRows } from "@/lib/propertyFeatures";
+import { buildPropertyFeatureGroups, buildDetailGroups } from "@/lib/propertyFeatures";
 import { PropertyDetailsAndEnergy } from "@/components/property/PropertyDetailsAndEnergy";
 import { PropertyDescriptionSection } from "@/components/property/PropertyDescriptionSection";
 import { PropertyAIInsightsSection } from "@/components/property/PropertyAIInsightsSection";
@@ -37,6 +36,7 @@ import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 import { PropertyValuationLockedCard } from "@/components/property/PropertyValuationLockedCard";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
+import { PropertyHeroSpecsBar, buildListingHeroSpecs } from "@/components/property/PropertyHeroSpecsBar";
 
 // skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
 export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house detail coordinates listing data, registration, offers, and owner controls.
@@ -197,7 +197,8 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
 
   const pricePerSqm = sqm > 0 ? Math.round(price / sqm) : null;
   const isLandType = ["land", "plot"].includes(db.property_type ?? "");
-  const detailRows = buildDetailRows(db, price, sqm, pricePerSqm, isLandType);
+  const detailGroups = buildDetailGroups(db, price, sqm, pricePerSqm, isLandType);
+  const heroSpecs = buildListingHeroSpecs(db);
   const { internalFeatures, externalFeatures, constructionFeatures, suitabilityFeatures } = buildPropertyFeatureGroups(db);
   const city = db.city || "";
 
@@ -320,16 +321,7 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                     {!!pricePerSqm && <div className="text-xs text-muted-foreground mt-0.5">€{pricePerSqm.toLocaleString()} {isGreek ? "ανά τ.μ." : "per m²"}</div>}
                   </div>
                 </div>
-                {/* Key stats bar — same as PropertyDetail */}
-                <div className="flex items-center gap-2 flex-wrap">
-                  {db.bedrooms != null && <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium"><Bed className="w-3.5 h-3.5 text-primary" />{db.bedrooms} {isGreek ? "υπν." : "bed"}</div>}
-                  {db.bathrooms != null && <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium"><Bath className="w-3.5 h-3.5 text-primary" />{db.bathrooms} {isGreek ? "μπάν." : "bath"}</div>}
-                  <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium"><Square className="w-3.5 h-3.5 text-primary" />{sqm} m²</div>
-                  {db.floor != null && <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium"><Layers className="w-3.5 h-3.5 text-primary" />{db.floor === 0 ? (isGreek ? "Ισόγειο" : "Ground") : `${db.floor}${db.total_floors ? (isGreek ? ` από ${db.total_floors}` : ` of ${db.total_floors}`) : ""}`}</div>}
-                  {db.year_built != null && <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium"><Calendar className="w-3.5 h-3.5 text-primary" />{db.year_built}</div>}
-                  {db.heating_system && <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium"><Thermometer className="w-3.5 h-3.5 text-primary" />{HEATING_TYPES.find((h) => h.value === db.heating_system)?.label ?? db.heating_system.replace(/_/g, " ")}</div>}
-                  {db.construction_status && <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-3 py-2 rounded-xl text-sm font-medium"><Building2 className="w-3.5 h-3.5 text-primary" />{CONDITION_OPTIONS.find((c) => c.value === db.construction_status)?.label ?? db.construction_status.replace(/_/g, " ")}</div>}
-                </div>
+                <PropertyHeroSpecsBar items={heroSpecs} />
               </div>
 
               {/* Open House date Section */}
@@ -370,8 +362,8 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
               <PropertyDescriptionSection description={db.description} />
 
               {/* Property Details + Energy Performance Certificate */}
-              {detailRows.length > 0 && (
-                <PropertyDetailsAndEnergy detailRows={detailRows} energyClass={db.energy_class} />
+              {detailGroups.length > 0 && (
+                <PropertyDetailsAndEnergy detailGroups={detailGroups} energyClass={db.energy_class} />
               )}
 
               {/* Features & Amenities */}

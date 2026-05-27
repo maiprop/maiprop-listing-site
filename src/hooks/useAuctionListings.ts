@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { fetchPublicApi } from "@/lib/publicApi";
 
-const AUCTION_SELECT_CORE = "id, title, city, address, price, auction_starting_bid, auction_date, auction_court, property_type, cover_image_url, sqm, bedrooms, bathrooms, latitude, longitude, tags, year_built, construction_status, website_url, region, is_featured, priority_placement";
+const AUCTION_SELECT_CORE = "id, title, city, address, price, auction_starting_bid, auction_date, auction_court, property_type, cover_image_url, sqm, bedrooms, bathrooms, floor, total_floors, latitude, longitude, tags, year_built, construction_status, website_url, region, is_featured, priority_placement";
 const QUERY_TIMEOUT_MS = 15_000;
 const AUCTION_FETCH_LIMIT = 500;
 const PORTAL_AUCTION_FETCH_LIMIT = 600;
@@ -36,6 +36,8 @@ export type AuctionListingRow = Pick<
   | "sqm"
   | "bedrooms"
   | "bathrooms"
+  | "floor"
+  | "total_floors"
   | "latitude"
   | "longitude"
   | "tags"
@@ -237,6 +239,24 @@ const fetchAuctionsFromPublicCache = async (maxRows: number): Promise<AuctionLis
   return Array.isArray(payload?.data) ? payload.data : [];
 };
 
+const hasFloorMetadata = (rows: AuctionListingRow[]): boolean =>
+  rows.some((row) => row.floor != null || row.total_floors != null);
+
+const preferFloorAwareRows = async (
+  today: string,
+  maxRows: number,
+  preferredRows: AuctionListingRow[],
+): Promise<AuctionListingRow[]> => {
+  if (hasFloorMetadata(preferredRows)) return preferredRows;
+
+  try {
+    const osRows = await fetchAuctionsFromOs(today, maxRows);
+    return hasFloorMetadata(osRows) || preferredRows.length === 0 ? osRows : preferredRows;
+  } catch {
+    return preferredRows;
+  }
+};
+
 const fetchFallbackAuctions = async (today: string, maxRows: number): Promise<AuctionListingRow[]> => {
   try {
     return await fetchAuctionsFromDatabase(today, true, maxRows);
@@ -254,12 +274,16 @@ const fetchAuctionListings = async (maxRows: number): Promise<AuctionListingRow[
   let cachedRows: AuctionListingRow[] = [];
 
   const publicRows = await fetchAuctionsFromPublicCache(maxRows);
-  if (publicRows.length > 0) return randomizeAndLimitAuctionRows(publicRows, maxRows);
+  if (publicRows.length > 0) {
+    const rows = await preferFloorAwareRows(today, maxRows, publicRows);
+    return randomizeAndLimitAuctionRows(rows, maxRows);
+  }
 
   if (maxRows <= PUBLIC_AUCTION_CACHE_LIMIT) {
     try {
       cachedRows = await fetchFallbackAuctions(today, sourceRows);
-      return randomizeAndLimitAuctionRows(cachedRows, maxRows);
+      const rows = await preferFloorAwareRows(today, maxRows, cachedRows);
+      return randomizeAndLimitAuctionRows(rows, maxRows);
     } catch (dbErr: unknown) {
       if (cachedRows.length > 0) return randomizeAndLimitAuctionRows(cachedRows, maxRows);
       throw dbErr;

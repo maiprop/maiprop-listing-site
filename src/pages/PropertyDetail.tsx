@@ -29,7 +29,7 @@ import { toast } from "sonner";
 import PropertyValuation from "@/components/PropertyValuation";
 const PropertyMiniMap = lazy(() => import("@/components/PropertyMiniMap"));
 const NeighbourhoodReport = lazy(() => import("@/components/NeighbourhoodReport"));
-import { buildPropertyFeatureGroups, buildDetailRows } from "@/lib/propertyFeatures";
+import { buildPropertyFeatureGroups, buildDetailGroups } from "@/lib/propertyFeatures";
 const AIAssistantWidget = lazy(() => import("@/components/AIAssistantWidget"));
 import { AuctionAlertModal } from "@/components/AuctionAlertModal";
 import { getStreetViewProxyUrl } from "@/lib/config";
@@ -265,8 +265,7 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
 
   const similarListings = similarFromDb.filter(l => l.id !== id).slice(0, 6);
 
-  // Build property details rows
-  const detailRows = buildDetailRows(db, price, sqm, pricePerSqm, isLandType);
+  const detailGroups = buildDetailGroups(db, price, sqm, pricePerSqm, isLandType);
 
 
   const ogImage = images[0] ?? "https://maiprop.co/og-default.jpg";
@@ -355,9 +354,6 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
               <PropertyTitleSection
                 db={db}
                 isAuction={isAuction}
-                ownershipDisplay={ownershipDisplay}
-                ownershipPct={ownershipPct}
-                ownershipStatus={ownershipStatus}
               />
 
               {/* ── AI Market Insights — dynamic from property-valuation ── */}
@@ -388,7 +384,7 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
               )}
 
               {/* ── Property Details + Energy Certificate ── */}
-              <PropertyDetailsAndEnergy detailRows={detailRows} energyClass={energyClass} />
+              <PropertyDetailsAndEnergy detailGroups={detailGroups} energyClass={energyClass} />
 
               {/* ── Features & Amenities ── */}
               <PropertyFeatureList

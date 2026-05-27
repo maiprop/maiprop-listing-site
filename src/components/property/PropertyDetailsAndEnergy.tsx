@@ -1,5 +1,5 @@
 import { Home, Zap } from "lucide-react";
-import { Section, SectionHeader, DetailRow } from "@/components/property/DetailPrimitives";
+import { Section, SectionHeader } from "@/components/property/DetailPrimitives";
 import { ENERGY_SCALE, ENERGY_COLORS } from "@/types";
 import type { EnergyClass } from "@/types";
 
@@ -8,14 +8,25 @@ export interface DetailRowItem {
   value: string | number | null | undefined;
 }
 
+export interface DetailGroupItem {
+  title: string;
+  rows: DetailRowItem[];
+}
+
 interface Props {
-  detailRows: DetailRowItem[];
+  detailRows?: DetailRowItem[];
+  detailGroups?: DetailGroupItem[];
   energyClass: string | null | undefined;
 }
 
 type VisibleDetailRow = {
   label: string;
   value: string | number;
+};
+
+type VisibleDetailGroup = {
+  title: string;
+  rows: VisibleDetailRow[];
 };
 
 const hasDisplayValue = (row: DetailRowItem): row is VisibleDetailRow => {
@@ -31,10 +42,47 @@ const getEnergyDescription = (energyClass: EnergyClass | null) => {
   return ENERGY_SCALE.find((e) => e.cls === energyClass)?.desc;
 };
 
-const DetailRowsGrid = ({ rows }: { rows: VisibleDetailRow[] }) => (
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10">
-    {rows.map((row) => (
-      <DetailRow key={row.label} label={row.label} value={row.value} />
+const getVisibleGroups = (
+  detailGroups: DetailGroupItem[] | undefined,
+  detailRows: DetailRowItem[] | undefined,
+): VisibleDetailGroup[] => {
+  const sourceGroups = detailGroups?.length
+    ? detailGroups
+    : [{ title: "Overview", rows: detailRows ?? [] }];
+
+  return sourceGroups
+    .map((group) => ({ ...group, rows: group.rows.filter(hasDisplayValue) }))
+    .filter((group) => group.rows.length > 0);
+};
+
+const DetailTile = ({ row }: { row: VisibleDetailRow }) => (
+  <div className="min-w-0 rounded-lg border border-border/60 bg-secondary/35 px-3.5 py-3">
+    <dt className="truncate text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+      {row.label}
+    </dt>
+    <dd className="mt-1 break-words text-sm font-semibold text-foreground capitalize">
+      {row.value}
+    </dd>
+  </div>
+);
+
+const DetailGroupsGrid = ({ groups }: { groups: VisibleDetailGroup[] }) => (
+  <div className="space-y-6">
+    {groups.map((group) => (
+      <section key={group.title} className="space-y-3">
+        <div className="flex items-center gap-2">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+            {group.title}
+          </p>
+          <div className="h-px flex-1 bg-border" />
+          <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+            {group.rows.length}
+          </span>
+        </div>
+        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          {group.rows.map((row) => <DetailTile key={`${group.title}-${row.label}`} row={row} />)}
+        </dl>
+      </section>
     ))}
   </div>
 );
@@ -107,15 +155,15 @@ const EnergyCertificate = ({ energyClass, energyDesc }: EnergyCertificateProps) 
  * energy certificate had nested conditionals + a loop + an IIFE all inline).
  * See docs/ENTERPRISE_ASSESSMENT_2026-04-27.md (Quadrant I, Top fn-size).
  */
-export const PropertyDetailsAndEnergy = ({ detailRows, energyClass }: Props) => {
+export const PropertyDetailsAndEnergy = ({ detailRows, detailGroups, energyClass }: Props) => {
   const displayEnergyClass = getDisplayEnergyClass(energyClass);
-  const visibleDetailRows = detailRows.filter(hasDisplayValue);
+  const visibleGroups = getVisibleGroups(detailGroups, detailRows);
 
   return (
     <Section>
       <SectionHeader icon={Home} title="Property Details" />
-      <div className="p-6">
-        <DetailRowsGrid rows={visibleDetailRows} />
+      <div className="p-5 sm:p-6">
+        <DetailGroupsGrid groups={visibleGroups} />
 
         <EnergyCertificate
           energyClass={displayEnergyClass}
