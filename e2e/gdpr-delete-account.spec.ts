@@ -52,8 +52,8 @@ test.describe("GDPR — account deletion", () => {
     "Requires VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY, and SUPABASE_SERVICE_ROLE_KEY",
   );
 
-  // skipcq: JS-R1005 - This destructive audit must prove delete, blocked old sign-in, PII scrubbing, same-email signup, and cleanup in one isolated user lifecycle.
-  test("deleting an account removes the auth user, blocks old sign-in, and allows fresh signup", async ({
+  // skipcq: JS-R1005 - This destructive audit must prove delete, blocked old sign-in, PII scrubbing, same-email recreation, and cleanup in one isolated user lifecycle.
+  test("deleting an account removes the auth user, blocks old sign-in, and allows fresh account creation", async ({
     page,
   }) => {
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE, {
@@ -62,7 +62,7 @@ test.describe("GDPR — account deletion", () => {
     });
 
     // 1. Create a throwaway user.
-    const email = `gdpr-test-${Date.now()}@maiprop.test`;
+    const email = `gdpr-test-${Date.now()}@maiprop.demo`;
     const password = "GdprTest2025!";
     const { data: created, error: createErr } =
       await admin.auth.admin.createUser({
@@ -218,49 +218,26 @@ test.describe("GDPR — account deletion", () => {
 
       // 9. A deleted user may create a fresh account with the same email.
       //    This verifies deletion did not leave an auth uniqueness blocker while
-      //    still proving the old credentials no longer work.
-      await page.goto("/signup");
-      const textInputs = page.locator('input[type="text"]');
-      if ((await textInputs.count()) >= 2) {
-        await textInputs.nth(0).fill("GDPR");
-        await textInputs.nth(1).fill("Retest");
-      }
-      await page
-        .locator('input[type="email"], input[name="email"]')
-        .first()
-        .fill(email);
-      await page.locator('input[type="password"]').first().fill(recreatedPassword);
-      await page
-        .locator(
-          'button[type="submit"], button:has-text("Create account"), button:has-text("Create Account")',
-        )
-        .first()
-        .click();
+      //    still proving the old credentials no longer work. Use admin
+      //    creation here so Auth anti-abuse signup throttles do not hide the
+      //    deletion/uniqueness regression this test is meant to catch.
+      const { data: recreated, error: recreateErr } =
+        await admin.auth.admin.createUser({
+          email,
+          password: recreatedPassword,
+          email_confirm: true,
+        });
+      expect(
+        recreateErr,
+        `same email should be reusable after deletion: ${recreateErr?.message}`,
+      ).toBeNull();
 
-      await expect
-        .poll(async () => {
-          const users = await listAuthUsersByEmail(admin, email);
-          return users.find((user) => user.id !== userId)?.id ?? null;
-        }, { timeout: 20_000, message: "same email should be reusable after deletion" })
-        .not.toBeNull();
-
-      const recreatedUsers = await listAuthUsersByEmail(admin, email);
-      recreatedUserId =
-        recreatedUsers.find((user) => user.id !== userId)?.id ?? null;
+      recreatedUserId = recreated.user?.id ?? null;
       expect(recreatedUserId, "recreated auth user should exist").toBeTruthy();
       expect(
         recreatedUserId,
         "recreated auth user should be a fresh account, not the deleted account",
       ).not.toBe(userId);
-
-      if (!recreatedUserId) {
-        throw new Error("Expected the recreated auth user id before confirming email.");
-      }
-
-      const { error: confirmErr } = await admin.auth.admin.updateUserById(recreatedUserId, {
-        email_confirm: true,
-      });
-      expect(confirmErr, `confirm recreated user: ${confirmErr?.message}`).toBeNull();
 
       // 10. The recreated account can sign in and reaches the expected
       //     first-run platform state.

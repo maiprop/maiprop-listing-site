@@ -139,7 +139,9 @@ describe("critical business invariants", () => {
     expect(wiring).toContain("CREATE TRIGGER trg_oh_registration_notify");
     expect(wiring).toContain("AFTER UPDATE OF status ON public.open_house_registrations");
     expect(wiring).toContain("'Authorization', 'Bearer ' || v_webhook_secret");
-    expect(wiring).toContain("https://qvvicunqcrwpioqnvzxf.supabase.co/functions/v1/oh-registration-notify");
+    expect(wiring).toContain("v_supabase_url");
+    expect(wiring).toContain("rtrim(v_supabase_url, '/') || '/functions/v1/oh-registration-notify'");
+    expect(wiring).not.toContain("qvvicunqcrwpioqnvzxf.supabase.co/functions/v1/oh-registration-notify");
   });
 
   it("keeps remaining plan limits and listing lifecycle effects enforced server-side", () => {
@@ -186,7 +188,9 @@ describe("critical business invariants", () => {
     expect(wiring).toContain("cron.schedule(");
     expect(wiring).toContain("SELECT public.invoke_send_saved_search_alerts_cron();");
     expect(wiring).toContain("'Authorization', 'Bearer ' || v_cron_secret");
-    expect(wiring).toContain("https://qvvicunqcrwpioqnvzxf.supabase.co/functions/v1/send-saved-search-alerts");
+    expect(wiring).toContain("v_supabase_url");
+    expect(wiring).toContain("rtrim(v_supabase_url, '/') || '/functions/v1/send-saved-search-alerts'");
+    expect(wiring).not.toContain("qvvicunqcrwpioqnvzxf.supabase.co/functions/v1/send-saved-search-alerts");
     expect(wiring).not.toContain("scheduled WITHOUT auth header");
   });
 

@@ -17,6 +17,7 @@ SET search_path = public
 AS $$
 DECLARE
   v_cron_secret text := NULL;
+  v_supabase_url text := NULL;
 BEGIN
   BEGIN
     SELECT decrypted_secret
@@ -39,8 +40,27 @@ BEGIN
     RETURN;
   END IF;
 
+  v_supabase_url := NULLIF(current_setting('app.settings.supabase_url', TRUE), '');
+  IF v_supabase_url IS NULL OR v_supabase_url = '' THEN
+    BEGIN
+      SELECT decrypted_secret
+      INTO v_supabase_url
+      FROM vault.decrypted_secrets
+      WHERE name IN ('SUPABASE_URL', 'supabase_url', 'saved_search_alerts_project_url')
+      LIMIT 1;
+    EXCEPTION
+      WHEN invalid_schema_name OR undefined_table THEN
+        RAISE NOTICE 'Vault decrypted secrets are not available while resolving Supabase URL.';
+    END;
+  END IF;
+
+  IF v_supabase_url IS NULL OR v_supabase_url = '' THEN
+    RAISE WARNING 'Supabase URL is missing from Vault/app settings; skipping saved-search alert cron invocation.';
+    RETURN;
+  END IF;
+
   PERFORM net.http_post(
-    url := 'https://qvvicunqcrwpioqnvzxf.supabase.co/functions/v1/send-saved-search-alerts',
+    url := rtrim(v_supabase_url, '/') || '/functions/v1/send-saved-search-alerts',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'Authorization', 'Bearer ' || v_cron_secret
@@ -93,7 +113,8 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_edge_url text := 'https://qvvicunqcrwpioqnvzxf.supabase.co/functions/v1/oh-registration-notify';
+  v_edge_url text := NULL;
+  v_supabase_url text := NULL;
   v_webhook_secret text := NULL;
 BEGIN
   IF NEW.status IS NOT DISTINCT FROM OLD.status THEN
@@ -124,6 +145,27 @@ BEGIN
     RAISE WARNING 'WEBHOOK_SECRET is missing from Vault/app settings; skipping open-house registration notification for registration %.', NEW.id;
     RETURN NEW;
   END IF;
+
+  v_supabase_url := NULLIF(current_setting('app.settings.supabase_url', TRUE), '');
+  IF v_supabase_url IS NULL OR v_supabase_url = '' THEN
+    BEGIN
+      SELECT decrypted_secret
+      INTO v_supabase_url
+      FROM vault.decrypted_secrets
+      WHERE name IN ('SUPABASE_URL', 'supabase_url', 'saved_search_alerts_project_url')
+      LIMIT 1;
+    EXCEPTION
+      WHEN invalid_schema_name OR undefined_table THEN
+        RAISE NOTICE 'Vault decrypted secrets are not available while resolving Supabase URL.';
+    END;
+  END IF;
+
+  IF v_supabase_url IS NULL OR v_supabase_url = '' THEN
+    RAISE WARNING 'Supabase URL is missing from Vault/app settings; skipping open-house registration notification for registration %.', NEW.id;
+    RETURN NEW;
+  END IF;
+
+  v_edge_url := rtrim(v_supabase_url, '/') || '/functions/v1/oh-registration-notify';
 
   PERFORM net.http_post(
     url := v_edge_url,

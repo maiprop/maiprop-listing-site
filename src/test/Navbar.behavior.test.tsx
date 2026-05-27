@@ -139,14 +139,12 @@ describe("Navbar behavior", () => {
 
     renderWithProviders(<Navbar forceScrolled />, { initialPath: "/dashboard/listings" });
 
-    expect(screen.getByRole("link", { name: "dashNav.myListings" })).toHaveAttribute("href", "/dashboard/listings");
-    expect(screen.getByRole("link", { name: "common.listProperty" })).toHaveAttribute("href", "/listings/new");
-    expect(screen.getByRole("link", { name: "common.proActive" })).toHaveAttribute("href", "/pricing");
-
     fireEvent.pointerDown(screen.getByText("Seller User"), { button: 0, ctrlKey: false });
 
     expect(await screen.findByText("Selling / Renting Out")).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /dashboard.myListings/i })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: /nav.quickSale/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "common.proActive" })).toHaveAttribute("href", "/pricing");
   });
 
   it("marks notifications read with a user ownership filter", async () => {
@@ -234,7 +232,7 @@ describe("Navbar behavior", () => {
     expect(await screen.findByText("notificationsPanel.empty")).toBeInTheDocument();
   });
 
-  it("uses dark-hero styling and developer/admin menus on the home route", async () => {
+  it("uses dark-hero styling and admin menu on the home route", async () => {
     authState = {
       user: { id: "admin-1", email: "admin@example.com" },
       profile: {
@@ -262,8 +260,6 @@ describe("Navbar behavior", () => {
     fireEvent.keyDown(screen.getByRole("menu", { name: "Admin User" }), { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("menu", { name: "Admin User" })).not.toBeInTheDocument());
 
-    fireEvent.pointerDown(screen.getByRole("button", { name: /common.listProperty/i }), { button: 0, ctrlKey: false });
-    expect(await screen.findByRole("menuitem", { name: /common.newBuilding/i })).toBeInTheDocument();
   });
 
   it("signs out from the mobile menu and returns home", async () => {

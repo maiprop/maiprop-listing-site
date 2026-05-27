@@ -7,6 +7,9 @@
  * Any .mjs script that writes to the database via the service-role key MUST
  * call `assertNotProduction()` before doing so.
  *
+ * Random hosted Supabase refs must be explicitly allowlisted through
+ * SAFE_SUPABASE_PROJECT_REFS or E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS.
+ *
  * Override with `I_KNOW_THIS_IS_PROD=yes` if you really do mean to seed prod.
  */
 
@@ -16,6 +19,18 @@ const PRODUCTION_SUPABASE_REFS = new Set([
 ]);
 
 const SAFE_HOST_SUBSTRINGS = ["staging", "dev", "local", "test", "127.0.0.1"];
+
+function getExplicitlyAllowedNonProdRefs() {
+  return new Set(
+    [
+      process.env.SAFE_SUPABASE_PROJECT_REFS,
+      process.env.E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS,
+    ]
+      .flatMap((value) => value?.split(",") ?? [])
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
+}
 
 /**
  * @param {string | undefined} supabaseUrl
@@ -41,10 +56,12 @@ export function assertNotProduction(supabaseUrl, scriptName) {
   }
 
   const isKnownProd = PRODUCTION_SUPABASE_REFS.has(ref);
+  const isExplicitlyAllowedNonProd = getExplicitlyAllowedNonProdRefs().has(ref);
   const looksSafe = SAFE_HOST_SUBSTRINGS.some((s) => host.includes(s));
   const nodeEnvProd = process.env.NODE_ENV === "production";
 
-  const appearsProduction = isKnownProd || nodeEnvProd || !looksSafe;
+  const appearsProduction = isKnownProd || nodeEnvProd ||
+    (!looksSafe && !isExplicitlyAllowedNonProd);
 
   if (!appearsProduction) return;
 

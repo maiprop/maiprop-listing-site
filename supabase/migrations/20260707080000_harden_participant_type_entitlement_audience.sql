@@ -114,6 +114,7 @@ $$;
 COMMENT ON FUNCTION public.profiles_guard_admin_and_role() IS
   'BEFORE UPDATE trigger on public.profiles. Enforces admin-only privileged fields, RPC-only role and non-null participant_type changes, and role/participant_type alignment for self-service onboarding.';
 
+DROP TRIGGER IF EXISTS profiles_guard_admin_and_role ON public.profiles;
 DROP TRIGGER IF EXISTS profiles_guard_admin_and_role_trg ON public.profiles;
 CREATE TRIGGER profiles_guard_admin_and_role_trg
   BEFORE UPDATE ON public.profiles

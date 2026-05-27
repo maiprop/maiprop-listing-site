@@ -10,6 +10,10 @@ async function signIn(page: Page): Promise<void> {
   await page.locator('input[type="password"]').first().fill(ONBOARDING_TEST_PASSWORD);
   await page.locator('button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")').first().click();
   await page.waitForURL(/\/dashboard|\/onboarding/, { timeout: 15_000 });
+  if (!/\/onboarding/.test(page.url())) {
+    await page.waitForURL(/\/onboarding/, { timeout: 10_000 }).catch(() => undefined);
+  }
+  await page.getByRole("button", { name: "Reject optional" }).click({ timeout: 2_000 }).catch(() => undefined);
 }
 
 test.describe("Onboarding role-selection guards", () => {
@@ -42,7 +46,9 @@ test.describe("Onboarding role-selection guards", () => {
     await page.getByText("Service Professional", { exact: true }).click();
     await expect(page.getByRole("heading", { name: "What's your discipline?" })).toBeVisible({ timeout: 10_000 });
 
-    await page.getByRole("button", { name: "Architect" }).click();
+    const architectCategory = page.getByRole("button", { name: "Architect" });
+    await architectCategory.click();
+    await expect(architectCategory).toHaveClass(/border-primary/);
     await page.getByRole("button", { name: "Continue" }).click();
 
     await expect(page.getByRole("heading", { name: "Business Verification" })).toBeVisible({ timeout: 10_000 });
