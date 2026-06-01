@@ -175,7 +175,7 @@
     "i18next-scanner": "^4.6.0",
     "jsdom": "^29.1.1",
     "postcss": "^8.5.15",
-    "remotion": "^4.0.451",
+    "remotion": "^4.0.467",
     "rollup-plugin-visualizer": "^6.0.11",
     "sharp": "^0.34.5",
     "supabase": "^2.101.0",
