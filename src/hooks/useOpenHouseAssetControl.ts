@@ -6,21 +6,6 @@ import type { Database } from "@/integrations/supabase/types";
 
 type OHRegUpdate = Database["public"]["Tables"]["open_house_registrations"]["Update"];
 type OHOfferUpdate = Database["public"]["Tables"]["open_house_offers"]["Update"];
-type CreateOpenHouseRegistrationRpc = (
-  fn: "create_open_house_registration",
-  args: {
-    p_listing_id: string;
-    p_timeslot_index?: number | null;
-    p_contact_name?: string | null;
-    p_contact_email?: string | null;
-    p_contact_phone?: string | null;
-    p_visit_purpose?: string | null;
-    p_note?: string | null;
-    p_contact_permission?: boolean;
-    p_id_verification_consent?: boolean;
-    p_privacy_acknowledgement?: boolean;
-  },
-) => Promise<{ data: OpenHouseRegistration | null; error: { code?: string; message?: string } | null }>;
 type SubmitOpenHouseOfferRpc = (
   fn: "submit_open_house_offer",
   args: {
@@ -42,12 +27,32 @@ type ReopenOpenHouseOfferSelectionRpc = (
     p_listing_id: string;
   },
 ) => Promise<{ data: null; error: Error | null }>;
-type GetOpenHouseCapacityRpc = (
-  fn: "get_open_house_capacity",
-  args: {
-    p_listing_id: string;
+type FunctionError = { code?: string | null; message?: string | null };
+type OpenHouseRegistrationEnvelope = {
+  data: OpenHouseRegistration | null;
+  error: FunctionError | null;
+};
+type InvokeOpenHouseCapacity = (
+  fn: "open-house-capacity",
+  options: { body: { listingId: string } },
+) => Promise<{ data: OpenHouseCapacityRow | null; error: Error | null }>;
+type InvokeOpenHouseRegistration = (
+  fn: "open-house-registration",
+  options: {
+    body: {
+      listingId: string;
+      timeslotIndex: number | null;
+      contactName: string;
+      contactEmail: string;
+      contactPhone: string;
+      visitPurpose: string | null;
+      note: string | null;
+      contactPermission: boolean;
+      idVerificationConsent: boolean;
+      privacyAcknowledgement: boolean;
+    };
   },
-) => Promise<{ data: OpenHouseCapacityRow[] | null; error: Error | null }>;
+) => Promise<{ data: OpenHouseRegistrationEnvelope | null; error: FunctionError | null }>;
 
 /** Listing summary attached to "my" registrations and offers via the listing_id join. */
 type OHListingSummary = Pick<
@@ -277,10 +282,10 @@ export function useOpenHouseCapacity(listingId: string | undefined) {
     queryKey: ["open_house_capacity", listingId],
     queryFn: async () => {
       if (!listingId) return null;
-      const rpc = supabase.rpc as unknown as GetOpenHouseCapacityRpc;
-      const { data, error } = await rpc("get_open_house_capacity", { p_listing_id: listingId });
+      const invoke = supabase.functions.invoke as unknown as InvokeOpenHouseCapacity;
+      const { data, error } = await invoke("open-house-capacity", { body: { listingId } });
       if (error) throw error;
-      const row = data?.[0];
+      const row = data;
       if (!row) return null;
       const parsedSlots =
         typeof row.slot_counts === "string"
@@ -327,7 +332,7 @@ export function useUpsertOpenHouseSettings() {
         .upsert(
           { listing_id: listingId, ...settings, updated_at: new Date().toISOString() },
           { onConflict: "listing_id" }
-        )
+      )
         .select()
         .single();
       if (error) throw error;
@@ -409,19 +414,22 @@ export function useCreateOpenHouseRegistration() {
     }) => {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) throw new Error("Not authenticated");
-      const rpc = supabase.rpc as unknown as CreateOpenHouseRegistrationRpc;
-      const { data, error } = await rpc("create_open_house_registration", {
-          p_listing_id: listingId,
-          p_timeslot_index: timeslotIndex ?? null,
-          p_contact_name: contactName,
-          p_contact_email: contactEmail,
-          p_contact_phone: contactPhone,
-          p_visit_purpose: visitPurpose || null,
-          p_note: note || null,
-          p_contact_permission: true,
-          p_id_verification_consent: true,
-          p_privacy_acknowledgement: true,
-        });
+      const invoke = supabase.functions.invoke as unknown as InvokeOpenHouseRegistration;
+      const { data: result, error: invokeError } = await invoke("open-house-registration", {
+        body: {
+          listingId,
+          timeslotIndex: timeslotIndex ?? null,
+          contactName,
+          contactEmail,
+          contactPhone,
+          visitPurpose: visitPurpose || null,
+          note: note || null,
+          contactPermission: true,
+          idVerificationConsent: true,
+          privacyAcknowledgement: true,
+        },
+      });
+      const error = invokeError ?? result?.error ?? null;
       if (error) {
         // Handle duplicate registration gracefully — fetch existing and return it
         if (error.code === "23505") {
@@ -454,7 +462,8 @@ export function useCreateOpenHouseRegistration() {
         }
         throw new Error(error.message || "Registration failed. Please try again.");
       }
-      return data;
+      if (!result?.data) throw new Error("Registration failed. Please try again.");
+      return result.data;
     },
     onSuccess: (_, v) => {
       qc.invalidateQueries({ queryKey: ["open_house_registrations", v.listingId] });

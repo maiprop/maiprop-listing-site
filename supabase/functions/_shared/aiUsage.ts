@@ -49,6 +49,11 @@ type ReserveResult = QuotaResult & {
   reservation_id?: string;
 };
 
+type ReserveAiQuotaForUserRpc = (
+  fn: "reserve_ai_quota_for_user",
+  args: { _user_id: string; p_bucket: string },
+) => Promise<{ data: unknown; error: { message: string } | null }>;
+
 function jsonResponse(
   body: Record<string, unknown>,
   status: number,
@@ -144,21 +149,13 @@ export async function enforceAiQuota(
 
   const userId = userData.user.id;
 
-  // The reservation RPC reads auth.uid(), so use a request-scoped client
-  // carrying the user's JWT. The RPC locks user+bucket+month and inserts the
-  // usage row before the expensive provider call starts.
-  const userClient = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    {
-      auth: { persistSession: false },
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    },
-  );
-
-  const { data: quotaData, error: quotaError } = await userClient.rpc(
-    "reserve_ai_quota",
-    { p_bucket: bucket },
+  // The Edge Function has already verified the user's JWT. Reserve quota via a
+  // service-role-only RPC that receives the verified user id explicitly, so the
+  // legacy caller-context RPC can be removed from browser-role EXECUTE grants.
+  const reserveAiQuotaForUser = client.rpc.bind(client) as unknown as ReserveAiQuotaForUserRpc;
+  const { data: quotaData, error: quotaError } = await reserveAiQuotaForUser(
+    "reserve_ai_quota_for_user",
+    { _user_id: userId, p_bucket: bucket },
   );
 
   if (quotaError) {

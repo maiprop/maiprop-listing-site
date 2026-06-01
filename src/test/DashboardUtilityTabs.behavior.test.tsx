@@ -235,13 +235,14 @@ describe("dashboard utility tabs", () => {
 
   it("switches participant type, handles RPC errors, deletes accounts, and shows permission fallbacks", async () => {
     const refreshProfile = vi.fn().mockResolvedValue(undefined);
-    mocks.rpc.mockResolvedValueOnce({ error: null });
     renderHarness(<SettingsSection roleLabel="Agent" onUpdate={vi.fn()} refreshProfile={refreshProfile} currentType="agent" hasActiveSub />);
 
     expect(screen.getByText("Lead management")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Switch Participant Type/i }));
     fireEvent.click(screen.getByRole("button", { name: /switch my type/i }));
-    await waitFor(() => expect(mocks.rpc).toHaveBeenCalledWith("begin_role_switch"));
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("begin-role-switch", {
+      body: {},
+    }));
     expect(mocks.invoke).toHaveBeenCalledWith("log-role-switch", {
       body: expect.objectContaining({
         from_type: "agent",
@@ -255,7 +256,11 @@ describe("dashboard utility tabs", () => {
     expect(mocks.navigate).toHaveBeenCalledWith("/onboarding");
     cleanup();
 
-    mocks.rpc.mockResolvedValueOnce({ error: { message: "not_authenticated" } });
+    mocks.invoke.mockImplementationOnce((fn: string) => (
+      fn === "begin-role-switch"
+        ? Promise.resolve({ data: null, error: { message: "not_authenticated" } })
+        : Promise.resolve({ data: null, error: null })
+    ));
     renderHarness(<SettingsSection roleLabel="Unknown" onUpdate={vi.fn()} refreshProfile={refreshProfile} currentType={null} hasActiveSub={false} />);
     expect(screen.getByText(/determined server-side/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Switch Participant Type/i }));

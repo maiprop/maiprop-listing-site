@@ -3,6 +3,30 @@ project_id = "qvvicunqcrwpioqnvzxf"
 [functions.ai-search]
 verify_jwt = false
 
+[functions.ai-quota-status]
+verify_jwt = true
+
+[functions.begin-role-switch]
+verify_jwt = true
+
+[functions.admin-content-report-action]
+verify_jwt = true
+
+[functions.admin-broadcast-notification]
+verify_jwt = true
+
+[functions.admin-firesale-action]
+verify_jwt = true
+
+[functions.submit-firesale-interest]
+verify_jwt = true
+
+[functions.open-house-capacity]
+verify_jwt = true
+
+[functions.open-house-registration]
+verify_jwt = true
+
 [functions.property-valuation]
 verify_jwt = false
 

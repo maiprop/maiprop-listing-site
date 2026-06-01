@@ -10,9 +10,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 
-const { fromMock, rpcMock, getUserMock, useAuthMock, storageBucket, toastMock } = vi.hoisted(() => ({
+const { fromMock, rpcMock, invokeMock, getUserMock, useAuthMock, storageBucket, toastMock } = vi.hoisted(() => ({
   fromMock: vi.fn(),
   rpcMock: vi.fn(),
+  invokeMock: vi.fn(),
   getUserMock: vi.fn(),
   useAuthMock: vi.fn(),
   storageBucket: { upload: vi.fn(), createSignedUrl: vi.fn() },
@@ -23,6 +24,7 @@ vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: (...a: unknown[]) => fromMock(...a),
     rpc: (...a: unknown[]) => rpcMock(...a),
+    functions: { invoke: (...a: unknown[]) => invokeMock(...a) },
     storage: { from: () => storageBucket },
     auth: { getUser: () => getUserMock() },
   },
@@ -64,6 +66,7 @@ const renderHookWithQuery = <T,>(hook: () => T) =>
 beforeEach(() => {
   fromMock.mockReset();
   rpcMock.mockReset();
+  invokeMock.mockReset();
   getUserMock.mockReset();
   getUserMock.mockResolvedValue({ data: { user: { id: "u-1" } } });
   useAuthMock.mockReset();
@@ -108,19 +111,27 @@ describe("useOpenHouseSettings", () => {
 // ─── useUpsertOpenHouseSettings ─────────────────────────────────────────────
 
 describe("useOpenHouseCapacity", () => {
-  it("fetches aggregate capacity through the server RPC", async () => {
-    rpcMock.mockResolvedValue({
-      data: [{
+  it("waits for a signed-in user before calling the capacity RPC", () => {
+    useAuthMock.mockReturnValue({ user: null });
+    const { result } = renderHookWithQuery(() => useOpenHouseCapacity("l-1"));
+
+    expect(result.current.isPending).toBe(true);
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+
+  it("fetches aggregate capacity through the authenticated Edge Function", async () => {
+    invokeMock.mockResolvedValue({
+      data: {
         listing_id: "l-1",
         active_total: 3,
         max_total_visitors: 5,
         slot_counts: [{ slot_index: 0, active_count: 2, max_visitors: 2, full: true }],
-      }],
+      },
       error: null,
     });
     const { result } = renderHookWithQuery(() => useOpenHouseCapacity("l-1"));
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(rpcMock).toHaveBeenCalledWith("get_open_house_capacity", { p_listing_id: "l-1" });
+    expect(invokeMock).toHaveBeenCalledWith("open-house-capacity", { body: { listingId: "l-1" } });
     expect(result.current.data?.slot_counts[0]).toMatchObject({ slot_index: 0, active_count: 2, full: true });
   });
 });
@@ -222,8 +233,8 @@ describe("useCreateOpenHouseRegistration", () => {
     ).rejects.toBeInstanceOf(Error);
   });
 
-  it("creates a pending registration through the capacity-checked RPC and toasts on success", async () => {
-    rpcMock.mockResolvedValue({ data: { id: "r-3" }, error: null });
+  it("creates a pending registration through the capacity-checked Edge Function and toasts on success", async () => {
+    invokeMock.mockResolvedValue({ data: { data: { id: "r-3" }, error: null }, error: null });
     const { result } = renderHookWithQuery(() => useCreateOpenHouseRegistration());
     await act(async () => {
       await result.current.mutateAsync({
@@ -236,25 +247,30 @@ describe("useCreateOpenHouseRegistration", () => {
         visitPurpose: "Buying",
       });
     });
-    expect(rpcMock).toHaveBeenCalledWith("create_open_house_registration", {
-      p_listing_id: "l-1",
-      p_timeslot_index: 2,
-      p_contact_name: "Buyer One",
-      p_contact_email: "buyer@example.com",
-      p_contact_phone: "+306900000000",
-      p_visit_purpose: "Buying",
-      p_note: "hi",
-      p_contact_permission: true,
-      p_id_verification_consent: true,
-      p_privacy_acknowledgement: true,
+    expect(invokeMock).toHaveBeenCalledWith("open-house-registration", {
+      body: {
+        listingId: "l-1",
+        timeslotIndex: 2,
+        contactName: "Buyer One",
+        contactEmail: "buyer@example.com",
+        contactPhone: "+306900000000",
+        visitPurpose: "Buying",
+        note: "hi",
+        contactPermission: true,
+        idVerificationConsent: true,
+        privacyAcknowledgement: true,
+      },
     });
     expect(toastMock.success).toHaveBeenCalled();
   });
 
   it("maps server-side capacity errors to visitor-friendly copy", async () => {
-    rpcMock.mockResolvedValue({
-      data: null,
-      error: { message: "open_house_timeslot_capacity_reached" },
+    invokeMock.mockResolvedValue({
+      data: {
+        data: null,
+        error: { message: "open_house_timeslot_capacity_reached" },
+      },
+      error: null,
     });
     const { result } = renderHookWithQuery(() => useCreateOpenHouseRegistration());
     await act(async () => {

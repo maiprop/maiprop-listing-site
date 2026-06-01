@@ -9,6 +9,7 @@ const {
   storageFromMock,
   uploadMock,
   rpcMock,
+  invokeMock,
   toastMock,
 } = vi.hoisted(() => ({
   fromMock: vi.fn(),
@@ -16,6 +17,7 @@ const {
   storageFromMock: vi.fn(),
   uploadMock: vi.fn(),
   rpcMock: vi.fn(),
+  invokeMock: vi.fn(),
   toastMock: { success: vi.fn(), error: vi.fn() },
 }));
 
@@ -23,6 +25,7 @@ vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: (...args: unknown[]) => fromMock(...args),
     rpc: (...args: unknown[]) => rpcMock(...args),
+    functions: { invoke: (...args: unknown[]) => invokeMock(...args) },
     auth: { getUser: () => getUserMock() },
     storage: { from: (...args: unknown[]) => storageFromMock(...args) },
   },
@@ -52,11 +55,13 @@ beforeEach(() => {
   storageFromMock.mockReset();
   uploadMock.mockReset();
   rpcMock.mockReset();
+  invokeMock.mockReset();
   toastMock.success.mockReset();
   toastMock.error.mockReset();
 
   getUserMock.mockResolvedValue({ data: { user: { id: "inv-1" } } });
   rpcMock.mockResolvedValue({ error: null });
+  invokeMock.mockResolvedValue({ data: { data: { id: "i-1" }, error: null }, error: null });
   storageFromMock.mockReturnValue({ upload: uploadMock });
   vi.stubGlobal("crypto", { ...crypto, randomUUID: () => "uuid-1" });
 });
@@ -134,9 +139,9 @@ describe("useFiresaleInterestQueue", () => {
 });
 
 describe("useExpressInterest", () => {
-  it("uploads proof and submits proof-backed interest through the workflow RPC", async () => {
+  it("uploads proof and submits proof-backed interest through the Edge workflow", async () => {
     uploadMock.mockResolvedValue({ data: { path: "inv-1/firesale/d-1/proof_uuid-1.pdf" }, error: null });
-    rpcMock.mockResolvedValueOnce({ data: { id: "i-1" }, error: null });
+    invokeMock.mockResolvedValueOnce({ data: { data: { id: "i-1" }, error: null }, error: null });
 
     const { result } = renderHook(() => useExpressInterest(), { wrapper: wrapper() });
     const file = new File(["x"], "proof.pdf", { type: "application/pdf" });
@@ -156,33 +161,52 @@ describe("useExpressInterest", () => {
       file,
       { upsert: false },
     );
-    expect(rpcMock).toHaveBeenCalledWith("submit_firesale_interest", {
-      p_deal_id: "d-1",
-      p_message: "Ready to move",
-      p_proof_amount: 1500000,
-      p_proof_of_funds_url: "inv-1/firesale/d-1/proof_uuid-1.pdf",
+    expect(invokeMock).toHaveBeenCalledWith("submit-firesale-interest", {
+      body: {
+        dealId: "d-1",
+        message: "Ready to move",
+        proofAmount: 1500000,
+        proofOfFundsUrl: "inv-1/firesale/d-1/proof_uuid-1.pdf",
+      },
     });
+    expect(rpcMock).not.toHaveBeenCalledWith("submit_firesale_interest", expect.anything());
   });
 
   it("uses interested status when no proof is provided", async () => {
-    rpcMock.mockResolvedValueOnce({ data: { id: "i-1" }, error: null });
+    invokeMock.mockResolvedValueOnce({ data: { data: { id: "i-1" }, error: null }, error: null });
 
     const { result } = renderHook(() => useExpressInterest(), { wrapper: wrapper() });
     await act(async () => {
       await result.current.mutateAsync({ dealId: "d-1", message: "No docs yet" });
     });
 
-    expect(rpcMock).toHaveBeenCalledWith("submit_firesale_interest", {
-      p_deal_id: "d-1",
-      p_message: "No docs yet",
-      p_proof_amount: undefined,
-      p_proof_of_funds_url: undefined,
+    expect(invokeMock).toHaveBeenCalledWith("submit-firesale-interest", {
+      body: {
+        dealId: "d-1",
+        message: "No docs yet",
+        proofAmount: undefined,
+        proofOfFundsUrl: undefined,
+      },
     });
+  });
+
+  it("rejects unsupported proof documents before storage upload", async () => {
+    const { result } = renderHook(() => useExpressInterest(), { wrapper: wrapper() });
+    const file = new File(["<svg></svg>"], "proof.svg", { type: "image/svg+xml" });
+
+    await expect(result.current.mutateAsync({
+      dealId: "d-1",
+      proofFile: file,
+    })).rejects.toThrow(/Unsupported proof of funds document type/);
+
+    expect(uploadMock).not.toHaveBeenCalled();
+    expect(invokeMock).not.toHaveBeenCalledWith("submit-firesale-interest", expect.anything());
+    expect(rpcMock).not.toHaveBeenCalledWith("submit_firesale_interest", expect.anything());
   });
 });
 
 describe("useUpdateInterestStatus", () => {
-  it("uses the admin workflow RPC", async () => {
+  it("uses the admin firesale Edge Function", async () => {
     const { result } = renderHook(() => useUpdateInterestStatus(), { wrapper: wrapper() });
 
     await act(async () => {
@@ -195,18 +219,21 @@ describe("useUpdateInterestStatus", () => {
       });
     });
 
-    expect(rpcMock).toHaveBeenCalledWith("admin_update_firesale_interest_workflow", {
-      p_interest_id: "i-1",
-      p_status: "reserved",
-      p_reservation_hours: 24,
-      p_verify_pof: true,
-      p_admin_note: undefined,
-      p_proof_amount: undefined,
+    expect(invokeMock).toHaveBeenCalledWith("admin-firesale-action", {
+      body: {
+        action: "update_interest_workflow",
+        interestId: "i-1",
+        status: "reserved",
+        reservationHours: 24,
+        verifyProof: true,
+        adminNote: undefined,
+        proofAmount: undefined,
+      },
     });
   });
 
-  it("toasts an error when the RPC fails", async () => {
-    rpcMock.mockResolvedValueOnce({ error: new Error("boom") });
+  it("toasts an error when the Edge Function fails", async () => {
+    invokeMock.mockResolvedValueOnce({ data: { data: null, error: "boom" }, error: null });
     const { result } = renderHook(() => useUpdateInterestStatus(), { wrapper: wrapper() });
 
     await act(async () => {

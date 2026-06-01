@@ -34,7 +34,61 @@ BEGIN
     'public.profiles_guard_account_moderation()',
     'public.sync_profile_role_from_investor_subscription()',
     'public.admin_review_agent_data_input(uuid,text,text)',
-    'public.admin_review_agent_data_input(uuid,text,text,boolean,uuid)'
+    'public.admin_review_agent_data_input(uuid,text,text,boolean,uuid)',
+    'public.get_agent_monthly_input_count(uuid)',
+    'public.get_ai_call_monthly_limit(uuid,text)',
+    'public.get_auction_alert_limit(uuid)',
+    'public.get_auction_listing_visible_limit(uuid)',
+    'public.get_contact_monthly_limit(uuid)',
+    'public.get_listing_limit(uuid)',
+    'public.get_open_house_rsvp_monthly_limit(uuid)',
+    'public.get_priority_ad_monthly_limit(uuid)',
+    'public.get_professionals_per_category_limit(uuid)',
+    'public.get_report_monthly_limit(uuid)',
+    'public.get_saved_search_limit(uuid)',
+    'public.get_search_alert_limit(uuid)',
+    'public.get_valuation_monthly_limit(uuid)',
+    'public.get_viewing_limit(uuid,boolean)',
+    'public.authoritative_role()',
+    'public.authoritative_role(uuid)',
+    'public.can_review_professional(uuid,uuid)',
+    'public.check_listing_quota()',
+    'public.release_expired_firesale_reservations(uuid)',
+    'public.has_buy_side_role(uuid)',
+    'public.has_platform_admin(uuid)',
+    'public.has_role(uuid,public.app_role)',
+    'public.has_role(uuid,public.user_role)',
+    'public.has_sell_side_role(uuid)',
+    'public.begin_role_switch()',
+    'public.begin_role_switch_for_user(uuid)',
+    'public.record_role_switch_audit(text,text,text,boolean,boolean)',
+    'public.record_role_switch_audit_for_user(uuid,text,text,text,boolean,boolean)',
+    'public.admin_broadcast_notification(text,text,text,text,text)',
+    'public.admin_broadcast_notification_for_user(uuid,text,text,text,text,text)',
+    'public.admin_set_firesale_investor_publication(uuid,boolean)',
+    'public.admin_set_firesale_investor_publication_for_user(uuid,uuid,boolean)',
+    'public.admin_update_firesale_interest_workflow(uuid,text,integer,boolean,text,numeric)',
+    'public.admin_update_firesale_interest_workflow_for_user(uuid,uuid,text,integer,boolean,text,numeric)',
+    'public.admin_update_firesale_pipeline_deal(uuid,text,text,numeric,text,numeric)',
+    'public.admin_update_firesale_pipeline_deal_for_user(uuid,uuid,text,text,numeric,text,numeric)',
+    'public.admin_ban_reported_content_owner(uuid,text)',
+    'public.admin_ban_reported_content_owner_for_user(uuid,uuid,text)',
+    'public.admin_resolve_listing_report(uuid)',
+    'public.admin_resolve_listing_report_for_user(uuid,uuid)',
+    'public.admin_suspend_reported_listing(uuid,text)',
+    'public.admin_suspend_reported_listing_for_user(uuid,uuid,text)',
+    'public.check_ai_quota(text)',
+    'public.check_ai_quota_for_user(uuid,text)',
+    'public.create_open_house_registration(uuid,integer,text,text,text,text,text,boolean,boolean,boolean)',
+    'public.create_open_house_registration_for_user(uuid,uuid,integer,text,text,text,text,text,boolean,boolean,boolean)',
+    'public.get_open_house_capacity(uuid)',
+    'public.get_open_house_capacity_for_user(uuid,uuid)',
+    'public.reserve_ai_quota(text)',
+    'public.reserve_ai_quota_for_user(uuid,text)',
+    'public.submit_firesale_interest(uuid,text,numeric,text)',
+    'public.submit_firesale_interest_for_user(uuid,uuid,text,numeric,text)',
+    'public.submit_agent_data_input(date,text,text,text,numeric,text,text,text,text,text,text)',
+    'public.submit_agent_data_input(date,text,text,text,numeric,text,text,text,text,text,text,text)'
   ] LOOP
     fn := to_regprocedure(sig);
     IF fn IS NOT NULL THEN
@@ -47,61 +101,8 @@ END $$;
 
 -- 3. App-facing SECURITY DEFINER RPCs keep authenticated access where the
 -- frontend still calls them, but lose PUBLIC/anon/default EXECUTE.
-DO $$
-DECLARE
-  sig text;
-  fn regprocedure;
-BEGIN
-  FOREACH sig IN ARRAY ARRAY[
-    'public.admin_ban_reported_content_owner(uuid,text)',
-    'public.admin_broadcast_notification(text,text,text,text,text)',
-    'public.admin_resolve_listing_report(uuid)',
-    'public.admin_set_firesale_investor_publication(uuid,boolean)',
-    'public.admin_suspend_reported_listing(uuid,text)',
-    'public.admin_update_firesale_interest_workflow(uuid,text,integer,boolean,text,numeric)',
-    'public.admin_update_firesale_pipeline_deal(uuid,text,text,numeric)',
-    'public.authoritative_role()',
-    'public.authoritative_role(uuid)',
-    'public.begin_role_switch()',
-    'public.can_review_professional(uuid,uuid)',
-    'public.check_ai_quota(text)',
-    'public.check_listing_quota()',
-    'public.complete_onboarding_role(public.user_role,text,text,text,text)',
-    'public.create_open_house_registration(uuid,integer,text,text,text,text,text,boolean,boolean,boolean)',
-    'public.get_agent_monthly_input_count(uuid)',
-    'public.get_ai_call_monthly_limit(uuid,text)',
-    'public.get_auction_alert_limit(uuid)',
-    'public.get_auction_listing_visible_limit(uuid)',
-    'public.get_contact_monthly_limit(uuid)',
-    'public.get_listing_limit(uuid)',
-    'public.get_my_role()',
-    'public.get_open_house_rsvp_monthly_limit(uuid)',
-    'public.get_priority_ad_monthly_limit(uuid)',
-    'public.get_professionals_per_category_limit(uuid)',
-    'public.get_report_monthly_limit(uuid)',
-    'public.get_saved_search_limit(uuid)',
-    'public.get_search_alert_limit(uuid)',
-    'public.get_valuation_monthly_limit(uuid)',
-    'public.get_viewing_limit(uuid,boolean)',
-    'public.has_buy_side_role(uuid)',
-    'public.has_platform_admin(uuid)',
-    'public.has_role(uuid,public.app_role)',
-    'public.has_role(uuid,public.user_role)',
-    'public.has_sell_side_role(uuid)',
-    'public.record_role_switch_audit(text,text,text,boolean,boolean)',
-    'public.release_expired_firesale_reservations(uuid)',
-    'public.reserve_ai_quota(text)',
-    'public.submit_agent_data_input(date,text,text,text,numeric,text,text,text,text,text,text)',
-    'public.submit_agent_data_input(date,text,text,text,numeric,text,text,text,text,text,text,text)',
-    'public.submit_firesale_interest(uuid,text,numeric,text)'
-  ] LOOP
-    fn := to_regprocedure(sig);
-    IF fn IS NOT NULL THEN
-      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC, anon', fn);
-      EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO authenticated, service_role', fn);
-    END IF;
-  END LOOP;
-END $$;
+-- None remain after browser flows were moved behind Edge Functions or private
+-- RLS helpers.
 
 
 -- 4. Public buckets still serve objects by URL, but storage.objects SELECT
@@ -341,7 +342,61 @@ BEGIN
     'public.profiles_guard_account_moderation()',
     'public.sync_profile_role_from_investor_subscription()',
     'public.admin_review_agent_data_input(uuid,text,text)',
-    'public.admin_review_agent_data_input(uuid,text,text,boolean,uuid)'
+    'public.admin_review_agent_data_input(uuid,text,text,boolean,uuid)',
+    'public.get_agent_monthly_input_count(uuid)',
+    'public.get_ai_call_monthly_limit(uuid,text)',
+    'public.get_auction_alert_limit(uuid)',
+    'public.get_auction_listing_visible_limit(uuid)',
+    'public.get_contact_monthly_limit(uuid)',
+    'public.get_listing_limit(uuid)',
+    'public.get_open_house_rsvp_monthly_limit(uuid)',
+    'public.get_priority_ad_monthly_limit(uuid)',
+    'public.get_professionals_per_category_limit(uuid)',
+    'public.get_report_monthly_limit(uuid)',
+    'public.get_saved_search_limit(uuid)',
+    'public.get_search_alert_limit(uuid)',
+    'public.get_valuation_monthly_limit(uuid)',
+    'public.get_viewing_limit(uuid,boolean)',
+    'public.authoritative_role()',
+    'public.authoritative_role(uuid)',
+    'public.can_review_professional(uuid,uuid)',
+    'public.check_listing_quota()',
+    'public.release_expired_firesale_reservations(uuid)',
+    'public.has_buy_side_role(uuid)',
+    'public.has_platform_admin(uuid)',
+    'public.has_role(uuid,public.app_role)',
+    'public.has_role(uuid,public.user_role)',
+    'public.has_sell_side_role(uuid)',
+    'public.begin_role_switch()',
+    'public.begin_role_switch_for_user(uuid)',
+    'public.record_role_switch_audit(text,text,text,boolean,boolean)',
+    'public.record_role_switch_audit_for_user(uuid,text,text,text,boolean,boolean)',
+    'public.admin_broadcast_notification(text,text,text,text,text)',
+    'public.admin_broadcast_notification_for_user(uuid,text,text,text,text,text)',
+    'public.admin_set_firesale_investor_publication(uuid,boolean)',
+    'public.admin_set_firesale_investor_publication_for_user(uuid,uuid,boolean)',
+    'public.admin_update_firesale_interest_workflow(uuid,text,integer,boolean,text,numeric)',
+    'public.admin_update_firesale_interest_workflow_for_user(uuid,uuid,text,integer,boolean,text,numeric)',
+    'public.admin_update_firesale_pipeline_deal(uuid,text,text,numeric,text,numeric)',
+    'public.admin_update_firesale_pipeline_deal_for_user(uuid,uuid,text,text,numeric,text,numeric)',
+    'public.admin_ban_reported_content_owner(uuid,text)',
+    'public.admin_ban_reported_content_owner_for_user(uuid,uuid,text)',
+    'public.admin_resolve_listing_report(uuid)',
+    'public.admin_resolve_listing_report_for_user(uuid,uuid)',
+    'public.admin_suspend_reported_listing(uuid,text)',
+    'public.admin_suspend_reported_listing_for_user(uuid,uuid,text)',
+    'public.check_ai_quota(text)',
+    'public.check_ai_quota_for_user(uuid,text)',
+    'public.create_open_house_registration(uuid,integer,text,text,text,text,text,boolean,boolean,boolean)',
+    'public.create_open_house_registration_for_user(uuid,uuid,integer,text,text,text,text,text,boolean,boolean,boolean)',
+    'public.get_open_house_capacity(uuid)',
+    'public.get_open_house_capacity_for_user(uuid,uuid)',
+    'public.reserve_ai_quota(text)',
+    'public.reserve_ai_quota_for_user(uuid,text)',
+    'public.submit_firesale_interest(uuid,text,numeric,text)',
+    'public.submit_firesale_interest_for_user(uuid,uuid,text,numeric,text)',
+    'public.submit_agent_data_input(date,text,text,text,numeric,text,text,text,text,text,text)',
+    'public.submit_agent_data_input(date,text,text,text,numeric,text,text,text,text,text,text,text)'
   ] LOOP
     fn := to_regprocedure(sig);
     IF fn IS NOT NULL THEN
@@ -352,8 +407,4 @@ BEGIN
     END IF;
   END LOOP;
 
-  fn := to_regprocedure('public.get_open_house_capacity(uuid)');
-  IF fn IS NOT NULL AND NOT has_function_privilege('anon', fn::oid, 'EXECUTE') THEN
-    RAISE EXCEPTION 'public.get_open_house_capacity(uuid) intentionally remains anon-callable for public listing capacity';
-  END IF;
 END $$;

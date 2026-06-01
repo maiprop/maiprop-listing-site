@@ -9,16 +9,10 @@ import { toast } from "sonner";
 
 type Segment = "all" | "investors" | "sellers" | "agents" | "professionals" | "developers";
 
-type BroadcastRpc = (
-  fn: "admin_broadcast_notification",
-  args: {
-    p_segment: Segment;
-    p_title: string;
-    p_body: string;
-    p_type?: string;
-    p_link?: string | null;
-  },
-) => Promise<{ data: number | null; error: Error | null }>;
+type BroadcastResponse = {
+  data?: number | null;
+  error?: string | null;
+};
 
 const SEGMENTS: { value: Segment; label: string }[] = [
   { value: "all", label: "All active users" },
@@ -37,16 +31,17 @@ export default function AdminBroadcastNotifications() {
 
   const broadcast = useMutation({
     mutationFn: async () => {
-      const rpc = supabase.rpc as unknown as BroadcastRpc;
-      const { data, error } = await rpc("admin_broadcast_notification", {
-        p_segment: segment,
-        p_title: title.trim(),
-        p_body: body.trim(),
-        p_type: "admin_broadcast",
-        p_link: link.trim() || null,
+      const { data, error } = await supabase.functions.invoke<BroadcastResponse>("admin-broadcast-notification", {
+        body: {
+          segment,
+          title: title.trim(),
+          body: body.trim(),
+          link: link.trim() || null,
+        },
       });
       if (error) throw error;
-      return data ?? 0;
+      if (data?.error) throw new Error(data.error);
+      return data?.data ?? 0;
     },
     onSuccess: (count) => {
       toast.success(`Broadcast sent to ${count} user${count === 1 ? "" : "s"}`);

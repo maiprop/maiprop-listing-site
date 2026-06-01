@@ -33,6 +33,11 @@ type ScreeningDeal = {
   created_at: string;
 };
 
+type AdminFiresaleActionResponse = {
+  data?: unknown;
+  error?: string | null;
+};
+
 function useScreeningDeals() {
   return useQuery<ScreeningDeal[]>({
     queryKey: ["admin-screening-deals"],
@@ -51,11 +56,15 @@ function useSetDealStatus() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, published }: { id: string; published: boolean }) => {
-      const { error } = await supabase.rpc("admin_set_firesale_investor_publication", {
-        p_deal_id: id,
-        p_published: published,
+      const { data, error } = await supabase.functions.invoke<AdminFiresaleActionResponse>("admin-firesale-action", {
+        body: {
+          action: "set_investor_publication",
+          dealId: id,
+          published,
+        },
       });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
     },
     onSuccess: (_, { published }) => {
       qc.invalidateQueries({ queryKey: ["admin-screening-deals"] });

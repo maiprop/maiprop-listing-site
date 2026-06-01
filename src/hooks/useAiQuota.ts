@@ -50,6 +50,14 @@ export function getAiQuotaTierLabel(quota: AIQuota | null | undefined): string {
   return quota.limit > FREE_AI_MONTHLY_LIMIT ? "Pro" : "Free";
 }
 
+export async function fetchAiQuota(bucket: string): Promise<AIQuota | null> {
+  const { data, error } = await supabase.functions.invoke("ai-quota-status", {
+    body: { bucket },
+  });
+  if (error) throw error;
+  return aiQuotaFromJson(data);
+}
+
 export function useAiQuota(
   bucket: string,
   user: User | null | undefined,
@@ -75,11 +83,7 @@ export function useAiQuota(
 
     setQuotaLoading(true);
     try {
-      const { data, error } = await supabase.rpc("check_ai_quota", {
-        p_bucket: bucket,
-      });
-      if (error) throw error;
-      const parsed = aiQuotaFromJson(data);
+      const parsed = await fetchAiQuota(bucket);
       setQuota(parsed);
       return parsed;
     } catch (_err: unknown) {

@@ -47,18 +47,19 @@ type PlatformStats = {
 type Tab = "overview" | "reports";
 type ReportFilter = "all" | "pending" | "resolved";
 
-type ResolveListingReportRpc = (
-  fn: "admin_resolve_listing_report",
-  args: { p_report_id: string },
-) => Promise<{ data: unknown; error: Error | null }>;
-
-type ModerationRpc = (
-  fn: "admin_suspend_reported_listing" | "admin_ban_reported_content_owner",
-  args: { p_report_id: string; p_reason?: string },
-) => Promise<{ data: unknown; error: Error | null }>;
-
 type ModerationAction = "suspend_listing" | "ban_owner";
 type PendingModeration = { action: ModerationAction; report: ReportRow } | null;
+
+type AdminReportActionPayload = {
+  action: "resolve" | ModerationAction;
+  reportId: string;
+  reason?: string;
+};
+
+type AdminReportActionResponse = {
+  data?: unknown;
+  error?: string | null;
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────────
 function firstOfMonth(): string {
@@ -92,6 +93,15 @@ import { formatDateTime as formatDate } from "@/lib/format";
 function getLinkForEntity(entityType: string, entityId: string): string {
   if (entityType === "firesale_request") return `/admin?tab=pipeline`;
   return `/property/${entityId}`;
+}
+
+async function invokeAdminReportAction(payload: AdminReportActionPayload): Promise<void> {
+  const { data, error } = await supabase.functions.invoke<AdminReportActionResponse>(
+    "admin-content-report-action",
+    { body: payload },
+  );
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
 }
 
 // ── Monthly bar helper ─────────────────────────────────────────────────────────────
@@ -345,9 +355,7 @@ function ContentReportsTab() {
 
   const resolveMutation = useMutation({
     mutationFn: async (id: string) => {
-      const rpc = supabase.rpc as unknown as ResolveListingReportRpc;
-      const { error } = await rpc("admin_resolve_listing_report", { p_report_id: id });
-      if (error) throw error;
+      await invokeAdminReportAction({ action: "resolve", reportId: id });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-content-reports"] });
@@ -360,13 +368,8 @@ function ContentReportsTab() {
 
   const moderationMutation = useMutation({
     mutationFn: async ({ action, report }: { action: ModerationAction; report: ReportRow }) => {
-      const rpc = supabase.rpc as unknown as ModerationRpc;
       const reason = `Action taken from content report ${report.id}`;
-      const fn = action === "suspend_listing"
-        ? "admin_suspend_reported_listing"
-        : "admin_ban_reported_content_owner";
-      const { error } = await rpc(fn, { p_report_id: report.id, p_reason: reason });
-      if (error) throw error;
+      await invokeAdminReportAction({ action, reportId: report.id, reason });
     },
     onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ["admin-content-reports"] });

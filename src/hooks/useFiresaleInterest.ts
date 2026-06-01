@@ -36,6 +36,18 @@ export type FiresaleInterestEntry = {
   } | null;
 };
 
+type AdminFiresaleActionResponse = {
+  data?: unknown;
+  error?: string | null;
+};
+
+type EdgeRpcError = string | { message?: string | null; code?: string | null };
+
+type SubmitFiresaleInterestResponse = {
+  data?: unknown;
+  error?: EdgeRpcError | null;
+};
+
 const INTEREST_SELECT =
   "id, deal_id, investor_id, proof_of_funds_url, proof_amount, proof_of_funds_verified_at, proof_of_funds_verified_by, message, status, reservation_expires_at, reserved_at, reserved_by, admin_note, created_at, updated_at, last_status_changed_at";
 
@@ -82,6 +94,11 @@ function sortFiresaleInterestQueue(entries: FiresaleInterestEntry[], now = Date.
 
     return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
   });
+}
+
+function getEdgeRpcErrorMessage(error: EdgeRpcError): string {
+  if (typeof error === "string") return error;
+  return error.message ?? "Firesale interest request failed";
 }
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
@@ -154,6 +171,14 @@ export function useExpressInterest() {
       if (!uid) throw new Error("Not authenticated");
 
       let proof_of_funds_url: string | undefined;
+      let parsedProofAmount: number | undefined;
+
+      if (proofAmount) {
+        parsedProofAmount = Number.parseFloat(proofAmount);
+        if (!Number.isFinite(parsedProofAmount)) {
+          throw new Error("Invalid proof amount");
+        }
+      }
 
       if (proofFile) {
         const ext = proofFile.name.split(".").pop() ?? "pdf";
@@ -165,15 +190,18 @@ export function useExpressInterest() {
         proof_of_funds_url = uploaded.path;
       }
 
-      const { data, error } = await supabase.rpc("submit_firesale_interest", {
-        p_deal_id: dealId,
-        p_message: message || undefined,
-        p_proof_amount: proofAmount ? parseFloat(proofAmount) : undefined,
-        p_proof_of_funds_url: proof_of_funds_url,
+      const { data, error } = await supabase.functions.invoke<SubmitFiresaleInterestResponse>("submit-firesale-interest", {
+        body: {
+          dealId,
+          message: message || undefined,
+          proofAmount: parsedProofAmount,
+          proofOfFundsUrl: proof_of_funds_url,
+        },
       });
 
       if (error) throw error;
-      return data;
+      if (data?.error) throw new Error(getEdgeRpcErrorMessage(data.error));
+      return data?.data;
     },
     onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ["firesale_interest_mine", variables.dealId] });
@@ -207,15 +235,19 @@ export function useUpdateInterestStatus() {
       adminNote?: string | null;
       proofAmount?: number | null;
     }) => {
-      const { error } = await supabase.rpc("admin_update_firesale_interest_workflow", {
-        p_interest_id: id,
-        p_status: status,
-        p_reservation_hours: reservationHours,
-        p_verify_pof: verifyProof ?? false,
-        p_admin_note: adminNote ?? undefined,
-        p_proof_amount: proofAmount ?? undefined,
+      const { data, error } = await supabase.functions.invoke<AdminFiresaleActionResponse>("admin-firesale-action", {
+        body: {
+          action: "update_interest_workflow",
+          interestId: id,
+          status,
+          reservationHours,
+          verifyProof: verifyProof ?? false,
+          adminNote: adminNote ?? undefined,
+          proofAmount: proofAmount ?? undefined,
+        },
       });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
     },
     onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ["firesale_interest_queue", variables.dealId] });

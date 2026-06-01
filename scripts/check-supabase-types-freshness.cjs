@@ -19,7 +19,7 @@ const writeStderr = (message) => process.stderr.write(`${message}\n`);
 
 const localSupabasePath = () =>
   process.platform === "win32"
-    ? join(root, "node_modules", "supabase", "bin", "supabase.exe")
+    ? join(root, "node_modules", ".bin", "supabase.cmd")
     : join(root, "node_modules", ".bin", "supabase");
 
 const findWindowsSupabase = () => {
@@ -33,7 +33,12 @@ const findWindowsSupabase = () => {
     })
       .split(/\r?\n/)
       .map((line) => line.trim())
-      .find(Boolean) ?? null;
+      .filter(Boolean)
+      .sort((a, b) => {
+        const aRunnable = /\.(?:cmd|exe)$/i.test(a) ? 0 : 1;
+        const bRunnable = /\.(?:cmd|exe)$/i.test(b) ? 0 : 1;
+        return aRunnable - bRunnable;
+      })[0] ?? null;
   } catch {
     return null;
   }
@@ -84,6 +89,7 @@ const generated = execFileSync(
     cwd: root,
     encoding: "utf8",
     env: process.env,
+    shell: process.platform === "win32",
     stdio: ["ignore", "pipe", "pipe"],
   },
 );

@@ -440,6 +440,9 @@ export type Database = {
       }
       conversations: {
         Row: {
+          closed_at: string | null
+          closed_by: string | null
+          closed_reason: string | null
           created_at: string
           id: string
           last_message_at: string | null
@@ -448,6 +451,9 @@ export type Database = {
           participant_b: string
         }
         Insert: {
+          closed_at?: string | null
+          closed_by?: string | null
+          closed_reason?: string | null
           created_at?: string
           id?: string
           last_message_at?: string | null
@@ -456,6 +462,9 @@ export type Database = {
           participant_b: string
         }
         Update: {
+          closed_at?: string | null
+          closed_by?: string | null
+          closed_reason?: string | null
           created_at?: string
           id?: string
           last_message_at?: string | null
@@ -2173,6 +2182,48 @@ export type Database = {
         }
         Relationships: []
       }
+      professional_review_responses: {
+        Row: {
+          body: string
+          created_at: string
+          professional_id: string
+          responder_id: string
+          review_id: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          professional_id: string
+          responder_id: string
+          review_id: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          professional_id?: string
+          responder_id?: string
+          review_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "professional_review_responses_professional_id_fkey"
+            columns: ["professional_id"]
+            isOneToOne: false
+            referencedRelation: "professionals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "professional_review_responses_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: true
+            referencedRelation: "professional_reviews"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       professional_reviews: {
         Row: {
           body: string | null
@@ -2300,8 +2351,8 @@ export type Database = {
           notes: string | null
           projects_count: number | null
           rating: number | null
-          reviews_count: number | null
           rejection_reason: string | null
+          reviews_count: number | null
           specialties: string[] | null
           subscription_tier: string | null
           title: string
@@ -2331,8 +2382,8 @@ export type Database = {
           notes?: string | null
           projects_count?: number | null
           rating?: number | null
-          reviews_count?: number | null
           rejection_reason?: string | null
+          reviews_count?: number | null
           specialties?: string[] | null
           subscription_tier?: string | null
           title: string
@@ -2362,8 +2413,8 @@ export type Database = {
           notes?: string | null
           projects_count?: number | null
           rating?: number | null
-          reviews_count?: number | null
           rejection_reason?: string | null
+          reviews_count?: number | null
           specialties?: string[] | null
           subscription_tier?: string | null
           title?: string
@@ -3289,47 +3340,146 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      admin_review_agent_data_input: {
+      admin_ban_reported_content_owner: {
+        Args: { p_reason?: string; p_report_id: string }
+        Returns: string
+      }
+      admin_ban_reported_content_owner_for_user: {
+        Args: { _admin_user_id: string; p_reason?: string; p_report_id: string }
+        Returns: string
+      }
+      admin_broadcast_notification: {
         Args: {
-          p_decision: string
-          p_input_id: string
-          p_lifetime_ban?: boolean
-          p_reason?: string
-          p_reviewer_id?: string
+          p_body: string
+          p_link?: string
+          p_segment: string
+          p_title: string
+          p_type?: string
         }
+        Returns: number
+      }
+      admin_broadcast_notification_for_user: {
+        Args: {
+          _admin_user_id: string
+          p_body: string
+          p_link?: string
+          p_segment: string
+          p_title: string
+          p_type?: string
+        }
+        Returns: number
+      }
+      admin_resolve_listing_report: {
+        Args: { p_report_id: string }
         Returns: {
-          agent_side: string
-          buyer_name: string | null
-          city: string | null
-          closing_date: string
           created_at: string
-          discount_applied: boolean
-          discount_applied_at: string | null
-          discount_invoice_id: string | null
-          discount_pct: number
+          entity_id: string
+          entity_type: string
           id: string
-          kaek: string | null
-          notes: string | null
-          postal_code: string | null
-          property_address: string
-          property_type: string
-          rejection_reason: string | null
-          reviewed_at: string | null
-          reviewed_by: string | null
-          sale_price: number
-          seller_name: string | null
-          status: string
-          transaction_type: string
-          updated_at: string
-          user_id: string
+          reporter_id: string | null
+          status: Database["public"]["Enums"]["listing_report_status"]
         }
         SetofOptions: {
           from: "*"
-          to: "agent_data_inputs"
+          to: "listing_reports"
           isOneToOne: true
           isSetofReturn: false
         }
       }
+      admin_resolve_listing_report_for_user: {
+        Args: { _admin_user_id: string; p_report_id: string }
+        Returns: {
+          created_at: string
+          entity_id: string
+          entity_type: string
+          id: string
+          reporter_id: string | null
+          status: Database["public"]["Enums"]["listing_report_status"]
+        }
+        SetofOptions: {
+          from: "*"
+          to: "listing_reports"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_review_agent_data_input:
+        | {
+            Args: { p_action: string; p_id: string; p_reason?: string }
+            Returns: {
+              agent_side: string
+              buyer_name: string | null
+              city: string | null
+              closing_date: string
+              created_at: string
+              discount_applied: boolean
+              discount_applied_at: string | null
+              discount_invoice_id: string | null
+              discount_pct: number
+              id: string
+              kaek: string | null
+              notes: string | null
+              postal_code: string | null
+              property_address: string
+              property_type: string
+              rejection_reason: string | null
+              reviewed_at: string | null
+              reviewed_by: string | null
+              sale_price: number
+              seller_name: string | null
+              status: string
+              transaction_type: string
+              updated_at: string
+              user_id: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "agent_data_inputs"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: {
+              p_decision: string
+              p_input_id: string
+              p_lifetime_ban?: boolean
+              p_reason?: string
+              p_reviewer_id?: string
+            }
+            Returns: {
+              agent_side: string
+              buyer_name: string | null
+              city: string | null
+              closing_date: string
+              created_at: string
+              discount_applied: boolean
+              discount_applied_at: string | null
+              discount_invoice_id: string | null
+              discount_pct: number
+              id: string
+              kaek: string | null
+              notes: string | null
+              postal_code: string | null
+              property_address: string
+              property_type: string
+              rejection_reason: string | null
+              reviewed_at: string | null
+              reviewed_by: string | null
+              sale_price: number
+              seller_name: string | null
+              status: string
+              transaction_type: string
+              updated_at: string
+              user_id: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "agent_data_inputs"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
       admin_review_invitation_request: {
         Args: {
           p_admin_user_id: string
@@ -3356,8 +3506,89 @@ export type Database = {
           status: string
         }[]
       }
+      admin_set_firesale_investor_publication_for_user: {
+        Args: {
+          _admin_user_id: string
+          p_deal_id: string
+          p_published: boolean
+        }
+        Returns: {
+          deal_id: string
+          published_to_investors: boolean
+          status: string
+        }[]
+      }
+      admin_suspend_reported_listing: {
+        Args: { p_reason?: string; p_report_id: string }
+        Returns: {
+          created_at: string
+          entity_id: string
+          entity_type: string
+          id: string
+          reporter_id: string | null
+          status: Database["public"]["Enums"]["listing_report_status"]
+        }
+        SetofOptions: {
+          from: "*"
+          to: "listing_reports"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_suspend_reported_listing_for_user: {
+        Args: { _admin_user_id: string; p_reason?: string; p_report_id: string }
+        Returns: {
+          created_at: string
+          entity_id: string
+          entity_type: string
+          id: string
+          reporter_id: string | null
+          status: Database["public"]["Enums"]["listing_report_status"]
+        }
+        SetofOptions: {
+          from: "*"
+          to: "listing_reports"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       admin_update_firesale_interest_workflow: {
         Args: {
+          p_admin_note?: string
+          p_interest_id: string
+          p_proof_amount?: number
+          p_reservation_hours?: number
+          p_status: string
+          p_verify_pof?: boolean
+        }
+        Returns: {
+          admin_note: string | null
+          created_at: string
+          deal_id: string
+          id: string
+          investor_id: string
+          last_status_changed_at: string
+          message: string | null
+          proof_amount: number | null
+          proof_of_funds_url: string | null
+          proof_of_funds_verified_at: string | null
+          proof_of_funds_verified_by: string | null
+          reservation_expires_at: string | null
+          reserved_at: string | null
+          reserved_by: string | null
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "firesale_interest"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      admin_update_firesale_interest_workflow_for_user: {
+        Args: {
+          _admin_user_id: string
           p_admin_note?: string
           p_interest_id: string
           p_proof_amount?: number
@@ -3405,6 +3636,22 @@ export type Database = {
           status: string
         }[]
       }
+      admin_update_firesale_pipeline_deal_for_user: {
+        Args: {
+          _admin_user_id: string
+          p_admin_notes?: string
+          p_deal_id: string
+          p_offer_price?: number
+          p_seller_response?: string
+          p_seller_response_price?: number
+          p_status: string
+        }
+        Returns: {
+          deal_id: string
+          notified: number
+          status: string
+        }[]
+      }
       agent_data_input_discount_pct_per_input: { Args: never; Returns: number }
       agent_data_input_max_per_month: { Args: never; Returns: number }
       agent_data_input_quota: {
@@ -3415,6 +3662,10 @@ export type Database = {
           remaining: number
           used: number
         }[]
+      }
+      apply_subscription_lapse_controls: {
+        Args: { p_user_id: string }
+        Returns: Json
       }
       apply_verified_data_input_discount: {
         Args: { p_invoice_id: string; p_user_id: string }
@@ -3434,7 +3685,19 @@ export type Database = {
             Returns: Database["public"]["Enums"]["user_role"]
           }
       begin_role_switch: { Args: never; Returns: undefined }
+      begin_role_switch_for_user: {
+        Args: { _user_id: string }
+        Returns: undefined
+      }
+      can_review_professional: {
+        Args: { p_professional_id: string; p_reviewer_id: string }
+        Returns: boolean
+      }
       check_ai_quota: { Args: { p_bucket: string }; Returns: Json }
+      check_ai_quota_for_user: {
+        Args: { _user_id: string; p_bucket: string }
+        Returns: Json
+      }
       check_and_increment_rate_limit: {
         Args: { p_bucket: string; p_limit: number; p_window_seconds: number }
         Returns: Json
@@ -3493,6 +3756,64 @@ export type Database = {
           listing_id: string
           mortgage_status: string | null
           note: string | null
+          pof_rejection_reason: string | null
+          pof_verified_status: string | null
+          privacy_acknowledged_at: string | null
+          proof_amount: number | null
+          proof_of_funds_url: string | null
+          rejection_reason: string | null
+          requester_id: string
+          screening_doc_url: string | null
+          screening_score: number | null
+          status: Database["public"]["Enums"]["oh_registration_status"] | null
+          timeslot_index: number | null
+          updated_at: string | null
+          visit_purpose: string | null
+          waiver_signed_at: string | null
+          waiver_url: string | null
+          working_with_agent: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "open_house_registrations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_open_house_registration_for_user: {
+        Args: {
+          _user_id: string
+          p_contact_email?: string
+          p_contact_name?: string
+          p_contact_permission?: boolean
+          p_contact_phone?: string
+          p_id_verification_consent?: boolean
+          p_listing_id: string
+          p_note?: string
+          p_privacy_acknowledgement?: boolean
+          p_timeslot_index?: number
+          p_visit_purpose?: string
+        }
+        Returns: {
+          approved_at: string | null
+          approved_by: string | null
+          attended_at: string | null
+          budget_range: string | null
+          contact_email: string | null
+          contact_name: string | null
+          contact_permission_at: string | null
+          contact_phone: string | null
+          created_at: string | null
+          id: string
+          id_doc_type: Database["public"]["Enums"]["oh_id_doc_type"] | null
+          id_doc_url: string | null
+          id_verification_consent_at: string | null
+          id_verified_at: string | null
+          investor_declaration_signed_at: string | null
+          listing_id: string
+          mortgage_status: string | null
+          note: string | null
+          pof_rejection_reason: string | null
           pof_verified_status: string | null
           privacy_acknowledged_at: string | null
           proof_amount: number | null
@@ -3551,6 +3872,14 @@ export type Database = {
         Returns: number
       }
       get_auction_alert_limit: { Args: { p_user_id: string }; Returns: number }
+      get_auction_listing_visible_limit: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
+      get_contact_monthly_limit: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
       get_listing_limit:
         | { Args: { p_is_pro: boolean; p_role: string }; Returns: number }
         | { Args: { p_user_id: string }; Returns: number }
@@ -3558,7 +3887,33 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"]
       }
+      get_open_house_capacity: {
+        Args: { p_listing_id: string }
+        Returns: {
+          active_total: number
+          listing_id: string
+          max_total_visitors: number
+          slot_counts: Json
+        }[]
+      }
+      get_open_house_capacity_for_user: {
+        Args: { _user_id: string; p_listing_id: string }
+        Returns: {
+          active_total: number
+          listing_id: string
+          max_total_visitors: number
+          slot_counts: Json
+        }[]
+      }
+      get_open_house_rsvp_monthly_limit: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
       get_priority_ad_monthly_limit: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
+      get_professionals_per_category_limit: {
         Args: { p_user_id: string }
         Returns: number
       }
@@ -3583,6 +3938,7 @@ export type Database = {
           notes: string | null
           projects_count: number | null
           rating: number | null
+          rejection_reason: string | null
           reviews_count: number | null
           specialties: string[] | null
           subscription_tier: string | null
@@ -3590,6 +3946,7 @@ export type Database = {
           updated_at: string
           user_id: string
           verified: boolean
+          verified_at: string | null
           video_link: string | null
           website_url: string | null
         }[]
@@ -3694,11 +4051,30 @@ export type Database = {
         }
         Returns: string
       }
+      record_role_switch_audit_for_user: {
+        Args: {
+          _from_type: string
+          _had_active_sub: boolean
+          _sub_cancelled: boolean
+          _switch_kind: string
+          _to_type: string
+          _user_id: string
+        }
+        Returns: string
+      }
       release_expired_firesale_reservations: {
         Args: { p_deal_id?: string }
         Returns: number
       }
+      reopen_open_house_offer_selection: {
+        Args: { p_listing_id: string }
+        Returns: undefined
+      }
       reserve_ai_quota: { Args: { p_bucket: string }; Returns: Json }
+      reserve_ai_quota_for_user: {
+        Args: { _user_id: string; p_bucket: string }
+        Returns: Json
+      }
       seed_grant_agent_role: {
         Args: { user_ids: string[] }
         Returns: undefined
@@ -3707,29 +4083,79 @@ export type Database = {
         Args: { target_role: string; user_ids: string[] }
         Returns: undefined
       }
-      submit_agent_data_input: {
-        Args: {
-          p_agent_side?: string
-          p_buyer_name?: string
-          p_closed_at: string
-          p_closing_price: number
-          p_kaek?: string
-          p_notes?: string
-          p_property_address: string
-          p_property_city: string
-          p_property_postal_code?: string
-          p_property_type?: string
-          p_seller_name?: string
-          p_transaction_type: string
-        }
-        Returns: string
-      }
+      submit_agent_data_input:
+        | {
+            Args: {
+              p_buyer_name?: string
+              p_closed_at: string
+              p_closing_price: number
+              p_kaek?: string
+              p_notes?: string
+              p_property_address: string
+              p_property_city: string
+              p_property_postal_code?: string
+              p_property_type?: string
+              p_seller_name?: string
+              p_transaction_type: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_agent_side?: string
+              p_buyer_name?: string
+              p_closed_at: string
+              p_closing_price: number
+              p_kaek?: string
+              p_notes?: string
+              p_property_address: string
+              p_property_city: string
+              p_property_postal_code?: string
+              p_property_type?: string
+              p_seller_name?: string
+              p_transaction_type: string
+            }
+            Returns: string
+          }
       submit_firesale_interest: {
         Args: {
           p_deal_id: string
-          p_message?: string | null
-          p_proof_amount?: number | null
-          p_proof_of_funds_url?: string | null
+          p_message?: string
+          p_proof_amount?: number
+          p_proof_of_funds_url?: string
+        }
+        Returns: {
+          admin_note: string | null
+          created_at: string
+          deal_id: string
+          id: string
+          investor_id: string
+          last_status_changed_at: string
+          message: string | null
+          proof_amount: number | null
+          proof_of_funds_url: string | null
+          proof_of_funds_verified_at: string | null
+          proof_of_funds_verified_by: string | null
+          reservation_expires_at: string | null
+          reserved_at: string | null
+          reserved_by: string | null
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "firesale_interest"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      submit_firesale_interest_for_user: {
+        Args: {
+          _user_id: string
+          p_deal_id: string
+          p_message?: string
+          p_proof_amount?: number
+          p_proof_of_funds_url?: string
         }
         Returns: {
           admin_note: string | null

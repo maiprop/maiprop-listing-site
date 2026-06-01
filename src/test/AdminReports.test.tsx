@@ -3,7 +3,7 @@
  *
  * We:
  *  - Mock `@/integrations/supabase/client` so tab 1's 7 parallel `.select()`
- *    count queries and tab 2's listing_reports query/update all resolve.
+ *    count queries and tab 2's listing_reports query/Edge action all resolve.
  *  - Mock recharts (ResponsiveContainer) so jsdom's 0-dim SVG doesn't throw.
  *  - Provide a real QueryClientProvider so `useQuery` / `useMutation` execute.
  */
@@ -13,16 +13,18 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-const { fromMock, rpcMock, toastMock } = vi.hoisted(() => ({
+const { fromMock, invokeMock, toastMock } = vi.hoisted(() => ({
   fromMock: vi.fn(),
-  rpcMock: vi.fn(),
+  invokeMock: vi.fn(),
   toastMock: { success: vi.fn(), error: vi.fn() },
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: (...a: unknown[]) => fromMock(...a),
-    rpc: (...a: unknown[]) => rpcMock(...a),
+    functions: {
+      invoke: (...a: unknown[]) => invokeMock(...a),
+    },
   },
 }));
 vi.mock("sonner", () => ({ toast: toastMock }));
@@ -76,8 +78,8 @@ const makeWrapper = () => {
 
 beforeEach(() => {
   fromMock.mockReset();
-  rpcMock.mockReset();
-  rpcMock.mockResolvedValue({ data: { id: "r-1", status: "resolved" }, error: null });
+  invokeMock.mockReset();
+  invokeMock.mockResolvedValue({ data: { data: { id: "r-1", status: "resolved" }, error: null }, error: null });
   toastMock.success.mockReset();
   toastMock.error.mockReset();
   // Default: every .from() call yields zero counts / empty rows.
@@ -156,7 +158,9 @@ describe("AdminReports", () => {
       .find((b) => b.textContent?.trim() === "Resolve")!;
     fireEvent.click(resolveBtn);
     await waitFor(() =>
-      expect(rpcMock).toHaveBeenCalledWith("admin_resolve_listing_report", { p_report_id: "r-1" }),
+      expect(invokeMock).toHaveBeenCalledWith("admin-content-report-action", {
+        body: { action: "resolve", reportId: "r-1" },
+      }),
     );
     await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith(expect.stringMatching(/resolved/i)));
   });

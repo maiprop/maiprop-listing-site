@@ -38,6 +38,7 @@
 
 ## Live Advisor Findings To Track
 
-1. Remaining security advisor warning: leaked password protection is disabled and must be enabled in Supabase Auth settings.
-2. Fixed: mutable `search_path` warnings, public storage listing policies, broad anon grants for non-public RPCs, authenticated public SECURITY DEFINER role-helper execution, `pg_net` extension registration in `public`, `project_leads` public select, `contact_submissions` always-true insert, missing FK indexes, and duplicate favorites index.
-3. Remaining performance advisor warnings: multiple permissive policies across messaging, open-house, project, lead, and media tables, plus unused-index INFO findings. `auth_rls_initplan` warnings were cleared in the strict release cleanup.
+1. Remaining security advisor warning: leaked password protection is disabled and requires a Supabase Pro plan to enable.
+2. Remaining security hardening debt: 0 authenticated SECURITY DEFINER RPC warnings remain. HIBP leaked-password protection is the only remaining security Advisor warning and is Supabase-plan blocked.
+3. Fixed: mutable `search_path` warnings, public storage listing policies, broad anon grants for non-public RPCs, open-house capacity/registration browser RPC execution, AdminReports moderation browser RPC execution, admin broadcast browser RPC execution, firesale admin workflow browser RPC execution, firesale interest submit browser RPC execution, public role/quota helper browser RPC execution, legacy onboarding role RPC browser execution, role-switch audit browser RPC execution, role-switch start browser RPC execution, AI quota reservation browser RPC execution, AI quota status browser RPC execution, `pg_net` extension registration in `public`, `project_leads` public select, `contact_submissions` always-true insert, all unindexed-FK findings, and duplicate favorites index.
+4. Remaining performance advisor warnings: 70 multiple-permissive-policy warnings and 64 unused-index INFO findings. `auth_rls_initplan` and unindexed-FK warnings were cleared in the strict release cleanup.

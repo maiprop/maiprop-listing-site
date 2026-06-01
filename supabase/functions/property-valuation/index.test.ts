@@ -22,7 +22,7 @@ const withQuotaAndProviderMock = async (
     if (url.includes("/auth/v1/user")) {
       return Promise.resolve(okJson({ user: { id: "user-1", email: "user@test.local" } }));
     }
-    if (url.includes("/rest/v1/rpc/reserve_ai_quota")) {
+    if (url.includes("/rest/v1/rpc/reserve_ai_quota_for_user")) {
       return Promise.resolve(okJson({ allowed: true, reason: null, used: 1, limit: 5 }));
     }
     if (url.includes("api.openai.com") || url.includes("generativelanguage.googleapis.com")) {

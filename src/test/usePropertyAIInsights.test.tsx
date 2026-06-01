@@ -57,7 +57,12 @@ beforeEach(() => {
   rpcMock.mockReset();
   toastErrorMock.mockReset();
   isAiLimitMock.mockReset();
-  rpcMock.mockResolvedValue({ data: { allowed: true, reason: null, used: 0, limit: 5 }, error: null });
+  invokeMock.mockImplementation(async (name: string) => {
+    if (name === "ai-quota-status") {
+      return { data: { allowed: true, reason: null, used: 0, limit: 5 }, error: null };
+    }
+    return { data: {}, error: null };
+  });
   isAiLimitMock.mockReturnValue(false);
 });
 
@@ -76,22 +81,32 @@ describe("usePropertyAIInsights", () => {
     expect(result.current.aiInsightsLoading).toBe(false);
   });
 
-  it("checks quota without spending an AI call on initial render", async () => {
+  it("checks quota through the Edge Function without spending an AI call on initial render", async () => {
     renderHook(() => usePropertyAIInsights(baseListing, baseUser, "L-1", false));
 
-    await waitFor(() => expect(rpcMock).toHaveBeenCalledWith("check_ai_quota", { p_bucket: "property-valuation" }));
-    expect(invokeMock).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("ai-quota-status", {
+        body: { bucket: "property-valuation" },
+      })
+    );
+    expect(invokeMock.mock.calls.some(([name]) => name === "property-valuation")).toBe(false);
   });
 
   it("runs for non-Pro users after click because the server enforces the free quota", async () => {
-    invokeMock.mockResolvedValueOnce({
-      data: {
-        estimatedValue: 470_000,
-        marketComparisonPct: 4.5,
-        rentalYieldEstimate: 3.8,
-        marketComparison: "above_market",
-        confidenceLabel: "High",
-      },
+    invokeMock.mockImplementation(async (name: string) => {
+      if (name === "ai-quota-status") {
+        return { data: { allowed: true, reason: null, used: 0, limit: 5 }, error: null };
+      }
+      return {
+        data: {
+          estimatedValue: 470_000,
+          marketComparisonPct: 4.5,
+          rentalYieldEstimate: 3.8,
+          marketComparison: "above_market",
+          confidenceLabel: "High",
+        },
+        error: null,
+      };
     });
     const { result } = renderHook(() =>
       usePropertyAIInsights(baseListing, baseUser, "L-1", false),
@@ -107,37 +122,57 @@ describe("usePropertyAIInsights", () => {
       marketComparison: "above_market",
       confidenceLabel: "High",
     });
-    expect(invokeMock).toHaveBeenCalledTimes(1);
-    expect(invokeMock.mock.calls[0][0]).toBe("property-valuation");
+    expect(invokeMock.mock.calls.filter(([name]) => name === "property-valuation")).toHaveLength(1);
   });
 
   it("passes listing fields to property-valuation", async () => {
-    invokeMock.mockResolvedValueOnce({ data: { estimatedValue: 200_000 } });
+    invokeMock.mockImplementation(async (name: string) => {
+      if (name === "ai-quota-status") {
+        return { data: { allowed: true, reason: null, used: 0, limit: 5 }, error: null };
+      }
+      return { data: { estimatedValue: 200_000 }, error: null };
+    });
     const { result } = renderHook(() => usePropertyAIInsights(baseListing, baseUser, undefined, true));
     await act(async () => {
       await result.current.loadAiInsights();
     });
-    await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1));
-    expect(invokeMock.mock.calls[0]).toMatchObject([
+    await waitFor(() =>
+      expect(invokeMock.mock.calls.some(([name]) => name === "property-valuation")).toBe(true)
+    );
+    const valuationCall = invokeMock.mock.calls.find(([name]) => name === "property-valuation");
+    expect(valuationCall).toMatchObject([
       "property-valuation",
       { body: { city: "Athens", address: "Kolonaki 12", price: 450_000, sqm: 95 } },
     ]);
   });
 
   it("populates ownershipStatus and ownershipPercentage from tags", async () => {
-    invokeMock.mockResolvedValueOnce({ data: { estimatedValue: 100 } });
+    invokeMock.mockImplementation(async (name: string) => {
+      if (name === "ai-quota-status") {
+        return { data: { allowed: true, reason: null, used: 0, limit: 5 }, error: null };
+      }
+      return { data: { estimatedValue: 100 }, error: null };
+    });
     const { result } = renderHook(() => usePropertyAIInsights(baseListing, baseUser, "L-1", true));
     await act(async () => {
       await result.current.loadAiInsights();
     });
-    await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1));
-    const valuationBody = (invokeMock.mock.calls[0][1] as { body: Record<string, unknown> }).body;
+    await waitFor(() =>
+      expect(invokeMock.mock.calls.some(([name]) => name === "property-valuation")).toBe(true)
+    );
+    const valuationCall = invokeMock.mock.calls.find(([name]) => name === "property-valuation");
+    const valuationBody = (valuationCall?.[1] as { body: Record<string, unknown> }).body;
     expect(valuationBody.ownershipStatus).toBe("private");
     expect(valuationBody.ownershipPercentage).toBe(100);
   });
 
   it("falls back to default values when property-valuation returns sparse fields", async () => {
-    invokeMock.mockResolvedValueOnce({ data: {} });
+    invokeMock.mockImplementation(async (name: string) => {
+      if (name === "ai-quota-status") {
+        return { data: { allowed: true, reason: null, used: 0, limit: 5 }, error: null };
+      }
+      return { data: {}, error: null };
+    });
     const { result } = renderHook(() =>
       usePropertyAIInsights(baseListing, baseUser, "L-1", true),
     );
@@ -155,7 +190,12 @@ describe("usePropertyAIInsights", () => {
   });
 
   it("surfaces a toast.error when isAiUsageLimitError reports true", async () => {
-    invokeMock.mockResolvedValueOnce({ data: { error: "limit reached" }, error: { message: "limit" } });
+    invokeMock.mockImplementation(async (name: string) => {
+      if (name === "ai-quota-status") {
+        return { data: { allowed: true, reason: null, used: 0, limit: 5 }, error: null };
+      }
+      return { data: { error: "limit reached" }, error: { message: "limit" } };
+    });
     isAiLimitMock.mockReturnValue(true);
     const { result } = renderHook(() => usePropertyAIInsights(baseListing, baseUser, "L-1", true));
     await act(async () => {
@@ -166,7 +206,12 @@ describe("usePropertyAIInsights", () => {
   });
 
   it("surfaces a toast.error when invoke throws and isAiUsageLimitError reports true", async () => {
-    invokeMock.mockRejectedValueOnce(new Error("network"));
+    invokeMock.mockImplementation(async (name: string) => {
+      if (name === "ai-quota-status") {
+        return { data: { allowed: true, reason: null, used: 0, limit: 5 }, error: null };
+      }
+      throw new Error("network");
+    });
     isAiLimitMock.mockReturnValue(true);
     const { result } = renderHook(() => usePropertyAIInsights(baseListing, baseUser, "L-1", true));
     await act(async () => {
@@ -176,20 +221,31 @@ describe("usePropertyAIInsights", () => {
   });
 
   it("does not invoke property-valuation when preflight quota is exhausted", async () => {
-    rpcMock.mockResolvedValue({ data: { allowed: false, reason: "monthly_limit_reached", used: 5, limit: 5 }, error: null });
+    invokeMock.mockImplementation(async (name: string) => {
+      if (name === "ai-quota-status") {
+        return { data: { allowed: false, reason: "monthly_limit_reached", used: 5, limit: 5 }, error: null };
+      }
+      return { data: {}, error: null };
+    });
     const { result } = renderHook(() => usePropertyAIInsights(baseListing, baseUser, "L-1", false));
 
     await act(async () => {
       await result.current.loadAiInsights();
     });
 
-    expect(invokeMock).not.toHaveBeenCalled();
+    expect(invokeMock.mock.calls.some(([name]) => name === "property-valuation")).toBe(false);
     expect(toastErrorMock).toHaveBeenCalledWith("You've reached your AI insights limit for this month. Upgrade to continue.");
   });
 
   it("does not refire if dbListing changes after the first load", async () => {
-    invokeMock.mockResolvedValueOnce({
-      data: { estimatedValue: 500_000 },
+    invokeMock.mockImplementation(async (name: string) => {
+      if (name === "ai-quota-status") {
+        return { data: { allowed: true, reason: null, used: 0, limit: 5 }, error: null };
+      }
+      return {
+        data: { estimatedValue: 500_000 },
+        error: null,
+      };
     });
     const { result, rerender } = renderHook(
       ({ l }: { l: ListingWithJoins | null }) => usePropertyAIInsights(l, baseUser, "L-1", true),
@@ -198,11 +254,13 @@ describe("usePropertyAIInsights", () => {
     await act(async () => {
       await result.current.loadAiInsights();
     });
-    await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(invokeMock.mock.calls.filter(([name]) => name === "property-valuation")).toHaveLength(1)
+    );
     await act(async () => {
       rerender({ l: { ...baseListing, id: "L-2" } });
     });
     await new Promise((r) => setTimeout(r, 10));
-    expect(invokeMock).toHaveBeenCalledTimes(1);
+    expect(invokeMock.mock.calls.filter(([name]) => name === "property-valuation")).toHaveLength(1);
   });
 });

@@ -79,7 +79,9 @@ export function SettingsSection({
     }
   };
 
-  // Role switch is initiated via the begin_role_switch RPC, which atomically:
+  // Role switch is initiated via the begin-role-switch Edge Function, which
+  // verifies the caller and invokes the service-only begin_role_switch_for_user
+  // RPC. The database operation atomically:
   //   - clears participant_type + bio,
   //   - stamps profiles.role_switch_in_progress_at,
   //   - pauses/cancels active role-specific public and counterparty workflows.
@@ -98,12 +100,9 @@ export function SettingsSection({
       }));
     } catch (_err: unknown) { /* ignore storage errors */ }
 
-    // begin_role_switch was added in migration 20260510120000; the generated
-    // types.ts does not yet include it. Use a typed double-cast through
-    // `unknown` to call the RPC without `any` so the call retains a
-    // narrow Promise<{ error: PostgrestError | null }> shape.
-    type RpcCaller = (name: "begin_role_switch") => Promise<{ error: { message: string } | null }>;
-    const { error } = await (supabase.rpc as unknown as RpcCaller)("begin_role_switch");
+    const { error } = await supabase.functions.invoke("begin-role-switch", {
+      body: {},
+    });
     if (error) {
       const friendlyMsg = ROLE_SWITCH_ERROR_MESSAGES[error.message]
         ?? "Could not start role switch. Please try again or contact support.";

@@ -98,7 +98,7 @@ const requirements: readonly ProofRequirement[] = [
     area: "open_house",
     kind: "happy_path",
     file: "src/test/useOpenHouseAssetControl.test.tsx",
-    snippets: ["creates a pending registration through the capacity-checked RPC", "submit_open_house_offer"],
+    snippets: ["creates a pending registration through the capacity-checked Edge Function", "submit_open_house_offer"],
   },
   {
     area: "open_house",
@@ -122,7 +122,7 @@ const requirements: readonly ProofRequirement[] = [
     area: "firesale",
     kind: "happy_path",
     file: "src/test/useFiresaleInterest.test.tsx",
-    snippets: ["admin_update_firesale_interest_workflow", "reservationHours"],
+    snippets: ["submit-firesale-interest", "admin-firesale-action", "reservationHours"],
   },
   {
     area: "firesale",

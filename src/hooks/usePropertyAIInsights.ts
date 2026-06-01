@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase as supabaseClient } from "@/integrations/supabase/client";
 import { isAiUsageLimitError } from "@/lib/aiErrorUtils";
-import { aiQuotaFromJson } from "@/hooks/useAiQuota";
+import { aiQuotaFromJson, fetchAiQuota } from "@/hooks/useAiQuota";
 import { toast } from "sonner";
 import type { User } from "@supabase/supabase-js";
 import type { ListingWithJoins } from "@/hooks/useListings";
@@ -51,11 +51,7 @@ export function usePropertyAIInsights(
 
     setAiInsightsQuotaLoading(true);
     try {
-      const { data, error } = await supabaseClient.rpc("check_ai_quota", {
-        p_bucket: AI_INSIGHTS_BUCKET,
-      });
-      if (error) throw error;
-      const quota = aiQuotaFromJson(data);
+      const quota = await fetchAiQuota(AI_INSIGHTS_BUCKET);
       setAiInsightsQuota(quota);
       return quota;
     } catch (_err: unknown) {

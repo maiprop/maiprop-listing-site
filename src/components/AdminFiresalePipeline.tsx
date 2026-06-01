@@ -11,6 +11,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { STATUS_CONFIG, type AdminDeal, AdminDealRow } from "@/components/admin/FiresaleComponents";
 
+type AdminFiresaleActionResponse = {
+  data?: unknown;
+  error?: string | null;
+};
+
 function useAdminDeals() {
   return useQuery<AdminDeal[]>({
     queryKey: ["admin-firesale-deals"],
@@ -43,17 +48,22 @@ function useUpdateAdminDeal() {
       sellerResponse?: string;
       sellerResponsePrice?: number;
     }) => {
-      const { data, error } = await supabase.rpc("admin_update_firesale_pipeline_deal", {
-        p_deal_id: id,
-        p_status: status,
-        p_admin_notes: admin_notes,
-        p_offer_price: offerPrice,
-        p_seller_response: sellerResponse,
-        p_seller_response_price: sellerResponsePrice,
+      const { data, error } = await supabase.functions.invoke<AdminFiresaleActionResponse>("admin-firesale-action", {
+        body: {
+          action: "update_pipeline_deal",
+          dealId: id,
+          status,
+          adminNotes: admin_notes,
+          offerPrice,
+          sellerResponse,
+          sellerResponsePrice,
+        },
       });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
-      const result = Array.isArray(data) ? data[0] : data;
+      const resultData = data?.data;
+      const result = Array.isArray(resultData) ? resultData[0] : resultData;
       return { notified: Number((result as { notified?: number } | null)?.notified ?? 0) };
     },
     onSuccess: (result, { status }) => {

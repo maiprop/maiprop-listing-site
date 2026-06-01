@@ -91,14 +91,24 @@ const fullData = {
   areaHighlights: ["UNESCO district", "Walkable to Acropolis"],
 };
 
+const quotaData = { allowed: true, reason: null, used: 1, limit: 5 };
+const mockQuotaAndReport = (
+  report: unknown = fullData,
+  quota: unknown = quotaData,
+) => {
+  invokeMock.mockImplementation(async (name: string) => {
+    if (name === "ai-quota-status") return { data: quota, error: null };
+    return { data: report, error: null };
+  });
+};
+const reportCalls = () =>
+  invokeMock.mock.calls.filter(([name]) => name === "neighbourhood-report");
+
 beforeEach(() => {
   useAuthMock.mockReset();
   invokeMock.mockReset();
   rpcMock.mockReset();
-  rpcMock.mockResolvedValue({
-    data: { allowed: true, reason: null, used: 1, limit: 5 },
-    error: null,
-  });
+  mockQuotaAndReport();
   toastMock.success.mockReset();
   toastMock.error.mockReset();
   useAuthMock.mockReturnValue({ user: { id: "u-1" } });
@@ -119,20 +129,20 @@ describe("NeighbourhoodReport — gates", () => {
     );
     await screen.findByText(/1 \/ 5 used/i);
     expect(screen.getByRole("button", { name: /Load Neighbourhood Report/i })).toBeInTheDocument();
-    expect(invokeMock).not.toHaveBeenCalled();
+    expect(reportCalls()).toHaveLength(0);
   });
 
   it("renders the Load CTA when user is logged in but data hasn't been fetched", async () => {
     render(<NeighbourhoodReport {...baseProps} />);
     await screen.findByText(/1 \/ 5 used/i);
     expect(screen.getByRole("button", { name: /Load Neighbourhood Report/i })).toBeInTheDocument();
-    expect(invokeMock).not.toHaveBeenCalled();
+    expect(reportCalls()).toHaveLength(0);
   });
 });
 
 describe("NeighbourhoodReport — fetch flows", () => {
   it("calls neighbourhood-report when listingId is provided so quota and GPT analysis are enforced", async () => {
-    invokeMock.mockResolvedValue({ data: fullData, error: null });
+    mockQuotaAndReport(fullData);
     render(<NeighbourhoodReport {...baseProps} listingId="l-1" />);
     await loadReport();
     await waitFor(() => expect(screen.getByText(/Plaka.*Athens/i)).toBeInTheDocument());
@@ -140,33 +150,38 @@ describe("NeighbourhoodReport — fetch flows", () => {
     const counter = screen.getByLabelText(/Neighbourhood Report request counter/i);
     expect(counter).toHaveTextContent(/1 \/ 5 used/i);
     expect(counter).toHaveTextContent(/Free 5\/mo \| Pro 50\/mo/i);
-    expect(rpcMock).toHaveBeenCalledWith("check_ai_quota", { p_bucket: "neighbourhood-report" });
+    expect(invokeMock).toHaveBeenCalledWith("ai-quota-status", {
+      body: { bucket: "neighbourhood-report" },
+    });
     expect(screen.getByText(/UNESCO district/)).toBeInTheDocument();
     expect(screen.getByText(/Excellent/)).toBeInTheDocument();
-    expect(invokeMock).toHaveBeenCalledTimes(1);
-    expect(invokeMock).toHaveBeenCalledWith(
+    expect(reportCalls()).toHaveLength(1);
+    expect(reportCalls()[0]).toEqual([
       "neighbourhood-report",
       expect.objectContaining({ body: expect.objectContaining({ listingId: "l-1" }) }),
-    );
+    ]);
   });
 
   it("calls neighbourhood-report directly when no listingId is given", async () => {
-    invokeMock.mockResolvedValue({ data: fullData, error: null });
+    mockQuotaAndReport(fullData);
     render(<NeighbourhoodReport {...baseProps} />);
     await loadReport();
     await waitFor(() => expect(screen.getByText(/Plaka.*Athens/i)).toBeInTheDocument());
-    expect(invokeMock).toHaveBeenCalledTimes(1);
-    expect(invokeMock).toHaveBeenCalledWith(
+    expect(reportCalls()).toHaveLength(1);
+    expect(reportCalls()[0]).toEqual([
       "neighbourhood-report",
       expect.objectContaining({
         body: expect.objectContaining({ city: "Athens", lat: 37.97, lng: 23.74 }),
       }),
-    );
+    ]);
   });
 
   it("renders the loading skeleton while the fetch is in flight", async () => {
     let resolve!: (v: unknown) => void;
-    invokeMock.mockReturnValue(new Promise((r) => { resolve = r; }));
+    invokeMock.mockImplementation((name: string) => {
+      if (name === "ai-quota-status") return Promise.resolve({ data: quotaData, error: null });
+      return new Promise((r) => { resolve = r; });
+    });
     render(<NeighbourhoodReport {...baseProps} />);
     await loadReport();
     expect(screen.getByText(/AI is analysing/i)).toBeInTheDocument();
@@ -175,28 +190,31 @@ describe("NeighbourhoodReport — fetch flows", () => {
   });
 
   it("renders the error pill + Retry button when invoke rejects, and Retry re-invokes", async () => {
-    invokeMock.mockResolvedValueOnce({ data: null, error: new Error("AI down") });
+    let reportAttempt = 0;
+    invokeMock.mockImplementation(async (name: string) => {
+      if (name === "ai-quota-status") return { data: quotaData, error: null };
+      reportAttempt += 1;
+      return reportAttempt === 1
+        ? { data: null, error: new Error("AI down") }
+        : { data: fullData, error: null };
+    });
     render(<NeighbourhoodReport {...baseProps} />);
     await loadReport();
     await waitFor(() => expect(screen.getByText("AI down")).toBeInTheDocument());
     expect(toastMock.error).toHaveBeenCalledWith("AI down");
-    invokeMock.mockResolvedValueOnce({ data: fullData, error: null });
     fireEvent.click(screen.getByRole("button", { name: /Retry/i }));
     await waitFor(() => expect(screen.getByText(/Plaka.*Athens/i)).toBeInTheDocument());
   });
 
   it("renders the error pill when the AI returns a data.error payload", async () => {
-    invokeMock.mockResolvedValue({ data: { error: "rate-limit" }, error: null });
+    mockQuotaAndReport({ error: "rate-limit" });
     render(<NeighbourhoodReport {...baseProps} />);
     await loadReport();
     await waitFor(() => expect(screen.getByText("rate-limit")).toBeInTheDocument());
   });
 
   it("shows the quota counter and upgrade CTA instead of invoking when the monthly cap is reached", async () => {
-    rpcMock.mockResolvedValue({
-      data: { allowed: false, reason: "monthly_limit_reached", used: 5, limit: 5 },
-      error: null,
-    });
+    mockQuotaAndReport(fullData, { allowed: false, reason: "monthly_limit_reached", used: 5, limit: 5 });
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <NeighbourhoodReport {...baseProps} />
@@ -206,14 +224,11 @@ describe("NeighbourhoodReport — fetch flows", () => {
     expect(await screen.findByText(/5 \/ 5 used/i)).toBeInTheDocument();
     expect(screen.getByText(/Monthly cap reached/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Upgrade/i })).toHaveAttribute("href", "/pricing");
-    expect(invokeMock).not.toHaveBeenCalled();
+    expect(reportCalls()).toHaveLength(0);
   });
 
   it("shows a Pro allowance counter with the Pro monthly cap", async () => {
-    rpcMock.mockResolvedValue({
-      data: { allowed: true, reason: null, used: 12, limit: 50 },
-      error: null,
-    });
+    mockQuotaAndReport(fullData, { allowed: true, reason: null, used: 12, limit: 50 });
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <NeighbourhoodReport {...baseProps} />
@@ -228,7 +243,7 @@ describe("NeighbourhoodReport — fetch flows", () => {
 
 describe("NeighbourhoodReport — full result UI", () => {
   it("renders all sections (trend, noise, safety, walkability, projects, outlook, demographics)", async () => {
-    invokeMock.mockResolvedValue({ data: fullData, error: null });
+    mockQuotaAndReport(fullData);
     render(<NeighbourhoodReport {...baseProps} />);
     await loadReport();
     await waitFor(() => expect(screen.getByText(/Plaka.*Athens/i)).toBeInTheDocument());
@@ -250,20 +265,17 @@ describe("NeighbourhoodReport — full result UI", () => {
   });
 
   it("Refresh report re-invokes the edge fn", async () => {
-    invokeMock.mockResolvedValue({ data: fullData, error: null });
+    mockQuotaAndReport(fullData);
     render(<NeighbourhoodReport {...baseProps} />);
     await loadReport();
     await waitFor(() => expect(screen.getByText(/Refresh report/i)).toBeInTheDocument());
     invokeMock.mockClear();
     fireEvent.click(screen.getByRole("button", { name: /Refresh report/i }));
-    await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(reportCalls()).toHaveLength(1));
   });
 
   it("hides the walkability card when walkabilityScore is null", async () => {
-    invokeMock.mockResolvedValue({
-      data: { ...fullData, walkabilityScore: null },
-      error: null,
-    });
+    mockQuotaAndReport({ ...fullData, walkabilityScore: null });
     render(<NeighbourhoodReport {...baseProps} />);
     await loadReport();
     await waitFor(() => expect(screen.getByText(/Plaka.*Athens/i)).toBeInTheDocument());
@@ -271,10 +283,7 @@ describe("NeighbourhoodReport — full result UI", () => {
   });
 
   it("hides the development projects section when the array is empty", async () => {
-    invokeMock.mockResolvedValue({
-      data: { ...fullData, developmentProjects: [] },
-      error: null,
-    });
+    mockQuotaAndReport({ ...fullData, developmentProjects: [] });
     render(<NeighbourhoodReport {...baseProps} />);
     await loadReport();
     await waitFor(() => expect(screen.getByText(/Plaka.*Athens/i)).toBeInTheDocument());
