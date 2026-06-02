@@ -1,0 +1,85 @@
+name: Live Operational Smoke
+
+on:
+  schedule:
+    - cron: "43 4 * * 2"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-operational-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  live-smoke:
+    name: Live role, tier, and AI quota smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PLAYWRIGHT_BASE_URL: https://portal.maiprop.co
+      E2E_USE_SEEDED_DEMO_ACCOUNTS: true
+      E2E_DEMO_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
+      E2E_BUYER_FREE_EMAIL: ${{ secrets.E2E_BUYER_FREE_EMAIL }}
+      E2E_BUYER_FREE_PASSWORD: ${{ secrets.E2E_BUYER_FREE_PASSWORD }}
+      E2E_BUYER_PRO_EMAIL: ${{ secrets.E2E_BUYER_PRO_EMAIL }}
+      E2E_BUYER_PRO_PASSWORD: ${{ secrets.E2E_BUYER_PRO_PASSWORD }}
+      E2E_SELLER_PRO_EMAIL: ${{ secrets.E2E_SELLER_PRO_EMAIL }}
+      E2E_SELLER_PRO_PASSWORD: ${{ secrets.E2E_SELLER_PRO_PASSWORD }}
+      E2E_AGENT_PRO_EMAIL: ${{ secrets.E2E_AGENT_PRO_EMAIL }}
+      E2E_AGENT_PRO_PASSWORD: ${{ secrets.E2E_AGENT_PRO_PASSWORD }}
+      E2E_DEVELOPER_PRO_EMAIL: ${{ secrets.E2E_DEVELOPER_PRO_EMAIL }}
+      E2E_DEVELOPER_PRO_PASSWORD: ${{ secrets.E2E_DEVELOPER_PRO_PASSWORD }}
+      E2E_INVESTOR_PRIVATE_EMAIL: ${{ secrets.E2E_INVESTOR_PRIVATE_EMAIL }}
+      E2E_INVESTOR_PRIVATE_PASSWORD: ${{ secrets.E2E_INVESTOR_PRIVATE_PASSWORD }}
+      E2E_INVESTOR_INSTITUTIONAL_EMAIL: ${{ secrets.E2E_INVESTOR_INSTITUTIONAL_EMAIL }}
+      E2E_INVESTOR_INSTITUTIONAL_PASSWORD: ${{ secrets.E2E_INVESTOR_INSTITUTIONAL_PASSWORD }}
+      E2E_PROFESSIONAL_ARCHITECT_EMAIL: ${{ secrets.E2E_PROFESSIONAL_ARCHITECT_EMAIL }}
+      E2E_PROFESSIONAL_ARCHITECT_PASSWORD: ${{ secrets.E2E_PROFESSIONAL_ARCHITECT_PASSWORD }}
+      E2E_PROFESSIONAL_LAWYER_EMAIL: ${{ secrets.E2E_PROFESSIONAL_LAWYER_EMAIL }}
+      E2E_PROFESSIONAL_LAWYER_PASSWORD: ${{ secrets.E2E_PROFESSIONAL_LAWYER_PASSWORD }}
+      E2E_PROFESSIONAL_VALUER_EMAIL: ${{ secrets.E2E_PROFESSIONAL_VALUER_EMAIL }}
+      E2E_PROFESSIONAL_VALUER_PASSWORD: ${{ secrets.E2E_PROFESSIONAL_VALUER_PASSWORD }}
+      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Detect live smoke credentials
+        id: smoke
+        shell: bash
+        run: |
+          if [ -z "${E2E_DEMO_PASSWORD}" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Live operational smoke skipped: E2E_DEMO_PASSWORD is not configured." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check runtime
+        if: steps.smoke.outputs.enabled == 'true'
+        run: npm run check:runtime
+
+      - name: Install dependencies
+        if: steps.smoke.outputs.enabled == 'true'
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Install Playwright
+        if: steps.smoke.outputs.enabled == 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Run non-consuming AI quota smoke
+        if: steps.smoke.outputs.enabled == 'true'
+        run: npm run test:e2e:live-ai-quota
+
+      - name: Run role and tier matrix smoke
+        if: steps.smoke.outputs.enabled == 'true'
+        run: npm run test:e2e:live-role-tier-matrix
