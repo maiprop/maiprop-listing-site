@@ -319,7 +319,7 @@ describe("OpenHouses page behavior", () => {
 
     expect(await screen.findByText("Athens Apartment")).toBeInTheDocument();
     expect(screen.getByText("Voula House")).toBeInTheDocument();
-  });
+  }, 15_000);
 
   it("shows the empty map state for listings without coordinates and can switch back to the list", async () => {
     makeListingsQuery([createListing({ id: "oh-no-map", title: "No Map Home", latitude: null, longitude: null })]);

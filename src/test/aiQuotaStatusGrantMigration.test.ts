@@ -46,10 +46,13 @@ describe("AI quota status grant hardening", () => {
 
   it("removes browser-role execution from the legacy caller-context quota RPC", () => {
     expect(legacyRevokeMigration).toContain(
-      "REVOKE ALL ON FUNCTION public.check_ai_quota(TEXT)",
+      "to_regprocedure('public.check_ai_quota(text)')",
     );
     expect(legacyRevokeMigration).toContain(
-      "GRANT EXECUTE ON FUNCTION public.check_ai_quota(TEXT)",
+      "REVOKE ALL ON FUNCTION %s FROM PUBLIC, anon, authenticated",
+    );
+    expect(legacyRevokeMigration).toContain(
+      "GRANT EXECUTE ON FUNCTION %s TO service_role",
     );
     expect(legacyRevokeMigration).toContain(
       "public.check_ai_quota(text) must not remain browser-callable",

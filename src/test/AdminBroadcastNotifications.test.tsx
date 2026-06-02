@@ -3,37 +3,37 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import AdminBroadcastNotifications from "@/components/AdminBroadcastNotifications";
 import { renderWithProviders } from "@/test/utils";
 
-const { rpcMock, toastMock } = vi.hoisted(() => ({
-  rpcMock: vi.fn(),
+const { invokeMock, toastMock } = vi.hoisted(() => ({
+  invokeMock: vi.fn(),
   toastMock: { success: vi.fn(), error: vi.fn() },
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
-    rpc: (...args: unknown[]) => rpcMock(...args),
+    functions: { invoke: (...args: unknown[]) => invokeMock(...args) },
   },
 }));
 
 vi.mock("sonner", () => ({ toast: toastMock }));
 
 beforeEach(() => {
-  rpcMock.mockReset();
+  invokeMock.mockReset();
   toastMock.success.mockReset();
   toastMock.error.mockReset();
 });
 
 describe("AdminBroadcastNotifications", () => {
-  it("requires a title and message before calling the broadcast RPC", () => {
+  it("requires a title and message before calling the broadcast function", () => {
     renderWithProviders(<AdminBroadcastNotifications />);
 
     fireEvent.click(screen.getByRole("button", { name: /Send Broadcast/i }));
 
-    expect(rpcMock).not.toHaveBeenCalled();
+    expect(invokeMock).not.toHaveBeenCalled();
     expect(toastMock.error).toHaveBeenCalledWith("Title and message are required");
   });
 
   it("sends a trimmed broadcast payload and resets the form on success", async () => {
-    rpcMock.mockResolvedValue({ data: 1, error: null });
+    invokeMock.mockResolvedValue({ data: { data: 1, error: null }, error: null });
     renderWithProviders(<AdminBroadcastNotifications />);
 
     fireEvent.change(screen.getByLabelText(/Audience/i), { target: { value: "investors" } });
@@ -43,12 +43,13 @@ describe("AdminBroadcastNotifications", () => {
     fireEvent.click(screen.getByRole("button", { name: /Send Broadcast/i }));
 
     await waitFor(() =>
-      expect(rpcMock).toHaveBeenCalledWith("admin_broadcast_notification", {
-        p_segment: "investors",
-        p_title: "Market update",
-        p_body: "New Athens deal live.",
-        p_type: "admin_broadcast",
-        p_link: "/dashboard",
+      expect(invokeMock).toHaveBeenCalledWith("admin-broadcast-notification", {
+        body: {
+          segment: "investors",
+          title: "Market update",
+          body: "New Athens deal live.",
+          link: "/dashboard",
+        },
       }),
     );
     await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Broadcast sent to 1 user"));
@@ -59,8 +60,8 @@ describe("AdminBroadcastNotifications", () => {
     expect(screen.getByLabelText(/Link/i)).toHaveValue("");
   });
 
-  it("surfaces RPC failures without clearing the draft message", async () => {
-    rpcMock.mockResolvedValue({ data: null, error: new Error("Only admins can broadcast") });
+  it("surfaces function failures without clearing the draft message", async () => {
+    invokeMock.mockResolvedValue({ data: { data: null, error: "Only admins can broadcast" }, error: null });
     renderWithProviders(<AdminBroadcastNotifications />);
 
     fireEvent.change(screen.getByLabelText(/Title/i), { target: { value: "Maintenance" } });

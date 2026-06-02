@@ -2,7 +2,8 @@ import type { TFunction } from "i18next";
 
 export function tFallback(t: TFunction, key: string, fallback: string): string {
   const value = t(key);
-  const leaf = key.split(".").at(-1);
+  const parts = key.split(".");
+  const leaf = parts[parts.length - 1];
   return value === key || value === leaf ? fallback : value;
 }
 

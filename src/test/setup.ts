@@ -21,7 +21,8 @@ console.error = (...args: unknown[]) => {
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string, fallback?: string) => fallback ?? key,
+    t: (key: string, fallback?: string | { defaultValue?: string }) =>
+      typeof fallback === "string" ? fallback : fallback?.defaultValue ?? key,
     i18n: {
       changeLanguage: vi.fn((language: string) => {
         globalThis.__MAIPROP_TEST_I18N_LANGUAGE__ = language;

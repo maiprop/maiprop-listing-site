@@ -43,9 +43,12 @@ describe("AI quota reservation RPC grant hardening", () => {
 
   it("removes browser execution from the legacy caller-context RPC in phase two", () => {
     expect(legacyGrantMigration).toContain(
-      "REVOKE ALL ON FUNCTION public.reserve_ai_quota(TEXT)",
+      "to_regprocedure('public.reserve_ai_quota(text)')",
     );
-    expect(legacyGrantMigration).toContain("FROM PUBLIC, anon, authenticated");
+    expect(legacyGrantMigration).toContain(
+      "REVOKE ALL ON FUNCTION %s FROM PUBLIC, anon, authenticated",
+    );
+    expect(legacyGrantMigration).toContain("GRANT EXECUTE ON FUNCTION %s TO service_role");
     expect(legacyGrantMigration).toContain("TO service_role");
     expect(legacyGrantMigration).toContain(
       "legacy AI quota reservation RPC must not be browser-executable",
