@@ -21,6 +21,14 @@ const futureAdvisorHardeningMigration = readFileSync(
   "utf8",
 );
 
+const internalHelperGrantReassertionMigration = readFileSync(
+  resolve(
+    process.cwd(),
+    "supabase/migrations/20260602134200_reassert_internal_security_helper_grants.sql",
+  ),
+  "utf8",
+);
+
 describe("public role helper policy rewrite", () => {
   it("rewrites remaining policies to private helpers before revoking public helper execution", () => {
     expect(migration).toContain("private.has_platform_admin(");
@@ -68,5 +76,28 @@ describe("public role helper policy rewrite", () => {
     expect(appFacingGrantBlock).not.toContain("public.has_platform_admin");
     expect(appFacingGrantBlock).not.toContain("public.has_role");
     expect(appFacingGrantBlock).not.toContain("public.check_listing_quota");
+  });
+
+  it("reasserts internal helper grants after historical staging drift", () => {
+    for (const signature of [
+      "public.authoritative_role()",
+      "public.authoritative_role(uuid)",
+      "public.check_listing_quota()",
+      "public.has_platform_admin(uuid)",
+      "public.has_role(uuid,public.app_role)",
+      "public.has_role(uuid,public.user_role)",
+    ]) {
+      expect(internalHelperGrantReassertionMigration).toContain(signature);
+    }
+
+    expect(internalHelperGrantReassertionMigration).toContain(
+      "REVOKE ALL ON FUNCTION %s FROM PUBLIC, anon, authenticated",
+    );
+    expect(internalHelperGrantReassertionMigration).toContain(
+      "GRANT EXECUTE ON FUNCTION %s TO service_role",
+    );
+    expect(internalHelperGrantReassertionMigration).toContain(
+      "internal security helper remains browser-executable",
+    );
   });
 });

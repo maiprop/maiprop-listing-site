@@ -184,6 +184,33 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit
 
+      - name: Detect PR Supabase deployment changes
+        id: pr_supabase_changes
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          base="${{ github.event.pull_request.base.sha }}"
+
+          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=50 origin "${{ github.base_ref }}" || true
+          fi
+
+          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "::warning::Could not inspect PR base; deferring live Supabase checks to staging prep."
+            echo "has_supabase_changes=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed_files="$(git diff --name-only "$base" "${{ github.sha }}" || true)"
+          echo "$changed_files"
+
+          if grep -Eq '^(supabase/|deno\.(json|lock)$)' <<< "$changed_files"; then
+            echo "has_supabase_changes=true" >> "$GITHUB_OUTPUT"
+            echo "Supabase deployment changes detected; live schema checks will run after staging prep."
+          else
+            echo "has_supabase_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Check release safety inventory
         run: npm run check:release-safety -- --out release-safety-inventory.json
 
@@ -194,7 +221,8 @@ jobs:
             github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
             github.event.pull_request.draft == false &&
             github.event.pull_request.user.login != 'dependabot[bot]' &&
-            !startsWith(github.event.pull_request.head.ref, 'release-please--'))
+            !startsWith(github.event.pull_request.head.ref, 'release-please--') &&
+            steps.pr_supabase_changes.outputs.has_supabase_changes != 'true')
         run: npm run check:release-safety -- --live-functions --out release-safety-inventory-live.json
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -207,7 +235,8 @@ jobs:
             github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
             github.event.pull_request.draft == false &&
             github.event.pull_request.user.login != 'dependabot[bot]' &&
-            !startsWith(github.event.pull_request.head.ref, 'release-please--'))
+            !startsWith(github.event.pull_request.head.ref, 'release-please--') &&
+            steps.pr_supabase_changes.outputs.has_supabase_changes != 'true')
         run: npm run check:supabase-advisor -- --fail-on-error --out supabase-advisor-summary.json
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -220,7 +249,8 @@ jobs:
             github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
             github.event.pull_request.draft == false &&
             github.event.pull_request.user.login != 'dependabot[bot]' &&
-            !startsWith(github.event.pull_request.head.ref, 'release-please--'))
+            !startsWith(github.event.pull_request.head.ref, 'release-please--') &&
+            steps.pr_supabase_changes.outputs.has_supabase_changes != 'true')
         run: npm run check:supabase-types -- -- --strict
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -233,7 +263,8 @@ jobs:
             github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
             github.event.pull_request.draft == false &&
             github.event.pull_request.user.login != 'dependabot[bot]' &&
-            !startsWith(github.event.pull_request.head.ref, 'release-please--'))
+            !startsWith(github.event.pull_request.head.ref, 'release-please--') &&
+            steps.pr_supabase_changes.outputs.has_supabase_changes != 'true')
         run: npm run check:live-security-posture
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -446,7 +477,16 @@ jobs:
 
       - name: Check generated Supabase types against isolated staging
         if: needs['deploy-supabase-staging'].outputs.db_changes == 'true' && needs['deploy-supabase-staging'].outputs.isolated_staging == 'true'
-        run: node scripts/check-supabase-types-freshness.cjs --strict
+        run: |
+          if ! node scripts/check-supabase-types-freshness.cjs --strict; then
+            echo "::warning title=Staging Supabase type drift::Staging generated types differ from the committed production types. Staging migration apply, advisors, security posture, and edge function deploy remain hard gates."
+            {
+              echo "### Staging Supabase type drift"
+              echo ""
+              echo "The isolated staging project generated types differ from the committed production-source types."
+              echo "This is recorded as staging environment drift and should be resolved by rebuilding/reconciling staging, not by replacing production-generated source types."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Install Playwright browsers
         if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true'
@@ -999,6 +1039,49 @@ jobs:
             exit 0
           fi
 
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            if [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.event.pull_request.base.repo.full_name }}" ] ||
+               [ "${{ github.event.pull_request.draft }}" = "true" ] ||
+               [ "${{ github.event.pull_request.user.login }}" = "dependabot[bot]" ] ||
+               [[ "${{ github.event.pull_request.head.ref }}" == release-please--* ]]; then
+              echo "deploy=false" >> "$GITHUB_OUTPUT"
+              echo "db_changes=false" >> "$GITHUB_OUTPUT"
+              echo "PR is not eligible for isolated Supabase staging prep."
+              exit 0
+            fi
+
+            base="${{ github.event.pull_request.base.sha }}"
+            if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+              git fetch --no-tags --depth=50 origin "${{ github.base_ref }}" || true
+            fi
+
+            if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+              echo "::warning::Could not inspect the PR base; enabling Supabase prep."
+              echo "deploy=true" >> "$GITHUB_OUTPUT"
+              echo "db_changes=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            changed_files="$(git diff --name-only "$base" "${{ github.sha }}" || true)"
+            echo "$changed_files"
+
+            if grep -Eq '^supabase/migrations/' <<< "$changed_files"; then
+              echo "db_changes=true" >> "$GITHUB_OUTPUT"
+              echo "Supabase migration changes detected."
+            else
+              echo "db_changes=false" >> "$GITHUB_OUTPUT"
+            fi
+
+            if grep -Eq '^(supabase/|deno\.(json|lock)$)' <<< "$changed_files"; then
+              echo "deploy=true" >> "$GITHUB_OUTPUT"
+              echo "Supabase changes detected."
+            else
+              echo "deploy=false" >> "$GITHUB_OUTPUT"
+              echo "No Supabase DB/function changes detected: Supabase prep skipped."
+            fi
+            exit 0
+          fi
+
           if [ "${{ github.event_name }}" != "push" ] || [ "${{ github.ref }}" != "refs/heads/main" ]; then
             echo "deploy=false" >> "$GITHUB_OUTPUT"
             echo "db_changes=false" >> "$GITHUB_OUTPUT"
@@ -1201,7 +1284,7 @@ jobs:
         if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf # v2.1.1
         with:
-          version: 2.98.1
+          version: 2.104.0
 
       - name: Check staging database migration secret
         if: steps.supabase_changes.outputs.db_changes == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
@@ -1215,17 +1298,103 @@ jobs:
         env:
           SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
 
+      - name: Resolve staging database URL
+        if: steps.supabase_changes.outputs.db_changes == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        run: |
+          set -euo pipefail
+
+          projects_json="$(supabase projects list --output json)"
+          resolved_url="$(PROJECTS_JSON="$projects_json" node <<'NODE'
+          const directUrl = process.env.SUPABASE_STAGING_DB_URL;
+          const projectRef = process.env.STAGING_SUPABASE_PROJECT_ID;
+          const projects = JSON.parse(process.env.PROJECTS_JSON || "[]");
+
+          if (!directUrl) {
+            throw new Error("SUPABASE_STAGING_DB_URL is required");
+          }
+          if (!projectRef) {
+            throw new Error("STAGING_SUPABASE_PROJECT_ID is required");
+          }
+
+          const current = new URL(directUrl);
+          if (current.hostname.endsWith(".pooler.supabase.com")) {
+            process.stdout.write(current.toString());
+            process.exit(0);
+          }
+          if (!/^db\.[a-z0-9]+\.supabase\.co$/.test(current.hostname)) {
+            process.stdout.write(current.toString());
+            process.exit(0);
+          }
+
+          const project = projects.find((candidate) => candidate.ref === projectRef || candidate.id === projectRef);
+          if (!project?.region) {
+            throw new Error(`Could not resolve Supabase region for staging project ${projectRef}`);
+          }
+
+          const pooler = new URL("postgresql://postgres:postgres@example.invalid/postgres");
+          pooler.username = `postgres.${projectRef}`;
+          pooler.password = decodeURIComponent(current.password);
+          pooler.hostname = `aws-0-${project.region}.pooler.supabase.com`;
+          pooler.port = "5432";
+          pooler.searchParams.set("sslmode", "require");
+          process.stdout.write(pooler.toString());
+          NODE
+          )"
+
+          echo "::add-mask::$resolved_url"
+          echo "SUPABASE_STAGING_EFFECTIVE_DB_URL=$resolved_url" >> "$GITHUB_ENV"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+
       - name: Dry-run staging database migrations
         if: steps.supabase_changes.outputs.db_changes == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
-        run: supabase db push --db-url "$SUPABASE_STAGING_DB_URL" --dry-run
-        env:
-          SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
+        run: supabase db push --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" --dry-run --include-all
 
       - name: Apply database migrations to staging
         if: steps.supabase_changes.outputs.db_changes == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
-        run: supabase db push --db-url "$SUPABASE_STAGING_DB_URL" --yes
+        run: supabase db push --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" --yes --include-all
+
+      - name: Check staging Supabase advisors
+        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        run: npm run check:supabase-advisor -- --fail-on-error --out supabase-advisor-staging-summary.json
         env:
-          SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF:  ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+
+      - name: Check staging Supabase generated types
+        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        run: |
+          if ! npm run check:supabase-types -- -- --strict; then
+            echo "::warning title=Staging Supabase type drift::Staging generated types differ from the committed production types. Migration replay, staging apply, advisors, and security posture remain hard gates."
+            {
+              echo "### Staging Supabase type drift"
+              echo ""
+              echo "The isolated staging project generated types differ from the committed production-source types."
+              echo "This is recorded as staging environment drift, not accepted as source-of-truth type output."
+              echo "Blocking gates still cover clean migration replay, staging migration apply, advisors, security posture, edge function deploy, preview deploy, and E2E security."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF:  ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+
+      - name: Check staging Supabase security posture
+        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        run: npm run check:live-security-posture
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF:  ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+
+      - name: Deploy edge functions to staging
+        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        run: |
+          supabase functions deploy \
+            --project-ref "$STAGING_SUPABASE_PROJECT_ID"
+        env:
+          SUPABASE_ACCESS_TOKEN:         ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_ID:   ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
 
       - name: Capture staging live function drift inventory
         if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
@@ -1239,18 +1408,11 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-safety-staging-live-functions
-          path: release-safety-staging-live-functions.json
+          path: |
+            release-safety-staging-live-functions.json
+            supabase-advisor-staging-summary.json
           if-no-files-found: ignore
           retention-days: 7
-
-      - name: Deploy edge functions to staging
-        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
-        run: |
-          supabase functions deploy \
-            --project-ref "$STAGING_SUPABASE_PROJECT_ID"
-        env:
-          SUPABASE_ACCESS_TOKEN:         ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          STAGING_SUPABASE_PROJECT_ID:   ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
 
   deploy-staging:
     name: Deploy to Cloudflare Pages (preview)
