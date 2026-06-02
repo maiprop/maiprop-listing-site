@@ -193,6 +193,46 @@ function yamlJobBlock(text, jobName) {
   return lines.slice(start, end).join("\n");
 }
 
+function packageVersion(packageName) {
+  const packagePath = join(root, "node_modules", packageName, "package.json");
+  if (!existsSync(packagePath)) return "unknown";
+  try {
+    return JSON.parse(read(packagePath)).version ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+function supabaseCliInvocation(args) {
+  const supabaseShim = join(root, "node_modules", "supabase", "dist", "supabase.js");
+  if (existsSync(supabaseShim)) {
+    return { command: process.execPath, args: [supabaseShim, ...args] };
+  }
+
+  const localBin = join(root, "node_modules", ".bin", process.platform === "win32" ? "supabase.cmd" : "supabase");
+  if (existsSync(localBin)) {
+    if (process.platform === "win32") {
+      return {
+        command: "cmd.exe",
+        args: ["/d", "/s", "/c", [quoteCmdArg(localBin), ...args.map(quoteCmdArg)].join(" ")],
+      };
+    }
+    return { command: localBin, args };
+  }
+
+  if (process.platform === "win32") {
+    return {
+      command: "cmd.exe",
+      args: ["/d", "/s", "/c", ["npx", "supabase", ...args].map(quoteCmdArg).join(" ")],
+    };
+  }
+  return { command: "npx", args: ["supabase", ...args] };
+}
+
+function quoteCmdArg(value) {
+  return `"${String(value).replace(/"/g, '\\"')}"`;
+}
+
 function collectLiveFunctionInventory(sourceFunctions) {
   if (!liveFunctionsMode) {
     return {
@@ -218,13 +258,7 @@ function collectLiveFunctionInventory(sourceFunctions) {
   }
 
   try {
-    const supabaseBin = process.platform === "win32"
-      ? join(root, "node_modules", "supabase", "bin", "supabase.exe")
-      : join(root, "node_modules", ".bin", "supabase");
-    const command = existsSync(supabaseBin) ? supabaseBin : process.platform === "win32" ? "npx.cmd" : "npx";
-    const args = existsSync(supabaseBin)
-      ? ["functions", "list", "--project-ref", projectRef]
-      : ["supabase", "functions", "list", "--project-ref", projectRef];
+    const { command, args } = supabaseCliInvocation(["functions", "list", "--project-ref", projectRef]);
     const output = execFileSync(
       command,
       args,
@@ -295,7 +329,7 @@ function collectInventory() {
       node: ">=20.19.0 <21",
       npm: ">=10.8.0 <11",
       deno: "2.7.12",
-      supabase_cli: "2.98.1",
+      supabase_cli: packageVersion("supabase"),
     },
     functions,
     function_inventory_gaps: {

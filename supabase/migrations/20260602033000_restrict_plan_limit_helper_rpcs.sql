@@ -76,9 +76,12 @@ BEGIN
   ]
   LOOP
     fn := to_regprocedure(sig);
-    IF fn IS NOT NULL
-       AND NOT has_function_privilege('authenticated', fn::oid, 'EXECUTE') THEN
-      RAISE EXCEPTION 'app-facing quota wrapper must remain authenticated-callable: %', sig;
+    IF fn IS NOT NULL THEN
+      EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO authenticated', fn);
+
+      IF NOT has_function_privilege('authenticated', fn::oid, 'EXECUTE') THEN
+        RAISE EXCEPTION 'app-facing quota wrapper must remain authenticated-callable: %', sig;
+      END IF;
     END IF;
   END LOOP;
 END $$;

@@ -49,6 +49,7 @@ describe("plan/quota helper RPC grant hardening", () => {
 
   it("keeps only the listing quota wrapper callable for remaining browser flows", () => {
     expect(helperGrantMigration).toContain("public.check_listing_quota()");
+    expect(helperGrantMigration).toContain("GRANT EXECUTE ON FUNCTION %s TO authenticated");
     expect(helperGrantMigration).toContain(
       "app-facing quota wrapper must remain authenticated-callable",
     );

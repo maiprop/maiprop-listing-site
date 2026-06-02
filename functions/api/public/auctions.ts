@@ -27,9 +27,7 @@ type EdgeAuctionPayload = {
 const PUBLIC_AUCTION_LIMIT_MAX = 60;
 const PUBLIC_AUCTION_CANDIDATE_LIMIT_MAX = 240;
 const OS_PROXY_TIMEOUT_MS = 12_000;
-const OS_DIVERSE_FALLBACK_PAGE = 80;
-const OS_DIVERSE_FALLBACK_PAGE_SIZE = 55;
-const AUCTION_CACHE_VERSION = "municipality-rotation-v4";
+const AUCTION_CACHE_VERSION = "national-sample-v5";
 const UNKNOWN_LOCATION_KEY = "__unknown_location__";
 const AUCTION_SELECT =
   "id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,ai_score,views_count,tags,auction_date,auction_starting_bid,latitude,longitude,auction_court,website_url,region,is_featured,priority_placement,construction_status,listing_images(url,sort_order)";
@@ -63,11 +61,6 @@ function sortAuctionRows(rows: AuctionRow[]): AuctionRow[] {
 function getCachedCandidateLimit(limit: number): number {
   if (limit <= 12) return limit;
   return Math.min(PUBLIC_AUCTION_CANDIDATE_LIMIT_MAX, limit * 4);
-}
-
-function getOsFallbackPageSize(limit: number): number {
-  if (limit < 40) return limit;
-  return OS_DIVERSE_FALLBACK_PAGE_SIZE;
 }
 
 function getAuctionLocationKey(row: AuctionRow): string {
@@ -148,9 +141,9 @@ async function fetchOsAuctions(env: PublicApiEnv, limit: number): Promise<Auctio
     },
     body: JSON.stringify({
       auctionDateFrom: todayIsoDate(),
-      page: OS_DIVERSE_FALLBACK_PAGE,
-      pageSize: getOsFallbackPageSize(limit),
-      sampleAcrossGreece: false,
+      page: 0,
+      pageSize: limit,
+      sampleAcrossGreece: true,
       sortBy: "AUCTION_DATE",
       order: "ASC",
     }),
