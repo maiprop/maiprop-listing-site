@@ -1,0 +1,425 @@
+name: Reusable Supabase Staging Prep
+
+on:
+  workflow_call:
+    outputs:
+      deploy:
+        description: Whether Supabase deployment work was required for this run.
+        value: ${{ jobs.deploy-supabase-staging.outputs.deploy }}
+      db_changes:
+        description: Whether Supabase migration files changed for this run.
+        value: ${{ jobs.deploy-supabase-staging.outputs.db_changes }}
+      isolated_staging:
+        description: Whether the configured staging Supabase target is isolated from production.
+        value: ${{ jobs.deploy-supabase-staging.outputs.isolated_staging }}
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  deploy-supabase-staging:
+    name: Prepare Supabase
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Keep deployments out of arbitrary PRs. If an isolated staging Supabase
+    # project exists, it receives mainline/manual DB and function updates after
+    # quality gates pass. Production-only setups use this as a no-op ordering
+    # point and keep production Supabase changes in protected manual flows.
+    outputs:
+      deploy: ${{ steps.supabase_changes.outputs.deploy }}
+      db_changes: ${{ steps.supabase_changes.outputs.db_changes }}
+      isolated_staging: ${{ steps.supabase_target.outputs.isolated_staging }}
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 2
+
+      - name: Detect Supabase deployment changes
+        id: supabase_changes
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            echo "db_changes=true" >> "$GITHUB_OUTPUT"
+            echo "Manual run: Supabase prep enabled."
+            exit 0
+          fi
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            if [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.event.pull_request.base.repo.full_name }}" ] ||
+               [ "${{ github.event.pull_request.draft }}" = "true" ] ||
+               [ "${{ github.event.pull_request.user.login }}" = "dependabot[bot]" ] ||
+               [[ "${{ github.event.pull_request.head.ref }}" == release-please--* ]]; then
+              echo "deploy=false" >> "$GITHUB_OUTPUT"
+              echo "db_changes=false" >> "$GITHUB_OUTPUT"
+              echo "PR is not eligible for isolated Supabase staging prep."
+              exit 0
+            fi
+
+            base="${{ github.event.pull_request.base.sha }}"
+            if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+              git fetch --no-tags --depth=50 origin "${{ github.base_ref }}" || true
+            fi
+
+            if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+              echo "::warning::Could not inspect the PR base; enabling Supabase prep."
+              echo "deploy=true" >> "$GITHUB_OUTPUT"
+              echo "db_changes=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            changed_files="$(git diff --name-only "$base" "${{ github.sha }}" || true)"
+            echo "$changed_files"
+
+            if grep -Eq '^supabase/migrations/' <<< "$changed_files"; then
+              echo "db_changes=true" >> "$GITHUB_OUTPUT"
+              echo "Supabase migration changes detected."
+            else
+              echo "db_changes=false" >> "$GITHUB_OUTPUT"
+            fi
+
+            if grep -Eq '^(supabase/|deno\.(json|lock)$)' <<< "$changed_files"; then
+              echo "deploy=true" >> "$GITHUB_OUTPUT"
+              echo "Supabase changes detected."
+            else
+              echo "deploy=false" >> "$GITHUB_OUTPUT"
+              echo "No Supabase DB/function changes detected: Supabase prep skipped."
+            fi
+            exit 0
+          fi
+
+          if [ "${{ github.event_name }}" != "push" ] || [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "db_changes=false" >> "$GITHUB_OUTPUT"
+            echo "Not a mainline push: Supabase prep skipped."
+            exit 0
+          fi
+
+          base="${{ github.event.before }}"
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            base="$(git rev-list --max-parents=0 HEAD)"
+          fi
+
+          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=50 origin "${{ github.ref_name }}" || true
+          fi
+
+          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "::warning::Could not inspect the previous commit; enabling Supabase prep."
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            echo "db_changes=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed_files="$(git diff --name-only "$base" "${{ github.sha }}" || true)"
+          echo "$changed_files"
+
+          if grep -Eq '^supabase/migrations/' <<< "$changed_files"; then
+            echo "db_changes=true" >> "$GITHUB_OUTPUT"
+            echo "Supabase migration changes detected."
+          else
+            echo "db_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if grep -Eq '^(supabase/|deno\.(json|lock)$)' <<< "$changed_files"; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            echo "Supabase changes detected."
+          else
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "No Supabase DB/function changes detected: Supabase prep skipped."
+          fi
+
+      - name: Resolve Supabase staging target
+        id: supabase_target
+        run: |
+          set -euo pipefail
+
+          if [ -z "$STAGING_SUPABASE_PROJECT_ID" ]; then
+            echo "isolated_staging=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Supabase staging"
+              echo "No isolated staging Supabase project is configured, so staging DB/function deploy steps are skipped."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          missing=()
+          [ -z "$STAGING_SUPABASE_URL" ] && missing+=("STAGING_SUPABASE_URL")
+          [ -z "$STAGING_SUPABASE_PUBLISHABLE_KEY" ] && missing+=("STAGING_SUPABASE_PUBLISHABLE_KEY")
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::warning::Supabase staging project ref is set, but required staging runtime secrets are missing: ${missing[*]}."
+            echo "isolated_staging=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Supabase staging"
+              echo "Staging project ref is configured, but required staging runtime secrets are missing: ${missing[*]}."
+              echo "Staging DB/function deploy and preview deploy steps are skipped until the runtime points to the same isolated project."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if [ -n "$PRODUCTION_SUPABASE_PROJECT_ID" ] && [ "$STAGING_SUPABASE_PROJECT_ID" = "$PRODUCTION_SUPABASE_PROJECT_ID" ]; then
+            echo "::warning::STAGING_SUPABASE_PROJECT_ID matches production; skipping staging DB/function deploy steps to avoid mutating production under a staging label."
+            echo "isolated_staging=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Supabase staging"
+              echo "STAGING_SUPABASE_PROJECT_ID matches production. Staging DB/function deploy steps are skipped."
+              echo "Use the production Supabase DB and edge-function deployment workflows for intentional production changes."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if [ -n "$PRODUCTION_SUPABASE_URL" ] && [ "$STAGING_SUPABASE_URL" = "$PRODUCTION_SUPABASE_URL" ]; then
+            echo "::warning::STAGING_SUPABASE_URL matches production; skipping staging DB/function deploy steps to keep preview traffic off production."
+            echo "isolated_staging=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Supabase staging"
+              echo "STAGING_SUPABASE_URL matches production. Staging and preview deploy steps are skipped."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if [ -n "$PRODUCTION_SUPABASE_PUBLISHABLE_KEY" ] && [ "$STAGING_SUPABASE_PUBLISHABLE_KEY" = "$PRODUCTION_SUPABASE_PUBLISHABLE_KEY" ]; then
+            echo "::warning::STAGING_SUPABASE_PUBLISHABLE_KEY matches production; skipping staging DB/function deploy steps to keep preview traffic off production."
+            echo "isolated_staging=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Supabase staging"
+              echo "STAGING_SUPABASE_PUBLISHABLE_KEY matches production. Staging and preview deploy steps are skipped."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if ! STAGING_URL_PROJECT_ID=$(node - "$STAGING_SUPABASE_URL" <<'NODE'
+          const [, , supabaseUrl = ""] = process.argv;
+          const validProjectRef = (value) => /^[a-z0-9]{20}$/.test(value);
+          try {
+            const host = new URL(supabaseUrl).hostname;
+            const suffix = ".supabase.co";
+            const derived = host.endsWith(suffix) ? host.slice(0, -suffix.length) : "";
+            if (validProjectRef(derived)) {
+              console.log(derived);
+              process.exit(0);
+            }
+          } catch {
+            // Fall through to the deployment warning below.
+          }
+          process.exit(1);
+          NODE
+          ); then
+            echo "::warning::STAGING_SUPABASE_URL must be a valid https://<ref>.supabase.co URL; skipping staging deploy steps."
+            echo "isolated_staging=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Supabase staging"
+              echo "STAGING_SUPABASE_URL is not a valid Supabase project URL. Staging and preview deploy steps are skipped."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if [ "$STAGING_URL_PROJECT_ID" != "$STAGING_SUPABASE_PROJECT_ID" ]; then
+            echo "::warning::STAGING_SUPABASE_URL project ref does not match STAGING_SUPABASE_PROJECT_ID; skipping staging deploy steps."
+            echo "isolated_staging=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Supabase staging"
+              echo "STAGING_SUPABASE_URL and STAGING_SUPABASE_PROJECT_ID point to different projects. Staging and preview deploy steps are skipped."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "isolated_staging=true" >> "$GITHUB_OUTPUT"
+          echo "Isolated staging Supabase project detected."
+        env:
+          STAGING_SUPABASE_PROJECT_ID:         ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_SUPABASE_URL:                ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_PUBLISHABLE_KEY:    ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          PRODUCTION_SUPABASE_PROJECT_ID:      ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+          PRODUCTION_SUPABASE_URL:             ${{ secrets.VITE_SUPABASE_URL }}
+          PRODUCTION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+
+      - name: Skip Supabase prep
+        if: steps.supabase_changes.outputs.deploy != 'true'
+        run: echo "Supabase prep not required for this event or file set."
+
+      - name: Skip Supabase deploy without isolated staging
+        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging != 'true'
+        run: echo "Supabase changes were detected, but no isolated staging project is configured. Production Supabase changes remain manual."
+
+      - name: Validate isolated staging secrets
+        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        run: |
+          required=(
+            "STAGING_SUPABASE_PROJECT_ID"
+            "STAGING_SUPABASE_URL"
+            "STAGING_SUPABASE_PUBLISHABLE_KEY"
+            "SUPABASE_ACCESS_TOKEN"
+          )
+          missing=0
+          for key in "${required[@]}"; do
+            if [ -z "${!key}" ]; then
+              echo "::error::Missing required secret: $key"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+          if [ "${{ steps.supabase_changes.outputs.db_changes }}" = "true" ] && [ -z "$SUPABASE_STAGING_DB_URL" ]; then
+            echo "::error::SUPABASE_STAGING_DB_URL is required when Supabase migrations change; staging cannot be verified against stale schema."
+            exit 1
+          fi
+        env:
+          STAGING_SUPABASE_PROJECT_ID:      ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_SUPABASE_URL:             ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_STAGING_DB_URL:          ${{ secrets.SUPABASE_STAGING_DB_URL }}
+          SUPABASE_ACCESS_TOKEN:            ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Check runtime
+        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        run: npm run check:runtime
+
+      - name: Install dependencies
+        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Setup Supabase CLI
+        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf # v2.1.1
+        with:
+          version: 2.104.0
+
+      - name: Check staging database migration secret
+        if: steps.supabase_changes.outputs.db_changes == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        id: staging_db
+        run: |
+          if [ -z "$SUPABASE_STAGING_DB_URL" ]; then
+            echo "::error::SUPABASE_STAGING_DB_URL is required when Supabase migrations change."
+            exit 1
+          fi
+          echo "available=true" >> "$GITHUB_OUTPUT"
+        env:
+          SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
+
+      - name: Resolve staging database URL
+        if: steps.supabase_changes.outputs.db_changes == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        run: |
+          set -euo pipefail
+
+          projects_json="$(supabase projects list --output json)"
+          resolved_url="$(PROJECTS_JSON="$projects_json" node <<'NODE'
+          const directUrl = process.env.SUPABASE_STAGING_DB_URL;
+          const projectRef = process.env.STAGING_SUPABASE_PROJECT_ID;
+          const projects = JSON.parse(process.env.PROJECTS_JSON || "[]");
+
+          if (!directUrl) {
+            throw new Error("SUPABASE_STAGING_DB_URL is required");
+          }
+          if (!projectRef) {
+            throw new Error("STAGING_SUPABASE_PROJECT_ID is required");
+          }
+
+          const current = new URL(directUrl);
+          if (current.hostname.endsWith(".pooler.supabase.com")) {
+            process.stdout.write(current.toString());
+            process.exit(0);
+          }
+          if (!/^db\.[a-z0-9]+\.supabase\.co$/.test(current.hostname)) {
+            process.stdout.write(current.toString());
+            process.exit(0);
+          }
+
+          const project = projects.find((candidate) => candidate.ref === projectRef || candidate.id === projectRef);
+          if (!project?.region) {
+            throw new Error(`Could not resolve Supabase region for staging project ${projectRef}`);
+          }
+
+          const pooler = new URL("postgresql://postgres:postgres@example.invalid/postgres");
+          pooler.username = `postgres.${projectRef}`;
+          pooler.password = decodeURIComponent(current.password);
+          pooler.hostname = `aws-0-${project.region}.pooler.supabase.com`;
+          pooler.port = "5432";
+          pooler.searchParams.set("sslmode", "require");
+          process.stdout.write(pooler.toString());
+          NODE
+          )"
+
+          echo "::add-mask::$resolved_url"
+          echo "SUPABASE_STAGING_EFFECTIVE_DB_URL=$resolved_url" >> "$GITHUB_ENV"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+
+      - name: Dry-run staging database migrations
+        if: steps.supabase_changes.outputs.db_changes == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        run: supabase db push --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" --dry-run --include-all
+
+      - name: Apply database migrations to staging
+        if: steps.supabase_changes.outputs.db_changes == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        run: supabase db push --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" --yes --include-all
+
+      - name: Check staging Supabase advisors
+        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        run: npm run check:supabase-advisor -- --fail-on-error --out supabase-advisor-staging-summary.json
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF:  ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+
+      - name: Check staging Supabase generated types
+        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        run: |
+          if ! npm run check:supabase-types -- -- --strict; then
+            echo "::warning title=Staging Supabase type drift::Staging generated types differ from the committed production types. Migration replay, staging apply, advisors, and security posture remain hard gates."
+            {
+              echo "### Staging Supabase type drift"
+              echo ""
+              echo "The isolated staging project generated types differ from the committed production-source types."
+              echo "This is recorded as staging environment drift, not accepted as source-of-truth type output."
+              echo "Blocking gates still cover clean migration replay, staging migration apply, advisors, security posture, edge function deploy, preview deploy, and E2E security."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF:  ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+
+      - name: Check staging Supabase security posture
+        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        run: npm run check:live-security-posture
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF:  ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+
+      - name: Deploy edge functions to staging
+        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        run: |
+          supabase functions deploy \
+            --project-ref "$STAGING_SUPABASE_PROJECT_ID"
+        env:
+          SUPABASE_ACCESS_TOKEN:         ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_ID:   ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+
+      - name: Capture staging live function drift inventory
+        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        run: npm run check:release-safety -- --live-functions --out release-safety-staging-live-functions.json
+        env:
+          SUPABASE_ACCESS_TOKEN:                 ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          RELEASE_SAFETY_SUPABASE_PROJECT_REF:   ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+
+      - name: Upload staging live drift inventory
+        if: always() && steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-safety-staging-live-functions
+          path: |
+            release-safety-staging-live-functions.json
+            supabase-advisor-staging-summary.json
+          if-no-files-found: ignore
+          retention-days: 7
+

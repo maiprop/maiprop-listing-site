@@ -2,6 +2,7 @@ import "@testing-library/jest-dom";
 import type React from "react";
 import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
+import process from "node:process";
 
 declare global {
   // Test-only language knob used by coverage smoke tests.
@@ -9,15 +10,67 @@ declare global {
 }
 
 const originalConsoleError = console.error.bind(console);
+const originalStderrWrite = process.stderr.write.bind(process.stderr);
 globalThis.__MAIPROP_TEST_I18N_LANGUAGE__ ??= "en";
 
+const intentionalTestErrorPatterns = [
+  "useAuth must be used within AuthProvider",
+  "BottomNav exploded",
+  "Test explosion",
+];
+
+let suppressIntentionalErrorStackLines = 0;
+
 console.error = (...args: unknown[]) => {
-  const message = String(args[0] ?? "");
-  if (message.includes("A suspended resource finished loading inside a test")) {
+  const message = args.map((arg) => {
+    if (arg instanceof Error) return `${arg.message}\n${arg.stack ?? ""}`;
+    if (typeof arg === "string") return arg;
+    try {
+      return JSON.stringify(arg);
+    } catch {
+      return String(arg);
+    }
+  }).join(" ");
+  if (
+    message.includes("A suspended resource finished loading inside a test") ||
+    intentionalTestErrorPatterns.some((pattern) => message.includes(pattern))
+  ) {
     return;
   }
   originalConsoleError(...args);
 };
+
+process.stderr.write = ((chunk: string | Uint8Array, encodingOrCallback?: BufferEncoding | ((err?: Error) => void), callback?: (err?: Error) => void) => {
+  const text = typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8");
+  const done = typeof encodingOrCallback === "function" ? encodingOrCallback : callback;
+
+  if (intentionalTestErrorPatterns.some((pattern) => text.includes(pattern))) {
+    suppressIntentionalErrorStackLines = 30;
+    done?.();
+    return true;
+  }
+
+  if (suppressIntentionalErrorStackLines > 0) {
+    const trimmed = text.trim();
+    const isStackLine =
+      trimmed === "" ||
+      trimmed.startsWith("at ") ||
+      trimmed.startsWith("+") ||
+      trimmed.startsWith("CategoryInfo") ||
+      trimmed.startsWith("FullyQualifiedErrorId") ||
+      text.includes("react-dom") ||
+      text.includes("jsdom") ||
+      text.includes("testing-library");
+    if (isStackLine) {
+      suppressIntentionalErrorStackLines -= 1;
+      done?.();
+      return true;
+    }
+    suppressIntentionalErrorStackLines = 0;
+  }
+
+  return originalStderrWrite(chunk, encodingOrCallback as BufferEncoding, callback);
+}) as typeof process.stderr.write;
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({

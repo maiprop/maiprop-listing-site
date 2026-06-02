@@ -27,6 +27,54 @@ import {
   tooManyRequestsResponse,
 } from "../_shared/rateLimit.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
+import {
+  AUTH_CAP,
+  FREE_CAP,
+  NATIONAL_SAMPLE_PAGE_COUNT,
+  NATIONAL_SAMPLE_SOURCE_PAGE_SIZE,
+  OS_ALLOWED_HOST_SUFFIX,
+  TRAILING_SLASH_RE,
+} from "./constants.ts";
+import {
+  clearAuctionResponseCache,
+  getAuctionResponseCacheKey,
+  readAuctionResponseCache,
+  writeAuctionResponseCache,
+} from "./auctionCache.ts";
+import { mapAuction } from "./auctionMapping.ts";
+import {
+  getAuctionSamplePageNumbers,
+  selectDiverseAuctionSample,
+} from "./auctionSampling.ts";
+import {
+  buildFilterRequest,
+  getValidatedPagination,
+} from "./requestFilters.ts";
+import { getFetchErrorPayload, isOsApiFailure } from "./fetchErrors.ts";
+import type {
+  AuctionResponsePayload,
+  MappedAuction,
+  OsApiFailure,
+  OsAuction,
+  OsConfig,
+  OsResponse,
+  PricingConfigPlanRow,
+  ProfilePlanRow,
+  RuntimeConfig,
+  SupabaseConfig,
+} from "./types.ts";
+
+export {
+  buildFilterRequest,
+  clearAuctionResponseCache,
+  getAuctionResponseCacheKey,
+  getAuctionSamplePageNumbers,
+  getFetchErrorPayload,
+  getValidatedPagination,
+  mapAuction,
+  readAuctionResponseCache,
+  selectDiverseAuctionSample,
+};
 
 const log = createLogger("fetch-os-auctions");
 const limiter = makeRateLimiter({
@@ -36,547 +84,9 @@ const limiter = makeRateLimiter({
   failClosed: true,
 });
 
-const FREE_CAP = 60;
-const AUTH_CAP = 600;
-const NATIONAL_SAMPLE_PAGE_COUNT = 3;
-const NATIONAL_SAMPLE_SOURCE_PAGE_SIZE = 600;
-const AUCTION_RESPONSE_CACHE_TTL_MS = 60_000;
-const AUCTION_RESPONSE_CACHE_MAX_ENTRIES = 32;
-const AUCTION_SAMPLE_SALT = "maiprop-auctions-national-v1";
-const TRAILING_SLASH_RE = /\/$/;
-const OS_ALLOWED_HOST_SUFFIX = ".maiprop.co";
 type SupabaseAdminClient = ReturnType<
   typeof createClient<Record<string, unknown>>
 >;
-type ProfilePlanRow = {
-  role?: string | null;
-  participant_type?: string | null;
-  subscription_product_id?: string | null;
-  force_pro_access?: boolean | null;
-};
-
-type PricingConfigPlanRow = {
-  key?: string | null;
-  audience?: string | null;
-  metadata?: {
-    stripe_product_id?: string | null;
-  } | null;
-};
-
-// ── Category mapping (mirrors poll-os-auctions) ─────────────────────────────
-
-const CATEGORY_MAP = new Map<string, string>([
-  ["RESIDENCE", "apartment"],
-  ["APARTMENT", "apartment"],
-  ["HOUSE", "house"],
-  ["VILLA", "villa"],
-  ["LAND", "land"],
-  ["PLOT", "land"],
-  ["PLOT_WITH_BUILDING", "land"],
-  ["LAND_WITH_BUILDING", "land"],
-  ["COMMERCIAL", "commercial"],
-  ["OFFICE", "office"],
-  ["STORE", "commercial"],
-  ["WAREHOUSE", "commercial"],
-  ["INDUSTRIAL", "commercial"],
-  ["STOREROOM", "commercial"],
-  ["PARKING", "commercial"],
-  ["HOTEL", "commercial"],
-  ["OTHER_BUSINESS_SPACE", "commercial"],
-]);
-
-const LAND_TYPE_TAG = new Map<string, string>([
-  ["LAND", "land"],
-  ["PLOT", "plot"],
-  ["PLOT_WITH_BUILDING", "plot_with_building"],
-  ["LAND_WITH_BUILDING", "land_with_building"],
-]);
-
-const COMMERCIAL_TYPE_TAG = new Map<string, string>([
-  ["STORE", "store"],
-  ["WAREHOUSE", "warehouse"],
-  ["INDUSTRIAL", "industrial"],
-  ["STOREROOM", "storeroom"],
-  ["PARKING", "parking"],
-  ["HOTEL", "hotel"],
-  ["OFFICE", "office"],
-  ["OTHER_BUSINESS_SPACE", "other_business_space"],
-  ["COMMERCIAL", "other_business_space"],
-]);
-
-const CATEGORY_GR = new Map<string, string>([
-  ["apartment", "Διαμέρισμα"],
-  ["house", "Κατοικία"],
-  ["villa", "Βίλα"],
-  ["land", "Γη / Οικόπεδο"],
-  ["commercial", "Επαγγελματικός Χώρος"],
-  ["office", "Γραφείο"],
-]);
-
-const OWNERSHIP_STATUS_TAGS = new Map<string, string>([
-  ["FULL", "ownership:full"],
-  ["COMPLETE", "ownership:full"],
-  ["FULL_OWNERSHIP", "ownership:full"],
-  ["BARE", "ownership:bare"],
-  ["BARE_OWNERSHIP", "ownership:bare"],
-  ["COMMON", "ownership:common"],
-  ["JOINT", "ownership:common"],
-  ["SHARED", "ownership:common"],
-  ["CO_OWNERSHIP", "ownership:common"],
-  ["USUFRUCT", "ownership:usufruct"],
-  ["PSILI_KYPHIOTITA", "ownership:usufruct"],
-  ["VERTICAL", "ownership:vertical"],
-  ["VERTICAL_OWNERSHIP", "ownership:vertical"],
-  ["HORIZONTAL", "ownership:horizontal"],
-  ["HORIZONTAL_OWNERSHIP", "ownership:horizontal"],
-]);
-
-function mapCategory(category?: string): string {
-  if (!category) return "apartment";
-  return CATEGORY_MAP.get(category.toUpperCase()) ?? "apartment";
-}
-
-function getSubtypeTag(category?: string): string | null {
-  if (!category) return null;
-  const categoryKey = category.toUpperCase();
-  const landTag = LAND_TYPE_TAG.get(categoryKey);
-  if (landTag) return `land_type:${landTag}`;
-  const commercialTag = COMMERCIAL_TYPE_TAG.get(categoryKey);
-  if (commercialTag) return `commercial_type:${commercialTag}`;
-  return null;
-}
-
-function mapOwnershipStatusToTag(raw?: string | null): string | null {
-  if (!raw) return null;
-  const ownershipStatus = raw.toUpperCase().trim();
-  return OWNERSHIP_STATUS_TAGS.get(ownershipStatus) ??
-    `ownership:${ownershipStatus.toLowerCase()}`;
-}
-
-// ── OS DTO type (same subset as poll-os-auctions) ───────────────────────────
-
-type OsAuction = {
-  auctionListingId?: string | number;
-  propertyCategory?: string;
-  propertyMunicipalityName?: string;
-  propertyPrefectureName?: string;
-  propertyAddress?: string;
-  propertyPostalCode?: string;
-  propertyLatitude?: number | string;
-  propertyLongitude?: number | string;
-  propertySquareMeters?: number | string;
-  propertyFloor?: number | string;
-  propertyFullKaek?: string;
-  numberOfFloors?: number | string;
-  constructionYear?: number | string;
-  pricePerSquareMeter?: number | string;
-  firstPriceOffer?: number | string;
-  auctionDate?: string;
-  auctionStatus?: string;
-  currentRound?: number | string;
-  ownershipStatus?: string;
-  ownershipPercentage?: number | string;
-  url?: string;
-  auctionUrl?: string;
-  listingUrl?: string;
-  eAuctionUrl?: string;
-};
-
-// Shape returned to the frontend — matches AuctionListingRow in useAuctionListings
-type MappedAuction = {
-  id: string;
-  title: string;
-  city: string;
-  address: string | null;
-  price: number;
-  auction_starting_bid: number;
-  auction_date: string | null;
-  auction_court: string | null;
-  property_type: string;
-  cover_image_url: string | null;
-  sqm: number;
-  bedrooms: null;
-  bathrooms: null;
-  floor: number | null;
-  total_floors: number | null;
-  latitude: number | null;
-  longitude: number | null;
-  tags: string[];
-  year_built: number | null;
-  construction_status: null;
-  website_url: string | null;
-  region: string | null;
-  is_featured: false;
-  priority_placement: 0;
-};
-
-type OsResponse = {
-  data?: OsAuction[];
-  responseMetadata?: { pagination?: { totalElements?: number } };
-};
-
-type OsConfig = {
-  url: string;
-  email: string;
-  password: string;
-};
-
-type SupabaseConfig = {
-  url: string;
-  serviceRoleKey: string;
-};
-
-type RuntimeConfig = {
-  osConfig: OsConfig;
-  supabaseConfig: SupabaseConfig;
-};
-
-type OsApiFailure = {
-  kind: "os-api";
-  status: number;
-  detail: string;
-};
-
-type AuctionResponsePayload = {
-  data: MappedAuction[];
-  total: number;
-  page: number;
-  planCap: number;
-};
-
-type AuctionCacheEntry = {
-  expiresAt: number;
-  payload: AuctionResponsePayload;
-};
-
-const OPTIONAL_FILTER_KEYS = [
-  "auctionDateTo",
-  "propertyCategories",
-  "prefectureId",
-  "propertyMunicipalityId",
-  "auctionStatuses",
-  "boundingBox",
-] as const;
-
-const AMOUNT_FILTER_KEYS = ["auctionAmountFrom", "auctionAmountTo"] as const;
-const SORT_FILTER_KEYS = ["sortBy", "order"] as const;
-const auctionResponseCache = new Map<string, AuctionCacheEntry>();
-
-function buildTitle(a: OsAuction): string {
-  const catKey = mapCategory(a.propertyCategory);
-  const catGr = CATEGORY_GR.get(catKey) ?? "Ακίνητο";
-  const city = a.propertyMunicipalityName ?? "Ελλάδα";
-  const price = Number(a.firstPriceOffer ?? 0);
-  const priceStr = price > 0 ? ` – €${price.toLocaleString("el-GR")}` : "";
-  return `Πλειστηριασμός ${catGr} | ${city}${priceStr}`;
-}
-
-function getNullableText(value?: string | null): string | null {
-  return value ?? null;
-}
-
-function getAuctionCity(auction: OsAuction): string {
-  return auction.propertyMunicipalityName ?? "Ελλάδα";
-}
-
-function getAuctionUrl(auction: OsAuction): string | null {
-  return auction.url ?? auction.auctionUrl ?? auction.listingUrl ??
-    auction.eAuctionUrl ?? null;
-}
-
-function getNumberOrNull(value?: number | string): number | null {
-  if (value == null) return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function getIntegerOrNull(value?: number | string): number | null {
-  const parsed = getNumberOrNull(value);
-  return parsed == null ? null : Math.round(parsed);
-}
-
-function getNumberOrDefault(
-  value: number | string | undefined,
-  fallback: number,
-): number {
-  if (value == null) return fallback;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function getStreetViewUrl(
-  lat: number | null,
-  lng: number | null,
-): string | null {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")?.replace(
-    TRAILING_SLASH_RE,
-    "",
-  );
-  return supabaseUrl && lat != null && lng != null
-    ? `${supabaseUrl}/functions/v1/streetview-proxy?size=800x450&lat=${lat}&lng=${lng}`
-    : null;
-}
-
-function getOwnershipPercentage(auction: OsAuction): number | undefined {
-  return getNumberOrNull(auction.ownershipPercentage) ?? undefined;
-}
-
-function getOwnershipTag(
-  auction: OsAuction,
-  ownershipPct: number | undefined,
-): string | null {
-  const ownershipTag = mapOwnershipStatusToTag(auction.ownershipStatus);
-  if (ownershipTag) return ownershipTag;
-  if (ownershipPct == null) return null;
-  return ownershipPct >= 100 ? "ownership:full" : "ownership:common";
-}
-
-function getAuctionStatusTag(auction: OsAuction): string {
-  return `auction_status:${auction.auctionStatus ?? "scheduled"}`;
-}
-
-function getCurrentRoundTag(auction: OsAuction): string | null {
-  return auction.currentRound != null ? `round:${auction.currentRound}` : null;
-}
-
-function getOwnershipPercentageTag(
-  ownershipPct: number | undefined,
-): string | null {
-  return ownershipPct != null ? `ownership_pct:${ownershipPct}` : null;
-}
-
-function isPresentTag(tag: string | null): tag is string {
-  return tag != null;
-}
-
-function compactTags(tags: (string | null)[]): string[] {
-  return tags.filter(isPresentTag);
-}
-
-function buildAuctionTags(
-  requiredTags: string[],
-  optionalTags: (string | null)[],
-): string[] {
-  return requiredTags.concat(compactTags(optionalTags));
-}
-
-function getSortedSerializableValue(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(getSortedSerializableValue);
-  }
-
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map((
-          [key, nestedValue],
-        ) => [key, getSortedSerializableValue(nestedValue)]),
-    );
-  }
-
-  return value;
-}
-
-function stableJson(value: unknown): string {
-  return JSON.stringify(getSortedSerializableValue(value));
-}
-
-export function getAuctionResponseCacheKey(
-  page: number,
-  size: number,
-  planCap: number,
-  sampleAcrossGreece: boolean,
-  filterRequest: Record<string, unknown>,
-): string {
-  return stableJson({
-    filterRequest,
-    page,
-    planCap,
-    sampleAcrossGreece,
-    size,
-  });
-}
-
-function pruneAuctionResponseCache(now: number): void {
-  for (const [key, entry] of auctionResponseCache) {
-    if (entry.expiresAt <= now) auctionResponseCache.delete(key);
-  }
-
-  while (auctionResponseCache.size > AUCTION_RESPONSE_CACHE_MAX_ENTRIES) {
-    const oldestKey = auctionResponseCache.keys().next().value;
-    if (!oldestKey) return;
-    auctionResponseCache.delete(oldestKey);
-  }
-}
-
-export function clearAuctionResponseCache(): void {
-  auctionResponseCache.clear();
-}
-
-export function readAuctionResponseCache(
-  key: string,
-  now = Date.now(),
-): AuctionResponsePayload | null {
-  const entry = auctionResponseCache.get(key);
-  if (!entry) return null;
-  if (entry.expiresAt <= now) {
-    auctionResponseCache.delete(key);
-    return null;
-  }
-  return entry.payload;
-}
-
-function writeAuctionResponseCache(
-  key: string,
-  payload: AuctionResponsePayload,
-  now = Date.now(),
-): void {
-  pruneAuctionResponseCache(now);
-  auctionResponseCache.set(key, {
-    expiresAt: now + AUCTION_RESPONSE_CACHE_TTL_MS,
-    payload,
-  });
-}
-
-function hashString(value: string): number {
-  let hash = 2166136261;
-  for (let i = 0; i < value.length; i += 1) {
-    hash ^= value.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
-
-function getAuctionSamplingSeed(date = new Date()): string {
-  return `${AUCTION_SAMPLE_SALT}:${date.toISOString().slice(0, 10)}`;
-}
-
-function getStableScore(seed: string, value: string): number {
-  return hashString(`${seed}:${value}`);
-}
-
-export function getAuctionSamplePageNumbers(
-  totalRows: number,
-  sourcePageSize: number,
-  samplePageCount: number,
-  seed = getAuctionSamplingSeed(),
-): number[] {
-  const totalPages = Math.max(1, Math.ceil(totalRows / sourcePageSize));
-  const desiredPages = Math.max(1, Math.min(samplePageCount, totalPages));
-  const pages = new Set<number>();
-
-  for (let i = 0; i < desiredPages; i += 1) {
-    const bucketStart = Math.floor((i * totalPages) / desiredPages);
-    const bucketEnd = Math.max(
-      bucketStart,
-      Math.floor(((i + 1) * totalPages) / desiredPages) - 1,
-    );
-    const bucketSize = Math.max(1, bucketEnd - bucketStart + 1);
-    pages.add(bucketStart + (getStableScore(seed, `page:${i}`) % bucketSize));
-  }
-
-  return [...pages].sort((a, b) => a - b);
-}
-
-function getAuctionGroupKey(row: MappedAuction): string {
-  return row.region || row.city || "Greece";
-}
-
-export function selectDiverseAuctionSample(
-  rows: MappedAuction[],
-  limit: number,
-  seed = getAuctionSamplingSeed(),
-): MappedAuction[] {
-  const uniqueRows = new Map<string, MappedAuction>();
-  for (const row of rows) uniqueRows.set(row.id, row);
-
-  const groups = new Map<string, MappedAuction[]>();
-  for (const row of uniqueRows.values()) {
-    const key = getAuctionGroupKey(row);
-    groups.set(key, [...(groups.get(key) ?? []), row]);
-  }
-
-  const orderedGroups = [...groups.entries()]
-    .map(([key, groupRows]) =>
-      [
-        key,
-        groupRows.sort((a, b) =>
-          getStableScore(seed, a.id) - getStableScore(seed, b.id)
-        ),
-      ] as const
-    )
-    .sort((a, b) =>
-      getStableScore(seed, `group:${a[0]}`) -
-      getStableScore(seed, `group:${b[0]}`)
-    );
-
-  const selected: MappedAuction[] = [];
-  let cursor = 0;
-  while (
-    selected.length < limit &&
-    orderedGroups.some(([, group]) => cursor < group.length)
-  ) {
-    for (const [, group] of orderedGroups) {
-      const row = group[cursor];
-      if (row) selected.push(row);
-      if (selected.length >= limit) break;
-    }
-    cursor += 1;
-  }
-
-  return selected;
-}
-
-export function mapAuction(auction: OsAuction): MappedAuction {
-  const osId = String(auction.auctionListingId ?? "unknown");
-  const tagKey = `os_auction:${osId}`;
-  const catKey = mapCategory(auction.propertyCategory);
-  const price = getNumberOrDefault(auction.firstPriceOffer, 0);
-  const lat = getNumberOrNull(auction.propertyLatitude);
-  const lng = getNumberOrNull(auction.propertyLongitude);
-  const ownershipPct = getOwnershipPercentage(auction);
-  const ownershipTag = getOwnershipTag(auction, ownershipPct);
-  const subtypeTag = getSubtypeTag(auction.propertyCategory);
-  const requiredTags = [
-    tagKey,
-    "source:maiprop-os",
-    getAuctionStatusTag(auction),
-  ];
-  const optionalTags = [
-    getCurrentRoundTag(auction),
-    ownershipTag,
-    getOwnershipPercentageTag(ownershipPct),
-    subtypeTag,
-  ];
-
-  return {
-    id: osId,
-    title: buildTitle(auction),
-    city: getAuctionCity(auction),
-    address: getNullableText(auction.propertyAddress),
-    price,
-    auction_starting_bid: price,
-    auction_date: getNullableText(auction.auctionDate),
-    auction_court: null,
-    property_type: catKey,
-    cover_image_url: getStreetViewUrl(lat, lng),
-    sqm: getNumberOrDefault(auction.propertySquareMeters, 1),
-    bedrooms: null,
-    bathrooms: null,
-    floor: getIntegerOrNull(auction.propertyFloor),
-    total_floors: getIntegerOrNull(auction.numberOfFloors),
-    latitude: lat,
-    longitude: lng,
-    tags: buildAuctionTags(requiredTags, optionalTags),
-    year_built: getNumberOrNull(auction.constructionYear),
-    construction_status: null,
-    website_url: getAuctionUrl(auction),
-    region: getNullableText(auction.propertyPrefectureName),
-    is_featured: false,
-    priority_placement: 0,
-  };
-}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -769,87 +279,6 @@ async function parseRequestBody(
     : {};
 }
 
-function getDefaultPageSize(planCap: number): number {
-  return planCap;
-}
-
-function getFiniteInteger(
-  body: Record<string, unknown>,
-  key: string,
-  fallback: number,
-): number | null {
-  const raw = body[key];
-  const value = raw == null ? fallback : Number(raw);
-  return Number.isFinite(value) && Number.isInteger(value) ? value : null;
-}
-
-export function getValidatedPagination(
-  body: Record<string, unknown>,
-  planCap: number,
-): { page: number; size: number } | { error: string } {
-  const page = getFiniteInteger(body, "page", 0);
-  if (page == null || page < 0) {
-    return { error: "page must be a finite non-negative integer" };
-  }
-
-  const rawSize = body.pageSize ?? body.size;
-  const size = rawSize == null
-    ? getDefaultPageSize(planCap)
-    : getFiniteInteger({ size: rawSize }, "size", planCap);
-  if (size == null || size < 1 || size > planCap) {
-    return {
-      error: `pageSize must be a finite integer between 1 and ${planCap}`,
-    };
-  }
-
-  return { page, size };
-}
-
-type FilterEntry = readonly [string, unknown];
-
-function hasTruthyFilterValue([, value]: FilterEntry): boolean {
-  return Boolean(value);
-}
-
-function getOptionalFilters(
-  body: Record<string, unknown>,
-): Record<string, unknown> {
-  return Object.fromEntries(
-    OPTIONAL_FILTER_KEYS
-      .map(function getOptionalFilterEntry(key) {
-        return [key, body[key]] as const;
-      })
-      .filter(hasTruthyFilterValue),
-  );
-}
-
-function getAmountFilterEntries(body: Record<string, unknown>): FilterEntry[] {
-  return AMOUNT_FILTER_KEYS.flatMap(function getAmountFilterEntry(key) {
-    return body[key] == null ? [] : [[key, body[key]] as const];
-  });
-}
-
-function getStringFilterEntries(
-  body: Record<string, unknown>,
-  keys: readonly string[],
-): FilterEntry[] {
-  return keys.flatMap(function getStringFilterEntry(key) {
-    return typeof body[key] === "string" ? [[key, body[key]] as const] : [];
-  });
-}
-
-export function buildFilterRequest(
-  body: Record<string, unknown>,
-): Record<string, unknown> {
-  return {
-    auctionDateFrom: body.auctionDateFrom ??
-      new Date().toISOString().split("T")[0],
-    ...getOptionalFilters(body),
-    ...Object.fromEntries(getAmountFilterEntries(body)),
-    ...Object.fromEntries(getStringFilterEntries(body, SORT_FILTER_KEYS)),
-  };
-}
-
 async function fetchOsAuctionDetails(
   osConfig: OsConfig,
   page: number,
@@ -1014,21 +443,6 @@ async function fetchNationalAuctionSample(
     total: firstPage.total,
     sourcePages: [0, ...remainingPages],
   };
-}
-
-function isOsApiFailure(err: unknown): err is OsApiFailure {
-  return typeof err === "object" &&
-    err !== null &&
-    "kind" in err &&
-    (err as { kind?: unknown }).kind === "os-api";
-}
-
-export function getFetchErrorPayload(
-  err: unknown,
-): { error: string; status: number } {
-  return isOsApiFailure(err)
-    ? { error: "Auction provider temporarily unavailable", status: 502 }
-    : { error: "Unable to fetch auctions", status: 500 };
 }
 
 function getBearerToken(req: Request): string | null {

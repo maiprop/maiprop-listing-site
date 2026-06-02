@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { appendFile, writeFile } from "node:fs/promises";
+import { classifyAdvisorDebt, loadAdvisorDebtPolicy } from "./supabase-advisor-debt.mjs";
 
 const args = process.argv.slice(2);
 
@@ -104,6 +105,10 @@ const failingLintCount = results.reduce(
   (count, result) => count + result.lints.filter((lint) => failingLevels.has(lint.level)).length,
   0,
 );
+const advisorDebt = classifyAdvisorDebt(
+  { results },
+  await loadAdvisorDebtPolicy(),
+);
 
 const summary = {
   generated_at: new Date().toISOString(),
@@ -112,6 +117,7 @@ const summary = {
   fail_on_error: failOnError,
   totals,
   failing_lint_count: failingLintCount,
+  advisor_debt: advisorDebt,
   results,
 };
 
@@ -135,6 +141,14 @@ if (process.env.GITHUB_STEP_SUMMARY) {
       rows,
       "",
       `Failing severity lints: ${failingLintCount}`,
+      "",
+      "### Advisor Debt",
+      "",
+      "| Status | Count |",
+      "|---|---:|",
+      `| Accepted | ${advisorDebt.accepted_count} |`,
+      `| Needs review | ${advisorDebt.review_count} |`,
+      `| Unknown | ${advisorDebt.unknown_count} |`,
       "",
     ].join("\n"),
   );

@@ -1,0 +1,27 @@
+{
+  "accepted": [
+    {
+      "match": { "name": "auth_leaked_password_protection" },
+      "owner": "platform/security",
+      "reason": "Supabase Management API reports this setting is available only on Supabase Pro plans and up for the current project.",
+      "next_action": "Upgrade the Supabase project plan or accept the warning with compensating app-side password checks.",
+      "review_cadence": "monthly"
+    }
+  ],
+  "review": [
+    {
+      "match": { "name": "unused_index" },
+      "owner": "data/platform",
+      "reason": "Unused-index advisories require production query telemetry before dropping indexes; blind removal can slow listing, search, admin, and analytics paths.",
+      "next_action": "Compare against pg_stat_user_indexes, pg_stat_statements, slow-query logs, and recent release history before dropping each index.",
+      "review_cadence": "weekly"
+    },
+    {
+      "match": { "name": "multiple_permissive_policies" },
+      "owner": "data/security",
+      "reason": "Policy consolidation is performance work but can change RLS semantics; each table/action needs an RLS regression test before changing policies.",
+      "next_action": "Group duplicate permissive policies by table/action, consolidate only when RLS tests prove identical user-visible access.",
+      "review_cadence": "weekly"
+    }
+  ]
+}
