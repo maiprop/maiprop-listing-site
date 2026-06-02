@@ -1,0 +1,79 @@
+name: Supabase Advisor Report
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-advisor-report-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  advisor-report:
+    name: Capture Supabase advisor warnings
+    runs-on: ubuntu-latest
+
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Check runtime
+        run: npm run check:runtime
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Capture Supabase advisors
+        run: npm run check:supabase-advisor -- --fail-on-error --out supabase-advisor-report.json
+
+      - name: Summarize advisory debt
+        if: always()
+        run: |
+          node <<'NODE'
+          const fs = require("fs");
+          const path = "supabase-advisor-report.json";
+          if (!fs.existsSync(path)) {
+            console.log("No advisor report was produced.");
+            process.exit(0);
+          }
+          const report = JSON.parse(fs.readFileSync(path, "utf8"));
+          const lines = [
+            "## Supabase Advisor Report",
+            "",
+            `Generated: ${report.generated_at}`,
+            `Failing lint count: ${report.failing_lint_count}`,
+            "",
+            "| Level | Count |",
+            "|---|---:|",
+            ...Object.entries(report.totals?.by_level ?? {}).map(([level, count]) => `| ${level} | ${count} |`),
+            "",
+            "| Category | Lints |",
+            "|---|---:|",
+            ...(report.results ?? []).map((result) => `| ${result.category} | ${result.lint_count} |`),
+            "",
+            "Review WARN items weekly. Keep ERROR/CRITICAL/HIGH at zero.",
+            "",
+          ];
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n"));
+          NODE
+
+      - name: Upload advisor report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: supabase-advisor-report
+          path: supabase-advisor-report.json
+          if-no-files-found: ignore
+          retention-days: 30

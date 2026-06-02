@@ -35,12 +35,14 @@ export default defineConfig({
       ],
       // Baseline thresholds are floors, not targets.
       //
-      // Measured locally on 2026-06-02 after upgrading to Vitest 4's
-      // more accurate V8 coverage remapping.
-      //   lines      84.71%   threshold 84
-      //   statements 80.66%   threshold 80
-      //   functions  79.68%   threshold 79
-      //   branches   69.51%   threshold 69
+      // Measured locally on 2026-06-02 after adding hotspot tests for AI
+      // search, firesale admin components, Google Maps Places loading,
+      // image galleries, pro services, listing draft, and building listing
+      // flows.
+      //   lines      86.08%   threshold 86
+      //   statements 81.99%   threshold 81.9
+      //   functions  81.08%   threshold 81
+      //   branches   71.25%   threshold 71
       //
       // Whenever a PR
       // adds meaningful coverage to a P0 page (Pricing, Dashboard,
@@ -48,10 +50,10 @@ export default defineConfig({
       // SAME PR so we ratchet up monotonically and can never silently
       // regress. Do not lower these without explicit team agreement.
       thresholds: {
-        lines: 84,
-        functions: 79,
-        branches: 69,
-        statements: 80,
+        lines: 86,
+        functions: 81,
+        branches: 71,
+        statements: 81.9,
       },
     },
   },

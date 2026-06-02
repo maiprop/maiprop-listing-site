@@ -12,7 +12,15 @@ const ROUTE_JS_BUDGET_KB: Record<string, number> = {
   "/platform-map": 2200,
 };
 
-const WEB_VITAL_ROUTES = ["/", "/listings", "/pricing"];
+const WEB_VITAL_ROUTES = [
+  "/",
+  "/listings",
+  "/pricing",
+  `/property/${PERF_LISTING_ID}`,
+  "/dashboard",
+  "/admin",
+  "/platform-map",
+];
 const WEB_VITAL_BUDGETS = {
   lcp: 4000,
   cls: 0.15,
@@ -107,6 +115,13 @@ async function installAuthenticatedSupabaseMocks(page: Page) {
   const expiresAt = Math.floor(Date.now() / 1000) + 60 * 60;
   await page.addInitScript(({ key, userId, expiresAtValue }) => {
     const token = `perf.${btoa(JSON.stringify({ sub: userId, role: "authenticated", exp: expiresAtValue }))}.signature`;
+    localStorage.setItem("maiprop_cookie_consent", JSON.stringify({
+      accepted: true,
+      functional: true,
+      analytics: false,
+      mapping: true,
+      timestamp: Date.now(),
+    }));
     localStorage.setItem(key, JSON.stringify({
       access_token: token,
       refresh_token: "perf-refresh-token",

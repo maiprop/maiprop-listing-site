@@ -248,7 +248,9 @@ Additional seeded E2E accounts:
 | `E2E_INVESTOR_INSTITUTIONAL_EMAIL` / `E2E_INVESTOR_INSTITUTIONAL_PASSWORD` | institutional investor fixture |
 | `E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD` | admin fixture |
 | `INCLUDE_DEMO_ADMIN` | set to `yes` only to create the shared-password demo admin in private, non-production seed runs |
-| `E2E_PROFESSIONAL_ARCHITECT_PASSWORD`, `E2E_PROFESSIONAL_LAWYER_PASSWORD`, `E2E_PROFESSIONAL_VALUER_PASSWORD` | professional fixture passwords |
+| `E2E_PROFESSIONAL_ARCHITECT_EMAIL` / `E2E_PROFESSIONAL_ARCHITECT_PASSWORD` | professional architect fixture |
+| `E2E_PROFESSIONAL_LAWYER_EMAIL` / `E2E_PROFESSIONAL_LAWYER_PASSWORD` | professional lawyer fixture |
+| `E2E_PROFESSIONAL_VALUER_EMAIL` / `E2E_PROFESSIONAL_VALUER_PASSWORD` | professional valuer fixture |
 
 Destructive tests are disabled by default:
 

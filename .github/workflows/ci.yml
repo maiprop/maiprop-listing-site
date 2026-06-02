@@ -240,7 +240,7 @@ jobs:
         run: npm run check:supabase-advisor -- --fail-on-error --out supabase-advisor-summary.json
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_PROJECT_REF: ${{ github.event_name == 'pull_request' && secrets.STAGING_SUPABASE_PROJECT_ID || secrets.VITE_SUPABASE_PROJECT_ID }}
+          SUPABASE_PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
 
       - name: Check live Supabase generated types
         if: >
@@ -254,7 +254,7 @@ jobs:
         run: npm run check:supabase-types -- -- --strict
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_PROJECT_REF: ${{ github.event_name == 'pull_request' && secrets.STAGING_SUPABASE_PROJECT_ID || secrets.VITE_SUPABASE_PROJECT_ID }}
+          SUPABASE_PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
 
       - name: Check live Supabase security posture
         if: >
@@ -268,7 +268,7 @@ jobs:
         run: npm run check:live-security-posture
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_PROJECT_REF: ${{ github.event_name == 'pull_request' && secrets.STAGING_SUPABASE_PROJECT_ID || secrets.VITE_SUPABASE_PROJECT_ID }}
+          SUPABASE_PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
 
       - name: Upload release safety inventory
         if: always()
