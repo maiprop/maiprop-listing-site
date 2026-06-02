@@ -3,10 +3,17 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+const readCheckoutSource = () =>
+  [
+    "supabase/functions/create-checkout/index.ts",
+    "supabase/functions/create-checkout/constants.ts",
+    "supabase/functions/create-checkout/pricing.ts",
+    "supabase/functions/create-checkout/stripeCustomers.ts",
+  ].map(read).join("\n");
 
 describe("critical business invariants", () => {
   it("binds checkout and webhook entitlements to role-specific pricing products", () => {
-    const checkout = read("supabase/functions/create-checkout/index.ts");
+    const checkout = readCheckoutSource();
     const webhook = read("supabase/functions/stripe-webhook/index.ts");
     const hardening = read("supabase/migrations/20260707070000_audience_scoped_pro_entitlements.sql");
     const lifecycle = read("supabase/migrations/20260525171000_subscription_lifecycle_grace_and_lapse.sql");
@@ -46,7 +53,7 @@ describe("critical business invariants", () => {
   });
 
   it("keeps invite-only investor access out of direct checkout and self-service onboarding", () => {
-    const checkout = read("supabase/functions/create-checkout/index.ts");
+    const checkout = readCheckoutSource();
     const onboarding = read("supabase/functions/complete-onboarding-role/index.ts");
     const invitation = read("supabase/migrations/20260514180443_high_trust_role_invite_activation.sql");
     const activation = read("supabase/migrations/20260514190054_activate_high_trust_profile_roles_from_paid_subscriptions.sql");

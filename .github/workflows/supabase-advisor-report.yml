@@ -63,7 +63,16 @@ jobs:
             "|---|---:|",
             ...(report.results ?? []).map((result) => `| ${result.category} | ${result.lint_count} |`),
             "",
-            "Review WARN items weekly. Keep ERROR/CRITICAL/HIGH at zero.",
+            "### Advisor Debt",
+            "",
+            "| Status | Count |",
+            "|---|---:|",
+            `| Accepted | ${report.advisor_debt?.accepted_count ?? 0} |`,
+            `| Needs review | ${report.advisor_debt?.review_count ?? 0} |`,
+            `| Unknown | ${report.advisor_debt?.unknown_count ?? 0} |`,
+            "",
+            "Accepted items require an owner and review cadence in scripts/supabase-advisor-debt-policy.json.",
+            "Unknown WARN items should be classified or fixed in the next advisor cleanup pass. Keep ERROR/CRITICAL/HIGH at zero.",
             "",
           ];
           fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n"));

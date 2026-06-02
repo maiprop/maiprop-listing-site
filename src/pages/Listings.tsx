@@ -25,8 +25,12 @@ import { ListingCompareButton } from "@/components/listings/ListingCompareButton
 import { VirtualizedListingGrid } from "@/components/listings/VirtualizedListingGrid";
 import { LocationSearchField } from "@/components/listings/LocationSearchField";
 import {
-  ActiveFilterChip,
-} from "@/components/listings/ListingsUiPrimitives";
+  DesktopActiveFilterChips,
+} from "./listings/ListingsActiveFilters";
+import {
+  translatePropertyType,
+  translateSubtype,
+} from "./listings/ListingsFilterLabels";
 import {
   GRID_ESTIMATED_ROW_HEIGHT,
   GRID_LOADING_SKELETON_KEYS,
@@ -41,200 +45,11 @@ import { useListingsPipeline } from "@/hooks/useListingsPipeline";
 import type { ListingCardWithRaw } from "@/lib/listingsCardUtils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCookieConsent } from "@/hooks/useCookieConsent";
-import { getTypeLabel, getSubtypeLabel, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
-import { HEATING_TYPES, CONSTRUCTION_STATUSES } from "@/lib/filterConfig";
 import { useSmartFilters } from "@/hooks/useSmartFilters";
 import {
   buyPriceRanges, rentPriceRanges, listingTypeOptions, sortOptions,
 } from "@/lib/listingsConfig";
 import { mapListingFromCard } from "@/lib/listingsPerformance";
-import {
-  getFeatureFilterLabel,
-  getPriceRangeLabel,
-  type SmartFilterFeature,
-} from "@/lib/listingsFilterHelpers";
-
-type ListingsFilterSetParam = ReturnType<typeof useListingsFilters>["setParam"];
-type ListingsFilterToggleMulti = ReturnType<typeof useListingsFilters>["toggleMulti"];
-const PROPERTY_TYPE_LABELS_EL: Record<string, string> = {
-  apartment: "Διαμέρισμα",
-  house: "Μονοκατοικία",
-  villa: "Βίλα",
-  land: "Οικόπεδο / Αγροτεμάχιο",
-  commercial: "Επαγγελματικό ακίνητο",
-  office: "Γραφείο",
-  studio: "Γκαρσονιέρα",
-  maisonette: "Μεζονέτα",
-  warehouse: "Αποθήκη",
-  hotel: "Ξενοδοχείο",
-  mixed_use: "Κτίριο μεικτής χρήσης",
-  parking: "Θέση στάθμευσης",
-  storage: "Αποθηκευτικός χώρος",
-};
-
-const SUBTYPE_LABELS_EL: Record<string, string> = {
-  studio: "Γκαρσονιέρα",
-  "1bedroom": "1 υπνοδωμάτιο",
-  "2bedroom": "2 υπνοδωμάτια",
-  "3bedroom": "3 υπνοδωμάτια",
-  "4bedroom": "4+ υπνοδωμάτια",
-  ground_floor: "Ισόγειο",
-  basement: "Υπόγειο",
-  detached: "Μονοκατοικία",
-  semi_detached: "Ημιανεξάρτητη κατοικία",
-  terraced: "Μεζονέτα σε σειρά",
-  townhouse: "Αστική κατοικία",
-  bungalow: "Ισόγεια κατοικία",
-  buildable: "Οικοδομήσιμο οικόπεδο",
-  agricultural: "Αγροτεμάχιο",
-  coastal: "Παραθαλάσσιο",
-  forest: "Δασική έκταση",
-  industrial: "Βιομηχανική ζώνη",
-  tourism: "Τουριστική ζώνη",
-  shop: "Κατάστημα",
-  warehouse: "Αποθήκη",
-  craft_workshop: "Βιοτεχνικός χώρος",
-  hotel: "Ξενοδοχείο",
-  commercial_building: "Κτίριο επαγγελματικών χώρων",
-  hall: "Αίθουσα",
-  showroom: "Εκθεσιακός χώρος",
-  restaurant: "Εστιατόριο / καφέ",
-  clinic: "Ιατρείο",
-  mixed_use: "Κτίριο μεικτής χρήσης",
-  office_private: "Ιδιωτικό γραφείο",
-  office_open_plan: "Γραφείο ανοικτού χώρου",
-  office_coworking: "Coworking / ευέλικτος χώρος",
-  office_business: "Business centre",
-  office_floor: "Ολόκληρος όροφος",
-  other_commercial: "Λοιπός επαγγελματικός χώρος",
-  private_office: "Ιδιωτικό γραφείο",
-  open_plan: "Γραφείο ανοικτού χώρου",
-  coworking: "Coworking / ευέλικτος χώρος",
-  business_centre: "Business centre",
-  floor: "Ολόκληρος όροφος",
-  converted: "Μετατρεπόμενος χώρος",
-};
-
-const HEATING_LABELS_EL: Record<string, string> = {
-  autonomous_oil: "Αυτόνομη θέρμανση (πετρέλαιο)",
-  autonomous_gas: "Αυτόνομη θέρμανση (φυσικό αέριο)",
-  autonomous: "Αυτόνομη θέρμανση",
-  central_oil: "Κεντρική θέρμανση (πετρέλαιο)",
-  central_gas: "Κεντρική θέρμανση (φυσικό αέριο)",
-  central: "Κεντρική θέρμανση",
-  floor: "Ενδοδαπέδια θέρμανση",
-  none: "Χωρίς θέρμανση",
-  other: "Άλλη θέρμανση",
-};
-
-const CONDITION_LABELS_EL: Record<string, string> = {
-  new: "Νεόδμητο",
-  under_construction: "Υπό κατασκευή",
-  renovated: "Ανακαινισμένο",
-  needs_renovation: "Χρήζει ανακαίνισης",
-  unfinished: "Ημιτελές",
-  preserved: "Διατηρητέο",
-  neoclassical: "Νεοκλασικό",
-};
-
-const translatePropertyType = (type: string, isGreek: boolean) =>
-  isGreek ? (PROPERTY_TYPE_LABELS_EL[type] ?? getTypeLabel(type)) : getTypeLabel(type);
-
-const translateSubtype = (type: string, subtype: string, isGreek: boolean) =>
-  isGreek ? (SUBTYPE_LABELS_EL[subtype] ?? getSubtypeLabel(type, subtype)) : getSubtypeLabel(type, subtype);
-
-const translateHeating = (value: string, isGreek: boolean) => {
-  const english = HEATING_TYPES.find((heating) => heating.value === value)?.label ?? value;
-  return isGreek ? (HEATING_LABELS_EL[value] ?? english) : english;
-};
-
-const translateCondition = (value: string, isGreek: boolean) => {
-  const english = CONSTRUCTION_STATUSES.find((status) => status.value === value)?.label ?? value;
-  return isGreek ? (CONDITION_LABELS_EL[value] ?? english) : english;
-};
-
-const DesktopActiveFilterChips = ({ // skipcq: JS-R1005 - Active chips map independent URL filters into removable controls.
-  selectedType,
-  selectedSubtype,
-  selectedPrice,
-  bedsRange,
-  selectedEnergyClasses,
-  selectedFeatures,
-  selectedHeating,
-  selectedConstruction,
-  preSaleOnly,
-  hasVideoViewing,
-  hasVirtualTour,
-  hasMessaging,
-  minAiScore,
-  minWalkability,
-  smartFeatures,
-  setParam,
-  toggleMulti,
-  clearAllFilters,
-  isGreek,
-}: {
-  selectedType: string;
-  selectedSubtype: string;
-  selectedPrice: string;
-  bedsRange: string[];
-  selectedEnergyClasses: string[];
-  selectedFeatures: string[];
-  selectedHeating: string;
-  selectedConstruction: string;
-  preSaleOnly: boolean;
-  hasVideoViewing: boolean;
-  hasVirtualTour: boolean;
-  hasMessaging: boolean;
-  minAiScore: number;
-  minWalkability: number;
-  smartFeatures: SmartFilterFeature[];
-  setParam: ListingsFilterSetParam;
-  toggleMulti: ListingsFilterToggleMulti;
-  clearAllFilters: () => void;
-  isGreek: boolean;
-}) => (
-  <div className="hidden sm:flex w-full items-center gap-2 min-h-9 flex-wrap overflow-hidden rounded-xl border border-border bg-card/70 px-3 py-2 shadow-sm [&>button]:inline-flex [&>button]:min-h-7 [&>button]:items-center [&>button]:leading-none [&>button]:max-w-full [&>button]:min-w-0 [&>button]:whitespace-nowrap">
-    <span className="flex h-7 items-center text-xs font-medium text-muted-foreground shrink-0">{isGreek ? "Ενεργά φίλτρα:" : "Active filters:"}</span>
-    {selectedType && (
-      <ActiveFilterChip onClick={() => { setParam("type", ""); setParam("subtype", ""); }}>
-        {PROPERTY_TYPE_MAP[selectedType as PropertyTypeKey]?.emoji} {translatePropertyType(selectedType, isGreek)}
-      </ActiveFilterChip>
-    )}
-    {selectedSubtype && selectedType && (
-      <ActiveFilterChip onClick={() => setParam("subtype", "")}>{translateSubtype(selectedType, selectedSubtype, isGreek)}</ActiveFilterChip>
-    )}
-    {selectedPrice && (
-      <ActiveFilterChip onClick={() => setParam("price", "")}>{getPriceRangeLabel(selectedPrice)}</ActiveFilterChip>
-    )}
-    {bedsRange[0] && <ActiveFilterChip onClick={() => setParam("beds_min", "")}>{bedsRange[0]}+ {isGreek ? "υπνοδωμάτια" : "beds"}</ActiveFilterChip>}
-    {selectedEnergyClasses.map((energyClass) => (
-      <ActiveFilterChip key={energyClass} onClick={() => toggleMulti("energy", energyClass)}>{isGreek ? "Ενεργειακή κλάση" : "Energy"} {energyClass}</ActiveFilterChip>
-    ))}
-    {selectedFeatures.map((feature) => (
-      <ActiveFilterChip key={feature} onClick={() => toggleMulti("features", feature)}>
-        {getFeatureFilterLabel(smartFeatures, feature)}
-      </ActiveFilterChip>
-    ))}
-    {selectedHeating && (
-      <ActiveFilterChip onClick={() => setParam("heating", "")}>
-        {isGreek ? "Θέρμανση:" : "Heating:"} {translateHeating(selectedHeating, isGreek)}
-      </ActiveFilterChip>
-    )}
-    {selectedConstruction && (
-      <ActiveFilterChip onClick={() => setParam("construction", "")}>
-        {translateCondition(selectedConstruction, isGreek)}
-      </ActiveFilterChip>
-    )}
-    {preSaleOnly && <ActiveFilterChip onClick={() => setParam("pre_sale", "")}>{isGreek ? "Προπώληση" : "Pre-sale"}</ActiveFilterChip>}
-    {hasVideoViewing && <ActiveFilterChip accent onClick={() => setParam("video_viewing", "")}>{isGreek ? "Βιντεοκλήση" : "Video Viewing"}</ActiveFilterChip>}
-    {hasVirtualTour && <ActiveFilterChip accent onClick={() => setParam("virtual_tour", "")}>{isGreek ? "Εικονική περιήγηση" : "Virtual Tour"}</ActiveFilterChip>}
-    {hasMessaging && <ActiveFilterChip accent onClick={() => setParam("messaging", "")}>{isGreek ? "Μηνύματα" : "Messaging"}</ActiveFilterChip>}
-    {minAiScore > 0 && <ActiveFilterChip accent onClick={() => setParam("min_ai_score", "")}>{isGreek ? "AI βαθμός" : "AI score"} {minAiScore}+</ActiveFilterChip>}
-    {minWalkability > 0 && <ActiveFilterChip accent onClick={() => setParam("min_walkability", "")}>{isGreek ? "Περπατησιμότητα" : "Walk"} {minWalkability}+</ActiveFilterChip>}
-    <button onClick={clearAllFilters} className="text-xs text-muted-foreground hover:text-foreground ml-1 shrink-0">{isGreek ? "Καθαρισμός όλων" : "Clear all"}</button>
-  </div>
-);
 
 const getListingsResultLabel = ({ // skipcq: JS-R1005 - Result labels intentionally branch by map, area, viewport, and pagination states.
   viewMode,
