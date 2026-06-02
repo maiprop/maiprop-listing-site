@@ -2,8 +2,15 @@ import { describe, expect, it } from "vitest";
 import {
   buildInitialForm,
   buildMetaLines,
+  canSubmitQuickSaleRequest,
+  getPhotoGrade,
+  getPhotoSelectionText,
+  getRequiredPropertyType,
   getLocalEstimate,
+  getSubmitEstimate,
+  propertyTypeLabel,
   syncContactFields,
+  validateSubmissionForm,
   validateStep1Form,
   validateStep2Form,
   type QuickSaleFormValues,
@@ -63,5 +70,33 @@ describe("quick sale form model helpers", () => {
       "KAEK: 050240601001/0/1",
       "Quick sale needed within 30 days.",
     ]);
+  });
+
+  it("covers submission validation, estimate fallbacks, role gates, and photo labels", () => {
+    expect(validateSubmissionForm(validForm(), 5)).toEqual({});
+    expect(validateSubmissionForm(validForm({ contactName: "", contactPhone: "abc" }), 2)).toMatchObject({
+      contactName: expect.any(String),
+      contactPhone: expect.any(String),
+      photos: expect.any(String),
+    });
+
+    expect(canSubmitQuickSaleRequest({ id: "user-1" }, { role: "seller" }, false)).toBe(true);
+    expect(canSubmitQuickSaleRequest(null, { role: "seller" }, false)).toBe(false);
+    expect(canSubmitQuickSaleRequest({ id: "user-1" }, null, false)).toBe(false);
+    expect(canSubmitQuickSaleRequest({ id: "user-1" }, { role: "buyer" }, false)).toBe(false);
+    expect(canSubmitQuickSaleRequest({ id: "user-1" }, { role: "seller" }, true)).toBe(false);
+
+    expect(getSubmitEstimate(250000, validForm())).toBe(250000);
+    expect(getSubmitEstimate(null, validForm({ sqm: "80" }))).toBe(139840);
+    expect(getRequiredPropertyType("commercial_shop")).toBe("commercial");
+    expect(() => getRequiredPropertyType("garage")).toThrow("Property type is invalid");
+
+    expect(getPhotoGrade(8)).toBe(9);
+    expect(getPhotoGrade(5)).toBe(7);
+    expect(getPhotoGrade(3)).toBe(5);
+    expect(getPhotoGrade(1)).toBe(3);
+    expect(getPhotoSelectionText(1)).toBe("1 photo selected");
+    expect(getPhotoSelectionText(2)).toBe("2 photos selected");
+    expect(propertyTypeLabel("apartment", "Apartment")).toBe("Apartment");
   });
 });

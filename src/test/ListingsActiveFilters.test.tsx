@@ -60,4 +60,75 @@ describe("DesktopActiveFilterChips", () => {
     fireEvent.click(screen.getByText(/Messaging/i));
     expect(setParam).toHaveBeenCalledWith("messaging", "");
   });
+
+  it("renders all premium/market filters and clears their URL params", () => {
+    const setParam = vi.fn();
+    const toggleMulti = vi.fn();
+    const clearAllFilters = vi.fn();
+
+    render(
+      <DesktopActiveFilterChips
+        {...baseProps}
+        selectedType="commercial"
+        selectedSubtype="warehouse"
+        selectedPrice="500000+"
+        bedsRange={["4"]}
+        selectedEnergyClasses={["B", "C"]}
+        selectedFeatures={["garden", "parking"]}
+        smartFeatures={[{ key: "garden", label: "Garden" }, { key: "parking", label: "Parking" }]}
+        selectedHeating="central"
+        selectedConstruction="new"
+        preSaleOnly
+        hasVideoViewing
+        hasVirtualTour
+        hasMessaging
+        minAiScore={80}
+        minWalkability={70}
+        setParam={setParam}
+        toggleMulti={toggleMulti}
+        clearAllFilters={clearAllFilters}
+      />,
+    );
+
+    fireEvent.click(screen.getByText(/Commercial/i));
+    expect(setParam).toHaveBeenCalledWith("type", "");
+    expect(setParam).toHaveBeenCalledWith("subtype", "");
+
+    fireEvent.click(screen.getByText(/Warehouse/i));
+    expect(setParam).toHaveBeenCalledWith("subtype", "");
+
+    fireEvent.click(screen.getByText(/500000\+/i));
+    expect(setParam).toHaveBeenCalledWith("price", "");
+
+    fireEvent.click(screen.getByText(/4\+ beds/i));
+    expect(setParam).toHaveBeenCalledWith("beds_min", "");
+
+    fireEvent.click(screen.getByText(/Energy B/i));
+    fireEvent.click(screen.getByText(/Energy C/i));
+    expect(toggleMulti).toHaveBeenCalledWith("energy", "B");
+    expect(toggleMulti).toHaveBeenCalledWith("energy", "C");
+
+    fireEvent.click(screen.getByText(/Garden/i));
+    fireEvent.click(screen.getByText(/Parking/i));
+    expect(toggleMulti).toHaveBeenCalledWith("features", "garden");
+    expect(toggleMulti).toHaveBeenCalledWith("features", "parking");
+
+    fireEvent.click(screen.getByText(/Heating:/i));
+    expect(setParam).toHaveBeenCalledWith("heating", "");
+
+    fireEvent.click(screen.getByText(/New/i));
+    expect(setParam).toHaveBeenCalledWith("construction", "");
+
+    for (const [label, key] of [
+      [/Pre-sale/i, "pre_sale"],
+      [/Video Viewing/i, "video_viewing"],
+      [/Virtual Tour/i, "virtual_tour"],
+      [/Messaging/i, "messaging"],
+      [/AI score 80\+/i, "min_ai_score"],
+      [/Walk 70\+/i, "min_walkability"],
+    ] as const) {
+      fireEvent.click(screen.getByText(label));
+      expect(setParam).toHaveBeenCalledWith(key, "");
+    }
+  });
 });
