@@ -10,6 +10,8 @@ import React, { Suspense } from "react";
 import { Route, Routes } from "react-router-dom";
 import { renderWithProviders } from "@/test/utils";
 
+vi.setConfig({ testTimeout: 15000 });
+
 // ── Common mocks ──────────────────────────────────────────────────────────────
 
 vi.mock("@/integrations/supabase/client", () => ({

@@ -22,6 +22,8 @@ const localSupabasePath = () =>
     ? join(root, "node_modules", ".bin", "supabase.cmd")
     : join(root, "node_modules", ".bin", "supabase");
 
+const localSupabaseJsPath = () => join(root, "node_modules", "supabase", "dist", "supabase.js");
+
 const findWindowsSupabase = () => {
   if (process.platform !== "win32") return null;
 
@@ -46,15 +48,19 @@ const findWindowsSupabase = () => {
 
 // skipcq: JS-R1005
 const supabaseCommand = () => {
+  const localJs = localSupabaseJsPath();
+  if (existsSync(localJs)) return { command: process.execPath, prefixArgs: [localJs], shell: false };
+
   const localBin = localSupabasePath();
-  if (existsSync(localBin)) return { command: localBin, prefixArgs: [] };
+  if (existsSync(localBin)) return { command: localBin, prefixArgs: [], shell: process.platform === "win32" };
 
   const windowsBin = findWindowsSupabase();
-  if (windowsBin) return { command: windowsBin, prefixArgs: [] };
+  if (windowsBin) return { command: windowsBin, prefixArgs: [], shell: process.platform === "win32" };
 
   return {
     command: process.platform === "win32" ? "npx.cmd" : "npx",
     prefixArgs: ["supabase"],
+    shell: process.platform === "win32",
   };
 };
 
@@ -72,7 +78,7 @@ if (!projectId || !token) {
   process.exit(0);
 }
 
-const { command, prefixArgs } = supabaseCommand();
+const { command, prefixArgs, shell } = supabaseCommand();
 const generated = execFileSync(
   command,
   [
@@ -89,7 +95,7 @@ const generated = execFileSync(
     cwd: root,
     encoding: "utf8",
     env: process.env,
-    shell: process.platform === "win32",
+    shell,
     stdio: ["ignore", "pipe", "pipe"],
   },
 );
