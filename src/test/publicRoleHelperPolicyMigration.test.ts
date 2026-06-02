@@ -12,6 +12,10 @@ const livePostureGate = readFileSync(
   "utf8",
 );
 
+const packageJson = JSON.parse(
+  readFileSync(resolve(process.cwd(), "package.json"), "utf8"),
+) as { scripts?: Record<string, string> };
+
 const futureAdvisorHardeningMigration = readFileSync(
   resolve(process.cwd(), "supabase/migrations/20260707140000_harden_supabase_advisor_security.sql"),
   "utf8",
@@ -44,6 +48,9 @@ describe("public role helper policy rewrite", () => {
   });
 
   it("updates live posture expectations and future hardening grants", () => {
+    expect(packageJson.scripts?.["check:live-security-posture"]).toBe(
+      "node scripts/check-live-security-posture.mjs",
+    );
     expect(livePostureGate).toContain("role helper must be service-role only");
 
     const internalGrantBlock = futureAdvisorHardeningMigration.slice(

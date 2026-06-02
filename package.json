@@ -73,6 +73,7 @@
     "check:public-functions": "node scripts/public-function-inventory.cjs --check",
     "check:supabase-advisor": "node scripts/check-supabase-advisor.mjs",
     "check:supabase-types": "node scripts/check-supabase-types-freshness.cjs",
+    "check:live-security-posture": "node scripts/check-live-security-posture.mjs",
     "inventory:audit-coverage": "node scripts/audit-coverage-inventory.mjs",
     "check:audit-coverage": "node scripts/audit-coverage-inventory.mjs --check && vitest run src/test/criticalWorkflowProof.test.ts",
     "test:audit-coverage": "npm run test:coverage && npm run inventory:audit-coverage && npm run check:audit-coverage",
