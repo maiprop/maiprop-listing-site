@@ -6,15 +6,16 @@
  * Responsibilities:
  *   1. Authenticate the caller (Bearer token → Supabase user)
  *   2. If cancel_subscription=true, cancel active Stripe subscription at period end
- *   3. Record an audit row in role_switch_history via the SECURITY DEFINER RPC
- *      `record_role_switch_audit` (caller-context, granted to authenticated)
+ *   3. Record an audit row in role_switch_history via the service-role-only
+ *      SECURITY DEFINER RPC `record_role_switch_audit_for_user`
  *
  * We deliberately do NOT do a direct INSERT into role_switch_history. The table's
  * INSERT policy is `WITH CHECK (false)` so any client without a verified service-role
  * JWT is rejected, and Supabase projects can be migrated to the new sb_secret_*
  * key format under the same `SUPABASE_SERVICE_ROLE_KEY` env name — in which case
  * supabase-js does not produce a service_role JWT for PostgREST and the insert
- * silently fails. Going through the RPC removes that dependency entirely.
+ * silently fails. Going through a service-role RPC with an explicitly verified
+ * user id removes that dependency entirely.
  */
 
 import Stripe from "npm:stripe@18.5.0";
@@ -22,6 +23,7 @@ import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { createLogger } from "../_shared/logger.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import { AuthError, verifyBearerToken } from "../_shared/auth.ts";
 
 const log = createLogger("log-role-switch");
 const limiter = makeRateLimiter({ bucket: "log-role-switch", maxRequests: 5, windowMs: 60_000 });
@@ -40,8 +42,8 @@ Deno.serve(async (req) => {
   if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-  if (!supabaseUrl || !anonKey) {
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  if (!supabaseUrl || !serviceRoleKey) {
     return new Response(JSON.stringify({ error: "Service unavailable" }), {
       status: 503,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -58,24 +60,21 @@ Deno.serve(async (req) => {
       status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-  const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-
-  // Caller-context client — forwards the user's JWT to PostgREST so the audit
-  // RPC's auth.uid() resolves to this user. Used both for getUser() and the
-  // record_role_switch_audit RPC call.
-  const supabase = createClient(supabaseUrl, anonKey, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
+  const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false },
   });
 
-  const { data: userData, error: userError } = await supabase.auth.getUser(token);
-  if (userError || !userData.user) {
+  // Verify the caller JWT, then pass only the verified user id to PostgREST.
+  let user: { id: string; email: string };
+  try {
+    user = await verifyBearerToken(req, supabaseAdmin);
+  } catch (err: unknown) {
+    const message = err instanceof AuthError ? err.message : "Unauthenticated";
+    log.warn("auth failed", { err: message });
     return new Response(JSON.stringify({ error: "Unauthenticated" }), {
       status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-
-  const user = userData.user;
 
   try {
     logStep("Authenticated", { userId: user.id });
@@ -160,7 +159,8 @@ Deno.serve(async (req) => {
     // active sub. This preserves the pre-PR semantic (which always re-issued the
     // update and recorded true) while keeping the Stripe call idempotent.
     const subPendingCancellation = subCancelled || subAlreadyCancelling;
-    const { error: insertError } = await supabase.rpc("record_role_switch_audit", {
+    const { error: insertError } = await supabaseAdmin.rpc("record_role_switch_audit_for_user", {
+      _user_id: user.id,
       _from_type: fromType,
       _to_type: toType || "",
       _switch_kind: switchKind,

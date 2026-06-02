@@ -60,7 +60,7 @@ describe("plan/quota helper RPC grant hardening", () => {
     }
 
     expect(futureAdvisorHardeningMigration).toContain(
-      "internal SECURITY DEFINER or plan/quota helper RPC remains API-executable",
+      "internal SECURITY DEFINER function remains API-executable",
     );
     const appFacingGrantBlock = futureAdvisorHardeningMigration.slice(
       futureAdvisorHardeningMigration.indexOf("-- 3. App-facing SECURITY DEFINER RPCs"),

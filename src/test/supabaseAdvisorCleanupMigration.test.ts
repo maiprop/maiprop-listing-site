@@ -63,10 +63,7 @@ describe("Supabase advisor cleanup migration", () => {
       "REVOKE ALL ON FUNCTION %s FROM PUBLIC, anon, authenticated",
     );
     expect(liveAdvisorSecurityMigration).toContain("GRANT EXECUTE ON FUNCTION %s TO service_role");
-    expect(liveAdvisorSecurityMigration).toContain(
-      "REVOKE ALL ON FUNCTION %s FROM PUBLIC, anon",
-    );
-    expect(liveAdvisorSecurityMigration).toContain(
+    expect(liveAdvisorSecurityMigration).not.toContain(
       "GRANT EXECUTE ON FUNCTION %s TO authenticated, service_role",
     );
     expect(liveAdvisorSecurityMigration).toContain(
@@ -78,9 +75,7 @@ describe("Supabase advisor cleanup migration", () => {
     expect(liveAdvisorSecurityMigration).toContain(
       "(SELECT current_setting('request.jwt.claims', true))",
     );
-    expect(liveAdvisorSecurityMigration).toContain(
-      "public.get_open_house_capacity(uuid) intentionally remains anon-callable",
-    );
+    expect(liveAdvisorSecurityMigration).not.toContain("intentionally remains anon-callable");
   });
 
   it("removes duplicate public-read RLS evaluation without removing owner writes", () => {

@@ -79,7 +79,25 @@ describe("BillingTab add-on checkout", () => {
       };
       return query;
     });
-    mocks.supabase?.functions.invoke.mockImplementation((fn: string) => {
+    mocks.supabase?.functions.invoke.mockImplementation((fn: string, opts?: { body?: { bucket?: string } }) => {
+      if (fn === "ai-quota-status") {
+        const quotas: Record<string, { used: number; limit: number }> = {
+          "property-valuation": { used: 48, limit: 50 },
+          "neighbourhood-report": { used: 50, limit: 50 },
+          "property-pois": { used: 12, limit: 50 },
+        };
+        const quota = quotas[opts?.body?.bucket ?? ""] ?? { used: 0, limit: 0 };
+        return Promise.resolve({
+          data: {
+            allowed: quota.used < quota.limit,
+            reason: quota.used >= quota.limit ? "monthly_limit_reached" : null,
+            used: quota.used,
+            limit: quota.limit,
+            remaining: Math.max(quota.limit - quota.used, 0),
+          },
+          error: null,
+        });
+      }
       if (fn === "get-invoices") {
         return Promise.resolve({
           data: {

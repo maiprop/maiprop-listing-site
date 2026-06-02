@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { PDF_MIME_TYPES, assertAllowedUpload } from "@/lib/uploadValidation";
 
 export type InterestStatus =
   | "interested"
@@ -181,6 +182,7 @@ export function useExpressInterest() {
       }
 
       if (proofFile) {
+        assertAllowedUpload(proofFile, PDF_MIME_TYPES, { label: "proof of funds document" });
         const ext = proofFile.name.split(".").pop() ?? "pdf";
         const path = `${uid}/firesale/${dealId}/proof_${crypto.randomUUID()}.${ext}`;
         const { data: uploaded, error: uploadError } = await supabase.storage

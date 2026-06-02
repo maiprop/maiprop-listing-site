@@ -11,16 +11,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
-const { invokeMock, rpcMock, useAuthMock } = vi.hoisted(() => ({
+const { invokeMock, useAuthMock } = vi.hoisted(() => ({
   invokeMock: vi.fn(),
-  rpcMock: vi.fn(),
   useAuthMock: vi.fn(),
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     functions: { invoke: (...a: unknown[]) => invokeMock(...a) },
-    rpc: (...a: unknown[]) => rpcMock(...a),
   },
 }));
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => useAuthMock() }));
@@ -58,6 +56,29 @@ vi.mock("mapbox-gl/dist/mapbox-gl.css", () => ({}));
 
 import PropertyMiniMap from "@/components/PropertyMiniMap";
 
+type InvokeResult = { data?: unknown; error?: unknown };
+
+let quotaInvokeResult: InvokeResult;
+let poisInvokeResult: InvokeResult;
+
+const invokeCallsFor = (functionName: string) =>
+  invokeMock.mock.calls.filter((call: unknown[]) => call[0] === functionName);
+
+beforeEach(() => {
+  invokeMock.mockReset();
+  quotaInvokeResult = {
+    data: { allowed: true, reason: null, used: 1, limit: 5, remaining: 4 },
+    error: null,
+  };
+  poisInvokeResult = { data: { pois: [] }, error: null };
+  invokeMock.mockImplementation(async (functionName: string) => {
+    if (functionName === "ai-quota-status") return quotaInvokeResult;
+    return poisInvokeResult;
+  });
+  useAuthMock.mockReset();
+  useAuthMock.mockReturnValue({ user: { id: "u-1" } });
+});
+
 const baseProps = {
   title: "Athens 3-bed",
   address: "Kolonaki 12",
@@ -66,45 +87,22 @@ const baseProps = {
   longitude: 23.73,
 };
 
-const quotaData = { allowed: true, reason: null, used: 1, limit: 5 };
-const mockQuotaAndPois = (
-  poisResponse: unknown = { pois: [] },
-  quota: unknown = quotaData,
-) => {
-  invokeMock.mockImplementation(async (name: string) => {
-    if (name === "ai-quota-status") return { data: quota, error: null };
-    return { data: poisResponse, error: null };
-  });
-};
-const poiCalls = () =>
-  invokeMock.mock.calls.filter(([name]) => name === "property-pois");
-
-beforeEach(() => {
-  invokeMock.mockReset();
-  rpcMock.mockReset();
-  mockQuotaAndPois();
-  useAuthMock.mockReset();
-  useAuthMock.mockReturnValue({ user: { id: "u-1" } });
-});
-
 describe("PropertyMiniMap", () => {
   it("renders the Mapbox map + property marker when lat/lng + token + user are present", async () => {
-    mockQuotaAndPois({ pois: [] });
     render(<PropertyMiniMap {...baseProps} />);
     expect(await screen.findByTestId("mapbox-map")).toBeInTheDocument();
     await waitFor(() => expect(screen.getAllByTestId("mapbox-marker").length).toBeGreaterThan(0));
     // Wait for the auto-fetch to settle so subsequent assertions are stable.
-    await waitFor(() => expect(poiCalls().length).toBeGreaterThan(0));
+    await waitFor(() => expect(invokeCallsFor("property-pois")).toHaveLength(1));
   });
 
   it("defers Mapbox loading until the map area is near the viewport", async () => {
-    mockQuotaAndPois({ pois: [] });
     const originalRect = HTMLElement.prototype.getBoundingClientRect;
     const originalIntersectionObserver = window.IntersectionObserver;
     let triggerIntersect: ((entries: Partial<IntersectionObserverEntry>[]) => void) | null = null;
     const observe = vi.fn();
     const disconnect = vi.fn();
-    const MockIntersectionObserver = vi.fn((callback: IntersectionObserverCallback) => {
+    const MockIntersectionObserver = vi.fn(function MockIntersectionObserver(callback: IntersectionObserverCallback) {
       triggerIntersect = (entries) => callback(entries as IntersectionObserverEntry[], {} as IntersectionObserver);
       return { observe, unobserve: vi.fn(), disconnect, takeRecords: () => [] } as unknown as IntersectionObserver;
     });
@@ -134,7 +132,7 @@ describe("PropertyMiniMap", () => {
       act(() => triggerIntersect?.([{ isIntersecting: true }]));
       expect(await screen.findByTestId("mapbox-map")).toBeInTheDocument();
       expect(disconnect).toHaveBeenCalled();
-      await waitFor(() => expect(poiCalls().length).toBeGreaterThan(0));
+      await waitFor(() => expect(invokeCallsFor("property-pois")).toHaveLength(1));
     } finally {
       Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", {
         configurable: true,
@@ -160,30 +158,30 @@ describe("PropertyMiniMap", () => {
   });
 
   it("calls property-pois automatically (with address, city, lat, lng) when authenticated", async () => {
-    mockQuotaAndPois({ pois: [] });
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <PropertyMiniMap {...baseProps} />
       </MemoryRouter>,
     );
-    await waitFor(() => expect(poiCalls().length).toBeGreaterThan(0));
-    expect(invokeMock).toHaveBeenCalledWith("ai-quota-status", {
-      body: { bucket: "property-pois" },
-    });
-    expect(poiCalls()[0]).toEqual([
+    await waitFor(() => expect(invokeCallsFor("property-pois")).toHaveLength(1));
+    expect(invokeMock).toHaveBeenCalledWith("ai-quota-status", { body: { bucket: "property-pois" } });
+    expect(invokeCallsFor("property-pois")[0]).toEqual([
       "property-pois",
       { body: { address: "Kolonaki 12", city: "Athens", lat: 37.98, lng: 23.73 } },
     ]);
   });
 
   it("hydrates POIs and notifies the parent of a walk score via onWalkScoreChange", async () => {
-    mockQuotaAndPois({
+    poisInvokeResult = {
+      data: {
         pois: [
           { name: "St Nicholas School", category: "school", distanceKm: 0.4, walkMinutes: 5 },
           { name: "Athens Metro", category: "transit", distanceKm: 0.3, walkMinutes: 4 },
           { name: "Café del Lungo", category: "cafe", distanceKm: 0.2, walkMinutes: 3 },
         ],
-    });
+      },
+      error: null,
+    };
     const onWalkScoreChange = vi.fn();
     render(<PropertyMiniMap {...baseProps} onWalkScoreChange={onWalkScoreChange} />);
     await waitFor(() => expect(screen.getByText("St Nicholas School")).toBeInTheDocument());
@@ -194,12 +192,9 @@ describe("PropertyMiniMap", () => {
   });
 
   it("renders an inline error message when property-pois fails (message via error.message)", async () => {
-    invokeMock.mockImplementation(async (name: string) => {
-      if (name === "ai-quota-status") return { data: quotaData, error: null };
-      return { data: null, error: { message: "rate limited" } };
-    });
+    poisInvokeResult = { data: null, error: { message: "rate limited" } };
     render(<PropertyMiniMap {...baseProps} />);
-    await waitFor(() => expect(poiCalls().length).toBeGreaterThan(0));
+    await waitFor(() => expect(invokeCallsFor("property-pois")).toHaveLength(1));
     await waitFor(() => {
       const card = document.body.textContent ?? "";
       expect(card).toMatch(/rate limited|Failed to load nearby/i);
@@ -207,7 +202,10 @@ describe("PropertyMiniMap", () => {
   });
 
   it("shows the quota counter and upgrade CTA instead of calling property-pois when the cap is reached", async () => {
-    mockQuotaAndPois({ pois: [] }, { allowed: false, reason: "monthly_limit_reached", used: 5, limit: 5 });
+    quotaInvokeResult = {
+      data: { allowed: false, reason: "monthly_limit_reached", used: 5, limit: 5, remaining: 0 },
+      error: null,
+    };
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <PropertyMiniMap {...baseProps} />
@@ -216,13 +214,13 @@ describe("PropertyMiniMap", () => {
     expect(await screen.findByText(/5 \/ 5 used/i)).toBeInTheDocument();
     expect(screen.getByText(/Monthly cap reached/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Upgrade/i })).toHaveAttribute("href", "/pricing");
-    expect(poiCalls()).toHaveLength(0);
+    expect(invokeCallsFor("property-pois")).toHaveLength(0);
   });
 
   it("rejects an invalid response shape (pois !== Array) and surfaces an error", async () => {
-    mockQuotaAndPois({ pois: "not-array" });
+    poisInvokeResult = { data: { pois: "not-array" }, error: null };
     render(<PropertyMiniMap {...baseProps} />);
-    await waitFor(() => expect(poiCalls().length).toBeGreaterThan(0));
+    await waitFor(() => expect(invokeCallsFor("property-pois")).toHaveLength(1));
     await waitFor(() => {
       const card = document.body.textContent ?? "";
       expect(card).toMatch(/Invalid response|Failed to load nearby/i);
