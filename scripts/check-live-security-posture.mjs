@@ -13,6 +13,50 @@ const fail = (message, detail) => {
   process.exit(1);
 };
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const retryableStatuses = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
+
+const querySupabase = async () => {
+  const maxAttempts = 4;
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const res = await fetch(
+        `https://api.supabase.com/v1/projects/${projectRef}/database/query`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ query }),
+        },
+      );
+      const text = await res.text();
+
+      if (res.ok) return text;
+      if (!retryableStatuses.has(res.status) || attempt === maxAttempts) {
+        fail(`Supabase Management API returned ${res.status}.`, text.slice(0, 500));
+      }
+
+      lastError = new Error(`Supabase Management API returned ${res.status}`);
+    } catch (error) {
+      lastError = error;
+      if (attempt === maxAttempts) throw error;
+    }
+
+    const delayMs = 1000 * attempt ** 2;
+    console.warn(
+      `[live-security] Supabase Management API attempt ${attempt} failed; retrying in ${delayMs}ms.`,
+    );
+    await sleep(delayMs);
+  }
+
+  throw lastError;
+};
+
 if (!accessToken) fail("Missing SUPABASE_ACCESS_TOKEN.");
 if (!projectRef) fail("Missing Supabase project ref.");
 
@@ -63,20 +107,13 @@ SELECT
 FROM bucket_checks, rls_disabled, function_grants;
 `;
 
-const res = await fetch(
-  `https://api.supabase.com/v1/projects/${projectRef}/database/query`,
-  {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ query }),
-  },
-);
-
-const text = await res.text();
-if (!res.ok) fail(`Supabase Management API returned ${res.status}.`, text.slice(0, 500));
+const text = await querySupabase().catch((error) => {
+  fail("Supabase Management API request failed after retries.", {
+    name: error?.name,
+    message: error?.message,
+    cause: error?.cause?.code ?? error?.cause?.message,
+  });
+});
 
 const [row] = JSON.parse(text);
 const buckets = new Map((row?.buckets ?? []).map((bucket) => [bucket.id, bucket]));
