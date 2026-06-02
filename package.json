@@ -158,7 +158,7 @@
     "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.60.0",
     "@remotion/google-fonts": "^4.0.467",
-    "@remotion/transitions": "^4.0.451",
+    "@remotion/transitions": "^4.0.471",
     "@tailwindcss/typography": "^0.5.16",
     "@testing-library/jest-dom": "^6.6.0",
     "@testing-library/react": "^16.0.0",

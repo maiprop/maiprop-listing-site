@@ -193,7 +193,7 @@ jobs:
           (github.event_name == 'pull_request' &&
             github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
             github.event.pull_request.draft == false &&
-            github.actor != 'dependabot[bot]')
+            github.event.pull_request.user.login != 'dependabot[bot]')
         run: npm run check:release-safety -- --live-functions --out release-safety-inventory-live.json
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -205,7 +205,7 @@ jobs:
           (github.event_name == 'pull_request' &&
             github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
             github.event.pull_request.draft == false &&
-            github.actor != 'dependabot[bot]')
+            github.event.pull_request.user.login != 'dependabot[bot]')
         run: npm run check:supabase-advisor -- --fail-on-error --out supabase-advisor-summary.json
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -217,7 +217,7 @@ jobs:
           (github.event_name == 'pull_request' &&
             github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
             github.event.pull_request.draft == false &&
-            github.actor != 'dependabot[bot]')
+            github.event.pull_request.user.login != 'dependabot[bot]')
         run: npm run check:supabase-types -- -- --strict
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -229,7 +229,7 @@ jobs:
           (github.event_name == 'pull_request' &&
             github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
             github.event.pull_request.draft == false &&
-            github.actor != 'dependabot[bot]')
+            github.event.pull_request.user.login != 'dependabot[bot]')
         run: npm run check:live-security-posture
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -334,7 +334,7 @@ jobs:
         github.event_name == 'push' ||
         (github.event_name == 'pull_request' &&
           github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
-          github.actor != 'dependabot[bot]' &&
+          github.event.pull_request.user.login != 'dependabot[bot]' &&
           github.event.pull_request.draft == false)
       )
     needs: [quality, release-safety, migrations-validate, deploy-supabase-staging]
@@ -650,7 +650,7 @@ jobs:
       (github.event_name == 'pull_request' &&
         github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
         github.event.pull_request.draft == false &&
-        github.actor != 'dependabot[bot]')
+        github.event.pull_request.user.login != 'dependabot[bot]')
     needs: [quality, release-safety]
     env:
       # Lighthouse audits protected app surfaces. Prefer isolated staging when
@@ -1259,7 +1259,7 @@ jobs:
       github.event_name == 'pull_request' &&
       github.event.pull_request.draft == false &&
       github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
-      github.actor != 'dependabot[bot]' &&
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
       needs['deploy-supabase-staging'].outputs.isolated_staging == 'true'
     needs: [quality, release-safety, deploy-supabase-staging]
 
