@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.10](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.9...v1.9.10) (2026-06-02)
+
+
+### Bug Fixes
+
+* harden supabase type freshness checks ([9cf1617](https://github.com/maiprop/maiprop-listing-site/commit/9cf161774c6fb4ab4c293700bddbed2db7c8afd1))
+
 ## [1.9.9](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.8...v1.9.9) (2026-06-02)
 
 
