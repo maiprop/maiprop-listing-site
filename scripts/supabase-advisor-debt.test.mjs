@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { classifyAdvisorDebt, flattenAdvisorLints } from "./supabase-advisor-debt.mjs";
+import {
+  buildUnusedIndexReview,
+  classifyAdvisorDebt,
+  flattenAdvisorLints,
+} from "./supabase-advisor-debt.mjs";
 
 const policy = {
   accepted: [
@@ -62,5 +66,78 @@ describe("supabase advisor debt classification", () => {
     expect(debt.items.accepted[0].policy.next_action).toContain("Upgrade");
     expect(debt.items.review[0].policy.reason).toBe("Needs telemetry");
     expect(debt.items.unknown[0].name).toBe("surprising_new_lint");
+  });
+});
+
+describe("unused index telemetry review", () => {
+  it("marks advisor-only unused indexes as requiring a pg_stat_user_indexes snapshot", () => {
+    const review = buildUnusedIndexReview({
+      results: [
+        {
+          category: "performance",
+          lints: [
+            {
+              name: "unused_index",
+              title: "Unused Index",
+              level: "INFO",
+              metadata: { index_name: "idx_listings_owner_id", table_name: "listings" },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(review.totals).toEqual({
+      unused_index_lints: 1,
+      mapped_to_stats: 0,
+      with_scans: 0,
+      zero_scan_candidates: 0,
+      needs_stats_snapshot: 1,
+      needs_manual_mapping: 0,
+    });
+    expect(review.items[0]).toMatchObject({
+      index_name: "idx_listings_owner_id",
+      review_status: "needs_pg_stat_user_indexes_snapshot",
+    });
+  });
+
+  it("keeps scanned indexes and requires extra review before dropping zero-scan indexes", () => {
+    const review = buildUnusedIndexReview(
+      {
+        results: [
+          {
+            category: "performance",
+            lints: [
+              {
+                name: "unused_index",
+                title: "Unused Index",
+                level: "INFO",
+                metadata: { index_name: "idx_recently_used", table_name: "listings" },
+              },
+              {
+                name: "unused_index",
+                title: "Unused Index",
+                level: "INFO",
+                metadata: { index_name: "idx_zero_scan", table_name: "messages" },
+              },
+            ],
+          },
+        ],
+      },
+      [
+        { indexrelname: "idx_recently_used", relname: "listings", idx_scan: 42 },
+        { indexrelname: "idx_zero_scan", relname: "messages", idx_scan: 0 },
+      ],
+    );
+
+    expect(review.totals).toMatchObject({
+      mapped_to_stats: 2,
+      with_scans: 1,
+      zero_scan_candidates: 1,
+    });
+    expect(review.items.map((item) => item.review_status)).toEqual([
+      "keep_or_recheck_usage",
+      "candidate_needs_pg_stat_statements_and_release_review",
+    ]);
   });
 });

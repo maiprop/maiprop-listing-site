@@ -1,12 +1,16 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 const root = process.cwd();
 const vitestBin = join(root, "node_modules", "vitest", "vitest.mjs");
+const coverageDir = join(root, "coverage");
 const coverageSummaryPath = join(root, "coverage", "coverage-summary.json");
-const coverageTmpPath = join(root, "coverage", ".tmp");
+const coverageRunRoot = join(root, ".coverage-runs");
+const coverageRunPath = join(coverageRunRoot, `${Date.now()}-${process.pid}`);
+const coverageRunSummaryPath = join(coverageRunPath, "coverage-summary.json");
+const coverageTmpPath = join(coverageRunPath, ".tmp");
 
 const thresholds = {
   lines: 86,
@@ -31,8 +35,8 @@ function removeCoverageTmp() {
 }
 
 function coverageMeetsThresholds() {
-  if (!existsSync(coverageSummaryPath)) return false;
-  const summary = JSON.parse(readFileSync(coverageSummaryPath, "utf8"));
+  if (!existsSync(coverageRunSummaryPath)) return false;
+  const summary = JSON.parse(readFileSync(coverageRunSummaryPath, "utf8"));
   const total = summary.total;
   return Boolean(total) &&
     total.lines?.pct >= thresholds.lines &&
@@ -45,6 +49,10 @@ function runCoverage() {
   return spawnSync(process.execPath, [vitestBin, "run", "--coverage"], {
     cwd: root,
     encoding: "utf8",
+    env: {
+      ...process.env,
+      VITEST_COVERAGE_DIR: coverageRunPath,
+    },
   });
 }
 
@@ -55,8 +63,8 @@ function writeResult(result) {
 
 function failedDuringCoverageTmpCleanup(output) {
   return (
-  /EPERM: operation not permitted, rmdir .*coverage[\\/]\.tmp/i.test(output) ||
-    /coverage[\\/]\.tmp.*EPERM/i.test(output)
+  /EPERM: operation not permitted, rmdir .*coverage[\\/]/i.test(output) ||
+    /coverage[\\/].*EPERM/i.test(output)
   );
 }
 
@@ -67,6 +75,20 @@ function testsPassed(output) {
   !/Test Files\s+.*failed/i.test(output) &&
     !/Tests\s+.*failed/i.test(output)
   );
+}
+
+function publishCoverageSummary() {
+  if (!existsSync(coverageRunSummaryPath)) return;
+  mkdirSync(coverageDir, { recursive: true });
+  copyFileSync(coverageRunSummaryPath, coverageSummaryPath);
+}
+
+function cleanupCoverageRun() {
+  try {
+    rmSync(coverageRunPath, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  } catch {
+    // Best effort only. The fresh run directory is ignored and can be removed later.
+  }
 }
 
 removeCoverageTmp();
@@ -83,14 +105,19 @@ if (result.status !== 0 && failedDuringCoverageTmpCleanup(output)) {
 }
 
 if (result.status === 0) {
+  publishCoverageSummary();
   removeCoverageTmp();
+  cleanupCoverageRun();
   process.exit(0);
 }
 
 if (failedDuringCoverageTmpCleanup(output) && testsPassed(output) && coverageMeetsThresholds()) {
+  publishCoverageSummary();
   removeCoverageTmp();
+  cleanupCoverageRun();
   console.warn("[test:coverage] Ignored Windows coverage/.tmp cleanup EPERM after tests and coverage thresholds passed.");
   process.exit(0);
 }
 
+cleanupCoverageRun();
 process.exit(result.status ?? 1);

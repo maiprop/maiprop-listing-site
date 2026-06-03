@@ -43,6 +43,7 @@ supabase/.branches/
 
 # Test artifacts
 coverage/
+.coverage-runs/
 playwright-report/
 test-results/
 .lighthouseci/
