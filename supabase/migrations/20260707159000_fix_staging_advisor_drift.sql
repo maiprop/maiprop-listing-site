@@ -4,6 +4,9 @@
 -- owner-scoped policies.
 
 DO $$
+DECLARE
+  log_user_role_change_fn regprocedure := to_regprocedure('public.log_user_role_change()');
+  rls_auto_enable_fn regprocedure := to_regprocedure('public.rls_auto_enable()');
 BEGIN
   IF to_regclass('public.marketing_leads') IS NOT NULL
      AND EXISTS (
@@ -87,18 +90,18 @@ BEGIN
     RAISE EXCEPTION 'marketing_leads.owner_id foreign key must have a supporting index';
   END IF;
 
-  IF to_regprocedure('public.log_user_role_change()') IS NOT NULL
+  IF log_user_role_change_fn IS NOT NULL
      AND (
-       has_function_privilege('anon', 'public.log_user_role_change()'::regprocedure, 'EXECUTE')
-       OR has_function_privilege('authenticated', 'public.log_user_role_change()'::regprocedure, 'EXECUTE')
+       has_function_privilege('anon', log_user_role_change_fn, 'EXECUTE')
+       OR has_function_privilege('authenticated', log_user_role_change_fn, 'EXECUTE')
      ) THEN
     RAISE EXCEPTION 'log_user_role_change must not be browser-executable';
   END IF;
 
-  IF to_regprocedure('public.rls_auto_enable()') IS NOT NULL
+  IF rls_auto_enable_fn IS NOT NULL
      AND (
-       has_function_privilege('anon', 'public.rls_auto_enable()'::regprocedure, 'EXECUTE')
-       OR has_function_privilege('authenticated', 'public.rls_auto_enable()'::regprocedure, 'EXECUTE')
+       has_function_privilege('anon', rls_auto_enable_fn, 'EXECUTE')
+       OR has_function_privilege('authenticated', rls_auto_enable_fn, 'EXECUTE')
      ) THEN
     RAISE EXCEPTION 'rls_auto_enable must not be browser-executable';
   END IF;
