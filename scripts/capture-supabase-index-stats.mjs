@@ -51,6 +51,11 @@ function firstJsonObject(text) {
 const outPath = readArg("--out");
 if (!outPath) fail("Missing --out <path>.");
 
+const dbUrl = readArg("--db-url") ||
+  process.env.SUPABASE_DB_URL ||
+  process.env.SUPABASE_STAGING_EFFECTIVE_DB_URL ||
+  process.env.SUPABASE_PRODUCTION_DB_URL;
+
 const tempDir = mkdtempSync(join(tmpdir(), "maiprop-index-stats-"));
 const sqlPath = join(tempDir, "index-stats.sql");
 
@@ -74,9 +79,17 @@ order by relname, indexrelname;
   );
 
   const npx = process.platform === "win32" ? "npx.cmd" : "npx";
+  const queryArgs = ["supabase", "db", "query"];
+  if (dbUrl) {
+    queryArgs.push("--db-url", dbUrl);
+  } else {
+    queryArgs.push("--linked");
+  }
+  queryArgs.push("--output", "json", "--file", sqlPath);
+
   const result = spawnSync(
     npx,
-    ["supabase", "db", "query", "--linked", "--output", "json", "--file", sqlPath],
+    queryArgs,
     {
       cwd: process.cwd(),
       env: process.env,
