@@ -105,7 +105,15 @@ describe("small interaction widgets", () => {
 
   it("routes auction AI searches to the auctions surface instead of applying listing-grid filters", async () => {
     invokeMock.mockResolvedValueOnce({
-      data: { listing_type: "auction", city: "Agrinio", summary: "Auctions in Agrinio" },
+      data: {
+        listing_type: "auction",
+        city: "Agrinio",
+        price_min: 100000,
+        price_max: 200000,
+        sqm_min: 80,
+        sqm_max: 120,
+        summary: "Auctions in Agrinio",
+      },
       error: null,
     });
     const onFiltersApplied = vi.fn();
@@ -118,7 +126,7 @@ describe("small interaction widgets", () => {
     fireEvent.click(screen.getByRole("button", { name: /^search$/i }));
 
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith(
-      "/auctions?city=Agrinio&ai_summary=Auctions+in+Agrinio",
+      "/auctions?city=Agrinio&price_min=100000&price_max=200000&sqm_min=80&sqm_max=120&ai_summary=Auctions+in+Agrinio",
     ));
     expect(onFiltersApplied).not.toHaveBeenCalled();
   });

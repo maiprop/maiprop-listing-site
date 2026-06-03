@@ -120,11 +120,14 @@ export function getFiresaleInterestUserMessage(error: unknown): string {
   if (message.includes("active_interest_is_admin_managed")) {
     return "Your interest is already being managed by the mAI prop team.";
   }
-  if (message.includes("invalid_proof_path") || message.includes("proof")) {
-    return "Your proof of funds document could not be accepted. Please re-upload it and try again.";
-  }
-  if (message.includes("not_authenticated")) {
+  if (message.includes("not_authenticated") || message.includes("not authenticated")) {
     return "Please sign in again before registering investor interest.";
+  }
+  if (message.includes("invalid proof amount") || message.includes("proof_amount")) {
+    return "Enter a valid proof of funds amount and try again.";
+  }
+  if (message.includes("invalid_proof_path") || message.includes("proof path")) {
+    return "Your proof of funds document could not be accepted. Please re-upload it and try again.";
   }
 
   return "Failed to register interest. Please try again.";

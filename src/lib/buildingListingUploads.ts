@@ -11,12 +11,27 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import {
-  IMAGE_MIME_TYPES,
-  IMAGE_AND_VIDEO_MIME_TYPES,
   PDF_MIME_TYPES,
   assertAllowedUpload,
 } from "@/lib/uploadValidation";
 import type { ProjectMediaType } from "@/hooks/useProjectMedia";
+
+const LISTING_IMAGE_MIME_TYPES = new Set<string>([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+
+const PROJECT_MEDIA_MIME_TYPES = new Set<string>([
+  ...LISTING_IMAGE_MIME_TYPES,
+  "image/gif",
+  "application/pdf",
+  "video/mp4",
+  "video/webm",
+]);
+
+const LISTING_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+const PROJECT_MEDIA_MAX_BYTES = 20 * 1024 * 1024;
 
 /** Per-upload type returned by `uploadListingImage`. */
 export interface UploadedListingImage {
@@ -40,7 +55,10 @@ export async function uploadListingImage(
 ): Promise<UploadedListingImage> {
   // Reject anything that isn't a recognised image MIME type before it
   // hits the bucket — the <input accept="..."> attribute is only a UX hint.
-  assertAllowedUpload(file, IMAGE_MIME_TYPES, { label: "image" });
+  assertAllowedUpload(file, LISTING_IMAGE_MIME_TYPES, {
+    label: "listing image",
+    maxBytes: LISTING_IMAGE_MAX_BYTES,
+  });
   const ext = file.name.split(".").pop();
   const id = crypto.randomUUID();
   const path = `${userId}/${id}.${ext}`;
@@ -53,7 +71,7 @@ export async function uploadListingImage(
 /**
  * Validates and uploads project-level media (renderings, floor plans,
  * brochures, video, etc.) to `project-media`. PDFs go through the PDF
- * allowlist; everything else allows images and video, with a 50 MB cap.
+ * allowlist; everything else matches the bucket's image/video allowlist.
  */
 export async function uploadProjectMedia(
   file: File,
@@ -61,10 +79,10 @@ export async function uploadProjectMedia(
   projectId: string,
   mediaType: ProjectMediaType,
 ): Promise<string> {
-  const allowed = mediaType === "brochure_pdf" ? PDF_MIME_TYPES : IMAGE_AND_VIDEO_MIME_TYPES;
+  const allowed = mediaType === "brochure_pdf" ? PDF_MIME_TYPES : PROJECT_MEDIA_MIME_TYPES;
   assertAllowedUpload(file, allowed, {
     label: mediaType === "brochure_pdf" ? "PDF brochure" : "media file",
-    maxBytes: 50 * 1024 * 1024, // 50 MB — videos/brochures can be larger than photos
+    maxBytes: PROJECT_MEDIA_MAX_BYTES,
   });
   const ext = file.name.split(".").pop() || "jpg";
   const path = `${userId}/${projectId}/media-${crypto.randomUUID()}.${ext}`;

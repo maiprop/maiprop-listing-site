@@ -7,6 +7,7 @@ import PortfoliosTab from "@/pages/dashboard/PortfoliosTab";
 import SavedSearchesTab from "@/pages/dashboard/SavedSearchesTab";
 import ViewingsTab from "@/pages/dashboard/ViewingsTab";
 import { MyListingsSection } from "@/pages/dashboard/MyListingsSection";
+import { toDateTimeLocalInputValue } from "@/lib/dateTimeLocal";
 
 const {
   authState,
@@ -306,6 +307,10 @@ describe("dashboard tab behavior", () => {
     renderWithProviders(<ViewingsTab />);
 
     fireEvent.click(screen.getByRole("button", { name: /edit viewing/i }));
+    expect(toDateTimeLocalInputValue("2026-05-16T10:00:00Z", -180)).toBe("2026-05-16T13:00");
+    expect(screen.getByLabelText(/Viewing date and time/i)).toHaveValue(
+      toDateTimeLocalInputValue("2026-05-16T10:00:00Z"),
+    );
     fireEvent.change(screen.getByLabelText(/Viewing date and time/i), {
       target: { value: "2026-05-17T12:30" },
     });
@@ -435,5 +440,29 @@ describe("dashboard tab behavior", () => {
       id: "l-edit",
       updates: { title: "Updated title", city: "Patras", price: 123456 },
     });
+  });
+
+  it("does not save an empty listing price as zero", () => {
+    listingsState.data = [{
+      id: "l-edit-empty-price",
+      title: "Priced home",
+      city: "Athens",
+      price: 100000,
+      sqm: 80,
+      status: "active",
+      views_count: 12,
+      is_off_market: false,
+      is_pre_sale: false,
+      tags: [],
+    }];
+
+    renderWithProviders(<MyListingsSection bioType="seller" role="seller" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /edit listing/i }));
+    fireEvent.change(screen.getByLabelText(/Listing price/i), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: /save listing/i }));
+
+    expect(updateListingMutate).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/Listing price/i)).toBeInTheDocument();
   });
 });

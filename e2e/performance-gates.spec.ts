@@ -1,6 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 
-const SUPABASE_ORIGIN = "https://abcdefghijklmnop.supabase.co";
 const AUTH_STORAGE_KEY = "sb-abcdefghijklmnop-auth-token";
 const PERF_USER_ID = "00000000-0000-4000-8000-000000000001";
 const PERF_LISTING_ID = "00000000-0000-4000-8000-000000000101";
@@ -115,14 +114,7 @@ async function installAuthenticatedSupabaseMocks(page: Page) {
   const expiresAt = Math.floor(Date.now() / 1000) + 60 * 60;
   await page.addInitScript(({ key, userId, expiresAtValue }) => {
     const token = `perf.${btoa(JSON.stringify({ sub: userId, role: "authenticated", exp: expiresAtValue }))}.signature`;
-    localStorage.setItem("maiprop_cookie_consent", JSON.stringify({
-      accepted: true,
-      functional: true,
-      analytics: false,
-      mapping: true,
-      timestamp: Date.now(),
-    }));
-    localStorage.setItem(key, JSON.stringify({
+    const authSession = JSON.stringify({
       access_token: token,
       refresh_token: "perf-refresh-token",
       expires_at: expiresAtValue,
@@ -136,17 +128,39 @@ async function installAuthenticatedSupabaseMocks(page: Page) {
         app_metadata: { provider: "email", providers: ["email"] },
         user_metadata: {},
       },
+    });
+
+    localStorage.setItem("maiprop_cookie_consent", JSON.stringify({
+      accepted: true,
+      functional: true,
+      analytics: false,
+      mapping: true,
+      timestamp: Date.now(),
     }));
+    localStorage.setItem(key, authSession);
+
+    const originalGetItem = Storage.prototype.getItem;
+    Storage.prototype.getItem = function getItem(storageKey: string) {
+      const stored = originalGetItem.call(this, storageKey);
+      if (
+        stored === null &&
+        this === window.localStorage &&
+        /^sb-[a-z0-9]+-auth-token$/i.test(storageKey)
+      ) {
+        return authSession;
+      }
+      return stored;
+    };
   }, { key: AUTH_STORAGE_KEY, userId: PERF_USER_ID, expiresAtValue: expiresAt });
 
-  await page.route(`${SUPABASE_ORIGIN}/functions/v1/**`, async (route) => {
+  await page.route("**/functions/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith("/owner-pro-status")) return json(route, { isPro: true });
     if (path.endsWith("/check-subscription")) return json(route, { subscribed: false, product_id: null, subscription_end: null });
     return json(route, {});
   });
 
-  await page.route(`${SUPABASE_ORIGIN}/auth/v1/**`, async (route) => {
+  await page.route("**/auth/v1/**", async (route) => {
     return json(route, {
       id: PERF_USER_ID,
       aud: "authenticated",
@@ -157,7 +171,7 @@ async function installAuthenticatedSupabaseMocks(page: Page) {
     });
   });
 
-  await page.route(`${SUPABASE_ORIGIN}/rest/v1/**`, async (route) => {
+  await page.route("**/rest/v1/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const wantsObject = request.headers().accept?.includes("vnd.pgrst.object+json") ?? false;

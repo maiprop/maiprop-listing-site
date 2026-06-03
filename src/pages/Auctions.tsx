@@ -27,6 +27,26 @@ import {
   AUCTIONS_MAX_PAGES_PRO,
 } from "@/hooks/useAuctionsPipeline";
 
+const AUCTION_URL_FILTER_MAX = "999999999";
+
+const numericRangeFromSearchParams = (
+  params: URLSearchParams,
+  minKey: string,
+  maxKey: string,
+): string => {
+  const min = params.get(minKey);
+  const max = params.get(maxKey);
+  if (min == null && max == null) return "";
+
+  const normalise = (value: string | null, fallback: string) => {
+    if (value == null || value.trim() === "") return fallback;
+    const numeric = Number(value);
+    return Number.isFinite(numeric) && numeric >= 0 ? String(numeric) : fallback;
+  };
+
+  return `${normalise(min, "0")}-${normalise(max, AUCTION_URL_FILTER_MAX)}`;
+};
+
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 const AuctionCardSkeleton = () => {
   return (
@@ -63,8 +83,13 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
 
   // Standard filters
   const [filterType, setFilterType] = useState(searchParams.get("type") || "");
-  const [filterBidRange, setFilterBidRange] = useState("");
+  const [filterBidRange, setFilterBidRange] = useState(() =>
+    numericRangeFromSearchParams(searchParams, "price_min", "price_max"),
+  );
   const [filterYearRange, setFilterYearRange] = useState("");
+  const [filterSqmRange, setFilterSqmRange] = useState(() =>
+    numericRangeFromSearchParams(searchParams, "sqm_min", "sqm_max"),
+  );
 
   // Premium filters (functional for Pro, locked/redirect for free users)
   const [filterOwnership, setFilterOwnership] = useState("");
@@ -76,7 +101,10 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
   // Prefill city from URL when data loads
   useEffect(() => {
     const cityParam = searchParams.get("city");
-    if (cityParam) setSelectedCity(cityParam);
+    setSelectedCity(cityParam || "All Cities");
+    setFilterType(searchParams.get("type") || "");
+    setFilterBidRange(numericRangeFromSearchParams(searchParams, "price_min", "price_max"));
+    setFilterSqmRange(numericRangeFromSearchParams(searchParams, "sqm_min", "sqm_max"));
   }, [searchParams]);
 
   const toggleFav = useToggleFavorite();
@@ -103,6 +131,7 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
     filterType,
     filterBidRange,
     filterYearRange,
+    filterSqmRange,
     filterOwnership,
     filterRound,
     filterYield,
@@ -125,6 +154,7 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
     setFilterType("");
     setFilterBidRange("");
     setFilterYearRange("");
+    setFilterSqmRange("");
     setFilterOwnership("");
     setFilterRound("");
     setFilterYield("");

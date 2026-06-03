@@ -33,6 +33,8 @@ export interface UseAuctionsPipelineOptions {
   filterBidRange: string;
   /** "" or `min-max` (numeric, year). */
   filterYearRange: string;
+  /** "" or `min-max` (numeric, square metres). Can be URL/AI-derived. */
+  filterSqmRange?: string;
   /** Premium filters. Only applied when `isPro || isMaiPropOsUser`. */
   filterOwnership: string;
   /** Premium: `""`, `"1"`, `"2"`, `"3plus"`. */
@@ -63,6 +65,7 @@ export function useAuctionsPipeline(opts: UseAuctionsPipelineOptions) {
     filterType,
     filterBidRange,
     filterYearRange,
+    filterSqmRange = "",
     filterOwnership,
     filterRound,
     filterYield,
@@ -114,12 +117,12 @@ export function useAuctionsPipeline(opts: UseAuctionsPipelineOptions) {
 
   const visibleFiltered = useMemo(() => {
     const predicate = buildAuctionFilter(
-      { selectedCity, filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, filterYield },
+      { selectedCity, filterType, filterBidRange, filterYearRange, filterSqmRange, filterOwnership, filterRound, filterYield },
       isPro,
       isMaiPropOsUser,
     );
     return cappedAuctions.filter(predicate);
-  }, [cappedAuctions, selectedCity, filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, filterYield, isPro, isMaiPropOsUser]);
+  }, [cappedAuctions, selectedCity, filterType, filterBidRange, filterYearRange, filterSqmRange, filterOwnership, filterRound, filterYield, isPro, isMaiPropOsUser]);
 
   const polygonFiltered = useMemo(() => {
     if (!polygonFilterIds) return visibleFiltered;
@@ -135,7 +138,7 @@ export function useAuctionsPipeline(opts: UseAuctionsPipelineOptions) {
   /** Reset to first page whenever any filter or the cap (tier change) flips. */
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedCity, filterType, filterBidRange, filterYearRange, filterOwnership, filterRound, filterYield, maxItems, setCurrentPage]);
+  }, [selectedCity, filterType, filterBidRange, filterYearRange, filterSqmRange, filterOwnership, filterRound, filterYield, maxItems, setCurrentPage]);
 
   /** Clamp current page to total when filters reduce the result set. */
   useEffect(() => {
@@ -146,6 +149,7 @@ export function useAuctionsPipeline(opts: UseAuctionsPipelineOptions) {
     filterType,
     filterBidRange,
     filterYearRange,
+    filterSqmRange,
     ...(isPro || isMaiPropOsUser ? [filterOwnership, filterRound, filterYield] : []),
   ].filter(Boolean).length;
 
@@ -240,6 +244,7 @@ interface BuildAuctionFilterOpts {
   filterType: string;
   filterBidRange: string;
   filterYearRange: string;
+  filterSqmRange?: string;
   filterOwnership: string;
   filterRound: string;
   filterYield: string;
@@ -261,6 +266,7 @@ export function buildAuctionFilter(
     filterType,
     filterBidRange,
     filterYearRange,
+    filterSqmRange = "",
     filterOwnership,
     filterRound,
     filterYield,
@@ -285,6 +291,12 @@ export function buildAuctionFilter(
     if (filterYearRange && a.year_built) {
       const [min, max] = filterYearRange.split("-").map(Number);
       if (a.year_built < min || a.year_built > max) return false;
+    }
+
+    if (filterSqmRange) {
+      const [min, max] = filterSqmRange.split("-").map(Number);
+      const sqm = Number(a.sqm ?? 0);
+      if (!Number.isFinite(sqm) || sqm < min || sqm > max) return false;
     }
 
     if (isPro || isMaiPropOsUser) {

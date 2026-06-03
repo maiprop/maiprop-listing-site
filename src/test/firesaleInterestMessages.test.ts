@@ -15,5 +15,11 @@ describe("firesale interest user-facing errors", () => {
     expect(getFiresaleInterestUserMessage(new Error("invalid_proof_path"))).toMatch(
       /proof of funds/i,
     );
+    expect(getFiresaleInterestUserMessage(new Error("Not authenticated"))).toMatch(
+      /sign in/i,
+    );
+    expect(getFiresaleInterestUserMessage(new Error("Invalid proof amount"))).toMatch(
+      /valid proof of funds amount/i,
+    );
   });
 });

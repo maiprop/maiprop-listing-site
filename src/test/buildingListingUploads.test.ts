@@ -63,8 +63,23 @@ describe("building listing upload helpers", () => {
     const file = new File(["text"], "notes.txt", { type: "text/plain" });
 
     await expect(uploadListingImage(file, "user-1")).rejects.toThrow(
-      /Unsupported image type/,
+      /Unsupported listing image type/,
     );
+    expect(storageMocks.uploadMock).not.toHaveBeenCalled();
+  });
+
+  it("matches the listing-images bucket MIME and size limits before upload", async () => {
+    await expect(
+      uploadListingImage(new File(["image"], "ios.heic", { type: "image/heic" }), "user-1"),
+    ).rejects.toThrow(/Unsupported listing image type/);
+
+    await expect(
+      uploadListingImage(
+        new File([new Uint8Array(5 * 1024 * 1024 + 1)], "large.jpg", { type: "image/jpeg" }),
+        "user-1",
+      ),
+    ).rejects.toThrow(/exceeds the 5 MB limit/);
+
     expect(storageMocks.uploadMock).not.toHaveBeenCalled();
   });
 
@@ -84,7 +99,7 @@ describe("building listing upload helpers", () => {
     );
   });
 
-  it("rejects non-PDF brochure uploads and oversized project media", async () => {
+  it("rejects non-PDF brochure uploads and project media outside bucket constraints", async () => {
     await expect(
       uploadProjectMedia(
         new File(["image"], "brochure.png", { type: "image/png" }),
@@ -94,12 +109,21 @@ describe("building listing upload helpers", () => {
       ),
     ).rejects.toThrow(/Unsupported PDF brochure type/);
 
-    const oversizedVideo = new File([new Uint8Array(50 * 1024 * 1024 + 1)], "tour.mp4", {
+    await expect(
+      uploadProjectMedia(
+        new File(["video"], "tour.mov", { type: "video/quicktime" }),
+        "user-1",
+        "project-1",
+        "video",
+      ),
+    ).rejects.toThrow(/Unsupported media file type/);
+
+    const oversizedVideo = new File([new Uint8Array(20 * 1024 * 1024 + 1)], "tour.mp4", {
       type: "video/mp4",
     });
     await expect(
       uploadProjectMedia(oversizedVideo, "user-1", "project-1", "video"),
-    ).rejects.toThrow(/exceeds the 50 MB limit/);
+    ).rejects.toThrow(/exceeds the 20 MB limit/);
     expect(storageMocks.uploadMock).not.toHaveBeenCalled();
   });
 

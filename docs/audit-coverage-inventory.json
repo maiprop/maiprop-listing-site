@@ -1,22 +1,22 @@
 {
-  "generated_at": "2026-06-03T05:59:23.662Z",
+  "generated_at": "2026-06-03T07:58:02.503Z",
   "totals": {
-    "source_files": 572,
-    "source_lines": 103100,
+    "source_files": 573,
+    "source_lines": 103173,
     "test_files": 313,
     "routes": 41,
     "supabase_functions": 57,
-    "likely_tested_source_files": 508,
+    "likely_tested_source_files": 509,
     "coverage_available": true,
-    "coverage_lines_pct": 86.37,
-    "coverage_functions_pct": 81.38,
-    "coverage_branches_pct": 71.55,
+    "coverage_lines_pct": 86.4,
+    "coverage_functions_pct": 81.41,
+    "coverage_branches_pct": 71.57,
     "zero_covered_runtime_files": 0
   },
   "by_root": {
     "src/pages": {
       "files": 57,
-      "lines": 20018,
+      "lines": 20051,
       "likely_tested_files": 55,
       "likely_untested_files": [
         "src/pages/dashboard/billing/AddonCard.tsx",
@@ -62,7 +62,7 @@
     },
     "src/hooks": {
       "files": 67,
-      "lines": 10129,
+      "lines": 10144,
       "likely_tested_files": 60,
       "likely_untested_files": [
         "src/hooks/useContactSubmissions.ts",
@@ -75,9 +75,9 @@
       ]
     },
     "src/lib": {
-      "files": 59,
-      "lines": 7230,
-      "likely_tested_files": 44,
+      "files": 60,
+      "lines": 7255,
+      "likely_tested_files": 45,
       "likely_untested_files": [
         "src/lib/apiDocsData.ts",
         "src/lib/authErrorMessages.ts",

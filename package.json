@@ -59,7 +59,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "node scripts/run-vitest-coverage.mjs",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:perf": "npm run build && playwright test e2e/performance-gates.spec.ts --project=chromium",

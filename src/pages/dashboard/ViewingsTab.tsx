@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { Link, useNavigate } from "react-router-dom";
 import { createViewingVideoRoomPath } from "@/lib/videoRooms";
+import { toDateTimeLocalInputValue } from "@/lib/dateTimeLocal";
 import type { Tables } from "@/integrations/supabase/types";
 import type { Profile } from "@/contexts/AuthContext";
 
@@ -32,7 +33,7 @@ function ViewingCard({
   const canJoinMaiPropRoom = isVideo && !hasVideoLink && v.status === "confirmed";
   const isPending = v.status === "pending";
   const [editing, setEditing] = useState(false);
-  const [scheduledAt, setScheduledAt] = useState(new Date(v.scheduled_at).toISOString().slice(0, 16));
+  const [scheduledAt, setScheduledAt] = useState(() => toDateTimeLocalInputValue(v.scheduled_at));
   const [viewingType, setViewingType] = useState<"in_person" | "video">(
     v.viewing_type === "video" ? "video" : "in_person",
   );

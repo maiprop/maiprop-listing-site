@@ -97,7 +97,9 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
     if (!editingListing) return;
     const title = editingListing.title.trim();
     const city = editingListing.city.trim();
-    const price = Number(editingListing.price);
+    const rawPrice = editingListing.price.trim();
+    const price = Number(rawPrice);
+    if (rawPrice === "") return;
     if (!title || !Number.isFinite(price) || price < 0) return;
 
     updateListing.mutate({

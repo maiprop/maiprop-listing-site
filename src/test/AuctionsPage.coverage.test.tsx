@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   mutate: vi.fn(),
   pipeline: vi.fn(),
+  search: "city=Athens&type=apartment",
 }));
 
 vi.mock("react-router-dom", async () => {
@@ -15,7 +16,7 @@ vi.mock("react-router-dom", async () => {
   return {
     ...actual,
     useNavigate: () => mocks.navigate,
-    useSearchParams: () => [new URLSearchParams("city=Athens&type=apartment")],
+    useSearchParams: () => [new URLSearchParams(mocks.search)],
   };
 });
 
@@ -130,7 +131,21 @@ describe("Auctions page coverage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.user = { id: "user-1" };
+    mocks.search = "city=Athens&type=apartment";
     setPipeline();
+  });
+
+  it("hydrates AI auction URL filters into the auction pipeline", () => {
+    mocks.search = "city=Agrinio&type=commercial&price_min=100000&price_max=200000&sqm_min=80&sqm_max=120";
+
+    renderWithProviders(<Auctions />);
+
+    expect(mocks.pipeline).toHaveBeenCalledWith(expect.objectContaining({
+      selectedCity: "Agrinio",
+      filterType: "commercial",
+      filterBidRange: "100000-200000",
+      filterSqmRange: "80-120",
+    }));
   });
 
   it("covers loading skeletons, alert modal close, filters, view toggles, map polygon, pagination, and favorites", async () => {
