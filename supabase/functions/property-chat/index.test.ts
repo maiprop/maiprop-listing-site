@@ -22,4 +22,34 @@ Deno.test("fake Bearer returns 401 (not 500)", async () => {
   assertEquals([401, 429].includes(res.status), true);
 });
 
+Deno.test("Gemini JSON responses are normalized to frontend-readable SSE chunks", async () => {
+  const originalFetch = globalThis.fetch;
+  const providerText = "This auction looks below nearby comparables.";
+  Deno.env.set("GEMINI_API_KEY", "placeholder-gemini");
+  globalThis.fetch = (() =>
+    Promise.resolve(new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ text: providerText }] } }],
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }))) as typeof fetch;
+
+  try {
+    const res = await handler(authedReq(
+      "POST",
+      { messages: [{ role: "user", content: "Summarize this property" }] },
+      { authorization: "Bearer test-valid-token" },
+    ));
+    assertEquals(res.status, 200);
+    assertEquals(res.headers.get("Content-Type"), "text/event-stream");
+    const body = await res.text();
+    assertEquals(body.includes("data: "), true);
+    assertEquals(body.includes(providerText), true);
+    assertEquals(body.includes("data: [DONE]"), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+    Deno.env.delete("GEMINI_API_KEY");
+  }
+});
+
 restore();

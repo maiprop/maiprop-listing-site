@@ -180,7 +180,7 @@ describe("dashboard tab behavior", () => {
 
     expect(screen.getAllByText("Seafront flat")).toHaveLength(2);
     expect(screen.getByText("Old town studio")).toBeInTheDocument();
-    expect(screen.getByText("Messages received")).toBeInTheDocument();
+    expect(screen.getByText("All-time messages")).toBeInTheDocument();
     expect(screen.getAllByText("2").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "30d" }));
     expect(screen.getByText(/Property views/i)).toHaveTextContent("last 30 days");
@@ -230,6 +230,23 @@ describe("dashboard tab behavior", () => {
     expect(deletePortfolioMutate).toHaveBeenCalledWith("p-1");
   });
 
+  it("opens a dashboard portfolio preview modal without forcing the full portfolio route", () => {
+    portfoliosState.data = [{
+      id: "p-preview",
+      name: "Preview stack",
+      listing_ids: ["l-1"],
+      listings: [{ id: "l-1", title: "Preview Flat", price: 180000 }],
+    }];
+
+    renderWithProviders(<PortfoliosTab />);
+
+    fireEvent.click(screen.getByRole("button", { name: /^Preview$/i }));
+    const dialog = screen.getByRole("dialog", { name: /portfolio preview/i });
+    expect(within(dialog).getByText("Preview stack")).toBeInTheDocument();
+    expect(within(dialog).getByText("Preview Flat")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /full view/i })).not.toBeInTheDocument();
+  });
+
   it("toggles alerts, runs with serialized filters, and confirms saved-search deletion", () => {
     savedSearchesState.data = [{
       id: "s-1",
@@ -273,6 +290,37 @@ describe("dashboard tab behavior", () => {
     const linkInput = screen.getByPlaceholderText(/Paste video call link/i);
     fireEvent.keyDown(linkInput, { key: "Enter" });
     expect(updateViewingMutate).toHaveBeenCalledWith({ id: "owner-1", updates: { video_link: "https://whereby.test/agent" } });
+  });
+
+  it("lets users edit viewing schedule and type from the dashboard", () => {
+    subscriptionState.isPro = true;
+    viewingsRequesterState.data = [{
+      id: "v-edit",
+      scheduled_at: "2026-05-16T10:00:00Z",
+      status: "confirmed",
+      viewing_type: "in_person",
+      video_link: null,
+      listings: { title: "Editable viewing" },
+    }];
+
+    renderWithProviders(<ViewingsTab />);
+
+    fireEvent.click(screen.getByRole("button", { name: /edit viewing/i }));
+    fireEvent.change(screen.getByLabelText(/Viewing date and time/i), {
+      target: { value: "2026-05-17T12:30" },
+    });
+    fireEvent.change(screen.getByLabelText(/Viewing type/i), {
+      target: { value: "video" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save viewing/i }));
+
+    expect(updateViewingMutate).toHaveBeenCalledWith({
+      id: "v-edit",
+      updates: {
+        scheduled_at: new Date("2026-05-17T12:30").toISOString(),
+        viewing_type: "video",
+      },
+    });
   });
 
   it("lets listing owners confirm or decline pending viewing requests", () => {
@@ -357,5 +405,35 @@ describe("dashboard tab behavior", () => {
     fireEvent.click(screen.getByRole("button", { name: /delete listing/i }));
     fireEvent.click(within(screen.getByRole("dialog", { name: /delete this listing/i })).getByRole("button", { name: /^delete$/i }));
     expect(deleteListingMutate).toHaveBeenCalledWith("l-1");
+  });
+
+  it("lets owners edit listing title, city, and price inline", () => {
+    listingsState.data = [{
+      id: "l-edit",
+      title: "Old title",
+      city: "Athens",
+      price: 100000,
+      sqm: 80,
+      status: "active",
+      views_count: 12,
+      is_off_market: false,
+      is_pre_sale: false,
+      is_featured: false,
+      priority_placement: 0,
+      tags: [],
+    }];
+
+    renderWithProviders(<MyListingsSection bioType="seller" role="seller" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /edit listing/i }));
+    fireEvent.change(screen.getByLabelText(/Listing title/i), { target: { value: "Updated title" } });
+    fireEvent.change(screen.getByLabelText(/Listing city/i), { target: { value: "Patras" } });
+    fireEvent.change(screen.getByLabelText(/Listing price/i), { target: { value: "123456" } });
+    fireEvent.click(screen.getByRole("button", { name: /save listing/i }));
+
+    expect(updateListingMutate).toHaveBeenCalledWith({
+      id: "l-edit",
+      updates: { title: "Updated title", city: "Patras", price: 123456 },
+    });
   });
 });

@@ -7,6 +7,11 @@ const serviceRpcMigration = readFileSync(
   "utf8",
 );
 
+const participantTypeInterestAccessMigration = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/20260603053003_allow_participant_type_firesale_interest_access.sql"),
+  "utf8",
+);
+
 const legacyRevokeMigration = readFileSync(
   resolve(process.cwd(), "supabase/migrations/20260601151512_restrict_legacy_firesale_interest_submit_rpc.sql"),
   "utf8",
@@ -59,6 +64,13 @@ describe("firesale interest submission RPC grants", () => {
     expect(edgeFunction).toContain("verifyBearerToken");
     expect(edgeFunction).toContain('"submit_firesale_interest_for_user"');
     expect(edgeFunction).toContain("validateProofPath");
+  });
+
+  it("keeps investor interest access aligned with dashboard participant type entitlement", () => {
+    expect(participantTypeInterestAccessMigration).toContain("CREATE OR REPLACE FUNCTION public.submit_firesale_interest_for_user");
+    expect(participantTypeInterestAccessMigration).toContain("p.participant_type::text IN ('investor', 'institutional')");
+    expect(participantTypeInterestAccessMigration).toContain("p.role::text IN ('investor', 'institutional')");
+    expect(participantTypeInterestAccessMigration).toContain("s.status IN ('active', 'trial')");
   });
 
   it("keeps the future advisor-hardening migration aligned for fresh database builds", () => {

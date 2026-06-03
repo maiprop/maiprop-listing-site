@@ -1,6 +1,6 @@
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
-import { openAIChatCompletion } from "../_shared/openai.ts";
+import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
 import { createLogger } from "../_shared/logger.ts";
 
@@ -8,6 +8,32 @@ const log = createLogger("property-chat");
 
 const BUCKET = "property-chat";
 const chatLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000, failClosed: true });
+
+function toSseChunk(text: string): string {
+  return `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\ndata: [DONE]\n\n`;
+}
+
+async function normalizeProviderResponseToSse(
+  response: Response,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const contentType = response.headers.get("Content-Type") ?? "";
+  if (contentType.toLowerCase().includes("text/event-stream")) {
+    return new Response(response.body, {
+      headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+    });
+  }
+
+  const payload = await response.json();
+  const text = readOpenAITextContent(payload).trim();
+  if (!text) {
+    throw new Error("AI response did not include readable chat content");
+  }
+
+  return new Response(toSseChunk(text), {
+    headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+  });
+}
 
 const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, listing context, AI parsing, and response shaping.
   const corsPreflightResponse = handleCors(req);
@@ -109,9 +135,7 @@ RESPONSE RULES — follow these strictly:
     // Record usage now — we've committed to the call. The stream may
     // still fail mid-flight, but the OpenAI cost is already incurred.
     await recordAiCall(quota.userId, BUCKET);
-    return new Response(response.body, {
-      headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
-    });
+    return await normalizeProviderResponseToSse(response, corsHeaders);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Unknown error";
     log.error("property-chat error", { err: msg });

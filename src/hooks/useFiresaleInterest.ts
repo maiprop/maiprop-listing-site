@@ -102,6 +102,34 @@ function getEdgeRpcErrorMessage(error: EdgeRpcError): string {
   return error.message ?? "Firesale interest request failed";
 }
 
+// skipcq: JS-0067 - Top-level helper is covered by dashboard error-message tests.
+export function getFiresaleInterestUserMessage(error: unknown): string {
+  const raw = error instanceof Error
+    ? error.message
+    : typeof error === "string"
+      ? error
+      : "";
+  const message = raw.toLowerCase();
+
+  if (message.includes("investor_access_required")) {
+    return "Investor dashboard access is required before you can register interest in Quick Sale opportunities.";
+  }
+  if (message.includes("firesale_deal_not_available")) {
+    return "This Quick Sale opportunity is no longer available for new investor interest.";
+  }
+  if (message.includes("active_interest_is_admin_managed")) {
+    return "Your interest is already being managed by the mAI prop team.";
+  }
+  if (message.includes("invalid_proof_path") || message.includes("proof")) {
+    return "Your proof of funds document could not be accepted. Please re-upload it and try again.";
+  }
+  if (message.includes("not_authenticated")) {
+    return "Please sign in again before registering investor interest.";
+  }
+
+  return "Failed to register interest. Please try again.";
+}
+
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 async function releaseExpiredReservations(dealId?: string) {
   const { error } = await supabase.rpc("release_expired_firesale_reservations", {
@@ -211,7 +239,7 @@ export function useExpressInterest() {
       qc.invalidateQueries({ queryKey: ["firesale_interest_queue", variables.dealId] });
       toast.success("Interest registered. Proof-backed submissions move into the priority queue first.");
     },
-    onError: () => toast.error("Failed to register interest. Please try again."),
+    onError: (error) => toast.error(getFiresaleInterestUserMessage(error)),
   });
 }
 

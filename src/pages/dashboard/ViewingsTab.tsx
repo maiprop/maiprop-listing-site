@@ -1,4 +1,5 @@
-import { Loader2, Calendar, Check, ExternalLink, Lock, Video, X } from "lucide-react";
+import { useState } from "react";
+import { Loader2, Calendar, Check, ExternalLink, Lock, Video, X, Edit2, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useViewings, useUpdateViewing, useUpdateViewingStatus } from "@/hooks/useViewings";
 import { useAuth } from "@/contexts/AuthContext";
@@ -30,6 +31,23 @@ function ViewingCard({
   const roomPath = createViewingVideoRoomPath(v.id);
   const canJoinMaiPropRoom = isVideo && !hasVideoLink && v.status === "confirmed";
   const isPending = v.status === "pending";
+  const [editing, setEditing] = useState(false);
+  const [scheduledAt, setScheduledAt] = useState(new Date(v.scheduled_at).toISOString().slice(0, 16));
+  const [viewingType, setViewingType] = useState<"in_person" | "video">(
+    v.viewing_type === "video" ? "video" : "in_person",
+  );
+  const saveViewing = () => {
+    const nextScheduledAt = new Date(scheduledAt);
+    if (Number.isNaN(nextScheduledAt.getTime())) return;
+    updateViewing.mutate({
+      id: v.id,
+      updates: {
+        scheduled_at: nextScheduledAt.toISOString(),
+        viewing_type: viewingType,
+      },
+    });
+    setEditing(false);
+  };
   return (
     <div className="glass-card rounded-xl p-4 flex flex-wrap items-start gap-4">
       <div className={`w-2 h-10 rounded-full shrink-0 ${
@@ -46,6 +64,48 @@ function ViewingCard({
         }`}>
           {v.status}
         </span>
+        {editing ? (
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-[1fr_160px_auto] gap-2 items-end">
+            <label className="text-xs text-muted-foreground">
+              Viewing date and time
+              <input
+                type="datetime-local"
+                value={scheduledAt}
+                onChange={(e) => setScheduledAt(e.target.value)}
+                className="mt-1 w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground"
+              />
+            </label>
+            <label className="text-xs text-muted-foreground">
+              Viewing type
+              <select
+                value={viewingType}
+                onChange={(e) => setViewingType(e.target.value === "video" ? "video" : "in_person")}
+                className="mt-1 w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground"
+              >
+                <option value="in_person">In-person</option>
+                <option value="video">Video</option>
+              </select>
+            </label>
+            <div className="flex gap-2">
+              <Button size="sm" className="h-9 gap-1.5" onClick={saveViewing} aria-label="Save viewing">
+                <Save className="w-3.5 h-3.5" />
+                Save
+              </Button>
+              <Button size="sm" variant="outline" className="h-9" onClick={() => setEditing(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+            aria-label="Edit viewing"
+          >
+            <Edit2 className="w-3 h-3" /> Edit viewing
+          </button>
+        )}
         {isOwner && isPending && (
           <div className="mt-3 flex flex-wrap gap-2">
             <Button

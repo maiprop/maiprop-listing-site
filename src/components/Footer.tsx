@@ -88,31 +88,47 @@ export function Footer() {
           <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground whitespace-nowrap">Our Products</span>
           <div className="flex flex-wrap items-center gap-3">
             {/* maiProp OS */}
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary border border-border">
+            <a
+              href="https://os.maiprop.co/"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="mAI prop OS"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary border border-border hover:border-primary/40 transition-colors"
+            >
               <span className="text-base leading-none">🖥️</span>
               <div>
                 <div className="text-xs font-semibold text-foreground leading-tight">mAI prop OS</div>
                 <div className="text-[10px] text-muted-foreground leading-tight">Operator platform</div>
               </div>
-            </div>
+            </a>
 
             {/* mai Properties */}
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary border border-border">
+            <a
+              href="https://properties.maiprop.co/"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="mAI properties"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary border border-border hover:border-primary/40 transition-colors"
+            >
               <span className="text-base leading-none">🏛️</span>
               <div>
                 <div className="text-xs font-semibold text-foreground leading-tight">mAI properties</div>
                 <div className="text-[10px] text-muted-foreground leading-tight">Investment properties</div>
               </div>
-            </div>
+            </a>
 
             {/* maiProp (current) */}
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20">
+            <Link
+              to="/"
+              aria-label="mAI prop home"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 hover:border-primary/40 transition-colors"
+            >
               <span className="text-base leading-none">🔍</span>
               <div>
                 <div className="text-xs font-semibold text-primary leading-tight">mAI prop</div>
                 <div className="text-[10px] text-muted-foreground leading-tight">You are here</div>
               </div>
-            </div>
+            </Link>
           </div>
         </div>
 
