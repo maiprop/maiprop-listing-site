@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
@@ -46,24 +46,42 @@ function coverageMeetsThresholds() {
 }
 
 function runCoverage() {
-  return spawnSync(process.execPath, [vitestBin, "run", "--coverage"], {
-    cwd: root,
-    encoding: "utf8",
-    env: {
-      ...process.env,
-      VITEST_COVERAGE_DIR: coverageRunPath,
-    },
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [vitestBin, "run", "--coverage"], {
+      cwd: root,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        VITEST_COVERAGE_DIR: coverageRunPath,
+      },
+    });
+    let output = "";
+    const append = (chunk, target) => {
+      const text = chunk.toString();
+      target.write(text);
+      output += text;
+      if (output.length > 2_000_000) {
+        output = output.slice(-1_000_000);
+      }
+    };
+    child.stdout?.on("data", (chunk) => append(chunk, process.stdout));
+    child.stderr?.on("data", (chunk) => append(chunk, process.stderr));
+    child.on("close", (status, signal) => {
+      resolve({ status, signal, output });
+    });
+    child.on("error", (error) => {
+      const text = `${error.name}: ${error.message}`;
+      process.stderr.write(`${text}\n`);
+      resolve({ status: 1, signal: null, output: `${output}\n${text}` });
+    });
   });
-}
-
-function writeResult(result) {
-  if (result.stdout) process.stdout.write(result.stdout);
-  if (result.stderr) process.stderr.write(result.stderr);
 }
 
 function failedDuringCoverageTmpCleanup(output) {
   return (
-  /EPERM: operation not permitted, rmdir .*coverage[\\/]/i.test(output) ||
+    /EPERM: operation not permitted, rmdir .*\.coverage-runs[\\/].*\.tmp/i.test(output) ||
+    /\.coverage-runs[\\/].*\.tmp.*EPERM/i.test(output) ||
+    /EPERM: operation not permitted, rmdir .*coverage[\\/]/i.test(output) ||
     /coverage[\\/].*EPERM/i.test(output)
   );
 }
@@ -92,16 +110,18 @@ function cleanupCoverageRun() {
 }
 
 removeCoverageTmp();
-let result = runCoverage();
-writeResult(result);
+let result = await runCoverage();
 
-let output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
-if (result.status !== 0 && failedDuringCoverageTmpCleanup(output)) {
+let output = result.output;
+if (
+  result.status !== 0 &&
+  failedDuringCoverageTmpCleanup(output) &&
+  !(testsPassed(output) && coverageMeetsThresholds())
+) {
   removeCoverageTmp();
   console.warn("[test:coverage] Retrying once after Windows coverage/.tmp cleanup EPERM.");
-  result = runCoverage();
-  writeResult(result);
-  output = `${output}\n${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+  result = await runCoverage();
+  output = `${output}\n${result.output}`;
 }
 
 if (result.status === 0) {
