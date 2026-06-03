@@ -9,6 +9,12 @@
 
 BEGIN;
 
+-- marketing_leads is the legacy/public capture table. Live schemas already
+-- expose owner_id for owner/admin visibility; clean replays from older
+-- migration history can still reach this advisor cleanup without the column.
+ALTER TABLE public.marketing_leads
+  ADD COLUMN IF NOT EXISTS owner_id UUID REFERENCES auth.users(id) ON DELETE SET NULL;
+
 -- P0 business invariant: direct listing inserts must pass quota checks.
 DROP POLICY IF EXISTS "listings_insert" ON public.listings;
 

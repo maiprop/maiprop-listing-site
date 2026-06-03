@@ -499,6 +499,14 @@ jobs:
           CREATE OR REPLACE FUNCTION storage.extension(name text) RETURNS text LANGUAGE sql AS $$ SELECT reverse(split_part(reverse(name), '.', 1)) $$;
           -- Stub extensions schema used by pg_net SCHEMA extensions
           CREATE SCHEMA IF NOT EXISTS extensions;
+          -- Stub pg_net used by private cron invoker migrations
+          CREATE SCHEMA IF NOT EXISTS net;
+          CREATE OR REPLACE FUNCTION net.http_post(
+            url text,
+            headers jsonb DEFAULT '{}'::jsonb,
+            body jsonb DEFAULT '{}'::jsonb,
+            timeout_milliseconds integer DEFAULT 1000
+          ) RETURNS bigint LANGUAGE sql AS $$ SELECT 0::bigint $$;
           -- Stub cron schema + minimal job table + schedule/unschedule functions (pg_cron is Supabase-managed)
           CREATE SCHEMA IF NOT EXISTS cron;
           CREATE TABLE IF NOT EXISTS cron.job (
@@ -545,6 +553,9 @@ jobs:
             created_at timestamptz DEFAULT now(),
             updated_at timestamptz DEFAULT now()
           );
+          CREATE OR REPLACE VIEW vault.decrypted_secrets AS
+            SELECT id, name, description, secret, key_id, nonce, created_at, updated_at
+            FROM vault.secrets;
           SQL
 
       - name: Strip unavailable extensions from migrations

@@ -375,7 +375,7 @@ async function constantTimeSecretMatch(
   supplied: string,
   expected: string,
 ): Promise<boolean> {
-  if (!supplied || !expected) return false;
+  if (supplied.length === 0 || expected.length === 0) return false;
   const suppliedHash = await sha256Bytes(supplied);
   const expectedHash = await sha256Bytes(expected);
   let diff = suppliedHash.length ^ expectedHash.length;
@@ -388,7 +388,7 @@ async function constantTimeSecretMatch(
 export async function isCronBearerRequest(req: Request): Promise<boolean> {
   const cronSecret = Deno.env.get("CRON_SECRET") ?? "";
   const token = getBearerToken(req);
-  if (!token || !cronSecret) return false;
+  if (token === null || cronSecret.length === 0) return false;
   return await constantTimeSecretMatch(token, cronSecret);
 }
 

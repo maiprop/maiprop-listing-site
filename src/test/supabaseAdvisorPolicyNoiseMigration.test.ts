@@ -24,6 +24,7 @@ describe("Supabase advisor policy-noise migration", () => {
   });
 
   it("keeps public plus owner/admin visibility as one OR-equivalent select policy", () => {
+    expect(migration).toContain("ALTER TABLE public.marketing_leads ADD COLUMN IF NOT EXISTS owner_id");
     expect(migration).toContain('CREATE POLICY "professionals_select"');
     expect(migration).toContain("archived_at IS NULL OR (SELECT auth.uid()) = user_id");
     expect(migration).toContain('CREATE POLICY "projects_select"');
