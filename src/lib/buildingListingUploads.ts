@@ -44,7 +44,7 @@ export async function uploadListingImage(
   const ext = file.name.split(".").pop();
   const id = crypto.randomUUID();
   const path = `${userId}/${id}.${ext}`;
-  const { error } = await supabase.storage.from("listing-images").upload(path, file, { upsert: true });
+  const { error } = await supabase.storage.from("listing-images").upload(path, file, { upsert: false });
   if (error) throw error;
   const { data } = supabase.storage.from("listing-images").getPublicUrl(path);
   return { id, url: data.publicUrl };
@@ -68,7 +68,7 @@ export async function uploadProjectMedia(
   });
   const ext = file.name.split(".").pop() || "jpg";
   const path = `${userId}/${projectId}/media-${crypto.randomUUID()}.${ext}`;
-  const { error } = await supabase.storage.from("project-media").upload(path, file, { upsert: true });
+  const { error } = await supabase.storage.from("project-media").upload(path, file, { upsert: false });
   if (error) throw error;
   const { data } = supabase.storage.from("project-media").getPublicUrl(path);
   return data.publicUrl;

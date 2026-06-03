@@ -171,7 +171,7 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
     });
     const ext = file.name.split(".").pop() || "jpg";
     const path = `${user.id}/${id}/${mediaType}-${crypto.randomUUID()}.${ext}`;
-    const { error } = await supabase.storage.from("project-media").upload(path, file, { upsert: true });
+    const { error } = await supabase.storage.from("project-media").upload(path, file, { upsert: false });
     if (error) throw error;
     const { data } = supabase.storage.from("project-media").getPublicUrl(path);
     return data.publicUrl;

@@ -193,6 +193,14 @@ describe("Dashboard behavior", () => {
     expect(screen.getAllByText("Auction Alerts").length).toBeGreaterThan(0);
   });
 
+  it("does not lock the dashboard main area with overflow-hidden scrolling", () => {
+    const { container } = renderWithProviders(<Dashboard />);
+
+    const main = container.querySelector("main");
+    expect(main).not.toBeNull();
+    expect(main?.className).not.toContain("overflow-hidden");
+  });
+
   it("counts seller active listings from the same listing rows shown in the overview", () => {
     authState.profile = { id: "p-1", role: "seller", participant_type: "seller", first_name: "Sofia" };
     listingsState.data = [

@@ -13,6 +13,7 @@ const invokeMock = vi.fn();
 const getSessionMock = vi.fn();
 const toastErrorMock = vi.fn();
 const currentAuth = vi.hoisted(() => ({ user: { id: "user-1" } as null | { id: string } }));
+const navigateMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({ user: currentAuth.user }),
@@ -28,6 +29,11 @@ vi.mock("@/integrations/supabase/client", () => ({
     auth: { getSession: (...args: unknown[]) => getSessionMock(...args) },
   },
 }));
+
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
+  return { ...actual, useNavigate: () => navigateMock };
+});
 
 vi.mock("sonner", () => ({
   toast: {
@@ -57,6 +63,7 @@ describe("small interaction widgets", () => {
     invokeMock.mockReset();
     getSessionMock.mockReset();
     toastErrorMock.mockReset();
+    navigateMock.mockReset();
     vi.restoreAllMocks();
   });
 
@@ -94,6 +101,26 @@ describe("small interaction widgets", () => {
     render(<AISearchBar onFiltersApplied={vi.fn()} />);
     fireEvent.click(screen.getAllByRole("button", { name: /Open AI Search/i }).at(-1)!);
     expect(screen.getByText("Sign in for AI Search")).toBeInTheDocument();
+  });
+
+  it("routes auction AI searches to the auctions surface instead of applying listing-grid filters", async () => {
+    invokeMock.mockResolvedValueOnce({
+      data: { listing_type: "auction", city: "Agrinio", summary: "Auctions in Agrinio" },
+      error: null,
+    });
+    const onFiltersApplied = vi.fn();
+    render(<AISearchBar onFiltersApplied={onFiltersApplied} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Open AI Search/i }));
+    fireEvent.change(screen.getByPlaceholderText(/quiet apartment/i), {
+      target: { value: "show me auctions in Agrinio" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^search$/i }));
+
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith(
+      "/auctions?city=Agrinio&ai_summary=Auctions+in+Agrinio",
+    ));
+    expect(onFiltersApplied).not.toHaveBeenCalled();
   });
 
   it("stores cookie preferences for accept, reject, custom save, hide, and invalid localStorage data", () => {

@@ -193,6 +193,9 @@ function SellerAgentAnalytics({ participantType }: { participantType: string }) 
           </button>
         ))}
       </div>
+      <p className="text-xs text-muted-foreground">
+        Period controls the view-trend chart and total views card. Cards labeled all-time are cumulative account metrics.
+      </p>
 
       {/* ── Summary cards — row 1: existing ────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -208,7 +211,7 @@ function SellerAgentAnalytics({ participantType }: { participantType: string }) 
         />
         <SummaryCard
           icon={<TrendingUp className="w-4 h-4 text-primary" />}
-          label="Avg views / listing"
+          label="All-time avg views/listing"
           value={avgViews.toString()}
         />
         <SummaryCard
@@ -223,12 +226,12 @@ function SellerAgentAnalytics({ participantType }: { participantType: string }) 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <SummaryCard
           icon={<MessageSquare className="w-4 h-4 text-blue-500" />}
-          label="Messages received"
+          label="All-time messages"
           value={messagesReceived.toString()}
         />
         <SummaryCard
           icon={<Calendar className="w-4 h-4 text-violet-500" />}
-          label="Viewing requests"
+          label="All-time viewing requests"
           value={viewingRequests.toString()}
         />
         <SummaryCard

@@ -48,7 +48,7 @@ describe("building listing upload helpers", () => {
     expect(storageMocks.uploadMock).toHaveBeenCalledWith(
       "user-1/123e4567-e89b-12d3-a456-426614174000.webp",
       file,
-      { upsert: true },
+      { upsert: false },
     );
     expect(storageMocks.getPublicUrlMock).toHaveBeenCalledWith(
       "user-1/123e4567-e89b-12d3-a456-426614174000.webp",
@@ -77,7 +77,7 @@ describe("building listing upload helpers", () => {
     expect(storageMocks.uploadMock).toHaveBeenCalledWith(
       "user-1/project-1/media-123e4567-e89b-12d3-a456-426614174000.pdf",
       file,
-      { upsert: true },
+      { upsert: false },
     );
     expect(url).toBe(
       "https://cdn.maiprop.test/user-1/project-1/media-123e4567-e89b-12d3-a456-426614174000.pdf",

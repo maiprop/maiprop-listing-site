@@ -59,6 +59,7 @@ export function useMaiPropVideoRoom({ roomId, displayName }: UseMaiPropVideoRoom
   const peerIdRef = useRef(createPeerId());
   const remotePeerIdRef = useRef<string | null>(null);
   const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
+  const joinInFlightRef = useRef(false);
 
   const [status, setStatus] = useState<RoomStatus>("idle");
   const [cameraChecked, setCameraChecked] = useState(false);
@@ -79,6 +80,12 @@ export function useMaiPropVideoRoom({ roomId, displayName }: UseMaiPropVideoRoom
     remoteStreamRef.current = stream;
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = stream;
   }, []);
+
+  const clearRemoteStream = useCallback(() => {
+    remoteStreamRef.current = null;
+    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+    if (typeof MediaStream !== "undefined") attachRemoteStream(new MediaStream());
+  }, [attachRemoteStream]);
 
   const startLocalMedia = useCallback(async () => {
     if (localStreamRef.current) {
@@ -146,6 +153,11 @@ export function useMaiPropVideoRoom({ roomId, displayName }: UseMaiPropVideoRoom
 
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === "connected") setStatus("connected");
+      if (pc.connectionState === "failed") {
+        pc.close();
+        peerConnectionRef.current = null;
+        pendingCandidatesRef.current = [];
+      }
       if (["disconnected", "failed", "closed"].includes(pc.connectionState)) {
         setStatus(remotePeerIdRef.current ? "waiting" : "ready");
       }
@@ -187,7 +199,7 @@ export function useMaiPropVideoRoom({ roomId, displayName }: UseMaiPropVideoRoom
         peerConnectionRef.current = null;
         remotePeerIdRef.current = null;
         pendingCandidatesRef.current = [];
-        attachRemoteStream(new MediaStream());
+        clearRemoteStream();
         setStatus("waiting");
       }
       return;
@@ -218,72 +230,109 @@ export function useMaiPropVideoRoom({ roomId, displayName }: UseMaiPropVideoRoom
         pendingCandidatesRef.current.push(payload.candidate);
       }
     }
-  }, [attachRemoteStream, createPeerConnection, flushPendingCandidates, roomId, sendSignal, startLocalMedia]);
+  }, [clearRemoteStream, createPeerConnection, flushPendingCandidates, roomId, sendSignal, startLocalMedia]);
+
+  const resetRoomConnection = useCallback(() => {
+    peerConnectionRef.current?.close();
+    peerConnectionRef.current = null;
+    remotePeerIdRef.current = null;
+    pendingCandidatesRef.current = [];
+    clearRemoteStream();
+    setRemoteDisplayName(null);
+    if (channelRef.current) {
+      channelRef.current.untrack().catch(() => undefined);
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+  }, [clearRemoteStream]);
 
   const joinRoom = useCallback(async () => {
-    await startLocalMedia();
-    setStatus("joining");
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) {
-      setStatus("failed");
-      setErrorMessage("Please sign in again before joining the mAI prop video room.");
-      return;
-    }
-    await supabase.realtime.setAuth(session.access_token);
+    if (joinInFlightRef.current) return;
+    joinInFlightRef.current = true;
+    setErrorMessage(null);
+    try {
+      await startLocalMedia();
+      setStatus("joining");
+      resetRoomConnection();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        joinInFlightRef.current = false;
+        setStatus("failed");
+        setErrorMessage("Please sign in again before joining the mAI prop video room.");
+        return;
+      }
+      await supabase.realtime.setAuth(session.access_token);
+      let subscriptionFailed = false;
 
-    const channel = supabase.channel(roomId, {
-      config: {
-        broadcast: { self: false },
-        presence: { key: peerIdRef.current },
-        private: true,
-      },
-    });
-
-    channel
-      .on("broadcast", { event: "signal" }, (payload) => {
-        void handleSignal(payload as unknown as { payload: SignalPayload });
-      })
-      .on("presence", { event: "sync" }, () => {
-        const state = channel.presenceState<PresenceMeta>();
-        const peers = Object.values(state).flat().filter((peer) => peer.peerId !== peerIdRef.current);
-        setParticipantCount(peers.length + 1);
-        const firstPeer = peers[0];
-        if (!firstPeer) {
-          peerConnectionRef.current?.close();
-          peerConnectionRef.current = null;
-          remotePeerIdRef.current = null;
-          pendingCandidatesRef.current = [];
-          attachRemoteStream(new MediaStream());
-          setRemoteDisplayName(null);
-          setStatus("waiting");
-          return;
-        }
-        setRemoteDisplayName(firstPeer.displayName);
-        if (!remotePeerIdRef.current) remotePeerIdRef.current = firstPeer.peerId;
-        if (peerIdRef.current < firstPeer.peerId) void startOffer(firstPeer.peerId);
-      })
-      .subscribe(async (subscribeStatus) => {
-        if (subscribeStatus === "SUBSCRIBED") {
-          setStatus("waiting");
-          try {
-            await channel.track({
-              peerId: peerIdRef.current,
-              displayName,
-              joinedAt: new Date().toISOString(),
-            } satisfies PresenceMeta);
-          } catch (_err: unknown) {
-            setStatus("failed");
-            setErrorMessage("Could not announce your presence in the mAI prop video room. Please retry or use an external meeting link.");
-          }
-        }
-        if (subscribeStatus === "CHANNEL_ERROR" || subscribeStatus === "TIMED_OUT") {
-          setStatus("failed");
-          setErrorMessage("Could not connect to the mAI prop video room. Please retry or use an external meeting link.");
-        }
+      const channel = supabase.channel(roomId, {
+        config: {
+          broadcast: { self: false },
+          presence: { key: peerIdRef.current },
+          private: true,
+        },
       });
+      channelRef.current = channel;
 
-    channelRef.current = channel;
-  }, [attachRemoteStream, displayName, handleSignal, roomId, startLocalMedia, startOffer]);
+      channel
+        .on("broadcast", { event: "signal" }, (payload) => {
+          void handleSignal(payload as unknown as { payload: SignalPayload });
+        })
+        .on("presence", { event: "sync" }, () => {
+          const state = channel.presenceState<PresenceMeta>();
+          const peers = Object.values(state).flat().filter((peer) => peer.peerId !== peerIdRef.current);
+          setParticipantCount(peers.length + 1);
+          const firstPeer = peers[0];
+          if (!firstPeer) {
+            peerConnectionRef.current?.close();
+            peerConnectionRef.current = null;
+            remotePeerIdRef.current = null;
+            pendingCandidatesRef.current = [];
+            clearRemoteStream();
+            setRemoteDisplayName(null);
+            setStatus("waiting");
+            return;
+          }
+          setRemoteDisplayName(firstPeer.displayName);
+          if (!remotePeerIdRef.current) remotePeerIdRef.current = firstPeer.peerId;
+          if (peerIdRef.current < firstPeer.peerId) void startOffer(firstPeer.peerId);
+        })
+        .subscribe(async (subscribeStatus) => {
+          if (subscribeStatus === "SUBSCRIBED") {
+            joinInFlightRef.current = false;
+            setStatus("waiting");
+            try {
+              await channel.track({
+                peerId: peerIdRef.current,
+                displayName,
+                joinedAt: new Date().toISOString(),
+              } satisfies PresenceMeta);
+            } catch (_err: unknown) {
+              resetRoomConnection();
+              setStatus("failed");
+              setErrorMessage("Could not announce your presence in the mAI prop video room. Please retry or use an external meeting link.");
+            }
+          }
+          if (subscribeStatus === "CHANNEL_ERROR" || subscribeStatus === "TIMED_OUT") {
+            subscriptionFailed = true;
+            joinInFlightRef.current = false;
+            resetRoomConnection();
+            setStatus("failed");
+            setErrorMessage("Could not connect to the mAI prop video room. Please retry or use an external meeting link.");
+          }
+        });
+      if (!subscriptionFailed) {
+        joinInFlightRef.current = false;
+        setStatus("waiting");
+      }
+    } catch (err: unknown) {
+      joinInFlightRef.current = false;
+      throw err;
+    } finally {
+      window.setTimeout(() => {
+        joinInFlightRef.current = false;
+      }, 10_000);
+    }
+  }, [clearRemoteStream, displayName, handleSignal, resetRoomConnection, roomId, startLocalMedia, startOffer]);
 
   const leaveRoom = useCallback(() => {
     void sendSignal({ type: "leave", to: remotePeerIdRef.current ?? undefined });

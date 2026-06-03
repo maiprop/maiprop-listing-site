@@ -1,4 +1,5 @@
 import { useState, useRef, KeyboardEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import { Sparkles, Loader2, X, ArrowRight, Lightbulb } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -36,6 +37,7 @@ interface AISearchBarProps {
 
 export function AISearchBar({ onFiltersApplied }: AISearchBarProps) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
@@ -56,6 +58,19 @@ export function AISearchBar({ onFiltersApplied }: AISearchBarProps) {
       if (data?.error) throw new Error(data.error);
       const filters = data as AIFilters;
       setLastSummary(filters.summary || null);
+      if (filters.listing_type === "auction") {
+        const params = new URLSearchParams();
+        if (filters.city) params.set("city", filters.city);
+        if (filters.property_type) params.set("type", filters.property_type);
+        if (filters.price_min != null) params.set("price_min", String(filters.price_min));
+        if (filters.price_max != null) params.set("price_max", String(filters.price_max));
+        if (filters.sqm_min != null) params.set("sqm_min", String(filters.sqm_min));
+        if (filters.sqm_max != null) params.set("sqm_max", String(filters.sqm_max));
+        if (filters.summary) params.set("ai_summary", filters.summary);
+        navigate(`/auctions${params.toString() ? `?${params.toString()}` : ""}`);
+        setOpen(false);
+        return;
+      }
       onFiltersApplied(filters);
       setOpen(false);
     } catch (e: unknown) {

@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { Link } from "react-router-dom";
 import {
-  TrendingUp, Plus, ExternalLink, Edit2, Trash2, LayoutGrid, Loader2,
+  TrendingUp, Plus, Edit2, Trash2, LayoutGrid, Loader2, Eye, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PropertyCard } from "@/components/PropertyCard";
@@ -34,6 +33,7 @@ export default function PortfoliosTab() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [addFromSavedPortfolioId, setAddFromSavedPortfolioId] = useState<string | null>(null);
+  const [previewPortfolio, setPreviewPortfolio] = useState<PortfolioItem | null>(null);
 
   const handleCreate = () => {
     if (!newName.trim()) {
@@ -60,10 +60,13 @@ export default function PortfoliosTab() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="border-border gap-2" asChild>
-            <Link to="/portfolios">
-              <ExternalLink className="w-4 h-4" /> Full View
-            </Link>
+          <Button
+            variant="outline"
+            className="border-border gap-2"
+            disabled={portfolios.length === 0}
+            onClick={() => setPreviewPortfolio((portfolios[0] as PortfolioItem | undefined) ?? null)}
+          >
+            <Eye className="w-4 h-4" /> Preview
           </Button>
           <Button
             className="bg-gradient-primary border-0 text-primary-foreground gap-2"
@@ -189,6 +192,14 @@ export default function PortfoliosTab() {
                       <Button
                         variant="ghost"
                         size="icon"
+                        onClick={() => setPreviewPortfolio(p)}
+                        aria-label="Preview portfolio"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         onClick={() => {
                           setEditingId(p.id);
                           setEditName(p.name);
@@ -301,6 +312,53 @@ export default function PortfoliosTab() {
         onConfirm={() => { if (deleteTarget) deletePortfolio.mutate(deleteTarget); setDeleteTarget(null); }}
         onCancel={() => setDeleteTarget(null)}
       />
+      {previewPortfolio && (
+        <div
+          className="fixed inset-0 z-[80] bg-background/70 backdrop-blur-sm flex items-center justify-center p-4"
+          role="presentation"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setPreviewPortfolio(null);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Portfolio preview"
+            className="w-full max-w-3xl max-h-[85vh] overflow-y-auto bg-card border border-border rounded-2xl shadow-elevated"
+          >
+            <div className="p-5 border-b border-border flex items-center justify-between gap-3">
+              <div>
+                <h2 className="font-display font-semibold">{previewPortfolio.name}</h2>
+                <p className="text-sm text-muted-foreground">
+                  {(previewPortfolio.listing_ids || []).length} properties in this portfolio
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Close portfolio preview"
+                onClick={() => setPreviewPortfolio(null)}
+                className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-secondary transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5">
+              {(previewPortfolio.listings || []).length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {(previewPortfolio.listings || []).map((l: PortfolioListing) => (
+                    <PropertyCard key={l.id} property={dbListingToCard(l)} />
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-border bg-muted/30 p-6 text-center">
+                  <LayoutGrid className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-sm font-medium">No properties in this portfolio yet</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
