@@ -35,8 +35,11 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit
 
+      - name: Capture Supabase index stats
+        run: npm run capture:supabase-index-stats -- --out supabase-index-stats.json
+
       - name: Capture Supabase advisors
-        run: npm run check:supabase-advisor -- --fail-on-error --fail-on-unknown --out supabase-advisor-report.json
+        run: npm run check:supabase-advisor -- --fail-on-error --fail-on-unknown --index-stats supabase-index-stats.json --out supabase-advisor-report.json
 
       - name: Summarize advisory debt
         if: always()
@@ -95,6 +98,8 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: supabase-advisor-report
-          path: supabase-advisor-report.json
+          path: |
+            supabase-advisor-report.json
+            supabase-index-stats.json
           if-no-files-found: ignore
           retention-days: 30

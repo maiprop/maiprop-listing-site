@@ -53,6 +53,9 @@ jobs:
       - name: Check committed secrets
         run: npm run check:secrets
 
+      - name: Check dependency overrides
+        run: npm run check:dependency-overrides
+
       - name: Type-check & build
         run: npm run build
 

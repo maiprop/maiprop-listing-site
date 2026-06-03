@@ -99,7 +99,7 @@ describe("useMyFiresaleInterests", () => {
     const { result } = renderHook(() => useMyFiresaleInterests(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(rpcMock).toHaveBeenCalledWith("release_expired_firesale_reservations", { p_deal_id: undefined });
+    expect(rpcMock).not.toHaveBeenCalledWith("release_expired_firesale_reservations", expect.anything());
     expect((result.current.data as Map<string, unknown>).has("d-2")).toBe(true);
   });
 });
@@ -127,6 +127,7 @@ describe("useFiresaleInterestQueue", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect((result.current.data as { id: string }[]).map((row) => row.id)).toEqual(["reserved", "priority", "plain"]);
+    expect(rpcMock).not.toHaveBeenCalledWith("release_expired_firesale_reservations", expect.anything());
   });
 
   it("surfaces Supabase errors", async () => {
@@ -155,6 +156,7 @@ describe("useExpressInterest", () => {
       });
     });
 
+    expect(storageFromMock).toHaveBeenCalledWith("firesale-proof-docs");
     expect(uploadMock).toHaveBeenCalled();
     expect(uploadMock).toHaveBeenCalledWith(
       "inv-1/firesale/d-1/proof_uuid-1.pdf",

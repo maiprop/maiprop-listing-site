@@ -276,7 +276,7 @@ Known remaining:
 | Major dependency upgrades are deferred. | `npm outdated --long`: React 19, React Router 7, Mapbox GL 3, Tailwind 4, Vite 8, Vitest 4, Recharts 3. | Future upgrades become harder if delayed too long. | Plan quarterly upgrade epics, one platform family at a time. |
 | `mapbox-gl` remains on 2.15.0. | `package.json`; latest major is 3.x. | Large map dependency and possible future compatibility debt. | Evaluate Mapbox 3 migration separately with map E2E coverage. |
 | Production audit checks only runtime deps. | CI runs `npm audit --omit=dev`; Dependabot handles dev. | Dev-tool vulnerabilities rely on Dependabot PR flow. | Keep Dependabot active and consider scheduled full-audit reporting. |
-| Overrides must be periodically revalidated. | `package.json` overrides for `tmp` and `uuid`. | Overrides can mask upstream fixes or create drift. | Review after Lighthouse/dependency upgrades. |
+| Partially fixed: overrides must be periodically revalidated. | `package.json` overrides for `tmp` and `uuid`; stale `qs` override removed after isolated audit stayed clean without it. | Overrides can mask upstream fixes or create drift. | Run `npm run check:dependency-overrides` plus `npm audit --audit-level=moderate` after Lighthouse/dependency upgrades, then remove overrides whose isolated no-override audit stays clean. |
 
 ## P2 - CI/CD Improvement Backlog
 

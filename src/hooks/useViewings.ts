@@ -90,11 +90,15 @@ export function useUpdateViewingStatus() {
   return useMutation({
     mutationFn: async ({ id, status }: { id: string; status: "confirmed" | "cancelled" | "completed" }) => {
       if (!user) throw new Error("Must be logged in");
-      const { error } = await supabase
+      const update = supabase
         .from("viewings")
         .update({ status })
-        .eq("id", id)
-        .or(`owner_id.eq.${user.id},requester_id.eq.${user.id}`);
+        .eq("id", id);
+
+      const { error } = status === "cancelled"
+        ? await update.or(`owner_id.eq.${user.id},requester_id.eq.${user.id}`)
+        : await update.eq("owner_id", user.id);
+
       if (error) throw error;
     },
     onSuccess: () => {

@@ -134,22 +134,12 @@ export function getFiresaleInterestUserMessage(error: unknown): string {
 }
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-async function releaseExpiredReservations(dealId?: string) {
-  const { error } = await supabase.rpc("release_expired_firesale_reservations", {
-    p_deal_id: dealId,
-  });
-  if (error) throw error;
-}
-
-// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function useMyFiresaleInterests() {
   return useQuery({
     queryKey: ["firesale_interest_mine_all"],
     queryFn: async () => {
       const uid = (await supabase.auth.getUser()).data.user?.id;
       if (!uid) return new Map<string, FiresaleInterestEntry>();
-
-      await releaseExpiredReservations();
 
       const { data } = await supabase
         .from("firesale_interest")
@@ -167,8 +157,6 @@ export function useFiresaleInterestQueue(dealId: string | undefined) {
     queryKey: ["firesale_interest_queue", dealId],
     queryFn: async () => {
       if (!dealId) return [];
-
-      await releaseExpiredReservations(dealId);
 
       const { data, error } = await supabase
         .from("firesale_interest")
@@ -217,7 +205,7 @@ export function useExpressInterest() {
         const ext = proofFile.name.split(".").pop() ?? "pdf";
         const path = `${uid}/firesale/${dealId}/proof_${crypto.randomUUID()}.${ext}`;
         const { data: uploaded, error: uploadError } = await supabase.storage
-          .from("open-house-docs")
+          .from("firesale-proof-docs")
           .upload(path, proofFile, { upsert: false });
         if (uploadError) throw uploadError;
         proof_of_funds_url = uploaded.path;

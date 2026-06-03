@@ -214,13 +214,13 @@ describe("useListingForm — image pipeline", () => {
     expect(result.current.images).toEqual([]);
   });
 
-  it("rejects files larger than 10MB and toasts a single error", async () => {
-    const big = makeFile("huge.jpg", 11 * 1024 * 1024);
+  it("rejects files larger than the listing-images 5MB bucket limit and toasts a single error", async () => {
+    const big = makeFile("huge.jpg", 5 * 1024 * 1024 + 1);
     const { result } = renderHook(() => useListingForm(), { wrapper: wrap });
     await act(async () => {
       await result.current.handleFilesSelected({ 0: big, length: 1, item: () => big } as unknown as FileList);
     });
-    expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/10 MB limit/));
+    expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/5 MB limit/));
     expect(result.current.images).toEqual([]);
   });
 
@@ -234,6 +234,11 @@ describe("useListingForm — image pipeline", () => {
     expect(result.current.images.length).toBe(1);
     expect(result.current.images[0].uploading).toBe(false);
     expect(result.current.coverImageId).toBe(result.current.images[0].id);
+    expect(storageMock.upload).toHaveBeenCalledWith(
+      expect.stringMatching(/^u-1\/.+\.webp$/),
+      expect.any(File),
+      expect.objectContaining({ upsert: false, contentType: "image/webp" }),
+    );
   });
 
   it("flags the placeholder with an error when storage upload throws", async () => {

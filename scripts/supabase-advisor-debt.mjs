@@ -28,9 +28,21 @@ function extractIndexName(lint) {
     return null;
   }
 
-  const direct = metadata.index_name ?? metadata.indexrelname ?? metadata.index ?? metadata.name;
+  const direct = metadata.index_name ?? metadata.indexrelname ?? metadata.index;
   if (typeof direct === "string" && direct.trim()) {
     return direct.trim().replace(/^"|"$/g, "");
+  }
+
+  const cacheKey = String(lint?.cache_key ?? "");
+  const tableName = extractTableName(lint);
+  const schemaName = typeof metadata.schema === "string" && metadata.schema.trim()
+    ? metadata.schema.trim()
+    : "public";
+  if (cacheKey && tableName) {
+    const prefix = `unused_index_${schemaName}_${tableName}_`;
+    if (cacheKey.startsWith(prefix)) {
+      return cacheKey.slice(prefix.length).trim() || null;
+    }
   }
 
   return null;
@@ -42,7 +54,7 @@ function extractTableName(lint) {
     return null;
   }
 
-  const direct = metadata.table_name ?? metadata.relname ?? metadata.table ?? metadata.relation;
+  const direct = metadata.table_name ?? metadata.relname ?? metadata.table ?? metadata.relation ?? metadata.name;
   return typeof direct === "string" && direct.trim() ? direct.trim().replace(/^"|"$/g, "") : null;
 }
 
