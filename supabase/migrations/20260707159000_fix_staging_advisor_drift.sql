@@ -4,9 +4,6 @@
 -- owner-scoped policies.
 
 DO $$
-DECLARE
-  log_user_role_change_fn regprocedure := to_regprocedure('public.log_user_role_change()');
-  rls_auto_enable_fn regprocedure := to_regprocedure('public.rls_auto_enable()');
 BEGIN
   IF to_regclass('public.marketing_leads') IS NOT NULL
      AND EXISTS (
@@ -77,6 +74,9 @@ BEGIN
 END $$;
 
 DO $$
+DECLARE
+  log_user_role_change_fn regprocedure := to_regprocedure('public.log_user_role_change()');
+  rls_auto_enable_fn regprocedure := to_regprocedure('public.rls_auto_enable()');
 BEGIN
   IF to_regclass('public.marketing_leads') IS NOT NULL
      AND EXISTS (

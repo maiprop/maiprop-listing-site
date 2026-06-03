@@ -33,11 +33,24 @@ describe("staging Supabase advisor drift hardening", () => {
   });
 
   it("removes browser execute grants from internal no-arg security-definer helpers", () => {
+    const assertionBlock = migration
+      .match(/DO \$\$[\s\S]*?log_user_role_change must not be browser-executable[\s\S]*?END \$\$;/)
+      ?.at(0);
+
     expect(migration).toContain("public.log_user_role_change()");
     expect(migration).toContain("public.rls_auto_enable()");
     expect(migration).toContain("REVOKE ALL ON FUNCTION %s FROM PUBLIC, anon, authenticated");
     expect(migration).toContain("log_user_role_change must not be browser-executable");
     expect(migration).toContain("rls_auto_enable must not be browser-executable");
+    expect(assertionBlock).toContain("DECLARE");
+    expect(assertionBlock).toContain("log_user_role_change_fn regprocedure");
+    expect(assertionBlock).toContain("rls_auto_enable_fn regprocedure");
+    expect(assertionBlock).toContain(
+      "has_function_privilege('anon', log_user_role_change_fn, 'EXECUTE')",
+    );
+    expect(assertionBlock).toContain(
+      "has_function_privilege('anon', rls_auto_enable_fn, 'EXECUTE')",
+    );
   });
 
   it("recreates simple user-owned policies with cached auth lookups", () => {
