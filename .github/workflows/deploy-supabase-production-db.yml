@@ -103,7 +103,7 @@ jobs:
         run: supabase db lint --db-url "$SUPABASE_PRODUCTION_DB_URL" --fail-on error > supabase-production-db-lint.txt
 
       - name: Check Supabase advisors
-        run: npm run check:supabase-advisor -- --fail-on-error --out supabase-production-advisor-summary.json
+        run: npm run check:supabase-advisor -- --fail-on-error --fail-on-unknown --out supabase-production-advisor-summary.json
 
       - name: Dry-run production migrations
         if: inputs.dry_run == true

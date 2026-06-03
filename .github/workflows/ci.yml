@@ -702,6 +702,160 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit
 
+      - name: Sync Cloudflare Pages preview runtime environment variables
+        env:
+          CF_API_TOKEN:                  ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID:                 ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CF_PROJECT:                    maiprop-listing-site
+          CF_API_BASE:                   https://api.cloudflare.com/client/v4
+          STAGING_SUPABASE_URL:          ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_PROJECT_ID:   ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          STAGING_APP_URL:               ${{ secrets.STAGING_APP_URL }}
+          STAGING_SITE_LOCK_PASSWORD:    ${{ secrets.STAGING_SITE_LOCK_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          required=(
+            "CF_API_TOKEN"
+            "CF_ACCOUNT_ID"
+            "STAGING_SUPABASE_URL"
+            "STAGING_SUPABASE_PROJECT_ID"
+            "STAGING_SUPABASE_PUBLISHABLE_KEY"
+            "STAGING_APP_URL"
+          )
+          missing=0
+          for key in "${required[@]}"; do
+            if [ -z "${!key}" ]; then
+              echo "::error::Missing required preview secret: $key"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+          if ! NORMALIZED_SUPABASE_PROJECT_ID=$(node - "$STAGING_SUPABASE_PROJECT_ID" "$STAGING_SUPABASE_URL" <<'NODE'
+          const [, , explicitProjectId = "", supabaseUrl = ""] = process.argv;
+          const validProjectRef = (value) => /^[a-z0-9]{20}$/.test(value);
+          if (validProjectRef(explicitProjectId)) {
+            console.log(explicitProjectId);
+            process.exit(0);
+          }
+          try {
+            const host = new URL(supabaseUrl).hostname;
+            const suffix = ".supabase.co";
+            const derived = host.endsWith(suffix) ? host.slice(0, -suffix.length) : "";
+            if (validProjectRef(derived)) {
+              console.log(derived);
+              process.exit(0);
+            }
+          } catch {
+            // Fall through to the deployment error below.
+          }
+          process.exit(1);
+          NODE
+          ); then
+            echo "::error::STAGING_SUPABASE_PROJECT_ID must be a 20-character project ref or STAGING_SUPABASE_URL must be a valid https://<ref>.supabase.co URL."
+            exit 1
+          fi
+
+          if ! node - "$STAGING_APP_URL" <<'NODE'
+          const [, , appUrl = ""] = process.argv;
+          try {
+            const parsed = new URL(appUrl);
+            if (parsed.protocol === "https:" && parsed.hostname.endsWith(".pages.dev")) {
+              process.exit(0);
+            }
+            if (parsed.protocol === "https:" && parsed.hostname.endsWith(".maiprop.co")) {
+              process.exit(0);
+            }
+          } catch {
+            // Fall through to error below.
+          }
+          process.exit(1);
+          NODE
+          then
+            echo "::error::STAGING_APP_URL must be an https:// preview or staging origin."
+            exit 1
+          fi
+
+          ENV_JSON=$(jq -n \
+            --arg surl "$STAGING_SUPABASE_URL" \
+            --arg pid "$NORMALIZED_SUPABASE_PROJECT_ID" \
+            --arg pkey "$STAGING_SUPABASE_PUBLISHABLE_KEY" \
+            --arg lock "$STAGING_SITE_LOCK_PASSWORD" \
+            '
+            ({} +
+              {
+                SUPABASE_URL: { value: $surl, type: "plain_text" },
+                VITE_SUPABASE_URL: { value: $surl, type: "plain_text" },
+                SUPABASE_PROJECT_ID: { value: $pid, type: "plain_text" },
+                VITE_SUPABASE_PROJECT_ID: { value: $pid, type: "plain_text" },
+                SUPABASE_PUBLISHABLE_KEY: { value: $pkey, type: "plain_text" },
+                VITE_SUPABASE_PUBLISHABLE_KEY: { value: $pkey, type: "plain_text" },
+                VITE_SUPABASE_ANON_KEY: { value: $pkey, type: "plain_text" }
+              } +
+              (if $lock != "" then { SITE_LOCK_PASSWORD: { value: $lock, type: "secret_text" } } else { SITE_LOCK_PASSWORD: null } end)
+            )')
+
+          PAYLOAD=$(jq -n --argjson env "$ENV_JSON" '{
+            deployment_configs: { preview: { env_vars: $env } }
+          }')
+
+          HTTP_CODE=$(curl -sS -o /tmp/cf_preview_env.json -w "%{http_code}" -X PATCH \
+            -H "Authorization: Bearer $CF_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "$PAYLOAD" \
+            "$CF_API_BASE/accounts/$CF_ACCOUNT_ID/pages/projects/$CF_PROJECT")
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Failed to sync Pages preview env vars (HTTP $HTTP_CODE)"
+            cat /tmp/cf_preview_env.json
+            exit 1
+          fi
+
+          HTTP_CODE=$(curl -sS -o /tmp/cf_preview_env_verify.json -w "%{http_code}" \
+            -H "Authorization: Bearer $CF_API_TOKEN" \
+            "$CF_API_BASE/accounts/$CF_ACCOUNT_ID/pages/projects/$CF_PROJECT")
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Failed to verify Pages preview env vars (HTTP $HTTP_CODE)"
+            cat /tmp/cf_preview_env_verify.json
+            exit 1
+          fi
+
+          for key in SUPABASE_URL VITE_SUPABASE_URL SUPABASE_PROJECT_ID VITE_SUPABASE_PROJECT_ID SUPABASE_PUBLISHABLE_KEY VITE_SUPABASE_PUBLISHABLE_KEY VITE_SUPABASE_ANON_KEY; do
+            if ! jq -e --arg key "$key" '.success == true and (.result.deployment_configs.preview.env_vars[$key].type == "plain_text")' /tmp/cf_preview_env_verify.json >/dev/null; then
+              echo "::error::Cloudflare Pages preview env var $key was not persisted."
+              exit 1
+            fi
+          done
+          if ! jq -e --arg pid "$NORMALIZED_SUPABASE_PROJECT_ID" '.result.deployment_configs.preview.env_vars.SUPABASE_PROJECT_ID.value == $pid' /tmp/cf_preview_env_verify.json >/dev/null; then
+            echo "::error::Cloudflare Pages preview SUPABASE_PROJECT_ID did not match the normalized project ref."
+            exit 1
+          fi
+
+          toml_quote() {
+            jq -Rn --arg value "$1" '$value'
+          }
+          {
+            echo 'name = "maiprop-listing-site"'
+            echo 'pages_build_output_dir = "./dist"'
+            echo 'compatibility_date = "2026-05-19"'
+            echo
+            echo '[vars]'
+            printf 'SUPABASE_URL = %s\n' "$(toml_quote "$STAGING_SUPABASE_URL")"
+            printf 'VITE_SUPABASE_URL = %s\n' "$(toml_quote "$STAGING_SUPABASE_URL")"
+            printf 'SUPABASE_PROJECT_ID = %s\n' "$(toml_quote "$NORMALIZED_SUPABASE_PROJECT_ID")"
+            printf 'VITE_SUPABASE_PROJECT_ID = %s\n' "$(toml_quote "$NORMALIZED_SUPABASE_PROJECT_ID")"
+            printf 'SUPABASE_PUBLISHABLE_KEY = %s\n' "$(toml_quote "$STAGING_SUPABASE_PUBLISHABLE_KEY")"
+            printf 'VITE_SUPABASE_PUBLISHABLE_KEY = %s\n' "$(toml_quote "$STAGING_SUPABASE_PUBLISHABLE_KEY")"
+            printf 'VITE_SUPABASE_ANON_KEY = %s\n' "$(toml_quote "$STAGING_SUPABASE_PUBLISHABLE_KEY")"
+            if [ -n "${STAGING_SITE_LOCK_PASSWORD}" ]; then
+              printf 'SITE_LOCK_PASSWORD = %s\n' "$(toml_quote "$STAGING_SITE_LOCK_PASSWORD")"
+            fi
+          } > wrangler.toml
+          echo "Pages preview runtime env vars synced and Wrangler preview config prepared."
+
       - name: Build app with staging environment
         run: npm run build
         env:
@@ -714,7 +868,7 @@ jobs:
           VITE_TURNSTILE_SITE_KEY:       ${{ secrets.VITE_TURNSTILE_SITE_KEY }}
           VITE_GOOGLE_MAPS_API_KEY:      ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
           VITE_PLAUSIBLE_DOMAIN:         ${{ secrets.VITE_PLAUSIBLE_DOMAIN }}
-          VITE_APP_URL:                  ${{ secrets.VITE_APP_URL }}
+          VITE_APP_URL:                  ${{ secrets.STAGING_APP_URL }}
 
       - name: Deploy to Cloudflare Pages (PR preview)
         uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0

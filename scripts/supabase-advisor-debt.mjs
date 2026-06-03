@@ -102,6 +102,44 @@ export function classifyAdvisorDebt(summary, policy) {
   };
 }
 
+function missingPolicyFields(item) {
+  const policy = item.policy ?? {};
+  return ["owner", "reason", "next_action", "review_cadence"]
+    .filter((field) => !String(policy[field] ?? "").trim());
+}
+
+export function assertAdvisorDebtIsActionable(debt, options = {}) {
+  const {
+    failOnUnknown = true,
+    requirePolicyMetadata = true,
+  } = options;
+  const errors = [];
+
+  if (failOnUnknown && debt?.unknown_count > 0) {
+    const names = (debt.items?.unknown ?? [])
+      .map((item) => `${item.name}${item.cache_key ? ` (${item.cache_key})` : ""}`)
+      .join(", ");
+    errors.push(`Unknown Supabase advisor lint(s) require classification: ${names}`);
+  }
+
+  if (requirePolicyMetadata) {
+    for (const bucket of ["accepted", "review"]) {
+      for (const item of debt.items?.[bucket] ?? []) {
+        const missing = missingPolicyFields(item);
+        if (missing.length > 0) {
+          errors.push(
+            `Advisor policy for ${item.name} is missing ${missing.join(", ")}.`,
+          );
+        }
+      }
+    }
+  }
+
+  if (errors.length > 0) {
+    throw new Error(errors.join("\n"));
+  }
+}
+
 export function buildUnusedIndexReview(summary, indexStatsRows = []) {
   const statsByIndex = new Map(
     indexStatsRows

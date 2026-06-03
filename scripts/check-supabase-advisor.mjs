@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { appendFile, readFile, writeFile } from "node:fs/promises";
 import {
+  assertAdvisorDebtIsActionable,
   buildUnusedIndexReview,
   classifyAdvisorDebt,
   loadAdvisorDebtPolicy,
@@ -21,6 +22,7 @@ function fail(message) {
 const outPath = readArg("--out");
 const indexStatsPath = readArg("--index-stats");
 const failOnError = args.includes("--fail-on-error");
+const failOnUnknown = args.includes("--fail-on-unknown");
 const accessToken = process.env.SUPABASE_ACCESS_TOKEN;
 const projectRef =
   process.env.SUPABASE_PROJECT_REF ||
@@ -134,6 +136,7 @@ const summary = {
   project_ref: projectRef,
   api_base: apiBase,
   fail_on_error: failOnError,
+  fail_on_unknown: failOnUnknown,
   totals,
   failing_lint_count: failingLintCount,
   advisor_debt: advisorDebt,
@@ -187,4 +190,12 @@ if (process.env.GITHUB_STEP_SUMMARY) {
 
 if (failOnError && failingLintCount > 0) {
   fail(`Found ${failingLintCount} advisor lint(s) at ERROR/CRITICAL/HIGH severity.`);
+}
+
+if (failOnUnknown) {
+  try {
+    assertAdvisorDebtIsActionable(advisorDebt);
+  } catch (error) {
+    fail(error.message);
+  }
 }

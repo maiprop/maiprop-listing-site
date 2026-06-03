@@ -36,7 +36,7 @@ jobs:
         run: npm ci --prefer-offline --no-audit
 
       - name: Capture Supabase advisors
-        run: npm run check:supabase-advisor -- --fail-on-error --out supabase-advisor-report.json
+        run: npm run check:supabase-advisor -- --fail-on-error --fail-on-unknown --out supabase-advisor-report.json
 
       - name: Summarize advisory debt
         if: always()

@@ -30,7 +30,7 @@ and local usage stay aligned.
 | `npm run check:release-safety` | Enforces release-safety invariants for CI. | Checks workflow coverage, public function posture, and documented env references. |
 | `npm run inventory:public-functions` | Regenerates `docs/public-edge-function-inventory.json`. | Use after changing `supabase/config.toml` or public Edge Function auth. |
 | `npm run check:public-functions` | Fails when a `verify_jwt=false` function is unclassified, missing source, missing required snippets, or missing tests. | Required before releasing Edge Function auth changes. |
-| `npm run check:supabase-advisor` | Fetches live Supabase Security and Performance Advisor lints through the Management API. | Requires `SUPABASE_ACCESS_TOKEN` and a project ref; writes JSON when `--out` is provided. |
+| `npm run check:supabase-advisor` | Fetches live Supabase Security and Performance Advisor lints through the Management API. Use `--fail-on-error` to block high/error lints and `--fail-on-unknown` to block unclassified WARN/INFO drift. | Requires `SUPABASE_ACCESS_TOKEN` and a project ref; writes JSON when `--out` is provided. |
 | `npm run check:supabase-types` | Checks generated Supabase types freshness. | Use after schema or migration changes. |
 | `npm run inventory:audit-coverage` | Generates audit coverage inventory data. | Pairs with audit remediation work. |
 | `npm run check:audit-coverage` | Enforces audit coverage plus the critical workflow proof test. | CI-oriented guard. |

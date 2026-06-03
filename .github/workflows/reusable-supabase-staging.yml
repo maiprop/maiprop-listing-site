@@ -367,7 +367,7 @@ jobs:
 
       - name: Check staging Supabase advisors
         if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
-        run: npm run check:supabase-advisor -- --fail-on-error --out supabase-advisor-staging-summary.json
+        run: npm run check:supabase-advisor -- --fail-on-error --fail-on-unknown --out supabase-advisor-staging-summary.json
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF:  ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}

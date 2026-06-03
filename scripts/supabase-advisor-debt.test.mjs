@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  assertAdvisorDebtIsActionable,
   buildUnusedIndexReview,
   classifyAdvisorDebt,
   flattenAdvisorLints,
@@ -66,6 +67,61 @@ describe("supabase advisor debt classification", () => {
     expect(debt.items.accepted[0].policy.next_action).toContain("Upgrade");
     expect(debt.items.review[0].policy.reason).toBe("Needs telemetry");
     expect(debt.items.unknown[0].name).toBe("surprising_new_lint");
+  });
+
+  it("fails actionable debt validation when advisor output contains unknown lints", () => {
+    const debt = classifyAdvisorDebt(
+      {
+        results: [
+          {
+            category: "performance",
+            lints: [{ name: "surprising_new_lint", title: "New Advisor", level: "WARN" }],
+          },
+        ],
+      },
+      policy,
+    );
+
+    expect(() => assertAdvisorDebtIsActionable(debt)).toThrow(/surprising_new_lint/);
+  });
+
+  it("accepts classified debt only when policy records ownership and cadence", () => {
+    const debt = classifyAdvisorDebt(
+      {
+        results: [
+          {
+            category: "security",
+            lints: [{ name: "auth_leaked_password_protection", title: "Leaked Password Protection Disabled", level: "WARN" }],
+          },
+          {
+            category: "performance",
+            lints: [{ name: "unused_index", title: "Unused Index", level: "INFO" }],
+          },
+        ],
+      },
+      {
+        accepted: [
+          {
+            match: { name: "auth_leaked_password_protection" },
+            owner: "platform/security",
+            reason: "Plan gated",
+            next_action: "Upgrade Supabase plan",
+            review_cadence: "monthly",
+          },
+        ],
+        review: [
+          {
+            match: { name: "unused_index" },
+            owner: "data/platform",
+            reason: "Needs telemetry",
+            next_action: "Review pg_stat_user_indexes",
+            review_cadence: "weekly",
+          },
+        ],
+      },
+    );
+
+    expect(() => assertAdvisorDebtIsActionable(debt)).not.toThrow();
   });
 });
 
