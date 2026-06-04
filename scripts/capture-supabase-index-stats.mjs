@@ -56,6 +56,7 @@ function firstJsonValue(text) {
 const outPath = readArg("--out");
 if (!outPath) fail("Missing --out <path>.");
 
+const allowEmptyWhenUnconfigured = args.includes("--allow-empty-when-unconfigured");
 const dbUrl = readArg("--db-url") ||
   process.env.SUPABASE_DB_URL ||
   process.env.SUPABASE_STAGING_EFFECTIVE_DB_URL ||
@@ -64,6 +65,14 @@ const projectRef = process.env.SUPABASE_PROJECT_REF ||
   process.env.RELEASE_SAFETY_SUPABASE_PROJECT_REF ||
   process.env.VITE_SUPABASE_PROJECT_ID;
 const dbPassword = process.env.SUPABASE_DB_PASSWORD;
+
+if (!dbUrl && !dbPassword && allowEmptyWhenUnconfigured) {
+  writeFileSync(outPath, "[]\n");
+  console.warn(
+    "[capture-supabase-index-stats] No DB URL/password configured; wrote an empty index stats artifact.",
+  );
+  process.exit(0);
+}
 
 const tempDir = mkdtempSync(join(tmpdir(), "maiprop-index-stats-"));
 const sqlPath = join(tempDir, "index-stats.sql");

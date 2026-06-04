@@ -14,6 +14,8 @@ describe("capture Supabase index stats script", () => {
     expect(script).toContain("process.env.SUPABASE_PRODUCTION_DB_URL");
     expect(script).toContain("process.env.SUPABASE_DB_PASSWORD");
     expect(script).toContain('"supabase", "link"');
+    expect(script).toContain("--allow-empty-when-unconfigured");
+    expect(script).toContain('writeFileSync(outPath, "[]\\n")');
     expect(script).toContain('queryArgs.push("--db-url", dbUrl)');
     expect(script).toContain('queryArgs.push("--linked")');
   });

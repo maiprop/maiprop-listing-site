@@ -80,7 +80,7 @@ jobs:
             github.event.pull_request.user.login != 'dependabot[bot]' &&
             !startsWith(github.event.pull_request.head.ref, 'release-please--') &&
             steps.pr_supabase_changes.outputs.has_supabase_changes != 'true')
-        run: npm run capture:supabase-index-stats -- --out supabase-index-stats.json
+        run: npm run capture:supabase-index-stats -- --out supabase-index-stats.json --allow-empty-when-unconfigured
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}

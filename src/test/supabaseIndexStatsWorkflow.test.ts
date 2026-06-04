@@ -23,6 +23,9 @@ describe("Supabase index stats workflow wiring", () => {
       expect(workflow).toContain(
         "npm run capture:supabase-index-stats -- --out",
       );
+      expect(workflow).toContain(
+        "--allow-empty-when-unconfigured",
+      );
     }
   });
 });
