@@ -41,118 +41,151 @@ $$;
 REVOKE ALL ON FUNCTION public.uuid_from_realtime_topic(text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.uuid_from_realtime_topic(text, text) TO authenticated, service_role;
 
-DROP POLICY IF EXISTS "video_room_channel_select" ON realtime.messages;
-DROP POLICY IF EXISTS "video_room_channel_insert" ON realtime.messages;
-DROP POLICY IF EXISTS "typing_channel_participant_select" ON realtime.messages;
-DROP POLICY IF EXISTS "typing_channel_participant_insert" ON realtime.messages;
-DROP POLICY IF EXISTS "debug_video_topic_select" ON realtime.messages;
-DROP POLICY IF EXISTS "debug_video_topic_insert" ON realtime.messages;
-DROP POLICY IF EXISTS "debug_authenticated_true_select" ON realtime.messages;
-DROP POLICY IF EXISTS "debug_authenticated_true_insert" ON realtime.messages;
-DROP POLICY IF EXISTS "debug_topic_column_select" ON realtime.messages;
-DROP POLICY IF EXISTS "debug_topic_column_insert" ON realtime.messages;
-DROP POLICY IF EXISTS "debug_uuid_topic_select" ON realtime.messages;
-DROP POLICY IF EXISTS "debug_uuid_topic_insert" ON realtime.messages;
-DROP POLICY IF EXISTS "debug_probe_select" ON realtime.messages;
-DROP POLICY IF EXISTS "debug_probe_insert" ON realtime.messages;
-DROP POLICY IF EXISTS "debug_condition_select" ON realtime.messages;
-DROP POLICY IF EXISTS "debug_condition_insert" ON realtime.messages;
-
 DROP FUNCTION IF EXISTS public.debug_realtime_policy_probe(text, text, text, text, boolean);
 DROP TABLE IF EXISTS public.debug_realtime_policy_logs;
 
-CREATE POLICY "video_room_channel_select"
-  ON realtime.messages
-  FOR SELECT
-  TO authenticated
-  USING (
-    realtime.messages.extension IN ('broadcast', 'presence')
-    AND (
-      EXISTS (
-        SELECT 1
-        FROM public.viewings v
-        WHERE v.id = public.uuid_from_realtime_topic((SELECT realtime.topic()), 'video:viewing')
-          AND v.viewing_type = 'video'::public.viewing_type
-          AND v.status = 'confirmed'::public.viewing_status
-          AND (v.owner_id = (SELECT auth.uid()) OR v.requester_id = (SELECT auth.uid()))
-      )
-      OR EXISTS (
-        SELECT 1
-        FROM public.consultation_requests cr
-        JOIN public.professionals p ON p.id = cr.professional_id
-        WHERE cr.id = public.uuid_from_realtime_topic((SELECT realtime.topic()), 'video:consultation')
-          AND cr.request_type = 'consultation'
-          AND cr.status = 'confirmed'
-          AND cr.meeting_type = 'video'
-          AND (p.user_id = (SELECT auth.uid()) OR cr.requester_id = (SELECT auth.uid()))
-      )
-      OR EXISTS (
-        SELECT 1
-        FROM public.professionals p
-        WHERE p.id = public.uuid_from_realtime_topic((SELECT realtime.topic()), 'video:professional')
-          AND p.user_id = (SELECT auth.uid())
-      )
-    )
-  );
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'realtime'
+      AND table_name = 'messages'
+  ) THEN
+    BEGIN
+      EXECUTE 'ALTER TABLE realtime.messages ENABLE ROW LEVEL SECURITY';
+    EXCEPTION WHEN OTHERS THEN
+      NULL;
+    END;
 
-CREATE POLICY "video_room_channel_insert"
-  ON realtime.messages
-  FOR INSERT
-  TO authenticated
-  WITH CHECK (
-    realtime.messages.extension IN ('broadcast', 'presence')
-    AND (
-      EXISTS (
-        SELECT 1
-        FROM public.viewings v
-        WHERE v.id = public.uuid_from_realtime_topic((SELECT realtime.topic()), 'video:viewing')
-          AND v.viewing_type = 'video'::public.viewing_type
-          AND v.status = 'confirmed'::public.viewing_status
-          AND (v.owner_id = (SELECT auth.uid()) OR v.requester_id = (SELECT auth.uid()))
-      )
-      OR EXISTS (
-        SELECT 1
-        FROM public.consultation_requests cr
-        JOIN public.professionals p ON p.id = cr.professional_id
-        WHERE cr.id = public.uuid_from_realtime_topic((SELECT realtime.topic()), 'video:consultation')
-          AND cr.request_type = 'consultation'
-          AND cr.status = 'confirmed'
-          AND cr.meeting_type = 'video'
-          AND (p.user_id = (SELECT auth.uid()) OR cr.requester_id = (SELECT auth.uid()))
-      )
-      OR EXISTS (
-        SELECT 1
-        FROM public.professionals p
-        WHERE p.id = public.uuid_from_realtime_topic((SELECT realtime.topic()), 'video:professional')
-          AND p.user_id = (SELECT auth.uid())
-      )
-    )
-  );
+    BEGIN
+      EXECUTE 'GRANT USAGE ON SCHEMA realtime TO authenticated';
+      EXECUTE 'GRANT SELECT, INSERT ON realtime.messages TO authenticated';
+    EXCEPTION WHEN OTHERS THEN
+      NULL;
+    END;
 
-CREATE POLICY "typing_channel_participant_select"
-  ON realtime.messages
-  FOR SELECT
-  TO authenticated
-  USING (
-    realtime.messages.extension = 'presence'
-    AND EXISTS (
-      SELECT 1
-      FROM public.conversations c
-      WHERE c.id = public.uuid_from_realtime_topic((SELECT realtime.topic()), 'typing')
-        AND ((SELECT auth.uid()) = c.participant_a OR (SELECT auth.uid()) = c.participant_b)
-    )
-  );
+    EXECUTE 'DROP POLICY IF EXISTS "video_room_channel_select" ON realtime.messages';
+    EXECUTE 'DROP POLICY IF EXISTS "video_room_channel_insert" ON realtime.messages';
+    EXECUTE 'DROP POLICY IF EXISTS "typing_channel_participant_select" ON realtime.messages';
+    EXECUTE 'DROP POLICY IF EXISTS "typing_channel_participant_insert" ON realtime.messages';
+    EXECUTE 'DROP POLICY IF EXISTS "debug_video_topic_select" ON realtime.messages';
+    EXECUTE 'DROP POLICY IF EXISTS "debug_video_topic_insert" ON realtime.messages';
+    EXECUTE 'DROP POLICY IF EXISTS "debug_authenticated_true_select" ON realtime.messages';
+    EXECUTE 'DROP POLICY IF EXISTS "debug_authenticated_true_insert" ON realtime.messages';
+    EXECUTE 'DROP POLICY IF EXISTS "debug_topic_column_select" ON realtime.messages';
+    EXECUTE 'DROP POLICY IF EXISTS "debug_topic_column_insert" ON realtime.messages';
+    EXECUTE 'DROP POLICY IF EXISTS "debug_uuid_topic_select" ON realtime.messages';
+    EXECUTE 'DROP POLICY IF EXISTS "debug_uuid_topic_insert" ON realtime.messages';
+    EXECUTE 'DROP POLICY IF EXISTS "debug_probe_select" ON realtime.messages';
+    EXECUTE 'DROP POLICY IF EXISTS "debug_probe_insert" ON realtime.messages';
+    EXECUTE 'DROP POLICY IF EXISTS "debug_condition_select" ON realtime.messages';
+    EXECUTE 'DROP POLICY IF EXISTS "debug_condition_insert" ON realtime.messages';
 
-CREATE POLICY "typing_channel_participant_insert"
-  ON realtime.messages
-  FOR INSERT
-  TO authenticated
-  WITH CHECK (
-    realtime.messages.extension = 'presence'
-    AND EXISTS (
-      SELECT 1
-      FROM public.conversations c
-      WHERE c.id = public.uuid_from_realtime_topic((SELECT realtime.topic()), 'typing')
-        AND ((SELECT auth.uid()) = c.participant_a OR (SELECT auth.uid()) = c.participant_b)
-    )
-  );
+    EXECUTE $POL$
+      CREATE POLICY "video_room_channel_select"
+        ON realtime.messages
+        FOR SELECT
+        TO authenticated
+        USING (
+          realtime.messages.extension IN ('broadcast', 'presence')
+          AND (
+            EXISTS (
+              SELECT 1
+              FROM public.viewings v
+              WHERE v.id = public.uuid_from_realtime_topic((SELECT realtime.topic()), 'video:viewing')
+                AND v.viewing_type = 'video'::public.viewing_type
+                AND v.status = 'confirmed'::public.viewing_status
+                AND (v.owner_id = (SELECT auth.uid()) OR v.requester_id = (SELECT auth.uid()))
+            )
+            OR EXISTS (
+              SELECT 1
+              FROM public.consultation_requests cr
+              JOIN public.professionals p ON p.id = cr.professional_id
+              WHERE cr.id = public.uuid_from_realtime_topic((SELECT realtime.topic()), 'video:consultation')
+                AND cr.request_type = 'consultation'
+                AND cr.status = 'confirmed'
+                AND cr.meeting_type = 'video'
+                AND (p.user_id = (SELECT auth.uid()) OR cr.requester_id = (SELECT auth.uid()))
+            )
+            OR EXISTS (
+              SELECT 1
+              FROM public.professionals p
+              WHERE p.id = public.uuid_from_realtime_topic((SELECT realtime.topic()), 'video:professional')
+                AND p.user_id = (SELECT auth.uid())
+            )
+          )
+        )
+    $POL$;
+
+    EXECUTE $POL$
+      CREATE POLICY "video_room_channel_insert"
+        ON realtime.messages
+        FOR INSERT
+        TO authenticated
+        WITH CHECK (
+          realtime.messages.extension IN ('broadcast', 'presence')
+          AND (
+            EXISTS (
+              SELECT 1
+              FROM public.viewings v
+              WHERE v.id = public.uuid_from_realtime_topic((SELECT realtime.topic()), 'video:viewing')
+                AND v.viewing_type = 'video'::public.viewing_type
+                AND v.status = 'confirmed'::public.viewing_status
+                AND (v.owner_id = (SELECT auth.uid()) OR v.requester_id = (SELECT auth.uid()))
+            )
+            OR EXISTS (
+              SELECT 1
+              FROM public.consultation_requests cr
+              JOIN public.professionals p ON p.id = cr.professional_id
+              WHERE cr.id = public.uuid_from_realtime_topic((SELECT realtime.topic()), 'video:consultation')
+                AND cr.request_type = 'consultation'
+                AND cr.status = 'confirmed'
+                AND cr.meeting_type = 'video'
+                AND (p.user_id = (SELECT auth.uid()) OR cr.requester_id = (SELECT auth.uid()))
+            )
+            OR EXISTS (
+              SELECT 1
+              FROM public.professionals p
+              WHERE p.id = public.uuid_from_realtime_topic((SELECT realtime.topic()), 'video:professional')
+                AND p.user_id = (SELECT auth.uid())
+            )
+          )
+        )
+    $POL$;
+
+    EXECUTE $POL$
+      CREATE POLICY "typing_channel_participant_select"
+        ON realtime.messages
+        FOR SELECT
+        TO authenticated
+        USING (
+          realtime.messages.extension = 'presence'
+          AND EXISTS (
+            SELECT 1
+            FROM public.conversations c
+            WHERE c.id = public.uuid_from_realtime_topic((SELECT realtime.topic()), 'typing')
+              AND ((SELECT auth.uid()) = c.participant_a OR (SELECT auth.uid()) = c.participant_b)
+          )
+        )
+    $POL$;
+
+    EXECUTE $POL$
+      CREATE POLICY "typing_channel_participant_insert"
+        ON realtime.messages
+        FOR INSERT
+        TO authenticated
+        WITH CHECK (
+          realtime.messages.extension = 'presence'
+          AND EXISTS (
+            SELECT 1
+            FROM public.conversations c
+            WHERE c.id = public.uuid_from_realtime_topic((SELECT realtime.topic()), 'typing')
+              AND ((SELECT auth.uid()) = c.participant_a OR (SELECT auth.uid()) = c.participant_b)
+          )
+        )
+    $POL$;
+  ELSE
+    RAISE NOTICE 'realtime.messages not present - skipping video-room realtime policies';
+  END IF;
+END $$;
