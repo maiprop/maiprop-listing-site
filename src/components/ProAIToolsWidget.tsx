@@ -3,6 +3,9 @@ import { Scale, Wrench, HardHat, TrendingUp, Building2, Paintbrush2, Send, Loade
 import ReactMarkdown from "react-markdown";
 import { SUPABASE_URL } from "@/lib/config";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { AIQuotaStatus } from "@/components/AIQuotaStatus";
+import { isAiQuotaReached, useAiQuota } from "@/hooks/useAiQuota";
 
 const GROUPS = [
   { id: "agents",     label: "Agents",     Icon: Building2 },
@@ -28,6 +31,10 @@ export default function ProAIToolsWidget() {
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const { user } = useAuth();
+  const { quota, quotaLoading, refreshQuota } = useAiQuota("pro-ai-tools", user, {
+    enabled: !!user,
+  });
 
   const messages = useMemo(() => messagesByGroup[groupId] ?? [], [messagesByGroup, groupId]);
 
@@ -41,6 +48,18 @@ export default function ProAIToolsWidget() {
   const sendMessage = useCallback(async (text?: string) => {
     const query = (text ?? input).trim();
     if (!query || isStreaming) return;
+
+    if (isAiQuotaReached(quota)) {
+      setMessages(groupId, (prev) => [
+        ...prev,
+        {
+          id: `q-${Date.now()}`,
+          role: "assistant",
+          content: "You've reached this month's Pro AI Tools allowance. Upgrade to continue.",
+        },
+      ]);
+      return;
+    }
 
     const userMsg: Message = { id: `u-${Date.now()}`, role: "user", content: query };
     const assistantId = `a-${Date.now()}`;
@@ -114,6 +133,7 @@ export default function ProAIToolsWidget() {
       setMessages(currentGroupId, (prev) =>
         prev.map((m) => m.id === assistantId ? { ...m, streaming: false } : m)
       );
+      void refreshQuota();
     } catch (e: unknown) {
       if (e instanceof Error && e.name === "AbortError") return;
       setMessages(currentGroupId, (prev) => prev.map((m) =>
@@ -124,7 +144,7 @@ export default function ProAIToolsWidget() {
     } finally {
       setIsStreaming(false);
     }
-  }, [input, messages, isStreaming, groupId, setMessages]);
+  }, [input, messages, isStreaming, groupId, setMessages, quota, refreshQuota]);
 
   const clearChat = () => {
     abortRef.current?.abort();
@@ -169,6 +189,17 @@ export default function ProAIToolsWidget() {
           </button>
         )}
       </div>
+
+      {user && (
+        <div className="border-b border-border px-3 py-2 bg-card shrink-0">
+          <AIQuotaStatus
+            featureName="Pro AI Tools"
+            quota={quota}
+            quotaLoading={quotaLoading}
+            variant="compact"
+          />
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
@@ -226,12 +257,12 @@ export default function ProAIToolsWidget() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
             placeholder={`Ask the ${GROUPS.find((g) => g.id === groupId)?.label.toLowerCase()} AI...`}
-            disabled={isStreaming}
+            disabled={isStreaming || isAiQuotaReached(quota)}
             className="flex-1 bg-secondary border border-border rounded-xl px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors disabled:opacity-60 min-w-0"
           />
           <button
             onClick={() => sendMessage()}
-            disabled={!input.trim() || isStreaming}
+            disabled={!input.trim() || isStreaming || isAiQuotaReached(quota)}
             className="w-9 h-9 rounded-xl bg-gradient-primary text-primary-foreground flex items-center justify-center disabled:opacity-50 transition-opacity hover:opacity-90 shrink-0"
           >
             {isStreaming ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}

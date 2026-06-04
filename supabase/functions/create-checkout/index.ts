@@ -135,28 +135,6 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
     if (addonKey) {
       const profile = await getCheckoutProfile(supabaseClient, user.id);
       const origin = resolveCheckoutOrigin(req.headers.get("origin"));
-      if (isStripeMockMode()) {
-        const url = `${origin}${
-          withMockBillingParams(
-            sanitizeRedirectPath(body.success_url) ??
-              "/dashboard/billing?checkout=success",
-            { checkout: "success", addon: addonKey },
-          )
-        }`;
-        return new Response(
-          JSON.stringify({
-            url,
-            mock: true,
-            mode: "mock",
-            addon_key: addonKey,
-          }),
-          {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-            status: 200,
-          },
-        );
-      }
-
       const checkoutAddon = await getCheckoutAddon(supabaseClient, addonKey);
       if (!checkoutAddon) {
         return new Response(
@@ -189,6 +167,27 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
           {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
             status: 403,
+          },
+        );
+      }
+      if (isStripeMockMode()) {
+        const url = `${origin}${
+          withMockBillingParams(
+            sanitizeRedirectPath(body.success_url) ??
+              "/dashboard/billing?checkout=success",
+            { checkout: "success", addon: addonKey },
+          )
+        }`;
+        return new Response(
+          JSON.stringify({
+            url,
+            mock: true,
+            mode: "mock",
+            addon_key: addonKey,
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
           },
         );
       }

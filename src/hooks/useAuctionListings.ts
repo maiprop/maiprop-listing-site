@@ -1,17 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
-import { fetchPublicApi } from "@/lib/publicApi";
 
 const AUCTION_SELECT_CORE = "id, title, city, address, price, auction_starting_bid, auction_date, auction_court, property_type, cover_image_url, sqm, bedrooms, bathrooms, floor, total_floors, latitude, longitude, tags, year_built, construction_status, website_url, region, is_featured, priority_placement";
 const QUERY_TIMEOUT_MS = 15_000;
 const AUCTION_FETCH_LIMIT = 500;
 const PORTAL_AUCTION_FETCH_LIMIT = 600;
-const PUBLIC_AUCTION_CACHE_LIMIT = 60;
-const PUBLIC_AUCTION_CACHE_TIMEOUT_MS = 8_000;
 const AUCTION_RANDOMIZATION_SALT = "maiprop-auctions-v1";
 const AUCTION_QUERY_STALE_TIME = 5 * 60_000;
 const AUCTION_QUERY_GC_TIME = 30 * 60_000;
+const OS_AUCTION_SOURCE_TAG = "source:maiprop-os";
 
 /**
  * Shape returned by the fetchAll helper. Columns are a Pick<> against the
@@ -54,6 +52,8 @@ export type AuctionListingRow = Pick<
 const getTodayDate = (): string => {
   return new Date().toISOString().split("T")[0];
 };
+
+const getDailyAuctionPoolTag = (date = getTodayDate()): string => `auction_pool:${date}`;
 
 const getAuctionSelect = (withImages: boolean): string => {
   return withImages ? `${AUCTION_SELECT_CORE}, listing_images(url, sort_order)` : AUCTION_SELECT_CORE;
@@ -105,6 +105,7 @@ const fetchAuctionPageFromDatabase = async (
   withImages: boolean,
   from: number,
   pageSize: number,
+  requiredTags: string[],
 ): Promise<AuctionListingRow[]> => {
   const { data, error } = await supabase
     .from("listings")
@@ -112,7 +113,9 @@ const fetchAuctionPageFromDatabase = async (
     .eq("listing_type", "auction")
     .eq("status", "active")
     .eq("is_off_market", false)
+    .contains("tags", requiredTags)
     .or(`auction_date.gte.${today},auction_date.is.null`)
+    .order("updated_at", { ascending: false })
     .order("is_featured", { ascending: false })
     .order("priority_placement", { ascending: false })
     .order("auction_date", { ascending: true, nullsFirst: false })
@@ -128,15 +131,16 @@ const fetchAuctionFallbackPageRange = async (
   from: number,
   remainingRows: number,
   allAuctions: AuctionListingRow[],
+  requiredTags: string[],
 ): Promise<AuctionListingRow[]> => {
   if (remainingRows <= 0) return allAuctions;
 
   const pageSize = Math.min(AUCTION_FETCH_LIMIT, remainingRows);
-  const rows = await fetchAuctionPageFromDatabase(today, withImages, from, pageSize);
+  const rows = await fetchAuctionPageFromDatabase(today, withImages, from, pageSize, requiredTags);
   const nextAuctions = allAuctions.concat(rows);
 
   return hasCompleteAuctionPage(rows, pageSize)
-    ? fetchAuctionFallbackPageRange(today, withImages, from + pageSize, remainingRows - rows.length, nextAuctions)
+    ? fetchAuctionFallbackPageRange(today, withImages, from + pageSize, remainingRows - rows.length, nextAuctions, requiredTags)
     : nextAuctions;
 };
 
@@ -144,8 +148,9 @@ const fetchAuctionsFromDatabase = (
   today: string,
   withImages: boolean,
   maxRows = PORTAL_AUCTION_FETCH_LIMIT,
+  requiredTags = [OS_AUCTION_SOURCE_TAG, getDailyAuctionPoolTag(today)],
 ): Promise<AuctionListingRow[]> => {
-  return fetchAuctionFallbackPageRange(today, withImages, 0, maxRows, []);
+  return fetchAuctionFallbackPageRange(today, withImages, 0, maxRows, [], requiredTags);
 };
 
 const fetchAuctionByDatabaseId = async (
@@ -210,58 +215,17 @@ export const fetchAuctionListingById = async (id: string): Promise<AuctionListin
   }
 };
 
-const fetchAuctionsFromOs = async (today: string, maxRows: number): Promise<AuctionListingRow[]> => {
-  const { data, error } = await supabase.functions.invoke("fetch-os-auctions", {
-    body: {
-      auctionDateFrom: today,
-      page: 0,
-      pageSize: maxRows,
-      sampleAcrossGreece: true,
-      sortBy: "AUCTION_DATE",
-      order: "ASC",
-    },
-  });
-
-  if (error) throw error;
-
-  const rows = data?.data;
-  if (!Array.isArray(rows)) throw new Error("Unexpected OS auctions response");
-  return rows as AuctionListingRow[];
-};
-
-const fetchAuctionsFromPublicCache = async (maxRows: number): Promise<AuctionListingRow[]> => {
-  if (maxRows > PUBLIC_AUCTION_CACHE_LIMIT) return [];
-  const payload = await fetchPublicApi<{ data?: AuctionListingRow[] } | AuctionListingRow[]>(
-    `/api/public/auctions?limit=${maxRows}`,
-    { timeoutMs: PUBLIC_AUCTION_CACHE_TIMEOUT_MS },
-  );
-  if (Array.isArray(payload)) return payload;
-  return Array.isArray(payload?.data) ? payload.data : [];
-};
-
-const hasFloorMetadata = (rows: AuctionListingRow[]): boolean =>
-  rows.some((row) => row.floor != null || row.total_floors != null);
-
-const preferFloorAwareRows = async (
-  today: string,
-  maxRows: number,
-  preferredRows: AuctionListingRow[],
-): Promise<AuctionListingRow[]> => {
-  if (hasFloorMetadata(preferredRows)) return preferredRows;
-
-  try {
-    const osRows = await fetchAuctionsFromOs(today, maxRows);
-    return hasFloorMetadata(osRows) || preferredRows.length === 0 ? osRows : preferredRows;
-  } catch {
-    return preferredRows;
-  }
-};
-
 const fetchFallbackAuctions = async (today: string, maxRows: number): Promise<AuctionListingRow[]> => {
+  const dailyPoolTags = [OS_AUCTION_SOURCE_TAG, getDailyAuctionPoolTag(today)];
+  const sourceTags = [OS_AUCTION_SOURCE_TAG];
   try {
-    return await fetchAuctionsFromDatabase(today, true, maxRows);
+    const dailyRows = await fetchAuctionsFromDatabase(today, true, maxRows, dailyPoolTags);
+    if (dailyRows.length > 0) return dailyRows;
+    return await fetchAuctionsFromDatabase(today, true, maxRows, sourceTags);
   } catch (_dbJoinErr: unknown) {
-    return fetchAuctionsFromDatabase(today, false, maxRows);
+    const dailyRows = await fetchAuctionsFromDatabase(today, false, maxRows, dailyPoolTags);
+    if (dailyRows.length > 0) return dailyRows;
+    return fetchAuctionsFromDatabase(today, false, maxRows, sourceTags);
   }
 };
 
@@ -272,32 +236,6 @@ const fetchAuctionListings = async (maxRows: number): Promise<AuctionListingRow[
   const today = getTodayDate();
   const sourceRows = PORTAL_AUCTION_FETCH_LIMIT;
   let cachedRows: AuctionListingRow[] = [];
-
-  const publicRows = await fetchAuctionsFromPublicCache(maxRows);
-  if (publicRows.length > 0) {
-    const rows = await preferFloorAwareRows(today, maxRows, publicRows);
-    return randomizeAndLimitAuctionRows(rows, maxRows);
-  }
-
-  if (maxRows <= PUBLIC_AUCTION_CACHE_LIMIT) {
-    try {
-      cachedRows = await fetchFallbackAuctions(today, sourceRows);
-      const rows = await preferFloorAwareRows(today, maxRows, cachedRows);
-      return randomizeAndLimitAuctionRows(rows, maxRows);
-    } catch (dbErr: unknown) {
-      if (cachedRows.length > 0) return randomizeAndLimitAuctionRows(cachedRows, maxRows);
-      throw dbErr;
-    }
-  }
-
-  try {
-    const osRows = await fetchAuctionsFromOs(today, maxRows);
-    if (osRows.length > 0) return randomizeAndLimitAuctionRows(osRows, maxRows);
-  } catch (_osErr: unknown) {
-    // Cached DB rows are only a resilience fallback. The live OS proxy samples
-    // the national auction catalogue; the local cache may contain a small
-    // municipality-clustered sync window.
-  }
 
   try {
     cachedRows = await fetchFallbackAuctions(today, sourceRows);

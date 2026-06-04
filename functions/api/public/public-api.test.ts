@@ -441,11 +441,11 @@ describe("public auctions endpoint", () => {
       "Patras",
     ]);
 
-    expect(fetchUrls("/rest/v1/listings")[0].searchParams.get("limit")).toBe("240");
+    expect(fetchUrls("/rest/v1/listings")[0].searchParams.get("limit")).toBe("600");
     expect(fetchUrls("/functions/v1/fetch-os-auctions")).toHaveLength(0);
   });
 
-  it("uses the OS proxy when the cached DB window is municipality-clustered", async () => {
+  it("keeps public auction reads local even when the cached DB window is municipality-clustered", async () => {
     fetchMock().mockResolvedValueOnce(jsonRows(
       Array.from({ length: 48 }, (_, i) => ({
         id: `cached-agrinio-${i}`,
@@ -455,65 +455,31 @@ describe("public auctions endpoint", () => {
         auction_date: "2026-06-01",
       })),
     ));
-    fetchMock().mockResolvedValueOnce(
-      new Response(JSON.stringify({
-        data: [
-          { id: "os-athens", city: "Athens", is_featured: false, priority_placement: 0, auction_date: "2026-06-01" },
-          { id: "os-patras", city: "Patras", is_featured: false, priority_placement: 0, auction_date: "2026-06-01" },
-          { id: "os-chania", city: "Chania", is_featured: false, priority_placement: 0, auction_date: "2026-06-01" },
-        ],
-      }), { headers: { "Content-Type": "application/json" } }),
-    );
-
     const rows = await fetchPublicAuctionRows(env, 60);
-    expect(rows.map((row) => row.id)).toEqual(["os-athens", "os-chania", "os-patras"]);
+    expect(rows).toHaveLength(48);
+    expect(rows.every((row) => row.city === "Agrinio")).toBe(true);
 
-    expect(fetchUrls("/rest/v1/listings")[0].searchParams.get("limit")).toBe("240");
-    const osCall = fetchUrls("/functions/v1/fetch-os-auctions")[0];
-    expect(osCall).toBeDefined();
-    expect(JSON.parse(String(initFor("/functions/v1/fetch-os-auctions").body))).toMatchObject({
-      page: 0,
-      pageSize: 60,
-      sampleAcrossGreece: true,
-    });
+    expect(fetchUrls("/rest/v1/listings")[0].searchParams.get("limit")).toBe("600");
+    expect(fetchUrls("/functions/v1/fetch-os-auctions")).toHaveLength(0);
   });
 
-  it("uses the OS proxy only when the cached DB window is empty", async () => {
+  it("returns an empty local result instead of calling OS when the cached DB window is empty", async () => {
     fetchMock().mockResolvedValueOnce(jsonRows([]));
-    fetchMock().mockResolvedValueOnce(
-      new Response(JSON.stringify({
-        data: [
-          { id: "low", is_featured: false, priority_placement: 0, auction_date: "2026-06-01" },
-          { id: "high", is_featured: false, priority_placement: 8, auction_date: "2026-06-03" },
-          { id: "featured", is_featured: true, priority_placement: 0, auction_date: "2026-05-30" },
-        ],
-      }), { headers: { "Content-Type": "application/json" } }),
-    );
 
     const rows = await fetchPublicAuctionRows(env, 2);
-    expect(rows.map((row) => row.id)).toEqual(["high", "featured"]);
+    expect(rows).toEqual([]);
 
     const dbCall = fetchUrls("/rest/v1/listings")[0];
     expect(dbCall).toBeDefined();
-    const osCall = fetchUrls("/functions/v1/fetch-os-auctions")[0];
-    expect(osCall).toBeDefined();
-    const init = initFor("/functions/v1/fetch-os-auctions");
-    expect(init.method).toBe("POST");
-    expect(JSON.parse(String(init.body))).toMatchObject({
-      page: 0,
-      pageSize: 2,
-      sampleAcrossGreece: true,
-      sortBy: "AUCTION_DATE",
-    });
+    expect(fetchUrls("/functions/v1/fetch-os-auctions")).toHaveLength(0);
   });
 
-  it("returns an empty list when both the DB cache and OS proxy are empty or unavailable", async () => {
+  it("returns an empty list when the local DB auction cache is empty", async () => {
     fetchMock().mockResolvedValueOnce(jsonRows([]));
     await expect(fetchPublicAuctionRows(env, 1)).resolves.toEqual([]);
 
     fetchMock().mockClear();
     fetchMock().mockResolvedValueOnce(jsonRows([]));
-    fetchMock().mockRejectedValueOnce(new Error("timeout"));
     await expect(fetchPublicAuctionRows(env, 2)).resolves.toEqual([]);
   });
 
@@ -523,6 +489,7 @@ describe("public auctions endpoint", () => {
     const dbUrl = fetchUrls("/rest/v1/listings")[0];
     expect(dbUrl.searchParams.get("listing_type")).toBe("eq.auction");
     expect(dbUrl.searchParams.get("is_off_market")).toBe("eq.false");
+    expect(dbUrl.searchParams.get("tags")).toMatch(/^cs\.\{source:maiprop-os,auction_pool:\d{4}-\d{2}-\d{2}\}$/);
     expect(dbUrl.searchParams.get("listing_images.limit")).toBe("3");
     expect(dbUrl.searchParams.get("limit")).toBe("1");
   });
@@ -533,7 +500,7 @@ describe("public auctions endpoint", () => {
     expect(body.data).toHaveLength(2);
 
     const dbUrl = fetchUrls("/rest/v1/listings")[0];
-    expect(dbUrl.searchParams.get("limit")).toBe("240");
+    expect(dbUrl.searchParams.get("limit")).toBe("600");
     expect(cacheApi.put.mock.calls[0][0].url).toContain("limit=60");
     expect(cacheApi.put.mock.calls[0][0].url).toContain("day=");
     expect(cacheApi.put.mock.calls[0][0].url).toContain("v=national-sample-v5");
@@ -550,7 +517,7 @@ describe("public homepage endpoint", () => {
     const dbUrl = fetchUrls("/rest/v1/listings")[0];
     expect(dbUrl.searchParams.get("listing_type")).toBe("eq.auction");
     expect(dbUrl.searchParams.get("is_off_market")).toBe("eq.false");
-    expect(dbUrl.searchParams.get("limit")).toBe("240");
+    expect(dbUrl.searchParams.get("limit")).toBe("600");
   });
 
   it("fetches lightweight featured and open-house homepage sections", async () => {

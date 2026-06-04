@@ -165,7 +165,7 @@ export function useListingForm(options?: { allowPreSale?: boolean }) {
     const path = `${user.id}/${id}.${ext}`;
     const { error } = await supabase.storage
       .from("listing-images")
-      .upload(path, compressed, { upsert: true, contentType: compressed.type });
+      .upload(path, compressed, { upsert: false, contentType: compressed.type });
     if (error) throw error;
     const { data } = supabase.storage.from("listing-images").getPublicUrl(path);
     return { id, url: data.publicUrl };
@@ -173,10 +173,10 @@ export function useListingForm(options?: { allowPreSale?: boolean }) {
 
   const handleFilesSelected = useCallback(async (files: FileList | null) => {
     if (!files || !user) return;
-    const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
+    const MAX_FILE_BYTES = 5 * 1024 * 1024; // listing-images bucket limit
     const all = Array.from(files).slice(0, 20 - images.length);
     const rejections = all.filter(f => f.size > MAX_FILE_BYTES).map(f => f.name);
-    if (rejections.length) toast.error(trv(rejections.length === 1 ? "createListing.validation.fileTooLargeOne" : "createListing.validation.fileTooLargeOther", rejections.length === 1 ? "{{files}} exceeds the 10 MB limit" : "{{files}} exceed the 10 MB limit", { files: rejections.join(", ") }));
+    if (rejections.length) toast.error(trv(rejections.length === 1 ? "createListing.validation.fileTooLargeOne" : "createListing.validation.fileTooLargeOther", rejections.length === 1 ? "{{files}} exceeds the 5 MB limit" : "{{files}} exceed the 5 MB limit", { files: rejections.join(", ") }));
     const newFiles = all.filter(f => f.size <= MAX_FILE_BYTES);
     if (newFiles.length === 0) return;
 

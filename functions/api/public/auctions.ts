@@ -20,13 +20,8 @@ type AuctionRow = Record<string, unknown> & {
   region?: string | null;
 };
 
-type EdgeAuctionPayload = {
-  data?: AuctionRow[];
-};
-
 const PUBLIC_AUCTION_LIMIT_MAX = 60;
-const PUBLIC_AUCTION_CANDIDATE_LIMIT_MAX = 240;
-const OS_PROXY_TIMEOUT_MS = 12_000;
+const PUBLIC_AUCTION_CANDIDATE_LIMIT_MAX = 600;
 const AUCTION_CACHE_VERSION = "national-sample-v5";
 const UNKNOWN_LOCATION_KEY = "__unknown_location__";
 const AUCTION_SELECT =
@@ -36,10 +31,8 @@ function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function timeoutSignal(ms: number): AbortSignal {
-  const controller = new AbortController();
-  setTimeout(() => controller.abort(), ms);
-  return controller.signal;
+function todayAuctionPoolTag(): string {
+  return `auction_pool:${todayIsoDate()}`;
 }
 
 function compareAuctionRows(a: AuctionRow, b: AuctionRow): number {
@@ -60,7 +53,7 @@ function sortAuctionRows(rows: AuctionRow[]): AuctionRow[] {
 
 function getCachedCandidateLimit(limit: number): number {
   if (limit <= 12) return limit;
-  return Math.min(PUBLIC_AUCTION_CANDIDATE_LIMIT_MAX, limit * 4);
+  return PUBLIC_AUCTION_CANDIDATE_LIMIT_MAX;
 }
 
 function getAuctionLocationKey(row: AuctionRow): string {
@@ -68,24 +61,6 @@ function getAuctionLocationKey(row: AuctionRow): string {
   if (city) return city;
   const region = typeof row.region === "string" ? row.region.trim() : "";
   return region || UNKNOWN_LOCATION_KEY;
-}
-
-function hasNationalCachedScope(rows: AuctionRow[], limit: number): boolean {
-  if (rows.length < 12 || limit < 12) return true;
-
-  const locationCounts = new Map<string, number>();
-  for (const row of rows) {
-    const key = getAuctionLocationKey(row);
-    locationCounts.set(key, (locationCounts.get(key) ?? 0) + 1);
-  }
-
-  const knownLocationCounts = [...locationCounts.entries()].filter(([key]) => key !== UNKNOWN_LOCATION_KEY);
-  const projectedRows = Math.min(rows.length, limit);
-  const minimumLocations = projectedRows >= 40 ? 3 : projectedRows >= 20 ? 2 : 1;
-  if (knownLocationCounts.length < minimumLocations) return false;
-
-  const largestLocationCount = Math.max(...knownLocationCounts.map(([, count]) => count));
-  return largestLocationCount / rows.length <= 0.85;
 }
 
 function roundRobinAuctionRowsByLocation(rows: AuctionRow[]): AuctionRow[] {
@@ -127,40 +102,13 @@ function diversifyAuctionRows(rows: AuctionRow[], limit: number): AuctionRow[] {
   return [...promotedRows, ...roundRobinAuctionRowsByLocation(organicRows)].slice(0, limit);
 }
 
-async function fetchOsAuctions(env: PublicApiEnv, limit: number): Promise<AuctionRow[]> {
-  const runtime = getSupabaseRuntime(env);
-  if (!runtime) throw new Error("missing-runtime");
-
-  const res = await fetch(new URL("/functions/v1/fetch-os-auctions", runtime.url), {
-    method: "POST",
-    headers: {
-      apikey: runtime.key,
-      Authorization: `Bearer ${runtime.key}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify({
-      auctionDateFrom: todayIsoDate(),
-      page: 0,
-      pageSize: limit,
-      sampleAcrossGreece: true,
-      sortBy: "AUCTION_DATE",
-      order: "ASC",
-    }),
-    signal: timeoutSignal(OS_PROXY_TIMEOUT_MS),
-  });
-
-  if (!res.ok) throw new Error(`OS proxy failed with ${res.status}`);
-  const payload = (await res.json()) as EdgeAuctionPayload;
-  return Array.isArray(payload.data) ? payload.data : [];
-}
-
 async function fetchCachedDbAuctions(env: PublicApiEnv, limit: number): Promise<AuctionRow[]> {
   const params = new URLSearchParams();
   params.set("select", AUCTION_SELECT);
   params.set("status", "eq.active");
   params.set("listing_type", "eq.auction");
   params.set("is_off_market", "eq.false");
+  params.set("tags", `cs.{source:maiprop-os,${todayAuctionPoolTag()}}`);
   params.set("or", `(auction_date.gte.${todayIsoDate()},auction_date.is.null)`);
   params.append("order", "is_featured.desc");
   params.append("order", "priority_placement.desc.nullslast");
@@ -174,17 +122,6 @@ async function fetchCachedDbAuctions(env: PublicApiEnv, limit: number): Promise<
 
 export async function fetchPublicAuctionRows(env: PublicApiEnv, limit: number): Promise<AuctionRow[]> {
   const cachedRows = await fetchCachedDbAuctions(env, getCachedCandidateLimit(limit));
-  if (cachedRows.length > 0 && hasNationalCachedScope(cachedRows, limit)) {
-    return diversifyAuctionRows(cachedRows, limit);
-  }
-
-  try {
-    const osRows = await fetchOsAuctions(env, limit);
-    if (osRows.length > 0) return diversifyAuctionRows(osRows, limit);
-  } catch {
-    // Keep the public route responsive even when the live OS proxy is slow.
-  }
-
   return cachedRows.length > 0 ? diversifyAuctionRows(cachedRows, limit) : [];
 }
 

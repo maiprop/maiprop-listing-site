@@ -88,7 +88,7 @@ const energyColors: Record<string, string> = {
 // Internal/system tag prefixes that should never be shown to users
 const SYSTEM_TAG_PREFIXES = [
   "os_auction:", "source:", "auction_status:", "ownership:", "ownership_pct:",
-  "round:", "status:", "posted", "sync:", "land_type:", "commercial_type:",
+  "round:", "status:", "posted", "sync:", "auction_pool:", "land_type:", "commercial_type:",
 ];
 
 const PROPERTY_IMAGE_WIDTHS = [320, 480, 768, 1024];

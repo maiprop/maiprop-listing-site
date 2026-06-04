@@ -193,9 +193,9 @@ describe("useBookViewing", () => {
 });
 
 describe("useUpdateViewingStatus", () => {
-  it("updates the row's status and invalidates the cache", async () => {
-    const or = vi.fn().mockResolvedValue({ error: null });
-    const eq = vi.fn().mockReturnValue({ or });
+  it("limits owner-confirmed status changes to the listing owner", async () => {
+    const eqOwner = vi.fn().mockResolvedValue({ error: null });
+    const eq = vi.fn().mockReturnValue({ eq: eqOwner });
     const update = vi.fn().mockReturnValue({ eq });
     fromMock.mockReturnValue({ update });
     const { result } = renderHook(() => useUpdateViewingStatus(), { wrapper: wrapper() });
@@ -204,8 +204,24 @@ describe("useUpdateViewingStatus", () => {
     });
     expect(update).toHaveBeenCalledWith({ status: "confirmed" });
     expect(eq).toHaveBeenCalledWith("id", "v-1");
-    expect(or).toHaveBeenCalledWith("owner_id.eq.u-1,requester_id.eq.u-1");
+    expect(eqOwner).toHaveBeenCalledWith("owner_id", "u-1");
     expect(toastMock.success).toHaveBeenCalledWith(expect.stringMatching(/updated/i));
+  });
+
+  it("allows either side to cancel a viewing without allowing requester confirmation", async () => {
+    const or = vi.fn().mockResolvedValue({ error: null });
+    const eq = vi.fn().mockReturnValue({ or });
+    const update = vi.fn().mockReturnValue({ eq });
+    fromMock.mockReturnValue({ update });
+    const { result } = renderHook(() => useUpdateViewingStatus(), { wrapper: wrapper() });
+
+    await act(async () => {
+      await result.current.mutateAsync({ id: "v-1", status: "cancelled" });
+    });
+
+    expect(update).toHaveBeenCalledWith({ status: "cancelled" });
+    expect(eq).toHaveBeenCalledWith("id", "v-1");
+    expect(or).toHaveBeenCalledWith("owner_id.eq.u-1,requester_id.eq.u-1");
   });
 
   it("rejects when no user", async () => {

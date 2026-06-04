@@ -17,7 +17,7 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov", "html", "json-summary"],
-      reportsDirectory: "./coverage",
+      reportsDirectory: process.env.VITEST_COVERAGE_DIR ?? "./coverage",
       include: [
         "src/**/*.{ts,tsx}",
         "functions/**/*.ts",

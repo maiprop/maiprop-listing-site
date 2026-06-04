@@ -358,6 +358,7 @@ describe("OpenHouseDashboardSection", () => {
     open_house_date: "2026-05-17T12:00:00.000Z",
     views_count: 12,
     cover_image_url: null,
+    price: 350000,
   };
 
   it("renders the empty dashboard state with visitor and owner paths", () => {
@@ -402,5 +403,35 @@ describe("OpenHouseDashboardSection", () => {
     expect(screen.getByText(/Offers remain/i)).toBeInTheDocument();
     expect(screen.getByText(/submitted/i)).toBeInTheDocument();
     expect(screen.getByText(/accepted/i)).toBeInTheDocument();
+  });
+
+  it("passes listing price into the expanded owner panel so high-value screening blockers apply", () => {
+    useOpenHouseRegistrationsMock.mockReturnValue({
+      isLoading: false,
+      data: [
+        {
+          ...completeRegistration,
+          id: "reg-missing-screening",
+          contact_name: "Screening Missing",
+          mortgage_status: null,
+          budget_range: null,
+          working_with_agent: null,
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <OpenHouseDashboardSection myListings={[listing as any]} />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByText("Owner Open House"));
+    fireEvent.click(screen.getByRole("button", { name: /approve/i }));
+
+    expect(toastMock.error).toHaveBeenCalledWith(expect.stringContaining("Mortgage/funds question missing"));
+    expect(updateRegMock.mutate).not.toHaveBeenCalledWith(expect.objectContaining({
+      id: "reg-missing-screening",
+    }));
   });
 });
