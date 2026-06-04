@@ -84,6 +84,14 @@ The CI `deploy` job **automatically syncs** these variables into the Pages
 production env on every deploy (step: *Sync Cloudflare Pages runtime
 environment variables*), sourced from the `VITE_SUPABASE_PROJECT_ID`,
 `VITE_SUPABASE_PUBLISHABLE_KEY`, and `SITE_LOCK_PASSWORD` GitHub secrets.
+The PR preview deploy job mirrors this for the Pages **Preview** runtime
+environment, but it uses the isolated staging secrets:
+`STAGING_SUPABASE_PROJECT_ID`, `STAGING_SUPABASE_URL`,
+`STAGING_SUPABASE_PUBLISHABLE_KEY`, optional `STAGING_APP_URL`, and optional
+`STAGING_SITE_LOCK_PASSWORD`. When `STAGING_APP_URL` is absent, CI derives the
+Cloudflare Pages branch preview origin and bakes that into `VITE_APP_URL`. This
+keeps preview browser bundles and preview Pages Functions on the same staging
+backend.
 You only need to touch Cloudflare Pages Settings > Environment variables if you add **new**
 server-side bindings (and then extend that CI step accordingly).
 
@@ -220,9 +228,11 @@ dashboard. All previously-issued cookies are invalidated automatically
   The splash page returns HTTP 200, so a naked `curl` still passes. If it
   doesn't, check the CI deploy logs for the *Sync* step output — the last
   line reports `site lock: ENABLED` or `disabled`.
-- **Preview deploys are also locked.** The sync step only writes to
-  `deployment_configs.production`, so previews are unaffected unless you
-  manually add the same variable under the *Preview* environment.
+- **Preview deploys are also locked.** Production and preview use separate
+  passcode secrets. The production sync writes `SITE_LOCK_PASSWORD` only to
+  `deployment_configs.production`; PR previews write `STAGING_SITE_LOCK_PASSWORD`
+  to `deployment_configs.preview` when that staging secret exists, otherwise
+  they remove the preview lock binding.
 - **I'm seeing the splash on localhost.** You shouldn't — the middleware
   runs only on Cloudflare Pages. `npm run dev` and `npm run preview` don't
   go through the Workers runtime.

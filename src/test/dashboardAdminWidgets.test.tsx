@@ -48,7 +48,13 @@ vi.mock("@/components/Navbar", () => ({ Navbar: () => <nav data-testid="navbar" 
 vi.mock("@/components/Footer", () => ({ Footer: () => <footer data-testid="footer" /> }));
 vi.mock("@/components/AdminFiresalePipeline", () => ({ default: () => <div data-testid="admin-pipeline">Pipeline body</div> }));
 vi.mock("@/components/AdminInvestorScreening", () => ({ default: () => <div data-testid="admin-investor-screening" /> }));
-vi.mock("@/components/OpenHouseDashboardSection", () => ({ default: () => <div data-testid="admin-open-houses" /> }));
+vi.mock("@/components/OpenHouseDashboardSection", () => ({
+  default: ({ myListings }: { myListings: Array<{ title?: string }> }) => (
+    <div data-testid="admin-open-houses">
+      {myListings.map((listing) => listing.title).join(",")}
+    </div>
+  ),
+}));
 vi.mock("@/pages/AdminPricing", () => ({ AdminPricingContent: () => <div data-testid="admin-pricing" /> }));
 vi.mock("@/components/AdminProfessionalVerification", () => ({ AdminProfessionalVerification: () => <div data-testid="admin-pro-verification" /> }));
 vi.mock("@/components/POFVerificationPanel", () => ({ POFVerificationPanel: () => <div data-testid="admin-pof-review" /> }));
@@ -201,6 +207,32 @@ describe("AdminDashboard tab routing", () => {
     renderAdminRoute("/admin?tab=contact-inbox");
 
     expect(await screen.findByTestId("admin-contact-submissions")).toBeInTheDocument();
+  });
+
+  it("loads platform-wide open-house listings for admin moderation", async () => {
+    fromMock.mockImplementation((table: string) => {
+      if (table === "listings") {
+        return selectBuilder([
+          {
+            id: "oh-admin-1",
+            title: "Non-owned Open House",
+            listing_type: "open_house",
+            status: "active",
+            open_house_date: "2026-07-01T10:00:00Z",
+            views_count: 4,
+            cover_image_url: null,
+            price: 350000,
+          },
+        ]);
+      }
+      return selectBuilder([]);
+    });
+
+    renderAdminRoute("/admin?tab=open-houses");
+
+    expect(await screen.findByText(/across the platform/i)).toBeInTheDocument();
+    expect(await screen.findByText("Non-owned Open House")).toBeInTheDocument();
+    expect(useMyListingsMock).not.toHaveBeenCalled();
   });
 });
 

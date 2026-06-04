@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDetailRows, buildPropertyFeatureGroups } from "@/lib/propertyFeatures";
+import { buildDetailGroups, buildDetailRows, buildPropertyFeatureGroups } from "@/lib/propertyFeatures";
 
 type FeatureInput = Parameters<typeof buildPropertyFeatureGroups>[0];
 type DetailInput = Parameters<typeof buildDetailRows>[0];
@@ -138,5 +138,26 @@ describe("propertyFeatures helpers", () => {
       { label: "Build Allowance", value: "180 m²" },
       { label: "From City", value: "2000 m" },
     ]));
+  });
+
+  it("keeps auction detail groups user-facing and omits raw court/status metadata", () => {
+    const groups = buildDetailGroups({
+      ...baseListing,
+      listing_type: "auction",
+      property_type: "apartment",
+      auction_date: "2026-06-10T00:00:00Z",
+      auction_court: "POSTED",
+      tags: ["ownership:full", "ownership_pct:100"],
+    } as unknown as DetailInput, 128000, 106.54, 1201, false);
+
+    const auctionGroup = groups.find((group) => group.title === "Auction");
+
+    expect(auctionGroup?.rows).toEqual(expect.arrayContaining([
+      { label: "Auction Date", value: "10/06/2026" },
+      { label: "Ownership", value: "Full" },
+      { label: "Ownership Share", value: "100%" },
+    ]));
+    expect(auctionGroup?.rows.some((row) => row.label === "Auction Court")).toBe(false);
+    expect(JSON.stringify(groups)).not.toContain("POSTED");
   });
 });

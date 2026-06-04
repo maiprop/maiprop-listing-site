@@ -365,9 +365,16 @@ jobs:
         if: steps.supabase_changes.outputs.db_changes == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: supabase db push --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" --yes --include-all
 
+      - name: Capture staging Supabase index stats
+        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        run: npm run capture:supabase-index-stats -- --out supabase-index-stats.json
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF:  ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+
       - name: Check staging Supabase advisors
         if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
-        run: npm run check:supabase-advisor -- --fail-on-error --out supabase-advisor-staging-summary.json
+        run: npm run check:supabase-advisor -- --fail-on-error --fail-on-unknown --index-stats supabase-index-stats.json --out supabase-advisor-staging-summary.json
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF:  ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
@@ -419,6 +426,7 @@ jobs:
           name: release-safety-staging-live-functions
           path: |
             release-safety-staging-live-functions.json
+            supabase-index-stats.json
             supabase-advisor-staging-summary.json
           if-no-files-found: ignore
           retention-days: 7

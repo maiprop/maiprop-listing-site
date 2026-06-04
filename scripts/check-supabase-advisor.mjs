@@ -1,6 +1,11 @@
 #!/usr/bin/env node
-import { appendFile, writeFile } from "node:fs/promises";
-import { classifyAdvisorDebt, loadAdvisorDebtPolicy } from "./supabase-advisor-debt.mjs";
+import { appendFile, readFile, writeFile } from "node:fs/promises";
+import {
+  assertAdvisorDebtIsActionable,
+  buildUnusedIndexReview,
+  classifyAdvisorDebt,
+  loadAdvisorDebtPolicy,
+} from "./supabase-advisor-debt.mjs";
 
 const args = process.argv.slice(2);
 
@@ -15,7 +20,9 @@ function fail(message) {
 }
 
 const outPath = readArg("--out");
+const indexStatsPath = readArg("--index-stats");
 const failOnError = args.includes("--fail-on-error");
+const failOnUnknown = args.includes("--fail-on-unknown");
 const accessToken = process.env.SUPABASE_ACCESS_TOKEN;
 const projectRef =
   process.env.SUPABASE_PROJECT_REF ||
@@ -84,6 +91,16 @@ async function fetchAdvisor(category) {
   return { category, lint_count: lints.length, lints };
 }
 
+async function readIndexStats(path) {
+  if (!path) return [];
+  const raw = await readFile(path, "utf8");
+  const parsed = JSON.parse(raw);
+  if (Array.isArray(parsed)) return parsed;
+  if (Array.isArray(parsed?.rows)) return parsed.rows;
+  if (Array.isArray(parsed?.data)) return parsed.data;
+  fail(`Index stats file ${path} must be a JSON array or object with rows/data array.`);
+}
+
 const results = [];
 for (const category of categories) {
   results.push(await fetchAdvisor(category));
@@ -109,15 +126,21 @@ const advisorDebt = classifyAdvisorDebt(
   { results },
   await loadAdvisorDebtPolicy(),
 );
+const unusedIndexReview = buildUnusedIndexReview(
+  { results },
+  await readIndexStats(indexStatsPath),
+);
 
 const summary = {
   generated_at: new Date().toISOString(),
   project_ref: projectRef,
   api_base: apiBase,
   fail_on_error: failOnError,
+  fail_on_unknown: failOnUnknown,
   totals,
   failing_lint_count: failingLintCount,
   advisor_debt: advisorDebt,
+  unused_index_review: unusedIndexReview,
   results,
 };
 
@@ -150,10 +173,29 @@ if (process.env.GITHUB_STEP_SUMMARY) {
       `| Needs review | ${advisorDebt.review_count} |`,
       `| Unknown | ${advisorDebt.unknown_count} |`,
       "",
+      "### Unused Index Review",
+      "",
+      "| Status | Count |",
+      "|---|---:|",
+      `| Advisor lints | ${unusedIndexReview.totals.unused_index_lints} |`,
+      `| Mapped to pg_stat_user_indexes | ${unusedIndexReview.totals.mapped_to_stats} |`,
+      `| With scans | ${unusedIndexReview.totals.with_scans} |`,
+      `| Zero-scan candidates needing extra review | ${unusedIndexReview.totals.zero_scan_candidates} |`,
+      `| Needs stats snapshot | ${unusedIndexReview.totals.needs_stats_snapshot} |`,
+      `| Needs manual mapping | ${unusedIndexReview.totals.needs_manual_mapping} |`,
+      "",
     ].join("\n"),
   );
 }
 
 if (failOnError && failingLintCount > 0) {
   fail(`Found ${failingLintCount} advisor lint(s) at ERROR/CRITICAL/HIGH severity.`);
+}
+
+if (failOnUnknown) {
+  try {
+    assertAdvisorDebtIsActionable(advisorDebt);
+  } catch (error) {
+    fail(error.message);
+  }
 }

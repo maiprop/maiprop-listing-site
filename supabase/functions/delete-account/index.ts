@@ -21,6 +21,7 @@
  *        - project-media                  : `${user.id}/<projectId>/<file>`  (nested, 2 levels)
  *        - message-attachments            : `${user.id}/<convId>/<file>`     (nested, 2 levels)
  *        - open-house-docs                : `${user.id}/.../<file>`          (POF / ID docs)
+ *        - firesale-proof-docs            : `${user.id}/firesale/.../<file>`  (investor POF docs)
  *        - firesale-photos                : `${firesaleRequestId}/<file>`    (NOT under user.id)
  *      Buckets that put user.id at the top of the path are walked recursively
  *      by `removeFolderRecursive(supabase, bucket, user.id)`. firesale-photos
@@ -47,6 +48,7 @@ export const USER_FOLDER_BUCKETS = [
   "project-media",
   "message-attachments",
   "open-house-docs",
+  "firesale-proof-docs",
 ] as const;
 
 type DbError = { code?: string; message?: string } | null;

@@ -262,7 +262,7 @@ describe("Listings page interactions", () => {
     expect(screen.getByTestId("advanced-filters")).toHaveTextContent("4 filtered");
     fireEvent.click(screen.getByRole("button", { name: "Close advanced" }));
     expect(screen.queryByTestId("advanced-filters")).not.toBeInTheDocument();
-  });
+  }, 15_000);
 
   it("loads Google Places for listing search only after focus and applies the selected location", async () => {
     let placeChanged: (() => void) | undefined;

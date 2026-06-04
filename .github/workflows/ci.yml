@@ -53,6 +53,9 @@ jobs:
       - name: Check committed secrets
         run: npm run check:secrets
 
+      - name: Check dependency overrides
+        run: npm run check:dependency-overrides
+
       - name: Type-check & build
         run: npm run build
 
@@ -166,120 +169,9 @@ jobs:
 
   release-safety:
     name: Release Safety Inventory
-    runs-on: ubuntu-latest
     needs: quality
-    timeout-minutes: 15
-
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version-file: .node-version
-          cache: npm
-
-      - name: Check runtime
-        run: npm run check:runtime
-
-      - name: Install dependencies
-        run: npm ci --prefer-offline --no-audit
-
-      - name: Detect PR Supabase deployment changes
-        id: pr_supabase_changes
-        if: github.event_name == 'pull_request'
-        run: |
-          set -euo pipefail
-          base="${{ github.event.pull_request.base.sha }}"
-
-          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
-            git fetch --no-tags --depth=50 origin "${{ github.base_ref }}" || true
-          fi
-
-          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
-            echo "::warning::Could not inspect PR base; deferring live Supabase checks to staging prep."
-            echo "has_supabase_changes=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          changed_files="$(git diff --name-only "$base" "${{ github.sha }}" || true)"
-          echo "$changed_files"
-
-          if grep -Eq '^(supabase/|deno\.(json|lock)$)' <<< "$changed_files"; then
-            echo "has_supabase_changes=true" >> "$GITHUB_OUTPUT"
-            echo "Supabase deployment changes detected; live schema checks will run after staging prep."
-          else
-            echo "has_supabase_changes=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Check release safety inventory
-        run: npm run check:release-safety -- --out release-safety-inventory.json
-
-      - name: Check live Supabase function inventory
-        if: >
-          (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-          (github.event_name == 'pull_request' &&
-            github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
-            github.event.pull_request.draft == false &&
-            github.event.pull_request.user.login != 'dependabot[bot]' &&
-            !startsWith(github.event.pull_request.head.ref, 'release-please--') &&
-            steps.pr_supabase_changes.outputs.has_supabase_changes != 'true')
-        run: npm run check:release-safety -- --live-functions --out release-safety-inventory-live.json
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          RELEASE_SAFETY_SUPABASE_PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
-
-      - name: Check live Supabase advisors
-        if: >
-          (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-          (github.event_name == 'pull_request' &&
-            github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
-            github.event.pull_request.draft == false &&
-            github.event.pull_request.user.login != 'dependabot[bot]' &&
-            !startsWith(github.event.pull_request.head.ref, 'release-please--') &&
-            steps.pr_supabase_changes.outputs.has_supabase_changes != 'true')
-        run: npm run check:supabase-advisor -- --fail-on-error --out supabase-advisor-summary.json
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
-
-      - name: Check live Supabase generated types
-        if: >
-          (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-          (github.event_name == 'pull_request' &&
-            github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
-            github.event.pull_request.draft == false &&
-            github.event.pull_request.user.login != 'dependabot[bot]' &&
-            !startsWith(github.event.pull_request.head.ref, 'release-please--') &&
-            steps.pr_supabase_changes.outputs.has_supabase_changes != 'true')
-        run: npm run check:supabase-types -- -- --strict
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
-
-      - name: Check live Supabase security posture
-        if: >
-          (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-          (github.event_name == 'pull_request' &&
-            github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
-            github.event.pull_request.draft == false &&
-            github.event.pull_request.user.login != 'dependabot[bot]' &&
-            !startsWith(github.event.pull_request.head.ref, 'release-please--') &&
-            steps.pr_supabase_changes.outputs.has_supabase_changes != 'true')
-        run: npm run check:live-security-posture
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
-
-      - name: Upload release safety inventory
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: release-safety-inventory
-          path: |
-            release-safety-inventory*.json
-            supabase-advisor-summary.json
-          if-no-files-found: ignore
-          retention-days: 3
+    uses: ./.github/workflows/reusable-release-safety.yml
+    secrets: inherit
 
   e2e:
     name: E2E Tests
@@ -607,6 +499,14 @@ jobs:
           CREATE OR REPLACE FUNCTION storage.extension(name text) RETURNS text LANGUAGE sql AS $$ SELECT reverse(split_part(reverse(name), '.', 1)) $$;
           -- Stub extensions schema used by pg_net SCHEMA extensions
           CREATE SCHEMA IF NOT EXISTS extensions;
+          -- Stub pg_net used by private cron invoker migrations
+          CREATE SCHEMA IF NOT EXISTS net;
+          CREATE OR REPLACE FUNCTION net.http_post(
+            url text,
+            headers jsonb DEFAULT '{}'::jsonb,
+            body jsonb DEFAULT '{}'::jsonb,
+            timeout_milliseconds integer DEFAULT 1000
+          ) RETURNS bigint LANGUAGE sql AS $$ SELECT 0::bigint $$;
           -- Stub cron schema + minimal job table + schedule/unschedule functions (pg_cron is Supabase-managed)
           CREATE SCHEMA IF NOT EXISTS cron;
           CREATE TABLE IF NOT EXISTS cron.job (
@@ -653,6 +553,9 @@ jobs:
             created_at timestamptz DEFAULT now(),
             updated_at timestamptz DEFAULT now()
           );
+          CREATE OR REPLACE VIEW vault.decrypted_secrets AS
+            SELECT id, name, description, secret, key_id, nonce, created_at, updated_at
+            FROM vault.secrets;
           SQL
 
       - name: Strip unavailable extensions from migrations
@@ -813,6 +716,186 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit
 
+      - name: Sync Cloudflare Pages preview runtime environment variables
+        env:
+          CF_API_TOKEN:                  ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID:                 ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CF_PROJECT:                    maiprop-listing-site
+          CF_API_BASE:                   https://api.cloudflare.com/client/v4
+          STAGING_SUPABASE_URL:          ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_PROJECT_ID:   ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          STAGING_APP_URL:               ${{ secrets.STAGING_APP_URL }}
+          STAGING_SITE_LOCK_PASSWORD:    ${{ secrets.STAGING_SITE_LOCK_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          required=(
+            "CF_API_TOKEN"
+            "CF_ACCOUNT_ID"
+            "STAGING_SUPABASE_URL"
+            "STAGING_SUPABASE_PROJECT_ID"
+            "STAGING_SUPABASE_PUBLISHABLE_KEY"
+          )
+          missing=0
+          for key in "${required[@]}"; do
+            if [ -z "${!key}" ]; then
+              echo "::error::Missing required preview secret: $key"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+          EFFECTIVE_STAGING_APP_URL="$STAGING_APP_URL"
+          if [ -z "$EFFECTIVE_STAGING_APP_URL" ]; then
+            EFFECTIVE_STAGING_APP_URL=$(node - "$GITHUB_HEAD_REF" "$CF_PROJECT" <<'NODE'
+          const [, , branchRef = "", projectName = ""] = process.argv;
+          const slug = branchRef
+            .toLowerCase()
+            .replace(/[^a-z0-9-]+/g, "-")
+            .replace(/^-+|-+$/g, "")
+            .slice(0, 63) || "preview";
+          const project = projectName.toLowerCase().replace(/[^a-z0-9-]+/g, "-");
+          console.log(`https://${slug}.${project}.pages.dev`);
+          NODE
+          )
+            echo "STAGING_APP_URL was not set; derived Cloudflare Pages preview URL from branch."
+          fi
+          {
+            echo "EFFECTIVE_STAGING_APP_URL=$EFFECTIVE_STAGING_APP_URL"
+            echo "VITE_APP_URL=$EFFECTIVE_STAGING_APP_URL"
+          } >> "$GITHUB_ENV"
+
+          if ! NORMALIZED_SUPABASE_PROJECT_ID=$(node - "$STAGING_SUPABASE_PROJECT_ID" "$STAGING_SUPABASE_URL" <<'NODE'
+          const [, , explicitProjectId = "", supabaseUrl = ""] = process.argv;
+          const validProjectRef = (value) => /^[a-z0-9]{20}$/.test(value);
+          if (validProjectRef(explicitProjectId)) {
+            console.log(explicitProjectId);
+            process.exit(0);
+          }
+          try {
+            const host = new URL(supabaseUrl).hostname;
+            const suffix = ".supabase.co";
+            const derived = host.endsWith(suffix) ? host.slice(0, -suffix.length) : "";
+            if (validProjectRef(derived)) {
+              console.log(derived);
+              process.exit(0);
+            }
+          } catch {
+            // Fall through to the deployment error below.
+          }
+          process.exit(1);
+          NODE
+          ); then
+            echo "::error::STAGING_SUPABASE_PROJECT_ID must be a 20-character project ref or STAGING_SUPABASE_URL must be a valid https://<ref>.supabase.co URL."
+            exit 1
+          fi
+
+          if ! node - "$EFFECTIVE_STAGING_APP_URL" <<'NODE'
+          const [, , appUrl = ""] = process.argv;
+          try {
+            const parsed = new URL(appUrl);
+            if (parsed.protocol === "https:" && parsed.hostname.endsWith(".pages.dev")) {
+              process.exit(0);
+            }
+            if (parsed.protocol === "https:" && parsed.hostname.endsWith(".maiprop.co")) {
+              process.exit(0);
+            }
+          } catch {
+            // Fall through to error below.
+          }
+          process.exit(1);
+          NODE
+          then
+            echo "::error::STAGING_APP_URL must be an https:// preview or staging origin."
+            exit 1
+          fi
+
+          ENV_JSON=$(jq -n \
+            --arg surl "$STAGING_SUPABASE_URL" \
+            --arg pid "$NORMALIZED_SUPABASE_PROJECT_ID" \
+            --arg pkey "$STAGING_SUPABASE_PUBLISHABLE_KEY" \
+            --arg app_url "$EFFECTIVE_STAGING_APP_URL" \
+            --arg lock "$STAGING_SITE_LOCK_PASSWORD" \
+            '
+            ({} +
+              {
+                SUPABASE_URL: { value: $surl, type: "plain_text" },
+                VITE_SUPABASE_URL: { value: $surl, type: "plain_text" },
+                SUPABASE_PROJECT_ID: { value: $pid, type: "plain_text" },
+                VITE_SUPABASE_PROJECT_ID: { value: $pid, type: "plain_text" },
+                SUPABASE_PUBLISHABLE_KEY: { value: $pkey, type: "plain_text" },
+                VITE_SUPABASE_PUBLISHABLE_KEY: { value: $pkey, type: "plain_text" },
+                VITE_SUPABASE_ANON_KEY: { value: $pkey, type: "plain_text" },
+                VITE_APP_URL: { value: $app_url, type: "plain_text" }
+              } +
+              (if $lock != "" then { SITE_LOCK_PASSWORD: { value: $lock, type: "secret_text" } } else { SITE_LOCK_PASSWORD: null } end)
+            )')
+
+          PAYLOAD=$(jq -n --argjson env "$ENV_JSON" '{
+            deployment_configs: { preview: { env_vars: $env } }
+          }')
+
+          HTTP_CODE=$(curl -sS -o /tmp/cf_preview_env.json -w "%{http_code}" -X PATCH \
+            -H "Authorization: Bearer $CF_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "$PAYLOAD" \
+            "$CF_API_BASE/accounts/$CF_ACCOUNT_ID/pages/projects/$CF_PROJECT")
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Failed to sync Pages preview env vars (HTTP $HTTP_CODE)"
+            cat /tmp/cf_preview_env.json
+            exit 1
+          fi
+
+          HTTP_CODE=$(curl -sS -o /tmp/cf_preview_env_verify.json -w "%{http_code}" \
+            -H "Authorization: Bearer $CF_API_TOKEN" \
+            "$CF_API_BASE/accounts/$CF_ACCOUNT_ID/pages/projects/$CF_PROJECT")
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Failed to verify Pages preview env vars (HTTP $HTTP_CODE)"
+            cat /tmp/cf_preview_env_verify.json
+            exit 1
+          fi
+
+          for key in SUPABASE_URL VITE_SUPABASE_URL SUPABASE_PROJECT_ID VITE_SUPABASE_PROJECT_ID SUPABASE_PUBLISHABLE_KEY VITE_SUPABASE_PUBLISHABLE_KEY VITE_SUPABASE_ANON_KEY VITE_APP_URL; do
+            if ! jq -e --arg key "$key" '.success == true and (.result.deployment_configs.preview.env_vars[$key].type == "plain_text")' /tmp/cf_preview_env_verify.json >/dev/null; then
+              echo "::error::Cloudflare Pages preview env var $key was not persisted."
+              exit 1
+            fi
+          done
+          if ! jq -e --arg pid "$NORMALIZED_SUPABASE_PROJECT_ID" '.result.deployment_configs.preview.env_vars.SUPABASE_PROJECT_ID.value == $pid' /tmp/cf_preview_env_verify.json >/dev/null; then
+            echo "::error::Cloudflare Pages preview SUPABASE_PROJECT_ID did not match the normalized project ref."
+            exit 1
+          fi
+          if ! jq -e --arg app_url "$EFFECTIVE_STAGING_APP_URL" '.result.deployment_configs.preview.env_vars.VITE_APP_URL.value == $app_url' /tmp/cf_preview_env_verify.json >/dev/null; then
+            echo "::error::Cloudflare Pages preview VITE_APP_URL did not match the effective staging app URL."
+            exit 1
+          fi
+
+          toml_quote() {
+            jq -Rn --arg value "$1" '$value'
+          }
+          {
+            echo 'name = "maiprop-listing-site"'
+            echo 'pages_build_output_dir = "./dist"'
+            echo 'compatibility_date = "2026-05-19"'
+            echo
+            echo '[vars]'
+            printf 'SUPABASE_URL = %s\n' "$(toml_quote "$STAGING_SUPABASE_URL")"
+            printf 'VITE_SUPABASE_URL = %s\n' "$(toml_quote "$STAGING_SUPABASE_URL")"
+            printf 'SUPABASE_PROJECT_ID = %s\n' "$(toml_quote "$NORMALIZED_SUPABASE_PROJECT_ID")"
+            printf 'VITE_SUPABASE_PROJECT_ID = %s\n' "$(toml_quote "$NORMALIZED_SUPABASE_PROJECT_ID")"
+            printf 'SUPABASE_PUBLISHABLE_KEY = %s\n' "$(toml_quote "$STAGING_SUPABASE_PUBLISHABLE_KEY")"
+            printf 'VITE_SUPABASE_PUBLISHABLE_KEY = %s\n' "$(toml_quote "$STAGING_SUPABASE_PUBLISHABLE_KEY")"
+            printf 'VITE_SUPABASE_ANON_KEY = %s\n' "$(toml_quote "$STAGING_SUPABASE_PUBLISHABLE_KEY")"
+            printf 'VITE_APP_URL = %s\n' "$(toml_quote "$EFFECTIVE_STAGING_APP_URL")"
+            if [ -n "${STAGING_SITE_LOCK_PASSWORD}" ]; then
+              printf 'SITE_LOCK_PASSWORD = %s\n' "$(toml_quote "$STAGING_SITE_LOCK_PASSWORD")"
+            fi
+          } > wrangler.toml
+          echo "Pages preview runtime env vars synced and Wrangler preview config prepared."
+
       - name: Build app with staging environment
         run: npm run build
         env:
@@ -825,7 +908,6 @@ jobs:
           VITE_TURNSTILE_SITE_KEY:       ${{ secrets.VITE_TURNSTILE_SITE_KEY }}
           VITE_GOOGLE_MAPS_API_KEY:      ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
           VITE_PLAUSIBLE_DOMAIN:         ${{ secrets.VITE_PLAUSIBLE_DOMAIN }}
-          VITE_APP_URL:                  ${{ secrets.VITE_APP_URL }}
 
       - name: Deploy to Cloudflare Pages (PR preview)
         uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0

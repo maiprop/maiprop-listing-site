@@ -1,7 +1,7 @@
 /**
- * Tests for the useAuctionListings hook. The hook prefers cached DB pagination
- * for a fast portal response, then falls back to the live OS proxy when the
- * cache is empty. If the listing_images join fails, it retries without the join.
+ * Tests for the useAuctionListings hook. The hook reads the canonical local
+ * 600-auction OS pool from Supabase, then applies the caller's entitlement
+ * slice. If the listing_images join fails, it retries without the join.
  */
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -80,23 +80,48 @@ beforeEach(() => {
  */
 const makeBuilder = (rangeImpl: () => Promise<{ data: unknown[] | null; error: unknown }>) => {
   const b: Record<string, unknown> = {};
-  const chain = ["select", "eq", "or", "order"];
+  const chain = ["select", "eq", "contains", "or", "order"];
   for (const m of chain) b[m] = vi.fn().mockReturnValue(b);
   b.range = vi.fn().mockImplementation(rangeImpl);
   return b;
 };
 
 describe("useAuctionListings", () => {
-  it("uses the cached public auction API before the slower OS proxy for public-sized windows", async () => {
-    publicApiMock.mockResolvedValue({ data: [auctionRow("public-a1", { floor: 1 })] });
+  it("reads the local canonical auction pool instead of the public cache or OS proxy", async () => {
+    const builder = makeBuilder(() => Promise.resolve({
+      data: [auctionRow("db-a1", { floor: 1 })],
+      error: null,
+    }));
+    fromMock.mockReturnValue(builder);
 
     const { result } = renderHookWithQuery(() => useAuctionListings(60));
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(result.current.data?.[0]).toMatchObject({ id: "public-a1" });
-    expect(publicApiMock).toHaveBeenCalledWith("/api/public/auctions?limit=60", { timeoutMs: 8_000 });
+    expect(result.current.data?.[0]).toMatchObject({ id: "db-a1" });
+    expect(publicApiMock).not.toHaveBeenCalled();
     expect(invokeMock).not.toHaveBeenCalled();
-    expect(fromMock).not.toHaveBeenCalled();
+    expect(fromMock).toHaveBeenCalled();
+  });
+
+  it("derives free and Pro windows from the same 600-row database pool", async () => {
+    const builder = makeBuilder(vi.fn()
+      .mockResolvedValueOnce({
+        data: Array.from({ length: 500 }, (_, i) => auctionRow(`daily-${i}`)),
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: Array.from({ length: 100 }, (_, i) => auctionRow(`daily-tail-${i}`)),
+        error: null,
+      }));
+    fromMock.mockReturnValue(builder);
+
+    const { result } = renderHookWithQuery(() => useAuctionListings(60));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data).toHaveLength(60);
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(builder.range).toHaveBeenCalledWith(0, 499);
+    expect(builder.range).toHaveBeenCalledWith(500, 599);
   });
 
   it("does not fall through to the slow live OS proxy for public-sized windows", async () => {
@@ -116,18 +141,18 @@ describe("useAuctionListings", () => {
     expect(builder.eq).toHaveBeenCalledWith("is_off_market", false);
   });
 
-  it("prefers live OS rows when the public cache is missing floor metadata", async () => {
-    publicApiMock.mockResolvedValue({ data: [auctionRow("public-a1", { floor: null, total_floors: null })] });
-    invokeMock.mockResolvedValue({ data: { data: [auctionRow("os-a1", { floor: 2, total_floors: 5 })] }, error: null });
+  it("falls back to the latest OS-sourced DB rows if today's pool has not synced yet", async () => {
+    const builder = makeBuilder(vi.fn()
+      .mockResolvedValueOnce({ data: [], error: null })
+      .mockResolvedValueOnce({ data: [auctionRow("db-fallback", { floor: 2, total_floors: 5 })], error: null }));
+    fromMock.mockReturnValue(builder);
 
     const { result } = renderHookWithQuery(() => useAuctionListings(60));
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(result.current.data?.[0]).toMatchObject({ id: "os-a1", floor: 2, total_floors: 5 });
-    expect(invokeMock).toHaveBeenCalledWith("fetch-os-auctions", expect.objectContaining({
-      body: expect.objectContaining({ pageSize: 60, sampleAcrossGreece: true }),
-    }));
-    expect(fromMock).not.toHaveBeenCalled();
+    expect(result.current.data?.[0]).toMatchObject({ id: "db-fallback", floor: 2, total_floors: 5 });
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(builder.range).toHaveBeenCalledTimes(2);
   });
 
   it("uses a deterministic daily rotation instead of preserving OS municipality order", () => {
@@ -159,7 +184,7 @@ describe("useAuctionListings", () => {
     expect(ordered[1].id).toBe("featured");
   });
 
-  it("prefers the live OS proxy over cached database auctions", async () => {
+  it("does not call the live OS proxy during normal portal reads", async () => {
     fromMock.mockReturnValue(makeBuilder(() => Promise.resolve({
       data: [{ id: "db-a1", title: "Cached auction" }],
       error: null,
@@ -169,11 +194,12 @@ describe("useAuctionListings", () => {
     const { result } = renderHookWithQuery(() => useAuctionListings());
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(result.current.data?.[0]).toMatchObject({ id: "os-a1" });
-    expect(fromMock).not.toHaveBeenCalled();
+    expect(result.current.data?.[0]).toMatchObject({ id: "db-a1" });
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(fromMock).toHaveBeenCalled();
   });
 
-  it("falls back to cached database auctions when the live OS proxy fails", async () => {
+  it("uses cached database auctions even when the live OS proxy would fail", async () => {
     invokeMock.mockRejectedValue(new Error("OS unavailable"));
     fromMock.mockReturnValue(makeBuilder(() => Promise.resolve({
       data: [{ id: "db-a1", title: "Cached auction" }],
@@ -186,20 +212,19 @@ describe("useAuctionListings", () => {
     expect(result.current.data?.[0]).toMatchObject({ id: "db-a1" });
   });
 
-  it("asks the OS proxy for a national sample at the current entitlement cap", async () => {
-    fromMock.mockReturnValue(makeBuilder(() => Promise.resolve({ data: [], error: null })));
-    invokeMock.mockResolvedValue({
-      data: { data: Array.from({ length: 80 }, (_, i) => auctionRow(`os-${i}`)) },
+  it("reads the local pool at the current entitlement cap", async () => {
+    const builder = makeBuilder(() => Promise.resolve({
+      data: Array.from({ length: 80 }, (_, i) => auctionRow(`db-${i}`)),
       error: null,
-    });
+    }));
+    fromMock.mockReturnValue(builder);
 
     const { result } = renderHookWithQuery(() => useAuctionListings(80));
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(result.current.data).toHaveLength(80);
-    expect(invokeMock).toHaveBeenCalledWith("fetch-os-auctions", expect.objectContaining({
-      body: expect.objectContaining({ pageSize: 80, sampleAcrossGreece: true }),
-    }));
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(builder.range).toHaveBeenCalledWith(0, 499);
   });
 
   it("returns an empty array when the first page is empty", async () => {

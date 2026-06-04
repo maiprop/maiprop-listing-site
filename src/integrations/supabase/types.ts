@@ -14,6 +14,68 @@ export type Database = {
   }
   public: {
     Tables: {
+      addon_purchases: {
+        Row: {
+          addon_key: string
+          audience: string
+          checkout_mode: string
+          created_at: string
+          id: string
+          metadata: Json
+          module: string
+          quantity: number
+          status: string
+          stripe_customer_id: string | null
+          stripe_session_id: string
+          stripe_subscription_id: string | null
+          unit: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          addon_key: string
+          audience: string
+          checkout_mode: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          module: string
+          quantity?: number
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_session_id: string
+          stripe_subscription_id?: string | null
+          unit: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          addon_key?: string
+          audience?: string
+          checkout_mode?: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          module?: string
+          quantity?: number
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_session_id?: string
+          stripe_subscription_id?: string | null
+          unit?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "addon_purchases_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       agent_data_input_bans: {
         Row: {
           banned_at: string
@@ -911,31 +973,40 @@ export type Database = {
       }
       investor_subscriptions: {
         Row: {
+          activated_at: string | null
           created_at: string
           expires_at: string | null
           id: string
           started_at: string
           status: string
+          stripe_customer_id: string | null
+          stripe_session_id: string | null
           tier: string
           updated_at: string
           user_id: string
         }
         Insert: {
+          activated_at?: string | null
           created_at?: string
           expires_at?: string | null
           id?: string
           started_at?: string
           status?: string
+          stripe_customer_id?: string | null
+          stripe_session_id?: string | null
           tier: string
           updated_at?: string
           user_id: string
         }
         Update: {
+          activated_at?: string | null
           created_at?: string
           expires_at?: string | null
           id?: string
           started_at?: string
           status?: string
+          stripe_customer_id?: string | null
+          stripe_session_id?: string | null
           tier?: string
           updated_at?: string
           user_id?: string

@@ -42,6 +42,7 @@ vi.mock("@/integrations/supabase/client", () => ({
       updateUser: vi.fn(),
       getSession: vi.fn(),
     },
+    functions: { invoke: vi.fn() },
   },
 }));
 
@@ -67,6 +68,7 @@ const mockSupabase = supabase as unknown as {
     updateUser: ReturnType<typeof vi.fn>;
     getSession: ReturnType<typeof vi.fn>;
   };
+  functions: { invoke: ReturnType<typeof vi.fn> };
 };
 
 const toastMock = toast as unknown as { error: ReturnType<typeof vi.fn> };
@@ -125,6 +127,10 @@ beforeEach(() => {
   mockSupabase.auth.resetPasswordForEmail.mockResolvedValue({ error: null });
   mockSupabase.auth.updateUser.mockResolvedValue({ error: null });
   mockSupabase.auth.getSession.mockResolvedValue({ data: { session: null } });
+  mockSupabase.functions.invoke.mockResolvedValue({
+    data: { allowed: true, reason: null, used: 0, limit: 50 },
+    error: null,
+  });
   localStorage.clear();
   document.body.innerHTML = "";
   document.head.querySelectorAll('script[src*="maps.googleapis.com"]').forEach((script) => script.remove());
@@ -478,6 +484,21 @@ describe("AIAssistantWidget", () => {
     fireEvent.click(screen.getByTitle("Clear chat"));
     expect(screen.queryByText("Hello there")).not.toBeInTheDocument();
     expect(screen.getByText("Ask me anything")).toBeInTheDocument();
+  });
+
+  it("shows the signed-in assistant request counter and blocks sending at the monthly cap", async () => {
+    authMock.user = { id: "user-1" };
+    mockSupabase.functions.invoke.mockResolvedValueOnce({
+      data: { allowed: false, reason: "monthly_limit_reached", used: 5, limit: 5 },
+      error: null,
+    });
+
+    renderWithProviders(<AIAssistantWidget variant="embedded" />);
+
+    expect(await screen.findByText("5 / 5 used")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /upgrade/i })).toHaveAttribute("href", "/pricing");
+    expect(screen.getByPlaceholderText("Ask a real estate question...")).toBeDisabled();
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("handles stream parsing edge cases and friendly error variants", async () => {

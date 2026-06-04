@@ -8,7 +8,7 @@
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react";
 
 const fromMock = vi.fn();
 
@@ -17,6 +17,7 @@ vi.mock("@/integrations/supabase/client", () => ({
 }));
 
 import {
+  useProfessionalsAdmin,
   useApproveProfessional,
   useRejectProfessional,
   useUpdateProfessionalNotes,
@@ -37,6 +38,68 @@ function renderHookWithQuery<T>(hook: () => T) {
 
 beforeEach(() => {
   fromMock.mockReset();
+});
+
+describe("useProfessionalsAdmin()", () => {
+  it("fetches pending applications separately so resolved rows cannot hide the queue", async () => {
+    const pendingRows = [
+      {
+        id: "pending-old",
+        display_name: "Older Pending",
+        category: "legal",
+        title: "Lawyer",
+        avatar_url: null,
+        created_at: "2026-01-01T00:00:00.000Z",
+        license_number: null,
+        specialties: ["contracts"],
+        verified: false,
+        rejection_reason: null,
+        verified_at: null,
+      },
+    ];
+    const resolvedRows = [
+      {
+        id: "verified-new",
+        display_name: "New Verified",
+        category: "legal",
+        title: "Lawyer",
+        avatar_url: null,
+        created_at: "2026-06-01T00:00:00.000Z",
+        license_number: "LIC-1",
+        specialties: [],
+        verified: true,
+        rejection_reason: null,
+        verified_at: "2026-06-01T00:00:00.000Z",
+      },
+    ];
+    const builders: Array<Record<string, ReturnType<typeof vi.fn>>> = [];
+    const makeBuilder = (data: unknown[]) => {
+      const builder: Record<string, ReturnType<typeof vi.fn>> = {
+        select: vi.fn(() => builder),
+        is: vi.fn(() => builder),
+        or: vi.fn(() => builder),
+        order: vi.fn(() => builder),
+        limit: vi.fn().mockResolvedValue({ data, error: null }),
+      };
+      builders.push(builder);
+      return builder;
+    };
+    fromMock
+      .mockReturnValueOnce(makeBuilder(pendingRows))
+      .mockReturnValueOnce(makeBuilder(resolvedRows));
+
+    const { result } = renderHookWithQuery(() => useProfessionalsAdmin());
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(fromMock).toHaveBeenCalledTimes(2);
+    expect(builders[0].is).toHaveBeenCalledWith("rejection_reason", null);
+    expect(builders[0].or).toHaveBeenCalledWith("verified.is.false,verified.is.null");
+    expect(builders[0].limit).toHaveBeenCalledWith(250);
+    expect(builders[1].or).toHaveBeenCalledWith("verified.eq.true,rejection_reason.not.is.null");
+    expect(result.current.data?.map((row) => row.id)).toEqual(["pending-old", "verified-new"]);
+    expect(result.current.data?.find((row) => row.id === "pending-old")?.status).toBe("pending");
+  });
 });
 
 describe("useRejectProfessional()", () => {

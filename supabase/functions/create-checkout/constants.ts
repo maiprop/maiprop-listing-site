@@ -76,5 +76,4 @@ export const PLAN_PRICE_ENV_ALIASES: Record<
 export const SELF_SERVE_ADDON_MODULES = new Set([
   "valuation_reports",
   "adhoc_charges",
-  "os_data_products",
 ]);

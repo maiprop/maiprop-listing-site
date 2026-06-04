@@ -21,12 +21,10 @@
   "type": "module",
   "overrides": {
     "tmp": "^0.2.7",
-    "qs": "^6.15.2",
     "uuid": "^14.0.0"
   },
   "overridesRationale": {
     "tmp": "@lhci/cli@0.15.1 pulls old tmp ranges through Lighthouse and inquirer/external-editor. Pin tmp above GHSA-ph9p-34f9-6g65 until Lighthouse CI removes those transitive ranges.",
-    "qs": "express/body-parser can resolve vulnerable qs versions. Pin qs above GHSA-q8mj-m7cp-5q26 until upstream ranges settle.",
     "uuid": "@lhci/cli@0.15.1 still declares uuid ^8.3.1. Pin to a supported uuid release because npm deprecates uuid@10 and below."
   },
   "scripts": {
@@ -69,11 +67,13 @@
     "test:e2e:ui": "playwright test --ui",
     "test:deno": "node scripts/run-deno-tests.mjs",
     "check:bundle-size": "node scripts/check-bundle-size.mjs",
+    "check:dependency-overrides": "node scripts/check-dependency-overrides.mjs",
     "inventory:release": "node scripts/release-safety-inventory.mjs",
     "check:release-safety": "node scripts/release-safety-inventory.mjs --check",
     "inventory:public-functions": "node scripts/public-function-inventory.cjs --out docs/public-edge-function-inventory.json",
     "check:public-functions": "node scripts/public-function-inventory.cjs --check",
     "check:supabase-advisor": "node scripts/check-supabase-advisor.mjs",
+    "capture:supabase-index-stats": "node scripts/capture-supabase-index-stats.mjs",
     "check:supabase-types": "node scripts/check-supabase-types-freshness.cjs",
     "check:live-security-posture": "node scripts/check-live-security-posture.mjs",
     "inventory:audit-coverage": "node scripts/audit-coverage-inventory.mjs",
