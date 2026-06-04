@@ -49,6 +49,25 @@ async function signIn(page: Page, email: string, password: string): Promise<void
   await page.waitForURL(/\/dashboard|\/onboarding/, { timeout: 25_000 });
 }
 
+function dashboardNavItem(page: Page, text: RegExp) {
+  return page
+    .locator(
+      'nav a, nav button, aside a, aside button, [role="navigation"] a, [role="navigation"] button,' +
+      ' [data-testid*="nav"] a, [data-testid*="nav"] button, [data-testid*="nav"] [role="button"]',
+    )
+    .filter({ hasText: text })
+    .first();
+}
+
+function anyDashboardNavItem(page: Page) {
+  return page
+    .locator(
+      'nav a, nav button, aside a, aside button, [role="navigation"] a, [role="navigation"] button,' +
+      ' [data-testid*="nav"] a, [data-testid*="nav"] button, [data-testid*="nav"] [role="button"]',
+    )
+    .first();
+}
+
 // ---------------------------------------------------------------------------
 // AGENT PRO tests
 // ---------------------------------------------------------------------------
@@ -106,15 +125,9 @@ test.describe("Agent Pro — sign-in and dashboard", () => {
     await signIn(page, AGENT_EMAIL, AGENT_PASSWORD);
     await page.waitForLoadState("networkidle", { timeout: 15_000 });
 
-    // Look for sidebar / nav items relevant to an agent workflow
-    const navItem = page
-      .locator(
-        'nav a:has-text("Listings"), nav a:has-text("My Listings"), nav a:has-text("CRM"),' +
-        ' nav a:has-text("Leads"), nav a:has-text("Properties"),' +
-        ' aside a:has-text("Listings"), aside a:has-text("Leads"), aside a:has-text("CRM"),' +
-        ' [data-testid*="nav"] :has-text("Listings"), [data-testid*="nav"] :has-text("CRM")'
-      )
-      .first();
+    // Dashboard nav can be rendered as links on desktop shells or buttons in the
+    // current tabbed sidebar. Either shape is valid if the agent workflow item exists.
+    const navItem = dashboardNavItem(page, /Listings|My Listings|CRM|Leads|Properties/i);
     await expect(navItem).toBeAttached({ timeout: 10_000 });
   });
 
@@ -169,8 +182,8 @@ test.describe("Developer Pro — sign-in, dashboard, and new-building form", () 
     await signIn(page, DEV_EMAIL, DEV_PASSWORD);
     await page.waitForLoadState("networkidle", { timeout: 15_000 });
 
-    // Any nav link in the sidebar confirms the dashboard shell rendered correctly.
-    const navItem = page.locator('nav a, aside a, [role="navigation"] a').first();
+    // The shared dashboard shell can expose nav items as links or tab buttons.
+    const navItem = anyDashboardNavItem(page);
     await expect(navItem).toBeAttached({ timeout: 10_000 });
   });
 

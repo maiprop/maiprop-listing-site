@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { classifyAdvisorDebt, flattenAdvisorLints } from "./supabase-advisor-debt.mjs";
+import {
+  assertAdvisorDebtIsActionable,
+  buildUnusedIndexReview,
+  classifyAdvisorDebt,
+  flattenAdvisorLints,
+} from "./supabase-advisor-debt.mjs";
 
 const policy = {
   accepted: [
@@ -62,5 +67,173 @@ describe("supabase advisor debt classification", () => {
     expect(debt.items.accepted[0].policy.next_action).toContain("Upgrade");
     expect(debt.items.review[0].policy.reason).toBe("Needs telemetry");
     expect(debt.items.unknown[0].name).toBe("surprising_new_lint");
+  });
+
+  it("fails actionable debt validation when advisor output contains unknown lints", () => {
+    const debt = classifyAdvisorDebt(
+      {
+        results: [
+          {
+            category: "performance",
+            lints: [{ name: "surprising_new_lint", title: "New Advisor", level: "WARN" }],
+          },
+        ],
+      },
+      policy,
+    );
+
+    expect(() => assertAdvisorDebtIsActionable(debt)).toThrow(/surprising_new_lint/);
+  });
+
+  it("accepts classified debt only when policy records ownership and cadence", () => {
+    const debt = classifyAdvisorDebt(
+      {
+        results: [
+          {
+            category: "security",
+            lints: [{ name: "auth_leaked_password_protection", title: "Leaked Password Protection Disabled", level: "WARN" }],
+          },
+          {
+            category: "performance",
+            lints: [{ name: "unused_index", title: "Unused Index", level: "INFO" }],
+          },
+        ],
+      },
+      {
+        accepted: [
+          {
+            match: { name: "auth_leaked_password_protection" },
+            owner: "platform/security",
+            reason: "Plan gated",
+            next_action: "Upgrade Supabase plan",
+            review_cadence: "monthly",
+          },
+        ],
+        review: [
+          {
+            match: { name: "unused_index" },
+            owner: "data/platform",
+            reason: "Needs telemetry",
+            next_action: "Review pg_stat_user_indexes",
+            review_cadence: "weekly",
+          },
+        ],
+      },
+    );
+
+    expect(() => assertAdvisorDebtIsActionable(debt)).not.toThrow();
+  });
+});
+
+describe("unused index telemetry review", () => {
+  it("marks advisor-only unused indexes as requiring a pg_stat_user_indexes snapshot", () => {
+    const review = buildUnusedIndexReview({
+      results: [
+        {
+          category: "performance",
+          lints: [
+            {
+              name: "unused_index",
+              title: "Unused Index",
+              level: "INFO",
+              metadata: { index_name: "idx_listings_owner_id", table_name: "listings" },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(review.totals).toEqual({
+      unused_index_lints: 1,
+      mapped_to_stats: 0,
+      with_scans: 0,
+      zero_scan_candidates: 0,
+      needs_stats_snapshot: 1,
+      needs_manual_mapping: 0,
+    });
+    expect(review.items[0]).toMatchObject({
+      index_name: "idx_listings_owner_id",
+      review_status: "needs_pg_stat_user_indexes_snapshot",
+    });
+  });
+
+  it("keeps scanned indexes and requires extra review before dropping zero-scan indexes", () => {
+    const review = buildUnusedIndexReview(
+      {
+        results: [
+          {
+            category: "performance",
+            lints: [
+              {
+                name: "unused_index",
+                title: "Unused Index",
+                level: "INFO",
+                metadata: { index_name: "idx_recently_used", table_name: "listings" },
+              },
+              {
+                name: "unused_index",
+                title: "Unused Index",
+                level: "INFO",
+                metadata: { index_name: "idx_zero_scan", table_name: "messages" },
+              },
+            ],
+          },
+        ],
+      },
+      [
+        { indexrelname: "idx_recently_used", relname: "listings", idx_scan: 42 },
+        { indexrelname: "idx_zero_scan", relname: "messages", idx_scan: 0 },
+      ],
+    );
+
+    expect(review.totals).toMatchObject({
+      mapped_to_stats: 2,
+      with_scans: 1,
+      zero_scan_candidates: 1,
+    });
+    expect(review.items.map((item) => item.review_status)).toEqual([
+      "keep_or_recheck_usage",
+      "candidate_needs_pg_stat_statements_and_release_review",
+    ]);
+  });
+
+  it("extracts the index name from Supabase unused-index cache keys when metadata only names the table", () => {
+    const review = buildUnusedIndexReview(
+      {
+        results: [
+          {
+            category: "performance",
+            lints: [
+              {
+                name: "unused_index",
+                title: "Unused Index",
+                level: "INFO",
+                cache_key: "unused_index_public_listings_idx_listings_property_type",
+                metadata: { name: "listings", type: "table", schema: "public" },
+              },
+            ],
+          },
+        ],
+      },
+      [
+        {
+          indexrelname: "idx_listings_property_type",
+          relname: "listings",
+          idx_scan: 0,
+        },
+      ],
+    );
+
+    expect(review.totals).toMatchObject({
+      mapped_to_stats: 1,
+      zero_scan_candidates: 1,
+      needs_stats_snapshot: 0,
+      needs_manual_mapping: 0,
+    });
+    expect(review.items[0]).toMatchObject({
+      table_name: "listings",
+      index_name: "idx_listings_property_type",
+      review_status: "candidate_needs_pg_stat_statements_and_release_review",
+    });
   });
 });

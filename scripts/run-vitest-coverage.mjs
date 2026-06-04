@@ -1,12 +1,16 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, rmSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 const root = process.cwd();
 const vitestBin = join(root, "node_modules", "vitest", "vitest.mjs");
+const coverageDir = join(root, "coverage");
 const coverageSummaryPath = join(root, "coverage", "coverage-summary.json");
-const coverageTmpPath = join(root, "coverage", ".tmp");
+const coverageRunRoot = join(root, ".coverage-runs");
+const coverageRunPath = join(coverageRunRoot, `${Date.now()}-${process.pid}`);
+const coverageRunSummaryPath = join(coverageRunPath, "coverage-summary.json");
+const coverageTmpPath = join(coverageRunPath, ".tmp");
 
 const thresholds = {
   lines: 86,
@@ -31,8 +35,8 @@ function removeCoverageTmp() {
 }
 
 function coverageMeetsThresholds() {
-  if (!existsSync(coverageSummaryPath)) return false;
-  const summary = JSON.parse(readFileSync(coverageSummaryPath, "utf8"));
+  if (!existsSync(coverageRunSummaryPath)) return false;
+  const summary = JSON.parse(readFileSync(coverageRunSummaryPath, "utf8"));
   const total = summary.total;
   return Boolean(total) &&
     total.lines?.pct >= thresholds.lines &&
@@ -42,21 +46,43 @@ function coverageMeetsThresholds() {
 }
 
 function runCoverage() {
-  return spawnSync(process.execPath, [vitestBin, "run", "--coverage"], {
-    cwd: root,
-    encoding: "utf8",
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [vitestBin, "run", "--coverage"], {
+      cwd: root,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        VITEST_COVERAGE_DIR: coverageRunPath,
+      },
+    });
+    let output = "";
+    const append = (chunk, target) => {
+      const text = chunk.toString();
+      target.write(text);
+      output += text;
+      if (output.length > 2_000_000) {
+        output = output.slice(-1_000_000);
+      }
+    };
+    child.stdout?.on("data", (chunk) => append(chunk, process.stdout));
+    child.stderr?.on("data", (chunk) => append(chunk, process.stderr));
+    child.on("close", (status, signal) => {
+      resolve({ status, signal, output });
+    });
+    child.on("error", (error) => {
+      const text = `${error.name}: ${error.message}`;
+      process.stderr.write(`${text}\n`);
+      resolve({ status: 1, signal: null, output: `${output}\n${text}` });
+    });
   });
-}
-
-function writeResult(result) {
-  if (result.stdout) process.stdout.write(result.stdout);
-  if (result.stderr) process.stderr.write(result.stderr);
 }
 
 function failedDuringCoverageTmpCleanup(output) {
   return (
-  /EPERM: operation not permitted, rmdir .*coverage[\\/]\.tmp/i.test(output) ||
-    /coverage[\\/]\.tmp.*EPERM/i.test(output)
+    /EPERM: operation not permitted, rmdir .*\.coverage-runs[\\/].*\.tmp/i.test(output) ||
+    /\.coverage-runs[\\/].*\.tmp.*EPERM/i.test(output) ||
+    /EPERM: operation not permitted, rmdir .*coverage[\\/]/i.test(output) ||
+    /coverage[\\/].*EPERM/i.test(output)
   );
 }
 
@@ -69,28 +95,49 @@ function testsPassed(output) {
   );
 }
 
-removeCoverageTmp();
-let result = runCoverage();
-writeResult(result);
+function publishCoverageSummary() {
+  if (!existsSync(coverageRunSummaryPath)) return;
+  mkdirSync(coverageDir, { recursive: true });
+  copyFileSync(coverageRunSummaryPath, coverageSummaryPath);
+}
 
-let output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
-if (result.status !== 0 && failedDuringCoverageTmpCleanup(output)) {
+function cleanupCoverageRun() {
+  try {
+    rmSync(coverageRunPath, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  } catch {
+    // Best effort only. The fresh run directory is ignored and can be removed later.
+  }
+}
+
+removeCoverageTmp();
+let result = await runCoverage();
+
+let output = result.output;
+if (
+  result.status !== 0 &&
+  failedDuringCoverageTmpCleanup(output) &&
+  !(testsPassed(output) && coverageMeetsThresholds())
+) {
   removeCoverageTmp();
   console.warn("[test:coverage] Retrying once after Windows coverage/.tmp cleanup EPERM.");
-  result = runCoverage();
-  writeResult(result);
-  output = `${output}\n${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+  result = await runCoverage();
+  output = `${output}\n${result.output}`;
 }
 
 if (result.status === 0) {
+  publishCoverageSummary();
   removeCoverageTmp();
+  cleanupCoverageRun();
   process.exit(0);
 }
 
 if (failedDuringCoverageTmpCleanup(output) && testsPassed(output) && coverageMeetsThresholds()) {
+  publishCoverageSummary();
   removeCoverageTmp();
+  cleanupCoverageRun();
   console.warn("[test:coverage] Ignored Windows coverage/.tmp cleanup EPERM after tests and coverage thresholds passed.");
   process.exit(0);
 }
 
+cleanupCoverageRun();
 process.exit(result.status ?? 1);

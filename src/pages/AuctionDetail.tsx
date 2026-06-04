@@ -139,6 +139,25 @@ const getAuctionFromRouteState = (state?: AuctionRouteState): Record<string, unk
   return null;
 };
 
+const getSafeAuctionWebsiteUrl = (auction: Record<string, unknown> | null | undefined): string | null =>
+  safeUrl(getNullableString(auction?.website_url));
+
+const mergeAuctionDetailData = (
+  primary: Record<string, unknown> | null,
+  exact: Record<string, unknown> | null,
+): Record<string, unknown> | null => {
+  if (!primary) return exact;
+  if (!exact) return primary;
+
+  const merged = { ...exact, ...primary };
+  const primaryUrl = getSafeAuctionWebsiteUrl(primary);
+  const exactUrl = getSafeAuctionWebsiteUrl(exact);
+  if (!primaryUrl && exactUrl) {
+    merged.website_url = exactUrl;
+  }
+  return merged;
+};
+
 const buildAuctionInsightsListing = (
   auction: Record<string, unknown>,
   fallbackId: string,
@@ -303,6 +322,7 @@ const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates aucti
   const { isPro } = useSubscription();
 
   const auctionFromState = getAuctionFromRouteState(state);
+  const stateHasWebsiteUrl = Boolean(getSafeAuctionWebsiteUrl(auctionFromState));
   const { data: allAuctions = [], isLoading: auctionsLoading } = useAuctionListings(AUCTION_DETAIL_LOOKUP_LIMIT, {
     enabled: !auctionFromState,
   });
@@ -313,13 +333,14 @@ const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates aucti
   const { data: auctionById = null, isLoading: auctionByIdLoading } = useQuery({
     queryKey: ["auction-listing-by-id", id],
     queryFn: () => fetchAuctionListingById(id),
-    enabled: Boolean(id) && !auctionFromState,
+    enabled: Boolean(id) && (!auctionFromState || !stateHasWebsiteUrl),
     staleTime: AUCTION_DETAIL_QUERY_STALE_TIME,
     gcTime: AUCTION_DETAIL_QUERY_STALE_TIME,
   });
-  const auction = auctionFromState
-    ?? (auctionFromCache as Record<string, unknown> | null)
-    ?? (auctionById as Record<string, unknown> | null);
+  const auction = mergeAuctionDetailData(
+    auctionFromState ?? (auctionFromCache as Record<string, unknown> | null),
+    auctionById as Record<string, unknown> | null,
+  );
   const aiInsightsListing = useMemo(
     () => auction ? buildAuctionInsightsListing(auction, id) : null,
     [auction, id],

@@ -48,6 +48,9 @@ import { PropertyValuationLockedCard } from "@/components/property/PropertyValua
 import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
 import { shouldUseNewBuildRoute } from "@/lib/listingRoutes";
 
+const safeExternalUrl = (url: string | null | undefined): string | null =>
+  url && /^https?:\/\//i.test(url) ? url : null;
+
 // ─── Main component ──────────────────────────────────────────────────────────
 const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates listing data, media, modals, and gated owner actions in one page shell.
   const { id } = useParams<{id: string;}>();
@@ -194,6 +197,7 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
   const energyClass = db.energy_class;
   const isLandType = propertyType === "land";
   const isAuction = listingType === "auction";
+  const auctionWebsiteUrl = isAuction ? safeExternalUrl(db.website_url) : null;
 
   // Extract ownership info from tags (for auction listings)
   const tags: string[] = db.tags ?? [];
@@ -377,6 +381,7 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
                   ownershipDisplay={ownershipDisplay}
                   ownershipPct={ownershipPct}
                   ownershipStatus={ownershipStatus}
+                  websiteUrl={auctionWebsiteUrl}
                 />
               )}
 

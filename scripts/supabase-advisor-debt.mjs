@@ -6,6 +6,12 @@ function normalize(value) {
   return String(value ?? "").trim().toLowerCase();
 }
 
+function numberOrNull(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function matchesRule(lint, rule) {
   const match = rule?.match ?? {};
   if (match.name && normalize(lint.name) !== normalize(match.name)) return false;
@@ -14,6 +20,42 @@ function matchesRule(lint, rule) {
     return false;
   }
   return Boolean(match.name || match.level || match.cache_key_contains);
+}
+
+function extractIndexName(lint) {
+  const metadata = lint?.metadata ?? {};
+  if (typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+
+  const direct = metadata.index_name ?? metadata.indexrelname ?? metadata.index;
+  if (typeof direct === "string" && direct.trim()) {
+    return direct.trim().replace(/^"|"$/g, "");
+  }
+
+  const cacheKey = String(lint?.cache_key ?? "");
+  const tableName = extractTableName(lint);
+  const schemaName = typeof metadata.schema === "string" && metadata.schema.trim()
+    ? metadata.schema.trim()
+    : "public";
+  if (cacheKey && tableName) {
+    const prefix = `unused_index_${schemaName}_${tableName}_`;
+    if (cacheKey.startsWith(prefix)) {
+      return cacheKey.slice(prefix.length).trim() || null;
+    }
+  }
+
+  return null;
+}
+
+function extractTableName(lint) {
+  const metadata = lint?.metadata ?? {};
+  if (typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+
+  const direct = metadata.table_name ?? metadata.relname ?? metadata.table ?? metadata.relation ?? metadata.name;
+  return typeof direct === "string" && direct.trim() ? direct.trim().replace(/^"|"$/g, "") : null;
 }
 
 export async function loadAdvisorDebtPolicy(path = DEFAULT_POLICY_PATH) {
@@ -70,4 +112,102 @@ export function classifyAdvisorDebt(summary, policy) {
     },
     items: buckets,
   };
+}
+
+function missingPolicyFields(item) {
+  const policy = item.policy ?? {};
+  return ["owner", "reason", "next_action", "review_cadence"]
+    .filter((field) => !String(policy[field] ?? "").trim());
+}
+
+export function assertAdvisorDebtIsActionable(debt, options = {}) {
+  const {
+    failOnUnknown = true,
+    requirePolicyMetadata = true,
+  } = options;
+  const errors = [];
+
+  if (failOnUnknown && debt?.unknown_count > 0) {
+    const names = (debt.items?.unknown ?? [])
+      .map((item) => `${item.name}${item.cache_key ? ` (${item.cache_key})` : ""}`)
+      .join(", ");
+    errors.push(`Unknown Supabase advisor lint(s) require classification: ${names}`);
+  }
+
+  if (requirePolicyMetadata) {
+    for (const bucket of ["accepted", "review"]) {
+      for (const item of debt.items?.[bucket] ?? []) {
+        const missing = missingPolicyFields(item);
+        if (missing.length > 0) {
+          errors.push(
+            `Advisor policy for ${item.name} is missing ${missing.join(", ")}.`,
+          );
+        }
+      }
+    }
+  }
+
+  if (errors.length > 0) {
+    throw new Error(errors.join("\n"));
+  }
+}
+
+export function buildUnusedIndexReview(summary, indexStatsRows = []) {
+  const statsByIndex = new Map(
+    indexStatsRows
+      .filter((row) => row && typeof row === "object")
+      .map((row) => [
+        normalize(row.indexrelname ?? row.index_name ?? row.index),
+        {
+          table_name: row.relname ?? row.table_name ?? row.table ?? null,
+          index_name: row.indexrelname ?? row.index_name ?? row.index ?? null,
+          idx_scan: numberOrNull(row.idx_scan),
+          idx_tup_read: numberOrNull(row.idx_tup_read),
+          idx_tup_fetch: numberOrNull(row.idx_tup_fetch),
+        },
+      ]),
+  );
+
+  const unusedIndexLints = flattenAdvisorLints(summary?.results ?? [])
+    .filter((lint) => normalize(lint.name) === "unused_index");
+
+  const items = unusedIndexLints.map((lint) => {
+    const indexName = extractIndexName(lint);
+    const tableName = extractTableName(lint);
+    const stats = indexName ? statsByIndex.get(normalize(indexName)) ?? null : null;
+    const idxScan = stats?.idx_scan ?? null;
+    let reviewStatus = "needs_manual_mapping";
+
+    if (indexName && !stats) {
+      reviewStatus = "needs_pg_stat_user_indexes_snapshot";
+    } else if (idxScan !== null && idxScan > 0) {
+      reviewStatus = "keep_or_recheck_usage";
+    } else if (idxScan === 0) {
+      reviewStatus = "candidate_needs_pg_stat_statements_and_release_review";
+    }
+
+    return {
+      category: lint.category,
+      title: lint.title,
+      level: lint.level,
+      cache_key: lint.cache_key,
+      index_name: indexName,
+      table_name: tableName ?? stats?.table_name ?? null,
+      idx_scan: idxScan,
+      idx_tup_read: stats?.idx_tup_read ?? null,
+      idx_tup_fetch: stats?.idx_tup_fetch ?? null,
+      review_status: reviewStatus,
+    };
+  });
+
+  const totals = {
+    unused_index_lints: items.length,
+    mapped_to_stats: items.filter((item) => item.idx_scan !== null).length,
+    with_scans: items.filter((item) => item.idx_scan !== null && item.idx_scan > 0).length,
+    zero_scan_candidates: items.filter((item) => item.idx_scan === 0).length,
+    needs_stats_snapshot: items.filter((item) => item.review_status === "needs_pg_stat_user_indexes_snapshot").length,
+    needs_manual_mapping: items.filter((item) => item.review_status === "needs_manual_mapping").length,
+  };
+
+  return { totals, items };
 }

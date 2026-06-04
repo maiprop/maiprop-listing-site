@@ -25,24 +25,9 @@ import { BillingUsagePanel } from "@/components/dashboard/BillingUsagePanel";
 import { formatDate } from "@/lib/format";
 import { AddonCard } from "./billing/AddonCard";
 import { getAddonSectionsForParticipant, resolveAddonKey, type AddonItem } from "./billing/addons";
+import { createAddonCheckoutUrl, formatBillingAmount } from "./billing/checkoutActions";
 import { StatusBadge } from "./billing/StatusBadge";
 import type { BillingInfo } from "./billing/types";
-
-const createAddonCheckoutUrl = async (addonKey: string): Promise<string> => {
-  const { data: checkout, error } = await supabase.functions.invoke("create-checkout", {
-    body: {
-      addon_key: addonKey,
-      success_url: "/dashboard/billing?checkout=success",
-      cancel_url: "/dashboard/billing?checkout=cancelled",
-    },
-  });
-
-  if (error || !checkout?.url) {
-    throw new Error(checkout?.error ?? error?.message ?? "Could not start add-on checkout");
-  }
-
-  return checkout.url;
-};
 
 const showManualAddonToast = () => {
   toast.info("This add-on is handled by the maiProp team.");
@@ -64,14 +49,6 @@ const useBillingInfo = () => {
     },
     staleTime: 60_000,
   });
-};
-
-const formatAmount = (amount: number, currency: string) => {
-  return new Intl.NumberFormat("el-GR", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 2,
-  }).format(amount);
 };
 
 export default function BillingTab() { // skipcq: JS-0067
@@ -250,7 +227,7 @@ export default function BillingTab() { // skipcq: JS-0067
               </p>
               <p className="font-semibold">
                 {sub.amount != null
-                  ? formatAmount(sub.amount, sub.currency)
+                  ? formatBillingAmount(sub.amount, sub.currency)
                   : "—"}{" "}
                 <span className="text-xs font-normal text-muted-foreground">
                   /{sub.interval}
@@ -391,7 +368,7 @@ export default function BillingTab() { // skipcq: JS-0067
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="font-semibold text-sm">
-                    {formatAmount(inv.amount_paid, inv.currency)}
+                    {formatBillingAmount(inv.amount_paid, inv.currency)}
                   </span>
                   <div className="flex items-center gap-1">
                     {inv.hosted_invoice_url && (

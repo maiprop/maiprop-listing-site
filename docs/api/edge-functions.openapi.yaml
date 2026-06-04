@@ -346,7 +346,7 @@ paths:
   /listing-ai-assist:
     post:
       operationId: listingAiAssist
-      summary: Assist form: title, description, features, price suggestion
+      summary: "Assist form: title, description, features, price suggestion"
       security: [{ SupabaseJWT: [] }]
       requestBody:
         required: true
@@ -659,7 +659,11 @@ paths:
       summary: Return clustered sale coordinates from MaiProp-OS
       security: []
       parameters:
-        - in: query, name: bbox, schema: { type: string }, description: "minLng,minLat,maxLng,maxLat"
+        - in: query
+          name: bbox
+          schema:
+            type: string
+          description: "minLng,minLat,maxLng,maxLat"
       responses:
         '200': { description: GeoJSON FeatureCollection }
 
@@ -734,10 +738,23 @@ paths:
       summary: Proxy for Google Street View images (hides API key)
       security: []
       parameters:
-        - in: query, name: lat,      schema: { type: number }
-        - in: query, name: lng,      schema: { type: number }
-        - in: query, name: location, schema: { type: string }
-        - in: query, name: size,     schema: { type: string, default: 600x400 }
+        - in: query
+          name: lat
+          schema:
+            type: number
+        - in: query
+          name: lng
+          schema:
+            type: number
+        - in: query
+          name: location
+          schema:
+            type: string
+        - in: query
+          name: size
+          schema:
+            type: string
+            default: 600x400
       responses:
         '200':
           description: JPEG image

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const { existsSync, mkdirSync, readFileSync, writeFileSync } = require("node:fs");
+const { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } = require("node:fs");
 const { dirname, isAbsolute, join } = require("node:path");
 
 const root = process.cwd();
@@ -251,6 +251,28 @@ const hasTest = (functionName) => {
     existsSync(join(dir, "webhook.test.ts"));
 };
 
+const readFunctionSource = (functionName) => {
+  const dir = join(functionRoot, functionName);
+  if (!existsSync(dir)) return "";
+
+  const files = [];
+  const visit = (currentDir) => {
+    for (const entry of readdirSync(currentDir, { withFileTypes: true })) {
+      const fullPath = join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        visit(fullPath);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      if (!entry.name.endsWith(".ts") || entry.name.endsWith(".test.ts")) continue;
+      files.push(fullPath);
+    }
+  };
+
+  visit(dir);
+  return files.sort().map(read).join("\n");
+};
+
 const collect = () => {
   const configured = parseFunctionConfig(read(configPath));
   const publicFunctions = [...configured.entries()]
@@ -261,7 +283,7 @@ const collect = () => {
   const entries = publicFunctions.map((name) => {
     const policy = policies[name] ?? null;
     const indexPath = join(functionRoot, name, "index.ts");
-    const source = existsSync(indexPath) ? read(indexPath) : "";
+    const source = readFunctionSource(name);
     const missingSnippets = policy
       ? policy.requiredSnippets.filter((snippet) => !source.includes(snippet))
       : [];

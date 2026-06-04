@@ -22,6 +22,56 @@
       "reason": "Policy consolidation is performance work but can change RLS semantics; each table/action needs an RLS regression test before changing policies.",
       "next_action": "Group duplicate permissive policies by table/action, consolidate only when RLS tests prove identical user-visible access.",
       "review_cadence": "weekly"
+    },
+    {
+      "match": {
+        "name": "authenticated_security_definer_function_executable",
+        "cache_key_contains": "public_bulk_update_project_unit_prices"
+      },
+      "owner": "dashboard/projects",
+      "reason": "Project bulk price updates are intentionally authenticated RPCs used by the dashboard; the function performs server-side project ownership checks before mutation.",
+      "next_action": "Move the workflow behind an Edge Function or private helper when the project editor is split further.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": {
+        "name": "authenticated_security_definer_function_executable",
+        "cache_key_contains": "public_get_open_house_capacity"
+      },
+      "owner": "open-house/platform",
+      "reason": "The legacy capacity RPC remains authenticated for compatibility while edge-facing capacity flows use the user-scoped service RPCs.",
+      "next_action": "Remove authenticated access after all clients and smoke tests prove only open-house Edge Functions call capacity helpers.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": {
+        "name": "authenticated_security_definer_function_executable",
+        "cache_key_contains": "public_submit_agent_data_input"
+      },
+      "owner": "agent-data/pricing",
+      "reason": "Agent data-input submission is an authenticated RPC with role, ban, quota, and idempotency checks enforced inside the function.",
+      "next_action": "Keep denial-path tests current and migrate browser submission to an Edge Function if additional moderation steps are added.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": {
+        "name": "auth_rls_initplan",
+        "cache_key_contains": "realtime_messages_video_room_channel"
+      },
+      "owner": "communications/video",
+      "reason": "Realtime video-room policies intentionally inspect JWT claims and room topics to enforce participant-only channels; prior migrations wrapped claim reads where practical.",
+      "next_action": "Profile realtime policy latency and simplify channel authorization only if it preserves viewing and consultation isolation.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": {
+        "name": "auth_rls_initplan",
+        "cache_key_contains": "public_listings_listing_insert_quota"
+      },
+      "owner": "listings/platform",
+      "reason": "Listing inserts must call the quota guard for free/pro plan enforcement; the policy uses a cached auth.uid() and a race-resistant helper.",
+      "next_action": "Monitor insert latency and keep quota-denial regression tests tied to buyer/seller/agent/developer limits.",
+      "review_cadence": "monthly"
     }
   ]
 }

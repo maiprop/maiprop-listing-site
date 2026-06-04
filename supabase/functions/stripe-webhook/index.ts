@@ -130,6 +130,20 @@ Deno.serve(async (req) => {
         // event is the definitive signal that the user has paid. Handle
         // idempotently — syncSubscription is a no-op if already applied.
         const session = event.data.object as Stripe.Checkout.Session;
+        if (await fulfillAddonCheckoutSession(supabase, session)) {
+          log.info("checkout.session.completed fulfilled add-on", {
+            session_id: session.id,
+            addon_key: session.metadata?.addon_key ?? null,
+          });
+          break;
+        }
+        if (await activateInvestorPaymentSession(supabase, session)) {
+          log.info("checkout.session.completed activated investor payment", {
+            session_id: session.id,
+            plan_key: session.metadata?.plan_key ?? null,
+          });
+          break;
+        }
         if (session.subscription && session.customer) {
           const sub = await stripe.subscriptions.retrieve(session.subscription as string);
           await syncSubscription(supabase, stripe, sub);
@@ -200,6 +214,117 @@ function normalizeAudience(raw: string | null | undefined): string | null {
     return raw;
   }
   return null;
+}
+
+function investorTierFromPlanKey(planKey: string | null | undefined): string | null {
+  if (planKey === "investor_private") return "private";
+  if (planKey === "investor_institutional") return "institutional";
+  return null;
+}
+
+function isPaidCheckoutSession(session: Stripe.Checkout.Session): boolean {
+  return session.payment_status === "paid" || session.status === "complete";
+}
+
+function normalizePositiveQuantity(raw: string | null | undefined): number {
+  const parsed = Number(raw ?? 1);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 10_000) {
+    throw new Error("addon checkout session has invalid quantity metadata");
+  }
+  return parsed;
+}
+
+function normalizeAddonCheckoutMode(mode: Stripe.Checkout.Session.Mode | null): "payment" | "subscription" {
+  if (mode === "payment" || mode === "subscription") return mode;
+  throw new Error("addon checkout session has unsupported checkout mode");
+}
+
+// skipcq: JS-0067 - Top-level helper is used by the webhook switch.
+async function fulfillAddonCheckoutSession(
+  supabase: SupabaseAdminClient,
+  session: Stripe.Checkout.Session,
+): Promise<boolean> {
+  const metadata = session.metadata ?? {};
+  if (metadata.checkout_type !== "addon") return false;
+  if (!isPaidCheckoutSession(session)) return true;
+
+  const userId = metadata.user_id;
+  const addonKey = metadata.addon_key;
+  const module = metadata.module;
+  const audience = metadata.audience;
+  const unit = metadata.unit;
+  if (!userId || !addonKey || !module || !audience || !unit) {
+    throw new Error("addon checkout session missing required metadata");
+  }
+  const checkoutMode = normalizeAddonCheckoutMode(session.mode);
+
+  const { error } = await supabase
+    .from("addon_purchases")
+    .upsert({
+      user_id: userId,
+      addon_key: addonKey,
+      module,
+      audience,
+      unit,
+      quantity: normalizePositiveQuantity(metadata.quantity),
+      checkout_mode: checkoutMode,
+      status: checkoutMode === "subscription" ? "active" : "paid",
+      stripe_session_id: session.id,
+      stripe_subscription_id: typeof session.subscription === "string" ? session.subscription : null,
+      stripe_customer_id: typeof session.customer === "string" ? session.customer : null,
+      metadata,
+    }, { onConflict: "stripe_session_id" });
+
+  if (error) throw error;
+  return true;
+}
+
+// skipcq: JS-0067 - Top-level helper is used by the webhook switch.
+async function activateInvestorPaymentSession(
+  supabase: SupabaseAdminClient,
+  session: Stripe.Checkout.Session,
+): Promise<boolean> {
+  const metadata = session.metadata ?? {};
+  if (metadata.checkout_type !== "investor_payment") return false;
+  if (!isPaidCheckoutSession(session)) return true;
+
+  const userId = metadata.user_id;
+  const tier = investorTierFromPlanKey(metadata.plan_key);
+  if (!userId || !tier) {
+    throw new Error("investor payment session missing user_id or supported plan_key");
+  }
+
+  const { data, error } = await supabase
+    .from("investor_subscriptions")
+    .update({
+      status: "active",
+      started_at: new Date().toISOString(),
+      expires_at: null,
+      updated_at: new Date().toISOString(),
+      activated_at: new Date().toISOString(),
+      stripe_customer_id: typeof session.customer === "string" ? session.customer : null,
+      stripe_session_id: session.id,
+    })
+    .eq("user_id", userId)
+    .eq("tier", tier)
+    .eq("status", "pending_payment")
+    .select("id, status, stripe_session_id")
+    .maybeSingle();
+
+  if (error) throw error;
+  if (data) return true;
+
+  const { data: existing, error: existingError } = await supabase
+    .from("investor_subscriptions")
+    .select("id, status, stripe_session_id")
+    .eq("user_id", userId)
+    .eq("tier", tier)
+    .eq("stripe_session_id", session.id)
+    .maybeSingle();
+  if (existingError) throw existingError;
+  if (existing) return true;
+
+  throw new Error("investor payment session has no matching pending subscription");
 }
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
