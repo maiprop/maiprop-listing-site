@@ -6,19 +6,20 @@
 import { lazy, Suspense, useState, useEffect } from "react";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Shield, Flame, Users, Wifi, SlidersHorizontal, ArrowLeft, DoorOpen, FolderKanban, MailPlus, FileText, Star, BadgeCheck, Wallet, Inbox, Megaphone } from "lucide-react";
+import { Shield, Flame, Users, Wifi, SlidersHorizontal, ArrowLeft, DoorOpen, FolderKanban, MailPlus, FileText, Star, BadgeCheck, Wallet, Inbox, Megaphone, Activity } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { supabase } from "@/integrations/supabase/client";
 import type { ListingWithJoins } from "@/hooks/useListings";
 import { Button } from "@/components/ui/button";
 
-type AdminTab = "pipeline" | "investor-screening" | "subscribers" | "pricing" | "os-sync" | "open-houses" | "reports" | "invitations" | "featured" | "pro-verification" | "pof-review" | "contact-inbox" | "broadcasts";
+type AdminTab = "pipeline" | "investor-screening" | "subscribers" | "users-activity" | "pricing" | "os-sync" | "open-houses" | "reports" | "invitations" | "featured" | "pro-verification" | "pof-review" | "contact-inbox" | "broadcasts";
 
-const VALID_TABS = ["pipeline", "investor-screening", "subscribers", "pricing", "os-sync", "open-houses", "reports", "invitations", "featured", "pro-verification", "pof-review", "contact-inbox", "broadcasts"];
+const VALID_TABS = ["pipeline", "investor-screening", "subscribers", "users-activity", "pricing", "os-sync", "open-houses", "reports", "invitations", "featured", "pro-verification", "pof-review", "contact-inbox", "broadcasts"];
 const AdminFiresalePipeline = lazy(() => import("@/components/AdminFiresalePipeline"));
 const AdminInvestorScreening = lazy(() => import("@/components/AdminInvestorScreening"));
 const AdminSubscribers = lazy(() => import("@/components/AdminSubscribers"));
+const AdminUserActivity = lazy(() => import("@/components/AdminUserActivity"));
 const AdminPanel = lazy(() => import("@/components/AdminPanel"));
 const AdminPricingContent = lazy(() => import("@/pages/AdminPricing").then((m) => ({ default: m.AdminPricingContent })));
 const OpenHouseDashboardSection = lazy(() => import("@/components/OpenHouseDashboardSection"));
@@ -76,6 +77,7 @@ export default function AdminDashboard() {
     { key: "investor-screening", label: "Investor Screening", icon: FolderKanban },
     { key: "open-houses", label: "Open Houses", icon: DoorOpen },
     { key: "subscribers", label: "Subscribers", icon: Users },
+    { key: "users-activity", label: "User Activity", icon: Activity },
     { key: "reports", label: "Reports", icon: FileText },
     { key: "contact-inbox", label: "Contact Inbox", icon: Inbox },
     { key: "invitations", label: "Invitations", icon: MailPlus },
@@ -140,6 +142,7 @@ export default function AdminDashboard() {
             </div>
           )}
           {activeTab === "subscribers" && <AdminSubscribers />}
+          {activeTab === "users-activity" && <AdminUserActivity />}
           {activeTab === "pricing" && <AdminPricingContent embed />}
           {activeTab === "os-sync" && <AdminPanel />}
           {activeTab === "invitations" && <AdminInvitationRequests />}

@@ -5,6 +5,7 @@ import { useMaiPropVideoRoom } from "@/hooks/useMaiPropVideoRoom";
 const mocks = vi.hoisted(() => ({
   channels: [] as Array<{
     id: string;
+    config: unknown;
     meta: unknown;
     signalHandlers: Array<(payload: unknown) => void>;
     presenceHandlers: Array<() => void>;
@@ -31,9 +32,10 @@ vi.mock("@/integrations/supabase/client", () => {
         setAuth: mocks.setAuth,
       },
       removeChannel: mocks.removeChannel,
-      channel: vi.fn((roomId: string) => {
+      channel: vi.fn((roomId: string, config: unknown) => {
         const channel = {
           id: `${roomId}-${mocks.channels.length}`,
+          config,
           meta: null as unknown,
           signalHandlers: [] as Array<(payload: unknown) => void>,
           presenceHandlers: [] as Array<() => void>,
@@ -196,6 +198,7 @@ describe("useMaiPropVideoRoom signaling", () => {
     expect(buyer.result.current.participantCount).toBe(2);
     expect(professional.result.current.participantCount).toBe(2);
     expect(mocks.setAuth).toHaveBeenCalledWith("token");
+    expect(mocks.channels[0].config).toMatchObject({ config: { private: true } });
     expect(mocks.sentSignals.map((signal) => signal.type)).toEqual(expect.arrayContaining(["offer", "answer", "candidate"]));
   });
 });

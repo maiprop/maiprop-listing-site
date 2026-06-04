@@ -9,6 +9,7 @@ import { dbListingToCard } from "@/lib/listingUtils";
 import { toast } from "sonner";
 import {
   usePortfolios,
+  usePortfolio,
   useCreatePortfolio,
   useUpdatePortfolio,
   useDeletePortfolio,
@@ -34,6 +35,14 @@ export default function PortfoliosTab() {
   const [editName, setEditName] = useState("");
   const [addFromSavedPortfolioId, setAddFromSavedPortfolioId] = useState<string | null>(null);
   const [previewPortfolio, setPreviewPortfolio] = useState<PortfolioItem | null>(null);
+  const {
+    data: previewFullPortfolio,
+    isLoading: previewLoading,
+    isError: previewError,
+  } = usePortfolio(previewPortfolio?.id);
+  const hydratedPreviewPortfolio = previewFullPortfolio ?? previewPortfolio;
+  const previewListingIds = hydratedPreviewPortfolio?.listing_ids || previewPortfolio?.listing_ids || [];
+  const previewListings = hydratedPreviewPortfolio?.listings || [];
 
   const handleCreate = () => {
     if (!newName.trim()) {
@@ -328,9 +337,9 @@ export default function PortfoliosTab() {
           >
             <div className="p-5 border-b border-border flex items-center justify-between gap-3">
               <div>
-                <h2 className="font-display font-semibold">{previewPortfolio.name}</h2>
+                <h2 className="font-display font-semibold">{hydratedPreviewPortfolio?.name ?? previewPortfolio.name}</h2>
                 <p className="text-sm text-muted-foreground">
-                  {(previewPortfolio.listing_ids || []).length} properties in this portfolio
+                  {previewListingIds.length} properties in this portfolio
                 </p>
               </div>
               <button
@@ -343,11 +352,27 @@ export default function PortfoliosTab() {
               </button>
             </div>
             <div className="p-5">
-              {(previewPortfolio.listings || []).length > 0 ? (
+              {previewLoading ? (
+                <div className="flex justify-center py-10">
+                  <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                </div>
+              ) : previewError ? (
+                <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-6 text-center">
+                  <p className="text-sm font-medium text-destructive">Could not load this portfolio's properties.</p>
+                </div>
+              ) : previewListings.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {(previewPortfolio.listings || []).map((l: PortfolioListing) => (
+                  {previewListings.map((l: PortfolioListing) => (
                     <PropertyCard key={l.id} property={dbListingToCard(l)} />
                   ))}
+                </div>
+              ) : previewListingIds.length > 0 ? (
+                <div className="rounded-xl border border-border bg-muted/30 p-6 text-center">
+                  <LayoutGrid className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-sm font-medium">Saved properties could not be shown</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {previewListingIds.length} saved {previewListingIds.length === 1 ? "property is" : "properties are"} no longer available to this account.
+                  </p>
                 </div>
               ) : (
                 <div className="rounded-xl border border-border bg-muted/30 p-6 text-center">

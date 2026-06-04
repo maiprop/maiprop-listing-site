@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { SignInForAI } from "@/components/SignInForAI";
 import { toast } from "sonner";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
+import { useTrackUserSearch } from "@/hooks/useTrackUserSearch";
 
 const SUGGESTIONS = [
   "Quiet apartment near metro in Athens under 200k",
@@ -44,6 +45,7 @@ export function AISearchBar({ onFiltersApplied }: AISearchBarProps) {
   const [lastSummary, setLastSummary] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useFocusTrap<HTMLDivElement>({ active: open, onEscape: () => setOpen(false) });
+  const trackUserSearch = useTrackUserSearch();
 
   const handleSearch = async (q?: string) => {
     if (!user) return;
@@ -57,6 +59,29 @@ export function AISearchBar({ onFiltersApplied }: AISearchBarProps) {
       if (error) throw new Error(error.message);
       if (data?.error) throw new Error(data.error);
       const filters = data as AIFilters;
+      void trackUserSearch({
+        surface: "ai_search",
+        query: searchQuery,
+        route: filters.listing_type === "auction" ? "/auctions" : "/listings",
+        filters: {
+          city: filters.city ?? undefined,
+          listing_type: filters.listing_type ?? undefined,
+          property_type: filters.property_type ?? undefined,
+          price_min: filters.price_min ?? undefined,
+          price_max: filters.price_max ?? undefined,
+          beds_min: filters.beds_min ?? undefined,
+          beds_max: filters.beds_max ?? undefined,
+          sqm_min: filters.sqm_min ?? undefined,
+          sqm_max: filters.sqm_max ?? undefined,
+          heating: filters.heating ?? undefined,
+          features: filters.features,
+          energy: filters.energy,
+        },
+        metadata: {
+          summary: filters.summary,
+          target: filters.listing_type === "auction" ? "auctions" : "listings",
+        },
+      });
       setLastSummary(filters.summary || null);
       if (filters.listing_type === "auction") {
         const params = new URLSearchParams();

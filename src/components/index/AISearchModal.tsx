@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { SignInForAI } from "@/components/SignInForAI";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
+import { useTrackUserSearch } from "@/hooks/useTrackUserSearch";
 
 const AI_SUGGESTIONS = [
   "Quiet apartment near metro in Athens under 200k",
@@ -26,6 +27,7 @@ export function AISearchModal({
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useFocusTrap<HTMLDivElement>({ onEscape: onClose });
+  const trackUserSearch = useTrackUserSearch();
 
   useEffect(() => {
     setTimeout(() => inputRef.current?.focus(), 50);
@@ -40,6 +42,27 @@ export function AISearchModal({
       const { data, error } = await supabase.functions.invoke("ai-search", { body: { query: searchQuery } });
       if (error) throw new Error(error.message);
       if (data?.error) throw new Error(data.error);
+      void trackUserSearch({
+        surface: "ai_search",
+        query: searchQuery,
+        route: data?.listing_type === "auction" ? "/auctions" : "/listings",
+        filters: {
+          city: data?.city,
+          listing_type: data?.listing_type,
+          property_type: data?.property_type,
+          price_min: data?.price_min,
+          price_max: data?.price_max,
+          beds_min: data?.beds_min,
+          beds_max: data?.beds_max,
+          sqm_min: data?.sqm_min,
+          sqm_max: data?.sqm_max,
+          features: data?.features,
+        },
+        metadata: {
+          summary: data?.summary,
+          target: data?.listing_type === "auction" ? "auctions" : "listings",
+        },
+      });
       onFiltersApplied(data);
       onClose();
     } catch (e: unknown) {

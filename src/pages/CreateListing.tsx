@@ -1,5 +1,5 @@
 import { useCallback, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   ChevronLeft,
@@ -24,7 +24,7 @@ import { useCreateListingConnections } from "@/hooks/useCreateListingConnections
 import { useSubscription } from "@/hooks/useSubscription";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { getPlanLimits } from "@/hooks/usePlanLimits";
-import { useMyListings } from "@/hooks/useListings";
+import { useListing, useMyListings } from "@/hooks/useListings";
 import { Link } from "react-router-dom";
 import { isPlatformAdmin, isSellSideRole } from "@/lib/authUtils";
 import { StepType } from "@/components/listings/StepType";
@@ -60,7 +60,10 @@ const steps = [
 export default function CreateListing() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { listingId } = useParams<{ listingId?: string }>();
   const { user, profile } = useAuth();
+  const isEditMode = Boolean(listingId);
+  const { data: editListing, isLoading: editListingLoading } = useListing(listingId ?? "");
   const participantType = getParticipantTypeFromProfile(profile);
   const tr = useCallback((key: string, fallback: string) => tFallback(t, key, fallback), [t]);
   const trv = useCallback((key: string, fallback: string, values: Record<string, string | number>) => tInterpolate(t, key, fallback, values), [t]);
@@ -116,7 +119,12 @@ export default function CreateListing() {
     validateStep,
     handleSubmit,
     completionPct,
-  } = useListingForm({ allowPreSale: canCreatePreSale });
+  } = useListingForm({
+    allowPreSale: canCreatePreSale,
+    mode: isEditMode ? "edit" : "create",
+    listingId,
+    initialListing: editListing,
+  });
 
   useEffect(() => {
     if (!canCreatePreSale && form.is_pre_sale) {
@@ -137,8 +145,8 @@ export default function CreateListing() {
 
   // Check for saved draft on mount
   useEffect(() => {
-    checkDraft();
-  }, [checkDraft]);
+    if (!isEditMode) checkDraft();
+  }, [checkDraft, isEditMode]);
 
   const handleNext = () => {
     const newErrors = validateStep(step);
@@ -157,6 +165,7 @@ export default function CreateListing() {
   if (
     user &&
     profile &&
+    !isEditMode &&
     canCreateListing &&
     listingLimit !== null &&
     myListings.length >= listingLimit
@@ -198,6 +207,42 @@ export default function CreateListing() {
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
           <span className="text-sm text-muted-foreground">{tr("createListing.guard.redirecting", "Redirecting...")}</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (isEditMode && editListingLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (isEditMode && !editListing) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <div className="max-w-md w-full text-center space-y-4">
+          <h1 className="font-display text-2xl font-bold">{tr("createListing.edit.notFoundTitle", "Listing not found")}</h1>
+          <p className="text-sm text-muted-foreground">{tr("createListing.edit.notFoundBody", "This listing could not be loaded for editing.")}</p>
+          <Button asChild variant="outline">
+            <Link to="/dashboard/listings">{tr("createListing.edit.backToListings", "Back to Listings")}</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (isEditMode && user && editListing && editListing.owner_id !== user.id) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <div className="max-w-md w-full text-center space-y-4">
+          <h1 className="font-display text-2xl font-bold">{tr("createListing.edit.notAllowedTitle", "Listing unavailable")}</h1>
+          <p className="text-sm text-muted-foreground">{tr("createListing.edit.notAllowedBody", "You can only edit listings you own.")}</p>
+          <Button asChild variant="outline">
+            <Link to="/dashboard/listings">{tr("createListing.edit.backToListings", "Back to Listings")}</Link>
+          </Button>
         </div>
       </div>
     );
@@ -250,7 +295,7 @@ export default function CreateListing() {
           <div className="container">
             <div className="flex items-center justify-between mb-1">
               <h1 className="font-display text-2xl font-bold">
-                {tr("createListing.title", "Create New Listing")}
+                {isEditMode ? tr("createListing.edit.title", "Edit Listing") : tr("createListing.title", "Create New Listing")}
               </h1>
               <span className="text-sm font-semibold tabular-nums text-primary">
                 {completionPct}%
@@ -380,13 +425,15 @@ export default function CreateListing() {
                 </Button>
               ) : (
                 <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={handleSaveDraft}
-                    disabled={submitting}
-                  >
-                    {tr("createListing.actions.saveDraft", "Save Draft")}
-                  </Button>
+                  {!isEditMode && (
+                    <Button
+                      variant="outline"
+                      onClick={handleSaveDraft}
+                      disabled={submitting}
+                    >
+                      {tr("createListing.actions.saveDraft", "Save Draft")}
+                    </Button>
+                  )}
                   <Button
                     className="bg-gradient-primary border-0 text-primary-foreground"
                     onClick={() => handleSubmit(false)}
@@ -395,10 +442,10 @@ export default function CreateListing() {
                     {submitting ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                        {tr("createListing.actions.publishing", "Publishing...")}
+                        {isEditMode ? tr("createListing.actions.saving", "Saving...") : tr("createListing.actions.publishing", "Publishing...")}
                       </>
                     ) : (
-                      tr("createListing.actions.publish", "Publish Listing")
+                      isEditMode ? tr("createListing.actions.saveChanges", "Save Changes") : tr("createListing.actions.publish", "Publish Listing")
                     )}
                   </Button>
                 </div>

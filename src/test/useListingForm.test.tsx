@@ -483,6 +483,190 @@ describe("useListingForm — handleSubmit", () => {
     });
     expect(toastMock.error).toHaveBeenCalledWith("rls");
   });
+
+  it("updates an existing listing and preserves unchanged non-cover image rows in edit mode", async () => {
+    const updateMock = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({ data: { id: "L-edit" }, error: null }),
+          }),
+        }),
+      }),
+    });
+    const imageDeleteEq = vi.fn().mockResolvedValue({ error: null });
+    const imageInsert = vi.fn().mockResolvedValue({ error: null });
+    fromMock.mockImplementation((table: string) => {
+      if (table === "listings") return { update: updateMock };
+      if (table === "listing_images") {
+        return {
+          delete: vi.fn().mockReturnValue({ eq: imageDeleteEq }),
+          insert: imageInsert,
+        };
+      }
+      throw new Error(`unexpected table ${table}`);
+    });
+    const initialListing = {
+      id: "L-edit",
+      owner_id: "u-1",
+      title: "Old title",
+      city: "Athens",
+      price: 100000,
+      sqm: 80,
+      status: "paused",
+      listing_type: "sale",
+      property_type: "apartment",
+      cover_image_url: "https://cdn.test/cover.jpg",
+      listing_images: [{ url: "https://cdn.test/extra.jpg", sort_order: 1 }],
+      tags: ["exclusive", "manual-tag"],
+      profiles: null,
+      ownerIsPro: false,
+      ownerParticipantType: "seller",
+    } as never;
+
+    const { result } = renderHook(() => useListingForm({
+      mode: "edit",
+      listingId: "L-edit",
+      initialListing,
+    }), { wrapper: wrap });
+
+    expect(result.current.form.title).toBe("Old title");
+    expect(result.current.form.is_exclusive).toBe(true);
+    act(() => {
+      result.current.set("is_exclusive", false);
+    });
+    await act(async () => {
+      await result.current.handleSubmit();
+    });
+
+    expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({
+      title: "Old title",
+      status: "paused",
+      cover_image_url: "https://cdn.test/cover.jpg",
+      tags: ["manual-tag"],
+    }));
+    expect(imageDeleteEq).not.toHaveBeenCalled();
+    expect(imageInsert).not.toHaveBeenCalled();
+    expect(toastMock.success).toHaveBeenCalledWith("Listing updated successfully!");
+    expect(navigateMock).toHaveBeenCalledWith("/property/L-edit");
+  });
+
+  it("does not delete existing edit-mode gallery rows when inserting replacement images fails", async () => {
+    const updateMock = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({ data: { id: "L-edit" }, error: null }),
+          }),
+        }),
+      }),
+    });
+    const imageInsert = vi.fn().mockRejectedValue(new Error("image insert failed"));
+    const imageDelete = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnThis(),
+    });
+    fromMock.mockImplementation((table: string) => {
+      if (table === "listings") return { update: updateMock };
+      if (table === "listing_images") {
+        return {
+          insert: imageInsert,
+          delete: imageDelete,
+        };
+      }
+      throw new Error(`unexpected table ${table}`);
+    });
+    storageMock.getPublicUrl.mockReturnValue({ data: { publicUrl: "https://cdn.test/new-extra.jpg" } });
+    const initialListing = {
+      id: "L-edit",
+      owner_id: "u-1",
+      title: "Old title",
+      city: "Athens",
+      price: 100000,
+      sqm: 80,
+      status: "active",
+      listing_type: "sale",
+      property_type: "apartment",
+      cover_image_url: "https://cdn.test/cover.jpg",
+      listing_images: [{ url: "https://cdn.test/old-extra.jpg", sort_order: 1 }],
+      tags: [],
+      profiles: null,
+      ownerIsPro: false,
+      ownerParticipantType: "seller",
+    } as never;
+    const newExtra = new File([new Uint8Array(1000)], "new-extra.jpg", { type: "image/jpeg" });
+
+    const { result } = renderHook(() => useListingForm({
+      mode: "edit",
+      listingId: "L-edit",
+      initialListing,
+    }), { wrapper: wrap });
+    await act(async () => {
+      await result.current.handleFilesSelected({ 0: newExtra, length: 1, item: () => newExtra } as unknown as FileList);
+    });
+
+    await act(async () => {
+      await result.current.handleSubmit();
+    });
+
+    expect(imageInsert).toHaveBeenCalledWith([
+      { listing_id: "L-edit", url: "https://cdn.test/new-extra.jpg", sort_order: 2 },
+    ]);
+    expect(imageDelete).not.toHaveBeenCalled();
+    expect(toastMock.error).toHaveBeenCalledWith("image insert failed");
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it("sends null for cover_image_url when an existing cover is removed in edit mode", async () => {
+    const updateMock = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({ data: { id: "L-edit" }, error: null }),
+          }),
+        }),
+      }),
+    });
+    fromMock.mockImplementation((table: string) => {
+      if (table === "listings") return { update: updateMock };
+      if (table === "listing_images") return {};
+      throw new Error(`unexpected table ${table}`);
+    });
+    const initialListing = {
+      id: "L-edit",
+      owner_id: "u-1",
+      title: "Old title",
+      city: "Athens",
+      price: 100000,
+      sqm: 80,
+      status: "active",
+      listing_type: "sale",
+      property_type: "apartment",
+      cover_image_url: "https://cdn.test/cover.jpg",
+      listing_images: [],
+      tags: [],
+      profiles: null,
+      ownerIsPro: false,
+      ownerParticipantType: "seller",
+    } as never;
+
+    const { result } = renderHook(() => useListingForm({
+      mode: "edit",
+      listingId: "L-edit",
+      initialListing,
+    }), { wrapper: wrap });
+    expect(result.current.images[0]?.id).toBe("existing-cover");
+    act(() => {
+      result.current.handleRemove("existing-cover");
+    });
+
+    await act(async () => {
+      await result.current.handleSubmit();
+    });
+
+    expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({
+      cover_image_url: null,
+    }));
+  });
 });
 
 describe("useListingForm — derived completionPct", () => {

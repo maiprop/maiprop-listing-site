@@ -14,7 +14,7 @@ export type Portfolio = Pick<
 /** A listing summary attached to a portfolio detail (subset of fields needed by PropertyCard). */
 export type PortfolioListing = Pick<
   Database["public"]["Tables"]["listings"]["Row"],
-  "id" | "title" | "city" | "price" | "sqm" | "property_type" | "cover_image_url" | "listing_type"
+  "id" | "title" | "city" | "price" | "sqm" | "property_type" | "cover_image_url" | "listing_type" | "status"
 >;
 
 /** The shape returned by usePortfolio() — the portfolio plus its listings array. */
@@ -40,10 +40,11 @@ export function usePortfolios() {
 }
 
 export function usePortfolio(id: string | undefined) {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ["portfolio", id],
+    queryKey: ["portfolio", user?.id, id],
     queryFn: async () => {
-      if (!id) return null;
+      if (!id || !user) return null;
       const { data: portfolio, error: pe } = await supabase
         .from("portfolios")
         .select("id, name, listing_ids, user_id, created_at, updated_at")
@@ -56,16 +57,15 @@ export function usePortfolio(id: string | undefined) {
 
       const { data: listings, error: le } = await supabase
         .from("listings")
-        .select("id, title, city, price, sqm, property_type, cover_image_url, listing_type")
-        .in("id", ids)
-        .eq("status", "active");
-      if (le) return { ...portfolio, listings: [] };
+        .select("id, title, city, price, sqm, property_type, cover_image_url, listing_type, status")
+        .in("id", ids);
+      if (le) throw le;
 
       const byId = Object.fromEntries((listings || []).map((l: PortfolioListing) => [l.id, l]));
       const ordered = ids.map((id) => byId[id]).filter(Boolean);
       return { ...portfolio, listings: ordered };
     },
-    enabled: !!id,
+    enabled: Boolean(id && user),
     staleTime: USER_SCOPED_QUERY_STALE_TIME,
   });
 }

@@ -7,6 +7,11 @@ const migration = readFileSync(
   "utf8",
 );
 
+const latestRealtimePolicyMigration = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/20260707160000_fix_realtime_video_room_auth_uid_policy.sql"),
+  "utf8",
+).replace(/\s+/g, " ");
+
 const roomHook = readFileSync(
   resolve(process.cwd(), "src/hooks/useMaiPropVideoRoom.ts"),
   "utf8",
@@ -45,5 +50,21 @@ describe("video room authorization hardening", () => {
 
     expect(migration).not.toContain(malformedUuidPattern);
     expect(migration.split(fullUuidPattern).length - 1).toBeGreaterThanOrEqual(6);
+  });
+
+  it("keeps the final realtime video-room policy on authenticated auth.uid checks", () => {
+    expect(latestRealtimePolicyMigration).toContain('DROP POLICY IF EXISTS "video_room_channel_select" ON realtime.messages');
+    expect(latestRealtimePolicyMigration).toContain('FOR SELECT TO authenticated');
+    expect(latestRealtimePolicyMigration).toContain('FOR INSERT TO authenticated');
+    expect(latestRealtimePolicyMigration).toContain("CREATE OR REPLACE FUNCTION public.uuid_from_realtime_topic");
+    expect(latestRealtimePolicyMigration).toContain("candidate::uuid");
+    expect(latestRealtimePolicyMigration).toContain("v.status = 'confirmed'::public.viewing_status");
+    expect(latestRealtimePolicyMigration).toContain("v.owner_id = (SELECT auth.uid()) OR v.requester_id = (SELECT auth.uid())");
+    expect(latestRealtimePolicyMigration).toContain("public.uuid_from_realtime_topic((SELECT realtime.topic()), 'video:viewing')");
+    expect(latestRealtimePolicyMigration).toContain('DROP POLICY IF EXISTS "typing_channel_participant_select" ON realtime.messages');
+    expect(latestRealtimePolicyMigration).toContain("public.uuid_from_realtime_topic((SELECT realtime.topic()), 'typing')");
+    expect(latestRealtimePolicyMigration).not.toContain("NULLIF(SUBSTRING(realtime.topic() FROM 8)");
+    expect(latestRealtimePolicyMigration).not.toContain("regexp_replace((SELECT realtime.topic())");
+    expect(latestRealtimePolicyMigration).not.toContain("request.jwt.claims");
   });
 });

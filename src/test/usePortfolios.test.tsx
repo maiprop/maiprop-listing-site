@@ -88,6 +88,18 @@ describe("usePortfolio(id)", () => {
     expect(fromMock).not.toHaveBeenCalled();
   });
 
+  it("waits for an authenticated user before loading a portfolio detail", async () => {
+    useAuthMock.mockReturnValue({ user: null });
+    const { result } = renderHookWithQuery(() => usePortfolio("p1"));
+    expect(result.current.isPending).toBe(true);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
   it("returns the portfolio with empty listings when the listing_ids array is empty", async () => {
     fromMock.mockReturnValueOnce({
       select: vi.fn().mockReturnThis(),
@@ -115,8 +127,7 @@ describe("usePortfolio(id)", () => {
     // Second from() — listings fetch (returns out of order)
     fromMock.mockReturnValueOnce({
       select: vi.fn().mockReturnThis(),
-      in: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({
+      in: vi.fn().mockResolvedValue({
         data: [{ id: "l1" }, { id: "l2" }, { id: "l3" }],
         error: null,
       }),
@@ -130,7 +141,7 @@ describe("usePortfolio(id)", () => {
     ]);
   });
 
-  it("returns the portfolio with empty listings when the second fetch errors", async () => {
+  it("propagates listing hydration errors instead of hiding saved properties", async () => {
     fromMock.mockReturnValueOnce({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
@@ -141,12 +152,10 @@ describe("usePortfolio(id)", () => {
     });
     fromMock.mockReturnValueOnce({
       select: vi.fn().mockReturnThis(),
-      in: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({ data: null, error: new Error("scoped") }),
+      in: vi.fn().mockResolvedValue({ data: null, error: new Error("scoped") }),
     });
     const { result } = renderHookWithQuery(() => usePortfolio("p1"));
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data?.listings).toEqual([]);
+    await waitFor(() => expect(result.current.isError).toBe(true));
   });
 
   it("rejects when the portfolio is missing", async () => {

@@ -1,15 +1,16 @@
 import React from "react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderWithProviders } from "@/test/utils";
 import type { ListingCardWithRaw } from "@/lib/listingsCardUtils";
 
-const { filterState, setParam, setParams, clearAllFilters, toggleMulti, pipelineState, authState, loadGoogleMapsPlaces } = vi.hoisted(() => {
+const { filterState, setParam, setParams, clearAllFilters, toggleMulti, pipelineState, authState, loadGoogleMapsPlaces, trackUserSearch } = vi.hoisted(() => {
   const setParam = vi.fn();
   const setParams = vi.fn();
   const clearAllFilters = vi.fn();
   const toggleMulti = vi.fn();
   const loadGoogleMapsPlaces = vi.fn().mockResolvedValue(undefined);
+  const trackUserSearch = vi.fn().mockResolvedValue(undefined);
   const filterState = {
     searchQuery: "",
     selectedListingType: "sale",
@@ -51,7 +52,7 @@ const { filterState, setParam, setParams, clearAllFilters, toggleMulti, pipeline
     sentinelRef: { current: null },
   };
   const authState = { user: null as null | { id: string } };
-  return { filterState, setParam, setParams, clearAllFilters, toggleMulti, pipelineState, authState, loadGoogleMapsPlaces };
+  return { filterState, setParam, setParams, clearAllFilters, toggleMulti, pipelineState, authState, loadGoogleMapsPlaces, trackUserSearch };
 });
 
 vi.mock("@/lib/config", () => ({
@@ -70,6 +71,10 @@ vi.mock("@/hooks/useListingsFilters", () => ({
 
 vi.mock("@/hooks/useListingsPipeline", () => ({
   useListingsPipeline: () => pipelineState,
+}));
+
+vi.mock("@/hooks/useTrackUserSearch", () => ({
+  useTrackUserSearch: () => trackUserSearch,
 }));
 
 vi.mock("@/hooks/useSmartFilters", () => ({
@@ -230,7 +235,13 @@ describe("Listings page interactions", () => {
     pipelineState.isError = false;
     pipelineState.hasNextPage = false;
     pipelineState.isFetchingNextPage = false;
+    trackUserSearch.mockReset();
+    trackUserSearch.mockResolvedValue(undefined);
     delete (window as typeof window & { google?: unknown }).google;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("wires mobile filters, desktop view toggles, and advanced panel close", async () => {
@@ -293,6 +304,36 @@ describe("Listings page interactions", () => {
 
     act(() => placeChanged?.());
     expect(setParam).toHaveBeenCalledWith("city", "Heraklion");
+  });
+
+  it("records submitted listing searches for admin activity analytics", async () => {
+    vi.useFakeTimers();
+    Object.assign(filterState, {
+      searchQuery: "Athens",
+      selectedListingType: "sale",
+      selectedType: "apartment",
+      selectedPrice: "100000-300000",
+      activeFilterCount: 3,
+      currentFilters: { city: "Athens", listing_type: "sale", type: "apartment" },
+    });
+    authState.user = { id: "buyer-1" };
+    const { default: Listings } = await import("@/pages/Listings");
+
+    renderWithProviders(<Listings />);
+    await act(async () => {
+      vi.advanceTimersByTime(1400);
+      await Promise.resolve();
+    });
+
+    expect(trackUserSearch).toHaveBeenCalledWith(expect.objectContaining({
+      surface: "listings",
+      query: expect.stringContaining("Athens"),
+      route: expect.stringContaining("/listings"),
+      resultCount: 4,
+      filters: expect.objectContaining({ city: "Athens", listing_type: "sale", type: "apartment" }),
+      metadata: expect.objectContaining({ activeFilterCount: 3, totalLoaded: 4 }),
+    }));
+    vi.useRealTimers();
   });
 
   it("adds, removes, clears, and caps listings in the compare drawer", async () => {

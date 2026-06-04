@@ -372,7 +372,7 @@ export function MaiPropVideoRoom({
       </div>
 
       <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-xs text-muted-foreground text-center">
-        This in-app room uses peer-to-peer WebRTC with Supabase Realtime signaling. External provider links can still be used when the host adds one.
+        This in-app room uses browser WebRTC with Supabase Realtime signaling. External provider links can still be used when the host adds one.
       </div>
 
       <p className="text-center text-xs text-muted-foreground">

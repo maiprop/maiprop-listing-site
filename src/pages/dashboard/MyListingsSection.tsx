@@ -21,8 +21,6 @@ import {
   ToggleRight,
   Loader2,
   Edit2,
-  Save,
-  X,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -58,12 +56,6 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
 
   const [listingFilter, setListingFilter] = useState<ListingFilter>("all");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [editingListing, setEditingListing] = useState<{
-    id: string;
-    title: string;
-    city: string;
-    price: string;
-  } | null>(null);
 
   const isSellSide = role === "agent" || role === "developer";
   const showFilterChips =
@@ -77,36 +69,6 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
         status: currentStatus === "active" ? "paused" : "active",
       },
     });
-  };
-
-  const startEditingListing = (listing: {
-    id: string;
-    title?: string | null;
-    city?: string | null;
-    price?: number | string | null;
-  }) => {
-    setEditingListing({
-      id: listing.id,
-      title: listing.title ?? "",
-      city: listing.city ?? "",
-      price: listing.price != null ? String(listing.price) : "",
-    });
-  };
-
-  const saveEditingListing = () => {
-    if (!editingListing) return;
-    const title = editingListing.title.trim();
-    const city = editingListing.city.trim();
-    const rawPrice = editingListing.price.trim();
-    const price = Number(rawPrice);
-    if (rawPrice === "") return;
-    if (!title || !Number.isFinite(price) || price < 0) return;
-
-    updateListing.mutate({
-      id: editingListing.id,
-      updates: { title, city, price },
-    });
-    setEditingListing(null);
   };
 
   const filteredListings =
@@ -190,8 +152,6 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
       ) : (
         <div className="space-y-3">
           {filteredListings.map((l) => {
-            const editState = editingListing?.id === l.id ? editingListing : null;
-            const isEditing = !!editState;
             return (
             <div
               key={l.id}
@@ -242,36 +202,6 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
                 >
                   {l.status}
                 </span>
-                {editState && (
-                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <label className="text-xs text-muted-foreground">
-                      Listing title
-                      <input
-                        value={editState.title}
-                        onChange={(e) => setEditingListing({ ...editState, title: e.target.value })}
-                        className="mt-1 w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground"
-                      />
-                    </label>
-                    <label className="text-xs text-muted-foreground">
-                      Listing city
-                      <input
-                        value={editState.city}
-                        onChange={(e) => setEditingListing({ ...editState, city: e.target.value })}
-                        className="mt-1 w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground"
-                      />
-                    </label>
-                    <label className="text-xs text-muted-foreground">
-                      Listing price
-                      <input
-                        type="number"
-                        min={0}
-                        value={editState.price}
-                        onChange={(e) => setEditingListing({ ...editState, price: e.target.value })}
-                        className="mt-1 w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground"
-                      />
-                    </label>
-                  </div>
-                )}
               </div>
               <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
                 {isSellSide && (
@@ -322,32 +252,14 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
                 <span className="text-xs text-muted-foreground mr-2">
                   {l.views_count} views
                 </span>
-                {isEditing ? (
-                  <>
-                    <button
-                      onClick={saveEditingListing}
-                      className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-primary/10 transition-colors text-primary"
-                      aria-label="Save listing"
-                    >
-                      <Save className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => setEditingListing(null)}
-                      className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
-                      aria-label="Cancel listing edit"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={() => startEditingListing(l)}
-                    className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
-                    aria-label="Edit listing"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                )}
+                <Link
+                  to={`/listings/${l.id}/edit`}
+                  className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
+                  aria-label="Edit listing"
+                  title="Edit full listing"
+                >
+                  <Edit2 className="w-4 h-4" />
+                </Link>
                 <button
                   onClick={() => toggleListingStatus(l.id, l.status)}
                   className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"

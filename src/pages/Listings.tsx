@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo, lazy, Suspense, useCallback } from "react";
+import { useRef, useState, useMemo, lazy, Suspense, useCallback, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
@@ -42,6 +42,7 @@ import {
 import type { ListingsFilters } from "@/hooks/useListings";
 import { useListingsFilters } from "@/hooks/useListingsFilters";
 import { useListingsPipeline } from "@/hooks/useListingsPipeline";
+import { useTrackUserSearch } from "@/hooks/useTrackUserSearch";
 import type { ListingCardWithRaw } from "@/lib/listingsCardUtils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCookieConsent } from "@/hooks/useCookieConsent";
@@ -117,6 +118,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
   const splitListRef = useRef<HTMLDivElement | null>(null);
   const { user } = useAuth();
   const { consent, accept } = useCookieConsent();
+  const trackUserSearch = useTrackUserSearch();
 
   const {
     searchQuery, selectedListingType, selectedType, selectedSubtype,
@@ -185,6 +187,56 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
     minAiScore,
     minWalkability,
   });
+
+  const currentFiltersKey = JSON.stringify(currentFilters);
+  useEffect(() => {
+    const searchParts = [
+      searchQuery,
+      selectedListingType,
+      selectedType,
+      selectedSubtype,
+      selectedPrice,
+      selectedHeating,
+      selectedConstruction,
+      selectedFeatures.join(" "),
+      selectedEnergyClasses.join(" "),
+    ].filter(Boolean);
+    const query = searchParts.join(" ").trim();
+    if (!query || (activeFilterCount === 0 && !searchQuery.trim())) return;
+
+    const timeout = window.setTimeout(() => {
+      void trackUserSearch({
+        surface: "listings",
+        query,
+        route: `/listings${window.location.search}`,
+        resultCount: filtered.length,
+        filters: JSON.parse(currentFiltersKey) as Record<string, string>,
+        metadata: {
+          viewMode,
+          activeFilterCount,
+          totalLoaded,
+        },
+      });
+    }, 1400);
+
+    return () => window.clearTimeout(timeout);
+  }, [
+    activeFilterCount,
+    currentFiltersKey,
+    filtered.length,
+    searchQuery,
+    selectedConstruction,
+    selectedEnergyClasses,
+    selectedFeatures,
+    selectedHeating,
+    selectedListingType,
+    selectedPrice,
+    selectedSubtype,
+    selectedType,
+    totalLoaded,
+    trackUserSearch,
+    viewMode,
+  ]);
 
   const mapListings = useMemo(() => filtered.map(mapListingFromCard), [filtered]);
 

@@ -78,7 +78,7 @@ export interface CreateBuildingListingInput {
   project: CreateBuildingListingProjectInput;
   /** Step 2 form snapshot. */
   unit: CreateBuildingListingUnitInput;
-  /** Step 3 — optional project-level media files keyed by media type. */
+  /** Step 3 - optional project-level media files keyed by media type. */
   projectMedia: Record<ProjectMediaType, File | null>;
   /** Step 4 form snapshot. */
   listing: { title: string; description: string };

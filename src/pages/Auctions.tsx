@@ -26,6 +26,7 @@ import {
   AUCTIONS_MAX_PAGES_FREE,
   AUCTIONS_MAX_PAGES_PRO,
 } from "@/hooks/useAuctionsPipeline";
+import { useTrackUserSearch } from "@/hooks/useTrackUserSearch";
 
 const AUCTION_URL_FILTER_MAX = "999999999";
 
@@ -71,6 +72,7 @@ const AuctionCardSkeleton = () => {
 
 const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinates filter state, map/list view state, pagination, and Pro upsells.
   const { user } = useAuth();
+  const trackUserSearch = useTrackUserSearch();
   const { i18n } = useTranslation();
   const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
   const navigate = useNavigate();
@@ -139,6 +141,63 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
     currentPage,
     setCurrentPage,
   });
+
+  useEffect(() => {
+    const city = selectedCity === "All Cities" ? "" : selectedCity;
+    const query = [
+      city,
+      filterType,
+      filterBidRange,
+      filterYearRange,
+      filterSqmRange,
+      filterOwnership,
+      filterRound,
+      filterYield,
+    ].filter(Boolean).join(" ").trim();
+    if (!query) return;
+
+    const timeout = window.setTimeout(() => {
+      void trackUserSearch({
+        surface: "auctions",
+        query,
+        route: `/auctions${window.location.search}`,
+        resultCount: visibleFiltered.length,
+        filters: {
+          city: city || undefined,
+          type: filterType || undefined,
+          bidRange: filterBidRange || undefined,
+          yearRange: filterYearRange || undefined,
+          sqmRange: filterSqmRange || undefined,
+          ownership: filterOwnership || undefined,
+          round: filterRound || undefined,
+          yield: filterYield || undefined,
+        },
+        metadata: {
+          viewMode,
+          activeFilterCount,
+          totalRaw,
+          mappableCount,
+        },
+      });
+    }, 1400);
+
+    return () => window.clearTimeout(timeout);
+  }, [
+    activeFilterCount,
+    filterBidRange,
+    filterOwnership,
+    filterRound,
+    filterSqmRange,
+    filterType,
+    filterYearRange,
+    filterYield,
+    mappableCount,
+    selectedCity,
+    totalRaw,
+    trackUserSearch,
+    viewMode,
+    visibleFiltered.length,
+  ]);
 
   const handleToggleFav = (id: string, isFav: boolean) => {
     if (!user) {navigate("/login");return;}
