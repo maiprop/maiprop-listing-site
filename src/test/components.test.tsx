@@ -359,11 +359,12 @@ describe("PropertyCard", () => {
 
   it("shows user-visible tags and hides system tags", async () => {
     const { PropertyCard } = await import("@/components/PropertyCard");
-    const tags = ["os_auction:123", "sea view", "source:manual", "renovated"];
+    const tags = ["os_auction:123", "auction_pool:2026-06-04", "sea view", "source:manual", "renovated"];
     renderWithProviders(<PropertyCard property={makeProperty({ tags })} />);
     expect(screen.getByText("sea view")).toBeInTheDocument();
     expect(screen.getByText("renovated")).toBeInTheDocument();
     expect(screen.queryByText(/os_auction/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/auction_pool/)).not.toBeInTheDocument();
     expect(screen.queryByText(/source:/)).not.toBeInTheDocument();
   });
 

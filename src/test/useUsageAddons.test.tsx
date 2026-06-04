@@ -1,5 +1,5 @@
 import React from "react";
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -113,30 +113,26 @@ describe("useUsageAddons", () => {
     await waitFor(() => expect(failing.result.current.isError).toBe(true));
   });
 
-  it("records valuation, report, and priority-ad usage, including auth/pro/error branches", async () => {
-    const insertOk = vi.fn().mockResolvedValue({ error: null });
-    mocks.from.mockReturnValue({ insert: insertOk });
+  it("rejects direct browser usage writes because usage is recorded by server workflows", async () => {
     const wrapper = makeWrapper();
 
     const valuation = renderHook(() => useRecordValuation(), { wrapper });
-    await act(async () => {
-      await valuation.result.current.mutateAsync("listing-1");
-    });
-    expect(mocks.from).toHaveBeenCalledWith("usage_ai_valuations");
-    expect(insertOk).toHaveBeenCalledWith({ user_id: "u1", listing_id: "listing-1" });
+    await expect(valuation.result.current.mutateAsync("listing-1")).rejects.toThrow(
+      /recorded server-side by the valuation function/,
+    );
+    expect(mocks.from).not.toHaveBeenCalledWith("usage_ai_valuations");
 
     const report = renderHook(() => useRecordReport(), { wrapper });
-    await act(async () => {
-      await report.result.current.mutateAsync(undefined);
-    });
-    expect(mocks.from).toHaveBeenCalledWith("usage_property_reports");
-    expect(insertOk).toHaveBeenCalledWith({ user_id: "u1", listing_id: null });
+    await expect(report.result.current.mutateAsync(undefined)).rejects.toThrow(
+      /recorded server-side by the report function/,
+    );
+    expect(mocks.from).not.toHaveBeenCalledWith("usage_property_reports");
 
     const priority = renderHook(() => useRecordPriorityAd(), { wrapper });
-    await act(async () => {
-      await priority.result.current.mutateAsync("listing-2");
-    });
-    expect(mocks.from).toHaveBeenCalledWith("usage_priority_ads");
+    await expect(priority.result.current.mutateAsync("listing-2")).rejects.toThrow(
+      /recorded server-side by the checkout or boost workflow/,
+    );
+    expect(mocks.from).not.toHaveBeenCalledWith("usage_priority_ads");
 
     mocks.useSubscription.mockReturnValue({ isPro: false });
     const nonPro = renderHook(() => useRecordPriorityAd(), { wrapper: makeWrapper() });
@@ -147,10 +143,5 @@ describe("useUsageAddons", () => {
     const anon = renderHook(() => useRecordValuation(), { wrapper: makeWrapper() });
     await expect(anon.result.current.mutateAsync(undefined)).rejects.toThrow("Not authenticated");
     await waitFor(() => expect(mocks.toast.error).toHaveBeenCalledWith("Failed to record AI valuation usage. Please try again."));
-
-    mocks.useAuth.mockReturnValue({ user: { id: "u1" } });
-    mocks.from.mockReturnValueOnce({ insert: vi.fn().mockResolvedValue({ error: new Error("report db") }) });
-    await expect(report.result.current.mutateAsync("listing-4")).rejects.toThrow("report db");
-    await waitFor(() => expect(mocks.toast.error).toHaveBeenCalledWith("Failed to record report usage. Please try again."));
   });
 });

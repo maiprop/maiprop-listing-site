@@ -8,6 +8,7 @@ import {
 } from "@/components/CookieConsentBanner";
 import ProAIToolsWidget from "@/components/ProAIToolsWidget";
 import { ROICalculator } from "@/components/ROICalculator";
+import { MemoryRouter } from "react-router-dom";
 
 const invokeMock = vi.fn();
 const getSessionMock = vi.fn();
@@ -61,6 +62,10 @@ describe("small interaction widgets", () => {
     localStorage.clear();
     currentAuth.user = { id: "user-1" };
     invokeMock.mockReset();
+    invokeMock.mockResolvedValue({
+      data: { allowed: true, reason: null, used: 1, limit: 50 },
+      error: null,
+    });
     getSessionMock.mockReset();
     toastErrorMock.mockReset();
     navigateMock.mockReset();
@@ -212,7 +217,12 @@ describe("small interaction widgets", () => {
       "data: [DONE]\n",
     ]) as unknown as Response);
 
-    render(<ProAIToolsWidget />);
+    render(
+      <MemoryRouter>
+        <ProAIToolsWidget />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText("1 / 50 used")).toBeInTheDocument();
     fireEvent.change(screen.getByPlaceholderText(/Ask the legal AI/i), { target: { value: "Draft a clause" } });
     fireEvent.keyDown(screen.getByPlaceholderText(/Ask the legal AI/i), { key: "Enter" });
     await screen.findByText(/Hello world/i);
@@ -235,5 +245,24 @@ describe("small interaction widgets", () => {
     fireEvent.change(screen.getByPlaceholderText(/Ask the legal AI/i), { target: { value: "Try again" } });
     fireEvent.click(screen.getByRole("button", { name: "" }));
     await screen.findByText(/quota/i);
+  });
+
+  it("blocks Pro AI Tools sends when the quota counter is exhausted", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+    invokeMock.mockResolvedValueOnce({
+      data: { allowed: false, reason: "monthly_limit_reached", used: 50, limit: 50 },
+      error: null,
+    });
+
+    render(
+      <MemoryRouter>
+        <ProAIToolsWidget />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("50 / 50 used")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /upgrade/i })).toHaveAttribute("href", "/pricing");
+    expect(screen.getByPlaceholderText(/Ask the legal AI/i)).toBeDisabled();
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

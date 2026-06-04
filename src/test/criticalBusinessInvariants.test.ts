@@ -201,6 +201,34 @@ describe("critical business invariants", () => {
     expect(wiring).not.toContain("scheduled WITHOUT auth header");
   });
 
+  it("keeps the daily OS auction cron private and bearer-authenticated", () => {
+    const wiring = read("supabase/migrations/20260603174928_standardize_daily_auction_pool_sync.sql");
+    const timeoutHardening = read("supabase/migrations/20260603201131_increase_poll_os_auctions_cron_timeout.sql");
+    const edgeFunction = read("supabase/functions/poll-os-auctions/index.ts");
+
+    expect(edgeFunction).toContain("isCronBearerRequest");
+    expect(edgeFunction).toContain('req.method !== "POST"');
+    expect(edgeFunction).toContain("getBearerToken(req)");
+    expect(edgeFunction).toContain("getActiveDailyPoolCount");
+    expect(edgeFunction).toContain("pruneUnselectedDailyPoolRows");
+    expect(edgeFunction).toContain("trimDailyPoolToLatest");
+    expect(edgeFunction).not.toContain("x-maiprop-cron");
+    expect(edgeFunction).not.toContain("x-forwarded-for\")?.split");
+
+    expect(wiring).toContain("CREATE SCHEMA IF NOT EXISTS private");
+    expect(wiring).toContain("DROP FUNCTION IF EXISTS public.invoke_poll_os_auctions_cron()");
+    expect(wiring).toContain("CREATE OR REPLACE FUNCTION private.invoke_poll_os_auctions_cron()");
+    expect(wiring).toContain("REVOKE ALL ON FUNCTION private.invoke_poll_os_auctions_cron() FROM PUBLIC, anon, authenticated");
+    expect(wiring).toContain("SELECT private.invoke_poll_os_auctions_cron();");
+    expect(wiring).toContain("'Authorization', 'Bearer ' || v_cron_secret");
+    expect(wiring).not.toContain("SELECT public.invoke_poll_os_auctions_cron();");
+    expect(wiring).not.toContain("scheduled WITHOUT auth header");
+
+    expect(timeoutHardening).toContain("CREATE OR REPLACE FUNCTION private.invoke_poll_os_auctions_cron()");
+    expect(timeoutHardening).toContain("timeout_milliseconds := 120000");
+    expect(timeoutHardening).toContain("REVOKE ALL ON FUNCTION private.invoke_poll_os_auctions_cron() FROM PUBLIC, anon, authenticated");
+  });
+
   it("serializes firesale reservations and account erasure covers proof documents", () => {
     const firesale = read("supabase/migrations/20260514150000_firesale_interest_reservation_workflow.sql");
     const firesaleVisibility = read("supabase/migrations/20260518000000_quick_sale_eligible_buyers_only.sql");
@@ -219,9 +247,11 @@ describe("critical business invariants", () => {
     expect(firesaleVisibility).toContain("status IN ('active', 'trial')");
 
     expect(deleteAccount).toContain('"open-house-docs"');
+    expect(deleteAccount).toContain('"firesale-proof-docs"');
     expect(deleteAccount).toContain("USER_FOLDER_BUCKETS");
     expect(deleteAccount).toContain("removeFolderRecursive");
     expect(deleteAccountTest).toContain("open-house-docs");
+    expect(deleteAccountTest).toContain("firesale-proof-docs");
   });
 
   it("keeps account deletion UX, privacy terms, and lifecycle coverage aligned", () => {

@@ -42,6 +42,7 @@ Deno.test("user-folder cleanup bucket allowlist covers only user-id-prefixed sto
     "project-media",
     "message-attachments",
     "open-house-docs",
+    "firesale-proof-docs",
   ]);
   assertEquals(USER_FOLDER_BUCKETS.includes("firesale-photos" as never), false);
 });
@@ -131,8 +132,9 @@ Deno.test("notification inserts dedupe rows and fall back when link column is mi
   assertEquals(inserted[1][0].link, undefined);
 });
 
-Deno.test("storage cleanup includes open-house proof documents under the user folder", async () => {
+Deno.test("storage cleanup includes firesale proof documents under the user folder", async () => {
   assert(USER_FOLDER_BUCKETS.includes("open-house-docs"));
+  assert(USER_FOLDER_BUCKETS.includes("firesale-proof-docs"));
 
   const listed: Array<{ bucket: string; prefix: string }> = [];
   const removed: Array<{ bucket: string; paths: string[] }> = [];
@@ -142,7 +144,7 @@ Deno.test("storage cleanup includes open-house proof documents under the user fo
       from: (bucket: string) => ({
         list: (prefix: string) => {
           listed.push({ bucket, prefix });
-          if (bucket !== "open-house-docs") {
+          if (bucket !== "firesale-proof-docs") {
             return Promise.resolve({ data: [], error: null });
           }
           if (prefix === "user-1") {
@@ -173,16 +175,16 @@ Deno.test("storage cleanup includes open-house proof documents under the user fo
     },
   };
 
-  await removeFolderRecursive(supabase, "open-house-docs", "user-1");
+  await removeFolderRecursive(supabase, "firesale-proof-docs", "user-1");
 
   assertEquals(listed, [
-    { bucket: "open-house-docs", prefix: "user-1" },
-    { bucket: "open-house-docs", prefix: "user-1/firesale" },
-    { bucket: "open-house-docs", prefix: "user-1/firesale/deal-1" },
+    { bucket: "firesale-proof-docs", prefix: "user-1" },
+    { bucket: "firesale-proof-docs", prefix: "user-1/firesale" },
+    { bucket: "firesale-proof-docs", prefix: "user-1/firesale/deal-1" },
   ]);
   assertEquals(removed, [
     {
-      bucket: "open-house-docs",
+      bucket: "firesale-proof-docs",
       paths: ["user-1/firesale/deal-1/proof.pdf"],
     },
   ]);

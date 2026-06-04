@@ -12,6 +12,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { createLogger } from "../_shared/logger.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { getAuctionSamplePageNumbers } from "../fetch-os-auctions/auctionSampling.ts";
 
 const log = createLogger("poll-os-auctions");
 const limiter = makeRateLimiter({ bucket: "poll-os-auctions", maxRequests: 3, windowMs: 60_000 });
@@ -19,16 +20,42 @@ const limiter = makeRateLimiter({ bucket: "poll-os-auctions", maxRequests: 3, wi
 // Edge Functions use the service-role Supabase client with generated DB types
 // unavailable in Deno. Keep helper signatures aligned with the inferred client.
 type SupabaseAdminClient = ReturnType<typeof createClient<Record<string, unknown>>>;
+type SupabaseError = { message?: string } | null;
+type SupabaseQueryResult<T> = {
+  data?: T[] | null;
+  count?: number | null;
+  error: SupabaseError;
+};
+type SupabaseQueryBuilder<T = unknown> = PromiseLike<SupabaseQueryResult<T>> & {
+  select: (columns: string, options?: { count?: "exact"; head?: boolean }) => SupabaseQueryBuilder<T>;
+  insert: (values: Record<string, unknown>) => Promise<SupabaseQueryResult<T>>;
+  update: (values: Record<string, unknown>) => SupabaseQueryBuilder<T>;
+  eq: (column: string, value: unknown) => SupabaseQueryBuilder<T>;
+  contains: (column: string, value: unknown[]) => SupabaseQueryBuilder<T>;
+  or: (filters: string) => SupabaseQueryBuilder<T>;
+  order: (column: string, options?: Record<string, unknown>) => SupabaseQueryBuilder<T>;
+  range: (from: number, to: number) => SupabaseQueryBuilder<T>;
+};
+type UntypedSupabaseClient = {
+  from: <T = unknown>(tableName: string) => SupabaseQueryBuilder<T>;
+};
+
+function table<T = unknown>(
+  sb: SupabaseAdminClient,
+  tableName: string,
+): SupabaseQueryBuilder<T> {
+  return (sb as unknown as UntypedSupabaseClient).from<T>(tableName);
+}
 
 /** Maximum number of OS auctions to sync per UTC calendar day. */
-const DAILY_AUCTION_LIMIT = 200;
+const DAILY_AUCTION_LIMIT = 600;
 
 /**
  * Number of distinct pages we cycle through before repeating.
  * With DAILY_AUCTION_LIMIT = 200 this covers up to 10 × 200 = 2 000 auctions
  * in rotation over 10 days, giving broad variety without hammering OS.
  */
-const ROTATION_PAGE_COUNT = 10;
+const NATIONAL_SYNC_PAGE_COUNT = 4;
 
 
 // OS propertyCategory → Hub property_type (and optional land_type / commercial_type for filters)
@@ -106,6 +133,14 @@ function mapOwnershipStatusToTag(rawOwnership?: string | null): string | null {
   if (occ === "VERTICAL" || occ === "VERTICAL_OWNERSHIP") return "ownership:vertical";
   if (occ === "HORIZONTAL" || occ === "HORIZONTAL_OWNERSHIP") return "ownership:horizontal";
   return `ownership:${occ.toLowerCase()}`;
+}
+
+function getUtcPoolDate(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getDailyPoolTag(poolDate: string): string {
+  return `auction_pool:${poolDate}`;
 }
 
 // AuctionOutputDto from the OS API. The OS service does not publish a typed
@@ -193,10 +228,7 @@ async function logSync(
   records_affected = 0,
 ): Promise<void> {
   try {
-    // `sync_log` is unregistered in the generated Supabase types; cast through
-    // the narrow `from` overload bridge that the rest of this codebase uses.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (sb.from as any)("sync_log").insert({
+    await table(sb, "sync_log").insert({
       direction: "os_to_hub",
       entity_type: "auction",
       entity_id: "poll-batch",
@@ -242,11 +274,12 @@ type MappedListingRow = {
 };
 
 type MappedAuction = { tagKey: string; row: MappedListingRow };
+type PoolTagRow = { id: string; tags?: string[] | null };
 
 /**
  * Map an AuctionOutputDto from the OS API to a Hub listing row.
  */
-function mapAuctionToListing(a: OsAuction): MappedAuction {
+function mapAuctionToListing(a: OsAuction, poolDate = getUtcPoolDate()): MappedAuction {
   const osId = String(a.auctionListingId ?? "unknown");
   const tagKey = `os_auction:${osId}`;
   const catKey = mapCategory(a.propertyCategory);
@@ -307,6 +340,7 @@ function mapAuctionToListing(a: OsAuction): MappedAuction {
       tags: [
         tagKey,
         "source:maiprop-os",
+        `auction_pool:${poolDate}`,
         `auction_status:${a.auctionStatus ?? "scheduled"}`,
         ...(a.currentRound != null ? [`round:${a.currentRound}`] : []),
         ...(ownershipTag ? [ownershipTag] : []),
@@ -317,19 +351,63 @@ function mapAuctionToListing(a: OsAuction): MappedAuction {
   };
 }
 
-// ── Require agent role (JWT) to prevent unauthenticated PII/sync abuse ───────
-async function requireAgent(
+// ── Require cron bearer or platform-admin JWT before any sync work ───────────
+function getBearerToken(req: Request): string | null {
+  const authHeader = req.headers.get("Authorization");
+  return authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+}
+
+async function sha256Bytes(value: string): Promise<Uint8Array> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(value),
+  );
+  return new Uint8Array(digest);
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  return Array.from(await sha256Bytes(value), (byte) =>
+    byte.toString(16).padStart(2, "0")
+  ).join("");
+}
+
+async function constantTimeSecretMatch(
+  supplied: string,
+  expected: string,
+): Promise<boolean> {
+  if (supplied.length === 0 || expected.length === 0) return false;
+  const suppliedHash = await sha256Bytes(supplied);
+  const expectedHash = await sha256Bytes(expected);
+  let diff = suppliedHash.length ^ expectedHash.length;
+  for (let i = 0; i < Math.max(suppliedHash.length, expectedHash.length); i += 1) {
+    diff |= (suppliedHash[i] ?? 0) ^ (expectedHash[i] ?? 0);
+  }
+  return diff === 0;
+}
+
+export async function isCronBearerRequest(req: Request): Promise<boolean> {
+  const cronSecret = Deno.env.get("CRON_SECRET") ?? "";
+  const token = getBearerToken(req);
+  if (token === null || cronSecret.length === 0) return false;
+  return await constantTimeSecretMatch(token, cronSecret);
+}
+
+type SyncAuth = { kind: "cron" } | { kind: "admin"; userId: string };
+
+export async function authorizeSyncRequest(
   req: Request,
   sb: SupabaseAdminClient,
   corsHeaders: Record<string, string>,
-): Promise<Response | null> {
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
+): Promise<SyncAuth | Response> {
+  if (await isCronBearerRequest(req)) return { kind: "cron" };
+
+  const token = getBearerToken(req);
+  if (!token) {
     return new Response(JSON.stringify({ error: "Missing or invalid Authorization header" }), {
       status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-  const token = authHeader.slice(7);
+
   const { data: { user }, error } = await sb.auth.getUser(token);
   if (error || !user) {
     return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
@@ -343,7 +421,194 @@ async function requireAgent(
       status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-  return null;
+  return { kind: "admin", userId: user.id };
+}
+
+async function getAuthorizedRateLimitKey(auth: SyncAuth): Promise<string> {
+  return auth.kind === "cron" ? "cron" : `admin:${await sha256Hex(auth.userId)}`;
+}
+
+type OsAuctionListResponse = {
+  data?: OsAuction[];
+  responseMetadata?: { pagination?: { totalElements?: number } };
+  pagination?: { totalElements?: number };
+};
+
+function parseAuctionListResponse(auctJson: OsAuctionListResponse | OsAuction[]): {
+  auctions: OsAuction[];
+  totalAvailable: number;
+} {
+  const auctions = Array.isArray(auctJson)
+    ? auctJson
+    : Array.isArray(auctJson.data)
+    ? auctJson.data
+    : [];
+  const pagination = (Array.isArray(auctJson)
+    ? undefined
+    : auctJson.responseMetadata?.pagination ?? auctJson.pagination) ?? {};
+  return {
+    auctions,
+    totalAvailable: pagination.totalElements ?? auctions.length,
+  };
+}
+
+async function fetchOsAuctionPage(
+  osUrl: string,
+  token: string,
+  page: number,
+  size: number,
+  filterRequest: Record<string, unknown>,
+): Promise<{ auctions: OsAuction[]; totalAvailable: number; endpoint: string }> {
+  const endpoint = `/api/v1/auctions/filter/details?page=${page}&pageSize=${size}`;
+  log.info("requesting auctions page", { endpoint, filter: filterRequest });
+
+  const auctRes = await fetchWithTimeout(
+    `${osUrl}${endpoint}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(filterRequest),
+    },
+    25_000,
+  );
+
+  if (!auctRes.ok) {
+    const errText = await auctRes.text();
+    throw new Error(`OS auction fetch failed (${auctRes.status}): ${errText.slice(0, 500)}`);
+  }
+
+  return {
+    ...parseAuctionListResponse(await auctRes.json() as OsAuctionListResponse | OsAuction[]),
+    endpoint,
+  };
+}
+
+function getAuctionGroupKey(row: MappedAuction): string {
+  return row.row.region || row.row.city || "Greece";
+}
+
+function selectDiverseMappedAuctions(rows: MappedAuction[], limit: number): MappedAuction[] {
+  const uniqueRows = new Map<string, MappedAuction>();
+  for (const row of rows) uniqueRows.set(row.tagKey, row);
+
+  const groups = new Map<string, MappedAuction[]>();
+  for (const row of uniqueRows.values()) {
+    const key = getAuctionGroupKey(row);
+    groups.set(key, [...(groups.get(key) ?? []), row]);
+  }
+
+  const orderedGroups = [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+  const selected: MappedAuction[] = [];
+  let cursor = 0;
+  while (
+    selected.length < limit &&
+    orderedGroups.some(([, group]) => cursor < group.length)
+  ) {
+    for (const [, group] of orderedGroups) {
+      const row = group[cursor];
+      if (row) selected.push(row);
+      if (selected.length >= limit) break;
+    }
+    cursor += 1;
+  }
+  return selected;
+}
+
+async function getActiveDailyPoolCount(
+  sb: SupabaseAdminClient,
+  poolDate: string,
+): Promise<number> {
+  const { count, error } = await table(sb, "listings")
+    .select("id", { count: "exact", head: true })
+    .eq("listing_type", "auction")
+    .eq("status", "active")
+    .eq("is_off_market", false)
+    .contains("tags", ["source:maiprop-os", getDailyPoolTag(poolDate)])
+    .or(`auction_date.gte.${poolDate},auction_date.is.null`);
+
+  if (error) throw error;
+  return count ?? 0;
+}
+
+async function removeDailyPoolTagFromRows(
+  sb: SupabaseAdminClient,
+  poolTag: string,
+  rows: PoolTagRow[],
+): Promise<number> {
+  let removed = 0;
+  const chunkSize = 25;
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    const chunk = rows.slice(i, i + chunkSize);
+    const results = await Promise.all(chunk.map((row) => {
+      const tags = (row.tags ?? []).filter((tag) => tag !== poolTag);
+      return table(sb, "listings").update({ tags }).eq("id", row.id);
+    }));
+    for (const result of results) {
+      if (result.error) throw result.error;
+      removed += 1;
+    }
+  }
+  return removed;
+}
+
+async function fetchActiveDailyPoolRows(
+  sb: SupabaseAdminClient,
+  poolDate: string,
+  selectColumns: string,
+): Promise<PoolTagRow[]> {
+  const poolTag = getDailyPoolTag(poolDate);
+  const pageSize = 500;
+  const rows: PoolTagRow[] = [];
+  let from = 0;
+
+  while (from < 5_000) {
+    const to = from + pageSize - 1;
+    const { data, error } = await table<PoolTagRow>(sb, "listings")
+      .select(selectColumns)
+      .eq("listing_type", "auction")
+      .eq("status", "active")
+      .eq("is_off_market", false)
+      .contains("tags", ["source:maiprop-os", poolTag])
+      .or(`auction_date.gte.${poolDate},auction_date.is.null`)
+      .order("updated_at", { ascending: false })
+      .range(from, to);
+
+    if (error) throw error;
+    const pageRows = (data ?? []) as PoolTagRow[];
+    rows.push(...pageRows);
+    if (pageRows.length < pageSize) break;
+    from += pageSize;
+  }
+
+  return rows;
+}
+
+async function trimDailyPoolToLatest(
+  sb: SupabaseAdminClient,
+  poolDate: string,
+  limit: number,
+): Promise<number> {
+  const poolTag = getDailyPoolTag(poolDate);
+  const rows = await fetchActiveDailyPoolRows(sb, poolDate, "id, tags");
+  const staleRows = rows.slice(limit);
+  return removeDailyPoolTagFromRows(sb, poolTag, staleRows);
+}
+
+async function pruneUnselectedDailyPoolRows(
+  sb: SupabaseAdminClient,
+  poolDate: string,
+  selectedAuctionTags: string[],
+): Promise<number> {
+  const poolTag = getDailyPoolTag(poolDate);
+  const selected = new Set(selectedAuctionTags);
+  const rows = await fetchActiveDailyPoolRows(sb, poolDate, "id, tags");
+  const staleRows = rows.filter((row) =>
+    !(row.tags ?? []).some((tag) => selected.has(tag))
+  );
+  return removeDailyPoolTagFromRows(sb, poolTag, staleRows);
 }
 
 // ── Main handler ────────────────────────────────────────────────────────────
@@ -352,47 +617,51 @@ Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS")
     return new Response(null, { headers: corsHeaders });
-
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
-  if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
   const sb = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
-  const authErr = await requireAgent(req, sb, corsHeaders);
-  if (authErr) return authErr;
+  const auth = await authorizeSyncRequest(req, sb, corsHeaders);
+  if (auth instanceof Response) return auth;
 
-  // ── Daily quota guard ────────────────────────────────────────────────────
-  // Count auctions already synced in this UTC calendar day. We use sync_log
-  // records_affected which holds imported + updated from each run.
-  const utcDayStart = new Date();
-  utcDayStart.setUTCHours(0, 0, 0, 0);
+  if (await limiter.isLimited(await getAuthorizedRateLimitKey(auth))) {
+    return tooManyRequestsResponse(corsHeaders);
+  }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: todayLogs } = await (sb.from as any)("sync_log")
-    .select("records_affected")
-    .eq("direction", "os_to_hub")
-    .eq("entity_type", "auction")
-    .eq("status", "success")
-    .gte("created_at", utcDayStart.toISOString()) as {
-      data: { records_affected: number }[] | null;
-    };
+  // ── Daily pool guard ─────────────────────────────────────────────────────
+  // Use the actual pool tag instead of sync_log so retries and interrupted
+  // pg_net calls cannot grow the visible daily catalogue beyond 600.
+  const poolDate = getUtcPoolDate();
+  const existingDailyPoolCount = await getActiveDailyPoolCount(sb, poolDate);
 
-  const todaySynced = (todayLogs ?? []).reduce(
-    (sum, r) => sum + (r.records_affected ?? 0),
-    0,
-  );
-
-  if (todaySynced >= DAILY_AUCTION_LIMIT) {
-    log.info("Daily auction limit reached — skipping", { todaySynced, limit: DAILY_AUCTION_LIMIT });
+  if (existingDailyPoolCount >= DAILY_AUCTION_LIMIT) {
+    const prunedPoolRows = existingDailyPoolCount > DAILY_AUCTION_LIMIT
+      ? await trimDailyPoolToLatest(sb, poolDate, DAILY_AUCTION_LIMIT)
+      : 0;
+    const finalDailyPoolCount = existingDailyPoolCount - prunedPoolRows;
+    log.info("Daily auction pool already populated — skipping", {
+      existingDailyPoolCount,
+      finalDailyPoolCount,
+      prunedPoolRows,
+      limit: DAILY_AUCTION_LIMIT,
+    });
     return new Response(
       JSON.stringify({
         ok: true,
         status: "skipped",
-        reason: `Daily limit of ${DAILY_AUCTION_LIMIT} auctions already reached`,
-        today_synced: todaySynced,
+        reason: `Daily pool of ${DAILY_AUCTION_LIMIT} auctions already populated`,
+        poolDate,
+        pool_count_before: existingDailyPoolCount,
+        pool_count_after: finalDailyPoolCount,
+        prunedPoolRows,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
@@ -442,95 +711,58 @@ Deno.serve(async (req) => {
       filterRequest.order = body.order ?? "ASC";
     }
 
-    // ── Pagination with daily rotation ──────────────────────────────────────
-    // When no explicit page is supplied, rotate through ROTATION_PAGE_COUNT
-    // pages using today's UTC day number as a deterministic seed. This means
-    // a different slice of OS auctions surfaces each calendar day, giving the
-    // auction page variety without fetching the same first page every run.
-    const dayNumber = Math.floor(Date.now() / (24 * 60 * 60 * 1000));
-    const defaultPage = dayNumber % ROTATION_PAGE_COUNT;
-    const page = Number(body.page ?? defaultPage);
+    // ── Canonical daily national pool ───────────────────────────────────────
+    // When no explicit page is supplied, sample multiple pages once and write
+    // a canonical national auction pool for the portal to serve locally.
+    const page = body.page == null ? 0 : Number(body.page);
 
     // Hard cap: never exceed what's left of today's daily quota, and never
     // exceed DAILY_AUCTION_LIMIT in a single call regardless of the caller.
-    const remaining = DAILY_AUCTION_LIMIT - todaySynced;
-    const size = Math.min(Number(body.size ?? body.pageSize ?? DAILY_AUCTION_LIMIT), remaining);
+    const size = Math.min(Number(body.size ?? body.pageSize ?? DAILY_AUCTION_LIMIT), DAILY_AUCTION_LIMIT);
+    const sampleAcrossGreece = body.sampleAcrossGreece !== false && body.page == null;
 
     log.info("authenticating against OS", { os_url: OS_URL });
     const token = await getOsToken(OS_URL, OS_EMAIL, OS_PASS);
 
-    const endpoint = `/api/v1/auctions/filter/details?page=${page}&pageSize=${size}`;
-    log.info("requesting auctions page", { endpoint, filter: filterRequest });
+    const firstPage = await fetchOsAuctionPage(OS_URL, token, page, size, filterRequest);
 
-    const auctRes = await fetchWithTimeout(
-      `${OS_URL}${endpoint}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(filterRequest),
-      },
-      25_000
+    const samplePages = sampleAcrossGreece
+      ? getAuctionSamplePageNumbers(firstPage.totalAvailable, size, NATIONAL_SYNC_PAGE_COUNT)
+      : [page];
+    const remainingPages = samplePages.filter((samplePage) => samplePage !== page);
+    const extraPageResults = await Promise.allSettled(
+      remainingPages.map((samplePage) => fetchOsAuctionPage(OS_URL, token, samplePage, size, filterRequest)),
     );
-
-    if (!auctRes.ok) {
-      const errText = await auctRes.text();
-      await logSync(
-        sb,
-        "error",
-        `OS auction fetch failed (${auctRes.status}): ${errText.slice(0, 500)}`
-      );
-      return new Response(
-        JSON.stringify({
-          error: `OS returned ${auctRes.status}`,
-          detail: errText.slice(0, 300),
-        }),
-        {
-          status: 502,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    type OsAuctionListResponse = {
-      data?: OsAuction[];
-      responseMetadata?: { pagination?: { totalElements?: number } };
-      pagination?: { totalElements?: number };
-    };
-    const auctJson = (await auctRes.json()) as OsAuctionListResponse | OsAuction[];
+    const extraAuctions = extraPageResults.flatMap((result) =>
+      result.status === "fulfilled" ? result.value.auctions : []
+    );
+    const auctions = [firstPage.auctions, ...extraAuctions].flat();
 
     // The v1 API wraps data in AnalyticaResponse → data is the list
-    const auctions: OsAuction[] = Array.isArray(auctJson)
-      ? auctJson
-      : Array.isArray(auctJson.data)
-      ? auctJson.data
-      : [];
-    const pagination = (Array.isArray(auctJson)
-      ? undefined
-      : auctJson.responseMetadata?.pagination ?? auctJson.pagination) ?? {};
-    const totalAvailable = pagination.totalElements ?? auctions.length;
+    const totalAvailable = firstPage.totalAvailable;
+    const endpoint = firstPage.endpoint;
 
     log.info("received auctions", {
       received: auctions.length,
       total_available: totalAvailable,
       page,
+      source_pages: samplePages,
       daily_limit: DAILY_AUCTION_LIMIT,
-      today_synced_before: todaySynced,
-      remaining,
+      pool_count_before: existingDailyPoolCount,
     });
 
     if (auctions.length === 0) {
       await logSync(sb, "success", null, { endpoint, total: 0, page }, 0);
       return new Response(
-        JSON.stringify({ ok: true, total: 0, imported: 0, updated: 0, page, daily_limit: DAILY_AUCTION_LIMIT, today_synced: todaySynced }),
+        JSON.stringify({ ok: true, total: 0, imported: 0, updated: 0, page, daily_limit: DAILY_AUCTION_LIMIT, pool_count_before: existingDailyPoolCount }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Map all auctions
-    const mapped = auctions.map(mapAuctionToListing);
+    const mapped = selectDiverseMappedAuctions(
+      auctions.map((auction) => mapAuctionToListing(auction, poolDate)),
+      size,
+    );
 
     // Fetch existing OS auction IDs in one query
     const osIds = mapped.map((m) => m.tagKey);
@@ -615,6 +847,13 @@ Deno.serve(async (req) => {
       }
     }
 
+    const prunedPoolRows = await pruneUnselectedDailyPoolRows(
+      sb,
+      poolDate,
+      mapped.map((row) => row.tagKey),
+    );
+    const finalDailyPoolCount = await getActiveDailyPoolCount(sb, poolDate);
+
     const summary = {
       endpoint,
       total: auctions.length,
@@ -623,11 +862,15 @@ Deno.serve(async (req) => {
       updated,
       errors,
       page,
+      sourcePages: samplePages,
       size,
+      poolDate,
+      auth: auth.kind,
       filter: filterRequest,
       daily_limit: DAILY_AUCTION_LIMIT,
-      today_synced_before: todaySynced,
-      today_synced_after: todaySynced + imported + updated,
+      pool_count_before: existingDailyPoolCount,
+      pool_count_after: finalDailyPoolCount,
+      prunedPoolRows,
     };
 
     await logSync(

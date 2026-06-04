@@ -5,10 +5,12 @@
 
 import { lazy, Suspense, useState, useEffect } from "react";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Shield, Flame, Users, Wifi, SlidersHorizontal, ArrowLeft, DoorOpen, FolderKanban, MailPlus, FileText, Star, BadgeCheck, Wallet, Inbox, Megaphone } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
-import { useMyListings } from "@/hooks/useListings";
+import { supabase } from "@/integrations/supabase/client";
+import type { ListingWithJoins } from "@/hooks/useListings";
 import { Button } from "@/components/ui/button";
 
 type AdminTab = "pipeline" | "investor-screening" | "subscribers" | "pricing" | "os-sync" | "open-houses" | "reports" | "invitations" | "featured" | "pro-verification" | "pof-review" | "contact-inbox" | "broadcasts";
@@ -39,11 +41,23 @@ function AdminTabFallback() {
 export default function AdminDashboard() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { data: myListings = [] } = useMyListings();
   const tabParam = searchParams.get("tab") as AdminTab | null;
   const [activeTab, setActiveTab] = useState<AdminTab>(
     tabParam && VALID_TABS.includes(tabParam) ? tabParam : "pipeline"
   );
+  const { data: adminOpenHouseListings = [] } = useQuery({
+    queryKey: ["admin-open-house-listings"],
+    enabled: activeTab === "open-houses",
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("listings")
+        .select("id,title,listing_type,status,open_house_date,views_count,cover_image_url,price")
+        .eq("listing_type", "open_house")
+        .order("open_house_date", { ascending: true, nullsFirst: false });
+      if (error) throw error;
+      return (data ?? []) as ListingWithJoins[];
+    },
+  });
 
   useEffect(() => {
     const t = searchParams.get("tab") as AdminTab | null;
@@ -120,9 +134,9 @@ export default function AdminDashboard() {
                 <h2 className="font-display text-lg font-semibold flex items-center gap-2">
                   <DoorOpen className="w-5 h-5 text-primary" /> Open House Management
                 </h2>
-                <p className="text-sm text-muted-foreground mt-1">All open house registrations, offers, and controls for your listings.</p>
+                <p className="text-sm text-muted-foreground mt-1">All open house registrations, offers, and controls across the platform.</p>
               </div>
-              <OpenHouseDashboardSection myListings={myListings} />
+              <OpenHouseDashboardSection myListings={adminOpenHouseListings} />
             </div>
           )}
           {activeTab === "subscribers" && <AdminSubscribers />}
