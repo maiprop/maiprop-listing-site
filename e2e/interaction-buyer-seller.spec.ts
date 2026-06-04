@@ -254,13 +254,7 @@ test.describe("Buyer — listings and property detail", () => {
       )
       .first();
 
-    const btnFound = await contactBtn
-      .isVisible({ timeout: 10_000 })
-      .catch(() => false);
-    if (!btnFound) {
-      test.skip();
-      return;
-    }
+    await expect(contactBtn).toBeVisible({ timeout: 30_000 });
 
     await contactBtn.click();
 
@@ -272,13 +266,13 @@ test.describe("Buyer — listings and property detail", () => {
       )
       .first();
 
-    const modalOpened = await dialogOrMessages
-      .isVisible({ timeout: 8_000 })
-      .catch(() => false);
-    const navigatedToMessages = page.url().includes("/messages");
+    const outcome = await Promise.race([
+      page.waitForURL(/\/messages/, { timeout: 15_000 }).then(() => "messages").catch(() => null),
+      dialogOrMessages.waitFor({ state: "visible", timeout: 15_000 }).then(() => "modal").catch(() => null),
+    ]);
 
     expect(
-      modalOpened || navigatedToMessages,
+      outcome !== null,
       "Expected a compose modal or /messages navigation after clicking Contact",
     ).toBe(true);
   });

@@ -346,6 +346,60 @@ describe("SellerRoute", () => {
     expect(screen.queryByText("LIST-FORM")).toBeNull();
   });
 
+  it("blocks stale Developer roles when participant_type is missing even if subscription is Pro", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1" },
+      profile: { user_id: "u-1", role: "developer", participant_type: null },
+      loading: false,
+      profileLoading: false,
+      needsOnboarding: false,
+    });
+    useSubscriptionMock.mockReturnValue({ isPro: true, loading: false });
+    renderGuarded(
+      <SellerRoute>
+        <div>LIST-FORM</div>
+      </SellerRoute>,
+    );
+    expect(screen.getByText(/Developer Pro Required/i)).toBeInTheDocument();
+    expect(screen.queryByText("LIST-FORM")).toBeNull();
+  });
+
+  it("blocks mismatched Developer profiles even if subscription is Pro", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1" },
+      profile: { user_id: "u-1", role: "developer", participant_type: "seller" },
+      loading: false,
+      profileLoading: false,
+      needsOnboarding: false,
+    });
+    useSubscriptionMock.mockReturnValue({ isPro: true, loading: false });
+    renderGuarded(
+      <SellerRoute>
+        <div>LIST-FORM</div>
+      </SellerRoute>,
+    );
+    expect(screen.getByText(/Developer Pro Required/i)).toBeInTheDocument();
+    expect(screen.queryByText("LIST-FORM")).toBeNull();
+  });
+
+  it("blocks stale developer participant_type on non-developer roles", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1" },
+      profile: { user_id: "u-1", role: "seller", participant_type: "developer" },
+      loading: false,
+      profileLoading: false,
+      needsOnboarding: false,
+    });
+    useSubscriptionMock.mockReturnValue({ isPro: true, loading: false });
+    renderGuarded(
+      <SellerRoute>
+        <div>LIST-FORM</div>
+      </SellerRoute>,
+    );
+    expect(screen.getByText(/Developer Pro Required/i)).toBeInTheDocument();
+    expect(screen.queryByText("LIST-FORM")).toBeNull();
+  });
+
   it("admits Developer accounts with an active Pro subscription", () => {
     useAuthMock.mockReturnValue({
       user: { id: "u-1" },

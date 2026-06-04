@@ -67,6 +67,20 @@ async function signInContext(
   return { ctx, page };
 }
 
+async function waitForAppContent(page: Page, timeout = 15_000): Promise<void> {
+  await page.waitForLoadState("load", { timeout });
+  await expect(page.locator("body")).toContainText(/\S/, { timeout: 10_000 });
+}
+
+async function waitForProfessionalProfile(page: Page): Promise<void> {
+  await waitForAppContent(page);
+  await page.waitForURL(/\/professionals\/[0-9a-f-]{36}/i, { timeout: 30_000 });
+  await expect(page.locator("body")).toContainText(
+    /Back to Directory|Professional Details|Book Consultation|Contact/i,
+    { timeout: 30_000 },
+  );
+}
+
 // ─── 1. Professional own-profile access ──────────────────────────────────────
 
 test.describe("Professional own-profile (/professionals/me)", () => {
@@ -74,7 +88,7 @@ test.describe("Professional own-profile (/professionals/me)", () => {
   test("architect.pro signs in and can access /professionals/me", async ({ page }) => {
     await signIn(page, ACCOUNTS.architect);
     await page.goto("/professionals/me");
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await waitForProfessionalProfile(page);
 
     // Page must render some recognisable UI — not a blank white screen.
     const content = page
@@ -86,7 +100,7 @@ test.describe("Professional own-profile (/professionals/me)", () => {
   test("architect.pro profile page shows edit form or profile UI", async ({ page }) => {
     await signIn(page, ACCOUNTS.architect);
     await page.goto("/professionals/me");
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await waitForProfessionalProfile(page);
 
     // Prefer edit-form presence; fall back to display-mode profile elements.
     const hasForm = (await page.locator("input, textarea, select").count()) > 0;
@@ -104,7 +118,7 @@ test.describe("Professional own-profile (/professionals/me)", () => {
 
     await signIn(page, ACCOUNTS.lawyer);
     await page.goto("/professionals/me");
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await waitForProfessionalProfile(page);
 
     // Body must contain meaningful content and no uncaught JS errors.
     const bodyText = await page.locator("body").textContent();
@@ -138,8 +152,8 @@ test.describe("Professional own-profile (/professionals/me)", () => {
       ]);
 
       await Promise.all([
-        arch.page.waitForLoadState("networkidle", { timeout: 15_000 }),
-        lawyer.page.waitForLoadState("networkidle", { timeout: 15_000 }),
+        waitForProfessionalProfile(arch.page),
+        waitForProfessionalProfile(lawyer.page),
       ]);
 
       // Each profile page must render some content.
@@ -168,7 +182,7 @@ test.describe("Buyer — professionals directory (/professionals)", () => {
   test("seeded buyer can browse /professionals directory", async ({ page }) => {
     await signIn(page, ACCOUNTS.buyer);
     await page.goto("/professionals");
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await waitForAppContent(page);
 
     // Heading must be visible to confirm the page mounted correctly.
     await expect(
@@ -190,7 +204,7 @@ test.describe("Buyer — professionals directory (/professionals)", () => {
   test("buyer sees search input on /professionals page", async ({ page }) => {
     await signIn(page, ACCOUNTS.buyer);
     await page.goto("/professionals");
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await waitForAppContent(page);
 
     // Use toBeAttached (not toBeVisible) — input may be in a collapsed header.
     const search = page
@@ -204,7 +218,7 @@ test.describe("Buyer — professionals directory (/professionals)", () => {
   test("buyer can click into a professional profile from directory", async ({ page }) => {
     await signIn(page, ACCOUNTS.buyer);
     await page.goto("/professionals");
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await waitForAppContent(page);
 
     // Only attempt click-through if at least one card is rendered.
     const firstCard = page
@@ -219,7 +233,7 @@ test.describe("Buyer — professionals directory (/professionals)", () => {
     }
 
     await firstCard.click();
-    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await waitForAppContent(page);
 
     // Navbar / header must still be visible — rules out a white-screen crash.
     await expect(page.locator("nav, header").first()).toBeVisible({ timeout: 10_000 });
@@ -256,8 +270,8 @@ test.describe("Buyer — professionals directory (/professionals)", () => {
         ]);
 
         await Promise.all([
-          buyer.page.waitForLoadState("networkidle", { timeout: 15_000 }),
-          arch.page.waitForLoadState("networkidle", { timeout: 15_000 }),
+          waitForAppContent(buyer.page),
+          waitForAppContent(arch.page),
         ]);
 
         // Both pages must render a heading or recognisable content.
@@ -289,7 +303,7 @@ test.describe("Professional detail page — consultation / contact button", () =
     async ({ page }) => {
       await signIn(page, ACCOUNTS.buyer);
       await page.goto("/professionals");
-      await page.waitForLoadState("networkidle", { timeout: 15_000 });
+      await waitForAppContent(page);
 
       const firstCard = page
         .locator("article, [class*='card'], [class*='professional-card']")
@@ -303,7 +317,7 @@ test.describe("Professional detail page — consultation / contact button", () =
       }
 
       await firstCard.click();
-      await page.waitForLoadState("networkidle", { timeout: 15_000 });
+      await waitForAppContent(page);
 
       // Check for any consultation / contact action button using toBeAttached.
       const actionButton = page
@@ -342,7 +356,7 @@ test.describe("Video room — authenticated buyer", () => {
 
       await signIn(page, ACCOUNTS.buyer);
       await page.goto("/video-room/00000000-0000-0000-0000-000000000000");
-      await page.waitForLoadState("networkidle", { timeout: 15_000 });
+      await waitForAppContent(page);
 
       // Navbar / header must still be rendered — proves the React tree didn't crash.
       await expect(page.locator("nav, header").first()).toBeVisible({ timeout: 10_000 });

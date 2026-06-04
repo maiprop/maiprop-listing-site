@@ -48,6 +48,9 @@ async function signIn(page: Page, email: string, password: string): Promise<void
   await page.waitForURL(/\/dashboard|\/onboarding/, { timeout: 25_000 });
 }
 
+const firstOpenHouseDetailLink = (page: Page) =>
+  page.locator('a[href^="/open-house/"]').first();
+
 // ---------------------------------------------------------------------------
 // 1. Public open house browsing (no auth required)
 // ---------------------------------------------------------------------------
@@ -86,8 +89,8 @@ test.describe("Public — open house browsing", () => {
     await page.goto("/open-houses");
     await page.waitForLoadState("load", { timeout: 15_000 });
 
-    const cards = page.locator("article, [class*='card']");
-    const cardCount = await cards.count();
+    const firstLink = firstOpenHouseDetailLink(page);
+    const cardCount = await firstLink.count();
 
     if (cardCount === 0) {
       // No seeded data — nothing to click
@@ -95,7 +98,7 @@ test.describe("Public — open house browsing", () => {
       return;
     }
 
-    await cards.first().click();
+    await firstLink.click();
     await page.waitForLoadState("load", { timeout: 15_000 });
 
     // Navbar must still be visible (app did not crash)
@@ -110,15 +113,15 @@ test.describe("Public — open house browsing", () => {
     await page.goto("/open-houses");
     await page.waitForLoadState("load", { timeout: 15_000 });
 
-    const cards = page.locator("article, [class*='card']");
-    const cardCount = await cards.count();
+    const firstLink = firstOpenHouseDetailLink(page);
+    const cardCount = await firstLink.count();
 
     if (cardCount === 0) {
       test.skip();
       return;
     }
 
-    await cards.first().click();
+    await firstLink.click();
     await page.waitForLoadState("load", { timeout: 15_000 });
 
     // Accept any CTA wording a detail page might use
@@ -185,15 +188,15 @@ test.describe("Buyer — authenticated open house browsing", () => {
     await page.goto("/open-houses");
     await page.waitForLoadState("load", { timeout: 15_000 });
 
-    const cards = page.locator("article, [class*='card']");
-    const cardCount = await cards.count();
+    const firstLink = firstOpenHouseDetailLink(page);
+    const cardCount = await firstLink.count();
 
     if (cardCount === 0) {
       test.skip();
       return;
     }
 
-    await cards.first().click();
+    await firstLink.click();
     await page.waitForLoadState("load", { timeout: 15_000 });
 
     // Detail page must render without crashing
@@ -213,15 +216,15 @@ test.describe("Buyer — authenticated open house browsing", () => {
     await page.goto("/open-houses");
     await page.waitForLoadState("load", { timeout: 15_000 });
 
-    const cards = page.locator("article, [class*='card']");
-    const cardCount = await cards.count();
+    const firstLink = firstOpenHouseDetailLink(page);
+    const cardCount = await firstLink.count();
 
     if (cardCount === 0) {
       test.skip();
       return;
     }
 
-    await cards.first().click();
+    await firstLink.click();
     await page.waitForLoadState("load", { timeout: 15_000 });
 
     const rsvpButton = page

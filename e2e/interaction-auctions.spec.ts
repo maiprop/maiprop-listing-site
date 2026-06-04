@@ -82,6 +82,29 @@ const expectPageShell = async (page: Page): Promise<void> => {
   ).toBeVisible({ timeout: 15_000 });
 };
 
+const firstAuctionDetailLink = (page: Page) =>
+  page.locator('main a[href^="/auction/"]').first();
+
+const requiresAuctionInventory = (page: Page): boolean => {
+  try {
+    return new URL(page.url()).hostname === "portal.maiprop.co";
+  } catch {
+    return false;
+  }
+};
+
+const clickFirstAuctionDetailLink = async (page: Page): Promise<boolean> => {
+  const link = firstAuctionDetailLink(page);
+  const attached = await link
+    .waitFor({ state: "attached", timeout: 30_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!attached) return false;
+  await link.scrollIntoViewIfNeeded();
+  await link.click();
+  return true;
+};
+
 // ─── PUBLIC — auction browsing ────────────────────────────────────────────────
 
 test.describe("Public auction browsing", () => {
@@ -135,20 +158,15 @@ test.describe("Public auction browsing", () => {
     await page.goto("/auctions");
     await page.waitForLoadState("load", { timeout: 15_000 });
 
-    const card = page
-      .locator("article, [class*='card'], [data-testid*='auction']")
-      .first();
-
-    const cardExists = await card
-      .isVisible({ timeout: 8_000 })
-      .catch(() => false);
+    const cardExists = await clickFirstAuctionDetailLink(page);
     if (!cardExists) {
-      // No seeded auction data — nothing to click
+      if (requiresAuctionInventory(page)) {
+        throw new Error("Expected at least one live auction detail link on /auctions");
+      }
       test.skip();
       return;
     }
 
-    await card.click();
     // After navigation the navbar must still be present
     await expect(page.locator("nav, header").first()).toBeVisible({
       timeout: 10_000,
@@ -164,19 +182,15 @@ test.describe("Public auction browsing", () => {
     await page.goto("/auctions");
     await page.waitForLoadState("load", { timeout: 15_000 });
 
-    const card = page
-      .locator("article, [class*='card'], [data-testid*='auction']")
-      .first();
-
-    const cardExists = await card
-      .isVisible({ timeout: 8_000 })
-      .catch(() => false);
+    const cardExists = await clickFirstAuctionDetailLink(page);
     if (!cardExists) {
+      if (requiresAuctionInventory(page)) {
+        throw new Error("Expected at least one live auction detail link on /auctions");
+      }
       test.skip();
       return;
     }
 
-    await card.click();
     await page.waitForLoadState("load", { timeout: 15_000 });
 
     // Accept any of: price/bid info, a property heading, or a "No bids" message
@@ -234,20 +248,16 @@ test.describe("Authenticated auction interaction", () => {
       timeout: 10_000,
     });
 
-    const card = page
-      .locator("article, [class*='card'], [data-testid*='auction']")
-      .first();
-
-    const cardExists = await card
-      .isVisible({ timeout: 8_000 })
-      .catch(() => false);
-    if (cardExists) {
-      await card.click();
-      await page.waitForLoadState("load", { timeout: 15_000 });
-      // Detail page must render without crashing
-      const bodyText = await page.locator("body").textContent();
-      expect((bodyText ?? "").trim().length).toBeGreaterThan(10);
+    const clicked = await clickFirstAuctionDetailLink(page);
+    if (!clicked && !requiresAuctionInventory(page)) {
+      test.skip();
+      return;
     }
+    expect(clicked, "expected investor to see at least one live auction detail link").toBe(true);
+    await page.waitForLoadState("load", { timeout: 15_000 });
+    // Detail page must render without crashing
+    const bodyText = await page.locator("body").textContent();
+    expect((bodyText ?? "").trim().length).toBeGreaterThan(10);
 
     expect(errors).toHaveLength(0);
   });
@@ -295,18 +305,11 @@ test.describe("Authenticated auction interaction", () => {
 
     const alertBtn = page
       .locator(
-        'button:has-text("Alert"), button:has-text("Set Alert"), button[aria-label*="alert" i], button svg',
+        'main button:has-text("Alert"), main button:has-text("Set Alert"), main button[aria-label*="alert" i]',
       )
       .first();
 
-    const btnAttached = await alertBtn
-      .isVisible({ timeout: 8_000 })
-      .catch(() => false);
-    if (!btnAttached) {
-      // Button not present in current build — skip gracefully
-      test.skip();
-      return;
-    }
+    await expect(alertBtn).toBeVisible({ timeout: 30_000 });
 
     await alertBtn.click();
     // Brief settle for any modal/tooltip animation
