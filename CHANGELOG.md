@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.9.11](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.10...v1.9.11) (2026-06-04)
+
+
+### Bug Fixes
+
+* close pending hardening gates ([1ac0ec8](https://github.com/maiprop/maiprop-listing-site/commit/1ac0ec86f3abc4274a892f488c3f1fc45c9db7e8))
+* delete production fixtures in dependency order ([08ceaae](https://github.com/maiprop/maiprop-listing-site/commit/08ceaae85fdc70ec70d864a1cc926fa50201973d))
+* harden core business flows and auction sync ([5b077a5](https://github.com/maiprop/maiprop-listing-site/commit/5b077a5bf2905c0f622083c2eac83cad85bd7807))
+* harden dashboard live flows ([#267](https://github.com/maiprop/maiprop-listing-site/issues/267)) ([5bee8f0](https://github.com/maiprop/maiprop-listing-site/commit/5bee8f03a7a4fb164d25f05e01e74cecc5175767))
+* harden live auction and dashboard smoke checks ([#277](https://github.com/maiprop/maiprop-listing-site/issues/277)) ([dee770a](https://github.com/maiprop/maiprop-listing-site/commit/dee770a0ce516d9f01f07bb842a606e1023cbf8e))
+* harden live flow coverage and developer listing gate ([b40d048](https://github.com/maiprop/maiprop-listing-site/commit/b40d048f359932aff985e1c5c2240b2608f8f5f6))
+* harden preview deploy parity ([e5703b1](https://github.com/maiprop/maiprop-listing-site/commit/e5703b1910fd448b5fce5d81dcd146849e69e99a))
+* harden release hygiene gates ([d6d3a46](https://github.com/maiprop/maiprop-listing-site/commit/d6d3a4696b78ebf93e185ef982e7567765bca391))
+* harden Supabase index stats capture ([2f20931](https://github.com/maiprop/maiprop-listing-site/commit/2f209314d930d9df73f3cf45b8fe433c9c0c21cc))
+* hide auction internals on cards ([#278](https://github.com/maiprop/maiprop-listing-site/issues/278)) ([697aa0e](https://github.com/maiprop/maiprop-listing-site/commit/697aa0e304e7623591b92c5ddfe881d749b3d42b))
+* keep advisor gate running without DB stats secrets ([def7a32](https://github.com/maiprop/maiprop-listing-site/commit/def7a3299d30aa13e149d84f56dd9f4a9ed4ab9c))
+* reconcile live migration smoke gates ([d657829](https://github.com/maiprop/maiprop-listing-site/commit/d65782985a6608532005cd7e691e2f3f99baa8c7))
+* repair admin smoke role seed guard ([#276](https://github.com/maiprop/maiprop-listing-site/issues/276)) ([24422b9](https://github.com/maiprop/maiprop-listing-site/commit/24422b977dbed4b18489a3da59536bf422c908e6))
+* require pro before investor access application ([#279](https://github.com/maiprop/maiprop-listing-site/issues/279)) ([7eb8b77](https://github.com/maiprop/maiprop-listing-site/commit/7eb8b77cbec23917a74508b887527010db3c51d4))
+* stream coverage output in CI ([067ee76](https://github.com/maiprop/maiprop-listing-site/commit/067ee76dee2bbe23c440db487e1e0bc9fd0726c1))
+
 ## [1.9.10](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.9...v1.9.10) (2026-06-02)
 
 
