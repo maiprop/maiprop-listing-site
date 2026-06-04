@@ -66,6 +66,26 @@ if (APPLY) {
 
 const supabase = createClient(url, serviceKey, { auth: { persistSession: false } });
 
+async function deleteIn(table, column, values) {
+  if (values.length === 0) return 0;
+  const { error, count } = await supabase
+    .from(table)
+    .delete({ count: "exact" })
+    .in(column, values);
+  if (error) throw new Error(`${table}.${column} cleanup failed: ${error.message}`);
+  return count ?? 0;
+}
+
+async function fetchConversationIds(listingIds) {
+  if (listingIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from("conversations")
+    .select("id")
+    .in("listing_id", listingIds);
+  if (error) throw new Error(`conversations cleanup lookup failed: ${error.message}`);
+  return (data ?? []).map((row) => row.id).filter(Boolean);
+}
+
 async function fetchFixtureListings() {
   const textResult = await supabase
     .from("listings")
@@ -126,12 +146,32 @@ async function run() {
   if (!APPLY || rows.length === 0) return;
 
   const ids = rows.map((row) => row.id);
-  const { error: imageDeleteError } = await supabase.from("listing_images").delete().in("listing_id", ids);
-  if (imageDeleteError) throw imageDeleteError;
+  const conversationIds = await fetchConversationIds(ids);
 
-  const { error: listingDeleteError } = await supabase.from("listings").delete().in("id", ids);
-  if (listingDeleteError) throw listingDeleteError;
+  const deleted = {};
+  // Delete child rows explicitly before deleting listings. Several tables use
+  // ON DELETE SET NULL for listing_id; leaving those rows in place can move
+  // synthetic CRM leads into the "general" context and violate canonical lead
+  // uniqueness constraints.
+  deleted.messages = await deleteIn("messages", "conversation_id", conversationIds);
+  deleted.conversations = await deleteIn("conversations", "id", conversationIds);
+  deleted.contacts = await deleteIn("contacts", "listing_id", ids);
+  deleted.leads = await deleteIn("leads", "listing_id", ids);
+  deleted.favorites = await deleteIn("favorites", "listing_id", ids);
+  deleted.viewings = await deleteIn("viewings", "listing_id", ids);
+  deleted.open_house_offers = await deleteIn("open_house_offers", "listing_id", ids);
+  deleted.open_house_registrations = await deleteIn("open_house_registrations", "listing_id", ids);
+  deleted.open_house_settings = await deleteIn("open_house_settings", "listing_id", ids);
+  deleted.listing_view_events = await deleteIn("listing_view_events", "listing_id", ids);
+  deleted.project_units = await deleteIn("project_units", "listing_id", ids);
+  deleted.property_report_cache = await deleteIn("property_report_cache", "listing_id", ids);
+  deleted.usage_ai_valuations = await deleteIn("usage_ai_valuations", "listing_id", ids);
+  deleted.usage_priority_ads = await deleteIn("usage_priority_ads", "listing_id", ids);
+  deleted.usage_property_reports = await deleteIn("usage_property_reports", "listing_id", ids);
+  deleted.listing_images = await deleteIn("listing_images", "listing_id", ids);
+  deleted.listings = await deleteIn("listings", "id", ids);
 
+  console.log(JSON.stringify({ deleted }, null, 2));
   console.log(`Deleted ${ids.length} public fixture listing(s).`);
 }
 
