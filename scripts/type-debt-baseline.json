@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-05-26T15:53:50.569Z",
-  "total": 121,
+  "generated_at": "2026-06-03T20:49:00.315Z",
+  "total": 110,
   "by_pattern": {
-    "no-explicit-any-disable": 43,
-    "explicit-any": 78,
+    "no-explicit-any-disable": 39,
+    "explicit-any": 71,
     "ts-ignore": 0
   },
   "files": [
@@ -46,20 +46,6 @@
         {
           "name": "explicit-any",
           "count": 4
-        }
-      ]
-    },
-    {
-      "file": "supabase/functions/create-checkout/index.ts",
-      "total": 7,
-      "findings": [
-        {
-          "name": "no-explicit-any-disable",
-          "count": 2
-        },
-        {
-          "name": "explicit-any",
-          "count": 5
         }
       ]
     },
@@ -163,20 +149,6 @@
     },
     {
       "file": "supabase/functions/_shared/proGate.ts",
-      "total": 4,
-      "findings": [
-        {
-          "name": "no-explicit-any-disable",
-          "count": 2
-        },
-        {
-          "name": "explicit-any",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "file": "supabase/functions/poll-os-auctions/index.ts",
       "total": 4,
       "findings": [
         {

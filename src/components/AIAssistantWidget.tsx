@@ -5,6 +5,9 @@ import ReactMarkdown from "react-markdown";
 import { SUPABASE_URL } from "@/lib/config";
 import { supabase } from "@/integrations/supabase/client";
 import { formatPrice } from "@/lib/format";
+import { useAuth } from "@/contexts/AuthContext";
+import { AIQuotaStatus } from "@/components/AIQuotaStatus";
+import { isAiQuotaReached, useAiQuota } from "@/hooks/useAiQuota";
 
 export interface PropertyContext {
   title?: string;
@@ -80,6 +83,10 @@ const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(fun
   const inputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const { user } = useAuth();
+  const { quota, quotaLoading, refreshQuota } = useAiQuota("property-chat", user, {
+    enabled: !!user,
+  });
 
   const suggestions = propertyContext
     ? SUGGESTIONS_PROPERTY(propertyContext)
@@ -98,6 +105,18 @@ const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(fun
   const sendMessage = useCallback(async (text?: string) => {
     const query = (text ?? input).trim();
     if (!query || isStreaming) return;
+
+    if (isAiQuotaReached(quota)) {
+      setMessages(prev => [
+        ...prev,
+        {
+          id: `q-${Date.now()}`,
+          role: "assistant",
+          content: "You've reached this month's AI assistant allowance. Upgrade to continue.",
+        },
+      ]);
+      return;
+    }
 
     const userMsg: Message = { id: `u-${Date.now()}`, role: "user", content: query };
     const assistantId = `a-${Date.now()}`;
@@ -192,6 +211,7 @@ const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(fun
       }
 
       setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, streaming: false } : m));
+      void refreshQuota();
     } catch (e: unknown) {
       if (e instanceof Error && e.name === "AbortError") return;
       const rawMsg = e instanceof Error ? e.message : "Something went wrong.";
@@ -211,7 +231,7 @@ const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(fun
     } finally {
       setIsStreaming(false);
     }
-  }, [input, messages, isStreaming, propertyContext]);
+  }, [input, messages, isStreaming, propertyContext, quota, refreshQuota]);
 
   const handleKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
@@ -327,6 +347,17 @@ const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(fun
 
       {!minimized && (
         <>
+          {user && (
+            <div className="border-b border-border px-3 py-2 bg-card">
+              <AIQuotaStatus
+                featureName="AI assistant"
+                quota={quota}
+                quotaLoading={quotaLoading}
+                variant="compact"
+              />
+            </div>
+          )}
+
           {/* Messages area */}
           <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
             {messages.length === 0 ? (
@@ -347,7 +378,7 @@ const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(fun
                     <button
                       key={s}
                       onClick={() => sendMessage(s)}
-                      disabled={isStreaming}
+                      disabled={isStreaming || isAiQuotaReached(quota)}
                       className="px-2.5 py-1.5 rounded-xl bg-secondary border border-border text-[11px] text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors disabled:opacity-50 text-left"
                     >
                       {s}
@@ -402,12 +433,12 @@ const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(fun
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKey}
                 placeholder={propertyContext ? "Ask about this property..." : "Ask a real estate question..."}
-                disabled={isStreaming}
+                disabled={isStreaming || isAiQuotaReached(quota)}
                 className="flex-1 bg-secondary border border-border rounded-xl px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors disabled:opacity-60 min-w-0"
               />
               <button
                 onClick={() => sendMessage()}
-                disabled={!input.trim() || isStreaming}
+                disabled={!input.trim() || isStreaming || isAiQuotaReached(quota)}
                 className="w-9 h-9 rounded-xl bg-gradient-primary text-primary-foreground flex items-center justify-center disabled:opacity-50 transition-opacity hover:opacity-90 shrink-0"
               >
                 {isStreaming

@@ -196,4 +196,44 @@ describe("unused index telemetry review", () => {
       "candidate_needs_pg_stat_statements_and_release_review",
     ]);
   });
+
+  it("extracts the index name from Supabase unused-index cache keys when metadata only names the table", () => {
+    const review = buildUnusedIndexReview(
+      {
+        results: [
+          {
+            category: "performance",
+            lints: [
+              {
+                name: "unused_index",
+                title: "Unused Index",
+                level: "INFO",
+                cache_key: "unused_index_public_listings_idx_listings_property_type",
+                metadata: { name: "listings", type: "table", schema: "public" },
+              },
+            ],
+          },
+        ],
+      },
+      [
+        {
+          indexrelname: "idx_listings_property_type",
+          relname: "listings",
+          idx_scan: 0,
+        },
+      ],
+    );
+
+    expect(review.totals).toMatchObject({
+      mapped_to_stats: 1,
+      zero_scan_candidates: 1,
+      needs_stats_snapshot: 0,
+      needs_manual_mapping: 0,
+    });
+    expect(review.items[0]).toMatchObject({
+      table_name: "listings",
+      index_name: "idx_listings_property_type",
+      review_status: "candidate_needs_pg_stat_statements_and_release_review",
+    });
+  });
 });

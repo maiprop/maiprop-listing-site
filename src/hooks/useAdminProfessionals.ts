@@ -32,38 +32,56 @@ type ProAdminRow = {
   verified_at: string | null;
 };
 
+function mapProfessionalAdminRow(raw: ProAdminRow): ProCard {
+  return {
+    id: raw.id,
+    display_name: raw.display_name ?? "Unknown",
+    category: raw.category ?? "",
+    title: raw.title ?? "",
+    avatar_url: raw.avatar_url ?? null,
+    created_at: raw.created_at ?? "",
+    license_number: raw.license_number ?? null,
+    specialties: raw.specialties ?? [],
+    status: raw.rejection_reason
+      ? "rejected"
+      : raw.verified
+        ? "verified"
+        : "pending",
+    verified_at: raw.verified_at ?? undefined,
+    rejection_reason: raw.rejection_reason ?? undefined,
+  };
+}
+
 export function useProfessionalsAdmin() {
   return useQuery<ProCard[]>({
     queryKey: KEY,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const selectColumns =
+        "id, display_name, category, title, avatar_url, created_at, license_number, specialties, verified, rejection_reason, verified_at";
+
+      const { data: pendingData, error: pendingError } = await supabase
         .from("professionals")
-        .select(
-          "id, display_name, category, title, avatar_url, created_at, license_number, specialties, verified, rejection_reason, verified_at",
-        )
+        .select(selectColumns)
+        .is("rejection_reason", null)
+        .or("verified.is.false,verified.is.null")
+        .order("created_at", { ascending: false })
+        .limit(250);
+      if (pendingError) throw pendingError;
+
+      const { data: resolvedData, error: resolvedError } = await supabase
+        .from("professionals")
+        .select(selectColumns)
+        .or("verified.eq.true,rejection_reason.not.is.null")
         .order("created_at", { ascending: false })
         .limit(100);
-      if (error) throw error;
-      const rows = (data ?? []) as unknown as ProAdminRow[];
-      return rows.map(
-        (raw): ProCard => ({
-          id: raw.id,
-          display_name: raw.display_name ?? "Unknown",
-          category: raw.category ?? "",
-          title: raw.title ?? "",
-          avatar_url: raw.avatar_url ?? null,
-          created_at: raw.created_at ?? "",
-          license_number: raw.license_number ?? null,
-          specialties: raw.specialties ?? [],
-          status: raw.rejection_reason
-            ? "rejected"
-            : raw.verified
-              ? "verified"
-              : "pending",
-          verified_at: raw.verified_at ?? undefined,
-          rejection_reason: raw.rejection_reason ?? undefined,
-        }),
-      );
+      if (resolvedError) throw resolvedError;
+
+      const byId = new Map<string, ProAdminRow>();
+      for (const row of [...(pendingData ?? []), ...(resolvedData ?? [])] as unknown as ProAdminRow[]) {
+        byId.set(row.id, row);
+      }
+
+      return [...byId.values()].map(mapProfessionalAdminRow);
     },
   });
 }

@@ -44,7 +44,8 @@ E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS=<staging-ref> \
 ### 4. GitHub
 
 - Settings -> Environments -> create `staging` env. No reviewers required.
-- Add required `staging` secrets: `STAGING_SUPABASE_URL`, `STAGING_SUPABASE_PUBLISHABLE_KEY`, `STAGING_SUPABASE_PROJECT_ID`, `STAGING_APP_URL`, `SUPABASE_ACCESS_TOKEN`, `SUPABASE_SERVICE_ROLE_KEY`, and seeded E2E account credentials.
+- Add required `staging` secrets: `STAGING_SUPABASE_URL`, `STAGING_SUPABASE_PUBLISHABLE_KEY`, `STAGING_SUPABASE_PROJECT_ID`, `SUPABASE_ACCESS_TOKEN`, `SUPABASE_SERVICE_ROLE_KEY`, and seeded E2E account credentials.
+- Optional: add `STAGING_APP_URL` when previews must use a fixed staging origin. If it is absent, CI derives the Cloudflare Pages branch preview URL and uses it as `VITE_APP_URL`.
 - Optional: add `STAGING_SITE_LOCK_PASSWORD` only when PR preview deployments should be passcode-protected.
 - Use the staging `service_role` JWT API key for `SUPABASE_SERVICE_ROLE_KEY`; the newer `sb_secret_*` key is not accepted by the PostgREST fixture paths used by live E2E.
 - Required when migrations change: add `SUPABASE_STAGING_DB_URL`, the percent-encoded Postgres connection string used by CI to run `supabase db push --db-url` before deploying staging edge functions. Without it, CI fails the staging migration path instead of deploying functions against a stale schema.
@@ -71,4 +72,4 @@ E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS=<staging-ref> \
 ## Troubleshooting
 
 - **Edge functions not updated on branch deploy** - edge functions live on Supabase, not Cloudflare Pages. Re-run `supabase functions deploy --project-ref <staging-ref>` manually or through the production edge-function deployment workflow adapted for staging.
-- **Auth emails going to production URL** - set the GitHub `STAGING_APP_URL` secret to the preview/staging origin and configure Supabase Auth -> URL Configuration to include that origin as an allowed redirect URL. The preview workflow now fails before deployment when `STAGING_APP_URL` is missing.
+- **Auth emails going to production URL** - set the GitHub `STAGING_APP_URL` secret to the preview/staging origin when you need a fixed redirect host, and configure Supabase Auth -> URL Configuration to include that origin. When the secret is absent, the preview workflow derives the Cloudflare Pages branch preview URL and uses it as `VITE_APP_URL`.

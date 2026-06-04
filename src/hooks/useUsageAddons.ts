@@ -51,11 +51,8 @@ export function useRecordValuation() {
   return useMutation({
     mutationFn: async (listingId?: string) => {
       if (!user) throw new Error("Not authenticated");
-      const { error } = await supabase.from("usage_ai_valuations").insert({
-        user_id: user.id,
-        listing_id: listingId ?? null,
-      });
-      if (error) throw error;
+      void listingId;
+      throw new Error("AI valuation usage is recorded server-side by the valuation function");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["usage_ai_valuations"] });
@@ -91,11 +88,8 @@ export function useRecordReport() {
   return useMutation({
     mutationFn: async (listingId?: string) => {
       if (!user) throw new Error("Not authenticated");
-      const { error } = await supabase.from("usage_property_reports").insert({
-        user_id: user.id,
-        listing_id: listingId ?? null,
-      });
-      if (error) throw error;
+      void listingId;
+      throw new Error("Property report usage is recorded server-side by the report function");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["usage_property_reports"] });
@@ -133,11 +127,8 @@ export function useRecordPriorityAd() {
     mutationFn: async (listingId: string) => {
       if (!user) throw new Error("Not authenticated");
       if (!isPro) throw new Error("Priority Ads require Pro plan");
-      const { error } = await supabase.from("usage_priority_ads").insert({
-        user_id: user.id,
-        listing_id: listingId,
-      });
-      if (error) throw error;
+      void listingId;
+      throw new Error("Priority ad usage is recorded server-side by the checkout or boost workflow");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["usage_priority_ads"] });

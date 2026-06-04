@@ -71,6 +71,20 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           RELEASE_SAFETY_SUPABASE_PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
 
+      - name: Capture live Supabase index stats
+        if: >
+          (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'pull_request' &&
+            github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name &&
+            github.event.pull_request.draft == false &&
+            github.event.pull_request.user.login != 'dependabot[bot]' &&
+            !startsWith(github.event.pull_request.head.ref, 'release-please--') &&
+            steps.pr_supabase_changes.outputs.has_supabase_changes != 'true')
+        run: npm run capture:supabase-index-stats -- --out supabase-index-stats.json
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+
       - name: Check live Supabase advisors
         if: >
           (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
@@ -80,7 +94,7 @@ jobs:
             github.event.pull_request.user.login != 'dependabot[bot]' &&
             !startsWith(github.event.pull_request.head.ref, 'release-please--') &&
             steps.pr_supabase_changes.outputs.has_supabase_changes != 'true')
-        run: npm run check:supabase-advisor -- --fail-on-error --fail-on-unknown --out supabase-advisor-summary.json
+        run: npm run check:supabase-advisor -- --fail-on-error --fail-on-unknown --index-stats supabase-index-stats.json --out supabase-advisor-summary.json
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
@@ -120,6 +134,7 @@ jobs:
           name: release-safety-inventory
           path: |
             release-safety-inventory*.json
+            supabase-index-stats.json
             supabase-advisor-summary.json
           if-no-files-found: ignore
           retention-days: 3

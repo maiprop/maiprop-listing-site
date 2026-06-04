@@ -57,6 +57,14 @@ export function AIQuotaStatus({
         <span className="hidden sm:inline">
           Free {FREE_AI_MONTHLY_LIMIT}/mo | Pro {PRO_AI_MONTHLY_LIMIT}/mo
         </span>
+        {(quotaReached || planExcluded) && (
+          <Button asChild size="sm" variant="outline" className="h-6 px-2 text-[10px]">
+            <Link to="/pricing">
+              Upgrade
+              <ArrowUpRight className="w-3 h-3" />
+            </Link>
+          </Button>
+        )}
       </div>
     );
   }

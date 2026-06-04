@@ -98,7 +98,7 @@ Deno.test("checkout audience gate blocks cross-role public plan purchases", () =
 Deno.test("self-serve add-on modules are explicitly allowlisted", () => {
   assertEquals(isSupportedCheckoutAddonModule("valuation_reports"), true);
   assertEquals(isSupportedCheckoutAddonModule("adhoc_charges"), true);
-  assertEquals(isSupportedCheckoutAddonModule("os_data_products"), true);
+  assertEquals(isSupportedCheckoutAddonModule("os_data_products"), false);
   assertEquals(isSupportedCheckoutAddonModule("user_subscription"), false);
   assertEquals(isSupportedCheckoutAddonModule("investor_subscription"), false);
   assertEquals(isSupportedCheckoutAddonModule(null), false);
@@ -121,10 +121,23 @@ Deno.test("add-on audience gate allows universal participant add-ons but blocks 
     isCheckoutAddonAudienceAllowed("professional", "adhoc_charges", { role: "agent" }),
     false,
   );
-  assertEquals(
-    isCheckoutAddonAudienceAllowed("participant", "os_data_products", { role: "agent" }),
-    true,
-  );
+  assertEquals(isCheckoutAddonAudienceAllowed("participant", "os_data_products", { role: "buyer" }), false);
+  assertEquals(isCheckoutAddonAudienceAllowed("participant", "os_data_products", { role: "developer" }), false);
+});
+
+Deno.test("mock add-on checkout is gated by add-on availability and audience", async () => {
+  const source = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+  const addonBranchStart = source.indexOf("if (addonKey) {");
+  const stripeSessionStart = source.indexOf("const stripe = new Stripe", addonBranchStart);
+  const addonBranch = source.slice(addonBranchStart, stripeSessionStart);
+
+  const lookupIndex = addonBranch.indexOf("const checkoutAddon = await getCheckoutAddon");
+  const audienceIndex = addonBranch.indexOf("!isCheckoutAddonAudienceAllowed");
+  const mockIndex = addonBranch.indexOf("if (isStripeMockMode())");
+
+  assertEquals(lookupIndex >= 0, true);
+  assertEquals(audienceIndex > lookupIndex, true);
+  assertEquals(mockIndex > audienceIndex, true);
 });
 
 restore();

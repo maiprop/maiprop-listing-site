@@ -323,6 +323,7 @@ export const isCheckoutAddonAudienceAllowed = (
   addonModule: string,
   profile: CheckoutProfileRow | null,
 ): boolean => {
+  if (!isSupportedCheckoutAddonModule(addonModule)) return false;
   const profileAudience = getProfilePricingAudience(profile);
   if (!profileAudience) return false;
   if (profileAudience === addonAudience) return true;

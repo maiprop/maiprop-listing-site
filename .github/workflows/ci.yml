@@ -53,6 +53,9 @@ jobs:
       - name: Check committed secrets
         run: npm run check:secrets
 
+      - name: Check dependency overrides
+        run: npm run check:dependency-overrides
+
       - name: Type-check & build
         run: npm run build
 
@@ -496,6 +499,14 @@ jobs:
           CREATE OR REPLACE FUNCTION storage.extension(name text) RETURNS text LANGUAGE sql AS $$ SELECT reverse(split_part(reverse(name), '.', 1)) $$;
           -- Stub extensions schema used by pg_net SCHEMA extensions
           CREATE SCHEMA IF NOT EXISTS extensions;
+          -- Stub pg_net used by private cron invoker migrations
+          CREATE SCHEMA IF NOT EXISTS net;
+          CREATE OR REPLACE FUNCTION net.http_post(
+            url text,
+            headers jsonb DEFAULT '{}'::jsonb,
+            body jsonb DEFAULT '{}'::jsonb,
+            timeout_milliseconds integer DEFAULT 1000
+          ) RETURNS bigint LANGUAGE sql AS $$ SELECT 0::bigint $$;
           -- Stub cron schema + minimal job table + schedule/unschedule functions (pg_cron is Supabase-managed)
           CREATE SCHEMA IF NOT EXISTS cron;
           CREATE TABLE IF NOT EXISTS cron.job (
@@ -542,6 +553,9 @@ jobs:
             created_at timestamptz DEFAULT now(),
             updated_at timestamptz DEFAULT now()
           );
+          CREATE OR REPLACE VIEW vault.decrypted_secrets AS
+            SELECT id, name, description, secret, key_id, nonce, created_at, updated_at
+            FROM vault.secrets;
           SQL
 
       - name: Strip unavailable extensions from migrations
@@ -722,7 +736,6 @@ jobs:
             "STAGING_SUPABASE_URL"
             "STAGING_SUPABASE_PROJECT_ID"
             "STAGING_SUPABASE_PUBLISHABLE_KEY"
-            "STAGING_APP_URL"
           )
           missing=0
           for key in "${required[@]}"; do
@@ -734,6 +747,26 @@ jobs:
           if [ "$missing" -ne 0 ]; then
             exit 1
           fi
+
+          EFFECTIVE_STAGING_APP_URL="$STAGING_APP_URL"
+          if [ -z "$EFFECTIVE_STAGING_APP_URL" ]; then
+            EFFECTIVE_STAGING_APP_URL=$(node - "$GITHUB_HEAD_REF" "$CF_PROJECT" <<'NODE'
+          const [, , branchRef = "", projectName = ""] = process.argv;
+          const slug = branchRef
+            .toLowerCase()
+            .replace(/[^a-z0-9-]+/g, "-")
+            .replace(/^-+|-+$/g, "")
+            .slice(0, 63) || "preview";
+          const project = projectName.toLowerCase().replace(/[^a-z0-9-]+/g, "-");
+          console.log(`https://${slug}.${project}.pages.dev`);
+          NODE
+          )
+            echo "STAGING_APP_URL was not set; derived Cloudflare Pages preview URL from branch."
+          fi
+          {
+            echo "EFFECTIVE_STAGING_APP_URL=$EFFECTIVE_STAGING_APP_URL"
+            echo "VITE_APP_URL=$EFFECTIVE_STAGING_APP_URL"
+          } >> "$GITHUB_ENV"
 
           if ! NORMALIZED_SUPABASE_PROJECT_ID=$(node - "$STAGING_SUPABASE_PROJECT_ID" "$STAGING_SUPABASE_URL" <<'NODE'
           const [, , explicitProjectId = "", supabaseUrl = ""] = process.argv;
@@ -760,7 +793,7 @@ jobs:
             exit 1
           fi
 
-          if ! node - "$STAGING_APP_URL" <<'NODE'
+          if ! node - "$EFFECTIVE_STAGING_APP_URL" <<'NODE'
           const [, , appUrl = ""] = process.argv;
           try {
             const parsed = new URL(appUrl);
@@ -784,6 +817,7 @@ jobs:
             --arg surl "$STAGING_SUPABASE_URL" \
             --arg pid "$NORMALIZED_SUPABASE_PROJECT_ID" \
             --arg pkey "$STAGING_SUPABASE_PUBLISHABLE_KEY" \
+            --arg app_url "$EFFECTIVE_STAGING_APP_URL" \
             --arg lock "$STAGING_SITE_LOCK_PASSWORD" \
             '
             ({} +
@@ -794,7 +828,8 @@ jobs:
                 VITE_SUPABASE_PROJECT_ID: { value: $pid, type: "plain_text" },
                 SUPABASE_PUBLISHABLE_KEY: { value: $pkey, type: "plain_text" },
                 VITE_SUPABASE_PUBLISHABLE_KEY: { value: $pkey, type: "plain_text" },
-                VITE_SUPABASE_ANON_KEY: { value: $pkey, type: "plain_text" }
+                VITE_SUPABASE_ANON_KEY: { value: $pkey, type: "plain_text" },
+                VITE_APP_URL: { value: $app_url, type: "plain_text" }
               } +
               (if $lock != "" then { SITE_LOCK_PASSWORD: { value: $lock, type: "secret_text" } } else { SITE_LOCK_PASSWORD: null } end)
             )')
@@ -823,7 +858,7 @@ jobs:
             exit 1
           fi
 
-          for key in SUPABASE_URL VITE_SUPABASE_URL SUPABASE_PROJECT_ID VITE_SUPABASE_PROJECT_ID SUPABASE_PUBLISHABLE_KEY VITE_SUPABASE_PUBLISHABLE_KEY VITE_SUPABASE_ANON_KEY; do
+          for key in SUPABASE_URL VITE_SUPABASE_URL SUPABASE_PROJECT_ID VITE_SUPABASE_PROJECT_ID SUPABASE_PUBLISHABLE_KEY VITE_SUPABASE_PUBLISHABLE_KEY VITE_SUPABASE_ANON_KEY VITE_APP_URL; do
             if ! jq -e --arg key "$key" '.success == true and (.result.deployment_configs.preview.env_vars[$key].type == "plain_text")' /tmp/cf_preview_env_verify.json >/dev/null; then
               echo "::error::Cloudflare Pages preview env var $key was not persisted."
               exit 1
@@ -831,6 +866,10 @@ jobs:
           done
           if ! jq -e --arg pid "$NORMALIZED_SUPABASE_PROJECT_ID" '.result.deployment_configs.preview.env_vars.SUPABASE_PROJECT_ID.value == $pid' /tmp/cf_preview_env_verify.json >/dev/null; then
             echo "::error::Cloudflare Pages preview SUPABASE_PROJECT_ID did not match the normalized project ref."
+            exit 1
+          fi
+          if ! jq -e --arg app_url "$EFFECTIVE_STAGING_APP_URL" '.result.deployment_configs.preview.env_vars.VITE_APP_URL.value == $app_url' /tmp/cf_preview_env_verify.json >/dev/null; then
+            echo "::error::Cloudflare Pages preview VITE_APP_URL did not match the effective staging app URL."
             exit 1
           fi
 
@@ -850,6 +889,7 @@ jobs:
             printf 'SUPABASE_PUBLISHABLE_KEY = %s\n' "$(toml_quote "$STAGING_SUPABASE_PUBLISHABLE_KEY")"
             printf 'VITE_SUPABASE_PUBLISHABLE_KEY = %s\n' "$(toml_quote "$STAGING_SUPABASE_PUBLISHABLE_KEY")"
             printf 'VITE_SUPABASE_ANON_KEY = %s\n' "$(toml_quote "$STAGING_SUPABASE_PUBLISHABLE_KEY")"
+            printf 'VITE_APP_URL = %s\n' "$(toml_quote "$EFFECTIVE_STAGING_APP_URL")"
             if [ -n "${STAGING_SITE_LOCK_PASSWORD}" ]; then
               printf 'SITE_LOCK_PASSWORD = %s\n' "$(toml_quote "$STAGING_SITE_LOCK_PASSWORD")"
             fi
@@ -868,7 +908,6 @@ jobs:
           VITE_TURNSTILE_SITE_KEY:       ${{ secrets.VITE_TURNSTILE_SITE_KEY }}
           VITE_GOOGLE_MAPS_API_KEY:      ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
           VITE_PLAUSIBLE_DOMAIN:         ${{ secrets.VITE_PLAUSIBLE_DOMAIN }}
-          VITE_APP_URL:                  ${{ secrets.STAGING_APP_URL }}
 
       - name: Deploy to Cloudflare Pages (PR preview)
         uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0

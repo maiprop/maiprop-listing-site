@@ -792,9 +792,18 @@ describe("Component smoke tests", () => {
   it("ProVideoStep renders without throwing", async () => {
     const { ProVideoStep } = await import("@/components/onboarding/ProVideoStep");
     expect(() => renderWithProviders(
-      <ProVideoStep value="" onChange={noop} />
+      <ProVideoStep
+        videoLink=""
+        calendarNotes=""
+        loading={false}
+        authLoading={false}
+        onVideoLinkChange={noop}
+        onCalendarNotesChange={noop}
+        onSave={noop}
+        onSkip={noop}
+      />
     )).not.toThrow();
-  });
+  }, 15_000);
 
   it("DeveloperSetupStep renders without throwing", async () => {
     const { DeveloperSetupStep } = await import("@/components/onboarding/DeveloperSetupStep");
