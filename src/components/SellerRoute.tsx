@@ -27,8 +27,15 @@ function useSellerRouteGuard(): RoleRouteGuardResult {
     return { denied: <ListingAccessRequired /> };
   }
 
-  // Developer role requires an active Pro subscription; listing creation is Pro-only for developers.
-  if (participantType === "developer" && !isPro && !isPlatformAdmin(profile)) {
+  const isAdmin = isPlatformAdmin(profile);
+  const hasDeveloperIdentity =
+    profile.role === "developer" || participantType === "developer";
+  const hasAlignedDeveloperIdentity =
+    profile.role === "developer" && participantType === "developer";
+
+  // Developer listing access must be both identity-aligned and paid. This
+  // fails closed while a stale role or participant_type is being repaired.
+  if (hasDeveloperIdentity && (!hasAlignedDeveloperIdentity || !isPro) && !isAdmin) {
     return { denied: <DeveloperProRequired /> };
   }
 

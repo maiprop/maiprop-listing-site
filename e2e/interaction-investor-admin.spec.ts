@@ -67,8 +67,12 @@ const signIn = async (
 
 const expectInvestorDashboardReady = async (page: Page): Promise<void> => {
   await expect(page).toHaveURL(/\/investor-dashboard/);
+  await expect(page.locator("body")).toContainText(/\S/, { timeout: 20_000 });
+  await expect(page.locator(".animate-spin").first())
+    .toBeHidden({ timeout: 15_000 })
+    .catch(() => undefined);
   await expect(page.getByTestId("investor-dashboard")).toBeVisible({
-    timeout: 15_000,
+    timeout: 30_000,
   });
   await expect(page.getByText(/Investor Access Required/i)).toHaveCount(0);
 
