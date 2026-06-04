@@ -16,6 +16,7 @@ const SYSTEM_TAG_PREFIXES = [
   "os_auction:",
   "auction_status:",
   "sync:",
+  "auction_pool:",
   "land_type:",
   "commercial_type:",
 ];

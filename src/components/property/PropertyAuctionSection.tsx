@@ -1,8 +1,9 @@
-import { Building2, Gavel, History } from "lucide-react";
+import { Building2, ExternalLink, Gavel, History } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Section, SectionHeader } from "@/components/property/DetailPrimitives";
 import { PastDealsTable } from "@/components/PastDealsTable";
 import { useSubscription } from "@/hooks/useSubscription";
+import { Button } from "@/components/ui/button";
 
 interface OwnershipDisplay {
   label: string;
@@ -16,6 +17,7 @@ interface Props {
   ownershipDisplay: OwnershipDisplay | null;
   ownershipPct: number | null;
   ownershipStatus: string | null;
+  websiteUrl?: string | null;
 }
 
 export function PropertyAuctionSection({
@@ -25,11 +27,13 @@ export function PropertyAuctionSection({
   ownershipDisplay,
   ownershipPct,
   ownershipStatus,
+  websiteUrl,
 }: Props) {
   const { isPro } = useSubscription();
   const { i18n } = useTranslation();
   const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
   const dateLocale = isGreek ? "el-GR" : "en-GB";
+  const safeWebsiteUrl = websiteUrl && /^https?:\/\//i.test(websiteUrl) ? websiteUrl : null;
 
   return (
     <Section>
@@ -80,6 +84,15 @@ export function PropertyAuctionSection({
             ? "⚡ Ηλεκτρονικός πλειστηριασμός — ο ενδιαφερόμενος αγοραστής διενεργεί τον δικό του νομικό και τεχνικό έλεγχο. Το mAI prop παρέχει AI υποστηριζόμενη προ-πλειστηριαστική ανάλυση."
             : "⚡ Electronic auction — buyer conducts own due diligence. mAI prop provides AI-powered pre-auction analysis."}
         </div>
+
+        {safeWebsiteUrl && (
+          <Button asChild className="w-full gap-2">
+            <a href={safeWebsiteUrl} target="_blank" rel="noreferrer noopener">
+              <ExternalLink className="w-4 h-4" />
+              {isGreek ? "Άνοιγμα eAuction" : "Open eAuction"}
+            </a>
+          </Button>
+        )}
 
         {isPro && (
           <div className="pt-4 border-t border-border mt-4">
