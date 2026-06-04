@@ -23,6 +23,7 @@ const outPath = readArg("--out");
 const indexStatsPath = readArg("--index-stats");
 const failOnError = args.includes("--fail-on-error");
 const failOnUnknown = args.includes("--fail-on-unknown");
+const allowTransientUnavailable = args.includes("--allow-transient-unavailable");
 const accessToken = process.env.SUPABASE_ACCESS_TOKEN;
 const projectRef =
   process.env.SUPABASE_PROJECT_REF ||
@@ -57,14 +58,52 @@ function lintName(lint) {
   return String(lint.name ?? lint.title ?? lint.cache_key ?? lint.id ?? "unnamed_lint");
 }
 
+function advisorErrorDetail(payload, body) {
+  if (payload && typeof payload === "object") {
+    return String(payload.message ?? payload.error ?? payload.detail ?? body);
+  }
+  return String(body);
+}
+
+function isTransientAdvisorFailure(status, detail) {
+  if (status === 544) return true;
+  return /connection terminated|connection timeout|i\/o timeout|timed out|timeout|econnreset|etimedout/i.test(
+    String(detail),
+  );
+}
+
+function buildTransientAdvisorUnavailableResult(category, status, detail) {
+  const statusLabel = status ? `HTTP ${status}` : "network timeout";
+  const unavailableReason = `${category} advisor request failed with ${statusLabel}: ${detail}`;
+  console.warn(`[supabase-advisor] ${unavailableReason}`);
+  return {
+    category,
+    lint_count: 0,
+    lints: [],
+    unavailable: true,
+    unavailable_reason: unavailableReason,
+    http_status: status,
+  };
+}
+
 async function fetchAdvisor(category) {
   const url = `${apiBase}/projects/${encodeURIComponent(projectRef)}/advisors/${category}`;
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: "application/json",
-    },
-  });
+  let response;
+  try {
+    response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/json",
+      },
+    });
+  } catch (error) {
+    const cause = error?.cause?.code ? ` (${error.cause.code})` : "";
+    const detail = `${error?.message ?? error}${cause}`;
+    if (allowTransientUnavailable && isTransientAdvisorFailure(0, detail)) {
+      return buildTransientAdvisorUnavailableResult(category, 0, detail);
+    }
+    throw error;
+  }
 
   const body = await response.text();
   let payload;
@@ -75,7 +114,10 @@ async function fetchAdvisor(category) {
   }
 
   if (!response.ok) {
-    const detail = typeof payload === "object" && payload ? payload.message ?? payload.error ?? body : body;
+    const detail = advisorErrorDetail(payload, body);
+    if (allowTransientUnavailable && isTransientAdvisorFailure(response.status, detail)) {
+      return buildTransientAdvisorUnavailableResult(category, response.status, detail);
+    }
     throw new Error(`${category} advisor request failed with HTTP ${response.status}: ${detail}`);
   }
 
@@ -105,6 +147,14 @@ const results = [];
 for (const category of categories) {
   results.push(await fetchAdvisor(category));
 }
+
+const transientAdvisorUnavailable = results
+  .filter((result) => result.unavailable)
+  .map((result) => ({
+    category: result.category,
+    http_status: result.http_status,
+    reason: result.unavailable_reason,
+  }));
 
 const totals = results.reduce(
   (acc, result) => {
@@ -137,8 +187,10 @@ const summary = {
   api_base: apiBase,
   fail_on_error: failOnError,
   fail_on_unknown: failOnUnknown,
+  allow_transient_unavailable: allowTransientUnavailable,
   totals,
   failing_lint_count: failingLintCount,
+  transient_advisor_unavailable: transientAdvisorUnavailable,
   advisor_debt: advisorDebt,
   unused_index_review: unusedIndexReview,
   results,
@@ -150,7 +202,13 @@ console.log(json);
 
 if (process.env.GITHUB_STEP_SUMMARY) {
   const rows = results
-    .map((result) => `| ${result.category} | ${result.lint_count} |`)
+    .map((result) => {
+      const status = result.unavailable ? " (transient unavailable)" : "";
+      return `| ${result.category}${status} | ${result.lint_count} |`;
+    })
+    .join("\n");
+  const unavailableRows = transientAdvisorUnavailable
+    .map((result) => `| ${result.category} | ${result.http_status} | ${result.reason} |`)
     .join("\n");
   await appendFile(
     process.env.GITHUB_STEP_SUMMARY,
@@ -184,6 +242,18 @@ if (process.env.GITHUB_STEP_SUMMARY) {
       `| Needs stats snapshot | ${unusedIndexReview.totals.needs_stats_snapshot} |`,
       `| Needs manual mapping | ${unusedIndexReview.totals.needs_manual_mapping} |`,
       "",
+      ...(transientAdvisorUnavailable.length
+        ? [
+            "### Transient Advisor Unavailability",
+            "",
+            "Supabase Management API advisor checks timed out. This is recorded as release evidence and does not suppress real advisor findings when the API responds.",
+            "",
+            "| Category | HTTP status | Reason |",
+            "|---|---:|---|",
+            unavailableRows,
+            "",
+          ]
+        : []),
     ].join("\n"),
   );
 }
