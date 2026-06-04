@@ -193,6 +193,24 @@ describe("Dashboard behavior", () => {
     expect(screen.getAllByText("Auction Alerts").length).toBeGreaterThan(0);
   });
 
+  it("requires buyer Pro before showing investor access application CTAs", () => {
+    renderWithProviders(<Dashboard />);
+
+    const upgradeLinks = screen.getAllByRole("link", { name: /Upgrade to Pro to apply/i });
+    expect(upgradeLinks.length).toBeGreaterThanOrEqual(1);
+    expect(upgradeLinks.every((link) => link.getAttribute("href") === "/pricing?audience=participant")).toBe(true);
+    expect(screen.queryByRole("link", { name: /^Apply$/i })).not.toBeInTheDocument();
+  });
+
+  it("allows buyer Pro accounts to reach the reviewed investor application flow", () => {
+    subscriptionState.isPro = true;
+
+    renderWithProviders(<Dashboard />);
+
+    expect(screen.getByRole("link", { name: /^Apply$/i })).toHaveAttribute("href", "/investor-dashboard");
+    expect(screen.queryByRole("link", { name: /Upgrade to Pro to apply/i })).not.toBeInTheDocument();
+  });
+
   it("does not lock the dashboard main area with overflow-hidden scrolling", () => {
     const { container } = renderWithProviders(<Dashboard />);
 

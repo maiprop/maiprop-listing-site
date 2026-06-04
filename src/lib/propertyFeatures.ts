@@ -151,7 +151,6 @@ export function buildDetailRows(
     ...(db.heating_system ? [{ label: "Heating", value: HEATING_TYPES.find((h) => h.value === db.heating_system)?.label ?? db.heating_system.replace(/_/g, " ") }] : []),
     ...(db.energy_class ? [{ label: "Energy Class", value: db.energy_class }] : []),
     ...(db.construction_status ? [{ label: "Condition", value: CONDITION_OPTIONS.find((c) => c.value === db.construction_status)?.label ?? db.construction_status.replace(/_/g, " ") }] : []),
-    ...(db.cadastre_number ? [{ label: "Cadastre No.", value: db.cadastre_number }] : []),
     ...(db.enfia_zone ? [{ label: "ENFIA Zone", value: db.enfia_zone }] : []),
     ...(db.postal_code ? [{ label: "Postal Code", value: db.postal_code }] : []),
     ...(db.region ? [{ label: "Region", value: db.region }] : []),
@@ -259,11 +258,10 @@ export function buildDetailGroups(
       ],
     },
     {
-      title: "Location & Legal",
+      title: "Location",
       rows: [
         { label: "Region", value: db.region },
         { label: "Postal Code", value: db.postal_code },
-        { label: "Cadastre No.", value: db.cadastre_number },
         { label: "ENFIA Zone", value: db.enfia_zone },
       ],
     },

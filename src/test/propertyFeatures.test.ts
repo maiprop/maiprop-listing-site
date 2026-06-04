@@ -160,4 +160,23 @@ describe("propertyFeatures helpers", () => {
     expect(auctionGroup?.rows.some((row) => row.label === "Auction Court")).toBe(false);
     expect(JSON.stringify(groups)).not.toContain("POSTED");
   });
+
+  it("keeps location details free of cadastre/legal section labels", () => {
+    const groups = buildDetailGroups({
+      ...baseListing,
+      listing_type: "sale",
+      property_type: "apartment",
+      region: "Attica",
+      postal_code: "11528",
+      cadastre_number: "KAEK-1",
+      enfia_zone: "A1",
+    } as unknown as DetailInput, 250000, 100, 2500, false);
+
+    const locationGroup = groups.find((group) => group.title === "Location");
+
+    expect(locationGroup).toBeDefined();
+    expect(groups.some((group) => group.title === "Location & Legal")).toBe(false);
+    expect(JSON.stringify(groups)).not.toContain("Cadastre No.");
+    expect(JSON.stringify(groups)).not.toContain("KAEK-1");
+  });
 });
