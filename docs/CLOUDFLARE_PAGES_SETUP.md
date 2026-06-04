@@ -87,9 +87,11 @@ environment variables*), sourced from the `VITE_SUPABASE_PROJECT_ID`,
 The PR preview deploy job mirrors this for the Pages **Preview** runtime
 environment, but it uses the isolated staging secrets:
 `STAGING_SUPABASE_PROJECT_ID`, `STAGING_SUPABASE_URL`,
-`STAGING_SUPABASE_PUBLISHABLE_KEY`, required `STAGING_APP_URL`, and optional
-`STAGING_SITE_LOCK_PASSWORD`. This keeps preview browser bundles and preview
-Pages Functions on the same staging backend.
+`STAGING_SUPABASE_PUBLISHABLE_KEY`, optional `STAGING_APP_URL`, and optional
+`STAGING_SITE_LOCK_PASSWORD`. When `STAGING_APP_URL` is absent, CI derives the
+Cloudflare Pages branch preview origin and bakes that into `VITE_APP_URL`. This
+keeps preview browser bundles and preview Pages Functions on the same staging
+backend.
 You only need to touch Cloudflare Pages Settings > Environment variables if you add **new**
 server-side bindings (and then extend that CI step accordingly).
 

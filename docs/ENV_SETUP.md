@@ -208,7 +208,7 @@ fail-fast behavior.
 | `STAGING_SUPABASE_URL` | optional isolated staging Supabase URL for security/E2E jobs; PR preview deploys require it to be a non-production Supabase URL matching `STAGING_SUPABASE_PROJECT_ID` | repo or staging environment |
 | `STAGING_SUPABASE_PUBLISHABLE_KEY` | optional isolated staging anon/publishable key; PR preview deploys are skipped when it matches the production key | repo or staging environment |
 | `STAGING_SUPABASE_PROJECT_ID` | optional isolated staging Supabase project ref; if absent, matching production, or mismatched from `STAGING_SUPABASE_URL`, CI treats the setup as production-only and skips staging/preview deploys | repo or staging environment |
-| `STAGING_APP_URL` | required for Cloudflare Pages PR preview deploys when isolated staging is enabled; must be an `https://` preview/staging origin and is baked into the preview bundle as `VITE_APP_URL` | repo or staging environment |
+| `STAGING_APP_URL` | optional explicit Cloudflare Pages PR preview/staging origin; when absent, CI derives `https://<branch>.<project>.pages.dev` and bakes that into the preview bundle as `VITE_APP_URL` | repo or staging environment |
 | `STAGING_SITE_LOCK_PASSWORD` | optional Cloudflare Pages Preview runtime passcode gate; never reuse `SITE_LOCK_PASSWORD` unless preview should intentionally share the production passcode | staging environment only |
 | `SUPABASE_ACCESS_TOKEN` | Supabase CLI deploy/list token | repo or environment scoped to deploy jobs |
 | `SUPABASE_DB_URL` | optional Postgres connection string override for local/CI Supabase diagnostic scripts such as index-stat capture; prefer staging/production-specific vars in workflows | local/CI diagnostics only |
