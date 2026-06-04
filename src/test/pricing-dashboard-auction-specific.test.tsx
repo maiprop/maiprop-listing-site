@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   useSubscriptionMock: vi.fn(),
   usePricingConfigsMock: vi.fn(),
   useAuctionListingsMock: vi.fn(),
+  fetchAuctionListingByIdMock: vi.fn(),
   useAuctionsPipelineMock: vi.fn(),
   useProfessionalMock: vi.fn(),
   useProfessionalsMock: vi.fn(),
@@ -164,6 +165,7 @@ vi.mock("@/components/professionals/ProfessionalReviewsTab", () => ({
 
 vi.mock("@/hooks/useAuctionListings", () => ({
   useAuctionListings: (...args: unknown[]) => mocks.useAuctionListingsMock(...args),
+  fetchAuctionListingById: (...args: unknown[]) => mocks.fetchAuctionListingByIdMock(...args),
 }));
 vi.mock("@/hooks/useAuctionsPipeline", async () => {
   const actual = await vi.importActual<typeof import("@/hooks/useAuctionsPipeline")>("@/hooks/useAuctionsPipeline");
@@ -284,6 +286,7 @@ beforeEach(() => {
   });
   mocks.useSubscriptionMock.mockReturnValue({ isPro: false, loading: false, refreshSubscription: vi.fn() });
   mocks.usePricingConfigsMock.mockReturnValue({ data: {} });
+  mocks.fetchAuctionListingByIdMock.mockResolvedValue(null);
   mocks.useProfessionalMock.mockReturnValue({ data: null, isLoading: false });
   mocks.useProfessionalsMock.mockReturnValue({ data: [], isLoading: false });
   mocks.useProfessionalServicesMock.mockReturnValue({ data: [], isLoading: false });
@@ -709,6 +712,29 @@ describe("Auctions focused page behavior", () => {
     const links = await screen.findAllByRole("link", { name: /Open eAuction/i });
     expect(links.length).toBeGreaterThan(0);
     expect(links[0]).toHaveAttribute("href", "https://eauction.example/listing");
+  });
+
+  it("enriches cached auction detail with the exact row eAuction URL", async () => {
+    mocks.useAuctionListingsMock.mockReturnValue({
+      data: [auction({ website_url: null })],
+      isLoading: false,
+    });
+    mocks.fetchAuctionListingByIdMock.mockResolvedValue(
+      auction({ website_url: "https://www.eauction.gr/Auction/Details/demo" }),
+    );
+    const { default: AuctionDetail } = await import("@/pages/AuctionDetail");
+
+    renderWithProviders(
+      <Routes>
+        <Route path="/auction/:id" element={<AuctionDetail />} />
+      </Routes>,
+      { initialPath: "/auction/auction-1" },
+    );
+
+    const links = await screen.findAllByRole("link", { name: /Open eAuction/i });
+    expect(links.length).toBeGreaterThan(0);
+    expect(links[0]).toHaveAttribute("href", "https://www.eauction.gr/Auction/Details/demo");
+    expect(mocks.fetchAuctionListingByIdMock).toHaveBeenCalledWith("auction-1");
   });
 
   it("keeps auction detail valuation Pro-gated and renders the property report card", async () => {
