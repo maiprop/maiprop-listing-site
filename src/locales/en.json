@@ -528,20 +528,20 @@
         "approved": "Your Quick Sale application is approved. Complete payment to activate deal-flow access.",
         "rejected": "Your application was not approved. You may browse auctions and saved searches.",
         "none": "Apply for access to exclusive Quick Sale deals. Invitation-only.",
-        "viewInvestorPlans": "View Investor Plans",
-        "apply": "Apply for Access"
+        "completePayment": "Complete investor payment",
+        "apply": "Apply for Access",
+        "upgradeToApply": "Upgrade to Pro to apply"
       },
       "savedProperties": {
         "title": "Saved Properties",
         "savedCount": "{{count}} saved - open Saved to view.",
         "empty": "Save listings you like to find them here."
       },
-      "investorMode": {
-        "title": "Investor mode",
-        "subtitle": "Get access to below-market deals, auction pipeline & quick sales.",
-        "error": "Could not enable investor mode",
-        "success": "Investor mode enabled!",
-        "enable": "Enable"
+      "investorAccess": {
+        "title": "Investor access",
+        "subtitle": "Apply for reviewed Quick Sale deal-flow access. Approval and a custom payment link are required before activation.",
+        "apply": "Apply",
+        "upgradeToApply": "Upgrade to Pro to apply"
       },
       "developerPro": {
         "title": "Developer tools require Pro",

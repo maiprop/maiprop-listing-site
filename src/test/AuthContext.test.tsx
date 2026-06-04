@@ -343,7 +343,7 @@ describe("AuthProvider auth API methods", () => {
     expect(outcome.error?.message).toMatch(/Not authenticated/);
   });
 
-  it("updateProfile strips participant_type and role from self-service updates", async () => {
+  it("updateProfile strips privileged role, participant, and investor access fields from self-service updates", async () => {
     const updateSpy = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) });
     supabaseMock.from.mockReturnValue({
       select: vi.fn().mockReturnThis(),
@@ -367,6 +367,7 @@ describe("AuthProvider auth API methods", () => {
         display_name: "Alice Updated",
         role: "developer",
         participant_type: "developer",
+        investor_mode: true,
       } as never);
     });
 

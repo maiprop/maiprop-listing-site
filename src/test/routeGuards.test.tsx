@@ -13,7 +13,7 @@
  */
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { renderWithProviders } from "@/test/utils";
 
@@ -566,6 +566,32 @@ describe("InvestorRoute", () => {
       </InvestorRoute>,
     );
     expect(screen.getByText(/Investor Access Required/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Upgrade to Pro to apply/i })).toHaveAttribute(
+      "href",
+      "/pricing?audience=participant",
+    );
+    expect(screen.queryByRole("button", { name: /Apply for investor access/i })).not.toBeInTheDocument();
+    expect(screen.queryByText("QUICK-SALE")).toBeNull();
+  });
+
+  it("lets ineligible Pro accounts open the investor access application", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1", email: "pro@example.com" },
+      profile: { user_id: "u-1", role: "buyer" },
+      loading: false,
+      profileLoading: false,
+      needsOnboarding: false,
+    });
+    useEligibleMock.mockReturnValue({ eligible: false, loading: false });
+    useSubscriptionMock.mockReturnValue({ isPro: true, hasDeveloperPro: false, loading: false });
+    renderGuarded(
+      <InvestorRoute>
+        <div>QUICK-SALE</div>
+      </InvestorRoute>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Apply for investor access/i }));
+    expect(screen.getByRole("dialog", { name: /Request Quick Sale access/i })).toBeInTheDocument();
     expect(screen.queryByText("QUICK-SALE")).toBeNull();
   });
 

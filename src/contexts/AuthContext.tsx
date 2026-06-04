@@ -336,7 +336,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         "country",
         "video_link",
         "website_url",
-        "investor_mode",
       ] as const);
 
       const safe: Partial<Tables<"profiles">> = {};

@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
+import type { User } from "@supabase/supabase-js";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEligibleForQuickSale } from "@/hooks/useEligibleForQuickSale";
+import { useSubscription } from "@/hooks/useSubscription";
 import { Flame, Lock, ArrowRight, CheckCircle2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RoleRoute, type RoleRouteGuardResult } from "./RoleRoute";
+import { InvitationRequestModal } from "@/components/InvitationRequestModal";
+import { toast } from "sonner";
 
 /** Protects Quick Sale deal flow. Access: admin or approved investors only. */
 export function InvestorRoute({ children }: { children: React.ReactNode }) {
@@ -12,11 +16,12 @@ export function InvestorRoute({ children }: { children: React.ReactNode }) {
 }
 
 function useInvestorRouteGuard(): RoleRouteGuardResult {
-  const { profile, loading: authLoading } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
   const { eligible, loading: eligibilityLoading } = useEligibleForQuickSale();
+  const { isPro, loading: subscriptionLoading } = useSubscription();
   const [timedOut, setTimedOut] = useState(false);
 
-  const stillLoading = authLoading || !profile || eligibilityLoading;
+  const stillLoading = authLoading || !profile || eligibilityLoading || subscriptionLoading;
 
   useEffect(() => {
     if (stillLoading) {
@@ -36,7 +41,7 @@ function useInvestorRouteGuard(): RoleRouteGuardResult {
   }
 
   if (!eligible) {
-    return { denied: <InvestorAccessRequired /> };
+    return { denied: <InvestorAccessRequired user={user} isPro={isPro} /> };
   }
 
   return { allowed: true };
@@ -64,7 +69,11 @@ function InvestorAccessRetry() {
   );
 }
 
-function InvestorAccessRequired() {
+function InvestorAccessRequired({ user, isPro }: { user: User | null; isPro: boolean }) {
+  const [showInvitationModal, setShowInvitationModal] = useState(false);
+  const primaryHref = isPro ? null : "/pricing?audience=participant";
+  const primaryLabel = isPro ? "Apply for investor access" : "Upgrade to Pro to apply";
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
       <div className="max-w-md w-full text-center space-y-6">
@@ -92,17 +101,33 @@ function InvestorAccessRequired() {
           ))}
         </div>
         <div className="flex gap-3 justify-center">
-          <Button asChild className="bg-orange-500 hover:bg-orange-600 text-white gap-2">
-            <Link to="/pricing?audience=investor">
-              <Flame className="w-4 h-4" /> View Investor Plans
-            </Link>
-          </Button>
+          {primaryHref ? (
+            <Button asChild className="bg-orange-500 hover:bg-orange-600 text-white gap-2">
+              <Link to={primaryHref}>
+                <Flame className="w-4 h-4" /> {primaryLabel}
+              </Link>
+            </Button>
+          ) : (
+            <Button className="bg-orange-500 hover:bg-orange-600 text-white gap-2" onClick={() => setShowInvitationModal(true)}>
+              <Flame className="w-4 h-4" /> {primaryLabel}
+            </Button>
+          )}
           <Button asChild variant="outline">
             <Link to="/dashboard">
               Go to Dashboard <ArrowRight className="w-4 h-4 ml-1" />
             </Link>
           </Button>
         </div>
+        {showInvitationModal && (
+          <InvitationRequestModal
+            user={user ? { id: user.id, email: user.email ?? undefined } : null}
+            onClose={() => setShowInvitationModal(false)}
+            onSuccess={() => {
+              setShowInvitationModal(false);
+              toast.success("Investor access request submitted. We'll review it and follow up with next steps.");
+            }}
+          />
+        )}
       </div>
     </div>
   );

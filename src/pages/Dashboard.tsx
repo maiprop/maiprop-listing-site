@@ -29,7 +29,6 @@ import { useMyProfessional, useProfessionalServices } from "@/hooks/useProfessio
 import { useMyConsultationRequests, useUpdateConsultationRequest } from "@/hooks/useConsultations";
 import ProfessionalServicesEditor from "@/components/ProfessionalServicesEditor";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getExplicitParticipantTypeFromProfile, getParticipantTypeFromProfile, PARTICIPANT_LABELS, type ParticipantId } from "@/lib/participantConfig";
 import { ProGate } from "@/components/gates/ProGate";
@@ -514,9 +513,15 @@ export default function Dashboard() { // skipcq: JS-R1005
                         {invitationRequestStatus === "none" && tr("dashboard.overview.quickSale.none", "Apply for access to exclusive Quick Sale deals. Invitation-only.")}
                       </p>
                       {invitationRequestStatus === "approved" ? (
-                        <Button size="sm" className="bg-gradient-gold border-0 text-background" asChild><Link to="/pricing">{tr("dashboard.overview.quickSale.viewInvestorPlans", "View Investor Plans")}</Link></Button>
+                        <Button size="sm" className="bg-gradient-gold border-0 text-background" asChild><Link to="/investor-dashboard">{tr("dashboard.overview.quickSale.completePayment", "Complete investor payment")}</Link></Button>
                       ) : invitationRequestStatus === "none" ? (
-                        <Button variant="outline" size="sm" className="border-destructive/40 text-destructive" asChild><Link to="/investor-dashboard">{tr("dashboard.overview.quickSale.apply", "Apply for Access")}</Link></Button>
+                        <Button variant="outline" size="sm" className="border-destructive/40 text-destructive" asChild>
+                          <Link to={isPro ? "/investor-dashboard" : "/pricing?audience=participant"}>
+                            {isPro
+                              ? tr("dashboard.overview.quickSale.apply", "Apply for Access")
+                              : tr("dashboard.overview.quickSale.upgradeToApply", "Upgrade to Pro to apply")}
+                          </Link>
+                        </Button>
                       ) : null}
                     </div>
                     <div className="glass-card rounded-xl p-6">
@@ -533,21 +538,20 @@ export default function Dashboard() { // skipcq: JS-R1005
                     </div>
                     <BuyerOpenHousesCard onOpen={() => setActiveSection("open-houses")} />
                   </div>
-                  {/* Investor mode cross-sell */}
+                  {/* Investor access cross-sell */}
                   {bioType === "buyer" && !profile?.investor_mode && (
                     <div className="glass-card rounded-xl border border-amber-500/20 p-4 flex items-center gap-4">
                       <Flame className="w-8 h-8 text-amber-400 shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm">{tr("dashboard.overview.investorMode.title", "Investor mode")}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{tr("dashboard.overview.investorMode.subtitle", "Get access to below-market deals, auction pipeline & quick sales.")}</p>
+                        <p className="font-semibold text-sm">{tr("dashboard.overview.investorAccess.title", "Investor access")}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{tr("dashboard.overview.investorAccess.subtitle", "Apply for reviewed Quick Sale deal-flow access. Approval and a custom payment link are required before activation.")}</p>
                       </div>
-                      <Button size="sm" className="shrink-0 text-xs h-8 bg-amber-500 hover:bg-amber-600 border-0 text-white"
-                        onClick={async () => {
-                          const { error } = await updateProfile({ investor_mode: true });
-                          if (error) { toast.error(tr("dashboard.overview.investorMode.error", "Could not enable investor mode")); return; }
-                          toast.success(tr("dashboard.overview.investorMode.success", "Investor mode enabled!"));
-                        }}>
-                        {tr("dashboard.overview.investorMode.enable", "Enable")}
+                      <Button size="sm" className="shrink-0 text-xs h-8 bg-amber-500 hover:bg-amber-600 border-0 text-white" asChild>
+                        <Link to={isPro ? "/investor-dashboard" : "/pricing?audience=participant"}>
+                          {isPro
+                            ? tr("dashboard.overview.investorAccess.apply", "Apply")
+                            : tr("dashboard.overview.investorAccess.upgradeToApply", "Upgrade to Pro to apply")}
+                        </Link>
                       </Button>
                     </div>
                   )}
