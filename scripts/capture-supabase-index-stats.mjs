@@ -16,6 +16,16 @@ function fail(message) {
   process.exit(1);
 }
 
+function writeEmptyArtifact(message) {
+  writeFileSync(outPath, "[]\n");
+  console.warn(`[capture-supabase-index-stats] ${message}`);
+}
+
+function isTransientQueryFailure(detail) {
+  return /status 544|connection terminated|connection timeout|i\/o timeout|timed out|timeout|econnreset|etimedout/i
+    .test(detail);
+}
+
 function firstJsonValue(text) {
   const objectStart = text.indexOf("{");
   const arrayStart = text.indexOf("[");
@@ -67,10 +77,7 @@ const projectRef = process.env.SUPABASE_PROJECT_REF ||
 const dbPassword = process.env.SUPABASE_DB_PASSWORD;
 
 if (!dbUrl && !dbPassword && allowEmptyWhenUnconfigured) {
-  writeFileSync(outPath, "[]\n");
-  console.warn(
-    "[capture-supabase-index-stats] No DB URL/password configured; wrote an empty index stats artifact.",
-  );
+  writeEmptyArtifact("No DB URL/password configured; wrote an empty index stats artifact.");
   process.exit(0);
 }
 
@@ -145,21 +152,27 @@ order by relname, indexrelname;
       result.stdout,
       result.stderr,
     ].filter(Boolean).join("\n");
-    fail(`supabase db query failed with exit ${result.status}.\n${detail}`);
+    if (allowEmptyWhenUnconfigured && isTransientQueryFailure(detail)) {
+      writeEmptyArtifact(
+        `Supabase index stats query was transiently unavailable; wrote an empty artifact.\n${detail}`,
+      );
+    } else {
+      fail(`supabase db query failed with exit ${result.status}.\n${detail}`);
+    }
+  } else {
+    const jsonText = firstJsonValue(`${result.stdout}\n${result.stderr}`);
+    if (!jsonText) fail("Could not parse JSON from supabase db query output.");
+    const payload = JSON.parse(jsonText);
+    const rows = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload.rows)
+        ? payload.rows
+        : Array.isArray(payload.data)
+          ? payload.data
+          : [];
+    writeFileSync(outPath, `${JSON.stringify(rows, null, 2)}\n`);
+    console.log(`[capture-supabase-index-stats] Wrote ${rows.length} index row(s) to ${outPath}.`);
   }
-
-  const jsonText = firstJsonValue(`${result.stdout}\n${result.stderr}`);
-  if (!jsonText) fail("Could not parse JSON from supabase db query output.");
-  const payload = JSON.parse(jsonText);
-  const rows = Array.isArray(payload)
-    ? payload
-    : Array.isArray(payload.rows)
-      ? payload.rows
-      : Array.isArray(payload.data)
-        ? payload.data
-        : [];
-  writeFileSync(outPath, `${JSON.stringify(rows, null, 2)}\n`);
-  console.log(`[capture-supabase-index-stats] Wrote ${rows.length} index row(s) to ${outPath}.`);
 } finally {
   rmSync(tempDir, { recursive: true, force: true });
 }

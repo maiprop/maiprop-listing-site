@@ -20,6 +20,14 @@ describe("capture Supabase index stats script", () => {
     expect(script).toContain('queryArgs.push("--linked")');
   });
 
+  it("only degrades transient Supabase query failures to an empty artifact", () => {
+    expect(script).toContain("function isTransientQueryFailure(detail)");
+    expect(script).toContain("status 544");
+    expect(script).toContain("connection timeout");
+    expect(script).toContain("Supabase index stats query was transiently unavailable");
+    expect(script).toContain("fail(`supabase db query failed with exit ${result.status}");
+  });
+
   it("accepts both JSON array and object row payloads from Supabase CLI output", () => {
     expect(script).toContain("function firstJsonValue(text)");
     expect(script).toContain("Array.isArray(payload)");
