@@ -406,7 +406,7 @@ export default function Dashboard() { // skipcq: JS-R1005
         />
 
         {/* Main content */}
-        <main className="flex-1 min-w-0 p-4 sm:p-6 max-w-full pb-4 md:pb-6 max-md:h-[calc(100svh-4rem-var(--dashboard-mobile-nav-h,56px)-env(safe-area-inset-bottom,0px))] max-md:overflow-y-auto">
+        <main className="flex-1 min-w-0 p-4 sm:p-6 max-w-full pb-dashboard-mobile-nav md:pb-6">
 
           {/* ── OVERVIEW ───────────────────────────────────────────────────── */}
           {activeSection === "overview" && navItems.some(i => i.key === "overview") && (

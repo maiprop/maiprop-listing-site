@@ -15,6 +15,7 @@ const getSessionMock = vi.fn();
 const toastErrorMock = vi.fn();
 const currentAuth = vi.hoisted(() => ({ user: { id: "user-1" } as null | { id: string } }));
 const navigateMock = vi.hoisted(() => vi.fn());
+const trackUserSearchMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({ user: currentAuth.user }),
@@ -22,6 +23,10 @@ vi.mock("@/contexts/AuthContext", () => ({
 
 vi.mock("@/components/SignInForAI", () => ({
   SignInForAI: ({ feature }: { feature: string }) => <div>Sign in for {feature}</div>,
+}));
+
+vi.mock("@/hooks/useTrackUserSearch", () => ({
+  useTrackUserSearch: () => trackUserSearchMock,
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
@@ -69,6 +74,8 @@ describe("small interaction widgets", () => {
     getSessionMock.mockReset();
     toastErrorMock.mockReset();
     navigateMock.mockReset();
+    trackUserSearchMock.mockReset();
+    trackUserSearchMock.mockResolvedValue(undefined);
     vi.restoreAllMocks();
   });
 
@@ -89,6 +96,12 @@ describe("small interaction widgets", () => {
     await waitFor(() => expect(onFiltersApplied).toHaveBeenCalledWith(
       expect.objectContaining({ city: "Athens", price_max: 200000 }),
     ));
+    expect(trackUserSearchMock).toHaveBeenCalledWith(expect.objectContaining({
+      surface: "ai_search",
+      query: "Athens under 200k",
+      route: "/listings",
+      filters: expect.objectContaining({ city: "Athens", price_max: 200000 }),
+    }));
     expect(screen.getByRole("button", { name: /Current filter: Athens under 200k/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Clear AI search filters/i }));
@@ -133,6 +146,12 @@ describe("small interaction widgets", () => {
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith(
       "/auctions?city=Agrinio&price_min=100000&price_max=200000&sqm_min=80&sqm_max=120&ai_summary=Auctions+in+Agrinio",
     ));
+    expect(trackUserSearchMock).toHaveBeenCalledWith(expect.objectContaining({
+      surface: "ai_search",
+      query: "show me auctions in Agrinio",
+      route: "/auctions",
+      filters: expect.objectContaining({ listing_type: "auction", city: "Agrinio" }),
+    }));
     expect(onFiltersApplied).not.toHaveBeenCalled();
   });
 

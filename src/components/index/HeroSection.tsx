@@ -103,13 +103,17 @@ export function HeroSection() {
     const city = asString(filters.city);
     if (city) params.set("city", city);
     const listingType = asString(filters.listing_type);
-    if (listingType) params.set("listing_type", listingType);
+    const isAuctionSearch = listingType === "auction";
+    if (listingType && !isAuctionSearch) params.set("listing_type", listingType);
     const propertyType = asString(filters.property_type);
     if (propertyType) params.set("type", propertyType);
 
     const priceMin = clampInt(filters.price_min, 0, PRICE_MAX);
     const priceMax = clampInt(filters.price_max, 0, PRICE_MAX);
-    if (priceMin != null || priceMax != null) {
+    if (isAuctionSearch) {
+      if (priceMin != null) params.set("price_min", String(priceMin));
+      if (priceMax != null) params.set("price_max", String(priceMax));
+    } else if (priceMin != null || priceMax != null) {
       params.set("price", `${priceMin ?? 0}-${priceMax ?? PRICE_MAX}`);
     }
 
@@ -125,7 +129,7 @@ export function HeroSection() {
       if (features.length) params.set("features", features.join(","));
     }
 
-    navigate(`/listings?${params.toString()}`);
+    navigate(`${isAuctionSearch ? "/auctions" : "/listings"}?${params.toString()}`);
   };
 
   const professionalInputValue = searchType === "Professionals" ? searchQuery : "";

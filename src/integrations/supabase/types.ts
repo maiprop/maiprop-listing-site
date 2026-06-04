@@ -3316,6 +3316,39 @@ export type Database = {
           },
         ]
       }
+      user_auth_activity_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          metadata: Json
+          route: string | null
+          session_id: string | null
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          metadata?: Json
+          route?: string | null
+          session_id?: string | null
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          metadata?: Json
+          route?: string | null
+          session_id?: string | null
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           id: string
@@ -3333,6 +3366,53 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      user_search_events: {
+        Row: {
+          created_at: string
+          filters: Json
+          id: string
+          metadata: Json
+          normalized_query: string
+          query_text: string
+          result_count: number | null
+          route: string | null
+          surface: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          filters?: Json
+          id?: string
+          metadata?: Json
+          normalized_query: string
+          query_text: string
+          result_count?: number | null
+          route?: string | null
+          surface: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          filters?: Json
+          id?: string
+          metadata?: Json
+          normalized_query?: string
+          query_text?: string
+          result_count?: number | null
+          route?: string | null
+          surface?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_search_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       viewings: {
         Row: {
@@ -3722,6 +3802,10 @@ export type Database = {
           notified: number
           status: string
         }[]
+      }
+      admin_user_activity_snapshot: {
+        Args: { p_days?: number; p_limit?: number }
+        Returns: Json
       }
       agent_data_input_discount_pct_per_input: { Args: never; Returns: number }
       agent_data_input_max_per_month: { Args: never; Returns: number }
@@ -4133,6 +4217,10 @@ export type Database = {
         }
         Returns: string
       }
+      record_user_auth_activity: {
+        Args: { p_event_type: string; p_metadata?: Json; p_route?: string }
+        Returns: string
+      }
       release_expired_firesale_reservations: {
         Args: { p_deal_id?: string }
         Returns: number
@@ -4280,9 +4368,24 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      track_user_search: {
+        Args: {
+          p_filters?: Json
+          p_metadata?: Json
+          p_query: string
+          p_result_count?: number
+          p_route?: string
+          p_surface: string
+        }
+        Returns: undefined
+      }
       unarchive_role_data: {
         Args: { p_role: string; p_user_id: string }
         Returns: undefined
+      }
+      uuid_from_realtime_topic: {
+        Args: { p_prefix: string; p_topic: string }
+        Returns: string
       }
     }
     Enums: {

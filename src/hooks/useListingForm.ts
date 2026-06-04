@@ -15,6 +15,7 @@ import type { UploadedImage } from "@/types";
 import { useListingDraft } from "@/hooks/useListingDraft";
 import { useListingAI } from "@/hooks/useListingAI";
 import type { Database } from "@/integrations/supabase/types";
+import type { ListingWithJoins } from "@/hooks/useListings";
 import type {
   PropertyType,
   ListingType,
@@ -28,6 +29,13 @@ import { tFallback, tInterpolate } from "@/lib/i18nFallback";
 // from "@/hooks/useListingForm"`) keep working.
 export type { PropertyType, ListingType, WizardStep, AIPriceSuggestion, ListingFormData };
 type ListingInsert = Database["public"]["Tables"]["listings"]["Insert"];
+type ListingUpdate = Database["public"]["Tables"]["listings"]["Update"];
+type UseListingFormOptions = {
+  allowPreSale?: boolean;
+  mode?: "create" | "edit";
+  listingId?: string;
+  initialListing?: ListingWithJoins | null;
+};
 
 /**
  * Set of keys on `ListingFormData` whose values are booleans — derived once
@@ -70,12 +78,92 @@ const INITIAL_FORM: ListingFormData = {
   is_featured: false, priority_placement: 0, is_exclusive: false,
 };
 
+const NUMERIC_STRING_FIELDS = [
+  "sqm", "year_built", "bedrooms", "bathrooms", "wc_count", "kitchens",
+  "living_rooms", "floor", "total_floors", "levels", "plot_surface",
+  "floor_height", "coverage_ratio", "building_allowance", "facade_length",
+  "plot_depth", "distance_from_sea", "distance_from_city", "price",
+  "auction_starting_bid", "deposit_months", "monthly_expenses",
+  "min_rental_months",
+] as const;
+
+function getBooleanKeys() {
+  if (!BOOLEAN_KEYS) {
+    BOOLEAN_KEYS = new Set(
+      Object.entries(INITIAL_FORM)
+        .filter(([, v]) => typeof v === "boolean")
+        .map(([k]) => k),
+    );
+  }
+  return BOOLEAN_KEYS;
+}
+
+function toFormString(value: unknown) {
+  return value === null || value === undefined ? "" : String(value);
+}
+
+function toDateTimeLocalValue(value: string | null | undefined) {
+  if (!value) return "";
+  return value.includes("T") ? value.slice(0, 16) : value;
+}
+
+function listingToForm(listing: ListingWithJoins): ListingFormData {
+  const next: ListingFormData = {
+    ...INITIAL_FORM,
+    listing_type: listing.listing_type as ListingType,
+    property_type: listing.property_type as PropertyType,
+    title: listing.title ?? "",
+    description: listing.description ?? "",
+    energy_class: listing.energy_class ?? "",
+    heating_system: listing.heating_system ?? "",
+    construction_status: listing.construction_status ?? "",
+    commercial_subtype: listing.commercial_subtype ?? "",
+    slope: listing.slope ?? "",
+    zone_type: listing.zone_type ?? "",
+    road_type: listing.road_type ?? "",
+    land_use: listing.land_use ?? "",
+    address: listing.address ?? "",
+    city: listing.city ?? "",
+    region: listing.region ?? "",
+    postal_code: listing.postal_code ?? "",
+    cadastre_number: listing.cadastre_number ?? "",
+    enfia_zone: listing.enfia_zone ?? "",
+    auction_date: toDateTimeLocalValue(listing.auction_date),
+    auction_court: listing.auction_court ?? "",
+    open_house_date: toDateTimeLocalValue(listing.open_house_date),
+    available_from: listing.available_from ?? "",
+    priority_placement: Number(listing.priority_placement ?? 0),
+    is_exclusive: (listing.tags ?? []).includes("exclusive"),
+  };
+
+  const raw = listing as unknown as Record<string, unknown>;
+  for (const key of NUMERIC_STRING_FIELDS) next[key] = toFormString(raw[key]);
+  for (const key of getBooleanKeys()) {
+    if (key === "is_exclusive") continue;
+    (next as unknown as Record<string, boolean>)[key] = Boolean(raw[key]);
+  }
+  return next;
+}
+
+function listingToImages(listing: ListingWithJoins): UploadedImage[] {
+  const images: UploadedImage[] = [];
+  if (listing.cover_image_url) images.push({ id: "existing-cover", url: listing.cover_image_url });
+  const additional = [...(listing.listing_images ?? [])]
+    .sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0))
+    .filter((img) => img.url && img.url !== listing.cover_image_url)
+    .map((img, idx) => ({ id: `existing-${idx}`, url: img.url }));
+  return [...images, ...additional];
+}
+
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
-export function useListingForm(options?: { allowPreSale?: boolean }) {
+export function useListingForm(options?: UseListingFormOptions) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const isEditMode = options?.mode === "edit";
+  const editListingId = options?.listingId;
+  const initialListing = options?.initialListing;
   const tr = useCallback((key: string, fallback: string) => tFallback(t, key, fallback), [t]);
   const trv = useCallback((key: string, fallback: string, values: Record<string, string | number>) => tInterpolate(t, key, fallback, values), [t]);
 
@@ -88,6 +176,7 @@ export function useListingForm(options?: { allowPreSale?: boolean }) {
   // Image state
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [coverImageId, setCoverImageId] = useState<string | null>(null);
+  const hydratedListingIdRef = useRef<string | null>(null);
   // Track every blob URL we hand out via URL.createObjectURL so we can
   // revoke them on unmount or replacement — leaking these on a long
   // listing-creation session leaks raw image bytes for the page lifetime.
@@ -99,6 +188,18 @@ export function useListingForm(options?: { allowPreSale?: boolean }) {
       urls.clear();
     };
   }, []);
+
+  useEffect(() => {
+    if (!isEditMode || !initialListing) return;
+    if (hydratedListingIdRef.current === initialListing.id) return;
+    hydratedListingIdRef.current = initialListing.id;
+    const existingImages = listingToImages(initialListing);
+    setForm(listingToForm(initialListing));
+    setImages(existingImages);
+    setCoverImageId(existingImages[0]?.id ?? null);
+    setErrors({});
+    setTouched({});
+  }, [initialListing, isEditMode]);
 
   // ── Sub-hooks ─────────────────────────────────────────────────────────────
 
@@ -132,14 +233,7 @@ export function useListingForm(options?: { allowPreSale?: boolean }) {
   }, [tr]);
 
   const toggle = useCallback((key: string) => {
-    if (!BOOLEAN_KEYS) {
-      BOOLEAN_KEYS = new Set(
-        Object.entries(INITIAL_FORM)
-          .filter(([, v]) => typeof v === "boolean")
-          .map(([k]) => k),
-      );
-    }
-    if (!BOOLEAN_KEYS.has(key)) {
+    if (!getBooleanKeys().has(key)) {
       // Refuse to flip non-boolean (or unknown) columns. Catches typos in
       // call sites and blocks injection of attacker-controlled keys via UI
       // bindings.
@@ -287,9 +381,17 @@ export function useListingForm(options?: { allowPreSale?: boolean }) {
     const isCommercial = ["commercial", "office"].includes(pt);
     try {
       const coverImg = images.find(img => img.id === coverImageId);
-      const coverImageUrl = coverImg?.url || undefined;
+      const coverImageUrl = coverImg?.url;
+      const coverImagePayload = coverImageUrl ?? (isEditMode ? null : undefined);
 
-      const payload: ListingInsert = {
+      const nextStatus = asDraft
+        ? "draft"
+        : isEditMode
+          ? initialListing?.status ?? "active"
+          : "active";
+      const baseTags = isEditMode ? (initialListing?.tags ?? []).filter((tag) => tag !== "exclusive") : [];
+      const tags = form.is_exclusive ? [...baseTags, "exclusive"] : (baseTags.length ? baseTags : undefined);
+      const payload: ListingInsert | ListingUpdate = {
         title: form.title,
         description: form.description || undefined,
         city: form.city,
@@ -306,7 +408,7 @@ export function useListingForm(options?: { allowPreSale?: boolean }) {
         energy_class: form.energy_class || undefined,
         heating_system: form.heating_system || undefined,
         construction_status: form.construction_status || undefined,
-        cover_image_url: coverImageUrl,
+        cover_image_url: coverImagePayload,
         price_per_sqm: form.price && form.sqm ? Math.round(Number(form.price) / Number(form.sqm)) : undefined,
         ...(isResidential && {
           bedrooms: form.bedrooms ? Number(form.bedrooms) : undefined,
@@ -378,42 +480,94 @@ export function useListingForm(options?: { allowPreSale?: boolean }) {
         has_structured_cabling: form.has_structured_cabling, has_equipped: form.has_equipped,
         is_featured: form.is_featured ?? false,
         priority_placement: Number(form.priority_placement) || 0,
-        tags: form.is_exclusive ? (["exclusive"] as string[]) : undefined,
+        tags,
         owner_id: user.id,
-        status: asDraft ? "draft" : "active",
+        status: nextStatus,
       };
 
-      const { data, error } = await supabase
-        .from("listings")
-        .insert(payload)
-        .select()
-        .single();
-      if (error) throw error;
-
-      const additionalImages = images.filter(img => img.url !== coverImageUrl && !img.uploading && !img.error);
-      if (additionalImages.length > 0) {
-        await supabase.from("listing_images").insert(
-          additionalImages.map((img, idx) => ({
-            listing_id: (data as { id: string }).id,
-            url: img.url,
-            sort_order: idx + 1,
-          }))
-        );
+      const listingId = editListingId ?? initialListing?.id;
+      let savedListing: { id: string };
+      if (isEditMode) {
+        if (!listingId) throw new Error(tr("createListing.validation.missingListing", "Listing could not be loaded for editing"));
+        const { data, error } = await supabase
+          .from("listings")
+          .update(payload as ListingUpdate)
+          .eq("id", listingId)
+          .eq("owner_id", user.id)
+          .select()
+          .single();
+        if (error) throw error;
+        savedListing = data as { id: string };
+      } else {
+        const { data, error } = await supabase
+          .from("listings")
+          .insert(payload as ListingInsert)
+          .select()
+          .single();
+        if (error) throw error;
+        savedListing = data as { id: string };
       }
 
-      toast.success(asDraft ? tr("createListing.validation.savedDraft", "Listing saved as draft!") : tr("createListing.validation.published", "Listing published successfully!"));
+      const additionalImages = images.filter(img => img.url !== coverImageUrl && !img.uploading && !img.error);
+      const desiredImageRows = additionalImages.map((img, idx) => ({
+        listing_id: savedListing.id,
+        url: img.url,
+        sort_order: idx + 1,
+      }));
+      if (isEditMode && listingId) {
+        const existingAdditionalRows = (initialListing?.listing_images ?? [])
+          .filter((img) => img.url && img.url !== initialListing?.cover_image_url);
+        const existingSortByUrl = new Map(existingAdditionalRows.map((img) => [img.url, Number(img.sort_order ?? 0)]));
+        const desiredUrls = new Set(desiredImageRows.map((img) => img.url));
+        const rowsToInsert = desiredImageRows.filter((img) => !existingSortByUrl.has(img.url));
+
+        if (rowsToInsert.length > 0) {
+          const { error: insertImageError } = await supabase.from("listing_images").insert(rowsToInsert);
+          if (insertImageError) throw insertImageError;
+        }
+
+        for (const row of desiredImageRows) {
+          if (existingSortByUrl.get(row.url) === row.sort_order) continue;
+          if (!existingSortByUrl.has(row.url)) continue;
+          const { error: updateImageError } = await supabase
+            .from("listing_images")
+            .update({ sort_order: row.sort_order })
+            .eq("listing_id", listingId)
+            .eq("url", row.url);
+          if (updateImageError) throw updateImageError;
+        }
+
+        for (const existingUrl of existingSortByUrl.keys()) {
+          if (desiredUrls.has(existingUrl)) continue;
+          const { error: deleteImageError } = await supabase
+            .from("listing_images")
+            .delete()
+            .eq("listing_id", listingId)
+            .eq("url", existingUrl);
+          if (deleteImageError) throw deleteImageError;
+        }
+      } else if (desiredImageRows.length > 0) {
+        const { error: insertImageError } = await supabase.from("listing_images").insert(desiredImageRows);
+        if (insertImageError) throw insertImageError;
+      }
+
+      toast.success(isEditMode
+        ? tr("createListing.validation.updated", "Listing updated successfully!")
+        : asDraft
+          ? tr("createListing.validation.savedDraft", "Listing saved as draft!")
+          : tr("createListing.validation.published", "Listing published successfully!"));
       const detailRoute = lt === "open_house"
-        ? `/open-house/${(data as { id: string }).id}`
+        ? `/open-house/${savedListing.id}`
         : options?.allowPreSale && form.is_pre_sale
-        ? `/new-build/${(data as { id: string }).id}`
-        : `/property/${(data as { id: string }).id}`;
+        ? `/new-build/${savedListing.id}`
+        : `/property/${savedListing.id}`;
       navigate(detailRoute);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : tr("createListing.validation.submissionFailed", "Submission failed"));
     } finally {
       setSubmitting(false);
     }
-  }, [form, images, coverImageId, user, navigate, options?.allowPreSale, tr]);
+  }, [editListingId, form, images, coverImageId, initialListing, isEditMode, user, navigate, options?.allowPreSale, tr]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
 

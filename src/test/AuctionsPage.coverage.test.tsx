@@ -1,5 +1,6 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders } from "@/test/utils";
 import Auctions from "@/pages/Auctions";
 
@@ -8,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   mutate: vi.fn(),
   pipeline: vi.fn(),
+  trackUserSearch: vi.fn(),
   search: "city=Athens&type=apartment",
 }));
 
@@ -33,6 +35,10 @@ vi.mock("@/hooks/useAuctionsPipeline", () => ({
   AUCTIONS_MAX_PAGES_FREE: 2,
   AUCTIONS_MAX_PAGES_PRO: 10,
   useAuctionsPipeline: (...args: unknown[]) => mocks.pipeline(...args),
+}));
+
+vi.mock("@/hooks/useTrackUserSearch", () => ({
+  useTrackUserSearch: () => mocks.trackUserSearch,
 }));
 
 vi.mock("@/components/Navbar", () => ({ Navbar: () => <nav data-testid="navbar" /> }));
@@ -132,7 +138,13 @@ describe("Auctions page coverage", () => {
     vi.clearAllMocks();
     mocks.user = { id: "user-1" };
     mocks.search = "city=Athens&type=apartment";
+    mocks.trackUserSearch.mockReset();
+    mocks.trackUserSearch.mockResolvedValue(undefined);
     setPipeline();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("hydrates AI auction URL filters into the auction pipeline", () => {
@@ -145,6 +157,36 @@ describe("Auctions page coverage", () => {
       filterType: "commercial",
       filterBidRange: "100000-200000",
       filterSqmRange: "80-120",
+    }));
+  });
+
+  it("records submitted auction filters for admin search activity analytics", async () => {
+    vi.useFakeTimers();
+    mocks.search = "city=Agrinio&type=commercial&price_min=100000&price_max=200000&sqm_min=80&sqm_max=120";
+    setPipeline({ visibleFiltered: [auction], activeFilterCount: 4, totalRaw: 600, mappableCount: 1 });
+
+    renderWithProviders(<Auctions />);
+    await act(async () => {
+      vi.advanceTimersByTime(1400);
+      await Promise.resolve();
+    });
+
+    expect(mocks.trackUserSearch).toHaveBeenCalledWith(expect.objectContaining({
+      surface: "auctions",
+      query: expect.stringContaining("Agrinio"),
+      route: expect.stringContaining("/auctions"),
+      resultCount: 1,
+      filters: expect.objectContaining({
+        city: "Agrinio",
+        type: "commercial",
+        bidRange: "100000-200000",
+        sqmRange: "80-120",
+      }),
+      metadata: expect.objectContaining({
+        activeFilterCount: 4,
+        totalRaw: 600,
+        mappableCount: 1,
+      }),
     }));
   });
 

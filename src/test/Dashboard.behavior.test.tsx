@@ -217,6 +217,8 @@ describe("Dashboard behavior", () => {
     const main = container.querySelector("main");
     expect(main).not.toBeNull();
     expect(main?.className).not.toContain("overflow-hidden");
+    expect(main?.className).not.toContain("overflow-y-auto");
+    expect(main?.className).not.toContain("max-md:h-");
   });
 
   it("counts seller active listings from the same listing rows shown in the overview", () => {

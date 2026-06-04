@@ -14,6 +14,7 @@ import { toast } from "sonner";
 
 const authMock = vi.hoisted(() => ({
   signIn: vi.fn(),
+  trackUserSearch: vi.fn(),
   user: null as null | { id: string },
   loading: false,
 }));
@@ -24,6 +25,10 @@ vi.mock("@/contexts/AuthContext", () => ({
     user: authMock.user,
     loading: authMock.loading,
   }),
+}));
+
+vi.mock("@/hooks/useTrackUserSearch", () => ({
+  useTrackUserSearch: () => authMock.trackUserSearch,
 }));
 
 vi.mock("@/components/Navbar", () => ({
@@ -79,6 +84,8 @@ function renderWithRoutes(ui: React.ReactElement, initialPath = "/") {
     <Routes>
       <Route path="/" element={ui} />
       <Route path="/login" element={ui} />
+      <Route path="/auctions" element={<div>Auctions destination</div>} />
+      <Route path="/listings" element={<div>Listings destination</div>} />
       <Route path="/dashboard" element={<div>Dashboard destination</div>} />
       <Route path="/signup" element={<div>Signup destination</div>} />
     </Routes>,
@@ -121,6 +128,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.useRealTimers();
   authMock.signIn.mockResolvedValue({ error: null });
+  authMock.trackUserSearch.mockResolvedValue(undefined);
   authMock.user = null;
   authMock.loading = false;
   mockSupabase.auth.signInWithOAuth.mockResolvedValue({ error: null });
@@ -307,6 +315,45 @@ describe("HeroSection", () => {
     act(() => vi.runOnlyPendingTimers());
 
     expect(video.querySelector("source")).toBeNull();
+  });
+
+  it("routes auction AI searches to the auctions result surface", async () => {
+    stubMatchMedia({ desktop: false });
+    authMock.user = { id: "buyer-1" };
+    mockSupabase.functions.invoke.mockResolvedValueOnce({
+      data: {
+        listing_type: "auction",
+        city: "Athens",
+        property_type: "apartment",
+        price_min: 100000,
+        price_max: 250000,
+      },
+      error: null,
+    });
+
+    renderWithRoutes(<HeroSection />);
+
+    fireEvent.click(screen.getByLabelText(/AI-powered search/i));
+    fireEvent.change(screen.getByPlaceholderText(/quiet apartment near metro/i), {
+      target: { value: "auctions in Athens under 250k" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^Search$/i }));
+
+    await waitFor(() => expect(screen.getByText("Auctions destination")).toBeInTheDocument());
+    expect(mockSupabase.functions.invoke).toHaveBeenCalledWith("ai-search", {
+      body: { query: "auctions in Athens under 250k" },
+    });
+    expect(authMock.trackUserSearch).toHaveBeenCalledWith(expect.objectContaining({
+      surface: "ai_search",
+      query: "auctions in Athens under 250k",
+      route: "/auctions",
+      filters: expect.objectContaining({
+        listing_type: "auction",
+        city: "Athens",
+        price_min: 100000,
+        price_max: 250000,
+      }),
+    }));
   });
 });
 

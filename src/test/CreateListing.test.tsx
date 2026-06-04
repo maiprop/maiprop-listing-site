@@ -9,22 +9,27 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
-const { useAuthMock, useSubMock, useListingFormMock, useMyListingsMock, useConnectionsMock, getPlanLimitsMock, useFormWizardMock, toastMock, navigateMock } = vi.hoisted(() => ({
+const { useAuthMock, useSubMock, useListingFormMock, useMyListingsMock, useListingMock, useConnectionsMock, getPlanLimitsMock, useFormWizardMock, toastMock, navigateMock, paramsState } = vi.hoisted(() => ({
   useAuthMock: vi.fn(),
   useSubMock: vi.fn(),
   useListingFormMock: vi.fn(),
   useMyListingsMock: vi.fn(),
+  useListingMock: vi.fn(),
   useConnectionsMock: vi.fn(),
   getPlanLimitsMock: vi.fn(),
   useFormWizardMock: vi.fn(),
   toastMock: { success: vi.fn(), error: vi.fn() },
   navigateMock: vi.fn(),
+  paramsState: { listingId: undefined as string | undefined },
 }));
 
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => useAuthMock() }));
 vi.mock("@/hooks/useSubscription", () => ({ useSubscription: () => useSubMock() }));
 vi.mock("@/hooks/useListingForm", () => ({ useListingForm: (...a: unknown[]) => useListingFormMock(...a) }));
-vi.mock("@/hooks/useListings", () => ({ useMyListings: () => useMyListingsMock() }));
+vi.mock("@/hooks/useListings", () => ({
+  useMyListings: () => useMyListingsMock(),
+  useListing: (id: string) => useListingMock(id),
+}));
 vi.mock("@/hooks/useCreateListingConnections", () => ({ useCreateListingConnections: () => useConnectionsMock() }));
 vi.mock("@/hooks/usePlanLimits", () => ({ getPlanLimits: (...a: unknown[]) => getPlanLimitsMock(...a) }));
 vi.mock("@/hooks/useFormWizard", () => ({ useFormWizard: () => useFormWizardMock() }));
@@ -42,7 +47,7 @@ vi.mock("@/lib/participantConfig", () => ({
 }));
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
-  return { ...actual, useNavigate: () => navigateMock };
+  return { ...actual, useNavigate: () => navigateMock, useParams: () => paramsState };
 });
 
 import CreateListing from "@/pages/CreateListing";
@@ -104,6 +109,9 @@ beforeEach(() => {
   useListingFormMock.mockReturnValue(baseForm());
   useMyListingsMock.mockReset();
   useMyListingsMock.mockReturnValue({ data: [] });
+  useListingMock.mockReset();
+  useListingMock.mockReturnValue({ data: null, isLoading: false });
+  paramsState.listingId = undefined;
   useConnectionsMock.mockReset();
   useConnectionsMock.mockReturnValue({});
   getPlanLimitsMock.mockReset();
@@ -187,7 +195,7 @@ describe("CreateListing", () => {
     }));
     render(<CreateListing />, { wrapper: wrap });
 
-    expect(useListingFormMock).toHaveBeenCalledWith({ allowPreSale: false });
+    expect(useListingFormMock).toHaveBeenCalledWith(expect.objectContaining({ allowPreSale: false, mode: "create" }));
     expect(set).toHaveBeenCalledWith("is_pre_sale", false);
     expect(set).toHaveBeenCalledWith("construction_status", "");
   });
@@ -198,8 +206,46 @@ describe("CreateListing", () => {
       profile: { role: "developer", participant_type: "developer" },
     });
     render(<CreateListing />, { wrapper: wrap });
-    expect(useListingFormMock).toHaveBeenCalledWith({ allowPreSale: true });
+    expect(useListingFormMock).toHaveBeenCalledWith(expect.objectContaining({ allowPreSale: true, mode: "create" }));
     expect(screen.getByTestId("step-type")).toBeInTheDocument();
+  });
+
+  it("hydrates the full listing editor and skips create-only listing caps", () => {
+    paramsState.listingId = "l-edit";
+    getPlanLimitsMock.mockReturnValue({ listings: 1 });
+    useMyListingsMock.mockReturnValue({ data: [{ id: "existing" }] });
+    const editListing = {
+      id: "l-edit",
+      owner_id: "u-1",
+      title: "Editable home",
+      listing_type: "sale",
+      property_type: "apartment",
+      listing_images: [],
+      profiles: null,
+      ownerIsPro: false,
+      ownerParticipantType: "seller",
+    };
+    useListingMock.mockReturnValue({ data: editListing, isLoading: false });
+
+    render(<CreateListing />, { wrapper: wrap });
+
+    expect(screen.getByText(/Edit Listing/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Listing Limit Reached/i)).not.toBeInTheDocument();
+    expect(useListingFormMock).toHaveBeenCalledWith(expect.objectContaining({
+      mode: "edit",
+      listingId: "l-edit",
+      initialListing: editListing,
+    }));
+  });
+
+  it("routes unavailable edit states back to the canonical listings dashboard", () => {
+    paramsState.listingId = "missing";
+    useListingMock.mockReturnValue({ data: null, isLoading: false });
+
+    render(<CreateListing />, { wrapper: wrap });
+
+    expect(screen.getByText(/Listing not found/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Back to Listings/i })).toHaveAttribute("href", "/dashboard/listings");
   });
 
   it("shows publishing stuck-state controls while the submit mutation is pending", () => {

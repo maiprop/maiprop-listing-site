@@ -16,6 +16,7 @@ import { logger } from "@/lib/logger";
 import { APP_ORIGIN } from "@/lib/config";
 import { getExplicitParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { validatePassword } from "@/lib/passwordPolicy";
+import { recordUserAuthActivity, type AuthActivityEventType } from "@/lib/authActivity";
 
 export type Profile = Tables<"profiles"> & {
   role_switch_in_progress_at?: string | null;
@@ -101,6 +102,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const expectedUserIdRef = useRef<string | null>(null);
   // Guard: prevent concurrent subscription checks
   const subCheckInProgressRef = useRef(false);
+  // Guard: avoid duplicate auth telemetry from INITIAL_SESSION + getSession races.
+  const lastAuthActivityRef = useRef<{ key: string; at: number } | null>(null);
 
   const fetchProfile = useCallback(async (userId: string) => {
     expectedUserIdRef.current = userId;
@@ -161,6 +164,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const recordAuthActivity = useCallback(
+    (eventType: AuthActivityEventType, currentSession: Session | null, source: string) => {
+      if (!currentSession?.user) return;
+      const key = [
+        eventType,
+        currentSession.user.id,
+        currentSession.expires_at ?? "no-expiry",
+      ].join(":");
+      const now = Date.now();
+      if (lastAuthActivityRef.current?.key === key && now - lastAuthActivityRef.current.at < 90_000) return;
+      lastAuthActivityRef.current = { key, at: now };
+
+      void recordUserAuthActivity({
+        eventType,
+        metadata: {
+          source,
+          expires_at: currentSession.expires_at ?? null,
+        },
+      });
+    },
+    [],
+  );
+
+  const eventToAuthActivity = useCallback((event: string): AuthActivityEventType | null => {
+    if (event === "SIGNED_IN") return "sign_in";
+    if (event === "INITIAL_SESSION") return "session_restored";
+    if (event === "TOKEN_REFRESHED") return "token_refreshed";
+    if (event === "USER_UPDATED") return "user_updated";
+    if (event === "PASSWORD_RECOVERY") return "password_recovery";
+    return null;
+  }, []);
+
   useEffect(() => {
     // Safety: never block the app for more than 8s if Supabase/auth hangs
     const SAFETY_MS = 8_000;
@@ -186,6 +221,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // setTimeout(0) avoids a Supabase deadlock when invoking functions
         // inside onAuthStateChange; the dedup ref prevents concurrent calls.
         setTimeout(() => checkSubscription(sess), 0);
+        const authActivityType = eventToAuthActivity(_event);
+        if (authActivityType) {
+          setTimeout(() => recordAuthActivity(authActivityType, sess, "on_auth_state_change"), 0);
+        }
       } else {
         // Clear all user-scoped state on sign-out
         expectedUserIdRef.current = null;
@@ -228,6 +267,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             err instanceof Error ? err.message : err,
           );
         });
+        recordAuthActivity("session_restored", sess, "get_session_restore");
       })
       .catch(() => setLoading(false));
 
@@ -254,7 +294,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       authSub.unsubscribe();
       clearInterval(interval);
     };
-  }, [fetchProfile, checkSubscription]);
+  }, [fetchProfile, checkSubscription, eventToAuthActivity, recordAuthActivity]);
 
   const signUp = useCallback(
     async (
@@ -309,6 +349,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    await recordUserAuthActivity({
+      eventType: "sign_out",
+      metadata: { source: "sign_out" },
+    });
     await supabase.auth.signOut();
     setProfile(null);
     setSubscription({

@@ -5,6 +5,7 @@ import { AISearchModal } from "@/components/index/AISearchModal";
 
 const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
+  trackUserSearch: vi.fn(),
   useAuth: vi.fn(),
   toastError: vi.fn(),
 }));
@@ -19,6 +20,10 @@ vi.mock("@/integrations/supabase/client", () => ({
 
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => mocks.useAuth(),
+}));
+
+vi.mock("@/hooks/useTrackUserSearch", () => ({
+  useTrackUserSearch: () => mocks.trackUserSearch,
 }));
 
 vi.mock("sonner", () => ({
@@ -47,6 +52,7 @@ describe("AISearchModal", () => {
     vi.clearAllMocks();
     mocks.useAuth.mockReturnValue({ user: { id: "user-1" } });
     mocks.invoke.mockResolvedValue({ data: { city: "Athens" }, error: null });
+    mocks.trackUserSearch.mockResolvedValue(undefined);
   });
 
   it("shows the sign-in gate and hides search controls for signed-out users", () => {
@@ -57,6 +63,7 @@ describe("AISearchModal", () => {
     expect(screen.getByText("Sign in for AI Search")).toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/quiet apartment/i)).not.toBeInTheDocument();
     expect(mocks.invoke).not.toHaveBeenCalled();
+    expect(mocks.trackUserSearch).not.toHaveBeenCalled();
   });
 
   it("does not invoke AI search for blank input", () => {
@@ -69,9 +76,11 @@ describe("AISearchModal", () => {
     fireEvent.click(searchButton);
 
     expect(mocks.invoke).not.toHaveBeenCalled();
+    expect(mocks.trackUserSearch).not.toHaveBeenCalled();
   });
 
   it("submits typed search, applies returned filters, and closes", async () => {
+    mocks.invoke.mockResolvedValue({ data: { city: "Athens", listing_type: "sale", price_max: 200000 }, error: null });
     const props = renderModal();
 
     fireEvent.change(screen.getByPlaceholderText(/quiet apartment/i), {
@@ -84,7 +93,13 @@ describe("AISearchModal", () => {
         body: { query: "quiet apartment near metro in Athens under 200k" },
       });
     });
-    expect(props.onFiltersApplied).toHaveBeenCalledWith({ city: "Athens" });
+    expect(mocks.trackUserSearch).toHaveBeenCalledWith(expect.objectContaining({
+      surface: "ai_search",
+      query: "quiet apartment near metro in Athens under 200k",
+      route: "/listings",
+      filters: expect.objectContaining({ city: "Athens", listing_type: "sale", price_max: 200000 }),
+    }));
+    expect(props.onFiltersApplied).toHaveBeenCalledWith({ city: "Athens", listing_type: "sale", price_max: 200000 });
     expect(props.onClose).toHaveBeenCalledTimes(1);
   });
 
@@ -98,6 +113,11 @@ describe("AISearchModal", () => {
         body: { query: "Studio with parking in Thessaloniki under 80k" },
       });
     });
+    expect(mocks.trackUserSearch).toHaveBeenCalledWith(expect.objectContaining({
+      surface: "ai_search",
+      query: "Studio with parking in Thessaloniki under 80k",
+      route: "/listings",
+    }));
     expect(props.onFiltersApplied).toHaveBeenCalledWith({ city: "Athens" });
     expect(props.onClose).toHaveBeenCalledTimes(1);
   });
@@ -112,6 +132,7 @@ describe("AISearchModal", () => {
     fireEvent.keyDown(screen.getByPlaceholderText(/quiet apartment/i), { key: "Enter" });
 
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith("Quota reached"));
+    expect(mocks.trackUserSearch).not.toHaveBeenCalled();
     expect(props.onFiltersApplied).not.toHaveBeenCalled();
     expect(props.onClose).not.toHaveBeenCalled();
   });
@@ -125,6 +146,7 @@ describe("AISearchModal", () => {
     fireEvent.click(screen.getByRole("button", { name: /search/i }));
 
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith("Invalid search request"));
+    expect(mocks.trackUserSearch).not.toHaveBeenCalled();
 
     fireEvent.keyDown(input, { key: "Escape" });
     expect(props.onClose).toHaveBeenCalled();

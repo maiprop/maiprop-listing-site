@@ -13,7 +13,7 @@ import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, render, renderHook, waitFor } from "@testing-library/react";
 
-const { authStateCallbackHolder, supabaseMock } = vi.hoisted(() => {
+const { authActivityMock, authStateCallbackHolder, supabaseMock } = vi.hoisted(() => {
   // Holder<T> lets us reassign the captured onAuthStateChange listener
   // between tests so each test can drive the provider with a fresh shape.
   const authStateCallbackHolder: { current: ((event: string, session: unknown) => void) | null } = {
@@ -42,7 +42,11 @@ const { authStateCallbackHolder, supabaseMock } = vi.hoisted(() => {
     },
   };
 
-  return { authStateCallbackHolder, supabaseMock };
+  const authActivityMock = {
+    recordUserAuthActivity: vi.fn().mockResolvedValue("auth-event-1"),
+  };
+
+  return { authActivityMock, authStateCallbackHolder, supabaseMock };
 });
 
 vi.mock("@/integrations/supabase/client", () => ({
@@ -52,6 +56,9 @@ vi.mock("@/lib/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
 vi.mock("@/lib/config", () => ({ APP_ORIGIN: "https://test.maiprop" }));
+vi.mock("@/lib/authActivity", () => ({
+  recordUserAuthActivity: (...args: unknown[]) => authActivityMock.recordUserAuthActivity(...args),
+}));
 
 import { AuthProvider, useAuth, profileNeedsOnboarding } from "@/contexts/AuthContext";
 
@@ -73,6 +80,7 @@ beforeEach(() => {
   supabaseMock.auth.signInWithPassword.mockResolvedValue({ error: null });
   supabaseMock.auth.signUp.mockResolvedValue({ data: { user: null, session: null }, error: null });
   supabaseMock.functions.invoke.mockResolvedValue({ data: null, error: null });
+  authActivityMock.recordUserAuthActivity.mockResolvedValue("auth-event-1");
 });
 
 describe("profileNeedsOnboarding (pure helper)", () => {
@@ -191,6 +199,12 @@ describe("AuthProvider signed-in flow", () => {
       subscriptionEnd: "2027-01-01",
     });
     expect(result.current.needsOnboarding).toBe(false);
+    await waitFor(() =>
+      expect(authActivityMock.recordUserAuthActivity).toHaveBeenCalledWith(expect.objectContaining({
+        eventType: "sign_in",
+        metadata: expect.objectContaining({ source: "on_auth_state_change" }),
+      })),
+    );
   });
 
   it("surfaces needsOnboarding=true when the profile lacks an aligned participant_type", async () => {
@@ -326,6 +340,10 @@ describe("AuthProvider auth API methods", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     await act(async () => {
       await result.current.signOut();
+    });
+    expect(authActivityMock.recordUserAuthActivity).toHaveBeenCalledWith({
+      eventType: "sign_out",
+      metadata: { source: "sign_out" },
     });
     expect(supabaseMock.auth.signOut).toHaveBeenCalled();
     expect(result.current.profile).toBeNull();

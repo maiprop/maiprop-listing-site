@@ -4,8 +4,9 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
-const { fromMock, invokeMock, getSessionMock, getUserMock, toastMock, useAuthMock, useMyListingsMock } = vi.hoisted(() => ({
+const { fromMock, rpcMock, invokeMock, getSessionMock, getUserMock, toastMock, useAuthMock, useMyListingsMock } = vi.hoisted(() => ({
   fromMock: vi.fn(),
+  rpcMock: vi.fn(),
   invokeMock: vi.fn(),
   getSessionMock: vi.fn(),
   getUserMock: vi.fn(),
@@ -17,6 +18,7 @@ const { fromMock, invokeMock, getSessionMock, getUserMock, toastMock, useAuthMoc
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: (...args: unknown[]) => fromMock(...args),
+    rpc: (...args: unknown[]) => rpcMock(...args),
     auth: {
       getSession: (...args: unknown[]) => getSessionMock(...args),
       getUser: (...args: unknown[]) => getUserMock(...args),
@@ -60,6 +62,7 @@ vi.mock("@/components/AdminProfessionalVerification", () => ({ AdminProfessional
 vi.mock("@/components/POFVerificationPanel", () => ({ POFVerificationPanel: () => <div data-testid="admin-pof-review" /> }));
 vi.mock("@/components/AdminReports", () => ({ default: () => <div data-testid="admin-reports" /> }));
 vi.mock("@/components/AdminContactSubmissions", () => ({ default: () => <div data-testid="admin-contact-submissions" /> }));
+vi.mock("@/components/AdminUserActivity", () => ({ default: () => <div data-testid="admin-user-activity" /> }));
 
 import AdminDashboard from "@/pages/AdminDashboard";
 import AdminFeaturedListings from "@/components/AdminFeaturedListings";
@@ -170,6 +173,7 @@ const listing = {
 beforeEach(() => {
   vi.useRealTimers();
   fromMock.mockReset();
+  rpcMock.mockReset();
   invokeMock.mockReset();
   getSessionMock.mockReset();
   getUserMock.mockReset();
@@ -182,6 +186,7 @@ beforeEach(() => {
   getUserMock.mockResolvedValue({ data: { user: { id: "admin-user" } } });
   invokeMock.mockResolvedValue({ data: { status: "ok" }, error: null });
   fromMock.mockImplementation(tableBuilder({}));
+  rpcMock.mockResolvedValue({ data: null, error: null });
 });
 
 afterEach(() => {
@@ -207,6 +212,13 @@ describe("AdminDashboard tab routing", () => {
     renderAdminRoute("/admin?tab=contact-inbox");
 
     expect(await screen.findByTestId("admin-contact-submissions")).toBeInTheDocument();
+  });
+
+  it("routes admin user and search activity analytics to the dedicated tab", async () => {
+    renderAdminRoute("/admin?tab=users-activity");
+
+    expect(await screen.findByTestId("admin-user-activity")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /User Activity/i })).toHaveClass("bg-primary");
   });
 
   it("loads platform-wide open-house listings for admin moderation", async () => {

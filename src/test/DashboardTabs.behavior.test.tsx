@@ -16,6 +16,7 @@ const {
   updateListingMutate,
   deleteListingMutate,
   portfoliosState,
+  portfolioDetailState,
   favoritesState,
   createPortfolioMutate,
   updatePortfolioMutate,
@@ -40,6 +41,7 @@ const {
   updateListingMutate: vi.fn(),
   deleteListingMutate: vi.fn(),
   portfoliosState: { data: [] as Array<Record<string, unknown>>, isLoading: false },
+  portfolioDetailState: { data: null as Record<string, unknown> | null, isLoading: false, isError: false },
   favoritesState: { data: [] as Array<Record<string, unknown>>, isLoading: false },
   createPortfolioMutate: vi.fn(),
   updatePortfolioMutate: vi.fn(),
@@ -68,6 +70,7 @@ vi.mock("@/hooks/useListings", () => ({
 }));
 vi.mock("@/hooks/usePortfolios", () => ({
   usePortfolios: () => portfoliosState,
+  usePortfolio: () => portfolioDetailState,
   useCreatePortfolio: () => ({ mutate: createPortfolioMutate, isPending: false }),
   useUpdatePortfolio: () => ({ mutate: updatePortfolioMutate, isPending: false }),
   useDeletePortfolio: () => ({ mutate: deletePortfolioMutate, isPending: false }),
@@ -141,6 +144,9 @@ beforeEach(() => {
   listingsState.isLoading = false;
   portfoliosState.data = [];
   portfoliosState.isLoading = false;
+  portfolioDetailState.data = null;
+  portfolioDetailState.isLoading = false;
+  portfolioDetailState.isError = false;
   favoritesState.data = [];
   viewingsRequesterState.data = [];
   viewingsRequesterState.isLoading = false;
@@ -236,8 +242,13 @@ describe("dashboard tab behavior", () => {
       id: "p-preview",
       name: "Preview stack",
       listing_ids: ["l-1"],
-      listings: [{ id: "l-1", title: "Preview Flat", price: 180000 }],
     }];
+    portfolioDetailState.data = {
+      id: "p-preview",
+      name: "Preview stack",
+      listing_ids: ["l-1"],
+      listings: [{ id: "l-1", title: "Preview Flat", price: 180000 }],
+    };
 
     renderWithProviders(<PortfoliosTab />);
 
@@ -246,6 +257,28 @@ describe("dashboard tab behavior", () => {
     expect(within(dialog).getByText("Preview stack")).toBeInTheDocument();
     expect(within(dialog).getByText("Preview Flat")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /full view/i })).not.toBeInTheDocument();
+  });
+
+  it("does not show a false empty portfolio message when saved listing ids cannot hydrate", () => {
+    portfoliosState.data = [{
+      id: "p-preview",
+      name: "Preview stack",
+      listing_ids: ["l-1", "l-2"],
+    }];
+    portfolioDetailState.data = {
+      id: "p-preview",
+      name: "Preview stack",
+      listing_ids: ["l-1", "l-2"],
+      listings: [],
+    };
+
+    renderWithProviders(<PortfoliosTab />);
+
+    fireEvent.click(screen.getByRole("button", { name: /^Preview$/i }));
+    const dialog = screen.getByRole("dialog", { name: /portfolio preview/i });
+    expect(within(dialog).getByText("2 properties in this portfolio")).toBeInTheDocument();
+    expect(within(dialog).getByText("Saved properties could not be shown")).toBeInTheDocument();
+    expect(within(dialog).queryByText("No properties in this portfolio yet")).not.toBeInTheDocument();
   });
 
   it("toggles alerts, runs with serialized filters, and confirms saved-search deletion", () => {
@@ -412,7 +445,7 @@ describe("dashboard tab behavior", () => {
     expect(deleteListingMutate).toHaveBeenCalledWith("l-1");
   });
 
-  it("lets owners edit listing title, city, and price inline", () => {
+  it("routes listing owners to the full listing editor", () => {
     listingsState.data = [{
       id: "l-edit",
       title: "Old title",
@@ -430,19 +463,11 @@ describe("dashboard tab behavior", () => {
 
     renderWithProviders(<MyListingsSection bioType="seller" role="seller" />);
 
-    fireEvent.click(screen.getByRole("button", { name: /edit listing/i }));
-    fireEvent.change(screen.getByLabelText(/Listing title/i), { target: { value: "Updated title" } });
-    fireEvent.change(screen.getByLabelText(/Listing city/i), { target: { value: "Patras" } });
-    fireEvent.change(screen.getByLabelText(/Listing price/i), { target: { value: "123456" } });
-    fireEvent.click(screen.getByRole("button", { name: /save listing/i }));
-
-    expect(updateListingMutate).toHaveBeenCalledWith({
-      id: "l-edit",
-      updates: { title: "Updated title", city: "Patras", price: 123456 },
-    });
+    expect(screen.getByRole("link", { name: /edit listing/i })).toHaveAttribute("href", "/listings/l-edit/edit");
+    expect(screen.queryByLabelText(/Listing title/i)).not.toBeInTheDocument();
   });
 
-  it("does not save an empty listing price as zero", () => {
+  it("does not expose the old partial inline listing editor", () => {
     listingsState.data = [{
       id: "l-edit-empty-price",
       title: "Priced home",
@@ -458,11 +483,8 @@ describe("dashboard tab behavior", () => {
 
     renderWithProviders(<MyListingsSection bioType="seller" role="seller" />);
 
-    fireEvent.click(screen.getByRole("button", { name: /edit listing/i }));
-    fireEvent.change(screen.getByLabelText(/Listing price/i), { target: { value: "" } });
-    fireEvent.click(screen.getByRole("button", { name: /save listing/i }));
-
+    expect(screen.getByRole("link", { name: /edit listing/i })).toHaveAttribute("href", "/listings/l-edit-empty-price/edit");
+    expect(screen.queryByLabelText(/Listing price/i)).not.toBeInTheDocument();
     expect(updateListingMutate).not.toHaveBeenCalled();
-    expect(screen.getByLabelText(/Listing price/i)).toBeInTheDocument();
   });
 });

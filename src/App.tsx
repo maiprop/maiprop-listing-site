@@ -119,6 +119,7 @@ const App = () => (
                       <Route path="/" element={<ErrorBoundary><Index /></ErrorBoundary>} />
                       <Route path="/listings/new" element={<SellerRoute><ErrorBoundary><CreateListing /></ErrorBoundary></SellerRoute>} />
                       <Route path="/listings/new-building" element={<NewBuildingRoute><ErrorBoundary><CreateNewBuildingListing /></ErrorBoundary></NewBuildingRoute>} />
+                      <Route path="/listings/:listingId/edit" element={<SellerRoute><ErrorBoundary><CreateListing /></ErrorBoundary></SellerRoute>} />
                       <Route path="/listings" element={<ErrorBoundary><Listings /></ErrorBoundary>} />
                       <Route path="/property/:id" element={<ErrorBoundary><PropertyDetail /></ErrorBoundary>} />
                       <Route path="/auction/:id" element={<ErrorBoundary><AuctionRouter /></ErrorBoundary>} />
