@@ -249,7 +249,6 @@ export function buildDetailGroups(
       title: "Auction",
       rows: [
         { label: "Auction Date", value: formatDate(db.auction_date) },
-        { label: "Auction Court", value: db.auction_court },
         ...getOwnershipDetailRows(db.tags),
       ],
     },

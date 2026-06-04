@@ -188,11 +188,12 @@ describe("dbListingToCard — tag filtering", () => {
 
   it("filters system tags when filterDisplayTags=true", () => {
     const card = dbListingToCard(
-      makeDbListing({ tags: ["has_parking", "ownership:full", "round:2"] }),
+      makeDbListing({ tags: ["has_parking", "ownership:full", "round:2", "auction_pool:2026-06-04"] }),
       { filterDisplayTags: true }
     );
     expect(card.tags).not.toContain("ownership:full");
     expect(card.tags).not.toContain("round:2");
+    expect(card.tags).not.toContain("auction_pool:2026-06-04");
     expect(card.tags).toContain("has_parking");
   });
 
