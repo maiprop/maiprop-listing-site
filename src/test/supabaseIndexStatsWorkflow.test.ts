@@ -16,6 +16,11 @@ const advisorScript = readFileSync(
   "utf8",
 );
 
+const supabaseTypesScript = readFileSync(
+  "scripts/check-supabase-types-freshness.cjs",
+  "utf8",
+);
+
 describe("Supabase index stats workflow wiring", () => {
   it("passes a direct production DB URL to clean-checkout index-stat captures", () => {
     for (const workflow of [releaseSafetyWorkflow, advisorReportWorkflow]) {
@@ -36,6 +41,9 @@ describe("Supabase index stats workflow wiring", () => {
 
   it("allows transient advisor unavailability only in release-safety inventory", () => {
     expect(releaseSafetyWorkflow).toContain("--allow-transient-unavailable");
+    expect(releaseSafetyWorkflow).toContain(
+      "check:supabase-types -- -- --strict --allow-transient-unavailable",
+    );
     expect(advisorReportWorkflow).not.toContain("--allow-transient-unavailable");
   });
 
@@ -47,5 +55,14 @@ describe("Supabase index stats workflow wiring", () => {
     expect(advisorScript).toContain("throw new Error");
     expect(advisorScript).toContain("failOnError && failingLintCount > 0");
     expect(advisorScript).toContain("assertAdvisorDebtIsActionable(advisorDebt)");
+  });
+
+  it("records transient Supabase type-generation failures without suppressing stale generated types", () => {
+    expect(supabaseTypesScript).toContain("allowTransientUnavailable");
+    expect(supabaseTypesScript).toContain("isTransientTypesFailure");
+    expect(supabaseTypesScript).toContain("error code:\\s*(?:520|522|524|504)");
+    expect(supabaseTypesScript).toContain("generated types check was transiently unavailable");
+    expect(supabaseTypesScript).toContain("normalize(current) !== normalize(generated)");
+    expect(supabaseTypesScript).toContain("src/integrations/supabase/types.ts is stale");
   });
 });
