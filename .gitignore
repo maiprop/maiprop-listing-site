@@ -80,4 +80,8 @@ src/integrations/supabase/types.ts.bak
 .complexity-report.json
 .madge-report.json
 .jscpd-report/
+release-safety-inventory*.json
+release-safety-inventory-live*.json
+supabase-advisor-*.json
+supabase-index-stats.json
 

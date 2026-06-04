@@ -16,9 +16,14 @@ function fail(message) {
   process.exit(1);
 }
 
-function firstJsonObject(text) {
-  const start = text.indexOf("{");
+function firstJsonValue(text) {
+  const objectStart = text.indexOf("{");
+  const arrayStart = text.indexOf("[");
+  const starts = [objectStart, arrayStart].filter((index) => index >= 0);
+  const start = starts.length > 0 ? Math.min(...starts) : -1;
   if (start < 0) return null;
+  const opener = text[start];
+  const closer = opener === "{" ? "}" : "]";
   let depth = 0;
   let inString = false;
   let escaped = false;
@@ -38,9 +43,9 @@ function firstJsonObject(text) {
 
     if (char === "\"") {
       inString = true;
-    } else if (char === "{") {
+    } else if (char === opener) {
       depth += 1;
-    } else if (char === "}") {
+    } else if (char === closer) {
       depth -= 1;
       if (depth === 0) return text.slice(start, i + 1);
     }
@@ -55,6 +60,10 @@ const dbUrl = readArg("--db-url") ||
   process.env.SUPABASE_DB_URL ||
   process.env.SUPABASE_STAGING_EFFECTIVE_DB_URL ||
   process.env.SUPABASE_PRODUCTION_DB_URL;
+const projectRef = process.env.SUPABASE_PROJECT_REF ||
+  process.env.RELEASE_SAFETY_SUPABASE_PROJECT_REF ||
+  process.env.VITE_SUPABASE_PROJECT_ID;
+const dbPassword = process.env.SUPABASE_DB_PASSWORD;
 
 const tempDir = mkdtempSync(join(tmpdir(), "maiprop-index-stats-"));
 const sqlPath = join(tempDir, "index-stats.sql");
@@ -79,6 +88,28 @@ order by relname, indexrelname;
   );
 
   const npx = process.platform === "win32" ? "npx.cmd" : "npx";
+  if (!dbUrl && projectRef && dbPassword) {
+    const linkResult = spawnSync(
+      npx,
+      ["supabase", "link", "--project-ref", projectRef, "--password", dbPassword, "--yes"],
+      {
+        cwd: process.cwd(),
+        env: process.env,
+        encoding: "utf8",
+        shell: process.platform === "win32",
+      },
+    );
+    if (linkResult.status !== 0) {
+      const detail = [
+        linkResult.error ? `error=${linkResult.error.message}` : "",
+        linkResult.signal ? `signal=${linkResult.signal}` : "",
+        linkResult.stdout,
+        linkResult.stderr,
+      ].filter(Boolean).join("\n").replaceAll(dbPassword, "[redacted]");
+      fail(`supabase link failed with exit ${linkResult.status}.\n${detail}`);
+    }
+  }
+
   const queryArgs = ["supabase", "db", "query"];
   if (dbUrl) {
     queryArgs.push("--db-url", dbUrl);
@@ -108,10 +139,16 @@ order by relname, indexrelname;
     fail(`supabase db query failed with exit ${result.status}.\n${detail}`);
   }
 
-  const jsonText = firstJsonObject(`${result.stdout}\n${result.stderr}`);
+  const jsonText = firstJsonValue(`${result.stdout}\n${result.stderr}`);
   if (!jsonText) fail("Could not parse JSON from supabase db query output.");
   const payload = JSON.parse(jsonText);
-  const rows = Array.isArray(payload.rows) ? payload.rows : [];
+  const rows = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload.rows)
+      ? payload.rows
+      : Array.isArray(payload.data)
+        ? payload.data
+        : [];
   writeFileSync(outPath, `${JSON.stringify(rows, null, 2)}\n`);
   console.log(`[capture-supabase-index-stats] Wrote ${rows.length} index row(s) to ${outPath}.`);
 } finally {

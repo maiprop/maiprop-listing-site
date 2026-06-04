@@ -12,7 +12,16 @@ describe("capture Supabase index stats script", () => {
     expect(script).toContain('readArg("--db-url")');
     expect(script).toContain("process.env.SUPABASE_STAGING_EFFECTIVE_DB_URL");
     expect(script).toContain("process.env.SUPABASE_PRODUCTION_DB_URL");
+    expect(script).toContain("process.env.SUPABASE_DB_PASSWORD");
+    expect(script).toContain('"supabase", "link"');
     expect(script).toContain('queryArgs.push("--db-url", dbUrl)');
     expect(script).toContain('queryArgs.push("--linked")');
+  });
+
+  it("accepts both JSON array and object row payloads from Supabase CLI output", () => {
+    expect(script).toContain("function firstJsonValue(text)");
+    expect(script).toContain("Array.isArray(payload)");
+    expect(script).toContain("Array.isArray(payload.rows)");
+    expect(script).toContain("Array.isArray(payload.data)");
   });
 });
