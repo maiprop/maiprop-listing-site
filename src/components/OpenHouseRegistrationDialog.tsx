@@ -369,18 +369,18 @@ export default function OpenHouseRegistrationDialog({
 
   const handleQualifiedSubmit = async () => {
     if (!regId) return;
-    const updates: Parameters<typeof updateReg.mutateAsync>[0]["updates"] = {};
-    if (requireInvestor && investorDeclared) {
-      updates.investor_declaration_signed_at = new Date().toISOString();
-    }
-    if (requirePOF && proofFile && user?.id) {
-      const ext = proofFile.name.split(".").pop() ?? "pdf";
-      const path = `${user.id}/${listingId}/proof_${crypto.randomUUID()}.${ext}`;
-      updates.proof_of_funds_url = await uploadOpenHouseDoc(proofFile, path);
-      if (proofAmount) updates.proof_amount = parseFloat(proofAmount);
-    }
     setLoading(true);
     try {
+      const updates: Parameters<typeof updateReg.mutateAsync>[0]["updates"] = {};
+      if (requireInvestor && investorDeclared) {
+        updates.investor_declaration_signed_at = new Date().toISOString();
+      }
+      if (requirePOF && proofFile && user?.id) {
+        const ext = proofFile.name.split(".").pop() ?? "pdf";
+        const path = `${user.id}/${listingId}/proof_${crypto.randomUUID()}.${ext}`;
+        updates.proof_of_funds_url = await uploadOpenHouseDoc(proofFile, path);
+        if (proofAmount) updates.proof_amount = parseFloat(proofAmount);
+      }
       await updateReg.mutateAsync({ id: regId, updates });
       setStep("done");
       toast.success(isGreek ? "Η εγγραφή ολοκληρώθηκε. Αναμένεται έγκριση από τον υπεύθυνο." : "Registration complete. Awaiting approval from asset manager.");

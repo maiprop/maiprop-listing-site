@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useRef, useState, useEffect, type ChangeEvent } from "react";
 import { Link } from "react-router-dom";
-import { Loader2, Star } from "lucide-react";
+import { Loader2, Star, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useMyProfessional, useUpdateProfessional } from "@/hooks/useProfessionalServices";
 import { LocationAutocompleteInput } from "@/components/location/LocationAutocompleteInput";
+import { uploadProfileAvatar } from "@/lib/profileAvatarUpload";
 
 const getSaveErrorMessage = (error: unknown) => {
   if (error instanceof Error && error.message) return error.message;
@@ -28,6 +29,8 @@ export function ProfessionalProfileEditor({
     experience_years: "", website_url: "", specialties: "", languages: "",
   });
   const [saving, setSaving] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (pro) {
@@ -70,6 +73,26 @@ export function ProfessionalProfileEditor({
     }
   };
 
+  const handleAvatarSelected = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !pro) return;
+    setAvatarUploading(true);
+    let uploadSucceeded = false;
+    try {
+      const uploaded = await uploadProfileAvatar(file, pro.user_id);
+      uploadSucceeded = true;
+      await updatePro.mutateAsync({
+        id: pro.id,
+        updates: { avatar_url: uploaded.url },
+      });
+    } catch (e: unknown) {
+      if (!uploadSucceeded) toast.error(getSaveErrorMessage(e));
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
   if (isLoading || !pro) {
     return (
       <div className="flex justify-center py-20">
@@ -80,6 +103,7 @@ export function ProfessionalProfileEditor({
 
   const rating = Number(pro.rating) || 0;
   const reviewsCount = pro.reviews_count || 0;
+  const initials = (pro.display_name || pro.title || "P").trim().slice(0, 2).toUpperCase();
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -92,6 +116,36 @@ export function ProfessionalProfileEditor({
 
       <div className="glass-card rounded-xl p-6 space-y-4">
         <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Profile details</h2>
+        <div className="flex items-center gap-4">
+          <div className="h-16 w-16 rounded-full border border-border bg-secondary overflow-hidden flex items-center justify-center text-lg font-semibold text-muted-foreground">
+            {pro.avatar_url ? (
+              <img src={pro.avatar_url} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <span>{initials}</span>
+            )}
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground mb-2">Profile photo</p>
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={handleAvatarSelected}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              disabled={avatarUploading || updatePro.isPending}
+              onClick={() => avatarInputRef.current?.click()}
+            >
+              {avatarUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              Upload photo
+            </Button>
+          </div>
+        </div>
         {([
           ["Professional Title",              "title",            "e.g. Licensed Architect"          ],
           ["City",                            "city",             "e.g. Athens"                      ],

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { assertAllowedUpload } from "@/lib/uploadValidation";
 import {
   CAPACITY_ERROR_MESSAGES,
   MY_OPEN_HOUSE_OFFERS_SELECT,
@@ -43,6 +44,14 @@ import type {
   ReopenOpenHouseOfferSelectionRpc,
   SubmitOpenHouseOfferRpc,
 } from "./openHouseAssetControl/types";
+
+const OPEN_HOUSE_DOC_MIME_TYPES = new Set<string>([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+const OPEN_HOUSE_DOC_MAX_BYTES = 10 * 1024 * 1024;
 
 export { getOpenHouseApprovalBlockers } from "./openHouseAssetControl/helpers";
 export type {
@@ -560,9 +569,13 @@ export async function uploadOpenHouseDoc(
   file: File,
   path: string
 ): Promise<string> {
+  assertAllowedUpload(file, OPEN_HOUSE_DOC_MIME_TYPES, {
+    label: "open house document",
+    maxBytes: OPEN_HOUSE_DOC_MAX_BYTES,
+  });
   const { data, error } = await supabase.storage
     .from("open-house-docs")
-    .upload(path, file, { upsert: true });
+    .upload(path, file, { upsert: false, contentType: file.type });
   if (error) throw error;
   return data.path;
 }
