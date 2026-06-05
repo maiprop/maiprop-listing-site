@@ -21,6 +21,11 @@ const supabaseTypesScript = readFileSync(
   "utf8",
 );
 
+const liveSecurityScript = readFileSync(
+  "scripts/check-live-security-posture.mjs",
+  "utf8",
+);
+
 describe("Supabase index stats workflow wiring", () => {
   it("passes a direct production DB URL to clean-checkout index-stat captures", () => {
     for (const workflow of [releaseSafetyWorkflow, advisorReportWorkflow]) {
@@ -44,6 +49,9 @@ describe("Supabase index stats workflow wiring", () => {
     expect(releaseSafetyWorkflow).toContain(
       "check:supabase-types -- -- --strict --allow-transient-unavailable",
     );
+    expect(releaseSafetyWorkflow).toContain(
+      "check:live-security-posture -- --allow-transient-unavailable",
+    );
     expect(advisorReportWorkflow).not.toContain("--allow-transient-unavailable");
   });
 
@@ -64,5 +72,13 @@ describe("Supabase index stats workflow wiring", () => {
     expect(supabaseTypesScript).toContain("generated types check was transiently unavailable");
     expect(supabaseTypesScript).toContain("normalize(current) !== normalize(generated)");
     expect(supabaseTypesScript).toContain("src/integrations/supabase/types.ts is stale");
+  });
+
+  it("allows transient live-security posture timeouts without suppressing posture failures", () => {
+    expect(liveSecurityScript).toContain("allowTransientUnavailable");
+    expect(liveSecurityScript).toContain("isTransientManagementFailure");
+    expect(liveSecurityScript).toContain("status, text");
+    expect(liveSecurityScript).toContain("process.exit(0)");
+    expect(liveSecurityScript).toContain("fail(\"posture check failed\", failures)");
   });
 });

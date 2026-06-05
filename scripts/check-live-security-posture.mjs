@@ -6,6 +6,8 @@ const projectRef =
   process.env.RELEASE_SAFETY_SUPABASE_PROJECT_REF ||
   process.env.STAGING_SUPABASE_PROJECT_ID ||
   process.env.VITE_SUPABASE_PROJECT_ID;
+const allowTransientUnavailable = process.argv.includes("--allow-transient-unavailable");
+const apiBase = process.env.SUPABASE_MANAGEMENT_API_BASE || "https://api.supabase.com/v1";
 
 const fail = (message, detail) => {
   console.error(`[live-security] ${message}`);
@@ -15,7 +17,26 @@ const fail = (message, detail) => {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const retryableStatuses = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
+const retryableStatuses = new Set([408, 409, 425, 429, 500, 502, 503, 504, 520, 522, 524, 544]);
+
+const isTransientManagementFailure = (status, detail = "") =>
+  retryableStatuses.has(status) &&
+  /timeout|timed out|connection terminated|temporarily unavailable|cloudflare|edge function/i.test(
+    String(detail),
+  );
+
+const isTransientRequestError = (error) =>
+  /timeout|timed out|econnreset|etimedout|fetch failed|network/i.test(
+    `${error?.name ?? ""} ${error?.message ?? ""} ${error?.cause?.code ?? ""} ${
+      error?.cause?.message ?? ""
+    }`,
+  );
+
+const exitTransient = (message, detail) => {
+  console.warn(`[live-security] posture check was transiently unavailable; ${message}`);
+  if (detail) console.warn(String(detail).slice(0, 500));
+  process.exit(0);
+};
 
 const querySupabase = async () => {
   const maxAttempts = 4;
@@ -24,7 +45,7 @@ const querySupabase = async () => {
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
       const res = await fetch(
-        `https://api.supabase.com/v1/projects/${projectRef}/database/query`,
+        `${apiBase}/projects/${projectRef}/database/query`,
         {
           method: "POST",
           headers: {
@@ -37,6 +58,9 @@ const querySupabase = async () => {
       const text = await res.text();
 
       if (res.ok) return text;
+      if (allowTransientUnavailable && isTransientManagementFailure(res.status, text)) {
+        exitTransient(`Supabase Management API returned ${res.status}.`, text);
+      }
       if (!retryableStatuses.has(res.status) || attempt === maxAttempts) {
         fail(`Supabase Management API returned ${res.status}.`, text.slice(0, 500));
       }
@@ -108,6 +132,9 @@ FROM bucket_checks, rls_disabled, function_grants;
 `;
 
 const text = await querySupabase().catch((error) => {
+  if (allowTransientUnavailable && isTransientRequestError(error)) {
+    exitTransient("Supabase Management API request failed after retries.", error?.message);
+  }
   fail("Supabase Management API request failed after retries.", {
     name: error?.name,
     message: error?.message,
