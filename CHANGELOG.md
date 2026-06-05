@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.9.12](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.11...v1.9.12) (2026-06-05)
+
+
+### Bug Fixes
+
+* degrade public api on transient upstream failures ([c7356ad](https://github.com/maiprop/maiprop-listing-site/commit/c7356ad28f74d94916851799540f79a359d621ed))
+* fail fast when Supabase is unavailable ([edc3da7](https://github.com/maiprop/maiprop-listing-site/commit/edc3da742f4451b02be04e89b9ffda884aae9180))
+* harden supabase and public api resilience ([46a8fbe](https://github.com/maiprop/maiprop-listing-site/commit/46a8fbe4ec63aa1a5e64d088327ee6ff40ce702b))
+* keep function-only Supabase staging prep unblocked ([227da6e](https://github.com/maiprop/maiprop-listing-site/commit/227da6e59baf317f180e7426ddc82403484ae300))
+* skip index stats when staging db credentials absent ([aa88b54](https://github.com/maiprop/maiprop-listing-site/commit/aa88b54426cc2730e34a66d3170344189897c5f0))
+* tolerate transient advisor timeouts ([d41d7f7](https://github.com/maiprop/maiprop-listing-site/commit/d41d7f7d5af69654f0511a5522ebaf0690e214fd))
+* tolerate transient index stats timeouts ([175ee0f](https://github.com/maiprop/maiprop-listing-site/commit/175ee0fb99b791ea303c36a127762895ba4b7b58))
+* tolerate transient live security posture timeouts ([16c5370](https://github.com/maiprop/maiprop-listing-site/commit/16c5370f343246f357faa975bd44411f7426371a))
+* tolerate transient type generation timeouts ([c47d30b](https://github.com/maiprop/maiprop-listing-site/commit/c47d30b6b0f9296d58378b3916b1a029256d0f68))
+
 ## [1.9.11](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.10...v1.9.11) (2026-06-04)
 
 
