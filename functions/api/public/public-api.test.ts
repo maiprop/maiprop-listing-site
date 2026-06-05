@@ -177,6 +177,10 @@ function installSupabaseFetch(): FetchMock {
           { id: "listing-e2e", owner_id: "owner-1", title: "E2E-FULL-PUBLISH-20260526T161856Z maisonette", tags: ["qa-full-publish"] },
           { id: "listing-1", owner_id: "owner-1", title: "Athens flat" },
           { id: "listing-2", owner_id: "owner-2", title: "Piraeus loft" },
+          { id: "listing-3", owner_id: "owner-2", title: "Glyfada villa" },
+          { id: "listing-4", owner_id: "owner-2", title: "Mykonos villa" },
+          { id: "listing-5", owner_id: "owner-2", title: "Santorini hotel" },
+          { id: "listing-6", owner_id: "owner-2", title: "Thessaloniki apartment" },
         ]);
       }
 
@@ -554,13 +558,17 @@ describe("public homepage endpoint", () => {
   it("fetches lightweight featured and open-house homepage sections", async () => {
     const featured = await homepageRequest(makeCtx("https://portal.maiprop.co/api/public/homepage?section=featured"));
     const featuredRows = await featured.json() as Array<{ id: string }>;
-    expect(featuredRows.map((row) => row.id)).toEqual(["listing-1", "listing-2"]);
+    expect(featuredRows.map((row) => row.id)).toEqual(["listing-1", "listing-2", "listing-3", "listing-4"]);
     let url = fetchUrls("/rest/v1/listings")[0];
     expect(url.searchParams.get("limit")).toBe("12");
     expect(url.searchParams.get("listing_type")).toBe("eq.sale");
     expect(url.searchParams.get("is_off_market")).toBe("eq.false");
     expect(url.searchParams.get("listing_images.limit")).toBe("3");
-    expect(cacheApi.put.mock.calls[0][0].url).toContain("v=off-market-v2");
+    const featuredCacheKey = new URL(cacheApi.put.mock.calls[0][0].url);
+    expect(featuredCacheKey.searchParams.get("day")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(featuredCacheKey.searchParams.get("v")).toBe("featured-daily-v1");
+    expect(featured.headers.get("Cache-Control")).toBe("public, max-age=86400, stale-while-revalidate=86400");
+    expect(featured.headers.get("CDN-Cache-Control")).toBe("public, max-age=86400, stale-while-revalidate=86400");
 
     fetchMock().mockClear();
     const openHouses = await homepageRequest(makeCtx("https://portal.maiprop.co/api/public/homepage?section=open-houses"));

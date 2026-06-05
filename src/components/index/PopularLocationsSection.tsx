@@ -36,7 +36,7 @@ export function PopularLocationsSection() {
   const locations: readonly Location[] = isError ? FALLBACK : (data ?? FALLBACK);
 
   return (
-    <section className="py-10 sm:py-16 bg-secondary">
+    <section className="py-8 sm:py-12 bg-secondary">
       <div ref={ref} className="container">
         <div className={`flex items-center justify-between mb-6 sm:mb-8 reveal ${inView ? "in-view" : ""}`}>
           <h2 className="font-display text-xl sm:text-2xl font-bold">Popular Locations</h2>
@@ -44,7 +44,7 @@ export function PopularLocationsSection() {
             Explore All <ArrowRight className="w-3 h-3" />
           </Link>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {locations.map((city, idx) => (
             <Link
               key={city.name}
@@ -52,12 +52,12 @@ export function PopularLocationsSection() {
               className={`reveal ${inView ? "in-view" : ""}`}
               style={{ transitionDelay: `${idx * 0.1}s` }}
             >
-              <div className="relative rounded-xl overflow-hidden aspect-[3/4] group shadow-card hover:shadow-elevated transition-shadow duration-500">
+              <div className="relative rounded-lg overflow-hidden aspect-[4/3] group shadow-card hover:shadow-elevated transition-shadow duration-500">
                 <img src={city.image} alt={city.name} loading="lazy" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out" />
                 <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/30 to-transparent group-hover:from-background/95 transition-all duration-500" />
                 <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" style={{ background: "linear-gradient(135deg, hsl(var(--primary) / 0.08) 0%, transparent 60%)" }} />
-                <div className="absolute bottom-4 left-4 translate-y-1 group-hover:translate-y-0 transition-transform duration-300">
-                  <div className="font-display font-bold text-lg text-foreground">{city.name}</div>
+                <div className="absolute bottom-3 left-3 translate-y-1 group-hover:translate-y-0 transition-transform duration-300">
+                  <div className="font-display font-bold text-base sm:text-lg text-foreground">{city.name}</div>
                   <div className="text-xs text-muted-foreground">{city.listings.toLocaleString()} listings</div>
                   <div className={`text-xs font-semibold flex items-center gap-1 mt-0.5 ${city.trendUp ? "text-brand-emerald" : "text-destructive"}`}>
                     {city.trendUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}

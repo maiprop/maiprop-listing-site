@@ -178,4 +178,75 @@ describe("AdminUserActivity", () => {
       }),
     );
   });
+
+  it("surfaces auth and search activity for maiprop demo mock users", async () => {
+    mocks.rpc.mockResolvedValueOnce({
+      data: {
+        ...snapshot,
+        summary: {
+          ...snapshot.summary,
+          auth_activity_events_in_range: 2,
+          searches_in_range: 1,
+          unique_searchers_in_range: 1,
+        },
+        users: [
+          {
+            ...snapshot.users[0],
+            user_id: "buyer-free-demo",
+            email: "buyer.free@maiprop.demo",
+            display_name: "Buyer Free Demo",
+            last_auth_event_type: "session_restored",
+            auth_event_count: 2,
+            search_count: 1,
+            last_search_query: "Athens apartment",
+          },
+          {
+            ...snapshot.users[1],
+            user_id: "agent-pro-demo",
+            email: "agent.pro@maiprop.demo",
+            display_name: "Agent Pro Demo",
+            role: "agent",
+          },
+        ],
+        recent_auth_events: [
+          {
+            ...snapshot.recent_auth_events[0],
+            id: "auth-demo-1",
+            event_type: "session_restored",
+            user_id: "buyer-free-demo",
+            email: "buyer.free@maiprop.demo",
+            display_name: "Buyer Free Demo",
+            role: "buyer",
+          },
+        ],
+        recent_searches: [
+          {
+            ...snapshot.recent_searches[0],
+            id: "search-demo-1",
+            query_text: "Athens apartment",
+            normalized_query: "athens apartment",
+            user_id: "buyer-free-demo",
+            email: "buyer.free@maiprop.demo",
+            display_name: "Buyer Free Demo",
+            role: "buyer",
+          },
+        ],
+        auth_events_by_type: [
+          { event_type: "session_restored", event_count: 2, user_count: 1, last_seen_at: "2026-06-04T09:25:00Z" },
+        ],
+        top_keywords: [
+          { keyword: "athens", search_count: 1, user_count: 1, last_seen_at: "2026-06-04T09:10:00Z" },
+        ],
+      },
+      error: null,
+    });
+
+    renderWithProviders(<AdminUserActivity />);
+
+    expect((await screen.findAllByText("Buyer Free Demo")).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("buyer.free@maiprop.demo")).toBeInTheDocument();
+    expect(screen.getByText("agent.pro@maiprop.demo")).toBeInTheDocument();
+    expect(screen.getAllByText("session restored").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Athens apartment").length).toBeGreaterThanOrEqual(1);
+  });
 });

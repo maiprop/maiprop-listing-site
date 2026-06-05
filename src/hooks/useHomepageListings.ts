@@ -27,6 +27,7 @@ const openHouseSelect =
 const HOMEPAGE_AUCTION_SOURCE_LIMIT = 60;
 const HOMEPAGE_AUCTION_DISPLAY_LIMIT = 6;
 const HOMEPAGE_PROPERTY_TYPES = ["apartment", "land"] as const;
+const FEATURED_DAILY_STALE_TIME_MS = 24 * 60 * 60 * 1000;
 
 const queryTimeout = <T,>(p: Promise<T>, ms: number): Promise<T> =>
   Promise.race([p, new Promise<T>((_, rej) => setTimeout(() => rej(new Error("Request timeout")), ms))]);
@@ -51,7 +52,7 @@ export function useHomepageFeaturedListings() {
     queryKey: ["homepage-featured"],
     queryFn: async () => {
       const cached = await fetchPublicApi<HomepageListing[]>("/api/public/homepage?section=featured");
-      if (cached) return publicHomepageRows(cached);
+      if (cached) return publicHomepageRows(cached, 4);
 
       const run = async () => {
         const { data, error } = await supabase
@@ -75,13 +76,13 @@ export function useHomepageFeaturedListings() {
             .order("created_at", { ascending: false })
             .limit(12);
           if (fallback.error) throw fallback.error;
-          return publicHomepageRows(fallback.data ?? []);
+          return publicHomepageRows(fallback.data ?? [], 4);
         }
-        return publicHomepageRows(data ?? []);
+        return publicHomepageRows(data ?? [], 4);
       };
       return queryTimeout(run(), 12_000);
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: FEATURED_DAILY_STALE_TIME_MS,
     retry: 1,
   });
 }
