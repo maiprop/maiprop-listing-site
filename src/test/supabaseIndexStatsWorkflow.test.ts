@@ -11,6 +11,11 @@ const advisorReportWorkflow = readFileSync(
   "utf8",
 );
 
+const supabaseStagingWorkflow = readFileSync(
+  ".github/workflows/reusable-supabase-staging.yml",
+  "utf8",
+);
+
 const advisorScript = readFileSync(
   "scripts/check-supabase-advisor.mjs",
   "utf8",
@@ -80,5 +85,29 @@ describe("Supabase index stats workflow wiring", () => {
     expect(liveSecurityScript).toContain("status, text");
     expect(liveSecurityScript).toContain("process.exit(0)");
     expect(liveSecurityScript).toContain("fail(\"posture check failed\", failures)");
+  });
+
+  it("lets function-only staging deploys skip DB-backed index stats without weakening migration gates", () => {
+    expect(supabaseStagingWorkflow).toMatch(
+      /if grep -Eq '\^supabase\/migrations\/' <<< "\$changed_files"; then\s+echo "db_changes=true" >> "\$GITHUB_OUTPUT"[\s\S]*?else\s+echo "db_changes=false" >> "\$GITHUB_OUTPUT"/,
+    );
+    expect(supabaseStagingWorkflow).toMatch(
+      /if grep -Eq '\^\(supabase\/\|deno\\\.\(json\|lock\)\$\)' <<< "\$changed_files"; then\s+echo "deploy=true" >> "\$GITHUB_OUTPUT"/,
+    );
+    expect(supabaseStagingWorkflow).toContain(
+      "if [ \"${{ steps.supabase_changes.outputs.db_changes }}\" = \"true\" ] && [ -z \"$SUPABASE_STAGING_DB_URL\" ]; then",
+    );
+    expect(supabaseStagingWorkflow).toContain(
+      "SUPABASE_STAGING_DB_URL is required when Supabase migrations change",
+    );
+    expect(supabaseStagingWorkflow).toMatch(
+      /- name: Check staging database migration secret\s+if: steps\.supabase_changes\.outputs\.db_changes == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'[\s\S]*SUPABASE_STAGING_DB_URL is required when Supabase migrations change\./,
+    );
+    expect(supabaseStagingWorkflow).toMatch(
+      /- name: Resolve staging database URL\s+if: steps\.supabase_changes\.outputs\.deploy == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'[\s\S]*if \[ -z "\$SUPABASE_STAGING_DB_URL" \]; then[\s\S]*SUPABASE_STAGING_EFFECTIVE_DB_URL=[\s\S]*function-only Supabase prep will use empty index stats\.[\s\S]*exit 0/,
+    );
+    expect(supabaseStagingWorkflow).toMatch(
+      /- name: Capture staging Supabase index stats\s+if: steps\.supabase_changes\.outputs\.deploy == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'\s+run: \|\s+set -euo pipefail\s+extra_args=\(\)\s+if \[ "\$\{\{ steps\.supabase_changes\.outputs\.db_changes \}\}" != "true" \]; then\s+extra_args\+=\(--allow-empty-when-unconfigured\)\s+fi\s+npm run capture:supabase-index-stats -- --out supabase-index-stats\.json "\$\{extra_args\[@\]\}"/,
+    );
   });
 });

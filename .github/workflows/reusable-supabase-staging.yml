@@ -308,9 +308,15 @@ jobs:
           SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
 
       - name: Resolve staging database URL
-        if: steps.supabase_changes.outputs.db_changes == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: |
           set -euo pipefail
+
+          if [ -z "$SUPABASE_STAGING_DB_URL" ]; then
+            echo "SUPABASE_STAGING_EFFECTIVE_DB_URL=" >> "$GITHUB_ENV"
+            echo "No staging database URL is configured; function-only Supabase prep will use empty index stats."
+            exit 0
+          fi
 
           projects_json="$(supabase projects list --output json)"
           resolved_url="$(PROJECTS_JSON="$projects_json" node <<'NODE'
@@ -367,7 +373,13 @@ jobs:
 
       - name: Capture staging Supabase index stats
         if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
-        run: npm run capture:supabase-index-stats -- --out supabase-index-stats.json
+        run: |
+          set -euo pipefail
+          extra_args=()
+          if [ "${{ steps.supabase_changes.outputs.db_changes }}" != "true" ]; then
+            extra_args+=(--allow-empty-when-unconfigured)
+          fi
+          npm run capture:supabase-index-stats -- --out supabase-index-stats.json "${extra_args[@]}"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF:  ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
