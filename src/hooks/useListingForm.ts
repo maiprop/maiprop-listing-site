@@ -24,6 +24,7 @@ import type {
   ListingFormData,
 } from "@/hooks/listingForm.types";
 import { tFallback, tInterpolate } from "@/lib/i18nFallback";
+import { assertAllowedUpload } from "@/lib/uploadValidation";
 
 // Re-export the types so existing callers (`import { type ListingFormData }
 // from "@/hooks/useListingForm"`) keep working.
@@ -44,6 +45,13 @@ type UseListingFormOptions = {
  * Populated lazily below since INITIAL_FORM is declared just after this.
  */
 let BOOLEAN_KEYS: Set<string> | null = null;
+
+const LISTING_IMAGE_MIME_TYPES = new Set<string>([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+const LISTING_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 
 const INITIAL_FORM: ListingFormData = {
   listing_type: "sale",
@@ -252,8 +260,16 @@ export function useListingForm(options?: UseListingFormOptions) {
 
   const uploadImage = useCallback(async (file: File): Promise<UploadedImage> => {
     if (!user) throw new Error("Must be logged in");
+    assertAllowedUpload(file, LISTING_IMAGE_MIME_TYPES, {
+      label: "listing image",
+      maxBytes: LISTING_IMAGE_MAX_BYTES,
+    });
     const { compressListingImage } = await import("@/lib/compressImage");
     const compressed = await compressListingImage(file);
+    assertAllowedUpload(compressed, LISTING_IMAGE_MIME_TYPES, {
+      label: "listing image",
+      maxBytes: LISTING_IMAGE_MAX_BYTES,
+    });
     const ext = compressed.name.split(".").pop();
     const id = crypto.randomUUID();
     const path = `${user.id}/${id}.${ext}`;
@@ -267,7 +283,7 @@ export function useListingForm(options?: UseListingFormOptions) {
 
   const handleFilesSelected = useCallback(async (files: FileList | null) => {
     if (!files || !user) return;
-    const MAX_FILE_BYTES = 5 * 1024 * 1024; // listing-images bucket limit
+    const MAX_FILE_BYTES = LISTING_IMAGE_MAX_BYTES; // listing-images bucket limit
     const all = Array.from(files).slice(0, 20 - images.length);
     const rejections = all.filter(f => f.size > MAX_FILE_BYTES).map(f => f.name);
     if (rejections.length) toast.error(trv(rejections.length === 1 ? "createListing.validation.fileTooLargeOne" : "createListing.validation.fileTooLargeOther", rejections.length === 1 ? "{{files}} exceeds the 5 MB limit" : "{{files}} exceed the 5 MB limit", { files: rejections.join(", ") }));

@@ -1628,7 +1628,7 @@
       "heading": "Property Photos",
       "subtitle": "Upload up to 20 photos. Drag to reorder. Click \"Set as cover\" to choose the main photo.",
       "dropPrompt": "Drop photos here or click to upload",
-      "fileHint": "JPG, PNG, WEBP - up to 10MB each - max 20 photos",
+      "fileHint": "JPG, PNG, WEBP - up to 5MB each - max 20 photos",
       "uploadedOne": "{{count}} photo uploaded",
       "uploadedOther": "{{count}} photos uploaded",
       "dragToReorder": "Drag to reorder",

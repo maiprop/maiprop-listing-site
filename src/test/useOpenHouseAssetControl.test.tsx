@@ -796,12 +796,12 @@ describe("uploadOpenHouseDoc / getOpenHouseDocSignedUrl", () => {
     const f = new File(["x"], "file.pdf", { type: "application/pdf" });
     const path = await uploadOpenHouseDoc(f, "u-1/file.pdf");
     expect(path).toBe("u-1/file.pdf");
-    expect(storageBucket.upload).toHaveBeenCalledWith("u-1/file.pdf", f, { upsert: true });
+    expect(storageBucket.upload).toHaveBeenCalledWith("u-1/file.pdf", f, { upsert: false, contentType: "application/pdf" });
   });
 
   it("rejects when storage.upload errors", async () => {
     storageBucket.upload.mockResolvedValue({ data: null, error: new Error("403") });
-    const f = new File(["x"], "file.pdf");
+    const f = new File(["x"], "file.pdf", { type: "application/pdf" });
     await expect(uploadOpenHouseDoc(f, "u-1/file.pdf")).rejects.toBeInstanceOf(Error);
   });
 

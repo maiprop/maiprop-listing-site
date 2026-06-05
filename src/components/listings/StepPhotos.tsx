@@ -36,14 +36,14 @@ export function StepPhotos({ images, coverImageId, onFilesSelected, onDrop, onRe
       >
         <input
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp"
           multiple
           className="absolute inset-0 opacity-0 cursor-pointer"
           onChange={e => onFilesSelected(e.target.files)}
         />
         <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2 group-hover:text-primary transition-colors" />
         <p className="text-sm font-medium">{tr("createListing.photos.dropPrompt", "Drop photos here or click to upload")}</p>
-        <p className="text-xs text-muted-foreground mt-1">{tr("createListing.photos.fileHint", "JPG, PNG, WEBP - up to 10MB each - max 20 photos")}</p>
+        <p className="text-xs text-muted-foreground mt-1">{tr("createListing.photos.fileHint", "JPG, PNG, WEBP - up to 5MB each - max 20 photos")}</p>
       </div>
 
       {images.length > 0 && (
