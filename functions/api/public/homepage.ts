@@ -40,6 +40,8 @@ const SECTIONS = [
   "auction-count",
 ] as const;
 const HOMEPAGE_CACHE_VERSION = "off-market-v2";
+const FEATURED_CACHE_VERSION = "featured-daily-v1";
+const FEATURED_DAILY_CACHE_SECONDS = 24 * 60 * 60;
 const COUNTED_PROPERTY_TYPES = ["apartment", "land"] as const;
 const PRICE_INDEX_FALLBACK = [
   { city: "Athens", avg_price_per_sqm: 2180, listing_count: 0, is_live: false, trend_change_pct: null, trend_up: null, trend_is_live: false },
@@ -68,6 +70,10 @@ function sortByImagePresence<T extends ListingRow>(rows: T[]): T[] {
     const bHasImg = Boolean(b.cover_image_url || b.listing_images?.length);
     return Number(bHasImg) - Number(aHasImg);
   });
+}
+
+function dailyCacheBucket(): string {
+  return new Date().toISOString().slice(0, 10);
 }
 
 async function fetchPopularLocations(env: PublicApiEnv) {
@@ -222,7 +228,7 @@ async function fetchSection(env: PublicApiEnv, section: (typeof SECTIONS)[number
     params.set("listing_images.order", "sort_order.asc");
     params.set("listing_images.limit", "3");
     params.set("limit", "12");
-    return publicListingRows(await supabaseJson<ListingRow>(env, "/rest/v1/listings", params), 6);
+    return publicListingRows(await supabaseJson<ListingRow>(env, "/rest/v1/listings", params), 4);
   }
 
   if (section === "auction-count") {
@@ -273,13 +279,23 @@ async function publicHomepage(ctx: PublicApiCtx, requestUrl: URL): Promise<Respo
 
   const cacheParams = new URLSearchParams([
     ["section", section],
-    ["v", HOMEPAGE_CACHE_VERSION],
+    ["v", section === "featured" ? FEATURED_CACHE_VERSION : HOMEPAGE_CACHE_VERSION],
   ]);
+  if (section === "featured") cacheParams.set("day", dailyCacheBucket());
   const cacheKey = normalizedCacheUrl(requestUrl, "homepage", cacheParams);
+  const cacheOptions = section === "featured"
+    ? {
+        edgeTtlSeconds: FEATURED_DAILY_CACHE_SECONDS,
+        browserTtlSeconds: FEATURED_DAILY_CACHE_SECONDS,
+        staleSeconds: FEATURED_DAILY_CACHE_SECONDS,
+      }
+    : {
+        edgeTtlSeconds: 180,
+        browserTtlSeconds: 60,
+        staleSeconds: 600,
+      };
   return cachedJson(ctx, cacheKey, async () => jsonResponse(await fetchSection(ctx.env, section)), {
-    edgeTtlSeconds: 180,
-    browserTtlSeconds: 60,
-    staleSeconds: 600,
+    ...cacheOptions,
   });
 }
 

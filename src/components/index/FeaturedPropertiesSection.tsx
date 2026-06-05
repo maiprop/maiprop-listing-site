@@ -13,6 +13,7 @@ interface Props {
 
 export function FeaturedPropertiesSection({ listings, isLoading, isError }: Props) {
   const { ref, inView } = useInView();
+  const visibleListings = listings.slice(0, 4);
 
   return (
     <section className="py-10 sm:py-16 bg-background">
@@ -28,7 +29,7 @@ export function FeaturedPropertiesSection({ listings, isLoading, isError }: Prop
             ? Array.from({ length: 4 }).map((_, i) => <PropertyCardSkeleton key={i} />)
             : isError
             ? <p className="col-span-4 py-8 text-center text-sm text-muted-foreground">Could not load featured listings.</p>
-            : listings.map((l) => {
+            : visibleListings.map((l) => {
                 const imgs = homepageListingImages(l);
                 return (
                   <PropertyCard
