@@ -143,6 +143,19 @@ describe("SEO Pages Functions", () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
+  it("leaves listing pages renderable when the Supabase SEO fetch aborts", async () => {
+    fetchMock().mockRejectedValueOnce(new DOMException("Timeout", "AbortError"));
+
+    const res = await listingsRequest(makeCtx("https://portal.maiprop.co/listings?city=Athens"));
+    const html = await res.text();
+
+    expect(res.status).toBe(200);
+    expect(html).toContain('<div id="root"></div>');
+    expect(html).toContain("Properties for Sale &amp; Rent in Greece");
+    const init = fetchMock().mock.calls[0][1] as RequestInit;
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
   it("accepts Vite-style Supabase runtime bindings for Pages Functions", async () => {
     const ctx = makeCtx("https://portal.maiprop.co/property/listing-1", { id: "listing-1" });
     ctx.env.SUPABASE_PROJECT_ID = undefined;

@@ -57,6 +57,7 @@ const DEFAULT_LISTING_TYPES = ["sale", "rent", "firesale"] as const;
 const ALLOWED_LISTING_TYPES = ["sale", "rent", "firesale", "auction", "open_house"] as const;
 const ALLOWED_PROPERTY_TYPES = ["apartment", "house", "villa", "land", "commercial", "office"] as const;
 const HEAD_CLOSE_TAG = "</head>";
+const SEO_SUPABASE_FETCH_TIMEOUT_MS = 2500;
 const DIGIT_CHARS = ["01234", "56789"].join("");
 const LOWER_ALPHANUMERIC_CHARS = ["abcde", "fghij", "klmno", "pqrst", "uvwxyz", DIGIT_CHARS].join("");
 const SAFE_TOKEN_CHARS = [
@@ -222,6 +223,20 @@ function metaProperty(property: string, content: string): string {
 function scriptJsonLd(data: unknown): string {
   const payload = JSON.stringify(data) ?? "null";
   return normalTag("script", { type: "application/ld+json" }, payload.split("<").join("\\u003c"));
+}
+
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  timeoutMs = SEO_SUPABASE_FETCH_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export function listingDetailPath(listing: SeoListing): string {
@@ -418,14 +433,21 @@ export async function fetchActiveListingById(env: SeoEnv, id: string): Promise<S
 
 async function fetchSupabaseListings(runtime: SupabaseRuntime, url: URL): Promise<SeoListing[]> {
   // nosemgrep: javascript.lang.security.audit.detect-non-literal-fetch.detect-non-literal-fetch -- The origin is built only from a validated Supabase project ref; request values are encoded as query params.
-  const res = await fetch(url, {
-    headers: {
-      apikey: runtime.key,
-      Authorization: `Bearer ${runtime.key}`,
-      Accept: "application/json",
-    },
-    cf: { cacheTtl: 300, cacheEverything: true } as RequestInitCfProperties,
-  });
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(url, {
+      headers: {
+        apikey: runtime.key,
+        Authorization: `Bearer ${runtime.key}`,
+        Accept: "application/json",
+      },
+      cf: { cacheTtl: 300, cacheEverything: true } as RequestInitCfProperties,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[seo] Supabase listings fetch unavailable: ${message}`);
+    return [];
+  }
   if (!res.ok) return [];
   return (await res.json()) as SeoListing[];
 }

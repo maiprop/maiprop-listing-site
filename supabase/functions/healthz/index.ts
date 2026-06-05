@@ -6,6 +6,29 @@ import { getStripeMode } from "../_shared/stripeMode.ts";
 type CheckStatus = "ok" | "fail" | "mock";
 type HealthChecks = Record<string, CheckStatus>;
 
+const HEALTHZ_DB_TIMEOUT_MS = 1500;
+
+const createTimedFetch = (timeoutMs = HEALTHZ_DB_TIMEOUT_MS): typeof fetch => {
+  return async (input, init = {}) => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(input, { ...init, signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
+  };
+};
+
+const createHealthzClient = (
+  url: string,
+  serviceRoleKey: string,
+) =>
+  createClient(url, serviceRoleKey, {
+    auth: { persistSession: false },
+    global: { fetch: createTimedFetch() },
+  });
+
 const getBearerToken = (req: Request): string | null => {
   const authHeader = req.headers.get("Authorization");
   const match = authHeader?.match(/^Bearer\s+(.+)$/i);
@@ -31,9 +54,7 @@ const isAuthorizedAdmin = async (
   if (Deno.env.get("HEALTHZ_MONITOR_SECRET") === token) return false;
 
   try {
-    const sb = createClient(url, serviceRoleKey, {
-      auth: { persistSession: false },
-    });
+    const sb = createHealthzClient(url, serviceRoleKey);
     const { data: authData, error: authError } = await sb.auth.getUser(token);
     const userId = authData.user?.id;
     if (authError || !userId) return false;
@@ -64,7 +85,7 @@ Deno.serve(async (req) => {
   // 1. Database connectivity
   try {
     if (!url || !key) throw new Error("Missing env");
-    const sb = createClient(url, key);
+    const sb = createHealthzClient(url, key);
     const { error } = await sb.from("profiles").select("user_id").limit(1);
     checks.database = error ? "fail" : "ok";
   } catch {

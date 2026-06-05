@@ -279,6 +279,19 @@ describe("public API cache helpers", () => {
     );
   });
 
+  it("uses abortable Supabase fetches and treats aborts as transient public-read failures", async () => {
+    fetchMock().mockRejectedValueOnce(new DOMException("Timeout", "AbortError"));
+    await expect(supabaseJson(env, "/rest/v1/listings", new URLSearchParams([["select", "id"]]))).resolves.toEqual([]);
+
+    fetchMock().mockRejectedValueOnce(new DOMException("Timeout", "AbortError"));
+    await expect(supabaseCount(env, "/rest/v1/listings", new URLSearchParams([["select", "id"]]))).resolves.toBe(0);
+
+    const jsonInit = fetchMock().mock.calls[0][1] as RequestInit;
+    const countInit = fetchMock().mock.calls[1][1] as RequestInit;
+    expect(jsonInit.signal).toBeInstanceOf(AbortSignal);
+    expect(countInit.signal).toBeInstanceOf(AbortSignal);
+  });
+
   it("returns cached edge responses without making another upstream request", async () => {
     const ctx = makeCtx("https://portal.maiprop.co/api/public/open-houses?limit=2");
 

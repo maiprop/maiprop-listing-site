@@ -95,4 +95,22 @@ describe("sitemap-dynamic.xml Pages Function", () => {
     expect(res.status).toBe(200);
     expect(call).toBe(2);
   });
+
+  it("uses an abortable upstream sitemap fetch before falling back", async () => {
+    let call = 0;
+    let observedSignal: AbortSignal | undefined;
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockImplementation((_input: RequestInfo | URL, init?: RequestInit) => {
+      call++;
+      if (call === 1) {
+        observedSignal = init?.signal ?? undefined;
+        return Promise.reject(new DOMException("Timeout", "AbortError"));
+      }
+      return Promise.resolve(new Response("<urlset/>", { status: 200 }));
+    });
+
+    const res = await onRequestGet(makeCtx("xyz1234567890"));
+    expect(res.status).toBe(200);
+    expect(call).toBe(2);
+    expect(observedSignal).toBeInstanceOf(AbortSignal);
+  });
 });

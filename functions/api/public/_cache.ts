@@ -7,6 +7,7 @@ export type PublicApiCtx = Parameters<PagesFunction<PublicApiEnv>>[0];
 const DEFAULT_EDGE_TTL_SECONDS = 120;
 const DEFAULT_BROWSER_TTL_SECONDS = 30;
 const DEFAULT_STALE_SECONDS = 300;
+const SUPABASE_FETCH_TIMEOUT_MS = 2500;
 const TRANSIENT_UPSTREAM_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504, 520, 522, 524, 544]);
 const SECURITY_HEADERS = {
   "X-Frame-Options": "DENY",
@@ -40,6 +41,25 @@ function applySecurityHeaders(headers: Headers): void {
   for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
     if (!headers.has(name)) headers.set(name, value);
   }
+}
+
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  timeoutMs = SUPABASE_FETCH_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function warnTransientFetchFailure(label: string, path: string, error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error);
+  console.warn(`[public-api] Supabase ${label} ${path} transiently unavailable: ${message}`);
 }
 
 export function jsonResponse(
@@ -129,14 +149,20 @@ export async function supabaseJson<T>(
     url.searchParams.append(key, value);
   }
 
-  const res = await fetch(url, {
-    headers: {
-      apikey: runtime.key,
-      Authorization: `Bearer ${runtime.key}`,
-      Accept: "application/json",
-    },
-    cf: { cacheTtl: DEFAULT_EDGE_TTL_SECONDS, cacheEverything: true } as RequestInitCfProperties,
-  });
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(url, {
+      headers: {
+        apikey: runtime.key,
+        Authorization: `Bearer ${runtime.key}`,
+        Accept: "application/json",
+      },
+      cf: { cacheTtl: DEFAULT_EDGE_TTL_SECONDS, cacheEverything: true } as RequestInitCfProperties,
+    });
+  } catch (error) {
+    warnTransientFetchFailure("request", path, error);
+    return [];
+  }
   if (!res.ok) {
     if (TRANSIENT_UPSTREAM_STATUSES.has(res.status)) {
       console.warn(`[public-api] Supabase ${path} transiently unavailable with ${res.status}`);
@@ -160,16 +186,22 @@ export async function supabaseCount(
     url.searchParams.append(key, value);
   }
 
-  const res = await fetch(url, {
-    method: "HEAD",
-    headers: {
-      apikey: runtime.key,
-      Authorization: `Bearer ${runtime.key}`,
-      Accept: "application/json",
-      Prefer: "count=exact",
-    },
-    cf: { cacheTtl: DEFAULT_EDGE_TTL_SECONDS, cacheEverything: true } as RequestInitCfProperties,
-  });
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(url, {
+      method: "HEAD",
+      headers: {
+        apikey: runtime.key,
+        Authorization: `Bearer ${runtime.key}`,
+        Accept: "application/json",
+        Prefer: "count=exact",
+      },
+      cf: { cacheTtl: DEFAULT_EDGE_TTL_SECONDS, cacheEverything: true } as RequestInitCfProperties,
+    });
+  } catch (error) {
+    warnTransientFetchFailure("count", path, error);
+    return 0;
+  }
   if (!res.ok) {
     if (TRANSIENT_UPSTREAM_STATUSES.has(res.status)) {
       console.warn(`[public-api] Supabase count ${path} transiently unavailable with ${res.status}`);

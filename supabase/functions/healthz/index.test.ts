@@ -93,4 +93,28 @@ Deno.test("monitor Bearer secret reveals mock billing detail", async () => {
   Deno.env.delete("HEALTHZ_MONITOR_SECRET");
 });
 
+Deno.test("database health check uses an abortable fetch", async () => {
+  const originalFetch = globalThis.fetch;
+  let observedSignal: AbortSignal | null = null;
+  globalThis.fetch = ((_input: RequestInfo | URL, init?: RequestInit) => {
+    observedSignal = init?.signal instanceof AbortSignal ? init.signal : null;
+    return Promise.reject(new DOMException("Timeout", "AbortError"));
+  }) as typeof fetch;
+
+  try {
+    const monitorValue = crypto.randomUUID();
+    Deno.env.set("HEALTHZ_MONITOR_SECRET", monitorValue);
+    const res = await handler(req("GET", undefined, {
+      "x-healthz-monitor-secret": monitorValue,
+    }));
+    assertEquals(res.status, 503);
+    assertExists(observedSignal);
+    const body = await res.json() as { checks: Record<string, string> };
+    assertEquals(body.checks.database, "fail");
+    Deno.env.delete("HEALTHZ_MONITOR_SECRET");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 restore();

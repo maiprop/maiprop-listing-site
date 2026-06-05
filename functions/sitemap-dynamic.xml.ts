@@ -17,6 +17,8 @@ interface Env {
   SUPABASE_PROJECT_ID?: string;
 }
 
+const SITEMAP_UPSTREAM_TIMEOUT_MS = 2500;
+
 export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const projectId = ctx.env.SUPABASE_PROJECT_ID;
 
@@ -28,15 +30,23 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const upstream = `https://${projectId}.supabase.co/functions/v1/sitemap`;
 
   try {
-    const res = await fetch(upstream, {
-      headers: {
-        "X-Forwarded-Host": "maiprop.co",
-        Accept: "application/xml, text/xml;q=0.9, */*;q=0.5",
-      },
-      // Use Cloudflare's edge cache for 10 minutes so we don't hammer the
-      // Supabase function on every crawl.
-      cf: { cacheTtl: 600, cacheEverything: true } as RequestInitCfProperties,
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), SITEMAP_UPSTREAM_TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch(upstream, {
+        headers: {
+          "X-Forwarded-Host": "maiprop.co",
+          Accept: "application/xml, text/xml;q=0.9, */*;q=0.5",
+        },
+        // Use Cloudflare's edge cache for 10 minutes so we don't hammer the
+        // Supabase function on every crawl.
+        cf: { cacheTtl: 600, cacheEverything: true } as RequestInitCfProperties,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!res.ok) {
       throw new Error(`Upstream sitemap returned ${res.status}`);
