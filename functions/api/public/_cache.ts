@@ -7,6 +7,7 @@ export type PublicApiCtx = Parameters<PagesFunction<PublicApiEnv>>[0];
 const DEFAULT_EDGE_TTL_SECONDS = 120;
 const DEFAULT_BROWSER_TTL_SECONDS = 30;
 const DEFAULT_STALE_SECONDS = 300;
+const TRANSIENT_UPSTREAM_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504, 520, 522, 524, 544]);
 const SECURITY_HEADERS = {
   "X-Frame-Options": "DENY",
   "X-Content-Type-Options": "nosniff",
@@ -136,7 +137,13 @@ export async function supabaseJson<T>(
     },
     cf: { cacheTtl: DEFAULT_EDGE_TTL_SECONDS, cacheEverything: true } as RequestInitCfProperties,
   });
-  if (!res.ok) throw new Error(`Supabase request failed with ${res.status}`);
+  if (!res.ok) {
+    if (TRANSIENT_UPSTREAM_STATUSES.has(res.status)) {
+      console.warn(`[public-api] Supabase ${path} transiently unavailable with ${res.status}`);
+      return [];
+    }
+    throw new Error(`Supabase request failed with ${res.status}`);
+  }
   return (await res.json()) as T[];
 }
 
@@ -163,7 +170,13 @@ export async function supabaseCount(
     },
     cf: { cacheTtl: DEFAULT_EDGE_TTL_SECONDS, cacheEverything: true } as RequestInitCfProperties,
   });
-  if (!res.ok) throw new Error(`Supabase count failed with ${res.status}`);
+  if (!res.ok) {
+    if (TRANSIENT_UPSTREAM_STATUSES.has(res.status)) {
+      console.warn(`[public-api] Supabase count ${path} transiently unavailable with ${res.status}`);
+      return 0;
+    }
+    throw new Error(`Supabase count failed with ${res.status}`);
+  }
 
   const rangeParts = res.headers.get("Content-Range")?.split("/") ?? [];
   const total = Number(rangeParts[rangeParts.length - 1]);

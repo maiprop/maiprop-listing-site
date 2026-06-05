@@ -261,6 +261,24 @@ describe("public API cache helpers", () => {
     expect((init as RequestInit & { cf?: unknown }).cf).toEqual({ cacheTtl: 120, cacheEverything: true });
   });
 
+  it("degrades transient Supabase public-read failures without hiding schema or auth errors", async () => {
+    fetchMock().mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }));
+    await expect(supabaseJson(env, "/rest/v1/listings", new URLSearchParams([["select", "id"]]))).resolves.toEqual([]);
+
+    fetchMock().mockResolvedValueOnce(new Response(null, { status: 504 }));
+    await expect(supabaseCount(env, "/rest/v1/listings", new URLSearchParams([["select", "id"]]))).resolves.toBe(0);
+
+    fetchMock().mockResolvedValueOnce(new Response("bad column", { status: 400 }));
+    await expect(supabaseJson(env, "/rest/v1/listings", new URLSearchParams([["select", "missing_column"]]))).rejects.toThrow(
+      "Supabase request failed with 400",
+    );
+
+    fetchMock().mockResolvedValueOnce(new Response("forbidden", { status: 403 }));
+    await expect(supabaseCount(env, "/rest/v1/listings", new URLSearchParams([["select", "id"]]))).rejects.toThrow(
+      "Supabase count failed with 403",
+    );
+  });
+
   it("returns cached edge responses without making another upstream request", async () => {
     const ctx = makeCtx("https://portal.maiprop.co/api/public/open-houses?limit=2");
 
