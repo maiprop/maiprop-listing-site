@@ -160,6 +160,7 @@ Dashboard → Project Settings → Edge Functions → Secrets.
 | `OPENAI_MODEL` | Optional OpenAI model override for non-translation AI functions |
 | `OPENAI_TRANSLATION_MODEL` | Optional OpenAI model override for translation |
 | `OPENAI_REASONING_EFFORT` | Optional OpenAI reasoning effort override for supported models |
+| `AI_PROVIDER_TIMEOUT_MS` | Optional timeout in milliseconds for outbound Gemini/OpenAI provider calls; defaults to `30000` |
 | `LOVABLE_API_KEY` | legacy `followup-lead` content generation |
 | `BREVO_API_KEY` | `send-saved-search-alerts`, `auth-email-hook`, `process-email-queue`, `invitation-notify`, `oh-registration-notify` |
 | `BREVO_FROM_EMAIL` | same Brevo-backed email functions as above |
