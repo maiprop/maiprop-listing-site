@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.13](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.12...v1.9.13) (2026-06-05)
+
+
+### Bug Fixes
+
+* restore photo uploads ([#286](https://github.com/maiprop/maiprop-listing-site/issues/286)) ([83b759f](https://github.com/maiprop/maiprop-listing-site/commit/83b759f267b59cb4bdbe5b584bc202ed14bae76c))
+
 ## [1.9.12](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.11...v1.9.12) (2026-06-05)
 
 
