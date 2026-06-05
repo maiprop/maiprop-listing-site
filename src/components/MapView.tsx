@@ -171,7 +171,7 @@ export function MapView({
 
   // ── Fit bounds ──────────────────────────────────────────────────────────────
   const fitBounds = useCallback(() => {
-    if (!mapRef.current || !mapBounds) return;
+    if (!mapRef.current || !mapBounds || typeof mapRef.current.fitBounds !== "function") return;
     mapRef.current.fitBounds(
       mapBounds,
       { padding: 60, duration: 600 }

@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   from: vi.fn(),
   invoke: vi.fn(),
   streetView: vi.fn(),
+  publicApi: vi.fn(),
 }));
 
 vi.mock("@/components/Navbar", () => ({ Navbar: () => <nav data-testid="navbar" /> }));
@@ -173,6 +174,9 @@ vi.mock("@/lib/config", async () => {
     getStreetViewProxyUrl: (...args: unknown[]) => mocks.streetView(...args),
   };
 });
+vi.mock("@/lib/publicApi", () => ({
+  fetchPublicApi: (...args: unknown[]) => mocks.publicApi(...args),
+}));
 vi.mock("sonner", () => ({
   toast: {
     success: (...args: unknown[]) => mocks.toastSuccess(...args),
@@ -281,6 +285,7 @@ beforeEach(() => {
   mocks.startConversation.isPending = false;
   mocks.invoke.mockResolvedValue({ data: null, error: null });
   mocks.streetView.mockReturnValue("https://street.example/fallback.jpg");
+  mocks.publicApi.mockReset().mockResolvedValue([]);
   makeListingsQuery([]);
   Object.assign(navigator, {
     clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
@@ -290,7 +295,7 @@ beforeEach(() => {
 
 describe("OpenHouses page behavior", () => {
   it("filters open house cards by city and property type, then clears filters", async () => {
-    const query = makeListingsQuery([
+    mocks.publicApi.mockResolvedValue([
       createListing({ id: "oh-athens", title: "Athens Apartment", city: "Athens", property_type: "apartment" }),
       createListing({ id: "oh-voula", title: "Voula House", city: "Voula", property_type: "house", price: 900000 }),
     ]);
@@ -299,10 +304,11 @@ describe("OpenHouses page behavior", () => {
 
     expect(await screen.findByText("Athens Apartment")).toBeInTheDocument();
     expect(screen.getByText("Voula House")).toBeInTheDocument();
-    expect(query.select).toHaveBeenCalledWith(expect.not.stringContaining("*"));
-    expect(query.select).toHaveBeenCalledWith(expect.stringContaining("listing_images(url, sort_order)"));
-    expect(query.select).toHaveBeenCalledWith(expect.stringContaining("has_parking"));
-    expect(query.select).toHaveBeenCalledWith(expect.stringContaining("open_house_date"));
+    expect(mocks.publicApi).toHaveBeenCalledWith(
+      "/api/public/open-houses?showPast=0&limit=200",
+      { throwOnError: true },
+    );
+    expect(mocks.from).not.toHaveBeenCalled();
 
     fireEvent.change(screen.getByLabelText(/search open houses by city/i), { target: { value: "Athens" } });
     fireEvent.keyDown(screen.getByLabelText(/search open houses by city/i), { key: "Enter" });
@@ -322,7 +328,7 @@ describe("OpenHouses page behavior", () => {
   }, 15_000);
 
   it("shows the empty map state for listings without coordinates and can switch back to the list", async () => {
-    makeListingsQuery([createListing({ id: "oh-no-map", title: "No Map Home", latitude: null, longitude: null })]);
+    mocks.publicApi.mockResolvedValue([createListing({ id: "oh-no-map", title: "No Map Home", latitude: null, longitude: null })]);
 
     await renderOpenHouses();
     expect(await screen.findByText("No Map Home")).toBeInTheDocument();
@@ -336,7 +342,7 @@ describe("OpenHouses page behavior", () => {
   });
 
   it("wires draw-area filtering through the Open Houses map and list views", async () => {
-    makeListingsQuery([
+    mocks.publicApi.mockResolvedValue([
       createListing({ id: "oh-athens", title: "Athens Apartment", city: "Athens", latitude: 37.98, longitude: 23.73 }),
       createListing({ id: "oh-voula", title: "Voula House", city: "Voula", latitude: 37.84, longitude: 23.77 }),
     ]);
@@ -364,7 +370,7 @@ describe("OpenHouses page behavior", () => {
   });
 
   it("hides supervisor test open houses and sends the logo as the empty-image fallback", async () => {
-    makeListingsQuery([
+    mocks.publicApi.mockResolvedValue([
       createListing({ id: "oh-live", title: "Real Open House", latitude: null, longitude: null }),
       createListing({ id: "oh-test", title: "supervisor-177912 smoke test", latitude: null, longitude: null }),
     ]);
@@ -376,23 +382,30 @@ describe("OpenHouses page behavior", () => {
     expect(screen.getByTestId("open-house-card")).toHaveAttribute("data-image", "/images/maiprop-logo.webp");
   });
 
-  it("uses the past-open-house query branch and renders the loading error retry state", async () => {
-    const firstChain = makeListingsQuery([], new Error("network down"));
+  it("surfaces public API outages without direct Supabase fallback and switches paths for past open houses", async () => {
+    mocks.publicApi.mockResolvedValue(null);
+    makeListingsQuery([createListing({ id: "oh-db", title: "Direct DB Open House" })]);
 
     await renderOpenHouses();
 
-    expect(await screen.findByRole("heading", { name: /could not load open houses/i })).toBeInTheDocument();
+    expect(await screen.findAllByText(/could not load open houses/i)).toHaveLength(2);
+    expect(screen.queryByText("Direct DB Open House")).not.toBeInTheDocument();
+    expect(mocks.publicApi).toHaveBeenCalledWith(
+      "/api/public/open-houses?showPast=0&limit=200",
+      { throwOnError: true },
+    );
+    expect(mocks.from).not.toHaveBeenCalled();
 
-    makeListingsQuery([createListing({ id: "oh-retry", title: "Retry Success" })]);
-    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
-
-    expect(await screen.findByText("Retry Success")).toBeInTheDocument();
-
-    const pastChain = makeListingsQuery([]);
+    mocks.publicApi.mockClear().mockResolvedValue([]);
     fireEvent.click(screen.getByRole("button", { name: "Past" }));
 
-    await waitFor(() => expect(pastChain.lt).toHaveBeenCalledWith("open_house_date", expect.any(String)));
-    expect(firstChain.gte).toHaveBeenCalledWith("open_house_date", expect.any(String));
+    await waitFor(() =>
+      expect(mocks.publicApi).toHaveBeenCalledWith(
+        "/api/public/open-houses?showPast=1&limit=200",
+        { throwOnError: true },
+      )
+    );
+    expect(mocks.from).not.toHaveBeenCalled();
   });
 });
 

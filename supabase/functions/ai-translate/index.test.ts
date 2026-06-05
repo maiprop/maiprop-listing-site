@@ -60,6 +60,78 @@ Deno.test("non-static locale requires auth before AI call", async () => {
   assertEquals(body.error, "Authentication required for AI translation");
 });
 
+Deno.test("oversized translations do not reserve quota or call provider", async () => {
+  const originalFetch = globalThis.fetch;
+  let authCalls = 0;
+  let quotaCalls = 0;
+  let providerCalls = 0;
+  const strings = Object.fromEntries(
+    Array.from({ length: 501 }, (_, i) => [`key.${i}`, "value"]),
+  );
+
+  globalThis.fetch = ((input: RequestInfo | URL): Promise<Response> => {
+    const url = String(input);
+    if (url.includes("/auth/v1/user")) {
+      authCalls += 1;
+      return Promise.resolve(new Response(JSON.stringify({ user: { id: "user-1" } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }));
+    }
+    if (url.includes("/rpc/reserve_ai_quota_for_user")) quotaCalls += 1;
+    if (url.includes("generativelanguage.googleapis.com") || url.includes("api.openai.com")) {
+      providerCalls += 1;
+    }
+    return Promise.resolve(new Response("{}", { status: 200 }));
+  }) as typeof fetch;
+
+  try {
+    const res = await handler(req("POST", {
+      locale: "fr",
+      strings,
+    }, { authorization: "Bearer valid-user-token" }));
+    assertEquals(res.status, 413);
+    assertEquals(authCalls, 1);
+    assertEquals(quotaCalls, 0);
+    assertEquals(providerCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("provider misconfiguration does not reserve quota", async () => {
+  const originalFetch = globalThis.fetch;
+  let quotaCalls = 0;
+  Deno.env.delete("OPENAI_API_KEY");
+  Deno.env.delete("GEMINI_API_KEY");
+
+  globalThis.fetch = ((input: RequestInfo | URL): Promise<Response> => {
+    const url = String(input);
+    if (url.includes("/auth/v1/user")) {
+      return Promise.resolve(new Response(JSON.stringify({ user: { id: "user-1" } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }));
+    }
+    if (url.includes("/rpc/reserve_ai_quota_for_user")) quotaCalls += 1;
+    return Promise.resolve(new Response("{}", { status: 200 }));
+  }) as typeof fetch;
+
+  try {
+    const res = await handler(req("POST", {
+      locale: "fr",
+      strings: { "nav.home": "Home" },
+    }, { authorization: "Bearer valid-user-token" }));
+    assertEquals(res.status, 503);
+    const body = await res.json();
+    assertEquals(body.error, "Translation service not configured");
+    assertEquals(quotaCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+    Deno.env.set("OPENAI_API_KEY", "placeholder-openai");
+  }
+});
+
 Deno.test("unknown origin falls back to production CORS origin", async () => {
   const r = new Request("https://functions.supabase.co/fn", {
     method: "OPTIONS",
@@ -97,11 +169,83 @@ Deno.test("translation parse failures do not expose raw model output", async () 
     const res = await handler(req("POST", {
       locale: "fr",
       strings: { "nav.home": "Home" },
-    }, { authorization: `Bearer ${crypto.randomUUID()}` }));
+    }, { authorization: "Bearer test-valid-token" }));
     assertEquals(res.status, 502);
     const body = await res.json();
     assertEquals(body.error, "Translation parsing failed");
     assert(!("raw" in body));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("non-static locale fails closed before provider call when quota service is unavailable", async () => {
+  const originalFetch = globalThis.fetch;
+  let providerCalls = 0;
+  Deno.env.delete("SUPABASE_SERVICE_ROLE_KEY");
+
+  globalThis.fetch = ((input: RequestInfo | URL): Promise<Response> => {
+    const url = String(input);
+    if (url.includes("/auth/v1/user")) {
+      return Promise.resolve(new Response(JSON.stringify({ user: { id: "user-1" } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }));
+    }
+    if (url.includes("generativelanguage.googleapis.com") || url.includes("api.openai.com")) {
+      providerCalls += 1;
+    }
+    return Promise.resolve(new Response("{}", { status: 200 }));
+  }) as typeof fetch;
+
+  try {
+    const res = await handler(req("POST", {
+      locale: "fr",
+      strings: { "nav.home": "Home" },
+    }, { authorization: "Bearer valid-user-token" }));
+    assertEquals(res.status, 503);
+    const body = await res.json();
+    assertEquals(body.error, "AI quota service unavailable. Please retry shortly.");
+    assertEquals(providerCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+    Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "placeholder-supabase-service-role");
+  }
+});
+
+Deno.test("non-static locale with quota reservation reaches provider", async () => {
+  const originalFetch = globalThis.fetch;
+  let providerCalls = 0;
+
+  globalThis.fetch = ((input: RequestInfo | URL): Promise<Response> => {
+    const url = String(input);
+    if (url.includes("/auth/v1/user")) {
+      return Promise.resolve(new Response(JSON.stringify({ user: { id: "test-user-id" } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }));
+    }
+    if (url.includes("generativelanguage.googleapis.com") || url.includes("api.openai.com")) {
+      providerCalls += 1;
+      return Promise.resolve(new Response(JSON.stringify({
+        choices: [{ message: { content: "{\"nav.home\":\"Accueil\"}" } }],
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }));
+    }
+    return Promise.resolve(new Response("{}", { status: 200 }));
+  }) as typeof fetch;
+
+  try {
+    const res = await handler(req("POST", {
+      locale: "fr",
+      strings: { "nav.home": "Home" },
+    }, { authorization: "Bearer test-valid-token" }));
+    assertEquals(res.status, 200);
+    const body = await res.json();
+    assertEquals(body.strings["nav.home"], "Accueil");
+    assertEquals(providerCalls, 1);
   } finally {
     globalThis.fetch = originalFetch;
   }

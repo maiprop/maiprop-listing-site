@@ -1,0 +1,4 @@
+-- No-op retained for remote migration history alignment.
+--
+-- The paired add-index migration is also a no-op in source now, so fresh
+-- replays do not pay create/drop cost for an index with no final schema benefit.

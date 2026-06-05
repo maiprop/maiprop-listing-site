@@ -1,11 +1,13 @@
 import {
   cachedJson,
+  isSupabaseTransientError,
   jsonResponse,
   methodNotAllowed,
   missingRuntime,
   normalizedCacheUrl,
   safeInt,
   supabaseJson,
+  upstreamUnavailable,
   type PublicApiCtx,
   type PublicApiEnv,
 } from "./_cache";
@@ -20,9 +22,9 @@ type AuctionRow = Record<string, unknown> & {
   region?: string | null;
 };
 
-const PUBLIC_AUCTION_LIMIT_MAX = 60;
+const PUBLIC_AUCTION_LIMIT_MAX = 600;
 const PUBLIC_AUCTION_CANDIDATE_LIMIT_MAX = 600;
-const AUCTION_CACHE_VERSION = "national-sample-v5";
+const AUCTION_CACHE_VERSION = "national-sample-v6";
 const UNKNOWN_LOCATION_KEY = "__unknown_location__";
 const AUCTION_SELECT =
   "id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,ai_score,views_count,tags,auction_date,auction_starting_bid,latitude,longitude,auction_court,website_url,region,is_featured,priority_placement,construction_status,listing_images(url,sort_order)";
@@ -102,13 +104,13 @@ function diversifyAuctionRows(rows: AuctionRow[], limit: number): AuctionRow[] {
   return [...promotedRows, ...roundRobinAuctionRowsByLocation(organicRows)].slice(0, limit);
 }
 
-async function fetchCachedDbAuctions(env: PublicApiEnv, limit: number): Promise<AuctionRow[]> {
+async function fetchDbAuctions(env: PublicApiEnv, limit: number, poolTag?: string): Promise<AuctionRow[]> {
   const params = new URLSearchParams();
   params.set("select", AUCTION_SELECT);
   params.set("status", "eq.active");
   params.set("listing_type", "eq.auction");
   params.set("is_off_market", "eq.false");
-  params.set("tags", `cs.{source:maiprop-os,${todayAuctionPoolTag()}}`);
+  params.set("tags", poolTag ? `cs.{source:maiprop-os,${poolTag}}` : "cs.{source:maiprop-os}");
   params.set("or", `(auction_date.gte.${todayIsoDate()},auction_date.is.null)`);
   params.append("order", "is_featured.desc");
   params.append("order", "priority_placement.desc.nullslast");
@@ -117,12 +119,22 @@ async function fetchCachedDbAuctions(env: PublicApiEnv, limit: number): Promise<
   params.set("listing_images.order", "sort_order.asc");
   params.set("listing_images.limit", "3");
 
-  return supabaseJson<AuctionRow>(env, "/rest/v1/listings", params);
+  return supabaseJson<AuctionRow>(env, "/rest/v1/listings", params, { failOnTransient: true });
+}
+
+async function fetchCachedDbAuctions(env: PublicApiEnv, limit: number): Promise<AuctionRow[]> {
+  return fetchDbAuctions(env, limit, todayAuctionPoolTag());
+}
+
+async function fetchFallbackDbAuctions(env: PublicApiEnv, limit: number): Promise<AuctionRow[]> {
+  return fetchDbAuctions(env, limit);
 }
 
 export async function fetchPublicAuctionRows(env: PublicApiEnv, limit: number): Promise<AuctionRow[]> {
-  const cachedRows = await fetchCachedDbAuctions(env, getCachedCandidateLimit(limit));
-  return cachedRows.length > 0 ? diversifyAuctionRows(cachedRows, limit) : [];
+  const candidateLimit = getCachedCandidateLimit(limit);
+  const cachedRows = await fetchCachedDbAuctions(env, candidateLimit);
+  const rows = cachedRows.length > 0 ? cachedRows : await fetchFallbackDbAuctions(env, candidateLimit);
+  return rows.length > 0 ? diversifyAuctionRows(rows, limit) : [];
 }
 
 export async function publicAuctions(ctx: PublicApiCtx, requestUrl: URL): Promise<Response> {
@@ -136,7 +148,14 @@ export async function publicAuctions(ctx: PublicApiCtx, requestUrl: URL): Promis
   ]);
   const cacheKey = normalizedCacheUrl(requestUrl, "auctions", cacheParams);
 
-  return cachedJson(ctx, cacheKey, async () => jsonResponse({ data: await fetchPublicAuctionRows(ctx.env, limit) }), {
+  return cachedJson(ctx, cacheKey, async () => {
+    try {
+      return jsonResponse({ data: await fetchPublicAuctionRows(ctx.env, limit) });
+    } catch (error) {
+      if (isSupabaseTransientError(error)) return upstreamUnavailable();
+      throw error;
+    }
+  }, {
     edgeTtlSeconds: 3_600,
     browserTtlSeconds: 300,
     staleSeconds: 21_600,

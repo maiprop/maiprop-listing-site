@@ -12,6 +12,7 @@ import {
   createMaiPropVideoRoomTopic,
   createProfessionalVideoRoomPath,
   getVideoPlatformName,
+  isUuid,
   normalizeVideoLink,
 } from "@/lib/videoRooms";
 
@@ -48,7 +49,7 @@ export default function BrandedVideoRoom() {
   const { data: room, isLoading, error } = useQuery({
     queryKey: ["professional-video-room", professionalId, consultationId, user?.id],
     queryFn: async () => {
-      if (!professionalId || !user?.id) return null;
+      if (!isUuid(professionalId) || (consultationId && !isUuid(consultationId)) || !user?.id) return null;
       const { data, error: queryError } = await supabase
         .from("professionals")
         .select("id, user_id, display_name, avatar_url, title, category, video_link")

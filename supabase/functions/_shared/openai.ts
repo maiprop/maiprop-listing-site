@@ -1,5 +1,8 @@
+import { fetchWithTimeout } from "./fetchWithTimeout.ts";
+
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 const GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
+const DEFAULT_AI_PROVIDER_TIMEOUT_MS = 30_000;
 
 export function getOpenAIModel(envVar = "OPENAI_MODEL", fallback = "gpt-4.1-mini"): string {
   return Deno.env.get(envVar) ?? fallback;
@@ -71,6 +74,12 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function getAIProviderTimeoutMs(): number {
+  const configured = Number(Deno.env.get("AI_PROVIDER_TIMEOUT_MS") ?? "");
+  if (!Number.isFinite(configured) || configured <= 0) return DEFAULT_AI_PROVIDER_TIMEOUT_MS;
+  return Math.min(60_000, Math.max(5_000, Math.round(configured)));
+}
+
 async function geminiGenerateContent(
   body: Record<string, unknown>,
   model = getGeminiModel(),
@@ -91,7 +100,7 @@ async function geminiGenerateContent(
 
   let response: Response | null = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    response = await fetch(`${GEMINI_API_BASE_URL}/${geminiModel}:generateContent`, {
+    response = await fetchWithTimeout(`${GEMINI_API_BASE_URL}/${geminiModel}:generateContent`, {
       method: "POST",
       headers: {
         "x-goog-api-key": apiKey,
@@ -102,7 +111,7 @@ async function geminiGenerateContent(
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         generationConfig,
       }),
-    });
+    }, getAIProviderTimeoutMs());
     if (response.status !== 429 && response.status < 500) return response;
     if (attempt < 2) await sleep(750 * (attempt + 1));
   }
@@ -117,7 +126,7 @@ export async function openAIChatCompletion(
   if (Deno.env.get("GEMINI_API_KEY")) return geminiGenerateContent(body, model);
 
   const reasoningEffort = getOpenAIReasoningEffort();
-  return fetch(OPENAI_API_URL, {
+  return fetchWithTimeout(OPENAI_API_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${requireOpenAIKey()}`,
@@ -130,7 +139,7 @@ export async function openAIChatCompletion(
         : {}),
       ...body,
     }),
-  });
+  }, getAIProviderTimeoutMs());
 }
 
 export function readOpenAITextContent(payload: unknown): string {

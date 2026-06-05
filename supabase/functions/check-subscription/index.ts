@@ -43,6 +43,26 @@ export function isValidInvestorSubscription(
   return !Number.isNaN(expiresAt.getTime()) && expiresAt > now;
 }
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function queryErrorMessage(error: unknown): string | null {
+  if (!error || typeof error !== "object") return null;
+  const message = (error as { message?: unknown }).message;
+  return typeof message === "string" ? message : String(error);
+}
+
+function subscriptionUnavailableResponse(corsHeaders: Record<string, string>) {
+  return new Response(
+    JSON.stringify({ error: "Subscription service unavailable" }),
+    {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 503,
+    },
+  );
+}
+
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export async function getDatabaseFallback( // skipcq: JS-R1005 - Fallback subscription resolution intentionally checks product IDs, direct subscription state, and investor grants.
   supabaseClient: unknown,
@@ -52,7 +72,7 @@ export async function getDatabaseFallback( // skipcq: JS-R1005 - Fallback subscr
 ): Promise<FallbackSubscriptionState> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const from = (supabaseClient as { from: any }).from as any;
-  const [{ data: profile }, { data: investorSubs }] = await Promise.all([
+  const [profileResult, investorResult] = await Promise.all([
     from("profiles")
       .select("subscription_product_id")
       .eq("user_id", userId)
@@ -62,9 +82,17 @@ export async function getDatabaseFallback( // skipcq: JS-R1005 - Fallback subscr
       .eq("user_id", userId)
       .in("status", ["active", "trial"]),
   ]);
+  const profileError = queryErrorMessage(profileResult.error);
+  if (profileError) {
+    throw new Error(`profile subscription lookup failed: ${profileError}`);
+  }
+  const investorError = queryErrorMessage(investorResult.error);
+  if (investorError) {
+    throw new Error(`investor subscription lookup failed: ${investorError}`);
+  }
 
   const productId =
-    (profile as { subscription_product_id?: string | null } | null)
+    (profileResult.data as { subscription_product_id?: string | null } | null)
       ?.subscription_product_id ?? null;
   const entitlement = allowProfileEntitlement && productId
     ? await resolveSubscriptionEntitlement(supabaseClient, userId, {
@@ -72,10 +100,10 @@ export async function getDatabaseFallback( // skipcq: JS-R1005 - Fallback subscr
     })
     : null;
   const investors =
-    (Array.isArray(investorSubs)
-      ? investorSubs
-      : investorSubs
-      ? [investorSubs]
+    (Array.isArray(investorResult.data)
+      ? investorResult.data
+      : investorResult.data
+      ? [investorResult.data]
       : []) as Array<
         {
           status?: string;
@@ -197,8 +225,14 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
     "anonymous";
-  if (await checkSubLimiter.isLimited(ip)) {
-    return tooManyRequestsResponse(corsHeaders);
+  try {
+    if (await checkSubLimiter.isLimited(ip)) {
+      return tooManyRequestsResponse(corsHeaders);
+    }
+  } catch (rateLimitError: unknown) {
+    log.warn("subscription rate limiter unavailable; allowing request", {
+      message: getErrorMessage(rateLimitError),
+    });
   }
 
   const supabaseClient = createClient(
@@ -212,11 +246,19 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
 
     if (!stripeKey) {
-      const fallback = await getDatabaseFallback(supabaseClient, user.id);
-      return new Response(JSON.stringify(fallback), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      });
+      try {
+        const fallback = await getDatabaseFallback(supabaseClient, user.id);
+        return new Response(JSON.stringify(fallback), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        });
+      } catch (fallbackError: unknown) {
+        log.error("database fallback failed without Stripe key", {
+          userId: user.id,
+          message: getErrorMessage(fallbackError),
+        });
+        return subscriptionUnavailableResponse(corsHeaders);
+      }
     }
 
     try {
@@ -272,23 +314,35 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
         },
       );
     } catch (stripeError: unknown) {
-      const fallback = await getDatabaseFallback(supabaseClient, user.id, {
-        allowProfileEntitlement: false,
-      });
       log.warn("stripe lookup failed; using database fallback", {
         userId: user.id,
-        message: stripeError instanceof Error
-          ? stripeError.message
-          : String(stripeError),
+        message: getErrorMessage(stripeError),
       });
-      return new Response(JSON.stringify(fallback), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      });
+      try {
+        const fallback = await getDatabaseFallback(supabaseClient, user.id, {
+          allowProfileEntitlement: false,
+        });
+        return new Response(JSON.stringify(fallback), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        });
+      } catch (fallbackError: unknown) {
+        log.error("database fallback failed after Stripe error", {
+          userId: user.id,
+          message: getErrorMessage(fallbackError),
+        });
+        return subscriptionUnavailableResponse(corsHeaders);
+      }
     }
   } catch (error: unknown) {
-    const status = error instanceof AuthError ? error.status : 500;
-    const message = error instanceof Error ? error.message : String(error);
+    if (!(error instanceof AuthError)) {
+      log.error("unexpected subscription check failure", {
+        message: getErrorMessage(error),
+      });
+      return subscriptionUnavailableResponse(corsHeaders);
+    }
+    const status = error.status;
+    const message = getErrorMessage(error);
     return new Response(JSON.stringify({ error: message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status,

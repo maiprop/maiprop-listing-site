@@ -67,8 +67,67 @@ Deno.test("Google fetch uses app Referer and returns image content", async () =>
     assertEquals(res.status, 200);
     assertEquals(res.headers.get("Content-Type"), "image/jpeg");
     assertStringIncludes(requestedUrl, "maps.googleapis.com/maps/api/streetview");
-    assertStringIncludes(requestedUrl, "location=37.97,23.73");
+    assertEquals(new URL(requestedUrl).searchParams.get("location"), "37.97,23.73");
     assertEquals(requestedReferer, "https://portal.maiprop.co/");
+  } finally {
+    globalThis.fetch = originalFetch;
+    Deno.env.delete("GOOGLE_MAPS_API_KEY");
+  }
+});
+
+Deno.test("Google URL is built with validated params and cannot inject extra query keys", async () => {
+  Deno.env.set("GOOGLE_MAPS_API_KEY", "server-side-test-key");
+  const originalFetch = globalThis.fetch;
+  let requestedUrl = "";
+
+  globalThis.fetch = ((input: string | URL | Request) => {
+    requestedUrl = String(input);
+    return Promise.resolve(
+      new Response("jpeg-bytes", {
+        status: 200,
+        headers: { "Content-Type": "image/jpeg" },
+      }),
+    );
+  }) as typeof fetch;
+
+  try {
+    const res = await handler(new Request("https://functions.supabase.co/fn?lat=37.97&lng=23.73&size=800x450%26key%3Devil", {
+      method: "GET",
+      headers: { origin: "https://maiprop.co" },
+    }));
+
+    assertEquals(res.status, 400);
+
+    const valid = await handler(new Request("https://functions.supabase.co/fn?location=Athens, Greece&size=800x450", {
+      method: "GET",
+      headers: { origin: "https://maiprop.co" },
+    }));
+    assertEquals(valid.status, 200);
+    const googleUrl = new URL(requestedUrl);
+    assertEquals(googleUrl.searchParams.get("key"), "server-side-test-key");
+    assertEquals(googleUrl.searchParams.get("location"), "Athens, Greece");
+    assertEquals(googleUrl.searchParams.get("size"), "800x450");
+  } finally {
+    globalThis.fetch = originalFetch;
+    Deno.env.delete("GOOGLE_MAPS_API_KEY");
+  }
+});
+
+Deno.test("invalid latitude and longitude are rejected before Google fetch", async () => {
+  Deno.env.set("GOOGLE_MAPS_API_KEY", "server-side-test-key");
+  const originalFetch = globalThis.fetch;
+  let googleFetches = 0;
+  globalThis.fetch = (() => {
+    googleFetches += 1;
+    return Promise.resolve(new Response("unexpected", { status: 200 }));
+  }) as typeof fetch;
+
+  try {
+    const res = await handler(new Request("https://functions.supabase.co/fn?lat=123&lng=23.73", {
+      method: "GET",
+    }));
+    assertEquals(res.status, 400);
+    assertEquals(googleFetches, 0);
   } finally {
     globalThis.fetch = originalFetch;
     Deno.env.delete("GOOGLE_MAPS_API_KEY");

@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { fetchPublicApi } from "@/lib/publicApi";
 import { useAuctionListings } from "@/hooks/useAuctionListings";
 import {
@@ -18,19 +17,10 @@ import {
  * fallback / sort logic, same staleTime / retry config.
  */
 
-const featuredSelect =
-  "id, title, address, city, price, price_per_sqm, bedrooms, bathrooms, sqm, floor, total_floors, year_built, energy_class, cover_image_url, property_type, listing_type, ai_score, views_count, tags";
-
-const openHouseSelect =
-  "id, title, address, city, price, price_per_sqm, bedrooms, bathrooms, sqm, floor, total_floors, year_built, energy_class, cover_image_url, property_type, listing_type, ai_score, views_count, tags, open_house_date, latitude, longitude, listing_images(url, sort_order)";
-
 const HOMEPAGE_AUCTION_SOURCE_LIMIT = 60;
 const HOMEPAGE_AUCTION_DISPLAY_LIMIT = 6;
 const HOMEPAGE_PROPERTY_TYPES = ["apartment", "land"] as const;
 const FEATURED_DAILY_STALE_TIME_MS = 24 * 60 * 60 * 1000;
-
-const queryTimeout = <T,>(p: Promise<T>, ms: number): Promise<T> =>
-  Promise.race([p, new Promise<T>((_, rej) => setTimeout(() => rej(new Error("Request timeout")), ms))]);
 
 /** Counts of active listings grouped by `property_type` for the BrowseByType section. */
 export function useHomepageTypeCounts() {
@@ -53,34 +43,7 @@ export function useHomepageFeaturedListings() {
     queryFn: async () => {
       const cached = await fetchPublicApi<HomepageListing[]>("/api/public/homepage?section=featured");
       if (cached) return publicHomepageRows(cached, 4);
-
-      const run = async () => {
-        const { data, error } = await supabase
-          .from("listings")
-          .select(`${featuredSelect}, listing_images(url, sort_order)`)
-          .order("sort_order", { referencedTable: "listing_images", ascending: true })
-          .limit(3, { referencedTable: "listing_images" })
-          .eq("status", "active")
-          .eq("listing_type", "sale")
-          .eq("is_off_market", false)
-          .order("created_at", { ascending: false })
-          .limit(12);
-        if (error) {
-          // Fallback without the join in case the embedded relation breaks
-          const fallback = await supabase
-            .from("listings")
-            .select(featuredSelect)
-            .eq("status", "active")
-            .eq("listing_type", "sale")
-            .eq("is_off_market", false)
-            .order("created_at", { ascending: false })
-            .limit(12);
-          if (fallback.error) throw fallback.error;
-          return publicHomepageRows(fallback.data ?? [], 4);
-        }
-        return publicHomepageRows(data ?? [], 4);
-      };
-      return queryTimeout(run(), 12_000);
+      return [];
     },
     staleTime: FEATURED_DAILY_STALE_TIME_MS,
     retry: 1,
@@ -104,21 +67,7 @@ export function useHomepageOpenHouseListings() {
     queryFn: async () => {
       const cached = await fetchPublicApi<HomepageListing[]>("/api/public/homepage?section=open-houses");
       if (cached) return sortByImagePresence(publicHomepageRows(cached));
-
-      const now = new Date().toISOString();
-      const { data, error } = await supabase
-        .from("listings")
-        .select(openHouseSelect)
-        .order("sort_order", { referencedTable: "listing_images", ascending: true })
-        .limit(3, { referencedTable: "listing_images" })
-        .eq("status", "active")
-        .eq("listing_type", "open_house")
-        .eq("is_off_market", false)
-        .gte("open_house_date", now)
-        .order("open_house_date", { ascending: true })
-        .limit(12);
-      if (error) return [];
-      return sortByImagePresence(publicHomepageRows(data ?? []));
+      return [];
     },
     staleTime: 2 * 60 * 1000,
   });

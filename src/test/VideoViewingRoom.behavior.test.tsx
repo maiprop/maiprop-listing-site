@@ -6,7 +6,7 @@ import VideoViewingRoom from "@/pages/VideoViewingRoom";
 const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   viewing: {
-    id: "viewing-1",
+    id: "11111111-1111-4111-8111-111111111111",
     listing_id: "listing-1",
     owner_id: "owner-1",
     requester_id: "buyer-1",
@@ -32,7 +32,7 @@ vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
   return {
     ...actual,
-    useParams: () => ({ viewingId: "viewing-1" }),
+    useParams: () => ({ viewingId: "11111111-1111-4111-8111-111111111111" }),
     useNavigate: () => mocks.navigate,
   };
 });
@@ -81,7 +81,7 @@ describe("VideoViewingRoom", () => {
     mocks.queryError = null;
     mocks.roomProps = null;
     mocks.viewing = {
-      id: "viewing-1",
+      id: "11111111-1111-4111-8111-111111111111",
       listing_id: "listing-1",
       owner_id: "owner-1",
       requester_id: "buyer-1",
@@ -119,14 +119,14 @@ describe("VideoViewingRoom", () => {
     expect(room).toBeInTheDocument();
     expect(screen.getByText("Property video viewing")).toBeInTheDocument();
     expect(within(room).getByText("Sample Flat")).toBeInTheDocument();
-    expect(screen.getByText("video:viewing:viewing-1")).toBeInTheDocument();
+    expect(screen.getByText("video:viewing:11111111-1111-4111-8111-111111111111")).toBeInTheDocument();
     expect(mocks.roomProps).toMatchObject({
-      roomTopic: "video:viewing:viewing-1",
-      roomDisplayName: "maiprop-viewing-viewing-",
+      roomTopic: "video:viewing:11111111-1111-4111-8111-111111111111",
+      roomDisplayName: "maiprop-viewing-11111111",
       backHref: "/dashboard?tab=viewings",
-      notesStorageKey: "viewing-call-notes-viewing-1",
+      notesStorageKey: "viewing-call-notes-11111111-1111-4111-8111-111111111111",
     });
-    expect(String(mocks.roomProps?.roomUrl)).toMatch(/\/video-viewing\/viewing-1$/);
+    expect(String(mocks.roomProps?.roomUrl)).toMatch(/\/video-viewing\/11111111-1111-4111-8111-111111111111$/);
   });
 
   it("rejects non-video viewings before exposing a room", async () => {

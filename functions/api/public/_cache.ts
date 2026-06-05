@@ -19,10 +19,25 @@ const SECURITY_HEADERS = {
   "Cross-Origin-Resource-Policy": "same-origin",
 } as const;
 
+export class SupabaseTransientError extends Error {
+  constructor(message: string, public readonly path: string, public readonly status?: number) {
+    super(message);
+    this.name = "SupabaseTransientError";
+  }
+}
+
+export function isSupabaseTransientError(error: unknown): error is SupabaseTransientError {
+  return error instanceof SupabaseTransientError;
+}
+
 type CacheOptions = {
   edgeTtlSeconds?: number;
   browserTtlSeconds?: number;
   staleSeconds?: number;
+};
+
+type SupabaseFetchOptions = {
+  failOnTransient?: boolean;
 };
 
 function applyCacheHeaders(headers: Headers, cache: CacheOptions, force = false): void {
@@ -104,6 +119,19 @@ export function missingRuntime(): Response {
   );
 }
 
+export function upstreamUnavailable(): Response {
+  return jsonResponse(
+    { error: "Supabase upstream unavailable" },
+    {
+      status: 503,
+      headers: {
+        "Cache-Control": "no-store",
+        "CDN-Cache-Control": "no-store",
+      },
+    },
+  );
+}
+
 export async function cachedJson(
   ctx: PublicApiCtx,
   cacheKey: URL,
@@ -140,6 +168,7 @@ export async function supabaseJson<T>(
   env: PublicApiEnv,
   path: string,
   searchParams: URLSearchParams,
+  options: SupabaseFetchOptions = {},
 ): Promise<T[]> {
   const runtime = getSupabaseRuntime(env);
   if (!runtime) throw new Error("missing-runtime");
@@ -160,11 +189,17 @@ export async function supabaseJson<T>(
       cf: { cacheTtl: DEFAULT_EDGE_TTL_SECONDS, cacheEverything: true } as RequestInitCfProperties,
     });
   } catch (error) {
+    if (options.failOnTransient) {
+      throw new SupabaseTransientError("Supabase request timed out", path);
+    }
     warnTransientFetchFailure("request", path, error);
     return [];
   }
   if (!res.ok) {
     if (TRANSIENT_UPSTREAM_STATUSES.has(res.status)) {
+      if (options.failOnTransient) {
+        throw new SupabaseTransientError(`Supabase request failed with ${res.status}`, path, res.status);
+      }
       console.warn(`[public-api] Supabase ${path} transiently unavailable with ${res.status}`);
       return [];
     }
@@ -177,6 +212,7 @@ export async function supabaseCount(
   env: PublicApiEnv,
   path: string,
   searchParams: URLSearchParams,
+  options: SupabaseFetchOptions = {},
 ): Promise<number> {
   const runtime = getSupabaseRuntime(env);
   if (!runtime) throw new Error("missing-runtime");
@@ -199,11 +235,17 @@ export async function supabaseCount(
       cf: { cacheTtl: DEFAULT_EDGE_TTL_SECONDS, cacheEverything: true } as RequestInitCfProperties,
     });
   } catch (error) {
+    if (options.failOnTransient) {
+      throw new SupabaseTransientError("Supabase count request timed out", path);
+    }
     warnTransientFetchFailure("count", path, error);
     return 0;
   }
   if (!res.ok) {
     if (TRANSIENT_UPSTREAM_STATUSES.has(res.status)) {
+      if (options.failOnTransient) {
+        throw new SupabaseTransientError(`Supabase count failed with ${res.status}`, path, res.status);
+      }
       console.warn(`[public-api] Supabase count ${path} transiently unavailable with ${res.status}`);
       return 0;
     }

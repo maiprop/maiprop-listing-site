@@ -8,11 +8,11 @@ import { captureHandler, req } from "../_shared/testUtils.ts";
 
 const { handler, restore } = await captureHandler(import.meta.url, "./index.ts");
 
-Deno.test("GET returns XML content-type (200 or 500)", async () => {
+Deno.test("GET returns XML content-type with a graceful fallback", async () => {
   const r = new Request("https://functions.supabase.co/fn", { method: "GET" });
   const res = await handler(r);
-  // Without real Supabase credentials the query fails → 500 with XML error comment
-  assertEquals([200, 500].includes(res.status), true);
+  // Without real Supabase credentials the query fails, but crawlers still get valid XML.
+  assertEquals(res.status, 200);
   const contentType = res.headers.get("Content-Type") ?? "";
   assertStringIncludes(contentType, "xml");
 });
@@ -24,13 +24,12 @@ Deno.test("OPTIONS preflight returns valid response", async () => {
   assertEquals(res.status >= 200 && res.status < 600, true);
 });
 
-Deno.test("error response body is XML-safe comment", async () => {
+Deno.test("fallback response body is XML-safe", async () => {
   const r = new Request("https://functions.supabase.co/fn", { method: "GET" });
   const res = await handler(r);
-  if (res.status === 500) {
-    const text = await res.text();
-    assertStringIncludes(text, "<!--");
-  }
+  const text = await res.text();
+  assertStringIncludes(text, "<urlset");
+  assertStringIncludes(text, "<!--");
 });
 
 restore();

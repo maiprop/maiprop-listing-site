@@ -64,6 +64,7 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
   const listingFromState = routeListing?.id === id ? routeListing : undefined;
   const { data: dbListing, isLoading, isError } = useListing(id || "", {
     initialData: listingFromState,
+    publicScope: true,
   });
   const { mutate: trackViewMutate } = useTrackListingView();
   const ownerId = (dbListing as ListingWithJoins | null)?.owner_id;

@@ -1,5 +1,6 @@
 import {
   cachedJson,
+  isSupabaseTransientError,
   jsonResponse,
   methodNotAllowed,
   missingRuntime,
@@ -7,6 +8,7 @@ import {
   safeToken,
   supabaseCount,
   supabaseJson,
+  upstreamUnavailable,
   type PublicApiCtx,
   type PublicApiEnv,
 } from "./_cache";
@@ -85,7 +87,7 @@ async function fetchPopularLocations(env: PublicApiEnv) {
       params.set("status", "eq.active");
       params.set("is_off_market", "eq.false");
       params.set("city", `eq.${city}`);
-      return [city, await supabaseCount(env, "/rest/v1/listings", params)] as const;
+      return [city, await supabaseCount(env, "/rest/v1/listings", params, { failOnTransient: true })] as const;
     }),
   );
   const listingsByCity = Object.fromEntries(countEntries);
@@ -106,7 +108,7 @@ async function fetchPopularLocations(env: PublicApiEnv) {
   params.set("created_at", `gte.${prevStart.toISOString()}`);
   params.append("created_at", `lt.${now.toISOString()}`);
   params.set("limit", "1000");
-  const priceRows = await supabaseJson<ListingRow>(env, "/rest/v1/listings", params);
+  const priceRows = await supabaseJson<ListingRow>(env, "/rest/v1/listings", params, { failOnTransient: true });
 
   const currentPrices: Record<string, number[]> = {};
   const prevPrices: Record<string, number[]> = {};
@@ -161,7 +163,7 @@ async function fetchPriceIndex(env: PublicApiEnv) {
   params.set("created_at", `gte.${prevStart.toISOString()}`);
   params.append("created_at", `lt.${now.toISOString()}`);
   params.set("limit", "1000");
-  const rows = await supabaseJson<ListingRow>(env, "/rest/v1/listings", params);
+  const rows = await supabaseJson<ListingRow>(env, "/rest/v1/listings", params, { failOnTransient: true });
 
   const currentPrices: Record<string, number[]> = {};
   const previousPrices: Record<string, number[]> = {};
@@ -210,7 +212,7 @@ async function fetchSection(env: PublicApiEnv, section: (typeof SECTIONS)[number
         params.set("status", "eq.active");
         params.set("is_off_market", "eq.false");
         params.set("property_type", `eq.${propertyType}`);
-        return [propertyType, await supabaseCount(env, "/rest/v1/listings", params)] as const;
+        return [propertyType, await supabaseCount(env, "/rest/v1/listings", params, { failOnTransient: true })] as const;
       }),
     );
     return Object.fromEntries(counts);
@@ -228,13 +230,13 @@ async function fetchSection(env: PublicApiEnv, section: (typeof SECTIONS)[number
     params.set("listing_images.order", "sort_order.asc");
     params.set("listing_images.limit", "3");
     params.set("limit", "12");
-    return publicListingRows(await supabaseJson<ListingRow>(env, "/rest/v1/listings", params), 4);
+    return publicListingRows(await supabaseJson<ListingRow>(env, "/rest/v1/listings", params, { failOnTransient: true }), 4);
   }
 
   if (section === "auction-count") {
     params.set("select", "id");
     params.set("listing_type", "eq.auction");
-    return supabaseCount(env, "/rest/v1/listings", params);
+    return supabaseCount(env, "/rest/v1/listings", params, { failOnTransient: true });
   }
 
   if (section === "popular-locations") {
@@ -253,7 +255,7 @@ async function fetchSection(env: PublicApiEnv, section: (typeof SECTIONS)[number
   params.set("listing_images.order", "sort_order.asc");
   params.set("listing_images.limit", "3");
   params.set("limit", "12");
-  return sortByImagePresence(publicListingRows(await supabaseJson<ListingRow>(env, "/rest/v1/listings", params), 6));
+  return sortByImagePresence(publicListingRows(await supabaseJson<ListingRow>(env, "/rest/v1/listings", params, { failOnTransient: true }), 6));
 }
 
 async function publicHomepage(ctx: PublicApiCtx, requestUrl: URL): Promise<Response> {
@@ -294,7 +296,14 @@ async function publicHomepage(ctx: PublicApiCtx, requestUrl: URL): Promise<Respo
         browserTtlSeconds: 60,
         staleSeconds: 600,
       };
-  return cachedJson(ctx, cacheKey, async () => jsonResponse(await fetchSection(ctx.env, section)), {
+  return cachedJson(ctx, cacheKey, async () => {
+    try {
+      return jsonResponse(await fetchSection(ctx.env, section));
+    } catch (error) {
+      if (isSupabaseTransientError(error)) return upstreamUnavailable();
+      throw error;
+    }
+  }, {
     ...cacheOptions,
   });
 }

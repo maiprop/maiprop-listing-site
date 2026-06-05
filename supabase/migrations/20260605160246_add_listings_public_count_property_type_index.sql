@@ -1,0 +1,5 @@
+-- No-op retained for remote migration history alignment.
+--
+-- This index was tested live and did not improve the target count plan. The
+-- existing partial idx_listings_public_property_type index covers the useful
+-- access path, so fresh replays should not create an immediately-dropped index.

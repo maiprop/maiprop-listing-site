@@ -1,6 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import type { Enums } from "@/integrations/supabase/types";
+import { fetchPublicApi } from "@/lib/publicApi";
+
+type SimilarListingRow = {
+  id: string;
+  profiles?: Record<string, unknown> | null;
+  [key: string]: unknown;
+};
+
+type SimilarListingsResponse<T = SimilarListingRow> = {
+  data: T[];
+};
 
 /**
  * Fetches similar listings/deals from the database (includes OS-synced auctions).
@@ -21,44 +30,20 @@ export function useSimilarListings(params: {
     queryFn: async () => {
       if (!city && !propertyType) return [];
 
-      let query = supabase
-        .from("listings")
-        .select(`*, listing_images(url, sort_order)`)
-        .eq("status", "active" as Enums<"listing_status">)
-        .limit(200);
+      const params = new URLSearchParams();
+      if (excludeId) params.set("excludeId", excludeId);
+      if (city) params.set("city", city);
+      if (propertyType) params.set("propertyType", propertyType);
+      if (listingType) params.set("listingType", listingType);
+      if (price != null) params.set("price", String(price));
+      params.set("limit", String(limit));
 
-      if (excludeId) query = query.neq("id", excludeId);
-      if (city) query = query.ilike("city", `%${city}%`);
-      if (propertyType) query = query.eq("property_type", propertyType as Enums<"property_type">);
-      if (listingType) query = query.eq("listing_type", listingType as Enums<"listing_type">);
-
-      const { data, error } = await query;
-      if (error) throw error;
-      if (!data?.length) return [];
-
-      // Fetch owner profiles for cards (use profiles_public per RLS; profiles restricted to own row)
-      const ownerIds = [...new Set(data.map(r => r.owner_id).filter((id): id is string => !!id))];
-      const { data: profiles = [] } = ownerIds.length
-        ? await supabase.from("profiles_public").select("user_id, display_name, avatar_url, role").in("user_id", ownerIds)
-        : { data: [] };
-      const profileMap = new Map((profiles ?? []).map(p => [p.user_id, p]));
-
-      const withProfiles = data.map(r => ({
-        ...r,
-        profiles: r.owner_id ? profileMap.get(r.owner_id) ?? null : null,
-      }));
-
-      // Sort by price proximity when price is provided
-      const sorted =
-        price != null && price > 0
-          ? [...withProfiles].sort((a, b) => {
-              const pa = Math.abs((a.price ?? 0) - price);
-              const pb = Math.abs((b.price ?? 0) - price);
-              return pa - pb;
-            })
-          : withProfiles;
-
-      return sorted.slice(0, limit);
+      const response = await fetchPublicApi<SimilarListingsResponse>(
+        `/api/public/similar-listings?${params.toString()}`,
+        { throwOnError: true },
+      );
+      if (!response) throw new Error("Public similar listings API returned no data");
+      return response.data;
     },
     enabled: !!(city || propertyType),
   });

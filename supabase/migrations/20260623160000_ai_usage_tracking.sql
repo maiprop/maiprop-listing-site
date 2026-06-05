@@ -57,7 +57,8 @@ INSERT INTO public.ai_usage_limits (bucket, free_monthly, pro_monthly, descripti
   ('listing-ai-assist',     10,  100, 'AI-assisted listing description / price estimate',     FALSE),
   ('property-pois',          5,   50, 'AI-generated points of interest near a property',      FALSE),
   ('ai-service-match',       5,   50, 'AI matchmaker for finding professionals',              FALSE),
-  ('pro-ai-tools',           0,  100, 'Pro-tier AI tools (CMA, valuation prompts, etc.)',     TRUE)
+  ('pro-ai-tools',           0,  100, 'Pro-tier AI tools (CMA, valuation prompts, etc.)',     TRUE),
+  ('ai-translate',         500, 5000, 'AI-assisted UI translation requests',                  FALSE)
 ON CONFLICT (bucket) DO NOTHING;
 
 

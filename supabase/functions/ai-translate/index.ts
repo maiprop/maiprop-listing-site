@@ -25,8 +25,10 @@ import {
   tooManyRequestsResponse,
 } from "../_shared/rateLimit.ts";
 import { createLogger } from "../_shared/logger.ts";
+import { enforceAiQuota } from "../_shared/aiUsage.ts";
 
 const log = createLogger("ai-translate");
+const AI_TRANSLATE_BUCKET = "ai-translate";
 
 const ALLOWED_ORIGINS = [
   "https://maiprop.co",
@@ -108,22 +110,31 @@ function jsonError(
 async function requireAuthenticatedUser( // skipcq: JS-R1005 - Auth parsing must cover missing, malformed, invalid, and valid bearer token states.
   req: Request,
   hdrs: Record<string, string>,
-): Promise<Response | null> {
+): Promise<{ userId: string | null; errorResponse: Response | null }> {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.toLowerCase().startsWith("bearer ")) {
-    return jsonError("Authentication required for AI translation", 401, hdrs);
+    return {
+      userId: null,
+      errorResponse: jsonError("Authentication required for AI translation", 401, hdrs),
+    };
   }
 
   const url = Deno.env.get("SUPABASE_URL");
   const key = Deno.env.get("SUPABASE_ANON_KEY") ??
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!url || !key) {
-    return jsonError("Translation auth service not configured", 503, hdrs);
+    return {
+      userId: null,
+      errorResponse: jsonError("Translation auth service not configured", 503, hdrs),
+    };
   }
 
   const token = authHeader.slice(7).trim();
   if (!token) {
-    return jsonError("Authentication required for AI translation", 401, hdrs);
+    return {
+      userId: null,
+      errorResponse: jsonError("Authentication required for AI translation", 401, hdrs),
+    };
   }
 
   const supabase = createClient(url, key, {
@@ -132,9 +143,12 @@ async function requireAuthenticatedUser( // skipcq: JS-R1005 - Auth parsing must
   });
   const { data, error } = await supabase.auth.getUser(token);
   if (error || !data.user) {
-    return jsonError("Invalid or expired token", 401, hdrs);
+    return {
+      userId: null,
+      errorResponse: jsonError("Invalid or expired token", 401, hdrs),
+    };
   }
-  return null;
+  return { userId: data.user.id, errorResponse: null };
 }
 
 Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates CORS, auth, quota, provider calls, and response shaping.
@@ -202,12 +216,13 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates C
     );
   }
 
-  const authError = await requireAuthenticatedUser(req, hdrs);
-  if (authError) return authError;
+  const auth = await requireAuthenticatedUser(req, hdrs);
+  if (auth.errorResponse) return auth.errorResponse;
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
     "unknown";
-  if (await translateLimiter.isLimited(ip)) {
+  const rateLimitKey = auth.userId ? `user:${auth.userId}` : ip;
+  if (await translateLimiter.isLimited(rateLimitKey)) {
     return tooManyRequestsResponse(hdrs);
   }
 
@@ -241,6 +256,9 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates C
       },
     );
   }
+
+  const quota = await enforceAiQuota(req, AI_TRANSLATE_BUCKET, hdrs);
+  if (quota.errorResponse) return quota.errorResponse;
 
   const prompt =
     `You are a professional translator for a Greek real estate SaaS platform called maiProp.

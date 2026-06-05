@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { onRequest as auctionsRequest, fetchPublicAuctionRows } from "./auctions";
 import { onRequest as homepageRequest } from "./homepage";
+import { onRequest as listingRequest } from "./listing";
 import { onRequest as listingsRequest } from "./listings";
 import { onRequest as openHousesRequest } from "./open-houses";
+import { onRequest as similarListingsRequest } from "./similar-listings";
 import {
   jsonResponse,
   methodNotAllowed,
@@ -169,7 +171,6 @@ function installSupabaseFetch(): FetchMock {
 
       if (
         listingType === "eq.sale" &&
-        url.searchParams.get("limit") === "12" &&
         url.searchParams.get("listing_images.limit") === "3"
       ) {
         return jsonRows([
@@ -403,6 +404,100 @@ describe("public listings endpoint", () => {
     expect(missing.status).toBe(503);
     expect(fetchMock()).not.toHaveBeenCalled();
   });
+
+  it("returns 503 instead of an empty successful catalogue when the listings upstream is transiently unavailable", async () => {
+    fetchMock().mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }));
+
+    const res = await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?limit=3"));
+
+    expect(res.status).toBe(503);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    await expect(res.json()).resolves.toEqual({ error: "Supabase upstream unavailable" });
+    expect(cacheApi.put).not.toHaveBeenCalled();
+  });
+});
+
+describe("public listing detail endpoint", () => {
+  it("fetches one active public listing, attaches the public owner profile, and caches by id", async () => {
+    const res = await listingRequest(
+      makeCtx("https://portal.maiprop.co/api/public/listing?id=11111111-1111-4111-8111-111111111111"),
+    );
+    const body = await res.json() as { data: { id: string; profiles: unknown } };
+
+    expect(body.data.id).toBe("listing-1");
+    expect(body.data.profiles).toMatchObject({ display_name: "Maria Agent" });
+
+    const listingsUrl = fetchUrls("/rest/v1/listings")[0];
+    expect(listingsUrl.searchParams.get("select")).not.toContain("*");
+    expect(listingsUrl.searchParams.get("select")).toContain("description");
+    expect(listingsUrl.searchParams.get("select")).toContain("listing_images(url,sort_order)");
+    expect(listingsUrl.searchParams.get("id")).toBe("eq.11111111-1111-4111-8111-111111111111");
+    expect(listingsUrl.searchParams.get("status")).toBe("eq.active");
+    expect(listingsUrl.searchParams.get("is_off_market")).toBe("eq.false");
+    expect(listingsUrl.searchParams.get("listing_images.order")).toBe("sort_order.asc");
+    expect(cacheApi.put.mock.calls[0][0].url).toContain("v=public-detail-v1");
+  });
+
+  it("rejects invalid detail ids before calling Supabase", async () => {
+    const res = await listingRequest(makeCtx("https://portal.maiprop.co/api/public/listing?id=not valid"));
+
+    expect(res.status).toBe(400);
+    expect(fetchMock()).not.toHaveBeenCalled();
+  });
+
+  it("returns 503 for transient exact-detail upstream failures", async () => {
+    fetchMock().mockResolvedValueOnce(new Response("timeout", { status: 504 }));
+
+    const res = await listingRequest(
+      makeCtx("https://portal.maiprop.co/api/public/listing?id=11111111-1111-4111-8111-111111111111"),
+    );
+
+    expect(res.status).toBe(503);
+    await expect(res.json()).resolves.toEqual({ error: "Supabase upstream unavailable" });
+  });
+});
+
+describe("public similar listings endpoint", () => {
+  it("fetches bounded related public rows and forwards safe filters", async () => {
+    const res = await similarListingsRequest(
+      makeCtx(
+        "https://portal.maiprop.co/api/public/similar-listings?excludeId=11111111-1111-4111-8111-111111111111&city=Athens&propertyType=apartment&listingType=sale&price=320000&limit=1",
+      ),
+    );
+    const body = await res.json() as { data: Array<{ id: string; profiles: unknown }> };
+
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].profiles).toMatchObject({ display_name: "Maria Agent" });
+
+    const listingsUrl = fetchUrls("/rest/v1/listings")[0];
+    expect(listingsUrl.searchParams.get("id")).toBe("neq.11111111-1111-4111-8111-111111111111");
+    expect(listingsUrl.searchParams.get("city")).toBe("ilike.*Athens*");
+    expect(listingsUrl.searchParams.get("property_type")).toBe("eq.apartment");
+    expect(listingsUrl.searchParams.get("listing_type")).toBe("eq.sale");
+    expect(listingsUrl.searchParams.get("limit")).toBe("48");
+    expect(listingsUrl.searchParams.get("listing_images.limit")).toBe("3");
+    expect(cacheApi.put.mock.calls[0][0].url).toContain("responseLimit=1");
+    expect(cacheApi.put.mock.calls[0][0].url).toContain("v=similar-v1");
+  });
+
+  it("returns an empty successful response when no similarity anchors are provided", async () => {
+    const res = await similarListingsRequest(makeCtx("https://portal.maiprop.co/api/public/similar-listings"));
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ data: [] });
+    expect(fetchMock()).not.toHaveBeenCalled();
+  });
+
+  it("returns 503 for transient similar-listing upstream failures", async () => {
+    fetchMock().mockResolvedValueOnce(new Response("timeout", { status: 504 }));
+
+    const res = await similarListingsRequest(
+      makeCtx("https://portal.maiprop.co/api/public/similar-listings?city=Athens"),
+    );
+
+    expect(res.status).toBe(503);
+    await expect(res.json()).resolves.toEqual({ error: "Supabase upstream unavailable" });
+  });
 });
 
 describe("public open houses endpoint", () => {
@@ -428,6 +523,17 @@ describe("public open houses endpoint", () => {
     expect(url.searchParams.get("order")).toBe("open_house_date.desc");
     expect(cacheApi.put.mock.calls[0][0].url).toContain("showPast=1");
     expect(cacheApi.put.mock.calls[0][0].url).toContain("v=off-market-v2");
+  });
+
+  it("returns 503 instead of caching an empty open-house window on transient upstream failure", async () => {
+    fetchMock().mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }));
+
+    const res = await openHousesRequest(makeCtx("https://portal.maiprop.co/api/public/open-houses?limit=12"));
+
+    expect(res.status).toBe(503);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    await expect(res.json()).resolves.toEqual({ error: "Supabase upstream unavailable" });
+    expect(cacheApi.put).not.toHaveBeenCalled();
   });
 });
 
@@ -498,23 +604,25 @@ describe("public auctions endpoint", () => {
     expect(fetchUrls("/functions/v1/fetch-os-auctions")).toHaveLength(0);
   });
 
-  it("returns an empty local result instead of calling OS when the cached DB window is empty", async () => {
+  it("falls back to source auctions when the daily cached DB window is empty", async () => {
     fetchMock().mockResolvedValueOnce(jsonRows([]));
 
     const rows = await fetchPublicAuctionRows(env, 2);
-    expect(rows).toEqual([]);
+    expect(rows).toHaveLength(2);
 
-    const dbCall = fetchUrls("/rest/v1/listings")[0];
-    expect(dbCall).toBeDefined();
+    const dbCalls = fetchUrls("/rest/v1/listings");
+    expect(dbCalls).toHaveLength(2);
+    expect(dbCalls[0].searchParams.get("tags")).toMatch(/^cs\.\{source:maiprop-os,auction_pool:\d{4}-\d{2}-\d{2}\}$/);
+    expect(dbCalls[1].searchParams.get("tags")).toBe("cs.{source:maiprop-os}");
     expect(fetchUrls("/functions/v1/fetch-os-auctions")).toHaveLength(0);
   });
 
-  it("returns an empty list when the local DB auction cache is empty", async () => {
-    fetchMock().mockResolvedValueOnce(jsonRows([]));
+  it("returns an empty list when both local DB auction windows are empty", async () => {
+    fetchMock().mockResolvedValueOnce(jsonRows([])).mockResolvedValueOnce(jsonRows([]));
     await expect(fetchPublicAuctionRows(env, 1)).resolves.toEqual([]);
 
     fetchMock().mockClear();
-    fetchMock().mockResolvedValueOnce(jsonRows([]));
+    fetchMock().mockResolvedValueOnce(jsonRows([])).mockResolvedValueOnce(jsonRows([]));
     await expect(fetchPublicAuctionRows(env, 2)).resolves.toEqual([]);
   });
 
@@ -536,9 +644,21 @@ describe("public auctions endpoint", () => {
 
     const dbUrl = fetchUrls("/rest/v1/listings")[0];
     expect(dbUrl.searchParams.get("limit")).toBe("600");
-    expect(cacheApi.put.mock.calls[0][0].url).toContain("limit=60");
-    expect(cacheApi.put.mock.calls[0][0].url).toContain("day=");
-    expect(cacheApi.put.mock.calls[0][0].url).toContain("v=national-sample-v5");
+    const cacheKey = new URL(cacheApi.put.mock.calls[0][0].url);
+    expect(cacheKey.searchParams.get("limit")).toBe("600");
+    expect(cacheKey.searchParams.has("day")).toBe(true);
+    expect(cacheKey.searchParams.get("v")).toBe("national-sample-v6");
+  });
+
+  it("returns 503 instead of falling back to empty auctions on transient upstream failure", async () => {
+    fetchMock().mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }));
+
+    const res = await auctionsRequest(makeCtx("https://portal.maiprop.co/api/public/auctions?limit=12"));
+
+    expect(res.status).toBe(503);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    await expect(res.json()).resolves.toEqual({ error: "Supabase upstream unavailable" });
+    expect(cacheApi.put).not.toHaveBeenCalled();
   });
 });
 
@@ -612,5 +732,16 @@ describe("public homepage endpoint", () => {
     const listingsSample = fetchUrls("/rest/v1/listings").find((url) => url.searchParams.get("select") === "city,price_per_sqm,created_at");
     expect(listingsSample?.searchParams.get("limit")).toBe("1000");
     expect(listingsSample?.searchParams.get("is_off_market")).toBe("eq.false");
+  });
+
+  it("returns 503 instead of caching zero homepage counts on transient upstream failure", async () => {
+    fetchMock().mockResolvedValueOnce(new Response(null, { status: 504 }));
+
+    const res = await homepageRequest(makeCtx("https://portal.maiprop.co/api/public/homepage?section=type-counts"));
+
+    expect(res.status).toBe(503);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    await expect(res.json()).resolves.toEqual({ error: "Supabase upstream unavailable" });
+    expect(cacheApi.put).not.toHaveBeenCalled();
   });
 });

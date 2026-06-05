@@ -294,8 +294,12 @@ type UseListingsOptions = {
 
 const fetchListingsPage = async (filters?: ListingsFilters, page = 1, pageSize = 24, options: UseListingsOptions = {}) => { // skipcq: JS-R1005 - Page fetch keeps listing rows and owner profile enrichment together.
   if (shouldUsePublicListingsApi(filters)) {
-    const cached = await fetchPublicApi<PublicListingsResponse>(publicListingsPath(filters, page, pageSize));
-    if (cached) return cached;
+    const cached = await fetchPublicApi<PublicListingsResponse>(
+      publicListingsPath(filters, page, pageSize),
+      { throwOnError: true },
+    );
+    if (!cached) throw new Error("Public listings API returned no data");
+    return cached;
   }
 
   const from = (page - 1) * pageSize;
@@ -359,8 +363,12 @@ export const useListings = (
     queryFn: async () => { // skipcq: JS-R1005 - Owner profile enrichment keeps the map fetch result self-contained.
       const limit = filters?.limit ?? MAP_FETCH_LIMIT;
       if (shouldUsePublicListingsApi(filters)) {
-        const cached = await fetchPublicApi<PublicListingsResponse>(publicListingsPath(filters, 1, limit));
-        if (cached) return cached.data;
+        const cached = await fetchPublicApi<PublicListingsResponse>(
+          publicListingsPath(filters, 1, limit),
+          { throwOnError: true },
+        );
+        if (!cached) throw new Error("Public listings API returned no data");
+        return cached.data;
       }
 
       const { data, error } = await buildListingsQuery(filters, 0, limit, { publicScope: options?.publicScope });
@@ -391,6 +399,7 @@ export const useListings = (
 
 type UseListingOptions = {
   initialData?: ListingWithJoins | null;
+  publicScope?: boolean;
 };
 
 const normalizeListingWithJoins = (listing: Database["public"]["Tables"]["listings"]["Row"] & Partial<ListingWithJoins>): ListingWithJoins => {
@@ -430,7 +439,19 @@ const fetchListingOwnerContext = async (ownerId: string | null): Promise<Listing
   }
 };
 
-const fetchListingById = async (id: string): Promise<ListingWithJoins | null> => {
+type PublicListingResponse = {
+  data: (Database["public"]["Tables"]["listings"]["Row"] & Partial<ListingWithJoins>) | null;
+};
+
+const fetchListingById = async (id: string, options: { publicScope?: boolean } = {}): Promise<ListingWithJoins | null> => {
+  if (options.publicScope) {
+    const response = await fetchPublicApi<PublicListingResponse>(
+      `/api/public/listing?id=${encodeURIComponent(id)}`,
+      { throwOnError: true },
+    );
+    return response?.data ? normalizeListingWithJoins(response.data) : null;
+  }
+
   const { data, error } = await supabase
     .from("listings")
     .select(`
@@ -450,8 +471,8 @@ const fetchListingById = async (id: string): Promise<ListingWithJoins | null> =>
 
 export const useListing = (id: string, options: UseListingOptions = {}) => {
   return useQuery({
-    queryKey: ["listing", id],
-    queryFn: () => fetchListingById(id),
+    queryKey: ["listing", id, { publicScope: Boolean(options.publicScope) }],
+    queryFn: () => fetchListingById(id, { publicScope: options.publicScope }),
     enabled: Boolean(id),
     placeholderData: options.initialData ? normalizeListingWithJoins(options.initialData) : undefined,
     staleTime: CATALOG_STATIC_QUERY_STALE_TIME,

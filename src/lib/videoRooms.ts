@@ -1,5 +1,7 @@
 export type MaiPropVideoRoomKind = "consultation" | "professional" | "viewing";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const KNOWN_VIDEO_PROVIDERS = [
   { pattern: "zoom.us", name: "Zoom" },
   { pattern: "whereby.com", name: "Whereby" },
@@ -34,6 +36,10 @@ export function getVideoPlatformName(videoLink: string | null | undefined) {
 
 export function createMaiPropVideoRoomTopic(kind: MaiPropVideoRoomKind, id: string) {
   return `video:${kind}:${id}`;
+}
+
+export function isUuid(value: string | null | undefined): value is string {
+  return Boolean(value && UUID_RE.test(value));
 }
 
 export function createMaiPropVideoRoomDisplayName(kind: MaiPropVideoRoomKind, id: string) {

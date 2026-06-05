@@ -1,5 +1,6 @@
 import {
   cachedJson,
+  isSupabaseTransientError,
   jsonResponse,
   methodNotAllowed,
   missingRuntime,
@@ -9,6 +10,7 @@ import {
   safeText,
   safeToken,
   supabaseJson,
+  upstreamUnavailable,
   type PublicApiCtx,
   type PublicApiEnv,
 } from "./_cache";
@@ -200,21 +202,26 @@ async function publicListings(ctx: PublicApiCtx, requestUrl: URL): Promise<Respo
   params.delete("pageSize");
 
   return cachedJson(ctx, cacheKey, async () => {
-    const rows = await supabaseJson<ListingRow>(ctx.env, "/rest/v1/listings", params);
-    const cleanRows = publicListingRows(rows);
-    const ownerIds = cleanRows.map((row) => row.owner_id).filter((id): id is string => typeof id === "string");
-    const profiles = await fetchOwnerProfiles(ctx.env, ownerIds);
-    const data = cleanRows.map((row) => ({
-      ...row,
-      profiles: row.owner_id ? profiles.get(row.owner_id) ?? null : null,
-    }));
+    try {
+      const rows = await supabaseJson<ListingRow>(ctx.env, "/rest/v1/listings", params, { failOnTransient: true });
+      const cleanRows = publicListingRows(rows);
+      const ownerIds = cleanRows.map((row) => row.owner_id).filter((id): id is string => typeof id === "string");
+      const profiles = await fetchOwnerProfiles(ctx.env, ownerIds);
+      const data = cleanRows.map((row) => ({
+        ...row,
+        profiles: row.owner_id ? profiles.get(row.owner_id) ?? null : null,
+      }));
 
-    return jsonResponse({
-      data,
-      hasMore: rows.length === pageSize,
-      page,
-      pageSize,
-    });
+      return jsonResponse({
+        data,
+        hasMore: rows.length === pageSize,
+        page,
+        pageSize,
+      });
+    } catch (error) {
+      if (isSupabaseTransientError(error)) return upstreamUnavailable();
+      throw error;
+    }
   });
 }
 

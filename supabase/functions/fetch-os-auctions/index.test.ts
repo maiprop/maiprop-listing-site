@@ -24,6 +24,7 @@ const { handler, restore } = await captureHandler(
 const {
   buildFilterRequest,
   getFetchErrorPayload,
+  getPlanCap,
   getValidatedPagination,
   getRateLimitKey,
   mapAuction,
@@ -61,6 +62,16 @@ Deno.test("rate-limit key ignores spoofable forwarded IP headers", async () => {
 });
 
 Deno.test("rate-limit key uses a stable token hash for authenticated callers", async () => {
+  const authClient = {
+    auth: {
+      getUser(token: string) {
+        return Promise.resolve({
+          data: { user: { id: token === "token-a" ? "user-a" : "user-b" } },
+          error: null,
+        });
+      },
+    },
+  };
   const first = new Request("https://functions.supabase.co/fetch-os-auctions", {
     headers: { authorization: "Bearer token-a" },
   });
@@ -71,9 +82,28 @@ Deno.test("rate-limit key uses a stable token hash for authenticated callers", a
     },
   );
 
-  const firstKey = await getRateLimitKey(first);
-  assertEquals(firstKey, await getRateLimitKey(first));
-  assertNotEquals(firstKey, await getRateLimitKey(second));
+  const firstKey = await getRateLimitKey(first, authClient);
+  assertEquals(firstKey, await getRateLimitKey(first, authClient));
+  assertNotEquals(firstKey, await getRateLimitKey(second, authClient));
+});
+
+Deno.test("invalid bearer tokens share the anonymous rate-limit bucket", async () => {
+  const authClient = {
+    auth: {
+      getUser() {
+        return Promise.resolve({ data: { user: null }, error: { message: "bad jwt" } });
+      },
+    },
+  };
+  const first = new Request("https://functions.supabase.co/fetch-os-auctions", {
+    headers: { authorization: "Bearer fake-token-a" },
+  });
+  const second = new Request("https://functions.supabase.co/fetch-os-auctions", {
+    headers: { authorization: "Bearer fake-token-b" },
+  });
+
+  assertEquals(await getRateLimitKey(first, authClient), "anonymous");
+  assertEquals(await getRateLimitKey(second, authClient), "anonymous");
 });
 
 Deno.test("mapAuction drops malformed numeric fields", () => {
@@ -350,6 +380,30 @@ Deno.test("OS portal access preserves Supabase RPC method binding", async () => 
   };
 
   assertEquals(await hasPortalProAccess(client as never, "user-pro"), true);
+});
+
+Deno.test("plan cap reuses a verified limiter user without a second Auth lookup", async () => {
+  const client = {
+    ...makeEntitlementClient({
+      role: "admin",
+      participant_type: "admin",
+      subscription_product_id: null,
+      force_pro_access: false,
+    }),
+    auth: {
+      getUser() {
+        throw new Error("auth.getUser should not run twice");
+      },
+    },
+  };
+
+  const cap = await getPlanCap(
+    req("POST", {}, { authorization: "Bearer already-verified" }),
+    client as never,
+    "verified-user",
+  );
+
+  assertEquals(cap, 600);
 });
 
 Deno.test("OS portal access accepts only investor-scoped pricing products", async () => {

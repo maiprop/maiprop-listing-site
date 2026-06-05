@@ -15,6 +15,7 @@ import {
   readOpenAITextContent,
   requireAIProviderKey,
   requireOpenAIKey,
+  openAIChatCompletion,
 } from "./openai.ts";
 
 // ── getOpenAIModel ────────────────────────────────────────────────────────────
@@ -165,4 +166,34 @@ Deno.test("readOpenAITextContent: returns empty string when content is missing",
 
 Deno.test("readOpenAITextContent: handles missing choices key", () => {
   assertEquals(readOpenAITextContent({}), "");
+});
+
+Deno.test("openAIChatCompletion sends provider requests with an abort signal", async () => {
+  const prevOpenAI = Deno.env.get("OPENAI_API_KEY");
+  const prevGemini = Deno.env.get("GEMINI_API_KEY");
+  Deno.env.set("OPENAI_API_KEY", "openai-test");
+  Deno.env.delete("GEMINI_API_KEY");
+  const originalFetch = globalThis.fetch;
+  let observedSignal: AbortSignal | null = null;
+
+  globalThis.fetch = ((_input: RequestInfo | URL, init?: RequestInit) => {
+    observedSignal = init?.signal instanceof AbortSignal ? init.signal : null;
+    return Promise.resolve(new Response(JSON.stringify({
+      choices: [{ message: { content: "ok" } }],
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+  }) as typeof fetch;
+
+  try {
+    const res = await openAIChatCompletion({
+      messages: [{ role: "user", content: "Hello" }],
+    });
+    assertEquals(res.status, 200);
+    assertStrictEquals(observedSignal !== null, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (prevOpenAI) Deno.env.set("OPENAI_API_KEY", prevOpenAI);
+    else Deno.env.delete("OPENAI_API_KEY");
+    if (prevGemini) Deno.env.set("GEMINI_API_KEY", prevGemini);
+    else Deno.env.delete("GEMINI_API_KEY");
+  }
 });

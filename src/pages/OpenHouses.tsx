@@ -14,7 +14,6 @@ import { Footer } from "@/components/Footer";
 import type { MapListing } from "@/components/MapView";
 const MapView = lazy(() => import("@/components/MapView").then(m => ({ default: m.MapView })));
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { getStreetViewProxyUrl } from "@/lib/config";
 import { MAIPROP_LOGO_FALLBACK_URL } from "@/lib/imageFallbacks";
 import { CATALOG_STATIC_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
@@ -146,35 +145,6 @@ const OPEN_HOUSE_LOADING_SKELETON_KEYS = [
   "open-house-loading-6",
 ];
 
-const OPEN_HOUSE_LISTING_COLUMNS = [
-  "id",
-  "title",
-  "address",
-  "city",
-  "region",
-  "status",
-  "listing_type",
-  "property_type",
-  "price",
-  "price_per_sqm",
-  "sqm",
-  "bedrooms",
-  "bathrooms",
-  "floor",
-  "total_floors",
-  "year_built",
-  "energy_class",
-  "open_house_date",
-  "ai_score",
-  "views_count",
-  "tags",
-  "cover_image_url",
-  "latitude",
-  "longitude",
-  ...FEATURES_RESIDENTIAL.map((feature) => feature.key),
-];
-
-const OPEN_HOUSE_LISTING_SELECT = `${Array.from(new Set(OPEN_HOUSE_LISTING_COLUMNS)).join(",")},listing_images(url, sort_order)`;
 type ListingRow = Database["public"]["Tables"]["listings"]["Row"];
 type OpenHouseListingRow = Pick<
   ListingRow,
@@ -281,27 +251,10 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
     queryFn: async () => { // skipcq: JS-R1005 - Query keeps time filtering, production cleanup, and media-first sorting together.
       const cached = await fetchPublicApi<OpenHouseListingRow[]>(
         `/api/public/open-houses?showPast=${showPast ? "1" : "0"}&limit=200`,
+        { throwOnError: true },
       );
-      if (cached) return normalizeOpenHouseRows(cached);
-
-      const now = new Date().toISOString();
-      let q = supabase
-        .from("listings")
-        .select(OPEN_HOUSE_LISTING_SELECT)
-        .order("sort_order", { referencedTable: "listing_images", ascending: true })
-        .limit(3, { referencedTable: "listing_images" })
-        .eq("status", "active")
-        .eq("listing_type", "open_house")
-        .eq("is_off_market", false);
-      if (showPast) {
-        q = q.lt("open_house_date", now).order("open_house_date", { ascending: false });
-      } else {
-        q = q.gte("open_house_date", now).order("open_house_date", { ascending: true });
-      }
-      const { data, error } = await q.limit(200);
-      if (error) throw error;
-      const rows = (data || []) as unknown as OpenHouseListingRow[];
-      return normalizeOpenHouseRows(rows);
+      if (!cached) throw new Error("Public open houses API returned no data");
+      return normalizeOpenHouseRows(cached);
     },
     staleTime: CATALOG_STATIC_QUERY_STALE_TIME,
   });

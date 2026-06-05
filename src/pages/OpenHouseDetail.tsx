@@ -48,7 +48,7 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
   const navigate = useNavigate();
   const { user } = useAuth();
   const { isPro } = useSubscription();
-  const { data: listing, isLoading } = useListing(id || "");
+  const { data: listing, isLoading } = useListing(id || "", { publicScope: true });
   const trackView = useTrackListingView();
   const updateListing = useUpdateListing();
   const deleteListing = useDeleteListing();

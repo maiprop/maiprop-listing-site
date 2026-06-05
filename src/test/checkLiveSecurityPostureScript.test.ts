@@ -37,7 +37,10 @@ function runLiveSecurityScript(apiBase: string, extraArgs: string[] = []) {
 
 function createJsonServer(status: number, payload: unknown) {
   const server = createServer((_req, res) => {
-    res.writeHead(status, { "content-type": "application/json" });
+    res.writeHead(status, {
+      "connection": "close",
+      "content-type": "application/json",
+    });
     res.end(JSON.stringify(payload));
   });
 
@@ -47,7 +50,11 @@ function createJsonServer(status: number, payload: unknown) {
       const address = server.address() as AddressInfo;
       resolve({
         apiBase: `http://127.0.0.1:${address.port}/v1`,
-        close: () => new Promise<void>((done) => server.close(() => done())),
+        close: () =>
+          new Promise<void>((done) => {
+            server.closeAllConnections();
+            server.close(() => done());
+          }),
       });
     });
   });
@@ -68,7 +75,7 @@ describe("check-live-security-posture script", () => {
     } finally {
       await server.close();
     }
-  });
+  }, 15_000);
 
   it("keeps real posture failures blocking", async () => {
     const server = await createJsonServer(200, [{
@@ -87,5 +94,5 @@ describe("check-live-security-posture script", () => {
     } finally {
       await server.close();
     }
-  });
+  }, 15_000);
 });

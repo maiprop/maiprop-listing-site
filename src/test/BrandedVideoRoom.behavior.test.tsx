@@ -6,7 +6,7 @@ import BrandedVideoRoom from "@/pages/BrandedVideoRoom";
 const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   professional: {
-    id: "pro-1",
+    id: "22222222-2222-4222-8222-222222222222",
     user_id: "owner-1",
     display_name: "Ariadne Pro",
     avatar_url: "https://example.com/pro.png",
@@ -16,8 +16,8 @@ const mocks = vi.hoisted(() => ({
   },
   consultationId: null as string | null,
   consultation: {
-    id: "consultation-1",
-    professional_id: "pro-1",
+    id: "33333333-3333-4333-8333-333333333333",
+    professional_id: "22222222-2222-4222-8222-222222222222",
     requester_id: "buyer-1",
     requester_name: "Buyer One",
     requester_email: "buyer@example.com",
@@ -46,7 +46,7 @@ vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
   return {
     ...actual,
-    useParams: () => ({ professionalId: "pro-1", consultationId: mocks.consultationId ?? undefined }),
+    useParams: () => ({ professionalId: "22222222-2222-4222-8222-222222222222", consultationId: mocks.consultationId ?? undefined }),
     useNavigate: () => mocks.navigate,
   };
 });
@@ -126,7 +126,7 @@ describe("BrandedVideoRoom", () => {
     vi.useRealTimers();
     vi.clearAllMocks();
     mocks.professional = {
-      id: "pro-1",
+      id: "22222222-2222-4222-8222-222222222222",
       user_id: "owner-1",
       display_name: "Ariadne Pro",
       avatar_url: "https://example.com/pro.png",
@@ -136,8 +136,8 @@ describe("BrandedVideoRoom", () => {
     };
     mocks.consultationId = null;
     mocks.consultation = {
-      id: "consultation-1",
-      professional_id: "pro-1",
+      id: "33333333-3333-4333-8333-333333333333",
+      professional_id: "22222222-2222-4222-8222-222222222222",
       requester_id: "buyer-1",
       requester_name: "Buyer One",
       requester_email: "buyer@example.com",
@@ -195,7 +195,7 @@ describe("BrandedVideoRoom", () => {
 
   it("scopes buyer access and signaling to a confirmed video consultation", async () => {
     mocks.currentUserId = "buyer-1";
-    mocks.consultationId = "consultation-1";
+    mocks.consultationId = "33333333-3333-4333-8333-333333333333";
     mocks.consultationAuthorized = true;
     renderRoom();
 
@@ -203,19 +203,19 @@ describe("BrandedVideoRoom", () => {
     expect(screen.getAllByText(/Feasibility review - 2026-06-01 10:00/i).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: /Copy link/i }));
-    await waitFor(() => expect(mocks.writeText).toHaveBeenCalledWith(expect.stringMatching(/\/video-room\/pro-1\/consultation-1$/)));
+    await waitFor(() => expect(mocks.writeText).toHaveBeenCalledWith(expect.stringMatching(/\/video-room\/22222222-2222-4222-8222-222222222222\/33333333-3333-4333-8333-333333333333$/)));
 
     fireEvent.click(screen.getByRole("button", { name: /Join now/i }));
     await screen.findByText(/Waiting for the other participant/i);
     const { supabase } = await import("@/integrations/supabase/client");
-    expect(supabase.channel).toHaveBeenCalledWith("video:consultation:consultation-1", expect.objectContaining({
+    expect(supabase.channel).toHaveBeenCalledWith("video:consultation:33333333-3333-4333-8333-333333333333", expect.objectContaining({
       config: expect.objectContaining({ private: true }),
     }));
   });
 
   it("rejects scoped in-person consultations before exposing the room", async () => {
     mocks.currentUserId = "buyer-1";
-    mocks.consultationId = "consultation-1";
+    mocks.consultationId = "33333333-3333-4333-8333-333333333333";
     mocks.consultationAuthorized = true;
     mocks.consultation.meeting_type = "in_person";
 
@@ -248,14 +248,14 @@ describe("BrandedVideoRoom", () => {
     await waitFor(() => expect(mocks.toastSuccess).toHaveBeenCalledWith("Camera and microphone are working."));
 
     fireEvent.click(screen.getByRole("button", { name: /Copy link/i }));
-    await waitFor(() => expect(mocks.writeText).toHaveBeenCalledWith(expect.stringMatching(/\/video-room\/pro-1$/)));
+    await waitFor(() => expect(mocks.writeText).toHaveBeenCalledWith(expect.stringMatching(/\/video-room\/22222222-2222-4222-8222-222222222222$/)));
 
     fireEvent.click(screen.getByRole("button", { name: /Join now/i }));
     expect(await screen.findByText(/Waiting for the other participant/i)).toBeInTheDocument();
     expect(mocks.setRealtimeAuth).toHaveBeenCalledWith("test-token");
     expect(mocks.channel).not.toBeNull();
     const { supabase } = await import("@/integrations/supabase/client");
-    expect(supabase.channel).toHaveBeenCalledWith("video:professional:pro-1", expect.objectContaining({
+    expect(supabase.channel).toHaveBeenCalledWith("video:professional:22222222-2222-4222-8222-222222222222", expect.objectContaining({
       config: expect.objectContaining({ private: true }),
     }));
     expect(mocks.channel?.track).toHaveBeenCalledWith(expect.objectContaining({ displayName: "K R" }));
@@ -271,7 +271,7 @@ describe("BrandedVideoRoom", () => {
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:summary");
 
     fireEvent.click(screen.getByRole("button", { name: /Return to Profile/i }));
-    expect(mocks.navigate).toHaveBeenCalledWith("/professionals/pro-1");
+    expect(mocks.navigate).toHaveBeenCalledWith("/professionals/22222222-2222-4222-8222-222222222222");
   });
 
   it("reports camera permission failures without joining", async () => {

@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
 import { jsonResponse } from "../_shared/response.ts";
 import { getStripeMode } from "../_shared/stripeMode.ts";
 
@@ -73,14 +73,28 @@ const isAuthorizedAdmin = async (
 };
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return handleCors(req) ?? new Response("ok");
-  const headers = getCorsHeaders(req);
+  const headers = getCorsHeaders(
+    req,
+    "x-healthz-detailed, x-healthz-monitor-secret",
+  );
+  if (req.method === "OPTIONS") return new Response("ok", { headers });
 
   const checks: HealthChecks = {};
   let allOk = true;
   const billingMode = getStripeMode();
   const url = Deno.env.get("SUPABASE_URL");
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const wantsAdminDetailed = req.headers.get("x-healthz-detailed") === "true";
+  const detailed = hasMonitorSecret(req) ||
+    (wantsAdminDetailed && await isAuthorizedAdmin(req, url, key));
+
+  if (!detailed) {
+    return jsonResponse(
+      { status: "healthy", timestamp: new Date().toISOString() },
+      200,
+      headers,
+    );
+  }
 
   // 1. Database connectivity
   try {
@@ -119,13 +133,9 @@ Deno.serve(async (req) => {
     status: allOk ? "healthy" : "degraded",
     timestamp: new Date().toISOString(),
   };
-  const detailed = hasMonitorSecret(req) ||
-    await isAuthorizedAdmin(req, url, key);
 
   return jsonResponse(
-    detailed
-      ? { ...basePayload, billing_mode: billingMode, checks }
-      : basePayload,
+    { ...basePayload, billing_mode: billingMode, checks },
     status,
     headers,
   );

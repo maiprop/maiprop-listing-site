@@ -1,7 +1,7 @@
 /**
  * Tests for check-subscription edge function.
  */
-import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assertEquals, assertRejects } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { authedReq, captureHandler, req } from "../_shared/testUtils.ts";
 
 const { handler, restore } = await captureHandler(
@@ -40,6 +40,8 @@ const mockSupabase = (
     investorExpiresAt = "2099-06-30T00:00:00.000Z",
     investorRows,
     pricingRows = [],
+    profileError = null,
+    investorError = null,
   }: {
     profileProductId?: string | null;
     profileRole?: string | null;
@@ -50,6 +52,8 @@ const mockSupabase = (
       { status?: string | null; expires_at?: string | null }
     >;
     pricingRows?: Array<Record<string, unknown>>;
+    profileError?: { message: string } | null;
+    investorError?: { message: string } | null;
   },
 ) => ({
   from(table: string) {
@@ -74,7 +78,7 @@ const mockSupabase = (
               participant_type: participantType,
               subscription_product_id: profileProductId,
             },
-            error: null,
+            error: profileError,
           });
         }
         if (table === "investor_subscriptions") {
@@ -94,7 +98,7 @@ const mockSupabase = (
               (investorStatus
                 ? [{ status: investorStatus, expires_at: investorExpiresAt }]
                 : []),
-            error: null,
+            error: investorError,
           });
           return;
         }
@@ -281,6 +285,32 @@ Deno.test("database fallback allows non-expiring trial investor subscription", a
   assertEquals(state.product_id, null);
   assertEquals(state.subscription_end, null);
   assertEquals(state.source, "database");
+});
+
+Deno.test("database fallback surfaces Supabase query errors", async () => {
+  await assertRejects(
+    () =>
+      getDatabaseFallback(
+        mockSupabase({
+          profileError: { message: "permission denied" },
+        }),
+        "00000000-0000-0000-0000-000000000010",
+      ),
+    Error,
+    "profile subscription lookup failed",
+  );
+
+  await assertRejects(
+    () =>
+      getDatabaseFallback(
+        mockSupabase({
+          investorError: { message: "relation unavailable" },
+        }),
+        "00000000-0000-0000-0000-000000000011",
+      ),
+    Error,
+    "investor subscription lookup failed",
+  );
 });
 
 Deno.test("subscription response rejects cross-role product fallback when pricing audience does not match profile", async () => {

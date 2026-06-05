@@ -108,7 +108,12 @@ export async function hasPortalProAccess(
 export async function getPlanCap(
   req: Request,
   sb: SupabaseAdminClient,
+  verifiedUserId: string | null = null,
 ): Promise<number> {
+  if (verifiedUserId) {
+    return await hasPortalProAccess(sb, verifiedUserId) ? AUTH_CAP : FREE_CAP;
+  }
+
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ") || !sb.auth?.getUser) return FREE_CAP;
 

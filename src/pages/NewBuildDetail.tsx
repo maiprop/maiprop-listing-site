@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,7 @@ import { UnitShowcase } from "@/components/new-build/UnitShowcase";
 import { RegisterInterestCard } from "@/components/new-build/RegisterInterestCard";
 import { tFallback, tInterpolate } from "@/lib/i18nFallback";
 import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
+import { fetchPublicApi } from "@/lib/publicApi";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const EnergyBadge = ({ cls }: { cls: string }) => {
@@ -64,6 +66,23 @@ const cleanOptionalText = (value: string | null | undefined) => {
 
 const getInterestPhone = (form: RegisterInterestForm, profile: Profile | null) => {
   return cleanOptionalText(form.phone) ?? cleanOptionalText(profile?.phone) ?? null;
+};
+
+type NewBuildListing = Database["public"]["Tables"]["listings"]["Row"] & {
+  listing_images?: Array<Pick<Database["public"]["Tables"]["listing_images"]["Row"], "url" | "sort_order">> | null;
+  profiles?: {
+    user_id: string;
+    display_name: string | null;
+    avatar_url: string | null;
+    phone?: string | null;
+  } | null;
+  walkability_score?: number | null;
+  safety_score?: number | null;
+  noise_score?: number | null;
+};
+
+type PublicListingResponse = {
+  data: NewBuildListing | null;
 };
 
 const insertNewBuildLead = async ({
@@ -121,38 +140,14 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
   const [aiInsightsLoading, setAiInsightsLoading] = useState(false);
 
   const { data: listing, isLoading, error } = useQuery({
-    queryKey: ["listing", id],
+    queryKey: ["new-build-listing", id],
     queryFn: async () => {
       if (!id) return null;
-      const { data, error } = await supabase
-        .from("listings")
-        .select(`
-          *,
-          listing_images(url, sort_order)
-        `)
-        .eq("id", id)
-        .maybeSingle();
-      if (error) throw error;
-
-      let ownerProfile: { user_id: string; display_name: string | null; avatar_url: string | null } | null = null;
-      if (data?.owner_id) {
-        const { data: profile } = await supabase
-          .from("profiles_public")
-          .select("user_id, display_name, avatar_url")
-          .eq("user_id", data.owner_id)
-          .maybeSingle();
-        ownerProfile = profile ?? null;
-      }
-
-      return data ? {
-        ...data,
-        profiles: ownerProfile,
-      } as typeof data & {
-        profiles?: typeof ownerProfile;
-        walkability_score?: number | null;
-        safety_score?: number | null;
-        noise_score?: number | null;
-      } : null;
+      const response = await fetchPublicApi<PublicListingResponse>(
+        `/api/public/listing?id=${encodeURIComponent(id)}`,
+        { throwOnError: true },
+      );
+      return response?.data ?? null;
     },
     enabled: !!id,
   });

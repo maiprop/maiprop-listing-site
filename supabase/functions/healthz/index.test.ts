@@ -93,6 +93,48 @@ Deno.test("monitor Bearer secret reveals mock billing detail", async () => {
   Deno.env.delete("HEALTHZ_MONITOR_SECRET");
 });
 
+Deno.test("public GET is shallow and does not perform DB fetches", async () => {
+  const originalFetch = globalThis.fetch;
+  let fetches = 0;
+  globalThis.fetch = (() => {
+    fetches += 1;
+    return Promise.reject(new Error("public health must not fetch"));
+  }) as typeof fetch;
+
+  try {
+    const res = await handler(req("GET"));
+    assertEquals(res.status, 200);
+    const body = await res.json() as Record<string, unknown>;
+    assertEquals(typeof body.status, "string");
+    assertEquals(body.checks, undefined);
+    assertEquals(fetches, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("public bearer requests stay shallow unless detailed checks are requested", async () => {
+  const originalFetch = globalThis.fetch;
+  let fetches = 0;
+  globalThis.fetch = (() => {
+    fetches += 1;
+    return Promise.reject(new Error("public bearer health must not fetch"));
+  }) as typeof fetch;
+
+  try {
+    const res = await handler(req("GET", undefined, {
+      authorization: "Bearer user-session-token",
+    }));
+    assertEquals(res.status, 200);
+    const body = await res.json() as Record<string, unknown>;
+    assertEquals(body.checks, undefined);
+    assertEquals(body.billing_mode, undefined);
+    assertEquals(fetches, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 Deno.test("database health check uses an abortable fetch", async () => {
   const originalFetch = globalThis.fetch;
   let observedSignal: AbortSignal | null = null;

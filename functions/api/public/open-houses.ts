@@ -1,11 +1,13 @@
 import {
   cachedJson,
+  isSupabaseTransientError,
   jsonResponse,
   methodNotAllowed,
   missingRuntime,
   normalizedCacheUrl,
   safeInt,
   supabaseJson,
+  upstreamUnavailable,
   type PublicApiCtx,
   type PublicApiEnv,
 } from "./_cache";
@@ -82,7 +84,7 @@ async function fetchOpenHouses(env: PublicApiEnv, showPast: boolean, limit: numb
     params.set("order", "open_house_date.asc");
   }
 
-  return supabaseJson<OpenHouseRow>(env, "/rest/v1/listings", params);
+  return supabaseJson<OpenHouseRow>(env, "/rest/v1/listings", params, { failOnTransient: true });
 }
 
 async function publicOpenHouses(ctx: PublicApiCtx, requestUrl: URL): Promise<Response> {
@@ -97,7 +99,14 @@ async function publicOpenHouses(ctx: PublicApiCtx, requestUrl: URL): Promise<Res
   ]);
   const cacheKey = normalizedCacheUrl(requestUrl, "open-houses", cacheParams);
 
-  return cachedJson(ctx, cacheKey, async () => jsonResponse(await fetchOpenHouses(ctx.env, showPast, limit)), {
+  return cachedJson(ctx, cacheKey, async () => {
+    try {
+      return jsonResponse(await fetchOpenHouses(ctx.env, showPast, limit));
+    } catch (error) {
+      if (isSupabaseTransientError(error)) return upstreamUnavailable();
+      throw error;
+    }
+  }, {
     edgeTtlSeconds: 180,
     browserTtlSeconds: 60,
     staleSeconds: 600,

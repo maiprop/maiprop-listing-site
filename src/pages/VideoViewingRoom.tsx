@@ -12,6 +12,7 @@ import {
   createMaiPropVideoRoomTopic,
   createViewingVideoRoomPath,
   getVideoPlatformName,
+  isUuid,
   normalizeVideoLink,
 } from "@/lib/videoRooms";
 import type { Tables } from "@/integrations/supabase/types";
@@ -34,7 +35,7 @@ export default function VideoViewingRoom() {
   const { data: viewing, isLoading, error } = useQuery({
     queryKey: ["video-viewing-room", viewingId],
     queryFn: async () => {
-      if (!viewingId) return null;
+      if (!isUuid(viewingId)) return null;
       const { data, error: queryError } = await supabase
         .from("viewings")
         .select("*, listings(title, city, cover_image_url, address)")

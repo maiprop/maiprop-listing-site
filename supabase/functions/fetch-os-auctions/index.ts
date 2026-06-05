@@ -61,6 +61,23 @@ import type {
   SupabaseConfig,
 } from "./types.ts";
 
+type AuthClient = {
+  auth?: {
+    getUser: (jwt: string) => Promise<{
+      data: { user?: { id: string } | null };
+      error?: unknown;
+    }>;
+  };
+};
+type SupabaseClient = AuthClient & {
+  rpc?: unknown;
+  from: (table: string) => unknown;
+};
+type AuthIdentity = {
+  rateLimitKey: string;
+  userId: string | null;
+};
+
 export {
   buildFilterRequest,
   clearAuctionResponseCache,
@@ -164,18 +181,38 @@ async function sha256Hex(value: string): Promise<string> {
   }).join("");
 }
 
-export async function getRateLimitKey(req: Request): Promise<string> {
+async function getAuthIdentity(
+  req: Request,
+  authClient?: AuthClient | null,
+): Promise<AuthIdentity> {
   const bearerToken = getBearerToken(req);
-  return bearerToken ? `auth:${await sha256Hex(bearerToken)}` : "anonymous";
+  if (!bearerToken || !authClient?.auth?.getUser) {
+    return { rateLimitKey: "anonymous", userId: null };
+  }
+
+  try {
+    const { data, error } = await authClient.auth.getUser(bearerToken);
+    const userId = data?.user?.id;
+    return error || !userId
+      ? { rateLimitKey: "anonymous", userId: null }
+      : { rateLimitKey: `auth:${await sha256Hex(userId)}`, userId };
+  } catch {
+    return { rateLimitKey: "anonymous", userId: null };
+  }
+}
+
+export async function getRateLimitKey(
+  req: Request,
+  authClient?: AuthClient | null,
+): Promise<string> {
+  return (await getAuthIdentity(req, authClient)).rateLimitKey;
 }
 
 async function getGuardResponse(
-  req: Request,
   corsHeaders: Record<string, string>,
+  rateLimitKey: string,
 ): Promise<Response | null> {
-  const preflight = handleCors(req);
-  if (preflight) return preflight;
-  return await limiter.isLimited(await getRateLimitKey(req))
+  return await limiter.isLimited(rateLimitKey)
     ? tooManyRequestsResponse(corsHeaders)
     : null;
 }
@@ -241,15 +278,12 @@ async function handleAuctionRequest(
   req: Request,
   corsHeaders: Record<string, string>,
   runtimeConfig: RuntimeConfig,
+  sb: SupabaseClient,
+  verifiedUserId: string | null,
 ): Promise<Response> {
-  const sb = createClient(
-    runtimeConfig.supabaseConfig.url,
-    runtimeConfig.supabaseConfig.serviceRoleKey,
-  );
-
   try {
     const body = await parseRequestBody(req);
-    const planCap = await getPlanCap(req, sb);
+    const planCap = await getPlanCap(req, sb, verifiedUserId);
     const pagination = getValidatedPagination(body, planCap);
     if ("error" in pagination) {
       return jsonResponse({ error: pagination.error }, corsHeaders, 400);
@@ -323,8 +357,8 @@ async function handleAuctionRequest(
 
 async function handleRequest(req: Request): Promise<Response> {
   const corsHeaders = getCorsHeaders(req);
-  const guardResponse = await getGuardResponse(req, corsHeaders);
-  if (guardResponse) return guardResponse;
+  const preflight = handleCors(req);
+  if (preflight) return preflight;
 
   if (req.method !== "POST") {
     return jsonResponse({ error: "Method not allowed" }, corsHeaders, 405);
@@ -333,7 +367,21 @@ async function handleRequest(req: Request): Promise<Response> {
   const runtimeConfig = getRuntimeConfig(corsHeaders);
   if (runtimeConfig instanceof Response) return runtimeConfig;
 
-  return await handleAuctionRequest(req, corsHeaders, runtimeConfig);
+  const sb = createClient(
+    runtimeConfig.supabaseConfig.url,
+    runtimeConfig.supabaseConfig.serviceRoleKey,
+  );
+  const authIdentity = await getAuthIdentity(req, sb);
+  const guardResponse = await getGuardResponse(corsHeaders, authIdentity.rateLimitKey);
+  if (guardResponse) return guardResponse;
+
+  return await handleAuctionRequest(
+    req,
+    corsHeaders,
+    runtimeConfig,
+    sb,
+    authIdentity.userId,
+  );
 }
 
 Deno.serve(handleRequest);
