@@ -76,7 +76,7 @@ const projectRef = process.env.SUPABASE_PROJECT_REF ||
   process.env.VITE_SUPABASE_PROJECT_ID;
 const dbPassword = process.env.SUPABASE_DB_PASSWORD;
 
-if (!dbUrl && !dbPassword && allowEmptyWhenUnconfigured) {
+if (!dbUrl && allowEmptyWhenUnconfigured && (!projectRef || !dbPassword)) {
   writeEmptyArtifact("No DB URL/password configured; wrote an empty index stats artifact.");
   process.exit(0);
 }
