@@ -30,12 +30,10 @@ interface Props {
 export function StepLocation({ form, set, errors, setFieldRef, connections, stepActive }: Props) {
   const { t } = useTranslation();
   const [googlePlacesRequested, setGooglePlacesRequested] = useState(false);
-  const [googlePlacesUnavailable, setGooglePlacesUnavailable] = useState(!GOOGLE_MAPS_API_KEY);
 
   const addressInputRef = useRef<HTMLInputElement | null>(null);
   const googleAutocompleteRef = useRef<{ getPlace: () => { address_components?: Array<{ long_name: string; short_name: string; types: string[] }>; formatted_address?: string } } | null>(null);
-  const shouldUseNominatimAddress = !GOOGLE_MAPS_API_KEY || googlePlacesUnavailable;
-  const nominatimQuery = shouldUseNominatimAddress ? [form.address, form.city].filter(Boolean).join(", ") : "";
+  const nominatimQuery = [form.address, form.city].filter(Boolean).join(", ");
   const { rawSuggestions: suggestions, loading: addrLoading, clear: clearAddressSuggestions } =
     useNominatimAddressSuggestions(nominatimQuery);
 
@@ -54,10 +52,7 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
       const input = addressInputRef.current;
       const AutocompleteClass = (window as GWindow).google?.maps?.places?.Autocomplete;
       if (!input || googleAutocompleteRef.current) return;
-      if (!AutocompleteClass) {
-        setGooglePlacesUnavailable(true);
-        return;
-      }
+      if (!AutocompleteClass) return;
       const autocomplete = new AutocompleteClass(input, {
         types: ["address"], componentRestrictions: { country: "gr" }, fields: ["address_components", "formatted_address"],
       });
@@ -77,16 +72,13 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
         if (postcode) set("postal_code", postcode);
       });
       googleAutocompleteRef.current = autocomplete;
-      setGooglePlacesUnavailable(false);
     };
 
     loadGoogleMapsPlaces()
       .then(() => {
         if (!cancelled) initGoogle();
       })
-      .catch(() => {
-        if (!cancelled) setGooglePlacesUnavailable(true);
-      });
+      .catch(() => undefined);
 
     return () => {
       cancelled = true;
