@@ -101,9 +101,8 @@ async function registerProProduct( // skipcq: JS-R1005 - Product registration ha
     return;
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await ((supabase as { from: any }).from as any)(
-    "pro_product_ids",
-  ).upsert({ product_id: productId }, { onConflict: "product_id" });
+  const { error } = await (supabase as { from: any }).from("pro_product_ids")
+    .upsert({ product_id: productId }, { onConflict: "product_id" });
   if (error)
     throw new Error("Failed to register Pro product: " + error.message);
 }

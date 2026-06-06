@@ -71,13 +71,13 @@ export async function getDatabaseFallback( // skipcq: JS-R1005 - Fallback subscr
     {},
 ): Promise<FallbackSubscriptionState> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const from = (supabaseClient as { from: any }).from as any;
+  const client = supabaseClient as { from: any };
   const [profileResult, investorResult] = await Promise.all([
-    from("profiles")
+    client.from("profiles")
       .select("subscription_product_id")
       .eq("user_id", userId)
       .maybeSingle(),
-    from("investor_subscriptions")
+    client.from("investor_subscriptions")
       .select("status, expires_at")
       .eq("user_id", userId)
       .in("status", ["active", "trial"]),

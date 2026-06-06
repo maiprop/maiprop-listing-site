@@ -119,7 +119,7 @@ Deno.serve(async (req) => {
     // generated Supabase types; cast through the narrow `from` overload bridge
     // that the rest of this codebase uses for unregistered tables.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: rowRaw, error: rowErr } = await (supabase.from as any)("agent_data_inputs")
+    const { data: rowRaw, error: rowErr } = await (supabase as any).from("agent_data_inputs")
       .select("id, user_id, status, discount_pct, applied_to_invoice_at, stripe_credit_id, stripe_credit_amount_cents, stripe_credit_currency")
       .eq("id", dataInputId)
       .maybeSingle();
@@ -217,7 +217,7 @@ Deno.serve(async (req) => {
     // exist (e.g. data drift).
     const monthStart = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)).toISOString();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: appliedThisMonthRaw } = await (supabase.from as any)("agent_data_inputs")
+    const { data: appliedThisMonthRaw } = await (supabase as any).from("agent_data_inputs")
       .select("stripe_credit_amount_cents")
       .eq("user_id", row.user_id)
       .gte("applied_to_invoice_at", monthStart);
@@ -265,7 +265,7 @@ Deno.serve(async (req) => {
     // "another caller won the race", in which case we reverse the orphaned
     // Stripe credit so the customer is never charged twice.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: claimed, error: updateErr } = await (supabase.from as any)("agent_data_inputs")
+    const { data: claimed, error: updateErr } = await (supabase as any).from("agent_data_inputs")
       .update({
         applied_to_invoice_at: new Date().toISOString(),
         stripe_credit_id: balanceTx.id,

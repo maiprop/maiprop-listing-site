@@ -56,7 +56,11 @@ const mockSupabase = (
     investorError?: { message: string } | null;
   },
 ) => ({
+  marker: "this-aware-supabase-mock",
   from(table: string) {
+    if (this?.marker !== "this-aware-supabase-mock") {
+      throw new Error("from called without Supabase client binding");
+    }
     const chain = {
       select() {
         return chain;
@@ -269,6 +273,19 @@ Deno.test("database fallback allows mixed expired and valid investor subscriptio
   assertEquals(state.subscribed, true);
   assertEquals(state.product_id, null);
   assertEquals(state.subscription_end, validExpiresAt);
+  assertEquals(state.source, "database");
+});
+
+Deno.test("database fallback keeps Supabase client binding for real client methods", async () => {
+  const state = await getDatabaseFallback(
+    mockSupabase({
+      investorStatus: "active",
+      investorExpiresAt: null,
+    }),
+    "00000000-0000-0000-0000-000000000012",
+  );
+
+  assertEquals(state.subscribed, true);
   assertEquals(state.source, "database");
 });
 

@@ -732,7 +732,7 @@ async function applyAgentDataInputDiscount(
       err: stripeErr instanceof Error ? stripeErr.message : String(stripeErr),
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: rollbackErr } = await (supabase.from as any)("agent_data_inputs")
+    const { error: rollbackErr } = await (supabase as any).from("agent_data_inputs")
       .update({ discount_applied: false, discount_applied_at: null, discount_invoice_id: null })
       .eq("user_id", userId)
       .eq("discount_invoice_id", invoice.id);
