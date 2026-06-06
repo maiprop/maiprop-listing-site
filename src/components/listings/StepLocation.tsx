@@ -27,12 +27,23 @@ interface Props {
   stepActive: boolean;
 }
 
+type GooglePlace = {
+  address_components?: Array<{ long_name: string; short_name: string; types: string[] }>;
+  formatted_address?: string;
+  geometry?: {
+    location?: {
+      lat?: () => number;
+      lng?: () => number;
+    };
+  };
+};
+
 export function StepLocation({ form, set, errors, setFieldRef, connections, stepActive }: Props) {
   const { t } = useTranslation();
   const [googlePlacesRequested, setGooglePlacesRequested] = useState(false);
 
   const addressInputRef = useRef<HTMLInputElement | null>(null);
-  const googleAutocompleteRef = useRef<{ getPlace: () => { address_components?: Array<{ long_name: string; short_name: string; types: string[] }>; formatted_address?: string } } | null>(null);
+  const googleAutocompleteRef = useRef<{ getPlace: () => GooglePlace } | null>(null);
   const nominatimQuery = [form.address, form.city].filter(Boolean).join(", ");
   const { rawSuggestions: suggestions, loading: addrLoading, clear: clearAddressSuggestions } =
     useNominatimAddressSuggestions(nominatimQuery);
@@ -44,7 +55,7 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
 
     type GPlacesAutoComplete = new (input: HTMLInputElement, opts: unknown) => {
       addListener: (event: string, cb: () => void) => void;
-      getPlace: () => { address_components?: Array<{ long_name: string; short_name: string; types: string[] }>; formatted_address?: string };
+      getPlace: () => GooglePlace;
     };
     type GWindow = { google?: { maps?: { places?: { Autocomplete?: GPlacesAutoComplete } } } };
 
@@ -54,7 +65,7 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
       if (!input || googleAutocompleteRef.current) return;
       if (!AutocompleteClass) return;
       const autocomplete = new AutocompleteClass(input, {
-        types: ["address"], componentRestrictions: { country: "gr" }, fields: ["address_components", "formatted_address"],
+        types: ["address"], componentRestrictions: { country: "gr" }, fields: ["address_components", "formatted_address", "geometry"],
       });
       autocomplete.addListener("place_changed", () => {
         const place = autocomplete.getPlace();
@@ -70,6 +81,10 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
         if (city) set("city", city);
         if (state) set("region", state);
         if (postcode) set("postal_code", postcode);
+        const latitude = place.geometry?.location?.lat?.();
+        const longitude = place.geometry?.location?.lng?.();
+        if (typeof latitude === "number" && Number.isFinite(latitude)) set("latitude", String(latitude));
+        if (typeof longitude === "number" && Number.isFinite(longitude)) set("longitude", String(longitude));
       });
       googleAutocompleteRef.current = autocomplete;
     };
@@ -89,6 +104,10 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
 
   const allOk = connections.supabaseOk && connections.storageOk && connections.locationOk;
   const tr = (key: string, fallback: string) => tFallback(t, key, fallback);
+  const clearCoordinates = () => {
+    set("latitude", "");
+    set("longitude", "");
+  };
 
   return (
     <div className="space-y-4">
@@ -120,7 +139,10 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
           mode="city"
           placeholder={tr("createListing.location.cityPlaceholder", "e.g. Athens")}
           value={form.city}
-          onChange={(value) => set("city", value)}
+          onChange={(value) => {
+            set("city", value);
+            clearCoordinates();
+          }}
           inputClassName={`w-full bg-secondary border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors ${errors.city ? "border-destructive ring-1 ring-destructive/30" : "border-border"}`}
         />
         <FieldError msg={errors.city} />
@@ -133,7 +155,10 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
           type="text"
           placeholder={GOOGLE_MAPS_API_KEY ? tr("createListing.location.addressGooglePlaceholder", "e.g. Voukourestiou 14, Athens") : tr("createListing.location.addressPlaceholder", "e.g. Voukourestiou 14")}
           value={form.address}
-          onChange={e => set("address", e.target.value)}
+          onChange={e => {
+            set("address", e.target.value);
+            clearCoordinates();
+          }}
           onFocus={() => setGooglePlacesRequested(true)}
           className={`w-full bg-secondary border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors ${errors.address ? "border-destructive ring-1 ring-destructive/30" : "border-border"}`}
         />
@@ -154,6 +179,8 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
                   if (city) set("city", city);
                   if (municipality) set("region", municipality);
                   if (postalCode) set("postal_code", postalCode);
+                  if (s.lat) set("latitude", s.lat);
+                  if (s.lon) set("longitude", s.lon);
                   clearAddressSuggestions();
                 }}
                 className="w-full text-left px-3 py-2 hover:bg-muted/80 border-b border-border last:border-0 first:rounded-t-xl last:rounded-b-xl">

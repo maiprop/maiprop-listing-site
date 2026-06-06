@@ -190,6 +190,8 @@ describe("useCreateBuildingListing coverage", () => {
       project_id: "project-1",
       price: 250000,
       sqm: 100,
+      latitude: 37.98,
+      longitude: undefined,
       cover_image_url: "https://cdn.test/cover.jpg",
       price_per_sqm: 2500,
       status: "active",

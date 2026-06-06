@@ -90,6 +90,12 @@ export interface CreateBuildingListingInput {
   additionalImageUrls: string[];
 }
 
+function toOptionalNumber(value: string | number) {
+  if (typeof value === "string" && !value.trim()) return undefined;
+  const parsed = typeof value === "number" ? value : Number(value.trim());
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 export function useCreateBuildingListing() {
   const addMedia = useAddProjectMedia();
 
@@ -111,8 +117,8 @@ export function useCreateBuildingListing() {
           city: project.city.trim(),
           municipality: project.municipality || undefined,
           area_description: project.area_description || undefined,
-          latitude: project.latitude ? parseFloat(String(project.latitude)) : undefined,
-          longitude: project.longitude ? parseFloat(String(project.longitude)) : undefined,
+          latitude: toOptionalNumber(project.latitude),
+          longitude: toOptionalNumber(project.longitude),
           permit_approval_date: project.permit_approval_date || undefined,
           construction_start_date: project.construction_start_date || undefined,
           structural_completion_date: project.structural_completion_date || undefined,
@@ -176,6 +182,8 @@ export function useCreateBuildingListing() {
           description: listing.description || undefined,
           city: project.city.trim(),
           address: project.address || undefined,
+          latitude: toOptionalNumber(project.latitude),
+          longitude: toOptionalNumber(project.longitude),
           property_type: "apartment" as const,
           listing_type: "sale" as const,
           price,

@@ -388,18 +388,21 @@ export default function PropertyMiniMap({
     // Fallback: Google Maps embed when no lat/lng
     return (
       <div className="glass-card rounded-xl overflow-hidden border border-border">
-        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div
+          data-property-map-header
+          className="px-5 py-4 border-b border-border flex items-start justify-between gap-3 flex-wrap"
+        >
+          <div className="flex min-w-0 flex-1 items-start gap-2">
             <MapPin className="w-4 h-4 text-primary" />
-            <h3 className="font-display font-semibold text-sm">
+            <h3 className="min-w-0 break-words font-display font-semibold text-sm leading-tight">
               Location & Nearby
             </h3>
           </div>
-          <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer">
+          <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer" className="shrink-0">
             <Button
               size="sm"
               variant="outline"
-              className="text-xs gap-1.5 h-7 border-primary/30 text-primary hover:bg-primary/10"
+              className="text-xs gap-1.5 h-7 whitespace-nowrap border-primary/30 text-primary hover:bg-primary/10"
             >
               <ExternalLink className="w-3 h-3" /> Open in Maps
             </Button>
@@ -423,24 +426,27 @@ export default function PropertyMiniMap({
   return (
     <div className="glass-card rounded-xl overflow-hidden border border-border">
       {/* Header */}
-      <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
+      <div
+        data-property-map-header
+        className="px-5 py-4 border-b border-border flex items-start justify-between gap-3 flex-wrap"
+      >
+        <div className="flex min-w-0 flex-1 items-start gap-2">
           <MapPin className="w-4 h-4 text-primary" />
-          <h3 className="font-display font-semibold text-sm">
+          <h3 className="min-w-0 break-words font-display font-semibold text-sm leading-tight">
             Location & Nearby Places
           </h3>
           {pois && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+            <span className="shrink-0 whitespace-nowrap text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
               {pois.length} places
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <a href={streetViewUrl} target="_blank" rel="noopener noreferrer">
             <Button
               size="sm"
               variant="outline"
-              className="text-xs gap-1.5 h-7 border-border hover:border-primary/50"
+              className="text-xs gap-1.5 h-7 whitespace-nowrap border-border hover:border-primary/50"
             >
               <ExternalLink className="w-3 h-3" /> Street View
             </Button>
@@ -449,7 +455,7 @@ export default function PropertyMiniMap({
             <Button
               size="sm"
               variant="outline"
-              className="text-xs gap-1.5 h-7 border-primary/30 text-primary hover:bg-primary/10"
+              className="text-xs gap-1.5 h-7 whitespace-nowrap border-primary/30 text-primary hover:bg-primary/10"
             >
               <MapPin className="w-3 h-3" /> Google Maps
             </Button>

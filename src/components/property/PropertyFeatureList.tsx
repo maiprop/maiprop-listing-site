@@ -30,7 +30,7 @@ export default function PropertyFeatureList({
         icon={Check}
         title="Features & Amenities"
         badge={
-          <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full border border-border">
+          <span className="inline-flex shrink-0 items-center whitespace-nowrap text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full border border-border">
             {total} features
           </span>
         }

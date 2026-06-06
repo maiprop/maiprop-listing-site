@@ -119,12 +119,20 @@ export function useDeleteProject() {
   return useMutation({
     mutationFn: async (id: string) => {
       if (!user) throw new Error("Must be logged in");
+      const { error: unlinkError } = await supabase
+        .from("listings")
+        .update({ project_id: null })
+        .eq("project_id", id)
+        .eq("owner_id", user.id);
+      if (unlinkError) throw unlinkError;
       const { error } = await supabase.from("projects").delete().eq("id", id).eq("owner_id", user.id);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["projects"] });
-      toast.success("Project deleted");
+      qc.invalidateQueries({ queryKey: ["listings"] });
+      qc.invalidateQueries({ queryKey: ["listings-paginated"] });
+      toast.success("Project deleted. Linked listings are now individual listings.");
     },
     onError: () => toast.error("Failed to delete project. Please try again."),
   });

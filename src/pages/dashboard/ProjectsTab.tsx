@@ -256,7 +256,7 @@ export default function ProjectsTab() {
       <ConfirmDialog
         open={!!deleteTarget}
         title="Delete project?"
-        description="This will permanently remove the project and all its units and media."
+        description="This will permanently remove the project, project units, and project media. Linked listings will remain published as individual listings."
         confirmLabel="Delete"
         onConfirm={() => { if (deleteTarget) deleteProject.mutate(deleteTarget); setDeleteTarget(null); }}
         onCancel={() => setDeleteTarget(null)}

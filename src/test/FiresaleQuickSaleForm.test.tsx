@@ -160,6 +160,27 @@ describe("FiresaleQuickSaleForm", () => {
     expect(navigateMock).toHaveBeenCalledWith("/signup?type=seller");
   });
 
+  it("keeps the non-seller Quick Sale form visible but locked without automatic onboarding redirects", () => {
+    isSellSideRoleMock.mockReturnValue(false);
+    render(<FiresaleQuickSaleForm />);
+
+    expect(screen.getByText(/Property Details/i)).toBeInTheDocument();
+    expect(screen.getByText(/Seller account required/i)).toBeInTheDocument();
+
+    const fileInput = getPhotoInput();
+    expect(fileInput).toBeDisabled();
+
+    const continueButton = screen.getByRole("button", { name: /Seller profile required/i });
+    expect(continueButton).toBeDisabled();
+
+    const validFile = new File(["x"], "admin-upload.jpg", { type: "image/jpeg" });
+    fireEvent.change(fileInput, { target: { files: [validFile] } });
+    fireEvent.click(continueButton);
+
+    expect(screen.queryByText(/1 photo selected/i)).not.toBeInTheDocument();
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
   it("the primary 'Get AI Estimate & Continue' button stays clickable and surfaces validation errors", () => {
     render(<FiresaleQuickSaleForm />);
     const btn = screen.getByRole("button", { name: /Get AI Estimate/i });

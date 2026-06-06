@@ -177,14 +177,25 @@ describe("useDeleteProject()", () => {
     ).rejects.toBeInstanceOf(Error);
   });
 
-  it("deletes the row scoped to the current user", async () => {
-    const eqOwner = vi.fn().mockResolvedValue({ error: null });
-    const eqId = vi.fn().mockReturnValue({ eq: eqOwner });
-    fromMock.mockReturnValue({ delete: vi.fn().mockReturnValue({ eq: eqId }) });
+  it("unlinks owned listings before deleting the project row", async () => {
+    const listingEqOwner = vi.fn().mockResolvedValue({ error: null });
+    const listingEqProject = vi.fn().mockReturnValue({ eq: listingEqOwner });
+    const listingUpdate = vi.fn().mockReturnValue({ eq: listingEqProject });
+    const projectEqOwner = vi.fn().mockResolvedValue({ error: null });
+    const projectEqId = vi.fn().mockReturnValue({ eq: projectEqOwner });
+    const projectDelete = vi.fn().mockReturnValue({ eq: projectEqId });
+    fromMock.mockImplementation((table: string) => {
+      if (table === "listings") return { update: listingUpdate };
+      if (table === "projects") return { delete: projectDelete };
+      throw new Error(`unexpected table ${table}`);
+    });
     const { result } = renderHookWithQuery(() => useDeleteProject());
     await act(async () => {
       await result.current.mutateAsync("pr1");
     });
-    expect(eqOwner).toHaveBeenCalledWith("owner_id", "u-1");
+    expect(listingUpdate).toHaveBeenCalledWith({ project_id: null });
+    expect(listingEqProject).toHaveBeenCalledWith("project_id", "pr1");
+    expect(listingEqOwner).toHaveBeenCalledWith("owner_id", "u-1");
+    expect(projectEqOwner).toHaveBeenCalledWith("owner_id", "u-1");
   });
 });
