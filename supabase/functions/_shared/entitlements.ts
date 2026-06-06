@@ -105,13 +105,13 @@ export async function resolveSubscriptionEntitlement(
   if (!item.productId) return null;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const from = (supabase as { from: any }).from as any;
+  const client = supabase as { from: any };
   const [{ data: profile }, { data: rows }] = await Promise.all([
-    from("profiles")
+    client.from("profiles")
       .select("role, participant_type")
       .eq("user_id", userId)
       .maybeSingle(),
-    from("pricing_configs")
+    client.from("pricing_configs")
       .select("key, audience, metadata")
       .eq("is_active", true),
   ]);

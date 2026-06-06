@@ -9,7 +9,11 @@ import {
 } from "./entitlements.ts";
 
 const fakeSupabase = (profile: unknown, pricingRows: unknown[]) => ({
+  marker: "this-aware-supabase-mock",
   from(table: string) {
+    if (this?.marker !== "this-aware-supabase-mock") {
+      throw new Error("from called without Supabase client binding");
+    }
     const state = { table };
     const builder = {
       select() {
@@ -108,6 +112,30 @@ Deno.test("pricingConfigMatchesStripeItem matches product and scoped prices", ()
       priceId: "price_other",
     }),
     false,
+  );
+});
+
+Deno.test("resolveSubscriptionEntitlement keeps Supabase client binding for real client methods", async () => {
+  const supabase = fakeSupabase(
+    { role: "agent", participant_type: "agent" },
+    [
+      {
+        key: "agent_pro",
+        audience: "agent",
+        metadata: { stripe_product_id: "prod_agent" },
+      },
+    ],
+  );
+
+  assertEquals(
+    await resolveSubscriptionEntitlement(supabase, "user_123", {
+      productId: "prod_agent",
+    }),
+    {
+      planKey: "agent_pro",
+      audience: "agent",
+      productId: "prod_agent",
+    },
   );
 });
 
