@@ -1568,7 +1568,7 @@
       "city": "Πόλη",
       "cityPlaceholder": "π.χ. Αθήνα",
       "streetAddress": "Οδός και αριθμός",
-      "googleHint": "(ξεκινήστε να πληκτρολογείτε για προτάσεις Google)",
+      "googleHint": "(ξεκινήστε να πληκτρολογείτε για προτάσεις διεύθυνσης)",
       "addressGooglePlaceholder": "π.χ. Βουκουρεστίου 14, Αθήνα",
       "addressPlaceholder": "π.χ. Βουκουρεστίου 14",
       "searchingAddress": "Αναζήτηση διεύθυνσης...",
