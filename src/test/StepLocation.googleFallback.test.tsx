@@ -73,4 +73,50 @@ describe("StepLocation Google Places fallback", () => {
     expect(set).toHaveBeenCalledWith("region", "Attica");
     expect(set).toHaveBeenCalledWith("postal_code", "10674");
   });
+
+  it("keeps address suggestions visible when Google Places loads but gives no prediction list", async () => {
+    vi.mocked(loadGoogleMapsPlaces).mockResolvedValue(undefined);
+    vi.stubGlobal("google", {
+      maps: {
+        places: {
+          Autocomplete: vi.fn().mockImplementation(() => ({
+            addListener: vi.fn(),
+            getPlace: vi.fn(),
+          })),
+        },
+      },
+    });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([
+        {
+          display_name: "Voukourestiou 14, Athens, Attica, Greece",
+          address: {
+            road: "Voukourestiou",
+            house_number: "14",
+            city: "Athens",
+            state: "Attica",
+            postcode: "10674",
+          },
+        },
+      ])),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <StepLocation
+        form={form({ address: "Voukourestiou", city: "Athens" })}
+        set={vi.fn()}
+        errors={{}}
+        setFieldRef={() => () => undefined}
+        connections={{ loading: false, supabaseOk: true, storageOk: true, locationOk: true, locationSource: "google" }}
+        stepActive
+      />,
+    );
+
+    fireEvent.focus(screen.getByPlaceholderText("e.g. Voukourestiou 14, Athens"));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    await waitFor(() => expect(loadGoogleMapsPlaces).toHaveBeenCalled());
+    expect(await screen.findByText(/Voukourestiou 14, Athens/i)).toBeInTheDocument();
+  });
 });
