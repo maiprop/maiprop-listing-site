@@ -435,6 +435,7 @@ describe("public listing detail endpoint", () => {
     expect(listingsUrl.searchParams.get("status")).toBe("eq.active");
     expect(listingsUrl.searchParams.get("is_off_market")).toBe("eq.false");
     expect(listingsUrl.searchParams.get("listing_images.order")).toBe("sort_order.asc");
+    expect(fetchUrls("/rest/v1/profiles_public")[0].searchParams.get("select")).toBe("user_id,display_name,avatar_url,role");
     expect(cacheApi.put.mock.calls[0][0].url).toContain("v=public-detail-v1");
   });
 
@@ -443,6 +444,28 @@ describe("public listing detail endpoint", () => {
 
     expect(res.status).toBe(400);
     expect(fetchMock()).not.toHaveBeenCalled();
+  });
+
+  it("keeps owner-backed listings loadable when the optional public profile lookup fails", async () => {
+    const mock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/rest/v1/listings") {
+        return jsonRows([{ id: "listing-1", owner_id: "owner-1", title: "Athens flat" }]);
+      }
+      if (url.pathname === "/rest/v1/profiles_public") {
+        return new Response("bad column", { status: 400 });
+      }
+      return jsonRows([]);
+    }) as unknown as FetchMock;
+    globalThis.fetch = mock as unknown as typeof fetch;
+
+    const res = await listingRequest(
+      makeCtx("https://portal.maiprop.co/api/public/listing?id=11111111-1111-4111-8111-111111111111"),
+    );
+    const body = await res.json() as { data: { id: string; profiles: unknown } };
+
+    expect(res.status).toBe(200);
+    expect(body.data).toMatchObject({ id: "listing-1", profiles: null });
   });
 
   it("returns 503 for transient exact-detail upstream failures", async () => {

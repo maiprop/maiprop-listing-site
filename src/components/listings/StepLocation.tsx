@@ -30,10 +30,12 @@ interface Props {
 export function StepLocation({ form, set, errors, setFieldRef, connections, stepActive }: Props) {
   const { t } = useTranslation();
   const [googlePlacesRequested, setGooglePlacesRequested] = useState(false);
+  const [googlePlacesUnavailable, setGooglePlacesUnavailable] = useState(!GOOGLE_MAPS_API_KEY);
 
   const addressInputRef = useRef<HTMLInputElement | null>(null);
   const googleAutocompleteRef = useRef<{ getPlace: () => { address_components?: Array<{ long_name: string; short_name: string; types: string[] }>; formatted_address?: string } } | null>(null);
-  const nominatimQuery = GOOGLE_MAPS_API_KEY ? "" : [form.address, form.city].filter(Boolean).join(", ");
+  const shouldUseNominatimAddress = !GOOGLE_MAPS_API_KEY || googlePlacesUnavailable;
+  const nominatimQuery = shouldUseNominatimAddress ? [form.address, form.city].filter(Boolean).join(", ") : "";
   const { rawSuggestions: suggestions, loading: addrLoading, clear: clearAddressSuggestions } =
     useNominatimAddressSuggestions(nominatimQuery);
 
@@ -51,7 +53,11 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
     const initGoogle = () => {
       const input = addressInputRef.current;
       const AutocompleteClass = (window as GWindow).google?.maps?.places?.Autocomplete;
-      if (!input || !AutocompleteClass || googleAutocompleteRef.current) return;
+      if (!input || googleAutocompleteRef.current) return;
+      if (!AutocompleteClass) {
+        setGooglePlacesUnavailable(true);
+        return;
+      }
       const autocomplete = new AutocompleteClass(input, {
         types: ["address"], componentRestrictions: { country: "gr" }, fields: ["address_components", "formatted_address"],
       });
@@ -71,6 +77,7 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
         if (postcode) set("postal_code", postcode);
       });
       googleAutocompleteRef.current = autocomplete;
+      setGooglePlacesUnavailable(false);
     };
 
     loadGoogleMapsPlaces()
@@ -78,7 +85,7 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
         if (!cancelled) initGoogle();
       })
       .catch(() => {
-        // Manual address entry remains available if Places cannot load.
+        if (!cancelled) setGooglePlacesUnavailable(true);
       });
 
     return () => {
@@ -128,7 +135,7 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
       </div>
 
       <div>
-        <FieldLabel>{tr("createListing.location.streetAddress", "Street Address")} {GOOGLE_MAPS_API_KEY ? tr("createListing.location.googleHint", "(start typing for Google suggestions)") : ""}</FieldLabel>
+        <FieldLabel>{tr("createListing.location.streetAddress", "Street Address")} {GOOGLE_MAPS_API_KEY ? tr("createListing.location.googleHint", "(start typing for address suggestions)") : ""}</FieldLabel>
         <input
           ref={el => { addressInputRef.current = el; setFieldRef("address")(el); }}
           type="text"

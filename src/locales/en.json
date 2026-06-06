@@ -1568,7 +1568,7 @@
       "city": "City",
       "cityPlaceholder": "e.g. Athens",
       "streetAddress": "Street Address",
-      "googleHint": "(start typing for Google suggestions)",
+      "googleHint": "(start typing for address suggestions)",
       "addressGooglePlaceholder": "e.g. Voukourestiou 14, Athens",
       "addressPlaceholder": "e.g. Voukourestiou 14",
       "searchingAddress": "Searching address...",

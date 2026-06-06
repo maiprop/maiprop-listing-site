@@ -24,10 +24,7 @@ type ProfilePublicRow = {
   user_id: string;
   display_name: string | null;
   avatar_url: string | null;
-  verified?: boolean | null;
   role?: string | null;
-  bio?: string | null;
-  phone?: string | null;
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -166,11 +163,16 @@ async function fetchOwnerProfile(env: PublicApiEnv, ownerId: string | null | und
   if (!ownerId) return null;
 
   const params = new URLSearchParams();
-  params.set("select", "user_id,display_name,avatar_url,verified,role,bio,phone");
+  params.set("select", "user_id,display_name,avatar_url,role");
   params.set("user_id", `eq.${ownerId}`);
   params.set("limit", "1");
-  const rows = await supabaseJson<ProfilePublicRow>(env, "/rest/v1/profiles_public", params);
-  return rows[0] ?? null;
+  try {
+    const rows = await supabaseJson<ProfilePublicRow>(env, "/rest/v1/profiles_public", params);
+    return rows[0] ?? null;
+  } catch (error) {
+    console.warn("[public-api] Public owner profile lookup failed; returning listing without profile", error);
+    return null;
+  }
 }
 
 function buildListingDetailParams(requestUrl: URL): URLSearchParams | null {
