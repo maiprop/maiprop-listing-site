@@ -17,6 +17,7 @@ import { DeveloperRoute } from "@/components/DeveloperRoute";
 import { NewBuildingRoute } from "@/components/NewBuildingRoute";
 import { BottomNav } from "@/components/BottomNav";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ScrollToTop } from "@/components/ScrollToTop";
 import { useAiTranslation } from "@/hooks/useAiTranslation";
 const Index = lazy(() => import("./pages/Index"));
 const AIAssistantWidget = lazy(() => import("@/components/AIAssistantWidget"));
@@ -113,6 +114,7 @@ const App = () => (
                 <Toaster />
                 <Sonner />
                 <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                  <ScrollToTop />
                   <ErrorBoundary>
                   <Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>}>
                     <Routes>

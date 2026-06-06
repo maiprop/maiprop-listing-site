@@ -42,12 +42,28 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
   const [newDesc, setNewDesc] = useState("");
   const [newCity, setNewCity] = useState("");
   const [newAddress, setNewAddress] = useState("");
+  const [newLatitude, setNewLatitude] = useState("");
+  const [newLongitude, setNewLongitude] = useState("");
   const [newPermit, setNewPermit] = useState("");
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
 
   const applyNewProjectAddressSelection = (selection: LocationAutocompleteSelection) => {
     setNewAddress(selection.addressLine || selection.value);
     if (selection.city) setNewCity(selection.city);
+    setNewLatitude(selection.latitude || "");
+    setNewLongitude(selection.longitude || "");
+  };
+
+  const handleNewProjectCityChange = (value: string) => {
+    setNewCity(value);
+    setNewLatitude("");
+    setNewLongitude("");
+  };
+
+  const handleNewProjectAddressChange = (value: string) => {
+    setNewAddress(value);
+    setNewLatitude("");
+    setNewLongitude("");
   };
 
   const handleCreate = () => {
@@ -56,13 +72,23 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
       return;
     }
     createProject.mutate(
-      { name: newName.trim(), description: newDesc.trim() || undefined, city: newCity.trim() || undefined, address: newAddress.trim() || undefined, building_permit_number: newPermit.trim() || undefined },
+      {
+        name: newName.trim(),
+        description: newDesc.trim() || undefined,
+        city: newCity.trim() || undefined,
+        address: newAddress.trim() || undefined,
+        latitude: newLatitude ? Number(newLatitude) : undefined,
+        longitude: newLongitude ? Number(newLongitude) : undefined,
+        building_permit_number: newPermit.trim() || undefined,
+      },
       {
         onSuccess: (data) => {
           setNewName("");
           setNewDesc("");
           setNewCity("");
           setNewAddress("");
+          setNewLatitude("");
+          setNewLongitude("");
           setNewPermit("");
           setShowCreate(false);
           if (data?.id) navigate(`/projects/${data.id}`);
@@ -156,7 +182,7 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
                 <LocationAutocompleteInput
                   mode="city"
                   value={newCity}
-                  onChange={setNewCity}
+                  onChange={handleNewProjectCityChange}
                   placeholder={tr("projects.fields.cityPlaceholder", "e.g. Athens")}
                   inputClassName="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"
                 />
@@ -166,7 +192,7 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
                 <LocationAutocompleteInput
                   mode="address"
                   value={newAddress}
-                  onChange={setNewAddress}
+                  onChange={handleNewProjectAddressChange}
                   onSuggestionSelect={applyNewProjectAddressSelection}
                   placeholder={tr("projects.fields.addressPlaceholder", "Street, number")}
                   inputClassName="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"

@@ -89,13 +89,20 @@ describe("useCreateListing", () => {
         sqm: 90,
         property_type: "apartment",
         listing_type: "sale",
+        latitude: 37.9779,
+        longitude: 23.7354,
       });
       expect(data).toEqual(mockListing);
     });
 
     expect(vi.mocked(supabase).from).toHaveBeenCalledWith("listings");
     expect(chain.insert).toHaveBeenCalledWith(
-      expect.objectContaining({ owner_id: TEST_USER_ID, status: "active" })
+      expect.objectContaining({
+        owner_id: TEST_USER_ID,
+        status: "active",
+        latitude: 37.9779,
+        longitude: 23.7354,
+      })
     );
   });
 

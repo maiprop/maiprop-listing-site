@@ -66,6 +66,122 @@ const LISTING_CARD_SELECT = [
 
 const LISTING_CARD_SELECT_WITH_IMAGES = `${LISTING_CARD_SELECT}, listing_images(url, sort_order)`;
 
+const LISTING_DETAIL_SELECT = [
+  "id",
+  "owner_id",
+  "created_at",
+  "updated_at",
+  "status",
+  "title",
+  "description",
+  "address",
+  "city",
+  "region",
+  "postal_code",
+  "price",
+  "price_per_sqm",
+  "sqm",
+  "bedrooms",
+  "bathrooms",
+  "wc_count",
+  "kitchens",
+  "living_rooms",
+  "floor",
+  "total_floors",
+  "levels",
+  "year_built",
+  "energy_class",
+  "cover_image_url",
+  "property_type",
+  "listing_type",
+  "commercial_subtype",
+  "heating_system",
+  "construction_status",
+  "available_from",
+  "deposit_months",
+  "monthly_expenses",
+  "agent_fee_included",
+  "min_rental_months",
+  "open_house_date",
+  "auction_date",
+  "auction_starting_bid",
+  "auction_court",
+  "website_url",
+  "ai_score",
+  "views_count",
+  "tags",
+  "has_video_tour",
+  "has_virtual_tour",
+  "is_featured",
+  "priority_placement",
+  "is_pre_sale",
+  "walkability_score",
+  "safety_score",
+  "noise_score",
+  "latitude",
+  "longitude",
+  "distance_from_city",
+  "distance_from_sea",
+  "plot_surface",
+  "plot_depth",
+  "coverage_ratio",
+  "building_allowance",
+  "facade_length",
+  "floor_height",
+  "slope",
+  "zone_type",
+  "road_type",
+  "land_use",
+  "is_buildable",
+  "is_corner",
+  "is_neoclassical",
+  "is_penthouse",
+  "is_preserved",
+  "within_city_plan",
+  "within_settlement",
+  "short_term_rental",
+  "suitable_commercial_use",
+  "suitable_holiday",
+  "suitable_investment",
+  "suitable_student",
+  "pets_allowed",
+  "has_ac",
+  "has_alarm",
+  "has_attic",
+  "has_awning",
+  "has_balcony",
+  "has_cctv",
+  "has_disability_access",
+  "has_double_glazing",
+  "has_electricity_supply",
+  "has_elevator",
+  "has_equipped",
+  "has_facade",
+  "has_fireplace",
+  "has_furnished",
+  "has_garden",
+  "has_internal_staircase",
+  "has_land_concession",
+  "has_loading_dock",
+  "has_night_power",
+  "has_painted",
+  "has_parking",
+  "has_pool",
+  "has_satellite",
+  "has_secure_door",
+  "has_security",
+  "has_smart_home",
+  "has_solar_water",
+  "has_storage",
+  "has_structured_cabling",
+  "has_three_phase_power",
+  "has_underfloor_heating",
+  "has_view",
+  "has_water_supply",
+  "has_window_screens",
+  "listing_images(url, sort_order)",
+].join(",");
+
 /**
  * A listings row augmented with joined tables and computed fields added by useListing().
  * Using this type eliminates type casting in consuming components.
@@ -443,13 +559,36 @@ type PublicListingResponse = {
   data: (Database["public"]["Tables"]["listings"]["Row"] & Partial<ListingWithJoins>) | null;
 };
 
+const fetchPublicListingFromSupabase = async (id: string): Promise<ListingWithJoins | null> => {
+  const { data, error } = await supabase
+    .from("listings")
+    .select(LISTING_DETAIL_SELECT)
+    .eq("id", id)
+    .eq("status", "active")
+    .eq("is_off_market", false)
+    .order("sort_order", { referencedTable: "listing_images", ascending: true })
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return null;
+
+  const row = data as unknown as Database["public"]["Tables"]["listings"]["Row"] & Partial<ListingWithJoins>;
+  const { profiles, ownerParticipantType } = await fetchListingOwnerContext(row.owner_id);
+  return normalizeListingWithJoins({ ...row, profiles, ownerParticipantType });
+};
+
 const fetchListingById = async (id: string, options: { publicScope?: boolean } = {}): Promise<ListingWithJoins | null> => {
   if (options.publicScope) {
-    const response = await fetchPublicApi<PublicListingResponse>(
-      `/api/public/listing?id=${encodeURIComponent(id)}`,
-      { throwOnError: true },
-    );
-    return response?.data ? normalizeListingWithJoins(response.data) : null;
+    try {
+      const response = await fetchPublicApi<PublicListingResponse>(
+        `/api/public/listing?id=${encodeURIComponent(id)}`,
+        { throwOnError: true },
+      );
+      return response?.data ? normalizeListingWithJoins(response.data) : null;
+    } catch (error) {
+      logger.warn("Public listing API failed; falling back to constrained Supabase detail read:", error);
+      return fetchPublicListingFromSupabase(id);
+    }
   }
 
   const { data, error } = await supabase
@@ -536,6 +675,7 @@ export const useCreateListing = () => {
       property_type: string; listing_type: string; description?: string;
       address?: string; bedrooms?: number; bathrooms?: number;
       cover_image_url?: string; tags?: string[];
+      latitude?: number; longitude?: number;
       auction_date?: string; auction_starting_bid?: number;
     }) => {
       if (!user) throw new Error("Must be logged in");

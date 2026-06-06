@@ -93,6 +93,7 @@ const SellerGateBanner = ({
 const AddressField = ({
   form,
   errors,
+  disabled,
   addressLoading,
   addressSuggestions,
   onUpdate,
@@ -101,6 +102,7 @@ const AddressField = ({
 }: {
   form: QuickSaleFormValues;
   errors: QuickSaleErrors;
+  disabled: boolean;
   addressLoading: boolean;
   addressSuggestions: NominatimAddressSuggestion[];
   onUpdate: QuickSaleFieldUpdater;
@@ -117,8 +119,9 @@ const AddressField = ({
         type="text"
         placeholder={ui("e.g. Kifisia, Dekelia 24, Athens", "π.χ. Κηφισιά, Δεκελείας 24, Αθήνα")}
         value={form.address}
-        onChange={(e) => onUpdate("address", e.target.value)}
-        className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
+        disabled={disabled}
+        onChange={disabled ? undefined : (e) => onUpdate("address", e.target.value)}
+        className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-70"
       />
     </div>
     {errors.address && <p className="mt-1 text-xs text-destructive">{errors.address}</p>}
@@ -143,7 +146,7 @@ const AddressField = ({
   </div>
 );
 
-const KaekField = ({ form, errors, onUpdate }: { form: QuickSaleFormValues; errors: QuickSaleErrors; onUpdate: QuickSaleFieldUpdater }) => (
+const KaekField = ({ form, errors, disabled, onUpdate }: { form: QuickSaleFormValues; errors: QuickSaleErrors; disabled: boolean; onUpdate: QuickSaleFieldUpdater }) => (
   <div>
     <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
       KAEK <span className="text-destructive">*</span>{" "}
@@ -157,8 +160,9 @@ const KaekField = ({ form, errors, onUpdate }: { form: QuickSaleFormValues; erro
         value={form.kaek}
         maxLength={KAEK_MAX_LENGTH}
         inputMode="numeric"
-        onChange={(e) => onUpdate("kaek", normalizeKaek(e.target.value))}
-        className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none font-mono"
+        disabled={disabled}
+        onChange={disabled ? undefined : (e) => onUpdate("kaek", normalizeKaek(e.target.value))}
+        className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none font-mono disabled:cursor-not-allowed disabled:opacity-70"
       />
     </div>
     <p className="mt-1 text-[10px] text-muted-foreground">
@@ -171,10 +175,12 @@ const KaekField = ({ form, errors, onUpdate }: { form: QuickSaleFormValues; erro
 const PropertyMetricsFields = ({
   form,
   errors,
+  disabled,
   onUpdate,
 }: {
   form: QuickSaleFormValues;
   errors: QuickSaleErrors;
+  disabled: boolean;
   onUpdate: QuickSaleFieldUpdater;
 }) => (
   <div className="grid grid-cols-2 gap-4">
@@ -184,8 +190,9 @@ const PropertyMetricsFields = ({
       </label>
       <select
         value={form.propertyType}
-        onChange={(e) => onUpdate("propertyType", e.target.value)}
-        className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none capitalize"
+        disabled={disabled}
+        onChange={disabled ? undefined : (e) => onUpdate("propertyType", e.target.value)}
+        className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary appearance-none capitalize disabled:cursor-not-allowed disabled:opacity-70"
       >
         <option value="" className="bg-card">{ui("Select type...", "Επιλέξτε τύπο...")}</option>
         {propertyTypeOptions.map((type) => (
@@ -202,8 +209,9 @@ const PropertyMetricsFields = ({
         type="number"
         placeholder="e.g. 120"
         value={form.sqm}
-        onChange={(e) => onUpdate("sqm", e.target.value)}
-        className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
+        disabled={disabled}
+        onChange={disabled ? undefined : (e) => onUpdate("sqm", e.target.value)}
+        className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors disabled:cursor-not-allowed disabled:opacity-70"
       />
       {errors.sqm && <p className="mt-1 text-xs text-destructive">{errors.sqm}</p>}
     </div>
@@ -217,8 +225,9 @@ const PropertyMetricsFields = ({
           type="number"
           placeholder={ui("Your target EUR", "Η επιθυμητή τιμή σε EUR")}
           value={form.askingPrice}
-          onChange={(e) => onUpdate("askingPrice", e.target.value)}
-          className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
+          disabled={disabled}
+          onChange={disabled ? undefined : (e) => onUpdate("askingPrice", e.target.value)}
+          className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-70"
         />
       </div>
       {errors.askingPrice && <p className="mt-1 text-xs text-destructive">{errors.askingPrice}</p>}
@@ -231,19 +240,21 @@ const PropertyMetricsFields = ({
         type="number"
         placeholder="e.g. 1998"
         value={form.constructionYear}
-        onChange={(e) => onUpdate("constructionYear", e.target.value)}
-        className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
+        disabled={disabled}
+        onChange={disabled ? undefined : (e) => onUpdate("constructionYear", e.target.value)}
+        className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors disabled:cursor-not-allowed disabled:opacity-70"
       />
       {errors.constructionYear && <p className="mt-1 text-xs text-destructive">{errors.constructionYear}</p>}
     </div>
   </div>
 );
 
-const EmptyPhotoUploadButton = ({ fileInputRef }: { fileInputRef: RefObject<HTMLInputElement> }) => (
+const EmptyPhotoUploadButton = ({ disabled, fileInputRef }: { disabled: boolean; fileInputRef: RefObject<HTMLInputElement> }) => (
   <button
     type="button"
+    disabled={disabled}
     onClick={() => fileInputRef.current?.click()}
-    className="w-full flex flex-col items-center justify-center gap-2 bg-muted border-2 border-dashed border-border rounded-xl py-7 text-muted-foreground hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 group"
+    className="w-full flex flex-col items-center justify-center gap-2 bg-muted border-2 border-dashed border-border rounded-xl py-7 text-muted-foreground hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 group disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:bg-muted disabled:opacity-70"
   >
     <div className="w-10 h-10 rounded-full bg-muted-foreground/10 group-hover:bg-primary/10 flex items-center justify-center transition-colors">
       <Upload className="w-5 h-5 group-hover:text-primary transition-colors" />
@@ -258,29 +269,33 @@ const EmptyPhotoUploadButton = ({ fileInputRef }: { fileInputRef: RefObject<HTML
 const PhotoPreviewTile = ({
   src,
   index,
+  disabled,
   onRemovePhoto,
 }: {
   src: string;
   index: number;
+  disabled: boolean;
   onRemovePhoto: (index: number) => void;
 }) => (
   <div className="relative group rounded-xl overflow-hidden aspect-square bg-muted border border-border">
     <img src={src} alt="" className="w-full h-full object-cover" />
     <button
       type="button"
+      disabled={disabled}
       onClick={() => onRemovePhoto(index)}
-      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-background/90 border border-border flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive hover:border-destructive hover:text-destructive-foreground"
+      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-background/90 border border-border flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive hover:border-destructive hover:text-destructive-foreground disabled:hidden"
     >
       <X className="w-3 h-3" />
     </button>
   </div>
 );
 
-const AddPhotoTile = ({ fileInputRef }: { fileInputRef: RefObject<HTMLInputElement> }) => (
+const AddPhotoTile = ({ disabled, fileInputRef }: { disabled: boolean; fileInputRef: RefObject<HTMLInputElement> }) => (
   <button
     type="button"
+    disabled={disabled}
     onClick={() => fileInputRef.current?.click()}
-    className="aspect-square rounded-xl border-2 border-dashed border-border bg-muted hover:border-primary/40 hover:bg-primary/5 flex items-center justify-center transition-all"
+    className="aspect-square rounded-xl border-2 border-dashed border-border bg-muted hover:border-primary/40 hover:bg-primary/5 flex items-center justify-center transition-all disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:bg-muted disabled:opacity-70"
   >
     <ImageIcon className="w-5 h-5 text-muted-foreground" />
   </button>
@@ -288,30 +303,34 @@ const AddPhotoTile = ({ fileInputRef }: { fileInputRef: RefObject<HTMLInputEleme
 
 const PhotoPreviewGrid = ({
   photoPreviews,
+  disabled,
   fileInputRef,
   onRemovePhoto,
 }: {
   photoPreviews: string[];
+  disabled: boolean;
   fileInputRef: RefObject<HTMLInputElement>;
   onRemovePhoto: (index: number) => void;
 }) => (
   <div className="grid grid-cols-3 gap-2">
     {photoPreviews.map((src, index) => (
-      <PhotoPreviewTile key={src} src={src} index={index} onRemovePhoto={onRemovePhoto} />
+      <PhotoPreviewTile key={src} src={src} index={index} disabled={disabled} onRemovePhoto={onRemovePhoto} />
     ))}
-    {photoPreviews.length < 10 && <AddPhotoTile fileInputRef={fileInputRef} />}
+    {photoPreviews.length < 10 && <AddPhotoTile disabled={disabled} fileInputRef={fileInputRef} />}
   </div>
 );
 
 const PhotoUploadField = ({
   errors,
   photoPreviews,
+  disabled,
   fileInputRef,
   onPhotoSelect,
   onRemovePhoto,
 }: {
   errors: QuickSaleErrors;
   photoPreviews: string[];
+  disabled: boolean;
   fileInputRef: RefObject<HTMLInputElement>;
   onPhotoSelect: PhotoSelectHandler;
   onRemovePhoto: (index: number) => void;
@@ -321,12 +340,12 @@ const PhotoUploadField = ({
       {ui("Property Photos", "Φωτογραφίες ακινήτου")} <span className="text-destructive">*</span>{" "}
       <span className="text-[10px] font-normal normal-case text-muted-foreground">{ui("(min 5, up to 10 images)", "(ελάχ. 5, έως 10 εικόνες)")}</span>
     </label>
-    <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={onPhotoSelect} />
+    <input ref={fileInputRef} type="file" accept="image/*" multiple disabled={disabled} className="hidden" onChange={disabled ? undefined : onPhotoSelect} />
     {photoPreviews.length === 0 ? (
-      <EmptyPhotoUploadButton fileInputRef={fileInputRef} />
+      <EmptyPhotoUploadButton disabled={disabled} fileInputRef={fileInputRef} />
     ) : (
       <div className="space-y-3">
-        <PhotoPreviewGrid photoPreviews={photoPreviews} fileInputRef={fileInputRef} onRemovePhoto={onRemovePhoto} />
+        <PhotoPreviewGrid photoPreviews={photoPreviews} disabled={disabled} fileInputRef={fileInputRef} onRemovePhoto={onRemovePhoto} />
         <p className="text-[10px] text-muted-foreground">
           {ui(getPhotoSelectionText(photoPreviews.length), `${photoPreviews.length} φωτογραφ${photoPreviews.length === 1 ? "ία επιλέχθηκε" : "ίες επιλέχθηκαν"}`)}
           {photoPreviews.length < 5 && ui(" - add at least 5 photos to continue", " - προσθέστε τουλάχιστον 5 φωτογραφίες για συνέχεια")}
@@ -337,7 +356,7 @@ const PhotoUploadField = ({
   </div>
 );
 
-const NotesField = ({ form, errors, onUpdate }: { form: QuickSaleFormValues; errors: QuickSaleErrors; onUpdate: QuickSaleFieldUpdater }) => (
+const NotesField = ({ form, errors, disabled, onUpdate }: { form: QuickSaleFormValues; errors: QuickSaleErrors; disabled: boolean; onUpdate: QuickSaleFieldUpdater }) => (
   <div>
     <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
       {ui("Additional Notes", "Πρόσθετες σημειώσεις")} <span className="text-destructive">*</span>
@@ -346,8 +365,9 @@ const NotesField = ({ form, errors, onUpdate }: { form: QuickSaleFormValues; err
       rows={2}
       placeholder={ui("Legal issues, urgent timeline, property history...", "Νομικά θέματα, επείγον χρονοδιάγραμμα, ιστορικό ακινήτου...")}
       value={form.notes}
-      onChange={(e) => onUpdate("notes", e.target.value)}
-      className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary resize-none transition-colors"
+      disabled={disabled}
+      onChange={disabled ? undefined : (e) => onUpdate("notes", e.target.value)}
+      className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary resize-none transition-colors disabled:cursor-not-allowed disabled:opacity-70"
     />
     {errors.notes && <p className="mt-1 text-xs text-destructive">{errors.notes}</p>}
   </div>
@@ -356,6 +376,7 @@ const NotesField = ({ form, errors, onUpdate }: { form: QuickSaleFormValues; err
 type StepOneProps = {
   authPending: boolean;
   canSubmitQuickSale: boolean;
+  formLocked: boolean;
   userExists: boolean;
   form: QuickSaleFormValues;
   errors: QuickSaleErrors;
@@ -373,7 +394,16 @@ type StepOneProps = {
   onContinue: () => void;
 };
 
-const StepOneButtonContent = ({ aiLoading }: { aiLoading: boolean }) => {
+const StepOneButtonContent = ({ aiLoading, locked }: { aiLoading: boolean; locked: boolean }) => {
+  if (locked) {
+    return (
+      <>
+        <Lock className="w-4 h-4 mr-2" />
+        {ui("Seller profile required", "Απαιτείται προφίλ πωλητή")}
+      </>
+    );
+  }
+
   if (aiLoading) {
     return (
       <>
@@ -403,24 +433,26 @@ const QuickSaleStepOne = (props: StepOneProps) => (
     <AddressField
       form={props.form}
       errors={props.errors}
+      disabled={props.formLocked}
       addressLoading={props.addressLoading}
       addressSuggestions={props.addressSuggestions}
       onUpdate={props.onUpdate}
       onSelectSuggestion={props.onSelectAddressSuggestion}
       onClearSuggestions={props.onClearAddressSuggestions}
     />
-    <KaekField form={props.form} errors={props.errors} onUpdate={props.onUpdate} />
-    <PropertyMetricsFields form={props.form} errors={props.errors} onUpdate={props.onUpdate} />
+    <KaekField form={props.form} errors={props.errors} disabled={props.formLocked} onUpdate={props.onUpdate} />
+    <PropertyMetricsFields form={props.form} errors={props.errors} disabled={props.formLocked} onUpdate={props.onUpdate} />
     <PhotoUploadField
       errors={props.errors}
       photoPreviews={props.photoPreviews}
+      disabled={props.formLocked}
       fileInputRef={props.fileInputRef}
       onPhotoSelect={props.onPhotoSelect}
       onRemovePhoto={props.onRemovePhoto}
     />
-    <NotesField form={props.form} errors={props.errors} onUpdate={props.onUpdate} />
-    <Button className="w-full bg-gradient-primary border-0 text-primary-foreground h-11" disabled={props.aiLoading} onClick={props.onContinue}>
-      <StepOneButtonContent aiLoading={props.aiLoading} />
+    <NotesField form={props.form} errors={props.errors} disabled={props.formLocked} onUpdate={props.onUpdate} />
+    <Button className="w-full bg-gradient-primary border-0 text-primary-foreground h-11" disabled={props.aiLoading || props.formLocked} onClick={props.onContinue}>
+      <StepOneButtonContent aiLoading={props.aiLoading} locked={props.formLocked} />
     </Button>
   </div>
 );
@@ -446,10 +478,11 @@ const EstimateSummary = ({ aiEstimate }: { aiEstimate: number | null }) => {
 type ContactFieldProps = {
   form: QuickSaleFormValues;
   errors: QuickSaleErrors;
+  disabled: boolean;
   onUpdate: QuickSaleFieldUpdater;
 };
 
-const ContactNameField = ({ form, errors, onUpdate }: ContactFieldProps) => (
+const ContactNameField = ({ form, errors, disabled, onUpdate }: ContactFieldProps) => (
   <div>
     <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
       {ui("Full Name", "Ονοματεπώνυμο")} <span className="text-destructive">*</span>
@@ -458,14 +491,15 @@ const ContactNameField = ({ form, errors, onUpdate }: ContactFieldProps) => (
       type="text"
       placeholder={ui("Your name", "Το όνομά σας")}
       value={form.contactName}
-      onChange={(e) => onUpdate("contactName", e.target.value)}
-      className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
+      disabled={disabled}
+      onChange={disabled ? undefined : (e) => onUpdate("contactName", e.target.value)}
+      className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors disabled:cursor-not-allowed disabled:opacity-70"
     />
     {errors.contactName && <p className="mt-1 text-xs text-destructive">{errors.contactName}</p>}
   </div>
 );
 
-const ContactEmailField = ({ form, errors, onUpdate }: ContactFieldProps) => (
+const ContactEmailField = ({ form, errors, disabled, onUpdate }: ContactFieldProps) => (
   <div>
     <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
       {ui("Email", "Email επικοινωνίας")} <span className="text-destructive">*</span>
@@ -474,14 +508,15 @@ const ContactEmailField = ({ form, errors, onUpdate }: ContactFieldProps) => (
       type="email"
       placeholder="email@example.com"
       value={form.contactEmail}
-      onChange={(e) => onUpdate("contactEmail", e.target.value)}
-      className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
+      disabled={disabled}
+      onChange={disabled ? undefined : (e) => onUpdate("contactEmail", e.target.value)}
+      className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors disabled:cursor-not-allowed disabled:opacity-70"
     />
     {errors.contactEmail && <p className="mt-1 text-xs text-destructive">{errors.contactEmail}</p>}
   </div>
 );
 
-const ContactPhoneField = ({ form, errors, onUpdate }: ContactFieldProps) => (
+const ContactPhoneField = ({ form, errors, disabled, onUpdate }: ContactFieldProps) => (
   <div>
     <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
       {ui("Phone", "Τηλέφωνο")} <span className="text-destructive">*</span>
@@ -490,8 +525,9 @@ const ContactPhoneField = ({ form, errors, onUpdate }: ContactFieldProps) => (
       type="tel"
       placeholder="+30 69..."
       value={form.contactPhone}
-      onChange={(e) => onUpdate("contactPhone", e.target.value)}
-      className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
+      disabled={disabled}
+      onChange={disabled ? undefined : (e) => onUpdate("contactPhone", e.target.value)}
+      className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors disabled:cursor-not-allowed disabled:opacity-70"
     />
     {errors.contactPhone && <p className="mt-1 text-xs text-destructive">{errors.contactPhone}</p>}
   </div>
@@ -518,6 +554,7 @@ type StepTwoProps = {
   step2Valid: boolean;
   submitting: boolean;
   uploadingPhotos: boolean;
+  formLocked: boolean;
   onUpdate: QuickSaleFieldUpdater;
   onBack: () => void;
   onSubmit: () => void;
@@ -546,7 +583,7 @@ const QuickSaleStepTwo = (props: StepTwoProps) => (
     <EstimateSummary aiEstimate={props.aiEstimate} />
     <h4 className="font-display font-semibold text-sm">{ui("Your Contact Details", "Στοιχεία επικοινωνίας")}</h4>
     <p className="text-xs text-muted-foreground -mt-3">{ui("Your information is kept strictly confidential.", "Τα στοιχεία σας παραμένουν αυστηρά εμπιστευτικά.")}</p>
-    <ContactFields form={props.form} errors={props.errors} onUpdate={props.onUpdate} />
+    <ContactFields form={props.form} errors={props.errors} disabled={props.formLocked} onUpdate={props.onUpdate} />
     <div className="rounded-xl bg-muted border border-border p-3 flex items-start gap-3">
       <Shield className="w-4 h-4 text-brand-emerald mt-0.5 shrink-0" />
       <p className="text-xs text-muted-foreground leading-relaxed">
@@ -559,7 +596,7 @@ const QuickSaleStepTwo = (props: StepTwoProps) => (
       <Button variant="outline" className="border-border" onClick={props.onBack}>{ui("Back", "Πίσω")}</Button>
       <Button
         className="flex-1 bg-gradient-to-r from-destructive to-destructive/80 border-0 text-destructive-foreground h-11"
-        disabled={!props.step2Valid || props.submitting}
+        disabled={!props.step2Valid || props.submitting || props.formLocked}
         onClick={props.onSubmit}
       >
         <SubmitRequestButtonContent submitting={props.submitting} uploadingPhotos={props.uploadingPhotos} />

@@ -65,6 +65,7 @@ export interface ListingFormData {
   distance_from_sea: string; distance_from_city: string;
   // Location
   address: string; city: string; region: string; postal_code: string;
+  latitude: string; longitude: string;
   cadastre_number: string; enfia_zone: string;
   // Pricing
   price: string; auction_starting_bid: string; auction_date: string; auction_court: string; open_house_date: string;

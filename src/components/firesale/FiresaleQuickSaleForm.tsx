@@ -64,6 +64,7 @@ export const FiresaleQuickSaleForm = () => {
 
   const authPending = Boolean(authLoading || profileLoading);
   const canSubmitQuickSale = canSubmitQuickSaleRequest(user, profile, authPending);
+  const formLocked = authPending || !canSubmitQuickSale;
 
   const [form, setForm] = useState(() => buildInitialForm(profile, user?.email));
   const [errors, setErrors] = useState<QuickSaleErrors>({});
@@ -110,10 +111,7 @@ export const FiresaleQuickSaleForm = () => {
 
   const handleContinue = async () => {
     if (showAuthPendingToast(authPending)) return;
-    if (!canSubmitQuickSale) {
-      navigateToSellerSetup(navigate, Boolean(user));
-      return;
-    }
+    if (redirectBlockedSubmitter(canSubmitQuickSale, navigate)) return;
     if (showValidationErrors(validateStep1Form(form, photoFiles.length), setErrors)) return;
     await generateEstimate();
     setStep(2);
@@ -167,6 +165,7 @@ export const FiresaleQuickSaleForm = () => {
       step={step}
       authPending={authPending}
       canSubmitQuickSale={canSubmitQuickSale}
+      formLocked={formLocked}
       userExists={Boolean(user)}
       form={form}
       errors={errors}

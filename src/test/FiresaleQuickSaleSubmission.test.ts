@@ -83,8 +83,10 @@ describe("quick sale submission helpers", () => {
     expect(navigate).toHaveBeenLastCalledWith("/login");
 
     expect(redirectBlockedSubmitter(true, navigate)).toBe(false);
+    navigate.mockClear();
     expect(redirectBlockedSubmitter(false, navigate)).toBe(true);
-    expect(navigate).toHaveBeenLastCalledWith("/onboarding");
+    expect(navigate).not.toHaveBeenCalled();
+    expect(toastMock.info).toHaveBeenCalledWith("Quick Sale submissions are available only to seller profiles.");
 
     expect(showAuthPendingToast(false)).toBe(false);
     expect(showAuthPendingToast(true)).toBe(true);

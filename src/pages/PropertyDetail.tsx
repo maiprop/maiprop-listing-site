@@ -300,7 +300,7 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
   };
 
   return (
-    <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
+    <div className="min-h-screen bg-background pb-mobile-nav-room lg:pb-0">
       <Helmet>
         <title>{`${title} — mAI prop`}</title>
         <meta name="description" content={ogDescription} />

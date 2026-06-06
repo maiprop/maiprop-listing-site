@@ -364,6 +364,32 @@ describe("useListingForm — handleSubmit", () => {
     expect(navigateMock).toHaveBeenCalledWith("/property/L-1");
   });
 
+  it("posts selected address coordinates with the listing", async () => {
+    const insertMock = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { id: "L-coordinates" }, error: null }),
+      }),
+    });
+    fromMock.mockReturnValueOnce({ insert: insertMock });
+    const { result } = renderHook(() => useListingForm(), { wrapper: wrap });
+    setBaseForm(result);
+    act(() => {
+      result.current.set("address", "14 Voukourestiou");
+      result.current.set("latitude", "37.9779");
+      result.current.set("longitude", "23.7354");
+    });
+
+    await act(async () => {
+      await result.current.handleSubmit();
+    });
+
+    expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({
+      address: "14 Voukourestiou",
+      latitude: 37.9779,
+      longitude: 23.7354,
+    }));
+  });
+
   it("persists uploaded non-cover images after the listing insert succeeds", async () => {
     const listingInsert = vi.fn().mockReturnValue({
       select: vi.fn().mockReturnValue({

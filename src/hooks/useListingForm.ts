@@ -79,6 +79,7 @@ const INITIAL_FORM: ListingFormData = {
   slope: "", zone_type: "", road_type: "", land_use: "",
   distance_from_sea: "", distance_from_city: "",
   address: "", city: "", region: "", postal_code: "",
+  latitude: "", longitude: "",
   cadastre_number: "", enfia_zone: "",
   price: "", auction_starting_bid: "", auction_date: "", auction_court: "", open_house_date: "",
   deposit_months: "", monthly_expenses: "", agent_fee_included: false,
@@ -115,6 +116,13 @@ function toDateTimeLocalValue(value: string | null | undefined) {
   return value.includes("T") ? value.slice(0, 16) : value;
 }
 
+function toOptionalNumber(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 function listingToForm(listing: ListingWithJoins): ListingFormData {
   const next: ListingFormData = {
     ...INITIAL_FORM,
@@ -134,6 +142,8 @@ function listingToForm(listing: ListingWithJoins): ListingFormData {
     city: listing.city ?? "",
     region: listing.region ?? "",
     postal_code: listing.postal_code ?? "",
+    latitude: toFormString(listing.latitude),
+    longitude: toFormString(listing.longitude),
     cadastre_number: listing.cadastre_number ?? "",
     enfia_zone: listing.enfia_zone ?? "",
     auction_date: toDateTimeLocalValue(listing.auction_date),
@@ -414,6 +424,8 @@ export function useListingForm(options?: UseListingFormOptions) {
         address: form.address || undefined,
         region: form.region || undefined,
         postal_code: form.postal_code || undefined,
+        latitude: toOptionalNumber(form.latitude),
+        longitude: toOptionalNumber(form.longitude),
         cadastre_number: form.cadastre_number || undefined,
         enfia_zone: form.enfia_zone || undefined,
         property_type: form.property_type,

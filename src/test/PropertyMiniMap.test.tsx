@@ -151,6 +151,16 @@ describe("PropertyMiniMap", () => {
     expect(document.querySelector("iframe[title='map']")).toBeInTheDocument();
   });
 
+  it("keeps the no-coordinates header responsive on narrow screens", () => {
+    render(<PropertyMiniMap {...baseProps} latitude={undefined} longitude={undefined} />);
+
+    const heading = screen.getByText("Location & Nearby");
+    const header = heading.closest("[data-property-map-header]");
+    expect(header).toHaveClass("flex-wrap");
+    expect(heading).toHaveClass("break-words");
+    expect(screen.getByRole("button", { name: /Open in Maps/i })).toHaveClass("whitespace-nowrap");
+  });
+
   it("renders the SignInForAI fallback when there is no authenticated user", () => {
     useAuthMock.mockReturnValue({ user: null });
     render(<PropertyMiniMap {...baseProps} />);

@@ -48,10 +48,10 @@ export const getSubmitUserId = (user: QuickSaleUser, navigate: NavigateFunction)
   return null;
 };
 
-export const redirectBlockedSubmitter = (canSubmitQuickSale: boolean, navigate: NavigateFunction): boolean => {
+export const redirectBlockedSubmitter = (canSubmitQuickSale: boolean, _navigate: NavigateFunction): boolean => {
   if (canSubmitQuickSale) return false;
   saveSellerIntent();
-  navigate("/onboarding");
+  toast.info("Quick Sale submissions are available only to seller profiles.");
   return true;
 };
 
