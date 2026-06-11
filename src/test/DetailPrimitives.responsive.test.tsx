@@ -19,7 +19,7 @@ describe("DetailPrimitives responsive layout", () => {
     expect(label).toHaveClass("break-words");
   });
 
-  it("keeps section-header badges on one line when the title wraps", () => {
+  it("lets section-header badges drop beneath the title on narrow layouts", () => {
     renderWithProviders(
       <SectionHeader
         icon={Home}
@@ -29,7 +29,7 @@ describe("DetailPrimitives responsive layout", () => {
     );
 
     expect(screen.getByText("Features & Amenities")).toHaveClass("min-w-0");
-    expect(screen.getByTestId("feature-count-badge").parentElement).toHaveClass("whitespace-nowrap");
+    expect(screen.getByTestId("feature-count-badge").parentElement).toHaveClass("w-full");
   });
 
   it("uses a one-column feature grid on narrow screens before switching to two columns", () => {

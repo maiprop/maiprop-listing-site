@@ -4,6 +4,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { LocationInput } from "@/components/index/LocationInput";
 import { LocationSearchField } from "@/components/listings/LocationSearchField";
 import { LocationAutocompleteInput } from "@/components/location/LocationAutocompleteInput";
+import { loadGoogleMapsPlaces } from "@/lib/googleMapsPlaces";
 
 vi.mock("@/lib/config", () => ({
   GOOGLE_MAPS_API_KEY: "maps-key",
@@ -219,6 +220,140 @@ describe("location address suggestions", () => {
       postalCode: "10671",
       latitude: "37.9779",
       longitude: "23.7354",
+    }));
+  });
+
+  it("uses Google Places details in shared address fields when Google is available", async () => {
+    let placeChanged: (() => void) | undefined;
+    vi.stubGlobal("google", {
+      maps: {
+        places: {
+          Autocomplete: vi.fn(function () {
+            return {
+              addListener: vi.fn((_event: string, cb: () => void) => {
+                placeChanged = cb;
+              }),
+              getPlace: vi.fn().mockReturnValue({
+                formatted_address: "Voukourestiou 14, Athens, Greece",
+                geometry: {
+                  location: {
+                    lat: () => 37.9779,
+                    lng: () => 23.7354,
+                  },
+                },
+                address_components: [
+                  { long_name: "Voukourestiou", short_name: "Voukourestiou", types: ["route"] },
+                  { long_name: "14", short_name: "14", types: ["street_number"] },
+                  { long_name: "Athens", short_name: "Athens", types: ["locality"] },
+                  { long_name: "Municipality of Athens", short_name: "Athens", types: ["administrative_area_level_2"] },
+                  { long_name: "10671", short_name: "10671", types: ["postal_code"] },
+                ],
+              }),
+            };
+          }),
+        },
+      },
+    });
+    const onSuggestionSelect = vi.fn();
+
+    function ControlledAddressField() {
+      const [value, setValue] = useState("");
+      return (
+        <>
+          <label htmlFor="google-project-address">Project address</label>
+          <LocationAutocompleteInput
+            id="google-project-address"
+            mode="address"
+            value={value}
+            onChange={setValue}
+            onSuggestionSelect={onSuggestionSelect}
+            inputClassName="border"
+          />
+        </>
+      );
+    }
+
+    render(<ControlledAddressField />);
+    fireEvent.focus(screen.getByLabelText("Project address"));
+    vi.useRealTimers();
+    await waitFor(() => expect(loadGoogleMapsPlaces).toHaveBeenCalled());
+
+    await act(async () => {
+      placeChanged?.();
+    });
+
+    expect(screen.getByLabelText("Project address")).toHaveValue("14 Voukourestiou");
+    expect(onSuggestionSelect).toHaveBeenCalledWith(expect.objectContaining({
+      city: "Athens",
+      municipality: "Municipality of Athens",
+      postalCode: "10671",
+      latitude: "37.9779",
+      longitude: "23.7354",
+    }));
+  });
+
+  it("uses Google Places city suggestions in shared city fields when Google is available", async () => {
+    let placeChanged: (() => void) | undefined;
+    vi.stubGlobal("google", {
+      maps: {
+        places: {
+          Autocomplete: vi.fn(function () {
+            return {
+              addListener: vi.fn((_event: string, cb: () => void) => {
+                placeChanged = cb;
+              }),
+              getPlace: vi.fn().mockReturnValue({
+                formatted_address: "Athens, Greece",
+                geometry: {
+                  location: {
+                    lat: () => 37.9838,
+                    lng: () => 23.7275,
+                  },
+                },
+                address_components: [
+                  { long_name: "Athens", short_name: "Athens", types: ["locality"] },
+                  { long_name: "Municipality of Athens", short_name: "Athens", types: ["administrative_area_level_2"] },
+                ],
+              }),
+            };
+          }),
+        },
+      },
+    });
+    const onSuggestionSelect = vi.fn();
+
+    function ControlledCityField() {
+      const [value, setValue] = useState("");
+      return (
+        <>
+          <label htmlFor="google-project-city">Project city</label>
+          <LocationAutocompleteInput
+            id="google-project-city"
+            mode="city"
+            value={value}
+            onChange={setValue}
+            onSuggestionSelect={onSuggestionSelect}
+            inputClassName="border"
+          />
+        </>
+      );
+    }
+
+    render(<ControlledCityField />);
+    fireEvent.focus(screen.getByLabelText("Project city"));
+    vi.useRealTimers();
+    await waitFor(() => expect(loadGoogleMapsPlaces).toHaveBeenCalled());
+
+    await act(async () => {
+      placeChanged?.();
+    });
+
+    expect(screen.getByLabelText("Project city")).toHaveValue("Athens");
+    expect(onSuggestionSelect).toHaveBeenCalledWith(expect.objectContaining({
+      city: "Athens",
+      municipality: "Municipality of Athens",
+      latitude: "37.9838",
+      longitude: "23.7275",
     }));
   });
 });

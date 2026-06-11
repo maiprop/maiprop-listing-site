@@ -115,23 +115,23 @@ export default function PropertyOwnerCard({
           {ownerIsPro ? (
             <>
               <Button
-                className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2 h-10"
+                className="h-auto min-h-[44px] w-full whitespace-normal bg-gradient-primary border-0 text-center leading-tight text-primary-foreground gap-2"
                 onClick={onContact}
                 disabled={isContactPending}>
                 {isContactPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
                 {isGreek ? "Αποστολή μηνύματος" : "Send Message"}
               </Button>
-              <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" className="border-border gap-1.5 h-9 text-xs">
+              <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2">
+                <Button variant="outline" className="h-auto min-h-[44px] whitespace-normal border-border px-3 py-2 text-center text-xs leading-tight gap-1.5">
                   <Phone className="w-3.5 h-3.5" />{isGreek ? "Κλήση" : "Call"}
                 </Button>
-                <Button variant="outline" className="border-border gap-1.5 h-9 text-xs" onClick={onRequestViewing}>
+                <Button variant="outline" className="h-auto min-h-[44px] whitespace-normal border-border px-3 py-2 text-center text-xs leading-tight gap-1.5" onClick={onRequestViewing}>
                   <Calendar className="w-3.5 h-3.5" />{isGreek ? "Επίσκεψη" : "Viewing"}
                 </Button>
               </div>
               <Button
                 variant="outline"
-                className="w-full border-border gap-2 h-9 text-xs"
+                className="h-auto min-h-[44px] w-full whitespace-normal border-border px-3 py-2 text-center text-xs leading-tight gap-2"
                 onClick={onRequestVideoViewing}>
                 <Video className="w-3.5 h-3.5" />{isGreek ? "Βιντεοκλήση" : "Video Viewing"}
                 {!canVideoView && <Lock className="w-3 h-3 ml-0.5 opacity-60" />}
