@@ -36,6 +36,7 @@ import { RegisterInterestCard } from "@/components/new-build/RegisterInterestCar
 import { tFallback, tInterpolate } from "@/lib/i18nFallback";
 import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 import { fetchPublicApi } from "@/lib/publicApi";
+import { getListingDetailPath, shouldUseNewBuildRoute } from "@/lib/listingRoutes";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const EnergyBadge = ({ cls }: { cls: string }) => {
@@ -151,6 +152,8 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
     },
     enabled: !!id,
   });
+  const canonicalDetailPath = listing ? getListingDetailPath(listing) : null;
+  const isCanonicalNewBuild = listing ? shouldUseNewBuildRoute(listing) : false;
 
   const handleRegisterInterest = async (form: RegisterInterestForm) => {
     const ownerId = listing?.owner_id;
@@ -181,7 +184,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
   };
 
   useEffect(() => {
-    if (!listing || !user) return;
+    if (!listing || !user || !isCanonicalNewBuild) return;
     setAiInsightsLoading(true);
     supabase.functions.invoke("property-valuation", {
       body: {
@@ -216,7 +219,12 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
       }
     }).finally(() => setAiInsightsLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listing?.id, user]);
+  }, [listing?.id, user, isCanonicalNewBuild]);
+
+  useEffect(() => {
+    if (!listing || isCanonicalNewBuild || !canonicalDetailPath) return;
+    navigate(canonicalDetailPath, { replace: true });
+  }, [canonicalDetailPath, isCanonicalNewBuild, listing, navigate]);
 
   if (isLoading) return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -233,6 +241,15 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
       <div className="pt-24 text-center px-4">
         <p className="text-muted-foreground">{tr("property.errorLoad", "Property not found.")}</p>
         <Link to="/listings"><Button variant="outline" className="mt-4">{tr("property.backToListings", "Back to listings")}</Button></Link>
+      </div>
+    </div>
+  );
+
+  if (!isCanonicalNewBuild) return (
+    <div className="min-h-screen bg-background flex flex-col">
+      <Navbar />
+      <div className="flex-1 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     </div>
   );
