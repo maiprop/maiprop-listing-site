@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.9.14](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.13...v1.9.14) (2026-06-11)
+
+
+### Bug Fixes
+
+* clear stale project coords and harden quick sale ([#298](https://github.com/maiprop/maiprop-listing-site/issues/298)) ([27e6849](https://github.com/maiprop/maiprop-listing-site/commit/27e6849dbb3ae883cdd3a6042f8d1a898e203b74))
+* keep listing detail loadable after uploads ([fff572e](https://github.com/maiprop/maiprop-listing-site/commit/fff572e81e3b4cb192b50aa858862d8d61a52d8e))
+* keep renovated sale listings off new-build routes ([ea6af48](https://github.com/maiprop/maiprop-listing-site/commit/ea6af4867219d122083c1441b8cb79899223d871))
+* polish location inputs and mobile property UX ([#300](https://github.com/maiprop/maiprop-listing-site/issues/300)) ([229937f](https://github.com/maiprop/maiprop-listing-site/commit/229937f4df6b871d20664cbbbe76160967ac191b))
+* preserve listing maps and mobile property flows ([e46d966](https://github.com/maiprop/maiprop-listing-site/commit/e46d9668c63e425e7791708f1eb9f39844559819))
+* preserve supabase edge client binding ([#290](https://github.com/maiprop/maiprop-listing-site/issues/290)) ([facd756](https://github.com/maiprop/maiprop-listing-site/commit/facd756218b2e0486710db78d47c92fe2583ea44))
+* restore listing address suggestions ([b35c0ca](https://github.com/maiprop/maiprop-listing-site/commit/b35c0caad2a9f958b53cc079d717f75bd1f32228))
+
 ## [1.9.13](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.12...v1.9.13) (2026-06-05)
 
 
