@@ -696,15 +696,23 @@ const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates aucti
 
               {isPro ? (
                 <PropertyValuation
+                  listingId={id}
                   title={title}
                   city={city}
                   address={address ?? undefined}
                   price={bid}
                   sqm={sqm && sqm > 0 ? sqm : 1}
+                  bedrooms={bedrooms}
+                  bathrooms={bathrooms}
                   propertyType={propertyType}
                   listingType="auction"
+                  floor={floor}
+                  totalFloors={totalFloors}
                   yearBuilt={yearBuilt}
+                  energyClass={energyClass}
                   region={region}
+                  latitude={lat}
+                  longitude={lng}
                   ownershipStatus={ownershipStatus ?? undefined}
                   ownershipPercentage={ownershipPct ?? undefined}
                 />

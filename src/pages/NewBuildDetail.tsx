@@ -188,11 +188,14 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
     setAiInsightsLoading(true);
     supabase.functions.invoke("property-valuation", {
       body: {
+        listingId: listing.id,
         title: listing.title,
         city: listing.city,
         address: listing.address,
         price: Number(listing.price),
         sqm: Number(listing.sqm),
+        latitude: listing.latitude != null ? Number(listing.latitude) : undefined,
+        longitude: listing.longitude != null ? Number(listing.longitude) : undefined,
         bedrooms: listing.bedrooms,
         bathrooms: listing.bathrooms,
         propertyType: listing.property_type,
@@ -605,6 +608,8 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                   hasGarden={listing.has_garden}
                   region={listing.region}
                   condition={listing.construction_status}
+                  latitude={listing.latitude != null ? Number(listing.latitude) : undefined}
+                  longitude={listing.longitude != null ? Number(listing.longitude) : undefined}
                 />
               )}
             </div>

@@ -3,11 +3,16 @@ import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.t
 import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
 import { createLogger } from "../_shared/logger.ts";
+import { buildVettedAnswerRules } from "../_shared/aiSafety.ts";
 
 const log = createLogger("property-chat");
 
 const BUCKET = "property-chat";
 const chatLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000, failClosed: true });
+const VETTED_ANSWER_RULES = buildVettedAnswerRules({
+  scope: "the property chat assistant",
+  timeSensitiveTopics: ["school catchments", "business hours"],
+});
 
 function toSseChunk(text: string): string {
   return `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\ndata: [DONE]\n\n`;
@@ -91,6 +96,8 @@ PROPERTY CONTEXT:
 - Neighbourhood: ${sanitize(propertyContext.region ?? propertyContext.city)}
 
 RESPONSE RULES — follow strictly:
+${VETTED_ANSWER_RULES}
+
 - Be extremely concise. No filler phrases ("Great question!", "Certainly!").
 - Use bullet points for any list of 2+ facts.
 - Max 3–5 bullets per answer unless the user asks for more detail.
@@ -100,6 +107,8 @@ RESPONSE RULES — follow strictly:
       : `You are an expert Greek real estate AI assistant. Help users with property questions, market insights, legal aspects, and neighbourhood information in Greece.
 
 RESPONSE RULES — follow these strictly:
+${VETTED_ANSWER_RULES}
+
 - Be extremely concise. No filler phrases (e.g. "Great question!", "Certainly!", "Of course!").
 - Use bullet points (- item) for any list of 2+ facts.
 - Max 3–5 bullets per answer unless the user explicitly asks for more detail.

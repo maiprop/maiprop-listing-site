@@ -141,11 +141,14 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
       try {
         // Valuation
         const valBody = {
+          listingId: raw.id,
           title: listing.title,
           city: raw.city,
           address: raw.address,
           price: Number(raw.price),
           sqm: Number(raw.sqm),
+          latitude: raw.latitude != null ? Number(raw.latitude) : undefined,
+          longitude: raw.longitude != null ? Number(raw.longitude) : undefined,
           bedrooms: raw.bedrooms,
           bathrooms: raw.bathrooms,
           propertyType: raw.property_type,
@@ -164,7 +167,14 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
         const [valRes, nbRes] = await Promise.allSettled([
           supabase.functions.invoke("property-valuation", { body: valBody }),
           supabase.functions.invoke("neighbourhood-report", {
-            body: { city: raw.city, address: raw.address, latitude: raw.latitude, longitude: raw.longitude, propertyType: raw.property_type },
+            body: {
+              city: raw.city,
+              address: raw.address,
+              lat: raw.latitude != null ? Number(raw.latitude) : undefined,
+              lng: raw.longitude != null ? Number(raw.longitude) : undefined,
+              propertyType: raw.property_type,
+              listingId: raw.id,
+            },
           }),
         ]);
 

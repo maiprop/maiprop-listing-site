@@ -3,11 +3,16 @@ import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.t
 import { hasAIProviderCredentials, openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
 import { createLogger } from "../_shared/logger.ts";
+import { buildVettedAnswerRules } from "../_shared/aiSafety.ts";
 
 const log = createLogger("listing-ai-assist");
 
 const BUCKET = "listing-ai-assist";
 const listingAiLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000, failClosed: true });
+const VETTED_LISTING_RULES = buildVettedAnswerRules({
+  scope: "listing creation assistance",
+  timeSensitiveTopics: ["market demand", "area amenities", "property availability"],
+});
 
 const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, provider errors, and response shaping.
   const corsPreflightResponse = handleCors(req);
@@ -17,13 +22,14 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
   try {
     const body = await req.json().catch(() => ({}));
     const { type, property } = body;
-    if (!hasAIProviderCredentials()) throw new Error("AI provider key required");
 
     if (type === "ping") {
       return new Response(JSON.stringify({ ok: true, message: "listing-ai-assist is available" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    if (!hasAIProviderCredentials()) throw new Error("AI provider key required");
 
     // Require authenticated user + per-user quota for description/price
     // (ping is excluded from both since it's a free health check).
@@ -36,7 +42,11 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
     let systemPrompt = "";
     let userPrompt = "";
     if (type === "description") {
-      systemPrompt = `You are a professional Greek real estate copywriter. Write compelling, accurate, and SEO-friendly property descriptions in English for listings on a Greek property portal. Be enthusiastic but factual. Include highlights, location benefits, and investment potential where relevant. Write in 2-3 short paragraphs (120-180 words total). Do NOT include a title. Do NOT add asterisks or markdown.`;
+      systemPrompt = `You are a professional Greek real estate copywriter. Write compelling, accurate, and SEO-friendly property descriptions in English for listings on a Greek property portal.
+
+${VETTED_LISTING_RULES}
+
+Be enthusiastic but factual. Include only highlights, location benefits, and investment potential supported by the supplied property data or clearly framed as general. Write in 2-3 short paragraphs (120-180 words total). Do NOT include a title. Do NOT add asterisks or markdown.`;
       userPrompt = `Write a listing description for this property:
 Type: ${property.property_type} (${property.listing_type})
 Location: ${property.city}${property.address ? `, ${property.address}` : ""}
@@ -49,7 +59,11 @@ ${property.energy_class ? `Energy class: ${property.energy_class}` : ""}
 ${property.features?.length ? `Features: ${property.features.join(", ")}` : ""}
 ${property.condition ? `Condition: ${property.condition}` : ""}`;
     } else if (type === "price") {
-      systemPrompt = `You are a Greek real estate market expert and valuation specialist. Provide a realistic market price estimate for Greek properties in 2025. Return ONLY valid JSON with this structure: {"min": number, "max": number, "suggested": number, "confidence": "low"|"medium"|"high", "reasoning": "brief 1-2 sentence explanation"}. No markdown, no extra text.`;
+      systemPrompt = `You are a Greek real estate market expert and valuation specialist. Provide a cautious market price estimate for Greek properties using the supplied property facts and stable market knowledge.
+
+${VETTED_LISTING_RULES}
+
+Return ONLY valid JSON with this structure: {"min": number, "max": number, "suggested": number, "confidence": "low"|"medium"|"high", "reasoning": "brief 1-2 sentence explanation naming missing data or uncertainty"}. No markdown, no extra text.`;
       userPrompt = `Estimate the market price for this Greek property:
 Type: ${property.property_type} (${property.listing_type})
 Location: ${property.city}${property.region ? `, ${property.region}` : ""}

@@ -4,11 +4,16 @@ import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.t
 import { openAIChatCompletion } from "../_shared/openai.ts";
 import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
 import { createLogger } from "../_shared/logger.ts";
+import { buildVettedAnswerRules } from "../_shared/aiSafety.ts";
 
 const log = createLogger("pro-ai-tools");
 
 const BUCKET = "pro-ai-tools";
 const proAiLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 15, windowMs: 60_000, failClosed: true });
+const VETTED_ANSWER_RULES = `\n\n${buildVettedAnswerRules({
+  scope: "specialist pro assistant tools",
+  timeSensitiveTopics: ["construction costs", "professional availability", "planning timelines"],
+})}`;
 
 const requireAuth = async (req: Request): Promise<{ error: Response | null; userId: string | null }> => {
   const corsHeaders = getCorsHeaders(req);
@@ -103,7 +108,7 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
   try {
     const { messages, groupId } = await req.json();
 
-    const systemContent = systemPrompts[groupId] || systemPrompts["legal"];
+    const systemContent = `${systemPrompts[groupId] || systemPrompts["legal"]}${VETTED_ANSWER_RULES}`;
 
     const response = await openAIChatCompletion({
       messages: [

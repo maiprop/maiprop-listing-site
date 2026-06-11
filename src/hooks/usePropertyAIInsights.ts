@@ -86,23 +86,35 @@ export function usePropertyAIInsights(
     try {
       const { data, error: fnErr } = await supabaseClient.functions.invoke("property-valuation", {
         body: {
+          listingId: snapshot.id,
           title: snapshot.title,
           city: snapshot.city,
           address: snapshot.address,
           price: Number(snapshot.price),
           sqm: Number(snapshot.sqm),
+          latitude: snapshot.latitude != null ? Number(snapshot.latitude) : undefined,
+          longitude: snapshot.longitude != null ? Number(snapshot.longitude) : undefined,
           bedrooms: snapshot.bedrooms,
           bathrooms: snapshot.bathrooms,
           propertyType: snapshot.property_type,
           listingType: snapshot.listing_type,
           floor: snapshot.floor,
+          totalFloors: snapshot.total_floors,
           yearBuilt: snapshot.year_built,
+          heatingSystem: snapshot.heating_system,
           energyClass: snapshot.energy_class,
           pricePerSqm: snapshot.price_per_sqm ? Number(snapshot.price_per_sqm) : undefined,
           hasParking: snapshot.has_parking,
           hasPool: snapshot.has_pool,
           hasElevator: snapshot.has_elevator,
+          hasGarden: snapshot.has_garden,
+          hasStorage: snapshot.has_storage,
+          hasBalcony: snapshot.has_balcony,
+          hasView: snapshot.has_view,
+          hasFurnished: snapshot.has_furnished,
           region: snapshot.region,
+          description: snapshot.description,
+          tags: snapshot.tags,
           ownershipStatus: (() => {
             const t = (snapshot as ListingWithJoins).tags ?? [];
             const tag = t.find((x) => x.startsWith("ownership:") && !x.startsWith("ownership_pct:"));

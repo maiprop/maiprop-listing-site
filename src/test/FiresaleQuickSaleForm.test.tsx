@@ -339,7 +339,14 @@ describe("FiresaleQuickSaleForm", () => {
     // generateEstimate is fired and reaches the supabase invoke + step 2.
     await waitFor(() =>
       expect(functionsInvokeMock).toHaveBeenCalledWith("property-valuation", {
-        body: { property_type: "apartment", sqm: 95 },
+        body: expect.objectContaining({
+          city: "Athens",
+          address: "Kolonaki 12, Athens",
+          propertyType: "apartment",
+          price: 350000,
+          sqm: 95,
+          yearBuilt: 2010,
+        }),
       }),
     );
     // Step indicator advances to 2/2.

@@ -1,4 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { buildVettedAnswerRules } from "../_shared/aiSafety.ts";
+import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 
 const requireEnv = (key: string): string => {
   const value = Deno.env.get(key);
@@ -8,11 +10,29 @@ const requireEnv = (key: string): string => {
 
 type LeadRecord = {
   id?: string;
-  full_name: string;
-  email?: string;
-  nationality: string;
-  investment_budget?: number;
-  preferred_location?: string;
+  full_name?: string | null;
+  name?: string | null;
+  email?: string | null;
+  nationality?: string | null;
+  investment_budget?: number | null;
+  preferred_location?: string | null;
+  message?: string | null;
+  source?: string | null;
+  status?: string | null;
+  followup_step?: number | null;
+};
+
+type LeadSourceTable = "marketing_leads" | "leads";
+
+type LeadLookupClient = {
+  from: (table: LeadSourceTable) => {
+    select: (columns: string) => {
+      eq: (
+        column: string,
+        value: unknown,
+      ) => { maybeSingle: () => PromiseLike<{ data?: unknown; error?: unknown }> };
+    };
+  };
 };
 
 type PropertyCard = {
@@ -63,6 +83,68 @@ function escapeHtml(text: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function nonEmpty(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function leadFullName(lead: LeadRecord): string {
+  return nonEmpty(lead.full_name) ?? nonEmpty(lead.name) ?? "there";
+}
+
+function leadFirstName(lead: LeadRecord): string {
+  return leadFullName(lead).split(/\s+/)[0] || "there";
+}
+
+function leadNationality(lead: LeadRecord): string {
+  return nonEmpty(lead.nationality) ?? "prospective buyer";
+}
+
+function leadPreferredLocation(lead: LeadRecord): string {
+  return nonEmpty(lead.preferred_location) ?? "Greece";
+}
+
+function leadBudget(lead: LeadRecord): number {
+  const budget = Number(lead.investment_budget);
+  return Number.isFinite(budget) && budget > 0 ? budget : 250000;
+}
+
+function normalizeFollowupStep(requestedStep: unknown, lead: LeadRecord): number | null {
+  if (requestedStep === undefined || requestedStep === null || requestedStep === "") {
+    const currentStep = Number(lead.followup_step ?? 0);
+    const nextStep = Number.isFinite(currentStep) ? Math.trunc(currentStep) + 1 : 1;
+    return Math.min(Math.max(nextStep, 1), 3);
+  }
+
+  const parsed = Number(requestedStep);
+  if (!Number.isInteger(parsed) || ![1, 2, 3].includes(parsed)) return null;
+  return parsed;
+}
+
+async function findLead(
+  supabase: LeadLookupClient,
+  leadId: string,
+): Promise<{ lead: LeadRecord | null; source: LeadSourceTable | null; error: unknown }> {
+  const marketing = await supabase
+    .from("marketing_leads")
+    .select("*")
+    .eq("id", leadId)
+    .maybeSingle();
+  if (!marketing.error && marketing.data) {
+    return { lead: marketing.data as LeadRecord, source: "marketing_leads", error: null };
+  }
+
+  const crm = await supabase
+    .from("leads")
+    .select("*")
+    .eq("id", leadId)
+    .maybeSingle();
+  if (!crm.error && crm.data) {
+    return { lead: crm.data as LeadRecord, source: "leads", error: null };
+  }
+
+  return { lead: null, source: null, error: marketing.error ?? crm.error ?? null };
 }
 
 function brandWrap(
@@ -152,9 +234,8 @@ function textToHtml(text: string): string {
 async function generateStep1(
   lead: LeadRecord,
   supabase: SupabaseClientLike,
-  LOVABLE_API_KEY: string,
 ) {
-  const budget = Number(lead.investment_budget) || 250000;
+  const budget = leadBudget(lead);
 
   // Get different properties - order by date_added to show newer ones
   const { data: props } = await supabase
@@ -169,26 +250,26 @@ async function generateStep1(
 
   const topProps = props || [];
 
-  const budgetStr = `€${Number(lead.investment_budget).toLocaleString()}`;
+  const budgetStr = `€${budget.toLocaleString()}`;
   const prompt = `You are mAI Prop's investment advisor. Write a SHORT follow-up email (max 8 lines) for a Golden Visa lead who hasn't responded yet.
 
-Lead: ${escapeHtml(lead.full_name)}, ${escapeHtml(lead.nationality)}, budget ${budgetStr}, prefers ${escapeHtml(lead.preferred_location || "Greece")}.
+Lead: ${escapeHtml(leadFullName(lead))}, ${escapeHtml(leadNationality(lead))}, budget ${budgetStr}, prefers ${escapeHtml(leadPreferredLocation(lead))}.
 
 CRITICAL: Centre the entire email around their ${budgetStr} budget:
 - Open by referencing their specific budget and what it unlocks right now
-- Explain what ${budgetStr} can get them: apartment size, location tier, expected rental yield
-- If budget is ≥€250k mention Golden Visa eligibility at this price point
-- If budget is <€250k mention high-yield renovation flips or rental income strategies
-- Mention that properties in this price range are moving fast
+- Explain cautiously what ${budgetStr} may support: property type, location tier, and realistic rental-yield range only if framed as an estimate
+- If budget is at or above the common Golden Visa threshold, say eligibility must be checked against current official rules and property-specific criteria
+- If budget is below the common Golden Visa threshold, mention alternative income or renovation strategies without implying residency eligibility
+- Do not claim properties are moving fast unless supported by the provided property data
 - End with invitation to book a 15-minute call to discuss ${budgetStr}-range options
 
 Do NOT list specific property details. Property cards with images will appear below.
 Do NOT use markdown. Plain text only. Sign off: "The mAI Prop Team"`;
 
-  const aiText = await callAI(LOVABLE_API_KEY, prompt);
+  const aiText = await callAI(prompt);
   const htmlContent = textToHtml(aiText);
   const cardsHtml = buildPropertyCardsHtml(topProps);
-  const firstName = escapeHtml(lead.full_name.split(" ")[0]);
+  const firstName = escapeHtml(leadFirstName(lead));
 
   // Process overview section for Step 1
   const processHtml = `
@@ -243,9 +324,8 @@ Do NOT use markdown. Plain text only. Sign off: "The mAI Prop Team"`;
 async function generateStep2(
   lead: LeadRecord,
   supabase: SupabaseClientLike,
-  LOVABLE_API_KEY: string,
 ) {
-  const budget = Number(lead.investment_budget) || 250000;
+  const budget = leadBudget(lead);
 
   const { data: props } = await supabase
     .from("properties")
@@ -288,26 +368,26 @@ async function generateStep2(
     })
     .join("");
 
-  const budgetStr = `€${Number(lead.investment_budget).toLocaleString()}`;
+  const budgetStr = `€${budget.toLocaleString()}`;
   const prompt = `You are mAI Prop's senior investment advisor. Write a personalized follow-up email (max 10 lines) for a Golden Visa lead.
 
-Lead: ${escapeHtml(lead.full_name)}, ${escapeHtml(lead.nationality)}, budget ${budgetStr}, prefers ${escapeHtml(lead.preferred_location || "Greece")}.
+Lead: ${escapeHtml(leadFullName(lead))}, ${escapeHtml(leadNationality(lead))}, budget ${budgetStr}, prefers ${escapeHtml(leadPreferredLocation(lead))}.
 
 CRITICAL: Make the entire email a ${budgetStr} investment breakdown:
 - Open with: "We've analysed what ${budgetStr} can achieve in the Greek property market"
-- Break down how their budget maps to: property acquisition, renovation costs, legal fees, and expected returns
-- Mention specific ROI projections for the ${budgetStr} range (e.g. rental yield %, capital appreciation)
-- If budget ≥€250k: emphasise Golden Visa + passive income combo at this tier
-- If budget <€250k: focus on high-yield renovation projects and rental returns
+- Break down how their budget may map to property acquisition, renovation costs, legal fees, and expected returns using cautious ranges
+- Mention only broad ROI/rental-yield ranges and label them as estimates, not guarantees
+- If budget is at or above the common Golden Visa threshold, explain that residency eligibility and passive-income assumptions require current official/legal verification
+- If budget is below the common Golden Visa threshold, focus on renovation and rental-return strategies without implying residency eligibility
 - Mention our end-to-end service covers everything within their budget
 - Invite them for a video call to walk through the ${budgetStr} investment plan
 
 Do NOT list specific property details. Detailed property cards appear below.
 Do NOT use markdown. Plain text only. Sign off: "The mAI Prop Team"`;
 
-  const aiText = await callAI(LOVABLE_API_KEY, prompt);
+  const aiText = await callAI(prompt);
   const htmlContent = textToHtml(aiText);
-  const firstName = escapeHtml(lead.full_name.split(" ")[0]);
+  const firstName = escapeHtml(leadFirstName(lead));
 
   const fullContent =
     htmlContent +
@@ -329,31 +409,30 @@ Do NOT use markdown. Plain text only. Sign off: "The mAI Prop Team"`;
 async function generateStep3(
   lead: LeadRecord,
   _supabase: SupabaseClientLike,
-  LOVABLE_API_KEY: string,
 ) {
-  const firstName = escapeHtml(lead.full_name.split(" ")[0]);
+  const firstName = escapeHtml(leadFirstName(lead));
 
-  const budgetStr = `€${Number(lead.investment_budget).toLocaleString()}`;
+  const budgetStr = `€${leadBudget(lead).toLocaleString()}`;
   const prompt = `You are mAI Prop's Golden Visa specialist. Write a compelling email (max 12 lines) about the Greek Golden Visa benefits for a lead who hasn't converted yet.
 
-Lead: ${escapeHtml(lead.full_name)}, ${escapeHtml(lead.nationality)}, budget ${budgetStr}.
+Lead: ${escapeHtml(leadFullName(lead))}, ${escapeHtml(leadNationality(lead))}, budget ${budgetStr}.
 
 CRITICAL: Frame every benefit through the lens of their ${budgetStr} budget:
 Cover these benefits with bullet points (use • character), tying each to their budget:
-• EU Residency — at ${budgetStr}, they qualify for full Schengen access across 27 countries
-• Family Inclusion — their ${budgetStr} investment covers the whole family (spouse, children, parents)
-• Strong Returns — at this price point, expect X% rental yield + capital appreciation
-• Fast Processing — from signing to residency in 6-9 months
-• No Minimum Stay — earn returns on their ${budgetStr} property without relocating
+• EU Residency — say ${budgetStr} may support a route only if current official Golden Visa thresholds and property criteria are met
+• Family Inclusion — say family inclusion rules must be verified with a qualified Greek immigration lawyer
+• Potential Returns — use cautious estimated rental-yield language, never guaranteed appreciation
+• Processing Timeline — describe timing as variable and subject to official processing
+• Minimum Stay — say stay requirements can change and must be verified
 
 After the bullets, add 2-3 lines about:
-- The minimum threshold is rising — their ${budgetStr} budget qualifies NOW but may not later
-- At current prices, ${budgetStr} buys significantly more than it will in 12 months
-- Final invitation to lock in their ${budgetStr} investment before thresholds increase
+- Golden Visa thresholds and qualifying zones can change, so current official/legal verification matters
+- A call can compare currently available properties against their ${budgetStr} goals
+- Final invitation to review their ${budgetStr} plan with the team
 
 Do NOT use markdown formatting. Use • for bullets. Plain text only. Sign off: "The mAI Prop Team"`;
 
-  const aiText = await callAI(LOVABLE_API_KEY, prompt);
+  const aiText = await callAI(prompt);
   const htmlContent = textToHtml(aiText);
 
   // Add a visual benefits summary section
@@ -406,32 +485,37 @@ Do NOT use markdown formatting. Use • for bullets. Plain text only. Sign off: 
   };
 }
 
-async function callAI(apiKey: string, prompt: string): Promise<string> {
+const FOLLOWUP_EMAIL_SYSTEM_PROMPT = `You write ultra-concise, professional emails for a luxury Greek real estate firm. Output only the email body. No subject line. No markdown.
+
+${buildVettedAnswerRules({
+  scope: "automated lead follow-up emails",
+  timeSensitiveTopics: [
+    "Golden Visa thresholds",
+    "residency rules",
+    "rental yields",
+    "capital appreciation",
+    "lead availability",
+  ],
+})}
+
+Email-specific rules:
+- Do not create urgency from unsupported claims such as live scarcity, fast-moving stock, rising thresholds, or guaranteed returns.
+- Treat Golden Visa, tax, legal, and residency claims as conditional and recommend official/legal verification.
+- Use the lead and property data as context; do not invent property details, exact market data, or exact ROI.`;
+
+async function callAI(prompt: string): Promise<string> {
   try {
-    const response = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash-lite",
-          messages: [
-            {
-              role: "system",
-              content:
-                "You write ultra-concise, professional emails for a luxury real estate firm. Output only the email body. No subject line. No markdown.",
-            },
-            { role: "user", content: prompt },
-          ],
-        }),
-      },
-    );
+    const response = await openAIChatCompletion({
+      messages: [
+        { role: "system", content: FOLLOWUP_EMAIL_SYSTEM_PROMPT },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.45,
+      max_tokens: 700,
+    });
     if (!response.ok) throw new Error(`AI error: ${response.status}`);
     const data = await response.json();
-    return data.choices?.[0]?.message?.content?.trim() || "";
+    return readOpenAITextContent(data).trim();
   } catch (e) {
     console.error("AI call failed:", e);
     return "";
@@ -487,7 +571,7 @@ Deno.serve(async (req) => {
     }
     // ────────────────────────────────────────────────────────────────────────
 
-    const { lead_id, step, preview_only } = await req.json();
+    const { lead_id, step: requestedStep, preview_only } = await req.json();
 
     if (!lead_id || typeof lead_id !== "string") {
       return new Response(JSON.stringify({ error: "Missing lead_id" }), {
@@ -496,7 +580,20 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (![1, 2, 3].includes(step)) {
+    const supabaseUrl = requireEnv("SUPABASE_URL");
+    const supabaseKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const { lead, source } = await findLead(supabase as unknown as LeadLookupClient, lead_id);
+    if (!lead || !source) {
+      return new Response(JSON.stringify({ error: "Lead not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const step = normalizeFollowupStep(requestedStep, lead);
+    if (!step) {
       return new Response(
         JSON.stringify({ error: "Step must be 1, 2, or 3" }),
         {
@@ -506,23 +603,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const supabaseUrl = requireEnv("SUPABASE_URL");
-    const supabaseKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    const { data: lead, error: dbError } = await supabase
-      .from("leads")
-      .select("*")
-      .eq("id", lead_id)
-      .single();
-    if (dbError || !lead) {
-      return new Response(JSON.stringify({ error: "Lead not found" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const BREVO_API_KEY = Deno.env.get("brevo");
+    const BREVO_API_KEY = Deno.env.get("BREVO_API_KEY") ?? Deno.env.get("brevo");
     if (!BREVO_API_KEY && !preview_only) {
       return new Response(
         JSON.stringify({ error: "Email service not configured" }),
@@ -532,22 +613,26 @@ Deno.serve(async (req) => {
         },
       );
     }
-
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") || "";
+    if (!lead.email && !preview_only) {
+      return new Response(JSON.stringify({ error: "Lead email is missing" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     let result: { subject: string; body: string };
     const propertySupabase = supabase as unknown as SupabaseClientLike;
 
     if (step === 1) {
-      result = await generateStep1(lead, propertySupabase, LOVABLE_API_KEY);
+      result = await generateStep1(lead, propertySupabase);
     } else if (step === 2) {
-      result = await generateStep2(lead, propertySupabase, LOVABLE_API_KEY);
+      result = await generateStep2(lead, propertySupabase);
     } else {
-      result = await generateStep3(lead, propertySupabase, LOVABLE_API_KEY);
+      result = await generateStep3(lead, propertySupabase);
     }
     // Fallback if AI failed
     if (!result.body) {
-      const firstName = escapeHtml(lead.full_name.split(" ")[0]);
+      const firstName = escapeHtml(leadFirstName(lead));
       result = {
         subject: `${firstName}, an update from mAI Prop`,
         body: brandWrap(
@@ -590,7 +675,7 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         sender: { name: "mAI Prop", email: "kr@maiprop.co" },
-        to: [{ email: lead.email, name: lead.full_name }],
+        to: [{ email: lead.email, name: leadFullName(lead) }],
         subject: result.subject,
         htmlContent: result.body,
       }),
@@ -606,14 +691,23 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Update followup_step and mark as contacted if still new
-    await supabase
-      .from("leads")
-      .update({
-        followup_step: step,
-        ...(lead.status === "new" ? { status: "contacted" } : {}),
-      })
-      .eq("id", lead_id);
+    if (source === "marketing_leads") {
+      await supabase
+        .from("marketing_leads")
+        .update({
+          followup_step: step,
+          ...(lead.status === "new" ? { status: "contacted" } : {}),
+        })
+        .eq("id", lead_id);
+    } else {
+      await supabase
+        .from("leads")
+        .update({
+          follow_up_at: new Date().toISOString(),
+          ...(lead.status === "new" ? { status: "contacted" } : {}),
+        })
+        .eq("id", lead_id);
+    }
 
     return new Response(
       JSON.stringify({ success: true, step, email_id: emailData.id }),

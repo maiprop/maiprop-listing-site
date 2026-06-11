@@ -44,9 +44,10 @@ Deno.serve(async (req) => {
     const now = new Date();
     const results: { step: number; success: boolean; error?: string }[] = [];
 
-    // Fetch all non-closed leads that haven't completed all 3 followups
+    // Fetch all non-closed marketing leads that haven't completed all 3 followups.
+    // The generic CRM `leads` table does not have `full_name` or `followup_step`.
     const { data: leads, error } = await supabase
-      .from("leads")
+      .from("marketing_leads")
       .select("id, full_name, email, created_at, followup_step, status")
       .neq("status", "closed")
       .lt("followup_step", 3)

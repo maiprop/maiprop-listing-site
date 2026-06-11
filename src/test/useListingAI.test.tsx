@@ -122,6 +122,17 @@ describe("useListingAI > handleAiPrice", () => {
     expect(result.current.aiPriceSuggestion).toEqual({ min: 200_000, max: 250_000, suggested: 225_000 });
   });
 
+  it("parses fenced JSON content into aiPriceSuggestion", async () => {
+    invokeMock.mockResolvedValue({
+      data: { content: "```json\n{\"min\":200000,\"max\":250000,\"suggested\":225000}\n```" },
+      error: null,
+    });
+    const set = vi.fn();
+    const { result } = renderHook(() => useListingAI(baseForm as never, set));
+    await act(async () => { await result.current.handleAiPrice(); });
+    expect(result.current.aiPriceSuggestion).toEqual({ min: 200_000, max: 250_000, suggested: 225_000 });
+  });
+
   it("clears any previous suggestion before invoking", async () => {
     // First call writes a suggestion …
     invokeMock.mockResolvedValueOnce({

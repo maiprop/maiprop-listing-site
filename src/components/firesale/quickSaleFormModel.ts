@@ -62,7 +62,7 @@ export type QuickSaleFormValues = {
 export type QuickSaleErrors = Record<string, string>;
 export type QuickSaleProfile = { display_name?: string | null; first_name?: string | null; phone?: string | null; role?: string | null } | null;
 export type QuickSaleUser = { id: string; email?: string | null } | null;
-export type RemoteEstimateData = { estimated_value?: number | null; error?: string };
+export type RemoteEstimateData = { estimatedValue?: number | null; estimated_value?: number | null; error?: string };
 export type ErrorSetter = (errors: QuickSaleErrors) => void;
 export type EstimateSetter = (estimate: number) => void;
 export type QuickSaleFieldUpdater = (key: keyof QuickSaleFormValues, value: string) => void;

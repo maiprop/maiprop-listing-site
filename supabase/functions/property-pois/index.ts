@@ -3,11 +3,16 @@ import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.t
 import { hasAIProviderCredentials, openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
 import { createLogger } from "../_shared/logger.ts";
+import { buildVettedAnswerRules } from "../_shared/aiSafety.ts";
 
 const log = createLogger("property-pois");
 
 const BUCKET = "property-pois";
 const poisLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000, failClosed: true });
+const VETTED_POI_RULES = buildVettedAnswerRules({
+  scope: "nearby points-of-interest estimates",
+  timeSensitiveTopics: ["business hours", "school names", "transit stops", "healthcare facilities", "shop availability"],
+});
 
 type FallbackPoi = {
   name: string;
@@ -79,7 +84,9 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
       );
     }
 
-    const prompt = `You are a Greek real estate assistant. Given a property at address "${address}" in ${city}, Greece (coordinates: ${lat}, ${lng}), generate exactly 12 nearby points of interest that a prospective buyer would care about.
+    const prompt = `You are a Greek real estate assistant. Given a property at address "${address}" in ${city}, Greece (coordinates: ${lat}, ${lng}), generate up to 12 cautious nearby points-of-interest estimates that a prospective buyer would care about.
+
+${VETTED_POI_RULES}
 
 Return ONLY valid JSON. Use this example shape exactly:
 {
@@ -95,10 +102,10 @@ Return ONLY valid JSON. Use this example shape exactly:
 }
 
 Rules:
-- Use real-sounding Greek place names relevant to ${city}
+- Do not invent exact school, business, transit, hospital, or park names. Use a precise real name only if it is a stable, widely known landmark for the supplied area; otherwise use generic labels such as "Nearby primary school" or "${city} transit stop".
 - Allowed categories: school, transit, cafe, hospital, shopping, park
 - Include at least one item per allowed category
-- Distances should be realistically spread from 50m to 2.5km
+- Distances are estimates only; spread them realistically from 50m to 2.5km and mention uncertainty in descriptions when names are generic
 - walkMinutes = Math.round(distanceKm * 12) approximately
 - Return only the JSON object, nothing else
 - The JSON must be complete and parseable`;

@@ -4,11 +4,16 @@ import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.t
 import { hasAIProviderCredentials, openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
 import { createLogger } from "../_shared/logger.ts";
+import { buildVettedAnswerRules } from "../_shared/aiSafety.ts";
 
 const log = createLogger("neighbourhood-report");
 
 const BUCKET = "neighbourhood-report";
 const neighbourhoodLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 15, windowMs: 60_000, failClosed: true });
+const VETTED_NEIGHBOURHOOD_RULES = buildVettedAnswerRules({
+  scope: "neighbourhood intelligence reports",
+  timeSensitiveTopics: ["development projects", "transport changes", "safety trends", "price-per-sqm trends"],
+});
 
 const fallbackReport = (city: string, address?: string, region?: string) => { // skipcq: JS-R1005 - Deterministic fallback report keeps section defaults together when AI output is unavailable.
   const areaName = address?.trim() || city.trim();
@@ -95,7 +100,9 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
     const locationStr = [address, city, region, "Greece"].filter(Boolean).join(", ");
     const coordStr = lat && lng ? ` (coords: ${lat}, ${lng})` : "";
 
-    const prompt = `You are a Greek real estate market analyst. Generate a neighbourhood intelligence report for a property at: ${locationStr}${coordStr}.
+    const prompt = `You are a Greek real estate market analyst. Generate a cautious neighbourhood intelligence report for a property at: ${locationStr}${coordStr}.
+
+${VETTED_NEIGHBOURHOOD_RULES}
 
 Return ONLY valid JSON, no markdown, no explanation. The JSON must be complete and parseable:
 {
@@ -143,10 +150,10 @@ Return ONLY valid JSON, no markdown, no explanation. The JSON must be complete a
 }
 
 Rules:
-- Base all data on real knowledge of ${city}, Greece neighbourhoods
+- Base estimates on stable general knowledge of ${city}, Greece neighbourhoods and the supplied address/coordinates. Do not present street-level details as verified unless supplied.
 - walkabilityScore: reflect proximity to shops, public transport, restaurants, parks
-- developmentProjects: include 2-4 realistic projects for the area
-- areaHighlights: 3-4 short bullet points (e.g. 'Metro line 200m away')
+- developmentProjects: include only known or context-supported projects; if not confident, return an empty array
+- areaHighlights: 3-4 short cautious bullet points; do not invent exact amenities or distances
 - All numbers must be realistic for the Greek market
 - Only return the JSON object
 - Do not include comments, trailing commas, prose, markdown, or incomplete arrays`;
@@ -227,6 +234,10 @@ Rules:
       } else {
         log.warn("neighbourhood-report: listing ownership mismatch", { listingId, userId: quota.userId });
       }
+    }
+
+    if (parsed && typeof parsed === "object" && !parsed.generatedBy) {
+      parsed.generatedBy = "openai";
     }
 
     await recordAiCall(quota.userId, BUCKET);

@@ -508,6 +508,8 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
                 cadastreNumber={db?.cadastre_number}
                 hasLandConcession={db?.has_land_concession}
                 landUse={db?.land_use}
+                latitude={db?.latitude != null ? Number(db.latitude) : undefined}
+                longitude={db?.longitude != null ? Number(db.longitude) : undefined}
                 listingId={id ?? undefined} /> : (
               <PropertyValuationLockedCard />
               )}

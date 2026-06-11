@@ -161,6 +161,7 @@ Reads from Hub table `firesale_requests`.
 | Variable                   | Used by                    | Purpose |
 |---------------------------|----------------------------|---------|
 | `MAIPROP_OS_URL`          | All sync functions         | Base URL of OS API (e.g. `https://app.os.maiprop.co:8080`) |
+| `MAIPROP_OS_API_URL`      | property-valuation         | Optional valuation API base URL alias; falls back to `MAIPROP_OS_URL` |
 | `MAIPROP_OS_EMAIL`        | full-sync, poll, sync-to-os, sync-firesale | OS login for token |
 | `MAIPROP_OS_PASSWORD`     | full-sync, poll, sync-to-os, sync-firesale | OS login for token |
 | `MAIPROP_OS_WEBHOOK_SECRET` | receive-from-os         | Validate webhook calls from OS |
