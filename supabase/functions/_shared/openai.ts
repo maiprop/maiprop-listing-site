@@ -16,6 +16,11 @@ export function getOpenAIReasoningEffort(): string | null {
   return Deno.env.get("OPENAI_REASONING_EFFORT") ?? null;
 }
 
+export function supportsOpenAIReasoningEffort(model: string): boolean {
+  const normalized = model.toLowerCase();
+  return /^(o[1-9]|o\d|gpt-5)(?:[.-]|$)/.test(normalized);
+}
+
 export function hasAIProviderCredentials(): boolean {
   return Boolean(Deno.env.get("GEMINI_API_KEY") || Deno.env.get("OPENAI_API_KEY"));
 }
@@ -27,7 +32,7 @@ export function requireOpenAIKey(): string {
 }
 
 export function requireAIProviderKey(): string {
-  const apiKey = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("OPENAI_API_KEY");
+  const apiKey = Deno.env.get("OPENAI_API_KEY") || Deno.env.get("GEMINI_API_KEY");
   if (!apiKey) throw new Error("AI provider key not configured");
   return apiKey;
 }
@@ -123,9 +128,11 @@ export async function openAIChatCompletion(
   body: Record<string, unknown>,
   model = getOpenAIModel(),
 ): Promise<Response> {
-  if (Deno.env.get("GEMINI_API_KEY")) return geminiGenerateContent(body, model);
+  if (!Deno.env.get("OPENAI_API_KEY") && Deno.env.get("GEMINI_API_KEY")) {
+    return geminiGenerateContent(body, model);
+  }
 
-  const reasoningEffort = getOpenAIReasoningEffort();
+  const reasoningEffort = supportsOpenAIReasoningEffort(model) ? getOpenAIReasoningEffort() : null;
   return fetchWithTimeout(OPENAI_API_URL, {
     method: "POST",
     headers: {

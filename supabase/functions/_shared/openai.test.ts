@@ -16,6 +16,7 @@ import {
   requireAIProviderKey,
   requireOpenAIKey,
   openAIChatCompletion,
+  supportsOpenAIReasoningEffort,
 } from "./openai.ts";
 
 // ── getOpenAIModel ────────────────────────────────────────────────────────────
@@ -114,18 +115,123 @@ Deno.test("hasAIProviderCredentials: accepts Gemini or OpenAI credentials", () =
   }
 });
 
-Deno.test("requireAIProviderKey: prefers Gemini over OpenAI", () => {
+Deno.test("requireAIProviderKey: prefers OpenAI over Gemini", () => {
   const prevGemini = Deno.env.get("GEMINI_API_KEY");
   const prevOpenAI = Deno.env.get("OPENAI_API_KEY");
   Deno.env.set("GEMINI_API_KEY", "gemini-test");
   Deno.env.set("OPENAI_API_KEY", "openai-test");
   try {
-    assertStrictEquals(requireAIProviderKey(), "gemini-test");
+    assertStrictEquals(requireAIProviderKey(), "openai-test");
   } finally {
     if (prevGemini) Deno.env.set("GEMINI_API_KEY", prevGemini);
     else Deno.env.delete("GEMINI_API_KEY");
     if (prevOpenAI) Deno.env.set("OPENAI_API_KEY", prevOpenAI);
     else Deno.env.delete("OPENAI_API_KEY");
+  }
+});
+
+Deno.test("supportsOpenAIReasoningEffort: gates reasoning effort to reasoning models", () => {
+  assertStrictEquals(supportsOpenAIReasoningEffort("gpt-4.1-mini"), false);
+  assertStrictEquals(supportsOpenAIReasoningEffort("gpt-4o"), false);
+  assertStrictEquals(supportsOpenAIReasoningEffort("o3-mini"), true);
+  assertStrictEquals(supportsOpenAIReasoningEffort("gpt-5.4-mini"), true);
+});
+
+Deno.test("openAIChatCompletion prefers OpenAI when both provider keys are configured", async () => {
+  const prevOpenAI = Deno.env.get("OPENAI_API_KEY");
+  const prevGemini = Deno.env.get("GEMINI_API_KEY");
+  Deno.env.set("OPENAI_API_KEY", "openai-test");
+  Deno.env.set("GEMINI_API_KEY", "gemini-test");
+  const originalFetch = globalThis.fetch;
+  let requestedUrl = "";
+
+  globalThis.fetch = ((input: RequestInfo | URL) => {
+    requestedUrl = String(input);
+    return Promise.resolve(new Response(JSON.stringify({
+      choices: [{ message: { content: "ok" } }],
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+  }) as typeof fetch;
+
+  try {
+    const res = await openAIChatCompletion({
+      messages: [{ role: "user", content: "Hello" }],
+    });
+    assertEquals(res.status, 200);
+    assertStrictEquals(requestedUrl, "https://api.openai.com/v1/chat/completions");
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (prevOpenAI) Deno.env.set("OPENAI_API_KEY", prevOpenAI);
+    else Deno.env.delete("OPENAI_API_KEY");
+    if (prevGemini) Deno.env.set("GEMINI_API_KEY", prevGemini);
+    else Deno.env.delete("GEMINI_API_KEY");
+  }
+});
+
+Deno.test("openAIChatCompletion omits reasoning_effort for non-reasoning OpenAI models", async () => {
+  const prevOpenAI = Deno.env.get("OPENAI_API_KEY");
+  const prevGemini = Deno.env.get("GEMINI_API_KEY");
+  const prevReasoning = Deno.env.get("OPENAI_REASONING_EFFORT");
+  Deno.env.set("OPENAI_API_KEY", "openai-test");
+  Deno.env.delete("GEMINI_API_KEY");
+  Deno.env.set("OPENAI_REASONING_EFFORT", "medium");
+  const originalFetch = globalThis.fetch;
+  let requestBody: Record<string, unknown> = {};
+
+  globalThis.fetch = ((_input: RequestInfo | URL, init?: RequestInit) => {
+    requestBody = JSON.parse(String(init?.body ?? "{}"));
+    return Promise.resolve(new Response(JSON.stringify({
+      choices: [{ message: { content: "ok" } }],
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+  }) as typeof fetch;
+
+  try {
+    const res = await openAIChatCompletion({
+      messages: [{ role: "user", content: "Hello" }],
+    }, "gpt-4.1-mini");
+    assertEquals(res.status, 200);
+    assertStrictEquals("reasoning_effort" in requestBody, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (prevOpenAI) Deno.env.set("OPENAI_API_KEY", prevOpenAI);
+    else Deno.env.delete("OPENAI_API_KEY");
+    if (prevGemini) Deno.env.set("GEMINI_API_KEY", prevGemini);
+    else Deno.env.delete("GEMINI_API_KEY");
+    if (prevReasoning) Deno.env.set("OPENAI_REASONING_EFFORT", prevReasoning);
+    else Deno.env.delete("OPENAI_REASONING_EFFORT");
+  }
+});
+
+Deno.test("openAIChatCompletion sends reasoning_effort for reasoning OpenAI models", async () => {
+  const prevOpenAI = Deno.env.get("OPENAI_API_KEY");
+  const prevGemini = Deno.env.get("GEMINI_API_KEY");
+  const prevReasoning = Deno.env.get("OPENAI_REASONING_EFFORT");
+  Deno.env.set("OPENAI_API_KEY", "openai-test");
+  Deno.env.delete("GEMINI_API_KEY");
+  Deno.env.set("OPENAI_REASONING_EFFORT", "high");
+  const originalFetch = globalThis.fetch;
+  let requestBody: Record<string, unknown> = {};
+
+  globalThis.fetch = ((_input: RequestInfo | URL, init?: RequestInit) => {
+    requestBody = JSON.parse(String(init?.body ?? "{}"));
+    return Promise.resolve(new Response(JSON.stringify({
+      choices: [{ message: { content: "ok" } }],
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+  }) as typeof fetch;
+
+  try {
+    const res = await openAIChatCompletion({
+      messages: [{ role: "user", content: "Hello" }],
+    }, "gpt-5.4-mini");
+    assertEquals(res.status, 200);
+    assertStrictEquals(requestBody.reasoning_effort, "high");
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (prevOpenAI) Deno.env.set("OPENAI_API_KEY", prevOpenAI);
+    else Deno.env.delete("OPENAI_API_KEY");
+    if (prevGemini) Deno.env.set("GEMINI_API_KEY", prevGemini);
+    else Deno.env.delete("GEMINI_API_KEY");
+    if (prevReasoning) Deno.env.set("OPENAI_REASONING_EFFORT", prevReasoning);
+    else Deno.env.delete("OPENAI_REASONING_EFFORT");
   }
 });
 

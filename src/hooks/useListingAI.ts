@@ -17,6 +17,25 @@ interface UseListingAIReturn {
   handleAiPrice: () => Promise<void>;
 }
 
+function parseAIPriceSuggestion(content: unknown): AIPriceSuggestion {
+  const text = typeof content === "string" ? content : "";
+  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const objectMatch = fenceMatch?.[1] ?? text.match(/\{[\s\S]*\}/)?.[0] ?? text;
+  const parsed = JSON.parse(objectMatch.trim()) as Partial<AIPriceSuggestion>;
+  const min = Number(parsed.min);
+  const max = Number(parsed.max);
+  const suggested = Number(parsed.suggested);
+  if (!Number.isFinite(min) || !Number.isFinite(max) || !Number.isFinite(suggested)) {
+    throw new Error("AI price suggestion returned an unexpected format");
+  }
+  return {
+    ...parsed,
+    min,
+    max,
+    suggested,
+  } as AIPriceSuggestion;
+}
+
 export function useListingAI(
   form: ListingFormData,
   set: (key: string, value: unknown) => void,
@@ -101,13 +120,12 @@ export function useListingAI(
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error as string);
-      let parsed: AIPriceSuggestion;
       try {
-        parsed = JSON.parse(data.content as string) as AIPriceSuggestion;
+        const parsed = parseAIPriceSuggestion(data.content);
+        setAiPriceSuggestion(parsed);
       } catch (_err: unknown) {
         throw new Error("AI price suggestion returned an unexpected format");
       }
-      setAiPriceSuggestion(parsed);
     } catch (err: unknown) {
       toast.error((err instanceof Error ? err.message : null) || "Failed to get price estimate");
     } finally {

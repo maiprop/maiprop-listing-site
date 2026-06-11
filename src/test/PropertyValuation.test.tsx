@@ -55,6 +55,8 @@ const baseProps = {
   address: "Plaka 1",
   price: 250_000,
   sqm: 90,
+  latitude: 37.9715,
+  longitude: 23.7257,
 };
 
 const validResult = {
@@ -130,7 +132,7 @@ describe("PropertyValuation — gates", () => {
 
 
 describe("PropertyValuation — happy paths", () => {
-  it("calls property-valuation when listingId is provided so quota and GPT analysis are enforced", async () => {
+  it("passes listing identity and coordinates so the Edge Function can prefer OS valuation data", async () => {
     invokeMock.mockResolvedValue({ data: validResult, error: null });
     render(<PropertyValuation {...baseProps} listingId="l-1" />);
     fireEvent.click(screen.getByRole("button", { name: /Run AI Valuation/i }));
@@ -138,7 +140,14 @@ describe("PropertyValuation — happy paths", () => {
     expect(screen.getByText(/Underpriced/i)).toBeInTheDocument();
     expect(invokeMock).toHaveBeenCalledTimes(1);
     expect(invokeMock).toHaveBeenCalledWith("property-valuation", expect.objectContaining({
-      body: expect.objectContaining({ city: "Athens", price: 250_000, sqm: 90 }),
+      body: expect.objectContaining({
+        listingId: "l-1",
+        city: "Athens",
+        price: 250_000,
+        sqm: 90,
+        latitude: 37.9715,
+        longitude: 23.7257,
+      }),
     }));
   });
 

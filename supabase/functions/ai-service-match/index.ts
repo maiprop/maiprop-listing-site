@@ -3,6 +3,7 @@ import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.t
 import { openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
 import { createLogger } from "../_shared/logger.ts";
+import { buildVettedAnswerRules } from "../_shared/aiSafety.ts";
 
 const log = createLogger("ai-service-match");
 
@@ -10,6 +11,12 @@ const BUCKET = "ai-service-match";
 const serviceMatchLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 20, windowMs: 60_000, failClosed: true });
 
 const SYSTEM_PROMPT = `You are a Greek real estate professional matchmaker. A user describes their property need in plain text, and you must:
+
+${buildVettedAnswerRules({
+  scope: "professional service matching",
+  timeSensitiveTopics: ["professional availability", "licensing requirements", "permit timelines", "service costs"],
+  includeDecisionStep: false,
+})}
 
 1. Identify the best professional category match from:
    - lawyer (contracts, title checks, conveyancing, Golden Visa, dispute resolution)

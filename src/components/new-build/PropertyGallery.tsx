@@ -1,7 +1,7 @@
 import { useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Building2, ChevronLeft, ChevronRight, Heart, Maximize2, Share2, X } from "lucide-react";
-import { Dialog, DialogClose, DialogOverlay, DialogPortal, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogDescription, DialogOverlay, DialogPortal, DialogTitle } from "@/components/ui/dialog";
 
 export function PropertyGallery({
   images,
@@ -137,6 +137,9 @@ export function PropertyGallery({
                 <DialogTitle className="truncate text-sm font-semibold text-white">
                   Full-screen photo viewer
                 </DialogTitle>
+                <DialogDescription className="sr-only">
+                  Use the previous and next controls to review all new-build photos.
+                </DialogDescription>
                 <p className="text-xs text-white/70">
                   {idx + 1} / {images.length}
                 </p>

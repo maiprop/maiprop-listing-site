@@ -147,6 +147,7 @@ Dashboard → Project Settings → Edge Functions → Secrets.
 | `STRIPE_WEBHOOK_SECRET` | `stripe-webhook` |
 | `MAIPROP_OS_WEBHOOK_SECRET` | `receive-from-os` (HMAC, see `WEBHOOK_VERIFICATION.md`) |
 | `MAIPROP_OS_URL` | OS import/sync functions |
+| `MAIPROP_OS_API_URL` | Optional OS API base URL alias used by `property-valuation`; falls back to `MAIPROP_OS_URL` |
 | `MAIPROP_OS_EMAIL` | OS import/sync functions |
 | `MAIPROP_OS_PASSWORD` | OS import/sync functions |
 | `GOOGLE_MAPS_API_KEY` | `streetview-proxy` and OS image enrichment |

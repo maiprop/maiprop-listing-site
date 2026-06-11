@@ -1,4 +1,5 @@
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { hasAIProviderCredentials, openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
@@ -8,6 +9,358 @@ const log = createLogger("property-valuation");
 
 const BUCKET = "property-valuation";
 const valuationLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 15, windowMs: 60_000, failClosed: true });
+const OS_VALUATION_TIMEOUT_MS = 25_000;
+
+const OS_PROPERTY_CATEGORY: Record<string, string> = {
+  apartment: "RESIDENCE",
+  house: "RESIDENCE",
+  villa: "RESIDENCE",
+  studio: "RESIDENCE",
+  maisonette: "RESIDENCE",
+  land: "LAND",
+  plot: "PLOT",
+  commercial: "OTHER_BUSINESS_SPACE",
+  office: "OFFICE",
+  store: "STORE",
+  shop: "STORE",
+  parking: "PARKING",
+  storage: "STOREROOM",
+  warehouse: "INDUSTRIAL",
+  industrial: "INDUSTRIAL",
+  hotel: "HOTEL",
+};
+
+type JsonRecord = Record<string, unknown>;
+
+type StructuredValuationInput = {
+  listingId?: string | null;
+  city: string;
+  address?: unknown;
+  price: number;
+  sqm: number;
+  propertyType?: unknown;
+  listingType?: unknown;
+  latitude?: unknown;
+  longitude?: unknown;
+  floor?: unknown;
+  yearBuilt?: unknown;
+  condition?: unknown;
+};
+
+const coerceFiniteNumber = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const optionalString = (value: unknown): string | undefined =>
+  typeof value === "string" && value.trim() ? value.trim() : undefined;
+
+const roundNumber = (value: number, digits = 0): number => {
+  const factor = 10 ** digits;
+  return Math.round(value * factor) / factor;
+};
+
+const normalizeAnnualYield = (value: unknown): number | null => {
+  const numeric = coerceFiniteNumber(value);
+  if (numeric == null) return null;
+  return roundNumber(numeric > 1 ? numeric : numeric * 100, 1);
+};
+
+const normalizeYearBuilt = (value: unknown): number => {
+  const year = coerceFiniteNumber(value);
+  if (year != null && year >= 1900 && year <= 2200) return Math.round(year);
+  return 2000;
+};
+
+const normalizeFloor = (value: unknown): number => {
+  const floor = coerceFiniteNumber(value);
+  return floor == null ? 0 : Math.round(floor);
+};
+
+const normalizeOsCategory = (value: unknown): string => {
+  const key = optionalString(value)?.toLowerCase().replace(/[^a-z0-9]+/g, "_") ?? "";
+  return OS_PROPERTY_CATEGORY[key] ?? OS_PROPERTY_CATEGORY[key.replace(/_property$/, "")] ?? "RESIDENCE";
+};
+
+const readJsonSafely = async (response: Response): Promise<JsonRecord | null> => {
+  try {
+    const parsed = await response.json();
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as JsonRecord : null;
+  } catch (_error) {
+    return null;
+  }
+};
+
+const isAbortError = (error: unknown): boolean =>
+  error instanceof DOMException && error.name === "AbortError";
+
+const extractOsToken = (payload: JsonRecord | null): string | null => {
+  const data = payload?.data as JsonRecord | undefined;
+  const user = payload?.user as JsonRecord | undefined;
+  const candidates = [
+    payload?.token,
+    payload?.accessToken,
+    payload?.access_token,
+    payload?.jwt,
+    data?.token,
+    data?.accessToken,
+    data?.access_token,
+    user?.token,
+  ];
+  const token = candidates.find((candidate) => typeof candidate === "string" && candidate.trim());
+  return typeof token === "string" ? token : null;
+};
+
+const fetchOsAuthToken = async (baseUrl: string, email: string, password: string): Promise<string> => {
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(`${baseUrl}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ email, password }),
+    }, OS_VALUATION_TIMEOUT_MS);
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw new Error(`OS auth timed out after ${OS_VALUATION_TIMEOUT_MS}ms`);
+    }
+    throw error;
+  }
+
+  const payload = await readJsonSafely(response);
+  const token = extractOsToken(payload);
+  if (!response.ok || !token) {
+    throw new Error(`OS auth failed with status ${response.status}`);
+  }
+  return token;
+};
+
+const buildOsValuationBody = (input: StructuredValuationInput): JsonRecord | null => {
+  const latitude = coerceFiniteNumber(input.latitude);
+  const longitude = coerceFiniteNumber(input.longitude);
+  const sqm = coerceFiniteNumber(input.sqm);
+  if (latitude == null || longitude == null || sqm == null || sqm <= 0) return null;
+
+  const addressParts = [optionalString(input.address), input.city].filter(Boolean);
+  const listingType = optionalString(input.listingType)?.toLowerCase() ?? "sale";
+
+  return {
+    constructionYear: normalizeYearBuilt(input.yearBuilt),
+    propertyLongitude: longitude,
+    propertyLatitude: latitude,
+    propertySquareMeters: sqm,
+    propertyCategory: normalizeOsCategory(input.propertyType),
+    propertyFloor: normalizeFloor(input.floor),
+    ...(addressParts.length ? { address: addressParts.join(", ") } : {}),
+    valuationModel: listingType === "auction" ? "auction" : "market",
+    rangesForSimilar: [0.5, 1, 2, 5],
+    maxSimilarReturned: 5,
+  };
+};
+
+const unwrapOsData = (payload: JsonRecord | null): JsonRecord | null => {
+  const data = payload?.data;
+  if (data && typeof data === "object" && !Array.isArray(data)) return data as JsonRecord;
+  return payload;
+};
+
+const fetchStructuredOsValuation = async (input: StructuredValuationInput): Promise<JsonRecord | null> => {
+  const baseUrl = (Deno.env.get("MAIPROP_OS_API_URL") ?? Deno.env.get("MAIPROP_OS_URL"))?.replace(/\/+$/, "");
+  const email = Deno.env.get("MAIPROP_OS_EMAIL");
+  const password = Deno.env.get("MAIPROP_OS_PASSWORD");
+  const requestBody = buildOsValuationBody(input);
+
+  if (!baseUrl || !email || !password || !requestBody) return null;
+
+  const token = await fetchOsAuthToken(baseUrl, email, password);
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(`${baseUrl}/api/v1/property/valuation`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(requestBody),
+    }, OS_VALUATION_TIMEOUT_MS);
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw new Error(`OS valuation timed out after ${OS_VALUATION_TIMEOUT_MS}ms`);
+    }
+    throw error;
+  }
+
+  const payload = await readJsonSafely(response);
+  if (!response.ok) {
+    throw new Error(`OS valuation failed with status ${response.status}`);
+  }
+
+  const data = unwrapOsData(payload);
+  const predictedPrice = coerceFiniteNumber(data?.propertyPredictedPrice);
+  return predictedPrice != null && predictedPrice > 0 ? data : null;
+};
+
+const countOverviewComparables = (value: unknown): number => {
+  if (!Array.isArray(value)) return 0;
+  return value.reduce((total, overview) => {
+    if (!overview || typeof overview !== "object") return total;
+    const similarListings = (overview as JsonRecord).similarListings;
+    return total + (Array.isArray(similarListings) ? similarListings.length : 0);
+  }, 0);
+};
+
+const firstOverviewNumber = (overviews: unknown, key: string): number | null => {
+  if (!Array.isArray(overviews)) return null;
+  for (const overview of overviews) {
+    if (!overview || typeof overview !== "object") continue;
+    const numeric = coerceFiniteNumber((overview as JsonRecord)[key]);
+    if (numeric != null) return numeric;
+  }
+  return null;
+};
+
+const toMarketComparison = (deltaPct: number): "below_market" | "at_market" | "above_market" => {
+  if (deltaPct > 5) return "above_market";
+  if (deltaPct < -5) return "below_market";
+  return "at_market";
+};
+
+const toPricingPosition = (deltaPct: number): "overpriced" | "fair" | "underpriced" => {
+  if (deltaPct > 5) return "underpriced";
+  if (deltaPct < -5) return "overpriced";
+  return "fair";
+};
+
+const buildOsValuationResult = (osData: JsonRecord, input: StructuredValuationInput): JsonRecord => {
+  const estimatedValue = Math.round(coerceFiniteNumber(osData.propertyPredictedPrice) ?? input.price);
+  const leaseEstimate = coerceFiniteNumber(osData.propertyPredictedLeasePrice);
+  const annualYield = normalizeAnnualYield(osData.annualYieldPrc);
+  const saleComparables = countOverviewComparables(osData.saleValuationOverviews);
+  const rentalComparables = countOverviewComparables(osData.rentalValuationOverviews);
+  const pricePerSqm = firstOverviewNumber(osData.saleValuationOverviews, "propertyEurPerSqm") ??
+    (input.sqm > 0 ? estimatedValue / input.sqm : null);
+  const deltaPct = input.price > 0 ? roundNumber(((estimatedValue - input.price) / input.price) * 100) : 0;
+  const listingType = optionalString(input.listingType)?.toLowerCase() ?? "sale";
+  const isAuction = listingType === "auction";
+  const confidence = Math.max(55, Math.min(90, 68 + Math.min(12, saleComparables + rentalComparables)));
+  const liquidityScore = isAuction ? 45 : Math.max(55, Math.min(82, 62 + Math.min(14, saleComparables)));
+  const comparablesText = `${saleComparables} sale and ${rentalComparables} rental comparables`;
+
+  return {
+    estimatedValue,
+    rangeLow: Math.round(estimatedValue * (isAuction ? 0.72 : 0.9)),
+    rangeHigh: Math.round(estimatedValue * (isAuction ? 0.92 : 1.1)),
+    confidence,
+    confidenceLabel: confidence >= 75 ? "High" : confidence >= 50 ? "Medium" : "Low",
+    marketComparison: toMarketComparison(deltaPct),
+    marketComparisonPct: deltaPct,
+    liquidityScore,
+    pricePerSqmEstimate: pricePerSqm == null ? null : Math.round(pricePerSqm),
+    pricingPosition: toPricingPosition(deltaPct),
+    rentalYieldEstimate: annualYield,
+    executionValue: Math.round(estimatedValue * (isAuction ? 0.75 : 0.88)),
+    objectiveValueProxy: null,
+    auctionAdjustedValue: isAuction ? Math.round(estimatedValue / 0.8) : null,
+    legalCleanliness: isAuction ? 45 : 65,
+    planningCertainty: 70,
+    taxFriction: isAuction ? 55 : 30,
+    transferReadiness: isAuction ? 42 : 62,
+    legalRiskScore: isAuction ? 55 : 28,
+    taxRiskScore: isAuction ? 42 : 24,
+    listingQualityScore: confidence,
+    summary: [
+      `mAI Prop OS predicts a market value of EUR ${estimatedValue.toLocaleString("en-US")}.`,
+      leaseEstimate ? `Estimated monthly lease is EUR ${Math.round(leaseEstimate).toLocaleString("en-US")}.` : null,
+      annualYield != null ? `Implied annual yield is ${annualYield}%.` : null,
+      `The OS model used ${comparablesText}.`,
+    ].filter(Boolean).join(" "),
+    keyFactors: [
+      { factor: "mAI Prop OS valuation", impact: "positive", note: "Structured OS valuation API response" },
+      { factor: "Comparable depth", impact: saleComparables + rentalComparables > 0 ? "positive" : "neutral", note: comparablesText },
+      annualYield != null ? { factor: "Rental yield", impact: "neutral", note: `${annualYield}% implied gross yield` } : null,
+      { factor: "Asking price delta", impact: Math.abs(deltaPct) <= 5 ? "neutral" : deltaPct > 0 ? "positive" : "negative", note: `${deltaPct}% versus asking price` },
+      { factor: "Legal/planning data", impact: isAuction ? "negative" : "neutral", note: isAuction ? "Auction risk remains" : "Document review still required" },
+    ].filter(Boolean),
+    legalSummary: isAuction
+      ? "The structured OS valuation does not replace auction title, occupancy, and burden review. Confirm legal status before relying on the estimate."
+      : "The structured OS valuation estimates market value from coordinates and property traits. Title, permit, and building identity documents still need review.",
+    taxSummary: "Assumes normal Greek transfer friction unless legal review identifies special burdens.",
+    renovationPotential: null,
+    highestBestUseHint: null,
+    redFlags: isAuction ? ["Auction valuations can shift materially after legal and title review."] : [],
+    methodUsed: "mAI Prop OS structured valuation API (/api/v1/property/valuation)",
+    valuationMode: "MODE_2_PUBLIC_ENRICHED",
+    generatedBy: "maiprop_os",
+    osValuation: osData,
+  };
+};
+
+const buildOsPromptContext = (osData: JsonRecord | null): string => {
+  if (!osData) {
+    return "No structured mAI Prop OS valuation was available for this property. Use listing data and Greece 2026 benchmarks only.";
+  }
+
+  const saleComparables = countOverviewComparables(osData.saleValuationOverviews);
+  const rentalComparables = countOverviewComparables(osData.rentalValuationOverviews);
+  const compact = {
+    propertyPredictedPrice: osData.propertyPredictedPrice,
+    propertyPredictedLeasePrice: osData.propertyPredictedLeasePrice,
+    annualYieldPrc: osData.annualYieldPrc,
+    saleComparables,
+    rentalComparables,
+    salePricePerSqm: firstOverviewNumber(osData.saleValuationOverviews, "propertyEurPerSqm"),
+    rentalPricePerSqm: firstOverviewNumber(osData.rentalValuationOverviews, "propertyEurPerSqm"),
+    saleAvgListingPrice: firstOverviewNumber(osData.saleValuationOverviews, "avgListingPrice"),
+    rentalAvgListingPrice: firstOverviewNumber(osData.rentalValuationOverviews, "avgListingPrice"),
+  };
+
+  return JSON.stringify(compact, null, 2);
+};
+
+const mergeOsEvidence = (result: JsonRecord, osData: JsonRecord | null, osFallback: JsonRecord | null): JsonRecord => {
+  if (!osData || !osFallback) return result;
+
+  const fallbackYield = coerceFiniteNumber(osFallback.rentalYieldEstimate);
+  const fallbackPricePerSqm = coerceFiniteNumber(osFallback.pricePerSqmEstimate);
+  const existingFactors = Array.isArray(result.keyFactors) ? result.keyFactors : [];
+  return {
+    ...osFallback,
+    ...result,
+    estimatedValue: coerceFiniteNumber(result.estimatedValue) ?? osFallback.estimatedValue,
+    rangeLow: coerceFiniteNumber(result.rangeLow) ?? osFallback.rangeLow,
+    rangeHigh: coerceFiniteNumber(result.rangeHigh) ?? osFallback.rangeHigh,
+    executionValue: coerceFiniteNumber(result.executionValue) ?? osFallback.executionValue,
+    pricePerSqmEstimate: coerceFiniteNumber(result.pricePerSqmEstimate) ?? fallbackPricePerSqm,
+    rentalYieldEstimate: coerceFiniteNumber(result.rentalYieldEstimate) ?? fallbackYield,
+    methodUsed: optionalString(result.methodUsed) ?? "OpenAI enriched valuation with mAI Prop OS structured valuation data",
+    valuationMode: optionalString(result.valuationMode) ?? "MODE_2_PUBLIC_ENRICHED",
+    keyFactors: [
+      ...existingFactors,
+      {
+        factor: "mAI Prop OS data",
+        impact: "positive",
+        note: "Structured valuation and comparable counts used as model evidence",
+      },
+    ],
+    generatedBy: "openai_maiprop_os",
+    osEstimatedValue: osFallback.estimatedValue,
+    osValuation: osData,
+  };
+};
+
+const withOsDiagnostics = (
+  result: JsonRecord,
+  status: string,
+  detail?: string,
+): JsonRecord => ({
+  ...result,
+  osValuationStatus: status,
+  ...(detail ? { osValuationDetail: detail } : {}),
+});
 
 // ── Greece 2026 market benchmarks ─────────────────────────────────────────────
 const MARKET_BENCHMARKS = `
@@ -281,7 +634,7 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
   try {
     const body = await req.json();
     const {
-      title, city, address, price, sqm, bedrooms, bathrooms,
+      listingId, title, city, address, price, sqm, bedrooms, bathrooms,
       propertyType, listingType, floor, totalFloors, yearBuilt,
       heatingSystem, energyClass, pricePerSqm, hasParking, hasPool, hasElevator,
       hasGarden, hasStorage, hasBalcony, hasView, hasFurnished,
@@ -291,6 +644,7 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
       isNeoclassical, isPreserved, distanceFromSea, withinCityPlan,
       withinSettlement, buildingAllowance, coverageRatio, isBuildable,
       cadastreNumber, hasLandConcession, landUse,
+      latitude, longitude,
     } = body;
 
     if (!city || !sqm || !price) {
@@ -300,16 +654,60 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
       );
     }
 
+    const structuredValuationInput: StructuredValuationInput = {
+      listingId: typeof listingId === "string" ? listingId : null,
+      city: String(city),
+      address,
+      price: Number(price),
+      sqm: Number(sqm),
+      propertyType,
+      listingType,
+      latitude,
+      longitude,
+      floor,
+      yearBuilt,
+      condition,
+    };
+
+    let osValuationData: JsonRecord | null = null;
+    let osValuationStatus = "not_requested";
+    let osValuationDetail: string | undefined;
+    const hasOsConfig = Boolean(
+      (Deno.env.get("MAIPROP_OS_API_URL") ?? Deno.env.get("MAIPROP_OS_URL")) &&
+        Deno.env.get("MAIPROP_OS_EMAIL") &&
+        Deno.env.get("MAIPROP_OS_PASSWORD")
+    );
+    const hasOsInputs = buildOsValuationBody(structuredValuationInput) != null;
+    if (!hasOsConfig) osValuationStatus = "missing_config";
+    else if (!hasOsInputs) osValuationStatus = "missing_inputs";
+    else osValuationStatus = "requested";
+
+    try {
+      osValuationData = await fetchStructuredOsValuation(structuredValuationInput);
+      osValuationStatus = osValuationData ? "ok" : osValuationStatus === "requested" ? "no_prediction" : osValuationStatus;
+    } catch (osError) {
+      osValuationStatus = "error";
+      osValuationDetail = osError instanceof Error ? osError.message.slice(0, 120) : String(osError).slice(0, 120);
+      log.warn("property-valuation: OS structured valuation unavailable; continuing with OpenAI", {
+        listingId: structuredValuationInput.listingId,
+        city,
+        err: osError instanceof Error ? osError.message : String(osError),
+      });
+    }
+    const osValuationFallback = osValuationData
+      ? buildOsValuationResult(osValuationData, structuredValuationInput)
+      : null;
+
     if (!hasAIProviderCredentials()) {
-      log.warn("property-valuation: AI provider key missing; using fallback valuation", { city });
-      const fallback = fallbackValuation({
+      log.warn("property-valuation: AI provider key missing; using OS/fallback valuation", { city });
+      const fallback = withOsDiagnostics(osValuationFallback ?? fallbackValuation({
         city: String(city),
         price: Number(price),
         sqm: Number(sqm),
         propertyType: typeof propertyType === "string" ? propertyType : undefined,
         listingType: typeof listingType === "string" ? listingType : undefined,
         reason: "the AI provider is not configured",
-      });
+      }), osValuationStatus, osValuationDetail);
       await recordAiCall(quotaUserId, BUCKET);
       return new Response(JSON.stringify(fallback), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
@@ -384,6 +782,11 @@ Observed features: ${observedFeatures}
 Legal/planning signals: ${legalSignals}
 ${listingDesc}
 
+=== MAIPROP OS STRUCTURED VALUATION DATA ===
+${buildOsPromptContext(osValuationData)}
+
+Use mAI Prop OS data as primary quantitative evidence when available, then enrich it with OpenAI qualitative reasoning. Explain where the OS data, listing price, micro-location, liquidity, legal risk, and qualitative asset traits agree or diverge.
+
 === METHODOLOGY TO APPLY ===
 ${typeInstructions}
 
@@ -398,6 +801,7 @@ CRITICAL RULES:
 7. Price growth is DECELERATING in 2026 — do not extrapolate past rates.
 8. Commercial behavior is DISTINCT from residential.
 9. All figures must be supportable from the benchmarks and methodology above; do not hallucinate local comps or unsourced premiums.
+10. Explicitly assess liquidity, buyer depth, area-specific micro-market quality, street/noise/view factors, renovation or fit-out risk, and qualitative desirability.
 
 Return ONLY valid JSON, no markdown, no explanation outside the JSON:
 
@@ -450,14 +854,14 @@ Rules:
     if (!response.ok) {
       const txt = await response.text();
       log.error("AI gateway error", { status: response.status, body: txt.slice(0, 500) });
-      const fallback = fallbackValuation({
+      const fallback = withOsDiagnostics(osValuationFallback ?? fallbackValuation({
         city: String(city),
         price: Number(price),
         sqm: Number(sqm),
         propertyType: typeof propertyType === "string" ? propertyType : undefined,
         listingType: typeof listingType === "string" ? listingType : undefined,
         reason: `the AI provider returned ${response.status}`,
-      });
+      }), osValuationStatus, osValuationDetail);
       await recordAiCall(quotaUserId, BUCKET);
       return new Response(JSON.stringify(fallback), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
@@ -491,7 +895,7 @@ Rules:
         rawLength: raw.length,
         sample: raw.slice(0, 240),
       });
-      result = fallbackValuation({
+      result = osValuationFallback ?? fallbackValuation({
         city: String(city),
         price: Number(price),
         sqm: Number(sqm),
@@ -511,6 +915,7 @@ Rules:
     if (!result.taxFriction) result.taxFriction = 30;
     if (!result.transferReadiness) result.transferReadiness = 55;
     if (!result.valuationMode) result.valuationMode = "MODE_1_LISTING_ONLY";
+    result = withOsDiagnostics(mergeOsEvidence(result, osValuationData, osValuationFallback), osValuationStatus, osValuationDetail);
 
     // Record usage after successful AI call
     await recordAiCall(quotaUserId, BUCKET);

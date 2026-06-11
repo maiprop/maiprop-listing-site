@@ -15,8 +15,14 @@ Deno.test("OPTIONS preflight returns 200", async () => {
 Deno.test("ping request returns 200 without auth", async () => {
   // listing-ai-assist has a special 'ping' type that bypasses heavy logic
   const res = await handler(req("POST", { type: "ping" }));
-  // ping may 200 or 500 if AI key is missing — it should not be 401
-  assertEquals(res.status !== 401, true);
+  assertEquals(res.status, 200);
+});
+
+Deno.test("ping request returns 200 even when AI provider credentials are missing", async () => {
+  Deno.env.delete("OPENAI_API_KEY");
+  Deno.env.delete("GEMINI_API_KEY");
+  const res = await handler(req("POST", { type: "ping" }));
+  assertEquals(res.status, 200);
 });
 
 Deno.test("unknown origin is rejected with fallback CORS", async () => {

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Heart, Share2, Eye, ChevronLeft, ChevronRight, Gavel, Maximize2, X } from "lucide-react";
-import { Dialog, DialogClose, DialogOverlay, DialogPortal, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogDescription, DialogOverlay, DialogPortal, DialogTitle } from "@/components/ui/dialog";
 import { isMaiPropLogoFallback, switchImageToNextFallback } from "@/lib/imageFallbacks";
 
 interface PropertyGalleryProps {
@@ -168,6 +168,9 @@ export default function PropertyGallery({
                 <DialogTitle className="truncate text-sm font-semibold text-white">
                   Full-screen photo viewer
                 </DialogTitle>
+                <DialogDescription className="sr-only">
+                  Use the previous and next controls to review all property photos.
+                </DialogDescription>
                 <p className="text-xs text-white/70">
                   {currentImage + 1} / {images.length}
                 </p>

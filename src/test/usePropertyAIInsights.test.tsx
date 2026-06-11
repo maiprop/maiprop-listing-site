@@ -43,6 +43,8 @@ const baseListing = {
   year_built: 2010,
   energy_class: "B",
   price_per_sqm: 4_736,
+  latitude: 37.981,
+  longitude: 23.735,
   has_parking: true,
   has_pool: false,
   has_elevator: true,
@@ -142,7 +144,17 @@ describe("usePropertyAIInsights", () => {
     const valuationCall = invokeMock.mock.calls.find(([name]) => name === "property-valuation");
     expect(valuationCall).toMatchObject([
       "property-valuation",
-      { body: { city: "Athens", address: "Kolonaki 12", price: 450_000, sqm: 95 } },
+      {
+        body: {
+          listingId: "L-1",
+          city: "Athens",
+          address: "Kolonaki 12",
+          price: 450_000,
+          sqm: 95,
+          latitude: 37.981,
+          longitude: 23.735,
+        },
+      },
     ]);
   });
 

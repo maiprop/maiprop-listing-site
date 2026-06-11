@@ -89,6 +89,8 @@ export interface PropertyValuationProps {
   cadastreNumber?: string | null;
   hasLandConcession?: boolean | null;
   landUse?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   /** Listing identifier for callers that need to associate this analysis with a listing. */
   listingId?: string | null;
 }
@@ -170,6 +172,45 @@ const ui = (isGreek: boolean, en: string, el: string) => (isGreek ? el : en);
 
 function fmt(n: number) { return n.toLocaleString("el-GR"); }
 
+function toFiniteNumber(value: unknown, fallback: number): number {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function normalizeValuationResult(data: Partial<ValuationResult>, fallbackPrice: number): ValuationResult {
+  const estimatedValue = toFiniteNumber(data.estimatedValue, fallbackPrice);
+  return {
+    estimatedValue,
+    rangeLow: toFiniteNumber(data.rangeLow, Math.round(estimatedValue * 0.9)),
+    rangeHigh: toFiniteNumber(data.rangeHigh, Math.round(estimatedValue * 1.1)),
+    executionValue: toFiniteNumber(data.executionValue, Math.round(estimatedValue * 0.88)),
+    pricePerSqmEstimate: toFiniteNumber(data.pricePerSqmEstimate, 0),
+    confidence: toFiniteNumber(data.confidence, 50),
+    confidenceLabel: data.confidenceLabel ?? "Medium",
+    liquidityScore: toFiniteNumber(data.liquidityScore, 50),
+    marketComparison: data.marketComparison ?? "at_market",
+    marketComparisonPct: toFiniteNumber(data.marketComparisonPct, 0),
+    pricingPosition: data.pricingPosition ?? "fair",
+    methodUsed: data.methodUsed ?? "OpenAI valuation",
+    valuationMode: data.valuationMode ?? "MODE_1_LISTING_ONLY",
+    summary: data.summary ?? "",
+    keyFactors: Array.isArray(data.keyFactors) ? data.keyFactors : [],
+    legalCleanliness: toFiniteNumber(data.legalCleanliness, 50),
+    planningCertainty: toFiniteNumber(data.planningCertainty, 60),
+    taxFriction: toFiniteNumber(data.taxFriction, 30),
+    transferReadiness: toFiniteNumber(data.transferReadiness, 55),
+    legalSummary: data.legalSummary ?? "",
+    taxSummary: data.taxSummary ?? "",
+    objectiveValueProxy: data.objectiveValueProxy ?? null,
+    renovationPotential: data.renovationPotential ?? null,
+    rentalYieldEstimate: toFiniteNumber(data.rentalYieldEstimate, 0),
+    highestBestUseHint: data.highestBestUseHint ?? null,
+    redFlags: Array.isArray(data.redFlags) ? data.redFlags : [],
+    auctionAdjustedValue: data.auctionAdjustedValue ?? null,
+    listingQualityScore: toFiniteNumber(data.listingQualityScore, 50),
+  };
+}
+
 // ── Mini score bar ─────────────────────────────────────────────────────────────
 function ScoreBar({ label, score, invert = false, icon }: { label: string; score: number; invert?: boolean; icon: React.ReactNode }) {
   const colour = invert ? frictionColour(score) : scoreColour(score);
@@ -203,18 +244,16 @@ export default function PropertyValuation(props: PropertyValuationProps) {
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
-  const { listingId: _listingId, ...valuationProps } = props;
-
   const runValuation = async () => {
     if (!user) return;
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("property-valuation", { body: valuationProps });
+      const { data, error } = await supabase.functions.invoke("property-valuation", { body: props });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       if (!data?.estimatedValue) throw new Error(ui(isGreek, "Valuation returned no result", "Η εκτίμηση δεν επέστρεψε αποτέλεσμα"));
-      setResult(data as ValuationResult);
+      setResult(normalizeValuationResult(data as Partial<ValuationResult>, props.price));
       setExpanded(true);
       void queryClient.invalidateQueries({ queryKey: ["usage_ai_calls"] });
     } catch (e: unknown) {

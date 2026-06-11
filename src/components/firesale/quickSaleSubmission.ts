@@ -73,8 +73,9 @@ export const applyRemoteEstimate = (
   fnErr: unknown,
   setAiEstimate: EstimateSetter,
 ) => {
-  if (data?.estimated_value) {
-    setAiEstimate(Math.round(data.estimated_value * 0.95));
+  const remoteEstimate = data?.estimatedValue ?? data?.estimated_value;
+  if (remoteEstimate) {
+    setAiEstimate(Math.round(remoteEstimate * 0.95));
     return;
   }
   showAiEstimateLimitError(fnErr, data);
