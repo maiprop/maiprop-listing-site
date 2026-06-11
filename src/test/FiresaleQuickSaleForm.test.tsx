@@ -2,7 +2,7 @@
  * Tests for the multi-step Firesale Quick Sale form. The form manages its
  * own state, validation, photo upload and AI estimate. We mock:
  *  - @/contexts/AuthContext           → supply a canSubmit seller / non-seller
- *  - @/lib/authUtils::isSellSideRole  → directly control the gate
+ *  - @/lib/authUtils::isSellerRole    → directly control the gate
  *  - @/hooks/useSubscription
  *  - @/integrations/supabase/client   → functions.invoke + from().insert()
  *  - react-router-dom                 → capture navigate()
@@ -12,10 +12,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
 
-const { useAuthMock, useSubMock, isSellSideRoleMock, functionsInvokeMock, fromMock, navigateMock, toastMock } = vi.hoisted(() => ({
+const { useAuthMock, useSubMock, isSellerRoleMock, functionsInvokeMock, fromMock, navigateMock, toastMock } = vi.hoisted(() => ({
   useAuthMock: vi.fn(),
   useSubMock: vi.fn(),
-  isSellSideRoleMock: vi.fn(),
+  isSellerRoleMock: vi.fn(),
   functionsInvokeMock: vi.fn(),
   fromMock: vi.fn(),
   navigateMock: vi.fn(),
@@ -24,7 +24,7 @@ const { useAuthMock, useSubMock, isSellSideRoleMock, functionsInvokeMock, fromMo
 
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => useAuthMock() }));
 vi.mock("@/hooks/useSubscription", () => ({ useSubscription: () => useSubMock() }));
-vi.mock("@/lib/authUtils", () => ({ isSellSideRole: (...a: unknown[]) => isSellSideRoleMock(...a) }));
+vi.mock("@/lib/authUtils", () => ({ isSellerRole: (...a: unknown[]) => isSellerRoleMock(...a) }));
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     functions: { invoke: functionsInvokeMock },
@@ -74,8 +74,8 @@ beforeEach(() => {
   });
   useSubMock.mockReset();
   useSubMock.mockReturnValue({ isPro: false });
-  isSellSideRoleMock.mockReset();
-  isSellSideRoleMock.mockReturnValue(true);
+  isSellerRoleMock.mockReset();
+  isSellerRoleMock.mockReturnValue(true);
   functionsInvokeMock.mockReset();
   functionsInvokeMock.mockResolvedValue({ data: { estimated_value: 300_000 }, error: null });
   fromMock.mockReset();
@@ -105,8 +105,8 @@ describe("FiresaleQuickSaleForm", () => {
     expect(screen.getByText(/Property Details/i)).toBeInTheDocument();
   });
 
-  it("shows the 'Seller account required' banner when isSellSideRole is false", () => {
-    isSellSideRoleMock.mockReturnValue(false);
+  it("shows the 'Seller account required' banner when isSellerRole is false", () => {
+    isSellerRoleMock.mockReturnValue(false);
     render(<FiresaleQuickSaleForm />);
     expect(screen.getByText(/Seller account required/i)).toBeInTheDocument();
     // The banner renders a CTA button — 'Become a Seller' when logged in.
@@ -139,21 +139,21 @@ describe("FiresaleQuickSaleForm", () => {
   });
 
   it("renders a 'Sign up as Seller' CTA when there is no user at all", () => {
-    isSellSideRoleMock.mockReturnValue(false);
+    isSellerRoleMock.mockReturnValue(false);
     useAuthMock.mockReturnValue({ user: null, profile: null });
     render(<FiresaleQuickSaleForm />);
     expect(screen.getByRole("button", { name: /Sign up as Seller/i })).toBeInTheDocument();
   });
 
   it("the non-seller banner CTA redirects logged-in users to /onboarding", () => {
-    isSellSideRoleMock.mockReturnValue(false);
+    isSellerRoleMock.mockReturnValue(false);
     render(<FiresaleQuickSaleForm />);
     fireEvent.click(screen.getByRole("button", { name: /Become a Seller/i }));
     expect(navigateMock).toHaveBeenCalledWith("/onboarding");
   });
 
   it("the non-seller banner CTA redirects anonymous users to /signup?type=seller", () => {
-    isSellSideRoleMock.mockReturnValue(false);
+    isSellerRoleMock.mockReturnValue(false);
     useAuthMock.mockReturnValue({ user: null, profile: null });
     render(<FiresaleQuickSaleForm />);
     fireEvent.click(screen.getByRole("button", { name: /Sign up as Seller/i }));
@@ -161,7 +161,7 @@ describe("FiresaleQuickSaleForm", () => {
   });
 
   it("keeps the non-seller Quick Sale form visible but locked without automatic onboarding redirects", () => {
-    isSellSideRoleMock.mockReturnValue(false);
+    isSellerRoleMock.mockReturnValue(false);
     render(<FiresaleQuickSaleForm />);
 
     expect(screen.getByText(/Property Details/i)).toBeInTheDocument();

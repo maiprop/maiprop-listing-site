@@ -3992,6 +3992,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      delete_project_and_unlink_listings: {
+        Args: { p_project_id: string }
+        Returns: undefined
+      }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean

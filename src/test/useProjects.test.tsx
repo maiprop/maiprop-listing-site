@@ -9,10 +9,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor, act } from "@testing-library/react";
 
 const fromMock = vi.fn();
+const rpcMock = vi.fn();
 const useAuthMock = vi.fn();
 
 vi.mock("@/integrations/supabase/client", () => ({
-  supabase: { from: (...args: unknown[]) => fromMock(...args) },
+  supabase: {
+    from: (...args: unknown[]) => fromMock(...args),
+    rpc: (...args: unknown[]) => rpcMock(...args),
+  },
 }));
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => useAuthMock(),
@@ -44,6 +48,7 @@ function renderHookWithQuery<T>(hook: () => T) {
 
 beforeEach(() => {
   fromMock.mockReset();
+  rpcMock.mockReset();
   useAuthMock.mockReset();
   useAuthMock.mockReturnValue({ user: { id: "u-1" } });
 });
@@ -177,25 +182,14 @@ describe("useDeleteProject()", () => {
     ).rejects.toBeInstanceOf(Error);
   });
 
-  it("unlinks owned listings before deleting the project row", async () => {
-    const listingEqOwner = vi.fn().mockResolvedValue({ error: null });
-    const listingEqProject = vi.fn().mockReturnValue({ eq: listingEqOwner });
-    const listingUpdate = vi.fn().mockReturnValue({ eq: listingEqProject });
-    const projectEqOwner = vi.fn().mockResolvedValue({ error: null });
-    const projectEqId = vi.fn().mockReturnValue({ eq: projectEqOwner });
-    const projectDelete = vi.fn().mockReturnValue({ eq: projectEqId });
-    fromMock.mockImplementation((table: string) => {
-      if (table === "listings") return { update: listingUpdate };
-      if (table === "projects") return { delete: projectDelete };
-      throw new Error(`unexpected table ${table}`);
-    });
+  it("deletes through the atomic unlink-and-delete RPC", async () => {
+    rpcMock.mockResolvedValue({ error: null });
     const { result } = renderHookWithQuery(() => useDeleteProject());
     await act(async () => {
       await result.current.mutateAsync("pr1");
     });
-    expect(listingUpdate).toHaveBeenCalledWith({ project_id: null });
-    expect(listingEqProject).toHaveBeenCalledWith("project_id", "pr1");
-    expect(listingEqOwner).toHaveBeenCalledWith("owner_id", "u-1");
-    expect(projectEqOwner).toHaveBeenCalledWith("owner_id", "u-1");
+    expect(rpcMock).toHaveBeenCalledWith("delete_project_and_unlink_listings", {
+      p_project_id: "pr1",
+    });
   });
 });

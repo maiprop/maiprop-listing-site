@@ -98,7 +98,7 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
   const deleteMedia = useDeleteProjectMedia();
   const updateListing = useUpdateListing();
 
-  const [form, setForm] = useState<Record<string, string | number | boolean | undefined>>({});
+  const [form, setForm] = useState<Record<string, string | number | boolean | null | undefined>>({});
   const [saving, setSaving] = useState(false);
   const modal = useModal<"unitForm" | "leadForm" | "bulkPrice">();
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
@@ -133,8 +133,11 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
     }
   }, [project]);
 
-  const updateField = (key: string, value: string | number | undefined) => {
+  const updateField = (key: string, value: string | number | null | undefined) => {
     setForm(f => ({ ...f, [key]: value }));
+  };
+  const updateLocationField = (key: "address" | "city" | "municipality", value: string) => {
+    setForm(f => ({ ...f, [key]: value, latitude: null, longitude: null }));
   };
   const applyProjectLocationSelection = (selection: LocationAutocompleteSelection) => {
     const latitude = selection.latitude ? Number(selection.latitude) : undefined;
@@ -365,21 +368,21 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
           {/* 2. Location */}
           <Section title={tr("projects.detail.sections.location", "Location")} icon={MapPin}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="sm:col-span-2"><label className={LABEL_CLS}>{tr("projects.fields.address", "Address")}</label><LocationAutocompleteInput mode="address" value={(currentForm.address as string) || ""} onChange={(value) => updateField("address", value)} onSuggestionSelect={applyProjectLocationSelection} placeholder={tr("projects.fields.addressPlaceholder", "Street, number")} inputClassName={INPUT_CLS} /></div>
-              <div><label className={LABEL_CLS}>{tr("projects.fields.city", "City")}</label><LocationAutocompleteInput mode="city" value={(currentForm.city as string) || ""} onChange={(value) => updateField("city", value)} onSuggestionSelect={(selection) => { if (selection.municipality) updateField("municipality", selection.municipality); }} placeholder={tr("projects.fields.cityPlaceholder", "e.g. Athens")} inputClassName={INPUT_CLS} /></div>
+              <div className="sm:col-span-2"><label className={LABEL_CLS}>{tr("projects.fields.address", "Address")}</label><LocationAutocompleteInput mode="address" value={(currentForm.address as string) || ""} onChange={(value) => updateLocationField("address", value)} onSuggestionSelect={applyProjectLocationSelection} placeholder={tr("projects.fields.addressPlaceholder", "Street, number")} inputClassName={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>{tr("projects.fields.city", "City")}</label><LocationAutocompleteInput mode="city" value={(currentForm.city as string) || ""} onChange={(value) => updateLocationField("city", value)} onSuggestionSelect={(selection) => { if (selection.municipality) updateField("municipality", selection.municipality); }} placeholder={tr("projects.fields.cityPlaceholder", "e.g. Athens")} inputClassName={INPUT_CLS} /></div>
               <div>
                 <label className={LABEL_CLS}>{tr("projects.detail.fields.municipality", "Municipality")}</label>
                 <LocationAutocompleteInput
                   mode="city"
                   value={(currentForm.municipality as string) || ""}
-                  onChange={(value) => updateField("municipality", value)}
+                  onChange={(value) => updateLocationField("municipality", value)}
                   onSuggestionSelect={(selection) => updateField("municipality", selection.municipality || selection.city || selection.value)}
                   placeholder={tr("projects.detail.placeholders.municipality", "Municipality")}
                   inputClassName={INPUT_CLS}
                 />
               </div>
-              <div><label className={LABEL_CLS}>{tr("projects.detail.fields.latitude", "Latitude")}</label><input type="number" step="any" value={(currentForm.latitude as number) ?? ""} onChange={e => updateField("latitude", e.target.value ? parseFloat(e.target.value) : undefined)} placeholder={tr("projects.detail.placeholders.latitude", "e.g. 37.9838")} className={INPUT_CLS} /></div>
-              <div><label className={LABEL_CLS}>{tr("projects.detail.fields.longitude", "Longitude")}</label><input type="number" step="any" value={(currentForm.longitude as number) ?? ""} onChange={e => updateField("longitude", e.target.value ? parseFloat(e.target.value) : undefined)} placeholder={tr("projects.detail.placeholders.longitude", "e.g. 23.7275")} className={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>{tr("projects.detail.fields.latitude", "Latitude")}</label><input type="number" step="any" value={(currentForm.latitude as number | null) ?? ""} onChange={e => updateField("latitude", e.target.value ? parseFloat(e.target.value) : null)} placeholder={tr("projects.detail.placeholders.latitude", "e.g. 37.9838")} className={INPUT_CLS} /></div>
+              <div><label className={LABEL_CLS}>{tr("projects.detail.fields.longitude", "Longitude")}</label><input type="number" step="any" value={(currentForm.longitude as number | null) ?? ""} onChange={e => updateField("longitude", e.target.value ? parseFloat(e.target.value) : null)} placeholder={tr("projects.detail.placeholders.longitude", "e.g. 23.7275")} className={INPUT_CLS} /></div>
               <div className="sm:col-span-2"><label className={LABEL_CLS}>{tr("projects.detail.fields.areaDescription", "Area description")}</label><textarea value={(currentForm.area_description as string) || ""} onChange={e => updateField("area_description", e.target.value)} rows={2} placeholder={tr("projects.detail.placeholders.areaDescription", "Neighbourhood, amenities, surroundings...")} className={INPUT_CLS + " resize-none"} /></div>
             </div>
           </Section>

@@ -144,6 +144,8 @@ export default function CreateNewBuildingListing() {
     navigate("/dashboard/settings", { replace: true });
   }, [user, profile, canCreateListing, navigate, tr]);
 
+  const setProjectLocationField = (key: "address" | "city" | "municipality", value: string) =>
+    setProject(p => ({ ...p, [key]: value, latitude: "", longitude: "" }));
   const setProjectField = (key: string, value: string | number) =>
     setProject(p => ({ ...p, [key]: value }));
   const setUnitField = (key: string, value: string | number | boolean) =>
@@ -397,7 +399,7 @@ export default function CreateNewBuildingListing() {
                     <LocationAutocompleteInput
                       mode="city"
                       value={project.city}
-                      onChange={(value) => setProjectField("city", value)}
+                      onChange={(value) => setProjectLocationField("city", value)}
                       onSuggestionSelect={(selection) => {
                         if (selection.municipality) setProjectField("municipality", selection.municipality);
                       }}
@@ -414,13 +416,13 @@ export default function CreateNewBuildingListing() {
                     <LocationAutocompleteInput
                       mode="city"
                       value={project.municipality}
-                      onChange={(value) => setProjectField("municipality", value)}
+                      onChange={(value) => setProjectLocationField("municipality", value)}
                       onSuggestionSelect={(selection) => setProjectField("municipality", selection.municipality || selection.city || selection.value)}
                       placeholder={tr("newBuildingListing.building.municipalityPlaceholder", "Δήμος")}
                       inputClassName={INPUT_CLS}
                     />
                   </div>
-                  <div className="sm:col-span-2"><label className={LABEL_CLS}>{tr("newBuildingListing.building.address", "Address")}</label><LocationAutocompleteInput mode="address" value={project.address} onChange={(value) => setProjectField("address", value)} onSuggestionSelect={applyProjectLocationSelection} placeholder={tr("newBuildingListing.building.addressPlaceholder", "Street, number")} inputClassName={INPUT_CLS} /></div>
+                  <div className="sm:col-span-2"><label className={LABEL_CLS}>{tr("newBuildingListing.building.address", "Address")}</label><LocationAutocompleteInput mode="address" value={project.address} onChange={(value) => setProjectLocationField("address", value)} onSuggestionSelect={applyProjectLocationSelection} placeholder={tr("newBuildingListing.building.addressPlaceholder", "Street, number")} inputClassName={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>{tr("newBuildingListing.building.latitude", "Latitude")}</label><input type="number" step="any" value={project.latitude} onChange={e => setProjectField("latitude", e.target.value)} placeholder="37.9838" className={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>{tr("newBuildingListing.building.longitude", "Longitude")}</label><input type="number" step="any" value={project.longitude} onChange={e => setProjectField("longitude", e.target.value)} placeholder="23.7275" className={INPUT_CLS} /></div>
                   <div className="sm:col-span-2"><label className={LABEL_CLS}>{tr("newBuildingListing.building.projectDescription", "Project description")}</label><textarea value={project.description} onChange={e => setProjectField("description", e.target.value)} rows={4} placeholder={tr("newBuildingListing.building.descriptionPlaceholder", "Brief description...")} className={INPUT_CLS + " resize-none"} /></div>
@@ -555,7 +557,10 @@ export default function CreateNewBuildingListing() {
                     accept="image/*"
                     multiple
                     className="hidden"
-                    onChange={e => handleListingFilesSelected(e.target.files)}
+                    onChange={e => {
+                      handleListingFilesSelected(e.target.files);
+                      e.target.value = "";
+                    }}
                   />
                   <Upload className="w-10 h-10 mx-auto text-muted-foreground mb-2" />
                   <p className="text-sm font-medium">{tr("newBuildingListing.photos.dropPrompt", "Drop photos or click to upload")}</p>
