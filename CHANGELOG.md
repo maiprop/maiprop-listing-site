@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.15](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.14...v1.9.15) (2026-06-11)
+
+
+### Bug Fixes
+
+* wire AI insights and follow-up automation ([d58c390](https://github.com/maiprop/maiprop-listing-site/commit/d58c3900903776f3fad6a8c8d9967ea3951c4742))
+
 ## [1.9.14](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.13...v1.9.14) (2026-06-11)
 
 
