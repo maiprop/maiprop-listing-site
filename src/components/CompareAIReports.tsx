@@ -5,6 +5,7 @@ import { getAiErrorMessage } from "@/lib/aiErrorUtils";
 import { useAuth } from "@/contexts/AuthContext";
 import { SignInForAI } from "@/components/SignInForAI";
 import { computeWalkScore, walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
+import { getPrimaryValuationEstimate } from "@/lib/valuationResult";
 
 // Compare drawer is fed both the formatted card view and the raw listing row
 // from useListings. Both shapes have ~80 columns between them and a tighter
@@ -178,8 +179,11 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
           }),
         ]);
 
-        const valuation = valRes.status === "fulfilled" && !valRes.value.error
-          ? valRes.value.data as AIReport
+        const valuation = valRes.status === "fulfilled" && !valRes.value.error && valRes.value.data
+          ? {
+              ...(valRes.value.data as AIReport),
+              estimatedValue: getPrimaryValuationEstimate(valRes.value.data, Number(raw.price)),
+            }
           : null;
 
         let reportError: string | null = null;

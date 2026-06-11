@@ -267,7 +267,7 @@ const OPEN_HOUSES = [
     has_view: false,
     has_ac: true,
     has_furnished: false,
-    is_pre_sale: true,
+    is_pre_sale: false,
     latitude: 38.0567,
     longitude: 23.8065,
     open_house_date: futureDate(3, 12, 0),

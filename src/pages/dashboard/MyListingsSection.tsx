@@ -34,7 +34,7 @@ import { cn } from "@/lib/utils";
 import type { ParticipantId } from "@/lib/participantConfig";
 import type { DashboardRole } from "@/lib/dashboardNav";
 
-type ListingFilter = "all" | "off_market" | "pre_sale";
+type ListingFilter = "all" | "off_market" | "new_build";
 
 interface MyListingsSectionProps {
   bioType: ParticipantId | null;
@@ -60,7 +60,7 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
   const isSellSide = role === "agent" || role === "developer";
   const showFilterChips =
     FILTER_ELIGIBLE_ROLES.includes(role) &&
-    myListings.some((l) => l.is_off_market || l.is_pre_sale);
+    myListings.some((l) => l.is_off_market || l.listing_type === "new_build");
 
   const toggleListingStatus = (id: string, currentStatus: string) => {
     updateListing.mutate({
@@ -74,8 +74,8 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
   const filteredListings =
     listingFilter === "off_market"
       ? myListings.filter((l) => l.is_off_market)
-      : listingFilter === "pre_sale"
-        ? myListings.filter((l) => l.is_pre_sale)
+      : listingFilter === "new_build"
+        ? myListings.filter((l) => l.listing_type === "new_build")
         : myListings;
 
   const filterChips: { key: ListingFilter; label: string }[] = [
@@ -85,8 +85,8 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
       label: `Off-market (${myListings.filter((l) => l.is_off_market).length})`,
     },
     {
-      key: "pre_sale",
-      label: `Pre-sale (${myListings.filter((l) => l.is_pre_sale).length})`,
+      key: "new_build",
+      label: `New builds (${myListings.filter((l) => l.listing_type === "new_build").length})`,
     },
   ];
 
@@ -183,9 +183,9 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
                       Off-market
                     </span>
                   )}
-                  {l.is_pre_sale && (
+                  {l.listing_type === "new_build" && (
                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-                      Pre-sale
+                      New build
                     </span>
                   )}
                 </div>

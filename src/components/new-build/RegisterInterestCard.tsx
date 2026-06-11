@@ -90,9 +90,9 @@ export function RegisterInterestCard({
         {listing.price_per_sqm != null && (
           <p className="text-xs text-muted-foreground mt-1">{trv("newBuildDetail.pricePerSqm", "{{price}} / m²", { price: formatNewBuildPrice(Number(listing.price_per_sqm)) })}</p>
         )}
-        {listing.is_pre_sale && (
+        {listing.listing_type === "new_build" && (
           <div className="mt-3 rounded-lg bg-primary/10 border border-primary/20 px-3 py-2 text-xs text-primary font-medium">
-            {tr("newBuildDetail.interestCard.preSaleNote", "Pre-sale pricing - early buyers may access preferential rates")}
+            {tr("newBuildDetail.interestCard.preSaleNote", "Project pricing - early buyers may access preferential rates")}
           </div>
         )}
       </div>

@@ -2,6 +2,7 @@ import type { NavigateFunction } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { isAiUsageLimitError } from "@/lib/aiErrorUtils";
+import { getRemoteValuationEstimate } from "@/lib/valuationResult";
 import {
   buildMetaLines,
   getCityFromAddress,
@@ -72,10 +73,13 @@ export const applyRemoteEstimate = (
   data: RemoteEstimateData | null | undefined,
   fnErr: unknown,
   setAiEstimate: EstimateSetter,
+  fallbackMarketValue = 0,
 ) => {
-  const remoteEstimate = data?.estimatedValue ?? data?.estimated_value;
-  if (remoteEstimate) {
-    setAiEstimate(Math.round(remoteEstimate * 0.95));
+  const remoteEstimate = getRemoteValuationEstimate(data);
+  const fallbackEstimate = !fnErr && !data?.error ? Number(fallbackMarketValue) : 0;
+  const marketEstimate = remoteEstimate ?? (Number.isFinite(fallbackEstimate) && fallbackEstimate > 0 ? fallbackEstimate : null);
+  if (marketEstimate && marketEstimate > 0) {
+    setAiEstimate(Math.round(marketEstimate * 0.95));
     return;
   }
   showAiEstimateLimitError(fnErr, data);

@@ -101,11 +101,12 @@ describe("CompareAIReports — Run AI Analysis happy path", () => {
         return Promise.resolve({
           data: {
             estimatedValue: 240_000,
+            auctionAdjustedValue: 300_000,
             rangeLow: 220_000,
             rangeHigh: 260_000,
             confidence: 0.9,
-            marketComparison: "below_market",
-            marketComparisonPct: -4,
+            marketComparison: "above_market",
+            marketComparisonPct: 20,
             rentalYieldEstimate: 4.5,
           },
           error: null,
@@ -125,9 +126,9 @@ describe("CompareAIReports — Run AI Analysis happy path", () => {
     render(wrap(<CompareAIReports listings={[baseListing()]} />));
     fireEvent.click(screen.getByRole("button", { name: /Run AI Analysis/i }));
 
-    // Valuation cell shows the formatted estimate + the below-market badge.
-    await waitFor(() => expect(screen.getByText("€240,000")).toBeInTheDocument());
-    expect(screen.getByText(/Below Mkt/i)).toBeInTheDocument();
+    // Valuation cell shows the formatted clean-market estimate + market badge.
+    await waitFor(() => expect(screen.getByText(/300,000/)).toBeInTheDocument());
+    expect(screen.getByText(/Above Mkt/i)).toBeInTheDocument();
     expect(screen.getByText(/Yield:/i)).toBeInTheDocument();
     // Walk score badge text uses our mocked label.
     expect(screen.getByText("Score 82")).toBeInTheDocument();

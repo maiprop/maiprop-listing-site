@@ -116,11 +116,11 @@ describe("DesktopActiveFilterChips", () => {
     fireEvent.click(screen.getByText(/Heating:/i));
     expect(setParam).toHaveBeenCalledWith("heating", "");
 
-    fireEvent.click(screen.getByText(/New/i));
+    fireEvent.click(screen.getByText(/^New$/i));
     expect(setParam).toHaveBeenCalledWith("construction", "");
 
     for (const [label, key] of [
-      [/Pre-sale/i, "pre_sale"],
+      [/New builds/i, "listing_type"],
       [/Video Viewing/i, "video_viewing"],
       [/Virtual Tour/i, "virtual_tour"],
       [/Messaging/i, "messaging"],
@@ -130,5 +130,6 @@ describe("DesktopActiveFilterChips", () => {
       fireEvent.click(screen.getByText(label));
       expect(setParam).toHaveBeenCalledWith(key, "");
     }
+    expect(setParam).toHaveBeenCalledWith("pre_sale", "");
   });
 });

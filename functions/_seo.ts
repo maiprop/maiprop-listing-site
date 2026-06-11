@@ -53,8 +53,8 @@ const SELECT_FIELDS = [
 const BASE_TITLE = "mAI prop - Greek Real Estate";
 const BASE_DESCRIPTION =
   "Buy, rent, or sell property in Greece. AI-powered listings, Greek auctions, Firesale instant offers, and verified professionals - all in one place.";
-const DEFAULT_LISTING_TYPES = ["sale", "rent", "firesale"] as const;
-const ALLOWED_LISTING_TYPES = ["sale", "rent", "firesale", "auction", "open_house"] as const;
+const DEFAULT_LISTING_TYPES = ["sale", "rent", "firesale", "new_build"] as const;
+const ALLOWED_LISTING_TYPES = ["sale", "rent", "firesale", "auction", "open_house", "new_build"] as const;
 const ALLOWED_PROPERTY_TYPES = ["apartment", "house", "villa", "land", "commercial", "office"] as const;
 const HEAD_CLOSE_TAG = "</head>";
 const SEO_SUPABASE_FETCH_TIMEOUT_MS = 2500;
@@ -242,7 +242,7 @@ async function fetchWithTimeout(
 export function listingDetailPath(listing: SeoListing): string {
   if (listing.listing_type === "auction") return `/auction/${listing.id}`;
   if (listing.listing_type === "open_house") return `/open-house/${listing.id}`;
-  if (listing.is_pre_sale || listing.listing_type === "new_build") return `/new-build/${listing.id}`;
+  if (listing.listing_type === "new_build") return `/new-build/${listing.id}`;
   return `/property/${listing.id}`;
 }
 

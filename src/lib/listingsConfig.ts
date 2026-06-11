@@ -23,6 +23,7 @@ export const listingTypeOptions = [
   { labelKey: "listingsPage.listingTypes.all", value: "", icon: "🏘️" },
   { labelKey: "listingsPage.listingTypes.buy", value: "sale", icon: "🏷️" },
   { labelKey: "listingsPage.listingTypes.rent", value: "rent", icon: "🔑" },
+  { labelKey: "listingsPage.listingTypes.newBuild", value: "new_build", icon: "🏗️" },
 ];
 
 export const sortOptions = [

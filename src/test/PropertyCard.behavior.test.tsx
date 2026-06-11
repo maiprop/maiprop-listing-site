@@ -90,7 +90,7 @@ describe("PropertyCard behavior", () => {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: writeTextMock } });
     const { PropertyCard } = await import("@/components/PropertyCard");
 
-    renderWithProviders(<PropertyCard property={baseProperty({ isPreSale: true })} />);
+    renderWithProviders(<PropertyCard property={baseProperty({ listingType: "new_build" })} />);
     fireEvent.click(screen.getByRole("button", { name: "propertyCard.actions.share" }));
 
     await waitFor(() => {

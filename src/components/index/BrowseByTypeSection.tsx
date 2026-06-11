@@ -40,7 +40,7 @@ export function BrowseByTypeSection({ typeCounts }: Props) {
             </Link>
           ))}
           {/* New Development */}
-          <Link to="/listings?pre_sale=1">
+          <Link to="/listings?listing_type=new_build">
             <div className="glass-card rounded-xl sm:rounded-2xl border border-border hover:border-primary/40 hover:shadow-elevated transition-all group p-3 sm:p-4 flex flex-col sm:flex-row items-center sm:items-center gap-1 sm:gap-3 cursor-pointer relative text-center sm:text-left">
               <span className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 px-1 sm:px-1.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-bold bg-primary text-primary-foreground leading-tight tracking-wide">
                 NEW

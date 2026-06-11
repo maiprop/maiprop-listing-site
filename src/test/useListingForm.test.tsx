@@ -438,7 +438,7 @@ describe("useListingForm — handleSubmit", () => {
     expect(toastMock.success).toHaveBeenCalledWith(expect.stringMatching(/draft/));
   });
 
-  it("routes a pre-sale listing to /new-build/:id", async () => {
+  it("routes a stale pre-sale sale listing to /property/:id", async () => {
     fromMock.mockReturnValueOnce({
       insert: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnValue({
@@ -452,7 +452,7 @@ describe("useListingForm — handleSubmit", () => {
     await act(async () => {
       await result.current.handleSubmit();
     });
-    expect(navigateMock).toHaveBeenCalledWith("/new-build/L-3");
+    expect(navigateMock).toHaveBeenCalledWith("/property/L-3");
   });
 
   it("forces stale pre-sale form state off when allowPreSale is false", async () => {

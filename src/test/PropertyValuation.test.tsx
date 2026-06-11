@@ -176,11 +176,30 @@ describe("PropertyValuation — happy paths", () => {
     await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith("rate-limited"));
   });
 
-  it("toasts when the AI returns no estimatedValue", async () => {
+  it("toasts when the AI returns no valuation number", async () => {
     invokeMock.mockResolvedValue({ data: { confidence: 50 }, error: null });
     render(<PropertyValuation {...baseProps} />);
     fireEvent.click(screen.getByRole("button", { name: /Run AI Valuation/i }));
     await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/no result/i)));
+  });
+
+  it("accepts a clean-market value as a valid primary valuation result", async () => {
+    invokeMock.mockResolvedValue({
+      data: {
+        auctionAdjustedValue: 300_000,
+        rangeLow: 280_000,
+        rangeHigh: 320_000,
+        confidence: 80,
+        liquidityScore: 70,
+        marketComparisonPct: 20,
+        pricingPosition: "overpriced",
+      },
+      error: null,
+    });
+    render(<PropertyValuation {...baseProps} />);
+    fireEvent.click(screen.getByRole("button", { name: /Run AI Valuation/i }));
+    await waitFor(() => expect(screen.getByText(/300\.000/)).toBeInTheDocument());
+    expect(toastMock.error).not.toHaveBeenCalled();
   });
 });
 
@@ -223,15 +242,22 @@ describe("PropertyValuation — result UI", () => {
     await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1));
   });
 
-  it("renders the Auction-Adjusted Value pill when it is non-null", async () => {
+  it("uses the clean-market value as the primary amount when an auction adjustment is present", async () => {
     invokeMock.mockResolvedValue({
-      data: { ...validResult, auctionAdjustedValue: 200_000 },
+      data: {
+        ...validResult,
+        estimatedValue: 130_000,
+        rangeLow: 120_000,
+        rangeHigh: 140_000,
+        auctionAdjustedValue: 154_000,
+      },
       error: null,
     });
     render(<PropertyValuation {...baseProps} />);
     fireEvent.click(screen.getByRole("button", { name: /Run AI Valuation/i }));
-    await waitFor(() => expect(screen.getByText(/Auction-Adjusted Value/i)).toBeInTheDocument());
-    expect(screen.getByText(/Clean market value/i)).toBeInTheDocument();
-    expect(screen.getByText("€200.000")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/Hybrid clean-market value/i)).toBeInTheDocument());
+    expect(screen.getByText(/154\.000/)).toBeInTheDocument();
+    expect(screen.getByText(/Auction-adjusted bid value/i)).toBeInTheDocument();
+    expect(screen.getByText(/130\.000/)).toBeInTheDocument();
   });
 });

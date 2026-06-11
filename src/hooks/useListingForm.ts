@@ -25,6 +25,7 @@ import type {
 } from "@/hooks/listingForm.types";
 import { tFallback, tInterpolate } from "@/lib/i18nFallback";
 import { assertAllowedUpload } from "@/lib/uploadValidation";
+import { getListingDetailPath } from "@/lib/listingRoutes";
 
 // Re-export the types so existing callers (`import { type ListingFormData }
 // from "@/hooks/useListingForm"`) keep working.
@@ -584,12 +585,7 @@ export function useListingForm(options?: UseListingFormOptions) {
         : asDraft
           ? tr("createListing.validation.savedDraft", "Listing saved as draft!")
           : tr("createListing.validation.published", "Listing published successfully!"));
-      const detailRoute = lt === "open_house"
-        ? `/open-house/${savedListing.id}`
-        : options?.allowPreSale && form.is_pre_sale
-        ? `/new-build/${savedListing.id}`
-        : `/property/${savedListing.id}`;
-      navigate(detailRoute);
+      navigate(getListingDetailPath({ id: savedListing.id, listing_type: lt }));
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : tr("createListing.validation.submissionFailed", "Submission failed"));
     } finally {

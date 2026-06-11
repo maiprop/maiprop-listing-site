@@ -98,11 +98,17 @@ describe("quick sale submission helpers", () => {
     applyRemoteEstimate({ estimated_value: 300_001 }, null, setAiEstimate);
     expect(setAiEstimate).toHaveBeenCalledWith(285001);
 
-    applyRemoteEstimate({ error: "monthly_limit_reached" }, null, setAiEstimate);
-    expect(setAiEstimate).toHaveBeenCalledTimes(1);
+    applyRemoteEstimate({ estimatedValue: 130_000, auctionAdjustedValue: 154_000 }, null, setAiEstimate);
+    expect(setAiEstimate).toHaveBeenLastCalledWith(146300);
+
+    applyRemoteEstimate({}, null, setAiEstimate, 350_000);
+    expect(setAiEstimate).toHaveBeenLastCalledWith(332500);
+
+    applyRemoteEstimate({ error: "monthly_limit_reached" }, null, setAiEstimate, 350_000);
+    expect(setAiEstimate).toHaveBeenCalledTimes(3);
     expect(toastMock.error).toHaveBeenCalledWith("AI estimate is temporarily unavailable due to usage limits.");
 
-    applyRemoteEstimate(null, new Error("gateway 402 usage limit"), setAiEstimate);
+    applyRemoteEstimate(null, new Error("gateway 402 usage limit"), setAiEstimate, 350_000);
     expect(toastMock.error).toHaveBeenCalledTimes(2);
   });
 

@@ -152,11 +152,11 @@ describe("buildListingsQuery — sort variants", () => {
 });
 
 describe("buildListingsQuery — listing-type / status scoping", () => {
-  it("with no listing_type and no includeAuctions, restricts to sale/rent/firesale via .in()", () => {
+  it("with no listing_type and no includeAuctions, restricts to public catalogue types including new_build via .in()", () => {
     buildListingsQuery();
     const inCall = calls("in").find((c) => c.args[0] === "listing_type");
     expect(inCall).toBeDefined();
-    expect(inCall?.args[1]).toEqual(["sale", "rent", "firesale"]);
+    expect(inCall?.args[1]).toEqual(["sale", "rent", "firesale", "new_build"]);
   });
 
   it("includeAuctions:true skips the listing_type allowlist", () => {
@@ -169,6 +169,12 @@ describe("buildListingsQuery — listing-type / status scoping", () => {
     buildListingsQuery({ listing_type: "auction" });
     expect(calls("eq").some((c) => c.args[0] === "listing_type" && c.args[1] === "auction")).toBe(true);
     expect(calls("in").find((c) => c.args[0] === "listing_type")).toBeUndefined();
+  });
+
+  it("explicit new_build listing_type searches project ads by type rather than pre-sale flag", () => {
+    buildListingsQuery({ listing_type: "new_build", is_pre_sale: true });
+    expect(calls("eq").some((c) => c.args[0] === "listing_type" && c.args[1] === "new_build")).toBe(true);
+    expect(calls("eq").some((c) => c.args[0] === "is_pre_sale")).toBe(false);
   });
 
   it("defaults status to 'active' when no owner_id is supplied", () => {

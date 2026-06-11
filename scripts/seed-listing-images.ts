@@ -206,8 +206,9 @@ function getImagePool(
   isPreSale: boolean,
   constructionStatus: string | null,
 ): string[][] {
+  const isCanonicalNewBuild = listingType === "new_build";
   const isUnderConst =
-    isPreSale &&
+    isCanonicalNewBuild &&
     constructionStatus &&
     !["new", "shell_complete"].includes(constructionStatus);
 

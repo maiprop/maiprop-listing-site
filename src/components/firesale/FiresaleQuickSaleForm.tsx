@@ -113,7 +113,7 @@ export const FiresaleQuickSaleForm = () => {
           condition: form.notes.trim() || undefined,
         },
       });
-      applyRemoteEstimate(data, fnErr, setAiEstimate);
+      applyRemoteEstimate(data, fnErr, setAiEstimate, Number(form.askingPrice));
     } catch (e: unknown) {
       showAiEstimateLimitError(e, null);
     } finally {

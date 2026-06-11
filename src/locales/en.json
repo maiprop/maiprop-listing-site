@@ -883,7 +883,8 @@
     "listingTypes": {
       "all": "All",
       "buy": "Buy",
-      "rent": "Rent"
+      "rent": "Rent",
+      "newBuild": "New Builds"
     },
     "priceRanges": {
       "buy": {
@@ -2401,7 +2402,7 @@
       "title": "Register your interest",
       "signInBody": "Sign in to register interest and receive full unit availability, floor plans and pricing from the developer.",
       "signInCta": "Sign in to Register Interest",
-      "preSaleNote": "Pre-sale pricing - early buyers may access preferential rates",
+      "preSaleNote": "Project pricing - early buyers may access preferential rates",
       "body": "Receive unit availability, floor plans and pricing directly from the developer.",
       "namePlaceholder": "Your name",
       "phonePlaceholder": "Phone number (optional)",

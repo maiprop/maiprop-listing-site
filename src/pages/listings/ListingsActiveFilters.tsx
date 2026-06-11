@@ -80,7 +80,7 @@ export const DesktopActiveFilterChips = ({ // skipcq: JS-R1005 - Active chips ma
         {translateCondition(selectedConstruction, isGreek)}
       </ActiveFilterChip>
     )}
-    {preSaleOnly && <ActiveFilterChip onClick={() => setParam("pre_sale", "")}>{isGreek ? "Προπώληση" : "Pre-sale"}</ActiveFilterChip>}
+    {preSaleOnly && <ActiveFilterChip onClick={() => { setParam("listing_type", ""); setParam("pre_sale", ""); }}>{isGreek ? "Νέες κατασκευές" : "New builds"}</ActiveFilterChip>}
     {hasVideoViewing && <ActiveFilterChip accent onClick={() => setParam("video_viewing", "")}>{isGreek ? "Βιντεοκλήση" : "Video Viewing"}</ActiveFilterChip>}
     {hasVirtualTour && <ActiveFilterChip accent onClick={() => setParam("virtual_tour", "")}>{isGreek ? "Εικονική περιήγηση" : "Virtual Tour"}</ActiveFilterChip>}
     {hasMessaging && <ActiveFilterChip accent onClick={() => setParam("messaging", "")}>{isGreek ? "Μηνύματα" : "Messaging"}</ActiveFilterChip>}

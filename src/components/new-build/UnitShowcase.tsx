@@ -36,9 +36,9 @@ export function UnitShowcase({ listing, onContact }: { listing: any; onContact: 
                 <p className="text-xs text-muted-foreground mt-0.5">{formatNewBuildPrice(Number(listing.price_per_sqm))} / m²</p>
               )}
             </div>
-            {listing.is_pre_sale && (
+            {listing.listing_type === "new_build" && (
               <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-primary text-primary-foreground">
-                Pre-sale
+                New build
               </span>
             )}
           </div>

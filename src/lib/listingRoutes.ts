@@ -6,7 +6,7 @@ type ListingRouteListing = {
 
 export const shouldUseNewBuildRoute = (
   listing: ListingRouteListing | null | undefined,
-): boolean => Boolean(listing?.is_pre_sale || listing?.listing_type === "new_build");
+): boolean => listing?.listing_type === "new_build";
 
 export const getListingDetailPath = (
   listing: ListingRouteListing,

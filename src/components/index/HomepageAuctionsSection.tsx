@@ -96,7 +96,7 @@ const getAuctionMetadata = (listing: HomepageAuctionListing) => ({ // skipcq: JS
   aiScore: valueOrUndefined(listing.ai_score),
   views: valueOrUndefined(listing.views_count),
   tags: valueOr(listing.tags, []),
-  isPreSale: valueOr(listing.is_pre_sale, false),
+  isPreSale: listing.listing_type === "new_build",
   constructionStatus: valueOrUndefined(listing.construction_status),
 });
 
