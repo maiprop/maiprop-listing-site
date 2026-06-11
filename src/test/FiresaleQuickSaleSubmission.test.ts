@@ -108,8 +108,12 @@ describe("quick sale submission helpers", () => {
     expect(setAiEstimate).toHaveBeenCalledTimes(3);
     expect(toastMock.error).toHaveBeenCalledWith("AI estimate is temporarily unavailable due to usage limits.");
 
+    applyRemoteEstimate({ error: "provider_down" }, null, setAiEstimate, 350_000);
+    expect(setAiEstimate).toHaveBeenCalledTimes(3);
+    expect(toastMock.error).toHaveBeenCalledWith("AI estimate is temporarily unavailable. Using fallback estimate.");
+
     applyRemoteEstimate(null, new Error("gateway 402 usage limit"), setAiEstimate, 350_000);
-    expect(toastMock.error).toHaveBeenCalledTimes(2);
+    expect(toastMock.error).toHaveBeenCalledTimes(3);
   });
 
   it("inserts the normalized firesale request, uploads every photo, and returns the stored request id", async () => {

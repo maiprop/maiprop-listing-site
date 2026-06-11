@@ -33,7 +33,7 @@ import {
   getSubmitUserId,
   navigateToSellerSetup,
   redirectBlockedSubmitter,
-  showAiEstimateLimitError,
+  showAiEstimateError,
   showAuthPendingToast,
   showValidationErrors,
   submitValidatedQuickSale,
@@ -115,7 +115,7 @@ export const FiresaleQuickSaleForm = () => {
       });
       applyRemoteEstimate(data, fnErr, setAiEstimate, Number(form.askingPrice));
     } catch (e: unknown) {
-      showAiEstimateLimitError(e, null);
+      showAiEstimateError(e, null);
     } finally {
       setAiLoading(false);
     }

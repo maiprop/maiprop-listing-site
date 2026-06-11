@@ -38,6 +38,21 @@ interface PropertyAIData {
   error: string | null;
 }
 
+const normalizeValuationReport = (data: unknown, fallbackPrice: number): AIReport => {
+  const source = data && typeof data === "object" ? data as Partial<AIReport> : {};
+  const estimatedValue = getPrimaryValuationEstimate(source, fallbackPrice);
+  const diffPct = fallbackPrice > 0 ? Math.round(((estimatedValue - fallbackPrice) / fallbackPrice) * 100) : 0;
+  return {
+    estimatedValue,
+    rangeLow: Number.isFinite(Number(source.rangeLow)) ? Number(source.rangeLow) : Math.round(estimatedValue * 0.9),
+    rangeHigh: Number.isFinite(Number(source.rangeHigh)) ? Number(source.rangeHigh) : Math.round(estimatedValue * 1.1),
+    confidence: Number.isFinite(Number(source.confidence)) ? Number(source.confidence) : 0,
+    marketComparison: source.marketComparison ?? (diffPct > 5 ? "above_market" : diffPct < -5 ? "below_market" : "at_market"),
+    marketComparisonPct: Number.isFinite(Number(source.marketComparisonPct)) ? Number(source.marketComparisonPct) : diffPct,
+    rentalYieldEstimate: Number.isFinite(Number(source.rentalYieldEstimate)) ? Number(source.rentalYieldEstimate) : 0,
+  };
+};
+
 // ── Mini walk score badge ─────────────────────────────────────────────────────
 function WalkBadge({ score }: { score: number }) {
   const colour = walkScoreColour(score);
@@ -180,10 +195,7 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
         ]);
 
         const valuation = valRes.status === "fulfilled" && !valRes.value.error && valRes.value.data
-          ? {
-              ...(valRes.value.data as AIReport),
-              estimatedValue: getPrimaryValuationEstimate(valRes.value.data, Number(raw.price)),
-            }
+          ? normalizeValuationReport(valRes.value.data, Number(raw.price))
           : null;
 
         let reportError: string | null = null;

@@ -167,6 +167,25 @@ describe("CompareAIReports — Run AI Analysis happy path", () => {
     expect(screen.getByText(/Noisy/i)).toBeInTheDocument();
   });
 
+  it("normalizes sparse successful valuation payloads before rendering", async () => {
+    invokeMock.mockImplementation((name: string) => {
+      if (name === "property-valuation")
+        return Promise.resolve({ data: {}, error: null });
+      if (name === "neighbourhood-report")
+        return Promise.resolve({ data: { safety_score: 70, noise_level: "moderate" }, error: null });
+      if (name === "property-pois")
+        return Promise.resolve({ data: { pois: [] }, error: null });
+      throw new Error("unexpected " + name);
+    });
+    render(wrap(<CompareAIReports listings={[baseListing({ price: 250_000 })]} />));
+    fireEvent.click(screen.getByRole("button", { name: /Run AI Analysis/i }));
+
+    await waitFor(() => expect(screen.getByText(/250,000/)).toBeInTheDocument());
+    expect(screen.getByText(/At Market/i)).toBeInTheDocument();
+    expect(screen.getByText(/225,000/)).toBeInTheDocument();
+    expect(screen.getByText(/275,000/)).toBeInTheDocument();
+  });
+
   it("renders em-dashes when valuation fails", async () => {
     invokeMock.mockImplementation((name: string) => {
       if (name === "property-valuation")

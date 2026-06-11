@@ -62,11 +62,17 @@ export const showAuthPendingToast = (authPending: boolean): boolean => {
   return true;
 };
 
-export const showAiEstimateLimitError = (
+export const showAiEstimateError = (
   error: unknown,
   data: RemoteEstimateData | null | undefined,
 ) => {
-  if (isAiUsageLimitError(error, data)) toast.error("AI estimate is temporarily unavailable due to usage limits.");
+  if (isAiUsageLimitError(error, data)) {
+    toast.error("AI estimate is temporarily unavailable due to usage limits.");
+    return;
+  }
+  if (error || data?.error) {
+    toast.error("AI estimate is temporarily unavailable. Using fallback estimate.");
+  }
 };
 
 export const applyRemoteEstimate = (
@@ -82,7 +88,7 @@ export const applyRemoteEstimate = (
     setAiEstimate(Math.round(marketEstimate * 0.95));
     return;
   }
-  showAiEstimateLimitError(fnErr, data);
+  showAiEstimateError(fnErr, data);
 };
 
 const insertFiresaleRequest = (
