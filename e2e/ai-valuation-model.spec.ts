@@ -465,9 +465,10 @@ test.describe("AI valuation model e2e coverage", () => {
     const dialog = page.getByRole("dialog", { name: /Property comparison/i });
     await expect(dialog).toBeVisible();
     await dialog.getByRole("button", { name: /Run AI Analysis/i }).click();
-    await expect(page.getByText(numberPattern(300000)).first()).toBeVisible();
-    await expect(page.getByText(numberPattern(250000)).first()).toBeVisible();
-    await expect(page.getByText(/At Market/i).first()).toBeVisible();
+    const aiValueCells = dialog.locator('tr:has-text("AI Value") td');
+    await expect(aiValueCells.nth(1)).toContainText(numberPattern(300000));
+    await expect(aiValueCells.nth(2)).toContainText(numberPattern(250000));
+    await expect(aiValueCells.nth(2)).toContainText(/At Market/i);
     expect(errors).toEqual([]);
   });
 
@@ -493,5 +494,6 @@ test.describe("AI valuation model e2e coverage", () => {
 
     await expect(page.getByText(/AI estimate is temporarily unavailable\. Using fallback estimate\./i)).toBeVisible();
     await expect(page.getByText(/AI Estimated Offer/i)).toBeVisible();
+    await expect(page.getByText(numberPattern(184000)).first()).toBeVisible();
   });
 });
