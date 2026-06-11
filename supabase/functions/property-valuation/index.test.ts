@@ -199,6 +199,9 @@ Deno.test("uses OpenAI enriched with structured OS valuation when listing coordi
       generatedBy?: string;
       marketComparison?: string;
       osEstimatedValue?: number;
+      osValuation?: unknown;
+      osDataSources?: string[];
+      osComparableCounts?: { sale?: number; rental?: number };
       redFlags?: string[];
       legalSummary?: string;
     };
@@ -209,6 +212,10 @@ Deno.test("uses OpenAI enriched with structured OS valuation when listing coordi
     assertEquals(body.generatedBy, "openai_maiprop_os");
     assertEquals(body.estimatedValue, 468000);
     assertEquals(body.osEstimatedValue, 470000);
+    assertEquals(Object.prototype.hasOwnProperty.call(body, "osValuation"), false);
+    assertEquals(body.osDataSources?.includes("mAI Prop OS structured valuation API"), true);
+    assertEquals(body.osComparableCounts?.sale, 1);
+    assertEquals(body.osComparableCounts?.rental, 1);
     assertEquals(body.rentalYieldEstimate, 3.9);
     assertEquals(body.marketComparison, "at_market");
     assertEquals(body.redFlags?.some((flag) => /no cadastre|outside city|no buildability/i.test(flag)), false);

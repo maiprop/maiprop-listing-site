@@ -164,7 +164,9 @@ const App = () => (
                   </Suspense>
                   </ErrorBoundary>
                   <ErrorBoundary fallback={null}><I18nLoader /></ErrorBoundary>
-                  <ErrorBoundary fallback={null}><GlobalAIWidget /></ErrorBoundary>
+                  <ErrorBoundary fallback={null}>
+                    <Suspense fallback={null}><GlobalAIWidget /></Suspense>
+                  </ErrorBoundary>
                   <ErrorBoundary fallback={null}><BottomNav /></ErrorBoundary>
                   <ErrorBoundary fallback={null}>
                     <Suspense fallback={null}><CookieConsentBanner /></Suspense>

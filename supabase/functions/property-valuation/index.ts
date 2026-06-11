@@ -228,8 +228,12 @@ const countOverviewComparables = (value: unknown): number => {
   if (!Array.isArray(value)) return 0;
   return value.reduce((total, overview) => {
     if (!overview || typeof overview !== "object") return total;
-    const similarListings = (overview as JsonRecord).similarListings;
-    return total + (Array.isArray(similarListings) ? similarListings.length : 0);
+    const record = overview as JsonRecord;
+    const comparableKeys = ["similarListings", "similarRentals", "comparableListings", "comparableRentals"];
+    return total + comparableKeys.reduce((count, key) => {
+      const comparables = record[key];
+      return count + (Array.isArray(comparables) ? comparables.length : 0);
+    }, 0);
   }, 0);
 };
 
@@ -452,7 +456,8 @@ const buildOsValuationResult = (osData: JsonRecord, input: StructuredValuationIn
     methodUsed: "mAI Prop OS structured valuation API (/api/v1/property/valuation)",
     valuationMode: "MODE_2_PUBLIC_ENRICHED",
     generatedBy: "maiprop_os",
-    osValuation: osData,
+    osDataSources: ["mAI Prop OS structured valuation API"],
+    osComparableCounts: { sale: saleComparables, rental: rentalComparables },
   };
 };
 
@@ -505,7 +510,11 @@ const mergeOsEvidence = (result: JsonRecord, osData: JsonRecord | null, osFallba
     ],
     generatedBy: "openai_maiprop_os",
     osEstimatedValue: osFallback.estimatedValue,
-    osValuation: osData,
+    osDataSources: ["mAI Prop OS structured valuation API", "OpenAI"],
+    osComparableCounts: {
+      sale: countOverviewComparables(osData.saleValuationOverviews),
+      rental: countOverviewComparables(osData.rentalValuationOverviews),
+    },
   };
 };
 

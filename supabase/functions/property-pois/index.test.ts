@@ -61,12 +61,20 @@ Deno.test("provider usage limit returns fallback POIs instead of an unavailable 
       lat: 37.9755,
       lng: 23.7348,
     }, { authorization: "Bearer test-valid-token" }));
-    const body = await jsonBody(res) as { error?: string; generatedBy?: string; pois?: unknown[] };
+    const body = await jsonBody(res) as {
+      error?: string;
+      generatedBy?: string;
+      warning?: string;
+      pois?: Array<{ name?: string; isFallbackEstimate?: boolean }>;
+    };
     assertEquals(res.status, 200);
     assertEquals(typeof body.error, "undefined");
     assertEquals(body.generatedBy, "fallback");
+    assertEquals(typeof body.warning, "string");
     assertEquals(Array.isArray(body.pois), true);
     assertEquals(body.pois?.length, 12);
+    assertEquals(body.pois?.every((poi) => poi.isFallbackEstimate === true), true);
+    assertEquals(body.pois?.some((poi) => /Athens .*School|Athens .*Hub|Athens .*Cafe/i.test(poi.name ?? "")), false);
   });
 });
 
@@ -78,12 +86,20 @@ Deno.test("provider server errors return fallback POIs instead of failing the mo
       lat: 37.9755,
       lng: 23.7348,
     }, { authorization: "Bearer test-valid-token" }));
-    const body = await jsonBody(res) as { error?: string; generatedBy?: string; pois?: unknown[] };
+    const body = await jsonBody(res) as {
+      error?: string;
+      generatedBy?: string;
+      warning?: string;
+      pois?: Array<{ name?: string; isFallbackEstimate?: boolean }>;
+    };
     assertEquals(res.status, 200);
     assertEquals(typeof body.error, "undefined");
     assertEquals(body.generatedBy, "fallback");
+    assertEquals(typeof body.warning, "string");
     assertEquals(Array.isArray(body.pois), true);
     assertEquals(body.pois?.length, 12);
+    assertEquals(body.pois?.every((poi) => poi.isFallbackEstimate === true), true);
+    assertEquals(body.pois?.some((poi) => /Athens .*School|Athens .*Hub|Athens .*Cafe/i.test(poi.name ?? "")), false);
   });
 });
 
