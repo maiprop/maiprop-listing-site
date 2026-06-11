@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.9.16](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.15...v1.9.16) (2026-06-11)
+
+
+### Bug Fixes
+
+* **ai:** normalize valuation and neighbourhood data ([3d8a1fe](https://github.com/maiprop/maiprop-listing-site/commit/3d8a1fe6e6ca569e9ae268a5750c1aedb8b575a2))
+* canonicalize new-build listings and hybrid valuation ([17171e8](https://github.com/maiprop/maiprop-listing-site/commit/17171e8fc5476332e37d7f80130785328d4a7dd2))
+
 ## [1.9.15](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.14...v1.9.15) (2026-06-11)
 
 
