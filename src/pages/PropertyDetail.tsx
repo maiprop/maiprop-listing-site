@@ -417,6 +417,7 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
                   city={city}
                   address={address}
                   region={db?.region}
+                  municipality={db?.region}
                   propertyType={propertyType}
                   lat={db?.latitude ? Number(db.latitude) : undefined}
                   lng={db?.longitude ? Number(db.longitude) : undefined}

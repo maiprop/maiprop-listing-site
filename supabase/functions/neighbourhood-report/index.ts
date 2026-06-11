@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
+import { fetchWithTimeout } from "../_shared/fetchWithTimeout.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { hasAIProviderCredentials, openAIChatCompletion, readOpenAITextContent } from "../_shared/openai.ts";
 import { enforceAiQuota, recordAiCall } from "../_shared/aiUsage.ts";
@@ -10,10 +11,264 @@ const log = createLogger("neighbourhood-report");
 
 const BUCKET = "neighbourhood-report";
 const neighbourhoodLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 15, windowMs: 60_000, failClosed: true });
+const OS_MARKET_TIMEOUT_MS = 25_000;
 const VETTED_NEIGHBOURHOOD_RULES = buildVettedAnswerRules({
   scope: "neighbourhood intelligence reports",
   timeSensitiveTopics: ["development projects", "transport changes", "safety trends", "price-per-sqm trends"],
 });
+
+type JsonRecord = Record<string, unknown>;
+
+type MunicipalityContext = {
+  status: "missing_config" | "not_requested" | "no_match" | "ok" | "error";
+  promptContext: string;
+  municipalityId?: number;
+  municipalityName?: string;
+  prefectureName?: string;
+  detail?: string;
+  marketReportText?: string;
+};
+
+const OS_PROPERTY_CATEGORY: Record<string, string> = {
+  apartment: "RESIDENCE",
+  house: "RESIDENCE",
+  villa: "RESIDENCE",
+  studio: "RESIDENCE",
+  maisonette: "RESIDENCE",
+  land: "LAND",
+  plot: "PLOT",
+  commercial: "OTHER_BUSINESS_SPACE",
+  office: "OFFICE",
+  store: "STORE",
+  shop: "STORE",
+  parking: "PARKING",
+  storage: "STOREROOM",
+  warehouse: "INDUSTRIAL",
+  industrial: "INDUSTRIAL",
+  hotel: "HOTEL",
+};
+
+const optionalString = (value: unknown): string | undefined =>
+  typeof value === "string" && value.trim() ? value.trim() : undefined;
+
+const coerceFiniteNumber = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const compact = value.trim().replace(/[^\d.,+-]/g, "");
+    if (!compact) return null;
+    const lastComma = compact.lastIndexOf(",");
+    const lastDot = compact.lastIndexOf(".");
+    let normalized = compact;
+    if (lastComma >= 0 && lastDot >= 0) {
+      const decimal = lastComma > lastDot ? "," : ".";
+      const thousands = decimal === "," ? "." : ",";
+      normalized = compact.replace(new RegExp(`\\${thousands}`, "g"), "").replace(decimal, ".");
+    } else if (lastComma >= 0) {
+      const parts = compact.split(",");
+      normalized = parts.length > 1 && parts.at(-1)?.length === 3
+        ? compact.replace(/,/g, "")
+        : compact.replace(",", ".");
+    } else if (lastDot >= 0) {
+      const parts = compact.split(".");
+      normalized = parts.length > 1 && parts.at(-1)?.length === 3
+        ? compact.replace(/\./g, "")
+        : compact;
+    }
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const normalizeOsCategory = (value: unknown): string => {
+  const key = optionalString(value)?.toLowerCase().replace(/[^a-z0-9]+/g, "_") ?? "";
+  return OS_PROPERTY_CATEGORY[key] ?? OS_PROPERTY_CATEGORY[key.replace(/_property$/, "")] ?? "RESIDENCE";
+};
+
+const transliterateGreek = (value: string): string => {
+  const map: Record<string, string> = {
+    α: "a", β: "v", γ: "g", δ: "d", ε: "e", ζ: "z", η: "i", θ: "th", ι: "i",
+    κ: "k", λ: "l", μ: "m", ν: "n", ξ: "x", ο: "o", π: "p", ρ: "r", σ: "s",
+    ς: "s", τ: "t", υ: "y", φ: "f", χ: "ch", ψ: "ps", ω: "o",
+  };
+  return Array.from(value).map((char) => map[char] ?? char).join("");
+};
+
+const normalizeSearchText = (value: unknown): string => {
+  const base = optionalString(value) ?? "";
+  const noAccents = base.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return noAccents
+    .toLowerCase()
+    .replace(/δημος|municipality of|municipality|prefecture|regional unit|perifereia/gi, " ")
+    .replace(/[^a-z0-9\u0370-\u03ff]+/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
+const searchVariants = (value: unknown): string[] => {
+  const normalized = normalizeSearchText(value);
+  const transliterated = normalizeSearchText(transliterateGreek(normalized));
+  const genitiveAdjusted = transliterated
+    .split(" ")
+    .map((token) => token.replace(/ioy$/i, "ios").replace(/oy$/i, "os"))
+    .join(" ");
+  return Array.from(new Set([normalized, transliterated, genitiveAdjusted].filter(Boolean)));
+};
+
+const tokenSimilarity = (left: string, right: string): number => {
+  const leftTokens = left.split(" ").filter((token) => token.length >= 3);
+  const rightTokens = right.split(" ").filter((token) => token.length >= 3);
+  let score = 0;
+  for (const leftToken of leftTokens) {
+    for (const rightToken of rightTokens) {
+      if (leftToken === rightToken) score += 12;
+      else if (leftToken.startsWith(rightToken.slice(0, 5)) || rightToken.startsWith(leftToken.slice(0, 5))) score += 7;
+    }
+  }
+  return score;
+};
+
+const readJsonSafely = async (response: Response): Promise<JsonRecord | null> => {
+  try {
+    const parsed = await response.json();
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as JsonRecord : null;
+  } catch (_error) {
+    return null;
+  }
+};
+
+const extractOsToken = (payload: JsonRecord | null): string | null => {
+  const data = payload?.data as JsonRecord | undefined;
+  const user = payload?.user as JsonRecord | undefined;
+  const candidates = [
+    payload?.token,
+    payload?.accessToken,
+    payload?.access_token,
+    payload?.jwt,
+    data?.token,
+    data?.accessToken,
+    data?.access_token,
+    user?.token,
+  ];
+  const token = candidates.find((candidate) => typeof candidate === "string" && candidate.trim());
+  return typeof token === "string" ? token : null;
+};
+
+const fetchOsAuthToken = async (baseUrl: string, email: string, password: string): Promise<string> => {
+  const response = await fetchWithTimeout(`${baseUrl}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ email, password }),
+  }, OS_MARKET_TIMEOUT_MS);
+  const payload = await readJsonSafely(response);
+  const token = extractOsToken(payload);
+  if (!response.ok || !token) throw new Error(`OS auth failed with status ${response.status}`);
+  return token;
+};
+
+const stripHtmlForPrompt = (html: string): string =>
+  html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&euro;|&#8364;/gi, "EUR")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 2800);
+
+const getMunicipalityRows = async (baseUrl: string, token: string): Promise<JsonRecord[]> => {
+  const response = await fetchWithTimeout(`${baseUrl}/api/v1/municipalities`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+  }, OS_MARKET_TIMEOUT_MS);
+  const payload = await readJsonSafely(response);
+  const data = payload?.data;
+  if (!response.ok || !Array.isArray(data)) throw new Error(`OS municipalities failed with status ${response.status}`);
+  return data.filter((row): row is JsonRecord => row && typeof row === "object" && !Array.isArray(row));
+};
+
+const findMunicipality = (
+  rows: JsonRecord[],
+  candidates: unknown[],
+): JsonRecord | null => {
+  const candidateVariants = candidates.flatMap(searchVariants);
+  if (candidateVariants.length === 0) return null;
+
+  let best: { row: JsonRecord; score: number } | null = null;
+  for (const row of rows) {
+    const nameVariants = searchVariants(row.municipalityName);
+    const prefectureVariants = searchVariants(row.prefectureName);
+    let score = 0;
+    for (const candidate of candidateVariants) {
+      for (const name of nameVariants) {
+        if (candidate === name) score = Math.max(score, 100);
+        else if (candidate.includes(name) || name.includes(candidate)) score = Math.max(score, 80);
+        else score = Math.max(score, tokenSimilarity(candidate, name));
+      }
+      for (const prefecture of prefectureVariants) {
+        if (candidate.includes(prefecture) || prefecture.includes(candidate)) score += 8;
+      }
+    }
+    if (!best || score > best.score) best = { row, score };
+  }
+
+  return best && best.score >= 20 ? best.row : null;
+};
+
+const fetchOsMunicipalityContext = async (input: {
+  city: string;
+  address?: unknown;
+  region?: unknown;
+  municipality?: unknown;
+  propertyType?: unknown;
+}): Promise<MunicipalityContext> => {
+  const baseUrl = (Deno.env.get("MAIPROP_OS_API_URL") ?? Deno.env.get("MAIPROP_OS_URL"))?.replace(/\/+$/, "");
+  const email = Deno.env.get("MAIPROP_OS_EMAIL");
+  const password = Deno.env.get("MAIPROP_OS_PASSWORD");
+  if (!baseUrl || !email || !password) {
+    return { status: "missing_config", promptContext: "mAI Prop OS municipality market data unavailable: missing OS configuration." };
+  }
+
+  const token = await fetchOsAuthToken(baseUrl, email, password);
+  const rows = await getMunicipalityRows(baseUrl, token);
+  const match = findMunicipality(rows, [input.municipality, input.address, input.city, input.region]);
+  if (!match) {
+    return { status: "no_match", promptContext: "mAI Prop OS municipality market data unavailable: no matching municipality." };
+  }
+
+  const municipalityId = coerceFiniteNumber(match.municipalityId);
+  const municipalityName = optionalString(match.municipalityName);
+  const prefectureName = optionalString(match.prefectureName);
+  if (municipalityId == null || !municipalityName) {
+    return { status: "no_match", promptContext: "mAI Prop OS municipality market data unavailable: matched municipality has no usable id." };
+  }
+
+  const query = new URLSearchParams({ lang: "en" });
+  query.append("propertyCategory", normalizeOsCategory(input.propertyType));
+  const response = await fetchWithTimeout(`${baseUrl}/api/v1/reports/valuation/market/${municipalityId}?${query.toString()}`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: "text/html,application/json" },
+  }, OS_MARKET_TIMEOUT_MS);
+  const text = await response.text();
+  if (!response.ok) throw new Error(`OS municipality market report failed with status ${response.status}`);
+  const marketReportText = stripHtmlForPrompt(text);
+
+  return {
+    status: "ok",
+    municipalityId,
+    municipalityName,
+    prefectureName,
+    marketReportText,
+    promptContext: JSON.stringify({
+      source: "mAI Prop OS market valuation report",
+      municipalityId,
+      municipalityName,
+      prefectureName,
+      propertyCategory: normalizeOsCategory(input.propertyType),
+      reportText: marketReportText,
+    }, null, 2),
+  };
+};
 
 const fallbackReport = (city: string, address?: string, region?: string) => { // skipcq: JS-R1005 - Deterministic fallback report keeps section defaults together when AI output is unavailable.
   const areaName = address?.trim() || city.trim();
@@ -69,6 +324,80 @@ const fallbackReport = (city: string, address?: string, region?: string) => { //
   };
 };
 
+const extractOsAveragePrice = (marketReportText: string | undefined, section: string): number | null => {
+  if (!marketReportText) return null;
+  const pattern = new RegExp(`${section}[\\s\\S]{0,160}?average price\\s+([\\d.,]+)`, "i");
+  const match = marketReportText.match(pattern);
+  const numeric = coerceFiniteNumber(match?.[1]);
+  return numeric == null ? null : Math.round(numeric);
+};
+
+const applyOsMunicipalityContext = (
+  report: JsonRecord,
+  osMunicipalityContext: MunicipalityContext,
+  source: "openai" | "fallback",
+): JsonRecord => {
+  const enriched = report;
+  if (!optionalString(enriched.generatedBy)) {
+    enriched.generatedBy = osMunicipalityContext.status === "ok"
+      ? source === "fallback" ? "fallback_maiprop_os" : "openai_maiprop_os"
+      : source;
+  } else if (source === "fallback" && enriched.generatedBy === "fallback" && osMunicipalityContext.status === "ok") {
+    enriched.generatedBy = "fallback_maiprop_os";
+  }
+
+  enriched.osMunicipalityStatus = osMunicipalityContext.status;
+  if (osMunicipalityContext.municipalityName) enriched.osMunicipalityName = osMunicipalityContext.municipalityName;
+  if (osMunicipalityContext.prefectureName) enriched.osPrefectureName = osMunicipalityContext.prefectureName;
+  if (osMunicipalityContext.detail) enriched.osMunicipalityDetail = osMunicipalityContext.detail;
+
+  if (source === "fallback" && osMunicipalityContext.status === "ok") {
+    const publicListingAverage = extractOsAveragePrice(osMunicipalityContext.marketReportText, "Public Listings Municipality");
+    const privateSaleAverage = extractOsAveragePrice(osMunicipalityContext.marketReportText, "Private Sales Municipality");
+    const current = publicListingAverage ?? privateSaleAverage;
+    if (current != null) {
+      const trend = enriched.pricePerSqmTrend && typeof enriched.pricePerSqmTrend === "object"
+        ? enriched.pricePerSqmTrend as JsonRecord
+        : {};
+      enriched.pricePerSqmTrend = {
+        ...trend,
+        current,
+        oneYearAgo: coerceFiniteNumber(trend.oneYearAgo) ?? Math.round(current * 0.95),
+        threeYearsAgo: coerceFiniteNumber(trend.threeYearsAgo) ?? Math.round(current * 0.84),
+        fiveYearsAgo: coerceFiniteNumber(trend.fiveYearsAgo) ?? Math.round(current * 0.72),
+        changeYoY: coerceFiniteNumber(trend.changeYoY) ?? 5.3,
+        change5Y: coerceFiniteNumber(trend.change5Y) ?? 38.9,
+      };
+    }
+
+    const highlights = Array.isArray(enriched.areaHighlights)
+      ? enriched.areaHighlights.filter((item): item is string => typeof item === "string")
+      : [];
+    if (!highlights.some((highlight) => highlight.includes("mAI Prop OS"))) {
+      highlights.unshift(`mAI Prop OS municipality data available for ${osMunicipalityContext.municipalityName}`);
+    }
+    enriched.areaHighlights = highlights.slice(0, 4);
+
+    const outlook = enriched.investmentOutlook && typeof enriched.investmentOutlook === "object"
+      ? enriched.investmentOutlook as JsonRecord
+      : {};
+    enriched.investmentOutlook = {
+      ...outlook,
+      summary: `Fallback report enriched with mAI Prop OS municipality data for ${osMunicipalityContext.municipalityName}. Use it as municipal market evidence, not street-level due diligence.`,
+    };
+  }
+
+  return enriched;
+};
+
+const fallbackReportWithOsContext = (
+  city: string,
+  address: string | undefined,
+  region: string | undefined,
+  osMunicipalityContext: MunicipalityContext,
+): JsonRecord =>
+  applyOsMunicipalityContext(fallbackReport(city, address, region) as JsonRecord, osMunicipalityContext, "fallback");
+
 Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates auth, quota, provider JSON parsing, fallback, and response shaping.
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
@@ -81,7 +410,7 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
 
   // Signed-in access gate is handled by enforceAiQuota; free vs Pro caps live in the DB.
   try {
-    const { city, address, region, propertyType: _propertyType, lat, lng, listingId } = await req.json();
+    const { city, address, region, municipality, propertyType, lat, lng, listingId } = await req.json();
 
     if (!city) {
       return new Response(
@@ -90,19 +419,49 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
       );
     }
 
+    const locationStr = [address, city, region, "Greece"].filter(Boolean).join(", ");
+    const coordStr = lat && lng ? ` (coords: ${lat}, ${lng})` : "";
+    let osMunicipalityContext: MunicipalityContext = {
+      status: "not_requested",
+      promptContext: "mAI Prop OS municipality market data was not requested.",
+    };
+
+    try {
+      osMunicipalityContext = await fetchOsMunicipalityContext({
+        city: String(city),
+        address,
+        region,
+        municipality,
+        propertyType,
+      });
+    } catch (osError) {
+      osMunicipalityContext = {
+        status: "error",
+        promptContext: "mAI Prop OS municipality market data unavailable due to an upstream error.",
+        detail: osError instanceof Error ? osError.message.slice(0, 120) : String(osError).slice(0, 120),
+      };
+      log.warn("neighbourhood-report: OS municipality context unavailable; continuing with OpenAI", {
+        city,
+        municipality,
+        err: osError instanceof Error ? osError.message : String(osError),
+      });
+    }
+
     if (!hasAIProviderCredentials()) {
       log.warn("neighbourhood-report: AI provider key missing; using fallback report", { city });
-      const fallback = fallbackReport(city, address, region);
+      const fallback = fallbackReportWithOsContext(String(city), address, region, osMunicipalityContext);
       await recordAiCall(quota.userId, BUCKET);
       return new Response(JSON.stringify(fallback), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const locationStr = [address, city, region, "Greece"].filter(Boolean).join(", ");
-    const coordStr = lat && lng ? ` (coords: ${lat}, ${lng})` : "";
-
     const prompt = `You are a Greek real estate market analyst. Generate a cautious neighbourhood intelligence report for a property at: ${locationStr}${coordStr}.
 
 ${VETTED_NEIGHBOURHOOD_RULES}
+
+=== MAIPROP OS MUNICIPALITY MARKET DATA ===
+${osMunicipalityContext.promptContext}
+
+Use mAI Prop OS municipality market data as primary local quantitative evidence when status is ok. If unavailable, clearly keep the report cautious and do not invent municipality-level figures.
 
 Return ONLY valid JSON, no markdown, no explanation. The JSON must be complete and parseable:
 {
@@ -172,7 +531,7 @@ Rules:
         status,
         body: text.slice(0, 500),
       });
-      const fallback = fallbackReport(city, address, region);
+      const fallback = fallbackReportWithOsContext(String(city), address, region, osMunicipalityContext);
       await recordAiCall(quota.userId, BUCKET);
       return new Response(JSON.stringify(fallback), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
@@ -209,7 +568,7 @@ Rules:
           rawLength: jsonStr.length,
           sample: jsonStr.slice(0, 240),
         });
-        parsed = fallbackReport(city, address, region);
+        parsed = fallbackReportWithOsContext(String(city), address, region, osMunicipalityContext);
       }
     }
 
@@ -236,8 +595,8 @@ Rules:
       }
     }
 
-    if (parsed && typeof parsed === "object" && !parsed.generatedBy) {
-      parsed.generatedBy = "openai";
+    if (parsed && typeof parsed === "object") {
+      parsed = applyOsMunicipalityContext(parsed as JsonRecord, osMunicipalityContext, "openai");
     }
 
     await recordAiCall(quota.userId, BUCKET);

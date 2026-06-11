@@ -50,6 +50,7 @@ export interface NeighbourhoodReportProps {
   city: string;
   address?: string;
   region?: string | null;
+  municipality?: string | null;
   propertyType?: string;
   lat?: number | null;
   lng?: number | null;
@@ -182,7 +183,7 @@ const OUTLOOK_COLOUR: Record<string, string> = {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export default function NeighbourhoodReport({ city, address, region, propertyType, lat, lng, listingId, isPro: _isPro = false }: NeighbourhoodReportProps) {
+export default function NeighbourhoodReport({ city, address, region, municipality, propertyType, lat, lng, listingId, isPro: _isPro = false }: NeighbourhoodReportProps) {
   const { user } = useAuth();
   const [data, setData] = useState<NeighbourhoodData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -203,7 +204,7 @@ export default function NeighbourhoodReport({ city, address, region, propertyTyp
       const currentQuota = await refreshQuota();
       if (currentQuota && !currentQuota.allowed) return;
       const { data: result, error: fnErr } = await supabase.functions.invoke("neighbourhood-report", {
-        body: { city, address, region, propertyType, lat, lng, listingId },
+        body: { city, address, region, municipality, propertyType, lat, lng, listingId },
       });
       if (fnErr) throw fnErr;
       if (result?.error) throw new Error(result.error);

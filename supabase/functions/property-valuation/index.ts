@@ -50,7 +50,27 @@ type StructuredValuationInput = {
 const coerceFiniteNumber = (value: unknown): number | null => {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value);
+    const compact = value.trim().replace(/[^\d.,+-]/g, "");
+    if (!compact) return null;
+    const lastComma = compact.lastIndexOf(",");
+    const lastDot = compact.lastIndexOf(".");
+    let normalized = compact;
+    if (lastComma >= 0 && lastDot >= 0) {
+      const decimal = lastComma > lastDot ? "," : ".";
+      const thousands = decimal === "," ? "." : ",";
+      normalized = compact.replace(new RegExp(`\\${thousands}`, "g"), "").replace(decimal, ".");
+    } else if (lastComma >= 0) {
+      const parts = compact.split(",");
+      normalized = parts.length > 1 && parts.at(-1)?.length === 3
+        ? compact.replace(/,/g, "")
+        : compact.replace(",", ".");
+    } else if (lastDot >= 0) {
+      const parts = compact.split(".");
+      normalized = parts.length > 1 && parts.at(-1)?.length === 3
+        ? compact.replace(/\./g, "")
+        : compact;
+    }
+    const parsed = Number(normalized);
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
@@ -233,6 +253,143 @@ const toPricingPosition = (deltaPct: number): "overpriced" | "fair" | "underpric
   if (deltaPct > 5) return "underpriced";
   if (deltaPct < -5) return "overpriced";
   return "fair";
+};
+
+const clampNumber = (value: number, min: number, max: number): number =>
+  Math.max(min, Math.min(max, value));
+
+const clampScore = (value: unknown, fallback: number): number => {
+  const numeric = coerceFiniteNumber(value);
+  return Math.round(clampNumber(numeric ?? fallback, 0, 100));
+};
+
+const isAuctionListing = (value: unknown): boolean =>
+  optionalString(value)?.toLowerCase() === "auction";
+
+const isResidentialType = (value: unknown): boolean => {
+  const propertyType = optionalString(value)?.toLowerCase() ?? "";
+  return ["apartment", "house", "villa", "studio", "maisonette", "residence"].includes(propertyType);
+};
+
+const hasConfirmedLegalPlanningDefect = (source: JsonRecord): boolean =>
+  source.withinCityPlan === false || source.withinSettlement === false || source.isBuildable === false;
+
+const computeListingQualityScore = (source: JsonRecord, osData: JsonRecord | null): number => {
+  let score = 10;
+  if (optionalString(source.title)) score += 4;
+  if (optionalString(source.city)) score += 8;
+  if (optionalString(source.address)) score += 8;
+  if (coerceFiniteNumber(source.latitude) != null && coerceFiniteNumber(source.longitude) != null) score += 10;
+  if ((coerceFiniteNumber(source.price) ?? 0) > 0) score += 10;
+  if ((coerceFiniteNumber(source.sqm) ?? 0) > 0) score += 10;
+  if (optionalString(source.propertyType)) score += 7;
+  if (optionalString(source.listingType)) score += 5;
+  if (coerceFiniteNumber(source.floor) != null) score += 3;
+  if (coerceFiniteNumber(source.yearBuilt) != null) score += 4;
+  if (coerceFiniteNumber(source.bedrooms) != null) score += 3;
+  if (coerceFiniteNumber(source.bathrooms) != null) score += 3;
+  if (optionalString(source.energyClass)) score += 3;
+  if (optionalString(source.condition)) score += 4;
+  if (optionalString(source.description) && optionalString(source.description)!.length >= 80) score += 4;
+  if ([
+    source.hasParking,
+    source.hasPool,
+    source.hasElevator,
+    source.hasGarden,
+    source.hasStorage,
+    source.hasBalcony,
+    source.hasView,
+    source.hasFurnished,
+  ].some((value) => value === true)) score += 4;
+  if ([
+    source.cadastreNumber,
+    source.withinCityPlan,
+    source.withinSettlement,
+    source.buildingAllowance,
+    source.coverageRatio,
+    source.isBuildable,
+    source.landUse,
+    source.ownershipStatus,
+    source.auctionCourt,
+  ].some((value) => value != null && value !== "")) score += 8;
+  if (osData) score += 15;
+
+  if (!osData) score = Math.min(score, 85);
+  if (coerceFiniteNumber(source.latitude) == null || coerceFiniteNumber(source.longitude) == null) score = Math.min(score, 75);
+  return Math.round(clampNumber(score, 20, 95));
+};
+
+const removeUnconfirmedLegalFlags = (
+  redFlags: unknown,
+  source: JsonRecord,
+): string[] => {
+  const flags = Array.isArray(redFlags)
+    ? redFlags.filter((flag): flag is string => typeof flag === "string" && flag.trim().length > 0).map((flag) => flag.trim())
+    : [];
+  const cityPlanKnownNegative = source.withinCityPlan === false || source.withinSettlement === false;
+  const buildabilityKnownNegative = source.isBuildable === false;
+  const cadastreKnownMissing = false;
+
+  return flags.filter((flag) => {
+    const normalized = flag.toLowerCase();
+    if (!cadastreKnownMissing && /cadastre|kaek|registration/.test(normalized)) return false;
+    if (!cityPlanKnownNegative && /(outside|out of).*(city|settlement|plan)|city.*settlement.*plan/.test(normalized)) return false;
+    if (!buildabilityKnownNegative && /buildability|buildable|building rights/.test(normalized)) return false;
+    return true;
+  });
+};
+
+const normalizeValuationResult = (
+  result: JsonRecord,
+  source: JsonRecord,
+  osData: JsonRecord | null,
+): JsonRecord => {
+  const listedPrice = coerceFiniteNumber(source.price) ?? 0;
+  const estimatedValue = coerceFiniteNumber(result.estimatedValue);
+  const cleanAuctionMarketValue = coerceFiniteNumber(result.auctionAdjustedValue);
+  const isAuction = isAuctionListing(source.listingType);
+  const marketAnchor = isAuction && cleanAuctionMarketValue != null && cleanAuctionMarketValue > 0
+    ? cleanAuctionMarketValue
+    : estimatedValue;
+
+  if (listedPrice > 0 && marketAnchor != null && marketAnchor > 0) {
+    const deltaPct = roundNumber(((marketAnchor - listedPrice) / listedPrice) * 100);
+    result.marketComparisonPct = deltaPct;
+    result.marketComparison = toMarketComparison(deltaPct);
+    result.pricingPosition = toPricingPosition(deltaPct);
+  }
+
+  const residential = isResidentialType(source.propertyType);
+  if (residential) {
+    const legalFloor = isAuction ? 50 : 60;
+    const planningFloor = isAuction ? 60 : 65;
+    const transferFloor = isAuction ? 45 : 55;
+    const taxCeiling = isAuction ? 55 : 35;
+    const hasConfirmedDefect = hasConfirmedLegalPlanningDefect(source);
+    result.legalCleanliness = hasConfirmedDefect
+      ? clampScore(result.legalCleanliness, legalFloor)
+      : Math.max(clampScore(result.legalCleanliness, legalFloor), legalFloor);
+    result.planningCertainty = hasConfirmedDefect
+      ? clampScore(result.planningCertainty, planningFloor)
+      : Math.max(clampScore(result.planningCertainty, planningFloor), planningFloor);
+    result.transferReadiness = hasConfirmedDefect
+      ? clampScore(result.transferReadiness, transferFloor)
+      : Math.max(clampScore(result.transferReadiness, transferFloor), transferFloor);
+    result.taxFriction = Math.min(clampScore(result.taxFriction, taxCeiling), taxCeiling);
+    result.redFlags = removeUnconfirmedLegalFlags(result.redFlags, source);
+
+    const legalSummary = optionalString(result.legalSummary) ?? "";
+    if (!hasConfirmedDefect && /outside|no cadastre|buildability|buildable/i.test(legalSummary)) {
+      result.legalSummary = isAuction
+        ? "Listing data does not include verified cadastre, title, occupancy, or permit documents. Treat legal and planning status as unverified; auction due diligence remains required before relying on the estimate."
+        : "Listing data does not include verified cadastre, title, or permit documents. Treat legal and planning status as unverified; no confirmed legal defect is present in the supplied fields.";
+    }
+  }
+
+  result.confidence = clampScore(result.confidence, 50);
+  result.liquidityScore = clampScore(result.liquidityScore, 50);
+  result.listingQualityScore = computeListingQualityScore(source, osData);
+  return result;
 };
 
 const buildOsValuationResult = (osData: JsonRecord, input: StructuredValuationInput): JsonRecord => {
@@ -427,7 +584,8 @@ SCORING MODEL (produce all four scores 0–100):
 
 1. LEGAL_CLEANLINESS_SCORE (0–100):
    Inputs: cadastre clarity, title chain, permit status, building identity, ownership complexity, restriction risk.
-   - No data on any legal field = start at 40; each unknown field costs -5
+   - Unknown listing fields are UNKNOWN, not confirmed defects. Do not mark absent listing metadata as illegal/title risk.
+   - Standard urban apartment/house with no adverse signal but no documents = 60-75, not below 50.
    - Co-ownership or partial ownership = -10 to -25
    - Auction property with no title info = -30
    - Signs of illegal enclosures/extensions from photos/description = -15 to -25
@@ -437,6 +595,7 @@ SCORING MODEL (produce all four scores 0–100):
 
 2. PLANNING_CERTAINTY_SCORE (0–100):
    Inputs: inside/outside plan certainty, SD/coverage/height data, land use, change-of-use feasibility.
+   - For standard apartments, do not require buildability/SD fields unless the listing is land/plot/development.
    - Apartment/house in established urban area = 70–85 (assumed inside plan)
    - Plot with SD stated explicitly = 75–90
    - Plot with SD unknown = 30–50
@@ -700,14 +859,14 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
 
     if (!hasAIProviderCredentials()) {
       log.warn("property-valuation: AI provider key missing; using OS/fallback valuation", { city });
-      const fallback = withOsDiagnostics(osValuationFallback ?? fallbackValuation({
+      const fallback = normalizeValuationResult(withOsDiagnostics(osValuationFallback ?? fallbackValuation({
         city: String(city),
         price: Number(price),
         sqm: Number(sqm),
         propertyType: typeof propertyType === "string" ? propertyType : undefined,
         listingType: typeof listingType === "string" ? listingType : undefined,
         reason: "the AI provider is not configured",
-      }), osValuationStatus, osValuationDetail);
+      }), osValuationStatus, osValuationDetail), body as JsonRecord, osValuationData);
       await recordAiCall(quotaUserId, BUCKET);
       return new Response(JSON.stringify(fallback), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
@@ -839,6 +998,11 @@ Return ONLY valid JSON, no markdown, no explanation outside the JSON:
 }
 
 Rules:
+- listingQualityScore is normalized by the server from supplied inputs and OS evidence.
+- legalCleanliness reflects ONLY data available in the listing; do not fabricate certainty or treat unknown fields as confirmed defects.
+- redFlags include only confirmed or strongly indicated problems. Missing cadastre/buildability/city-plan fields on standard apartments are data gaps, not red flags.
+- marketComparisonPct uses the clean market value anchor. For auctions, compare listed price with auctionAdjustedValue, not executionValue or the auction-adjusted bid value.
+- pricingPosition is "underpriced" only when the listed price is meaningfully below clean market value; "overpriced" only when listed price is above it.
 - keyFactors: 4–7 items; always include a 2026 trend factor, transaction cost factor, and a legal/planning factor
 - confidenceLabel: High = 75+, Medium = 50–74, Low = <50
 - legalCleanliness: reflects ONLY data available in the listing — do not fabricate certainty
@@ -854,14 +1018,14 @@ Rules:
     if (!response.ok) {
       const txt = await response.text();
       log.error("AI gateway error", { status: response.status, body: txt.slice(0, 500) });
-      const fallback = withOsDiagnostics(osValuationFallback ?? fallbackValuation({
+      const fallback = normalizeValuationResult(withOsDiagnostics(osValuationFallback ?? fallbackValuation({
         city: String(city),
         price: Number(price),
         sqm: Number(sqm),
         propertyType: typeof propertyType === "string" ? propertyType : undefined,
         listingType: typeof listingType === "string" ? listingType : undefined,
         reason: `the AI provider returned ${response.status}`,
-      }), osValuationStatus, osValuationDetail);
+      }), osValuationStatus, osValuationDetail), body as JsonRecord, osValuationData);
       await recordAiCall(quotaUserId, BUCKET);
       return new Response(JSON.stringify(fallback), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
@@ -916,6 +1080,7 @@ Rules:
     if (!result.transferReadiness) result.transferReadiness = 55;
     if (!result.valuationMode) result.valuationMode = "MODE_1_LISTING_ONLY";
     result = withOsDiagnostics(mergeOsEvidence(result, osValuationData, osValuationFallback), osValuationStatus, osValuationDetail);
+    result = normalizeValuationResult(result, body as JsonRecord, osValuationData);
 
     // Record usage after successful AI call
     await recordAiCall(quotaUserId, BUCKET);
