@@ -1,6 +1,6 @@
 import type { ChangeEvent } from "react";
 import i18next from "i18next";
-import { isSellSideRole } from "@/lib/authUtils";
+import { isSellerRole } from "@/lib/authUtils";
 import { isValidKaek, normalizeKaek, toFiresalePropertyType } from "@/lib/firesaleValidation";
 
 export const propertyTypeOptions = [
@@ -197,7 +197,7 @@ export const canSubmitQuickSaleRequest = (
   user: QuickSaleUser,
   profile: QuickSaleProfile,
   authPending: boolean,
-): boolean => Boolean(user) && !authPending && profile != null && isSellSideRole(profile);
+): boolean => Boolean(user) && !authPending && profile != null && isSellerRole(profile);
 
 const BASE_PRICE_PER_SQM: Record<string, number> = {
   villa: 3200,

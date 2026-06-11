@@ -242,6 +242,7 @@ export default function PropertyMiniMap({
   const mapShellRef = useRef<HTMLDivElement>(null);
   const lat = latitude ? Number(latitude) : null;
   const lng = longitude ? Number(longitude) : null;
+  const fallbackLocationQuery = [address, city, "Greece"].filter(Boolean).join(", ");
 
   const [pois, setPois] = useState<POI[] | null>(null);
   const [loadingPOIs, setLoadingPOIs] = useState(false);
@@ -377,12 +378,12 @@ export default function PropertyMiniMap({
   const streetViewUrl =
     lat && lng
       ? `https://www.google.com/maps?q=${lat},${lng}&layer=c&cbll=${lat},${lng}&cbp=12,0,,0,0`
-      : `https://www.google.com/maps/search/${encodeURIComponent(address + ", " + city + ", Greece")}`;
+      : `https://www.google.com/maps/search/${encodeURIComponent(fallbackLocationQuery)}`;
 
   const googleMapsUrl =
     lat && lng
       ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
-      : `https://www.google.com/maps/search/${encodeURIComponent(address + ", " + city + ", Greece")}`;
+      : `https://www.google.com/maps/search/${encodeURIComponent(fallbackLocationQuery)}`;
 
   if (!lat || !lng) {
     // Fallback: Google Maps embed when no lat/lng
@@ -413,7 +414,7 @@ export default function PropertyMiniMap({
             title="map"
             loading="lazy"
             className="w-full h-full border-0"
-            src={`https://maps.google.com/maps?q=${encodeURIComponent(city + ", Greece")}&output=embed&z=13`}
+            src={`https://maps.google.com/maps?q=${encodeURIComponent(fallbackLocationQuery)}&output=embed&z=13`}
           />
         </div>
         <div className="p-3 text-center text-xs text-muted-foreground">

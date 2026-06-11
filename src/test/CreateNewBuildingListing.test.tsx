@@ -173,6 +173,42 @@ describe("CreateNewBuildingListing", () => {
     expect(navigateMock).toHaveBeenCalledWith("/new-build/listing-1");
   });
 
+  it("clears stale coordinates when the project address is manually edited", async () => {
+    renderPage();
+
+    fireEvent.change(screen.getByPlaceholderText("e.g. Marina Heights"), { target: { value: "Marina Heights" } });
+    fireEvent.change(screen.getByPlaceholderText("e.g. 12345/2024"), { target: { value: "12345/2024" } });
+    fireEvent.change(screen.getByPlaceholderText("e.g. Athens"), { target: { value: "Athens" } });
+    fireEvent.change(screen.getByPlaceholderText("37.9838"), { target: { value: "37.9838" } });
+    fireEvent.change(screen.getByPlaceholderText("23.7275"), { target: { value: "23.7275" } });
+    fireEvent.change(screen.getByPlaceholderText("Street, number"), { target: { value: "Metaxa 11" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 2 of 5/i);
+    fillRequiredUnit();
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 3 of 5/i);
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 4 of 5/i);
+    fireEvent.change(screen.getByPlaceholderText("e.g. Marina Heights - Unit A101"), { target: { value: "Marina Heights A101" } });
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 5 of 5/i);
+
+    fireEvent.change(document.querySelector("#nb-photo-input") as HTMLInputElement, {
+      target: { files: [new File(["photo"], "cover.jpg", { type: "image/jpeg" })] },
+    });
+    await screen.findByRole("button", { name: /Cover/i });
+    fireEvent.click(screen.getByRole("button", { name: /Create Listing/i }));
+
+    await waitFor(() => expect(submitMock).toHaveBeenCalledWith(expect.objectContaining({
+      project: expect.objectContaining({
+        address: "Metaxa 11",
+        latitude: "",
+        longitude: "",
+      }),
+    })));
+  });
+
   it("surfaces media selection and submit failures without leaving the wizard", async () => {
     submitMock.mockRejectedValueOnce(new Error("nope"));
     renderPage();

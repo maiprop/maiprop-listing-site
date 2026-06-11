@@ -211,8 +211,8 @@ describe("ProjectDetail", () => {
     fireEvent.change(screen.getByPlaceholderText("e.g. Athens"), { target: { value: "Athens" } });
     fireEvent.change(screen.getByPlaceholderText("Municipality"), { target: { value: "Athens" } });
     fireEvent.change(screen.getByDisplayValue("Harbour"), { target: { value: "Metro-side neighbourhood" } });
-    fireEvent.change(screen.getByDisplayValue("37.94"), { target: { value: "37.98" } });
-    fireEvent.change(screen.getByDisplayValue("23.64"), { target: { value: "23.73" } });
+    fireEvent.change(screen.getByPlaceholderText("e.g. 37.9838"), { target: { value: "37.98" } });
+    fireEvent.change(screen.getByPlaceholderText("e.g. 23.7275"), { target: { value: "23.73" } });
     const dateInputs = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="date"]'));
     ["2026-03-01", "2026-04-01", "2026-10-01", "2027-02-01"].forEach((value, index) => {
       fireEvent.change(dateInputs[index], { target: { value } });
@@ -240,6 +240,27 @@ describe("ProjectDetail", () => {
             construction_start_date: "2026-04-01",
             structural_completion_date: "2026-10-01",
             delivery_date: "2027-02-01",
+          }),
+        }),
+        expect.any(Object),
+      ),
+    );
+  });
+
+  it("clears stored coordinates when the address is manually changed", async () => {
+    renderPage();
+
+    fireEvent.change(screen.getByDisplayValue("Akti 1"), { target: { value: "Metaxa 11" } });
+    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+
+    await waitFor(() =>
+      expect(updateProjectMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "project-1",
+          updates: expect.objectContaining({
+            address: "Metaxa 11",
+            latitude: null,
+            longitude: null,
           }),
         }),
         expect.any(Object),

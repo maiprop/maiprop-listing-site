@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isPlatformAdmin, isSellSideRole } from "@/lib/authUtils";
+import { isPlatformAdmin, isSellSideRole, isSellerRole } from "@/lib/authUtils";
 
 describe("isPlatformAdmin", () => {
   it("returns false for null", () => {
@@ -41,5 +41,15 @@ describe("isSellSideRole", () => {
 
   it("returns false for empty profile", () => {
     expect(isSellSideRole({})).toBe(false);
+  });
+});
+
+describe("isSellerRole", () => {
+  it("returns true only for seller profiles", () => {
+    expect(isSellerRole({ role: "seller" })).toBe(true);
+    expect(isSellerRole({ role: "agent" })).toBe(false);
+    expect(isSellerRole({ role: "developer" })).toBe(false);
+    expect(isSellerRole({ role: "admin" })).toBe(false);
+    expect(isSellerRole(null)).toBe(false);
   });
 });

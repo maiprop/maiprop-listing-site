@@ -12,6 +12,13 @@ export function isPlatformAdmin(
   return profile.role === "admin";
 }
 
+export function isSellerRole(
+  profile: { role?: string | null } | null
+): boolean {
+  if (!profile) return false;
+  return profile.role === "seller";
+}
+
 /** Sell-side: can create listings (agent, seller, developer, institutional).
  *  SECURITY: relies solely on the trigger-protected `role` column.
  *  `participant_type` is user-writable and must NOT be used for authorization. */

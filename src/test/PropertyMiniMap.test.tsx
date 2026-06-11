@@ -149,6 +149,7 @@ describe("PropertyMiniMap", () => {
     ).toBeInTheDocument();
     // The fallback embeds an iframe titled 'map'.
     expect(document.querySelector("iframe[title='map']")).toBeInTheDocument();
+    expect(document.querySelector("iframe[title='map']")?.getAttribute("src")).toContain("Kolonaki%2012");
   });
 
   it("keeps the no-coordinates header responsive on narrow screens", () => {
