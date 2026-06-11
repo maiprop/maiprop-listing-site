@@ -1,6 +1,8 @@
 import { useEffect, useId, useMemo, useRef, useState, type InputHTMLAttributes } from "react";
 import ReactDOM from "react-dom";
 import { Loader2, MapPin } from "lucide-react";
+import { GOOGLE_MAPS_API_KEY } from "@/lib/config";
+import { loadGoogleMapsPlaces } from "@/lib/googleMapsPlaces";
 import { useNominatimAddressSuggestions, type NominatimAddressSuggestion } from "@/hooks/useNominatimAddressSuggestions";
 import {
   getNominatimAddressLine,
@@ -23,6 +25,37 @@ export interface LocationAutocompleteSelection {
   longitude?: string;
 }
 
+type GooglePlace = {
+  address_components?: Array<{ long_name: string; short_name: string; types: string[] }>;
+  formatted_address?: string;
+  geometry?: {
+    location?: {
+      lat?: () => number;
+      lng?: () => number;
+    };
+  };
+};
+
+type GoogleAutocompleteInstance = {
+  addListener: (eventName: string, handler: () => void) => void;
+  getPlace: () => GooglePlace;
+};
+
+type GoogleAutocompleteConstructor = new (
+  input: HTMLInputElement,
+  options: Record<string, unknown>,
+) => GoogleAutocompleteInstance;
+
+type GoogleWindow = typeof window & {
+  google?: {
+    maps?: {
+      places?: {
+        Autocomplete?: GoogleAutocompleteConstructor;
+      };
+    };
+  };
+};
+
 interface LocationAutocompleteInputProps
   extends Omit<InputHTMLAttributes<HTMLInputElement>, "onChange" | "type" | "value"> {
   value: string;
@@ -38,6 +71,63 @@ type SuggestionItem = {
   key: string;
   label: string;
   selection: LocationAutocompleteSelection;
+};
+
+const getGoogleAddressComponent = (place: GooglePlace, type: string) =>
+  place.address_components?.find((component) => component.types.includes(type))?.long_name ?? "";
+
+const getGoogleCoordinates = (place: GooglePlace) => {
+  const latitude = place.geometry?.location?.lat?.();
+  const longitude = place.geometry?.location?.lng?.();
+
+  return {
+    latitude: typeof latitude === "number" && Number.isFinite(latitude) ? String(latitude) : undefined,
+    longitude: typeof longitude === "number" && Number.isFinite(longitude) ? String(longitude) : undefined,
+  };
+};
+
+const buildGoogleSelection = (
+  place: GooglePlace,
+  mode: "city" | "address",
+): LocationAutocompleteSelection => {
+  const city =
+    getGoogleAddressComponent(place, "locality") ||
+    getGoogleAddressComponent(place, "postal_town") ||
+    getGoogleAddressComponent(place, "administrative_area_level_3") ||
+    getGoogleAddressComponent(place, "administrative_area_level_2") ||
+    getGoogleAddressComponent(place, "administrative_area_level_1");
+  const municipality =
+    getGoogleAddressComponent(place, "administrative_area_level_2") ||
+    getGoogleAddressComponent(place, "administrative_area_level_3") ||
+    city;
+  const postalCode = getGoogleAddressComponent(place, "postal_code");
+  const { latitude, longitude } = getGoogleCoordinates(place);
+
+  if (mode === "city") {
+    const value = city || municipality || place.formatted_address || "";
+    return {
+      value,
+      city: city || value,
+      municipality,
+      postalCode,
+      latitude,
+      longitude,
+    };
+  }
+
+  const street = getGoogleAddressComponent(place, "route");
+  const number = getGoogleAddressComponent(place, "street_number");
+  const addressLine = [number, street].filter(Boolean).join(" ") || place.formatted_address || "";
+
+  return {
+    value: addressLine,
+    addressLine,
+    city,
+    municipality,
+    postalCode,
+    latitude,
+    longitude,
+  };
 };
 
 export function LocationAutocompleteInput({
@@ -57,9 +147,12 @@ export function LocationAutocompleteInput({
   const generatedId = useId();
   const inputId = id ?? generatedId;
   const [focused, setFocused] = useState(false);
+  const [googlePlacesRequested, setGooglePlacesRequested] = useState(false);
+  const [googleReady, setGoogleReady] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const googleInitializedRef = useRef(false);
   const textValue = value ?? "";
   const query = textValue.trim();
   const activeQuery = !disabled && focused ? query : "";
@@ -81,6 +174,48 @@ export function LocationAutocompleteInput({
   useEffect(() => {
     if (disabled) setFocused(false);
   }, [disabled]);
+
+  useEffect(() => {
+    if (disabled || !GOOGLE_MAPS_API_KEY || !googlePlacesRequested) return;
+    let cancelled = false;
+
+    const initGoogle = () => {
+      const input = inputRef.current;
+      const Autocomplete = (window as GoogleWindow).google?.maps?.places?.Autocomplete;
+      if (!input || !Autocomplete || googleInitializedRef.current) return;
+
+      const autocomplete = new Autocomplete(input, {
+        types: mode === "city" ? ["(cities)"] : ["address"],
+        ...(mode === "address" ? { componentRestrictions: { country: "gr" } } : {}),
+        fields: ["address_components", "formatted_address", "geometry"],
+      });
+
+      autocomplete.addListener("place_changed", () => {
+        const selection = buildGoogleSelection(autocomplete.getPlace(), mode);
+        if (!selection.value) return;
+        onChange(selection.value);
+        onSuggestionSelect?.(selection);
+        clear();
+        setFocused(false);
+      });
+
+      googleInitializedRef.current = true;
+      setGoogleReady(true);
+    };
+
+    loadGoogleMapsPlaces()
+      .then(() => {
+        if (cancelled) return;
+        initGoogle();
+      })
+      .catch(() => {
+        if (!cancelled) setGoogleReady(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clear, disabled, googlePlacesRequested, mode, onChange, onSuggestionSelect]);
 
   const cityItems = useMemo<SuggestionItem[]>(() => {
     const nominatimCities = rawSuggestions.map(getNominatimCity).filter(Boolean);
@@ -129,7 +264,8 @@ export function LocationAutocompleteInput({
   ), [rawSuggestions]);
 
   const items = mode === "address" ? addressItems : cityItems;
-  const showDropdown = focused && !disabled && (items.length > 0 || loading);
+  const suppressCustomDropdown = googleReady && query.length > 0;
+  const showDropdown = focused && !disabled && !suppressCustomDropdown && (items.length > 0 || loading);
   const listboxId = `${inputId}-listbox`;
 
   const getPos = () => {
@@ -192,6 +328,7 @@ export function LocationAutocompleteInput({
         onChange={(event) => onChange(event.target.value)}
         onFocus={(event) => {
           setFocused(true);
+          setGooglePlacesRequested(true);
           onFocus?.(event);
         }}
         onKeyDown={(event) => {

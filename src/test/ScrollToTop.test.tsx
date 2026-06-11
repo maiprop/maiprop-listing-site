@@ -20,6 +20,16 @@ function Harness() {
 describe("ScrollToTop", () => {
   beforeEach(() => {
     vi.stubGlobal("scrollTo", vi.fn());
+    vi.stubGlobal("requestAnimationFrame", vi.fn((callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    }));
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    Object.defineProperty(window.history, "scrollRestoration", {
+      configurable: true,
+      writable: true,
+      value: "auto",
+    });
   });
 
   afterEach(() => {
@@ -57,5 +67,19 @@ describe("ScrollToTop", () => {
 
     await waitFor(() => expect(screen.getByText("Property")).toBeInTheDocument());
     expect(window.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("disables browser-managed scroll restoration while mounted", async () => {
+    const { unmount } = render(
+      <MemoryRouter initialEntries={["/property/1"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Harness />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(window.history.scrollRestoration).toBe("manual"));
+
+    unmount();
+
+    expect(window.history.scrollRestoration).toBe("auto");
   });
 });

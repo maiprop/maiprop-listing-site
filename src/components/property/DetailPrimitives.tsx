@@ -59,14 +59,18 @@ export function SectionHeader({
   badge?: React.ReactNode;
 }) {
   return (
-    <div className="flex min-w-0 items-center gap-2.5 px-5 py-4 border-b border-border">
+    <div className="flex min-w-0 flex-wrap items-center gap-2.5 px-5 py-4 border-b border-border">
       {Icon && (
         <div className="w-7 h-7 shrink-0 rounded-lg bg-primary/10 flex items-center justify-center">
           <Icon className="w-3.5 h-3.5 text-primary" />
         </div>
       )}
-      <h4 className="min-w-0 flex-1 font-display font-semibold text-sm leading-tight">{title}</h4>
-      {badge && <span className="ml-auto shrink-0 whitespace-nowrap">{badge}</span>}
+      <h4 className="min-w-0 flex-1 basis-40 font-display font-semibold text-sm leading-tight">{title}</h4>
+      {badge && (
+        <div className="flex w-full justify-start sm:ml-auto sm:w-auto sm:justify-end">
+          {badge}
+        </div>
+      )}
     </div>
   );
 }

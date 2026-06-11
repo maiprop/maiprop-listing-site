@@ -273,6 +273,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                 isFavorited={isFavorited}
                 onFavorite={handleFavorite}
                 onShare={handleShare}
+                title={listing.title}
               />
 
               {/* Title + Price hero row */}
@@ -520,12 +521,16 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                 if (total === 0) return null;
                 return (
                   <div className="glass-card rounded-2xl border border-border overflow-hidden">
-                    <div className="flex items-center gap-2.5 px-5 py-4 border-b border-border">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2.5 px-5 py-4 border-b border-border">
                       <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
                         <Check className="w-3.5 h-3.5 text-primary" />
                       </div>
-                      <h4 className="font-display font-semibold text-sm">{tr("newBuildDetail.features.title", "Features & Amenities")}</h4>
-                      <span className="ml-auto text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full border border-border">{trv("newBuildDetail.features.count", "{{count}} features", { count: total })}</span>
+                      <h4 className="min-w-0 flex-1 basis-40 font-display font-semibold text-sm">{tr("newBuildDetail.features.title", "Features & Amenities")}</h4>
+                      <div className="flex w-full justify-start sm:ml-auto sm:w-auto sm:justify-end">
+                        <span className="inline-flex max-w-full items-center justify-center text-center text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full border border-border">
+                          {trv("newBuildDetail.features.count", "{{count}} features", { count: total })}
+                        </span>
+                      </div>
                     </div>
                     <div className="p-6 space-y-6">
                       <FeatureSection title={tr("newBuildDetail.features.internal", "Internal")} features={internalFeatures} accent="bg-primary" />
