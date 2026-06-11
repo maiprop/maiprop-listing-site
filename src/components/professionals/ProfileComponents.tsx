@@ -37,7 +37,7 @@ export function ListingGrid({ listings }: { listings: any[] }) {
       {listings.map((listing: any) => (
         <Link
           key={listing.id}
-          to={listing.is_pre_sale ? `/new-build/${listing.id}` : `/property/${listing.id}`}
+          to={listing.listing_type === "new_build" ? `/new-build/${listing.id}` : `/property/${listing.id}`}
           className="group border border-border rounded-xl overflow-hidden hover:border-primary/30 transition-colors bg-card"
         >
           {listing.cover_image_url && (
@@ -52,7 +52,7 @@ export function ListingGrid({ listings }: { listings: any[] }) {
           <div className="p-3">
             <div className="flex items-start justify-between gap-2 mb-1">
               <p className="text-sm font-semibold line-clamp-1 group-hover:text-primary transition-colors">{listing.title}</p>
-              {!!listing.is_pre_sale && (
+              {listing.listing_type === "new_build" && (
                 <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-orange-500/10 text-orange-500 border border-orange-500/20 font-medium">New Build</span>
               )}
               {listing.listing_type === "open_house" && (

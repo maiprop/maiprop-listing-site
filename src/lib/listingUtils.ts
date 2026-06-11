@@ -116,7 +116,7 @@ export function dbListingToCard(
     hasVirtualTour: l.has_virtual_tour,
     isFeatured: !!l.is_featured,
     priorityPlacement: Number(l.priority_placement) || 0,
-    isPreSale: l.is_pre_sale ?? false,
+    isPreSale: l.listing_type === "new_build",
     constructionStatus: l.construction_status ?? undefined,
     walkabilityScore: l.walkability_score != null ? Number(l.walkability_score) : undefined,
     safetyScore: l.safety_score != null ? Number(l.safety_score) : undefined,

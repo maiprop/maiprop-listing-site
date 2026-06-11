@@ -615,12 +615,12 @@ describe("PropertyDetail", () => {
     mockUseAuth.mockReturnValue({ user: null, profile: null, loading: false });
   });
 
-  it("does not route ordinary sale or rent listings to new-build just because they have a condition", async () => {
+  it("routes only canonical new-build listing types to the new-build detail page", async () => {
     const { shouldUseNewBuildRoute } = await import("@/lib/listingRoutes");
 
     expect(shouldUseNewBuildRoute({ is_pre_sale: false, listing_type: "sale", construction_status: "renovated" } as never)).toBe(false);
     expect(shouldUseNewBuildRoute({ is_pre_sale: false, listing_type: "rent", construction_status: "new" } as never)).toBe(false);
-    expect(shouldUseNewBuildRoute({ is_pre_sale: true, listing_type: "sale" })).toBe(true);
+    expect(shouldUseNewBuildRoute({ is_pre_sale: true, listing_type: "sale" })).toBe(false);
     expect(shouldUseNewBuildRoute({ is_pre_sale: false, listing_type: "new_build" })).toBe(true);
   });
 

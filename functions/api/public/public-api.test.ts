@@ -169,8 +169,20 @@ function installSupabaseFetch(): FetchMock {
         ]);
       }
 
+      if (listingType === "eq.new_build") {
+        return jsonRows([
+          {
+            id: "new-build-1",
+            owner_id: "owner-1",
+            title: "Canonical Project Listing",
+            listing_type: "new_build",
+            is_pre_sale: false,
+          },
+        ]);
+      }
+
       if (
-        listingType === "eq.sale" &&
+        (listingType === "eq.sale" || listingType === "in.(sale,new_build)") &&
         url.searchParams.get("listing_images.limit") === "3"
       ) {
         return jsonRows([
@@ -347,7 +359,7 @@ describe("public listings endpoint", () => {
 
   it("uses the default public catalogue scope unless auctions are explicitly included", async () => {
     await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?sort=price-desc"));
-    expect(fetchUrls("/rest/v1/listings")[0].searchParams.get("listing_type")).toBe("in.(sale,rent,firesale)");
+    expect(fetchUrls("/rest/v1/listings")[0].searchParams.get("listing_type")).toBe("in.(sale,rent,firesale,new_build)");
     expect(fetchUrls("/rest/v1/listings")[0].searchParams.get("is_off_market")).toBe("eq.false");
     expect(fetchUrls("/rest/v1/listings")[0].searchParams.getAll("order")).toContain("price.desc");
 
@@ -357,6 +369,37 @@ describe("public listings endpoint", () => {
     expect(url.searchParams.has("listing_type")).toBe(false);
     expect(url.searchParams.get("is_off_market")).toBe("eq.false");
     expect(url.searchParams.getAll("order")).toContain("views_count.desc.nullslast");
+  });
+
+  it("returns canonical new-build listings by listing_type instead of the legacy pre-sale flag", async () => {
+    const res = await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?listing_type=new_build&limit=1"));
+    const body = await res.json() as { data: Array<{ id: string; listing_type: string; is_pre_sale: boolean }> };
+
+    const url = fetchUrls("/rest/v1/listings")[0];
+    expect(url.searchParams.get("listing_type")).toBe("eq.new_build");
+    expect(url.searchParams.has("pre_sale")).toBe(false);
+    expect(url.searchParams.has("is_pre_sale")).toBe(false);
+    expect(body.data).toEqual([
+      expect.objectContaining({
+        id: "new-build-1",
+        listing_type: "new_build",
+        is_pre_sale: false,
+      }),
+    ]);
+  });
+
+  it("maps legacy is_pre_sale=true requests to canonical new-build listing_type", async () => {
+    const res = await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?is_pre_sale=true&limit=1"));
+    const body = await res.json() as { data: Array<{ id: string; listing_type: string; is_pre_sale: boolean }> };
+
+    const url = fetchUrls("/rest/v1/listings")[0];
+    expect(url.searchParams.get("listing_type")).toBe("eq.new_build");
+    expect(url.searchParams.has("is_pre_sale")).toBe(false);
+    expect(body.data[0]).toMatchObject({
+      id: "new-build-1",
+      listing_type: "new_build",
+      is_pre_sale: false,
+    });
   });
 
   it("does not expose off-market rows through public listing search", async () => {
@@ -704,7 +747,7 @@ describe("public homepage endpoint", () => {
     expect(featuredRows.map((row) => row.id)).toEqual(["listing-1", "listing-2", "listing-3", "listing-4"]);
     let url = fetchUrls("/rest/v1/listings")[0];
     expect(url.searchParams.get("limit")).toBe("12");
-    expect(url.searchParams.get("listing_type")).toBe("eq.sale");
+    expect(url.searchParams.get("listing_type")).toBe("in.(sale,new_build)");
     expect(url.searchParams.get("is_off_market")).toBe("eq.false");
     expect(url.searchParams.get("listing_images.limit")).toBe("3");
     const featuredCacheKey = new URL(cacheApi.put.mock.calls[0][0].url);

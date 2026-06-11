@@ -129,7 +129,7 @@ function buildListingParams(requestUrl: URL): { params: URLSearchParams; page: n
   if (listingType) {
     params.set("listing_type", `eq.${listingType}`);
   } else if (requestUrl.searchParams.get("includeAuctions") !== "true") {
-    params.set("listing_type", "in.(sale,rent,firesale)");
+    params.set("listing_type", "in.(sale,rent,firesale,new_build)");
   }
 
   appendIfPresent(params, "city", safeText(requestUrl.searchParams.get("city"))?.replace(/^(.+)$/, "ilike.*$1*") ?? null);
@@ -160,7 +160,9 @@ function buildListingParams(requestUrl: URL): { params: URLSearchParams; page: n
   const commercialSubtype = safeText(requestUrl.searchParams.get("commercial_subtype"), 40);
   if (commercialSubtype) params.set("commercial_subtype", `eq.${commercialSubtype}`);
 
-  if (requestUrl.searchParams.get("is_pre_sale") === "true") params.set("is_pre_sale", "eq.true");
+  if (requestUrl.searchParams.get("is_pre_sale") === "true" && !listingType) {
+    params.set("listing_type", "eq.new_build");
+  }
   if (requestUrl.searchParams.get("is_off_market") === "true") {
     params.set("id", "eq.00000000-0000-0000-0000-000000000000");
   }

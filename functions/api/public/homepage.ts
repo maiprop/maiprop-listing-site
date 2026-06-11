@@ -225,7 +225,7 @@ async function fetchSection(env: PublicApiEnv, section: (typeof SECTIONS)[number
 
   if (section === "featured") {
     params.set("select", featuredSelect);
-    params.set("listing_type", "eq.sale");
+    params.set("listing_type", "in.(sale,new_build)");
     params.set("order", "created_at.desc");
     params.set("listing_images.order", "sort_order.asc");
     params.set("listing_images.limit", "3");

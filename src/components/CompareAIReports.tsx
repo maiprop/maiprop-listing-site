@@ -5,6 +5,7 @@ import { getAiErrorMessage } from "@/lib/aiErrorUtils";
 import { useAuth } from "@/contexts/AuthContext";
 import { SignInForAI } from "@/components/SignInForAI";
 import { computeWalkScore, walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
+import { getPrimaryValuationEstimate } from "@/lib/valuationResult";
 
 // Compare drawer is fed both the formatted card view and the raw listing row
 // from useListings. Both shapes have ~80 columns between them and a tighter
@@ -36,6 +37,21 @@ interface PropertyAIData {
   loading: boolean;
   error: string | null;
 }
+
+const normalizeValuationReport = (data: unknown, fallbackPrice: number): AIReport => {
+  const source = data && typeof data === "object" ? data as Partial<AIReport> : {};
+  const estimatedValue = getPrimaryValuationEstimate(source, fallbackPrice);
+  const diffPct = fallbackPrice > 0 ? Math.round(((estimatedValue - fallbackPrice) / fallbackPrice) * 100) : 0;
+  return {
+    estimatedValue,
+    rangeLow: Number.isFinite(Number(source.rangeLow)) ? Number(source.rangeLow) : Math.round(estimatedValue * 0.9),
+    rangeHigh: Number.isFinite(Number(source.rangeHigh)) ? Number(source.rangeHigh) : Math.round(estimatedValue * 1.1),
+    confidence: Number.isFinite(Number(source.confidence)) ? Number(source.confidence) : 0,
+    marketComparison: source.marketComparison ?? (diffPct > 5 ? "above_market" : diffPct < -5 ? "below_market" : "at_market"),
+    marketComparisonPct: Number.isFinite(Number(source.marketComparisonPct)) ? Number(source.marketComparisonPct) : diffPct,
+    rentalYieldEstimate: Number.isFinite(Number(source.rentalYieldEstimate)) ? Number(source.rentalYieldEstimate) : 0,
+  };
+};
 
 // ── Mini walk score badge ─────────────────────────────────────────────────────
 function WalkBadge({ score }: { score: number }) {
@@ -178,8 +194,8 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
           }),
         ]);
 
-        const valuation = valRes.status === "fulfilled" && !valRes.value.error
-          ? valRes.value.data as AIReport
+        const valuation = valRes.status === "fulfilled" && !valRes.value.error && valRes.value.data
+          ? normalizeValuationReport(valRes.value.data, Number(raw.price))
           : null;
 
         let reportError: string | null = null;

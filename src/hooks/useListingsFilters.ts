@@ -88,7 +88,7 @@ export function useListingsFilters(): ListingsFilterState & ListingsFilterAction
   const selectedFeatures = getMulti("features");
   const selectedHeating = getParam("heating");
   const selectedConstruction = getParam("construction");
-  const preSaleOnly = searchParams.get("pre_sale") === "1";
+  const preSaleOnly = selectedListingType === "new_build" || searchParams.get("pre_sale") === "1";
   const hasVideoViewing = searchParams.get("video_viewing") === "1";
   const hasVirtualTour = searchParams.get("virtual_tour") === "1";
   const hasMessaging = searchParams.get("messaging") === "1";

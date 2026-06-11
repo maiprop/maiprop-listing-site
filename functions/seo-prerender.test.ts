@@ -110,7 +110,7 @@ describe("SEO Pages Functions", () => {
     });
   });
 
-  it("uses canonical auction and new-build detail URLs when listing data requires it", async () => {
+  it("uses canonical auction and new-build detail URLs when listing type requires it", async () => {
     fetchMock().mockResolvedValueOnce(
       new Response(JSON.stringify([{ ...listing, listing_type: "auction" }]), {
         status: 200,
@@ -121,7 +121,7 @@ describe("SEO Pages Functions", () => {
     expect(await auctionRes.text()).toContain("https://maiprop.co/auction/listing-1");
 
     fetchMock().mockResolvedValueOnce(
-      new Response(JSON.stringify([{ ...listing, is_pre_sale: true }]), {
+      new Response(JSON.stringify([{ ...listing, listing_type: "new_build" }]), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       }),
@@ -209,7 +209,7 @@ describe("SEO Pages Functions", () => {
 
     const url = firstSupabaseRequestUrl();
     expect(url.searchParams.get("city")).toBe("ilike.*Athens*");
-    expect(url.searchParams.get("listing_type")).toBe("in.(sale,rent,firesale)");
+    expect(url.searchParams.get("listing_type")).toBe("in.(sale,rent,firesale,new_build)");
   });
 
   it("honors explicit /listings listing_type and includeAuctions query intent", async () => {

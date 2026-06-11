@@ -142,9 +142,8 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
 
   const filters = useMemo<ListingsFilters>(() => ({ // skipcq: JS-R1005 - Listings route maps many independent URL filters into one query payload.
     city: searchQuery || undefined,
-    listing_type: preSaleOnly ? "sale" : (selectedListingType || undefined),
+    listing_type: preSaleOnly ? "new_build" : (selectedListingType || undefined),
     property_type: selectedType || undefined,
-    is_pre_sale: preSaleOnly || undefined,
     price_min: priceMin || undefined,
     price_max: priceMax || undefined,
     beds_min: bedsRange[0] ? Number(bedsRange[0]) : undefined,
@@ -473,15 +472,15 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                     </div>
                   </div>
                   {/* Listing status */}
-                  {(selectedListingType === "sale" || !selectedListingType) && (
+                  {(!selectedListingType || selectedListingType === "sale" || selectedListingType === "new_build") && (
                     <div className="space-y-1.5">
-                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isGreek ? "Κατάσταση" : "Status"}</span>
+                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{isGreek ? "Τύπος" : "Type"}</span>
                       <div className="flex gap-3 flex-wrap">
                         <label className="flex items-center gap-2 cursor-pointer">
                           <input type="checkbox" checked={preSaleOnly}
-                            onChange={e => setParam("pre_sale", e.target.checked ? "1" : "")}
+                            onChange={e => setParams([["listing_type", e.target.checked ? "new_build" : ""], ["pre_sale", ""]])}
                             className="rounded border-border accent-primary" />
-                          <span className="text-sm">🏗️ {isGreek ? "Προπώληση" : "Pre-sale"}</span>
+                          <span className="text-sm">🏗️ {isGreek ? "Νέες κατασκευές" : "New builds"}</span>
                         </label>
                       </div>
                     </div>
@@ -503,7 +502,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                    {selectedPrice && <button onClick={() => setParam("price", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{[...buyPriceRanges, ...rentPriceRanges].find(r => r.value === selectedPrice)?.label || selectedPrice} <X className="w-3 h-3" /></button>}
                    {bedsRange[0] && <button onClick={() => setParam("beds_min", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{bedsRange[0]}+ {isGreek ? "υπνοδωμάτια" : "beds"} <X className="w-3 h-3" /></button>}
                    {(minSqm || maxSqm) && <button onClick={() => { setParam("sqm_min", ""); setParam("sqm_max", ""); }} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{isGreek ? "Εμβαδόν" : "Size"} <X className="w-3 h-3" /></button>}
-                   {preSaleOnly && <button onClick={() => setParam("pre_sale", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{isGreek ? "Προπώληση" : "Pre-sale"} <X className="w-3 h-3" /></button>}
+                   {preSaleOnly && <button onClick={() => setParams([["listing_type", ""], ["pre_sale", ""]])} className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary shrink-0">{isGreek ? "Νέες κατασκευές" : "New builds"} <X className="w-3 h-3" /></button>}
                    {hasVideoViewing && <button onClick={() => setParam("video_viewing", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent shrink-0">🎥 {isGreek ? "Βίντεο" : "Video"} <X className="w-3 h-3" /></button>}
                    {hasVirtualTour && <button onClick={() => setParam("virtual_tour", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent shrink-0">🔮 {isGreek ? "Εικονική περιήγηση" : "Virtual"} <X className="w-3 h-3" /></button>}
                    {hasMessaging && <button onClick={() => setParam("messaging", "")} className="flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 border border-accent/20 text-xs text-accent shrink-0">💬 {isGreek ? "Μηνύματα" : "Messaging"} <X className="w-3 h-3" /></button>}

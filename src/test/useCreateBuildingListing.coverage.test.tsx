@@ -19,6 +19,8 @@ const {
     projectDelete: vi.fn(),
     projectDeleteEq: vi.fn(),
     unitInsert: vi.fn(),
+    unitUpdate: vi.fn(),
+    unitUpdateEq: vi.fn(),
     listingInsert: vi.fn(),
     imageInsert: vi.fn(),
   },
@@ -122,8 +124,12 @@ function installSupabaseChains({
       };
     }
     if (table === "project_units") {
+      const unitUpdateChain = {
+        eq: chains.unitUpdateEq.mockReturnThis(),
+      };
       return {
         insert: chains.unitInsert.mockReturnValue(selectSingle(unitResult)),
+        update: chains.unitUpdate.mockReturnValue(unitUpdateChain),
       };
     }
     if (table === "listings") {
@@ -195,8 +201,12 @@ describe("useCreateBuildingListing coverage", () => {
       cover_image_url: "https://cdn.test/cover.jpg",
       price_per_sqm: 2500,
       status: "active",
-      is_pre_sale: true,
+      listing_type: "new_build",
+      is_pre_sale: false,
     }));
+    expect(chains.unitUpdate).toHaveBeenCalledWith({ listing_id: "listing-1" });
+    expect(chains.unitUpdateEq).toHaveBeenCalledWith("id", "unit-1");
+    expect(chains.unitUpdateEq).toHaveBeenCalledWith("project_id", "project-1");
     expect(chains.imageInsert).toHaveBeenCalledWith([
       { listing_id: "listing-1", url: "https://cdn.test/2.jpg", sort_order: 1 },
       { listing_id: "listing-1", url: "https://cdn.test/3.jpg", sort_order: 2 },

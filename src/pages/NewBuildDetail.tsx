@@ -26,6 +26,7 @@ import PropertyMiniMap from "@/components/PropertyMiniMap";
 import { ENERGY_SCALE, ENERGY_COLORS } from "@/types";
 import { CONSTRUCTION_PHASES, formatNewBuildPrice as formatPrice } from "@/lib/newBuildConfig";
 import { formatPrice as formatCurrency } from "@/lib/format";
+import { getPrimaryValuationEstimate } from "@/lib/valuationResult";
 import { FeatureSection } from "@/components/property/DetailPrimitives";
 import { PropertyGallery as Gallery } from "@/components/new-build/PropertyGallery";
 import { ConstructionTimeline } from "@/components/new-build/ConstructionTimeline";
@@ -215,7 +216,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
         setAiInsightsData({
           vsMarket: data.marketComparisonPct ?? 0,
           rentalYield: data.rentalYieldEstimate ?? 0,
-          estimatedValue: data.estimatedValue ?? Number(listing.price),
+          estimatedValue: getPrimaryValuationEstimate(data, Number(listing.price)),
           marketComparison: data.marketComparison ?? "at_market",
           confidenceLabel: data.confidenceLabel ?? "Medium",
         });
@@ -276,7 +277,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
         {/* Back link */}
         <div className="container max-w-5xl px-4 pt-6 pb-2">
           <Link
-            to="/listings?pre_sale=1"
+            to="/listings?listing_type=new_build"
             className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="w-4 h-4" /> {tr("newBuildDetail.backToNewBuilds", "Back to new builds")}
@@ -306,9 +307,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                           {tr(`newBuildDetail.phases.${listing.construction_status}`, listing.construction_status.replace(/_/g, " "))}
                         </span>
                       )}
-                      {listing.is_pre_sale && (
-                        <span className="text-[10px] font-bold uppercase tracking-widest bg-primary/15 text-primary rounded-full px-2 py-0.5">{tr("newBuildDetail.badges.preSale", "Pre-sale")}</span>
-                      )}
+                      <span className="text-[10px] font-bold uppercase tracking-widest bg-primary/15 text-primary rounded-full px-2 py-0.5">{tr("newBuildDetail.badges.newBuild", "New Build")}</span>
                       {listing.energy_class && <EnergyBadge cls={listing.energy_class} />}
                     </div>
                     <h1 className="font-display text-2xl sm:text-3xl font-bold leading-tight">{listing.title}</h1>

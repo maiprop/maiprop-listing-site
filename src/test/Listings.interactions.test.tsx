@@ -418,9 +418,9 @@ describe("Listings page interactions", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "3+" })[0]);
     expect(setParam).toHaveBeenCalledWith("beds_min", "3");
 
-    fireEvent.click(screen.getByLabelText(/pre-sale/i));
+    fireEvent.click(screen.getByLabelText(/new builds/i));
     expect(screen.queryByLabelText(/off-market/i)).not.toBeInTheDocument();
-    expect(setParam).toHaveBeenCalledWith("pre_sale", "1");
+    expect(setParams).toHaveBeenCalledWith([["listing_type", "new_build"], ["pre_sale", ""]]);
 
     fireEvent.click(screen.getByRole("button", { name: "Clear all filters" }));
     expect(clearAllFilters).toHaveBeenCalled();
@@ -501,8 +501,8 @@ describe("Listings page interactions", () => {
       /Energy A\+/i,
       /pool/i,
       /Heating:/i,
-      /new/i,
-      /pre-sale/i,
+      /^New$/i,
+      /new builds/i,
       /video viewing/i,
       /virtual tour/i,
       /messaging/i,

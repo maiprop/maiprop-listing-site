@@ -118,8 +118,8 @@ const listing = {
   year_built: 2027,
   energy_class: "A",
   construction_status: "foundation",
-  is_pre_sale: true,
-  listing_type: "sale",
+  is_pre_sale: false,
+  listing_type: "new_build",
   address: "Akti 1",
   city: "Piraeus",
   region: "Attica",
@@ -181,10 +181,11 @@ beforeEach(() => {
   fromMock.mockReturnValue({ insert: vi.fn().mockResolvedValue({ error: null }) });
   functionsInvokeMock.mockResolvedValue({
     data: {
-      marketComparisonPct: -3,
+      marketComparisonPct: 19,
       rentalYieldEstimate: 4.4,
       estimatedValue: 430000,
-      marketComparison: "below_market",
+      auctionAdjustedValue: 500000,
+      marketComparison: "above_market",
       confidenceLabel: "High",
     },
   });
@@ -245,12 +246,12 @@ describe("NewBuildDetail", () => {
     expect(toastMock.success).toHaveBeenCalledWith("Link copied to clipboard");
   });
 
-  it("redirects normal sale listings away from the new-build detail route", async () => {
+  it("redirects legacy sale listings with is_pre_sale away from the new-build detail route", async () => {
     useQueryMock.mockReturnValue({
       data: {
         ...listing,
         construction_status: "renovated",
-        is_pre_sale: false,
+        is_pre_sale: true,
         listing_type: "sale",
       },
       isLoading: false,
@@ -274,6 +275,7 @@ describe("NewBuildDetail", () => {
 
     await waitFor(() => expect(functionsInvokeMock).toHaveBeenCalledWith("property-valuation", expect.any(Object)));
     expect(await screen.findByText("AI Estimate")).toBeInTheDocument();
+    expect(screen.getByText(/500\.000/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "favorite" }));
     expect(toggleFavoriteMock).toHaveBeenCalledWith({ listing_id: "listing-1", isFavorited: false });

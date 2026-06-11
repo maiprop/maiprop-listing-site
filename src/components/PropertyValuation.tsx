@@ -8,6 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { getAiErrorMessage } from "@/lib/aiErrorUtils";
+import { getPrimaryValuationEstimate, getRemoteValuationEstimate } from "@/lib/valuationResult";
 import { useAuth } from "@/contexts/AuthContext";
 import { SignInForAI } from "@/components/SignInForAI";
 import { toast } from "sonner";
@@ -177,8 +178,15 @@ function toFiniteNumber(value: unknown, fallback: number): number {
   return Number.isFinite(numeric) ? numeric : fallback;
 }
 
-function normalizeValuationResult(data: Partial<ValuationResult>, fallbackPrice: number): ValuationResult {
-  const estimatedValue = toFiniteNumber(data.estimatedValue, fallbackPrice);
+type RawValuationResult = Partial<ValuationResult> & {
+  estimated_value?: unknown;
+  auction_adjusted_value?: unknown;
+};
+
+function normalizeValuationResult(data: RawValuationResult, fallbackPrice: number): ValuationResult {
+  const primaryEstimate = getPrimaryValuationEstimate(data, fallbackPrice);
+  const estimatedValue = toFiniteNumber(data.estimatedValue ?? data.estimated_value, primaryEstimate);
+  const auctionAdjustedValue = toFiniteNumber(data.auctionAdjustedValue ?? data.auction_adjusted_value, 0);
   return {
     estimatedValue,
     rangeLow: toFiniteNumber(data.rangeLow, Math.round(estimatedValue * 0.9)),
@@ -206,7 +214,7 @@ function normalizeValuationResult(data: Partial<ValuationResult>, fallbackPrice:
     rentalYieldEstimate: toFiniteNumber(data.rentalYieldEstimate, 0),
     highestBestUseHint: data.highestBestUseHint ?? null,
     redFlags: Array.isArray(data.redFlags) ? data.redFlags : [],
-    auctionAdjustedValue: data.auctionAdjustedValue ?? null,
+    auctionAdjustedValue: auctionAdjustedValue > 0 ? auctionAdjustedValue : null,
     listingQualityScore: toFiniteNumber(data.listingQualityScore, 50),
   };
 }
@@ -252,8 +260,8 @@ export default function PropertyValuation(props: PropertyValuationProps) {
       const { data, error } = await supabase.functions.invoke("property-valuation", { body: props });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      if (!data?.estimatedValue) throw new Error(ui(isGreek, "Valuation returned no result", "Η εκτίμηση δεν επέστρεψε αποτέλεσμα"));
-      setResult(normalizeValuationResult(data as Partial<ValuationResult>, props.price));
+      if (!getRemoteValuationEstimate(data)) throw new Error(ui(isGreek, "Valuation returned no result", "Η εκτίμηση δεν επέστρεψε αποτέλεσμα"));
+      setResult(normalizeValuationResult(data as RawValuationResult, props.price));
       setExpanded(true);
       void queryClient.invalidateQueries({ queryKey: ["usage_ai_calls"] });
     } catch (e: unknown) {
@@ -263,7 +271,10 @@ export default function PropertyValuation(props: PropertyValuationProps) {
     }
   };
 
-  const diff = result ? result.estimatedValue - props.price : 0;
+  const primaryMarketValue = result ? getPrimaryValuationEstimate(result, props.price) : 0;
+  const hasAuctionAdjustment = Boolean(result?.auctionAdjustedValue && result.auctionAdjustedValue > 0);
+  const hasDistinctAuctionBidValue = Boolean(hasAuctionAdjustment && result && result.auctionAdjustedValue !== result.estimatedValue);
+  const diff = result ? primaryMarketValue - props.price : 0;
   const diffPct = result ? Math.round((diff / props.price) * 100) : 0;
   const pricing = result ? PRICING_CONFIG[result.pricingPosition as keyof typeof PRICING_CONFIG] : null;
 
@@ -310,12 +321,12 @@ export default function PropertyValuation(props: PropertyValuationProps) {
             <div className="flex items-start gap-4">
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
-                  {result.auctionAdjustedValue
-                    ? ui(isGreek, "Auction-Adjusted Value", "Αξία προσαρμοσμένη για πλειστηριασμό")
+                  {hasAuctionAdjustment
+                    ? ui(isGreek, "Hybrid clean-market value", "Υβριδική καθαρή εμπορική αξία")
                     : ui(isGreek, "AI Estimated Value", "Εκτιμώμενη αξία AI")}
                 </p>
                 <p className="font-display font-black text-2xl text-foreground leading-none">
-                  €{fmt(result.estimatedValue)}
+                  €{fmt(primaryMarketValue)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1.5 font-mono">
                   €{fmt(result.rangeLow)} — €{fmt(result.rangeHigh)}
@@ -339,10 +350,10 @@ export default function PropertyValuation(props: PropertyValuationProps) {
             )}
 
             {/* Auction clean market value */}
-            {result.auctionAdjustedValue && (
+            {hasDistinctAuctionBidValue && (
               <div className="bg-amber-500/8 border border-amber-500/20 rounded-xl px-3 py-2 text-xs flex items-center justify-between">
-                <span className="text-muted-foreground">{ui(isGreek, "Clean market value (pre-auction)", "Καθαρή εμπορική αξία πριν τον πλειστηριασμό")}</span>
-                <span className="font-bold text-amber-400">€{fmt(result.auctionAdjustedValue)}</span>
+                <span className="text-muted-foreground">{ui(isGreek, "Auction-adjusted bid value", "Αξία προσαρμοσμένη για πλειστηριασμό")}</span>
+                <span className="font-bold text-amber-400">€{fmt(result.estimatedValue)}</span>
               </div>
             )}
 

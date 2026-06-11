@@ -5,6 +5,7 @@ import { aiQuotaFromJson, fetchAiQuota } from "@/hooks/useAiQuota";
 import { toast } from "sonner";
 import type { User } from "@supabase/supabase-js";
 import type { ListingWithJoins } from "@/hooks/useListings";
+import { getPrimaryValuationEstimate } from "@/lib/valuationResult";
 
 export interface AIInsightsData {
   vsMarket: number;
@@ -131,7 +132,7 @@ export function usePropertyAIInsights(
         setAiInsightsData({
           vsMarket: data.marketComparisonPct ?? 0,
           rentalYield: data.rentalYieldEstimate ?? 0,
-          estimatedValue: data.estimatedValue ?? Number(snapshot.price),
+          estimatedValue: getPrimaryValuationEstimate(data, Number(snapshot.price)),
           marketComparison: data.marketComparison ?? "at_market",
           confidenceLabel: data.confidenceLabel ?? "Medium",
         });

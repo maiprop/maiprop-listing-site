@@ -172,19 +172,22 @@ export function ListingsAdvancedFilters({ filteredCount, onClose }: Props) {
     <div className="bg-card/95 backdrop-blur-sm border-b border-border shadow-lg">
       <div className="container py-7">
         {/* Listing status quick toggles */}
-        {(selectedListingType === "sale" || !selectedListingType) && (
+        {(!selectedListingType || selectedListingType === "sale" || selectedListingType === "new_build") && (
           <div className="mb-6 pb-5 border-b border-border">
-            <p className="text-xs font-semibold text-foreground/60 uppercase tracking-wider mb-3">{ui(isGreek, "Listing Status", "Κατάσταση αγγελίας")}</p>
+            <p className="text-xs font-semibold text-foreground/60 uppercase tracking-wider mb-3">{ui(isGreek, "Listing Type", "Τύπος αγγελίας")}</p>
             <div className="flex flex-wrap gap-3">
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={preSaleOnly}
-                  onChange={e => setParam("pre_sale", e.target.checked ? "1" : "")}
+                  onChange={e => {
+                    setParam("listing_type", e.target.checked ? "new_build" : "");
+                    setParam("pre_sale", "");
+                  }}
                   className="rounded border-border accent-primary"
                 />
-                <span className="text-sm font-medium">🏗️ {ui(isGreek, "Pre-sale only", "Μόνο προπώληση")}</span>
-                <span className="text-xs text-muted-foreground hidden sm:inline">{ui(isGreek, "New developments before completion", "Νέα έργα πριν από την ολοκλήρωση")}</span>
+                <span className="text-sm font-medium">🏗️ {ui(isGreek, "New builds only", "Μόνο νέες κατασκευές")}</span>
+                <span className="text-xs text-muted-foreground hidden sm:inline">{ui(isGreek, "Project ads and developer listings", "Αγγελίες έργων και κατασκευαστών")}</span>
               </label>
             </div>
           </div>

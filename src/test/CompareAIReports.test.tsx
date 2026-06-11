@@ -101,11 +101,12 @@ describe("CompareAIReports — Run AI Analysis happy path", () => {
         return Promise.resolve({
           data: {
             estimatedValue: 240_000,
+            auctionAdjustedValue: 300_000,
             rangeLow: 220_000,
             rangeHigh: 260_000,
             confidence: 0.9,
-            marketComparison: "below_market",
-            marketComparisonPct: -4,
+            marketComparison: "above_market",
+            marketComparisonPct: 20,
             rentalYieldEstimate: 4.5,
           },
           error: null,
@@ -125,9 +126,9 @@ describe("CompareAIReports — Run AI Analysis happy path", () => {
     render(wrap(<CompareAIReports listings={[baseListing()]} />));
     fireEvent.click(screen.getByRole("button", { name: /Run AI Analysis/i }));
 
-    // Valuation cell shows the formatted estimate + the below-market badge.
-    await waitFor(() => expect(screen.getByText("€240,000")).toBeInTheDocument());
-    expect(screen.getByText(/Below Mkt/i)).toBeInTheDocument();
+    // Valuation cell shows the formatted clean-market estimate + market badge.
+    await waitFor(() => expect(screen.getByText(/300,000/)).toBeInTheDocument());
+    expect(screen.getByText(/Above Mkt/i)).toBeInTheDocument();
     expect(screen.getByText(/Yield:/i)).toBeInTheDocument();
     // Walk score badge text uses our mocked label.
     expect(screen.getByText("Score 82")).toBeInTheDocument();
@@ -164,6 +165,25 @@ describe("CompareAIReports — Run AI Analysis happy path", () => {
     await waitFor(() => expect(screen.getByText(/60\/100/)).toBeInTheDocument());
     expect(screen.getByText(/At Market/i)).toBeInTheDocument();
     expect(screen.getByText(/Noisy/i)).toBeInTheDocument();
+  });
+
+  it("normalizes sparse successful valuation payloads before rendering", async () => {
+    invokeMock.mockImplementation((name: string) => {
+      if (name === "property-valuation")
+        return Promise.resolve({ data: {}, error: null });
+      if (name === "neighbourhood-report")
+        return Promise.resolve({ data: { safety_score: 70, noise_level: "moderate" }, error: null });
+      if (name === "property-pois")
+        return Promise.resolve({ data: { pois: [] }, error: null });
+      throw new Error("unexpected " + name);
+    });
+    render(wrap(<CompareAIReports listings={[baseListing({ price: 250_000 })]} />));
+    fireEvent.click(screen.getByRole("button", { name: /Run AI Analysis/i }));
+
+    await waitFor(() => expect(screen.getByText(/250,000/)).toBeInTheDocument());
+    expect(screen.getByText(/At Market/i)).toBeInTheDocument();
+    expect(screen.getByText(/225,000/)).toBeInTheDocument();
+    expect(screen.getByText(/275,000/)).toBeInTheDocument();
   });
 
   it("renders em-dashes when valuation fails", async () => {

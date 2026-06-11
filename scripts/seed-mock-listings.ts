@@ -7,7 +7,7 @@
  *   - 5 for sale (private owner)
  *   - 5 for sale (agent) + ensures each agent exists in `professionals`
  *   - 5 for rent (mixed owners)
- *   - 5 new builds (is_pre_sale: true)
+ *   - 5 new builds (listing_type: "new_build")
  *   - 5 open house
  *
  * Quick Sale listings are NOT in the listings table.
@@ -345,11 +345,11 @@ async function main() {
     {
       title: "Skyline Residences — Pre-Sale Phase I | Marousi",
       description: "Brand-new 68-unit luxury residential tower in Marousi's golden mile. Phase I pre-sale now open. Apartments from 1BR studios to 4BR penthouses. Completion Q3 2027. DEKA certified energy class A+. Rooftop pool, concierge, underground parking.",
-      listing_type: "sale", property_type: "apartment", city: "Marousi", address: "120 Kifisias Ave, Marousi (Plot A)",
+      listing_type: "new_build", property_type: "apartment", city: "Marousi", address: "120 Kifisias Ave, Marousi (Plot A)",
       price: 380000, sqm: 90, bedrooms: 2, bathrooms: 2, floor: 5, total_floors: 15, year_built: 2027,
       energy_class: "A+", heating_system: "heat_pump", has_parking: true, has_elevator: true,
       has_balcony: true, has_view: true, has_pool: true, has_ac: true,
-      is_featured: true, is_pre_sale: true, construction_status: "under_construction",
+      is_featured: true, is_pre_sale: false, construction_status: "under_construction",
       cover_image_url: "https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=800&q=80",
       price_per_sqm: 4222, status: "active", latitude: 38.0500, longitude: 23.8100,
       views_count: 891, priority_placement: 2, suitable_investment: true,
@@ -357,11 +357,11 @@ async function main() {
     {
       title: "Ellinikon Park Villas — Phase II Pre-Sale",
       description: "Unique opportunity to own a villa within the Ellinikon mega-project. 24 semi-detached villas, 180–260m², private gardens, direct park access. LEED Platinum. Delivery 2028. Only 6 plots remaining in Phase II pre-sale.",
-      listing_type: "sale", property_type: "villa", city: "Ellinikon", address: "Ellinikon Metropolitan Park, Ellinikon",
+      listing_type: "new_build", property_type: "villa", city: "Ellinikon", address: "Ellinikon Metropolitan Park, Ellinikon",
       price: 1200000, sqm: 200, bedrooms: 4, bathrooms: 3, floor: 0, total_floors: 2, year_built: 2028,
       energy_class: "A+", heating_system: "underfloor", has_parking: true, has_elevator: false,
       has_balcony: true, has_view: true, has_pool: true, has_garden: true, has_ac: true,
-      is_featured: true, is_pre_sale: true, construction_status: "pre_construction",
+      is_featured: true, is_pre_sale: false, construction_status: "pre_construction",
       cover_image_url: "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=800&q=80",
       price_per_sqm: 6000, status: "active", latitude: 37.8900, longitude: 23.7300,
       views_count: 1204, priority_placement: 2, suitable_investment: true,
@@ -369,11 +369,11 @@ async function main() {
     {
       title: "Thessaloniki Waterfront Towers — 1BR from €145k",
       description: "New residential development on Thessaloniki's revitalised waterfront. 3 towers, 200 units. 1BR to 3BR. Energy class A+, underfloor heating, triple-glazed windows. Completion Q1 2027. Pre-sale pricing now — phase 2 price increase expected.",
-      listing_type: "sale", property_type: "apartment", city: "Thessaloniki", address: "88 Nikis Ave, Thessaloniki Waterfront",
+      listing_type: "new_build", property_type: "apartment", city: "Thessaloniki", address: "88 Nikis Ave, Thessaloniki Waterfront",
       price: 145000, sqm: 50, bedrooms: 1, bathrooms: 1, floor: 3, total_floors: 12, year_built: 2027,
       energy_class: "A+", heating_system: "underfloor", has_parking: true, has_elevator: true,
       has_balcony: true, has_view: true, has_ac: true,
-      is_featured: false, is_pre_sale: true, construction_status: "under_construction",
+      is_featured: false, is_pre_sale: false, construction_status: "under_construction",
       cover_image_url: "https://images.unsplash.com/photo-1605146769289-440113cc3d00?w=800&q=80",
       price_per_sqm: 2900, status: "active", latitude: 40.6280, longitude: 22.9440,
       views_count: 543, priority_placement: 1, suitable_investment: true,
@@ -381,11 +381,11 @@ async function main() {
     {
       title: "Vouliagmeni Sea Residences — Penthouse Pre-Sale",
       description: "Exclusive boutique development of 12 luxury apartments in Vouliagmeni. The penthouse (200m²) is now available for pre-sale. Private infinity pool, panoramic Saronic views, smart home, private lift. Only 3 units remain. Completion 2026.",
-      listing_type: "sale", property_type: "apartment", city: "Vouliagmeni", address: "Kavouri Bay, Vouliagmeni",
+      listing_type: "new_build", property_type: "apartment", city: "Vouliagmeni", address: "Kavouri Bay, Vouliagmeni",
       price: 2200000, sqm: 200, bedrooms: 4, bathrooms: 4, floor: 6, total_floors: 6, year_built: 2026,
       energy_class: "A+", heating_system: "underfloor", has_parking: true, has_elevator: true,
       has_balcony: true, has_view: true, has_pool: true, has_ac: true,
-      is_featured: true, is_pre_sale: true, construction_status: "finishing",
+      is_featured: true, is_pre_sale: false, construction_status: "finishing",
       cover_image_url: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80",
       price_per_sqm: 11000, status: "active", latitude: 37.8100, longitude: 23.7800,
       views_count: 978, priority_placement: 2, suitable_investment: false,
@@ -393,11 +393,11 @@ async function main() {
     {
       title: "Green Quarter Residences — Chalandri",
       description: "Sustainable new development of 40 apartments. All units achieve BREEAM Excellent. 2BR, 3BR options with private terraces. EV charging in every parking bay. Rooftop urban garden. Pre-sale price lock — build commencement June 2025.",
-      listing_type: "sale", property_type: "apartment", city: "Chalandri", address: "Konstantinoupoleos & Frinis, Chalandri",
+      listing_type: "new_build", property_type: "apartment", city: "Chalandri", address: "Konstantinoupoleos & Frinis, Chalandri",
       price: 320000, sqm: 95, bedrooms: 2, bathrooms: 2, floor: 2, total_floors: 8, year_built: 2027,
       energy_class: "A+", heating_system: "heat_pump", has_parking: true, has_elevator: true,
       has_balcony: true, has_view: false, has_ac: true,
-      is_featured: false, is_pre_sale: true, construction_status: "pre_construction",
+      is_featured: false, is_pre_sale: false, construction_status: "pre_construction",
       cover_image_url: "https://images.unsplash.com/photo-1493809842364-78817add7ffb?w=800&q=80",
       price_per_sqm: 3368, status: "active", latitude: 38.0130, longitude: 23.8020,
       views_count: 367, priority_placement: 0, suitable_investment: true,
@@ -457,7 +457,7 @@ async function main() {
       listing_type: "open_house", property_type: "apartment", city: "Marousi", address: "120 Kifisias Ave, Marousi (Show Suite)",
       price: 395000, sqm: 92, bedrooms: 2, bathrooms: 2, floor: 6, total_floors: 15, year_built: 2027,
       energy_class: "A+", heating_system: "heat_pump", has_parking: true, has_elevator: true,
-      has_balcony: true, has_view: true, has_ac: true, is_pre_sale: true, open_house_date: daysFromNow(6),
+      has_balcony: true, has_view: true, has_ac: true, is_pre_sale: false, open_house_date: daysFromNow(6),
       is_featured: true, cover_image_url: "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=800&q=80",
       price_per_sqm: 4293, status: "active", latitude: 38.0510, longitude: 23.8110,
       views_count: 834, priority_placement: 2,

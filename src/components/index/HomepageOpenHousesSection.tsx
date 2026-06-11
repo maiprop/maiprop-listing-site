@@ -76,7 +76,7 @@ export function HomepageOpenHousesSection({ listings }: Props) {
                   aiScore: l.ai_score ?? undefined,
                   views: l.views_count ?? undefined,
                   tags: l.tags || [],
-                  isPreSale: l.is_pre_sale ?? false,
+                  isPreSale: l.listing_type === "new_build",
                   constructionStatus: l.construction_status ?? undefined,
                 }}
               />

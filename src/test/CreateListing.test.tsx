@@ -200,13 +200,13 @@ describe("CreateListing", () => {
     expect(set).toHaveBeenCalledWith("construction_status", "");
   });
 
-  it("allows developers through the pre-sale creation gate", () => {
+  it("keeps the legacy pre-sale creation gate disabled for developers", () => {
     useAuthMock.mockReturnValue({
       user: { id: "u-1" },
       profile: { role: "developer", participant_type: "developer" },
     });
     render(<CreateListing />, { wrapper: wrap });
-    expect(useListingFormMock).toHaveBeenCalledWith(expect.objectContaining({ allowPreSale: true, mode: "create" }));
+    expect(useListingFormMock).toHaveBeenCalledWith(expect.objectContaining({ allowPreSale: false, mode: "create" }));
     expect(screen.getByTestId("step-type")).toBeInTheDocument();
   });
 

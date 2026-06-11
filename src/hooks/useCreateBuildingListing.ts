@@ -10,7 +10,7 @@
  *   2. Insert into `project_units`    (FK -> project)
  *   3. For each non-null project-media file, upload to `project-media`
  *      and insert a row in `project_media` via `useAddProjectMedia()`
- *   4. Insert into `listings`         (FK -> project)
+ *   4. Insert into `listings` as listing_type = new_build (FK -> project)
  *   5. Bulk-insert into `listing_images` for any non-cover photos
  *
  * On *any* failure after step 1, the project row is rolled back via
@@ -161,7 +161,7 @@ export function useCreateBuildingListing() {
           heating_system: unit.heating_system || undefined,
           cooling_system: unit.cooling_system || undefined,
         };
-        const { error: unitErr } = await supabase
+        const { data: createdUnit, error: unitErr } = await supabase
           .from("project_units")
           .insert(unitPayload)
           .select()
@@ -185,7 +185,7 @@ export function useCreateBuildingListing() {
           latitude: toOptionalNumber(project.latitude),
           longitude: toOptionalNumber(project.longitude),
           property_type: "apartment" as const,
-          listing_type: "sale" as const,
+          listing_type: "new_build" as const,
           price,
           sqm: internalSqm,
           bedrooms: parseInt(String(unit.bedrooms)),
@@ -199,7 +199,7 @@ export function useCreateBuildingListing() {
           owner_id: userId,
           status: "active" as const,
           project_id: createdProject.id,
-          is_pre_sale: true,
+          is_pre_sale: false,
         };
         const { data: createdListing, error: listErr } = await supabase
           .from("listings")
@@ -207,6 +207,15 @@ export function useCreateBuildingListing() {
           .select()
           .single();
         if (listErr) throw listErr;
+
+        if (createdUnit?.id) {
+          const { error: unitLinkErr } = await supabase
+            .from("project_units")
+            .update({ listing_id: createdListing.id })
+            .eq("id", createdUnit.id)
+            .eq("project_id", createdProject.id);
+          if (unitLinkErr) throw unitLinkErr;
+        }
 
         // 5. Bulk-insert listing_images for non-cover photos
         if (additionalImageUrls.length > 0) {

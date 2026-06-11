@@ -127,6 +127,33 @@ describe("usePropertyAIInsights", () => {
     expect(invokeMock.mock.calls.filter(([name]) => name === "property-valuation")).toHaveLength(1);
   });
 
+  it("uses the clean-market value as the AI estimate when auction adjustment data is returned", async () => {
+    invokeMock.mockImplementation(async (name: string) => {
+      if (name === "ai-quota-status") {
+        return { data: { allowed: true, reason: null, used: 0, limit: 5 }, error: null };
+      }
+      return {
+        data: {
+          estimatedValue: 130_000,
+          auctionAdjustedValue: 154_000,
+          marketComparisonPct: 0,
+          rentalYieldEstimate: 4.5,
+          marketComparison: "at_market",
+          confidenceLabel: "Medium",
+        },
+        error: null,
+      };
+    });
+    const { result } = renderHook(() =>
+      usePropertyAIInsights(baseListing, baseUser, "L-1", false),
+    );
+    await act(async () => {
+      await result.current.loadAiInsights();
+    });
+    await waitFor(() => expect(result.current.aiInsightsData).not.toBeNull());
+    expect(result.current.aiInsightsData?.estimatedValue).toBe(154_000);
+  });
+
   it("passes listing fields to property-valuation", async () => {
     invokeMock.mockImplementation(async (name: string) => {
       if (name === "ai-quota-status") {

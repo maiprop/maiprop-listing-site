@@ -68,8 +68,6 @@ export default function CreateListing() {
   const tr = useCallback((key: string, fallback: string) => tFallback(t, key, fallback), [t]);
   const trv = useCallback((key: string, fallback: string, values: Record<string, string | number>) => tInterpolate(t, key, fallback, values), [t]);
   const canCreateListing = isSellSideRole(profile) || isPlatformAdmin(profile);
-  const canCreatePreSale =
-    profile?.role === "developer" || isPlatformAdmin(profile);
 
   const redirectedRef = useRef(false);
   useEffect(() => {
@@ -120,18 +118,18 @@ export default function CreateListing() {
     handleSubmit,
     completionPct,
   } = useListingForm({
-    allowPreSale: canCreatePreSale,
+    allowPreSale: false,
     mode: isEditMode ? "edit" : "create",
     listingId,
     initialListing: editListing,
   });
 
   useEffect(() => {
-    if (!canCreatePreSale && form.is_pre_sale) {
+    if (form.is_pre_sale) {
       set("is_pre_sale", false);
       set("construction_status", "");
     }
-  }, [canCreatePreSale, form.is_pre_sale, set]);
+  }, [form.is_pre_sale, set]);
 
   // Field refs for scroll-to-error
   const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -354,7 +352,7 @@ export default function CreateListing() {
                 form={form}
                 set={set}
                 toggle={toggle}
-                showPreSaleOption={canCreatePreSale}
+                showPreSaleOption={false}
               />
             )}
             {step === "details" && (

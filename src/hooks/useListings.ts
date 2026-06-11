@@ -295,7 +295,7 @@ export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize
   if (filters?.listing_type) {
     query = query.eq("listing_type", filters.listing_type as Enums<"listing_type">);
   } else if (!filters?.includeAuctions) {
-    query = query.in("listing_type", ["sale", "rent", "firesale"] as Enums<"listing_type">[]);
+    query = query.in("listing_type", ["sale", "rent", "firesale", "new_build"] as Enums<"listing_type">[]);
   }
   if (filters?.property_type) query = query.eq("property_type", filters.property_type as Enums<"property_type">);
   if (filters?.owner_id) query = query.eq("owner_id", filters.owner_id);
@@ -326,7 +326,7 @@ export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize
   if (filters?.heating_system) query = query.eq("heating_system", filters.heating_system);
   if (filters?.construction_status) query = query.eq("construction_status", filters.construction_status);
   if (filters?.commercial_subtype) query = query.eq("commercial_subtype", filters.commercial_subtype);
-  if (filters?.is_pre_sale === true) query = query.eq("is_pre_sale", true);
+  if (filters?.is_pre_sale === true && !filters?.listing_type) query = query.eq("is_pre_sale", true);
   if (ownerScoped && filters?.is_off_market === true) query = query.eq("is_off_market", true);
   if (filters?.energy_class?.length) query = query.in("energy_class", filters.energy_class);
 
