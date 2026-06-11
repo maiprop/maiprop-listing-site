@@ -119,6 +119,7 @@ const listing = {
   energy_class: "A",
   construction_status: "foundation",
   is_pre_sale: true,
+  listing_type: "sale",
   address: "Akti 1",
   city: "Piraeus",
   region: "Attica",
@@ -242,6 +243,25 @@ describe("NewBuildDetail", () => {
     fireEvent.click(screen.getByRole("button", { name: "share" }));
     await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalled());
     expect(toastMock.success).toHaveBeenCalledWith("Link copied to clipboard");
+  });
+
+  it("redirects normal sale listings away from the new-build detail route", async () => {
+    useQueryMock.mockReturnValue({
+      data: {
+        ...listing,
+        construction_status: "renovated",
+        is_pre_sale: false,
+        listing_type: "sale",
+      },
+      isLoading: false,
+      error: null,
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith("/property/listing-1", { replace: true });
+    });
   });
 
   it("starts conversations from contact affordances and writes interest records for signed-in users", async () => {

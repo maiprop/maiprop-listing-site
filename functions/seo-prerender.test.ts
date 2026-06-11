@@ -130,6 +130,21 @@ describe("SEO Pages Functions", () => {
     expect(await newBuildRes.text()).toContain("https://maiprop.co/new-build/listing-1");
   });
 
+  it("keeps renovated sale listings on the property canonical URL", async () => {
+    fetchMock().mockResolvedValueOnce(
+      new Response(JSON.stringify([{ ...listing, construction_status: "renovated", is_pre_sale: false }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const res = await propertyRequest(makeCtx("https://portal.maiprop.co/property/listing-1", { id: "listing-1" }));
+    const html = await res.text();
+
+    expect(html).toContain("https://maiprop.co/property/listing-1");
+    expect(html).not.toContain("https://maiprop.co/new-build/listing-1");
+  });
+
   it("leaves the shell renderable when Supabase runtime bindings are missing", async () => {
     const ctx = makeCtx("https://portal.maiprop.co/property/listing-1", { id: "listing-1" });
     ctx.env.SUPABASE_PROJECT_ID = undefined;

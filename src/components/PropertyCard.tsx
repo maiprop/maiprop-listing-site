@@ -20,6 +20,7 @@ import {
   isMaiPropLogoFallback,
   switchImageToNextFallback,
 } from "@/lib/imageFallbacks";
+import { getListingDetailPath, shouldUseNewBuildRoute } from "@/lib/listingRoutes";
 
 export interface Property {
   id: string;
@@ -151,13 +152,13 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
     toggleFav.mutate({ listing_id: property.id, isFavorited });
   };
 
-  const detailPath = property.listingType === "auction"
-    ? `/auction/${property.id}`
-    : property.listingType === "open_house"
-    ? `/open-house/${property.id}`
-    : (property.isPreSale || property.constructionStatus)
-    ? `/new-build/${property.id}`
-    : `/property/${property.id}`;
+  const routeListing = {
+    id: property.id,
+    is_pre_sale: property.isPreSale,
+    listing_type: property.listingType,
+  };
+  const isNewBuildListing = shouldUseNewBuildRoute(routeListing);
+  const detailPath = getListingDetailPath(routeListing);
   const rawListing = property._raw && typeof property._raw === "object"
     ? {
         ...(property._raw as Record<string, unknown>),
@@ -208,7 +209,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
   if (property.listingType === "auction") return { label: t("propertyCard.badges.auction"), cls: "badge-auction" };
     if (property.listingType === "open_house") return { label: t("propertyCard.badges.openHouse"), cls: "badge-open-house" };
     if (property.listingType === "firesale") return { label: t("propertyCard.badges.quickSale"), cls: "badge-firesale" };
-    if (property.isPreSale || property.constructionStatus) return { label: t("propertyCard.badges.newBuild"), cls: "bg-teal-600/90 text-white" };
+    if (isNewBuildListing) return { label: t("propertyCard.badges.newBuild"), cls: "bg-teal-600/90 text-white" };
     if (property.isNew) return { label: t("propertyCard.badges.new"), cls: "badge-new" };
     if (property.isPremium) return { label: t("propertyCard.badges.premium"), cls: "bg-brand-purple/90 text-white" };
     return null;

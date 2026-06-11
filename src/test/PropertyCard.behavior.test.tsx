@@ -99,6 +99,31 @@ describe("PropertyCard behavior", () => {
     expect(toastSuccess).toHaveBeenCalledWith("propertyCard.linkCopied");
   });
 
+  it("keeps sale listings with a construction condition on the property route", async () => {
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: writeTextMock } });
+    const { PropertyCard } = await import("@/components/PropertyCard");
+
+    const { container } = renderWithProviders(
+      <PropertyCard
+        property={baseProperty({
+          constructionStatus: "renovated",
+          isPreSale: false,
+          listingType: "sale",
+        })}
+      />,
+    );
+
+    expect(container.querySelector('a[href="/property/p1"]')).toBeTruthy();
+    expect(container.querySelector('a[href="/new-build/p1"]')).toBeNull();
+    expect(screen.queryByText("propertyCard.badges.newBuild")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "propertyCard.actions.share" }));
+    await waitFor(() => {
+      expect(writeTextMock).toHaveBeenCalledWith("https://maiprop.test/property/p1");
+    });
+  });
+
   it("reports signed-in listings and uses the firesale entity type", async () => {
     authMock.mockReturnValue({ user: { id: "reporter-1" }, profile: null, loading: false });
     const { PropertyCard } = await import("@/components/PropertyCard");
@@ -237,7 +262,8 @@ describe("PropertyCard behavior", () => {
       />,
     );
 
-    expect(screen.getByText("propertyCard.badges.newBuild")).toBeInTheDocument();
+    expect(screen.queryByText("propertyCard.badges.newBuild")).not.toBeInTheDocument();
+    expect(screen.getByText("propertyCard.badges.new")).toBeInTheDocument();
     expect(screen.getByText("+7%")).toBeInTheDocument();
     expect(screen.getByText("3propertyCard.floor/6")).toBeInTheDocument();
     expect(screen.getByText(/leasehold 40%/)).toBeInTheDocument();

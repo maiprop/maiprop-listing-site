@@ -240,8 +240,9 @@ async function fetchWithTimeout(
 }
 
 export function listingDetailPath(listing: SeoListing): string {
-  if (listing.is_pre_sale || listing.construction_status) return `/new-build/${listing.id}`;
   if (listing.listing_type === "auction") return `/auction/${listing.id}`;
+  if (listing.listing_type === "open_house") return `/open-house/${listing.id}`;
+  if (listing.is_pre_sale || listing.listing_type === "new_build") return `/new-build/${listing.id}`;
   return `/property/${listing.id}`;
 }
 
