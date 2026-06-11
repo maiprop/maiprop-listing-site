@@ -176,6 +176,24 @@ describe("NeighbourhoodReport — fetch flows", () => {
     ]);
   });
 
+  it("passes municipality to the edge function for OS-backed local reports", async () => {
+    mockQuotaAndReport(fullData);
+    render(<NeighbourhoodReport {...baseProps} municipality="Agios Dimitrios" />);
+    await loadReport();
+    await waitFor(() => expect(screen.getByText(/Plaka.*Athens/i)).toBeInTheDocument());
+    expect(reportCalls()[0]).toEqual([
+      "neighbourhood-report",
+      expect.objectContaining({
+        body: expect.objectContaining({
+          city: "Athens",
+          municipality: "Agios Dimitrios",
+          lat: 37.97,
+          lng: 23.74,
+        }),
+      }),
+    ]);
+  });
+
   it("renders the loading skeleton while the fetch is in flight", async () => {
     let resolve!: (v: unknown) => void;
     invokeMock.mockImplementation((name: string) => {

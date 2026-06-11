@@ -158,13 +158,17 @@ Deno.test("uses OpenAI enriched with structured OS valuation when listing coordi
               planningCertainty: 72,
               taxFriction: 30,
               transferReadiness: 60,
-              legalSummary: "No document review was performed.",
+              legalSummary: "No cadastre data, outside city and settlement plan, no buildability.",
               taxSummary: "Normal transfer friction assumed.",
               objectiveValueProxy: null,
               renovationPotential: null,
               rentalYieldEstimate: 3.9,
               highestBestUseHint: null,
-              redFlags: [],
+              redFlags: [
+                "No cadastre registration",
+                "Outside city and settlement plan",
+                "No buildability rights",
+              ],
               auctionAdjustedValue: null,
               listingQualityScore: 82,
             }),
@@ -195,6 +199,8 @@ Deno.test("uses OpenAI enriched with structured OS valuation when listing coordi
       generatedBy?: string;
       marketComparison?: string;
       osEstimatedValue?: number;
+      redFlags?: string[];
+      legalSummary?: string;
     };
     assertEquals(res.status, 200);
     assertEquals(providerCalled, true);
@@ -204,7 +210,9 @@ Deno.test("uses OpenAI enriched with structured OS valuation when listing coordi
     assertEquals(body.estimatedValue, 468000);
     assertEquals(body.osEstimatedValue, 470000);
     assertEquals(body.rentalYieldEstimate, 3.9);
-    assertEquals(body.marketComparison, "above_market");
+    assertEquals(body.marketComparison, "at_market");
+    assertEquals(body.redFlags?.some((flag) => /no cadastre|outside city|no buildability/i.test(flag)), false);
+    assertEquals(/outside|no cadastre|buildability|buildable/i.test(body.legalSummary ?? ""), false);
   } finally {
     globalThis.fetch = originalFetch;
     if (prevOsUrl) Deno.env.set("MAIPROP_OS_API_URL", prevOsUrl);
@@ -213,6 +221,113 @@ Deno.test("uses OpenAI enriched with structured OS valuation when listing coordi
     else Deno.env.delete("MAIPROP_OS_EMAIL");
     if (prevOsPassword) Deno.env.set("MAIPROP_OS_PASSWORD", prevOsPassword);
     else Deno.env.delete("MAIPROP_OS_PASSWORD");
+    if (prevOpenAI) Deno.env.set("OPENAI_API_KEY", prevOpenAI);
+    else Deno.env.delete("OPENAI_API_KEY");
+    if (prevGemini) Deno.env.set("GEMINI_API_KEY", prevGemini);
+    else Deno.env.delete("GEMINI_API_KEY");
+  }
+});
+
+Deno.test("normalizes auction comparison against clean market value and softens unknown legal fields", async () => {
+  const originalFetch = globalThis.fetch;
+  const prevOpenAI = Deno.env.get("OPENAI_API_KEY");
+  const prevGemini = Deno.env.get("GEMINI_API_KEY");
+  Deno.env.set("OPENAI_API_KEY", "openai-test");
+  Deno.env.delete("GEMINI_API_KEY");
+
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("/auth/v1/user")) {
+      return Promise.resolve(okJson({ user: { id: "user-1", email: "user@test.local" } }));
+    }
+    if (url.includes("/rest/v1/rpc/reserve_ai_quota_for_user")) {
+      return Promise.resolve(okJson({ allowed: true, reason: null, used: 1, limit: 5 }));
+    }
+    if (url.includes("api.openai.com") || url.includes("generativelanguage.googleapis.com")) {
+      return Promise.resolve(okJson({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              estimatedValue: 130000,
+              rangeLow: 120000,
+              rangeHigh: 140000,
+              executionValue: 115000,
+              pricePerSqmEstimate: 1450,
+              confidence: 45,
+              confidenceLabel: "Low",
+              liquidityScore: 50,
+              marketComparison: "below_market",
+              marketComparisonPct: -15,
+              pricingPosition: "underpriced",
+              methodUsed: "Comparable hedonic model with auction overlay",
+              valuationMode: "MODE_1_LISTING_ONLY",
+              summary: "Auction valuation with limited listing data.",
+              keyFactors: [],
+              legalCleanliness: 25,
+              planningCertainty: 30,
+              taxFriction: 60,
+              transferReadiness: 30,
+              legalSummary: "No cadastre data, outside city and settlement plan, no buildability.",
+              taxSummary: "Auction transfer friction applies.",
+              objectiveValueProxy: null,
+              renovationPotential: null,
+              rentalYieldEstimate: 4,
+              highestBestUseHint: null,
+              redFlags: [
+                "No cadastre registration",
+                "Outside city and settlement plan",
+                "No buildability rights",
+                "Auction sale with legal/title uncertainty",
+              ],
+              auctionAdjustedValue: "EUR154.000",
+              listingQualityScore: 5,
+            }),
+          },
+        }],
+      }));
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+
+  try {
+    const res = await handler(req("POST", {
+      title: "Auction apartment",
+      city: "Agios Dimitrios",
+      address: "Arpis 44",
+      price: 154000,
+      sqm: 90,
+      propertyType: "apartment",
+      listingType: "auction",
+      latitude: 37.94,
+      longitude: 23.73,
+      floor: 1,
+      yearBuilt: 1975,
+    }, { authorization: "Bearer test-valid-token" }));
+
+    const body = await jsonBody(res) as {
+      marketComparison?: string;
+      marketComparisonPct?: number;
+      pricingPosition?: string;
+      legalCleanliness?: number;
+      planningCertainty?: number;
+      taxFriction?: number;
+      transferReadiness?: number;
+      redFlags?: string[];
+      listingQualityScore?: number;
+    };
+
+    assertEquals(res.status, 200);
+    assertEquals(body.marketComparison, "at_market");
+    assertEquals(body.marketComparisonPct, 0);
+    assertEquals(body.pricingPosition, "fair");
+    assertEquals((body.legalCleanliness ?? 0) >= 50, true);
+    assertEquals((body.planningCertainty ?? 0) >= 60, true);
+    assertEquals((body.taxFriction ?? 100) <= 55, true);
+    assertEquals((body.transferReadiness ?? 0) >= 45, true);
+    assertEquals(body.redFlags?.some((flag) => /no cadastre|outside city|no buildability/i.test(flag)), false);
+    assertEquals((body.listingQualityScore ?? 0) >= 60, true);
+  } finally {
+    globalThis.fetch = originalFetch;
     if (prevOpenAI) Deno.env.set("OPENAI_API_KEY", prevOpenAI);
     else Deno.env.delete("OPENAI_API_KEY");
     if (prevGemini) Deno.env.set("GEMINI_API_KEY", prevGemini);

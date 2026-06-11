@@ -651,6 +651,7 @@ const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates aucti
                   city={city}
                   address={address ?? undefined}
                   region={region}
+                  municipality={region}
                   propertyType={propertyType}
                   lat={lat}
                   lng={lng}
