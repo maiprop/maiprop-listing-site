@@ -58,7 +58,7 @@ const baseForm = (overrides: Partial<ListingFormData> = {}) => ({
 const noopRef = () => () => {};
 
 describe("listing step detail interactions", () => {
-  it("forwards listing type, pre-sale, off-market, property type, and subtype changes", () => {
+  it("forwards listing type, off-market, property type, and subtype changes", () => {
     const set = vi.fn();
     const toggle = vi.fn();
     renderWithProviders(
@@ -72,20 +72,15 @@ describe("listing step detail interactions", () => {
         })}
         set={set}
         toggle={toggle}
-        showPreSaleOption={true}
       />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: /for rent/i }));
-    fireEvent.click(screen.getByLabelText(/pre-sale/i));
-    fireEvent.change(screen.getByRole("spinbutton"), { target: { value: "2028" } });
     fireEvent.click(screen.getByLabelText(/off-market/i));
     fireEvent.click(screen.getByRole("button", { name: /land/i }));
     fireEvent.click(screen.getByTitle(/street-level commercial space/i));
 
     expect(set).toHaveBeenCalledWith("listing_type", "rent");
-    expect(toggle).toHaveBeenCalledWith("is_pre_sale");
-    expect(set).toHaveBeenCalledWith("year_built", "2028");
     expect(toggle).toHaveBeenCalledWith("is_off_market");
     expect(set).toHaveBeenCalledWith("property_type", "land");
     expect(set).toHaveBeenCalledWith("commercial_subtype", "");

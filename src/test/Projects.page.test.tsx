@@ -225,8 +225,9 @@ describe("Projects page", () => {
     });
     useMyListingsMock.mockReturnValue({
       data: [
-        { id: "linked-1", project_id: "project-1", title: "Linked unit" },
-        { id: "loose-1", project_id: null, title: "Loose listing with a long display name" },
+        { id: "linked-1", project_id: "project-1", title: "Linked unit", listing_type: "new_build" },
+        { id: "loose-1", project_id: null, title: "Loose listing with a long display name", listing_type: "new_build" },
+        { id: "sale-1", project_id: null, title: "Ordinary sale listing", listing_type: "sale" },
       ],
     });
 
@@ -252,6 +253,7 @@ describe("Projects page", () => {
         construction_status: "planning",
       },
     });
+    expect(screen.queryByRole("button", { name: /\+ Ordinary sale listing/i })).not.toBeInTheDocument();
     expect(updateListingMock).toHaveBeenCalledWith({ id: "linked-1", updates: { project_id: null } });
     expect(deleteProjectMock).toHaveBeenCalledWith("project-1");
   });

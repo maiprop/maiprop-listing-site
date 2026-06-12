@@ -170,7 +170,7 @@ beforeEach(() => {
     data: [{ id: "lead-1", project_id: "project-1", name: "Alex Buyer", email: "alex@example.com", unit_id: "A101", status: "new" }],
   });
   useProjectViewsMock.mockReturnValue({ data: { count: 5 } });
-  useMyListingsMock.mockReturnValue({ data: [{ id: "listing-free", title: "Loose unit" }] });
+  useMyListingsMock.mockReturnValue({ data: [{ id: "listing-free", title: "Loose unit", listing_type: "new_build" }] });
   getPublicUrlMock.mockReturnValue({ data: { publicUrl: "https://cdn/uploaded.jpg" } });
   uploadMock.mockResolvedValue({ error: null });
 });
@@ -425,6 +425,12 @@ describe("ProjectDetail", () => {
   });
 
   it("links and unlinks listings, including the developer new-building empty branch", () => {
+    useMyListingsMock.mockReturnValue({
+      data: [
+        { id: "listing-free", title: "Loose unit", listing_type: "new_build" },
+        { id: "listing-sale", title: "Ordinary resale", listing_type: "sale" },
+      ],
+    });
     renderPage();
 
     fireEvent.click(screen.getByRole("button", { name: /\+ Loose unit/i }));
@@ -440,9 +446,10 @@ describe("ProjectDetail", () => {
         year_built: 2027,
       },
     });
+    expect(screen.queryByRole("button", { name: /\+ Ordinary resale/i })).not.toBeInTheDocument();
     expect(updateListingMock).toHaveBeenCalledWith({ id: "listing-linked", updates: { project_id: null } });
 
-    useMyListingsMock.mockReturnValue({ data: [{ id: "listing-linked" }] });
+    useMyListingsMock.mockReturnValue({ data: [{ id: "listing-linked", listing_type: "new_build" }] });
     renderPage();
 
     expect(screen.getByRole("link", { name: /new building/i })).toHaveAttribute("href", "/listings/new-building");

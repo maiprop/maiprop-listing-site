@@ -9,6 +9,14 @@ export type ProjectListingClassificationSource = {
   delivery_date?: string | null;
 };
 
+export type ProjectLinkableListingSource = {
+  listing_type?: string | null;
+};
+
+export const isProjectLinkableListing = (
+  listing: ProjectLinkableListingSource,
+): boolean => listing.listing_type === "new_build";
+
 const deliveryYearFromDate = (date: string | null | undefined) => {
   const match = date?.match(/^(\d{4})-/);
   if (!match) return undefined;
