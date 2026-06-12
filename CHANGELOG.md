@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.18](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.17...v1.9.18) (2026-06-12)
+
+
+### Bug Fixes
+
+* harden audit findings and listing media flows ([#310](https://github.com/maiprop/maiprop-listing-site/issues/310)) ([e3f8261](https://github.com/maiprop/maiprop-listing-site/commit/e3f82614bb1b6938a6307195a11d25967347d94f))
+
 ## [1.9.17](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.16...v1.9.17) (2026-06-12)
 
 
