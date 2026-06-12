@@ -19,7 +19,11 @@ import { LocationAutocompleteInput, type LocationAutocompleteSelection } from "@
 import type { Tables } from "@/integrations/supabase/types";
 import { tFallback } from "@/lib/i18nFallback";
 import { getListingDetailPath } from "@/lib/listingRoutes";
-import { getProjectLinkedListingUpdates, isProjectLinkableListing } from "@/lib/projectListingClassification";
+import {
+  getProjectLinkedListingUpdates,
+  getProjectUnlinkedListingUpdates,
+  isProjectLinkableListing,
+} from "@/lib/projectListingClassification";
 
 type ProjectListing = { id: string; title: string; cover_image_url?: string | null; price?: number | null; listing_type?: string | null };
 type ProjectWithListings = Tables<"projects"> & { listings?: ProjectListing[] };
@@ -113,7 +117,7 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
   };
 
   const handleUnlinkListing = (listingId: string) => {
-    updateListing.mutate({ id: listingId, updates: { project_id: null } });
+    updateListing.mutate({ id: listingId, updates: getProjectUnlinkedListingUpdates() });
   };
 
   if (!user) {

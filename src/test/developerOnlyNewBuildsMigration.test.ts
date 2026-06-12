@@ -6,10 +6,15 @@ const migrationPath = resolve(
   process.cwd(),
   "supabase/migrations/20260707167000_developer_only_new_builds.sql",
 );
+const deleteRepairMigrationPath = resolve(
+  process.cwd(),
+  "supabase/migrations/20260612110536_harden_project_delete_listing_detach.sql",
+);
 const migrationSql = () => readFileSync(migrationPath, "utf8");
+const deleteRepairMigrationSql = () => readFileSync(deleteRepairMigrationPath, "utf8");
 
-describe("developer-only new-build and project RLS migration", () => {
-  it("adds a private developer access helper based on authoritative role", () => {
+describe("developer/admin new-build and project RLS migration", () => {
+  it("adds a private developer/admin access helper based on authoritative role", () => {
     const sql = migrationSql();
 
     expect(sql).toContain("CREATE OR REPLACE FUNCTION private.has_developer_listing_access");
@@ -18,7 +23,7 @@ describe("developer-only new-build and project RLS migration", () => {
     expect(sql).toContain("REVOKE ALL ON FUNCTION private.has_developer_listing_access(uuid) FROM PUBLIC, anon");
   });
 
-  it("blocks non-developer writes to new_build or project-linked listings", () => {
+  it("blocks non-developer/non-admin writes to new_build or project-linked listings", () => {
     const sql = migrationSql();
 
     expect(sql).toContain("DROP POLICY IF EXISTS listing_insert_quota ON public.listings");
@@ -38,7 +43,7 @@ describe("developer-only new-build and project RLS migration", () => {
     expect(sql).toContain("COALESCE(is_pre_sale, false) = false");
   });
 
-  it("restricts project and project inventory writes to developer accounts", () => {
+  it("restricts project and project inventory writes to developer/admin accounts", () => {
     const sql = migrationSql();
 
     for (const policy of [
@@ -66,5 +71,19 @@ describe("developer-only new-build and project RLS migration", () => {
     expect(sql).toContain("developer-only listing update policy missing");
     expect(sql).toContain("developer-only project insert policy missing");
     expect(sql).toContain("developer-only project inventory policy missing");
+  });
+
+  it("repairs project deletion so linked listings become standalone listings", () => {
+    const sql = deleteRepairMigrationSql();
+
+    expect(sql).toContain("CREATE OR REPLACE FUNCTION private.unlink_project_listings_before_delete()");
+    expect(sql).toContain("BEFORE DELETE ON public.projects");
+    expect(sql).toContain("EXECUTE FUNCTION private.unlink_project_listings_before_delete()");
+    expect(sql).toContain("project_id = NULL");
+    expect(sql).toContain("listing_type = 'sale'::public.listing_type");
+    expect(sql).toContain("listing_type::text = 'new_build'");
+    expect(sql).toContain("is_pre_sale = false");
+    expect(sql).toContain("'0308050d-8d62-4fc8-b421-7c74116343b3'::uuid");
+    expect(sql).toContain("project delete listing detach trigger missing");
   });
 });

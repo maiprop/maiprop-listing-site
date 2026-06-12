@@ -45,3 +45,9 @@ export const getProjectLinkedListingUpdates = (
   if (deliveryYear !== undefined) updates.year_built = deliveryYear;
   return updates;
 };
+
+export const getProjectUnlinkedListingUpdates = (): TablesUpdate<"listings"> => ({
+  project_id: null,
+  listing_type: "sale",
+  is_pre_sale: false,
+});
