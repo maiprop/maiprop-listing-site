@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.17](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.16...v1.9.17) (2026-06-12)
+
+
+### Bug Fixes
+
+* harden audit-critical ai and supabase paths ([d28e871](https://github.com/maiprop/maiprop-listing-site/commit/d28e871b2c3724acc9e2dbd1eae5e452eda55b25))
+
 ## [1.9.16](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.15...v1.9.16) (2026-06-11)
 
 
