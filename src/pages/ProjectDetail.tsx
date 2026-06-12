@@ -37,7 +37,11 @@ import {
 } from "@/lib/uploadValidation";
 import { tFallback, tInterpolate } from "@/lib/i18nFallback";
 import { getListingDetailPath } from "@/lib/listingRoutes";
-import { getProjectLinkedListingUpdates, isProjectLinkableListing } from "@/lib/projectListingClassification";
+import {
+  getProjectLinkedListingUpdates,
+  getProjectUnlinkedListingUpdates,
+  isProjectLinkableListing,
+} from "@/lib/projectListingClassification";
 
 const INPUT_CLS = "w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors";
 const LABEL_CLS = "text-xs text-muted-foreground block mb-1.5 font-medium";
@@ -215,7 +219,7 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
   };
 
   const handleUnlinkListing = (listingId: string) => {
-    updateListing.mutate({ id: listingId, updates: { project_id: null } });
+    updateListing.mutate({ id: listingId, updates: getProjectUnlinkedListingUpdates() });
   };
 
   const handleAddLead = () => {

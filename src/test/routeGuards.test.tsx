@@ -693,6 +693,58 @@ describe("DeveloperRoute", () => {
 });
 
 describe("NewBuildingRoute", () => {
+  it("admits platform admins regardless of developer subscription", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1" },
+      profile: { user_id: "u-1", role: "admin", participant_type: "buyer" },
+      loading: false,
+      profileLoading: false,
+      needsOnboarding: false,
+    });
+    useSubscriptionMock.mockReturnValue({ isPro: false, hasDeveloperPro: false, loading: false });
+    renderGuarded(
+      <NewBuildingRoute>
+        <div>NEW-BUILDING</div>
+      </NewBuildingRoute>,
+    );
+    expect(screen.getByText("NEW-BUILDING")).toBeInTheDocument();
+  });
+
+  it("admits Developer accounts with an active Developer Pro subscription", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1" },
+      profile: { user_id: "u-1", role: "developer", participant_type: "developer" },
+      loading: false,
+      profileLoading: false,
+      needsOnboarding: false,
+    });
+    useSubscriptionMock.mockReturnValue({ isPro: true, hasDeveloperPro: true, loading: false });
+    renderGuarded(
+      <NewBuildingRoute>
+        <div>NEW-BUILDING</div>
+      </NewBuildingRoute>,
+    );
+    expect(screen.getByText("NEW-BUILDING")).toBeInTheDocument();
+  });
+
+  it("blocks non-developer Pro accounts from off-plan creation", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u-1" },
+      profile: { user_id: "u-1", role: "agent", participant_type: "agent" },
+      loading: false,
+      profileLoading: false,
+      needsOnboarding: false,
+    });
+    useSubscriptionMock.mockReturnValue({ isPro: true, hasDeveloperPro: false, loading: false });
+    renderGuarded(
+      <NewBuildingRoute>
+        <div>NEW-BUILDING</div>
+      </NewBuildingRoute>,
+    );
+    expect(screen.getByText(/Developer Access Required/i)).toBeInTheDocument();
+    expect(screen.queryByText("NEW-BUILDING")).toBeNull();
+  });
+
   it("blocks off-plan creation while a developer switch is still in progress", () => {
     useAuthMock.mockReturnValue({
       user: { id: "u-1" },

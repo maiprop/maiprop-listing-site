@@ -254,7 +254,14 @@ describe("Projects page", () => {
       },
     });
     expect(screen.queryByRole("button", { name: /\+ Ordinary sale listing/i })).not.toBeInTheDocument();
-    expect(updateListingMock).toHaveBeenCalledWith({ id: "linked-1", updates: { project_id: null } });
+    expect(updateListingMock).toHaveBeenCalledWith({
+      id: "linked-1",
+      updates: {
+        project_id: null,
+        listing_type: "sale",
+        is_pre_sale: false,
+      },
+    });
     expect(deleteProjectMock).toHaveBeenCalledWith("project-1");
   });
 });

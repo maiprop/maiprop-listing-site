@@ -447,7 +447,14 @@ describe("ProjectDetail", () => {
       },
     });
     expect(screen.queryByRole("button", { name: /\+ Ordinary resale/i })).not.toBeInTheDocument();
-    expect(updateListingMock).toHaveBeenCalledWith({ id: "listing-linked", updates: { project_id: null } });
+    expect(updateListingMock).toHaveBeenCalledWith({
+      id: "listing-linked",
+      updates: {
+        project_id: null,
+        listing_type: "sale",
+        is_pre_sale: false,
+      },
+    });
 
     useMyListingsMock.mockReturnValue({ data: [{ id: "listing-linked", listing_type: "new_build" }] });
     renderPage();
