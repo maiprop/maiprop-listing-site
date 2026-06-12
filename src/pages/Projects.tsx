@@ -19,6 +19,7 @@ import { LocationAutocompleteInput, type LocationAutocompleteSelection } from "@
 import type { Tables } from "@/integrations/supabase/types";
 import { tFallback } from "@/lib/i18nFallback";
 import { getListingDetailPath } from "@/lib/listingRoutes";
+import { getProjectLinkedListingUpdates } from "@/lib/projectListingClassification";
 
 type ProjectListing = { id: string; title: string; cover_image_url?: string | null; price?: number | null; listing_type?: string | null };
 type ProjectWithListings = Tables<"projects"> & { listings?: ProjectListing[] };
@@ -106,8 +107,8 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
     setProjectToDelete(id);
   };
 
-  const handleLinkListing = (projectId: string, listingId: string) => {
-    updateListing.mutate({ id: listingId, updates: { project_id: projectId } });
+  const handleLinkListing = (project: ProjectWithListings, listingId: string) => {
+    updateListing.mutate({ id: listingId, updates: getProjectLinkedListingUpdates(project) });
   };
 
   const handleUnlinkListing = (listingId: string) => {
@@ -351,7 +352,7 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
                             key={l.id}
                             variant="outline"
                             size="sm"
-                            onClick={() => handleLinkListing(p.id, l.id)}
+                            onClick={() => handleLinkListing(p, l.id)}
                           >
                             + {l.title?.slice(0, 30)}{l.title?.length > 30 ? "…" : ""}
                           </Button>

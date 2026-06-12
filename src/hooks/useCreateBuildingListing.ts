@@ -96,6 +96,20 @@ function toOptionalNumber(value: string | number) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function getDeliveryYear(deliveryDate: string) {
+  const match = deliveryDate.match(/^(\d{4})-/);
+  if (!match) return undefined;
+  const year = Number(match[1]);
+  return Number.isFinite(year) ? year : undefined;
+}
+
+function getProjectPhase(project: CreateBuildingListingProjectInput) {
+  if (project.structural_completion_date) return "shell_complete";
+  if (project.construction_start_date) return "under_construction";
+  if (project.permit_approval_date || project.building_permit_number.trim()) return "planning";
+  return undefined;
+}
+
 export function useCreateBuildingListing() {
   const addMedia = useAddProjectMedia();
 
@@ -194,6 +208,8 @@ export function useCreateBuildingListing() {
           floor: unit.floor ? parseInt(String(unit.floor)) : undefined,
           energy_class: unit.energy_class || undefined,
           heating_system: unit.heating_system || undefined,
+          construction_status: getProjectPhase(project),
+          year_built: getDeliveryYear(project.delivery_date),
           cover_image_url: coverImageUrl,
           price_per_sqm: internalSqm > 0 ? Math.round(price / internalSqm) : undefined,
           owner_id: userId,

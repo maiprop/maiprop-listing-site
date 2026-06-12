@@ -430,7 +430,16 @@ describe("ProjectDetail", () => {
     fireEvent.click(screen.getByRole("button", { name: /\+ Loose unit/i }));
     fireEvent.click(screen.getByRole("button", { name: /unlink/i }));
 
-    expect(updateListingMock).toHaveBeenCalledWith({ id: "listing-free", updates: { project_id: "project-1" } });
+    expect(updateListingMock).toHaveBeenCalledWith({
+      id: "listing-free",
+      updates: {
+        project_id: "project-1",
+        listing_type: "new_build",
+        is_pre_sale: false,
+        construction_status: "shell_complete",
+        year_built: 2027,
+      },
+    });
     expect(updateListingMock).toHaveBeenCalledWith({ id: "listing-linked", updates: { project_id: null } });
 
     useMyListingsMock.mockReturnValue({ data: [{ id: "listing-linked" }] });
