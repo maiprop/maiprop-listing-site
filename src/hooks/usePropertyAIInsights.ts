@@ -5,7 +5,7 @@ import { aiQuotaFromJson, fetchAiQuota } from "@/hooks/useAiQuota";
 import { toast } from "sonner";
 import type { User } from "@supabase/supabase-js";
 import type { ListingWithJoins } from "@/hooks/useListings";
-import { getPrimaryValuationEstimate } from "@/lib/valuationResult";
+import { deriveListingMarketComparison, getPrimaryValuationEstimate } from "@/lib/valuationResult";
 
 export interface AIInsightsData {
   vsMarket: number;
@@ -143,11 +143,13 @@ export function usePropertyAIInsights(
         },
       });
       if (data && !data.error) {
+        const estimatedValue = getPrimaryValuationEstimate(data, Number(snapshot.price));
+        const comparison = deriveListingMarketComparison(snapshot.price, estimatedValue);
         setAiInsightsData({
-          vsMarket: data.marketComparisonPct ?? 0,
+          vsMarket: comparison.marketComparisonPct,
           rentalYield: data.rentalYieldEstimate ?? 0,
-          estimatedValue: getPrimaryValuationEstimate(data, Number(snapshot.price)),
-          marketComparison: data.marketComparison ?? "at_market",
+          estimatedValue,
+          marketComparison: comparison.marketComparison,
           confidenceLabel: data.confidenceLabel ?? "Medium",
         });
         await refreshAiInsightsQuota();

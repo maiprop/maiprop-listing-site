@@ -283,7 +283,7 @@ Output (JSON only):`;
       messages: [{ role: "user", content: prompt }],
       temperature: 0.2,
       max_tokens: 4096,
-    }, Deno.env.get("OPENAI_TRANSLATION_MODEL") ?? "gpt-4.1-mini");
+    }, Deno.env.get("OPENAI_TRANSLATION_MODEL") ?? "gpt-5.4-mini");
 
     if (!response.ok) {
       const err = await response.text();

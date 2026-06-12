@@ -216,8 +216,9 @@ Deno.test("non-static locale fails closed before provider call when quota servic
 Deno.test("non-static locale with quota reservation reaches provider", async () => {
   const originalFetch = globalThis.fetch;
   let providerCalls = 0;
+  let providerModel = "";
 
-  globalThis.fetch = ((input: RequestInfo | URL): Promise<Response> => {
+  globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = String(input);
     if (url.includes("/auth/v1/user")) {
       return Promise.resolve(new Response(JSON.stringify({ user: { id: "test-user-id" } }), {
@@ -227,6 +228,7 @@ Deno.test("non-static locale with quota reservation reaches provider", async () 
     }
     if (url.includes("generativelanguage.googleapis.com") || url.includes("api.openai.com")) {
       providerCalls += 1;
+      providerModel = String(JSON.parse(String(init?.body ?? "{}")).model ?? "");
       return Promise.resolve(new Response(JSON.stringify({
         choices: [{ message: { content: "{\"nav.home\":\"Accueil\"}" } }],
       }), {
@@ -246,6 +248,7 @@ Deno.test("non-static locale with quota reservation reaches provider", async () 
     const body = await res.json();
     assertEquals(body.strings["nav.home"], "Accueil");
     assertEquals(providerCalls, 1);
+    assertEquals(providerModel, "gpt-5.4-mini");
   } finally {
     globalThis.fetch = originalFetch;
   }

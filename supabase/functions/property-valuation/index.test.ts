@@ -99,6 +99,7 @@ Deno.test("uses OpenAI enriched with structured OS valuation when listing coordi
   Deno.env.delete("GEMINI_API_KEY");
   let providerCalled = false;
   let providerPrompt = "";
+  let providerModel = "";
   globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url.includes("/auth/v1/user")) {
@@ -134,6 +135,7 @@ Deno.test("uses OpenAI enriched with structured OS valuation when listing coordi
     if (url.includes("api.openai.com") || url.includes("generativelanguage.googleapis.com")) {
       providerCalled = true;
       const body = JSON.parse(String(init?.body ?? "{}"));
+      providerModel = String(body.model ?? "");
       providerPrompt = String(body.messages?.[0]?.content ?? "");
       return Promise.resolve(okJson({
         choices: [{
@@ -207,6 +209,7 @@ Deno.test("uses OpenAI enriched with structured OS valuation when listing coordi
     };
     assertEquals(res.status, 200);
     assertEquals(providerCalled, true);
+    assertEquals(providerModel, "gpt-5.4-mini");
     assertEquals(providerPrompt.includes("MAIPROP OS STRUCTURED VALUATION DATA"), true);
     assertEquals(providerPrompt.includes("propertyPredictedPrice"), true);
     assertEquals(body.generatedBy, "openai_maiprop_os");
