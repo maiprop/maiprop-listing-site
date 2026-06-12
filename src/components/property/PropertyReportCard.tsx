@@ -85,8 +85,17 @@ const getHtmlReportFileName = (fileName: string): string => {
   return fileName.replace(/\.[a-z0-9]+$/i, "") + ".html";
 };
 
+const sanitizePrintableReportHtml = (html: string): string =>
+  html
+    .replace(/<\s*(script|iframe|object|embed|form)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "")
+    .replace(/<\s*(script|iframe|object|embed|base|form|input|button|textarea|select)\b[^>]*\/?>/gi, "")
+    .replace(/\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/\s+(href|src|xlink:href)\s*=\s*(["'])\s*javascript:[^"']*\2/gi, "")
+    .replace(/\s+(href|src|xlink:href)\s*=\s*javascript:[^\s>]+/gi, "")
+    .replace(/\s+srcdoc\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+
 const downloadHtmlReport = (html: string, fileName: string) => {
-  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const blob = new Blob([sanitizePrintableReportHtml(html)], { type: "text/html;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -97,22 +106,39 @@ const downloadHtmlReport = (html: string, fileName: string) => {
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 };
 
-const openPrintablePdf = (html: string, fileName: string) => {
-  const title = fileName.replace(/\.[a-z0-9]+$/i, "");
-  const printScript = `
-    <script>
-      window.addEventListener("load", function() {
-        document.title = ${JSON.stringify(title)};
-        setTimeout(function() { window.focus(); window.print(); }, 250);
-      });
-    </script>
-  `;
-  const printableHtml = html.includes("</body>")
-    ? html.replace("</body>", `${printScript}</body>`)
-    : `${html}${printScript}`;
+const openPrintableBlobUrl = (url: string): boolean => {
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.tabIndex = -1;
+  iframe.onload = () => {
+    try {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+    } catch {
+      toast.error(ui("Print preview could not be opened. Download HTML instead.", "Print preview could not be opened. Download HTML instead."));
+    }
+  };
+  iframe.onerror = () => {
+    toast.error(ui("Print preview could not be opened. Download HTML instead.", "Print preview could not be opened. Download HTML instead."));
+    iframe.remove();
+  };
+  iframe.src = url;
+  document.body.appendChild(iframe);
+  window.setTimeout(() => iframe.remove(), 60_000);
+  return true;
+};
+
+const openPrintablePdf = (html: string) => {
+  const printableHtml = sanitizePrintableReportHtml(html);
   const blob = new Blob([printableHtml], { type: "text/html;charset=utf-8" });
   const url = URL.createObjectURL(blob);
-  const opened = window.open(url, "_blank");
+  const opened = openPrintableBlobUrl(url);
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
   if (!opened) {
     toast.error(ui("Popup blocked. Allow popups to export the report as PDF.", "Το αναδυόμενο παράθυρο μπλοκαρίστηκε. Επιτρέψτε τα popups για εξαγωγή της αναφοράς σε PDF."));
@@ -241,7 +267,7 @@ const LoadedReportContent = ({ osReport }: { osReport: OsPrintableReport }) => (
       <Button
         className="w-full gap-2"
         variant="outline"
-        onClick={() => openPrintablePdf(osReport.html, osReport.fileName)}
+        onClick={() => openPrintablePdf(osReport.html)}
       >
         <Printer className="w-4 h-4" />
         {ui("Print / Save PDF", "Εκτύπωση / Αποθήκευση PDF")}

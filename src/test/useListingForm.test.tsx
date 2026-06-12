@@ -253,6 +253,27 @@ describe("useListingForm — image pipeline", () => {
     expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/Failed to upload/));
   });
 
+  it("sets the cover to the first successful upload when an earlier upload fails", async () => {
+    storageMock.upload
+      .mockResolvedValueOnce({ error: new Error("storage 500") })
+      .mockResolvedValueOnce({ error: null });
+    const failed = makeFile("failed.jpg", 100_000);
+    const successful = makeFile("successful.jpg", 100_000);
+    const { result } = renderHook(() => useListingForm(), { wrapper: wrap });
+
+    await act(async () => {
+      await result.current.handleFilesSelected({
+        0: failed,
+        1: successful,
+        length: 2,
+        item: () => null,
+      } as unknown as FileList);
+    });
+
+    expect(result.current.images[0].error).toMatch(/storage 500/);
+    expect(result.current.coverImageId).toBe(result.current.images[1].id);
+  });
+
   it("handleDrop forwards files to the upload pipeline", async () => {
     const f = makeFile("a.jpg", 100_000);
     const dt = { files: { 0: f, length: 1, item: () => f } as unknown as FileList } as DataTransfer;
@@ -420,6 +441,62 @@ describe("useListingForm — handleSubmit", () => {
     expect(imageInsert).toHaveBeenCalledWith([
       { listing_id: "L-images", url: "https://cdn/extra.webp", sort_order: 1 },
     ]);
+  });
+
+  it("blocks draft and publish while any image upload is still pending", async () => {
+    let resolveUpload: (value: { error: null }) => void = () => undefined;
+    storageMock.upload.mockReturnValue(
+      new Promise((resolve) => {
+        resolveUpload = resolve;
+      }),
+    );
+    const insertMock = vi.fn();
+    fromMock.mockReturnValue({ insert: insertMock });
+    const file = new File([new Uint8Array(1000)], "slow.jpg", { type: "image/jpeg" });
+    const { result } = renderHook(() => useListingForm(), { wrapper: wrap });
+
+    await act(async () => {
+      void result.current.handleFilesSelected({ 0: file, length: 1, item: () => file } as unknown as FileList);
+      await Promise.resolve();
+    });
+    expect(result.current.images[0]?.uploading).toBe(true);
+    setBaseForm(result);
+
+    await act(async () => {
+      await result.current.handleSubmit();
+    });
+
+    expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/finish uploading/i));
+    expect(insertMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveUpload({ error: null });
+      await Promise.resolve();
+    });
+  });
+
+  it("blocks submission when uploaded images remain but no cover is selected", async () => {
+    const insertMock = vi.fn();
+    fromMock.mockReturnValue({ insert: insertMock });
+    storageMock.getPublicUrl
+      .mockReturnValueOnce({ data: { publicUrl: "https://cdn/cover.webp" } })
+      .mockReturnValueOnce({ data: { publicUrl: "https://cdn/extra.webp" } });
+    const cover = new File([new Uint8Array(1000)], "cover.jpg", { type: "image/jpeg" });
+    const extra = new File([new Uint8Array(1000)], "extra.jpg", { type: "image/jpeg" });
+    const { result } = renderHook(() => useListingForm(), { wrapper: wrap });
+
+    await act(async () => {
+      await result.current.handleFilesSelected({ 0: cover, 1: extra, length: 2, item: () => null } as unknown as FileList);
+    });
+    act(() => result.current.handleRemove(result.current.coverImageId as string));
+    setBaseForm(result);
+
+    await act(async () => {
+      await result.current.handleSubmit();
+    });
+
+    expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/cover photo/i));
+    expect(insertMock).not.toHaveBeenCalled();
   });
 
   it("posts a draft when asDraft=true (status=draft)", async () => {

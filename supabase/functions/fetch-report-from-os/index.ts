@@ -221,6 +221,22 @@ function getHtmlReportFileName(fileName: string): string {
   return fileName.replace(/\.[a-z0-9]+$/i, "") + ".html";
 }
 
+function sanitizeOsReportHtml(html: string): string {
+  const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data:; style-src 'unsafe-inline' https:; font-src https: data:;">`;
+  const sanitized = html
+    .replace(/<\s*(script|iframe|object|embed|form)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "")
+    .replace(/<\s*(script|iframe|object|embed|base|form|input|button|textarea|select|link|meta)\b[^>]*\/?>/gi, "")
+    .replace(/\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/\s+(href|src|xlink:href)\s*=\s*(["'])\s*javascript:[^"']*\2/gi, "")
+    .replace(/\s+(href|src|xlink:href)\s*=\s*javascript:[^\s>]+/gi, "")
+    .replace(/\s+srcdoc\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+
+  if (/<head\b[^>]*>/i.test(sanitized)) {
+    return sanitized.replace(/<head\b([^>]*)>/i, `<head$1>${csp}`);
+  }
+  return `<!doctype html><html><head>${csp}</head><body>${sanitized}</body></html>`;
+}
+
 function appendFeatures(params: URLSearchParams, features: PropertyFeaturesRequest): void {
   for (const [key, value] of Object.entries(features)) {
     if (value == null || value === "") continue;
@@ -312,7 +328,7 @@ function cachedReportResponse(
       ok: true,
       report: {
         kind: "valuation-property-html",
-        html: cache.html,
+        html: sanitizeOsReportHtml(cache.html),
         ai: cache.ai,
         features: cache.features,
         fileName: getHtmlReportFileName(cache.file_name),
@@ -476,7 +492,7 @@ Deno.serve(async (req) => {
         );
       }
 
-      const html = await reportRes.text();
+      const html = sanitizeOsReportHtml(await reportRes.text());
       const aiRes = await fetchTextIfOk(aiUrl, token, 5_000).catch(() => null);
       const ai = aiRes?.ok ? await aiRes.json().catch(() => null) : null;
       const fileName = getSafeReportFileName(listing_id);

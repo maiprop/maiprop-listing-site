@@ -323,7 +323,7 @@ export function useListingForm(options?: UseListingFormOptions) {
         setImages(prev => prev.map(img =>
           img.id === placeholder.id ? { ...uploaded, uploading: false } : img
         ));
-        if (i === 0) setCoverImageId(prev => prev ?? uploaded.id);
+        setCoverImageId(prev => prev ?? uploaded.id);
       } catch (err: unknown) {
         setImages(prev => prev.map(img =>
           img.id === placeholder.id
@@ -384,6 +384,25 @@ export function useListingForm(options?: UseListingFormOptions) {
   // ── Submit ────────────────────────────────────────────────────────────────
 
   const handleSubmit = useCallback(async (asDraft = false) => {
+    const pendingImage = images.some((img) => img.uploading);
+    if (pendingImage) {
+      toast.error(tr("createListing.validation.photosUploading", "Please wait for photos to finish uploading."));
+      return;
+    }
+    const failedImage = images.some((img) => img.error);
+    if (failedImage) {
+      toast.error(tr("createListing.validation.photosFailed", "Remove failed photo uploads before publishing."));
+      return;
+    }
+    const coverImg = images.find(img => img.id === coverImageId);
+    if (images.length > 0 && !coverImg) {
+      toast.error(tr("createListing.validation.coverNotReady", "Choose a successfully uploaded cover photo before publishing."));
+      return;
+    }
+    if (coverImg?.uploading || coverImg?.error || coverImg?.url.startsWith("blob:")) {
+      toast.error(tr("createListing.validation.coverNotReady", "Choose a successfully uploaded cover photo before publishing."));
+      return;
+    }
     if (!form.title || !form.city || !form.price || !form.sqm) {
       toast.error(tr("createListing.validation.requiredFields", "Please fill in all required fields"));
       return;
@@ -407,7 +426,6 @@ export function useListingForm(options?: UseListingFormOptions) {
     const isLand = pt === "land";
     const isCommercial = ["commercial", "office"].includes(pt);
     try {
-      const coverImg = images.find(img => img.id === coverImageId);
       const coverImageUrl = coverImg?.url;
       const coverImagePayload = coverImageUrl ?? (isEditMode ? null : undefined);
 
@@ -595,6 +613,10 @@ export function useListingForm(options?: UseListingFormOptions) {
 
   // ── Derived ───────────────────────────────────────────────────────────────
 
+  const imageUploadsPending = images.some((img) => img.uploading);
+  const imageUploadErrors = images.some((img) => Boolean(img.error));
+  const canSubmitImages = !imageUploadsPending && !imageUploadErrors;
+
   const completionPct = (() => {
     const checks = [
       true,
@@ -611,6 +633,7 @@ export function useListingForm(options?: UseListingFormOptions) {
   return {
     // State
     form, errors, setErrors, submitting, touched,
+    imageUploadsPending, imageUploadErrors, canSubmitImages,
     draftBanner, setDraftBanner,
     aiDescLoading, aiPriceLoading, aiPriceSuggestion,
     images, coverImageId, setCoverImageId,

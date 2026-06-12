@@ -116,6 +116,20 @@ export function usePropertyAIInsights(
           region: snapshot.region,
           description: snapshot.description,
           tags: snapshot.tags,
+          auctionCourt: snapshot.auction_court,
+          plotSurface: snapshot.plot_surface,
+          condition: snapshot.construction_status,
+          isNeoclassical: snapshot.is_neoclassical,
+          isPreserved: snapshot.is_preserved,
+          distanceFromSea: snapshot.distance_from_sea,
+          withinCityPlan: snapshot.within_city_plan,
+          withinSettlement: snapshot.within_settlement,
+          buildingAllowance: snapshot.building_allowance,
+          coverageRatio: snapshot.coverage_ratio,
+          isBuildable: snapshot.is_buildable,
+          cadastreNumber: snapshot.cadastre_number,
+          hasLandConcession: snapshot.has_land_concession,
+          landUse: snapshot.land_use,
           ownershipStatus: (() => {
             const t = (snapshot as ListingWithJoins).tags ?? [];
             const tag = t.find((x) => x.startsWith("ownership:") && !x.startsWith("ownership_pct:"));

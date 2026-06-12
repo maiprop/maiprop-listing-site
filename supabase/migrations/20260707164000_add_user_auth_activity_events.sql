@@ -477,6 +477,19 @@ REVOKE ALL ON FUNCTION public.admin_user_activity_snapshot(integer, integer)
 GRANT EXECUTE ON FUNCTION public.admin_user_activity_snapshot(integer, integer)
   TO authenticated;
 
+REVOKE INSERT, UPDATE, DELETE ON TABLE public.user_auth_activity_events FROM authenticated;
+GRANT SELECT ON TABLE public.user_auth_activity_events TO authenticated;
+
+DROP POLICY IF EXISTS "user_auth_activity_events_insert_own"
+  ON public.user_auth_activity_events;
+
+DO $$
+BEGIN
+  IF has_table_privilege('authenticated', 'public.user_auth_activity_events', 'INSERT') THEN
+    RAISE EXCEPTION 'authenticated must record auth activity through public.record_user_auth_activity, not direct INSERT';
+  END IF;
+END $$;
+
 DO $$
 BEGIN
   IF has_table_privilege('anon', 'public.user_auth_activity_events', 'SELECT')

@@ -285,19 +285,19 @@ Do NOT use markdown. Plain text only. Sign off: "The mAI Prop Team"`;
           <td style="padding:12px 14px;background:#0f1340;border-radius:6px 6px 0 0;border-bottom:1px solid #1a1e3a;">
             <p style="margin:0 0 2px;color:#4ef5f1;font-size:22px;font-weight:700;">2</p>
             <p style="margin:0 0 2px;color:#e0fafa;font-size:14px;font-weight:600;">Property Selection</p>
-            <p style="margin:0;color:#a0b0c0;font-size:12px;">We curate Golden Visa-eligible properties matching your criteria.</p>
+            <p style="margin:0;color:#a0b0c0;font-size:12px;">We shortlist properties and verify any residency-related criteria before presentation.</p>
           </td>
         </tr>
         <tr>
           <td style="padding:12px 14px;background:#0f1340;border-bottom:1px solid #1a1e3a;">
             <p style="margin:0 0 2px;color:#4ef5f1;font-size:22px;font-weight:700;">3</p>
             <p style="margin:0 0 2px;color:#e0fafa;font-size:14px;font-weight:600;">Legal & Renovation</p>
-            <p style="margin:0;color:#a0b0c0;font-size:12px;">Our legal team handles the visa paperwork while we renovate your property.</p>
+            <p style="margin:0;color:#a0b0c0;font-size:12px;">Qualified legal partners review conveyancing and residency documents; renovation support is scoped where applicable.</p>
           </td>
           <td style="padding:12px 14px;background:#0f1340;border-radius:0 0 6px 6px;">
             <p style="margin:0 0 2px;color:#4ef5f1;font-size:22px;font-weight:700;">4</p>
             <p style="margin:0 0 2px;color:#e0fafa;font-size:14px;font-weight:600;">Residency & Returns</p>
-            <p style="margin:0;color:#a0b0c0;font-size:12px;">Receive your Golden Visa and start earning rental income.</p>
+            <p style="margin:0;color:#a0b0c0;font-size:12px;">Proceed only after current eligibility, legal, and income assumptions are verified.</p>
           </td>
         </tr>
       </table>
@@ -311,7 +311,7 @@ Do NOT use markdown. Plain text only. Sign off: "The mAI Prop Team"`;
     processHtml;
 
   return {
-    subject: `${firstName}, new properties just listed — don't miss out`,
+    subject: `${firstName}, budget-matched property options from mAI Prop`,
     body: brandWrap(
       fullContent,
       "Book a Free Consultation →",
@@ -442,32 +442,32 @@ Do NOT use markdown formatting. Use • for bullets. Plain text only. Sign off: 
       <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
         <tr>
           <td style="padding:12px 14px;background:#0f1340;border-radius:6px 6px 0 0;border-bottom:1px solid #1a1e3a;">
-            <p style="margin:0 0 2px;color:#4ef5f1;font-size:13px;font-weight:600;">Minimum Investment</p>
-            <p style="margin:0;color:#e0fafa;font-size:15px;">€250,000</p>
+            <p style="margin:0 0 2px;color:#4ef5f1;font-size:13px;font-weight:600;">Eligibility Threshold</p>
+            <p style="margin:0;color:#e0fafa;font-size:15px;">Verify current rules</p>
           </td>
           <td style="padding:12px 14px;background:#0f1340;border-radius:6px 6px 0 0;border-bottom:1px solid #1a1e3a;">
             <p style="margin:0 0 2px;color:#4ef5f1;font-size:13px;font-weight:600;">Processing Time</p>
-            <p style="margin:0;color:#e0fafa;font-size:15px;">6-9 Months</p>
+            <p style="margin:0;color:#e0fafa;font-size:15px;">Varies by file</p>
           </td>
         </tr>
         <tr>
           <td style="padding:12px 14px;background:#0f1340;border-bottom:1px solid #1a1e3a;">
             <p style="margin:0 0 2px;color:#4ef5f1;font-size:13px;font-weight:600;">Validity</p>
-            <p style="margin:0;color:#e0fafa;font-size:15px;">5 Years (Renewable)</p>
+            <p style="margin:0;color:#e0fafa;font-size:15px;">Official rules apply</p>
           </td>
           <td style="padding:12px 14px;background:#0f1340;border-bottom:1px solid #1a1e3a;">
             <p style="margin:0 0 2px;color:#4ef5f1;font-size:13px;font-weight:600;">Family Members</p>
-            <p style="margin:0;color:#e0fafa;font-size:15px;">Spouse + Children + Parents</p>
+            <p style="margin:0;color:#e0fafa;font-size:15px;">Legal review required</p>
           </td>
         </tr>
         <tr>
           <td style="padding:12px 14px;background:#0f1340;border-radius:0 0 6px 6px;">
             <p style="margin:0 0 2px;color:#4ef5f1;font-size:13px;font-weight:600;">Schengen Access</p>
-            <p style="margin:0;color:#e0fafa;font-size:15px;">27 Countries</p>
+            <p style="margin:0;color:#e0fafa;font-size:15px;">Check current rights</p>
           </td>
           <td style="padding:12px 14px;background:#0f1340;border-radius:0 0 6px 6px;">
             <p style="margin:0 0 2px;color:#4ef5f1;font-size:13px;font-weight:600;">Min. Stay Required</p>
-            <p style="margin:0;color:#e0fafa;font-size:15px;">None</p>
+            <p style="margin:0;color:#e0fafa;font-size:15px;">Verify current rules</p>
           </td>
         </tr>
       </table>
@@ -476,7 +476,7 @@ Do NOT use markdown formatting. Use • for bullets. Plain text only. Sign off: 
   const fullContent = htmlContent + benefitsHtml;
 
   return {
-    subject: `${firstName}, your Golden Visa guide — act before thresholds increase`,
+    subject: `${firstName}, your Golden Visa questions to verify before investing`,
     body: brandWrap(
       fullContent,
       "Book Your Free Consultation →",

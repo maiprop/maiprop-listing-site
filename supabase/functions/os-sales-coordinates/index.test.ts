@@ -153,7 +153,7 @@ Deno.test("upstream URL honours MAIPROP_OS_URL env var", async () => {
   }
 });
 
-Deno.test("upstream URL falls back to default when MAIPROP_OS_URL is unset", async () => {
+Deno.test("missing MAIPROP_OS_URL fails closed without calling a default upstream", async () => {
   const calls: string[] = [];
   const originalFetch = globalThis.fetch;
   const previousOsUrl = Deno.env.get("MAIPROP_OS_URL");
@@ -165,12 +165,28 @@ Deno.test("upstream URL falls back to default when MAIPROP_OS_URL is unset", asy
   try {
     Deno.env.delete("MAIPROP_OS_URL");
     const res = await handler(req("POST", { lat: 37.98, lng: 23.72, radius_km: 1, limit: 5 }));
-    assertEquals([200, 502, 503].includes(res.status), true);
-    const upstreamCall = calls.find((u) => u.includes("/api/v1/sales/filter/coordinates"));
-    if (!upstreamCall) {
-      throw new Error(`expected an upstream call to /api/v1/sales/filter/coordinates, got: ${calls.join(", ") || "<none>"}`);
-    }
-    assertStringIncludes(upstreamCall, "http://app.os.maiprop.co:8080/api/v1/sales/filter/coordinates");
+    assertEquals(res.status, 503);
+    assertEquals(calls.some((u) => u.includes("/api/v1/sales/filter/coordinates")), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousOsUrl === undefined) Deno.env.delete("MAIPROP_OS_URL");
+    else Deno.env.set("MAIPROP_OS_URL", previousOsUrl);
+  }
+});
+
+Deno.test("non-HTTPS MAIPROP_OS_URL fails closed", async () => {
+  const originalFetch = globalThis.fetch;
+  const previousOsUrl = Deno.env.get("MAIPROP_OS_URL");
+  let called = false;
+  globalThis.fetch = (() => {
+    called = true;
+    return Promise.resolve(new Response(null, { status: 503 }));
+  }) as typeof fetch;
+  try {
+    Deno.env.set("MAIPROP_OS_URL", "http://app.os.maiprop.co:8080");
+    const res = await handler(req("POST", { lat: 37.98, lng: 23.72, radius_km: 1, limit: 5 }));
+    assertEquals(res.status, 503);
+    assertEquals(called, false);
   } finally {
     globalThis.fetch = originalFetch;
     if (previousOsUrl === undefined) Deno.env.delete("MAIPROP_OS_URL");

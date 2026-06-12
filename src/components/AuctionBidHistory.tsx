@@ -2,8 +2,8 @@
  * AuctionBidHistory
  * ─────────────────────────────────────────────────────────────────────────────
  * Shows comparable sales near an auction listing by calling the
- * os-sales-coordinates Supabase edge function (which proxies the OS API and
- * falls back to mock data automatically).
+ * os-sales-coordinates Supabase edge function, which proxies the OS API and
+ * fails closed when OS is unavailable or not configured over HTTPS.
  *
  * Props: lat, lng, listingId, title
  */
@@ -184,6 +184,8 @@ export function AuctionBidHistory({ lat, lng, lon, listingId: _listingId, title,
   );
 
   const isMock = result?.dataSource === "mock";
+  const showOsError = isError && !isLoading;
+  const showLegacyOsErrorFallback = false;
   const sales = result?.sales ?? [];
   const soldSales = sales.filter((s) => s.status === "sold");
 
@@ -262,7 +264,14 @@ export function AuctionBidHistory({ lat, lng, lon, listingId: _listingId, title,
       )}
 
       {/* Hard error (shouldn't happen — edge fn returns mock on failure) */}
-      {isError && !isLoading && (
+      {showOsError && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground rounded-lg border border-border bg-muted/30 px-3 py-2">
+          <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+          OS comparable sales are unavailable. Refresh after the OS connection is restored.
+        </div>
+      )}
+
+      {showLegacyOsErrorFallback && showOsError && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground rounded-lg border border-border bg-muted/30 px-3 py-2">
           <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
           OS API unavailable — showing representative Athens market data.

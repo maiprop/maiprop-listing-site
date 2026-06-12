@@ -53,4 +53,28 @@ describe("PropertyPopup auction imagery", () => {
     fireEvent.error(image);
     expect(image.src).toContain("/images/maiprop-logo.webp");
   });
+
+  it("uses the canonical new-build route for new-build map pins", async () => {
+    const { PropertyPopup } = await import("@/components/map/PropertyPopup");
+
+    renderWithProviders(
+      <PropertyPopup
+        listing={{
+          id: "new-build-1",
+          title: "New Build Popup",
+          price: 420000,
+          sqm: 95,
+          latitude: 37.98,
+          longitude: 23.72,
+          images: [],
+          listingType: "new_build",
+          city: "Athens",
+          _raw: { property_type: "apartment", tags: [] },
+        }}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: /view property/i })).toHaveAttribute("href", "/new-build/new-build-1");
+  });
 });

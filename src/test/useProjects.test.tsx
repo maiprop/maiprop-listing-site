@@ -73,6 +73,22 @@ describe("useProjects()", () => {
     expect(result.current.data).toEqual([{ id: "pr1", name: "A" }]);
   });
 
+  it("selects linked listing metadata needed by project UI and canonical routes", async () => {
+    const order = vi.fn().mockResolvedValue({
+      data: [{ id: "pr1", name: "A", listings: [{ id: "l1", listing_type: "new_build" }] }],
+      error: null,
+    });
+    const select = vi.fn().mockReturnValue({ order });
+    fromMock.mockReturnValue({ select });
+    const { result } = renderHookWithQuery(() => useProjects());
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(select).toHaveBeenCalledWith(expect.stringContaining("listings: listings("));
+    expect(select).toHaveBeenCalledWith(expect.stringContaining("listing_type"));
+    expect(select).toHaveBeenCalledWith(expect.stringContaining("cover_image_url"));
+  });
+
   it("filters by owner_id when ownerId is provided", async () => {
     const eq = vi.fn().mockResolvedValue({ data: [{ id: "pr2" }], error: null });
     const order = vi.fn().mockReturnValue({ eq });

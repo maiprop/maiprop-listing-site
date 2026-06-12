@@ -15,9 +15,10 @@ import {
   useDeleteProject,
 } from "@/hooks/useProjects";
 import type { Tables } from "@/integrations/supabase/types";
+import { getListingDetailPath } from "@/lib/listingRoutes";
 
 type Project = Tables<"projects"> & { listings?: ProjectListing[] };
-type ProjectListing = { id: string; title: string; city: string | null; project_id: string | null };
+type ProjectListing = { id: string; title: string; project_id: string | null; listing_type?: string | null };
 
 export default function ProjectsTab() {
   const { user } = useAuth();
@@ -240,7 +241,7 @@ export default function ProjectsTab() {
                     {(p.listings as ProjectListing[]).map((l: ProjectListing) => (
                       <Link
                         key={l.id}
-                        to={`/property/${l.id}`}
+                        to={getListingDetailPath(l)}
                         className="text-xs px-2 py-1 bg-secondary rounded-lg border border-border hover:border-primary/40 transition-colors truncate max-w-[180px]"
                       >
                         {l.title}

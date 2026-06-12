@@ -80,6 +80,34 @@ const coerceFiniteNumber = (value: unknown): number | null => {
   return null;
 };
 
+const clampNumber = (value: number, min: number, max: number): number =>
+  Math.max(min, Math.min(max, value));
+
+const clampScore = (value: unknown, min: number, max: number): number | null => {
+  const numeric = coerceFiniteNumber(value);
+  return numeric == null ? null : Math.round(clampNumber(numeric, min, max));
+};
+
+const normalizeNeighbourhoodReport = (report: JsonRecord): JsonRecord => {
+  const normalized = { ...report };
+  const walkabilityScore = clampScore(normalized.walkabilityScore, 0, 100);
+  if (walkabilityScore != null) normalized.walkabilityScore = walkabilityScore;
+
+  const noiseLevel = normalized.noiseLevel;
+  if (noiseLevel && typeof noiseLevel === "object" && !Array.isArray(noiseLevel)) {
+    const score = clampScore((noiseLevel as JsonRecord).score, 1, 10);
+    if (score != null) normalized.noiseLevel = { ...(noiseLevel as JsonRecord), score };
+  }
+
+  const safetyScore = normalized.safetyScore;
+  if (safetyScore && typeof safetyScore === "object" && !Array.isArray(safetyScore)) {
+    const score = clampScore((safetyScore as JsonRecord).score, 1, 100);
+    if (score != null) normalized.safetyScore = { ...(safetyScore as JsonRecord), score };
+  }
+
+  return normalized;
+};
+
 const normalizeOsCategory = (value: unknown): string => {
   const key = optionalString(value)?.toLowerCase().replace(/[^a-z0-9]+/g, "_") ?? "";
   return OS_PROPERTY_CATEGORY[key] ?? OS_PROPERTY_CATEGORY[key.replace(/_property$/, "")] ?? "RESIDENCE";
@@ -572,6 +600,12 @@ Rules:
       }
     }
 
+    if (parsed && typeof parsed === "object") {
+      parsed = normalizeNeighbourhoodReport(
+        applyOsMunicipalityContext(parsed as JsonRecord, osMunicipalityContext, "openai"),
+      );
+    }
+
     // Persist neighbourhood scores back to the listing row so they can be filtered on.
     // SECURITY: verify the caller owns the listing before writing scores.
     if (listingId && parsed.walkabilityScore != null) {
@@ -586,17 +620,13 @@ Rules:
         .single();
       if (listing && listing.owner_id === quota.userId) {
         await adminClient.from("listings").update({
-          walkability_score: Math.round(parsed.walkabilityScore),
-          safety_score:      parsed.safetyScore?.score  != null ? Math.round(parsed.safetyScore.score)  : undefined,
-          noise_score:       parsed.noiseLevel?.score   != null ? Math.round(parsed.noiseLevel.score)   : undefined,
+          walkability_score: parsed.walkabilityScore,
+          safety_score:      parsed.safetyScore?.score,
+          noise_score:       parsed.noiseLevel?.score,
         }).eq("id", listingId);
       } else {
         log.warn("neighbourhood-report: listing ownership mismatch", { listingId, userId: quota.userId });
       }
-    }
-
-    if (parsed && typeof parsed === "object") {
-      parsed = applyOsMunicipalityContext(parsed as JsonRecord, osMunicipalityContext, "openai");
     }
 
     await recordAiCall(quota.userId, BUCKET);

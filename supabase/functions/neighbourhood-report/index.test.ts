@@ -275,4 +275,86 @@ Deno.test("uses mAI Prop OS municipality market data in the neighbourhood prompt
   }
 });
 
+Deno.test("clamps AI neighbourhood scores before returning and persisting", async () => {
+  const originalFetch = globalThis.fetch;
+  const prevOpenAI = Deno.env.get("OPENAI_API_KEY");
+  const prevGemini = Deno.env.get("GEMINI_API_KEY");
+  Deno.env.set("OPENAI_API_KEY", "openai-test");
+  Deno.env.delete("GEMINI_API_KEY");
+
+  let updatePayload: Record<string, unknown> | null = null;
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    const method = input instanceof Request ? input.method : init?.method;
+    if (url.includes("/auth/v1/user")) {
+      return Promise.resolve(okJson({ user: { id: "user-1", email: "user@test.local" } }));
+    }
+    if (url.includes("/rest/v1/rpc/reserve_ai_quota_for_user")) {
+      return Promise.resolve(okJson({ allowed: true, reason: null, used: 1, limit: 5 }));
+    }
+    if (url.includes("api.openai.com") || url.includes("generativelanguage.googleapis.com")) {
+      return Promise.resolve(okJson({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              areaName: "Athens",
+              walkabilityScore: 150,
+              pricePerSqmTrend: {
+                current: 3000,
+                oneYearAgo: 2900,
+                threeYearsAgo: 2500,
+                fiveYearsAgo: 2200,
+                changeYoY: 3.4,
+                change5Y: 36.4,
+              },
+              noiseLevel: { score: 99, label: "Very Busy", notes: "Out-of-range provider score." },
+              safetyScore: { score: -5, label: "Average", trend: "Stable", notes: "Out-of-range provider score." },
+              developmentProjects: [],
+              demographics: { primaryResidents: "Mixed", avgAge: 40, tourismImpact: "Moderate" },
+              investmentOutlook: { rating: "Good", summary: "Cautious report." },
+              areaHighlights: ["Central urban market"],
+            }),
+          },
+        }],
+      }));
+    }
+    if (url.includes("/rest/v1/listings") && method === "GET") {
+      return Promise.resolve(okJson({ owner_id: "test-user-id" }));
+    }
+    if (url.includes("/rest/v1/listings") && method === "PATCH") {
+      updatePayload = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      return Promise.resolve(okJson({ id: "listing-1" }));
+    }
+    return Promise.resolve(okJson({ data: [] }));
+  }) as typeof fetch;
+
+  try {
+    const res = await handler(req("POST", {
+      city: "Athens",
+      address: "Syntagma",
+      listingId: "listing-1",
+    }, { authorization: "Bearer test-valid-token" }));
+    const body = await jsonBody(res) as {
+      walkabilityScore?: number;
+      noiseLevel?: { score?: number };
+      safetyScore?: { score?: number };
+    };
+
+    assertEquals(res.status, 200);
+    assertEquals(body.walkabilityScore, 100);
+    assertEquals(body.noiseLevel?.score, 10);
+    assertEquals(body.safetyScore?.score, 1);
+    const persistedScores = updatePayload as Record<string, unknown> | null;
+    assertEquals(persistedScores?.["walkability_score"], 100);
+    assertEquals(persistedScores?.["noise_score"], 10);
+    assertEquals(persistedScores?.["safety_score"], 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (prevOpenAI) Deno.env.set("OPENAI_API_KEY", prevOpenAI);
+    else Deno.env.delete("OPENAI_API_KEY");
+    if (prevGemini) Deno.env.set("GEMINI_API_KEY", prevGemini);
+    else Deno.env.delete("GEMINI_API_KEY");
+  }
+});
+
 restore();

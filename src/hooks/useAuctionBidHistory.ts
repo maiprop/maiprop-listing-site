@@ -2,8 +2,8 @@
  * useAuctionBidHistory
  * ─────────────────────────────────────────────────────────────────────────────
  * Fetches comparable sales near a coordinate pair via the os-sales-coordinates
- * Supabase edge function. The function proxies the maiProp OS API and falls
- * back to mock data automatically, so this hook never errors in production.
+ * Supabase edge function. The function proxies the maiProp OS API and fails
+ * closed when OS is not configured with an HTTPS endpoint.
  */
 
 import { useQuery } from "@tanstack/react-query";
@@ -30,7 +30,7 @@ export type SaleRecord = {
 
 export type AuctionBidHistoryResult = {
   sales: SaleRecord[];
-  /** "os" when live data was returned, "mock" when fallback was used */
+  /** "os" when live data was returned, "mock" only for explicitly marked sample payloads */
   dataSource: "os" | "mock";
 };
 

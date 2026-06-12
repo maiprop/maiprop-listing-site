@@ -370,16 +370,22 @@ const normalizeValuationResult = (
     const transferFloor = isAuction ? 45 : 55;
     const taxCeiling = isAuction ? 55 : 35;
     const hasConfirmedDefect = hasConfirmedLegalPlanningDefect(source);
-    result.legalCleanliness = hasConfirmedDefect
-      ? clampScore(result.legalCleanliness, legalFloor)
-      : Math.max(clampScore(result.legalCleanliness, legalFloor), legalFloor);
-    result.planningCertainty = hasConfirmedDefect
-      ? clampScore(result.planningCertainty, planningFloor)
-      : Math.max(clampScore(result.planningCertainty, planningFloor), planningFloor);
-    result.transferReadiness = hasConfirmedDefect
-      ? clampScore(result.transferReadiness, transferFloor)
-      : Math.max(clampScore(result.transferReadiness, transferFloor), transferFloor);
-    result.taxFriction = Math.min(clampScore(result.taxFriction, taxCeiling), taxCeiling);
+    if (hasConfirmedDefect) {
+      const legalCap = isAuction ? 35 : 50;
+      const planningCap = isAuction ? 40 : 55;
+      const transferCap = isAuction ? 45 : 60;
+      const taxFloor = isAuction ? 60 : 50;
+      const taxConfirmedCeiling = isAuction ? 85 : 80;
+      result.legalCleanliness = Math.min(clampScore(result.legalCleanliness, legalCap), legalCap);
+      result.planningCertainty = Math.min(clampScore(result.planningCertainty, planningCap), planningCap);
+      result.transferReadiness = Math.min(clampScore(result.transferReadiness, transferCap), transferCap);
+      result.taxFriction = clampNumber(clampScore(result.taxFriction, taxFloor), taxFloor, taxConfirmedCeiling);
+    } else {
+      result.legalCleanliness = Math.max(clampScore(result.legalCleanliness, legalFloor), legalFloor);
+      result.planningCertainty = Math.max(clampScore(result.planningCertainty, planningFloor), planningFloor);
+      result.transferReadiness = Math.max(clampScore(result.transferReadiness, transferFloor), transferFloor);
+      result.taxFriction = Math.min(clampScore(result.taxFriction, taxCeiling), taxCeiling);
+    }
     result.redFlags = removeUnconfirmedLegalFlags(result.redFlags, source);
 
     const legalSummary = optionalString(result.legalSummary) ?? "";
