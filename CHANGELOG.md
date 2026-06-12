@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.9.20](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.19...v1.9.20) (2026-06-12)
+
+
+### Bug Fixes
+
+* enforce developer-only new build listings ([2fcfc01](https://github.com/maiprop/maiprop-listing-site/commit/2fcfc017941a45f14259c6bdd2326074b37a6a7d))
+* salvage stale advisor index cleanup ([#316](https://github.com/maiprop/maiprop-listing-site/issues/316)) ([e685657](https://github.com/maiprop/maiprop-listing-site/commit/e6856574151d2e5db387250def7ba1fb4cc00513))
+* source-control project delete migration ([#317](https://github.com/maiprop/maiprop-listing-site/issues/317)) ([0e437d2](https://github.com/maiprop/maiprop-listing-site/commit/0e437d27b454a2f60fa3c4c95ec107c510df2e0d))
+
 ## [1.9.19](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.18...v1.9.19) (2026-06-12)
 
 
