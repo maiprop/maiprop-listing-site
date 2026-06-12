@@ -29,6 +29,15 @@ describe("developer-only new-build and project RLS migration", () => {
     expect(sql).toContain("WITH CHECK");
   });
 
+  it("keeps project-linked ads canonical new_build rows instead of legacy pre-sale rows", () => {
+    const sql = migrationSql();
+
+    expect(sql).toContain("listings_project_ads_are_new_build");
+    expect(sql).toContain("project_id IS NULL OR listing_type = 'new_build'::public.listing_type");
+    expect(sql).toContain("listings_new_build_ads_are_not_legacy_pre_sale");
+    expect(sql).toContain("COALESCE(is_pre_sale, false) = false");
+  });
+
   it("restricts project and project inventory writes to developer accounts", () => {
     const sql = migrationSql();
 

@@ -23,6 +23,42 @@ GRANT EXECUTE ON FUNCTION private.has_developer_listing_access(uuid) TO authenti
 COMMENT ON FUNCTION private.has_developer_listing_access(uuid) IS
   'RLS helper for developer-only new-build listings, projects, and project inventory.';
 
+UPDATE public.listings
+SET
+  listing_type = 'new_build'::public.listing_type,
+  is_pre_sale = false
+WHERE project_id IS NOT NULL
+  AND (
+    listing_type IS DISTINCT FROM 'new_build'::public.listing_type
+    OR COALESCE(is_pre_sale, false) IS TRUE
+  );
+
+UPDATE public.listings
+SET is_pre_sale = false
+WHERE listing_type = 'new_build'::public.listing_type
+  AND COALESCE(is_pre_sale, false) IS TRUE;
+
+ALTER TABLE public.listings
+  DROP CONSTRAINT IF EXISTS listings_project_ads_are_new_build;
+ALTER TABLE public.listings
+  ADD CONSTRAINT listings_project_ads_are_new_build
+  CHECK (
+    project_id IS NULL OR listing_type = 'new_build'::public.listing_type
+  ) NOT VALID;
+ALTER TABLE public.listings
+  VALIDATE CONSTRAINT listings_project_ads_are_new_build;
+
+ALTER TABLE public.listings
+  DROP CONSTRAINT IF EXISTS listings_new_build_ads_are_not_legacy_pre_sale;
+ALTER TABLE public.listings
+  ADD CONSTRAINT listings_new_build_ads_are_not_legacy_pre_sale
+  CHECK (
+    listing_type <> 'new_build'::public.listing_type
+    OR COALESCE(is_pre_sale, false) = false
+  ) NOT VALID;
+ALTER TABLE public.listings
+  VALIDATE CONSTRAINT listings_new_build_ads_are_not_legacy_pre_sale;
+
 DROP POLICY IF EXISTS listing_insert_quota ON public.listings;
 CREATE POLICY listing_insert_quota
   ON public.listings
@@ -203,6 +239,32 @@ CREATE POLICY "project_units_owner_delete"
 
 DO $$
 BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint c
+    JOIN pg_class t ON t.oid = c.conrelid
+    JOIN pg_namespace n ON n.oid = t.relnamespace
+    WHERE n.nspname = 'public'
+      AND t.relname = 'listings'
+      AND c.conname = 'listings_project_ads_are_new_build'
+      AND c.convalidated
+  ) THEN
+    RAISE EXCEPTION 'project-linked listing type invariant missing';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint c
+    JOIN pg_class t ON t.oid = c.conrelid
+    JOIN pg_namespace n ON n.oid = t.relnamespace
+    WHERE n.nspname = 'public'
+      AND t.relname = 'listings'
+      AND c.conname = 'listings_new_build_ads_are_not_legacy_pre_sale'
+      AND c.convalidated
+  ) THEN
+    RAISE EXCEPTION 'new-build legacy pre-sale invariant missing';
+  END IF;
+
   IF NOT EXISTS (
     SELECT 1
     FROM pg_policies

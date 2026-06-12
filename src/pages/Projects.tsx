@@ -19,7 +19,7 @@ import { LocationAutocompleteInput, type LocationAutocompleteSelection } from "@
 import type { Tables } from "@/integrations/supabase/types";
 import { tFallback } from "@/lib/i18nFallback";
 import { getListingDetailPath } from "@/lib/listingRoutes";
-import { getProjectLinkedListingUpdates } from "@/lib/projectListingClassification";
+import { getProjectLinkedListingUpdates, isProjectLinkableListing } from "@/lib/projectListingClassification";
 
 type ProjectListing = { id: string; title: string; cover_image_url?: string | null; price?: number | null; listing_type?: string | null };
 type ProjectWithListings = Tables<"projects"> & { listings?: ProjectListing[] };
@@ -37,6 +37,7 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
   const deleteProject = useDeleteProject();
   const updateListing = useUpdateListing();
   const tr = (key: string, fallback: string) => tFallback(t, key, fallback);
+  const newBuildListings = myListings.filter(isProjectLinkableListing);
 
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -345,7 +346,7 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
                   <div className="border-t border-border px-5 py-4 bg-muted/30">
                     <h4 className="text-xs font-medium text-muted-foreground mb-2">{tr("projects.labels.linkListings", "Link your listings")}</h4>
                     <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
-                      {myListings
+                      {newBuildListings
                         .filter((l) => l.project_id !== p.id)
                         .map((l) => (
                           <Button
@@ -357,9 +358,9 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
                             + {l.title?.slice(0, 30)}{l.title?.length > 30 ? "…" : ""}
                           </Button>
                         ))}
-                      {myListings.filter((l) => l.project_id !== p.id).length === 0 && (
+                      {newBuildListings.filter((l) => l.project_id !== p.id).length === 0 && (
                         <p className="text-xs text-muted-foreground">
-                          {tr("projects.empty.noUnlinked", "No unlinked listings.")} <Link to="/listings/new" className="underline text-primary">{tr("projects.empty.createOne", "Create one")}</Link>
+                          {tr("projects.empty.noUnlinkedNewBuilds", "No unlinked new-building listings.")} <Link to="/listings/new-building" className="underline text-primary">{tr("projects.empty.createNewBuilding", "Create new building")}</Link>
                         </p>
                       )}
                     </div>

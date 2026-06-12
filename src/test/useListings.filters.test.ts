@@ -177,6 +177,12 @@ describe("buildListingsQuery — listing-type / status scoping", () => {
     expect(calls("eq").some((c) => c.args[0] === "is_pre_sale")).toBe(false);
   });
 
+  it("legacy pre-sale searches are translated to the canonical new_build listing type", () => {
+    buildListingsQuery({ is_pre_sale: true });
+    expect(calls("eq").some((c) => c.args[0] === "listing_type" && c.args[1] === "new_build")).toBe(true);
+    expect(calls("eq").some((c) => c.args[0] === "is_pre_sale")).toBe(false);
+  });
+
   it("defaults status to 'active' when no owner_id is supplied", () => {
     buildListingsQuery();
     expect(calls("eq").some((c) => c.args[0] === "status" && c.args[1] === "active")).toBe(true);

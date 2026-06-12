@@ -27,8 +27,8 @@ const WEB_VITAL_BUDGETS = {
 };
 const INP_SAMPLE_ATTEMPTS = 3;
 
-const LAZY_ONLY_CHUNK_RE = /(?:LazyRecharts|recharts|d3-|BarChart|LineChart|AreaChart|PieChart|ResponsiveContainer|mapbox-gl|react-map-gl|vendor-mapbox|vendor-charts)/i;
-const CHART_CHUNK_RE = /(?:LazyRecharts|recharts|d3-|BarChart|LineChart|AreaChart|PieChart|ResponsiveContainer|vendor-charts)/i;
+const LAZY_ONLY_CHUNK_RE = /(?:LazyRecharts|recharts|(?:^|\/)d3-|BarChart|LineChart|AreaChart|PieChart|ResponsiveContainer|mapbox-gl|react-map-gl|vendor-mapbox|vendor-charts)/;
+const CHART_CHUNK_RE = /(?:LazyRecharts|recharts|(?:^|\/)d3-|BarChart|LineChart|AreaChart|PieChart|ResponsiveContainer|vendor-charts)/;
 
 type WebVitalsSnapshot = {
   fcp: number;
