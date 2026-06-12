@@ -4,7 +4,7 @@ const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 const GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 const DEFAULT_AI_PROVIDER_TIMEOUT_MS = 30_000;
 
-export function getOpenAIModel(envVar = "OPENAI_MODEL", fallback = "gpt-4.1-mini"): string {
+export function getOpenAIModel(envVar = "OPENAI_MODEL", fallback = "gpt-5.4-mini"): string {
   return Deno.env.get(envVar) ?? fallback;
 }
 

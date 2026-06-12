@@ -25,7 +25,7 @@ Deno.test("getOpenAIModel: returns fallback when env var is unset", () => {
   const prev = Deno.env.get("OPENAI_MODEL");
   Deno.env.delete("OPENAI_MODEL");
   try {
-    assertStrictEquals(getOpenAIModel(), "gpt-4.1-mini");
+    assertStrictEquals(getOpenAIModel(), "gpt-5.4-mini");
   } finally {
     if (prev) Deno.env.set("OPENAI_MODEL", prev);
   }

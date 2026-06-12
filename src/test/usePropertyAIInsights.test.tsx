@@ -130,13 +130,52 @@ describe("usePropertyAIInsights", () => {
     });
     await waitFor(() => expect(result.current.aiInsightsData).not.toBeNull());
     expect(result.current.aiInsightsData).toEqual({
-      vsMarket: 4.5,
+      vsMarket: -4,
       rentalYield: 3.8,
       estimatedValue: 470_000,
-      marketComparison: "above_market",
+      marketComparison: "at_market",
       confidenceLabel: "High",
     });
     expect(invokeMock.mock.calls.filter(([name]) => name === "property-valuation")).toHaveLength(1);
+  });
+
+  it("recomputes vs-market from the displayed estimate when AI payload comparison is stale", async () => {
+    const listing = {
+      ...baseListing,
+      price: 275_000,
+      price_per_sqm: 7_051,
+    } as unknown as ListingWithJoins;
+    invokeMock.mockImplementation(async (name: string) => {
+      if (name === "ai-quota-status") {
+        return { data: { allowed: true, reason: null, used: 0, limit: 5 }, error: null };
+      }
+      return {
+        data: {
+          estimatedValue: 220_000,
+          marketComparisonPct: -20,
+          rentalYieldEstimate: 5,
+          marketComparison: "below_market",
+          confidenceLabel: "Medium",
+        },
+        error: null,
+      };
+    });
+    const { result } = renderHook(() =>
+      usePropertyAIInsights(listing, baseUser, "L-1", false),
+    );
+
+    await act(async () => {
+      await result.current.loadAiInsights();
+    });
+
+    await waitFor(() => expect(result.current.aiInsightsData).not.toBeNull());
+    expect(result.current.aiInsightsData).toEqual({
+      vsMarket: 25,
+      rentalYield: 5,
+      estimatedValue: 220_000,
+      marketComparison: "above_market",
+      confidenceLabel: "Medium",
+    });
   });
 
   it("uses the clean-market value as the AI estimate when auction adjustment data is returned", async () => {

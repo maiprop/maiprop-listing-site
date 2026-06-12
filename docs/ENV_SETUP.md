@@ -155,11 +155,11 @@ Dashboard → Project Settings → Edge Functions → Secrets.
 | `WEBHOOK_SECRET` | `oh-registration-notify` |
 | `SENTRY_DSN` | edge-function structured logger forwarding |
 | `ENVIRONMENT` | edge-function environment tag and CORS tightening |
-| `GEMINI_API_KEY` | Preferred AI provider for report/search/assist functions when configured |
+| `GEMINI_API_KEY` | AI provider fallback for report/search/assist functions when `OPENAI_API_KEY` is not configured |
 | `GEMINI_MODEL` | Optional Gemini model override; defaults to `gemini-2.5-flash` |
-| `OPENAI_API_KEY` | Fallback AI provider for `ai-search`, `property-chat`, `pro-ai-tools`, `listing-ai-assist`, `ai-translate`, `smart-filters`, `neighbourhood-report`, `ai-service-match`, `property-valuation`, `property-pois` |
-| `OPENAI_MODEL` | Optional OpenAI model override for non-translation AI functions |
-| `OPENAI_TRANSLATION_MODEL` | Optional OpenAI model override for translation |
+| `OPENAI_API_KEY` | Primary AI provider for `ai-search`, `property-chat`, `pro-ai-tools`, `listing-ai-assist`, `ai-translate`, `smart-filters`, `neighbourhood-report`, `ai-service-match`, `property-valuation`, `property-pois` |
+| `OPENAI_MODEL` | Optional OpenAI model override for non-translation AI functions; defaults to `gpt-5.4-mini` |
+| `OPENAI_TRANSLATION_MODEL` | Optional OpenAI model override for translation; defaults to `gpt-5.4-mini` |
 | `OPENAI_REASONING_EFFORT` | Optional OpenAI reasoning effort override for supported models |
 | `AI_PROVIDER_TIMEOUT_MS` | Optional timeout in milliseconds for outbound Gemini/OpenAI provider calls; defaults to `30000` |
 | `LOVABLE_API_KEY` | legacy `followup-lead` content generation |
