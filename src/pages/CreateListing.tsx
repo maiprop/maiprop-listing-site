@@ -353,7 +353,6 @@ export default function CreateListing() {
                 form={form}
                 set={set}
                 toggle={toggle}
-                showPreSaleOption={false}
               />
             )}
             {step === "details" && (

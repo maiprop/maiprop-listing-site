@@ -1,7 +1,7 @@
 import { Info } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { PROPERTY_TYPES as PROP_TYPES, PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
-import { FieldLabel, FormSelect as Select, FormInput as Input } from "@/components/listings/FormPrimitives";
+import { FieldLabel } from "@/components/listings/FormPrimitives";
 import type { ListingFormData } from "@/hooks/useListingForm";
 import { tFallback } from "@/lib/i18nFallback";
 
@@ -9,10 +9,9 @@ interface Props {
   form: ListingFormData;
   set: (key: string, value: unknown) => void;
   toggle: (key: string) => void;
-  showPreSaleOption: boolean;
 }
 
-export function StepType({ form, set, toggle, showPreSaleOption }: Props) {
+export function StepType({ form, set, toggle }: Props) {
   const { t } = useTranslation();
   const { listing_type: lt, property_type: pt } = form;
   const tr = (key: string, fallback: string) => tFallback(t, key, fallback);
@@ -44,52 +43,6 @@ export function StepType({ form, set, toggle, showPreSaleOption }: Props) {
           ))}
         </div>
       </div>
-
-      {/* Pre-sale / Off-market flags */}
-      {showPreSaleOption && (lt === "sale" || !lt) && (
-        <div className="space-y-3">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={form.is_pre_sale} onChange={() => toggle("is_pre_sale")} className="rounded border-border" />
-            <span className="text-sm font-medium">{tr("createListing.type.preSale", "Pre-sale / Off-plan")}</span>
-            <span className="text-xs text-muted-foreground">{tr("createListing.type.preSaleDesc", "New development before completion")}</span>
-          </label>
-
-          {form.is_pre_sale && (
-            <div className="ml-6 p-4 rounded-xl border border-primary/30 bg-primary/5 space-y-3">
-              <p className="text-xs font-semibold text-primary uppercase tracking-wide">{tr("createListing.type.newBuildDetails", "New Build Details")}</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <FieldLabel>{tr("createListing.type.constructionPhase", "Construction Phase")}</FieldLabel>
-                  <Select value={form.construction_status} onChange={e => set("construction_status", e.target.value)}>
-                    <option value="">{tr("createListing.type.selectPhase", "Select phase...")}</option>
-                    <option value="planning">{tr("createListing.type.phases.planning", "Planning / Permits")}</option>
-                    <option value="foundation">{tr("createListing.type.phases.foundation", "Foundation stage")}</option>
-                    <option value="under_construction">{tr("createListing.type.phases.underConstruction", "Under construction")}</option>
-                    <option value="topping_out">{tr("createListing.type.phases.toppingOut", "Topping out (structure done)")}</option>
-                    <option value="shell_complete">{tr("createListing.type.phases.shellComplete", "Shell complete (fitting out)")}</option>
-                    <option value="new">{tr("createListing.type.phases.completedNew", "Completed / New")}</option>
-                  </Select>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">{tr("createListing.type.progressHint", "Shown on the project page with a progress indicator")}</p>
-                </div>
-                <div>
-                  <FieldLabel>{tr("createListing.type.deliveryYear", "Estimated Delivery Year")}</FieldLabel>
-                  <Input
-                    type="number"
-                    placeholder={String(new Date().getFullYear() + 1)}
-                    value={form.year_built}
-                    onChange={e => set("year_built", e.target.value)}
-                  />
-                  <p className="text-[11px] text-muted-foreground mt-0.5">{tr("createListing.type.expectedCompletionHint", "Shown as \"Expected completion\"")}</p>
-                </div>
-              </div>
-              <div className="rounded-lg bg-background/60 border border-border px-3 py-2 text-xs text-muted-foreground flex items-start gap-2">
-                <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-primary" />
-                <span>{tr("createListing.type.newBuildNoticeBefore", "Your listing will appear in the")} <strong className="text-foreground">{tr("createListing.type.newBuilds", "New Builds")}</strong> {tr("createListing.type.newBuildNoticeAfter", "section with a dedicated project showcase page.")}</span>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
 
       <label className="flex items-center gap-2 cursor-pointer">
         <input type="checkbox" checked={form.is_off_market} onChange={() => toggle("is_off_market")} className="rounded border-border" />
