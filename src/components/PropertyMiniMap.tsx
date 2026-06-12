@@ -19,6 +19,7 @@ import {
   Loader2,
   Zap,
   RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MAPBOX_TOKEN } from "@/lib/config";
@@ -37,7 +38,14 @@ export interface POI {
   distanceKm: number;
   walkMinutes: number;
   description?: string;
+  isFallbackEstimate?: boolean;
 }
+
+type PoiResponse = {
+  pois: POI[];
+  generatedBy?: "ai" | "fallback";
+  warning?: string;
+};
 
 const CATEGORY_META: Record<
   POI["category"],
@@ -112,7 +120,7 @@ async function fetchPOIs(
   city: string,
   lat: number,
   lng: number,
-): Promise<POI[]> {
+): Promise<PoiResponse> {
   const { data, error } = await supabase.functions.invoke("property-pois", {
     body: { address, city, lat, lng },
   });
@@ -136,7 +144,11 @@ async function fetchPOIs(
   if (typeof data?.error === "string") throw new Error(data.error);
   if (!Array.isArray(data?.pois))
     throw new Error("Failed to load nearby places");
-  return data.pois as POI[];
+  return {
+    pois: data.pois as POI[],
+    generatedBy: data.generatedBy === "fallback" ? "fallback" : "ai",
+    warning: typeof data.warning === "string" ? data.warning : undefined,
+  };
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
@@ -247,6 +259,7 @@ export default function PropertyMiniMap({
   const [pois, setPois] = useState<POI[] | null>(null);
   const [loadingPOIs, setLoadingPOIs] = useState(false);
   const [poiError, setPoiError] = useState<string | null>(null);
+  const [poiWarning, setPoiWarning] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<POI["category"] | "all">(
     "all",
   );
@@ -321,6 +334,7 @@ export default function PropertyMiniMap({
     if (!lat || !lng || !user) return;
     setLoadingPOIs(true);
     setPoiError(null);
+    setPoiWarning(null);
     try {
       const quota = await refreshPoiQuota();
       if (quota && !quota.allowed) {
@@ -328,9 +342,10 @@ export default function PropertyMiniMap({
         return;
       }
       const data = await fetchPOIs(address, city, lat, lng);
-      setPois(data);
+      setPois(data.pois);
+      setPoiWarning(data.generatedBy === "fallback" ? data.warning ?? "Generic nearby-place estimates used." : null);
       // Compute walk score and notify parent
-      const score = computeWalkScore(data);
+      const score = computeWalkScore(data.pois);
       onWalkScoreChange?.(score);
       await refreshPoiQuota();
     } catch (e: unknown) {
@@ -701,6 +716,12 @@ export default function PropertyMiniMap({
                   AI estimates based on property location — distances are
                   approximate walking distances
                 </p>
+                {poiWarning && (
+                  <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-300/50 bg-amber-50 px-3 py-2 text-[10px] leading-relaxed text-amber-900">
+                    <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                    <span>{poiWarning} Verify exact place names and distances before relying on them.</span>
+                  </div>
+                )}
               </>
             )}
           </>

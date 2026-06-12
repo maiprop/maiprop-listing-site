@@ -20,23 +20,24 @@ type FallbackPoi = {
   distanceKm: number;
   walkMinutes: number;
   description: string;
+  isFallbackEstimate: true;
 };
 
 const fallbackPois = (city: string): FallbackPoi[] => {
   const area = city?.trim() || "the area";
   return [
-    { name: `${area} Primary School`, category: "school", distanceKm: 0.45, walkMinutes: 5, description: "Local education option" },
-    { name: `${area} High School`, category: "school", distanceKm: 1.35, walkMinutes: 16, description: "Secondary education nearby" },
-    { name: `${area} Bus Stop`, category: "transit", distanceKm: 0.18, walkMinutes: 2, description: "Nearest transit link" },
-    { name: `${area} Metro/Transit Hub`, category: "transit", distanceKm: 1.1, walkMinutes: 13, description: "Main public transport access" },
-    { name: `${area} Coffee Corner`, category: "cafe", distanceKm: 0.28, walkMinutes: 3, description: "Neighbourhood cafe" },
-    { name: `${area} Bakery & Cafe`, category: "cafe", distanceKm: 0.62, walkMinutes: 7, description: "Daily convenience stop" },
-    { name: `${area} Medical Centre`, category: "hospital", distanceKm: 1.4, walkMinutes: 17, description: "Primary healthcare access" },
-    { name: `${area} Pharmacy`, category: "hospital", distanceKm: 0.35, walkMinutes: 4, description: "Healthcare convenience" },
-    { name: `${area} Market Street`, category: "shopping", distanceKm: 0.5, walkMinutes: 6, description: "Groceries and services" },
-    { name: `${area} Shopping Arcade`, category: "shopping", distanceKm: 1.8, walkMinutes: 22, description: "Retail cluster" },
-    { name: `${area} Pocket Park`, category: "park", distanceKm: 0.75, walkMinutes: 9, description: "Local green space" },
-    { name: `${area} Public Square`, category: "park", distanceKm: 1.2, walkMinutes: 14, description: "Open public space" },
+    { name: "School proximity estimate", category: "school", distanceKm: 0.45, walkMinutes: 5, description: `Generic ${area} area estimate`, isFallbackEstimate: true },
+    { name: "Secondary-school proximity estimate", category: "school", distanceKm: 1.35, walkMinutes: 16, description: `Generic ${area} area estimate`, isFallbackEstimate: true },
+    { name: "Transit-stop proximity estimate", category: "transit", distanceKm: 0.18, walkMinutes: 2, description: `Generic ${area} area estimate`, isFallbackEstimate: true },
+    { name: "Transit-hub proximity estimate", category: "transit", distanceKm: 1.1, walkMinutes: 13, description: `Generic ${area} area estimate`, isFallbackEstimate: true },
+    { name: "Cafe proximity estimate", category: "cafe", distanceKm: 0.28, walkMinutes: 3, description: `Generic ${area} area estimate`, isFallbackEstimate: true },
+    { name: "Daily convenience proximity estimate", category: "cafe", distanceKm: 0.62, walkMinutes: 7, description: `Generic ${area} area estimate`, isFallbackEstimate: true },
+    { name: "Healthcare proximity estimate", category: "hospital", distanceKm: 1.4, walkMinutes: 17, description: `Generic ${area} area estimate`, isFallbackEstimate: true },
+    { name: "Pharmacy proximity estimate", category: "hospital", distanceKm: 0.35, walkMinutes: 4, description: `Generic ${area} area estimate`, isFallbackEstimate: true },
+    { name: "Shopping proximity estimate", category: "shopping", distanceKm: 0.5, walkMinutes: 6, description: `Generic ${area} area estimate`, isFallbackEstimate: true },
+    { name: "Retail-cluster proximity estimate", category: "shopping", distanceKm: 1.8, walkMinutes: 22, description: `Generic ${area} area estimate`, isFallbackEstimate: true },
+    { name: "Green-space proximity estimate", category: "park", distanceKm: 0.75, walkMinutes: 9, description: `Generic ${area} area estimate`, isFallbackEstimate: true },
+    { name: "Public-square proximity estimate", category: "park", distanceKm: 1.2, walkMinutes: 14, description: `Generic ${area} area estimate`, isFallbackEstimate: true },
   ];
 };
 
@@ -149,8 +150,10 @@ Rules:
       distanceKm?: unknown;
       walkMinutes?: unknown;
       description?: unknown;
+      isFallbackEstimate?: unknown;
     };
     let parsed: { pois: RawPoi[] };
+    let fallbackReason: string | null = null;
     try {
       parsed = JSON.parse(jsonStr);
     } catch {
@@ -170,12 +173,14 @@ Rules:
           city,
           response: jsonStr?.slice(0, 500),
         });
+        fallbackReason = "AI provider returned invalid nearby-place JSON; generic category estimates used";
         parsed = { pois: fallbackPois(String(city ?? "")) };
       }
     }
 
     if (!Array.isArray(parsed.pois)) {
       log.warn("property-pois: invalid AI response shape; using fallback POIs", { city });
+      fallbackReason = "AI provider returned an invalid nearby-place shape; generic category estimates used";
       parsed = { pois: fallbackPois(String(city ?? "")) };
     }
 
@@ -198,12 +203,16 @@ Rules:
           distanceKm,
           walkMinutes: Math.max(1, Math.min(60, Number(p.walkMinutes ?? fallbackWalk))),
           description: p.description ? String(p.description).slice(0, 40) : undefined,
+          isFallbackEstimate: p.isFallbackEstimate === true ? true : undefined,
         };
       })
       .slice(0, 15);
 
     await recordAiCall(quota.userId, BUCKET);
-    return new Response(JSON.stringify({ pois }), {
+    return new Response(JSON.stringify({
+      pois,
+      ...(fallbackReason ? { generatedBy: "fallback", warning: fallbackReason } : { generatedBy: "ai" }),
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
