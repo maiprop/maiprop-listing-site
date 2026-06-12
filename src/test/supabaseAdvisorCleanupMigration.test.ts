@@ -26,6 +26,10 @@ const mediaOwnerRlsMigration = readFileSync(
   resolve(process.cwd(), "supabase/migrations/20260707143000_consolidate_public_media_rls.sql"),
   "utf8",
 );
+const staleAdvisorIndexesMigration = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/20260707168000_cleanup_stale_advisor_indexes.sql"),
+  "utf8",
+);
 
 describe("Supabase advisor cleanup migration", () => {
   it("revokes trigger-only security definer functions from API roles without touching public RPCs", () => {
@@ -95,5 +99,22 @@ describe("Supabase advisor cleanup migration", () => {
       'DROP POLICY IF EXISTS "open_house_settings_owner" ON public.open_house_settings',
     );
     expect(mediaOwnerRlsMigration).not.toContain("FOR SELECT");
+  });
+
+  it("keeps the safe index cleanup from the stale health remediation branch", () => {
+    expect(staleAdvisorIndexesMigration).toContain("CREATE INDEX IF NOT EXISTS idx_notifications_user_id");
+    expect(staleAdvisorIndexesMigration).toContain("CREATE INDEX IF NOT EXISTS idx_viewings_requester_id");
+
+    for (const indexName of [
+      "idx_firesale_interest_deal_id",
+      "idx_oh_reg_listing",
+      "idx_oh_offers_listing",
+    ]) {
+      expect(staleAdvisorIndexesMigration).toContain(`DROP INDEX IF EXISTS public.${indexName}`);
+    }
+
+    expect(staleAdvisorIndexesMigration).toContain("firesale_interest_deal_id_investor_id_key");
+    expect(staleAdvisorIndexesMigration).toContain("open_house_registrations_listing_id_requester_id_key");
+    expect(staleAdvisorIndexesMigration).toContain("open_house_offers_listing_id_bidder_id_key");
   });
 });
