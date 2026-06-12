@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.19](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.18...v1.9.19) (2026-06-12)
+
+
+### Bug Fixes
+
+* canonicalize project listing types ([#312](https://github.com/maiprop/maiprop-listing-site/issues/312)) ([018bba6](https://github.com/maiprop/maiprop-listing-site/commit/018bba6ac48d1d75ff147adeae6d808647273bdd))
+
 ## [1.9.18](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.17...v1.9.18) (2026-06-12)
 
 
