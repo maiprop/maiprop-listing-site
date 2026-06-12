@@ -25,9 +25,10 @@ export const TYPE_HEX: Record<string, string> = {
   rent: "#9b6bfc",
   auction: "#f5c518",
   firesale: "#e84040",
+  new_build: "#ff8a3d",
 };
 
-export function typeColour(t?: string) { return TYPE_HEX[t || "sale"]; }
+export function typeColour(t?: string) { return TYPE_HEX[t || "sale"] ?? TYPE_HEX.sale; }
 
 export function priceLabel(p: number) {
   if (p >= 1_000_000) return `€${(p / 1_000_000).toFixed(1)}M`;

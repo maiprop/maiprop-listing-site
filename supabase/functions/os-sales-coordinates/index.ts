@@ -5,10 +5,9 @@
  *   POST $MAIPROP_OS_URL/api/v1/sales/filter/coordinates
  *
  * Reads `MAIPROP_OS_URL` from env (same secret consumed by os-diagnose,
- * sync-to-os, poll-os-auctions, etc.) and falls back to the production OS
- * URL if unset, matching the previous hardcoded behaviour.
+ * sync-to-os, poll-os-auctions, etc.) and fails closed when it is unset or
+ * not HTTPS.
  *
- * Falls back to mock data if the OS API is unavailable so the UI never breaks.
  * verify_jwt = false — callable without auth (used on public property pages).
  */
 
@@ -17,8 +16,6 @@ import { createLogger } from "../_shared/logger.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 
 const log = createLogger("os-sales-coordinates");
-
-const DEFAULT_OS_URL = "http://app.os.maiprop.co:8080";
 
 const limiter = makeRateLimiter({
   bucket: "os-sales-coordinates",
@@ -72,6 +69,18 @@ const pickAllowedFields = (record: Record<string, unknown>): Partial<SaleRecord>
     if (key in record) out[key] = record[key];
   }
   return out as Partial<SaleRecord>;
+};
+
+const getConfiguredOsBaseUrl = (): { url?: string; reason?: string } => {
+  const raw = Deno.env.get("MAIPROP_OS_URL")?.trim();
+  if (!raw) return { reason: "os_config_missing" };
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== "https:") return { reason: "os_config_not_https" };
+    return { url: parsed.href.replace(/\/+$/, "") };
+  } catch {
+    return { reason: "os_config_invalid" };
+  }
 };
 
 
@@ -129,7 +138,16 @@ Deno.serve(async (req) => {
   const radius_km = Math.min(Math.max(Number(body.radius_km) || 2, 0.1), MAX_RADIUS_KM);
   const limit = Math.min(Math.max(Math.floor(Number(body.limit) || 50), 1), MAX_LIMIT);
 
-  const osBase = (Deno.env.get("MAIPROP_OS_URL")?.trim() || DEFAULT_OS_URL).replace(/\/$/, "");
+  const osConfig = getConfiguredOsBaseUrl();
+  if (!osConfig.url) {
+    log.warn("OS API configuration unavailable", { reason: osConfig.reason });
+    return new Response(
+      JSON.stringify({ available: false, reason: osConfig.reason ?? "os_config_unavailable" }),
+      { status: 503, headers: { ...hdrs, "Content-Type": "application/json" } },
+    );
+  }
+
+  const osBase = osConfig.url;
   const osUrl = `${osBase}/api/v1/sales/filter/coordinates`;
 
   try {

@@ -107,4 +107,48 @@ describe("PropertyReportCard", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: /download html/i })).toBeInTheDocument());
     expect(screen.getByRole("button", { name: /print \/ save pdf/i })).toBeInTheDocument();
   });
+
+  it("opens printable reports without injecting executable script into the HTML blob", async () => {
+    let openedBlob: Blob | null = null;
+    const focusPrintFrame = vi.fn();
+    const printFrame = vi.fn();
+    const createObjectUrl = vi.spyOn(URL, "createObjectURL").mockImplementation((blob) => {
+      openedBlob = blob as Blob;
+      return "blob:report";
+    });
+    const revokeObjectUrl = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+    mocks.invoke.mockResolvedValue({
+      data: {
+        ok: true,
+        report: {
+          html: "<html><body><h1>Report</h1></body></html>",
+          fileName: "maiprop-property-report-listing-1.html",
+        },
+      },
+      error: null,
+    });
+
+    try {
+      renderCard();
+      fireEvent.click(screen.getByRole("button", { name: /load report/i }));
+      const printButton = await screen.findByRole("button", { name: /print \/ save pdf/i });
+      fireEvent.click(printButton);
+
+      const iframe = document.querySelector('iframe[src="blob:report"]') as HTMLIFrameElement | null;
+      expect(iframe).toBeTruthy();
+      Object.defineProperty(iframe, "contentWindow", {
+        configurable: true,
+        value: { focus: focusPrintFrame, print: printFrame },
+      });
+      fireEvent.load(iframe as HTMLIFrameElement);
+
+      expect(focusPrintFrame).toHaveBeenCalled();
+      expect(printFrame).toHaveBeenCalled();
+      expect(await openedBlob?.text()).not.toContain("<script");
+    } finally {
+      createObjectUrl.mockRestore();
+      revokeObjectUrl.mockRestore();
+      document.querySelector('iframe[src="blob:report"]')?.remove();
+    }
+  });
 });

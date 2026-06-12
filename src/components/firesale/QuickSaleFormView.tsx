@@ -281,9 +281,10 @@ const PhotoPreviewTile = ({
     <img src={src} alt="" className="w-full h-full object-cover" />
     <button
       type="button"
+      aria-label={ui("Remove photo", "Remove photo")}
       disabled={disabled}
       onClick={() => onRemovePhoto(index)}
-      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-background/90 border border-border flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive hover:border-destructive hover:text-destructive-foreground disabled:hidden"
+      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-background/90 border border-border flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity hover:bg-destructive hover:border-destructive hover:text-destructive-foreground disabled:hidden"
     >
       <X className="w-3 h-3" />
     </button>

@@ -95,6 +95,7 @@ export default function CreateListing() {
     errors,
     setErrors,
     submitting,
+    canSubmitImages,
     draftBanner,
     aiDescLoading,
     aiPriceLoading,
@@ -427,7 +428,7 @@ export default function CreateListing() {
                     <Button
                       variant="outline"
                       onClick={handleSaveDraft}
-                      disabled={submitting}
+                      disabled={submitting || !canSubmitImages}
                     >
                       {tr("createListing.actions.saveDraft", "Save Draft")}
                     </Button>
@@ -435,7 +436,7 @@ export default function CreateListing() {
                   <Button
                     className="bg-gradient-primary border-0 text-primary-foreground"
                     onClick={() => handleSubmit(false)}
-                    disabled={submitting}
+                    disabled={submitting || !canSubmitImages}
                   >
                     {submitting ? (
                       <>

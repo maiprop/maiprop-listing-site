@@ -342,4 +342,99 @@ Deno.test("normalizes auction comparison against clean market value and softens 
   }
 });
 
+Deno.test("caps legal scores when listing data confirms planning/buildability defects", async () => {
+  const originalFetch = globalThis.fetch;
+  const prevOpenAI = Deno.env.get("OPENAI_API_KEY");
+  const prevGemini = Deno.env.get("GEMINI_API_KEY");
+  Deno.env.set("OPENAI_API_KEY", "openai-test");
+  Deno.env.delete("GEMINI_API_KEY");
+
+  globalThis.fetch = ((input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("/auth/v1/user")) {
+      return Promise.resolve(okJson({ user: { id: "user-1", email: "user@test.local" } }));
+    }
+    if (url.includes("/rest/v1/rpc/reserve_ai_quota_for_user")) {
+      return Promise.resolve(okJson({ allowed: true, reason: null, used: 1, limit: 5 }));
+    }
+    if (url.includes("api.openai.com") || url.includes("generativelanguage.googleapis.com")) {
+      return Promise.resolve(okJson({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              estimatedValue: 210000,
+              rangeLow: 190000,
+              rangeHigh: 225000,
+              executionValue: 185000,
+              pricePerSqmEstimate: 2100,
+              confidence: 80,
+              confidenceLabel: "High",
+              liquidityScore: 82,
+              marketComparison: "at_market",
+              marketComparisonPct: 0,
+              pricingPosition: "fair",
+              methodUsed: "AI valuation",
+              valuationMode: "MODE_1_LISTING_ONLY",
+              summary: "Good data but confirmed planning defects exist.",
+              keyFactors: [],
+              legalCleanliness: 95,
+              planningCertainty: 98,
+              taxFriction: 10,
+              transferReadiness: 97,
+              legalSummary: "Listing explicitly states it is outside plan and not buildable.",
+              taxSummary: "Transfer friction elevated by confirmed planning risk.",
+              objectiveValueProxy: null,
+              renovationPotential: null,
+              rentalYieldEstimate: 4.2,
+              highestBestUseHint: null,
+              redFlags: [
+                "Outside city and settlement plan",
+                "No buildability rights",
+              ],
+              auctionAdjustedValue: null,
+              listingQualityScore: 80,
+            }),
+          },
+        }],
+      }));
+    }
+    return originalFetch(input);
+  }) as typeof fetch;
+
+  try {
+    const res = await handler(req("POST", {
+      title: "Planning risk apartment",
+      city: "Athens",
+      price: 210000,
+      sqm: 100,
+      propertyType: "apartment",
+      listingType: "sale",
+      withinCityPlan: false,
+      withinSettlement: false,
+      isBuildable: false,
+    }, { authorization: "Bearer test-valid-token" }));
+
+    const body = await jsonBody(res) as {
+      legalCleanliness?: number;
+      planningCertainty?: number;
+      taxFriction?: number;
+      transferReadiness?: number;
+      redFlags?: string[];
+    };
+
+    assertEquals(res.status, 200);
+    assertEquals((body.legalCleanliness ?? 100) <= 50, true);
+    assertEquals((body.planningCertainty ?? 100) <= 55, true);
+    assertEquals((body.transferReadiness ?? 100) <= 60, true);
+    assertEquals((body.taxFriction ?? 0) >= 50, true);
+    assertEquals(body.redFlags?.some((flag) => /outside city|buildability/i.test(flag)), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (prevOpenAI) Deno.env.set("OPENAI_API_KEY", prevOpenAI);
+    else Deno.env.delete("OPENAI_API_KEY");
+    if (prevGemini) Deno.env.set("GEMINI_API_KEY", prevGemini);
+    else Deno.env.delete("GEMINI_API_KEY");
+  }
+});
+
 restore();

@@ -17,8 +17,15 @@ const authActivityMigration = readFileSync(
   "utf8",
 ).replace(/\s+/g, " ");
 
+const authActivityRpcOnlyMigrationName = "20260612070500_harden_auth_activity_rpc_only.sql";
+
 const guardrailsMigration = readFileSync(
   resolve(process.cwd(), "supabase/migrations/20260707165000_harden_user_search_telemetry_guards.sql"),
+  "utf8",
+).replace(/\s+/g, " ");
+
+const authActivityRpcOnlyMigration = readFileSync(
+  resolve(process.cwd(), `supabase/migrations/${authActivityRpcOnlyMigrationName}`),
   "utf8",
 ).replace(/\s+/g, " ");
 
@@ -74,6 +81,16 @@ describe("admin user activity analytics migration", () => {
     expect(authActivityMigration).toContain("TO authenticated");
     expect(authActivityMigration).toContain("public record_user_auth_activity must remain SECURITY INVOKER");
     expect(authActivityMigration).toContain("private auth activity insert helper must remain SECURITY DEFINER");
+  });
+
+  it("removes direct authenticated writes to auth activity telemetry after the RPC guard exists", () => {
+    expect(authActivityRpcOnlyMigration).toContain("to_regclass('public.user_auth_activity_events') IS NULL");
+    expect(authActivityRpcOnlyMigration).toContain("REVOKE INSERT, UPDATE, DELETE ON TABLE public.user_auth_activity_events FROM authenticated");
+    expect(authActivityRpcOnlyMigration).toContain('DROP POLICY IF EXISTS "user_auth_activity_events_insert_own"');
+    expect(authActivityRpcOnlyMigration).toContain("authenticated must record auth activity through public.record_user_auth_activity");
+    expect(authActivityRpcOnlyMigration).toContain("GRANT SELECT ON TABLE public.user_auth_activity_events TO authenticated");
+    expect(authActivityMigration).toContain("REVOKE INSERT, UPDATE, DELETE ON TABLE public.user_auth_activity_events FROM authenticated");
+    expect(authActivityMigration).toContain('DROP POLICY IF EXISTS "user_auth_activity_events_insert_own"');
   });
 
   it("adds private trigger guardrails against oversized or spammy telemetry rows", () => {

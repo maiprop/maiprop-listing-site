@@ -46,7 +46,7 @@ describe("ImageGallery coverage", () => {
     fireEvent.click(screen.getByRole("button", { name: /set as cover/i }));
     expect(onSetCover).toHaveBeenCalledWith("plain");
 
-    const removeButtons = container.querySelectorAll("button.absolute.top-2.right-2");
+    const removeButtons = screen.getAllByRole("button", { name: /remove photo/i });
     fireEvent.click(removeButtons[0]);
     expect(onRemove).toHaveBeenCalledWith("cover");
 

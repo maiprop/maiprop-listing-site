@@ -68,21 +68,24 @@ export function ImageGallery({
               </div>
             )}
 
-            <div className="absolute top-2 right-8 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded bg-background/70">
+            <div className="absolute top-2 right-8 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity p-1 rounded bg-background/80">
               <GripVertical className="w-3 h-3 text-muted-foreground" />
             </div>
 
             <button
+              type="button"
+              aria-label="Remove photo"
               onClick={() => onRemove(img.id)}
-              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full bg-destructive text-destructive-foreground"
+              className="absolute top-2 right-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity p-1 rounded-full bg-destructive text-destructive-foreground"
             >
               <X className="w-3 h-3" />
             </button>
 
             {!isCover && !img.uploading && !img.error && (
               <button
+                type="button"
                 onClick={() => onSetCover(img.id)}
-                className="absolute bottom-0 inset-x-0 py-1.5 bg-background/80 backdrop-blur-sm text-xs text-foreground font-medium opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary/20 hover:text-primary"
+                className="absolute bottom-0 inset-x-0 py-1.5 bg-background/85 backdrop-blur-sm text-xs text-foreground font-medium opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity hover:bg-primary/20 hover:text-primary"
               >
                 Set as cover
               </button>

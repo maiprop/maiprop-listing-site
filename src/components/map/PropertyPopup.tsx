@@ -5,6 +5,7 @@ import { getAuctionImageList } from "@/lib/auctionStreetView";
 import { getOwnershipStatus, getOwnershipPct } from "@/lib/auctionUtils";
 import { formatPrice } from "@/lib/format";
 import { MAIPROP_LOGO_FALLBACK_URL, isMaiPropLogoFallback, switchImageToNextFallback } from "@/lib/imageFallbacks";
+import { getListingDetailPath } from "@/lib/listingRoutes";
 import type { MapListing } from "./mapConfig";
 import { typeColour } from "./mapConfig";
 
@@ -142,9 +143,7 @@ const getFloorLabel = (value: RawListing["floor"]): string | null => {
 };
 
 const getDetailLink = (listing: MapListing): string => {
-  if (listing.listingType === "auction") return `/auction/${listing.id}`;
-  if (listing.listingType === "open_house") return `/open-house/${listing.id}`;
-  return `/property/${listing.id}`;
+  return getListingDetailPath({ id: listing.id, listing_type: listing.listingType });
 };
 
 const getDetailState = (listing: MapListing, raw: RawListing) => {

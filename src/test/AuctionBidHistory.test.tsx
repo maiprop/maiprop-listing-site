@@ -66,7 +66,7 @@ describe("AuctionBidHistory", () => {
     });
     render(<AuctionBidHistory {...baseProps} />);
     // Component surfaces: "OS API unavailable — showing representative Athens market data."
-    expect(screen.getByText(/OS API unavailable/i)).toBeInTheDocument();
+    expect(screen.getByText(/OS comparable sales are unavailable/i)).toBeInTheDocument();
   });
 
   it("renders the 'no comparable sales' empty state when data.sales is empty", () => {

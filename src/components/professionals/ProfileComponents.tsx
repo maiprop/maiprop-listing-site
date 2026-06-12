@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { Link } from "react-router-dom";
 import { Star, MapPin } from "lucide-react";
+import { getListingDetailPath } from "@/lib/listingRoutes";
 
 export function StarRating({ rating, max = 5 }: { rating: number; max?: number }) {
   return (
@@ -37,7 +38,7 @@ export function ListingGrid({ listings }: { listings: any[] }) {
       {listings.map((listing: any) => (
         <Link
           key={listing.id}
-          to={listing.listing_type === "new_build" ? `/new-build/${listing.id}` : `/property/${listing.id}`}
+          to={getListingDetailPath(listing)}
           className="group border border-border rounded-xl overflow-hidden hover:border-primary/30 transition-colors bg-card"
         >
           {listing.cover_image_url && (

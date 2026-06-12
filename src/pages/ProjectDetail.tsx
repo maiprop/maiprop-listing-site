@@ -37,6 +37,7 @@ import {
   assertAllowedUpload,
 } from "@/lib/uploadValidation";
 import { tFallback, tInterpolate } from "@/lib/i18nFallback";
+import { getListingDetailPath } from "@/lib/listingRoutes";
 
 const INPUT_CLS = "w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors";
 const LABEL_CLS = "text-xs text-muted-foreground block mb-1.5 font-medium";
@@ -304,7 +305,7 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
     structural_completion_date: project.structural_completion_date, delivery_date: project.delivery_date, status: project.status,
   };
 
-  const listings: Array<{ id: string; views_count?: number }> = Array.isArray((project as unknown as Record<string, unknown>).listings) ? (project as unknown as { listings: Array<{ id: string; views_count?: number }> }).listings : [];
+  const listings: Array<{ id: string; title?: string | null; sqm?: number | null; price?: number | null; cover_image_url?: string | null; listing_type?: string | null; views_count?: number }> = Array.isArray((project as unknown as Record<string, unknown>).listings) ? (project as unknown as { listings: Array<{ id: string; title?: string | null; sqm?: number | null; price?: number | null; cover_image_url?: string | null; listing_type?: string | null; views_count?: number }> }).listings : [];
   const linkedListingIds = new Set(listings.map((l) => l.id));
   const availableCount = units.filter((u) => u.availability_status === "available").length;
   const reservedCount = units.filter((u) => u.availability_status === "reserved").length;
@@ -535,10 +536,10 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
             <p className="text-sm text-muted-foreground mb-3">{tr("projects.detail.linkedListings.caption", "Link existing listings to this project. These appear on the project showcase.")}</p>
             {listings.length > 0 && (
               <div className="space-y-2 mb-4">
-                {listings.map((l: { id: string; title?: string | null; sqm?: number | null; price?: number | null; cover_image_url?: string | null }) => (
+                {listings.map((l) => (
                   <div key={l.id} className="flex items-center gap-3 bg-secondary rounded-xl p-3">
                     {l.cover_image_url && <img src={l.cover_image_url} alt="" className="w-12 h-12 rounded-lg object-cover" />}
-                    <div className="flex-1 min-w-0"><Link to={`/property/${l.id}`} className="font-medium hover:underline truncate block">{l.title}</Link><span className="text-xs text-muted-foreground">€{Number(l.price).toLocaleString()} · {l.sqm}m²</span></div>
+                    <div className="flex-1 min-w-0"><Link to={getListingDetailPath(l)} className="font-medium hover:underline truncate block">{l.title}</Link><span className="text-xs text-muted-foreground">€{Number(l.price).toLocaleString()} · {l.sqm}m²</span></div>
                     <Button variant="ghost" size="sm" onClick={() => handleUnlinkListing(l.id)}>{tr("projects.actions.unlink", "Unlink")}</Button>
                   </div>
                 ))}

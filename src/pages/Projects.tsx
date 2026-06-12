@@ -18,8 +18,9 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { LocationAutocompleteInput, type LocationAutocompleteSelection } from "@/components/location/LocationAutocompleteInput";
 import type { Tables } from "@/integrations/supabase/types";
 import { tFallback } from "@/lib/i18nFallback";
+import { getListingDetailPath } from "@/lib/listingRoutes";
 
-type ProjectListing = { id: string; title: string; cover_image_url?: string | null; price?: number | null };
+type ProjectListing = { id: string; title: string; cover_image_url?: string | null; price?: number | null; listing_type?: string | null };
 type ProjectWithListings = Tables<"projects"> & { listings?: ProjectListing[] };
 
 const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delete project UI state together with its ProGate surface.
@@ -322,7 +323,7 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
                               <img src={l.cover_image_url} alt="" className="w-10 h-10 rounded object-cover" />
                             )}
                             <div>
-                              <Link to={`/property/${l.id}`} className="font-medium hover:underline">
+                              <Link to={getListingDetailPath(l)} className="font-medium hover:underline">
                                 {l.title}
                               </Link>
                               <span className="text-muted-foreground ml-2">€{Number(l.price).toLocaleString()}</span>
