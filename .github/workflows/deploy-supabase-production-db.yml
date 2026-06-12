@@ -111,6 +111,7 @@ jobs:
       - name: Dry-run production migrations
         if: inputs.dry_run == true
         run: |
+          set -o pipefail
           args=(--db-url "$SUPABASE_PRODUCTION_DB_URL")
           if [ "$INCLUDE_ALL_MIGRATIONS" = "true" ]; then
             args+=(--include-all)
@@ -120,6 +121,7 @@ jobs:
       - name: Apply production migrations
         if: inputs.dry_run != true
         run: |
+          set -o pipefail
           args=(--db-url "$SUPABASE_PRODUCTION_DB_URL")
           if [ "$INCLUDE_ALL_MIGRATIONS" = "true" ]; then
             args+=(--include-all)

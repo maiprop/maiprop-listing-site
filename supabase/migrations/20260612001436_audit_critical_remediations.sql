@@ -1,0 +1,7 @@
+-- Production migration-history marker.
+--
+-- The audit-critical remediation SQL was applied to production via the
+-- Supabase management API under this version. The executable, replay-safe
+-- migration remains at 20260707166000_audit_critical_remediations.sql because
+-- fresh local/staging replays need later message/view/storage objects to exist
+-- before those hardening statements run.
