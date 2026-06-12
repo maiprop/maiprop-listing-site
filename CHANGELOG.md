@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.21](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.20...v1.9.21) (2026-06-12)
+
+
+### Bug Fixes
+
+* detach project listings as standalone ads ([92e762a](https://github.com/maiprop/maiprop-listing-site/commit/92e762a4abea8af1c6c1bd987556c618775af1ef))
+
 ## [1.9.20](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.19...v1.9.20) (2026-06-12)
 
 
