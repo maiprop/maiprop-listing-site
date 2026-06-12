@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Info, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { GOOGLE_MAPS_API_KEY } from "@/lib/config";
+import { GOOGLE_MAPS_API_KEY, GOOGLE_PLACES_AUTOCOMPLETE_ENABLED } from "@/lib/config";
 import { loadGoogleMapsPlaces } from "@/lib/googleMapsPlaces";
 import { FieldLabel, FieldError, FormInput as Input } from "@/components/listings/FormPrimitives";
 import { LocationAutocompleteInput } from "@/components/location/LocationAutocompleteInput";
@@ -43,6 +43,7 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
   const [googlePlacesRequested, setGooglePlacesRequested] = useState(false);
 
   const addressInputRef = useRef<HTMLInputElement | null>(null);
+  const addressSuggestionsRef = useRef<HTMLDivElement | null>(null);
   const googleAutocompleteRef = useRef<{ getPlace: () => GooglePlace } | null>(null);
   const nominatimQuery = [form.address, form.city].filter(Boolean).join(", ");
   const { rawSuggestions: suggestions, loading: addrLoading, clear: clearAddressSuggestions } =
@@ -50,7 +51,7 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
 
   // Google Places autocomplete
   useEffect(() => {
-    if (!GOOGLE_MAPS_API_KEY || !stepActive || !googlePlacesRequested) return;
+    if (!GOOGLE_PLACES_AUTOCOMPLETE_ENABLED || !stepActive || !googlePlacesRequested) return;
     let cancelled = false;
 
     type GPlacesAutoComplete = new (input: HTMLInputElement, opts: unknown) => {
@@ -108,6 +109,19 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
     set("latitude", "");
     set("longitude", "");
   };
+  const hasSavedCoordinates = Boolean(String(form.latitude ?? "").trim()) && Boolean(String(form.longitude ?? "").trim());
+  const applyAddressSuggestion = (s: (typeof suggestions)[number]) => {
+    set("address", getNominatimAddressLine(s));
+    const city = getNominatimCity(s);
+    const municipality = getNominatimMunicipality(s);
+    const postalCode = getNominatimPostalCode(s);
+    if (city) set("city", city);
+    if (municipality) set("region", municipality);
+    if (postalCode) set("postal_code", postalCode);
+    if (s.lat) set("latitude", s.lat);
+    if (s.lon) set("longitude", s.lon);
+    clearAddressSuggestions();
+  };
 
   return (
     <div className="space-y-4">
@@ -149,15 +163,21 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
       </div>
 
       <div>
-        <FieldLabel>{tr("createListing.location.streetAddress", "Street Address")} {GOOGLE_MAPS_API_KEY ? tr("createListing.location.googleHint", "(start typing for address suggestions)") : ""}</FieldLabel>
+        <FieldLabel>{tr("createListing.location.streetAddress", "Street Address")} {(GOOGLE_PLACES_AUTOCOMPLETE_ENABLED || GOOGLE_MAPS_API_KEY) ? tr("createListing.location.googleHint", "(start typing for address suggestions)") : ""}</FieldLabel>
         <input
           ref={el => { addressInputRef.current = el; setFieldRef("address")(el); }}
           type="text"
-          placeholder={GOOGLE_MAPS_API_KEY ? tr("createListing.location.addressGooglePlaceholder", "e.g. Voukourestiou 14, Athens") : tr("createListing.location.addressPlaceholder", "e.g. Voukourestiou 14")}
+          placeholder={(GOOGLE_PLACES_AUTOCOMPLETE_ENABLED || GOOGLE_MAPS_API_KEY) ? tr("createListing.location.addressGooglePlaceholder", "e.g. Voukourestiou 14, Athens") : tr("createListing.location.addressPlaceholder", "e.g. Voukourestiou 14")}
           value={form.address}
           onChange={e => {
             set("address", e.target.value);
             clearCoordinates();
+          }}
+          onBlur={event => {
+            const nextTarget = event.relatedTarget as Node | null;
+            if (nextTarget && addressSuggestionsRef.current?.contains(nextTarget)) return;
+            if (hasSavedCoordinates || suggestions.length === 0) return;
+            applyAddressSuggestion(suggestions[0]);
           }}
           onFocus={() => setGooglePlacesRequested(true)}
           className={`w-full bg-secondary border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors ${errors.address ? "border-destructive ring-1 ring-destructive/30" : "border-border"}`}
@@ -168,21 +188,11 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
           </p>
         )}
         {!addrLoading && suggestions.length > 0 && (
-          <div className="mt-1 bg-background border border-border rounded-xl shadow-md text-sm max-h-40 overflow-auto">
+          <div ref={addressSuggestionsRef} className="mt-1 bg-background border border-border rounded-xl shadow-md text-sm max-h-40 overflow-auto">
             {suggestions.map((s, i) => (
               <button key={i} type="button"
-                onClick={() => {
-                  set("address", getNominatimAddressLine(s));
-                  const city = getNominatimCity(s);
-                  const municipality = getNominatimMunicipality(s);
-                  const postalCode = getNominatimPostalCode(s);
-                  if (city) set("city", city);
-                  if (municipality) set("region", municipality);
-                  if (postalCode) set("postal_code", postalCode);
-                  if (s.lat) set("latitude", s.lat);
-                  if (s.lon) set("longitude", s.lon);
-                  clearAddressSuggestions();
-                }}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => applyAddressSuggestion(s)}
                 className="w-full text-left px-3 py-2 hover:bg-muted/80 border-b border-border last:border-0 first:rounded-t-xl last:rounded-b-xl">
                 {s.display_name}
               </button>

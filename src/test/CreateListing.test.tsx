@@ -146,10 +146,26 @@ describe("CreateListing", () => {
 
   it("renders the 'Listing Limit Reached' card when the user is at their plan cap", () => {
     getPlanLimitsMock.mockReturnValue({ listings: 2 });
-    useMyListingsMock.mockReturnValue({ data: [{ id: "a" }, { id: "b" }] });
+    useMyListingsMock.mockReturnValue({ data: [{ id: "a", status: "active" }, { id: "b", status: "active" }] });
     render(<CreateListing />, { wrapper: wrap });
     expect(screen.getByText(/Listing Limit Reached/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Upgrade Plan/i })).toBeInTheDocument();
+  });
+
+  it("does not count inactive listings against the active-listing create cap", () => {
+    getPlanLimitsMock.mockReturnValue({ listings: 2 });
+    useMyListingsMock.mockReturnValue({
+      data: [
+        { id: "active", status: "active" },
+        { id: "draft", status: "draft" },
+        { id: "paused", status: "paused" },
+      ],
+    });
+
+    render(<CreateListing />, { wrapper: wrap });
+
+    expect(screen.queryByText(/Listing Limit Reached/i)).not.toBeInTheDocument();
+    expect(screen.getByTestId("step-type")).toBeInTheDocument();
   });
 
   it("shows the 'Draft auto-saved' banner when draftBanner === 'autosaved'", () => {

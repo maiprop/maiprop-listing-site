@@ -31,6 +31,10 @@ export function FeaturedPropertiesSection({ listings, isLoading, isError }: Prop
             ? <p className="col-span-4 py-8 text-center text-sm text-muted-foreground">Could not load featured listings.</p>
             : visibleListings.map((l) => {
                 const imgs = homepageListingImages(l);
+                const isProjectNewBuild = l.listing_type === "new_build" && Boolean(l.project_id);
+                const listingType = l.listing_type === "new_build" && !isProjectNewBuild
+                  ? "sale"
+                  : l.listing_type ?? "sale";
                 return (
                   <PropertyCard
                     key={l.id}
@@ -50,11 +54,11 @@ export function FeaturedPropertiesSection({ listings, isLoading, isError }: Prop
                       energyClass: l.energy_class ?? undefined,
                       images: imgs,
                       type: l.property_type ?? "apartment",
-                      listingType: l.listing_type ?? "sale",
+                      listingType,
                       aiScore: l.ai_score ?? undefined,
                       views: l.views_count ?? undefined,
                       tags: l.tags || [],
-                      isPreSale: l.listing_type === "new_build",
+                      isPreSale: isProjectNewBuild,
                       constructionStatus: l.construction_status ?? undefined,
                     }}
                   />

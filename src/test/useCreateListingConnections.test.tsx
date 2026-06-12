@@ -8,6 +8,7 @@ const { fromMock, storageFromMock } = vi.hoisted(() => ({
 
 vi.mock("@/lib/config", () => ({
   GOOGLE_MAPS_API_KEY: "",
+  GOOGLE_PLACES_AUTOCOMPLETE_ENABLED: false,
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({

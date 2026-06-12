@@ -207,6 +207,18 @@ describe("PropertyCard behavior", () => {
     expect(image.style.objectFit).toBe("contain");
   });
 
+  it("uses public Supabase object URLs directly instead of 403-prone transform srcsets", async () => {
+    const { PropertyCard } = await import("@/components/PropertyCard");
+    const supabaseImage =
+      "https://qvvicunqcrwpioqnvzxf.supabase.co/storage/v1/object/public/listing-images/user/photo.webp";
+
+    renderWithProviders(<PropertyCard property={baseProperty({ images: [supabaseImage] })} />);
+
+    const image = screen.getByAltText("Athens Loft") as HTMLImageElement;
+    expect(image).toHaveAttribute("src", supabaseImage);
+    expect(image).not.toHaveAttribute("srcset");
+  });
+
   it("renders remaining badges, non-urgent timers, price deltas, score tiers, and report errors", async () => {
     authMock.mockReturnValue({ user: { id: "u-error" }, profile: null, loading: false });
     insertMock.mockResolvedValueOnce({ error: new Error("duplicate") });

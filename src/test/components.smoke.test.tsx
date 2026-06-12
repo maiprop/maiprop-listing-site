@@ -164,6 +164,7 @@ vi.mock("@/lib/config", () => ({
   SUPABASE_ANON_KEY: "test-anon-key",
   MAPBOX_TOKEN: "",
   GOOGLE_MAPS_API_KEY: "",
+  GOOGLE_PLACES_AUTOCOMPLETE_ENABLED: false,
   APP_ORIGIN: "https://example.com",
   PROJECT_ID: "test",
 }));

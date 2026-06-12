@@ -8,6 +8,7 @@ import { loadGoogleMapsPlaces } from "@/lib/googleMapsPlaces";
 
 vi.mock("@/lib/config", () => ({
   GOOGLE_MAPS_API_KEY: "maps-key",
+  GOOGLE_PLACES_AUTOCOMPLETE_ENABLED: true,
 }));
 
 vi.mock("@/lib/googleMapsPlaces", () => ({
@@ -214,6 +215,55 @@ describe("location address suggestions", () => {
     fireEvent.click(await screen.findByRole("option", { name: ADDRESS_SUGGESTION }));
 
     expect(screen.getByLabelText("Project address")).toHaveValue("14 Voukourestiou");
+    expect(onSuggestionSelect).toHaveBeenCalledWith(expect.objectContaining({
+      city: "Athens",
+      municipality: "Municipality of Athens",
+      postalCode: "10671",
+      latitude: "37.9779",
+      longitude: "23.7354",
+    }));
+  });
+
+  it("auto-applies the first shared address suggestion on blur", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([STRUCTURED_ADDRESS_SUGGESTION])),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const onSuggestionSelect = vi.fn();
+
+    function ControlledAddressField() {
+      const [value, setValue] = useState("");
+      return (
+        <>
+          <label htmlFor="blur-project-address">Project address</label>
+          <LocationAutocompleteInput
+            id="blur-project-address"
+            mode="address"
+            value={value}
+            onChange={setValue}
+            onSuggestionSelect={onSuggestionSelect}
+            inputClassName="border"
+          />
+        </>
+      );
+    }
+
+    render(<ControlledAddressField />);
+    const input = screen.getByLabelText("Project address");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "Voukourestiou 14" } });
+
+    await act(async () => {
+      vi.advanceTimersByTime(450);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    vi.useRealTimers();
+
+    await screen.findByRole("option", { name: ADDRESS_SUGGESTION });
+    fireEvent.blur(input);
+
+    expect(input).toHaveValue("14 Voukourestiou");
     expect(onSuggestionSelect).toHaveBeenCalledWith(expect.objectContaining({
       city: "Athens",
       municipality: "Municipality of Athens",

@@ -410,16 +410,12 @@ type UseListingsOptions = {
   publicScope?: boolean;
 };
 
-const fetchListingsPage = async (filters?: ListingsFilters, page = 1, pageSize = 24, options: UseListingsOptions = {}) => { // skipcq: JS-R1005 - Page fetch keeps listing rows and owner profile enrichment together.
-  if (shouldUsePublicListingsApi(filters)) {
-    const cached = await fetchPublicApi<PublicListingsResponse>(
-      publicListingsPath(filters, page, pageSize),
-      { throwOnError: true },
-    );
-    if (!cached) throw new Error("Public listings API returned no data");
-    return cached;
-  }
-
+const fetchListingsPageFromSupabase = async (
+  filters?: ListingsFilters,
+  page = 1,
+  pageSize = 24,
+  options: UseListingsOptions = {},
+) => { // skipcq: JS-R1005 - Page fetch keeps listing rows and owner profile enrichment together.
   const from = (page - 1) * pageSize;
   const { data, error } = await buildListingsQuery(filters, from, pageSize, { publicScope: options.publicScope });
 
@@ -447,6 +443,24 @@ const fetchListingsPage = async (filters?: ListingsFilters, page = 1, pageSize =
 
   // ORDER BY is applied server-side in buildListingsQuery; no client sort needed.
   return { data: enriched, hasMore: rows.length === pageSize };
+};
+
+const fetchListingsPage = async (filters?: ListingsFilters, page = 1, pageSize = 24, options: UseListingsOptions = {}) => { // skipcq: JS-R1005 - Page fetch keeps listing rows and owner profile enrichment together.
+  if (shouldUsePublicListingsApi(filters)) {
+    try {
+      const cached = await fetchPublicApi<PublicListingsResponse>(
+        publicListingsPath(filters, page, pageSize),
+        { throwOnError: true },
+      );
+      if (!cached) throw new Error("Public listings API returned no data");
+      return cached;
+    } catch (error) {
+      logger.warn("Public listings API failed; falling back to constrained Supabase listing read:", error);
+      return fetchListingsPageFromSupabase(filters, page, pageSize, { ...options, publicScope: true });
+    }
+  }
+
+  return fetchListingsPageFromSupabase(filters, page, pageSize, options);
 };
 
 /** Paginated listings for grid view — fetches 24 per page, server-side filtering */
@@ -481,36 +495,22 @@ export const useListings = (
     queryFn: async () => { // skipcq: JS-R1005 - Owner profile enrichment keeps the map fetch result self-contained.
       const limit = filters?.limit ?? MAP_FETCH_LIMIT;
       if (shouldUsePublicListingsApi(filters)) {
-        const cached = await fetchPublicApi<PublicListingsResponse>(
-          publicListingsPath(filters, 1, limit),
-          { throwOnError: true },
-        );
-        if (!cached) throw new Error("Public listings API returned no data");
-        return cached.data;
+        try {
+          const cached = await fetchPublicApi<PublicListingsResponse>(
+            publicListingsPath(filters, 1, limit),
+            { throwOnError: true },
+          );
+          if (!cached) throw new Error("Public listings API returned no data");
+          return cached.data;
+        } catch (error) {
+          logger.warn("Public listings API failed; falling back to constrained Supabase listing read:", error);
+          const fallback = await fetchListingsPageFromSupabase(filters, 1, limit, { ...options, publicScope: true });
+          return fallback.data as ListingWithJoins[];
+        }
       }
 
-      const { data, error } = await buildListingsQuery(filters, 0, limit, { publicScope: options?.publicScope });
-      if (error) throw error;
-      const rows = data ?? [];
-      if (rows.length === 0) return rows as unknown as ListingWithJoins[];
-
-      // ORDER BY is applied server-side in buildListingsQuery; no client sort needed.
-      const typedRows = rows as unknown as ListingRowWithOwner[];
-      const ownerIds = [
-        ...new Set(typedRows.map((r) => r.owner_id).filter((id): id is string => Boolean(id))),
-      ];
-      let profileMap = new Map<string, { user_id: string; display_name: string | null; avatar_url: string | null }>();
-      if (ownerIds.length > 0) {
-        const { data: ownerProfiles = [] } = await supabase
-          .from("profiles_public")
-          .select("user_id, display_name, avatar_url")
-          .in("user_id", ownerIds);
-        profileMap = new Map((ownerProfiles ?? []).map((p) => [p.user_id, p]));
-      }
-      return typedRows.map((r) => ({
-        ...r,
-        profiles: r.owner_id ? profileMap.get(r.owner_id) ?? null : null,
-      })) as ListingWithJoins[];
+      const fallback = await fetchListingsPageFromSupabase(filters, 1, limit, options);
+      return fallback.data as ListingWithJoins[];
     },
   });
 };

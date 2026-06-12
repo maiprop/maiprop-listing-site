@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { GOOGLE_MAPS_API_KEY } from "@/lib/config";
+import { GOOGLE_PLACES_AUTOCOMPLETE_ENABLED } from "@/lib/config";
 
 export type LocationSource = "google" | "nominatim" | "none";
 
@@ -16,14 +16,14 @@ export type CreateListingConnections = {
  * Verifies that required APIs and modules for Create Listing are connected:
  * - Supabase (client + listings table reachable)
  * - Storage (listing-images bucket)
- * - Location autocomplete (Google Places if key set, else Nominatim as fallback)
+ * - Location autocomplete (Google Places only when explicitly enabled, else Nominatim fallback)
  */
 export function useCreateListingConnections(): CreateListingConnections {
   const [state, setState] = useState<CreateListingConnections>({
     supabaseOk: false,
     storageOk: false,
-    locationSource: GOOGLE_MAPS_API_KEY ? "google" : "nominatim",
-    locationOk: true, // Nominatim is public; Google we assume ok if key set
+    locationSource: GOOGLE_PLACES_AUTOCOMPLETE_ENABLED ? "google" : "nominatim",
+    locationOk: true, // Nominatim is public; Google is only reported when explicitly enabled
     loading: true,
   });
 
@@ -50,8 +50,8 @@ export function useCreateListingConnections(): CreateListingConnections {
         }
       }
 
-      const locationSource: LocationSource = GOOGLE_MAPS_API_KEY ? "google" : "nominatim";
-      const locationOk = locationSource === "nominatim" || !!GOOGLE_MAPS_API_KEY;
+      const locationSource: LocationSource = GOOGLE_PLACES_AUTOCOMPLETE_ENABLED ? "google" : "nominatim";
+      const locationOk = true;
 
       if (!cancelled) {
         setState({

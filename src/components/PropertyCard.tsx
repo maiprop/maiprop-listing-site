@@ -105,22 +105,13 @@ const withUnsplashImageParams = (url: URL, width: number): string | null => {
   return url.toString();
 };
 
-const withSupabaseImageParams = (url: URL, width: number): string | null => {
-  if (!url.hostname.endsWith("supabase.co") || !url.pathname.includes("/storage/v1/object/public/")) return null;
-
-  url.pathname = url.pathname.replace("/storage/v1/object/public/", "/storage/v1/render/image/public/");
-  url.searchParams.set("quality", "80");
-  url.searchParams.set("resize", "cover");
-  url.searchParams.set("width", String(width));
-  return url.toString();
-};
-
 const getSizedImageUrl = (src: string, width: number): string | null => {
   try {
     const url = new URL(src, APP_ORIGIN);
     if (!["http:", "https:"].includes(url.protocol)) return null;
+    if (url.hostname.endsWith("supabase.co") && url.pathname.includes("/storage/v1/object/public/")) return null;
 
-    return withUnsplashImageParams(url, width) ?? withSupabaseImageParams(url, width);
+    return withUnsplashImageParams(url, width);
   } catch {
     return null;
   }

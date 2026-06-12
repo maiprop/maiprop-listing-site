@@ -93,12 +93,39 @@ describe("CreateNewBuildingListing", () => {
 
   it("shows the listing limit card when the developer is at the plan cap", () => {
     getPlanLimitsMock.mockReturnValue({ listings: 1 });
-    useMyListingsMock.mockReturnValue({ data: [{ id: "one" }] });
+    useMyListingsMock.mockReturnValue({ data: [{ id: "one", status: "active" }] });
 
     renderPage();
 
     expect(screen.getByText(/Listing Limit Reached/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Upgrade Plan/i })).toHaveAttribute("href", "/pricing");
+  });
+
+  it("does not count inactive listings against the developer active-listing cap", () => {
+    getPlanLimitsMock.mockReturnValue({ listings: 1 });
+    useMyListingsMock.mockReturnValue({
+      data: [
+        { id: "active", status: "active" },
+        { id: "draft", status: "draft" },
+      ],
+    });
+
+    const blocked = renderPage();
+
+    expect(screen.getByText(/Listing Limit Reached/i)).toBeInTheDocument();
+    blocked.unmount();
+
+    useMyListingsMock.mockReturnValue({
+      data: [
+        { id: "draft", status: "draft" },
+        { id: "paused", status: "paused" },
+      ],
+    });
+
+    const allowed = renderPage();
+    expect(screen.queryByText(/Listing Limit Reached/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Step 1 of 5/i)).toBeInTheDocument();
+    allowed.unmount();
   });
 
   it("validates required fields across the building, unit, listing, and photos steps", async () => {

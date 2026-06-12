@@ -42,7 +42,7 @@ const SECTIONS = [
   "auction-count",
 ] as const;
 const HOMEPAGE_CACHE_VERSION = "off-market-v2";
-const FEATURED_CACHE_VERSION = "featured-daily-v1";
+const FEATURED_CACHE_VERSION = "featured-daily-v2";
 const FEATURED_DAILY_CACHE_SECONDS = 24 * 60 * 60;
 const COUNTED_PROPERTY_TYPES = ["apartment", "land"] as const;
 const PRICE_INDEX_FALLBACK = [
@@ -61,7 +61,7 @@ const POPULAR_LOCATION_FALLBACK: PopularLocation[] = [
 ];
 
 const featuredSelect =
-  "id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,ai_score,views_count,tags,listing_images(url,sort_order)";
+  "id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,project_id,ai_score,views_count,tags,listing_images(url,sort_order)";
 
 const openHouseSelect =
   "id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,ai_score,views_count,tags,open_house_date,latitude,longitude,listing_images(url,sort_order)";

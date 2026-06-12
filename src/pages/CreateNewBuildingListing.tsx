@@ -66,6 +66,7 @@ export default function CreateNewBuildingListing() {
   const canCreateListing = profile?.role === "developer" || isPlatformAdmin(profile);
   const { hasDeveloperPro } = useSubscription();
   const { data: myListings = [] } = useMyListings();
+  const activeListingCount = myListings.filter((listing) => listing.status === "active").length;
   const listingLimit = getPlanLimits(participantType, hasDeveloperPro ? "pro" : "free").listings;
   const tr = useCallback((key: string, fallback: string) => tFallback(t, key, fallback), [t]);
   const trv = useCallback((key: string, fallback: string, values: Record<string, string | number>) => tInterpolate(t, key, fallback, values), [t]);
@@ -167,7 +168,7 @@ export default function CreateNewBuildingListing() {
   }, [user, tr]);
 
   // Guard: listing count limit reached
-  if (user && profile && canCreateListing && listingLimit !== null && myListings.length >= listingLimit) {
+  if (user && profile && canCreateListing && listingLimit !== null && activeListingCount >= listingLimit) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-4">
         <div className="max-w-md w-full text-center space-y-5">

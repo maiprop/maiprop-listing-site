@@ -15,7 +15,10 @@ vi.mock("@/hooks/useProfessionalReviews", () => ({
   useSubmitReview: () => mocks.submitReview,
 }));
 
-vi.mock("@/lib/config", () => ({ GOOGLE_MAPS_API_KEY: "" }));
+vi.mock("@/lib/config", () => ({
+  GOOGLE_MAPS_API_KEY: "",
+  GOOGLE_PLACES_AUTOCOMPLETE_ENABLED: false,
+}));
 
 const form = (overrides: Partial<ListingFormData> = {}) => ({
   city: "",

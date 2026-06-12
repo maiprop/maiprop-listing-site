@@ -56,32 +56,38 @@ beforeEach(() => {
 });
 
 describe("public listings API fallback behavior", () => {
-  it("surfaces public grid read outages without direct Supabase fallback", async () => {
-    publicApiMock.mockResolvedValue(null);
-    fromMock.mockReturnValue(makeThenableBuilder([{ id: "db-listing" }]));
+  it("falls back to constrained Supabase rows when the public grid read is unavailable", async () => {
+    publicApiMock.mockRejectedValue(new Error("Public API returned 503"));
+    fromMock.mockReturnValue(makeThenableBuilder([{ id: "db-listing", owner_id: null, listing_images: [] }]));
 
     const { result } = renderHookWithQuery(() => useListings({ listing_type: "sale" }));
-    await waitFor(() => expect(result.current.isError).toBe(true));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(publicApiMock).toHaveBeenCalledWith(
       expect.stringContaining("/api/public/listings?"),
       { throwOnError: true },
     );
-    expect(fromMock).not.toHaveBeenCalled();
+    expect(fromMock).toHaveBeenCalledWith("listings");
+    expect(result.current.data).toEqual([
+      expect.objectContaining({ id: "db-listing", profiles: null }),
+    ]);
   });
 
-  it("surfaces public paginated read outages without direct Supabase fallback", async () => {
-    publicApiMock.mockResolvedValue(null);
-    fromMock.mockReturnValue(makeThenableBuilder([{ id: "db-listing" }]));
+  it("falls back to constrained Supabase pages when the public paginated read is unavailable", async () => {
+    publicApiMock.mockRejectedValue(new Error("Public API returned 503"));
+    fromMock.mockReturnValue(makeThenableBuilder([{ id: "db-listing", owner_id: null, listing_images: [] }]));
 
     const { result } = renderHookWithQuery(() => useListingsPaginated({ listing_type: "sale" }));
-    await waitFor(() => expect(result.current.isError).toBe(true));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(publicApiMock).toHaveBeenCalledWith(
       expect.stringContaining("/api/public/listings?"),
       { throwOnError: true },
     );
-    expect(fromMock).not.toHaveBeenCalled();
+    expect(fromMock).toHaveBeenCalledWith("listings");
+    expect(result.current.data?.pages[0]?.data).toEqual([
+      expect.objectContaining({ id: "db-listing", profiles: null }),
+    ]);
   });
 
   it("preserves direct Supabase reads for owner-scoped listing data", async () => {

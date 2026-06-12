@@ -89,6 +89,8 @@ if (!import.meta.env.VITE_GOOGLE_MAPS_API_KEY && import.meta.env.PROD) {
 // JavaScript API and Places API. Do NOT use it for Street View client URLs; use
 // getStreetViewProxyUrl() so the Street View key stays server-side.
 export const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? "";
+export const GOOGLE_PLACES_AUTOCOMPLETE_ENABLED =
+  Boolean(GOOGLE_MAPS_API_KEY) && import.meta.env.VITE_ENABLE_GOOGLE_PLACES_AUTOCOMPLETE === "true";
 
 /**
  * Safe app origin for OAuth redirects — never derived from window.location
