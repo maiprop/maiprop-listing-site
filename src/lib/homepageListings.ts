@@ -26,6 +26,7 @@ export type HomepageListing = HasHomepageImages & {
   energy_class?: string | null;
   property_type?: Property["type"] | null;
   listing_type?: Property["listingType"] | null;
+  project_id?: string | null;
   auction_date?: string | null;
   auction_starting_bid?: number | string | null;
   open_house_date?: string | null;

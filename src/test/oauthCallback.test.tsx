@@ -29,6 +29,7 @@ vi.mock("@/lib/config", () => ({
   SUPABASE_URL: "https://supabase.test",
   SUPABASE_ANON_KEY: "anon",
   GOOGLE_MAPS_API_KEY: "",
+  GOOGLE_PLACES_AUTOCOMPLETE_ENABLED: false,
   MAPBOX_TOKEN: "",
   getStreetViewProxyUrl: vi.fn().mockReturnValue(""),
 }));

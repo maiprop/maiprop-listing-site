@@ -6,6 +6,7 @@ import { loadGoogleMapsPlaces } from "@/lib/googleMapsPlaces";
 
 vi.mock("@/lib/config", () => ({
   GOOGLE_MAPS_API_KEY: "maps-key",
+  GOOGLE_PLACES_AUTOCOMPLETE_ENABLED: true,
 }));
 
 vi.mock("@/lib/googleMapsPlaces", () => ({
@@ -69,7 +70,9 @@ describe("StepLocation Google Places fallback", () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain("countrycodes=gr");
     expect(String(fetchMock.mock.calls[0][0])).toContain("Voukourestiou");
 
-    fireEvent.click(await screen.findByText(/Voukourestiou 14, Athens/i));
+    const suggestionButton = await screen.findByRole("button", { name: /Voukourestiou 14, Athens/i });
+    fireEvent.mouseDown(suggestionButton);
+    fireEvent.click(suggestionButton);
     expect(set).toHaveBeenCalledWith("address", "14 Voukourestiou");
     expect(set).toHaveBeenCalledWith("city", "Athens");
     expect(set).toHaveBeenCalledWith("region", "Attica");
@@ -184,5 +187,53 @@ describe("StepLocation Google Places fallback", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     await waitFor(() => expect(loadGoogleMapsPlaces).toHaveBeenCalled());
     expect(await screen.findByText(/Voukourestiou 14, Athens/i)).toBeInTheDocument();
+  });
+
+  it("auto-applies the first address suggestion on blur when typed text has no saved coordinates", async () => {
+    vi.mocked(loadGoogleMapsPlaces).mockRejectedValue(new Error("Google Maps failed to load"));
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([
+        {
+          display_name: "Voukourestiou 14, Athens, Attica, Greece",
+          lat: "37.9779",
+          lon: "23.7354",
+          address: {
+            road: "Voukourestiou",
+            house_number: "14",
+            city: "Athens",
+            state: "Attica",
+            postcode: "10674",
+          },
+        },
+      ])),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const set = vi.fn();
+
+    render(
+      <StepLocation
+        form={form({ address: "Voukourestiou 14", city: "Athens", latitude: "", longitude: "" } as Partial<ListingFormData>)}
+        set={set}
+        errors={{}}
+        setFieldRef={() => () => undefined}
+        connections={{ loading: false, supabaseOk: true, storageOk: true, locationOk: true, locationSource: "google" }}
+        stepActive
+      />,
+    );
+
+    const addressInput = screen.getByPlaceholderText("e.g. Voukourestiou 14, Athens");
+    fireEvent.focus(addressInput);
+    await screen.findByText(/Voukourestiou 14, Athens/i);
+
+    fireEvent.blur(addressInput);
+
+    await waitFor(() => {
+      expect(set).toHaveBeenCalledWith("address", "14 Voukourestiou");
+      expect(set).toHaveBeenCalledWith("city", "Athens");
+      expect(set).toHaveBeenCalledWith("region", "Attica");
+      expect(set).toHaveBeenCalledWith("postal_code", "10674");
+      expect(set).toHaveBeenCalledWith("latitude", "37.9779");
+      expect(set).toHaveBeenCalledWith("longitude", "23.7354");
+    });
   });
 });

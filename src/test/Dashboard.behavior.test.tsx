@@ -85,7 +85,10 @@ vi.mock("@/integrations/supabase/client", () => ({
 vi.mock("@/components/Navbar", () => ({ Navbar: () => <nav data-testid="navbar" /> }));
 vi.mock("@/components/DashboardPlanCard", () => ({
   DashboardPlanCard: ({ usage }: { usage: Record<string, number> }) => (
-    <div data-testid="dashboard-plan-card">Saved searches: {usage.savedSearches}</div>
+    <div data-testid="dashboard-plan-card">
+      <span>Saved searches: {usage.savedSearches}</span>
+      <span>Listings: {usage.listings}</span>
+    </div>
   ),
 }));
 vi.mock("@/components/OpenHouseDashboardSection", () => ({ default: () => <div>Open houses section</div> }));
@@ -237,6 +240,19 @@ describe("Dashboard behavior", () => {
     expect(screen.getByText("Athens Flat")).toBeInTheDocument();
     expect(screen.getByText("Piraeus Loft")).toBeInTheDocument();
     expect(screen.getByText("Chania Villa")).toBeInTheDocument();
+  });
+
+  it("uses active listings, not all owned rows, in the plan usage card", () => {
+    authState.profile = { id: "p-1", role: "seller", participant_type: "seller", first_name: "Sofia" };
+    listingsState.data = [
+      { id: "l-1", status: "active", title: "Live flat", views_count: 1 },
+      { id: "l-2", status: "draft", title: "Draft flat", views_count: 0 },
+      { id: "l-3", status: "paused", title: "Paused flat", views_count: 0 },
+    ];
+
+    renderWithProviders(<Dashboard />);
+
+    expect(screen.getByTestId("dashboard-plan-card")).toHaveTextContent("Listings: 1");
   });
 
   it("honors a route tab when it is available for the current role", async () => {

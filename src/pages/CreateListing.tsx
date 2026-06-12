@@ -84,6 +84,7 @@ export default function CreateListing() {
   const connections = useCreateListingConnections();
   const { isPro } = useSubscription();
   const { data: myListings = [] } = useMyListings();
+  const activeListingCount = myListings.filter((listing) => listing.status === "active").length;
   const listingLimit = getPlanLimits(
     participantType,
     isPro ? "pro" : "free",
@@ -167,7 +168,7 @@ export default function CreateListing() {
     !isEditMode &&
     canCreateListing &&
     listingLimit !== null &&
-    myListings.length >= listingLimit
+    activeListingCount >= listingLimit
   ) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-4">

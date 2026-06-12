@@ -45,6 +45,7 @@ origin instead, for example `https://auth.maiprop.co`.
 | Production telemetry audit | `SENTRY_AUTH_TOKEN` | sentry.io → User Settings → Auth Tokens; local/read-only audit only |
 | Analytics | `VITE_PLAUSIBLE_DOMAIN` | plausible.io → Sites |
 | Street view / Places | `VITE_GOOGLE_MAPS_API_KEY` | Google Cloud Console; use a browser key restricted to local/dev referrers |
+| Google Places autocomplete | `VITE_ENABLE_GOOGLE_PLACES_AUTOCOMPLETE` | Optional `true` flag; requires `VITE_GOOGLE_MAPS_API_KEY` with Places API access |
 | Native public API origin | `VITE_PUBLIC_API_ORIGIN` | Optional absolute origin for `/api/public/*` when running a native shell; defaults to `VITE_APP_URL` or same-origin browser paths |
 
 ### 4. Service-role key (server-side scripts only)
@@ -94,6 +95,7 @@ See [`STAGING_SETUP.md`](./STAGING_SETUP.md) for the full walkthrough. Variables
 | `VITE_STRIPE_PRICE_*` | required for billing | Production prices |
 | `VITE_TURNSTILE_SITE_KEY` | optional | Cloudflare Turnstile |
 | `VITE_GOOGLE_MAPS_API_KEY` | optional | See browser-key restrictions below |
+| `VITE_ENABLE_GOOGLE_PLACES_AUTOCOMPLETE` | optional | Set to `true` only when the browser key has Places API access; otherwise the UI uses the Nominatim fallback |
 | `VITE_PUBLIC_API_ORIGIN` | optional | Absolute origin for `/api/public/*` when a native shell cannot use same-origin paths; browser builds use same-origin paths |
 
 Built-in mAI Prop video rooms do not have a public-channel fallback. They always
@@ -199,6 +201,7 @@ fail-fast behavior.
 | `VITE_STRIPE_PRO_PRODUCT_ID` | optional Stripe product id for subscription checks | production environment |
 | `VITE_TURNSTILE_SITE_KEY` | optional Turnstile site key | production environment |
 | `VITE_GOOGLE_MAPS_API_KEY` | optional browser Google Maps key; see browser-key restrictions above | production environment |
+| `VITE_ENABLE_GOOGLE_PLACES_AUTOCOMPLETE` | optional `true` flag for Google Places autocomplete; leave false/unset to use Nominatim suggestions | production/staging build |
 | `VITE_PLAUSIBLE_DOMAIN` | optional analytics domain | production environment |
 | `VITE_APP_URL` | canonical app origin for production build | production environment |
 | `VITE_PUBLIC_API_ORIGIN` | optional absolute origin for cached `/api/public/*` routes in native shells; defaults to `VITE_APP_URL` | production/staging build |

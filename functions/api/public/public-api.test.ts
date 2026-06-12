@@ -749,10 +749,11 @@ describe("public homepage endpoint", () => {
     expect(url.searchParams.get("limit")).toBe("12");
     expect(url.searchParams.get("listing_type")).toBe("in.(sale,new_build)");
     expect(url.searchParams.get("is_off_market")).toBe("eq.false");
+    expect(url.searchParams.get("select")).toContain("project_id");
     expect(url.searchParams.get("listing_images.limit")).toBe("3");
     const featuredCacheKey = new URL(cacheApi.put.mock.calls[0][0].url);
     expect(featuredCacheKey.searchParams.get("day")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(featuredCacheKey.searchParams.get("v")).toBe("featured-daily-v1");
+    expect(featuredCacheKey.searchParams.get("v")).toBe("featured-daily-v2");
     expect(featured.headers.get("Cache-Control")).toBe("public, max-age=86400, stale-while-revalidate=86400");
     expect(featured.headers.get("CDN-Cache-Control")).toBe("public, max-age=86400, stale-while-revalidate=86400");
 

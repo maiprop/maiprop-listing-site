@@ -344,7 +344,7 @@ export default function Dashboard() { // skipcq: JS-R1005
         ? viewings.filter(v => v.created_at >= monthStart).length
         : ownViewings.filter(v => v.created_at >= monthStart).length,
       auctionAlerts: auctionAlerts.filter(a => a.active).length,
-      listings: myListings.length,
+      listings: myListings.filter(l => l.status === "active").length,
     };
   }, [savedSearches, viewings, ownViewings, auctionAlerts, myListings, bioType, role, isSellerLike]);
 

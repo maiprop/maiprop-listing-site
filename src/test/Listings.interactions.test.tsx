@@ -57,6 +57,7 @@ const { filterState, setParam, setParams, clearAllFilters, toggleMulti, pipeline
 
 vi.mock("@/lib/config", () => ({
   GOOGLE_MAPS_API_KEY: "maps-key",
+  GOOGLE_PLACES_AUTOCOMPLETE_ENABLED: true,
   MAPBOX_TOKEN: "",
   getStreetViewProxyUrl: vi.fn().mockReturnValue(""),
 }));

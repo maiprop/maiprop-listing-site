@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type InputHTMLAttributes } from "react";
 import ReactDOM from "react-dom";
 import { Loader2, MapPin } from "lucide-react";
-import { GOOGLE_MAPS_API_KEY } from "@/lib/config";
+import { GOOGLE_PLACES_AUTOCOMPLETE_ENABLED } from "@/lib/config";
 import { loadGoogleMapsPlaces } from "@/lib/googleMapsPlaces";
 import { useNominatimAddressSuggestions, type NominatimAddressSuggestion } from "@/hooks/useNominatimAddressSuggestions";
 import {
@@ -142,6 +142,7 @@ export function LocationAutocompleteInput({
   disabled,
   onFocus,
   onKeyDown,
+  onBlur,
   ...inputProps
 }: LocationAutocompleteInputProps) {
   const generatedId = useId();
@@ -176,7 +177,7 @@ export function LocationAutocompleteInput({
   }, [disabled]);
 
   useEffect(() => {
-    if (disabled || !GOOGLE_MAPS_API_KEY || !googlePlacesRequested) return;
+    if (disabled || !GOOGLE_PLACES_AUTOCOMPLETE_ENABLED || !googlePlacesRequested) return;
     let cancelled = false;
 
     const initGoogle = () => {
@@ -335,6 +336,17 @@ export function LocationAutocompleteInput({
           onKeyDown?.(event);
           if (event.defaultPrevented) return;
           if (event.key === "Escape") setFocused(false);
+        }}
+        onBlur={(event) => {
+          onBlur?.(event);
+          if (event.defaultPrevented) return;
+          const nextTarget = event.relatedTarget as Node | null;
+          if (nextTarget && dropdownRef.current?.contains(nextTarget)) return;
+          if (mode === "address" && !suppressCustomDropdown && items.length > 0) {
+            selectItem(items[0]);
+            return;
+          }
+          setFocused(false);
         }}
         role="combobox"
         aria-autocomplete="list"
