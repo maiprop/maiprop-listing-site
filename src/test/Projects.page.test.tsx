@@ -243,7 +243,15 @@ describe("Projects page", () => {
 
     expect(updateProjectMock).toHaveBeenCalledWith({ id: "project-1", updates: { name: "Marina Bay" } }, expect.any(Object));
     expect(updateProjectMock).toHaveBeenCalledWith({ id: "project-1", updates: { description: "Updated" } }, expect.any(Object));
-    expect(updateListingMock).toHaveBeenCalledWith({ id: "loose-1", updates: { project_id: "project-1" } });
+    expect(updateListingMock).toHaveBeenCalledWith({
+      id: "loose-1",
+      updates: {
+        project_id: "project-1",
+        listing_type: "new_build",
+        is_pre_sale: false,
+        construction_status: "planning",
+      },
+    });
     expect(updateListingMock).toHaveBeenCalledWith({ id: "linked-1", updates: { project_id: null } });
     expect(deleteProjectMock).toHaveBeenCalledWith("project-1");
   });

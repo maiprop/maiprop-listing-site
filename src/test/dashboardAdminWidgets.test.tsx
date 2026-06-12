@@ -276,6 +276,7 @@ describe("AdminFeaturedListings", () => {
         listing,
         { ...listing, id: "listing-2", title: "Auction Maisonette", listing_type: "auction", is_featured: false, priority_placement: 1, views_count: 75, owner_id: null },
         { ...listing, id: "listing-3", title: "Open House Loft", listing_type: "open_house", is_featured: false, priority_placement: 2, views_count: 10, owner_id: null },
+        { ...listing, id: "listing-4", title: "New Build Flat", listing_type: "new_build", is_featured: false, priority_placement: 3, views_count: 20, owner_id: null },
       ],
       profiles_public: [{ user_id: "owner-1", display_name: "Owner One" }],
     }));
@@ -286,11 +287,12 @@ describe("AdminFeaturedListings", () => {
     expect(screen.getByText("Owner One")).toBeInTheDocument();
     expect(screen.getByText(/High/i)).toBeInTheDocument();
     expect(screen.getByText(/Medium/i)).toBeInTheDocument();
-    expect(screen.getByText(/Low/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Low/i).length).toBeGreaterThan(0);
     const detailLinks = screen.getAllByTitle("View listing");
     expect(detailLinks[0]).toHaveAttribute("href", "/property/listing-1");
     expect(detailLinks[1]).toHaveAttribute("href", "/auction/listing-2");
     expect(detailLinks[2]).toHaveAttribute("href", "/open-house/listing-3");
+    expect(detailLinks[3]).toHaveAttribute("href", "/new-build/listing-4");
 
     fireEvent.click(screen.getByRole("switch", { name: /Toggle featured for Sea View Flat/i }));
     await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Listing removed from featured"));

@@ -243,6 +243,27 @@ describe("useCreateBuildingListing coverage", () => {
     }));
   });
 
+  it("stores project delivery and phase metadata on the new-build listing", async () => {
+    const { result } = renderHook(() => useCreateBuildingListing());
+
+    await act(async () => {
+      await result.current(makeInput({
+        project: {
+          ...makeInput().project,
+          permit_approval_date: "2026-01-15",
+          construction_start_date: "2026-02-01",
+          delivery_date: "2026-08-21",
+        },
+      }));
+    });
+
+    expect(chains.listingInsert).toHaveBeenCalledWith(expect.objectContaining({
+      listing_type: "new_build",
+      construction_status: "under_construction",
+      year_built: 2026,
+    }));
+  });
+
   it("throws project insert failures without rollback because no project exists yet", async () => {
     const projectError = new Error("project insert failed");
     installSupabaseChains({ projectResult: { data: null, error: projectError } });

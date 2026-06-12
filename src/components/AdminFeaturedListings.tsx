@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import type { Database } from "@/integrations/supabase/types";
+import { getListingDetailPath } from "@/lib/listingRoutes";
 
 type ListingStatus = Database["public"]["Enums"]["listing_status"];
 type PropertyType = Database["public"]["Enums"]["property_type"];
@@ -244,11 +245,7 @@ export default function AdminFeaturedListings() {
     [queryClient],
   );
 
-  const getDetailPath = (listing: FeaturedListing): string => {
-    if (listing.listing_type === "auction") return `/auction/${listing.id}`;
-    if (listing.listing_type === "open_house") return `/open-house/${listing.id}`;
-    return `/property/${listing.id}`;
-  };
+  const getDetailPath = (listing: FeaturedListing): string => getListingDetailPath(listing);
 
   const getPriorityValue = (listing: FeaturedListing): string => {
     return pendingPriority[listing.id] !== undefined
