@@ -49,10 +49,10 @@ const WIZARD_STEPS = ["building", "unit", "media", "listing", "photos"] as const
 type WizardStep = typeof WIZARD_STEPS[number];
 
 const STEPS = [
-  { id: "building" as WizardStep, label: "Building", icon: Building2 },
-  { id: "unit" as WizardStep, label: "Unit", icon: Home },
+  { id: "building" as WizardStep, label: "Project", icon: Building2 },
+  { id: "unit" as WizardStep, label: "Inventory", icon: Home },
   { id: "media" as WizardStep, label: "Media", icon: LayoutGrid },
-  { id: "listing" as WizardStep, label: "Listing", icon: FileText },
+  { id: "listing" as WizardStep, label: "Ad", icon: FileText },
   { id: "photos" as WizardStep, label: "Photos", icon: Image },
 ];
 
@@ -98,7 +98,7 @@ export default function CreateNewBuildingListing() {
     longitude: "" as string | number,
   });
 
-  // Step 2: Unit
+  // Step 2: Project inventory
   const [unit, setUnit] = useState({
     unit_id: "",
     floor: "",
@@ -129,11 +129,13 @@ export default function CreateNewBuildingListing() {
     drone: null, walkthrough: null, progress: null, video: null,
   });
 
-  // Step 4: Listing
+  // Step 4: Public New Build ad
   const [listing, setListing] = useState({
     title: "",
     description: "",
   });
+  const suggestedListingTitle = project.name.trim();
+  const effectiveListingTitle = listing.title.trim() || suggestedListingTitle;
 
   // Step 5: Photos
   const [images, setImages] = useState<UploadedImage[]>([]);
@@ -252,7 +254,7 @@ export default function CreateNewBuildingListing() {
       if (!unit.bathrooms) newErrors.bathrooms = tr("newBuildingListing.validation.bathroomsRequired", "Bathrooms are required");
     }
     if (s === "listing") {
-      if (!listing.title.trim()) newErrors.title = tr("newBuildingListing.validation.titleRequired", "Listing title is required");
+      if (!effectiveListingTitle) newErrors.title = tr("newBuildingListing.validation.titleRequired", "Listing title is required");
     }
     if (s === "photos") {
       const validImages = images.filter(img => !img.uploading && !img.error);
@@ -284,7 +286,7 @@ export default function CreateNewBuildingListing() {
       toast.error(tr("newBuildingListing.validation.unitFieldsRequired", "Fill in required unit fields"));
       return;
     }
-    const finalTitle = listing.title.trim() || `${project.name}${unit.unit_id ? ` - Unit ${unit.unit_id}` : ""}`.trim();
+    const finalTitle = effectiveListingTitle;
     if (!finalTitle) {
       toast.error(tr("newBuildingListing.validation.titleRequired", "Listing title is required"));
       return;
@@ -316,10 +318,10 @@ export default function CreateNewBuildingListing() {
         coverImageUrl,
         additionalImageUrls,
       });
-      toast.success(tr("newBuildingListing.validation.created", "New building created!"));
+      toast.success(tr("newBuildingListing.validation.created", "New Build ad published!"));
       navigate(`/new-build/${listingId}`);
     } catch (_err: unknown) {
-      toast.error(tr("newBuildingListing.validation.createFailed", "Failed to create new building. Please try again."));
+      toast.error(tr("newBuildingListing.validation.createFailed", "Failed to publish New Build ad. Please try again."));
     } finally {
       setSubmitting(false);
     }
@@ -330,7 +332,7 @@ export default function CreateNewBuildingListing() {
       if (i === 0) return !!(project.name && project.building_permit_number && project.city);
       if (i === 1) return !!(unit.internal_sqm && unit.price && unit.bedrooms && unit.bathrooms);
       if (i === 2) return true;
-      if (i === 3) return !!listing.title.trim();
+      if (i === 3) return !!effectiveListingTitle;
       if (i === 4) return images.some(img => !img.uploading && !img.error);
       return false;
     }).length) / STEPS.length
@@ -343,7 +345,7 @@ export default function CreateNewBuildingListing() {
         <div className="border-b border-border bg-card py-5">
           <div className="container">
             <div className="flex items-center justify-between mb-1">
-              <h1 className="font-display text-2xl font-bold">{tr("newBuildingListing.title", "Create New Building")}</h1>
+              <h1 className="font-display text-2xl font-bold">{tr("newBuildingListing.title", "Create New Build Ad")}</h1>
               <span className="text-sm font-semibold tabular-nums text-primary">{completionPct}%</span>
             </div>
             <p className="text-muted-foreground text-xs mb-3">
@@ -439,8 +441,8 @@ export default function CreateNewBuildingListing() {
             {/* Step 2: Unit */}
             {step === "unit" && (
               <div className="space-y-6">
-                <h2 className="font-display text-xl font-semibold">{tr("newBuildingListing.unit.heading", "Unit Details")}</h2>
-                <p className="text-sm text-muted-foreground">{tr("newBuildingListing.unit.subtitle", "Details for the specific unit you are listing.")}</p>
+                <h2 className="font-display text-xl font-semibold">{tr("newBuildingListing.unit.heading", "Project Inventory")}</h2>
+                <p className="text-sm text-muted-foreground">{tr("newBuildingListing.unit.subtitle", "Add the first available unit, price, and specs for this New Build ad. You can add more units later.")}</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div><label className={LABEL_CLS}>{tr("newBuildingListing.unit.unitId", "Unit ID")}</label><input value={unit.unit_id} onChange={e => setUnitField("unit_id", e.target.value)} placeholder="A101" className={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>{tr("newBuildingListing.unit.floor", "Floor")}</label><input type="number" value={unit.floor} onChange={e => setUnitField("floor", e.target.value)} placeholder="1" className={INPUT_CLS} /></div>
@@ -514,15 +516,15 @@ export default function CreateNewBuildingListing() {
             {/* Step 4: Listing */}
             {step === "listing" && (
               <div className="space-y-6">
-                <h2 className="font-display text-xl font-semibold">{tr("newBuildingListing.listing.heading", "Listing Info")}</h2>
-                <p className="text-sm text-muted-foreground">{tr("newBuildingListing.listing.subtitle", "Title and description for the listing. A default title was suggested from your project and unit.")}</p>
+                <h2 className="font-display text-xl font-semibold">{tr("newBuildingListing.listing.heading", "Public New Build Ad")}</h2>
+                <p className="text-sm text-muted-foreground">{tr("newBuildingListing.listing.subtitle", "Title and description for the public project ad. The ad will use the project inventory, media, and timeline from this wizard.")}</p>
                 <div className="space-y-4">
                   <div>
-                    <label className={LABEL_CLS}>{tr("newBuildingListing.listing.title", "Listing title")} *</label>
+                    <label className={LABEL_CLS}>{tr("newBuildingListing.listing.title", "Ad title")} *</label>
                     <input
-                      value={listing.title || `${project.name}${unit.unit_id ? ` - Unit ${unit.unit_id}` : ""}`}
+                      value={listing.title || suggestedListingTitle}
                       onChange={e => setListing(l => ({ ...l, title: e.target.value }))}
-                      placeholder={tr("newBuildingListing.listing.titlePlaceholder", "e.g. Marina Heights - Unit A101")}
+                      placeholder={tr("newBuildingListing.listing.titlePlaceholder", "e.g. Marina Heights - new residences in Glyfada")}
                       className={INPUT_CLS}
                     />
                     {errors.title && <p className="text-xs text-destructive mt-1">{errors.title}</p>}
@@ -533,7 +535,7 @@ export default function CreateNewBuildingListing() {
                       value={listing.description}
                       onChange={e => setListing(l => ({ ...l, description: e.target.value }))}
                       rows={6}
-                      placeholder={tr("newBuildingListing.listing.descriptionPlaceholder", "Describe the unit, building amenities, finishes...")}
+                      placeholder={tr("newBuildingListing.listing.descriptionPlaceholder", "Describe the project, available units, finishes, amenities, and delivery plan...")}
                       className={INPUT_CLS + " resize-none"}
                     />
                   </div>
@@ -544,8 +546,8 @@ export default function CreateNewBuildingListing() {
             {/* Step 5: Photos */}
             {step === "photos" && (
               <div className="space-y-6">
-                <h2 className="font-display text-xl font-semibold">{tr("newBuildingListing.photos.heading", "Listing Photos")}</h2>
-                <p className="text-sm text-muted-foreground">{tr("newBuildingListing.photos.subtitle", "Upload photos for your listing. Drag to reorder. Click \"Set as cover\" on the main photo.")}</p>
+                <h2 className="font-display text-xl font-semibold">{tr("newBuildingListing.photos.heading", "Project Ad Photos")}</h2>
+                <p className="text-sm text-muted-foreground">{tr("newBuildingListing.photos.subtitle", "Upload project photos and renderings for the public New Build ad. Drag to reorder and set a cover photo.")}</p>
                 <div
                   onDragOver={e => e.preventDefault()}
                   onDrop={e => { e.preventDefault(); handleListingFilesSelected(e.dataTransfer.files); }}
@@ -603,16 +605,14 @@ export default function CreateNewBuildingListing() {
               ) : (
                 <Button onClick={handleSubmit} disabled={submitting} className="gap-2 bg-gradient-primary border-0">
                   {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  {submitting ? tr("newBuildingListing.actions.creating", "Creating...") : tr("newBuildingListing.actions.createListing", "Create New Building")}
+                  {submitting ? tr("newBuildingListing.actions.creating", "Publishing...") : tr("newBuildingListing.actions.createListing", "Publish New Build Ad")}
                 </Button>
               )}
             </div>
           </div>
 
           <p className="text-center text-sm text-muted-foreground mt-4">
-            <Link to="/listings/new" className="text-primary hover:underline">{tr("newBuildingListing.links.regularListing", "Create a regular listing")}</Link>
-            {" · "}
-            <Link to="/projects" className="text-primary hover:underline">{tr("newBuildingListing.links.myProjects", "My projects")}</Link>
+            <Link to="/projects" className="text-primary hover:underline">{tr("newBuildingListing.links.myProjects", "Manage New Build Ads")}</Link>
           </p>
         </div>
       </div>

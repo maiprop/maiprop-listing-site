@@ -58,7 +58,7 @@ export default function Firesale() {
         <meta property="og:title" content={isGreek ? "Γρήγορη Πώληση Quick Sale™ - mAI prop" : "Quick Sale™ - mAI prop"} />
       </Helmet>
       <Navbar />
-      <div className="pt-16">
+      <main id="main-content" className="pt-16">
         {/* Hero */}
         <div className="relative py-16 sm:py-28 overflow-hidden border-b border-border">
           <div
@@ -161,7 +161,7 @@ export default function Firesale() {
             />
           </div>
         </div>
-      </div>
+      </main>
       <Footer />
 
       {showInvitationModal && (

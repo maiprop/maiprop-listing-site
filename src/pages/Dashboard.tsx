@@ -578,7 +578,7 @@ export default function Dashboard() { // skipcq: JS-R1005
                               <Link to="/pricing?audience=developer">{tr("dashboard.overview.developerPro.trial", "Start 7-day free trial")}</Link>
                             </Button>
                             <Button size="sm" variant="outline" className="border-orange-500/30 text-orange-400" asChild>
-                              <Link to="/listings/new-building">{tr("dashboard.overview.developerPro.previewTools", "Preview listing tools")}</Link>
+                              <Link to="/pricing?audience=developer">{tr("dashboard.overview.developerPro.previewTools", "View Developer Plan")}</Link>
                             </Button>
                           </div>
                         </div>
@@ -750,9 +750,9 @@ export default function Dashboard() { // skipcq: JS-R1005
               <div className="space-y-6">
                 <div>
                   <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-                    <FolderKanban className="w-6 h-6 text-primary" /> {tr("dashboard.booking.title", "Booking & Calendar")}
+                    <FolderKanban className="w-6 h-6 text-primary" /> {tr("dashboard.booking.title", "Booking Calendar")}
                   </h1>
-                  <p className="text-sm text-muted-foreground mt-1">{tr("dashboard.booking.subtitle", "Your consultations and scheduled viewings in one place.")}</p>
+                  <p className="text-sm text-muted-foreground mt-1">{tr("dashboard.booking.subtitle", "Scheduled consultations and viewings live here. New inquiries stay in Leads CRM.")}</p>
                 </div>
                 <BookingCalendarSection
                   viewings={ownViewings}

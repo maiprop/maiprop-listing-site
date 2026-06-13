@@ -40,7 +40,7 @@ export default function Contact() {
   return (
     <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
       <Navbar />
-      <div className="pt-28 pb-20">
+      <main id="main-content" className="pt-28 pb-20">
         <div className="container max-w-5xl">
           <div className="mb-10">
             <h1 className="font-display text-4xl font-bold mb-3">{t("contact.title")}</h1>
@@ -135,7 +135,7 @@ export default function Contact() {
             </form>
           </div>
         </div>
-      </div>
+      </main>
       <Footer />
     </div>
   );

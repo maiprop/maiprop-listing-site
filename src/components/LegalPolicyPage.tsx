@@ -113,9 +113,9 @@ export function LegalPolicyPage({ policyKey }: { policyKey: PolicyKey }) {
   const { Icon, bg, color } = policyIcons[policyKey];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
       <Navbar />
-      <div className="pt-16">
+      <main id="main-content" className="pt-16">
         <section className="py-16 container max-w-4xl">
           <div className="flex items-center gap-3 mb-4">
             <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center`}>
@@ -139,7 +139,7 @@ export function LegalPolicyPage({ policyKey }: { policyKey: PolicyKey }) {
             ))}
           </div>
         </section>
-      </div>
+      </main>
       <Footer />
     </div>
   );

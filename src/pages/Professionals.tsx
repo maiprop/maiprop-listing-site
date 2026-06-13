@@ -291,7 +291,7 @@ export default function Professionals() {
       </Helmet>
       <Navbar />
       {aiMatchOpen && <AIServiceMatchModal onClose={() => setAiMatchOpen(false)} onNavigate={(cat) => { setSearchParams((p) => { const n = new URLSearchParams(p); n.set("category", cat); return n; }); setSelectedGroup(categoryGroups.find((g) => g.categories.includes(cat))?.id ?? null); }} />}
-      <div className="pt-16">
+      <main id="main-content" className="pt-16">
 
         {/* ── Hero ───────────────────────────────────────────────────── */}
         <div className="relative bg-card border-b border-border overflow-hidden">
@@ -588,7 +588,7 @@ export default function Professionals() {
             </Button>
           </div>
         </div>
-      </div>
+      </main>
       <Footer />
     </div>);
 

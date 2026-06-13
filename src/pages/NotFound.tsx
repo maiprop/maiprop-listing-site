@@ -25,9 +25,9 @@ const NotFound = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col pb-bottom-nav lg:pb-0">
       <Navbar />
-      <div className="flex-1 flex items-center justify-center px-4 pt-20 pb-12">
+      <main id="main-content" className="flex-1 flex items-center justify-center px-4 pt-20 pb-12">
         <div className="text-center max-w-md">
           <h1 className="mb-2 text-6xl font-bold text-primary">404</h1>
           <p className="mb-6 text-lg text-muted-foreground">Oops! This page doesn't exist or has moved.</p>
@@ -42,7 +42,7 @@ const NotFound = () => {
             <Link to="/"><Home className="w-4 h-4 mr-2" /> Return to Home</Link>
           </Button>
         </div>
-      </div>
+      </main>
     </div>
   );
 };

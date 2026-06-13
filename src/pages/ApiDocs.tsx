@@ -15,9 +15,9 @@ export default function APIDocs() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
       <Navbar forceScrolled />
-      <div className="pt-16">
+      <main id="main-content" className="pt-16">
         {/* Hero */}
         <section className="py-12 border-b border-border bg-muted/30">
           <div className="container max-w-6xl">
@@ -269,7 +269,7 @@ export default function APIDocs() {
             </div>
           </div>
         </div>
-      </div>
+      </main>
       <Footer />
     </div>
   );

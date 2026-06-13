@@ -179,8 +179,12 @@ test.describe("Public — Auth pages (sign-up, reset-password)", () => {
     await page.goto("/reset-password");
     await page.waitForLoadState("networkidle", { timeout: 15_000 });
     // Without a recovery token the page shows an info state; with one it shows a form
-    const hasInput = await page.locator('input[type="password"]').isVisible();
-    const hasInfoText = await page.locator("p, span, h1, h2").first().isVisible();
+    const main = page.locator("main, [role='main'], #main-content").first();
+    const hasInput = await main.locator('input[type="password"]').isVisible();
+    const hasInfoText = await main
+      .getByText(/invalid reset link|expired or is invalid|reset your password|password reset/i)
+      .first()
+      .isVisible();
     expect(hasInput || hasInfoText).toBe(true);
   });
 });

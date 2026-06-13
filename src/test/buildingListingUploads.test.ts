@@ -99,6 +99,24 @@ describe("building listing upload helpers", () => {
     );
   });
 
+  it("accepts project media above 20 MB up to the wizard's 50 MB limit", async () => {
+    const file = new File([new Uint8Array(21 * 1024 * 1024)], "tour.mp4", {
+      type: "video/mp4",
+    });
+
+    const url = await uploadProjectMedia(file, "user-1", "project-1", "video");
+
+    expect(storageMocks.fromMock).toHaveBeenCalledWith("project-media");
+    expect(storageMocks.uploadMock).toHaveBeenCalledWith(
+      "user-1/project-1/media-123e4567-e89b-12d3-a456-426614174000.mp4",
+      file,
+      { upsert: false },
+    );
+    expect(url).toBe(
+      "https://cdn.maiprop.test/user-1/project-1/media-123e4567-e89b-12d3-a456-426614174000.mp4",
+    );
+  });
+
   it("rejects non-PDF brochure uploads and project media outside bucket constraints", async () => {
     await expect(
       uploadProjectMedia(
@@ -118,12 +136,12 @@ describe("building listing upload helpers", () => {
       ),
     ).rejects.toThrow(/Unsupported media file type/);
 
-    const oversizedVideo = new File([new Uint8Array(20 * 1024 * 1024 + 1)], "tour.mp4", {
+    const oversizedVideo = new File([new Uint8Array(50 * 1024 * 1024 + 1)], "tour.mp4", {
       type: "video/mp4",
     });
     await expect(
       uploadProjectMedia(oversizedVideo, "user-1", "project-1", "video"),
-    ).rejects.toThrow(/exceeds the 20 MB limit/);
+    ).rejects.toThrow(/exceeds the 50 MB limit/);
     expect(storageMocks.uploadMock).not.toHaveBeenCalled();
   });
 

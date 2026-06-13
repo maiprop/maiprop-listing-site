@@ -176,7 +176,7 @@ test.describe("Pricing page", () => {
 
   test("a CTA button is present on the pricing page", async ({ page }) => {
     const cta = page.locator(
-      'button:has-text("Get"), button:has-text("Subscribe"), button:has-text("Start"), button:has-text("Upgrade"), button:has-text("Choose"), a:has-text("Get"), a:has-text("Start")'
+      'main button:has-text("Get"):visible, main button:has-text("Subscribe"):visible, main button:has-text("Start"):visible, main button:has-text("Upgrade"):visible, main button:has-text("Choose"):visible, main a:has-text("Get"):visible, main a:has-text("Start"):visible, main a:has-text("Claim"):visible'
     ).first();
     await expect(cta).toBeVisible({ timeout: 10_000 });
   });
@@ -265,7 +265,7 @@ test.describe("Navbar — unauthenticated user", () => {
     await page.goto("/");
     // The i18n key `nav.signIn` renders as "Sign In" in English
     const signInLink = page.locator(
-      'a[href="/login"], a:has-text("Sign in"), a:has-text("Sign In"), a:has-text("Log in"), button:has-text("Sign in")'
+      'a[href="/login"]:visible, a:has-text("Sign in"):visible, a:has-text("Sign In"):visible, a:has-text("Log in"):visible, button:has-text("Sign in"):visible'
     ).first();
     await expect(signInLink).toBeVisible({ timeout: 10_000 });
   });
@@ -295,8 +295,17 @@ test.describe("Navbar — unauthenticated user", () => {
     await page.goto("/");
     await page.waitForLoadState("load", { timeout: 15_000 });
     // aria-label is t("language.select") = "Language"
-    const langBtn = page.locator('button[aria-label="Language"]').first();
-    await expect(langBtn).toBeAttached({ timeout: 8_000 });
+    let langBtn = page.locator('button[aria-label="Language"]:visible').first();
+    const openMenuBtn = page.getByRole("button", { name: /open menu/i });
+    await Promise.race([
+      langBtn.waitFor({ state: "visible", timeout: 8_000 }).catch(() => undefined),
+      openMenuBtn.waitFor({ state: "visible", timeout: 8_000 }).catch(() => undefined),
+    ]);
+    if (!(await langBtn.isVisible().catch(() => false))) {
+      await openMenuBtn.click();
+      langBtn = page.locator('button[aria-label="Language"]:visible').first();
+    }
+    await expect(langBtn).toBeVisible({ timeout: 8_000 });
     await langBtn.click();
 
     // Radix DropdownMenuContent renders in a portal — wait for either menu

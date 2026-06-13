@@ -74,20 +74,22 @@ describe("ProjectsTab", () => {
   it("uses Create New Building as the only project creation entry point", () => {
     render(<ProjectsTab />, { wrapper: wrap });
 
-    const createLinks = screen.getAllByRole("link", { name: /create new building/i });
+    const createLinks = screen.getAllByRole("link", { name: /create new build ad/i });
     expect(createLinks.length).toBeGreaterThan(0);
     for (const link of createLinks) {
       expect(link).toHaveAttribute("href", "/listings/new-building");
     }
     expect(screen.queryByRole("button", { name: /new project/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/Create project/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/link listings/i)).not.toBeInTheDocument();
   });
 
   it("routes the empty state to Create New Building instead of opening a standalone form", () => {
     render(<ProjectsTab />, { wrapper: wrap });
 
     expect(screen.getByText(/No projects yet/i)).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: /create new building/i }).at(-1)).toHaveAttribute("href", "/listings/new-building");
+    expect(screen.getByText(/Create one New Build ad for the whole project/i)).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: /create new build ad/i }).at(-1)).toHaveAttribute("href", "/listings/new-building");
     expect(screen.queryByRole("button", { name: /create your first project/i })).not.toBeInTheDocument();
   });
 
@@ -97,8 +99,7 @@ describe("ProjectsTab", () => {
       isLoading: false,
     });
     render(<ProjectsTab />, { wrapper: wrap });
-    // The delete button is icon-only with an aria-label='Delete project'.
-    fireEvent.click(screen.getByRole("button", { name: /Delete project/i }));
-    await waitFor(() => expect(screen.getByText(/Delete project\?/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /Delete New Build ad/i }));
+    await waitFor(() => expect(screen.getByText(/Delete New Build ad\?/i)).toBeInTheDocument());
   });
 });

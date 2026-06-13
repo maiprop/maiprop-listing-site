@@ -29,6 +29,35 @@ test.describe("Accessibility", () => {
     await expect(page.locator("#main-content")).toBeAttached();
   });
 
+  test("public routes with the global skip link expose #main-content", async ({ page }) => {
+    const routes = [
+      "/firesale",
+      "/open-houses",
+      "/professionals",
+      "/contact",
+      "/privacy-policy",
+      "/terms-of-service",
+      "/cookie-policy",
+      "/missing-route-for-a11y-check",
+    ];
+
+    for (const route of routes) {
+      await page.goto(route);
+      await page.waitForLoadState("load");
+      await expect(page.locator('a[href="#main-content"]'), `${route} skip link`).toBeAttached();
+      await expect(page.locator("#main-content"), `${route} main content target`).toBeAttached();
+    }
+  });
+
+  test("API docs route exposes a documentation shell", async ({ page }) => {
+    await page.goto("/api-docs");
+    await page.waitForLoadState("load");
+
+    await expect(
+      page.getByRole("heading", { name: /mAI prop Supabase Edge Functions|maiProp Platform API/i }).first(),
+    ).toBeVisible({ timeout: 10_000 });
+  });
+
   test("Navbar has a <nav> element with aria-label or role", async ({ page }) => {
     await page.goto("/");
     // Should have at least one <nav> element

@@ -74,12 +74,15 @@ describe("critical business invariants", () => {
 
   it("does not claim mock checkout creates a live paid entitlement", () => {
     const pricing = read("src/pages/Pricing.tsx");
+    const billing = read("src/pages/dashboard/BillingTab.tsx");
     const checkout = read("supabase/functions/create-checkout/index.ts");
 
     expect(checkout).toContain("withMockBillingParams");
     expect(checkout).toContain('mode: "mock"');
     expect(pricing).toContain('searchParams.get("billing_mode") === "mock"');
     expect(pricing).toContain("Mock checkout completed. No live payment or subscription entitlement was created.");
+    expect(billing).toContain('searchParams.get("billing_mode") === "mock"');
+    expect(billing).toContain("Mock add-on checkout completed. No live payment or add-on entitlement was created.");
   });
 
   it("keeps Stripe payment recovery from revoking Pro before terminal lapse", () => {

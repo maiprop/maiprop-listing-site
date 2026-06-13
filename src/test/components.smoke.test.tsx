@@ -13,7 +13,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React, { Suspense } from "react";
-import { act, cleanup, fireEvent } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { renderWithProviders } from "@/test/utils";
 
 // ── requestAnimationFrame stub (not in jsdom) ─────────────────────────────────
@@ -454,6 +454,34 @@ describe("Component smoke tests", () => {
         canVideoView={false}
       />
     )).not.toThrow();
+  });
+
+  it("PropertyOwnerCard keeps buyer messaging available when the owner is not Pro", async () => {
+    const { default: PropertyOwnerCard } = await import("@/components/property/PropertyOwnerCard");
+    const onContact = vi.fn();
+
+    renderWithProviders(
+      <PropertyOwnerCard
+        ownerProfile={{ display_name: "MaiProp Admin", verified: true }}
+        ownerParticipantType="agent"
+        isAuction={false}
+        ownerIsPro={false}
+        price={200000}
+        listingType="sale"
+        pricePerSqm={null}
+        viewsCount={0}
+        onContact={onContact}
+        isContactPending={false}
+        onRequestViewing={noop}
+        onRequestVideoViewing={noop}
+        canVideoView={false}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /send message/i }));
+
+    expect(onContact).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: /^viewing$/i })).not.toBeInTheDocument();
   });
 
   it("PropertyTitleSection renders without throwing", async () => {

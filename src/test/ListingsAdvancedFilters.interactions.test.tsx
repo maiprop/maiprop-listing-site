@@ -3,8 +3,9 @@ import { fireEvent, screen } from "@testing-library/react";
 import { renderWithProviders } from "@/test/utils";
 import { ListingsAdvancedFilters } from "@/components/listings/ListingsAdvancedFilters";
 
-const { state, setParam, toggleMulti, clearAllFilters } = vi.hoisted(() => {
+const { state, setParam, setParams, toggleMulti, clearAllFilters } = vi.hoisted(() => {
   const setParam = vi.fn();
+  const setParams = vi.fn();
   const toggleMulti = vi.fn();
   const clearAllFilters = vi.fn();
   const state = {
@@ -30,12 +31,13 @@ const { state, setParam, toggleMulti, clearAllFilters } = vi.hoisted(() => {
     proFilterCount: 0,
     isRent: false,
     setParam,
+    setParams,
     toggleMulti,
     clearAllFilters,
     getParam: vi.fn(() => ""),
     getMulti: vi.fn(() => [] as string[]),
   };
-  return { state, setParam, toggleMulti, clearAllFilters };
+  return { state, setParam, setParams, toggleMulti, clearAllFilters };
 });
 
 vi.mock("@/hooks/useListingsFilters", () => ({
@@ -122,6 +124,17 @@ describe("ListingsAdvancedFilters interactions", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Parking" }));
     expect(toggleMulti).toHaveBeenCalledWith("features", "has_parking");
+  });
+
+  it("batches New Building filter URL updates so the listings grid refreshes once", () => {
+    renderWithProviders(<ListingsAdvancedFilters filteredCount={12} onClose={vi.fn()} />);
+
+    fireEvent.click(screen.getByLabelText(/new buildings only/i));
+
+    expect(setParams).toHaveBeenCalledTimes(1);
+    expect(setParams).toHaveBeenCalledWith([["listing_type", "new_build"], ["pre_sale", ""]]);
+    expect(setParam).not.toHaveBeenCalledWith("listing_type", "new_build");
+    expect(setParam).not.toHaveBeenCalledWith("pre_sale", "");
   });
 
   it("applies pro filters, resets filters, and closes on show results", () => {

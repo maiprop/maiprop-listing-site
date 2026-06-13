@@ -24,6 +24,7 @@ import { MapGate } from "@/components/listings/MapGate";
 import { ListingCompareButton } from "@/components/listings/ListingCompareButton";
 import { VirtualizedListingGrid } from "@/components/listings/VirtualizedListingGrid";
 import { LocationSearchField } from "@/components/listings/LocationSearchField";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   DesktopActiveFilterChips,
 } from "./listings/ListingsActiveFilters";
@@ -116,6 +117,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
   const [polygonFilterIds, setPolygonFilterIds] = useState<Set<string> | null>(null);
   const [mobileTab, setMobileTab] = useState<"list" | "map">("list");
   const splitListRef = useRef<HTMLDivElement | null>(null);
+  const isMobileViewport = useIsMobile();
   const { user } = useAuth();
   const { consent, accept } = useCookieConsent();
   const trackUserSearch = useTrackUserSearch();
@@ -278,6 +280,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
       minWalkability={minWalkability}
       smartFeatures={aiFilterConfig.features}
       setParam={setParam}
+      setParams={setParams}
       toggleMulti={toggleMulti}
       clearAllFilters={clearAllFilters}
       isGreek={isGreek}
@@ -587,7 +590,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
         </div>
 
         {/* Advanced Filters Panel — AI-powered */}
-        {showFilters && (
+        {showFilters && !isMobileViewport && (
           <ListingsAdvancedFilters filteredCount={filtered.length} onClose={() => setShowFilters(false)} />
         )}
 

@@ -128,7 +128,7 @@ const signedInOnlySurfaces: readonly Surface[] = [
 
 const aiSurfaces: readonly Surface[] = ["ai_search", "ai_reports"];
 
-const sellerLike = new Set<RoleTier>(["seller_free", "seller_pro", "agent_free", "agent_pro", "admin"]);
+const sellerLike = new Set<RoleTier>(["seller_free", "seller_pro", "agent_free", "agent_pro", "developer_pro", "admin"]);
 const developerLike = new Set<RoleTier>(["developer_pro", "admin"]);
 const investorActive = new Set<RoleTier>(["investor_private_active", "investor_institutional_active", "admin"]);
 const professionalLike = new Set<RoleTier>(["professional_free", "professional_pro", "admin"]);
@@ -236,6 +236,7 @@ describe("role/tier interaction matrix", () => {
     expect(interactionMatrix.anonymous.messages.outcome).toBe("signin_required");
     expect(interactionMatrix.buyer_free.create_standard_listing.outcome).toBe("role_denied");
     expect(interactionMatrix.seller_free.create_standard_listing.outcome).toBe("allow");
+    expect(interactionMatrix.developer_pro.create_standard_listing.outcome).toBe("allow");
     expect(interactionMatrix.developer_free.create_new_building.outcome).toBe("pro_required");
     expect(interactionMatrix.developer_pro.create_new_building.outcome).toBe("allow");
     expect(interactionMatrix.investor_pending_payment.firesale_investor_dashboard.outcome).toBe("invite_pending_payment");

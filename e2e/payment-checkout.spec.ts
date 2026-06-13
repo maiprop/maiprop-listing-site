@@ -2,9 +2,8 @@
  * Stripe checkout E2E.
  *
  * Verifies the upgrade flow from Pricing → create-checkout edge function →
- * Stripe Checkout redirect. Does NOT complete payment (would require a real
- * Stripe test account with a known Price ID in test mode); we stop at the
- * redirect to checkout.stripe.com and assert the session was created.
+ * checkout redirect. In real billing mode this reaches Stripe Checkout; in
+ * safe mock billing mode this returns to the app with checkout=success.
  *
  * Skips gracefully when the real Supabase project is not reachable (e.g. on
  * PRs with only CI stub env).
@@ -23,7 +22,7 @@ const canRun =
 test.describe("Stripe checkout flow", () => {
   test.skip(!canRun, "Requires real Supabase project + seeded buyer.free account");
 
-  test("free user can initiate Stripe checkout from pricing page", async ({ page, context }) => {
+  test("free user can initiate checkout from pricing page", async ({ page, context }) => {
     // Sign in as a free-tier user.
     await page.goto("/login");
     await page.locator('input[type="email"], input[name="email"]').first().fill(TEST_EMAIL);
@@ -35,10 +34,15 @@ test.describe("Stripe checkout flow", () => {
     await page.goto("/pricing");
     await page.waitForLoadState("networkidle");
 
-    // Click the first "Upgrade" / "Subscribe" CTA. Button text varies by locale.
-    const upgradeBtn = page
-      .locator('button:has-text("Upgrade"), button:has-text("Subscribe"), a:has-text("Upgrade")')
-      .first();
+    await page
+      .getByRole("button", { name: /accept all|reject optional/i })
+      .click({ timeout: 3_000 })
+      .catch(() => {});
+
+    // Click a pricing-card CTA, not the navbar "Upgrade" link.
+    const upgradeBtn = page.locator("#main-content").getByRole("button", {
+      name: /get pro plan|get agent pro|get developer pro|subscribe/i,
+    }).first();
     await expect(upgradeBtn).toBeVisible({ timeout: 10_000 });
 
     // create-checkout returns a URL; the app either navigates to it or opens it
@@ -49,8 +53,8 @@ test.describe("Stripe checkout flow", () => {
     ]);
 
     const target = popup ?? page;
-    await target.waitForURL(/checkout\.stripe\.com|billing\.stripe\.com/, { timeout: 20_000 });
-    expect(target.url()).toMatch(/stripe\.com/);
+    await target.waitForURL(/checkout\.stripe\.com|billing\.stripe\.com|[?&]checkout=success/, { timeout: 20_000 });
+    expect(target.url()).toMatch(/stripe\.com|[?&]checkout=success/);
   });
 
   test("create-checkout rejects unauthenticated requests", async ({ request }) => {

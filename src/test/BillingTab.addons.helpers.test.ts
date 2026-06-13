@@ -18,6 +18,7 @@ describe("billing add-on helpers", () => {
     expect(resolveAddonKey({ name: "Neighbourhood Bundle x 3" })).toBe(
       "neighbourhood_report_bundle",
     );
+    expect(resolveAddonKey({ name: "Market Intelligence", manual: true })).toBeNull();
     expect(resolveAddonKey({ name: "Custom onboarding" })).toBeNull();
   });
 

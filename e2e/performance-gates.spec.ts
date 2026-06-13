@@ -1,5 +1,10 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 
+const RUNNING_PRODUCTION_PERF_GATE =
+  process.env.CI ||
+  process.env.npm_lifecycle_event === "test:perf" ||
+  process.argv.some((arg) => arg.includes("performance-gates.spec.ts"));
+
 const AUTH_STORAGE_KEY = "sb-abcdefghijklmnop-auth-token";
 const PERF_USER_ID = "00000000-0000-4000-8000-000000000001";
 const PERF_LISTING_ID = "00000000-0000-4000-8000-000000000101";
@@ -362,6 +367,8 @@ async function waitForInteractionIdle(page: Page) {
 }
 
 test.describe("authenticated performance gates @perf", () => {
+  test.skip(!RUNNING_PRODUCTION_PERF_GATE, "Run npm run test:perf to measure production preview bundle budgets.");
+
   test("public routes stay within Core Web Vitals budgets", async ({ page }) => {
     await installWebVitalsCollector(page);
     await installAuthenticatedSupabaseMocks(page);

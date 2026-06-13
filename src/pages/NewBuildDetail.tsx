@@ -316,6 +316,11 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
   const displayLatitude = listing?.latitude ?? project?.latitude ?? null;
   const displayLongitude = listing?.longitude ?? project?.longitude ?? null;
   const displayTitle = project?.name ?? listing?.title ?? "New Building";
+  const projectUnitPrices = projectUnits
+    .map((unit) => Number(unit.price))
+    .filter((price) => Number.isFinite(price) && price > 0);
+  const displayPrice = projectUnitPrices.length > 0 ? Math.min(...projectUnitPrices) : Number(listing?.price ?? 0);
+  const isFromPrice = projectUnitPrices.length > 0;
 
   const handleRegisterInterest = async (form: RegisterInterestForm) => {
     const ownerId = listing?.owner_id;
@@ -351,7 +356,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
     supabase.functions.invoke("property-valuation", {
       body: {
         listingId: listing.id,
-        title: listing.title,
+        title: displayTitle,
         city: displayCity,
         address: displayAddress,
         price: Number(listing.price),
@@ -459,7 +464,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                 isFavorited={isFavorited}
                 onFavorite={handleFavorite}
                 onShare={handleShare}
-                title={listing.title}
+                title={displayTitle}
               />
 
               {/* Title + Price hero row */}
@@ -475,7 +480,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                       <span className="text-[10px] font-bold uppercase tracking-widest bg-primary/15 text-primary rounded-full px-2 py-0.5">{tr("newBuildDetail.badges.newBuild", "New Building")}</span>
                       {listing.energy_class && <EnergyBadge cls={listing.energy_class} />}
                     </div>
-                    <h1 className="font-display text-2xl sm:text-3xl font-bold leading-tight">{listing.title}</h1>
+                    <h1 className="font-display text-2xl sm:text-3xl font-bold leading-tight">{displayTitle}</h1>
                     <div className="flex items-center gap-1.5 mt-2 text-muted-foreground text-sm">
                       <MapPin className="w-4 h-4 shrink-0" />
                       <span>{[displayAddress, displayCity, displayRegion].filter(Boolean).join(", ")}</span>
@@ -483,7 +488,9 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                   </div>
                   <div className="text-right shrink-0">
                     <div className="font-display text-3xl font-black text-foreground">
-                      {formatPrice(Number(listing.price))}
+                      {isFromPrice
+                        ? trv("newBuildDetail.fromPrice", "From {{price}}", { price: formatPrice(displayPrice) })
+                        : formatPrice(displayPrice)}
                     </div>
                     {listing.price_per_sqm != null && (
                       <div className="text-xs text-muted-foreground mt-0.5">
@@ -757,7 +764,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
               {id && (
                 <PropertyValuation
                   listingId={id}
-                  title={listing.title}
+                  title={displayTitle}
                   city={displayCity}
                   address={displayAddress || undefined}
                   price={Number(listing.price)}

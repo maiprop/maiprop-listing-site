@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import BillingTab from "@/pages/dashboard/BillingTab";
 import { renderWithProviders } from "@/test/utils";
+import { toast } from "sonner";
 
 const mocks = vi.hoisted(() => ({
   supabase: null as ReturnType<typeof import("@/test/utils").makeMockSupabase> | null,
@@ -49,6 +50,8 @@ vi.mock("sonner", () => ({
 describe("BillingTab add-on checkout", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    authState.profile.role = "seller";
+    authState.profile.participant_type = "seller";
     mocks.supabase?.rpc.mockImplementation((_fn: string, args?: { p_bucket?: string }) => {
       const quotas: Record<string, { used: number; limit: number }> = {
         "property-valuation": { used: 48, limit: 50 },
@@ -165,6 +168,35 @@ describe("BillingTab add-on checkout", () => {
           cancel_url: "/dashboard/billing?checkout=cancelled",
         },
       });
+    });
+  });
+
+  it("keeps developer Market Intelligence as a team-handled add-on", async () => {
+    authState.profile.role = "developer";
+    authState.profile.participant_type = "developer";
+
+    renderWithProviders(<BillingTab />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Contact team/i }));
+
+    expect(toast.info).toHaveBeenCalledWith("This add-on is handled by the maiProp team.");
+    expect(mocks.supabase?.functions.invoke).not.toHaveBeenCalledWith(
+      "create-checkout",
+      expect.objectContaining({
+        body: expect.objectContaining({ addon_key: "market_intelligence" }),
+      }),
+    );
+  });
+
+  it("discloses mock add-on checkout success without implying entitlement", async () => {
+    renderWithProviders(<BillingTab />, {
+      initialPath: "/dashboard/billing?checkout=success&billing_mode=mock",
+    });
+
+    await waitFor(() => {
+      expect(toast.info).toHaveBeenCalledWith(
+        "Mock add-on checkout completed. No live payment or add-on entitlement was created.",
+      );
     });
   });
 });

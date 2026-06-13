@@ -220,19 +220,18 @@ test.describe("Buyer — professionals directory (/professionals)", () => {
     await page.goto("/professionals");
     await waitForAppContent(page);
 
-    // Only attempt click-through if at least one card is rendered.
-    const firstCard = page
-      .locator("article, [class*='card'], [class*='professional-card']")
-      .first();
+    // Only attempt click-through if at least one profile link is rendered.
+    const firstProfileLink = page.getByRole("link", { name: /view profile/i }).first();
+    await firstProfileLink.waitFor({ state: "visible", timeout: 15_000 }).catch(() => {});
 
-    const cardAttached = (await firstCard.count()) > 0;
-    if (!cardAttached) {
+    const profileLinkAttached = (await firstProfileLink.count()) > 0;
+    if (!profileLinkAttached) {
       // No professionals seeded yet — directory is empty; skip click-through check.
       test.skip();
       return;
     }
 
-    await firstCard.click();
+    await firstProfileLink.click();
     await waitForAppContent(page);
 
     // Navbar / header must still be visible — rules out a white-screen crash.
@@ -305,18 +304,17 @@ test.describe("Professional detail page — consultation / contact button", () =
       await page.goto("/professionals");
       await waitForAppContent(page);
 
-      const firstCard = page
-        .locator("article, [class*='card'], [class*='professional-card']")
-        .first();
+      const firstProfileLink = page.getByRole("link", { name: /view profile/i }).first();
+      await firstProfileLink.waitFor({ state: "visible", timeout: 15_000 }).catch(() => {});
 
-      const cardAttached = (await firstCard.count()) > 0;
-      if (!cardAttached) {
+      const profileLinkAttached = (await firstProfileLink.count()) > 0;
+      if (!profileLinkAttached) {
         // No professionals in directory — cannot follow through to detail page.
         test.skip();
         return;
       }
 
-      await firstCard.click();
+      await firstProfileLink.click();
       await waitForAppContent(page);
 
       // Check for any consultation / contact action button using toBeAttached.

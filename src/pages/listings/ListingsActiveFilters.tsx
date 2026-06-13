@@ -5,6 +5,7 @@ import { PROPERTY_TYPE_MAP, type PropertyTypeKey } from "@/lib/propertyTypes";
 import { translateCondition, translateHeating, translatePropertyType, translateSubtype } from "./ListingsFilterLabels";
 
 type ListingsFilterSetParam = ReturnType<typeof useListingsFilters>["setParam"];
+type ListingsFilterSetParams = ReturnType<typeof useListingsFilters>["setParams"];
 type ListingsFilterToggleMulti = ReturnType<typeof useListingsFilters>["toggleMulti"];
 
 export const DesktopActiveFilterChips = ({ // skipcq: JS-R1005 - Active chips map independent URL filters into removable controls.
@@ -24,6 +25,7 @@ export const DesktopActiveFilterChips = ({ // skipcq: JS-R1005 - Active chips ma
   minWalkability,
   smartFeatures,
   setParam,
+  setParams,
   toggleMulti,
   clearAllFilters,
   isGreek,
@@ -44,6 +46,7 @@ export const DesktopActiveFilterChips = ({ // skipcq: JS-R1005 - Active chips ma
   minWalkability: number;
   smartFeatures: SmartFilterFeature[];
   setParam: ListingsFilterSetParam;
+  setParams: ListingsFilterSetParams;
   toggleMulti: ListingsFilterToggleMulti;
   clearAllFilters: () => void;
   isGreek: boolean;
@@ -80,7 +83,7 @@ export const DesktopActiveFilterChips = ({ // skipcq: JS-R1005 - Active chips ma
         {translateCondition(selectedConstruction, isGreek)}
       </ActiveFilterChip>
     )}
-    {preSaleOnly && <ActiveFilterChip onClick={() => { setParam("listing_type", ""); setParam("pre_sale", ""); }}>{isGreek ? "Νέες κατασκευές" : "New Buildings"}</ActiveFilterChip>}
+    {preSaleOnly && <ActiveFilterChip onClick={() => setParams([["listing_type", ""], ["pre_sale", ""]])}>{isGreek ? "Νέες κατασκευές" : "New Buildings"}</ActiveFilterChip>}
     {hasVideoViewing && <ActiveFilterChip accent onClick={() => setParam("video_viewing", "")}>{isGreek ? "Βιντεοκλήση" : "Video Viewing"}</ActiveFilterChip>}
     {hasVirtualTour && <ActiveFilterChip accent onClick={() => setParam("virtual_tour", "")}>{isGreek ? "Εικονική περιήγηση" : "Virtual Tour"}</ActiveFilterChip>}
     {hasMessaging && <ActiveFilterChip accent onClick={() => setParam("messaging", "")}>{isGreek ? "Μηνύματα" : "Messaging"}</ActiveFilterChip>}
