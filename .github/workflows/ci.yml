@@ -77,6 +77,9 @@ jobs:
       - name: Check public edge function protections
         run: npm run check:public-functions
 
+      - name: Check enterprise readiness basics
+        run: npm run check:enterprise-readiness-basics
+
       - name: Check type-debt ratchet
         run: npm run check:type-debt
 

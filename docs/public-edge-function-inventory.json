@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-05-16T07:08:52.361Z",
-  "public_function_count": 22,
+  "generated_at": "2026-06-13T16:58:53.516Z",
+  "public_function_count": 25,
   "entries": [
     {
       "name": "ai-search",
@@ -160,6 +160,26 @@
       "missing_required_snippets": []
     },
     {
+      "name": "neighbourhood-report",
+      "source": true,
+      "has_test": true,
+      "status": "ready",
+      "caller": "signed-in browser",
+      "classification": "costly_ai",
+      "mechanisms": [
+        "signed_in_quota",
+        "fail_closed_rate_limit",
+        "bounded_payload"
+      ],
+      "requiredSnippets": [
+        "enforceAiQuota(req",
+        "recordAiCall",
+        "failClosed: true"
+      ],
+      "notes": "AI neighbourhood report endpoint; handler requires an authenticated quota context before provider work.",
+      "missing_required_snippets": []
+    },
+    {
       "name": "oh-registration-notify",
       "source": true,
       "has_test": true,
@@ -235,6 +255,46 @@
         "auth.getUser"
       ],
       "notes": "Public platform JWT is disabled; handler auth and rate limit are the control plane.",
+      "missing_required_snippets": []
+    },
+    {
+      "name": "property-pois",
+      "source": true,
+      "has_test": true,
+      "status": "ready",
+      "caller": "signed-in browser",
+      "classification": "costly_ai",
+      "mechanisms": [
+        "signed_in_quota",
+        "fail_closed_rate_limit",
+        "bounded_payload"
+      ],
+      "requiredSnippets": [
+        "enforceAiQuota(req",
+        "recordAiCall",
+        "failClosed: true"
+      ],
+      "notes": "AI POI endpoint; CORS-compatible platform config is paired with handler-level quota and rate-limit gates.",
+      "missing_required_snippets": []
+    },
+    {
+      "name": "property-valuation",
+      "source": true,
+      "has_test": true,
+      "status": "ready",
+      "caller": "signed-in browser",
+      "classification": "costly_ai",
+      "mechanisms": [
+        "signed_in_quota",
+        "fail_closed_rate_limit",
+        "bounded_payload"
+      ],
+      "requiredSnippets": [
+        "enforceAiQuota(req",
+        "recordAiCall",
+        "failClosed: true"
+      ],
+      "notes": "AI valuation endpoint; signed-in quota enforcement runs before valuation generation.",
       "missing_required_snippets": []
     },
     {
