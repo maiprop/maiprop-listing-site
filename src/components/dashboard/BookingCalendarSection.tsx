@@ -83,7 +83,7 @@ export function BookingCalendarSection({
     <div className="space-y-6">
       <div className="flex gap-2 flex-wrap">
         <Button variant="outline" size="sm" className="border-primary/40 text-primary" onClick={onGoToLeads}>
-          View Leads
+          Open Leads CRM
         </Button>
         <Button variant="outline" size="sm" className="border-border" onClick={onGoToViewings}>
           View Viewings
@@ -98,10 +98,10 @@ export function BookingCalendarSection({
           <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
           <p className="font-semibold">No scheduled items</p>
           <p className="text-sm text-muted-foreground mt-1 mb-4">
-            Consultation requests and viewings will appear here when scheduled.
+            Scheduled consultation requests and viewings will appear here.
           </p>
           <Button variant="outline" className="border-primary/40 text-primary" onClick={onGoToLeads}>
-            View Leads
+            Open Leads CRM
           </Button>
         </div>
       ) : (

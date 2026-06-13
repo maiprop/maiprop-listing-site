@@ -114,7 +114,7 @@ const project = {
   structural_completion_date: "2026-09-01",
   delivery_date: "2027-01-01",
   status: "active",
-  listings: [{ id: "listing-linked", title: "Penthouse", price: 750000, sqm: 120, views_count: 8 }],
+  listings: [{ id: "listing-linked", title: "Penthouse", price: 750000, sqm: 120, views_count: 8, listing_type: "new_build" }],
 };
 
 const renderPage = (initialEntry = "/projects/project-1") =>
@@ -424,43 +424,15 @@ describe("ProjectDetail", () => {
     expect(deleteLeadMock).toHaveBeenCalledWith({ id: "lead-1", projectId: "project-1" });
   });
 
-  it("links and unlinks only legacy unlinked New Building ads", () => {
-    useMyListingsMock.mockReturnValue({
-      data: [
-        { id: "listing-free", title: "Loose unit", listing_type: "new_build" },
-        { id: "listing-sale", title: "Ordinary resale", listing_type: "sale" },
-      ],
-    });
-    const firstRender = renderPage();
-
-    fireEvent.click(screen.getByRole("button", { name: /\+ Loose unit/i }));
-    fireEvent.click(screen.getByRole("button", { name: /unlink/i }));
-
-    expect(updateListingMock).toHaveBeenCalledWith({
-      id: "listing-free",
-      updates: {
-        project_id: "project-1",
-        listing_type: "new_build",
-        is_pre_sale: false,
-        construction_status: "shell_complete",
-        year_built: 2027,
-      },
-    });
-    expect(screen.queryByRole("button", { name: /\+ Ordinary resale/i })).not.toBeInTheDocument();
-    expect(updateListingMock).toHaveBeenCalledWith({
-      id: "listing-linked",
-      updates: {
-        project_id: null,
-        listing_type: "sale",
-        is_pre_sale: false,
-      },
-    });
-
-    firstRender.unmount();
-    useMyListingsMock.mockReturnValue({ data: [{ id: "listing-linked", listing_type: "new_build" }] });
+  it("shows the public New Build ad without legacy attach or unlink controls", () => {
     renderPage();
 
-    expect(screen.queryByRole("link", { name: /create new building/i })).not.toBeInTheDocument();
+    expect(screen.getByText("Public New Build ad")).toBeInTheDocument();
+    expect(screen.getByText(/project details, units, pricing, phases, and media/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Penthouse/i })).toHaveAttribute("href", "/new-build/listing-linked");
+    expect(screen.getByRole("link", { name: /View ad/i })).toHaveAttribute("href", "/new-build/listing-linked");
+    expect(screen.queryByRole("button", { name: /unlink/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^\+ / })).not.toBeInTheDocument();
+    expect(updateListingMock).not.toHaveBeenCalled();
   });
 });

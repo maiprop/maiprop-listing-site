@@ -389,7 +389,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
         <meta property="og:title" content={pageTitle} />
       </Helmet>
       <Navbar />
-      <div className="pt-16 min-h-screen">
+      <main id="main-content" className="pt-16 min-h-screen">
         {/* Hero header */}
         <div className="border-b border-border bg-card/60 py-8">
           <div className="container">
@@ -723,7 +723,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
             </div>
           )}
         </div>
-      </div>
+      </main>
       <Footer />
     </div>
   );

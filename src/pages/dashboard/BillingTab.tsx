@@ -1,5 +1,5 @@
 /* eslint complexity: "off" */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -19,7 +19,7 @@ import {
   Shield,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { BillingUsagePanel } from "@/components/dashboard/BillingUsagePanel";
 import { formatDate } from "@/lib/format";
@@ -53,6 +53,7 @@ const useBillingInfo = () => {
 
 export default function BillingTab() { // skipcq: JS-0067
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const {
     isPro,
     subscriptionEnd,
@@ -69,6 +70,13 @@ export default function BillingTab() { // skipcq: JS-0067
 
   const participantType = getParticipantTypeFromProfile(profile) ?? "buyer";
   const addonSections = getAddonSectionsForParticipant(participantType);
+
+  useEffect(() => {
+    if (searchParams.get("checkout") !== "success") return;
+    if (searchParams.get("billing_mode") === "mock") {
+      toast.info("Mock add-on checkout completed. No live payment or add-on entitlement was created.");
+    }
+  }, [searchParams]);
 
   const openPortal = async () => {
     if (isLoading || !data) {
@@ -475,15 +483,19 @@ export default function BillingTab() { // skipcq: JS-0067
                 {section.category}
               </h3>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {section.items.map((item) => (
-                  <AddonCard
-                    key={item.name}
-                    item={item}
-                    accent={section.accent}
-                    loading={addonLoadingKey === resolveAddonKey(item)}
-                    onPurchase={() => purchaseAddon(item)}
-                  />
-                ))}
+                {section.items.map((item) => {
+                  const addonKey = resolveAddonKey(item);
+
+                  return (
+                    <AddonCard
+                      key={item.name}
+                      item={item}
+                      accent={section.accent}
+                      loading={Boolean(addonKey && addonLoadingKey === addonKey)}
+                      onPurchase={() => purchaseAddon(item)}
+                    />
+                  );
+                })}
               </div>
             </div>
           ))}

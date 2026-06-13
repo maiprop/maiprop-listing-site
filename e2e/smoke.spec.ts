@@ -16,7 +16,7 @@ test.describe("Public pages", () => {
     await page.goto("/listings");
     // Wait for either a listing card or the empty-state message
     await expect(
-      page.locator('[data-testid="property-card"], [data-testid="empty-listings"], h1')
+      page.locator('[data-testid="property-card"], [data-testid="empty-listings"], h1').first()
     ).toBeVisible({ timeout: 10_000 });
   });
 

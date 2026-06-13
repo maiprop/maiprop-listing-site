@@ -30,16 +30,16 @@ export default function ProjectsTab() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-            <Globe2 className="w-6 h-6 text-primary" /> Projects
+            <Globe2 className="w-6 h-6 text-primary" /> New Build Ads
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Showcase development projects and link listings
+            One public ad per project, with units, prices, phases, and media in one place.
           </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" className="border-border gap-2" asChild>
             <Link to="/projects">
-              <ExternalLink className="w-4 h-4" /> Full View
+              <ExternalLink className="w-4 h-4" /> Manage Ads
             </Link>
           </Button>
           <Button
@@ -47,7 +47,7 @@ export default function ProjectsTab() {
             asChild
           >
             <Link to="/listings/new-building">
-              <Plus className="w-4 h-4" /> Create New Building
+              <Plus className="w-4 h-4" /> Create New Build Ad
             </Link>
           </Button>
         </div>
@@ -62,14 +62,14 @@ export default function ProjectsTab() {
           <FolderOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
           <h2 className="font-semibold">No projects yet</h2>
           <p className="text-sm text-muted-foreground mt-2 mb-4">
-            Create a new building to create the project, first unit, and public ad together.
+            Create one New Build ad for the whole project, then add units, prices, phases, and media inside it.
           </p>
           <Button
             className="bg-gradient-primary border-0 text-primary-foreground gap-2"
             asChild
           >
             <Link to="/listings/new-building">
-              <Plus className="w-4 h-4" /> Create New Building
+              <Plus className="w-4 h-4" /> Create New Build Ad
             </Link>
           </Button>
         </div>
@@ -120,13 +120,13 @@ export default function ProjectsTab() {
                   <Button variant="outline" size="sm" className="border-border text-xs" asChild>
                     <Link to={`/projects/${p.id}`}>
                       <Edit2 className="w-3 h-3 mr-1" />
-                      Edit
+                      Edit ad
                     </Link>
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon"
-                    aria-label="Delete project"
+                    aria-label="Delete New Build ad"
                     className="text-destructive hover:text-destructive"
                     onClick={() => setDeleteTarget(p.id)}
                   >
@@ -137,7 +137,7 @@ export default function ProjectsTab() {
               {Array.isArray(p.listings) && p.listings.length > 0 && (
                 <div className="border-t border-border px-5 py-3 bg-muted/20">
                   <p className="text-xs text-muted-foreground mb-2">
-                    {p.listings.length} linked listing(s)
+                    Public New Build ad
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {(p.listings as ProjectListing[]).map((l: ProjectListing) => (
@@ -158,8 +158,8 @@ export default function ProjectsTab() {
       )}
       <ConfirmDialog
         open={!!deleteTarget}
-        title="Delete project?"
-        description="This will permanently remove the project, project units, and project media. Linked listings will remain published as individual listings."
+        title="Delete New Build ad?"
+        description="This removes the project data, units, and media. Any legacy linked listing rows are detached by the database safeguard."
         confirmLabel="Delete"
         onConfirm={() => { if (deleteTarget) deleteProject.mutate(deleteTarget); setDeleteTarget(null); }}
         onCancel={() => setDeleteTarget(null)}

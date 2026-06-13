@@ -7,20 +7,16 @@ const {
   navigateMock,
   useAuthMock,
   useProjectsMock,
-  useMyListingsMock,
   updateProjectMock,
   deleteProjectMock,
-  updateListingMock,
   toastMock,
   participantTypeMock,
 } = vi.hoisted(() => ({
   navigateMock: vi.fn(),
   useAuthMock: vi.fn(),
   useProjectsMock: vi.fn(),
-  useMyListingsMock: vi.fn(),
   updateProjectMock: vi.fn(),
   deleteProjectMock: vi.fn(),
-  updateListingMock: vi.fn(),
   toastMock: { error: vi.fn(), success: vi.fn() },
   participantTypeMock: vi.fn(),
 }));
@@ -83,10 +79,6 @@ vi.mock("@/hooks/useProjects", () => ({
   useUpdateProject: () => ({ mutate: updateProjectMock }),
   useDeleteProject: () => ({ mutate: deleteProjectMock }),
 }));
-vi.mock("@/hooks/useListings", () => ({
-  useMyListings: () => useMyListingsMock(),
-  useUpdateListing: () => ({ mutate: updateListingMock }),
-}));
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
   return { ...actual, useNavigate: () => navigateMock };
@@ -106,10 +98,8 @@ beforeEach(() => {
   navigateMock.mockReset();
   useAuthMock.mockReset();
   useProjectsMock.mockReset();
-  useMyListingsMock.mockReset();
   updateProjectMock.mockReset();
   deleteProjectMock.mockReset();
-  updateListingMock.mockReset();
   toastMock.error.mockReset();
   toastMock.success.mockReset();
   participantTypeMock.mockReset();
@@ -117,7 +107,6 @@ beforeEach(() => {
   useAuthMock.mockReturnValue({ user: { id: "owner-1" }, profile: { participant_type: "developer" } });
   participantTypeMock.mockReturnValue("developer");
   useProjectsMock.mockReturnValue({ data: [], isLoading: false });
-  useMyListingsMock.mockReturnValue({ data: [] });
 });
 
 describe("Projects page", () => {
@@ -126,14 +115,14 @@ describe("Projects page", () => {
 
     renderPage();
 
-    expect(screen.getByText("Sign in to manage projects")).toBeInTheDocument();
+    expect(screen.getByText("Sign in to manage New Build ads")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /sign in/i })).toHaveAttribute("href", "/login");
   });
 
   it("shows developer-only new building entry point", () => {
     renderPage();
 
-    expect(screen.getAllByRole("link", { name: /create new building/i })[0]).toHaveAttribute("href", "/listings/new-building");
+    expect(screen.getAllByRole("link", { name: /create new build ad/i })[0]).toHaveAttribute("href", "/listings/new-building");
   });
 
   it("hides the new building entry point for non-developers", () => {
@@ -141,7 +130,7 @@ describe("Projects page", () => {
 
     renderPage();
 
-    expect(screen.queryByRole("link", { name: /create new building/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /create new build ad/i })).not.toBeInTheDocument();
   });
 
   it("shows a loading spinner while projects load", () => {
@@ -155,24 +144,27 @@ describe("Projects page", () => {
   it("uses Create New Building as the only project creation entry point", () => {
     renderPage();
 
-    const createLinks = screen.getAllByRole("link", { name: /create new building/i });
+    const createLinks = screen.getAllByRole("link", { name: /create new build ad/i });
     expect(createLinks.length).toBeGreaterThan(0);
     for (const link of createLinks) {
       expect(link).toHaveAttribute("href", "/listings/new-building");
     }
     expect(screen.queryByRole("button", { name: /new project/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/Create project/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/link listings/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/attach legacy/i)).not.toBeInTheDocument();
   });
 
   it("routes the empty project state to Create New Building instead of opening a standalone form", () => {
     renderPage();
 
     expect(screen.getByText(/No projects yet/i)).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: /create new building/i }).at(-1)).toHaveAttribute("href", "/listings/new-building");
+    expect(screen.getByText(/Create one New Build ad for the whole project/i)).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: /create new build ad/i }).at(-1)).toHaveAttribute("href", "/listings/new-building");
     expect(screen.queryByRole("button", { name: /create your first project/i })).not.toBeInTheDocument();
   });
 
-  it("quick-edits, links, unlinks, and deletes an existing project", async () => {
+  it("quick-edits, shows the public ad, hides link/unlink controls, and deletes an existing project", async () => {
     useProjectsMock.mockReturnValue({
       data: [
         {
@@ -182,50 +174,28 @@ describe("Projects page", () => {
           city: "Athens",
           status: "active",
           building_permit_number: "PERMIT-1",
-          listings: [{ id: "linked-1", title: "Linked unit", price: 350000 }],
+          listings: [{ id: "linked-1", title: "Marina Heights public ad", price: 350000, listing_type: "new_build" }],
         },
       ],
       isLoading: false,
-    });
-    useMyListingsMock.mockReturnValue({
-      data: [
-        { id: "linked-1", project_id: "project-1", title: "Linked unit", listing_type: "new_build" },
-        { id: "loose-1", project_id: null, title: "Loose listing with a long display name", listing_type: "new_build" },
-        { id: "sale-1", project_id: null, title: "Ordinary sale listing", listing_type: "sale" },
-      ],
     });
 
     renderPage();
     fireEvent.click(screen.getByRole("button", { name: /quick edit/i }));
     fireEvent.blur(screen.getByLabelText("Project name"), { target: { value: "Marina Bay" } });
     fireEvent.blur(screen.getByLabelText("Project description"), { target: { value: "Updated" } });
-    fireEvent.click(screen.getByRole("button", { name: /\+ Loose listing with a long/i }));
-    fireEvent.click(screen.getByRole("button", { name: "Unlink" }));
-    fireEvent.click(screen.getByRole("button", { name: /delete project/i }));
+    fireEvent.click(screen.getByRole("button", { name: /delete new build ad/i }));
 
-    await waitFor(() => expect(screen.getByText("Delete project")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Delete New Build ad")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
 
     expect(updateProjectMock).toHaveBeenCalledWith({ id: "project-1", updates: { name: "Marina Bay" } }, expect.any(Object));
     expect(updateProjectMock).toHaveBeenCalledWith({ id: "project-1", updates: { description: "Updated" } }, expect.any(Object));
-    expect(updateListingMock).toHaveBeenCalledWith({
-      id: "loose-1",
-      updates: {
-        project_id: "project-1",
-        listing_type: "new_build",
-        is_pre_sale: false,
-        construction_status: "planning",
-      },
-    });
+    expect(screen.getByText("Public New Build ad")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Marina Heights public ad/i })).toHaveAttribute("href", "/new-build/linked-1");
+    expect(screen.queryByRole("button", { name: /unlink/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /\+ Loose listing with a long/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /\+ Ordinary sale listing/i })).not.toBeInTheDocument();
-    expect(updateListingMock).toHaveBeenCalledWith({
-      id: "linked-1",
-      updates: {
-        project_id: null,
-        listing_type: "sale",
-        is_pre_sale: false,
-      },
-    });
     expect(deleteProjectMock).toHaveBeenCalledWith("project-1");
   });
 });

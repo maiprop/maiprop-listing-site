@@ -300,8 +300,8 @@ test.describe("Listings browse", () => {
     await page.goto("/new-build/merged-new-build");
     await page.waitForLoadState("load");
 
-    await expect(page.getByText("Aegean Residences").first()).toBeVisible();
-    await expect(page.getByText("Marina Heights").first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Marina Heights" }).first()).toBeVisible();
+    await expect(page.getByText("Aegean Residences", { exact: true })).toHaveCount(0);
     await expect(page.getByText("Marina Avenue 10, Piraeus, Piraeus Municipality").first()).toBeVisible();
     await expect(page.getByText("Mai Developments").first()).toBeVisible();
     await expect(page.getByText("Aegean Studio").first()).toBeVisible();

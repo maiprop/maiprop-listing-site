@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { useProjects, useUpdateProject, useDeleteProject } from "@/hooks/useProjects";
-import { useMyListings, useUpdateListing } from "@/hooks/useListings";
 import { useAuth } from "@/contexts/AuthContext";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { ProGate } from "@/components/gates/ProGate";
@@ -17,11 +16,6 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import type { Tables } from "@/integrations/supabase/types";
 import { tFallback } from "@/lib/i18nFallback";
 import { getListingDetailPath } from "@/lib/listingRoutes";
-import {
-  getProjectLinkedListingUpdates,
-  getProjectUnlinkedListingUpdates,
-  isProjectLinkableListing,
-} from "@/lib/projectListingClassification";
 
 type ProjectListing = { id: string; title: string; cover_image_url?: string | null; price?: number | null; listing_type?: string | null };
 type ProjectWithListings = Tables<"projects"> & { listings?: ProjectListing[] };
@@ -32,12 +26,9 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
   const participantType = getParticipantTypeFromProfile(profile);
   const isDeveloper = participantType === "developer";
   const { data: projects = [], isLoading } = useProjects(user?.id);
-  const { data: myListings = [] } = useMyListings();
   const updateProject = useUpdateProject();
   const deleteProject = useDeleteProject();
-  const updateListing = useUpdateListing();
   const tr = (key: string, fallback: string) => tFallback(t, key, fallback);
-  const newBuildListings = myListings.filter(isProjectLinkableListing);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
@@ -50,14 +41,6 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
     setProjectToDelete(id);
   };
 
-  const handleLinkListing = (project: ProjectWithListings, listingId: string) => {
-    updateListing.mutate({ id: listingId, updates: getProjectLinkedListingUpdates(project) });
-  };
-
-  const handleUnlinkListing = (listingId: string) => {
-    updateListing.mutate({ id: listingId, updates: getProjectUnlinkedListingUpdates() });
-  };
-
   if (!user) {
     return (
       <div className="min-h-screen flex flex-col bg-background">
@@ -65,8 +48,8 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
         <main className="flex-1 flex items-center justify-center p-8">
           <div className="text-center">
             <Building2 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <h1 className="font-display text-xl font-semibold">{tr("projects.auth.title", "Sign in to manage projects")}</h1>
-            <p className="text-sm text-muted-foreground mt-2">{tr("projects.auth.subtitle", "Create and showcase your development projects")}</p>
+            <h1 className="font-display text-xl font-semibold">{tr("projects.auth.title", "Sign in to manage New Build ads")}</h1>
+            <p className="text-sm text-muted-foreground mt-2">{tr("projects.auth.subtitle", "Create and manage full-project New Build ads")}</p>
             <Button className="mt-4" asChild>
               <Link to="/login">{tr("projects.auth.signIn", "Sign in")}</Link>
             </Button>
@@ -84,14 +67,14 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
         <ProGate>
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="font-display text-2xl font-bold">{tr("projects.title", "Projects")}</h1>
-            <p className="text-sm text-muted-foreground mt-1">{tr("projects.subtitle", "Showcase development projects and link listings")}</p>
+            <h1 className="font-display text-2xl font-bold">{tr("projects.title", "New Build Ads")}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{tr("projects.subtitle", "Each New Build ad represents a whole project: units, prices, phases, and media.")}</p>
           </div>
           <div className="flex gap-2">
             {isDeveloper && (
               <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
                 <Link to="/listings/new-building">
-                  <Plus className="w-4 h-4" /> {tr("projects.newBuildingListing", "Create New Building")}
+                  <Plus className="w-4 h-4" /> {tr("projects.newBuildingListing", "Create New Build Ad")}
                 </Link>
               </Button>
             )}
@@ -106,11 +89,11 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
           <div className="glass-card rounded-xl p-12 text-center">
             <FolderOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <h2 className="font-semibold">{tr("projects.empty.title", "No projects yet")}</h2>
-            <p className="text-sm text-muted-foreground mt-2">{tr("projects.empty.subtitle", "Create a new building to create the project, first unit, and public ad together.")}</p>
+            <p className="text-sm text-muted-foreground mt-2">{tr("projects.empty.subtitle", "Create one New Build ad for the whole project, then add units, prices, phases, and media inside it.")}</p>
             {isDeveloper && (
               <Button className="mt-4 bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
                 <Link to="/listings/new-building">
-                  <Plus className="w-4 h-4" /> {tr("projects.empty.cta", "Create New Building")}
+                  <Plus className="w-4 h-4" /> {tr("projects.empty.cta", "Create New Build Ad")}
                 </Link>
               </Button>
             )}
@@ -119,7 +102,6 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
           <div className="space-y-6">
             {(projects as ProjectWithListings[]).map((p) => {
               const listings = Array.isArray(p.listings) ? p.listings : [];
-              const linkableListings = newBuildListings.filter((l) => l.project_id !== p.id);
               const isEditing = editingId === p.id;
 
               return (
@@ -174,7 +156,7 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
                     </div>
                     <div className="flex items-center gap-1">
                       <Button variant="outline" size="sm" className="border-border" asChild>
-                        <Link to={`/projects/${p.id}`}>{tr("projects.actions.editFull", "Edit full")}</Link>
+                        <Link to={`/projects/${p.id}`}>{tr("projects.actions.editFull", "Edit ad")}</Link>
                       </Button>
                       <Button
                         variant="ghost"
@@ -188,7 +170,7 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
                         variant="ghost"
                         size="icon"
                         onClick={() => handleDelete(p.id)}
-                        aria-label={tr("projects.actions.deleteProject", "Delete project")}
+                        aria-label={tr("projects.actions.deleteProject", "Delete New Build ad")}
                         className="text-destructive hover:text-destructive"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -198,7 +180,7 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
 
                   {listings.length > 0 && (
                     <div className="border-t border-border px-5 py-4">
-                      <h4 className="text-xs font-medium text-muted-foreground mb-3">{tr("projects.labels.listingsInProject", "Listings in this project")}</h4>
+                      <h4 className="text-xs font-medium text-muted-foreground mb-3">{tr("projects.labels.listingsInProject", "Public New Build ad")}</h4>
                       <div className="flex flex-wrap gap-2">
                         {listings.map((l) => (
                           <div
@@ -214,36 +196,12 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
                               </Link>
                               <span className="text-muted-foreground ml-2">€{Number(l.price).toLocaleString()}</span>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleUnlinkListing(l.id)}
-                            >
-                              {tr("projects.actions.unlink", "Unlink")}
-                            </Button>
                           </div>
                         ))}
                       </div>
                     </div>
                   )}
 
-                  {linkableListings.length > 0 && (
-                    <div className="border-t border-border px-5 py-4 bg-muted/30">
-                    <h4 className="text-xs font-medium text-muted-foreground mb-2">{tr("projects.labels.linkListings", "Attach legacy New Building ads")}</h4>
-                    <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
-                      {linkableListings.map((l) => (
-                          <Button
-                            key={l.id}
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleLinkListing(p, l.id)}
-                          >
-                            + {l.title?.slice(0, 30)}{l.title?.length > 30 ? "…" : ""}
-                          </Button>
-                        ))}
-                    </div>
-                    </div>
-                  )}
                 </div>
               );
             })}
@@ -262,8 +220,8 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
       <Footer />
       <ConfirmDialog
         open={Boolean(projectToDelete)}
-        title={tr("projects.deleteDialog.title", "Delete project")}
-        description={tr("projects.deleteDialog.description", "Delete this project? Linked listings will be unlinked.")}
+        title={tr("projects.deleteDialog.title", "Delete New Build ad")}
+        description={tr("projects.deleteDialog.description", "This removes the project data, units, and media. Any legacy linked listing rows are detached by the database safeguard.")}
         confirmLabel={tr("projects.deleteDialog.confirm", "Delete")}
         onConfirm={() => {
           if (projectToDelete) deleteProject.mutate(projectToDelete);

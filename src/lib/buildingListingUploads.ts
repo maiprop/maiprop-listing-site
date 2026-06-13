@@ -31,7 +31,7 @@ const PROJECT_MEDIA_MIME_TYPES = new Set<string>([
 ]);
 
 const LISTING_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
-const PROJECT_MEDIA_MAX_BYTES = 20 * 1024 * 1024;
+const PROJECT_MEDIA_MAX_BYTES = 50 * 1024 * 1024;
 
 /** Per-upload type returned by `uploadListingImage`. */
 export interface UploadedListingImage {

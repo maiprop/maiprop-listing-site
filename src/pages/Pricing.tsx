@@ -529,7 +529,7 @@ export default function Pricing() {
   return (
     <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
       <Navbar />
-      <div className="pt-16">
+      <main id="main-content" className="pt-16">
 
         {/* ── Hero ──────────────────────────────────────────────────────────── */}
         <div className="border-b border-border bg-card/60 py-12 sm:py-16">
@@ -834,7 +834,7 @@ export default function Pricing() {
           </div>
         </div>}
 
-      </div>
+      </main>
       <Footer />
     </div>
   );

@@ -53,7 +53,7 @@ export default function ResetPassword() { // skipcq: JS-R1005 - Password reset r
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <Navbar />
-        <div className="flex-1 flex items-center justify-center pt-16 px-4">
+        <main id="main-content" className="flex-1 flex items-center justify-center pt-16 px-4 pb-40 sm:pb-16">
           <div className="w-full max-w-sm glass-card rounded-2xl p-8 border border-border text-center">
             <ShieldCheck className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <h2 className="font-display font-bold text-xl mb-2">Invalid Reset Link</h2>
@@ -62,7 +62,7 @@ export default function ResetPassword() { // skipcq: JS-R1005 - Password reset r
               Back to Sign In
             </Button>
           </div>
-        </div>
+        </main>
       </div>
     );
   }
@@ -71,7 +71,7 @@ export default function ResetPassword() { // skipcq: JS-R1005 - Password reset r
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <Navbar />
-        <div className="flex-1 flex items-center justify-center pt-16 px-4">
+        <main id="main-content" className="flex-1 flex items-center justify-center pt-16 px-4 pb-40 sm:pb-16">
           <div className="w-full max-w-sm glass-card rounded-2xl p-8 border border-border text-center">
             <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/25 flex items-center justify-center mx-auto mb-5">
               <CheckCircle className="w-8 h-8 text-primary" />
@@ -79,7 +79,7 @@ export default function ResetPassword() { // skipcq: JS-R1005 - Password reset r
             <h2 className="font-display font-bold text-xl mb-2">Password updated!</h2>
             <p className="text-muted-foreground text-sm">Redirecting you to your dashboard…</p>
           </div>
-        </div>
+        </main>
       </div>
     );
   }
@@ -87,7 +87,7 @@ export default function ResetPassword() { // skipcq: JS-R1005 - Password reset r
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
-      <div className="flex-1 flex items-center justify-center pt-16 px-4">
+      <main id="main-content" className="flex-1 flex items-center justify-center pt-16 px-4 pb-40 sm:pb-16">
         <div className="w-full max-w-sm">
           <div className="glass-card rounded-2xl p-8 border border-border">
             <div className="text-center mb-6">
@@ -139,7 +139,7 @@ export default function ResetPassword() { // skipcq: JS-R1005 - Password reset r
             </form>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

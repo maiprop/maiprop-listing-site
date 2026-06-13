@@ -81,7 +81,7 @@ export const AddonCard = ({
         ) : (
           <CreditCard className="w-3.5 h-3.5" />
         )}
-        Buy add-on
+        {item.manual ? "Contact team" : "Buy add-on"}
       </Button>
     </div>
   );

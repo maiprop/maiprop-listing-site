@@ -547,7 +547,7 @@
         "title": "Developer tools require Pro",
         "subtitle": "Unlimited listings, project showcases, project ad management, and featured placement are all part of the Developer Pro plan.",
         "trial": "Start 7-day free trial",
-        "previewTools": "Preview listing tools"
+        "previewTools": "View Developer Plan"
       },
       "proUpgrade": {
         "title": "Unlock the full Dashboard",
@@ -582,8 +582,8 @@
       }
     },
     "booking": {
-      "title": "Booking & Calendar",
-      "subtitle": "Your consultations and scheduled viewings in one place."
+      "title": "Booking Calendar",
+      "subtitle": "Scheduled consultations and viewings live here. New inquiries stay in Leads CRM."
     },
     "proFeatures": {
       "developerProjects": "Developer projects",
@@ -1246,8 +1246,8 @@
     "auctionAlerts": "Auction Alerts",
     "openHouses": "Open Houses",
     "myServices": "My Services",
-    "booking": "Booking",
-    "leads": "Leads",
+    "booking": "Booking Calendar",
+    "leads": "Leads CRM",
     "contacts": "Contacts",
     "projects": "Projects",
     "portfolios": "Portfolios",
@@ -1928,13 +1928,13 @@
     }
   },
   "newBuildingListing": {
-    "title": "Create New Building",
+    "title": "Create New Build Ad",
     "stepProgress": "Step {{current}} of {{total}} - {{label}}",
     "steps": {
-      "building": "Building",
-      "unit": "Unit",
+      "building": "Project",
+      "unit": "Inventory",
       "media": "Media",
-      "listing": "Listing",
+      "listing": "Ad",
       "photos": "Photos"
     },
     "plan": {
@@ -1981,8 +1981,8 @@
       "deliveryDate": "Delivery date"
     },
     "unit": {
-      "heading": "Unit Details",
-      "subtitle": "Details for the specific unit you are listing.",
+      "heading": "Project Inventory",
+      "subtitle": "Add the first available unit, price, and specs for this New Build ad. You can add more units later.",
       "unitId": "Unit ID",
       "floor": "Floor",
       "unitNumber": "Unit number",
@@ -2031,16 +2031,16 @@
       }
     },
     "listing": {
-      "heading": "Listing Info",
-      "subtitle": "Title and description for the listing. A default title was suggested from your project and unit.",
-      "title": "Listing title",
-      "titlePlaceholder": "e.g. Marina Heights - Unit A101",
+      "heading": "Public New Build Ad",
+      "subtitle": "Title and description for the public project ad. The ad will use the project inventory, media, and timeline from this wizard.",
+      "title": "Ad title",
+      "titlePlaceholder": "e.g. Marina Heights - new residences in Glyfada",
       "description": "Description",
-      "descriptionPlaceholder": "Describe the unit, building amenities, finishes..."
+      "descriptionPlaceholder": "Describe the project, available units, finishes, amenities, and delivery plan..."
     },
     "photos": {
-      "heading": "Listing Photos",
-      "subtitle": "Upload photos for your listing. Drag to reorder. Click \"Set as cover\" on the main photo.",
+      "heading": "Project Ad Photos",
+      "subtitle": "Upload project photos and renderings for the public New Build ad. Drag to reorder and set a cover photo.",
       "dropPrompt": "Drop photos or click to upload",
       "fileHint": "JPG, PNG, WEBP - max 20",
       "cover": "Cover",
@@ -2049,12 +2049,12 @@
     "actions": {
       "back": "Back",
       "next": "Next",
-      "creating": "Creating...",
-      "createListing": "Create New Building"
+      "creating": "Publishing...",
+      "createListing": "Publish New Build Ad"
     },
     "links": {
       "regularListing": "Create a regular listing",
-      "myProjects": "My projects"
+      "myProjects": "Manage New Build Ads"
     },
     "validation": {
       "mustBeLoggedIn": "Must be logged in",
@@ -2072,26 +2072,26 @@
       "coverRequired": "Set a cover photo",
       "projectFieldsRequired": "Fill in required project fields",
       "unitFieldsRequired": "Fill in required unit fields",
-      "created": "New building created!",
-      "createFailed": "Failed to create new building. Please try again.",
+      "created": "New Build ad published!",
+      "createFailed": "Failed to publish New Build ad. Please try again.",
       "unsupportedFile": "Unsupported file"
     }
   },
   "projects": {
-    "title": "Projects",
-    "subtitle": "Showcase development projects created through Create New Building",
-    "newBuildingListing": "Create New Building",
-    "newProject": "Create New Building",
+    "title": "New Build Ads",
+    "subtitle": "Each New Build ad represents a whole project: units, prices, phases, and media.",
+    "newBuildingListing": "Create New Build Ad",
+    "newProject": "Create New Build Ad",
     "auth": {
-      "title": "Sign in to manage projects",
-      "subtitle": "Create and showcase your development projects",
+      "title": "Sign in to manage New Build ads",
+      "subtitle": "Create and manage full-project New Build ads",
       "signIn": "Sign in"
     },
     "validation": {
       "nameRequired": "Project name is required"
     },
     "create": {
-      "title": "Create New Building"
+      "title": "Create New Build Ad"
     },
     "fields": {
       "name": "Name",
@@ -2111,30 +2111,30 @@
     "actions": {
       "create": "Create",
       "cancel": "Cancel",
-      "editFull": "Edit full",
+      "editFull": "Edit ad",
       "doneEditing": "Done editing",
       "quickEdit": "Quick edit",
-      "deleteProject": "Delete project",
+      "deleteProject": "Delete New Build ad",
       "unlink": "Unlink",
       "backToDashboard": "Back to Dashboard"
     },
     "empty": {
       "title": "No projects yet",
-      "subtitle": "Create a new building to create the project, first unit, and public ad together.",
-      "cta": "Create New Building",
+      "subtitle": "Create one New Build ad for the whole project, then add units, prices, phases, and media inside it.",
+      "cta": "Create New Build Ad",
       "noUnlinked": "No unlinked listings.",
       "createOne": "Create one",
       "noUnlinkedNewBuilds": "No legacy New Building ads to attach.",
-      "createNewBuilding": "Create New Building"
+      "createNewBuilding": "Create New Build Ad"
     },
     "labels": {
       "permit": "Permit",
-      "listingsInProject": "Listings in this project",
+      "listingsInProject": "Public New Build ad",
       "linkListings": "Attach legacy New Building ads"
     },
     "deleteDialog": {
-      "title": "Delete project",
-      "description": "Delete this project? Linked listings will be unlinked.",
+      "title": "Delete New Build ad",
+      "description": "This removes the project data, units, and media. Any legacy linked listing rows are detached by the database safeguard.",
       "confirm": "Delete"
     },
     "detail": {
@@ -2148,7 +2148,8 @@
         "media": "Media",
         "units": "Units (inventory & pricing)",
         "leads": "Lead management",
-        "linkedListings": "Linked listings"
+        "linkedListings": "Public New Build ad",
+        "publicAd": "Public New Build ad"
       },
       "stats": {
         "available": "Available",
@@ -2218,7 +2219,8 @@
         "deleteUnit": "Delete unit",
         "addUnit": "Add unit",
         "addLead": "Add lead",
-        "deleteLeadNamed": "Delete lead {{name}}"
+        "deleteLeadNamed": "Delete lead {{name}}",
+        "viewPublicAd": "View ad"
       },
       "leads": {
         "caption": "Track and manage leads interested in this project.",
@@ -2242,6 +2244,10 @@
         "caption": "Project ads created through Create New Building appear on the project showcase.",
         "newBuilding": "New Building",
         "empty": "No project ads linked yet."
+      },
+      "publicAd": {
+        "caption": "The public ad for this project uses the project details, units, pricing, phases, and media managed here.",
+        "empty": "No public ad has been published for this project yet."
       },
       "dialogs": {
         "bulkPrice": {
@@ -2307,6 +2313,7 @@
   "newBuildDetail": {
     "backToNewBuilds": "Back to New Buildings",
     "fallbackInterestedBuyer": "Interested buyer",
+    "fromPrice": "From {{price}}",
     "pricePerSqm": "{{price}} per m²",
     "badges": {
       "newBuild": "New Building",

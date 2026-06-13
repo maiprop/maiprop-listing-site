@@ -4,7 +4,7 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import { renderWithProviders } from "@/test/utils";
 import type { ListingCardWithRaw } from "@/lib/listingsCardUtils";
 
-const { filterState, setParam, setParams, clearAllFilters, toggleMulti, pipelineState, authState, loadGoogleMapsPlaces, trackUserSearch } = vi.hoisted(() => {
+const { filterState, setParam, setParams, clearAllFilters, toggleMulti, pipelineState, authState, isMobileState, loadGoogleMapsPlaces, trackUserSearch } = vi.hoisted(() => {
   const setParam = vi.fn();
   const setParams = vi.fn();
   const clearAllFilters = vi.fn();
@@ -52,7 +52,8 @@ const { filterState, setParam, setParams, clearAllFilters, toggleMulti, pipeline
     sentinelRef: { current: null },
   };
   const authState = { user: null as null | { id: string } };
-  return { filterState, setParam, setParams, clearAllFilters, toggleMulti, pipelineState, authState, loadGoogleMapsPlaces, trackUserSearch };
+  const isMobileState = { value: false };
+  return { filterState, setParam, setParams, clearAllFilters, toggleMulti, pipelineState, authState, isMobileState, loadGoogleMapsPlaces, trackUserSearch };
 });
 
 vi.mock("@/lib/config", () => ({
@@ -80,6 +81,10 @@ vi.mock("@/hooks/useTrackUserSearch", () => ({
 
 vi.mock("@/hooks/useSmartFilters", () => ({
   useSmartFilters: () => ({ config: { features: [] }, loading: false }),
+}));
+
+vi.mock("@/hooks/use-mobile", () => ({
+  useIsMobile: () => isMobileState.value,
 }));
 
 vi.mock("@/contexts/AuthContext", () => ({
@@ -236,6 +241,7 @@ describe("Listings page interactions", () => {
     pipelineState.isError = false;
     pipelineState.hasNextPage = false;
     pipelineState.isFetchingNextPage = false;
+    isMobileState.value = false;
     trackUserSearch.mockReset();
     trackUserSearch.mockResolvedValue(undefined);
     delete (window as typeof window & { google?: unknown }).google;
@@ -275,6 +281,17 @@ describe("Listings page interactions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close advanced" }));
     expect(screen.queryByTestId("advanced-filters")).not.toBeInTheDocument();
   }, 15_000);
+
+  it("does not mount the advanced filters panel when mobile compact filters are open", async () => {
+    isMobileState.value = true;
+    const { default: Listings } = await import("@/pages/Listings");
+    renderWithProviders(<Listings />);
+
+    fireEvent.click(screen.getByLabelText("Filters"));
+
+    expect(screen.getByLabelText(/new buildings/i)).toBeInTheDocument();
+    expect(screen.queryByTestId("advanced-filters")).not.toBeInTheDocument();
+  });
 
   it("loads Google Places for listing search only after focus and applies the selected location", async () => {
     let placeChanged: (() => void) | undefined;
@@ -422,6 +439,8 @@ describe("Listings page interactions", () => {
     fireEvent.click(screen.getByLabelText(/new buildings/i));
     expect(screen.queryByLabelText(/off-market/i)).not.toBeInTheDocument();
     expect(setParams).toHaveBeenCalledWith([["listing_type", "new_build"], ["pre_sale", ""]]);
+    expect(setParam).not.toHaveBeenCalledWith("listing_type", "new_build");
+    expect(setParam).not.toHaveBeenCalledWith("pre_sale", "");
 
     fireEvent.click(screen.getByRole("button", { name: "Clear all filters" }));
     expect(clearAllFilters).toHaveBeenCalled();

@@ -128,6 +128,37 @@ describe("CreateNewBuildingListing", () => {
     allowed.unmount();
   });
 
+  it("presents the wizard as one New Build project ad, not a project plus linked listings", async () => {
+    renderPage();
+
+    expect(screen.getByRole("heading", { name: /Create New Build Ad/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Project/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Inventory/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Ad/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Create a regular listing/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Manage New Build Ads/i })).toHaveAttribute("href", "/projects");
+
+    fillRequiredProject();
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    expect(await screen.findByText(/Step 2 of 5/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Project Inventory/i })).toBeInTheDocument();
+    expect(screen.getByText(/Add the first available unit/i)).toBeInTheDocument();
+    expect(screen.queryByText(/specific unit you are listing/i)).not.toBeInTheDocument();
+
+    fillRequiredUnit();
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    expect(await screen.findByText(/Step 3 of 5/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    expect(await screen.findByText(/Step 4 of 5/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Public New Build Ad/i })).toBeInTheDocument();
+    expect(screen.queryByText(/Listing Info/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    expect(await screen.findByText(/Step 5 of 5/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Project Ad Photos/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Publish New Build Ad/i })).toBeInTheDocument();
+  });
+
   it("validates required fields across the building, unit, listing, and photos steps", async () => {
     renderPage();
 
@@ -149,14 +180,11 @@ describe("CreateNewBuildingListing", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Next/i }));
     expect(await screen.findByText(/Step 4 of 5/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
-    expect(await screen.findByText("Listing title is required")).toBeInTheDocument();
-
-    fireEvent.change(screen.getByPlaceholderText("e.g. Marina Heights - Unit A101"), { target: { value: "Marina Heights A101" } });
+    expect(screen.getByDisplayValue("Marina Heights")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Next/i }));
     expect(await screen.findByText(/Step 5 of 5/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /Create New Building/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Publish New Build Ad/i }));
     expect(toastMock.error).toHaveBeenLastCalledWith("At least one photo is required");
     expect(submitMock).not.toHaveBeenCalled();
   });
@@ -167,7 +195,7 @@ describe("CreateNewBuildingListing", () => {
     fillRequiredProject();
     fireEvent.click(screen.getByRole("button", { name: /Next/i }));
     await screen.findByText(/Step 2 of 5/i);
-    fireEvent.click(screen.getByRole("button", { name: /Building/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Project/i }));
     await screen.findByText(/Step 1 of 5/i);
     fireEvent.click(screen.getByRole("button", { name: /Next/i }));
     await screen.findByText(/Step 2 of 5/i);
@@ -176,7 +204,7 @@ describe("CreateNewBuildingListing", () => {
     await screen.findByText(/Step 3 of 5/i);
     fireEvent.click(screen.getByRole("button", { name: /Next/i }));
     await screen.findByText(/Step 4 of 5/i);
-    fireEvent.change(screen.getByPlaceholderText("e.g. Marina Heights - Unit A101"), { target: { value: "Marina Heights A101" } });
+    fireEvent.change(screen.getByPlaceholderText("e.g. Marina Heights - new residences in Glyfada"), { target: { value: "Marina Heights A101" } });
     fireEvent.click(screen.getByRole("button", { name: /Next/i }));
     await screen.findByText(/Step 5 of 5/i);
 
@@ -188,7 +216,7 @@ describe("CreateNewBuildingListing", () => {
     await waitFor(() => expect(uploadListingImageMock).toHaveBeenCalledWith(file, "u-1"));
     await screen.findByRole("button", { name: /Cover/i });
 
-    fireEvent.click(screen.getByRole("button", { name: /Create New Building/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Publish New Build Ad/i }));
 
     await waitFor(() => expect(submitMock).toHaveBeenCalledWith(expect.objectContaining({
       userId: "u-1",
@@ -196,7 +224,7 @@ describe("CreateNewBuildingListing", () => {
       coverImageUrl: "https://cdn.test/cover.jpg",
       additionalImageUrls: [],
     })));
-    expect(toastMock.success).toHaveBeenCalledWith("New building created!");
+    expect(toastMock.success).toHaveBeenCalledWith("New Build ad published!");
     expect(navigateMock).toHaveBeenCalledWith("/new-build/listing-1");
   });
 
@@ -217,7 +245,7 @@ describe("CreateNewBuildingListing", () => {
     await screen.findByText(/Step 3 of 5/i);
     fireEvent.click(screen.getByRole("button", { name: /Next/i }));
     await screen.findByText(/Step 4 of 5/i);
-    fireEvent.change(screen.getByPlaceholderText("e.g. Marina Heights - Unit A101"), { target: { value: "Marina Heights A101" } });
+    fireEvent.change(screen.getByPlaceholderText("e.g. Marina Heights - new residences in Glyfada"), { target: { value: "Marina Heights A101" } });
     fireEvent.click(screen.getByRole("button", { name: /Next/i }));
     await screen.findByText(/Step 5 of 5/i);
 
@@ -225,7 +253,7 @@ describe("CreateNewBuildingListing", () => {
       target: { files: [new File(["photo"], "cover.jpg", { type: "image/jpeg" })] },
     });
     await screen.findByRole("button", { name: /Cover/i });
-    fireEvent.click(screen.getByRole("button", { name: /Create New Building/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Publish New Build Ad/i }));
 
     await waitFor(() => expect(submitMock).toHaveBeenCalledWith(expect.objectContaining({
       project: expect.objectContaining({
@@ -256,7 +284,7 @@ describe("CreateNewBuildingListing", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Next/i }));
     await screen.findByText(/Step 4 of 5/i);
-    fireEvent.change(screen.getByPlaceholderText("e.g. Marina Heights - Unit A101"), { target: { value: "Marina Heights A101" } });
+    fireEvent.change(screen.getByPlaceholderText("e.g. Marina Heights - new residences in Glyfada"), { target: { value: "Marina Heights A101" } });
     fireEvent.click(screen.getByRole("button", { name: /Next/i }));
     await screen.findByText(/Step 5 of 5/i);
 
@@ -264,9 +292,9 @@ describe("CreateNewBuildingListing", () => {
       target: { files: [new File(["photo"], "cover.jpg", { type: "image/jpeg" })] },
     });
     await screen.findByRole("button", { name: /Cover/i });
-    fireEvent.click(screen.getByRole("button", { name: /Create New Building/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Publish New Build Ad/i }));
 
-    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith("Failed to create new building. Please try again."));
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith("Failed to publish New Build ad. Please try again."));
     expect(navigateMock).not.toHaveBeenCalledWith("/new-build/listing-1");
   });
 
@@ -335,8 +363,8 @@ describe("CreateNewBuildingListing", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Next/i }));
     await screen.findByText(/Step 4 of 5/i);
-    fireEvent.change(screen.getByPlaceholderText("e.g. Marina Heights - Unit A101"), { target: { value: "B203 at Marina Park" } });
-    fireEvent.change(screen.getByPlaceholderText("Describe the unit, building amenities, finishes..."), {
+    fireEvent.change(screen.getByPlaceholderText("e.g. Marina Heights - new residences in Glyfada"), { target: { value: "B203 at Marina Park" } });
+    fireEvent.change(screen.getByPlaceholderText("Describe the project, available units, finishes, amenities, and delivery plan..."), {
       target: { value: "Detailed listing copy" },
     });
 
@@ -356,7 +384,7 @@ describe("CreateNewBuildingListing", () => {
     await waitFor(() => expect(uploadListingImageMock).toHaveBeenCalledWith(clickFile, "u-1"));
 
     fireEvent.click(await screen.findByRole("button", { name: /Set as cover/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Create New Building/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Publish New Build Ad/i }));
 
     await waitFor(() => expect(submitMock).toHaveBeenCalledWith(expect.objectContaining({
       finalTitle: "B203 at Marina Park",

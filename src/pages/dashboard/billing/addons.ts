@@ -22,6 +22,7 @@ export type AddonItem = {
   desc: string;
   icon: ElementType;
   badge?: string;
+  manual?: boolean;
 };
 export type AddonSection = { category: string; accent: string; items: AddonItem[] };
 
@@ -280,6 +281,7 @@ export const ADDONS_BY_ROLE: Record<string, AddonSection[]> = {
           unit: "/ month",
           desc: "Greek property price index, transaction comps, regional trend reports.",
           icon: TrendingUp,
+          manual: true,
         },
       ],
     },
@@ -429,7 +431,6 @@ const ADDON_KEY_BY_NAME: Record<string, string> = {
   "Featured + Priority": "featured_priority_bundle",
   "Extra Listing Slot": "extra_listing",
   "Extra Project Listing": "extra_listing",
-  "Market Intelligence": "market_intelligence",
   "Extra Agent Seat": "agent_extra_seat",
   "Agency-Branded Profile": "agency_branded_profile",
   "Dedicated Account Mgr": "agency_dedicated_manager",
@@ -447,7 +448,8 @@ const ADDON_KEY_PREFIXES: Array<[string, string]> = [
   ["Neighbourhood Bundle", "neighbourhood_report_bundle"],
 ];
 
-export const resolveAddonKey = (item: Pick<AddonItem, "name">): string | null => {
+export const resolveAddonKey = (item: Pick<AddonItem, "name" | "manual">): string | null => {
+  if (item.manual) return null;
   const prefixMatch = ADDON_KEY_PREFIXES.find(([prefix]) => item.name.startsWith(prefix));
   return prefixMatch?.[1] ?? ADDON_KEY_BY_NAME[item.name] ?? null;
 };

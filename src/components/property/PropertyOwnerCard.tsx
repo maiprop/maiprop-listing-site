@@ -112,6 +112,15 @@ export default function PropertyOwnerCard({
 
       {!isAuction && (
         <div className="p-5 space-y-2.5">
+          {!ownerIsPro && (
+            <Button
+              className="h-auto min-h-[44px] w-full whitespace-normal bg-gradient-primary border-0 text-center leading-tight text-primary-foreground gap-2"
+              onClick={onContact}
+              disabled={isContactPending}>
+              {isContactPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
+              {isGreek ? "Αποστολή μηνύματος" : "Send Message"}
+            </Button>
+          )}
           {ownerIsPro ? (
             <>
               <Button
@@ -138,7 +147,7 @@ export default function PropertyOwnerCard({
               </Button>
             </>
           ) : (
-            <p className="text-xs text-muted-foreground">{isGreek ? "Τα μηνύματα και ο συγχρονισμός ημερολογίου είναι διαθέσιμα σε ιδιοκτήτες με Pro." : "Messaging and calendar sync available for Pro property owners."}</p>
+            <p className="text-xs text-muted-foreground">{isGreek ? "Η προβολή, οι κλήσεις και ο συγχρονισμός ημερολογίου ξεκλειδώνουν όταν ο ιδιοκτήτης αναβαθμίσει σε Pro." : "Viewing, calls, and calendar sync unlock when this property owner upgrades to Pro."}</p>
           )}
         </div>
       )}

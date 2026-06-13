@@ -61,8 +61,9 @@ vi.mock("@/components/property/PropertyScoresSection", () => ({
   PropertyScoresSection: ({ walkScore }: { walkScore: number | null }) => <div data-testid="scores">walk:{walkScore ?? "none"}</div>,
 }));
 vi.mock("@/components/new-build/PropertyGallery", () => ({
-  PropertyGallery: ({ onFavorite, onShare }: { onFavorite: () => void; onShare: () => void }) => (
+  PropertyGallery: ({ title, onFavorite, onShare }: { title: string; onFavorite: () => void; onShare: () => void }) => (
     <div>
+      <span>gallery title:{title}</span>
       <button type="button" onClick={onFavorite}>favorite</button>
       <button type="button" onClick={onShare}>share</button>
     </div>
@@ -339,7 +340,10 @@ describe("NewBuildDetail", () => {
   it("renders the linked project summary and passes project units and media to the new-build sections", () => {
     renderPage();
 
-    expect(screen.getByText("Marina Heights")).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { name: "Marina Heights" }).length).toBeGreaterThan(0);
+    expect(screen.getByText("gallery title:Marina Heights")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Aegean Residences" })).not.toBeInTheDocument();
+    expect(screen.getByText(/From/)).toHaveTextContent(/410[,.]000/);
     expect(screen.getByText("Mai Developments")).toBeInTheDocument();
     expect(screen.getByText("Aegean Studio")).toBeInTheDocument();
     expect(screen.getByText("BuildCo")).toBeInTheDocument();
@@ -360,6 +364,9 @@ describe("NewBuildDetail", () => {
     renderPage();
 
     await waitFor(() => expect(functionsInvokeMock).toHaveBeenCalledWith("property-valuation", expect.any(Object)));
+    expect(functionsInvokeMock).toHaveBeenCalledWith("property-valuation", expect.objectContaining({
+      body: expect.objectContaining({ title: "Marina Heights" }),
+    }));
     expect(await screen.findByText("AI Estimate")).toBeInTheDocument();
     expect(screen.getByText(/500\.000/)).toBeInTheDocument();
 

@@ -24,7 +24,6 @@ import {
   type ProjectLeadInsert, type ProjectLead,
 } from "@/hooks/useProjectLeads";
 import { useProjectViews } from "@/hooks/useProjectViews";
-import { useMyListings, useUpdateListing } from "@/hooks/useListings";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -37,11 +36,6 @@ import {
 } from "@/lib/uploadValidation";
 import { tFallback, tInterpolate } from "@/lib/i18nFallback";
 import { getListingDetailPath } from "@/lib/listingRoutes";
-import {
-  getProjectLinkedListingUpdates,
-  getProjectUnlinkedListingUpdates,
-  isProjectLinkableListing,
-} from "@/lib/projectListingClassification";
 
 const INPUT_CLS = "w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors";
 const LABEL_CLS = "text-xs text-muted-foreground block mb-1.5 font-medium";
@@ -88,7 +82,6 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
   const { data: media = [] } = useProjectMedia(id);
   const { data: leads = [] } = useProjectLeads(id);
   const { data: viewsData } = useProjectViews(id);
-  const { data: myListings = [] } = useMyListings();
   const createLead = useCreateProjectLead();
   const updateLead = useUpdateProjectLead();
   const deleteLead = useDeleteProjectLead();
@@ -99,7 +92,6 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
   const deleteUnit = useDeleteProjectUnit();
   const addMedia = useAddProjectMedia();
   const deleteMedia = useDeleteProjectMedia();
-  const updateListing = useUpdateListing();
 
   const [form, setForm] = useState<Record<string, string | number | boolean | null | undefined>>({});
   const [saving, setSaving] = useState(false);
@@ -213,15 +205,6 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
     setUnitToDelete(unitId);
   };
 
-  const handleLinkListing = (listingId: string) => {
-    if (!project) return;
-    updateListing.mutate({ id: listingId, updates: getProjectLinkedListingUpdates(project) });
-  };
-
-  const handleUnlinkListing = (listingId: string) => {
-    updateListing.mutate({ id: listingId, updates: getProjectUnlinkedListingUpdates() });
-  };
-
   const handleAddLead = () => {
     if (!id || !leadForm.name?.trim()) return;
     createLead.mutate({ ...leadForm, project_id: id, name: leadForm.name.trim() } as ProjectLeadInsert, {
@@ -308,9 +291,6 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
   };
 
   const listings: Array<{ id: string; title?: string | null; sqm?: number | null; price?: number | null; cover_image_url?: string | null; listing_type?: string | null; views_count?: number }> = Array.isArray((project as unknown as Record<string, unknown>).listings) ? (project as unknown as { listings: Array<{ id: string; title?: string | null; sqm?: number | null; price?: number | null; cover_image_url?: string | null; listing_type?: string | null; views_count?: number }> }).listings : [];
-  const linkedListingIds = new Set(listings.map((l) => l.id));
-  const unlinkedNewBuildListings = myListings.filter((l) => isProjectLinkableListing(l) && !linkedListingIds.has(l.id));
-  const hasLegacyLinkCandidates = unlinkedNewBuildListings.length > 0;
   const availableCount = units.filter((u) => u.availability_status === "available").length;
   const reservedCount = units.filter((u) => u.availability_status === "reserved").length;
   const soldCount = units.filter((u) => u.availability_status === "sold").length;
@@ -535,29 +515,24 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
             </div>
           </Section>
 
-          {/* 7. Linked listings */}
-          <Section title={tr("projects.detail.sections.linkedListings", "Linked listings")} icon={Building2}>
-            <p className="text-sm text-muted-foreground mb-3">{tr("projects.detail.linkedListings.caption", "Project ads created through Create New Building appear on the project showcase.")}</p>
+          {/* 7. Public ad */}
+          <Section title={tr("projects.detail.sections.publicAd", "Public New Build ad")} icon={Building2}>
+            <p className="text-sm text-muted-foreground mb-3">{tr("projects.detail.publicAd.caption", "The public ad for this project uses the project details, units, pricing, phases, and media managed here.")}</p>
             {listings.length > 0 && (
               <div className="space-y-2 mb-4">
                 {listings.map((l) => (
                   <div key={l.id} className="flex items-center gap-3 bg-secondary rounded-xl p-3">
                     {l.cover_image_url && <img src={l.cover_image_url} alt="" className="w-12 h-12 rounded-lg object-cover" />}
                     <div className="flex-1 min-w-0"><Link to={getListingDetailPath(l)} className="font-medium hover:underline truncate block">{l.title}</Link><span className="text-xs text-muted-foreground">€{Number(l.price).toLocaleString()} · {l.sqm}m²</span></div>
-                    <Button variant="ghost" size="sm" onClick={() => handleUnlinkListing(l.id)}>{tr("projects.actions.unlink", "Unlink")}</Button>
+                    <Button variant="outline" size="sm" className="border-border" asChild>
+                      <Link to={getListingDetailPath(l)}>{tr("projects.detail.actions.viewPublicAd", "View ad")}</Link>
+                    </Button>
                   </div>
                 ))}
               </div>
             )}
-            {hasLegacyLinkCandidates && (
-            <div className="flex flex-wrap gap-2">
-              {unlinkedNewBuildListings.map((l) => (
-                <Button key={l.id} variant="outline" size="sm" className="border-border" onClick={() => handleLinkListing(l.id)}>+ {l.title?.slice(0, 25)}{(l.title?.length ?? 0) > 25 ? "…" : ""}</Button>
-              ))}
-            </div>
-            )}
-            {listings.length === 0 && !hasLegacyLinkCandidates && (
-              <p className="text-sm text-muted-foreground">{tr("projects.detail.linkedListings.empty", "No project ads linked yet.")}</p>
+            {listings.length === 0 && (
+              <p className="text-sm text-muted-foreground">{tr("projects.detail.publicAd.empty", "No public ad has been published for this project yet.")}</p>
             )}
           </Section>
         </div>

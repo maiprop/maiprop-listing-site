@@ -151,7 +151,7 @@ export function ListingsAdvancedFilters({ filteredCount, onClose }: Props) {
     selectedEnergyClasses, selectedFeatures, selectedHeating, selectedConstruction,
     hasVideoViewing, hasVirtualTour, hasMessaging,
     minAiScore, minWalkability, proFilterCount,
-    isRent, setParam, toggleMulti, clearAllFilters, getParam, getMulti,
+    isRent, setParam, setParams, toggleMulti, clearAllFilters, getParam, getMulti,
   } = useListingsFilters();
 
   const { config: aiFilterConfig, loading: aiFiltersLoading } = useSmartFilters(
@@ -181,8 +181,7 @@ export function ListingsAdvancedFilters({ filteredCount, onClose }: Props) {
                   type="checkbox"
                   checked={preSaleOnly}
                   onChange={e => {
-                    setParam("listing_type", e.target.checked ? "new_build" : "");
-                    setParam("pre_sale", "");
+                    setParams([["listing_type", e.target.checked ? "new_build" : ""], ["pre_sale", ""]]);
                   }}
                   className="rounded border-border accent-primary"
                 />
