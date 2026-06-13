@@ -87,7 +87,7 @@ describe("CreateNewBuildingListing", () => {
     renderPage();
 
     expect(screen.getByText(/Redirecting/i)).toBeInTheDocument();
-    expect(toastMock.error).toHaveBeenCalledWith("New building listings are for developers only. Switch your account type in Settings.");
+    expect(toastMock.error).toHaveBeenCalledWith("Creating new buildings is for developers only. Switch your account type in Settings.");
     expect(navigateMock).toHaveBeenCalledWith("/dashboard/settings", { replace: true });
   });
 
@@ -156,7 +156,7 @@ describe("CreateNewBuildingListing", () => {
     fireEvent.click(screen.getByRole("button", { name: /Next/i }));
     expect(await screen.findByText(/Step 5 of 5/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /Create Listing/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Create New Building/i }));
     expect(toastMock.error).toHaveBeenLastCalledWith("At least one photo is required");
     expect(submitMock).not.toHaveBeenCalled();
   });
@@ -188,7 +188,7 @@ describe("CreateNewBuildingListing", () => {
     await waitFor(() => expect(uploadListingImageMock).toHaveBeenCalledWith(file, "u-1"));
     await screen.findByRole("button", { name: /Cover/i });
 
-    fireEvent.click(screen.getByRole("button", { name: /Create Listing/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Create New Building/i }));
 
     await waitFor(() => expect(submitMock).toHaveBeenCalledWith(expect.objectContaining({
       userId: "u-1",
@@ -196,7 +196,7 @@ describe("CreateNewBuildingListing", () => {
       coverImageUrl: "https://cdn.test/cover.jpg",
       additionalImageUrls: [],
     })));
-    expect(toastMock.success).toHaveBeenCalledWith("New building listing created!");
+    expect(toastMock.success).toHaveBeenCalledWith("New building created!");
     expect(navigateMock).toHaveBeenCalledWith("/new-build/listing-1");
   });
 
@@ -225,7 +225,7 @@ describe("CreateNewBuildingListing", () => {
       target: { files: [new File(["photo"], "cover.jpg", { type: "image/jpeg" })] },
     });
     await screen.findByRole("button", { name: /Cover/i });
-    fireEvent.click(screen.getByRole("button", { name: /Create Listing/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Create New Building/i }));
 
     await waitFor(() => expect(submitMock).toHaveBeenCalledWith(expect.objectContaining({
       project: expect.objectContaining({
@@ -264,9 +264,9 @@ describe("CreateNewBuildingListing", () => {
       target: { files: [new File(["photo"], "cover.jpg", { type: "image/jpeg" })] },
     });
     await screen.findByRole("button", { name: /Cover/i });
-    fireEvent.click(screen.getByRole("button", { name: /Create Listing/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Create New Building/i }));
 
-    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith("Failed to create new building listing. Please try again."));
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith("Failed to create new building. Please try again."));
     expect(navigateMock).not.toHaveBeenCalledWith("/new-build/listing-1");
   });
 
@@ -356,7 +356,7 @@ describe("CreateNewBuildingListing", () => {
     await waitFor(() => expect(uploadListingImageMock).toHaveBeenCalledWith(clickFile, "u-1"));
 
     fireEvent.click(await screen.findByRole("button", { name: /Set as cover/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Create Listing/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Create New Building/i }));
 
     await waitFor(() => expect(submitMock).toHaveBeenCalledWith(expect.objectContaining({
       finalTitle: "B203 at Marina Park",

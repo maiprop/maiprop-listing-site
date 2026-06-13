@@ -22,6 +22,8 @@ const {
     unitUpdate: vi.fn(),
     unitUpdateEq: vi.fn(),
     listingInsert: vi.fn(),
+    listingDelete: vi.fn(),
+    listingDeleteEq: vi.fn(),
     imageInsert: vi.fn(),
   },
 }));
@@ -115,6 +117,9 @@ function installSupabaseChains({
   const projectDeleteChain = {
     eq: chains.projectDeleteEq.mockReturnThis(),
   };
+  const listingDeleteChain = {
+    eq: chains.listingDeleteEq.mockReturnThis(),
+  };
 
   fromMock.mockImplementation((table: string) => {
     if (table === "projects") {
@@ -135,6 +140,7 @@ function installSupabaseChains({
     if (table === "listings") {
       return {
         insert: chains.listingInsert.mockReturnValue(selectSingle(listingResult)),
+        delete: chains.listingDelete.mockReturnValue(listingDeleteChain),
       };
     }
     if (table === "listing_images") {
@@ -211,6 +217,7 @@ describe("useCreateBuildingListing coverage", () => {
       { listing_id: "listing-1", url: "https://cdn.test/2.jpg", sort_order: 1 },
       { listing_id: "listing-1", url: "https://cdn.test/3.jpg", sort_order: 2 },
     ]);
+    expect(chains.listingDelete).not.toHaveBeenCalled();
     expect(chains.projectDelete).not.toHaveBeenCalled();
   });
 
@@ -280,6 +287,21 @@ describe("useCreateBuildingListing coverage", () => {
 
     await expect(act(async () => result.current(makeInput()))).rejects.toThrow(listingError);
 
+    expect(chains.projectDelete).toHaveBeenCalled();
+    expect(chains.projectDeleteEq).toHaveBeenNthCalledWith(1, "id", "project-1");
+    expect(chains.projectDeleteEq).toHaveBeenNthCalledWith(2, "owner_id", "user-1");
+  });
+
+  it("rolls back the owned listing before the project if image linking fails after listing creation", async () => {
+    const imageError = new Error("listing image insert failed");
+    installSupabaseChains({ imageResult: { error: imageError } });
+    const { result } = renderHook(() => useCreateBuildingListing());
+
+    await expect(act(async () => result.current(makeInput()))).rejects.toThrow(imageError);
+
+    expect(chains.listingDelete).toHaveBeenCalled();
+    expect(chains.listingDeleteEq).toHaveBeenNthCalledWith(1, "id", "listing-1");
+    expect(chains.listingDeleteEq).toHaveBeenNthCalledWith(2, "owner_id", "user-1");
     expect(chains.projectDelete).toHaveBeenCalled();
     expect(chains.projectDeleteEq).toHaveBeenNthCalledWith(1, "id", "project-1");
     expect(chains.projectDeleteEq).toHaveBeenNthCalledWith(2, "owner_id", "user-1");

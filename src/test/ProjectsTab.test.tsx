@@ -1,17 +1,16 @@
 /**
  * Tests for the dashboard ProjectsTab. Covers: empty / loading / list
- * rendering, the "New Project" creation form (with required-name guard),
- * the delete confirmation flow, and the navigate-on-success behaviour.
+ * rendering, the single Create New Building project entry point, and the
+ * delete confirmation flow.
  */
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
-const { useAuthMock, useProjectsMock, createMutateMock, deleteMutateMock, navigateMock, toastMock } = vi.hoisted(() => ({
+const { useAuthMock, useProjectsMock, deleteMutateMock, navigateMock, toastMock } = vi.hoisted(() => ({
   useAuthMock: vi.fn(),
   useProjectsMock: vi.fn(),
-  createMutateMock: vi.fn(),
   deleteMutateMock: vi.fn(),
   navigateMock: vi.fn(),
   toastMock: { success: vi.fn(), error: vi.fn() },
@@ -20,7 +19,6 @@ const { useAuthMock, useProjectsMock, createMutateMock, deleteMutateMock, naviga
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => useAuthMock() }));
 vi.mock("@/hooks/useProjects", () => ({
   useProjects: () => useProjectsMock(),
-  useCreateProject: () => ({ mutate: createMutateMock, isPending: false }),
   useDeleteProject: () => ({ mutate: deleteMutateMock, isPending: false }),
 }));
 vi.mock("react-router-dom", async () => {
@@ -40,7 +38,6 @@ beforeEach(() => {
   useAuthMock.mockReturnValue({ user: { id: "u-1" } });
   useProjectsMock.mockReset();
   useProjectsMock.mockReturnValue({ data: [], isLoading: false });
-  createMutateMock.mockReset();
   deleteMutateMock.mockReset();
   navigateMock.mockReset();
   toastMock.success.mockReset();
@@ -74,43 +71,24 @@ describe("ProjectsTab", () => {
     expect(screen.getByText("Patras Loft")).toBeInTheDocument();
   });
 
-  it("opens the create form on 'New Project' and rejects an empty name with toast", () => {
+  it("uses Create New Building as the only project creation entry point", () => {
     render(<ProjectsTab />, { wrapper: wrap });
-    fireEvent.click(screen.getByRole("button", { name: /New Project/i }));
-    // The actual button label inside the create form is 'Create' (not Save).
-    const createBtns = screen.getAllByRole("button", { name: /^Create$/i });
-    fireEvent.click(createBtns[createBtns.length - 1]);
-    expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/name is required/i));
-    expect(createMutateMock).not.toHaveBeenCalled();
+
+    const createLinks = screen.getAllByRole("link", { name: /create new building/i });
+    expect(createLinks.length).toBeGreaterThan(0);
+    for (const link of createLinks) {
+      expect(link).toHaveAttribute("href", "/listings/new-building");
+    }
+    expect(screen.queryByRole("button", { name: /new project/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Create project/i)).not.toBeInTheDocument();
   });
 
-  it("calls createProject.mutate with the trimmed payload when a valid name is entered", () => {
+  it("routes the empty state to Create New Building instead of opening a standalone form", () => {
     render(<ProjectsTab />, { wrapper: wrap });
-    fireEvent.click(screen.getByRole("button", { name: /New Project/i }));
-    // The Name input uses 'e.g. Marina Heights' as its placeholder.
-    fireEvent.change(screen.getByPlaceholderText(/Marina Heights/i), {
-      target: { value: "  Athens Riviera  " },
-    });
-    const createBtns = screen.getAllByRole("button", { name: /^Create$/i });
-    fireEvent.click(createBtns[createBtns.length - 1]);
-    expect(createMutateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ name: "Athens Riviera" }),
-      expect.any(Object),
-    );
-  });
 
-  it("navigates to the new project on successful creation", () => {
-    createMutateMock.mockImplementation((_, opts) => {
-      opts.onSuccess?.({ id: "p-new" });
-    });
-    render(<ProjectsTab />, { wrapper: wrap });
-    fireEvent.click(screen.getByRole("button", { name: /New Project/i }));
-    fireEvent.change(screen.getByPlaceholderText(/Marina Heights/i), {
-      target: { value: "New" },
-    });
-    const createBtns = screen.getAllByRole("button", { name: /^Create$/i });
-    fireEvent.click(createBtns[createBtns.length - 1]);
-    expect(navigateMock).toHaveBeenCalledWith("/projects/p-new");
+    expect(screen.getByText(/No projects yet/i)).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: /create new building/i }).at(-1)).toHaveAttribute("href", "/listings/new-building");
+    expect(screen.queryByRole("button", { name: /create your first project/i })).not.toBeInTheDocument();
   });
 
   it("opens the delete confirmation dialog when the delete button is clicked", async () => {

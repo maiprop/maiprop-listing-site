@@ -13,8 +13,8 @@
  *   4. Insert into `listings` as listing_type = new_build (FK -> project)
  *   5. Bulk-insert into `listing_images` for any non-cover photos
  *
- * On *any* failure after step 1, the project row is rolled back via
- * `DELETE` to avoid leaving an orphaned project with no listing.
+ * On *any* failure after step 1, created rows are rolled back via
+ * guarded `DELETE`s to avoid leaving partial project ads.
  *
  * Caller surfaces success/failure toasts and navigates after success.
  * Pulling this out of `CreateNewBuildingListing.tsx` brings the page from
@@ -118,6 +118,7 @@ export function useCreateBuildingListing() {
       const { userId, project, unit, projectMedia, listing, finalTitle, coverImageUrl, additionalImageUrls } = args;
 
       let createdProjectId: string | null = null;
+      let createdListingId: string | null = null;
       try {
         // 1. Create the project
         const projectPayload = {
@@ -223,6 +224,7 @@ export function useCreateBuildingListing() {
           .select()
           .single();
         if (listErr) throw listErr;
+        createdListingId = createdListing.id;
 
         if (createdUnit?.id) {
           const { error: unitLinkErr } = await supabase
@@ -247,10 +249,17 @@ export function useCreateBuildingListing() {
 
         return { listingId: createdListing.id };
       } catch (err: unknown) {
-        // Rollback: avoid leaving an orphaned project with no unit/listing.
+        // Rollback: avoid leaving partial rows when any later write fails.
         // Per CLAUDE.md / CONTRIBUTING.md: every UPDATE/DELETE must filter by
         // both record id AND the current user's ownership column — RLS is
         // a defence in depth, not a substitute for the explicit guard.
+        if (createdListingId) {
+          await supabase
+            .from("listings")
+            .delete()
+            .eq("id", createdListingId)
+            .eq("owner_id", userId);
+        }
         if (createdProjectId) {
           await supabase
             .from("projects")

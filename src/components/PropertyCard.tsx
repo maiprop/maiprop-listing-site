@@ -62,7 +62,7 @@ export interface Property {
   ownershipPercentage?: number;
   /** ISO date string for open house — used for countdown badge */
   openHouseDateIso?: string;
-  /** True when listing is a pre-sale / off-plan new build */
+  /** True when the card should show the New Building project badge */
   isPreSale?: boolean;
   constructionStatus?: string;
   /** Neighbourhood quality scores populated by the neighbourhood-report edge function */

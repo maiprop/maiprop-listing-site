@@ -57,6 +57,11 @@ const steps = [
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+const isProjectAdRecord = (listing: unknown) => {
+  const record = listing as { listing_type?: unknown; project_id?: unknown } | null | undefined;
+  return record?.listing_type === "new_build" || Boolean(record?.project_id);
+};
+
 export default function CreateListing() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -126,12 +131,34 @@ export default function CreateListing() {
     initialListing: editListing,
   });
 
+  const formListingType = (form as { listing_type?: unknown }).listing_type;
   useEffect(() => {
-    if (form.is_pre_sale) {
+    const hasProjectAdType = formListingType === "new_build";
+    if (hasProjectAdType) {
+      set("listing_type", "sale");
+    }
+    if (form.is_pre_sale || hasProjectAdType) {
       set("is_pre_sale", false);
       set("construction_status", "");
     }
-  }, [form.is_pre_sale, set]);
+  }, [form.is_pre_sale, formListingType, set]);
+
+  const redirectingProjectAdEdit = Boolean(
+    isEditMode &&
+    user &&
+    editListing &&
+    editListing.owner_id === user.id &&
+    isProjectAdRecord(editListing),
+  );
+  const projectAdRedirectedRef = useRef(false);
+  useEffect(() => {
+    if (!redirectingProjectAdEdit || projectAdRedirectedRef.current) return;
+    projectAdRedirectedRef.current = true;
+    toast.error(
+      tr("createListing.edit.projectAdManagedInProjects", "Project ads are managed from Projects. Use Create New Building for project inventory."),
+    );
+    navigate("/projects", { replace: true });
+  }, [navigate, redirectingProjectAdEdit, tr]);
 
   // Field refs for scroll-to-error
   const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -243,6 +270,17 @@ export default function CreateListing() {
           <Button asChild variant="outline">
             <Link to="/dashboard/listings">{tr("createListing.edit.backToListings", "Back to Listings")}</Link>
           </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (redirectingProjectAdEdit) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <span className="text-sm text-muted-foreground">{tr("createListing.guard.redirecting", "Redirecting...")}</span>
         </div>
       </div>
     );

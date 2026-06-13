@@ -415,6 +415,10 @@ export function useListingForm(options?: UseListingFormOptions) {
       toast.error(tr("createListing.validation.openHouseDateRequired", "Open house date & time is required"));
       return;
     }
+    if (!options?.allowPreSale && (form.listing_type as string) === "new_build") {
+      toast.error(tr("createListing.validation.newBuildingDedicatedFlow", "Use Create New Building for project ads."));
+      return;
+    }
     if (!user) {
       toast.error(tr("createListing.validation.signInRequired", "You must be signed in to publish a listing"));
       return;

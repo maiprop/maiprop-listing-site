@@ -41,7 +41,7 @@ interface MyListingsSectionProps {
   role: DashboardRole;
 }
 
-/** Roles that should see the off-market / pre-sale filter chips. */
+/** Roles that should see the off-market / new-building filter chips. */
 const FILTER_ELIGIBLE_ROLES: ReadonlyArray<DashboardRole> = [
   "agent",
   "seller",
@@ -86,7 +86,7 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
     },
     {
       key: "new_build",
-      label: `New builds (${myListings.filter((l) => l.listing_type === "new_build").length})`,
+      label: `New Buildings (${myListings.filter((l) => l.listing_type === "new_build").length})`,
     },
   ];
 
@@ -152,6 +152,11 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
       ) : (
         <div className="space-y-3">
           {filteredListings.map((l) => {
+            const isProjectAd = l.listing_type === "new_build";
+            const editHref = isProjectAd
+              ? (l.project_id ? `/projects/${l.project_id}` : "/projects")
+              : `/listings/${l.id}/edit`;
+            const editLabel = isProjectAd ? "Manage project" : "Edit listing";
             return (
             <div
               key={l.id}
@@ -185,7 +190,7 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
                   )}
                   {l.listing_type === "new_build" && (
                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-                      New build
+                      New Building
                     </span>
                   )}
                 </div>
@@ -253,10 +258,10 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
                   {l.views_count} views
                 </span>
                 <Link
-                  to={`/listings/${l.id}/edit`}
+                  to={editHref}
                   className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
-                  aria-label="Edit listing"
-                  title="Edit full listing"
+                  aria-label={editLabel}
+                  title={editLabel}
                 >
                   <Edit2 className="w-4 h-4" />
                 </Link>

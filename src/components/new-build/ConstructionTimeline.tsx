@@ -1,7 +1,36 @@
 import { HardHat, CheckCircle2, Circle } from "lucide-react";
 import { CONSTRUCTION_PHASES } from "@/lib/newBuildConfig";
 
-export function ConstructionTimeline({ status }: { status: string | null }) {
+type ProjectTimeline = {
+  permit_approval_date?: string | null;
+  construction_start_date?: string | null;
+  structural_completion_date?: string | null;
+  delivery_date?: string | null;
+};
+
+const formatDate = (date: string | null | undefined) => {
+  if (!date) return null;
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) return date;
+  return new Intl.DateTimeFormat("en-GB", { month: "short", year: "numeric" }).format(parsed);
+};
+
+const projectDateForPhase = (key: string, project: ProjectTimeline | null | undefined) => {
+  if (!project) return null;
+  if (key === "planning") return formatDate(project.permit_approval_date);
+  if (key === "foundation") return formatDate(project.construction_start_date);
+  if (key === "under_construction" || key === "topping_out") return formatDate(project.structural_completion_date);
+  if (key === "shell_complete" || key === "new") return formatDate(project.delivery_date);
+  return null;
+};
+
+export function ConstructionTimeline({
+  status,
+  project,
+}: {
+  status: string | null;
+  project?: ProjectTimeline | null;
+}) {
   if (!status) return null;
   const currentIdx = CONSTRUCTION_PHASES.findIndex(p => p.key === status);
   const activeIdx = currentIdx === -1 ? 0 : currentIdx;
@@ -22,6 +51,7 @@ export function ConstructionTimeline({ status }: { status: string | null }) {
             const done = idx < activeIdx;
             const active = idx === activeIdx;
             const Icon = phase.icon;
+            const dateLabel = projectDateForPhase(phase.key, project);
             return (
               <div key={phase.key} className="flex items-center gap-4 relative">
                 <div className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all ${
@@ -37,6 +67,7 @@ export function ConstructionTimeline({ status }: { status: string | null }) {
                     {active && <span className="ml-2 text-xs font-bold bg-orange-500/15 text-orange-600 px-2 py-0.5 rounded-full">Current</span>}
                     {done && <span className="ml-2 text-xs text-muted-foreground">Done</span>}
                   </p>
+                  {dateLabel && <p className="text-xs text-muted-foreground mt-0.5">{dateLabel}</p>}
                 </div>
               </div>
             );

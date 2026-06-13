@@ -53,48 +53,6 @@ export function useProject(id: string | undefined) {
   });
 }
 
-export type ProjectInsert = {
-  name: string;
-  description?: string;
-  city?: string;
-  address?: string;
-  building_permit_number?: string;
-  developer_company?: string;
-  architect_group?: string;
-  construction_company?: string;
-  municipality?: string;
-  latitude?: number;
-  longitude?: number;
-  area_description?: string;
-  permit_approval_date?: string;
-  construction_start_date?: string;
-  structural_completion_date?: string;
-  delivery_date?: string;
-};
-
-// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-export function useCreateProject() {
-  const qc = useQueryClient();
-  const { user } = useAuth();
-  return useMutation({
-    mutationFn: async (project: ProjectInsert) => {
-      if (!user) throw new Error("Not authenticated");
-      const { data, error } = await supabase
-        .from("projects")
-        .insert({ ...project, owner_id: user.id })
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["projects"] });
-      toast.success("Project created");
-    },
-    onError: () => toast.error("Failed to create project. Please try again."),
-  });
-}
-
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function useUpdateProject() {
   const qc = useQueryClient();

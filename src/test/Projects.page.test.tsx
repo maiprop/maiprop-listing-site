@@ -8,7 +8,6 @@ const {
   useAuthMock,
   useProjectsMock,
   useMyListingsMock,
-  createProjectMock,
   updateProjectMock,
   deleteProjectMock,
   updateListingMock,
@@ -19,7 +18,6 @@ const {
   useAuthMock: vi.fn(),
   useProjectsMock: vi.fn(),
   useMyListingsMock: vi.fn(),
-  createProjectMock: vi.fn(),
   updateProjectMock: vi.fn(),
   deleteProjectMock: vi.fn(),
   updateListingMock: vi.fn(),
@@ -82,7 +80,6 @@ vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => useAuthMock() }));
 vi.mock("@/lib/participantConfig", () => ({ getParticipantTypeFromProfile: () => participantTypeMock() }));
 vi.mock("@/hooks/useProjects", () => ({
   useProjects: (...args: unknown[]) => useProjectsMock(...args),
-  useCreateProject: () => ({ mutate: createProjectMock, isPending: false }),
   useUpdateProject: () => ({ mutate: updateProjectMock }),
   useDeleteProject: () => ({ mutate: deleteProjectMock }),
 }));
@@ -110,7 +107,6 @@ beforeEach(() => {
   useAuthMock.mockReset();
   useProjectsMock.mockReset();
   useMyListingsMock.mockReset();
-  createProjectMock.mockReset();
   updateProjectMock.mockReset();
   deleteProjectMock.mockReset();
   updateListingMock.mockReset();
@@ -137,7 +133,7 @@ describe("Projects page", () => {
   it("shows developer-only new building entry point", () => {
     renderPage();
 
-    expect(screen.getByRole("link", { name: /new building listing/i })).toHaveAttribute("href", "/listings/new-building");
+    expect(screen.getAllByRole("link", { name: /create new building/i })[0]).toHaveAttribute("href", "/listings/new-building");
   });
 
   it("hides the new building entry point for non-developers", () => {
@@ -145,7 +141,7 @@ describe("Projects page", () => {
 
     renderPage();
 
-    expect(screen.queryByRole("link", { name: /new building listing/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /create new building/i })).not.toBeInTheDocument();
   });
 
   it("shows a loading spinner while projects load", () => {
@@ -156,56 +152,24 @@ describe("Projects page", () => {
     expect(container.querySelector(".animate-spin")).toBeTruthy();
   });
 
-  it("guards project creation when the name is blank", () => {
+  it("uses Create New Building as the only project creation entry point", () => {
     renderPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /new project/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^create$/i }));
-
-    expect(toastMock.error).toHaveBeenCalledWith("Project name is required");
-    expect(createProjectMock).not.toHaveBeenCalled();
+    const createLinks = screen.getAllByRole("link", { name: /create new building/i });
+    expect(createLinks.length).toBeGreaterThan(0);
+    for (const link of createLinks) {
+      expect(link).toHaveAttribute("href", "/listings/new-building");
+    }
+    expect(screen.queryByRole("button", { name: /new project/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Create project/i)).not.toBeInTheDocument();
   });
 
-  it("creates a project with trimmed optional fields and navigates on success", () => {
-    createProjectMock.mockImplementation((_payload, opts) => opts.onSuccess?.({ id: "project-new" }));
-
+  it("routes the empty project state to Create New Building instead of opening a standalone form", () => {
     renderPage();
-    fireEvent.click(screen.getByRole("button", { name: /new project/i }));
-    fireEvent.change(screen.getByPlaceholderText(/Marina Heights/i), { target: { value: "  Coastline  " } });
-    fireEvent.change(screen.getByPlaceholderText(/Brief description/i), { target: { value: "  Sea view  " } });
-    fireEvent.change(screen.getByPlaceholderText(/Athens/i), { target: { value: "  Piraeus  " } });
-    fireEvent.change(screen.getByPlaceholderText(/Street, number/i), { target: { value: "  Akti 1  " } });
-    fireEvent.change(screen.getByPlaceholderText(/12345\/2024/i), { target: { value: "  BP-1  " } });
-    fireEvent.click(screen.getByRole("button", { name: /^create$/i }));
 
-    expect(createProjectMock).toHaveBeenCalledWith(
-      {
-        name: "Coastline",
-        description: "Sea view",
-        city: "Piraeus",
-        address: "Akti 1",
-        building_permit_number: "BP-1",
-      },
-      expect.any(Object),
-    );
-    expect(navigateMock).toHaveBeenCalledWith("/projects/project-new");
-  });
-
-  it("clears selected project coordinates when the address is manually edited before create", () => {
-    renderPage();
-    fireEvent.click(screen.getByRole("button", { name: /new project/i }));
-    fireEvent.change(screen.getByPlaceholderText(/Marina Heights/i), { target: { value: "Coastline" } });
-    fireEvent.click(screen.getByRole("button", { name: /select address suggestion/i }));
-    fireEvent.change(screen.getByPlaceholderText(/Street, number/i), { target: { value: "Manual override" } });
-    fireEvent.click(screen.getByRole("button", { name: /^create$/i }));
-
-    expect(createProjectMock).toHaveBeenCalledWith(
-      expect.not.objectContaining({
-        latitude: expect.any(Number),
-        longitude: expect.any(Number),
-      }),
-      expect.any(Object),
-    );
+    expect(screen.getByText(/No projects yet/i)).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: /create new building/i }).at(-1)).toHaveAttribute("href", "/listings/new-building");
+    expect(screen.queryByRole("button", { name: /create your first project/i })).not.toBeInTheDocument();
   });
 
   it("quick-edits, links, unlinks, and deletes an existing project", async () => {

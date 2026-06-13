@@ -61,6 +61,66 @@ type RegisterInterestPayload = {
   contactName: string;
 };
 
+type NewBuildProjectUnit = Pick<
+  Database["public"]["Tables"]["project_units"]["Row"],
+  | "id"
+  | "listing_id"
+  | "unit_id"
+  | "unit_number"
+  | "floor"
+  | "availability_status"
+  | "internal_sqm"
+  | "balcony_sqm"
+  | "storage_sqm"
+  | "parking_sqm"
+  | "bedrooms"
+  | "bathrooms"
+  | "kitchen_type"
+  | "living_rooms"
+  | "price"
+  | "price_per_sqm"
+  | "vat_included"
+  | "parking_price"
+  | "storage_price"
+  | "sea_view"
+  | "city_view"
+  | "mountain_view"
+  | "energy_class"
+  | "heating_system"
+  | "cooling_system"
+>;
+
+type NewBuildProjectMedia = Pick<
+  Database["public"]["Tables"]["project_media"]["Row"],
+  "id" | "url" | "media_type" | "title" | "sort_order"
+>;
+
+type NewBuildProject = Pick<
+  Database["public"]["Tables"]["projects"]["Row"],
+  | "id"
+  | "name"
+  | "description"
+  | "address"
+  | "city"
+  | "municipality"
+  | "latitude"
+  | "longitude"
+  | "cover_image_url"
+  | "developer_company"
+  | "architect_group"
+  | "construction_company"
+  | "building_permit_number"
+  | "area_description"
+  | "permit_approval_date"
+  | "construction_start_date"
+  | "structural_completion_date"
+  | "delivery_date"
+  | "status"
+> & {
+  project_units?: NewBuildProjectUnit[] | null;
+  project_media?: NewBuildProjectMedia[] | null;
+};
+
 const cleanOptionalText = (value: string | null | undefined) => {
   const trimmed = value?.trim();
   return trimmed || undefined;
@@ -72,6 +132,8 @@ const getInterestPhone = (form: RegisterInterestForm, profile: Profile | null) =
 
 type NewBuildListing = Database["public"]["Tables"]["listings"]["Row"] & {
   listing_images?: Array<Pick<Database["public"]["Tables"]["listing_images"]["Row"], "url" | "sort_order">> | null;
+  project?: NewBuildProject | null;
+  projects?: NewBuildProject | null;
   profiles?: {
     user_id: string;
     display_name: string | null;
@@ -86,6 +148,95 @@ type NewBuildListing = Database["public"]["Tables"]["listings"]["Row"] & {
 type PublicListingResponse = {
   data: NewBuildListing | null;
 };
+
+const getListingProject = (listing: NewBuildListing | null | undefined): NewBuildProject | null => {
+  return listing?.project ?? listing?.projects ?? null;
+};
+
+const sortProjectUnits = (units: NewBuildProjectUnit[] | null | undefined): NewBuildProjectUnit[] => {
+  return [...(units ?? [])].sort((a, b) => {
+    const floorDelta = (a.floor ?? Number.MAX_SAFE_INTEGER) - (b.floor ?? Number.MAX_SAFE_INTEGER);
+    if (floorDelta !== 0) return floorDelta;
+    return (a.unit_number ?? a.unit_id ?? "").localeCompare(b.unit_number ?? b.unit_id ?? "");
+  });
+};
+
+const sortProjectMedia = (media: NewBuildProjectMedia[] | null | undefined): NewBuildProjectMedia[] => {
+  return [...(media ?? [])].sort((a, b) => {
+    const typeDelta = (a.media_type ?? "").localeCompare(b.media_type ?? "");
+    if (typeDelta !== 0) return typeDelta;
+    return (a.sort_order ?? 99) - (b.sort_order ?? 99);
+  });
+};
+
+const isProjectImageMedia = (media: NewBuildProjectMedia): boolean => {
+  const type = media.media_type?.toLowerCase() ?? "";
+  const url = media.url.toLowerCase();
+  return !type.includes("pdf") && !url.endsWith(".pdf");
+};
+
+const formatProjectDate = (date: string | null | undefined): string | null => {
+  if (!date) return null;
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) return date;
+  return new Intl.DateTimeFormat("en-GB", { month: "short", year: "numeric" }).format(parsed);
+};
+
+function ProjectOverview({
+  project,
+  unitCount,
+  mediaCount,
+}: {
+  project: NewBuildProject | null;
+  unitCount: number;
+  mediaCount: number;
+}) {
+  if (!project) return null;
+
+  const facts = [
+    { label: "Developer", value: project.developer_company },
+    { label: "Architect", value: project.architect_group },
+    { label: "Builder", value: project.construction_company },
+    { label: "Permit", value: project.building_permit_number },
+    { label: "Municipality", value: project.municipality ?? project.city },
+    { label: "Delivery", value: formatProjectDate(project.delivery_date) },
+    { label: "Available units", value: unitCount > 0 ? `${unitCount} unit${unitCount === 1 ? "" : "s"}` : null },
+    { label: "Project media", value: mediaCount > 0 ? `${mediaCount} file${mediaCount === 1 ? "" : "s"}` : null },
+  ].filter((item): item is { label: string; value: string } => Boolean(item.value));
+
+  if (!project.name && !project.area_description && !project.description && facts.length === 0) return null;
+
+  return (
+    <section className="glass-card rounded-2xl border border-border overflow-hidden">
+      <div className="flex items-center gap-2.5 px-5 py-4 border-b border-border">
+        <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+          <Building2 className="w-3.5 h-3.5 text-primary" />
+        </div>
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Project</p>
+          <h2 className="font-display font-semibold text-sm">{project.name}</h2>
+        </div>
+      </div>
+      <div className="p-5 space-y-4">
+        {(project.area_description || project.description) && (
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            {project.area_description ?? project.description}
+          </p>
+        )}
+        {facts.length > 0 && (
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {facts.map((fact) => (
+              <div key={fact.label} className="rounded-xl border border-border bg-secondary/40 px-4 py-3">
+                <dt className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{fact.label}</dt>
+                <dd className="mt-1 text-sm font-semibold text-foreground break-words">{fact.value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </div>
+    </section>
+  );
+}
 
 const insertNewBuildLead = async ({
   listingId,
@@ -155,6 +306,16 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
   });
   const canonicalDetailPath = listing ? getListingDetailPath(listing) : null;
   const isCanonicalNewBuild = listing ? shouldUseNewBuildRoute(listing) : false;
+  const project = getListingProject(listing);
+  const projectUnits = sortProjectUnits(project?.project_units);
+  const projectMedia = sortProjectMedia(project?.project_media);
+  const projectImageUrls = projectMedia.filter(isProjectImageMedia).map((media) => media.url);
+  const displayAddress = project?.address ?? listing?.address ?? "";
+  const displayCity = project?.city ?? listing?.city ?? "";
+  const displayRegion = project?.municipality ?? listing?.region ?? undefined;
+  const displayLatitude = listing?.latitude ?? project?.latitude ?? null;
+  const displayLongitude = listing?.longitude ?? project?.longitude ?? null;
+  const displayTitle = project?.name ?? listing?.title ?? "New Building";
 
   const handleRegisterInterest = async (form: RegisterInterestForm) => {
     const ownerId = listing?.owner_id;
@@ -191,12 +352,12 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
       body: {
         listingId: listing.id,
         title: listing.title,
-        city: listing.city,
-        address: listing.address,
+        city: displayCity,
+        address: displayAddress,
         price: Number(listing.price),
         sqm: Number(listing.sqm),
-        latitude: listing.latitude != null ? Number(listing.latitude) : undefined,
-        longitude: listing.longitude != null ? Number(listing.longitude) : undefined,
+        latitude: displayLatitude != null ? Number(displayLatitude) : undefined,
+        longitude: displayLongitude != null ? Number(displayLongitude) : undefined,
         bedrooms: listing.bedrooms,
         bathrooms: listing.bathrooms,
         propertyType: listing.property_type,
@@ -208,7 +369,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
         hasParking: listing.has_parking,
         hasPool: listing.has_pool,
         hasElevator: listing.has_elevator,
-        region: listing.region,
+        region: displayRegion,
         condition: listing.construction_status,
       },
     }).then(({ data }) => { // skipcq: JS-R1005 - AI insight response normalizes several optional metrics together.
@@ -263,9 +424,13 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
     .sort((a: { sort_order: number | null }, b: { sort_order: number | null }) =>
       (a.sort_order ?? 99) - (b.sort_order ?? 99))
     .map((img: { url: string }) => img.url);
-  const allImages = listing.cover_image_url
-    ? [listing.cover_image_url, ...sortedImages.filter((s: string) => s !== listing.cover_image_url)]
-    : sortedImages;
+  const allImages = [
+    listing.cover_image_url,
+    ...sortedImages,
+    project?.cover_image_url,
+    ...projectImageUrls,
+  ].filter((url): url is string => Boolean(url));
+  const uniqueImages = Array.from(new Set(allImages));
 
   const owner = listing.profiles as { display_name?: string; avatar_url?: string; phone?: string } | null;
 
@@ -280,7 +445,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
             to="/listings?listing_type=new_build"
             className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
-            <ArrowLeft className="w-4 h-4" /> {tr("newBuildDetail.backToNewBuilds", "Back to new builds")}
+            <ArrowLeft className="w-4 h-4" /> {tr("newBuildDetail.backToNewBuilds", "Back to New Buildings")}
           </Link>
         </div>
 
@@ -290,7 +455,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
             {/* ── Left: main content ──────────────────────────────── */}
             <div className="space-y-6">
               <Gallery
-                images={allImages}
+                images={uniqueImages}
                 isFavorited={isFavorited}
                 onFavorite={handleFavorite}
                 onShare={handleShare}
@@ -307,13 +472,13 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                           {tr(`newBuildDetail.phases.${listing.construction_status}`, listing.construction_status.replace(/_/g, " "))}
                         </span>
                       )}
-                      <span className="text-[10px] font-bold uppercase tracking-widest bg-primary/15 text-primary rounded-full px-2 py-0.5">{tr("newBuildDetail.badges.newBuild", "New Build")}</span>
+                      <span className="text-[10px] font-bold uppercase tracking-widest bg-primary/15 text-primary rounded-full px-2 py-0.5">{tr("newBuildDetail.badges.newBuild", "New Building")}</span>
                       {listing.energy_class && <EnergyBadge cls={listing.energy_class} />}
                     </div>
                     <h1 className="font-display text-2xl sm:text-3xl font-bold leading-tight">{listing.title}</h1>
                     <div className="flex items-center gap-1.5 mt-2 text-muted-foreground text-sm">
                       <MapPin className="w-4 h-4 shrink-0" />
-                      <span>{[listing.address, listing.city, listing.region].filter(Boolean).join(", ")}</span>
+                      <span>{[displayAddress, displayCity, displayRegion].filter(Boolean).join(", ")}</span>
                     </div>
                   </div>
                   <div className="text-right shrink-0">
@@ -368,22 +533,25 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                 </div>
               </div>
 
+              <ProjectOverview project={project} unitCount={projectUnits.length} mediaCount={projectMedia.length} />
+
               {/* Type-specific: Unit showcase */}
-              <UnitShowcase listing={listing as Record<string, unknown>} onContact={handleContact} />
+              <UnitShowcase listing={listing as Record<string, unknown>} units={projectUnits} onContact={handleContact} />
 
               {/* Type-specific: Construction timeline */}
               {listing.construction_status && (
-                <ConstructionTimeline status={listing.construction_status as string} />
+                <ConstructionTimeline status={listing.construction_status as string} project={project} />
               )}
 
               {/* Type-specific: Floor plans / gallery */}
               <FloorPlanSection
-                images={allImages}
+                images={uniqueImages}
+                media={projectMedia}
                 onRequestPlans={handleContact}
               />
 
               {/* Type-specific: Building specs */}
-              <ConstructionSpecs listing={listing} />
+              <ConstructionSpecs listing={listing} project={project} units={projectUnits} />
 
               {/* AI Market Insights */}
               <div className="glass-card rounded-2xl border border-border overflow-hidden">
@@ -563,23 +731,23 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
               {/* Mini Map */}
               <div className="rounded-2xl overflow-hidden">
                 <PropertyMiniMap
-                  latitude={listing.latitude}
-                  longitude={listing.longitude}
-                  address={listing.address ?? ""}
-                  city={listing.city ?? undefined}
-                  title={listing.title}
+                  latitude={displayLatitude}
+                  longitude={displayLongitude}
+                  address={displayAddress}
+                  city={displayCity}
+                  title={displayTitle}
                   onWalkScoreChange={setWalkScore}
                 />
               </div>
 
               {/* Neighbourhood Report */}
-              {listing.address && (
+              {displayAddress && (
                 <NeighbourhoodReport
-                  city={listing.city ?? undefined}
-                  address={listing.address ?? ""}
-                  region={listing.region ?? undefined}
-                  lat={listing.latitude != null ? Number(listing.latitude) : undefined}
-                  lng={listing.longitude != null ? Number(listing.longitude) : undefined}
+                  city={displayCity}
+                  address={displayAddress}
+                  region={displayRegion}
+                  lat={displayLatitude != null ? Number(displayLatitude) : undefined}
+                  lng={displayLongitude != null ? Number(displayLongitude) : undefined}
                   listingId={id ?? undefined}
                   isPro={isPro}
                 />
@@ -590,8 +758,8 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                 <PropertyValuation
                   listingId={id}
                   title={listing.title}
-                  city={listing.city ?? undefined}
-                  address={listing.address ?? undefined}
+                  city={displayCity}
+                  address={displayAddress || undefined}
                   price={Number(listing.price)}
                   sqm={Number(listing.sqm)}
                   bedrooms={listing.bedrooms}
@@ -605,10 +773,10 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                   hasPool={listing.has_pool}
                   hasElevator={listing.has_elevator}
                   hasGarden={listing.has_garden}
-                  region={listing.region}
+                  region={displayRegion}
                   condition={listing.construction_status}
-                  latitude={listing.latitude != null ? Number(listing.latitude) : undefined}
-                  longitude={listing.longitude != null ? Number(listing.longitude) : undefined}
+                  latitude={displayLatitude != null ? Number(displayLatitude) : undefined}
+                  longitude={displayLongitude != null ? Number(displayLongitude) : undefined}
                 />
               )}
             </div>
@@ -669,7 +837,19 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                   {listing.year_built && (
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">{tr("newBuildDetail.sidebar.expectedCompletion", "Expected completion")}</span>
-                      <span className="font-medium">{listing.year_built}</span>
+                      <span className="font-medium">{formatProjectDate(project?.delivery_date) ?? listing.year_built}</span>
+                    </div>
+                  )}
+                  {projectUnits.length > 0 && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Project units</span>
+                      <span className="font-medium">{projectUnits.length}</span>
+                    </div>
+                  )}
+                  {project?.building_permit_number && (
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="text-muted-foreground">Permit</span>
+                      <span className="font-medium text-right break-words">{project.building_permit_number}</span>
                     </div>
                   )}
                   {listing.energy_class && (

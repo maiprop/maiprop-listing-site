@@ -12,7 +12,7 @@ const AI_SUGGESTIONS = [
   "Quiet apartment near metro in Athens under 200k",
   "3 bed villa with pool for rent in Mykonos",
   "Studio with parking in Thessaloniki under 80k",
-  "New build energy A+ apartment in Athens",
+  "New Building apartment with A+ energy in Athens",
 ];
 
 export function AISearchModal({

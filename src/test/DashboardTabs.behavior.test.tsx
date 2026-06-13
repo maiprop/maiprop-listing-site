@@ -467,6 +467,30 @@ describe("dashboard tab behavior", () => {
     expect(screen.queryByLabelText(/Listing title/i)).not.toBeInTheDocument();
   });
 
+  it("routes project ads to the project manager instead of the ordinary listing editor", () => {
+    listingsState.data = [{
+      id: "l-project",
+      project_id: "project-1",
+      title: "New build unit",
+      city: "Athens",
+      price: 250000,
+      sqm: 80,
+      status: "active",
+      views_count: 12,
+      listing_type: "new_build",
+      is_off_market: false,
+      is_pre_sale: false,
+      is_featured: false,
+      priority_placement: 0,
+      tags: [],
+    }];
+
+    renderWithProviders(<MyListingsSection bioType="developer" role="developer" />);
+
+    expect(screen.getByRole("link", { name: /manage project/i })).toHaveAttribute("href", "/projects/project-1");
+    expect(screen.queryByRole("link", { name: /edit listing/i })).not.toBeInTheDocument();
+  });
+
   it("does not expose the old partial inline listing editor", () => {
     listingsState.data = [{
       id: "l-edit-empty-price",

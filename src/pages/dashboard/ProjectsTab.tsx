@@ -1,17 +1,14 @@
 import { useState } from "react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
   Globe2, Plus, ExternalLink, MapPin, Edit2, Trash2, FolderOpen, Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "sonner";
-import { LocationAutocompleteInput } from "@/components/location/LocationAutocompleteInput";
 import {
   useProjects,
-  useCreateProject,
   useDeleteProject,
 } from "@/hooks/useProjects";
 import type { Tables } from "@/integrations/supabase/types";
@@ -22,43 +19,11 @@ type ProjectListing = { id: string; title: string; project_id: string | null; li
 
 export default function ProjectsTab() {
   const { user } = useAuth();
-  const navigate = useNavigate();
 
   const { data: myProjects = [], isLoading: projectsLoading } = useProjects(user?.id);
-  const createProject = useCreateProject();
   const deleteProject = useDeleteProject();
 
-  const [showCreate, setShowCreate] = useState(false);
-  const [newName, setNewName] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-  const [newDesc, setNewDesc] = useState("");
-  const [newCity, setNewCity] = useState("");
-  const [newPermit, setNewPermit] = useState("");
-
-  const handleCreate = () => {
-    if (!newName.trim()) {
-      toast.error("Project name is required");
-      return;
-    }
-    createProject.mutate(
-      {
-        name: newName.trim(),
-        description: newDesc.trim() || undefined,
-        city: newCity.trim() || undefined,
-        building_permit_number: newPermit.trim() || undefined,
-      },
-      {
-        onSuccess: (data: Project | null) => {
-          setNewName("");
-          setNewDesc("");
-          setNewCity("");
-          setNewPermit("");
-          setShowCreate(false);
-          if (data?.id) navigate(`/projects/${data.id}`);
-        },
-      }
-    );
-  };
 
   return (
     <div className="space-y-6">
@@ -79,79 +44,14 @@ export default function ProjectsTab() {
           </Button>
           <Button
             className="bg-gradient-primary border-0 text-primary-foreground gap-2"
-            onClick={() => setShowCreate(true)}
+            asChild
           >
-            <Plus className="w-4 h-4" /> New Project
+            <Link to="/listings/new-building">
+              <Plus className="w-4 h-4" /> Create New Building
+            </Link>
           </Button>
         </div>
       </div>
-
-      {showCreate && (
-        <div className="glass-card rounded-xl p-6 border border-border">
-          <h3 className="font-display font-semibold mb-4">Create project</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs text-muted-foreground block mb-1.5">Name *</label>
-              <input
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder="e.g. Marina Heights"
-                className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground block mb-1.5">City</label>
-              <LocationAutocompleteInput
-                mode="city"
-                value={newCity}
-                onChange={setNewCity}
-                placeholder="e.g. Athens"
-                inputClassName="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="text-xs text-muted-foreground block mb-1.5">Description</label>
-              <textarea
-                value={newDesc}
-                onChange={(e) => setNewDesc(e.target.value)}
-                placeholder="Brief description..."
-                rows={2}
-                className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm resize-none text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground block mb-1.5">
-                Building Permit #
-              </label>
-              <input
-                value={newPermit}
-                onChange={(e) => setNewPermit(e.target.value)}
-                placeholder="e.g. 12345/2024"
-                className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"
-              />
-            </div>
-          </div>
-          <div className="flex gap-2 mt-4">
-            <Button
-              onClick={handleCreate}
-              disabled={createProject.isPending}
-              className="bg-gradient-primary border-0 text-primary-foreground"
-            >
-              {createProject.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : null}{" "}
-              Create
-            </Button>
-            <Button
-              variant="outline"
-              className="border-border"
-              onClick={() => setShowCreate(false)}
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      )}
 
       {projectsLoading ? (
         <div className="flex justify-center py-16">
@@ -162,13 +62,15 @@ export default function ProjectsTab() {
           <FolderOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
           <h2 className="font-semibold">No projects yet</h2>
           <p className="text-sm text-muted-foreground mt-2 mb-4">
-            Create a project to group and showcase your listings
+            Create a new building to create the project, first unit, and public ad together.
           </p>
           <Button
-            className="bg-gradient-primary border-0 text-primary-foreground"
-            onClick={() => setShowCreate(true)}
+            className="bg-gradient-primary border-0 text-primary-foreground gap-2"
+            asChild
           >
-            Create your first project
+            <Link to="/listings/new-building">
+              <Plus className="w-4 h-4" /> Create New Building
+            </Link>
           </Button>
         </div>
       ) : (

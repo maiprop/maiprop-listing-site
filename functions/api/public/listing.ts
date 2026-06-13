@@ -29,10 +29,62 @@ type ProfilePublicRow = {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EXTERNAL_TAG_RE = /^[A-Za-z0-9:_-]{1,120}$/;
-const LISTING_DETAIL_CACHE_VERSION = "public-detail-v1";
+const LISTING_DETAIL_CACHE_VERSION = "public-detail-v2";
+const PROJECT_UNIT_SELECT = [
+  "id",
+  "listing_id",
+  "unit_id",
+  "unit_number",
+  "floor",
+  "availability_status",
+  "internal_sqm",
+  "balcony_sqm",
+  "storage_sqm",
+  "parking_sqm",
+  "bedrooms",
+  "bathrooms",
+  "kitchen_type",
+  "living_rooms",
+  "price",
+  "price_per_sqm",
+  "vat_included",
+  "parking_price",
+  "storage_price",
+  "sea_view",
+  "city_view",
+  "mountain_view",
+  "energy_class",
+  "heating_system",
+  "cooling_system",
+].join(",");
+const PROJECT_MEDIA_SELECT = ["id", "url", "media_type", "title", "sort_order"].join(",");
+const PROJECT_SELECT = [
+  "id",
+  "name",
+  "description",
+  "address",
+  "city",
+  "municipality",
+  "latitude",
+  "longitude",
+  "cover_image_url",
+  "developer_company",
+  "architect_group",
+  "construction_company",
+  "building_permit_number",
+  "area_description",
+  "permit_approval_date",
+  "construction_start_date",
+  "structural_completion_date",
+  "delivery_date",
+  "status",
+  `project_units!project_units_project_id_fkey(${PROJECT_UNIT_SELECT})`,
+  `project_media!project_media_project_id_fkey(${PROJECT_MEDIA_SELECT})`,
+].join(",");
 const LISTING_DETAIL_SELECT = [
   "id",
   "owner_id",
+  "project_id",
   "created_at",
   "updated_at",
   "status",
@@ -143,6 +195,7 @@ const LISTING_DETAIL_SELECT = [
   "has_view",
   "has_water_supply",
   "has_window_screens",
+  `project:projects!listings_project_id_fkey(${PROJECT_SELECT})`,
   "listing_images(url,sort_order)",
 ].join(",");
 
@@ -184,6 +237,8 @@ function buildListingDetailParams(requestUrl: URL): URLSearchParams | null {
   params.set("is_off_market", "eq.false");
   params.set("limit", "1");
   params.set("listing_images.order", "sort_order.asc");
+  params.set("project.project_units.order", "floor.asc.nullslast,unit_number.asc.nullslast");
+  params.set("project.project_media.order", "media_type.asc,sort_order.asc");
 
   if (UUID_RE.test(id)) {
     params.set("id", `eq.${id}`);

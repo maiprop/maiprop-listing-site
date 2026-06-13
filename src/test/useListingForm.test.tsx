@@ -551,6 +551,19 @@ describe("useListingForm — handleSubmit", () => {
     expect(navigateMock).toHaveBeenCalledWith("/property/L-regular");
   });
 
+  it("blocks stale project/new-build listing type state in the ordinary listing flow", async () => {
+    const { result } = renderHook(() => useListingForm({ allowPreSale: false }), { wrapper: wrap });
+    setBaseForm(result);
+    act(() => result.current.set("listing_type", "new_build" as never));
+
+    await act(async () => {
+      await result.current.handleSubmit();
+    });
+
+    expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/Create New Building/i));
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
   it("routes an open_house listing to /open-house/:id", async () => {
     fromMock.mockReturnValueOnce({
       insert: vi.fn().mockReturnValue({

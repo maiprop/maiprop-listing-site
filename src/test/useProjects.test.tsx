@@ -28,7 +28,6 @@ vi.mock("sonner", () => ({
 import {
   useProjects,
   useProject,
-  useCreateProject,
   useUpdateProject,
   useDeleteProject,
 } from "@/hooks/useProjects";
@@ -129,35 +128,6 @@ describe("useProject(id)", () => {
     });
     const { result } = renderHookWithQuery(() => useProject("pr-404"));
     await waitFor(() => expect(result.current.isError).toBe(true));
-  });
-});
-
-describe("useCreateProject()", () => {
-  it("inserts the project with owner_id from auth and returns the new row", async () => {
-    const single = vi.fn().mockResolvedValue({ data: { id: "pr2" }, error: null });
-    const insert = vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({ single }),
-    });
-    fromMock.mockReturnValue({ insert });
-    const { result } = renderHookWithQuery(() => useCreateProject());
-    await act(async () => {
-      const created = await result.current.mutateAsync({ name: "New" });
-      expect(created).toEqual({ id: "pr2" });
-    });
-    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ owner_id: "u-1", name: "New" }));
-  });
-
-  it("rejects when insert errors", async () => {
-    const single = vi.fn().mockResolvedValue({ data: null, error: new Error("dup") });
-    fromMock.mockReturnValue({
-      insert: vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single }) }),
-    });
-    const { result } = renderHookWithQuery(() => useCreateProject());
-    await expect(
-      act(async () => {
-        await result.current.mutateAsync({ name: "x" });
-      }),
-    ).rejects.toBeInstanceOf(Error);
   });
 });
 

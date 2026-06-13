@@ -186,7 +186,7 @@ export function ListingsAdvancedFilters({ filteredCount, onClose }: Props) {
                   }}
                   className="rounded border-border accent-primary"
                 />
-                <span className="text-sm font-medium">🏗️ {ui(isGreek, "New builds only", "Μόνο νέες κατασκευές")}</span>
+                <span className="text-sm font-medium">🏗️ {ui(isGreek, "New Buildings only", "Μόνο νέες κατασκευές")}</span>
                 <span className="text-xs text-muted-foreground hidden sm:inline">{ui(isGreek, "Project ads and developer listings", "Αγγελίες έργων και κατασκευαστών")}</span>
               </label>
             </div>

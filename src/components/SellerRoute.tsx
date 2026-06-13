@@ -86,7 +86,7 @@ function DeveloperProRequired() {
           <p className="text-muted-foreground text-sm">
             Creating listings as a Developer requires an active Developer Pro
             subscription. Upgrade to unlock unlimited project listings and
-            new-build showcase pages.
+            New Building showcase pages.
           </p>
         </div>
         <div className="flex gap-3 justify-center">
