@@ -310,6 +310,7 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
   const listings: Array<{ id: string; title?: string | null; sqm?: number | null; price?: number | null; cover_image_url?: string | null; listing_type?: string | null; views_count?: number }> = Array.isArray((project as unknown as Record<string, unknown>).listings) ? (project as unknown as { listings: Array<{ id: string; title?: string | null; sqm?: number | null; price?: number | null; cover_image_url?: string | null; listing_type?: string | null; views_count?: number }> }).listings : [];
   const linkedListingIds = new Set(listings.map((l) => l.id));
   const unlinkedNewBuildListings = myListings.filter((l) => isProjectLinkableListing(l) && !linkedListingIds.has(l.id));
+  const hasLegacyLinkCandidates = unlinkedNewBuildListings.length > 0;
   const availableCount = units.filter((u) => u.availability_status === "available").length;
   const reservedCount = units.filter((u) => u.availability_status === "reserved").length;
   const soldCount = units.filter((u) => u.availability_status === "sold").length;
@@ -536,7 +537,7 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
 
           {/* 7. Linked listings */}
           <Section title={tr("projects.detail.sections.linkedListings", "Linked listings")} icon={Building2}>
-            <p className="text-sm text-muted-foreground mb-3">{tr("projects.detail.linkedListings.caption", "Link existing listings to this project. These appear on the project showcase.")}</p>
+            <p className="text-sm text-muted-foreground mb-3">{tr("projects.detail.linkedListings.caption", "Project ads created through Create New Building appear on the project showcase.")}</p>
             {listings.length > 0 && (
               <div className="space-y-2 mb-4">
                 {listings.map((l) => (
@@ -548,16 +549,16 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
                 ))}
               </div>
             )}
+            {hasLegacyLinkCandidates && (
             <div className="flex flex-wrap gap-2">
               {unlinkedNewBuildListings.map((l) => (
                 <Button key={l.id} variant="outline" size="sm" className="border-border" onClick={() => handleLinkListing(l.id)}>+ {l.title?.slice(0, 25)}{(l.title?.length ?? 0) > 25 ? "…" : ""}</Button>
               ))}
-              {unlinkedNewBuildListings.length === 0 && (
-                <p className="text-sm text-muted-foreground">
-                  {tr("projects.empty.noUnlinkedNewBuilds", "No unlinked new-building listings.")} <Link to="/listings/new-building" className="text-primary underline">{tr("projects.empty.createNewBuilding", "Create new building")}</Link>
-                </p>
-              )}
             </div>
+            )}
+            {listings.length === 0 && !hasLegacyLinkCandidates && (
+              <p className="text-sm text-muted-foreground">{tr("projects.detail.linkedListings.empty", "No project ads linked yet.")}</p>
+            )}
           </Section>
         </div>
       </main>

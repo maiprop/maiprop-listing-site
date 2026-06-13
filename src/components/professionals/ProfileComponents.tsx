@@ -54,7 +54,7 @@ export function ListingGrid({ listings }: { listings: any[] }) {
             <div className="flex items-start justify-between gap-2 mb-1">
               <p className="text-sm font-semibold line-clamp-1 group-hover:text-primary transition-colors">{listing.title}</p>
               {listing.listing_type === "new_build" && (
-                <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-orange-500/10 text-orange-500 border border-orange-500/20 font-medium">New Build</span>
+                <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-orange-500/10 text-orange-500 border border-orange-500/20 font-medium">New Building</span>
               )}
               {listing.listing_type === "open_house" && (
                 <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">Open House</span>

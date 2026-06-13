@@ -424,14 +424,14 @@ describe("ProjectDetail", () => {
     expect(deleteLeadMock).toHaveBeenCalledWith({ id: "lead-1", projectId: "project-1" });
   });
 
-  it("links and unlinks listings, including the developer new-building empty branch", () => {
+  it("links and unlinks only legacy unlinked New Building ads", () => {
     useMyListingsMock.mockReturnValue({
       data: [
         { id: "listing-free", title: "Loose unit", listing_type: "new_build" },
         { id: "listing-sale", title: "Ordinary resale", listing_type: "sale" },
       ],
     });
-    renderPage();
+    const firstRender = renderPage();
 
     fireEvent.click(screen.getByRole("button", { name: /\+ Loose unit/i }));
     fireEvent.click(screen.getByRole("button", { name: /unlink/i }));
@@ -456,9 +456,11 @@ describe("ProjectDetail", () => {
       },
     });
 
+    firstRender.unmount();
     useMyListingsMock.mockReturnValue({ data: [{ id: "listing-linked", listing_type: "new_build" }] });
     renderPage();
 
-    expect(screen.getByRole("link", { name: /new building/i })).toHaveAttribute("href", "/listings/new-building");
+    expect(screen.queryByRole("link", { name: /create new building/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^\+ / })).not.toBeInTheDocument();
   });
 });

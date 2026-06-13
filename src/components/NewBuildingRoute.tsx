@@ -54,7 +54,7 @@ function useNewBuildingRouteGuard(): RoleRouteGuardResult {
       denied: (
       <GateMessage
         title="Profile Required"
-        message="We could not load your account profile. Refresh your session or return to the dashboard before creating a new-building listing."
+        message="We could not load your account profile. Refresh your session or return to the dashboard before creating a New Building."
         primary={{ to: "/dashboard", label: "Back to Dashboard" }}
         secondary={{ to: "/login", label: "Sign In Again" }}
       />
@@ -70,8 +70,8 @@ function useNewBuildingRouteGuard(): RoleRouteGuardResult {
       <GateMessage
         title="Developer Access Required"
         message={switching
-          ? "Your account type change is still in progress. Finish onboarding before creating an off-plan development listing."
-          : "Pre-sale and off-plan listings use the dedicated developer workflow. Switch your account type to Developer to create them."}
+          ? "Your account type change is still in progress. Finish onboarding before creating a New Building."
+          : "New Buildings use the dedicated developer workflow. Switch your account type to Developer to create them."}
         primary={{ to: "/dashboard/settings", label: "Switch Account Type" }}
         secondary={{ to: "/dashboard", label: "Back to Dashboard" }}
       />
@@ -84,7 +84,7 @@ function useNewBuildingRouteGuard(): RoleRouteGuardResult {
       denied: (
       <GateMessage
         title="Developer Pro Required"
-        message="New-building listings require an active Developer Pro subscription."
+        message="New Buildings require an active Developer Pro subscription."
         primary={{ to: "/pricing?audience=developer", label: "View Developer Plan" }}
         secondary={{ to: "/dashboard", label: "Back to Dashboard" }}
       />

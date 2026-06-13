@@ -129,7 +129,7 @@ export const participants: ParticipantType[] = [
     features: [
       "Unlimited property listings",
       "Project showcase pages",
-      "Pre-sale listing management",
+      "Project ad management",
       "Bulk inquiry management",
       "Performance analytics",
     ],

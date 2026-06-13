@@ -40,6 +40,7 @@ const LISTING_CARD_SELECT = [
   "cover_image_url",
   "property_type",
   "listing_type",
+  "project_id",
   "open_house_date",
   "auction_date",
   "auction_starting_bid",

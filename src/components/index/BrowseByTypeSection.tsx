@@ -52,7 +52,7 @@ export function BrowseByTypeSection({ typeCounts }: Props) {
                 <div className="font-display font-semibold text-xs sm:text-sm text-foreground group-hover:text-primary transition-colors leading-tight">
                   New Dev
                 </div>
-                <div className="text-[9px] sm:text-[10px] text-muted-foreground mt-0.5 hidden sm:block">Off-plan &amp; new builds</div>
+                <div className="text-[9px] sm:text-[10px] text-muted-foreground mt-0.5 hidden sm:block">New Building projects</div>
               </div>
             </div>
           </Link>

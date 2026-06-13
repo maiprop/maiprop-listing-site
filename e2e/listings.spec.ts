@@ -124,6 +124,14 @@ const mockPublicListingApis = async (
     });
   });
 
+  await page.route("https://api.mapbox.com/**", async (route) => {
+    await route.fulfill({ status: 204, body: "" });
+  });
+
+  await page.route("https://events.mapbox.com/**", async (route) => {
+    await route.fulfill({ status: 204, body: "" });
+  });
+
   return listingRequests;
 };
 
@@ -219,5 +227,89 @@ test.describe("Listings browse", () => {
     await page.waitForURL("**/property/stale-pre-sale-sale");
     await expect(page.getByText("Legacy Flagged Sale Detail").first()).toBeVisible();
     expect(page.url()).toContain("/property/stale-pre-sale-sale");
+  });
+
+  test("new-build detail merges the linked project, inventory, and media into one listing page", async ({ page }) => {
+    const newBuild = makeListing({
+      id: "merged-new-build",
+      title: "Aegean Residences",
+      listing_type: "new_build",
+      is_pre_sale: false,
+      construction_status: "under_construction",
+      address: null,
+      city: null,
+      region: null,
+      project_id: "project-1",
+      project: {
+        id: "project-1",
+        name: "Marina Heights",
+        description: "Waterfront homes with shared amenities.",
+        address: "Marina Avenue 10",
+        city: "Piraeus",
+        municipality: "Piraeus Municipality",
+        latitude: 37.94,
+        longitude: 23.64,
+        cover_image_url: fixtureImage,
+        developer_company: "Mai Developments",
+        architect_group: "Aegean Studio",
+        construction_company: "BuildCo",
+        building_permit_number: "BP-2026-01",
+        area_description: "New waterfront regeneration zone.",
+        permit_approval_date: "2026-01-15",
+        construction_start_date: "2026-03-01",
+        structural_completion_date: "2026-10-15",
+        delivery_date: "2027-06-30",
+        status: "active",
+        project_units: [
+          {
+            id: "unit-1",
+            unit_number: "A101",
+            unit_id: "A101",
+            floor: 1,
+            availability_status: "available",
+            internal_sqm: 82,
+            balcony_sqm: 14,
+            bedrooms: 2,
+            bathrooms: 2,
+            price: 410000,
+            price_per_sqm: 5000,
+            vat_included: true,
+            energy_class: "A",
+          },
+        ],
+        project_media: [
+          {
+            id: "media-1",
+            media_type: "floor_plan",
+            title: "A101 floor plan",
+            url: fixtureImage,
+            sort_order: 1,
+          },
+          {
+            id: "media-2",
+            media_type: "brochure_pdf",
+            title: "Project brochure",
+            url: "https://cdn.example/project-brochure.pdf",
+            sort_order: 2,
+          },
+        ],
+      },
+    });
+    await mockPublicListingApis(page, [newBuild]);
+
+    await page.goto("/new-build/merged-new-build");
+    await page.waitForLoadState("load");
+
+    await expect(page.getByText("Aegean Residences").first()).toBeVisible();
+    await expect(page.getByText("Marina Heights").first()).toBeVisible();
+    await expect(page.getByText("Marina Avenue 10, Piraeus, Piraeus Municipality").first()).toBeVisible();
+    await expect(page.getByText("Mai Developments").first()).toBeVisible();
+    await expect(page.getByText("Aegean Studio").first()).toBeVisible();
+    await expect(page.getByText("BuildCo").first()).toBeVisible();
+    await expect(page.getByText("BP-2026-01").first()).toBeVisible();
+    await expect(page.getByText("A101").first()).toBeVisible();
+    await expect(page.getByText("82 m2 internal").first()).toBeVisible();
+    await expect(page.getByText("A101 floor plan").first()).toBeVisible();
+    await expect(page.getByRole("link", { name: /project brochure/i }).first()).toBeVisible();
   });
 });

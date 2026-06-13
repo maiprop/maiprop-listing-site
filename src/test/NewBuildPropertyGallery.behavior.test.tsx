@@ -18,7 +18,7 @@ describe("New-build PropertyGallery behavior", () => {
     fireEvent.click(screen.getByRole("button", { name: "View photos fullscreen" }));
 
     expect(screen.getByRole("dialog", { name: "Full-screen photo viewer" })).toBeInTheDocument();
-    expect(screen.getByText("Use the previous and next controls to review all new-build photos.")).toHaveClass(
+    expect(screen.getByText("Use the previous and next controls to review all New Building photos.")).toHaveClass(
       "sr-only",
     );
     expect(screen.getByRole("img", { name: "New build gallery photo 1 of 2" })).toHaveAttribute(

@@ -70,13 +70,39 @@ vi.mock("@/components/new-build/PropertyGallery", () => ({
 }));
 vi.mock("@/components/new-build/ConstructionTimeline", () => ({ ConstructionTimeline: () => <div data-testid="timeline" /> }));
 vi.mock("@/components/new-build/FloorPlanSection", () => ({
-  FloorPlanSection: ({ onRequestPlans }: { onRequestPlans: () => void }) => (
-    <button type="button" onClick={onRequestPlans}>floor plans child</button>
+  FloorPlanSection: ({
+    media,
+    onRequestPlans,
+  }: {
+    media?: Array<{ title?: string | null }>;
+    onRequestPlans: () => void;
+  }) => (
+    <div>
+      <span>media count:{media?.length ?? 0}</span>
+      {media?.[0]?.title && <span>{media[0].title}</span>}
+      <button type="button" onClick={onRequestPlans}>floor plans child</button>
+    </div>
   ),
 }));
-vi.mock("@/components/new-build/ConstructionSpecs", () => ({ ConstructionSpecs: () => <div data-testid="specs" /> }));
+vi.mock("@/components/new-build/ConstructionSpecs", () => ({
+  ConstructionSpecs: ({ project }: { project?: { building_permit_number?: string | null } | null }) => (
+    <div data-testid="specs">{project?.building_permit_number ?? "no permit"}</div>
+  ),
+}));
 vi.mock("@/components/new-build/UnitShowcase", () => ({
-  UnitShowcase: ({ onContact }: { onContact: () => void }) => <button type="button" onClick={onContact}>unit contact</button>,
+  UnitShowcase: ({
+    units,
+    onContact,
+  }: {
+    units?: Array<{ unit_number?: string | null }>;
+    onContact: () => void;
+  }) => (
+    <div>
+      <span>unit count:{units?.length ?? 0}</span>
+      {units?.[0]?.unit_number && <span>{units[0].unit_number}</span>}
+      <button type="button" onClick={onContact}>unit contact</button>
+    </div>
+  ),
 }));
 vi.mock("@/components/new-build/RegisterInterestCard", () => ({
   RegisterInterestCard: ({
@@ -139,6 +165,51 @@ const listing = {
   has_video_tour: true,
   cover_image_url: "https://cdn/cover.jpg",
   listing_images: [{ url: "https://cdn/other.jpg", sort_order: 2 }],
+  project_id: "project-1",
+  project: {
+    id: "project-1",
+    name: "Marina Heights",
+    description: "Waterfront homes with shared amenities.",
+    address: "Marina Avenue 10",
+    city: "Piraeus",
+    municipality: "Piraeus Municipality",
+    developer_company: "Mai Developments",
+    architect_group: "Aegean Studio",
+    construction_company: "BuildCo",
+    building_permit_number: "BP-2026-01",
+    area_description: "New waterfront regeneration zone.",
+    status: "active",
+    permit_approval_date: "2026-01-15",
+    construction_start_date: "2026-03-01",
+    structural_completion_date: "2026-10-15",
+    delivery_date: "2027-06-30",
+    project_units: [
+      {
+        id: "unit-1",
+        unit_number: "A101",
+        unit_id: "A101",
+        floor: 1,
+        availability_status: "available",
+        internal_sqm: 82,
+        balcony_sqm: 14,
+        bedrooms: 2,
+        bathrooms: 2,
+        price: 410000,
+        price_per_sqm: 5000,
+        vat_included: true,
+        energy_class: "A",
+      },
+    ],
+    project_media: [
+      {
+        id: "media-1",
+        media_type: "floor_plan",
+        title: "A101 floor plan",
+        url: "https://cdn/floor-plan.jpg",
+        sort_order: 1,
+      },
+    ],
+  },
   description: "A".repeat(240),
   latitude: 37.94,
   longitude: 23.64,
@@ -263,6 +334,21 @@ describe("NewBuildDetail", () => {
     await waitFor(() => {
       expect(navigateMock).toHaveBeenCalledWith("/property/listing-1", { replace: true });
     });
+  });
+
+  it("renders the linked project summary and passes project units and media to the new-build sections", () => {
+    renderPage();
+
+    expect(screen.getByText("Marina Heights")).toBeInTheDocument();
+    expect(screen.getByText("Mai Developments")).toBeInTheDocument();
+    expect(screen.getByText("Aegean Studio")).toBeInTheDocument();
+    expect(screen.getByText("BuildCo")).toBeInTheDocument();
+    expect(screen.getAllByText("BP-2026-01").length).toBeGreaterThan(0);
+    expect(screen.getByText("New waterfront regeneration zone.")).toBeInTheDocument();
+    expect(screen.getByText("unit count:1")).toBeInTheDocument();
+    expect(screen.getByText("A101")).toBeInTheDocument();
+    expect(screen.getByText("media count:1")).toBeInTheDocument();
+    expect(screen.getByText("A101 floor plan")).toBeInTheDocument();
   });
 
   it("starts conversations from contact affordances and writes interest records for signed-in users", async () => {

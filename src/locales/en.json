@@ -5,7 +5,7 @@
     "quickSale": "Quick Sale™",
     "professionals": "Professionals",
     "openHouses": "Open Houses",
-    "newBuilds": "New Builds",
+    "newBuilds": "New Buildings",
     "projects": "Projects",
     "aiAssistant": "AI Assistant",
     "dashboard": "Dashboard",
@@ -79,7 +79,7 @@
       "forSale": "For Sale",
       "forRent": "For Rent",
       "auctions": "Auctions",
-      "newBuilds": "New Builds",
+      "newBuilds": "New Buildings",
       "quickSale": "Quick Sale"
     }
   },
@@ -114,7 +114,7 @@
       "rent": "For Rent",
       "auction": "Auction",
       "firesale": "Quick Sale",
-      "new_build": "New Build"
+      "new_build": "New Building"
     },
     "propertyTypes": {
       "apartment": "Apartment",
@@ -545,7 +545,7 @@
       },
       "developerPro": {
         "title": "Developer tools require Pro",
-        "subtitle": "Unlimited listings, project showcases, pre-sale management, and featured placement are all part of the Developer Pro plan.",
+        "subtitle": "Unlimited listings, project showcases, project ad management, and featured placement are all part of the Developer Pro plan.",
         "trial": "Start 7-day free trial",
         "previewTools": "Preview listing tools"
       },
@@ -806,7 +806,7 @@
       "auctions": "Property Auctions",
       "quickSale": "Quick Sale",
       "openHouses": "Open Houses",
-      "newBuilds": "New Builds",
+      "newBuilds": "New Buildings",
       "aiAssistant": "AI Assistant",
       "professionals": "Find Professionals",
       "listYourServices": "List Your Services",
@@ -833,7 +833,7 @@
       "auction": "Auction",
       "openHouse": "Open House",
       "quickSale": "Quick Sale",
-      "newBuild": "New Build",
+      "newBuild": "New Building",
       "new": "New",
       "premium": "Premium",
       "featured": "Featured",
@@ -884,7 +884,7 @@
       "all": "All",
       "buy": "Buy",
       "rent": "Rent",
-      "newBuild": "New Builds"
+      "newBuild": "New Buildings"
     },
     "priceRanges": {
       "buy": {
@@ -920,7 +920,7 @@
       "1": "Quiet apartment near metro in Athens under 200k",
       "2": "3 bed villa with pool for rent in Mykonos",
       "3": "Studio with parking in Thessaloniki under 80k",
-      "4": "New build energy A+ apartment in Athens"
+      "4": "New Building apartment with A+ energy in Athens"
     }
   },
   "loginPage": {
@@ -1425,16 +1425,16 @@
       "rentDesc": "Monthly or long-term",
       "openHouse": "Open House",
       "openHouseDesc": "Public viewing event",
-      "preSale": "Pre-sale / Off-plan",
-      "preSaleDesc": "New development before completion",
-      "newBuildDetails": "New Build Details",
+      "preSale": "Project Ad",
+      "preSaleDesc": "New Building project before delivery",
+      "newBuildDetails": "New Building Details",
       "constructionPhase": "Construction Phase",
       "selectPhase": "Select phase...",
       "progressHint": "Shown on the project page with a progress indicator",
       "deliveryYear": "Estimated Delivery Year",
       "expectedCompletionHint": "Shown as \"Expected completion\"",
       "newBuildNoticeBefore": "Your listing will appear in the",
-      "newBuilds": "New Builds",
+      "newBuilds": "New Buildings",
       "newBuildNoticeAfter": "section with a dedicated project showcase page.",
       "offMarket": "Off-market",
       "offMarketDesc": "Exclusive - not publicly advertised",
@@ -1928,7 +1928,7 @@
     }
   },
   "newBuildingListing": {
-    "title": "New Building Listing",
+    "title": "Create New Building",
     "stepProgress": "Step {{current}} of {{total}} - {{label}}",
     "steps": {
       "building": "Building",
@@ -1942,7 +1942,7 @@
       "free": "Free"
     },
     "guard": {
-      "developersOnly": "New building listings are for developers only. Switch your account type in Settings.",
+      "developersOnly": "Creating new buildings is for developers only. Switch your account type in Settings.",
       "redirecting": "Redirecting..."
     },
     "limit": {
@@ -2050,7 +2050,7 @@
       "back": "Back",
       "next": "Next",
       "creating": "Creating...",
-      "createListing": "Create Listing"
+      "createListing": "Create New Building"
     },
     "links": {
       "regularListing": "Create a regular listing",
@@ -2072,16 +2072,16 @@
       "coverRequired": "Set a cover photo",
       "projectFieldsRequired": "Fill in required project fields",
       "unitFieldsRequired": "Fill in required unit fields",
-      "created": "New building listing created!",
-      "createFailed": "Failed to create new building listing. Please try again.",
+      "created": "New building created!",
+      "createFailed": "Failed to create new building. Please try again.",
       "unsupportedFile": "Unsupported file"
     }
   },
   "projects": {
     "title": "Projects",
-    "subtitle": "Showcase development projects and link listings",
-    "newBuildingListing": "New Building Listing",
-    "newProject": "New Project",
+    "subtitle": "Showcase development projects created through Create New Building",
+    "newBuildingListing": "Create New Building",
+    "newProject": "Create New Building",
     "auth": {
       "title": "Sign in to manage projects",
       "subtitle": "Create and showcase your development projects",
@@ -2091,7 +2091,7 @@
       "nameRequired": "Project name is required"
     },
     "create": {
-      "title": "Create project"
+      "title": "Create New Building"
     },
     "fields": {
       "name": "Name",
@@ -2120,15 +2120,17 @@
     },
     "empty": {
       "title": "No projects yet",
-      "subtitle": "Create a project to group and showcase your listings",
-      "cta": "Create your first project",
+      "subtitle": "Create a new building to create the project, first unit, and public ad together.",
+      "cta": "Create New Building",
       "noUnlinked": "No unlinked listings.",
-      "createOne": "Create one"
+      "createOne": "Create one",
+      "noUnlinkedNewBuilds": "No legacy New Building ads to attach.",
+      "createNewBuilding": "Create New Building"
     },
     "labels": {
       "permit": "Permit",
       "listingsInProject": "Listings in this project",
-      "linkListings": "Link your listings"
+      "linkListings": "Attach legacy New Building ads"
     },
     "deleteDialog": {
       "title": "Delete project",
@@ -2237,8 +2239,9 @@
         "lost": "Lost"
       },
       "linkedListings": {
-        "caption": "Link existing listings to this project. These appear on the project showcase.",
-        "newBuilding": "New building"
+        "caption": "Project ads created through Create New Building appear on the project showcase.",
+        "newBuilding": "New Building",
+        "empty": "No project ads linked yet."
       },
       "dialogs": {
         "bulkPrice": {
@@ -2302,11 +2305,12 @@
     }
   },
   "newBuildDetail": {
-    "backToNewBuilds": "Back to new builds",
+    "backToNewBuilds": "Back to New Buildings",
     "fallbackInterestedBuyer": "Interested buyer",
     "pricePerSqm": "{{price}} per m²",
     "badges": {
-      "preSale": "Pre-sale"
+      "newBuild": "New Building",
+      "preSale": "Project Ad"
     },
     "stats": {
       "bed": "{{count}} bed",

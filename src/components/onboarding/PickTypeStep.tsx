@@ -78,8 +78,8 @@ export function PickTypeStep({
       color: "orange",
       label: isGreek ? "Κατασκευαστής / εταιρεία ανάπτυξης ακινήτων" : "Developer / Builder",
       tagline: isGreek ? "Προβάλετε νέα έργα" : "Showcase new projects",
-      desc: isGreek ? "Δημιουργήστε σελίδες έργων για νέες κατασκευές, διαχειριστείτε αγγελίες προπώλησης και αιτήματα αγοραστών." : "Create project pages for new builds, manage pre-sale listings, and handle buyer inquiries in one place.",
-      features: isGreek ? ["Σελίδες έργων", "Αγγελίες προπώλησης", "Διαχείριση αιτημάτων", "Αναλυτικά έργου"] : ["Project showcase pages", "Pre-sale listings", "Buyer inquiry management", "Project analytics"],
+      desc: isGreek ? "Δημιουργήστε σελίδες έργων για νέες κατασκευές, διαχειριστείτε αγγελίες έργων και αιτήματα αγοραστών." : "Create project pages for New Buildings, manage project ads, and handle buyer inquiries in one place.",
+      features: isGreek ? ["Σελίδες έργων", "Αγγελίες έργων", "Διαχείριση αιτημάτων", "Αναλυτικά έργου"] : ["Project showcase pages", "Project ads", "Buyer inquiry management", "Project analytics"],
       immediate: onDeveloperImmediate,
     },
     {

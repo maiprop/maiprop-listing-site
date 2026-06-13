@@ -38,6 +38,15 @@ const AUDIENCE_TABS: { id: AudienceId; label: string; mobileLabel: string; icon:
 // ── Plan feature type ──────────────────────────────────────────────────────────
 type PlanFeature = { label: string; free?: boolean | string; paid?: boolean | string; icon?: React.ElementType };
 
+const normalizePlanDescription = (description?: string | null) => {
+  if (!description) return undefined;
+  return description
+    .replace(/new build showcase/gi, "new building showcase")
+    .replace(/pre-sale\s*&\s*floor plans/gi, "project ads & floor plans")
+    .replace(/pre-sale management/gi, "project ad management")
+    .replace(/off-plan management/gi, "project ad management");
+};
+
 // ── Per-audience plan data ─────────────────────────────────────────────────────
 
 const PARTICIPANT_FREE_LIST = [
@@ -88,10 +97,10 @@ const AGENT_PRO: PlanFeature[] = [
 
 const DEVELOPER_PRO: PlanFeature[] = [
   { label: "Unlimited project listings", icon: Layers,       free: false,        paid: true },
-  { label: "New Build showcase pages",   icon: Building2,    free: false,        paid: true },
-  { label: "Pre-sale & off-plan management", icon: Eye,      free: false,        paid: true },
+  { label: "New Building showcase pages", icon: Building2,    free: false,        paid: true },
+  { label: "Project ad and unit management", icon: Eye,      free: false,        paid: true },
   { label: "Construction timeline & floor plans", icon: FileText, free: false,  paid: true },
-  { label: "Priority in New Builds section", icon: Star,     free: false,        paid: true },
+  { label: "Priority in New Buildings section", icon: Star,     free: false,        paid: true },
   { label: "AI listing & description tools", icon: Sparkles, free: false,        paid: true },
   { label: "Project analytics dashboard", icon: BarChart2,   free: false,        paid: true },
   { label: "AI Neighbourhood Reports",   icon: Globe,        free: false,        paid: "3/month included" },
@@ -271,13 +280,13 @@ const PRICING_EL: Record<string, string> = {
   "50/month core AI · 3 property reports/month": "50/μήνα για βασικά AI εργαλεία · 3 αναφορές ακινήτου/μήνα",
   "Developer plan required": "Απαιτείται πλάνο κατασκευαστή",
   "Developer Pro": "Pro κατασκευαστή",
-  "Unlimited projects, new build showcase, pre-sale management & priority placement": "Απεριόριστα έργα, προβολή νέων κατασκευών, διαχείριση προπώλησης και προτεραιότητα προβολής",
+  "Unlimited projects, new building showcase, project ad management & priority placement": "Απεριόριστα έργα, προβολή νέων κατασκευών, διαχείριση αγγελιών έργου και προτεραιότητα προβολής",
   "Get Developer Pro": "Απόκτηση Developer Pro",
   "Unlimited project listings": "Απεριόριστες αγγελίες έργων",
-  "New Build showcase pages": "Σελίδες προβολής νέων κατασκευών",
-  "Pre-sale & off-plan management": "Διαχείριση προπώλησης και off-plan",
+  "New Building showcase pages": "Σελίδες προβολής νέων κατασκευών",
+  "Project ad and unit management": "Διαχείριση αγγελιών έργου και μονάδων",
   "Construction timeline & floor plans": "Χρονοδιάγραμμα κατασκευής και κατόψεις",
-  "Priority in New Builds section": "Προτεραιότητα στην ενότητα Νέων Κατασκευών",
+  "Priority in New Buildings section": "Προτεραιότητα στην ενότητα Νέων Κατασκευών",
   "AI listing & description tools": "AI εργαλεία αγγελίας και περιγραφής",
   "Project analytics dashboard": "Πίνακας αναλυτικών έργου",
   "AI Neighbourhood Reports": "AI αναφορές περιοχής",
@@ -352,7 +361,7 @@ const PLANS: Record<AudienceId, PlanDef> = {
   developer: {
     freeLabel: "—", freePrice: "—", freeDesc: "Developer plan required", freeCTA: "—", freeHref: "#",
     paidLabel: "Developer Pro", monthlyPrice: 129, annualPrice: 1290,
-    paidDesc: "Unlimited projects, new build showcase, pre-sale management & priority placement", paidCTA: "Get Developer Pro", paidHref: "/pricing",
+    paidDesc: "Unlimited projects, new building showcase, project ad management & priority placement", paidCTA: "Get Developer Pro", paidHref: "/pricing",
     freeList: [], features: DEVELOPER_PRO,
     accent: "text-orange-600 dark:text-orange-400", accentBg: "bg-orange-500/10", accentBorder: "border-orange-500/40",
     proOnly: true,
@@ -508,7 +517,7 @@ export default function Pricing() {
     ? {
         ...basePlan,
         paidLabel: config.label,
-        paidDesc: config.description || basePlan.paidDesc,
+        paidDesc: normalizePlanDescription(config.description) || basePlan.paidDesc,
         monthlyPrice: dbMonthlyPrice,
         annualPrice: dbAnnualPrice,
       }

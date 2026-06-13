@@ -120,7 +120,7 @@ describe("DesktopActiveFilterChips", () => {
     expect(setParam).toHaveBeenCalledWith("construction", "");
 
     for (const [label, key] of [
-      [/New builds/i, "listing_type"],
+      [/New Buildings/i, "listing_type"],
       [/Video Viewing/i, "video_viewing"],
       [/Virtual Tour/i, "virtual_tour"],
       [/Messaging/i, "messaging"],

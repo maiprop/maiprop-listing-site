@@ -829,7 +829,7 @@ describe("Component smoke tests", () => {
 
   it("ConstructionTimeline renders without throwing", async () => {
     const { ConstructionTimeline } = await import("@/components/new-build/ConstructionTimeline");
-    expect(() => renderWithProviders(<ConstructionTimeline milestones={[]} />)).not.toThrow();
+    expect(() => renderWithProviders(<ConstructionTimeline status="foundation" />)).not.toThrow();
   });
 
   it("FloorPlanSection renders without throwing", async () => {

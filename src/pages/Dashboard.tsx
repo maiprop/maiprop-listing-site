@@ -571,7 +571,7 @@ export default function Dashboard() { // skipcq: JS-R1005
                         <div className="flex-1">
                           <h3 className="font-bold">{tr("dashboard.overview.developerPro.title", "Developer tools require Pro")}</h3>
                           <p className="text-sm text-muted-foreground mt-1 mb-3">
-                            {tr("dashboard.overview.developerPro.subtitle", "Unlimited listings, project showcases, pre-sale management, and featured placement are all part of the Developer Pro plan.")}
+                            {tr("dashboard.overview.developerPro.subtitle", "Unlimited listings, project showcases, project ad management, and featured placement are all part of the Developer Pro plan.")}
                           </p>
                           <div className="flex gap-2">
                             <Button size="sm" className="bg-orange-500 hover:bg-orange-600 border-0 text-white" asChild>

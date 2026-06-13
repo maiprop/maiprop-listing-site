@@ -141,7 +141,7 @@ export default function CreateNewBuildingListing() {
 
   useEffect(() => {
     if (!user || !profile || canCreateListing) return;
-    toast.error(tr("newBuildingListing.guard.developersOnly", "New building listings are for developers only. Switch your account type in Settings."));
+    toast.error(tr("newBuildingListing.guard.developersOnly", "Creating new buildings is for developers only. Switch your account type in Settings."));
     navigate("/dashboard/settings", { replace: true });
   }, [user, profile, canCreateListing, navigate, tr]);
 
@@ -316,10 +316,10 @@ export default function CreateNewBuildingListing() {
         coverImageUrl,
         additionalImageUrls,
       });
-      toast.success(tr("newBuildingListing.validation.created", "New building listing created!"));
+      toast.success(tr("newBuildingListing.validation.created", "New building created!"));
       navigate(`/new-build/${listingId}`);
     } catch (_err: unknown) {
-      toast.error(tr("newBuildingListing.validation.createFailed", "Failed to create new building listing. Please try again."));
+      toast.error(tr("newBuildingListing.validation.createFailed", "Failed to create new building. Please try again."));
     } finally {
       setSubmitting(false);
     }
@@ -343,7 +343,7 @@ export default function CreateNewBuildingListing() {
         <div className="border-b border-border bg-card py-5">
           <div className="container">
             <div className="flex items-center justify-between mb-1">
-              <h1 className="font-display text-2xl font-bold">{tr("newBuildingListing.title", "New Building Listing")}</h1>
+              <h1 className="font-display text-2xl font-bold">{tr("newBuildingListing.title", "Create New Building")}</h1>
               <span className="text-sm font-semibold tabular-nums text-primary">{completionPct}%</span>
             </div>
             <p className="text-muted-foreground text-xs mb-3">
@@ -603,7 +603,7 @@ export default function CreateNewBuildingListing() {
               ) : (
                 <Button onClick={handleSubmit} disabled={submitting} className="gap-2 bg-gradient-primary border-0">
                   {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  {submitting ? tr("newBuildingListing.actions.creating", "Creating...") : tr("newBuildingListing.actions.createListing", "Create Listing")}
+                  {submitting ? tr("newBuildingListing.actions.creating", "Creating...") : tr("newBuildingListing.actions.createListing", "Create New Building")}
                 </Button>
               )}
             </div>

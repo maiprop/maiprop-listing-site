@@ -18,7 +18,7 @@ const PRO_OPTIONS_EN = [
     desc: "Launching residential or commercial development projects.",
     icon: Briefcase,
     color: "orange",
-    features: ["Project showcases", "Pre-sale management", "Portfolio pages", "Bulk inquiries"],
+    features: ["Project showcases", "Project ad management", "Portfolio pages", "Bulk inquiries"],
   },
   {
     id: "service_pro" as const,

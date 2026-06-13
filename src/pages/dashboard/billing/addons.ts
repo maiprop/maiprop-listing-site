@@ -234,10 +234,10 @@ export const ADDONS_BY_ROLE: Record<string, AddonSection[]> = {
       accent: "amber",
       items: [
         {
-          name: "Featured New Build",
+          name: "Featured New Building",
           price: "€39",
           unit: "/ 30 days",
-          desc: "Showcase at the top of the New Builds section — high-intent buyers.",
+          desc: "Showcase at the top of the New Buildings section — high-intent buyers.",
           icon: Crown,
         },
         {
@@ -424,7 +424,7 @@ const ADDON_KEY_BY_NAME: Record<string, string> = {
   "Property Report": "property_report_single",
   "Neighbourhood Report": "neighbourhood_report_single",
   "Featured Listing": "featured_listing",
-  "Featured New Build": "featured_listing",
+  "Featured New Building": "featured_listing",
   "Priority Placement": "priority_placement",
   "Featured + Priority": "featured_priority_bundle",
   "Extra Listing Slot": "extra_listing",

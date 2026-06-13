@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
   Building2, Plus, Loader2, MapPin, Edit2, Trash2, ChevronRight,
   FolderOpen
@@ -8,14 +8,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
-import { useProjects, useCreateProject, useUpdateProject, useDeleteProject } from "@/hooks/useProjects";
+import { useProjects, useUpdateProject, useDeleteProject } from "@/hooks/useProjects";
 import { useMyListings, useUpdateListing } from "@/hooks/useListings";
 import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "sonner";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { ProGate } from "@/components/gates/ProGate";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { LocationAutocompleteInput, type LocationAutocompleteSelection } from "@/components/location/LocationAutocompleteInput";
 import type { Tables } from "@/integrations/supabase/types";
 import { tFallback } from "@/lib/i18nFallback";
 import { getListingDetailPath } from "@/lib/listingRoutes";
@@ -30,79 +28,19 @@ type ProjectWithListings = Tables<"projects"> & { listings?: ProjectListing[] };
 
 const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delete project UI state together with its ProGate surface.
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { user, profile } = useAuth();
   const participantType = getParticipantTypeFromProfile(profile);
   const isDeveloper = participantType === "developer";
   const { data: projects = [], isLoading } = useProjects(user?.id);
   const { data: myListings = [] } = useMyListings();
-  const createProject = useCreateProject();
   const updateProject = useUpdateProject();
   const deleteProject = useDeleteProject();
   const updateListing = useUpdateListing();
   const tr = (key: string, fallback: string) => tFallback(t, key, fallback);
   const newBuildListings = myListings.filter(isProjectLinkableListing);
 
-  const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [newName, setNewName] = useState("");
-  const [newDesc, setNewDesc] = useState("");
-  const [newCity, setNewCity] = useState("");
-  const [newAddress, setNewAddress] = useState("");
-  const [newLatitude, setNewLatitude] = useState("");
-  const [newLongitude, setNewLongitude] = useState("");
-  const [newPermit, setNewPermit] = useState("");
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
-
-  const applyNewProjectAddressSelection = (selection: LocationAutocompleteSelection) => {
-    setNewAddress(selection.addressLine || selection.value);
-    if (selection.city) setNewCity(selection.city);
-    setNewLatitude(selection.latitude || "");
-    setNewLongitude(selection.longitude || "");
-  };
-
-  const handleNewProjectCityChange = (value: string) => {
-    setNewCity(value);
-    setNewLatitude("");
-    setNewLongitude("");
-  };
-
-  const handleNewProjectAddressChange = (value: string) => {
-    setNewAddress(value);
-    setNewLatitude("");
-    setNewLongitude("");
-  };
-
-  const handleCreate = () => {
-    if (!newName.trim()) {
-      toast.error(tr("projects.validation.nameRequired", "Project name is required"));
-      return;
-    }
-    createProject.mutate(
-      {
-        name: newName.trim(),
-        description: newDesc.trim() || undefined,
-        city: newCity.trim() || undefined,
-        address: newAddress.trim() || undefined,
-        latitude: newLatitude ? Number(newLatitude) : undefined,
-        longitude: newLongitude ? Number(newLongitude) : undefined,
-        building_permit_number: newPermit.trim() || undefined,
-      },
-      {
-        onSuccess: (data) => {
-          setNewName("");
-          setNewDesc("");
-          setNewCity("");
-          setNewAddress("");
-          setNewLatitude("");
-          setNewLongitude("");
-          setNewPermit("");
-          setShowCreate(false);
-          if (data?.id) navigate(`/projects/${data.id}`);
-        },
-      }
-    );
-  };
 
   const handleUpdate = (id: string, updates: { name?: string; description?: string; status?: string }) => {
     updateProject.mutate({ id, updates }, { onSuccess: () => setEditingId(null) });
@@ -151,79 +89,14 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
           </div>
           <div className="flex gap-2">
             {isDeveloper && (
-              <Button variant="outline" className="border-border" asChild>
-                <Link to="/listings/new-building">{tr("projects.newBuildingListing", "New Building Listing")}</Link>
+              <Button className="bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
+                <Link to="/listings/new-building">
+                  <Plus className="w-4 h-4" /> {tr("projects.newBuildingListing", "Create New Building")}
+                </Link>
               </Button>
             )}
-            <Button onClick={() => setShowCreate(true)} className="bg-gradient-primary border-0 text-primary-foreground gap-2">
-              <Plus className="w-4 h-4" /> {tr("projects.newProject", "New Project")}
-            </Button>
           </div>
         </div>
-
-        {showCreate && (
-          <div className="glass-card rounded-xl p-6 mb-6 border border-border">
-            <h3 className="font-display font-semibold mb-4">{tr("projects.create.title", "Create project")}</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs text-muted-foreground block mb-1.5">{tr("projects.fields.name", "Name")} *</label>
-                <input
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder={tr("projects.fields.namePlaceholder", "e.g. Marina Heights")}
-                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground block mb-1.5">{tr("projects.fields.description", "Description")}</label>
-                <textarea
-                  value={newDesc}
-                  onChange={(e) => setNewDesc(e.target.value)}
-                  placeholder={tr("projects.fields.descriptionPlaceholder", "Brief description...")}
-                  rows={2}
-                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm resize-none text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground block mb-1.5">{tr("projects.fields.city", "City")}</label>
-                <LocationAutocompleteInput
-                  mode="city"
-                  value={newCity}
-                  onChange={handleNewProjectCityChange}
-                  placeholder={tr("projects.fields.cityPlaceholder", "e.g. Athens")}
-                  inputClassName="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground block mb-1.5">{tr("projects.fields.address", "Address")}</label>
-                <LocationAutocompleteInput
-                  mode="address"
-                  value={newAddress}
-                  onChange={handleNewProjectAddressChange}
-                  onSuggestionSelect={applyNewProjectAddressSelection}
-                  placeholder={tr("projects.fields.addressPlaceholder", "Street, number")}
-                  inputClassName="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground block mb-1.5">{tr("projects.fields.permit", "Building permit number")} *</label>
-                <input
-                  value={newPermit}
-                  onChange={(e) => setNewPermit(e.target.value)}
-                  placeholder={tr("projects.fields.permitPlaceholder", "e.g. 12345/2024")}
-                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary transition-colors"
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button onClick={handleCreate} disabled={createProject.isPending} className="bg-gradient-primary border-0 text-primary-foreground">
-                  {createProject.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  {tr("projects.actions.create", "Create")}
-                </Button>
-                <Button variant="outline" className="border-border" onClick={() => setShowCreate(false)}>{tr("projects.actions.cancel", "Cancel")}</Button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {isLoading ? (
           <div className="flex justify-center py-20">
@@ -233,13 +106,20 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
           <div className="glass-card rounded-xl p-12 text-center">
             <FolderOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <h2 className="font-semibold">{tr("projects.empty.title", "No projects yet")}</h2>
-            <p className="text-sm text-muted-foreground mt-2">{tr("projects.empty.subtitle", "Create a project to group and showcase your listings")}</p>
-            <Button className="mt-4 bg-gradient-primary border-0 text-primary-foreground" onClick={() => setShowCreate(true)}>{tr("projects.empty.cta", "Create your first project")}</Button>
+            <p className="text-sm text-muted-foreground mt-2">{tr("projects.empty.subtitle", "Create a new building to create the project, first unit, and public ad together.")}</p>
+            {isDeveloper && (
+              <Button className="mt-4 bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
+                <Link to="/listings/new-building">
+                  <Plus className="w-4 h-4" /> {tr("projects.empty.cta", "Create New Building")}
+                </Link>
+              </Button>
+            )}
           </div>
         ) : (
           <div className="space-y-6">
             {(projects as ProjectWithListings[]).map((p) => {
               const listings = Array.isArray(p.listings) ? p.listings : [];
+              const linkableListings = newBuildListings.filter((l) => l.project_id !== p.id);
               const isEditing = editingId === p.id;
 
               return (
@@ -347,12 +227,11 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
                     </div>
                   )}
 
-                  <div className="border-t border-border px-5 py-4 bg-muted/30">
-                    <h4 className="text-xs font-medium text-muted-foreground mb-2">{tr("projects.labels.linkListings", "Link your listings")}</h4>
+                  {linkableListings.length > 0 && (
+                    <div className="border-t border-border px-5 py-4 bg-muted/30">
+                    <h4 className="text-xs font-medium text-muted-foreground mb-2">{tr("projects.labels.linkListings", "Attach legacy New Building ads")}</h4>
                     <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
-                      {newBuildListings
-                        .filter((l) => l.project_id !== p.id)
-                        .map((l) => (
+                      {linkableListings.map((l) => (
                           <Button
                             key={l.id}
                             variant="outline"
@@ -362,13 +241,9 @@ const Projects = () => { // skipcq: JS-R1005 - This page keeps create/edit/delet
                             + {l.title?.slice(0, 30)}{l.title?.length > 30 ? "…" : ""}
                           </Button>
                         ))}
-                      {newBuildListings.filter((l) => l.project_id !== p.id).length === 0 && (
-                        <p className="text-xs text-muted-foreground">
-                          {tr("projects.empty.noUnlinkedNewBuilds", "No unlinked new-building listings.")} <Link to="/listings/new-building" className="underline text-primary">{tr("projects.empty.createNewBuilding", "Create new building")}</Link>
-                        </p>
-                      )}
                     </div>
-                  </div>
+                    </div>
+                  )}
                 </div>
               );
             })}

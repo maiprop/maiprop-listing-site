@@ -216,6 +216,19 @@ describe("CreateListing", () => {
     expect(set).toHaveBeenCalledWith("construction_status", "");
   });
 
+  it("resets stale project listing type state in the ordinary listing wizard", () => {
+    const set = vi.fn();
+    useListingFormMock.mockReturnValue(baseForm({
+      form: { listing_type: "new_build", is_pre_sale: false },
+      set,
+    }));
+    render(<CreateListing />, { wrapper: wrap });
+
+    expect(set).toHaveBeenCalledWith("listing_type", "sale");
+    expect(set).toHaveBeenCalledWith("is_pre_sale", false);
+    expect(set).toHaveBeenCalledWith("construction_status", "");
+  });
+
   it("keeps the legacy pre-sale creation gate disabled for developers", () => {
     useAuthMock.mockReturnValue({
       user: { id: "u-1" },
@@ -252,6 +265,29 @@ describe("CreateListing", () => {
       listingId: "l-edit",
       initialListing: editListing,
     }));
+  });
+
+  it("redirects project ads away from the ordinary listing editor", () => {
+    paramsState.listingId = "project-ad";
+    useListingMock.mockReturnValue({
+      data: {
+        id: "project-ad",
+        owner_id: "u-1",
+        title: "Off-plan tower",
+        listing_type: "new_build",
+        project_id: "project-1",
+        property_type: "apartment",
+        listing_images: [],
+      },
+      isLoading: false,
+    });
+
+    render(<CreateListing />, { wrapper: wrap });
+
+    expect(screen.getByText(/Redirecting/i)).toBeInTheDocument();
+    expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/managed from Projects/i));
+    expect(navigateMock).toHaveBeenCalledWith("/projects", { replace: true });
+    expect(screen.queryByText(/Edit Listing/i)).not.toBeInTheDocument();
   });
 
   it("routes unavailable edit states back to the canonical listings dashboard", () => {

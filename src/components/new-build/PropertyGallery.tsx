@@ -8,7 +8,7 @@ export function PropertyGallery({
   isFavorited,
   onFavorite,
   onShare,
-  title = "New build property",
+  title = "New Building property",
 }: {
   images: string[];
   isFavorited: boolean;
@@ -51,7 +51,7 @@ export function PropertyGallery({
           </button>
         <div className="absolute top-4 left-4">
           <span className="inline-flex items-center gap-1.5 bg-primary text-primary-foreground text-xs font-bold px-3 py-1.5 rounded-full">
-            <Building2 className="w-3.5 h-3.5" /> New Build
+            <Building2 className="w-3.5 h-3.5" /> New Building
           </span>
         </div>
         {images.length > 1 && (
@@ -138,7 +138,7 @@ export function PropertyGallery({
                   Full-screen photo viewer
                 </DialogTitle>
                 <DialogDescription className="sr-only">
-                  Use the previous and next controls to review all new-build photos.
+                  Use the previous and next controls to review all New Building photos.
                 </DialogDescription>
                 <p className="text-xs text-white/70">
                   {idx + 1} / {images.length}

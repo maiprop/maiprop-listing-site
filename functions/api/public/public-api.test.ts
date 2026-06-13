@@ -479,7 +479,85 @@ describe("public listing detail endpoint", () => {
     expect(listingsUrl.searchParams.get("is_off_market")).toBe("eq.false");
     expect(listingsUrl.searchParams.get("listing_images.order")).toBe("sort_order.asc");
     expect(fetchUrls("/rest/v1/profiles_public")[0].searchParams.get("select")).toBe("user_id,display_name,avatar_url,role");
-    expect(cacheApi.put.mock.calls[0][0].url).toContain("v=public-detail-v1");
+    expect(cacheApi.put.mock.calls[0][0].url).toContain("v=public-detail-v2");
+  });
+
+  it("requests and returns the linked project, project units, and project media for new-build details", async () => {
+    const projectPayload = {
+      id: "project-1",
+      name: "Marina Heights",
+      developer_company: "Mai Developments",
+      building_permit_number: "BP-2026-01",
+      project_units: [
+        {
+          id: "unit-1",
+          unit_number: "A101",
+          availability_status: "available",
+          floor: 1,
+          internal_sqm: 82,
+          bedrooms: 2,
+          bathrooms: 2,
+          price: 410000,
+          price_per_sqm: 5000,
+        },
+      ],
+      project_media: [
+        {
+          id: "media-1",
+          media_type: "floor_plan",
+          title: "A101 floor plan",
+          url: "https://cdn.example/floor-plan.jpg",
+          sort_order: 1,
+        },
+      ],
+    };
+    const mock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/rest/v1/listings") {
+        return jsonRows([
+          {
+            id: "listing-1",
+            owner_id: "owner-1",
+            title: "Marina Heights A101",
+            listing_type: "new_build",
+            project_id: "project-1",
+            project: projectPayload,
+          },
+        ]);
+      }
+      if (url.pathname === "/rest/v1/profiles_public") {
+        return jsonRows([{ user_id: "owner-1", display_name: "Mai Developer", avatar_url: null, role: "developer" }]);
+      }
+      return jsonRows([]);
+    }) as unknown as FetchMock;
+    globalThis.fetch = mock as unknown as typeof fetch;
+
+    const res = await listingRequest(
+      makeCtx("https://portal.maiprop.co/api/public/listing?id=11111111-1111-4111-8111-111111111111"),
+    );
+    const body = await res.json() as {
+      data: {
+        project_id: string;
+        project: typeof projectPayload;
+        profiles: unknown;
+      };
+    };
+
+    expect(body.data.project_id).toBe("project-1");
+    expect(body.data.project.project_units).toHaveLength(1);
+    expect(body.data.project.project_media).toHaveLength(1);
+    expect(body.data.profiles).toMatchObject({ display_name: "Mai Developer" });
+
+    const listingsUrl = fetchUrls("/rest/v1/listings")[0];
+    const select = listingsUrl.searchParams.get("select") ?? "";
+    expect(select).not.toContain("(,");
+    expect(select).not.toContain(",)");
+    expect(select).toContain("project_id");
+    expect(select).toContain("project:projects!listings_project_id_fkey(id,name");
+    expect(select).toContain("project_units!project_units_project_id_fkey(id,listing_id");
+    expect(select).toContain("cooling_system),project_media!project_media_project_id_fkey(id,url,media_type,title,sort_order)");
+    expect(listingsUrl.searchParams.get("project.project_units.order")).toBe("floor.asc.nullslast,unit_number.asc.nullslast");
+    expect(listingsUrl.searchParams.get("project.project_media.order")).toBe("media_type.asc,sort_order.asc");
   });
 
   it("rejects invalid detail ids before calling Supabase", async () => {

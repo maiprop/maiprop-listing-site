@@ -419,7 +419,7 @@ describe("Listings page interactions", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "3+" })[0]);
     expect(setParam).toHaveBeenCalledWith("beds_min", "3");
 
-    fireEvent.click(screen.getByLabelText(/new builds/i));
+    fireEvent.click(screen.getByLabelText(/new buildings/i));
     expect(screen.queryByLabelText(/off-market/i)).not.toBeInTheDocument();
     expect(setParams).toHaveBeenCalledWith([["listing_type", "new_build"], ["pre_sale", ""]]);
 
@@ -503,7 +503,7 @@ describe("Listings page interactions", () => {
       /pool/i,
       /Heating:/i,
       /^New$/i,
-      /new builds/i,
+      /new buildings/i,
       /video viewing/i,
       /virtual tour/i,
       /messaging/i,
