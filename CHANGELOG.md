@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.9.22](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.21...v1.9.22) (2026-06-13)
+
+
+### Bug Fixes
+
+* repair listing media and classification flows ([#322](https://github.com/maiprop/maiprop-listing-site/issues/322)) ([f28192d](https://github.com/maiprop/maiprop-listing-site/commit/f28192dd82896e067b4225fae00192937ece8115))
+* use gpt-5.4 mini for ai insights ([#320](https://github.com/maiprop/maiprop-listing-site/issues/320)) ([40e4ebe](https://github.com/maiprop/maiprop-listing-site/commit/40e4ebe456bcf606e566c30fa171716455f29cba))
+
 ## [1.9.21](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.20...v1.9.21) (2026-06-12)
 
 
