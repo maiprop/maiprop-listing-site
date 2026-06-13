@@ -1,6 +1,7 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 
 const RUNNING_PRODUCTION_PERF_GATE =
+  process.env.MAIPROP_RUNNING_PERF_GATE === "1" ||
   process.env.CI ||
   process.env.npm_lifecycle_event === "test:perf" ||
   process.argv.some((arg) => arg.includes("performance-gates.spec.ts"));

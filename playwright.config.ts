@@ -1,3 +1,5 @@
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
 
 const defaultBaseURL = process.env.CI
@@ -6,8 +8,11 @@ const defaultBaseURL = process.env.CI
 const isPerformanceGate =
   process.env.npm_lifecycle_event === "test:perf" ||
   process.argv.some((arg) => arg.includes("performance-gates.spec.ts"));
+if (isPerformanceGate) process.env.MAIPROP_RUNNING_PERF_GATE = "1";
 const configuredBaseURL = process.env.PLAYWRIGHT_BASE_URL;
 const baseURL = configuredBaseURL ?? (isPerformanceGate ? "http://localhost:4173" : defaultBaseURL);
+const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR ??
+  (isPerformanceGate ? join(tmpdir(), "maiprop-playwright-perf-results") : "test-results");
 const shouldStartLocalServer =
   !configuredBaseURL &&
   (baseURL.startsWith("http://localhost") ||
@@ -39,6 +44,7 @@ export default defineConfig({
   retries: 1,
   /* Parallelism — cap at 3 locally to avoid Supabase auth rate-limiting under high parallel load */
   workers: process.env.CI ? 2 : 3,
+  outputDir,
   reporter: process.env.CI ? "github" : "list",
 
   use: {
