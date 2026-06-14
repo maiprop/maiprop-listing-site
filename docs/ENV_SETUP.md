@@ -237,6 +237,7 @@ fail-fast behavior.
 | `PRODUCTION_DEPLOY_CHECK_ATTEMPTS` | optional retry count for the production deploy smoke check; defaults to `8` | deploy diagnostics only |
 | `PRODUCTION_DEPLOY_CHECK_DELAY_MS` | optional retry delay in milliseconds for the production deploy smoke check; defaults to `10000` | deploy diagnostics only |
 | `PLAYWRIGHT_BASE_URL` | live or staging app origin used by Playwright suites that are skipped by default | E2E diagnostics only |
+| `MAIPROP_RUNNING_PERF_GATE` | internal marker set by `playwright.config.ts` so Playwright workers run `test:perf` instead of skipping performance-gate specs; do not set manually | local/CI performance tests |
 | `E2E_RUN_SUPERVISOR_NETWORK` | explicit `true` gate for the supervisor/agent live network E2E suite | E2E diagnostics only |
 | `VITE_WEB_VITALS_SAMPLE_RATE` | optional browser-side Web Vitals Sentry sampling rate from `0` to `1`; defaults to `0.1` | production/staging build |
 | `VITE_VIEW_TRACKING_SAMPLE_RATE` | optional browser-side listing-view sample rate; defaults to `1` | production/staging build |
