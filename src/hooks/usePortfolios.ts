@@ -4,6 +4,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import type { Database } from "@/integrations/supabase/types";
 import { USER_SCOPED_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
+import {
+  parseMutationInput,
+  portfolioIdSchema,
+  portfolioNameSchema,
+  portfolioUpdateMutationSchema,
+} from "@/lib/mutationSchemas";
 
 /** A portfolio row as returned by the list/detail queries. */
 export type Portfolio = Pick<
@@ -76,9 +82,10 @@ export function useCreatePortfolio() {
   return useMutation({
     mutationFn: async (name: string) => {
       if (!user) throw new Error("Not authenticated");
+      const portfolioName = parseMutationInput(portfolioNameSchema, name, "portfolio name");
       const { data, error } = await supabase
         .from("portfolios")
-        .insert({ name, user_id: user.id })
+        .insert({ name: portfolioName, user_id: user.id })
         .select()
         .single();
       if (error) throw error;
@@ -104,10 +111,15 @@ export function useUpdatePortfolio() {
       updates: { name?: string; listing_ids?: string[] };
     }) => {
       if (!user) throw new Error("Must be logged in");
+      const payload = parseMutationInput(
+        portfolioUpdateMutationSchema,
+        { id, updates },
+        "portfolio update",
+      );
       const { data, error } = await supabase
         .from("portfolios")
-        .update(updates)
-        .eq("id", id)
+        .update(payload.updates)
+        .eq("id", payload.id)
         .eq("user_id", user.id)
         .select()
         .single();
@@ -129,7 +141,8 @@ export function useDeletePortfolio() {
   return useMutation({
     mutationFn: async (id: string) => {
       if (!user) throw new Error("Must be logged in");
-      const { error } = await supabase.from("portfolios").delete().eq("id", id).eq("user_id", user.id);
+      const portfolioId = parseMutationInput(portfolioIdSchema, id, "portfolio id");
+      const { error } = await supabase.from("portfolios").delete().eq("id", portfolioId).eq("user_id", user.id);
       if (error) throw error;
     },
     onSuccess: () => {

@@ -5,6 +5,7 @@ import { requireOwnedProject } from "@/hooks/projectOwnership";
 import { toast } from "sonner";
 import type { Database } from "@/integrations/supabase/types";
 import { CATALOG_STATIC_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
+import { parseMutationInput, projectMediaCreateSchema, scopedRowDeleteMutationSchema } from "@/lib/mutationSchemas";
 
 export type ProjectMediaType =
   | "rendering"
@@ -59,9 +60,20 @@ export function useAddProjectMedia() {
       sort_order?: number;
     }) => {
       await requireOwnedProject(project_id, user?.id);
+      const payload = parseMutationInput(
+        projectMediaCreateSchema,
+        { project_id, url, media_type, title, sort_order },
+        "project media",
+      );
       const { data, error } = await supabase
         .from("project_media")
-        .insert({ project_id, url, media_type, title: title || null, sort_order: sort_order ?? 0 })
+        .insert({
+          project_id: payload.project_id,
+          url: payload.url,
+          media_type: payload.media_type as ProjectMediaType,
+          title: payload.title || null,
+          sort_order: payload.sort_order ?? 0,
+        })
         .select()
         .single();
       if (error) throw error;
@@ -82,11 +94,12 @@ export function useDeleteProjectMedia() {
   return useMutation({
     mutationFn: async ({ id, projectId }: { id: string; projectId: string }) => {
       await requireOwnedProject(projectId, user?.id);
+      const payload = parseMutationInput(scopedRowDeleteMutationSchema, { id, scopeId: projectId }, "project media delete");
       const { error } = await supabase
         .from("project_media")
         .delete()
-        .eq("id", id)
-        .eq("project_id", projectId);
+        .eq("id", payload.id)
+        .eq("project_id", payload.scopeId);
       if (error) throw error;
     },
     onSuccess: (_: unknown, { projectId }: { id: string; projectId: string }) => {

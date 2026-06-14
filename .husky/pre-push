@@ -1,3 +1,4 @@
-npm run check:secrets
-npm run typecheck
-npm test
+node scripts/project-runtime.mjs -- npm run check:runtime
+node scripts/project-runtime.mjs -- npm run check:secrets
+node scripts/project-runtime.mjs -- npm run typecheck
+node scripts/project-runtime.mjs -- npm test

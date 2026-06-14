@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { formatPrice, formatTimeAgo } from "@/lib/format";
+import { adminFiresaleActionBodySchema, parseMutationInput } from "@/lib/mutationSchemas";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   pending:     { label: "Pending",     color: "bg-brand-gold/15 text-brand-gold border-brand-gold/20" },
@@ -56,12 +57,17 @@ function useSetDealStatus() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, published }: { id: string; published: boolean }) => {
-      const { data, error } = await supabase.functions.invoke<AdminFiresaleActionResponse>("admin-firesale-action", {
-        body: {
+      const body = parseMutationInput(
+        adminFiresaleActionBodySchema,
+        {
           action: "set_investor_publication",
           dealId: id,
           published,
         },
+        "admin firesale publication",
+      );
+      const { data, error } = await supabase.functions.invoke<AdminFiresaleActionResponse>("admin-firesale-action", {
+        body,
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);

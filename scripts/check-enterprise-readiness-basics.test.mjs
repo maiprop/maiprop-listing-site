@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   checkEnterpriseReadinessBasics,
+  checkEnterpriseTenantContract,
   checkObservabilityWiring,
   checkPublicFunctionInventory,
   checkRuntimeAlignment,
@@ -12,16 +13,24 @@ import {
 const makeFixture = () => {
   const root = mkdtempSync(join(tmpdir(), "maiprop-readiness-"));
   mkdirSync(join(root, ".github"), { recursive: true });
+  mkdirSync(join(root, ".husky"), { recursive: true });
+  mkdirSync(join(root, "apps"), { recursive: true });
+  mkdirSync(join(root, "packages"), { recursive: true });
+  mkdirSync(join(root, "infrastructure"), { recursive: true });
   mkdirSync(join(root, "docs"), { recursive: true });
+  mkdirSync(join(root, "docs", "adr"), { recursive: true });
   mkdirSync(join(root, "docs", "api"), { recursive: true });
   mkdirSync(join(root, "docs", "backups"), { recursive: true });
   mkdirSync(join(root, "docs", "governance"), { recursive: true });
   mkdirSync(join(root, "scripts"), { recursive: true });
   mkdirSync(join(root, "scripts", "load-test"), { recursive: true });
+  mkdirSync(join(root, "src", "hooks"), { recursive: true });
   mkdirSync(join(root, "src", "lib"), { recursive: true });
   mkdirSync(join(root, "supabase"), { recursive: true });
+  mkdirSync(join(root, "supabase", "migrations"), { recursive: true });
   mkdirSync(join(root, "supabase", "functions", "_shared"), { recursive: true });
   mkdirSync(join(root, "supabase", "functions", "healthz"), { recursive: true });
+  mkdirSync(join(root, "supabase", "functions", "open-house-registration"), { recursive: true });
 
   writeFileSync(
     join(root, "package.json"),
@@ -29,11 +38,25 @@ const makeFixture = () => {
       packageManager: "npm@10.8.2",
       volta: { node: "20.19.5", npm: "10.8.2" },
       engines: { node: ">=20.19.0 <21", npm: ">=10.8.0 <11" },
+      scripts: {
+        "runtime:doctor": "node scripts/project-runtime.mjs --doctor",
+        "check:runtime:local": "node scripts/project-runtime.mjs -- npm run check:runtime",
+        "check:repo-architecture": "node scripts/check-repository-architecture.mjs",
+      },
     }),
   );
   writeFileSync(join(root, ".node-version"), "20.19.5\n");
   writeFileSync(join(root, ".nvmrc"), "20.19.5\n");
   writeFileSync(join(root, ".npmrc"), "engine-strict=true\n");
+  writeFileSync(
+    join(root, ".husky", "pre-push"),
+    [
+      "node scripts/project-runtime.mjs -- npm run check:runtime",
+      "node scripts/project-runtime.mjs -- npm run check:secrets",
+      "node scripts/project-runtime.mjs -- npm run typecheck",
+      "node scripts/project-runtime.mjs -- npm test",
+    ].join("\n"),
+  );
   writeFileSync(
     join(root, "docs", "OBSERVABILITY.md"),
     [
@@ -60,6 +83,10 @@ const makeFixture = () => {
       "* @krenios",
       "/.github/workflows/ @krenios",
       "/.github/CODEOWNERS @krenios",
+      "/apps/ @krenios",
+      "/packages/ @krenios",
+      "/infrastructure/ @krenios",
+      "/supabase/ @krenios",
       "/supabase/migrations/ @krenios",
       "/supabase/functions/_shared/ @krenios",
       "/src/integrations/supabase/ @krenios",
@@ -136,6 +163,108 @@ const makeFixture = () => {
     }),
   );
   writeFileSync(
+    join(root, "docs", "governance", "ENTERPRISE_TENANCY_AND_SSO.md"),
+    [
+      "# Enterprise Tenancy and SSO",
+      "organization_memberships",
+      "organization_sso_providers",
+      "Supabase SSO/SAML",
+      "supabase sso",
+      "signInWithSSO",
+      "SAML metadata is not stored in application tables",
+      "database membership remains the authorization source of truth",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "docs", "governance", "PROCUREMENT_EVIDENCE_MATRIX.md"),
+    [
+      "# Procurement Evidence Matrix",
+      "procurement_evidence",
+      "Security questionnaire",
+      "Data Processing Agreement",
+      "Subprocessor list",
+      "Backup restore drill",
+      "SAML/SSO configuration",
+      "SOC 2 / ISO evidence is external and not claimed by this repository",
+    ].join("\n"),
+  );
+  writeFileSync(join(root, "apps", "README.md"), "# Apps\n");
+  writeFileSync(join(root, "packages", "README.md"), "# Packages\n");
+  writeFileSync(join(root, "infrastructure", "README.md"), "# Infrastructure\n");
+  writeFileSync(
+    join(root, "docs", "REPOSITORY_ARCHITECTURE.md"),
+    [
+      "# Repository Architecture",
+      "Current layout",
+      "Target layout",
+      "/apps/web",
+      "/packages/domain",
+      "/packages/ui",
+      "/packages/data-access",
+      "/infrastructure/cloudflare",
+      "no physical move without dedicated migration PR",
+      "Cloudflare Pages",
+      "Supabase",
+      "React Query",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "docs", "adr", "0005-repository-package-architecture.md"),
+    [
+      "# ADR-0005: Repository Package Architecture",
+      "- **Status:** Accepted",
+      "phased",
+      "no npm workspaces until package extraction",
+      "codemod/import migration",
+      "/apps",
+      "/packages",
+      "/infrastructure",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "docs", "governance", "repository-boundaries.json"),
+    JSON.stringify({
+      version: 1,
+      currentMode: "single-package",
+      targetLayout: {
+        apps: ["apps/web"],
+        packages: ["packages/domain", "packages/ui", "packages/data-access"],
+        infrastructure: ["infrastructure/cloudflare", "infrastructure/capacitor"],
+      },
+      boundaries: [
+        { id: "app-web", current: ["src"], target: "apps/web", ownerPath: "/apps/" },
+        { id: "shared-ui", current: ["src/components/ui"], target: "packages/ui", ownerPath: "/packages/" },
+        { id: "domain", current: ["src/lib"], target: "packages/domain", ownerPath: "/packages/" },
+        { id: "data-access", current: ["src/hooks", "src/integrations/supabase"], target: "packages/data-access", ownerPath: "/packages/" },
+        { id: "cloudflare-pages", current: ["functions", "public/_headers", "public/_redirects"], target: "infrastructure/cloudflare", ownerPath: "/infrastructure/" },
+        { id: "supabase-backend", current: ["supabase"], target: "supabase", ownerPath: "/supabase/" },
+      ],
+    }),
+  );
+  writeFileSync(
+    join(root, "supabase", "migrations", "20260614155000_enterprise_tenant_sso_procurement.sql"),
+    [
+      "CREATE TABLE IF NOT EXISTS public.organizations ();",
+      "CREATE TABLE IF NOT EXISTS public.organization_memberships ();",
+      "CREATE TABLE IF NOT EXISTS public.organization_domains ();",
+      "CREATE TABLE IF NOT EXISTS public.organization_sso_providers (supabase_provider_id uuid);",
+      "CREATE TABLE IF NOT EXISTS public.procurement_evidence ();",
+      "ALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY;",
+      "ALTER TABLE public.organization_memberships ENABLE ROW LEVEL SECURITY;",
+      "ALTER TABLE public.organization_domains ENABLE ROW LEVEL SECURITY;",
+      "ALTER TABLE public.organization_sso_providers ENABLE ROW LEVEL SECURITY;",
+      "ALTER TABLE public.procurement_evidence ENABLE ROW LEVEL SECURITY;",
+      "REVOKE ALL ON TABLE public.organizations FROM anon;",
+      "GRANT SELECT, INSERT, UPDATE ON TABLE public.organizations TO authenticated;",
+      "CREATE OR REPLACE FUNCTION private.is_org_member() RETURNS boolean LANGUAGE sql AS $$ SELECT true $$;",
+      "CREATE OR REPLACE FUNCTION private.has_org_role() RETURNS boolean LANGUAGE sql AS $$ SELECT true $$;",
+      "CREATE POLICY organizations_select_members ON public.organizations USING (private.is_org_member());",
+      "CREATE POLICY organization_memberships_manage ON public.organization_memberships WITH CHECK (private.has_org_role());",
+      "CREATE POLICY organization_sso_providers_manage ON public.organization_sso_providers WITH CHECK (private.has_org_role());",
+      "CREATE POLICY procurement_evidence_manage ON public.procurement_evidence WITH CHECK (private.has_org_role());",
+    ].join("\n"),
+  );
+  writeFileSync(
     join(root, "docs", "BRANCH_PROTECTION.md"),
     [
       "# Branch Protection",
@@ -188,6 +317,14 @@ const makeFixture = () => {
   );
   writeFileSync(join(root, "scripts", "supabase-logical-backup.mjs"), "process.exit(0);\n");
   writeFileSync(
+    join(root, "scripts", "project-runtime.mjs"),
+    [
+      "const home = process.env.MAIPROP_NODE20_HOME;",
+      "const cli = 'npm-cli.js';",
+      "console.log('Project runtime launcher OK', home, cli);",
+    ].join("\n"),
+  );
+  writeFileSync(
     join(root, "scripts", "load-test", "basic.js"),
     [
       "import http from \"k6/http\";",
@@ -220,6 +357,36 @@ const makeFixture = () => {
     ].join("\n"),
   );
   writeFileSync(
+    join(root, "src", "lib", "mutationSchemas.ts"),
+    [
+      "import { z } from \"zod\";",
+      "export function parseMutationInput() {}",
+      "export const savedSearchCreateSchema = {};",
+      "export const contactSubmissionInputSchema = {};",
+      "export const favoriteToggleSchema = {};",
+      "export const leadCreateSchema = {};",
+      "export const contactCreateSchema = {};",
+      "export const listingWriteSchema = {};",
+      "export const pricingConfigRowsSchema = {};",
+      "export const aiSearchBodySchema = {};",
+      "export const adminFiresaleActionBodySchema = {};",
+      "export const agentDataInputActionBodySchema = {};",
+      "export const submitFiresaleInterestBodySchema = {};",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "src", "hooks", "useSavedSearches.ts"),
+    [
+      "parseMutationInput(savedSearchCreateSchema, input, 'saved search');",
+      "parseMutationInput(savedSearchIdSchema, id, 'saved search id');",
+      "parseMutationInput(savedSearchAlertToggleSchema, input, 'saved search alert');",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "src", "hooks", "useContactSubmissions.ts"),
+    "parseMutationInput(contactSubmissionInputSchema, input, 'contact submission');\n",
+  );
+  writeFileSync(
     join(root, "src", "lib", "webVitals.ts"),
     [
       "export function installWebVitalsMonitoring() {",
@@ -239,8 +406,16 @@ const makeFixture = () => {
     ].join("\n"),
   );
   writeFileSync(
+    join(root, "supabase", "functions", "_shared", "schema.ts"),
+    "import { z } from 'npm:zod'; export class SchemaValidationError extends Error {} export async function parseJsonBody() {}\n",
+  );
+  writeFileSync(
     join(root, "supabase", "functions", "healthz", "index.ts"),
     "const checks = {}; checks.sentry = Deno.env.get('SENTRY_DSN') ? 'ok' : 'fail';\n",
+  );
+  writeFileSync(
+    join(root, "supabase", "functions", "open-house-registration", "index.ts"),
+    "const registrationRequestSchema = z.object({}); await parseJsonBody(req, registrationRequestSchema);\n",
   );
   return root;
 };
@@ -263,6 +438,17 @@ describe("enterprise readiness basics", () => {
 
     expect(result.ok).toBe(false);
     expect(result.failures.join("\n")).toContain(".nvmrc");
+  });
+
+  it("requires local hooks to run through the project runtime launcher", () => {
+    const root = makeFixture();
+    writeFileSync(join(root, ".husky", "pre-push"), "npm test\n");
+
+    const result = checkRuntimeAlignment(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain(".husky/pre-push");
+    expect(result.failures.join("\n")).toContain("project-runtime.mjs -- npm run check:runtime");
   });
 
   it("compares public function inventory against supabase config", () => {
@@ -289,6 +475,16 @@ describe("enterprise readiness basics", () => {
     expect(result.failures.join("\n")).toContain("src/main.tsx must mention installWebVitalsMonitoring");
   });
 
+  it("requires enterprise tenancy, SSO/SAML, and procurement evidence contracts", () => {
+    const root = makeFixture();
+    writeFileSync(join(root, "docs", "governance", "PROCUREMENT_EVIDENCE_MATRIX.md"), "# Missing\n");
+
+    const result = checkEnterpriseTenantContract(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("PROCUREMENT_EVIDENCE_MATRIX.md");
+  });
+
   it("includes the load-test contract in enterprise readiness", () => {
     const root = makeFixture();
     writeFileSync(
@@ -300,5 +496,5 @@ describe("enterprise readiness basics", () => {
 
     expect(result.ok).toBe(false);
     expect(result.failures.join("\n")).toContain("scripts/load-test/basic.js");
-  });
+  }, 10_000);
 });

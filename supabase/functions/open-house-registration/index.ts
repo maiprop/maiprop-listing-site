@@ -16,6 +16,7 @@ import {
   makeRateLimiter,
   tooManyRequestsResponse,
 } from "../_shared/rateLimit.ts";
+import { parseJsonBody, z } from "../_shared/schema.ts";
 
 const log = createLogger("open-house-registration");
 const limiter = makeRateLimiter({
@@ -23,19 +24,6 @@ const limiter = makeRateLimiter({
   maxRequests: 60,
   windowMs: 60_000,
 });
-
-type RegistrationRequest = {
-  listingId?: unknown;
-  timeslotIndex?: unknown;
-  contactName?: unknown;
-  contactEmail?: unknown;
-  contactPhone?: unknown;
-  visitPurpose?: unknown;
-  note?: unknown;
-  contactPermission?: unknown;
-  idVerificationConsent?: unknown;
-  privacyAcknowledgement?: unknown;
-};
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -50,35 +38,53 @@ const jsonResponse = (
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-function parseListingId(value: unknown): string {
-  if (typeof value !== "string" || !UUID_RE.test(value)) {
-    throw new Error("Invalid listingId");
-  }
-  return value;
-}
+const schemaString = (field: string, maxLength: number) =>
+  z.unknown().transform((value, ctx) => {
+    if (value === null || value === undefined) return null;
+    if (typeof value !== "string") {
+      ctx.addIssue({ code: "custom", message: `Invalid ${field}` });
+      return z.NEVER;
+    }
+    const trimmed = value.trim();
+    if (trimmed.length > maxLength) {
+      ctx.addIssue({ code: "custom", message: `Invalid ${field}` });
+      return z.NEVER;
+    }
+    return trimmed.length === 0 ? null : trimmed;
+  });
 
-function optionalString(value: unknown, field: string, maxLength: number): string | null {
-  if (value === null || value === undefined) return null;
-  if (typeof value !== "string") throw new Error(`Invalid ${field}`);
-  const trimmed = value.trim();
-  if (trimmed.length > maxLength) throw new Error(`Invalid ${field}`);
-  return trimmed.length === 0 ? null : trimmed;
-}
-
-function optionalEmail(value: unknown): string | null {
-  const email = optionalString(value, "contactEmail", 254);
-  if (!email) return null;
-  if (!EMAIL_RE.test(email)) throw new Error("Invalid contactEmail");
-  return email.toLowerCase();
-}
-
-function optionalTimeslot(value: unknown): number | null {
-  if (value === null || value === undefined) return null;
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 999) {
-    throw new Error("Invalid timeslotIndex");
-  }
-  return value;
-}
+const registrationRequestSchema = z.object({
+  listingId: z.unknown().transform((value, ctx) => {
+    if (typeof value !== "string" || !UUID_RE.test(value)) {
+      ctx.addIssue({ code: "custom", message: "Invalid listingId" });
+      return z.NEVER;
+    }
+    return value;
+  }),
+  timeslotIndex: z.unknown().transform((value, ctx) => {
+    if (value === null || value === undefined) return null;
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 999) {
+      ctx.addIssue({ code: "custom", message: "Invalid timeslotIndex" });
+      return z.NEVER;
+    }
+    return value;
+  }),
+  contactName: schemaString("contactName", 160),
+  contactEmail: schemaString("contactEmail", 254).transform((email, ctx) => {
+    if (!email) return null;
+    if (!EMAIL_RE.test(email)) {
+      ctx.addIssue({ code: "custom", message: "Invalid contactEmail" });
+      return z.NEVER;
+    }
+    return email.toLowerCase();
+  }),
+  contactPhone: schemaString("contactPhone", 80),
+  visitPurpose: schemaString("visitPurpose", 400),
+  note: schemaString("note", 1000),
+  contactPermission: z.unknown().transform((value) => value === true),
+  idVerificationConsent: z.unknown().transform((value) => value === true),
+  privacyAcknowledgement: z.unknown().transform((value) => value === true),
+}).strict();
 
 function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
@@ -117,19 +123,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const body = await req.json().catch(() => ({})) as RegistrationRequest;
-    const payload = {
-      listingId: parseListingId(body.listingId),
-      timeslotIndex: optionalTimeslot(body.timeslotIndex),
-      contactName: optionalString(body.contactName, "contactName", 160),
-      contactEmail: optionalEmail(body.contactEmail),
-      contactPhone: optionalString(body.contactPhone, "contactPhone", 80),
-      visitPurpose: optionalString(body.visitPurpose, "visitPurpose", 400),
-      note: optionalString(body.note, "note", 1000),
-      contactPermission: body.contactPermission === true,
-      idVerificationConsent: body.idVerificationConsent === true,
-      privacyAcknowledgement: body.privacyAcknowledgement === true,
-    };
+    const payload = await parseJsonBody(req, registrationRequestSchema);
 
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },

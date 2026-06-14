@@ -19,6 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ChartFallback,
 } from "@/components/charts/LazyRecharts";
+import { adminContentReportActionSchema, parseMutationInput } from "@/lib/mutationSchemas";
 
 // ── Types ─────────────────────────────────────────────────────────────────────────
 type ReportStatus = "pending" | "resolved";
@@ -96,9 +97,10 @@ function getLinkForEntity(entityType: string, entityId: string): string {
 }
 
 async function invokeAdminReportAction(payload: AdminReportActionPayload): Promise<void> {
+  const body = parseMutationInput(adminContentReportActionSchema, payload, "admin report action");
   const { data, error } = await supabase.functions.invoke<AdminReportActionResponse>(
     "admin-content-report-action",
-    { body: payload },
+    { body },
   );
   if (error) throw error;
   if (data?.error) throw new Error(data.error);

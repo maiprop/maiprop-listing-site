@@ -17,6 +17,11 @@ import { APP_ORIGIN } from "@/lib/config";
 import { getExplicitParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { validatePassword } from "@/lib/passwordPolicy";
 import { recordUserAuthActivity, type AuthActivityEventType } from "@/lib/authActivity";
+import {
+  parseMutationInput,
+  profileUpdateMutationSchema,
+  signUpProfileUpdateMutationSchema,
+} from "@/lib/mutationSchemas";
 
 export type Profile = Tables<"profiles"> & {
   role_switch_in_progress_at?: string | null;
@@ -328,10 +333,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ...(meta.phone ? { phone: meta.phone } : {}),
       };
       if (data.user && !error && Object.keys(profileUpdates).length > 0) {
+        const payload = parseMutationInput(
+          signUpProfileUpdateMutationSchema,
+          { userId: data.user.id, updates: profileUpdates },
+          "signup profile update",
+        );
         await supabase
           .from("profiles")
-          .update(profileUpdates)
-          .eq("user_id", data.user.id);
+          .update(payload.updates)
+          .eq("user_id", payload.userId);
       }
       // needsEmailConfirm = signup succeeded but no session yet (email confirmation required)
       const needsEmailConfirm = !error && !!data.user && !data.session;
@@ -392,11 +402,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (Object.keys(safe).length === 0) {
         return { error: new Error("No allowed fields to update") };
       }
+      const payload = parseMutationInput(
+        profileUpdateMutationSchema,
+        { userId: user.id, updates: safe },
+        "profile update",
+      );
 
       const { error } = await supabase
         .from("profiles")
-        .update(safe)
-        .eq("user_id", user.id);
+        .update(payload.updates)
+        .eq("user_id", payload.userId);
       if (!error) await fetchProfile(user.id);
       return { error: error as Error | null };
     },

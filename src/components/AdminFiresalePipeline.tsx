@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { STATUS_CONFIG, type AdminDeal, AdminDealRow } from "@/components/admin/FiresaleComponents";
+import { adminFiresaleActionBodySchema, parseMutationInput } from "@/lib/mutationSchemas";
 
 type AdminFiresaleActionResponse = {
   data?: unknown;
@@ -48,8 +49,9 @@ function useUpdateAdminDeal() {
       sellerResponse?: string;
       sellerResponsePrice?: number;
     }) => {
-      const { data, error } = await supabase.functions.invoke<AdminFiresaleActionResponse>("admin-firesale-action", {
-        body: {
+      const body = parseMutationInput(
+        adminFiresaleActionBodySchema,
+        {
           action: "update_pipeline_deal",
           dealId: id,
           status,
@@ -58,6 +60,10 @@ function useUpdateAdminDeal() {
           sellerResponse,
           sellerResponsePrice,
         },
+        "admin firesale action",
+      );
+      const { data, error } = await supabase.functions.invoke<AdminFiresaleActionResponse>("admin-firesale-action", {
+        body,
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);

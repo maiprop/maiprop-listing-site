@@ -4,6 +4,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import type { Database, TablesUpdate } from "@/integrations/supabase/types";
 import { USER_SCOPED_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
+import {
+  contactCreateSchema,
+  contactIdSchema,
+  contactTaskCreateSchema,
+  contactTaskUpdateMutationSchema,
+  contactUpdateMutationSchema,
+  parseMutationInput,
+} from "@/lib/mutationSchemas";
 
 const DEAL_STAGES = ["new", "contacted", "qualified", "proposal", "negotiation", "won", "lost"] as const;
 
@@ -69,17 +77,18 @@ export function useCreateContact() {
       listing_id?: string | null;
     }) => {
       if (!user) throw new Error("Not authenticated");
+      const payload = parseMutationInput(contactCreateSchema, contact, "contact");
       const { data, error } = await supabase
         .from("contacts")
         .insert({
-          name: contact.name,
-          email: contact.email,
-          phone: contact.phone,
-          source: contact.source,
-          notes: contact.notes,
-          deal_stage: contact.deal_stage || "new",
-          follow_up_at: contact.follow_up_at,
-          listing_id: contact.listing_id,
+          name: payload.name,
+          email: payload.email,
+          phone: payload.phone,
+          source: payload.source,
+          notes: payload.notes,
+          deal_stage: payload.deal_stage || "new",
+          follow_up_at: payload.follow_up_at,
+          listing_id: payload.listing_id,
           user_id: user.id,
         })
         .select()
@@ -101,10 +110,11 @@ export function useUpdateContact() {
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: TablesUpdate<"contacts"> }) => {
       if (!user) throw new Error("Not authenticated");
+      const payload = parseMutationInput(contactUpdateMutationSchema, { id, updates }, "contact update");
       const { data, error } = await supabase
         .from("contacts")
-        .update(updates)
-        .eq("id", id)
+        .update(payload.updates)
+        .eq("id", payload.id)
         .eq("user_id", user.id)
         .select()
         .single();
@@ -125,7 +135,8 @@ export function useDeleteContact() {
   return useMutation({
     mutationFn: async (id: string) => {
       if (!user) throw new Error("Not authenticated");
-      const { error } = await supabase.from("contacts").delete().eq("id", id).eq("user_id", user.id);
+      const contactId = parseMutationInput(contactIdSchema, id, "contact id");
+      const { error } = await supabase.from("contacts").delete().eq("id", contactId).eq("user_id", user.id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -172,14 +183,19 @@ export function useCreateContactTask() {
       notes?: string;
     }) => {
       if (!user) throw new Error("Not authenticated");
+      const payload = parseMutationInput(
+        contactTaskCreateSchema,
+        { contactId, title, dueAt, notes },
+        "contact task",
+      );
       const { data, error } = await supabase
         .from("contact_tasks")
         .insert({
-          contact_id: contactId,
+          contact_id: payload.contactId,
           user_id: user.id,
-          title,
-          due_at: dueAt || null,
-          notes: notes || null,
+          title: payload.title,
+          due_at: payload.dueAt || null,
+          notes: payload.notes || null,
         })
         .select()
         .single();
@@ -206,10 +222,11 @@ export function useUpdateContactTask() {
       updates: { title?: string; due_at?: string | null; completed_at?: string | null; notes?: string };
     }) => {
       if (!user) throw new Error("Must be logged in");
+      const payload = parseMutationInput(contactTaskUpdateMutationSchema, { id, updates }, "contact task update");
       const { data, error } = await supabase
         .from("contact_tasks")
-        .update(updates)
-        .eq("id", id)
+        .update(payload.updates)
+        .eq("id", payload.id)
         .eq("user_id", user.id)
         .select()
         .single();

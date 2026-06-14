@@ -4,6 +4,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 import { USER_SCOPED_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
+import {
+  parseMutationInput,
+  savedSearchAlertToggleSchema,
+  savedSearchCreateSchema,
+  savedSearchIdSchema,
+} from "@/lib/mutationSchemas";
 
 export type SavedSearch = {
   id: string;
@@ -50,12 +56,17 @@ export function useCreateSavedSearch() {
     }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
-       
+      const payload = parseMutationInput(
+        savedSearchCreateSchema,
+        { name, filters, emailAlerts },
+        "saved search",
+      );
+
       const { error } = await supabase.from("saved_searches").insert({
         user_id: user.id,
-        name,
-        filters: filters as unknown as import("@/integrations/supabase/types").Database["public"]["Tables"]["saved_searches"]["Insert"]["filters"],
-        email_alerts: emailAlerts,
+        name: payload.name,
+        filters: payload.filters as unknown as import("@/integrations/supabase/types").Database["public"]["Tables"]["saved_searches"]["Insert"]["filters"],
+        email_alerts: payload.emailAlerts,
       });
       if (error) throw error;
     },
@@ -76,7 +87,8 @@ export function useDeleteSavedSearch() {
   return useMutation({
     mutationFn: async (id: string) => {
       if (!user) throw new Error("Not authenticated");
-      const { error } = await supabase.from("saved_searches").delete().eq("id", id).eq("user_id", user.id);
+      const savedSearchId = parseMutationInput(savedSearchIdSchema, id, "saved search id");
+      const { error } = await supabase.from("saved_searches").delete().eq("id", savedSearchId).eq("user_id", user.id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -96,10 +108,15 @@ export function useToggleSavedSearchAlert() {
   return useMutation({
     mutationFn: async ({ id, emailAlerts }: { id: string; emailAlerts: boolean }) => {
       if (!user) throw new Error("Not authenticated");
+      const payload = parseMutationInput(
+        savedSearchAlertToggleSchema,
+        { id, emailAlerts },
+        "saved search alert",
+      );
       const { error } = await supabase
         .from("saved_searches")
-        .update({ email_alerts: emailAlerts })
-        .eq("id", id)
+        .update({ email_alerts: payload.emailAlerts })
+        .eq("id", payload.id)
         .eq("user_id", user.id);
       if (error) throw error;
     },

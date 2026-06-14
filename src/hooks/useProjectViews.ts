@@ -1,5 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { parseMutationInput, projectViewCreateSchema } from "@/lib/mutationSchemas";
 
 
 export function useProjectViews(projectId: string | undefined) {
@@ -22,9 +23,14 @@ export function useRecordProjectView() {
   return useMutation({
     mutationFn: async (projectId: string) => {
       const { data: { user } } = await supabase.auth.getUser();
+      const payload = parseMutationInput(
+        projectViewCreateSchema,
+        { project_id: projectId, viewer_id: user?.id ?? null },
+        "project view",
+      );
       const { error } = await supabase
         .from("project_views")
-        .insert({ project_id: projectId, viewer_id: user?.id ?? null });
+        .insert(payload);
       if (error) throw error;
     },
   });

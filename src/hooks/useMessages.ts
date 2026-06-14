@@ -4,6 +4,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { REALTIME_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
+import {
+  conversationCreateSchema,
+  conversationTimestampUpdateSchema,
+  markMessagesReadSchema,
+  messageAttachmentRowsSchema,
+  messageCreateSchema,
+  parseMutationInput,
+} from "@/lib/mutationSchemas";
 
 type ConversationCandidate = { id: string; listing_id: string | null };
 type StartConversationInput = { other_user_id: string; listing_id?: string };
@@ -34,11 +42,16 @@ const insertConversation = async (
   otherUserId: string,
   targetListingId: string | null,
 ) => {
+  const payload = parseMutationInput(
+    conversationCreateSchema,
+    { currentUserId, otherUserId, targetListingId },
+    "conversation",
+  );
   const { data, error } = await supabase.from("conversations")
     .insert({
-      participant_a: currentUserId,
-      participant_b: otherUserId,
-      listing_id: targetListingId,
+      participant_a: payload.currentUserId,
+      participant_b: payload.otherUserId,
+      listing_id: payload.targetListingId,
     })
     .select()
     .single();
@@ -262,26 +275,36 @@ export function useSendMessage() {
       attachmentPaths?: { path: string; filename: string; mime_type?: string }[];
     }) => {
       if (!user) throw new Error("Must be logged in");
+      const payload = parseMutationInput(
+        messageCreateSchema,
+        { conversation_id, content, attachmentPaths },
+        "message",
+      );
        
       const { data, error } = await supabase.from("messages")
-        .insert({ conversation_id, sender_id: user.id, content, receiver_id: null })
+        .insert({ conversation_id: payload.conversation_id, sender_id: user.id, content: payload.content, receiver_id: null })
         .select()
         .single();
       if (error) throw error;
-      if (attachmentPaths?.length) {
+      if (payload.attachmentPaths?.length) {
         await supabase.from("message_attachments").insert(
-          attachmentPaths.map((a) => ({
+          parseMutationInput(messageAttachmentRowsSchema, payload.attachmentPaths.map((a) => ({
             message_id: data.id,
             storage_path: a.path,
             filename: a.filename,
             mime_type: a.mime_type,
-          }))
+          })), "message attachments")
         );
       }
+      const conversationUpdate = parseMutationInput(
+        conversationTimestampUpdateSchema,
+        { conversationId: payload.conversation_id, lastMessageAt: new Date().toISOString() },
+        "conversation update",
+      );
       await supabase
         .from("conversations")
-        .update({ last_message_at: new Date().toISOString() })
-        .eq("id", conversation_id);
+        .update({ last_message_at: conversationUpdate.lastMessageAt })
+        .eq("id", conversationUpdate.conversationId);
       return data;
     },
     onSuccess: (_, { conversation_id }) => {
@@ -305,10 +328,15 @@ export function useMarkMessagesRead(conversationId: string) {
         .neq("sender_id", user.id)
         .eq("status", "sent");
       if (!msgs?.length) return;
+      const payload = parseMutationInput(
+        markMessagesReadSchema,
+        { conversationId, messageIds: msgs.map((m) => m.id) },
+        "message read update",
+      );
       await supabase
         .from("messages")
         .update({ status: "read" })
-        .in("id", msgs.map((m) => m.id));
+        .in("id", payload.messageIds);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });

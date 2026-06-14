@@ -27,6 +27,13 @@ import type {
 import { tFallback, tInterpolate } from "@/lib/i18nFallback";
 import { assertAllowedUpload } from "@/lib/uploadValidation";
 import { getListingDetailPath } from "@/lib/listingRoutes";
+import {
+  listingImageDeleteSchema,
+  listingImageRowsSchema,
+  listingImageSortUpdateSchema,
+  listingWriteSchema,
+  parseMutationInput,
+} from "@/lib/mutationSchemas";
 
 // Re-export the types so existing callers (`import { type ListingFormData }
 // from "@/hooks/useListingForm"`) keep working.
@@ -544,6 +551,7 @@ export function useListingForm(options?: UseListingFormOptions) {
         owner_id: user.id,
         status: nextStatus,
       };
+      const validatedPayload = parseMutationInput(listingWriteSchema, payload, "listing");
 
       const listingId = editListingId ?? initialListing?.id;
       let savedListing: { id: string };
@@ -551,7 +559,7 @@ export function useListingForm(options?: UseListingFormOptions) {
         if (!listingId) throw new Error(tr("createListing.validation.missingListing", "Listing could not be loaded for editing"));
         const { data, error } = await supabase
           .from("listings")
-          .update(payload as ListingUpdate)
+          .update(validatedPayload as ListingUpdate)
           .eq("id", listingId)
           .eq("owner_id", user.id)
           .select()
@@ -561,7 +569,7 @@ export function useListingForm(options?: UseListingFormOptions) {
       } else {
         const { data, error } = await supabase
           .from("listings")
-          .insert(payload as ListingInsert)
+          .insert(validatedPayload as ListingInsert)
           .select()
           .single();
         if (error) throw error;
@@ -582,32 +590,46 @@ export function useListingForm(options?: UseListingFormOptions) {
         const rowsToInsert = desiredImageRows.filter((img) => !existingSortByUrl.has(img.url));
 
         if (rowsToInsert.length > 0) {
-          const { error: insertImageError } = await supabase.from("listing_images").insert(rowsToInsert);
+          const { error: insertImageError } = await supabase
+            .from("listing_images")
+            .insert(parseMutationInput(listingImageRowsSchema, rowsToInsert, "listing images"));
           if (insertImageError) throw insertImageError;
         }
 
         for (const row of desiredImageRows) {
           if (existingSortByUrl.get(row.url) === row.sort_order) continue;
           if (!existingSortByUrl.has(row.url)) continue;
+          const imageUpdate = parseMutationInput(
+            listingImageSortUpdateSchema,
+            { listingId, url: row.url, sortOrder: row.sort_order },
+            "listing image update",
+          );
           const { error: updateImageError } = await supabase
             .from("listing_images")
-            .update({ sort_order: row.sort_order })
-            .eq("listing_id", listingId)
-            .eq("url", row.url);
+            .update({ sort_order: imageUpdate.sortOrder })
+            .eq("listing_id", imageUpdate.listingId)
+            .eq("url", imageUpdate.url);
           if (updateImageError) throw updateImageError;
         }
 
         for (const existingUrl of existingSortByUrl.keys()) {
           if (desiredUrls.has(existingUrl)) continue;
+          const imageDelete = parseMutationInput(
+            listingImageDeleteSchema,
+            { listingId, url: existingUrl },
+            "listing image delete",
+          );
           const { error: deleteImageError } = await supabase
             .from("listing_images")
             .delete()
-            .eq("listing_id", listingId)
-            .eq("url", existingUrl);
+            .eq("listing_id", imageDelete.listingId)
+            .eq("url", imageDelete.url);
           if (deleteImageError) throw deleteImageError;
         }
       } else if (desiredImageRows.length > 0) {
-        const { error: insertImageError } = await supabase.from("listing_images").insert(desiredImageRows);
+        const { error: insertImageError } = await supabase
+          .from("listing_images")
+          .insert(parseMutationInput(listingImageRowsSchema, desiredImageRows, "listing images"));
         if (insertImageError) throw insertImageError;
       }
 

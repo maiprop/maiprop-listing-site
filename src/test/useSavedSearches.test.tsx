@@ -105,6 +105,18 @@ describe("useCreateSavedSearch", () => {
     ).rejects.toThrow(/authenticated/i);
   });
 
+  it("rejects invalid saved-search input before inserting", async () => {
+    const insert = vi.fn().mockResolvedValue({ error: null });
+    fromMock.mockReturnValue({ insert });
+    const { result } = renderHook(() => useCreateSavedSearch(), { wrapper: wrapper() });
+
+    await expect(
+      result.current.mutateAsync({ name: " ", filters: [], emailAlerts: false }),
+    ).rejects.toThrow(/Invalid saved search/i);
+
+    expect(insert).not.toHaveBeenCalled();
+  });
+
   it("toasts the supabase error message on failure", async () => {
     const insert = vi.fn().mockResolvedValue({ error: new Error("limit hit") });
     fromMock.mockReturnValue({ insert });
@@ -118,15 +130,16 @@ describe("useCreateSavedSearch", () => {
 
 describe("useDeleteSavedSearch", () => {
   it("scopes the delete to id + user_id and toasts success", async () => {
+    const savedSearchId = "11111111-1111-4111-8111-111111111111";
     const eq2 = vi.fn().mockResolvedValue({ error: null });
     const eq1 = vi.fn().mockReturnValue({ eq: eq2 });
     const del = vi.fn().mockReturnValue({ eq: eq1 });
     fromMock.mockReturnValue({ delete: del });
     const { result } = renderHook(() => useDeleteSavedSearch(), { wrapper: wrapper() });
     await act(async () => {
-      await result.current.mutateAsync("s-99");
+      await result.current.mutateAsync(savedSearchId);
     });
-    expect(eq1).toHaveBeenCalledWith("id", "s-99");
+    expect(eq1).toHaveBeenCalledWith("id", savedSearchId);
     expect(eq2).toHaveBeenCalledWith("user_id", "u-1");
     expect(toastMock.success).toHaveBeenCalledWith(expect.stringMatching(/removed/i));
   });
@@ -136,29 +149,41 @@ describe("useDeleteSavedSearch", () => {
     const { result } = renderHook(() => useDeleteSavedSearch(), { wrapper: wrapper() });
     await expect(result.current.mutateAsync("s")).rejects.toThrow(/authenticated/i);
   });
+
+  it("rejects invalid ids before deleting", async () => {
+    const del = vi.fn();
+    fromMock.mockReturnValue({ delete: del });
+    const { result } = renderHook(() => useDeleteSavedSearch(), { wrapper: wrapper() });
+
+    await expect(result.current.mutateAsync("not-a-uuid")).rejects.toThrow(/Invalid saved search id/i);
+
+    expect(del).not.toHaveBeenCalled();
+  });
 });
 
 describe("useToggleSavedSearchAlert", () => {
   it("updates the email_alerts flag scoped to id + user_id", async () => {
+    const savedSearchId = "22222222-2222-4222-8222-222222222222";
     const eq2 = vi.fn().mockResolvedValue({ error: null });
     const eq1 = vi.fn().mockReturnValue({ eq: eq2 });
     const update = vi.fn().mockReturnValue({ eq: eq1 });
     fromMock.mockReturnValue({ update });
     const { result } = renderHook(() => useToggleSavedSearchAlert(), { wrapper: wrapper() });
     await act(async () => {
-      await result.current.mutateAsync({ id: "s-1", emailAlerts: true });
+      await result.current.mutateAsync({ id: savedSearchId, emailAlerts: true });
     });
     expect(update).toHaveBeenCalledWith({ email_alerts: true });
-    expect(eq1).toHaveBeenCalledWith("id", "s-1");
+    expect(eq1).toHaveBeenCalledWith("id", savedSearchId);
     expect(eq2).toHaveBeenCalledWith("user_id", "u-1");
   });
 
   it("toasts on error", async () => {
+    const savedSearchId = "33333333-3333-4333-8333-333333333333";
     const eq2 = vi.fn().mockResolvedValue({ error: new Error("oops") });
     fromMock.mockReturnValue({ update: () => ({ eq: () => ({ eq: eq2 }) }) });
     const { result } = renderHook(() => useToggleSavedSearchAlert(), { wrapper: wrapper() });
     await act(async () => {
-      await result.current.mutateAsync({ id: "s-1", emailAlerts: false }).catch(() => {});
+      await result.current.mutateAsync({ id: savedSearchId, emailAlerts: false }).catch(() => {});
     });
     expect(toastMock.error).toHaveBeenCalledWith("oops");
   });

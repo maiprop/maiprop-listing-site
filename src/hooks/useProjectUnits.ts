@@ -5,6 +5,13 @@ import { requireOwnedProject } from "@/hooks/projectOwnership";
 import { toast } from "sonner";
 import type { Database } from "@/integrations/supabase/types";
 import { FAST_CHANGING_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
+import {
+  parseMutationInput,
+  projectUnitBulkPriceMutationSchema,
+  projectUnitCreateSchema,
+  projectUnitUpdateMutationSchema,
+  scopedRowDeleteMutationSchema,
+} from "@/lib/mutationSchemas";
 
 /** A project_units row as fetched by the list query. */
 export type ProjectUnit = Database["public"]["Tables"]["project_units"]["Row"];
@@ -69,9 +76,10 @@ export const useCreateProjectUnit = () => {
   return useMutation({
     mutationFn: async (unit: ProjectUnitInsert) => {
       await requireOwnedProject(unit.project_id, user?.id);
+      const payload = parseMutationInput(projectUnitCreateSchema, unit, "project unit") as ProjectUnitInsert;
       const { data, error } = await supabase
         .from("project_units")
-        .insert(unit)
+        .insert(payload)
         .select()
         .single();
       if (error) throw error;
@@ -92,11 +100,16 @@ export const useUpdateProjectUnit = () => {
   return useMutation({
     mutationFn: async ({ id, projectId, updates }: { id: string; projectId: string; updates: ProjectUnitUpdate }) => {
       await requireOwnedProject(projectId, user?.id);
+      const payload = parseMutationInput(
+        projectUnitUpdateMutationSchema,
+        { id, projectId, updates },
+        "project unit update",
+      );
       const { data, error } = await supabase
         .from("project_units")
-        .update(updates)
-        .eq("id", id)
-        .eq("project_id", projectId)
+        .update(payload.updates as ProjectUnitUpdate)
+        .eq("id", payload.id)
+        .eq("project_id", payload.projectId)
         .select()
         .single();
       if (error) throw error;
@@ -116,6 +129,11 @@ export const useBulkUpdateProjectUnitPrices = () => {
   return useMutation({
     mutationFn: async ({ projectId, units, percentage }: BulkUpdateProjectUnitPricesInput) => {
       if (units.length === 0) return { updatedCount: 0 };
+      const payload = parseMutationInput(
+        projectUnitBulkPriceMutationSchema,
+        { projectId, units, percentage },
+        "project unit bulk price update",
+      );
 
       // Localized escape hatch: generated Supabase types can lag new migrations in PR CI.
       const rpc = supabase.rpc as unknown as (
@@ -123,8 +141,8 @@ export const useBulkUpdateProjectUnitPrices = () => {
         args: { p_project_id: string; p_percentage: number },
       ) => Promise<{ data: number | null; error: Error | null }>;
       const { data, error } = await rpc("bulk_update_project_unit_prices", {
-        p_project_id: projectId,
-        p_percentage: percentage,
+        p_project_id: payload.projectId,
+        p_percentage: payload.percentage,
       });
 
       if (error) throw error;
@@ -144,11 +162,12 @@ export const useDeleteProjectUnit = () => {
   return useMutation({
     mutationFn: async ({ id, projectId }: { id: string; projectId: string }) => {
       await requireOwnedProject(projectId, user?.id);
+      const payload = parseMutationInput(scopedRowDeleteMutationSchema, { id, scopeId: projectId }, "project unit delete");
       const { error } = await supabase
         .from("project_units")
         .delete()
-        .eq("id", id)
-        .eq("project_id", projectId);
+        .eq("id", payload.id)
+        .eq("project_id", payload.scopeId);
       if (error) throw error;
     },
     onSuccess: (_data, { projectId }) => {

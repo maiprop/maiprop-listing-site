@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { toast } from "sonner";
+import { parseMutationInput, rowIdSchema } from "@/lib/mutationSchemas";
 
 const VALUATION_INCLUDED = 5;
 const VALUATION_EXTRA_COST = 39; // euros, valuation_single
@@ -51,7 +52,7 @@ export function useRecordValuation() {
   return useMutation({
     mutationFn: async (listingId?: string) => {
       if (!user) throw new Error("Not authenticated");
-      void listingId;
+      if (listingId) parseMutationInput(rowIdSchema("listing id"), listingId, "listing id");
       throw new Error("AI valuation usage is recorded server-side by the valuation function");
     },
     onSuccess: () => {
@@ -88,7 +89,7 @@ export function useRecordReport() {
   return useMutation({
     mutationFn: async (listingId?: string) => {
       if (!user) throw new Error("Not authenticated");
-      void listingId;
+      if (listingId) parseMutationInput(rowIdSchema("listing id"), listingId, "listing id");
       throw new Error("Property report usage is recorded server-side by the report function");
     },
     onSuccess: () => {
@@ -127,7 +128,7 @@ export function useRecordPriorityAd() {
     mutationFn: async (listingId: string) => {
       if (!user) throw new Error("Not authenticated");
       if (!isPro) throw new Error("Priority Ads require Pro plan");
-      void listingId;
+      parseMutationInput(rowIdSchema("listing id"), listingId, "listing id");
       throw new Error("Priority ad usage is recorded server-side by the checkout or boost workflow");
     },
     onSuccess: () => {

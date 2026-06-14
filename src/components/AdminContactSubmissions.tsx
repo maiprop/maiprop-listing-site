@@ -12,6 +12,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import type { TablesUpdate } from "@/integrations/supabase/types";
 import { formatDateTime } from "@/lib/format";
+import { parseMutationInput, rowUpdateMutationSchema } from "@/lib/mutationSchemas";
 
 type SubmissionStatus = "new" | "in_review" | "handled" | "spam";
 type SubmissionFilter = "all" | SubmissionStatus;
@@ -93,11 +94,16 @@ function useUpdateSubmission() {
         payload.handled_at = null;
         payload.handled_by = null;
       }
+      const validated = parseMutationInput(
+        rowUpdateMutationSchema,
+        { id, updates: payload },
+        "contact submission update",
+      );
 
       const { error } = await supabase
         .from("contact_submissions")
-        .update(payload)
-        .eq("id", id);
+        .update(validated.updates as TablesUpdate<"contact_submissions">)
+        .eq("id", validated.id);
       if (error) throw error;
     },
     onSuccess: () => {

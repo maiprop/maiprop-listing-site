@@ -41,7 +41,10 @@
     "seed:demo-accounts": "npx tsx scripts/seed-demo-accounts.ts",
     "db:push": "supabase db push",
     "api-docs:copy": "node -e \"const fs=require('fs');fs.mkdirSync('public/docs',{recursive:true});fs.copyFileSync('docs/api/edge-functions.openapi.yaml','public/docs/edge-functions.openapi.yaml')\"",
+    "runtime": "node scripts/project-runtime.mjs --",
+    "runtime:doctor": "node scripts/project-runtime.mjs --doctor",
     "check:runtime": "node scripts/check-runtime.mjs",
+    "check:runtime:local": "node scripts/project-runtime.mjs -- npm run check:runtime",
     "check:secrets": "node scripts/check-secrets.mjs",
     "check:production-deploy": "node scripts/check-production-deploy.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
@@ -80,6 +83,8 @@
     "check:github-governance": "node scripts/check-github-governance.mjs",
     "check:dr-readiness": "node scripts/check-dr-readiness.mjs",
     "check:openapi-coverage": "node scripts/check-openapi-coverage.mjs",
+    "check:mutation-validation": "node scripts/check-mutation-validation-contract.mjs",
+    "check:repo-architecture": "node scripts/check-repository-architecture.mjs",
     "check:enterprise-readiness-basics": "node scripts/check-enterprise-readiness-basics.mjs",
     "backup:supabase:logical": "node scripts/supabase-logical-backup.mjs",
     "inventory:audit-coverage": "node scripts/audit-coverage-inventory.mjs",
@@ -155,7 +160,8 @@
     "sonner": "^1.7.4",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
-    "vaul": "^0.9.9"
+    "vaul": "^0.9.9",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",

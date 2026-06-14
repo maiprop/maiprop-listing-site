@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "currentMode": "single-package",
+  "targetLayout": {
+    "apps": [
+      "apps/web"
+    ],
+    "packages": [
+      "packages/domain",
+      "packages/ui",
+      "packages/data-access",
+      "packages/config",
+      "packages/testing"
+    ],
+    "infrastructure": [
+      "infrastructure/cloudflare",
+      "infrastructure/capacitor"
+    ],
+    "platform": [
+      "supabase"
+    ]
+  },
+  "boundaries": [
+    {
+      "id": "app-web",
+      "current": [
+        "src",
+        "index.html",
+        "vite.config.ts",
+        "tailwind.config.ts"
+      ],
+      "target": "apps/web",
+      "ownerPath": "/apps/",
+      "notes": "Move only after package imports, Vite config, Cloudflare Pages build, Playwright, Lighthouse, and Capacitor paths are migrated together."
+    },
+    {
+      "id": "shared-ui",
+      "current": [
+        "src/components/ui"
+      ],
+      "target": "packages/ui",
+      "ownerPath": "/packages/",
+      "notes": "Extract design-system primitives before app-specific composite components."
+    },
+    {
+      "id": "domain",
+      "current": [
+        "src/lib/mutationSchemas.ts",
+        "src/lib/listingUtils.ts",
+        "src/lib/propertyTypes.ts",
+        "src/lib/rolePlanMap.ts"
+      ],
+      "target": "packages/domain",
+      "ownerPath": "/packages/",
+      "notes": "Domain code must stay free of React, Supabase clients, Cloudflare bindings, browser globals, and Sentry."
+    },
+    {
+      "id": "data-access",
+      "current": [
+        "src/hooks",
+        "src/integrations/supabase",
+        "src/lib/publicApi.ts"
+      ],
+      "target": "packages/data-access",
+      "ownerPath": "/packages/",
+      "notes": "Expose typed hooks/adapters; avoid pushing Supabase table access into UI pages."
+    },
+    {
+      "id": "cloudflare-pages",
+      "current": [
+        "functions",
+        "public/_headers",
+        "public/_redirects",
+        "wrangler.toml"
+      ],
+      "target": "infrastructure/cloudflare",
+      "ownerPath": "/infrastructure/",
+      "notes": "Move only after Cloudflare Pages preview and production deploy configuration can consume the new paths."
+    },
+    {
+      "id": "supabase-backend",
+      "current": [
+        "supabase"
+      ],
+      "target": "supabase",
+      "ownerPath": "/supabase/",
+      "notes": "Keep at root until Supabase CLI, migrations, Edge Function deploys, and local validation jobs are explicitly reconfigured."
+    }
+  ]
+}

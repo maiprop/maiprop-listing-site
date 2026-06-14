@@ -44,6 +44,12 @@ import type {
   ReopenOpenHouseOfferSelectionRpc,
   SubmitOpenHouseOfferRpc,
 } from "./openHouseAssetControl/types";
+import {
+  parseMutationInput,
+  rowIdSchema,
+  rowUpdateMutationSchema,
+  scopedRowIdsMutationSchema,
+} from "@/lib/mutationSchemas";
 
 const OPEN_HOUSE_DOC_MIME_TYPES = new Set<string>([
   "application/pdf",
@@ -91,8 +97,9 @@ export function useOpenHouseCapacity(listingId: string | undefined) {
     queryKey: ["open_house_capacity", listingId],
     queryFn: async () => {
       if (!listingId) return null;
+      const parsedListingId = parseMutationInput(rowIdSchema("listing id"), listingId, "listing id");
       const invoke = supabase.functions.invoke as unknown as InvokeOpenHouseCapacity;
-      const { data, error } = await invoke("open-house-capacity", { body: { listingId } });
+      const { data, error } = await invoke("open-house-capacity", { body: { listingId: parsedListingId } });
       if (error) throw error;
       const row = data;
       if (!row) return null;
@@ -112,10 +119,15 @@ export function useUpsertOpenHouseSettings() {
       listingId: string;
       settings: OpenHouseSettingsUpdate;
     }) => {
+      const payload = parseMutationInput(
+        rowUpdateMutationSchema,
+        { id: listingId, updates: { ...settings, updated_at: new Date().toISOString() } },
+        "open house settings",
+      );
       const { data, error } = await supabase
         .from("open_house_settings")
         .upsert(
-          { listing_id: listingId, ...settings, updated_at: new Date().toISOString() },
+          { listing_id: payload.id, ...payload.updates },
           { onConflict: "listing_id" }
       )
         .select()
@@ -300,10 +312,15 @@ export function useUpdateOpenHouseRegistration() {
       if (isOwner && requestedStatus === "attended" && lookup?.status !== "approved") {
         throw new Error("Only approved registrations can be marked as attended.");
       }
+      const payload = parseMutationInput(
+        rowUpdateMutationSchema,
+        { id, updates },
+        "open house registration update",
+      );
       const { data, error } = await supabase
         .from("open_house_registrations")
-        .update(updates as OHRegUpdate)
-        .eq("id", id)
+        .update(payload.updates as OHRegUpdate)
+        .eq("id", payload.id)
         .select()
         .single();
       if (error) throw error;
@@ -445,10 +462,15 @@ export function useUpdateOpenHouseOffer() {
         throw new Error("Only the bidder can withdraw a bid.");
       }
       const updates = buildOfferStatusUpdate(status, uid);
+      const payload = parseMutationInput(
+        rowUpdateMutationSchema,
+        { id, updates },
+        "open house offer update",
+      );
       const { data, error } = await supabase
         .from("open_house_offers")
-        .update(updates)
-        .eq("id", id)
+        .update(payload.updates as ReturnType<typeof buildOfferStatusUpdate>)
+        .eq("id", payload.id)
         .select()
         .single();
       if (error) throw error;
@@ -547,10 +569,15 @@ export function useRevealAllOffers() {
         offer_deadline: settings?.offer_deadline ?? null,
       });
       if (revealBlocker) throw new Error(revealBlocker);
+      const payload = parseMutationInput(
+        scopedRowIdsMutationSchema,
+        { scopeId: _listingId, ids: offerIds },
+        "open house offer reveal",
+      );
       const { error } = await supabase
         .from("open_house_offers")
         .update({ status: "revealed", revealed_at: new Date().toISOString() })
-        .in("id", offerIds)
+        .in("id", payload.ids)
         .eq("status", "submitted");
       if (error) throw error;
     },

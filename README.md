@@ -15,6 +15,15 @@ This repo is pinned to Node `20.19.5` and npm `10.8.2`. `.nvmrc`,
 `.node-version`, `.npmrc`, CI, and the development Dockerfile all enforce that
 runtime contract.
 
+If your shell still resolves a newer global Node/npm first, use the local
+launcher:
+
+```bash
+npm run runtime:doctor
+npm run check:runtime:local
+npm run runtime -- npm run test
+```
+
 ## Required Environment Variables
 
 | Variable | Description |
@@ -37,6 +46,7 @@ See `.env.example` for the full list.
 ```bash
 npm run dev          # dev server on :8080
 npm run check:runtime # verify Node/npm match package.json engines
+npm run check:runtime:local # same check through the local Node 20 launcher
 npm run build        # production build (dist/)
 npm run preview      # preview prod build on :4173
 npm run lint         # ESLint

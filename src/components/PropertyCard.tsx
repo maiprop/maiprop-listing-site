@@ -14,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { APP_ORIGIN } from "@/lib/config";
 import { formatPrice } from "@/lib/format";
+import { listingReportSchema, parseMutationInput } from "@/lib/mutationSchemas";
 import {
   MAIPROP_LOGO_FALLBACK_URL,
   getImageFallbackChain,
@@ -188,11 +189,12 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
     e.stopPropagation();
     if (!user) { toast.error(t("propertyCard.signInToReport")); navigate("/login"); return; }
     const entityType = property.listingType === "firesale" ? "firesale_request" : "listing";
-    const { error } = await supabase.from("listing_reports").insert({
+    const payload = parseMutationInput(listingReportSchema, {
       entity_type: entityType,
       entity_id: property.id,
       reporter_id: user.id,
-    });
+    }, "listing report");
+    const { error } = await supabase.from("listing_reports").insert(payload);
     if (error) toast.error(t("propertyCard.errorReport"));
     else toast.success(t("propertyCard.reportSubmitted"));
   };

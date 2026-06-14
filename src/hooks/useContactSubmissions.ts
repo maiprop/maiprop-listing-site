@@ -1,5 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { contactSubmissionInputSchema, parseMutationInput } from "@/lib/mutationSchemas";
 import type { TablesInsert } from "@/integrations/supabase/types";
 
 export type ContactSubmissionInput = Pick<
@@ -15,7 +16,12 @@ export type ContactSubmissionInput = Pick<
 export function useSubmitContactForm() {
   return useMutation({
     mutationFn: async (input: ContactSubmissionInput) => {
-      const { error } = await supabase.from("contact_submissions").insert(input);
+      const payload = parseMutationInput(
+        contactSubmissionInputSchema,
+        input,
+        "contact submission",
+      );
+      const { error } = await supabase.from("contact_submissions").insert(payload);
       if (error) throw error;
     },
   });

@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { USER_SCOPED_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
+import { favoriteToggleSchema, parseMutationInput } from "@/lib/mutationSchemas";
 
 /** Returns the current user's saved/favorited listings with full listing data joined. */
 export function useFavorites() {
@@ -45,19 +46,24 @@ export function useToggleFavorite() {
       price?: number;
     }) => {
       if (!user) throw new Error("Must be logged in to save properties");
-      if (isFavorited) {
+      const payload = parseMutationInput(
+        favoriteToggleSchema,
+        { listing_id, isFavorited, priceAlert, price },
+        "favorite",
+      );
+      if (payload.isFavorited) {
         const { error } = await supabase
           .from("favorites")
           .delete()
           .eq("user_id", user.id)
-          .eq("listing_id", listing_id);
+          .eq("listing_id", payload.listing_id);
         if (error) throw error;
       } else {
         const { error } = await supabase.from("favorites").insert({
           user_id: user.id,
-          listing_id,
-          price_alert: priceAlert ?? false,
-          price_when_saved: price ?? null,
+          listing_id: payload.listing_id,
+          price_alert: payload.priceAlert ?? false,
+          price_when_saved: payload.price ?? null,
         });
         if (error) throw error;
       }

@@ -11,6 +11,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { ProCard } from "@/components/admin/ProVerificationComponents";
 import type { Database } from "@/integrations/supabase/types";
+import { parseMutationInput, rowUpdateMutationSchema } from "@/lib/mutationSchemas";
 
 const KEY = ["admin-professionals"] as const;
 type ProfessionalUpdate = Database["public"]["Tables"]["professionals"]["Update"];
@@ -98,15 +99,23 @@ export function useApproveProfessional() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, licenseNumber }: { id: string; licenseNumber: string }) => {
+      const payload = parseMutationInput(
+        rowUpdateMutationSchema,
+        {
+          id,
+          updates: {
+            verified: true,
+            license_number: licenseNumber || null,
+            rejection_reason: null,
+            verified_at: new Date().toISOString(),
+          },
+        },
+        "professional approval",
+      );
       const { error } = await supabase
         .from("professionals")
-        .update({
-          verified: true,
-          license_number: licenseNumber || null,
-          rejection_reason: null,
-          verified_at: new Date().toISOString(),
-        } satisfies ProfessionalUpdate)
-        .eq("id", id);
+        .update(payload.updates as ProfessionalUpdate)
+        .eq("id", payload.id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
@@ -124,10 +133,15 @@ export function useUpdateProfessionalNotes() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, notes }: { id: string; notes: string }) => {
+      const payload = parseMutationInput(
+        rowUpdateMutationSchema,
+        { id, updates: { notes: notes || null } },
+        "professional notes",
+      );
       const { error } = await supabase
         .from("professionals")
-        .update({ notes: notes || null } satisfies ProfessionalUpdate)
-        .eq("id", id);
+        .update(payload.updates as ProfessionalUpdate)
+        .eq("id", payload.id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
@@ -151,14 +165,22 @@ export function useRejectProfessional() {
     mutationFn: async ({ id, notes }: { id: string; notes: string }) => {
       const trimmed = notes.trim();
       const reason = trimmed.length > 0 ? trimmed : "Rejected by admin";
+      const payload = parseMutationInput(
+        rowUpdateMutationSchema,
+        {
+          id,
+          updates: {
+            verified: false,
+            rejection_reason: reason,
+            verified_at: null,
+          },
+        },
+        "professional rejection",
+      );
       const { error } = await supabase
         .from("professionals")
-        .update({
-          verified: false,
-          rejection_reason: reason,
-          verified_at: null,
-        } satisfies ProfessionalUpdate)
-        .eq("id", id);
+        .update(payload.updates as ProfessionalUpdate)
+        .eq("id", payload.id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),

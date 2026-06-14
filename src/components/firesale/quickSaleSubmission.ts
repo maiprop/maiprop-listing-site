@@ -2,6 +2,11 @@ import type { NavigateFunction } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { isAiUsageLimitError } from "@/lib/aiErrorUtils";
+import {
+  firesaleRequestSchema,
+  firesaleRollbackSchema,
+  parseMutationInput,
+} from "@/lib/mutationSchemas";
 import { getRemoteValuationEstimate } from "@/lib/valuationResult";
 import {
   buildMetaLines,
@@ -100,7 +105,7 @@ const insertFiresaleRequest = (
 ) =>
   supabase
     .from("firesale_requests")
-    .insert({
+    .insert(parseMutationInput(firesaleRequestSchema, {
       address: form.address.trim(),
       city: form.city.trim() || getCityFromAddress(form.address),
       property_type: propertyType,
@@ -113,12 +118,13 @@ const insertFiresaleRequest = (
       ai_estimate: estimate,
       user_id: userId,
       status: "pending",
-    })
+    }, "quick sale request"))
     .select("id")
     .single();
 
 const rollbackFiresaleRequest = async (requestId: string, userId: string) => {
-  await supabase.from("firesale_requests").delete().eq("id", requestId).eq("user_id", userId);
+  const payload = parseMutationInput(firesaleRollbackSchema, { requestId, userId }, "quick sale rollback");
+  await supabase.from("firesale_requests").delete().eq("id", payload.requestId).eq("user_id", payload.userId);
 };
 
 const ensurePhotosUploaded = async (

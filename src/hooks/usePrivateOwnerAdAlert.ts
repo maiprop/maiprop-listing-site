@@ -2,6 +2,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { parseMutationInput, privateOwnerAdAlertToggleSchema } from "@/lib/mutationSchemas";
 
 export function usePrivateOwnerAdAlert() {
   const { user } = useAuth();
@@ -24,7 +25,8 @@ export function usePrivateOwnerAdAlert() {
   const toggle = useMutation({
     mutationFn: async (enable: boolean) => {
       if (!user) throw new Error("Not authenticated");
-      if (enable) {
+      const shouldEnable = parseMutationInput(privateOwnerAdAlertToggleSchema, enable, "private owner ad alert");
+      if (shouldEnable) {
          
         const { error } = await supabase.from("private_owner_ad_alerts").upsert(
           { user_id: user.id },

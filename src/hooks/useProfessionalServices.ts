@@ -4,6 +4,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import type { TablesUpdate } from "@/integrations/supabase/types";
 import { CATALOG_STATIC_QUERY_STALE_TIME, USER_SCOPED_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
+import {
+  parseMutationInput,
+  professionalAvailabilityRowsSchema,
+  professionalIdSchema,
+  professionalServiceRowsSchema,
+  rowUpdateMutationSchema,
+} from "@/lib/mutationSchemas";
 
 export interface ProfessionalService {
   id: string;
@@ -104,11 +111,12 @@ export function useUpsertProfessionalServices() {
       const { data: prof } = await supabase.from("professionals").select("user_id").eq("id", professionalId).eq("user_id", user.id).maybeSingle();
       if (!prof) throw new Error("Unauthorized");
       requireSameProfessional(professionalId, services, "services");
+      const parsedProfessionalId = parseMutationInput(professionalIdSchema, professionalId, "professional id");
       if (services.length > 0) {
         // Upsert on (professional_id, service_key) — insert or update without gap
         const { error: upsertError } = await supabase
           .from("professional_services")
-          .upsert(services, { onConflict: "professional_id,service_key" });
+          .upsert(parseMutationInput(professionalServiceRowsSchema, services, "professional services"), { onConflict: "professional_id,service_key" });
         if (upsertError) throw upsertError;
       }
       // Remove rows not in the new set.
@@ -117,7 +125,7 @@ export function useUpsertProfessionalServices() {
       const pruneQuery = supabase
         .from("professional_services")
         .delete()
-        .eq("professional_id", professionalId);
+        .eq("professional_id", parsedProfessionalId);
       const { error: deleteError } = await (
         keepKeys.length > 0
           ? pruneQuery.not("service_key", "in", `(${keepKeys.join(",")})`)
@@ -142,11 +150,12 @@ export function useUpsertProfessionalAvailability() {
       const { data: prof } = await supabase.from("professionals").select("user_id").eq("id", professionalId).eq("user_id", user.id).maybeSingle();
       if (!prof) throw new Error("Unauthorized");
       requireSameProfessional(professionalId, availability, "availability");
+      const parsedProfessionalId = parseMutationInput(professionalIdSchema, professionalId, "professional id");
       if (availability.length > 0) {
         // Upsert on (professional_id, day_of_week) — insert or update without gap
         const { error: upsertError } = await supabase
           .from("professional_availability")
-          .upsert(availability, { onConflict: "professional_id,day_of_week" });
+          .upsert(parseMutationInput(professionalAvailabilityRowsSchema, availability, "professional availability"), { onConflict: "professional_id,day_of_week" });
         if (upsertError) throw upsertError;
       }
       // Remove days not in the new set (integers, no quoting needed)
@@ -154,7 +163,7 @@ export function useUpsertProfessionalAvailability() {
       const pruneQuery = supabase
         .from("professional_availability")
         .delete()
-        .eq("professional_id", professionalId);
+        .eq("professional_id", parsedProfessionalId);
       const { error: deleteError } = await (
         keepDays.length > 0
           ? pruneQuery.not("day_of_week", "in", `(${keepDays.join(",")})`)
@@ -176,10 +185,11 @@ export function useUpdateProfessional() {
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: TablesUpdate<"professionals"> }) => {
       if (!user) throw new Error("Must be logged in");
+      const payload = parseMutationInput(rowUpdateMutationSchema, { id, updates }, "professional update");
       const { data, error } = await supabase
         .from("professionals")
-        .update(updates)
-        .eq("id", id)
+        .update(payload.updates as TablesUpdate<"professionals">)
+        .eq("id", payload.id)
         .eq("user_id", user.id)
         .select("id")
         .maybeSingle();

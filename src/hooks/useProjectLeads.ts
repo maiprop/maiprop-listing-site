@@ -5,6 +5,12 @@ import { requireOwnedProject } from "@/hooks/projectOwnership";
 import { toast } from "sonner";
 import type { Database } from "@/integrations/supabase/types";
 import { FAST_CHANGING_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
+import {
+  parseMutationInput,
+  projectLeadCreateSchema,
+  projectLeadUpdateMutationSchema,
+  scopedRowDeleteMutationSchema,
+} from "@/lib/mutationSchemas";
 
 export type ProjectLeadInsert = {
   project_id: string;
@@ -49,9 +55,10 @@ export function useCreateProjectLead() {
   return useMutation({
     mutationFn: async (lead: ProjectLeadInsert) => {
       await requireOwnedProject(lead.project_id, user?.id);
+      const payload = parseMutationInput(projectLeadCreateSchema, lead, "project lead") as ProjectLeadInsert;
       const { data, error } = await supabase
         .from("project_leads")
-        .insert(lead)
+        .insert(payload)
         .select()
         .single();
       if (error) throw error;
@@ -71,11 +78,16 @@ export function useUpdateProjectLead() {
   return useMutation({
     mutationFn: async ({ id, projectId, updates }: { id: string; projectId: string; updates: ProjectLeadUpdate }) => {
       await requireOwnedProject(projectId, user?.id);
+      const payload = parseMutationInput(
+        projectLeadUpdateMutationSchema,
+        { id, projectId, updates },
+        "project lead update",
+      );
       const { data, error } = await supabase
         .from("project_leads")
-        .update(updates)
-        .eq("id", id)
-        .eq("project_id", projectId)
+        .update(payload.updates as ProjectLeadUpdate)
+        .eq("id", payload.id)
+        .eq("project_id", payload.projectId)
         .select()
         .single();
       if (error) throw error;
@@ -95,11 +107,12 @@ export function useDeleteProjectLead() {
   return useMutation({
     mutationFn: async ({ id, projectId }: { id: string; projectId: string }) => {
       await requireOwnedProject(projectId, user?.id);
+      const payload = parseMutationInput(scopedRowDeleteMutationSchema, { id, scopeId: projectId }, "project lead delete");
       const { error } = await supabase
         .from("project_leads")
         .delete()
-        .eq("id", id)
-        .eq("project_id", projectId);
+        .eq("id", payload.id)
+        .eq("project_id", payload.scopeId);
       if (error) throw error;
     },
     onSuccess: (_: unknown, { projectId }: { id: string; projectId: string }) => {

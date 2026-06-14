@@ -26,6 +26,14 @@ npm ci
 npm run dev
 ```
 
+If your terminal still resolves a newer global Node/npm first, run:
+
+```bash
+npm run runtime:doctor
+npm run check:runtime:local
+npm run runtime -- npm run dev
+```
+
 ## Environment Variables
 
 ### Required (app won't start without these)
@@ -52,6 +60,7 @@ npm run dev
 ```bash
 npm run dev          # Dev server with HMR (port 8080)
 npm run check:runtime # Verify Node/npm match package.json engines
+npm run check:runtime:local # Verify through the local Node 20 launcher
 npm run build        # Production build
 npm run lint         # ESLint check
 npm run test         # Vitest (single run)

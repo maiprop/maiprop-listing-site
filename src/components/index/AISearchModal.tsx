@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { SignInForAI } from "@/components/SignInForAI";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { useTrackUserSearch } from "@/hooks/useTrackUserSearch";
+import { aiSearchBodySchema, parseMutationInput } from "@/lib/mutationSchemas";
 
 const AI_SUGGESTIONS = [
   "Quiet apartment near metro in Athens under 200k",
@@ -39,7 +40,8 @@ export function AISearchModal({
     if (!searchQuery) return;
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("ai-search", { body: { query: searchQuery } });
+      const body = parseMutationInput(aiSearchBodySchema, { query: searchQuery }, "AI search");
+      const { data, error } = await supabase.functions.invoke("ai-search", { body });
       if (error) throw new Error(error.message);
       if (data?.error) throw new Error(data.error);
       void trackUserSearch({

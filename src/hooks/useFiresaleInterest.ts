@@ -2,6 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { PDF_MIME_TYPES, assertAllowedUpload } from "@/lib/uploadValidation";
+import {
+  adminFiresaleActionBodySchema,
+  parseMutationInput,
+  submitFiresaleInterestBodySchema,
+} from "@/lib/mutationSchemas";
 
 export type InterestStatus =
   | "interested"
@@ -211,13 +216,18 @@ export function useExpressInterest() {
         proof_of_funds_url = uploaded.path;
       }
 
-      const { data, error } = await supabase.functions.invoke<SubmitFiresaleInterestResponse>("submit-firesale-interest", {
-        body: {
+      const body = parseMutationInput(
+        submitFiresaleInterestBodySchema,
+        {
           dealId,
           message: message || undefined,
           proofAmount: parsedProofAmount,
           proofOfFundsUrl: proof_of_funds_url,
         },
+        "firesale interest",
+      );
+      const { data, error } = await supabase.functions.invoke<SubmitFiresaleInterestResponse>("submit-firesale-interest", {
+        body,
       });
 
       if (error) throw error;
@@ -256,8 +266,9 @@ export function useUpdateInterestStatus() {
       adminNote?: string | null;
       proofAmount?: number | null;
     }) => {
-      const { data, error } = await supabase.functions.invoke<AdminFiresaleActionResponse>("admin-firesale-action", {
-        body: {
+      const body = parseMutationInput(
+        adminFiresaleActionBodySchema,
+        {
           action: "update_interest_workflow",
           interestId: id,
           status,
@@ -266,6 +277,10 @@ export function useUpdateInterestStatus() {
           adminNote: adminNote ?? undefined,
           proofAmount: proofAmount ?? undefined,
         },
+        "firesale interest workflow",
+      );
+      const { data, error } = await supabase.functions.invoke<AdminFiresaleActionResponse>("admin-firesale-action", {
+        body,
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);

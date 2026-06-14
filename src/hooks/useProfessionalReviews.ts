@@ -3,6 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { CATALOG_STATIC_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
+import {
+  parseMutationInput,
+  professionalIdSchema,
+  professionalReviewSubmissionSchema,
+} from "@/lib/mutationSchemas";
 
 export interface ProfessionalReview {
   id: string;
@@ -92,8 +97,10 @@ export function useSubmitReview(professionalId: string) {
       recommended: boolean;
     }) => {
       if (!user) throw new Error("Sign in to leave a review.");
+      const parsedProfessionalId = parseMutationInput(professionalIdSchema, professionalId, "professional id");
+      const validated = parseMutationInput(professionalReviewSubmissionSchema, payload, "professional review");
       const { error } = await supabase.from("professional_reviews").upsert(
-        { ...payload, professional_id: professionalId, reviewer_id: user.id },
+        { ...validated, professional_id: parsedProfessionalId, reviewer_id: user.id },
         { onConflict: "professional_id,reviewer_id" }
       );
       if (error) throw error;

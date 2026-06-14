@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { useTranslation } from "react-i18next";
 import { LocationAutocompleteInput } from "@/components/location/LocationAutocompleteInput";
+import { invitationRequestSchema, parseMutationInput } from "@/lib/mutationSchemas";
 
 const INVESTMENT_FOCUS_OPTIONS = [
   { value: "", label: "Select focus" },
@@ -143,8 +144,7 @@ export function InvitationRequestModal({ user, onClose, onSuccess }: Props) {
     if (!termsAccepted) { toast.error(isGreek ? "Αποδεχθείτε τους όρους και την πολιτική απορρήτου" : "Please accept the terms and privacy policy"); return; }
     setLoading(true);
     try {
-       
-      const { error } = await supabase.from("invitation_requests").insert({
+      const payload = parseMutationInput(invitationRequestSchema, {
         email: trimmedEmail,
         full_name: fullName.trim() || null,
         phone: phone.trim() || null,
@@ -162,7 +162,8 @@ export function InvitationRequestModal({ user, onClose, onSuccess }: Props) {
         message: message.trim() || null,
         terms_accepted: termsAccepted,
         user_id: user?.id ?? null,
-      });
+      }, "invitation request");
+      const { error } = await supabase.from("invitation_requests").insert(payload);
       if (error) throw error;
       onSuccess();
     } catch (err: unknown) {
