@@ -13,6 +13,12 @@
 # Default owner — every change at minimum routes to the lead.
 *                                                @krenios
 
+# Target repository architecture landing zones.
+/apps/                                           @krenios
+/packages/                                       @krenios
+/infrastructure/                                 @krenios
+/supabase/                                       @krenios
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Tier 1 — Highest blast radius (auth, DB, payments, schema)
 # ─────────────────────────────────────────────────────────────────────────────

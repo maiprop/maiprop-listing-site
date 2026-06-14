@@ -13,7 +13,11 @@ import {
 const makeFixture = () => {
   const root = mkdtempSync(join(tmpdir(), "maiprop-readiness-"));
   mkdirSync(join(root, ".github"), { recursive: true });
+  mkdirSync(join(root, "apps"), { recursive: true });
+  mkdirSync(join(root, "packages"), { recursive: true });
+  mkdirSync(join(root, "infrastructure"), { recursive: true });
   mkdirSync(join(root, "docs"), { recursive: true });
+  mkdirSync(join(root, "docs", "adr"), { recursive: true });
   mkdirSync(join(root, "docs", "api"), { recursive: true });
   mkdirSync(join(root, "docs", "backups"), { recursive: true });
   mkdirSync(join(root, "docs", "governance"), { recursive: true });
@@ -33,6 +37,7 @@ const makeFixture = () => {
       packageManager: "npm@10.8.2",
       volta: { node: "20.19.5", npm: "10.8.2" },
       engines: { node: ">=20.19.0 <21", npm: ">=10.8.0 <11" },
+      scripts: { "check:repo-architecture": "node scripts/check-repository-architecture.mjs" },
     }),
   );
   writeFileSync(join(root, ".node-version"), "20.19.5\n");
@@ -64,6 +69,10 @@ const makeFixture = () => {
       "* @krenios",
       "/.github/workflows/ @krenios",
       "/.github/CODEOWNERS @krenios",
+      "/apps/ @krenios",
+      "/packages/ @krenios",
+      "/infrastructure/ @krenios",
+      "/supabase/ @krenios",
       "/supabase/migrations/ @krenios",
       "/supabase/functions/_shared/ @krenios",
       "/src/integrations/supabase/ @krenios",
@@ -164,6 +173,59 @@ const makeFixture = () => {
       "SAML/SSO configuration",
       "SOC 2 / ISO evidence is external and not claimed by this repository",
     ].join("\n"),
+  );
+  writeFileSync(join(root, "apps", "README.md"), "# Apps\n");
+  writeFileSync(join(root, "packages", "README.md"), "# Packages\n");
+  writeFileSync(join(root, "infrastructure", "README.md"), "# Infrastructure\n");
+  writeFileSync(
+    join(root, "docs", "REPOSITORY_ARCHITECTURE.md"),
+    [
+      "# Repository Architecture",
+      "Current layout",
+      "Target layout",
+      "/apps/web",
+      "/packages/domain",
+      "/packages/ui",
+      "/packages/data-access",
+      "/infrastructure/cloudflare",
+      "no physical move without dedicated migration PR",
+      "Cloudflare Pages",
+      "Supabase",
+      "React Query",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "docs", "adr", "0005-repository-package-architecture.md"),
+    [
+      "# ADR-0005: Repository Package Architecture",
+      "- **Status:** Accepted",
+      "phased",
+      "no npm workspaces until package extraction",
+      "codemod/import migration",
+      "/apps",
+      "/packages",
+      "/infrastructure",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "docs", "governance", "repository-boundaries.json"),
+    JSON.stringify({
+      version: 1,
+      currentMode: "single-package",
+      targetLayout: {
+        apps: ["apps/web"],
+        packages: ["packages/domain", "packages/ui", "packages/data-access"],
+        infrastructure: ["infrastructure/cloudflare", "infrastructure/capacitor"],
+      },
+      boundaries: [
+        { id: "app-web", current: ["src"], target: "apps/web", ownerPath: "/apps/" },
+        { id: "shared-ui", current: ["src/components/ui"], target: "packages/ui", ownerPath: "/packages/" },
+        { id: "domain", current: ["src/lib"], target: "packages/domain", ownerPath: "/packages/" },
+        { id: "data-access", current: ["src/hooks", "src/integrations/supabase"], target: "packages/data-access", ownerPath: "/packages/" },
+        { id: "cloudflare-pages", current: ["functions", "public/_headers", "public/_redirects"], target: "infrastructure/cloudflare", ownerPath: "/infrastructure/" },
+        { id: "supabase-backend", current: ["supabase"], target: "supabase", ownerPath: "/supabase/" },
+      ],
+    }),
   );
   writeFileSync(
     join(root, "supabase", "migrations", "20260614155000_enterprise_tenant_sso_procurement.sql"),
@@ -401,5 +463,5 @@ describe("enterprise readiness basics", () => {
 
     expect(result.ok).toBe(false);
     expect(result.failures.join("\n")).toContain("scripts/load-test/basic.js");
-  });
+  }, 10_000);
 });

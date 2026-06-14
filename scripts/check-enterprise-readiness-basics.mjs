@@ -6,6 +6,7 @@ import { checkGithubGovernance } from "./check-github-governance.mjs";
 import { checkLoadTestContract } from "./check-load-test-contract.mjs";
 import { checkMutationValidationContract } from "./check-mutation-validation-contract.mjs";
 import { checkOpenApiCoverage } from "./check-openapi-coverage.mjs";
+import { checkRepositoryArchitecture } from "./check-repository-architecture.mjs";
 
 const REQUIRED_NODE = "20.19.5";
 const REQUIRED_NPM = "10.8.2";
@@ -309,6 +310,7 @@ export function checkEnterpriseReadinessBasics(root = process.cwd()) {
     checkLoadTestContract(root),
     checkMutationValidationContract(root),
     checkEnterpriseTenantContract(root),
+    checkRepositoryArchitecture(root),
   ];
   return result(checks.flatMap((check) => check.failures));
 }

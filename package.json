@@ -81,6 +81,7 @@
     "check:dr-readiness": "node scripts/check-dr-readiness.mjs",
     "check:openapi-coverage": "node scripts/check-openapi-coverage.mjs",
     "check:mutation-validation": "node scripts/check-mutation-validation-contract.mjs",
+    "check:repo-architecture": "node scripts/check-repository-architecture.mjs",
     "check:enterprise-readiness-basics": "node scripts/check-enterprise-readiness-basics.mjs",
     "backup:supabase:logical": "node scripts/supabase-logical-backup.mjs",
     "inventory:audit-coverage": "node scripts/audit-coverage-inventory.mjs",
