@@ -123,12 +123,63 @@ function_grants AS (
       'has_role',
       'release_expired_firesale_reservations'
     )
+),
+future_default_grants AS (
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+    'grantor_role', grantor_role,
+    'object_type', object_type,
+    'grantee', grantee,
+    'privileges', privileges
+  ) ORDER BY grantor_role, object_type, grantee), '[]'::jsonb) AS grants
+  FROM (
+    SELECT
+      pg_get_userbyid(d.defaclrole) AS grantor_role,
+      CASE d.defaclobjtype
+        WHEN 'r' THEN 'TABLES'
+        WHEN 'S' THEN 'SEQUENCES'
+        WHEN 'f' THEN 'FUNCTIONS'
+        ELSE d.defaclobjtype::text
+      END AS object_type,
+      COALESCE(r.rolname, 'PUBLIC') AS grantee,
+      array_agg(DISTINCT a.privilege_type ORDER BY a.privilege_type) AS privileges
+    FROM pg_default_acl d
+    JOIN pg_namespace n ON n.oid = d.defaclnamespace
+    CROSS JOIN LATERAL aclexplode(d.defaclacl) a
+    LEFT JOIN pg_roles r ON r.oid = a.grantee
+    WHERE n.nspname = 'public'
+      AND pg_get_userbyid(d.defaclrole) = 'postgres'
+      AND (
+        (
+          d.defaclobjtype IN ('r', 'S')
+          AND COALESCE(r.rolname, 'PUBLIC') IN ('anon', 'authenticated', 'service_role', 'PUBLIC')
+        )
+        OR (
+          d.defaclobjtype = 'f'
+          AND COALESCE(r.rolname, 'PUBLIC') IN ('anon', 'authenticated', 'PUBLIC')
+        )
+      )
+    GROUP BY d.defaclrole, d.defaclobjtype, COALESCE(r.rolname, 'PUBLIC')
+  ) default_grant_rows
+),
+project_authenticated_select_policies AS (
+  SELECT COALESCE(jsonb_agg(policyname ORDER BY policyname), '[]'::jsonb) AS policies
+  FROM pg_policies
+  WHERE schemaname = 'public'
+    AND tablename = 'projects'
+    AND cmd = 'SELECT'
+    AND permissive = 'PERMISSIVE'
+    AND (
+      'authenticated' = ANY(roles)
+      OR 'public' = ANY(roles)
+    )
 )
 SELECT
   bucket_checks.buckets,
   COALESCE(rls_disabled.tables, '[]'::jsonb) AS rls_disabled_tables,
-  function_grants.grants
-FROM bucket_checks, rls_disabled, function_grants;
+  function_grants.grants,
+  future_default_grants.grants AS future_default_grants,
+  project_authenticated_select_policies.policies AS project_authenticated_select_policies
+FROM bucket_checks, rls_disabled, function_grants, future_default_grants, project_authenticated_select_policies;
 `;
 
 const text = await querySupabase().catch((error) => {
@@ -172,6 +223,20 @@ if ((row?.rls_disabled_tables ?? []).length > 0) {
   failures.push({
     message: "public tables with RLS disabled",
     tables: row.rls_disabled_tables,
+  });
+}
+
+if ((row?.future_default_grants ?? []).length > 0) {
+  failures.push({
+    message: "future public-schema default grants must be revoked; use explicit grants in migrations",
+    grants: row.future_default_grants,
+  });
+}
+
+if ((row?.project_authenticated_select_policies ?? []).length > 1) {
+  failures.push({
+    message: "project SELECT policies overlap for authenticated users",
+    policies: row.project_authenticated_select_policies,
   });
 }
 

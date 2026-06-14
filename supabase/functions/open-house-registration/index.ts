@@ -37,7 +37,8 @@ type RegistrationRequest = {
   privacyAcknowledgement?: unknown;
 };
 
-const UUID_RE = /^[0-9a-f-]{36}$/i;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const jsonResponse = (
   body: unknown,
@@ -56,11 +57,19 @@ function parseListingId(value: unknown): string {
   return value;
 }
 
-function optionalString(value: unknown, maxLength: number): string | null {
+function optionalString(value: unknown, field: string, maxLength: number): string | null {
   if (value === null || value === undefined) return null;
-  if (typeof value !== "string") throw new Error("Invalid request body");
+  if (typeof value !== "string") throw new Error(`Invalid ${field}`);
   const trimmed = value.trim();
-  return trimmed.length === 0 ? null : trimmed.slice(0, maxLength);
+  if (trimmed.length > maxLength) throw new Error(`Invalid ${field}`);
+  return trimmed.length === 0 ? null : trimmed;
+}
+
+function optionalEmail(value: unknown): string | null {
+  const email = optionalString(value, "contactEmail", 254);
+  if (!email) return null;
+  if (!EMAIL_RE.test(email)) throw new Error("Invalid contactEmail");
+  return email.toLowerCase();
 }
 
 function optionalTimeslot(value: unknown): number | null {
@@ -112,11 +121,11 @@ Deno.serve(async (req) => {
     const payload = {
       listingId: parseListingId(body.listingId),
       timeslotIndex: optionalTimeslot(body.timeslotIndex),
-      contactName: optionalString(body.contactName, 160),
-      contactEmail: optionalString(body.contactEmail, 254),
-      contactPhone: optionalString(body.contactPhone, 80),
-      visitPurpose: optionalString(body.visitPurpose, 400),
-      note: optionalString(body.note, 1000),
+      contactName: optionalString(body.contactName, "contactName", 160),
+      contactEmail: optionalEmail(body.contactEmail),
+      contactPhone: optionalString(body.contactPhone, "contactPhone", 80),
+      visitPurpose: optionalString(body.visitPurpose, "visitPurpose", 400),
+      note: optionalString(body.note, "note", 1000),
       contactPermission: body.contactPermission === true,
       idVerificationConsent: body.idVerificationConsent === true,
       privacyAcknowledgement: body.privacyAcknowledgement === true,

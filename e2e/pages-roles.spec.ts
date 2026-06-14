@@ -13,6 +13,7 @@
  */
 import { test, expect, type Page } from "@playwright/test";
 import { seededDemoAccountsEnabled } from "./helpers/demoAccounts";
+import { expectPublicCatalogContent } from "./helpers/publicCatalog";
 
 // Default to seeded demo buyer account (not admin, not investor — triggers wrong-role gates).
 const TEST_EMAIL = process.env.E2E_TEST_EMAIL ?? "seller.pro@maiprop.demo";
@@ -59,7 +60,7 @@ test.describe("Auctions page", () => {
     await expect(page.locator("h1, h2, [role='heading']").first()).toBeVisible({ timeout: 10_000 });
   });
 
-  test("shows auction listings or an empty/error state", async ({ page }) => {
+  test("shows auction listings or an empty state", async ({ page }) => {
     // Wait for React Query to finish its first auctions fetch before asserting.
     // We switched the beforeEach from `networkidle` to `load` to dodge Mapbox's
     // never-settling tile requests, but `load` only waits for the bundle —
@@ -67,13 +68,14 @@ test.describe("Auctions page", () => {
     // `expect(...).toBeVisible()` instead of a one-shot `isVisible()` so the
     // assertion polls until either an auction card, an empty-state element,
     // or any rendered card/skeleton becomes visible.
-    const contentLocator = page.getByTestId("auction-card")
-      .or(page.getByText("No auctions match your filters"))
-      .or(page.getByText("Failed to load auctions"))
-      .or(page.locator('[aria-busy="true"]'));
-
-    await expect(page.locator("main, #main-content, body").first()).toBeVisible();
-    await expect(contentLocator.first()).toBeVisible({ timeout: 20_000 });
+    await expectPublicCatalogContent(page, {
+      apiPath: "/api/public/auctions?limit=1",
+      cardTestId: "auction-card",
+      emptyText: "No auctions match your filters",
+      errorText: "Failed to load auctions",
+      loadingSelector: '[aria-busy="true"]',
+      label: "Auctions",
+    });
   });
 
   test("map / list view toggle button is present", async ({ page }) => {
@@ -110,13 +112,14 @@ test.describe("Open Houses page", () => {
     // but `load` only waits for the bundle — data-driven content arrives later.
     // Use Playwright's auto-retrying `expect(...).toBeVisible()` so the assertion
     // polls until either a card, an empty-state element, or a skeleton becomes visible.
-    const contentLocator = page.getByTestId("open-house-card")
-      .or(page.getByText("No open houses match your filters"))
-      .or(page.getByText("Could not load open houses"))
-      .or(page.locator('[aria-label="Loading open houses"]'));
-
-    await expect(page.locator("main, #main-content, body").first()).toBeVisible();
-    await expect(contentLocator.first()).toBeVisible({ timeout: 20_000 });
+    await expectPublicCatalogContent(page, {
+      apiPath: "/api/public/open-houses?showPast=0&limit=1",
+      cardTestId: "open-house-card",
+      emptyText: "No open houses match your filters",
+      errorText: "Could not load open houses",
+      loadingSelector: '[aria-label="Loading open houses"]',
+      label: "Open houses",
+    });
   });
 
   test("open-house cards include a date/time element when listings exist", async ({ page }) => {

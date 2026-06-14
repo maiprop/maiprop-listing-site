@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   checkEnterpriseReadinessBasics,
+  checkObservabilityWiring,
   checkPublicFunctionInventory,
   checkRuntimeAlignment,
 } from "./check-enterprise-readiness-basics.mjs";
@@ -16,7 +17,11 @@ const makeFixture = () => {
   mkdirSync(join(root, "docs", "backups"), { recursive: true });
   mkdirSync(join(root, "docs", "governance"), { recursive: true });
   mkdirSync(join(root, "scripts"), { recursive: true });
+  mkdirSync(join(root, "scripts", "load-test"), { recursive: true });
+  mkdirSync(join(root, "src", "lib"), { recursive: true });
   mkdirSync(join(root, "supabase"), { recursive: true });
+  mkdirSync(join(root, "supabase", "functions", "_shared"), { recursive: true });
+  mkdirSync(join(root, "supabase", "functions", "healthz"), { recursive: true });
 
   writeFileSync(
     join(root, "package.json"),
@@ -182,6 +187,61 @@ const makeFixture = () => {
     ].join("\n"),
   );
   writeFileSync(join(root, "scripts", "supabase-logical-backup.mjs"), "process.exit(0);\n");
+  writeFileSync(
+    join(root, "scripts", "load-test", "basic.js"),
+    [
+      "import http from \"k6/http\";",
+      "export const errorRate = new Rate('errors');",
+      "export const options = {",
+      "  scenarios: { browse: { executor: \"ramping-vus\", stages: [{ target: 100 }] } },",
+      "  thresholds: { http_req_duration: [\"p(95)<2500\"], errors: [\"rate<0.01\"], http_req_failed: [\"rate<0.01\"] },",
+      "};",
+      "export default function () {",
+      "  http.get(`${BASE_URL}/listings`);",
+      "  http.get(`${BASE_URL}/auctions`);",
+      "  http.get(`${BASE_URL}/api/public/listings?limit=24`);",
+      "  http.get(`${BASE_URL}/api/public/open-houses?limit=24`);",
+      "  http.get(`${BASE_URL}/sitemap-dynamic.xml`);",
+      "}",
+      "export function handleSummary() { return { 'load-test-summary.json': '{}' }; }",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "src", "main.tsx"),
+    [
+      "import * as Sentry from '@sentry/react';",
+      "import { installWebVitalsMonitoring } from '@/lib/webVitals';",
+      "const sentryDsn = import.meta.env.VITE_SENTRY_DSN;",
+      "if (sentryDsn) {",
+      "  Sentry.init({ dsn: sentryDsn, tracesSampleRate: 0.1 });",
+      "  window.__sentryClient = Sentry;",
+      "  installWebVitalsMonitoring();",
+      "}",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "src", "lib", "webVitals.ts"),
+    [
+      "export function installWebVitalsMonitoring() {",
+      "  const sampleRate = import.meta.env.VITE_WEB_VITALS_SAMPLE_RATE;",
+      "  window.__maipropWebVitalsInstalled = true;",
+      "  window.__sentryClient?.addBreadcrumb?.({ category: 'web-vitals', sampleRate });",
+      "  window.__sentryClient?.captureMessage?.('web-vitals-route');",
+      "}",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "supabase", "functions", "_shared", "logger.ts"),
+    [
+      "function parseSentryDsn() { return Deno.env.get('SENTRY_DSN'); }",
+      "function forwardToSentry() { return fetch('https://sentry.example/api', { headers: { 'X-Sentry-Auth': 'Sentry sentry_version=7' } }); }",
+      "export function createLogger() { return { error: forwardToSentry }; }",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "supabase", "functions", "healthz", "index.ts"),
+    "const checks = {}; checks.sentry = Deno.env.get('SENTRY_DSN') ? 'ok' : 'fail';\n",
+  );
   return root;
 };
 
@@ -216,5 +276,29 @@ describe("enterprise readiness basics", () => {
 
     expect(result.ok).toBe(false);
     expect(result.failures.join("\n")).toContain("expected 2");
+  });
+
+  it("requires source-level frontend and edge observability wiring", () => {
+    const root = makeFixture();
+    writeFileSync(join(root, "src", "main.tsx"), "console.log('no sentry');\n");
+
+    const result = checkObservabilityWiring(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("src/main.tsx must mention Sentry.init");
+    expect(result.failures.join("\n")).toContain("src/main.tsx must mention installWebVitalsMonitoring");
+  });
+
+  it("includes the load-test contract in enterprise readiness", () => {
+    const root = makeFixture();
+    writeFileSync(
+      join(root, "scripts", "load-test", "basic.js"),
+      "import http from \"k6/http\"; export default function () { http.get(`${BASE_URL}/`); }\n",
+    );
+
+    const result = checkEnterpriseReadinessBasics(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("scripts/load-test/basic.js");
   });
 });

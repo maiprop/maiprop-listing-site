@@ -16,6 +16,7 @@
 import { test, expect, type Page, type BrowserContext } from "@playwright/test";
 import { getBaseURL } from "./helpers/baseURL";
 import { seededDemoAccountsEnabled } from "./helpers/demoAccounts";
+import { expectPublicCatalogContent } from "./helpers/publicCatalog";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -51,6 +52,18 @@ async function signIn(page: Page, email: string, password: string): Promise<void
 const firstOpenHouseDetailLink = (page: Page) =>
   page.locator('a[href^="/open-house/"]').first();
 
+const clickFirstOpenHouseDetailLink = async (page: Page): Promise<boolean> => {
+  const link = firstOpenHouseDetailLink(page);
+  const attached = await link
+    .waitFor({ state: "attached", timeout: 20_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!attached) return false;
+  await link.scrollIntoViewIfNeeded();
+  await link.click();
+  return true;
+};
+
 // ---------------------------------------------------------------------------
 // 1. Public open house browsing (no auth required)
 // ---------------------------------------------------------------------------
@@ -67,38 +80,26 @@ test.describe("Public — open house browsing", () => {
       timeout: 10_000,
     });
 
-    // Accept listing cards OR any empty/no-result element
-    const hasCards = await page
-      .locator("article, [class*='card']")
-      .first()
-      .isVisible()
-      .catch(() => false);
-
-    const hasEmpty = await page
-      .locator(
-        "[class*='empty'], [class*='no-result'], .text-muted-foreground, [data-testid='empty-state']"
-      )
-      .first()
-      .isVisible()
-      .catch(() => false);
-
-    expect(hasCards || hasEmpty).toBe(true);
+    await expectPublicCatalogContent(page, {
+      apiPath: "/api/public/open-houses?showPast=0&limit=1",
+      cardTestId: "open-house-card",
+      emptyText: "No open houses match your filters",
+      errorText: "Could not load open houses",
+      loadingSelector: '[aria-label="Loading open houses"]',
+      label: "Open houses",
+    });
   });
 
   test("clicking an open house card navigates to detail page", async ({ page }) => {
     await page.goto("/open-houses");
     await page.waitForLoadState("load", { timeout: 15_000 });
 
-    const firstLink = firstOpenHouseDetailLink(page);
-    const cardCount = await firstLink.count();
-
-    if (cardCount === 0) {
+    if (!(await clickFirstOpenHouseDetailLink(page))) {
       // No seeded data — nothing to click
       test.skip();
       return;
     }
 
-    await firstLink.click();
     await page.waitForLoadState("load", { timeout: 15_000 });
 
     // Navbar must still be visible (app did not crash)
@@ -113,15 +114,11 @@ test.describe("Public — open house browsing", () => {
     await page.goto("/open-houses");
     await page.waitForLoadState("load", { timeout: 15_000 });
 
-    const firstLink = firstOpenHouseDetailLink(page);
-    const cardCount = await firstLink.count();
-
-    if (cardCount === 0) {
+    if (!(await clickFirstOpenHouseDetailLink(page))) {
       test.skip();
       return;
     }
 
-    await firstLink.click();
     await page.waitForLoadState("load", { timeout: 15_000 });
 
     // Accept any CTA wording a detail page might use
@@ -160,22 +157,14 @@ test.describe("Buyer — authenticated open house browsing", () => {
       timeout: 10_000,
     });
 
-    // Cards or empty state
-    const hasCards = await page
-      .locator("article, [class*='card']")
-      .first()
-      .isVisible()
-      .catch(() => false);
-
-    const hasEmpty = await page
-      .locator(
-        "[class*='empty'], [class*='no-result'], .text-muted-foreground, [data-testid='empty-state']"
-      )
-      .first()
-      .isVisible()
-      .catch(() => false);
-
-    expect(hasCards || hasEmpty).toBe(true);
+    await expectPublicCatalogContent(page, {
+      apiPath: "/api/public/open-houses?showPast=0&limit=1",
+      cardTestId: "open-house-card",
+      emptyText: "No open houses match your filters",
+      errorText: "Could not load open houses",
+      loadingSelector: '[aria-label="Loading open houses"]',
+      label: "Open houses",
+    });
     expect(errors).toHaveLength(0);
   });
 
@@ -188,15 +177,11 @@ test.describe("Buyer — authenticated open house browsing", () => {
     await page.goto("/open-houses");
     await page.waitForLoadState("load", { timeout: 15_000 });
 
-    const firstLink = firstOpenHouseDetailLink(page);
-    const cardCount = await firstLink.count();
-
-    if (cardCount === 0) {
+    if (!(await clickFirstOpenHouseDetailLink(page))) {
       test.skip();
       return;
     }
 
-    await firstLink.click();
     await page.waitForLoadState("load", { timeout: 15_000 });
 
     // Detail page must render without crashing
@@ -216,15 +201,11 @@ test.describe("Buyer — authenticated open house browsing", () => {
     await page.goto("/open-houses");
     await page.waitForLoadState("load", { timeout: 15_000 });
 
-    const firstLink = firstOpenHouseDetailLink(page);
-    const cardCount = await firstLink.count();
-
-    if (cardCount === 0) {
+    if (!(await clickFirstOpenHouseDetailLink(page))) {
       test.skip();
       return;
     }
 
-    await firstLink.click();
     await page.waitForLoadState("load", { timeout: 15_000 });
 
     const rsvpButton = page

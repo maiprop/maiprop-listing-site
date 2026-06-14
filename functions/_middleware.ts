@@ -180,6 +180,7 @@ function loginPage(opts: { error?: string; redirectTo: string; status?: number }
       "X-Robots-Tag": "noindex, nofollow",
       "X-Frame-Options": "DENY",
       "Referrer-Policy": "no-referrer",
+      "Origin-Agent-Cluster": "?1",
     },
   });
 }
@@ -206,6 +207,7 @@ async function nextWithoutAssetHtmlFallback(
       "Content-Type": "text/plain; charset=utf-8",
       "Cache-Control": "no-store, no-cache, must-revalidate",
       "X-Content-Type-Options": "nosniff",
+      "Origin-Agent-Cluster": "?1",
     },
   });
 }
@@ -321,6 +323,7 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
       "Content-Type": "text/plain; charset=utf-8",
       "Cache-Control": "no-store",
       "X-Robots-Tag": "noindex, nofollow",
+      "Origin-Agent-Cluster": "?1",
     },
   });
 };
