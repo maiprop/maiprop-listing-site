@@ -21,6 +21,16 @@ export function supportsOpenAIReasoningEffort(model: string): boolean {
   return /^(o[1-9]|o\d|gpt-5)(?:[.-]|$)/.test(normalized);
 }
 
+function usesMaxCompletionTokens(model: string): boolean {
+  const normalized = model.toLowerCase();
+  return /^(o[1-9]|o\d|gpt-5)(?:[.-]|$)/.test(normalized);
+}
+
+function usesReasoningModelRequestShape(model: string): boolean {
+  const normalized = model.toLowerCase();
+  return /^(o[1-9]|o\d|gpt-5)(?:[.-]|$)/.test(normalized);
+}
+
 export function hasAIProviderCredentials(): boolean {
   return Boolean(Deno.env.get("GEMINI_API_KEY") || Deno.env.get("OPENAI_API_KEY"));
 }
@@ -133,20 +143,43 @@ export async function openAIChatCompletion(
   }
 
   const reasoningEffort = supportsOpenAIReasoningEffort(model) ? getOpenAIReasoningEffort() : null;
-  return fetchWithTimeout(OPENAI_API_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${requireOpenAIKey()}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      ...(reasoningEffort && body.reasoning_effort === undefined
-        ? { reasoning_effort: reasoningEffort }
-        : {}),
-      ...body,
-    }),
-  }, getAIProviderTimeoutMs());
+  const requestBody = { ...body };
+  if (usesMaxCompletionTokens(model) && typeof requestBody.max_tokens === "number") {
+    requestBody.max_completion_tokens ??= requestBody.max_tokens;
+    delete requestBody.max_tokens;
+  }
+  if (usesReasoningModelRequestShape(model)) {
+    delete requestBody.temperature;
+    delete requestBody.top_p;
+    delete requestBody.presence_penalty;
+    delete requestBody.frequency_penalty;
+  }
+  if (requestBody.response_format === undefined && wantsJsonResponse(getPromptText(requestBody))) {
+    requestBody.response_format = { type: "json_object" };
+  }
+
+  try {
+    return await fetchWithTimeout(OPENAI_API_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${requireOpenAIKey()}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        ...(reasoningEffort && requestBody.reasoning_effort === undefined
+          ? { reasoning_effort: reasoningEffort }
+          : {}),
+        ...requestBody,
+      }),
+    }, getAIProviderTimeoutMs());
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    return new Response(JSON.stringify({ error: "AI provider request failed", detail }), {
+      status: 504,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 }
 
 export function readOpenAITextContent(payload: unknown): string {

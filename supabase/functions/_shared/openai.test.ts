@@ -235,6 +235,139 @@ Deno.test("openAIChatCompletion sends reasoning_effort for reasoning OpenAI mode
   }
 });
 
+Deno.test("openAIChatCompletion maps max_tokens to max_completion_tokens for GPT-5 style models", async () => {
+  const prevOpenAI = Deno.env.get("OPENAI_API_KEY");
+  const prevGemini = Deno.env.get("GEMINI_API_KEY");
+  Deno.env.set("OPENAI_API_KEY", "openai-test");
+  Deno.env.delete("GEMINI_API_KEY");
+  const originalFetch = globalThis.fetch;
+  let requestBody: Record<string, unknown> = {};
+
+  globalThis.fetch = ((_input: RequestInfo | URL, init?: RequestInit) => {
+    requestBody = JSON.parse(String(init?.body ?? "{}"));
+    return Promise.resolve(new Response(JSON.stringify({
+      choices: [{ message: { content: "ok" } }],
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+  }) as typeof fetch;
+
+  try {
+    const res = await openAIChatCompletion({
+      messages: [{ role: "user", content: "Hello" }],
+      temperature: 0.2,
+      top_p: 0.9,
+      presence_penalty: 0.1,
+      frequency_penalty: 0.2,
+      max_tokens: 1234,
+    }, "gpt-5.4-mini");
+    assertEquals(res.status, 200);
+    assertStrictEquals("max_tokens" in requestBody, false);
+    assertStrictEquals(requestBody.max_completion_tokens, 1234);
+    assertStrictEquals("temperature" in requestBody, false);
+    assertStrictEquals("top_p" in requestBody, false);
+    assertStrictEquals("presence_penalty" in requestBody, false);
+    assertStrictEquals("frequency_penalty" in requestBody, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (prevOpenAI) Deno.env.set("OPENAI_API_KEY", prevOpenAI);
+    else Deno.env.delete("OPENAI_API_KEY");
+    if (prevGemini) Deno.env.set("GEMINI_API_KEY", prevGemini);
+    else Deno.env.delete("GEMINI_API_KEY");
+  }
+});
+
+Deno.test("openAIChatCompletion preserves sampling controls for non-reasoning chat models", async () => {
+  const prevOpenAI = Deno.env.get("OPENAI_API_KEY");
+  const prevGemini = Deno.env.get("GEMINI_API_KEY");
+  Deno.env.set("OPENAI_API_KEY", "openai-test");
+  Deno.env.delete("GEMINI_API_KEY");
+  const originalFetch = globalThis.fetch;
+  let requestBody: Record<string, unknown> = {};
+
+  globalThis.fetch = ((_input: RequestInfo | URL, init?: RequestInit) => {
+    requestBody = JSON.parse(String(init?.body ?? "{}"));
+    return Promise.resolve(new Response(JSON.stringify({
+      choices: [{ message: { content: "ok" } }],
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+  }) as typeof fetch;
+
+  try {
+    const res = await openAIChatCompletion({
+      messages: [{ role: "user", content: "Hello" }],
+      temperature: 0.2,
+      top_p: 0.9,
+      max_tokens: 1234,
+    }, "gpt-4.1-mini");
+    assertEquals(res.status, 200);
+    assertStrictEquals(requestBody.max_tokens, 1234);
+    assertStrictEquals(requestBody.temperature, 0.2);
+    assertStrictEquals(requestBody.top_p, 0.9);
+    assertStrictEquals("max_completion_tokens" in requestBody, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (prevOpenAI) Deno.env.set("OPENAI_API_KEY", prevOpenAI);
+    else Deno.env.delete("OPENAI_API_KEY");
+    if (prevGemini) Deno.env.set("GEMINI_API_KEY", prevGemini);
+    else Deno.env.delete("GEMINI_API_KEY");
+  }
+});
+
+Deno.test("openAIChatCompletion requests JSON mode when the prompt explicitly asks for JSON", async () => {
+  const prevOpenAI = Deno.env.get("OPENAI_API_KEY");
+  const prevGemini = Deno.env.get("GEMINI_API_KEY");
+  Deno.env.set("OPENAI_API_KEY", "openai-test");
+  Deno.env.delete("GEMINI_API_KEY");
+  const originalFetch = globalThis.fetch;
+  let requestBody: Record<string, unknown> = {};
+
+  globalThis.fetch = ((_input: RequestInfo | URL, init?: RequestInit) => {
+    requestBody = JSON.parse(String(init?.body ?? "{}"));
+    return Promise.resolve(new Response(JSON.stringify({
+      choices: [{ message: { content: "{}" } }],
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+  }) as typeof fetch;
+
+  try {
+    const res = await openAIChatCompletion({
+      messages: [{ role: "user", content: "Return only valid JSON for this request." }],
+    }, "gpt-5.4-mini");
+    assertEquals(res.status, 200);
+    assertEquals(requestBody.response_format, { type: "json_object" });
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (prevOpenAI) Deno.env.set("OPENAI_API_KEY", prevOpenAI);
+    else Deno.env.delete("OPENAI_API_KEY");
+    if (prevGemini) Deno.env.set("GEMINI_API_KEY", prevGemini);
+    else Deno.env.delete("GEMINI_API_KEY");
+  }
+});
+
+Deno.test("openAIChatCompletion converts provider transport errors into a 504 response", async () => {
+  const prevOpenAI = Deno.env.get("OPENAI_API_KEY");
+  const prevGemini = Deno.env.get("GEMINI_API_KEY");
+  Deno.env.set("OPENAI_API_KEY", "openai-test");
+  Deno.env.delete("GEMINI_API_KEY");
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (() => {
+    throw new DOMException("The signal has been aborted", "AbortError");
+  }) as typeof fetch;
+
+  try {
+    const res = await openAIChatCompletion({
+      messages: [{ role: "user", content: "Hello" }],
+    }, "gpt-5.4-mini");
+    const body = await res.json();
+    assertEquals(res.status, 504);
+    assertEquals(body.error, "AI provider request failed");
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (prevOpenAI) Deno.env.set("OPENAI_API_KEY", prevOpenAI);
+    else Deno.env.delete("OPENAI_API_KEY");
+    if (prevGemini) Deno.env.set("GEMINI_API_KEY", prevGemini);
+    else Deno.env.delete("GEMINI_API_KEY");
+  }
+});
+
 // ── readOpenAITextContent ─────────────────────────────────────────────────────
 
 Deno.test("readOpenAITextContent: extracts content from standard response", () => {
