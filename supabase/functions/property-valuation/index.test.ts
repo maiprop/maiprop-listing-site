@@ -102,6 +102,7 @@ Deno.test("fallback valuation uses location benchmarks instead of copying the li
       marketComparisonPct?: number;
       methodUsed?: string;
       summary?: string;
+      redFlags?: string[];
     };
     assertEquals(res.status, 200);
     assertEquals(body.generatedBy, "fallback");
@@ -109,6 +110,7 @@ Deno.test("fallback valuation uses location benchmarks instead of copying the li
     assertEquals(body.marketComparisonPct, -12);
     assertEquals(body.methodUsed, "Deterministic fallback using 2026 Greece location/type benchmark ranges");
     assertEquals(body.summary?.includes("copying the listed price"), true);
+    assertEquals(body.redFlags?.some((flag) => /provider|fallback/i.test(flag)), false);
   });
 });
 
@@ -458,6 +460,162 @@ Deno.test("caps legal scores when listing data confirms planning/buildability de
     assertEquals((body.transferReadiness ?? 100) <= 60, true);
     assertEquals((body.taxFriction ?? 0) >= 50, true);
     assertEquals(body.redFlags?.some((flag) => /outside city|buildability/i.test(flag)), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (prevOpenAI) Deno.env.set("OPENAI_API_KEY", prevOpenAI);
+    else Deno.env.delete("OPENAI_API_KEY");
+    if (prevGemini) Deno.env.set("GEMINI_API_KEY", prevGemini);
+    else Deno.env.delete("GEMINI_API_KEY");
+  }
+});
+
+Deno.test("uses separate clean-listing valuation instructions for non-auction ads", async () => {
+  const originalFetch = globalThis.fetch;
+  const prevOpenAI = Deno.env.get("OPENAI_API_KEY");
+  const prevGemini = Deno.env.get("GEMINI_API_KEY");
+  Deno.env.set("OPENAI_API_KEY", "openai-test");
+  Deno.env.delete("GEMINI_API_KEY");
+  let providerPrompt = "";
+
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("/auth/v1/user")) {
+      return Promise.resolve(okJson({ user: { id: "user-1", email: "user@test.local" } }));
+    }
+    if (url.includes("/rest/v1/rpc/reserve_ai_quota_for_user")) {
+      return Promise.resolve(okJson({ allowed: true, reason: null, used: 1, limit: 5 }));
+    }
+    if (url.includes("api.openai.com") || url.includes("generativelanguage.googleapis.com")) {
+      const requestBody = JSON.parse(String(init?.body ?? "{}"));
+      providerPrompt = String(requestBody.messages?.[0]?.content ?? "");
+      return Promise.resolve(okJson({
+        choices: [{ message: { content: JSON.stringify({
+          estimatedValue: 260000,
+          rangeLow: 240000,
+          rangeHigh: 280000,
+          executionValue: 230000,
+          pricePerSqmEstimate: 2600,
+          confidence: 72,
+          confidenceLabel: "Medium",
+          liquidityScore: 76,
+          marketComparison: "at_market",
+          marketComparisonPct: 0,
+          pricingPosition: "fair",
+          methodUsed: "Clean listing valuation",
+          valuationMode: "MODE_1_LISTING_ONLY",
+          summary: "Clean listing market valuation.",
+          keyFactors: [],
+          legalCleanliness: 72,
+          planningCertainty: 75,
+          taxFriction: 28,
+          transferReadiness: 70,
+          legalSummary: "Clean listing assumption.",
+          taxSummary: "Standard transfer friction.",
+          objectiveValueProxy: null,
+          renovationPotential: null,
+          rentalYieldEstimate: 4.2,
+          highestBestUseHint: null,
+          redFlags: [],
+          auctionAdjustedValue: null,
+          listingQualityScore: 72,
+        }) } }],
+      }));
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+
+  try {
+    const res = await handler(req("POST", {
+      title: "Clean listing apartment",
+      city: "Athens",
+      price: 260000,
+      sqm: 100,
+      propertyType: "apartment",
+      listingType: "sale",
+    }, { authorization: "Bearer test-valid-token" }));
+    assertEquals(res.status, 200);
+    assertEquals(providerPrompt.includes("CLEAN LISTING ASSUMPTION"), true);
+    assertEquals(providerPrompt.includes("ready to transact"), true);
+    assertEquals(providerPrompt.includes("AUCTION-SPECIFIC RISK MODEL"), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (prevOpenAI) Deno.env.set("OPENAI_API_KEY", prevOpenAI);
+    else Deno.env.delete("OPENAI_API_KEY");
+    if (prevGemini) Deno.env.set("GEMINI_API_KEY", prevGemini);
+    else Deno.env.delete("GEMINI_API_KEY");
+  }
+});
+
+Deno.test("uses auction-specific valuation instructions for legal risk and limited observability", async () => {
+  const originalFetch = globalThis.fetch;
+  const prevOpenAI = Deno.env.get("OPENAI_API_KEY");
+  const prevGemini = Deno.env.get("GEMINI_API_KEY");
+  Deno.env.set("OPENAI_API_KEY", "openai-test");
+  Deno.env.delete("GEMINI_API_KEY");
+  let providerPrompt = "";
+
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("/auth/v1/user")) {
+      return Promise.resolve(okJson({ user: { id: "user-1", email: "user@test.local" } }));
+    }
+    if (url.includes("/rest/v1/rpc/reserve_ai_quota_for_user")) {
+      return Promise.resolve(okJson({ allowed: true, reason: null, used: 1, limit: 5 }));
+    }
+    if (url.includes("api.openai.com") || url.includes("generativelanguage.googleapis.com")) {
+      const requestBody = JSON.parse(String(init?.body ?? "{}"));
+      providerPrompt = String(requestBody.messages?.[0]?.content ?? "");
+      return Promise.resolve(okJson({
+        choices: [{ message: { content: JSON.stringify({
+          estimatedValue: 130000,
+          rangeLow: 115000,
+          rangeHigh: 142000,
+          executionValue: 112000,
+          pricePerSqmEstimate: 1450,
+          confidence: 52,
+          confidenceLabel: "Medium",
+          liquidityScore: 46,
+          marketComparison: "below_market",
+          marketComparisonPct: -10,
+          pricingPosition: "overpriced",
+          methodUsed: "Auction valuation with legal and observability overlay",
+          valuationMode: "MODE_1_LISTING_ONLY",
+          summary: "Auction-specific valuation.",
+          keyFactors: [],
+          legalCleanliness: 50,
+          planningCertainty: 60,
+          taxFriction: 55,
+          transferReadiness: 45,
+          legalSummary: "Auction legal risk requires review.",
+          taxSummary: "Auction transfer friction.",
+          objectiveValueProxy: null,
+          renovationPotential: null,
+          rentalYieldEstimate: 4,
+          highestBestUseHint: null,
+          redFlags: ["Auction due diligence required"],
+          auctionAdjustedValue: 154000,
+          listingQualityScore: 60,
+        }) } }],
+      }));
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+
+  try {
+    const res = await handler(req("POST", {
+      title: "Auction apartment",
+      city: "Agios Dimitrios",
+      price: 154000,
+      sqm: 90,
+      propertyType: "apartment",
+      listingType: "auction",
+      auctionCourt: "Athens Court",
+    }, { authorization: "Bearer test-valid-token" }));
+    assertEquals(res.status, 200);
+    assertEquals(providerPrompt.includes("AUCTION-SPECIFIC RISK MODEL"), true);
+    assertEquals(providerPrompt.includes("legal risk"), true);
+    assertEquals(providerPrompt.includes("limited observability"), true);
+    assertEquals(providerPrompt.includes("CLEAN LISTING ASSUMPTION"), false);
   } finally {
     globalThis.fetch = originalFetch;
     if (prevOpenAI) Deno.env.set("OPENAI_API_KEY", prevOpenAI);

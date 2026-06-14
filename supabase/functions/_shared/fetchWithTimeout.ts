@@ -12,7 +12,12 @@ export function fetchWithTimeout(
 ): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  return fetch(url, { ...init, signal: controller.signal }).finally(() =>
-    clearTimeout(timer)
-  );
+  try {
+    return fetch(url, { ...init, signal: controller.signal }).finally(() =>
+      clearTimeout(timer)
+    );
+  } catch (err) {
+    clearTimeout(timer);
+    throw err;
+  }
 }

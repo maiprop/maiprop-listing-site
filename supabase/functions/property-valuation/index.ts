@@ -736,6 +736,36 @@ Use benchmark table. Apply condition, location, feature adjustments. Range: ±15
   return (base[propertyType] || fallback) + auctionSuffix;
 };
 
+const getTransactionInstructions = (listingType: string): string => {
+  if (listingType === "auction") {
+    return `
+AUCTION-SPECIFIC RISK MODEL:
+- This is not a normal listing valuation. Estimate clean market value first, then separately estimate auction execution value.
+- Explicitly price legal risk, title-burden uncertainty, eviction/occupancy risk, and limited observability of the interior/property condition.
+- Limited observability means no full buyer inspection, incomplete photos, unknown hidden defects, unknown access, and unknown repair scope unless supplied data proves otherwise.
+- Do not treat the starting bid or listing price as market value. Use it only as a comparison point after deriving the clean market value.
+- auctionAdjustedValue must be the clean market value before auction discounts. estimatedValue must be the auction-adjusted value after legal, liquidity, observability, and execution discounts.
+- Red flags may include only auction-specific due diligence risks or confirmed property defects; do not list AI/provider fallback status as a property red flag.`;
+  }
+
+  if (listingType === "rent") {
+    return `
+CLEAN LISTING ASSUMPTION:
+- This is a normal rental listing, not an auction. Assume the property is clean, marketable, and ready to transact unless supplied fields explicitly confirm a legal/planning defect.
+- Focus valuation on rent level, yield, location, asset quality, tenant demand, condition, amenities, floor, energy class, liquidity, and neighbourhood desirability.
+- Do not apply auction discounts, eviction risk, title-burden discounts, or limited-observability penalties to normal listings.
+- Missing cadastre, buildability, or city-plan fields on standard apartments/houses are data gaps, not red flags.`;
+  }
+
+  return `
+CLEAN LISTING ASSUMPTION:
+- This is a normal sale/listing ad, not an auction. Assume the property is clean, marketable, and ready to transact unless supplied fields explicitly confirm a legal/planning defect.
+- Focus valuation on market benchmarks, micro-location, size, floor, age, condition, energy class, amenities, views/noise, renovation risk, liquidity, buyer depth, and qualitative desirability.
+- Do not apply auction discounts, eviction risk, title-burden discounts, or limited-observability penalties to normal listings.
+- Legal/tax overlay should stay light: standard transfer friction unless the listing data confirms complexity.
+- Missing cadastre, buildability, or city-plan fields on standard apartments/houses are data gaps, not red flags.`;
+};
+
 // ── Main handler ───────────────────────────────────────────────────────────────
 const fallbackBenchmarkPricePerSqm = (input: {
   city: string;
@@ -811,7 +841,7 @@ const fallbackValuation = (input: { // skipcq: JS-R1005 - Deterministic valuatio
     pricingPosition: toPricingPosition(deltaPct),
     methodUsed: "Deterministic fallback using 2026 Greece location/type benchmark ranges",
     valuationMode: "MODE_1_LISTING_ONLY",
-    summary: `Fallback valuation for ${input.city}: ${input.reason ?? "the AI provider returned malformed JSON"}, so this uses a ${pricePerSqm.toLocaleString()} EUR/sqm 2026 market benchmark for the location and asset type rather than copying the listed price. Treat this as a temporary estimate until a full OS/OpenAI valuation can be generated.`,
+    summary: `Preliminary benchmark valuation for ${input.city}: this uses a ${pricePerSqm.toLocaleString()} EUR/sqm 2026 market benchmark for the location and asset type rather than copying the listed price. Treat this as a temporary estimate until a full OS/OpenAI valuation can be generated.`,
     keyFactors: [
       { factor: "Location benchmark", impact: "neutral", note: `${pricePerSqm.toLocaleString()} EUR/sqm fallback benchmark` },
       { factor: "2026 market uncertainty", impact: "neutral", note: "Conservative confidence applied" },
@@ -828,10 +858,11 @@ const fallbackValuation = (input: { // skipcq: JS-R1005 - Deterministic valuatio
     renovationPotential: null,
     rentalYieldEstimate: input.propertyType === "apartment" ? 4.5 : 3.5,
     highestBestUseHint: null,
-    redFlags: [`${input.reason ?? "AI provider returned malformed JSON"}; fallback valuation used`],
+    redFlags: isAuction ? ["Auction legal, occupancy, and inspection status require independent verification."] : [],
     auctionAdjustedValue: isAuction ? cleanMarketValue : null,
     listingQualityScore: 40,
     generatedBy: "fallback",
+    fallbackReason: input.reason ?? "the AI provider returned malformed JSON",
   };
 };
 
@@ -981,7 +1012,10 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
       ? `Description excerpt: "${String(description).slice(0, 500)}"`
       : "";
 
-    const typeInstructions = getTypeInstructions(propertyType || "apartment", listingType || "sale");
+    const normalizedListingType = optionalString(listingType)?.toLowerCase() ?? "sale";
+    const normalizedPropertyType = optionalString(propertyType)?.toLowerCase() ?? "apartment";
+    const transactionInstructions = getTransactionInstructions(normalizedListingType);
+    const typeInstructions = getTypeInstructions(normalizedPropertyType, normalizedListingType);
 
     const prompt = `You are a senior Greek real estate valuation expert (RICS-equivalent) specialising in the 2026 Greek market. Produce a RIGOROUS, EVIDENCE-BASED valuation including a legal/tax overlay layer.
 
@@ -1005,6 +1039,9 @@ ${listingDesc}
 ${buildOsPromptContext(osValuationData)}
 
 Use mAI Prop OS data as primary quantitative evidence when available, then enrich it with OpenAI qualitative reasoning. Explain where the OS data, listing price, micro-location, liquidity, legal risk, and qualitative asset traits agree or diverge.
+
+=== TRANSACTION CONTEXT ===
+${transactionInstructions}
 
 === METHODOLOGY TO APPLY ===
 ${typeInstructions}
@@ -1072,7 +1109,7 @@ Rules:
     const response = await openAIChatCompletion({
       messages: [{ role: "user", content: prompt }],
       temperature: 0.15,
-      max_tokens: 8192,
+      max_tokens: 4096,
     });
 
     if (!response.ok) {
