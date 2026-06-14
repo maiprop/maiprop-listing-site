@@ -23,6 +23,13 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   // ── Cron secret guard: reject unauthenticated external triggers ──────────
   {
     const CRON_SECRET = Deno.env.get("CRON_SECRET");

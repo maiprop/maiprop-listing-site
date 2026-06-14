@@ -217,6 +217,8 @@ fail-fast behavior.
 | `STAGING_SITE_LOCK_PASSWORD` | optional Cloudflare Pages Preview runtime passcode gate; never reuse `SITE_LOCK_PASSWORD` unless preview should intentionally share the production passcode | staging environment only |
 | `SUPABASE_ACCESS_TOKEN` | Supabase CLI deploy/list token | repo or environment scoped to deploy jobs |
 | `SUPABASE_DB_URL` | optional Postgres connection string override for local/CI Supabase diagnostic scripts such as index-stat capture; prefer staging/production-specific vars in workflows | local/CI diagnostics only |
+| `DATABASE_URL` | optional legacy Postgres connection string fallback used by local backup/diagnostic scripts only when `SUPABASE_DB_URL` is unset | local/CI diagnostics only |
+| `MAIPROP_BACKUP_PASSPHRASE` | local operator secret used to encrypt `npm run backup:supabase:logical` output; never expose through `VITE_*` or app runtime environments | local backup operator shell only |
 | `SUPABASE_STAGING_DB_URL` | optional isolated staging Postgres connection string for CI `supabase db push --db-url`; only required when `STAGING_SUPABASE_PROJECT_ID` points to a real non-production staging project and migrations change | staging environment only |
 | `SUPABASE_STAGING_EFFECTIVE_DB_URL` | CI-generated staging Postgres connection string after resolving `SUPABASE_STAGING_DB_URL` or the Supabase Management API pooler URL; do not set manually outside the workflow | GitHub Actions generated runtime env |
 | `SUPABASE_PRODUCTION_DB_URL` | percent-encoded production Postgres connection string used only by the manual production DB migration workflow; keep scoped to the protected `production` environment | production environment |

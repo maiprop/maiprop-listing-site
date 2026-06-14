@@ -27,7 +27,7 @@ env:
 
 jobs:
   quality:
-    name: Build · Lint · Test
+    name: Build / Lint / Test
     runs-on: ubuntu-latest
     timeout-minutes: 35
 
@@ -77,8 +77,17 @@ jobs:
       - name: Check public edge function protections
         run: npm run check:public-functions
 
+      - name: Check OpenAPI coverage
+        run: npm run check:openapi-coverage
+
       - name: Check enterprise readiness basics
         run: npm run check:enterprise-readiness-basics
+
+      - name: Check GitHub governance evidence
+        run: npm run check:github-governance
+
+      - name: Check disaster recovery evidence
+        run: npm run check:dr-readiness
 
       - name: Check type-debt ratchet
         run: npm run check:type-debt

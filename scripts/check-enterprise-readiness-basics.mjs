@@ -1,6 +1,9 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { checkDisasterRecoveryReadiness } from "./check-dr-readiness.mjs";
+import { checkGithubGovernance } from "./check-github-governance.mjs";
+import { checkOpenApiCoverage } from "./check-openapi-coverage.mjs";
 
 const REQUIRED_NODE = "20.19.5";
 const REQUIRED_NPM = "10.8.2";
@@ -167,6 +170,9 @@ export function checkEnterpriseReadinessBasics(root = process.cwd()) {
     checkPublicFunctionInventory(root),
     checkObservabilityContract(root),
     checkGovernanceDocs(root),
+    checkGithubGovernance(root),
+    checkDisasterRecoveryReadiness(root),
+    checkOpenApiCoverage(root),
   ];
   return result(checks.flatMap((check) => check.failures));
 }

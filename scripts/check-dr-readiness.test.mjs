@@ -1,0 +1,90 @@
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import {
+  checkDisasterRecoveryReadiness,
+  checkFreeTierBackupRunbook,
+  checkProductionChecklistRecoveryEvidence,
+} from "./check-dr-readiness.mjs";
+
+const makeFixture = () => {
+  const root = mkdtempSync(join(tmpdir(), "maiprop-dr-readiness-"));
+  mkdirSync(join(root, "docs", "backups"), { recursive: true });
+  mkdirSync(join(root, "scripts"), { recursive: true });
+
+  writeFileSync(
+    join(root, "docs", "DR_RUNBOOK.md"),
+    [
+      "# Disaster Recovery Runbook",
+      "## Free-tier logical backup fallback",
+      "supabase db dump",
+      "MAIPROP_BACKUP_PASSPHRASE",
+      "encrypted off-site backup",
+      "restore drill",
+      "RPO",
+      "RTO",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "docs", "PRODUCTION_CHECKLIST.md"),
+    [
+      "# Production Deployment Checklist",
+      "Supabase Free",
+      "logical backup",
+      "encrypted off-site backup",
+      "restore drill",
+      "Last restore test",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "docs", "backups", "FREE_TIER_LOGICAL_BACKUPS.md"),
+    [
+      "# Free Tier Logical Backups",
+      "supabase db dump",
+      "MAIPROP_BACKUP_PASSPHRASE",
+      "encrypted off-site backup",
+      "restore drill",
+      "RPO",
+      "RTO",
+    ].join("\n"),
+  );
+  writeFileSync(join(root, "scripts", "supabase-logical-backup.mjs"), "process.exit(0);\n");
+
+  return root;
+};
+
+describe("disaster recovery readiness check", () => {
+  it("accepts free-tier backup docs, script, and restore evidence markers", () => {
+    const result = checkDisasterRecoveryReadiness(makeFixture());
+
+    expect(result.ok).toBe(true);
+    expect(result.failures).toEqual([]);
+  });
+
+  it("fails when the free-tier logical backup runbook is missing encryption evidence", () => {
+    const root = makeFixture();
+    writeFileSync(
+      join(root, "docs", "backups", "FREE_TIER_LOGICAL_BACKUPS.md"),
+      ["# Free Tier Logical Backups", "supabase db dump"].join("\n"),
+    );
+
+    const result = checkFreeTierBackupRunbook(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("MAIPROP_BACKUP_PASSPHRASE");
+  });
+
+  it("fails when the production checklist only mentions paid PITR", () => {
+    const root = makeFixture();
+    writeFileSync(
+      join(root, "docs", "PRODUCTION_CHECKLIST.md"),
+      ["# Production Deployment Checklist", "Supabase PITR enabled"].join("\n"),
+    );
+
+    const result = checkProductionChecklistRecoveryEvidence(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("Supabase Free");
+  });
+});

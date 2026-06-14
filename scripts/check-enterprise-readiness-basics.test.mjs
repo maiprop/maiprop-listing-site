@@ -12,6 +12,10 @@ const makeFixture = () => {
   const root = mkdtempSync(join(tmpdir(), "maiprop-readiness-"));
   mkdirSync(join(root, ".github"), { recursive: true });
   mkdirSync(join(root, "docs"), { recursive: true });
+  mkdirSync(join(root, "docs", "api"), { recursive: true });
+  mkdirSync(join(root, "docs", "backups"), { recursive: true });
+  mkdirSync(join(root, "docs", "governance"), { recursive: true });
+  mkdirSync(join(root, "scripts"), { recursive: true });
   mkdirSync(join(root, "supabase"), { recursive: true });
 
   writeFileSync(
@@ -46,6 +50,21 @@ const makeFixture = () => {
     ].join("\n"),
   );
   writeFileSync(
+    join(root, ".github", "CODEOWNERS"),
+    [
+      "* @krenios",
+      "/.github/workflows/ @krenios",
+      "/.github/CODEOWNERS @krenios",
+      "/supabase/migrations/ @krenios",
+      "/supabase/functions/_shared/ @krenios",
+      "/src/integrations/supabase/ @krenios",
+      "/src/contexts/AuthContext.tsx @krenios",
+      "/functions/_middleware.ts @krenios",
+      "/public/_headers @krenios",
+      "/scripts/ @krenios",
+    ].join("\n"),
+  );
+  writeFileSync(
     join(root, "SECURITY.md"),
     [
       "# Security Policy",
@@ -71,6 +90,98 @@ const makeFixture = () => {
     join(root, "docs", "public-edge-function-inventory.json"),
     JSON.stringify({ public_function_count: 2, entries: [{ name: "ai-search" }, { name: "healthz" }] }),
   );
+  writeFileSync(
+    join(root, "docs", "api", "edge-functions.openapi.yaml"),
+    [
+      "openapi: 3.0.3",
+      "paths:",
+      "  /ai-search:",
+      "    post:",
+      "      operationId: aiSearch",
+      "  /healthz:",
+      "    get:",
+      "      operationId: healthz",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "docs", "api", "README.md"),
+    [
+      "# API Documentation",
+      "npm run check:openapi-coverage",
+      "Update docs/api/edge-functions.openapi.yaml",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "docs", "governance", "main-branch-protection.expected.json"),
+    JSON.stringify({
+      branch: "main",
+      requiredStatusChecks: [
+        "Build / Lint / Test",
+        "Release Safety Inventory",
+        "Validate Supabase migrations",
+        "E2E Tests",
+      ],
+      requiredApprovingReviewCount: 1,
+      requireCodeOwnerReviews: true,
+      dismissStaleReviews: true,
+      requireConversationResolution: true,
+      allowForcePushes: false,
+      allowDeletions: false,
+      doNotAllowBypass: true,
+    }),
+  );
+  writeFileSync(
+    join(root, "docs", "BRANCH_PROTECTION.md"),
+    [
+      "# Branch Protection",
+      "Require pull request reviews",
+      "Require review from Code Owners",
+      "Dismiss stale pull request approvals",
+      "Require conversation resolution",
+      "Do not allow bypassing the above settings",
+      "Allow force pushes | disabled",
+      "Allow deletions | disabled",
+      "Build / Lint / Test",
+      "Validate Supabase migrations",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "docs", "DR_RUNBOOK.md"),
+    [
+      "# Disaster Recovery Runbook",
+      "## Free-tier logical backup fallback",
+      "supabase db dump",
+      "MAIPROP_BACKUP_PASSPHRASE",
+      "encrypted off-site backup",
+      "restore drill",
+      "RPO",
+      "RTO",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "docs", "PRODUCTION_CHECKLIST.md"),
+    [
+      "# Production Deployment Checklist",
+      "Supabase Free",
+      "logical backup",
+      "encrypted off-site backup",
+      "restore drill",
+      "Last restore test",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "docs", "backups", "FREE_TIER_LOGICAL_BACKUPS.md"),
+    [
+      "# Free Tier Logical Backups",
+      "supabase db dump",
+      "MAIPROP_BACKUP_PASSPHRASE",
+      "encrypted off-site backup",
+      "restore drill",
+      "RPO",
+      "RTO",
+    ].join("\n"),
+  );
+  writeFileSync(join(root, "scripts", "supabase-logical-backup.mjs"), "process.exit(0);\n");
   return root;
 };
 
