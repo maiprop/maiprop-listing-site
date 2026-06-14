@@ -23,6 +23,8 @@ and local usage stay aligned.
 | Command or file | Purpose | Notes |
 | --- | --- | --- |
 | `npm run check:runtime` | Verifies Node, npm, and `packageManager` match the repo engines. | Run before debugging dependency or CI drift. |
+| `npm run check:runtime:local` | Runs `check:runtime` through `scripts/project-runtime.mjs`. | Use when a local shell defaults to Node/npm newer than the repo pin. |
+| `npm run runtime -- <command>` | Runs any command through the pinned local Node 20/npm 10 launcher. | Finds Volta, Scoop `nodejs20`, PATH entries, or `MAIPROP_NODE20_HOME`; used by Husky hooks. |
 | `npm run check:secrets` | Scans tracked workspace text files for common committed secret/token patterns. | Runs in CI and pre-push; rotate any real value it flags before committing. |
 | `npm run check:production-deploy` | Verifies a live deployed URL serves the built Vite bundle and mounts the app. | CI deploy gate; pass URLs after `--` and use `--browser` for the Playwright mount check. |
 | `npm run check:bundle-size` | Checks built JS chunks in `dist/assets` against conservative size budgets. | Run after `npm run build`; fails on budget breaches and forbidden initial preloads. |

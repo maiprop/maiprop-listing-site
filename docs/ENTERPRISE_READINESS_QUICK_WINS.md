@@ -17,11 +17,14 @@ npm run check:runtime
 ```
 
 Use `nvm use`, Volta, or the project Dockerfile before running local checks.
-On this Windows workstation, Scoop also has a compatible Node 20 install:
+If the shell still resolves a newer global Node/npm first, use the source-controlled
+launcher. It finds Volta, Scoop `nodejs20`, PATH entries, or
+`MAIPROP_NODE20_HOME` and runs the command through the pinned runtime:
 
 ```powershell
-$env:PATH='C:\Users\K R\scoop\apps\nodejs20\current;' + $env:PATH
-npm run check:runtime
+npm run runtime:doctor
+npm run check:runtime:local
+npm run runtime -- npm run test
 ```
 
 ## Public Edge Function Inventory

@@ -71,6 +71,12 @@ export function checkRuntimeAlignment(root = process.cwd()) {
   if (pkg.engines?.npm !== ">=10.8.0 <11") {
     failures.push("package.json engines.npm must be >=10.8.0 <11");
   }
+  if (pkg.scripts?.["runtime:doctor"] !== "node scripts/project-runtime.mjs --doctor") {
+    failures.push("package.json scripts.runtime:doctor must run the project runtime launcher");
+  }
+  if (pkg.scripts?.["check:runtime:local"] !== "node scripts/project-runtime.mjs -- npm run check:runtime") {
+    failures.push("package.json scripts.check:runtime:local must run check:runtime through the project runtime launcher");
+  }
 
   for (const file of [".node-version", ".nvmrc"]) {
     const version = requireText(root, file, failures)?.trim();
@@ -82,6 +88,29 @@ export function checkRuntimeAlignment(root = process.cwd()) {
   const npmrc = requireText(root, ".npmrc", failures);
   if (npmrc && !npmrc.includes("engine-strict=true")) {
     failures.push(".npmrc must enable engine-strict=true");
+  }
+
+  const runtimeLauncher = requireText(root, "scripts/project-runtime.mjs", failures);
+  if (runtimeLauncher) {
+    for (const marker of ["MAIPROP_NODE20_HOME", "npm-cli.js", "Project runtime launcher OK"]) {
+      if (!runtimeLauncher.includes(marker)) {
+        failures.push(`scripts/project-runtime.mjs must mention ${marker}`);
+      }
+    }
+  }
+
+  const prePush = requireText(root, ".husky/pre-push", failures);
+  if (prePush) {
+    for (const marker of [
+      "project-runtime.mjs -- npm run check:runtime",
+      "project-runtime.mjs -- npm run check:secrets",
+      "project-runtime.mjs -- npm run typecheck",
+      "project-runtime.mjs -- npm test",
+    ]) {
+      if (!prePush.includes(marker)) {
+        failures.push(`.husky/pre-push must run ${marker}`);
+      }
+    }
   }
 
   return result(failures);

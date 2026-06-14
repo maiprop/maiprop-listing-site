@@ -13,6 +13,7 @@ import {
 const makeFixture = () => {
   const root = mkdtempSync(join(tmpdir(), "maiprop-readiness-"));
   mkdirSync(join(root, ".github"), { recursive: true });
+  mkdirSync(join(root, ".husky"), { recursive: true });
   mkdirSync(join(root, "apps"), { recursive: true });
   mkdirSync(join(root, "packages"), { recursive: true });
   mkdirSync(join(root, "infrastructure"), { recursive: true });
@@ -37,12 +38,25 @@ const makeFixture = () => {
       packageManager: "npm@10.8.2",
       volta: { node: "20.19.5", npm: "10.8.2" },
       engines: { node: ">=20.19.0 <21", npm: ">=10.8.0 <11" },
-      scripts: { "check:repo-architecture": "node scripts/check-repository-architecture.mjs" },
+      scripts: {
+        "runtime:doctor": "node scripts/project-runtime.mjs --doctor",
+        "check:runtime:local": "node scripts/project-runtime.mjs -- npm run check:runtime",
+        "check:repo-architecture": "node scripts/check-repository-architecture.mjs",
+      },
     }),
   );
   writeFileSync(join(root, ".node-version"), "20.19.5\n");
   writeFileSync(join(root, ".nvmrc"), "20.19.5\n");
   writeFileSync(join(root, ".npmrc"), "engine-strict=true\n");
+  writeFileSync(
+    join(root, ".husky", "pre-push"),
+    [
+      "node scripts/project-runtime.mjs -- npm run check:runtime",
+      "node scripts/project-runtime.mjs -- npm run check:secrets",
+      "node scripts/project-runtime.mjs -- npm run typecheck",
+      "node scripts/project-runtime.mjs -- npm test",
+    ].join("\n"),
+  );
   writeFileSync(
     join(root, "docs", "OBSERVABILITY.md"),
     [
@@ -303,6 +317,14 @@ const makeFixture = () => {
   );
   writeFileSync(join(root, "scripts", "supabase-logical-backup.mjs"), "process.exit(0);\n");
   writeFileSync(
+    join(root, "scripts", "project-runtime.mjs"),
+    [
+      "const home = process.env.MAIPROP_NODE20_HOME;",
+      "const cli = 'npm-cli.js';",
+      "console.log('Project runtime launcher OK', home, cli);",
+    ].join("\n"),
+  );
+  writeFileSync(
     join(root, "scripts", "load-test", "basic.js"),
     [
       "import http from \"k6/http\";",
@@ -416,6 +438,17 @@ describe("enterprise readiness basics", () => {
 
     expect(result.ok).toBe(false);
     expect(result.failures.join("\n")).toContain(".nvmrc");
+  });
+
+  it("requires local hooks to run through the project runtime launcher", () => {
+    const root = makeFixture();
+    writeFileSync(join(root, ".husky", "pre-push"), "npm test\n");
+
+    const result = checkRuntimeAlignment(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain(".husky/pre-push");
+    expect(result.failures.join("\n")).toContain("project-runtime.mjs -- npm run check:runtime");
   });
 
   it("compares public function inventory against supabase config", () => {

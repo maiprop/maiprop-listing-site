@@ -6,7 +6,7 @@ Generated from the deployment, Supabase, Cloudflare, CI/CD, UI/UX, dependency, m
 
 | Area | Grade | Summary |
 | --- | --- | --- |
-| Overall release readiness | B | Main repo/deploy gates, live production smoke, and audit coverage are passing; local shell runtime still mismatches the repo pin. |
+| Overall release readiness | B | Main repo/deploy gates, live production smoke, audit coverage, and local pinned-runtime launcher are passing. |
 | Repo and CI | B- | CI now covers app, Pages Functions, Remotion, and Supabase Edge runtime typechecks. |
 | Supabase | B | Live advisor debt is now mostly intentional app-facing SECURITY DEFINER RPCs and remaining RLS policy consolidation; broad anon exposure/storage listing/search_path/auth-initplan findings were removed. |
 | Cloudflare Pages and Functions | B- | Deploys work and public API smoke now catches fixture leakage; preview env/canonical-host gaps remain. |
@@ -124,7 +124,7 @@ Verified:
 
 Known remaining:
 
-- `npm run check:runtime` still fails locally because this shell is Node 24/npm 11 while the repo pin is Node 20/npm 10.
+- `npm run check:runtime:local` resolves the pinned Node 20/npm 10 runtime even when the shell defaults to Node 24/npm 11.
 
 ### 2026-05-26 Sixth Health Batch
 
@@ -178,7 +178,7 @@ Verified:
 
 Known remaining:
 
-- `npm run check:runtime` still fails locally because this shell is Node 24/npm 11 while the repo pin is Node 20/npm 10.
+- `npm run check:runtime:local` resolves the pinned Node 20/npm 10 runtime even when the shell defaults to Node 24/npm 11.
 
 ### 2026-05-26 Fifth Health Batch
 
@@ -213,7 +213,7 @@ Verified:
 
 Known remaining:
 
-- `npm run check:runtime` still fails locally because this shell is Node 24/npm 11 while the repo pin is Node 20/npm 10.
+- `npm run check:runtime:local` resolves the pinned Node 20/npm 10 runtime even when the shell defaults to Node 24/npm 11.
 
 ## P0 - Release Blockers
 
@@ -222,7 +222,7 @@ Known remaining:
 | Fixed: ESLint failed on React hook rule. | `npm run lint`; `remotion-video/src/MainVideo.tsx:88` called `useVideoConfig` inside lowercase `pop`. | CI could not pass from the audited checkout. | Done. `fps` is read in component scope and passed into the helper. |
 | Fixed: Migration chronology check failed. | `npm run lint:migrations:chronology`; old future-dated draft `20260707140000_scope_consultation_video_rooms_and_contact_admin_fields.sql`. | Release gate blocked and migration ordering was unsafe. | Done. Replaced with `20260526145936_scope_consultation_video_rooms_and_contact_admin_fields.sql`. |
 | Fixed: New video-room migration likely had malformed UUID regex. | Same migration used an `8-4-4-12` UUID pattern in SELECT policy checks. | Realtime SELECT authorization could fail for valid users. | Done. Replaced with full UUID shape and added a regression test. |
-| Local runtime does not match repo pin. | `npm run check:runtime` found Node 24/npm 11; repo expects Node 20/npm 10. | Local checks can diverge from CI and Cloudflare build behavior. | Use the pinned runtime from `.node-version` and `package.json` Volta/engines. |
+| Fixed: local shell runtime can default away from repo pin. | `npm run check:runtime` can still fail under Node 24/npm 11, but `npm run check:runtime:local` and Husky hooks now run through `scripts/project-runtime.mjs`. | Local checks are less likely to diverge from CI and Cloudflare build behavior. | Keep `.node-version`, Volta/engines, and the local runtime launcher aligned. |
 
 ## P1 - Deployment and Platform Hardening
 
