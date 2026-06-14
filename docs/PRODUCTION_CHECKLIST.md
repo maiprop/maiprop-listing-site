@@ -24,6 +24,7 @@ Go through every box **before** promoting a release to production. This is a saf
 - [ ] Every new file in `supabase/migrations/` has been applied to **staging** and the smoke checklist in [`STAGING_SETUP.md`](./STAGING_SETUP.md) passes there.
 - [ ] `supabase db push` against production has no warnings about destructive changes.
 - [ ] RLS policies on new tables reviewed — no `USING (true)` or `WITH CHECK (true)` without justification.
+- [ ] Enterprise tenant migrations reviewed: `organizations`, `organization_memberships`, `organization_domains`, `organization_sso_providers`, and `procurement_evidence` all have RLS enabled.
 - [ ] `e2e/rls-security.spec.ts` passes against staging credentials.
 - [ ] Supabase PITR / daily backups enabled and retention >= 7 days. If the project is on Supabase Free, the free-tier logical backup fallback is active instead.
 - [ ] Supabase Free fallback, when applicable: latest logical backup exists as an encrypted off-site backup.
@@ -73,6 +74,8 @@ Go through every box **before** promoting a release to production. This is a saf
 - [ ] Cookie banner is present on first load and only fires analytics after consent.
 - [ ] `e2e/gdpr-delete-account.spec.ts` passes against staging.
 - [ ] Data retention schedule documented.
+- [ ] Enterprise procurement evidence matrix reviewed: [`docs/governance/PROCUREMENT_EVIDENCE_MATRIX.md`](./governance/PROCUREMENT_EVIDENCE_MATRIX.md).
+- [ ] SSO/SAML requirements reviewed against [`docs/governance/ENTERPRISE_TENANCY_AND_SSO.md`](./governance/ENTERPRISE_TENANCY_AND_SSO.md). If customer SSO is required, Supabase SSO provider configuration and IdP test sign-in are verified in staging before production.
 
 ## 10. Post-deploy verification (within 30 minutes of go-live)
 

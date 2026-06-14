@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { checkDisasterRecoveryReadiness } from "./check-dr-readiness.mjs";
@@ -32,6 +32,22 @@ const requireText = (root, relativePath, failures) => {
 
 const includesAll = (text, required) => {
   return required.filter((needle) => !text.includes(needle));
+};
+
+const readSqlDirectoryText = (root, relativeDir, failures) => {
+  const path = join(root, relativeDir);
+  if (!existsSync(path)) {
+    failures.push(`${relativeDir} is missing`);
+    return null;
+  }
+
+  const files = readdirSync(path).filter((file) => file.endsWith(".sql")).sort();
+  if (files.length === 0) {
+    failures.push(`${relativeDir} has no SQL migrations`);
+    return null;
+  }
+
+  return files.map((file) => readFileSync(join(path, file), "utf8")).join("\n");
 };
 
 export function checkRuntimeAlignment(root = process.cwd()) {
@@ -217,6 +233,69 @@ export function checkGovernanceDocs(root = process.cwd()) {
   return result(failures);
 }
 
+export function checkEnterpriseTenantContract(root = process.cwd()) {
+  const failures = [];
+  const migrations = readSqlDirectoryText(root, "supabase/migrations", failures);
+  const tenancyDoc = requireText(root, "docs/governance/ENTERPRISE_TENANCY_AND_SSO.md", failures);
+  const procurementDoc = requireText(root, "docs/governance/PROCUREMENT_EVIDENCE_MATRIX.md", failures);
+
+  if (migrations) {
+    for (const marker of includesAll(migrations, [
+      "CREATE TABLE IF NOT EXISTS public.organizations",
+      "CREATE TABLE IF NOT EXISTS public.organization_memberships",
+      "CREATE TABLE IF NOT EXISTS public.organization_domains",
+      "CREATE TABLE IF NOT EXISTS public.organization_sso_providers",
+      "CREATE TABLE IF NOT EXISTS public.procurement_evidence",
+      "ALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY",
+      "ALTER TABLE public.organization_memberships ENABLE ROW LEVEL SECURITY",
+      "ALTER TABLE public.organization_domains ENABLE ROW LEVEL SECURITY",
+      "ALTER TABLE public.organization_sso_providers ENABLE ROW LEVEL SECURITY",
+      "ALTER TABLE public.procurement_evidence ENABLE ROW LEVEL SECURITY",
+      "REVOKE ALL ON TABLE public.organizations FROM anon",
+      "GRANT SELECT, INSERT, UPDATE ON TABLE public.organizations TO authenticated",
+      "supabase_provider_id",
+      "CREATE OR REPLACE FUNCTION private.is_org_member",
+      "CREATE OR REPLACE FUNCTION private.has_org_role",
+      "CREATE POLICY organizations_select_members",
+      "CREATE POLICY organization_memberships_manage",
+      "CREATE POLICY organization_sso_providers_manage",
+      "CREATE POLICY procurement_evidence_manage",
+    ])) {
+      failures.push(`supabase/migrations must include enterprise tenant contract marker: ${marker}`);
+    }
+  }
+
+  if (tenancyDoc) {
+    for (const marker of includesAll(tenancyDoc, [
+      "organization_memberships",
+      "organization_sso_providers",
+      "Supabase SSO/SAML",
+      "supabase sso",
+      "signInWithSSO",
+      "SAML metadata is not stored in application tables",
+      "database membership remains the authorization source of truth",
+    ])) {
+      failures.push(`docs/governance/ENTERPRISE_TENANCY_AND_SSO.md must mention ${marker}`);
+    }
+  }
+
+  if (procurementDoc) {
+    for (const marker of includesAll(procurementDoc, [
+      "procurement_evidence",
+      "Security questionnaire",
+      "Data Processing Agreement",
+      "Subprocessor list",
+      "Backup restore drill",
+      "SAML/SSO configuration",
+      "SOC 2 / ISO evidence is external and not claimed by this repository",
+    ])) {
+      failures.push(`docs/governance/PROCUREMENT_EVIDENCE_MATRIX.md must mention ${marker}`);
+    }
+  }
+
+  return result(failures);
+}
+
 export function checkEnterpriseReadinessBasics(root = process.cwd()) {
   const checks = [
     checkRuntimeAlignment(root),
@@ -229,6 +308,7 @@ export function checkEnterpriseReadinessBasics(root = process.cwd()) {
     checkOpenApiCoverage(root),
     checkLoadTestContract(root),
     checkMutationValidationContract(root),
+    checkEnterpriseTenantContract(root),
   ];
   return result(checks.flatMap((check) => check.failures));
 }

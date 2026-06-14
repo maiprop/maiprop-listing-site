@@ -1,7 +1,7 @@
 # Enterprise Readiness Quick Wins
 
-This checklist tracks the low-effort ECAS remediations that can be completed
-before the larger organization-tenancy and service-boundary refactors.
+This checklist tracks low-effort ECAS remediations and the source-controlled
+enterprise gates that can be completed without paid platform upgrades.
 
 ## Runtime Alignment
 
@@ -74,6 +74,15 @@ The repo must include:
 
 - `.github/PULL_REQUEST_TEMPLATE.md`
 - `SECURITY.md`
+- `docs/governance/ENTERPRISE_TENANCY_AND_SSO.md`
+- `docs/governance/PROCUREMENT_EVIDENCE_MATRIX.md`
+
+The additive enterprise tenant model now lives in
+`supabase/migrations/20260614155000_enterprise_tenant_sso_procurement.sql`.
+It creates `organizations`, `organization_memberships`,
+`organization_domains`, `organization_sso_providers`, and
+`procurement_evidence` with RLS enabled. Supabase SSO/SAML provider activation
+still depends on Supabase project/plan configuration and the customer's IdP.
 
 Verification:
 

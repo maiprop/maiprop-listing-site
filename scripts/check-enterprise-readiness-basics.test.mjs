@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   checkEnterpriseReadinessBasics,
+  checkEnterpriseTenantContract,
   checkObservabilityWiring,
   checkPublicFunctionInventory,
   checkRuntimeAlignment,
@@ -21,6 +22,7 @@ const makeFixture = () => {
   mkdirSync(join(root, "src", "hooks"), { recursive: true });
   mkdirSync(join(root, "src", "lib"), { recursive: true });
   mkdirSync(join(root, "supabase"), { recursive: true });
+  mkdirSync(join(root, "supabase", "migrations"), { recursive: true });
   mkdirSync(join(root, "supabase", "functions", "_shared"), { recursive: true });
   mkdirSync(join(root, "supabase", "functions", "healthz"), { recursive: true });
   mkdirSync(join(root, "supabase", "functions", "open-house-registration"), { recursive: true });
@@ -136,6 +138,55 @@ const makeFixture = () => {
       allowDeletions: false,
       doNotAllowBypass: true,
     }),
+  );
+  writeFileSync(
+    join(root, "docs", "governance", "ENTERPRISE_TENANCY_AND_SSO.md"),
+    [
+      "# Enterprise Tenancy and SSO",
+      "organization_memberships",
+      "organization_sso_providers",
+      "Supabase SSO/SAML",
+      "supabase sso",
+      "signInWithSSO",
+      "SAML metadata is not stored in application tables",
+      "database membership remains the authorization source of truth",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "docs", "governance", "PROCUREMENT_EVIDENCE_MATRIX.md"),
+    [
+      "# Procurement Evidence Matrix",
+      "procurement_evidence",
+      "Security questionnaire",
+      "Data Processing Agreement",
+      "Subprocessor list",
+      "Backup restore drill",
+      "SAML/SSO configuration",
+      "SOC 2 / ISO evidence is external and not claimed by this repository",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "supabase", "migrations", "20260614155000_enterprise_tenant_sso_procurement.sql"),
+    [
+      "CREATE TABLE IF NOT EXISTS public.organizations ();",
+      "CREATE TABLE IF NOT EXISTS public.organization_memberships ();",
+      "CREATE TABLE IF NOT EXISTS public.organization_domains ();",
+      "CREATE TABLE IF NOT EXISTS public.organization_sso_providers (supabase_provider_id uuid);",
+      "CREATE TABLE IF NOT EXISTS public.procurement_evidence ();",
+      "ALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY;",
+      "ALTER TABLE public.organization_memberships ENABLE ROW LEVEL SECURITY;",
+      "ALTER TABLE public.organization_domains ENABLE ROW LEVEL SECURITY;",
+      "ALTER TABLE public.organization_sso_providers ENABLE ROW LEVEL SECURITY;",
+      "ALTER TABLE public.procurement_evidence ENABLE ROW LEVEL SECURITY;",
+      "REVOKE ALL ON TABLE public.organizations FROM anon;",
+      "GRANT SELECT, INSERT, UPDATE ON TABLE public.organizations TO authenticated;",
+      "CREATE OR REPLACE FUNCTION private.is_org_member() RETURNS boolean LANGUAGE sql AS $$ SELECT true $$;",
+      "CREATE OR REPLACE FUNCTION private.has_org_role() RETURNS boolean LANGUAGE sql AS $$ SELECT true $$;",
+      "CREATE POLICY organizations_select_members ON public.organizations USING (private.is_org_member());",
+      "CREATE POLICY organization_memberships_manage ON public.organization_memberships WITH CHECK (private.has_org_role());",
+      "CREATE POLICY organization_sso_providers_manage ON public.organization_sso_providers WITH CHECK (private.has_org_role());",
+      "CREATE POLICY procurement_evidence_manage ON public.procurement_evidence WITH CHECK (private.has_org_role());",
+    ].join("\n"),
   );
   writeFileSync(
     join(root, "docs", "BRANCH_PROTECTION.md"),
@@ -327,6 +378,16 @@ describe("enterprise readiness basics", () => {
     expect(result.ok).toBe(false);
     expect(result.failures.join("\n")).toContain("src/main.tsx must mention Sentry.init");
     expect(result.failures.join("\n")).toContain("src/main.tsx must mention installWebVitalsMonitoring");
+  });
+
+  it("requires enterprise tenancy, SSO/SAML, and procurement evidence contracts", () => {
+    const root = makeFixture();
+    writeFileSync(join(root, "docs", "governance", "PROCUREMENT_EVIDENCE_MATRIX.md"), "# Missing\n");
+
+    const result = checkEnterpriseTenantContract(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("PROCUREMENT_EVIDENCE_MATRIX.md");
   });
 
   it("includes the load-test contract in enterprise readiness", () => {

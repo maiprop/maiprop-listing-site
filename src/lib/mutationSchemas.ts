@@ -50,6 +50,14 @@ const optionalDateTime = (label: string) =>
     z.string().max(80, `Invalid ${label}`).nullable(),
   );
 
+const enterpriseSsoDomainSchema = z.preprocess(
+  (value) => typeof value === "string" ? value.trim().toLowerCase() : value,
+  z.string()
+    .min(3, "Invalid enterprise SSO")
+    .max(253, "Invalid enterprise SSO")
+    .regex(/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z-]{0,61}[a-z])$/i, "Invalid enterprise SSO"),
+);
+
 export const uuidSchema = (label: string) => z.string().uuid(`Invalid ${label}`);
 export const rowIdSchema = (label: string) =>
   z.string().trim().min(1, `Invalid ${label}`).max(120, `Invalid ${label}`);
@@ -106,6 +114,25 @@ export const contactSubmissionInputSchema = z.object({
   TablesInsert<"contact_submissions">,
   "type" | "name" | "email" | "company" | "message"
 >>;
+
+export const enterpriseSsoSignInSchema = z.object({
+  domain: enterpriseSsoDomainSchema.optional(),
+  providerId: z.string().uuid("Invalid enterprise SSO provider").optional(),
+  redirectTo: z.string().trim().url("Invalid enterprise SSO").max(2048, "Invalid enterprise SSO").optional(),
+}).strict().superRefine((value, ctx) => {
+  const hasDomain = Boolean(value.domain);
+  const hasProviderId = Boolean(value.providerId);
+  if (hasDomain === hasProviderId) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Invalid enterprise SSO",
+      path: ["domain"],
+    });
+  }
+});
+
+export type EnterpriseSsoSignInInput = z.input<typeof enterpriseSsoSignInSchema>;
+export type EnterpriseSsoSignIn = z.infer<typeof enterpriseSsoSignInSchema>;
 
 export const documentShareSubmissionSchema = z.object({
   type: z.literal("document_share"),
