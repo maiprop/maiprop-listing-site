@@ -95,14 +95,13 @@ describe("usePropertyAIInsights", () => {
     expect(result.current.aiInsightsLoading).toBe(false);
   });
 
-  it("checks quota through the Edge Function without spending an AI call on initial render", async () => {
+  it("defers quota checks on initial render so detail pages do not spend network time before user action", async () => {
     renderHook(() => usePropertyAIInsights(baseListing, baseUser, "L-1", false));
 
-    await waitFor(() =>
-      expect(invokeMock).toHaveBeenCalledWith("ai-quota-status", {
-        body: { bucket: "property-valuation" },
-      })
-    );
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(invokeMock).not.toHaveBeenCalledWith("ai-quota-status", {
+      body: { bucket: "property-valuation" },
+    });
     expect(invokeMock.mock.calls.some(([name]) => name === "property-valuation")).toBe(false);
   });
 
