@@ -24,6 +24,8 @@ describe("capture Supabase index stats script", () => {
     expect(script).toContain("function isTransientQueryFailure(detail)");
     expect(script).toContain("status 544");
     expect(script).toContain("connection timeout");
+    expect(script).toContain("IPv6 is not supported");
+    expect(script).toContain("network is unreachable");
     expect(script).toContain("Supabase index stats query was transiently unavailable");
     expect(script).toContain("fail(`supabase db query failed with exit ${result.status}");
   });

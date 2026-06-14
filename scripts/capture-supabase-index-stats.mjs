@@ -22,7 +22,7 @@ function writeEmptyArtifact(message) {
 }
 
 function isTransientQueryFailure(detail) {
-  return /status 544|connection terminated|connection timeout|i\/o timeout|timed out|timeout|econnreset|etimedout/i
+  return /status 544|connection terminated|connection timeout|i\/o timeout|timed out|timeout|econnreset|etimedout|IPv6 is not supported|network is unreachable/i
     .test(detail);
 }
 
