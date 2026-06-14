@@ -9,6 +9,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { agentDataInputActionBodySchema, parseMutationInput } from "@/lib/mutationSchemas";
 
 export type AgentDataInputStatus = "pending" | "verified" | "rejected";
 export type AgentDataInputSide = "buyer" | "seller" | "both";
@@ -197,8 +198,9 @@ export const useAgentDataInputs = () => {
     queryKey: [QUERY_KEY_LIST, user?.id],
     queryFn: async (): Promise<AgentDataInput[]> => {
       if (!user) return [];
+      const body = parseMutationInput(agentDataInputActionBodySchema, { action: "list" }, "agent data input list");
       const { data, error } = await supabase.functions.invoke("agent-data-input", {
-        body: { action: "list" },
+        body,
       });
       if (error) throw error;
       const response = data as EdgeStatusResponse;
@@ -215,8 +217,9 @@ export const useAgentDataInputQuota = () => {
     queryFn: async (): Promise<AgentDataInputQuota> => {
       if (!user) return DEFAULT_AGENT_DATA_INPUT_QUOTA;
 
+      const body = parseMutationInput(agentDataInputActionBodySchema, { action: "status" }, "agent data input status");
       const { data, error } = await supabase.functions.invoke("agent-data-input", {
-        body: { action: "status" },
+        body,
       });
       if (error) throw error;
       return quotaFromResponse(data as EdgeStatusResponse | null);
@@ -233,11 +236,16 @@ export const useSubmitAgentDataInput = () => {
   return useMutation({
     mutationFn: async (args: SubmitAgentDataInputArgs): Promise<string> => {
       if (!user) throw new Error("Must be logged in");
-      const { data, error } = await supabase.functions.invoke("agent-data-input", {
-        body: {
+      const body = parseMutationInput(
+        agentDataInputActionBodySchema,
+        {
           action: "submit",
           payload: buildSubmitPayload(args),
         },
+        "agent data input submission",
+      );
+      const { data, error } = await supabase.functions.invoke("agent-data-input", {
+        body,
       });
       if (error) throw error;
       return ((data as { entry?: { id?: string } } | null)?.entry?.id) ?? "";

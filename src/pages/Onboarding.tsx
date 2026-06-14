@@ -38,6 +38,13 @@ import {
   type ProfessionalInsert,
   type ProfessionalUpdate,
 } from "./onboarding/onboardingHelpers";
+import {
+  parseMutationInput,
+  professionalAvailabilityRowsSchema,
+  professionalIdSchema,
+  professionalServiceRowsSchema,
+  professionalVideoSettingsMutationSchema,
+} from "@/lib/mutationSchemas";
 
 // skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
 export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a multi-step account setup workflow in one route shell.
@@ -548,10 +555,12 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
     const { error: deleteError } = await supabase
       .from("professional_services")
       .delete()
-      .eq("professional_id", professionalId);
+      .eq("professional_id", parseMutationInput(professionalIdSchema, professionalId, "professional id"));
     if (deleteError) { toast.error("Could not update services. Please try again."); setLoading(false); return; }
 
-    const { error } = await supabase.from("professional_services").insert(rows);
+    const { error } = await supabase.from("professional_services").insert(
+      parseMutationInput(professionalServiceRowsSchema, rows, "professional services"),
+    );
     if (error) { toast.error("Could not save services. Please try again."); setLoading(false); return; }
     setLoading(false);
     setStep("pro-availability");
@@ -571,11 +580,13 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
     const { error: deleteError } = await supabase
       .from("professional_availability")
       .delete()
-      .eq("professional_id", professionalId);
+      .eq("professional_id", parseMutationInput(professionalIdSchema, professionalId, "professional id"));
     if (deleteError) { toast.error("Could not update availability. Please try again."); setLoading(false); return; }
 
     if (rows.length > 0) {
-      const { error } = await supabase.from("professional_availability").insert(rows);
+      const { error } = await supabase.from("professional_availability").insert(
+        parseMutationInput(professionalAvailabilityRowsSchema, rows, "professional availability"),
+      );
       if (error) { toast.error("Could not save availability. Please try again."); setLoading(false); return; }
     }
     setLoading(false);
@@ -589,10 +600,15 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
       video_link: videoLink || null,
       calendar_notes: calendarNotes || null,
     };
+    const payload = parseMutationInput(
+      professionalVideoSettingsMutationSchema,
+      { professionalId: targetProfessionalId, userId: targetUserId, ...videoSettings },
+      "professional video settings",
+    );
     const { error } = await supabase.from("professionals")
-      .update(videoSettings)
-      .eq("id", targetProfessionalId)
-      .eq("user_id", targetUserId);
+      .update({ video_link: payload.video_link, calendar_notes: payload.calendar_notes })
+      .eq("id", payload.professionalId)
+      .eq("user_id", payload.userId);
     if (!error) return true;
     toast.error("Could not save video settings. Please try again.");
     return false;

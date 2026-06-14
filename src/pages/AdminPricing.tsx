@@ -11,6 +11,13 @@ import { isPlatformAdmin } from "@/lib/authUtils";
 import { SlidersHorizontal, Save, Plus, Loader2, Shield, Euro, Trash2, Sparkles, X as XIcon, CreditCard, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import type { Database, Json } from "@/integrations/supabase/types";
+import {
+  emptyFunctionBodySchema,
+  parseMutationInput,
+  pricingConfigIdSchema,
+  pricingConfigRowsSchema,
+  stripePriceCreateBodySchema,
+} from "@/lib/mutationSchemas";
 
 type PricingConfigUpsert = Database["public"]["Tables"]["pricing_configs"]["Insert"];
 
@@ -161,7 +168,8 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
         ...rest,
         metadata: rest.metadata ?? {},
       }));
-      const { error } = await supabase.from("pricing_configs").upsert(payload, { onConflict: "id" });
+      const validatedPayload = parseMutationInput(pricingConfigRowsSchema, payload, "pricing configuration") as PricingConfigUpsert[];
+      const { error } = await supabase.from("pricing_configs").upsert(validatedPayload, { onConflict: "id" });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -176,7 +184,8 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("pricing_configs").delete().eq("id", id);
+      const pricingConfigId = parseMutationInput(pricingConfigIdSchema, id, "pricing config id");
+      const { error } = await supabase.from("pricing_configs").delete().eq("id", pricingConfigId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -196,7 +205,8 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
         created_at: now,
         updated_at: now,
       }));
-      const { error } = await supabase.from("pricing_configs").upsert(rows, { onConflict: "id" });
+      const validatedRows = parseMutationInput(pricingConfigRowsSchema, rows, "pricing seed") as PricingConfigUpsert[];
+      const { error } = await supabase.from("pricing_configs").upsert(validatedRows, { onConflict: "id" });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -300,7 +310,8 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
     setStripeSyncing(true);
     setStripeSyncResult(null);
     try {
-      const { data, error } = await supabase.functions.invoke("sync-stripe-pricing", { body: {} });
+      const body = parseMutationInput(emptyFunctionBodySchema, {}, "Stripe pricing sync");
+      const { data, error } = await supabase.functions.invoke("sync-stripe-pricing", { body });
       if (error || data?.error) throw new Error(data?.error ?? error?.message ?? "Sync failed");
       const results: Array<{ action: string; error?: string; key: string }> = data.results ?? [];
       const errors = results.filter(r => r.action === "error").map(r => `${r.key}: ${r.error}`);
@@ -342,8 +353,13 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
     }
     setStripeCreatingId(row.id);
     try {
+      const body = parseMutationInput(
+        stripePriceCreateBodySchema,
+        { config_id: row.id },
+        "Stripe price creation",
+      );
       const { data, error } = await supabase.functions.invoke("create-stripe-price", {
-        body: { config_id: row.id },
+        body,
       });
       if (error || data?.error) throw new Error(data?.error ?? error?.message ?? "Failed");
       const priceId = data?.price_id;

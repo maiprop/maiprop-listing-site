@@ -4,6 +4,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { FAST_CHANGING_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
+import {
+  leadCreateSchema,
+  leadIdSchema,
+  leadUpdateMutationSchema,
+  parseMutationInput,
+} from "@/lib/mutationSchemas";
 
 export const LEAD_STATUSES = ["new", "contacted", "qualified", "proposal", "negotiation", "won", "lost"] as const;
 export const LEAD_SOURCES = ["manual", "listing_inquiry", "consultation", "callback", "project_inquiry", "viewing", "message"] as const;
@@ -48,20 +54,21 @@ export function useCreateLead() {
       project_id?: string | null;
     }) => {
       if (!user) throw new Error("Not authenticated");
+      const validated = parseMutationInput(leadCreateSchema, lead, "lead");
        
       const payload: TablesInsert<"leads"> = {
           owner_id: user.id,
-          name: lead.name,
-          email: lead.email || null,
-          phone: lead.phone || null,
-          message: lead.message || null,
-          source: lead.source || "manual",
-          status: lead.status || "new",
-          notes: lead.notes || null,
-          follow_up_at: lead.follow_up_at || null,
-          listing_id: lead.listing_id || null,
-          professional_id: lead.professional_id || null,
-          project_id: lead.project_id || null,
+          name: validated.name,
+          email: validated.email || null,
+          phone: validated.phone || null,
+          message: validated.message || null,
+          source: validated.source || "manual",
+          status: validated.status || "new",
+          notes: validated.notes || null,
+          follow_up_at: validated.follow_up_at || null,
+          listing_id: validated.listing_id || null,
+          professional_id: validated.professional_id || null,
+          project_id: validated.project_id || null,
         };
       const { data, error } = await supabase.from("leads").insert(payload)
         .select()
@@ -83,10 +90,11 @@ export function useUpdateLead() {
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: TablesUpdate<"leads"> }) => {
       if (!user) throw new Error("Not authenticated");
+      const payload = parseMutationInput(leadUpdateMutationSchema, { id, updates }, "lead update");
       const { data, error } = await supabase
         .from("leads")
-        .update(updates)
-        .eq("id", id)
+        .update(payload.updates)
+        .eq("id", payload.id)
         .eq("owner_id", user.id)
         .select()
         .single();
@@ -107,7 +115,8 @@ export function useDeleteLead() {
   return useMutation({
     mutationFn: async (id: string) => {
       if (!user) throw new Error("Not authenticated");
-      const { error } = await supabase.from("leads").delete().eq("id", id).eq("owner_id", user.id);
+      const leadId = parseMutationInput(leadIdSchema, id, "lead id");
+      const { error } = await supabase.from("leads").delete().eq("id", leadId).eq("owner_id", user.id);
       if (error) throw error;
     },
     onSuccess: () => {

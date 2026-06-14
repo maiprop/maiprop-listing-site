@@ -18,10 +18,12 @@ const makeFixture = () => {
   mkdirSync(join(root, "docs", "governance"), { recursive: true });
   mkdirSync(join(root, "scripts"), { recursive: true });
   mkdirSync(join(root, "scripts", "load-test"), { recursive: true });
+  mkdirSync(join(root, "src", "hooks"), { recursive: true });
   mkdirSync(join(root, "src", "lib"), { recursive: true });
   mkdirSync(join(root, "supabase"), { recursive: true });
   mkdirSync(join(root, "supabase", "functions", "_shared"), { recursive: true });
   mkdirSync(join(root, "supabase", "functions", "healthz"), { recursive: true });
+  mkdirSync(join(root, "supabase", "functions", "open-house-registration"), { recursive: true });
 
   writeFileSync(
     join(root, "package.json"),
@@ -220,6 +222,36 @@ const makeFixture = () => {
     ].join("\n"),
   );
   writeFileSync(
+    join(root, "src", "lib", "mutationSchemas.ts"),
+    [
+      "import { z } from \"zod\";",
+      "export function parseMutationInput() {}",
+      "export const savedSearchCreateSchema = {};",
+      "export const contactSubmissionInputSchema = {};",
+      "export const favoriteToggleSchema = {};",
+      "export const leadCreateSchema = {};",
+      "export const contactCreateSchema = {};",
+      "export const listingWriteSchema = {};",
+      "export const pricingConfigRowsSchema = {};",
+      "export const aiSearchBodySchema = {};",
+      "export const adminFiresaleActionBodySchema = {};",
+      "export const agentDataInputActionBodySchema = {};",
+      "export const submitFiresaleInterestBodySchema = {};",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "src", "hooks", "useSavedSearches.ts"),
+    [
+      "parseMutationInput(savedSearchCreateSchema, input, 'saved search');",
+      "parseMutationInput(savedSearchIdSchema, id, 'saved search id');",
+      "parseMutationInput(savedSearchAlertToggleSchema, input, 'saved search alert');",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "src", "hooks", "useContactSubmissions.ts"),
+    "parseMutationInput(contactSubmissionInputSchema, input, 'contact submission');\n",
+  );
+  writeFileSync(
     join(root, "src", "lib", "webVitals.ts"),
     [
       "export function installWebVitalsMonitoring() {",
@@ -239,8 +271,16 @@ const makeFixture = () => {
     ].join("\n"),
   );
   writeFileSync(
+    join(root, "supabase", "functions", "_shared", "schema.ts"),
+    "import { z } from 'npm:zod'; export class SchemaValidationError extends Error {} export async function parseJsonBody() {}\n",
+  );
+  writeFileSync(
     join(root, "supabase", "functions", "healthz", "index.ts"),
     "const checks = {}; checks.sentry = Deno.env.get('SENTRY_DSN') ? 'ok' : 'fail';\n",
+  );
+  writeFileSync(
+    join(root, "supabase", "functions", "open-house-registration", "index.ts"),
+    "const registrationRequestSchema = z.object({}); await parseJsonBody(req, registrationRequestSchema);\n",
   );
   return root;
 };

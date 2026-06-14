@@ -8,6 +8,7 @@ import { formatPrice } from "@/lib/format";
 import { useAuth } from "@/contexts/AuthContext";
 import { AIQuotaStatus } from "@/components/AIQuotaStatus";
 import { isAiQuotaReached, useAiQuota } from "@/hooks/useAiQuota";
+import { aiChatBodySchema, parseMutationInput } from "@/lib/mutationSchemas";
 
 export interface PropertyContext {
   title?: string;
@@ -126,7 +127,9 @@ const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(fun
     setInput("");
     setIsStreaming(true);
 
-    const history = [...messages, userMsg].map(m => ({ role: m.role, content: m.content }));
+    const history = [...messages, userMsg]
+      .filter(m => m.content.trim().length > 0)
+      .map(m => ({ role: m.role, content: m.content }));
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -141,13 +144,18 @@ const AIAssistantWidget = forwardRef<HTMLDivElement, AIAssistantWidgetProps>(fun
       }
 
       abortRef.current = new AbortController();
+      const body = parseMutationInput(
+        aiChatBodySchema,
+        { messages: history, propertyContext },
+        "property chat",
+      );
       const resp = await fetch(`${SUPABASE_URL}/functions/v1/property-chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ messages: history, propertyContext }),
+        body: JSON.stringify(body),
         signal: abortRef.current.signal,
       });
 

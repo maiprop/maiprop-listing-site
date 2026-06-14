@@ -24,6 +24,11 @@ import { formatTimeAgo } from "@/lib/format";
 import { isPlatformAdmin, isSellSideRole } from "@/lib/authUtils";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { sanitizeRedirectPath } from "@/lib/authRedirect";
+import {
+  notificationReadAllSchema,
+  notificationReadSchema,
+  parseMutationInput,
+} from "@/lib/mutationSchemas";
 
 // Pages that have a full-width dark hero image at the top
 const DARK_HERO_ROUTES = ["/"];
@@ -84,7 +89,8 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
     // RLS protects this server-side but the repo rule is to also filter
     // client-side so a malformed/forged id can't be used to update someone
     // else's notification by accident.
-    await supabase.from("notifications").update({ read: true }).eq("id", id).eq("user_id", user.id);
+    const payload = parseMutationInput(notificationReadSchema, { id }, "notification");
+    await supabase.from("notifications").update({ read: true }).eq("id", payload.id).eq("user_id", user.id);
     queryClient.invalidateQueries({ queryKey: ["notifications_unread", user.id] });
     queryClient.invalidateQueries({ queryKey: ["notifications_list", user.id] });
   };
@@ -96,7 +102,8 @@ export const Navbar = ({ forceScrolled = false }: { forceScrolled?: boolean } = 
 
   const markAllRead = async () => {
     if (!user) return;
-    await supabase.from("notifications").update({ read: true }).eq("user_id", user.id).eq("read", false);
+    const payload = parseMutationInput(notificationReadAllSchema, { userId: user.id }, "notifications");
+    await supabase.from("notifications").update({ read: true }).eq("user_id", payload.userId).eq("read", false);
     queryClient.invalidateQueries({ queryKey: ["notifications_unread", user.id] });
     queryClient.invalidateQueries({ queryKey: ["notifications_list", user.id] });
   };

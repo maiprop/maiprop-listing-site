@@ -8,6 +8,12 @@ import { logger } from "@/lib/logger";
 import { getOwnerParticipantType } from "@/lib/participantConfig";
 import { CATALOG_STATIC_QUERY_STALE_TIME, USER_SCOPED_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 import { fetchPublicApi } from "@/lib/publicApi";
+import {
+  listingIdSchema,
+  listingUpdateMutationSchema,
+  listingWriteSchema,
+  parseMutationInput,
+} from "@/lib/mutationSchemas";
 
 /**
  * Minimal shape we need from a listings row to enrich it with profiles. The
@@ -651,8 +657,9 @@ export const useOwnerProStatus = (listingId?: string, ownerId?: string | null) =
 export const useTrackListingView = () => {
   return useMutation({
     mutationFn: async (listingId: string) => {
+      const parsedListingId = parseMutationInput(listingIdSchema, listingId, "listing id");
       const viewTtlMs = 6 * 60 * 60 * 1000;
-      const storageKey = `maiprop_viewed_${listingId}`;
+      const storageKey = `maiprop_viewed_${parsedListingId}`;
       const now = Date.now();
       const lastTracked = Number(localStorage.getItem(storageKey) ?? sessionStorage.getItem(storageKey) ?? "0");
       if (Number.isFinite(lastTracked) && now - lastTracked < viewTtlMs) return;
@@ -664,7 +671,7 @@ export const useTrackListingView = () => {
       if (Number.isFinite(sampleRate) && sampleRate >= 0 && sampleRate < 1 && Math.random() > sampleRate) return;
 
       await supabase.functions.invoke("record-listing-view", {
-        body: { listingId },
+        body: { listingId: parsedListingId },
       }).catch((e: unknown) => logger.warn("View tracking failed:", e));
     },
   });
@@ -684,13 +691,13 @@ export const useCreateListing = () => {
       auction_date?: string; auction_starting_bid?: number;
     }) => {
       if (!user) throw new Error("Must be logged in");
-      const payload: TablesInsert<"listings"> = {
+      const payload = parseMutationInput(listingWriteSchema, {
         ...listing,
         owner_id: user.id,
         status: "active" as Enums<"listing_status">,
         listing_type: listing.listing_type as TablesInsert<"listings">["listing_type"],
         property_type: listing.property_type as TablesInsert<"listings">["property_type"],
-      };
+      }, "listing") as TablesInsert<"listings">;
       const { data, error } = await supabase.from("listings").insert(payload)
         .select()
         .single();
@@ -715,10 +722,11 @@ export const useUpdateListing = () => {
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: TablesUpdate<"listings"> }) => {
       if (!user) throw new Error("Must be logged in");
+      const payload = parseMutationInput(listingUpdateMutationSchema, { id, updates }, "listing update");
       const { data, error } = await supabase
         .from("listings")
-        .update(updates)
-        .eq("id", id)
+        .update(payload.updates as TablesUpdate<"listings">)
+        .eq("id", payload.id)
         .eq("owner_id", user.id)
         .select()
         .single();
@@ -741,7 +749,8 @@ export const useDeleteListing = () => {
   return useMutation({
     mutationFn: async (id: string) => {
       if (!user) throw new Error("Must be logged in");
-      const { error } = await supabase.from("listings").delete().eq("id", id).eq("owner_id", user.id);
+      const listingId = parseMutationInput(listingIdSchema, id, "listing id");
+      const { error } = await supabase.from("listings").delete().eq("id", listingId).eq("owner_id", user.id);
       if (error) throw error;
     },
     onSuccess: () => {

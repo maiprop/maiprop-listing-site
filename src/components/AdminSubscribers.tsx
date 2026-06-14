@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { SUBSCRIPTION_STATUS_COLORS } from "@/lib/statusColors";
 import { logger } from "@/lib/logger";
 import type { Database } from "@/integrations/supabase/types";
+import { parseMutationInput, rowUpdateMutationSchema } from "@/lib/mutationSchemas";
 
 function TransferAdminForm({ onSuccess }: { onSuccess: () => Promise<void> }) {
   const [email, setEmail] = useState("");
@@ -128,10 +129,15 @@ function useUpdateSubscription() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ subId, updates }: { subId: string; updates: SubscriptionUpdate }) => {
+      const payload = parseMutationInput(
+        rowUpdateMutationSchema,
+        { id: subId, updates },
+        "subscription update",
+      );
       const { error } = await supabase
         .from("investor_subscriptions")
-        .update(updates)
-        .eq("id", subId);
+        .update(payload.updates as SubscriptionUpdate)
+        .eq("id", payload.id);
       if (error) throw error;
     },
     onSuccess: () => {

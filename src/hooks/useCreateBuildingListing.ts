@@ -27,6 +27,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAddProjectMedia, type ProjectMediaType } from "@/hooks/useProjectMedia";
 import { type ProjectUnitInsert } from "@/hooks/useProjectUnits";
 import { uploadProjectMedia } from "@/lib/buildingListingUploads";
+import type { Database } from "@/integrations/supabase/types";
+import {
+  listingImageRowsSchema,
+  listingWriteSchema,
+  newBuildingProjectWriteSchema,
+  ownedRowDeleteSchema,
+  parseMutationInput,
+  projectUnitListingLinkSchema,
+  projectUnitWriteSchema,
+} from "@/lib/mutationSchemas";
+
+type ProjectInsert = Database["public"]["Tables"]["projects"]["Insert"];
+type ListingInsert = Database["public"]["Tables"]["listings"]["Insert"];
 
 export interface CreateBuildingListingProjectInput {
   name: string;
@@ -139,9 +152,14 @@ export function useCreateBuildingListing() {
           structural_completion_date: project.structural_completion_date || undefined,
           delivery_date: project.delivery_date || undefined,
         };
+        const validatedProjectPayload = parseMutationInput(
+          newBuildingProjectWriteSchema,
+          { ...projectPayload, owner_id: userId },
+          "new building project",
+        );
         const { data: createdProject, error: projErr } = await supabase
           .from("projects")
-          .insert({ ...projectPayload, owner_id: userId })
+          .insert(validatedProjectPayload as ProjectInsert)
           .select()
           .single();
         if (projErr) throw projErr;
@@ -176,9 +194,10 @@ export function useCreateBuildingListing() {
           heating_system: unit.heating_system || undefined,
           cooling_system: unit.cooling_system || undefined,
         };
+        const validatedUnitPayload = parseMutationInput(projectUnitWriteSchema, unitPayload, "new building unit");
         const { data: createdUnit, error: unitErr } = await supabase
           .from("project_units")
-          .insert(unitPayload)
+          .insert(validatedUnitPayload as ProjectUnitInsert)
           .select()
           .single();
         if (unitErr) throw unitErr;
@@ -218,31 +237,37 @@ export function useCreateBuildingListing() {
           project_id: createdProject.id,
           is_pre_sale: false,
         };
+        const validatedListingPayload = parseMutationInput(listingWriteSchema, listingPayload, "new building listing");
         const { data: createdListing, error: listErr } = await supabase
           .from("listings")
-          .insert(listingPayload)
+          .insert(validatedListingPayload as ListingInsert)
           .select()
           .single();
         if (listErr) throw listErr;
         createdListingId = createdListing.id;
 
         if (createdUnit?.id) {
+          const unitLink = parseMutationInput(
+            projectUnitListingLinkSchema,
+            { unitId: createdUnit.id, projectId: createdProject.id, listingId: createdListing.id },
+            "new building unit link",
+          );
           const { error: unitLinkErr } = await supabase
             .from("project_units")
-            .update({ listing_id: createdListing.id })
-            .eq("id", createdUnit.id)
-            .eq("project_id", createdProject.id);
+            .update({ listing_id: unitLink.listingId })
+            .eq("id", unitLink.unitId)
+            .eq("project_id", unitLink.projectId);
           if (unitLinkErr) throw unitLinkErr;
         }
 
         // 5. Bulk-insert listing_images for non-cover photos
         if (additionalImageUrls.length > 0) {
           const { error: imgErr } = await supabase.from("listing_images").insert(
-            additionalImageUrls.map((url, idx) => ({
+            parseMutationInput(listingImageRowsSchema, additionalImageUrls.map((url, idx) => ({
               listing_id: createdListing.id,
               url,
               sort_order: idx + 1,
-            })),
+            })), "new building images"),
           );
           if (imgErr) throw imgErr;
         }
@@ -254,18 +279,28 @@ export function useCreateBuildingListing() {
         // both record id AND the current user's ownership column — RLS is
         // a defence in depth, not a substitute for the explicit guard.
         if (createdListingId) {
+          const rollbackListing = parseMutationInput(
+            ownedRowDeleteSchema,
+            { id: createdListingId, ownerId: userId },
+            "new building listing rollback",
+          );
           await supabase
             .from("listings")
             .delete()
-            .eq("id", createdListingId)
-            .eq("owner_id", userId);
+            .eq("id", rollbackListing.id)
+            .eq("owner_id", rollbackListing.ownerId);
         }
         if (createdProjectId) {
+          const rollbackProject = parseMutationInput(
+            ownedRowDeleteSchema,
+            { id: createdProjectId, ownerId: userId },
+            "new building project rollback",
+          );
           await supabase
             .from("projects")
             .delete()
-            .eq("id", createdProjectId)
-            .eq("owner_id", userId);
+            .eq("id", rollbackProject.id)
+            .eq("owner_id", rollbackProject.ownerId);
         }
         throw err;
       }

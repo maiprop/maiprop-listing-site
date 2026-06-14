@@ -11,6 +11,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { agentDataInputActionBodySchema, parseMutationInput } from "@/lib/mutationSchemas";
 
 export type DataInputStatusEntry = {
   id: string;
@@ -69,8 +70,9 @@ export function useAgentDataInputStatus() {
   return useQuery<AgentDataInputStatus>({
     queryKey: QUERY_KEY,
     queryFn: async () => {
+      const body = parseMutationInput(agentDataInputActionBodySchema, { action: "status" }, "agent data input status");
       const { data, error } = await supabase.functions.invoke("agent-data-input", {
-        body: { action: "status" },
+        body,
       });
       if (error) throw error;
       return data as AgentDataInputStatus;
@@ -84,8 +86,13 @@ export function useSubmitDataInput(): ReturnType<typeof useMutation<DataInputSta
   const qc = useQueryClient();
   return useMutation<DataInputStatusEntry, Error, SubmitDataInputPayload>({
     mutationFn: async (payload: SubmitDataInputPayload) => {
+      const body = parseMutationInput(
+        agentDataInputActionBodySchema,
+        { action: "submit", payload },
+        "agent data input submission",
+      );
       const { data, error } = await supabase.functions.invoke("agent-data-input", {
-        body: { action: "submit", payload },
+        body,
       });
       if (error) {
         // The edge function returns structured error bodies; pull out the

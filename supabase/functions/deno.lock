@@ -8,7 +8,8 @@
     "npm:@types/react@18.3.1": "18.3.1",
     "npm:openai@^4.52.5": "4.104.0",
     "npm:react@18.3.1": "18.3.1",
-    "npm:stripe@18.5.0": "18.5.0"
+    "npm:stripe@18.5.0": "18.5.0",
+    "npm:zod@4.4.3": "4.4.3"
   },
   "jsr": {
     "@supabase/functions-js@2.104.1": {
@@ -927,6 +928,9 @@
     },
     "ws@8.20.0": {
       "integrity": "sha512-sAt8BhgNbzCtgGbt2OxmpuryO63ZoDk/sqaB/znQm94T4fCEsy/yV+7CdC1kJhOU9lboAEU7R3kquuycDoibVA=="
+    },
+    "zod@4.4.3": {
+      "integrity": "sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ=="
     }
   },
   "redirects": {

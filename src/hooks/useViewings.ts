@@ -5,6 +5,12 @@ import { toast } from "sonner";
 import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 import type { TablesUpdate } from "@/integrations/supabase/types";
 import { FAST_CHANGING_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
+import {
+  parseMutationInput,
+  viewingCreateSchema,
+  viewingStatusMutationSchema,
+  viewingUpdateMutationSchema,
+} from "@/lib/mutationSchemas";
 
 const getFallbackErrorMessage = (err: unknown) => {
   if (err instanceof Error) return err.message;
@@ -50,9 +56,10 @@ export function useBookViewing() {
       note?: string;
     }) => {
       if (!user) throw new Error("Must be logged in");
+      const payload = parseMutationInput(viewingCreateSchema, { ...viewing, requester_id: user.id }, "viewing");
       const { data, error } = await supabase
         .from("viewings")
-        .insert({ ...viewing, requester_id: user.id })
+        .insert(payload)
         .select()
         .single();
       if (error) throw error;
@@ -90,10 +97,11 @@ export function useUpdateViewingStatus() {
   return useMutation({
     mutationFn: async ({ id, status }: { id: string; status: "confirmed" | "cancelled" | "completed" }) => {
       if (!user) throw new Error("Must be logged in");
+      const payload = parseMutationInput(viewingStatusMutationSchema, { id, status }, "viewing status");
       const update = supabase
         .from("viewings")
-        .update({ status })
-        .eq("id", id);
+        .update({ status: payload.status })
+        .eq("id", payload.id);
 
       const { error } = status === "cancelled"
         ? await update.or(`owner_id.eq.${user.id},requester_id.eq.${user.id}`)
@@ -114,10 +122,11 @@ export function useUpdateViewing() {
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: TablesUpdate<"viewings"> }) => {
       if (!user) throw new Error("Must be logged in");
+      const payload = parseMutationInput(viewingUpdateMutationSchema, { id, updates }, "viewing update");
       const { error } = await supabase
         .from("viewings")
-        .update(updates)
-        .eq("id", id)
+        .update(payload.updates as TablesUpdate<"viewings">)
+        .eq("id", payload.id)
         .or(`owner_id.eq.${user.id},requester_id.eq.${user.id}`);
       if (error) throw error;
     },

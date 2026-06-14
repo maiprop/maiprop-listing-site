@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { USER_SCOPED_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
+import { dealChecklistUpsertSchema, parseMutationInput } from "@/lib/mutationSchemas";
 
 export function useDealChecklists() {
   const { user } = useAuth();
@@ -62,17 +63,18 @@ export function useUpsertDealChecklist() {
       status?: string;
     }) => {
       if (!user) throw new Error("Not authenticated");
+      const payload = parseMutationInput(dealChecklistUpsertSchema, {
+        user_id: user.id,
+        entity_type,
+        entity_id,
+        title: title ?? "Due diligence",
+        items: items ?? [],
+        status: status ?? "in_progress",
+      }, "deal checklist");
       const { data, error } = await supabase
         .from("deal_checklists")
         .upsert(
-          {
-            user_id: user.id,
-            entity_type,
-            entity_id,
-            title: title ?? "Due diligence",
-            items: items ?? [],
-            status: status ?? "in_progress",
-          },
+          payload,
           { onConflict: "user_id,entity_type,entity_id" }
         )
         .select()

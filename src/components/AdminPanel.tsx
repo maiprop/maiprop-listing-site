@@ -33,6 +33,7 @@ import {
   Calendar,
 } from "lucide-react";
 import { toast } from "sonner";
+import { emptyFunctionBodySchema, parseMutationInput } from "@/lib/mutationSchemas";
 
 const SYNC_LOG_QUERY_KEY = "admin-sync-log";
 
@@ -90,7 +91,8 @@ export default function AdminPanel() {
       setDbOk(false);
     }
     try {
-      const { data, error } = await supabase.functions.invoke("os-diagnose", { body: {} });
+      const body = parseMutationInput(emptyFunctionBodySchema, {}, "OS diagnostic");
+      const { data, error } = await supabase.functions.invoke("os-diagnose", { body });
       const ok = !error && (data?.osReachable === true || data?.status === "ok");
       setOsOk(ok);
     } catch (_err: unknown) {

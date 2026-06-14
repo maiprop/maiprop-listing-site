@@ -39,6 +39,7 @@ import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 import { fetchPublicApi } from "@/lib/publicApi";
 import { getListingDetailPath, shouldUseNewBuildRoute } from "@/lib/listingRoutes";
 import { invokeAuthenticatedFunction } from "@/lib/invokeAuthenticatedFunction";
+import { newBuildLeadSchema, parseMutationInput } from "@/lib/mutationSchemas";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const EnergyBadge = ({ cls }: { cls: string }) => {
@@ -294,7 +295,7 @@ const insertNewBuildLead = async ({
   form,
   contactName,
 }: RegisterInterestPayload) => {
-  await supabase.from("new_building_leads").insert({
+  const payload = parseMutationInput(newBuildLeadSchema, {
     new_building_id: listingId,
     user_id: user.id,
     email: user.email ?? "",
@@ -303,7 +304,8 @@ const insertNewBuildLead = async ({
     investment_budget: 0,
     notes: cleanOptionalText(form.message) ?? "",
     utm_source: "newbuild_detail_register",
-  });
+  }, "new build lead");
+  await supabase.from("new_building_leads").insert(payload);
 };
 
 // ── Main page ─────────────────────────────────────────────────────────────────

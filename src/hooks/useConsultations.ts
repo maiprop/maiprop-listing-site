@@ -3,6 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { FAST_CHANGING_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
+import {
+  consultationRequestSchema,
+  consultationUpdateMutationSchema,
+  parseMutationInput,
+} from "@/lib/mutationSchemas";
 
 export type ConsultationRequestInput = {
   professional_id: string;
@@ -32,24 +37,25 @@ export function useSubmitConsultation() {
       if (!user) {
         throw new Error("auth_required");
       }
-      const preferredDate = input.preferred_date?.trim() || null;
-      const preferredTime = input.preferred_time?.trim() || null;
+      const payload = parseMutationInput(consultationRequestSchema, input, "consultation request");
+      const preferredDate = payload.preferred_date?.trim() || null;
+      const preferredTime = payload.preferred_time?.trim() || null;
       const { error } = await supabase.from("consultation_requests").insert({
-        professional_id: input.professional_id,
+        professional_id: payload.professional_id,
         requester_id: user.id,
-        requester_name: input.requester_name,
-        requester_email: input.requester_email,
-        requester_phone: input.requester_phone ?? null,
-        request_type: input.request_type,
-        meeting_type: input.request_type === "consultation" ? input.meeting_type ?? "in_person" : null,
-        service: input.service ?? null,
+        requester_name: payload.requester_name,
+        requester_email: payload.requester_email,
+        requester_phone: payload.requester_phone ?? null,
+        request_type: payload.request_type,
+        meeting_type: payload.request_type === "consultation" ? payload.meeting_type ?? "in_person" : null,
+        service: payload.service ?? null,
         preferred_date: preferredDate,
         preferred_time: preferredTime,
-        callback_time: input.callback_time ?? null,
-        message: input.message ?? null,
+        callback_time: payload.callback_time ?? null,
+        message: payload.message ?? null,
       });
       if (error) throw error;
-      return { requestType: input.request_type };
+      return { requestType: payload.request_type };
     },
     onSuccess: ({ requestType }) => {
       qc.invalidateQueries({ queryKey: ["consultation-requests"] });
@@ -124,11 +130,16 @@ export function useUpdateConsultationRequest() {
       // so a malformed/forged id can't accidentally target someone else's row.
       const proId = await getCurrentProfessionalId(user?.id);
       if (!proId) throw new Error("Not authorised: no professional profile");
+      const payload = parseMutationInput(
+        consultationUpdateMutationSchema,
+        { id, updates },
+        "consultation update",
+      );
 
       const { data, error } = await supabase
         .from("consultation_requests")
-        .update(updates)
-        .eq("id", id)
+        .update(payload.updates)
+        .eq("id", payload.id)
         .eq("professional_id", proId)
         .select()
         .single();

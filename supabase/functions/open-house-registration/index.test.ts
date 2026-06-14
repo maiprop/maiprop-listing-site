@@ -71,7 +71,8 @@ const transformedSource = functionSource
   .replace(
     'from "../_shared/rateLimit.ts"',
     `from "${shared("rateLimit.ts")}"`,
-  );
+  )
+  .replace('from "../_shared/schema.ts"', `from "${shared("schema.ts")}"`);
 
 await Deno.writeTextFile(transformedPath, transformedSource);
 

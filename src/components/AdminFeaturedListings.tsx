@@ -14,9 +14,11 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import type { Database } from "@/integrations/supabase/types";
 import { getListingDetailPath } from "@/lib/listingRoutes";
+import { parseMutationInput, rowUpdateMutationSchema } from "@/lib/mutationSchemas";
 
 type ListingStatus = Database["public"]["Enums"]["listing_status"];
 type PropertyType = Database["public"]["Enums"]["property_type"];
+type ListingUpdate = Database["public"]["Tables"]["listings"]["Update"];
 
 type FeaturedListing = {
   id: string;
@@ -160,10 +162,15 @@ export default function AdminFeaturedListings() {
       setToggling((prev) => ({ ...prev, [listing.id]: true }));
       const next = !listing.is_featured;
       try {
+        const payload = parseMutationInput(
+          rowUpdateMutationSchema,
+          { id: listing.id, updates: { is_featured: next } },
+          "featured listing update",
+        );
         const { error: updateError } = await supabase
           .from("listings")
-          .update({ is_featured: next })
-          .eq("id", listing.id);
+          .update(payload.updates as ListingUpdate)
+          .eq("id", payload.id);
         if (updateError) throw updateError;
         await queryClient.invalidateQueries({ queryKey: ["admin-featured-listings"] });
         toast.success(next ? "Listing marked as featured" : "Listing removed from featured");
@@ -203,10 +210,15 @@ export default function AdminFeaturedListings() {
 
       setUpdatingPriority((prev) => ({ ...prev, [listing.id]: true }));
       try {
+        const payload = parseMutationInput(
+          rowUpdateMutationSchema,
+          { id: listing.id, updates: { priority_placement: clamped } },
+          "featured priority update",
+        );
         const { error: updateError } = await supabase
           .from("listings")
-          .update({ priority_placement: clamped })
-          .eq("id", listing.id);
+          .update(payload.updates as ListingUpdate)
+          .eq("id", payload.id);
         if (updateError) throw updateError;
         await queryClient.invalidateQueries({ queryKey: ["admin-featured-listings"] });
         toast.success(`Priority updated to ${clamped}`);
@@ -229,10 +241,15 @@ export default function AdminFeaturedListings() {
       setUpdatingUntil((prev) => ({ ...prev, [listing.id]: true }));
       const newVal = dateValue ? new Date(dateValue).toISOString() : null;
       try {
+        const payload = parseMutationInput(
+          rowUpdateMutationSchema,
+          { id: listing.id, updates: { featured_until: newVal } },
+          "featured expiry update",
+        );
         const { error: updateError } = await supabase
           .from("listings")
-          .update({ featured_until: newVal })
-          .eq("id", listing.id);
+          .update(payload.updates as ListingUpdate)
+          .eq("id", payload.id);
         if (updateError) throw updateError;
         await queryClient.invalidateQueries({ queryKey: ["admin-featured-listings"] });
         toast.success(newVal ? `Expires ${formatDate(newVal)}` : "Expiry cleared");

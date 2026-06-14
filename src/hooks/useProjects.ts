@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import type { TablesUpdate } from "@/integrations/supabase/types";
 import { USER_SCOPED_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
+import { parseMutationInput, projectUpdateMutationSchema, rowIdSchema } from "@/lib/mutationSchemas";
 
 const PROJECT_SELECT = `
   id, owner_id, name, description, city, address, municipality, cover_image_url,
@@ -60,10 +61,11 @@ export function useUpdateProject() {
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: TablesUpdate<"projects"> }) => {
       if (!user) throw new Error("Must be logged in");
+      const payload = parseMutationInput(projectUpdateMutationSchema, { id, updates }, "project update");
       const { data, error } = await supabase
         .from("projects")
-        .update(updates)
-        .eq("id", id)
+        .update(payload.updates as TablesUpdate<"projects">)
+        .eq("id", payload.id)
         .eq("owner_id", user.id)
         .select()
         .single();
@@ -86,8 +88,9 @@ export function useDeleteProject() {
   return useMutation({
     mutationFn: async (id: string) => {
       if (!user) throw new Error("Must be logged in");
+      const projectId = parseMutationInput(rowIdSchema("project id"), id, "project id");
       const { error } = await supabase.rpc("delete_project_and_unlink_listings", {
-        p_project_id: id,
+        p_project_id: projectId,
       });
       if (error) throw error;
     },

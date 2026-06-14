@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { adminBroadcastBodySchema, parseMutationInput } from "@/lib/mutationSchemas";
 
 type Segment = "all" | "investors" | "sellers" | "agents" | "professionals" | "developers";
 
@@ -31,13 +32,18 @@ export default function AdminBroadcastNotifications() {
 
   const broadcast = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke<BroadcastResponse>("admin-broadcast-notification", {
-        body: {
+      const bodyPayload = parseMutationInput(
+        adminBroadcastBodySchema,
+        {
           segment,
           title: title.trim(),
           body: body.trim(),
           link: link.trim() || null,
         },
+        "broadcast notification",
+      );
+      const { data, error } = await supabase.functions.invoke<BroadcastResponse>("admin-broadcast-notification", {
+        body: bodyPayload,
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);

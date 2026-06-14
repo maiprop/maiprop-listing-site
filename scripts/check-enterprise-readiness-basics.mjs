@@ -4,6 +4,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { checkDisasterRecoveryReadiness } from "./check-dr-readiness.mjs";
 import { checkGithubGovernance } from "./check-github-governance.mjs";
 import { checkLoadTestContract } from "./check-load-test-contract.mjs";
+import { checkMutationValidationContract } from "./check-mutation-validation-contract.mjs";
 import { checkOpenApiCoverage } from "./check-openapi-coverage.mjs";
 
 const REQUIRED_NODE = "20.19.5";
@@ -227,6 +228,7 @@ export function checkEnterpriseReadinessBasics(root = process.cwd()) {
     checkDisasterRecoveryReadiness(root),
     checkOpenApiCoverage(root),
     checkLoadTestContract(root),
+    checkMutationValidationContract(root),
   ];
   return result(checks.flatMap((check) => check.failures));
 }

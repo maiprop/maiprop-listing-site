@@ -6,6 +6,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { SignInForAI } from "@/components/SignInForAI";
 import { computeWalkScore, walkScoreLabel, walkScoreColour } from "@/lib/walkScore";
 import { getPrimaryValuationEstimate } from "@/lib/valuationResult";
+import {
+  neighbourhoodReportBodySchema,
+  parseMutationInput,
+  propertyValuationBodySchema,
+} from "@/lib/mutationSchemas";
 
 // Compare drawer is fed both the formatted card view and the raw listing row
 // from useListings. Both shapes have ~80 columns between them and a tighter
@@ -178,19 +183,21 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
           hasElevator: raw.has_elevator,
           region: raw.region,
         };
+        const valuationBody = parseMutationInput(propertyValuationBodySchema, valBody, "property valuation");
+        const neighbourhoodBody = parseMutationInput(neighbourhoodReportBodySchema, {
+          city: raw.city,
+          address: raw.address,
+          lat: raw.latitude != null ? Number(raw.latitude) : undefined,
+          lng: raw.longitude != null ? Number(raw.longitude) : undefined,
+          propertyType: raw.property_type,
+          listingId: raw.id,
+        }, "neighbourhood report");
 
         // Neighbourhood data (reuse neighbourhood-report edge fn, extract scores)
         const [valRes, nbRes] = await Promise.allSettled([
-          supabase.functions.invoke("property-valuation", { body: valBody }),
+          supabase.functions.invoke("property-valuation", { body: valuationBody }),
           supabase.functions.invoke("neighbourhood-report", {
-            body: {
-              city: raw.city,
-              address: raw.address,
-              lat: raw.latitude != null ? Number(raw.latitude) : undefined,
-              lng: raw.longitude != null ? Number(raw.longitude) : undefined,
-              propertyType: raw.property_type,
-              listingId: raw.id,
-            },
+            body: neighbourhoodBody,
           }),
         ]);
 

@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { AIQuotaStatus } from "@/components/AIQuotaStatus";
 import { isAiQuotaReached, useAiQuota } from "@/hooks/useAiQuota";
+import { parseMutationInput, proAiToolsBodySchema } from "@/lib/mutationSchemas";
 
 const GROUPS = [
   { id: "agents",     label: "Agents",     Icon: Building2 },
@@ -70,7 +71,9 @@ export default function ProAIToolsWidget() {
     setIsStreaming(true);
 
     const currentGroupId = groupId;
-    const history = [...messages, userMsg].map((m) => ({ role: m.role, content: m.content }));
+    const history = [...messages, userMsg]
+      .filter((m) => m.content.trim().length > 0)
+      .map((m) => ({ role: m.role, content: m.content }));
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -82,13 +85,18 @@ export default function ProAIToolsWidget() {
       }
 
       abortRef.current = new AbortController();
+      const body = parseMutationInput(
+        proAiToolsBodySchema,
+        { messages: history, groupId: currentGroupId },
+        "Pro AI tools",
+      );
       const resp = await fetch(`${SUPABASE_URL}/functions/v1/pro-ai-tools`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ messages: history, groupId: currentGroupId }),
+        body: JSON.stringify(body),
         signal: abortRef.current.signal,
       });
 

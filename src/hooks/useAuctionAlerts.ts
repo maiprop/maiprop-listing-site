@@ -4,6 +4,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 import type { Database } from "@/integrations/supabase/types";
+import {
+  auctionAlertMutationSchema,
+  auctionAlertPayloadSchema,
+  parseMutationInput,
+  rowIdSchema,
+} from "@/lib/mutationSchemas";
 
 export type AuctionAlert = Database["public"]["Tables"]["auction_alerts"]["Row"];
 
@@ -40,8 +46,9 @@ export function useCreateAuctionAlert() {
     mutationFn: async (payload: AlertPayload) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
+      const validated = parseMutationInput(auctionAlertPayloadSchema, payload, "auction alert");
        
-      const { error } = await supabase.from("auction_alerts").insert({ user_id: user.id, ...payload });
+      const { error } = await supabase.from("auction_alerts").insert({ user_id: user.id, ...validated });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -61,7 +68,8 @@ export function useUpdateAuctionAlert() {
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<AlertPayload & { active: boolean }> }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
-      const { error } = await supabase.from("auction_alerts").update(updates).eq("id", id).eq("user_id", user.id);
+      const payload = parseMutationInput(auctionAlertMutationSchema, { id, updates }, "auction alert update");
+      const { error } = await supabase.from("auction_alerts").update(payload.updates).eq("id", payload.id).eq("user_id", user.id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -81,7 +89,8 @@ export function useDeleteAuctionAlert() {
     mutationFn: async (id: string) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
-      const { error } = await supabase.from("auction_alerts").delete().eq("id", id).eq("user_id", user.id);
+      const alertId = parseMutationInput(rowIdSchema("auction alert id"), id, "auction alert id");
+      const { error } = await supabase.from("auction_alerts").delete().eq("id", alertId).eq("user_id", user.id);
       if (error) throw error;
     },
     onSuccess: () => {

@@ -27,6 +27,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { getOpenHouseDocSignedUrl } from "@/hooks/useOpenHouseAssetControl";
+import { parseMutationInput, rowUpdateMutationSchema } from "@/lib/mutationSchemas";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -305,10 +306,15 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
     if (!entry) return;
 
     {
+      const payload = parseMutationInput(
+        rowUpdateMutationSchema,
+        { id, updates: { pof_verified_status: "verified", pof_rejection_reason: null } },
+        "POF verification",
+      );
       const { error } = await supabase
         .from("open_house_registrations")
-        .update({ pof_verified_status: "verified", pof_rejection_reason: null } as never)
-        .eq("id", id);
+        .update(payload.updates as never)
+        .eq("id", payload.id);
       if (error) {
         toast.error("Failed to verify. Please try again.");
         return;
@@ -327,13 +333,21 @@ export function POFVerificationPanel({ dealId }: POFVerificationPanelProps) {
     if (!entry) return;
 
     {
+      const payload = parseMutationInput(
+        rowUpdateMutationSchema,
+        {
+          id: rejectTarget,
+          updates: {
+            pof_verified_status: "rejected",
+            pof_rejection_reason: reason,
+          },
+        },
+        "POF rejection",
+      );
       const { error } = await supabase
         .from("open_house_registrations")
-        .update({
-          pof_verified_status: "rejected",
-          pof_rejection_reason: reason,
-        } as never)
-        .eq("id", rejectTarget);
+        .update(payload.updates as never)
+        .eq("id", payload.id);
       if (error) {
         toast.error("Failed to reject. Please try again.");
         return;

@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { documentShareSubmissionSchema, parseMutationInput } from "@/lib/mutationSchemas";
 
 // Types
 
@@ -363,14 +364,15 @@ export const LegalDocumentModal = ({ open, onClose, listingTitle = "Property", s
   async function handleShare() {
     if (!shareEmail.includes("@")) { toast.error("Enter a valid email address."); return; }
     try {
-      const { error } = await supabase.from("contact_submissions").insert({
+      const payload = parseMutationInput(documentShareSubmissionSchema, {
         type: "document_share",
         email: shareEmail,
         document_type: tpl.id,
         listing_title: listingTitle,
         share_to_email: shareEmail,
         message: `Document share request: ${tpl.titleEn} for ${listingTitle}`,
-      });
+      }, "document share");
+      const { error } = await supabase.from("contact_submissions").insert(payload);
       if (error) throw error;
       toast.success(`Share request sent to ${shareEmail}`);
     } catch (_err: unknown) {

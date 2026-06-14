@@ -47,6 +47,7 @@ import { PropertyDescriptionSection } from "@/components/property/PropertyDescri
 import { PropertyValuationLockedCard } from "@/components/property/PropertyValuationLockedCard";
 import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
 import { shouldUseNewBuildRoute } from "@/lib/listingRoutes";
+import { listingReportSchema, parseMutationInput } from "@/lib/mutationSchemas";
 
 const safeExternalUrl = (url: string | null | undefined): string | null =>
   url && /^https?:\/\//i.test(url) ? url : null;
@@ -570,11 +571,12 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
                   onClick={async () => {
                     if (!user) { toast.error(t("property.signInToReport")); navigate("/login"); return; }
                     if (!id) return;
-                    const { error } = await supabaseClient.from("listing_reports").insert({
+                    const payload = parseMutationInput(listingReportSchema, {
                       entity_type: "listing",
                       entity_id: id,
                       reporter_id: user.id,
-                    });
+                    }, "listing report");
+                    const { error } = await supabaseClient.from("listing_reports").insert(payload);
                     if (error) toast.error(t("property.errorReport"));
                     else toast.success(t("property.reportSubmitted"));
                   }}

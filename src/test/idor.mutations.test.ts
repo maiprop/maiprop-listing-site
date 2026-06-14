@@ -229,8 +229,7 @@ describe("IDOR ownership guard on useUpdateContactTask", () => {
     const { result } = renderHook(() => useUpdateContactTask(), { wrapper });
 
     await act(async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await result.current.mutateAsync({ id: "task-1", updates: { done: true } as any });
+      await result.current.mutateAsync({ id: "task-1", updates: { completed_at: new Date().toISOString() } });
     });
 
     expect(chain.eqCalls).toContainEqual(["id", "task-1"]);
@@ -244,8 +243,7 @@ describe("IDOR ownership guard on useUpdateContactTask", () => {
 
     await act(async () => {
       await expect(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        result.current.mutateAsync({ id: "task-1", updates: { done: true } as any })
+        result.current.mutateAsync({ id: "task-1", updates: { completed_at: new Date().toISOString() } })
       ).rejects.toThrow("Must be logged in");
     });
   });
