@@ -584,6 +584,42 @@ describe("useListingForm — handleSubmit", () => {
     expect(navigateMock).toHaveBeenCalledWith("/open-house/L-4");
   });
 
+  it("submits rental open houses with rental terms while keeping listing_type=open_house", async () => {
+    const insertMock = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { id: "L-oh-rent" }, error: null }),
+      }),
+    });
+    fromMock.mockReturnValueOnce({ insert: insertMock });
+    const { result } = renderHook(() => useListingForm(), { wrapper: wrap });
+    setBaseForm(result);
+    act(() => {
+      result.current.set("listing_type", "open_house");
+      result.current.set("open_house_transaction_type", "rent");
+      result.current.set("open_house_date", "2027-01-01T18:00");
+      result.current.set("deposit_months", "2");
+      result.current.set("monthly_expenses", "75");
+      result.current.set("available_from", "2027-02-01");
+      result.current.set("min_rental_months", "12");
+      result.current.toggle("pets_allowed");
+    });
+
+    await act(async () => {
+      await result.current.handleSubmit();
+    });
+
+    expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({
+      listing_type: "open_house",
+      open_house_transaction_type: "rent",
+      deposit_months: 2,
+      monthly_expenses: 75,
+      available_from: "2027-02-01",
+      min_rental_months: 12,
+      pets_allowed: true,
+    }));
+    expect(navigateMock).toHaveBeenCalledWith("/open-house/L-oh-rent");
+  });
+
   it("toasts the error message when supabase insert throws", async () => {
     fromMock.mockReturnValueOnce({
       insert: vi.fn().mockReturnValue({

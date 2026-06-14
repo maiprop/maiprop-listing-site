@@ -63,6 +63,7 @@ const LISTING_SELECT = [
   "property_type",
   "listing_type",
   "open_house_date",
+  "open_house_transaction_type",
   "auction_date",
   "auction_starting_bid",
   "ai_score",

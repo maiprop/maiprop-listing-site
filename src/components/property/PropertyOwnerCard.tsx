@@ -15,6 +15,7 @@ interface PropertyOwnerCardProps {
   ownerIsPro: boolean;
   price: number;
   listingType: string;
+  isRentalPricing?: boolean;
   pricePerSqm?: number | null;
   viewsCount: number;
   onContact: () => void;
@@ -26,12 +27,13 @@ interface PropertyOwnerCardProps {
 
 export default function PropertyOwnerCard({
   ownerProfile, ownerParticipantType, isAuction, ownerIsPro,
-  price, listingType, pricePerSqm, viewsCount,
+  price, listingType, isRentalPricing, pricePerSqm, viewsCount,
   onContact, isContactPending, onRequestViewing, onRequestVideoViewing, canVideoView,
 }: PropertyOwnerCardProps) {
   const { i18n } = useTranslation();
   const isGreek = i18n?.language?.toLowerCase().startsWith("el") ?? false;
   const locale = isGreek ? "el-GR" : undefined;
+  const showsRentalPricing = isRentalPricing ?? listingType === "rent";
   const ownerLabel =
     ownerParticipantType === "agent"
       ? (isGreek ? "Αδειοδοτημένος μεσίτης" : "Licensed real estate agent")
@@ -46,11 +48,11 @@ export default function PropertyOwnerCard({
           <div className="flex items-end justify-between">
             <div>
               <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">
-                {listingType === "rent" ? (isGreek ? "Μηνιαίο μίσθωμα" : "Monthly Rent") : (isGreek ? "Ζητούμενη τιμή" : "Asking Price")}
+                {showsRentalPricing ? (isGreek ? "Μηνιαίο μίσθωμα" : "Monthly Rent") : (isGreek ? "Ζητούμενη τιμή" : "Asking Price")}
               </p>
               <p className="font-display text-2xl font-black text-foreground">
                 €{price.toLocaleString(locale)}
-                {listingType === "rent" && <span className="text-sm font-normal text-muted-foreground">{isGreek ? "/μήνα" : "/mo"}</span>}
+                {showsRentalPricing && <span className="text-sm font-normal text-muted-foreground">{isGreek ? "/μήνα" : "/mo"}</span>}
               </p>
               {!!pricePerSqm && (
                 <p className="text-xs text-muted-foreground mt-0.5">€{Number(pricePerSqm).toLocaleString(locale)}/m²</p>

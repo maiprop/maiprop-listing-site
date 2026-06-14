@@ -64,6 +64,7 @@ export function HomepageOpenHousesSection({ listings }: Props) {
                   images: imgs,
                   type: l.property_type ?? "apartment",
                   listingType: "open_house",
+                  openHouseTransactionType: l.open_house_transaction_type === "rent" ? "rent" : "sale",
                   auctionDate: l.open_house_date
                     ? new Date(l.open_house_date).toLocaleDateString(dateLocale, {
                         weekday: "short",

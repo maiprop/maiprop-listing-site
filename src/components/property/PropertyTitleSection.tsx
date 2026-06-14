@@ -10,12 +10,17 @@ interface Props {
   isAuction: boolean;
 }
 
-const getListingLabel = (listingType: string | null | undefined) => {
+const isRentalPricingListing = (db: ListingWithJoins) =>
+  db.listing_type === "rent" ||
+  (db.listing_type === "open_house" && db.open_house_transaction_type === "rent");
+
+const getListingLabel = (db: ListingWithJoins) => {
+  const listingType = db.listing_type;
   if (!listingType) return null;
   if (listingType === "sale") return "For sale";
   if (listingType === "rent") return "For rent";
   if (listingType === "auction") return "For auction";
-  if (listingType === "open_house") return "Open house";
+  if (listingType === "open_house") return isRentalPricingListing(db) ? "Open house rental" : "Open house sale";
   return `For ${listingType.replace(/_/g, " ")}`;
 };
 
@@ -24,13 +29,13 @@ export function PropertyTitleSection({ db, isAuction }: Props) {
   const city = db.city;
   const address = db.address ?? city;
   const price = Number(db.price);
-  const listingType = db.listing_type;
   const propertyType = db.property_type;
   const subtype = db.commercial_subtype;
   const energyClass = db.energy_class;
   const pricePerSqm = db.price_per_sqm;
   const heroSpecs = buildListingHeroSpecs(db);
-  const listingLabel = getListingLabel(listingType);
+  const listingLabel = getListingLabel(db);
+  const isRentalPricing = isRentalPricingListing(db);
 
   const rentExtras = [
     db.deposit_months ? `${db.deposit_months}mo deposit` : null,
@@ -86,7 +91,7 @@ export function PropertyTitleSection({ db, isAuction }: Props) {
           <div className="w-full shrink-0 text-left sm:w-auto sm:text-right">
             <div className="font-display text-3xl font-black text-foreground">
               {"\u20ac"}{price.toLocaleString()}
-              {listingType === "rent" && <span className="text-base font-normal text-muted-foreground">/mo</span>}
+              {isRentalPricing && <span className="text-base font-normal text-muted-foreground">/mo</span>}
             </div>
             {!!pricePerSqm && (
               <div className="text-xs text-muted-foreground mt-0.5">
@@ -99,7 +104,7 @@ export function PropertyTitleSection({ db, isAuction }: Props) {
 
       <PropertyHeroSpecsBar items={heroSpecs} />
 
-      {listingType === "rent" && rentExtras.length > 0 && (
+      {isRentalPricing && rentExtras.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {rentExtras.map((extra) => (
             <span key={extra} className="px-2.5 py-1 rounded-lg bg-secondary border border-border text-xs font-medium">

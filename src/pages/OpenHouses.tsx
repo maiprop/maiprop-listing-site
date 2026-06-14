@@ -155,6 +155,7 @@ type OpenHouseListingRow = Pick<
   | "region"
   | "status"
   | "listing_type"
+  | "open_house_transaction_type"
   | "property_type"
   | "price"
   | "price_per_sqm"
@@ -332,6 +333,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
         images: imgs,
         type: l.property_type,
         listingType: "open_house" as const,
+        openHouseTransactionType: l.open_house_transaction_type === "rent" ? "rent" as const : "sale" as const,
         auctionDate: l.open_house_date
           ? `${fmtDate(l.open_house_date)} · ${fmtTime(l.open_house_date)}`
           : undefined,

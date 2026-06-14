@@ -100,6 +100,9 @@ export function dbListingToCard(
     images,
     type: l.property_type,
     listingType: l.listing_type,
+    openHouseTransactionType: l.listing_type === "open_house"
+      ? (l.open_house_transaction_type === "rent" ? "rent" : "sale")
+      : undefined,
     auctionDate: l.listing_type === "open_house" && l.open_house_date
       ? new Date(l.open_house_date).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
       : l.auction_date ? new Date(l.auction_date).toLocaleDateString("en-GB") : undefined,

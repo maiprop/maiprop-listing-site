@@ -193,6 +193,19 @@ describe("dashboard tab behavior", () => {
     expect(screen.getByText(/Property views/i)).toHaveTextContent("last 30 days");
   });
 
+  it("shows the viewing-request empty state when requests are outside the selected period", () => {
+    listingsState.data = [
+      { id: "l-1", title: "Seafront flat", city: "Athens", views_count: 30, status: "active", created_at: new Date().toISOString() },
+    ];
+    viewingsOwnerState.data = [{ id: "old-viewing", created_at: "2020-01-01T00:00:00.000Z" }];
+    trendsState.data = [];
+
+    renderWithProviders(<AnalyticsTab />);
+
+    expect(screen.getByText(/No viewing requests yet/i)).toBeInTheDocument();
+    expect(screen.queryByTestId("bar-chart")).not.toBeInTheDocument();
+  });
+
   it("creates, renames, adds saved listings to, removes from, and deletes portfolios", () => {
     portfoliosState.data = [{
       id: "p-1",

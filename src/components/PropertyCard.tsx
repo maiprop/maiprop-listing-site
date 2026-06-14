@@ -35,6 +35,7 @@ export interface Property {
   images: string[];
   type: PropertyTypeKey;
   listingType: "sale" | "rent" | "auction" | "firesale" | "open_house" | "new_build";
+  openHouseTransactionType?: "sale" | "rent" | null;
   subtype?: string;
   auctionDate?: string;
   auctionStartingBid?: number;
@@ -220,6 +221,10 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
   const discountPct = property.listingType === "auction" && property.auctionStartingBid
     ? Math.round((1 - property.auctionStartingBid / property.price) * 100)
     : null;
+  const isRentalPricing =
+    property.listingType === "rent" ||
+    (property.listingType === "open_house" && property.openHouseTransactionType === "rent");
+  const displayPrice = `${formatPrice(property.price)}${isRentalPricing ? "/mo" : ""}`;
 
   if (compact) {
     const thumb = imageChain[0] || MAIPROP_LOGO_FALLBACK_URL;
@@ -258,7 +263,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
             {property.bedrooms != null && <span className="flex items-center gap-0.5"><Bed className="w-3 h-3" />{property.bedrooms}</span>}
             <span className="flex items-center gap-0.5"><Square className="w-3 h-3" />{property.sqm}m²</span>
           </div>
-          <div className="font-display font-bold text-sm text-primary mt-1">{property.listingType === "rent" ? `${formatPrice(property.price)}/mo` : formatPrice(property.price)}</div>
+          <div className="font-display font-bold text-sm text-primary mt-1">{displayPrice}</div>
         </div>
       </Link>
     );
@@ -350,7 +355,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
               {/* Amber-highlighted price */}
               <div className="inline-flex items-baseline gap-1.5 bg-primary/90 backdrop-blur-sm rounded-xl px-3 py-1.5 sm:px-3 sm:py-1.5 shadow-md">
                 <span className="text-lg sm:text-xl font-display font-bold text-primary-foreground leading-none">
-                  {property.listingType === "rent" ? `${formatPrice(property.price)}/mo` : formatPrice(property.price)}
+                  {displayPrice}
                 </span>
               </div>
               {Boolean(property.pricePerSqm) && (

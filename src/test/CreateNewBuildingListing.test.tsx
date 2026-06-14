@@ -61,6 +61,7 @@ const fillRequiredUnit = () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
   useAuthMock.mockReturnValue({
     user: { id: "u-1" },
     profile: { role: "developer", participant_type: "developer" },
@@ -187,6 +188,37 @@ describe("CreateNewBuildingListing", () => {
     fireEvent.click(screen.getByRole("button", { name: /Publish New Build Ad/i }));
     expect(toastMock.error).toHaveBeenLastCalledWith("At least one photo is required");
     expect(submitMock).not.toHaveBeenCalled();
+  });
+
+  it("restores the in-progress new-build draft after a refresh", async () => {
+    const { unmount } = renderPage();
+
+    fillRequiredProject();
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    expect(await screen.findByText(/Step 2 of 5/i)).toBeInTheDocument();
+    fillRequiredUnit();
+
+    await waitFor(() => {
+      const savedDraft = Array.from({ length: localStorage.length }, (_, index) => {
+        const key = localStorage.key(index);
+        return key ? localStorage.getItem(key) : null;
+      }).filter(Boolean).join("\n");
+      expect(savedDraft).toContain("Marina Heights");
+      expect(savedDraft).toContain("250000");
+    });
+
+    unmount();
+    renderPage();
+
+    expect(await screen.findByText(/Step 2 of 5/i)).toBeInTheDocument();
+    expect(screen.getByDisplayValue("85")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("250000")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Project/i }));
+    expect(await screen.findByText(/Step 1 of 5/i)).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Marina Heights")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("12345/2024")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Athens")).toBeInTheDocument();
   });
 
   it("uploads a photo, uses it as cover, submits, and navigates to the created listing", async () => {

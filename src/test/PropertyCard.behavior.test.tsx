@@ -180,6 +180,30 @@ describe("PropertyCard behavior", () => {
     expect(image.style.objectFit).toBe("contain");
   });
 
+  it("keeps rental open houses on the open-house route while showing monthly rent pricing", async () => {
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: writeTextMock } });
+    const { PropertyCard } = await import("@/components/PropertyCard");
+
+    const { container } = renderWithProviders(
+      <PropertyCard
+        property={baseProperty({
+          listingType: "open_house",
+          openHouseTransactionType: "rent",
+          price: 1800,
+        })}
+      />,
+    );
+
+    expect(container.querySelector('a[href="/open-house/p1"]')).toBeTruthy();
+    expect(screen.getAllByText(/€1[.,]800\/mo/).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "propertyCard.actions.share" }));
+    await waitFor(() => {
+      expect(writeTextMock).toHaveBeenCalledWith("https://maiprop.test/open-house/p1");
+    });
+  });
+
   it("falls back from auction Street View to cover imagery before the logo", async () => {
     const { PropertyCard } = await import("@/components/PropertyCard");
 

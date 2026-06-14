@@ -142,7 +142,11 @@ function SellerAgentAnalytics({ participantType }: { participantType: string }) 
   const hasViewData = chartData.some((d) => d.count > 0);
 
   // Enquiries chart — built from real viewings data only
-  const hasEnquiryData = viewingRequests > 0;
+  const enquiriesData = buildEnquiriesData(
+    viewings as Array<{ created_at?: string }>,
+    Math.min(selectedDays, 30),
+  );
+  const hasEnquiryData = enquiriesData.some((day) => day.enquiries > 0);
 
   // Listings sorted by views desc for the performance table
   const sortedListings = [...myListings].sort(
@@ -310,15 +314,9 @@ function SellerAgentAnalytics({ participantType }: { participantType: string }) 
           Viewing requests over time
         </h2>
         {hasEnquiryData ? (
-          (() => {
-            const enquiriesData = buildEnquiriesData(
-              viewings as Array<{ created_at?: string }>,
-              Math.min(selectedDays, 30),
-            );
-            return (
-              <Suspense fallback={<ChartFallback height={160} />}>
-                <ResponsiveContainer width="100%" height={160}>
-                  <BarChart data={enquiriesData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+          <Suspense fallback={<ChartFallback height={160} />}>
+            <ResponsiveContainer width="100%" height={160}>
+              <BarChart data={enquiriesData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                   <XAxis
                     dataKey="label"
                     tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
@@ -342,11 +340,9 @@ function SellerAgentAnalytics({ participantType }: { participantType: string }) 
                     labelStyle={{ color: "hsl(var(--foreground))" }}
                   />
                   <Bar dataKey="enquiries" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} opacity={0.85} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Suspense>
-            );
-          })()
+              </BarChart>
+            </ResponsiveContainer>
+          </Suspense>
         ) : (
           <div className="flex flex-col items-center justify-center h-32 text-center">
             <Calendar className="w-8 h-8 text-muted-foreground mb-2" />

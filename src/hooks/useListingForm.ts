@@ -19,6 +19,7 @@ import type { ListingWithJoins } from "@/hooks/useListings";
 import type {
   PropertyType,
   ListingType,
+  OpenHouseTransactionType,
   WizardStep,
   AIPriceSuggestion,
   ListingFormData,
@@ -29,7 +30,7 @@ import { getListingDetailPath } from "@/lib/listingRoutes";
 
 // Re-export the types so existing callers (`import { type ListingFormData }
 // from "@/hooks/useListingForm"`) keep working.
-export type { PropertyType, ListingType, WizardStep, AIPriceSuggestion, ListingFormData };
+export type { PropertyType, ListingType, OpenHouseTransactionType, WizardStep, AIPriceSuggestion, ListingFormData };
 type ListingInsert = Database["public"]["Tables"]["listings"]["Insert"];
 type ListingUpdate = Database["public"]["Tables"]["listings"]["Update"];
 type UseListingFormOptions = {
@@ -56,6 +57,7 @@ const LISTING_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 
 const INITIAL_FORM: ListingFormData = {
   listing_type: "sale",
+  open_house_transaction_type: "sale",
   property_type: "apartment",
   title: "", description: "", sqm: "", year_built: "", energy_class: "",
   bedrooms: "", bathrooms: "", wc_count: "", kitchens: "", living_rooms: "",
@@ -128,6 +130,10 @@ function listingToForm(listing: ListingWithJoins): ListingFormData {
   const next: ListingFormData = {
     ...INITIAL_FORM,
     listing_type: listing.listing_type as ListingType,
+    open_house_transaction_type:
+      listing.listing_type === "open_house" && listing.open_house_transaction_type === "rent"
+        ? "rent"
+        : "sale",
     property_type: listing.property_type as PropertyType,
     title: listing.title ?? "",
     description: listing.description ?? "",
@@ -374,7 +380,8 @@ export function useListingForm(options?: UseListingFormOptions) {
     }
     if (s === "pricing") {
       const lt = form.listing_type;
-      if (!form.price) newErrors.price = lt === "rent" ? tr("createListing.validation.monthlyRentRequired", "Monthly rent is required") : tr("createListing.validation.askingPriceRequired", "Asking price is required");
+      const isRentalPricing = lt === "rent" || (lt === "open_house" && form.open_house_transaction_type === "rent");
+      if (!form.price) newErrors.price = isRentalPricing ? tr("createListing.validation.monthlyRentRequired", "Monthly rent is required") : tr("createListing.validation.askingPriceRequired", "Asking price is required");
       if (lt === "auction" && !form.auction_starting_bid) newErrors.auction_starting_bid = tr("createListing.validation.firstOfferRequired", "First offer price is required");
       if (lt === "open_house" && !form.open_house_date) newErrors.open_house_date = tr("createListing.validation.openHouseDateRequired", "Open house date & time is required");
     }
@@ -426,6 +433,7 @@ export function useListingForm(options?: UseListingFormOptions) {
     setSubmitting(true);
     const pt = form.property_type;
     const lt = form.listing_type;
+    const isRentalPricing = lt === "rent" || (lt === "open_house" && form.open_house_transaction_type === "rent");
     const isResidential = ["apartment", "house", "villa"].includes(pt);
     const isLand = pt === "land";
     const isCommercial = ["commercial", "office"].includes(pt);
@@ -453,6 +461,7 @@ export function useListingForm(options?: UseListingFormOptions) {
         enfia_zone: form.enfia_zone || undefined,
         property_type: form.property_type,
         listing_type: form.listing_type,
+        open_house_transaction_type: lt === "open_house" ? form.open_house_transaction_type : null,
         price: Number(form.price),
         sqm: Number(form.sqm),
         year_built: form.year_built ? Number(form.year_built) : undefined,
@@ -491,7 +500,7 @@ export function useListingForm(options?: UseListingFormOptions) {
           distance_from_sea: form.distance_from_sea ? Number(form.distance_from_sea) : undefined,
           distance_from_city: form.distance_from_city ? Number(form.distance_from_city) : undefined,
         }),
-        ...(lt === "rent" && {
+        ...(isRentalPricing && {
           deposit_months: form.deposit_months ? Number(form.deposit_months) : undefined,
           monthly_expenses: form.monthly_expenses ? Number(form.monthly_expenses) : undefined,
           agent_fee_included: form.agent_fee_included,

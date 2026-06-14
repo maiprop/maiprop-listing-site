@@ -1,4 +1,4 @@
-﻿import { useState, useCallback, useEffect } from "react";
+﻿import { useState, useCallback, useEffect, useRef } from "react";
 import { useFormWizard } from "@/hooks/useFormWizard";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
@@ -47,6 +47,169 @@ type UploadedImage = { id: string; url: string; file?: File; uploading?: boolean
 
 const WIZARD_STEPS = ["building", "unit", "media", "listing", "photos"] as const;
 type WizardStep = typeof WIZARD_STEPS[number];
+type ProjectDraft = {
+  name: string;
+  building_permit_number: string;
+  developer_company: string;
+  architect_group: string;
+  construction_company: string;
+  description: string;
+  address: string;
+  city: string;
+  municipality: string;
+  area_description: string;
+  permit_approval_date: string;
+  construction_start_date: string;
+  structural_completion_date: string;
+  delivery_date: string;
+  latitude: string | number;
+  longitude: string | number;
+};
+type UnitDraft = {
+  unit_id: string;
+  floor: string;
+  unit_number: string;
+  internal_sqm: string;
+  balcony_sqm: string;
+  storage_sqm: string;
+  parking_sqm: string;
+  bedrooms: string;
+  bathrooms: string;
+  kitchen_type: string;
+  living_rooms: string;
+  price: string;
+  vat_included: boolean;
+  parking_price: string;
+  storage_price: string;
+  sea_view: boolean;
+  city_view: boolean;
+  mountain_view: boolean;
+  energy_class: string;
+  heating_system: string;
+  cooling_system: string;
+};
+type ListingDraft = {
+  title: string;
+  description: string;
+};
+type NewBuildingDraft = {
+  version: 1;
+  step: WizardStep;
+  project: ProjectDraft;
+  unit: UnitDraft;
+  listing: ListingDraft;
+  images: Array<Pick<UploadedImage, "id" | "url">>;
+  coverImageId: string | null;
+};
+
+const NEW_BUILDING_DRAFT_KEY_PREFIX = "maiprop:new-building-listing-draft:v1";
+
+const EMPTY_PROJECT: ProjectDraft = {
+  name: "",
+  building_permit_number: "",
+  developer_company: "",
+  architect_group: "",
+  construction_company: "",
+  description: "",
+  address: "",
+  city: "",
+  municipality: "",
+  area_description: "",
+  permit_approval_date: "",
+  construction_start_date: "",
+  structural_completion_date: "",
+  delivery_date: "",
+  latitude: "",
+  longitude: "",
+};
+
+const EMPTY_UNIT: UnitDraft = {
+  unit_id: "",
+  floor: "",
+  unit_number: "",
+  internal_sqm: "",
+  balcony_sqm: "",
+  storage_sqm: "",
+  parking_sqm: "",
+  bedrooms: "",
+  bathrooms: "",
+  kitchen_type: "",
+  living_rooms: "",
+  price: "",
+  vat_included: true,
+  parking_price: "",
+  storage_price: "",
+  sea_view: false,
+  city_view: false,
+  mountain_view: false,
+  energy_class: "",
+  heating_system: "",
+  cooling_system: "",
+};
+
+const EMPTY_PROJECT_MEDIA: Record<ProjectMediaType, File | null> = {
+  rendering: null, floor_plan: null, site_plan: null, brochure_pdf: null,
+  drone: null, walkthrough: null, progress: null, video: null,
+};
+
+const EMPTY_LISTING: ListingDraft = {
+  title: "",
+  description: "",
+};
+
+function getNewBuildingDraftKey(userId: string) {
+  return `${NEW_BUILDING_DRAFT_KEY_PREFIX}:${userId}`;
+}
+
+function readNewBuildingDraft(userId: string): NewBuildingDraft | null {
+  try {
+    const raw = localStorage.getItem(getNewBuildingDraftKey(userId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<NewBuildingDraft>;
+    if (parsed.version !== 1) return null;
+    if (!parsed.step || !WIZARD_STEPS.includes(parsed.step)) return null;
+    return {
+      version: 1,
+      step: parsed.step,
+      project: { ...EMPTY_PROJECT, ...(parsed.project ?? {}) },
+      unit: { ...EMPTY_UNIT, ...(parsed.unit ?? {}) },
+      listing: { ...EMPTY_LISTING, ...(parsed.listing ?? {}) },
+      images: Array.isArray(parsed.images)
+        ? parsed.images.filter((image): image is Pick<UploadedImage, "id" | "url"> =>
+            typeof image?.id === "string" &&
+            typeof image?.url === "string" &&
+            !image.url.startsWith("blob:"),
+          )
+        : [],
+      coverImageId: typeof parsed.coverImageId === "string" ? parsed.coverImageId : null,
+    };
+  } catch (_err: unknown) {
+    return null;
+  }
+}
+
+function clearNewBuildingDraft(userId: string) {
+  try {
+    localStorage.removeItem(getNewBuildingDraftKey(userId));
+  } catch (_err: unknown) {
+    /* localStorage can be disabled */
+  }
+}
+
+function hasDraftContent(project: ProjectDraft, unit: UnitDraft, listing: ListingDraft, images: UploadedImage[]) {
+  return (
+    Object.values(project).some((value) => String(value).trim() !== "") ||
+    Object.entries(unit).some(([key, value]) => key !== "vat_included" && String(value).trim() !== "") ||
+    Object.values(listing).some((value) => value.trim() !== "") ||
+    images.some((image) => !image.uploading && !image.error && !image.file && !image.url.startsWith("blob:"))
+  );
+}
+
+function persistableImages(images: UploadedImage[]): Array<Pick<UploadedImage, "id" | "url">> {
+  return images
+    .filter((image) => !image.uploading && !image.error && !image.file && !image.url.startsWith("blob:"))
+    .map(({ id, url }) => ({ id, url }));
+}
 
 const STEPS = [
   { id: "building" as WizardStep, label: "Project", icon: Building2 },
@@ -79,73 +242,61 @@ export default function CreateNewBuildingListing() {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Step 1: Project
-  const [project, setProject] = useState({
-    name: "",
-    building_permit_number: "",
-    developer_company: "",
-    architect_group: "",
-    construction_company: "",
-    description: "",
-    address: "",
-    city: "",
-    municipality: "",
-    area_description: "",
-    permit_approval_date: "",
-    construction_start_date: "",
-    structural_completion_date: "",
-    delivery_date: "",
-    latitude: "" as string | number,
-    longitude: "" as string | number,
-  });
+  const [project, setProject] = useState<ProjectDraft>(() => ({ ...EMPTY_PROJECT }));
 
   // Step 2: Project inventory
-  const [unit, setUnit] = useState({
-    unit_id: "",
-    floor: "",
-    unit_number: "",
-    internal_sqm: "",
-    balcony_sqm: "",
-    storage_sqm: "",
-    parking_sqm: "",
-    bedrooms: "",
-    bathrooms: "",
-    kitchen_type: "",
-    living_rooms: "",
-    price: "",
-    vat_included: true,
-    parking_price: "",
-    storage_price: "",
-    sea_view: false,
-    city_view: false,
-    mountain_view: false,
-    energy_class: "",
-    heating_system: "",
-    cooling_system: "",
-  });
+  const [unit, setUnit] = useState<UnitDraft>(() => ({ ...EMPTY_UNIT }));
 
   // Step 3: Project media (optional)
-  const [projectMedia, setProjectMedia] = useState<Record<ProjectMediaType, File | null>>({
-    rendering: null, floor_plan: null, site_plan: null, brochure_pdf: null,
-    drone: null, walkthrough: null, progress: null, video: null,
-  });
+  const [projectMedia, setProjectMedia] = useState<Record<ProjectMediaType, File | null>>(() => ({ ...EMPTY_PROJECT_MEDIA }));
 
   // Step 4: Public New Build ad
-  const [listing, setListing] = useState({
-    title: "",
-    description: "",
-  });
+  const [listing, setListing] = useState<ListingDraft>(() => ({ ...EMPTY_LISTING }));
   const suggestedListingTitle = project.name.trim();
   const effectiveListingTitle = listing.title.trim() || suggestedListingTitle;
 
   // Step 5: Photos
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [coverImageId, setCoverImageId] = useState<string | null>(null);
+  const restoredDraftUserRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!user || !profile || canCreateListing) return;
     toast.error(tr("newBuildingListing.guard.developersOnly", "Creating new buildings is for developers only. Switch your account type in Settings."));
     navigate("/dashboard/settings", { replace: true });
   }, [user, profile, canCreateListing, navigate, tr]);
+
+  useEffect(() => {
+    if (!user?.id || restoredDraftUserRef.current === user.id) return;
+    restoredDraftUserRef.current = user.id;
+    const draft = readNewBuildingDraft(user.id);
+    if (!draft) return;
+    setProject(draft.project);
+    setUnit(draft.unit);
+    setListing(draft.listing);
+    setImages(draft.images);
+    setCoverImageId(draft.coverImageId);
+    goTo(draft.step);
+  }, [goTo, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    if (!hasDraftContent(project, unit, listing, images)) return;
+    try {
+      const draft: NewBuildingDraft = {
+        version: 1,
+        step,
+        project,
+        unit,
+        listing,
+        images: persistableImages(images),
+        coverImageId,
+      };
+      localStorage.setItem(getNewBuildingDraftKey(user.id), JSON.stringify(draft));
+    } catch (_err: unknown) {
+      /* localStorage can be disabled or full */
+    }
+  }, [coverImageId, images, listing, project, step, unit, user?.id]);
 
   const setProjectLocationField = (key: "address" | "city" | "municipality", value: string) =>
     setProject(p => ({ ...p, [key]: value, latitude: "", longitude: "" }));
@@ -318,6 +469,7 @@ export default function CreateNewBuildingListing() {
         coverImageUrl,
         additionalImageUrls,
       });
+      clearNewBuildingDraft(user.id);
       toast.success(tr("newBuildingListing.validation.created", "New Build ad published!"));
       navigate(`/new-build/${listingId}`);
     } catch (_err: unknown) {
