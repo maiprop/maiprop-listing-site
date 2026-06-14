@@ -194,6 +194,11 @@ describe("buildListingsQuery — listing-type / status scoping", () => {
     expect(calls("eq").some((c) => c.args[0] === "owner_id" && c.args[1] === "owner-1")).toBe(true);
   });
 
+  it("with owner_id, omits the public listing-type allowlist so owned open houses are visible", () => {
+    buildListingsQuery({ owner_id: "owner-1" });
+    expect(calls("in").find((c) => c.args[0] === "listing_type")).toBeUndefined();
+  });
+
   it("with owner_id and explicit status, applies that status only", () => {
     buildListingsQuery({ owner_id: "owner-1", status: "draft" });
     expect(calls("eq").some((c) => c.args[0] === "status" && c.args[1] === "draft")).toBe(true);

@@ -101,7 +101,7 @@ vi.mock("@/components/new-build/UnitShowcase", () => ({
     <div>
       <span>unit count:{units?.length ?? 0}</span>
       {units?.[0]?.unit_number && <span>{units[0].unit_number}</span>}
-      <button type="button" onClick={onContact}>unit contact</button>
+      <button type="button" onClick={onContact}>Ask developer</button>
     </div>
   ),
 }));
@@ -376,6 +376,9 @@ describe("NewBuildDetail", () => {
     expect(await screen.findByText("AI Estimate")).toBeInTheDocument();
     expect(screen.getByText(/500\.000/)).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("button", { name: "Ask developer" }));
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/messages?conv=conv-1"));
+
     fireEvent.click(screen.getByRole("button", { name: "favorite" }));
     expect(toggleFavoriteMock).toHaveBeenCalledWith({ listing_id: "listing-1", isFavorited: false });
 
@@ -391,12 +394,41 @@ describe("NewBuildDetail", () => {
     expect(toastMock.success).toHaveBeenCalledWith("Interest registered — the developer will be in touch");
   });
 
+  it("wires the snapshot Ask developer fallback when unit terms are unavailable", async () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "buyer-1", email: "buyer@example.com" },
+      profile: { display_name: "Buyer One" },
+    });
+    useQueryMock.mockReturnValue({
+      data: {
+        ...listing,
+        project: {
+          ...listing.project,
+          project_units: listing.project.project_units.map((unit) => ({
+            ...unit,
+            vat_included: null,
+          })),
+        },
+      },
+      isLoading: false,
+      error: null,
+    });
+
+    renderPage();
+
+    const askDeveloperButtons = screen.getAllByRole("button", { name: "Ask developer" });
+    expect(askDeveloperButtons.length).toBeGreaterThanOrEqual(2);
+
+    fireEvent.click(askDeveloperButtons[0]);
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/messages?conv=conv-1"));
+  });
+
   it("handles contact errors without leaving the loading state stuck", async () => {
     useAuthMock.mockReturnValue({ user: { id: "buyer-1" }, profile: null });
     startConversationMock.mockRejectedValueOnce(new Error("offline"));
 
     renderPage();
-    fireEvent.click(screen.getByRole("button", { name: "unit contact" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ask developer" }));
 
     await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith("Could not start conversation"));
   });

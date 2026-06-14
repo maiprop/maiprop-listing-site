@@ -303,7 +303,7 @@ export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize
   if (filters?.city) query = query.ilike("city", `%${filters.city}%`);
   if (filters?.listing_type) {
     query = query.eq("listing_type", filters.listing_type as Enums<"listing_type">);
-  } else if (!filters?.includeAuctions) {
+  } else if (!ownerScoped && !filters?.includeAuctions) {
     query = query.in("listing_type", ["sale", "rent", "firesale", "new_build"] as Enums<"listing_type">[]);
   }
   if (filters?.property_type) query = query.eq("property_type", filters.property_type as Enums<"property_type">);

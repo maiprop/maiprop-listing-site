@@ -421,6 +421,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
       label: tr("newBuildDetail.snapshot.terms", "Terms"),
       value: vatSummary ?? tr("newBuildDetail.snapshot.askDeveloper", "Ask developer"),
       note: listing?.energy_class ? trv("newBuildDetail.snapshot.energy", "energy {{class}} shown", { class: listing.energy_class }) : tr("newBuildDetail.snapshot.unitSpecific", "unit-specific details"),
+      contactDeveloper: !vatSummary,
     },
   ];
 
@@ -614,13 +615,24 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {projectSnapshot.map(({ icon: Icon, label, value, note }) => (
+                  {projectSnapshot.map(({ icon: Icon, label, value, note, contactDeveloper }) => (
                     <div key={label} className="rounded-xl border border-border bg-card/80 p-3.5 shadow-sm">
                       <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                         <Icon className="h-3.5 w-3.5 text-primary" />
                         <span className="min-w-0 truncate">{label}</span>
                       </div>
-                      <p className="text-sm font-bold leading-snug text-foreground">{value}</p>
+                      {contactDeveloper ? (
+                        <button
+                          type="button"
+                          onClick={handleContact}
+                          disabled={contactLoading}
+                          className="text-left text-sm font-bold leading-snug text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {value}
+                        </button>
+                      ) : (
+                        <p className="text-sm font-bold leading-snug text-foreground">{value}</p>
+                      )}
                       <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{note}</p>
                     </div>
                   ))}

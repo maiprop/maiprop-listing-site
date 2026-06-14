@@ -4,6 +4,7 @@ import {
   DoorOpen, Calendar, Euro, Users, Check, X, Clock,
   ChevronDown, ChevronUp, Loader2, Plus, Building2, Eye, Star,
   CheckCircle2, AlertCircle, Timer, Flame, ArrowRight, Pencil,
+  Settings2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -121,8 +122,19 @@ function OwnerListingCard({ listing }: { listing: DashboardListing }) {
             asChild
             onClick={(e) => e.stopPropagation()}
           >
+            <Link to={`/listings/${listing.id}/edit`}>
+              <Pencil className="w-3 h-3" /> Edit listing
+            </Link>
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-xs gap-1 hidden sm:flex"
+            asChild
+            onClick={(e) => e.stopPropagation()}
+          >
             <Link to={`/open-house/${listing.id}`}>
-              <Pencil className="w-3 h-3" /> Manage
+              <Settings2 className="w-3 h-3" /> Manage
             </Link>
           </Button>
           {expanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
