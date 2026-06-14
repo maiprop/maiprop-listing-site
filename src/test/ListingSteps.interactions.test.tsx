@@ -11,6 +11,7 @@ const baseForm = (overrides: Partial<ListingFormData> = {}) => ({
   description: "",
   property_type: "apartment",
   listing_type: "sale",
+  open_house_transaction_type: "sale",
   sqm: "",
   year_built: "",
   bedrooms: "",
@@ -341,5 +342,33 @@ describe("listing step pricing interactions", () => {
       />,
     );
     expect(screen.getByText(/Open house date is required/)).toBeInTheDocument();
+  });
+
+  it("shows rental pricing terms for rental open houses", () => {
+    const set = vi.fn();
+    const toggle = vi.fn();
+    renderWithProviders(
+      <StepPricing
+        form={baseForm({ listing_type: "open_house", open_house_transaction_type: "rent" })}
+        set={set}
+        toggle={toggle}
+        errors={{}}
+        setFieldRef={noopRef}
+        aiPriceLoading={false}
+        aiPriceSuggestion={null}
+        handleAiPrice={vi.fn()}
+        participantType="owner"
+        isPro={false}
+      />,
+    );
+
+    expect(screen.getByText(/Monthly Rent/i)).toBeInTheDocument();
+    expect(screen.getByText(/Rental Terms/i)).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText("800"), { target: { value: "1800" } });
+    fireEvent.change(screen.getByLabelText(/Open house transaction/i), { target: { value: "sale" } });
+    expect(set).toHaveBeenCalledWith("price", "1800");
+    expect(set).toHaveBeenCalledWith("open_house_transaction_type", "sale");
+    fireEvent.click(screen.getByText(/Pets Allowed/i));
+    expect(toggle).toHaveBeenCalledWith("pets_allowed");
   });
 });

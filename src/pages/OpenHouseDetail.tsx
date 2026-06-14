@@ -197,6 +197,8 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
   if (!imgs.length && streetViewFallback) imgs = [streetViewFallback];
 
   const pricePerSqm = sqm > 0 ? Math.round(price / sqm) : null;
+  const isRentalOpenHouse = db.open_house_transaction_type === "rent";
+  const rentalPriceSuffix = isRentalOpenHouse ? (isGreek ? "/μήνα" : "/mo") : "";
   const isLandType = ["land", "plot"].includes(db.property_type ?? "");
   const detailGroups = buildDetailGroups(db, price, sqm, pricePerSqm, isLandType);
   const heroSpecs = buildListingHeroSpecs(db);
@@ -309,7 +311,11 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-2">
                       <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground bg-muted px-2 py-0.5 rounded-full border border-border capitalize">{db.property_type}</span>
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/30">{isGreek ? "Ανοιχτή επίσκεψη" : "Open House"}</span>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                        {isRentalOpenHouse
+                          ? (isGreek ? "Ανοιχτή επίσκεψη ενοικίασης" : "Open House Rental")
+                          : (isGreek ? "Ανοιχτή επίσκεψη πώλησης" : "Open House Sale")}
+                      </span>
                     </div>
                     <h1 className="font-display text-2xl md:text-3xl font-bold leading-tight">{db.title}</h1>
                     <div className="flex items-center gap-1.5 mt-2 text-sm text-muted-foreground">
@@ -318,7 +324,9 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <div className="font-display text-3xl font-black text-foreground">€{price.toLocaleString()}</div>
+                    <div className="font-display text-3xl font-black text-foreground">
+                      €{price.toLocaleString()}{rentalPriceSuffix && <span className="text-base font-normal text-muted-foreground">{rentalPriceSuffix}</span>}
+                    </div>
                     {!!pricePerSqm && <div className="text-xs text-muted-foreground mt-0.5">€{pricePerSqm.toLocaleString()} {isGreek ? "ανά τ.μ." : "per m²"}</div>}
                   </div>
                 </div>
@@ -426,7 +434,7 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
             <div className="space-y-4 lg:sticky lg:top-24 self-start">
               <div className="glass-card rounded-xl p-5 border border-border">
                 <div className="font-display text-2xl font-bold text-primary mb-1">
-                  €{price.toLocaleString()}
+                  €{price.toLocaleString()}{rentalPriceSuffix && <span className="text-sm font-normal text-muted-foreground">{rentalPriceSuffix}</span>}
                 </div>
                 {sqm > 0 && <p className="text-xs text-muted-foreground">€{Math.round(price / sqm).toLocaleString()}/{isGreek ? "τ.μ." : "m²"}</p>}
 

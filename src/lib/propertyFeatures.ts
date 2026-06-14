@@ -56,6 +56,10 @@ const formatBoolean = (value: boolean | null | undefined) =>
 const humanize = (value: string | null | undefined) =>
   value ? value.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase()) : null;
 
+const isRentalPricingListing = (db: ListingWithJoins) =>
+  db.listing_type === "rent" ||
+  (db.listing_type === "open_house" && db.open_house_transaction_type === "rent");
+
 const formatFloor = (floor: number | null | undefined, totalFloors: number | null | undefined) => {
   if (floor === null || floor === undefined) return null;
   const base = floor === -1 ? "Basement" : floor === 0 ? "Ground" : String(floor);
@@ -178,8 +182,9 @@ export function buildDetailGroups(
   pricePerSqm: number | null | undefined,
   isLandType: boolean,
 ): DetailGroup[] {
+  const isRentalPricing = isRentalPricingListing(db);
   const priceLabel =
-    db.listing_type === "rent"
+    isRentalPricing
       ? "Monthly Rent"
       : db.listing_type === "auction"
         ? "First Offer Price"
@@ -232,7 +237,7 @@ export function buildDetailGroups(
     },
     {
       title: "Rental Terms",
-      rows: db.listing_type === "rent"
+      rows: isRentalPricing
         ? [
             { label: "Deposit", value: db.deposit_months ? `${db.deposit_months} months` : null },
             { label: "Monthly Expenses", value: formatCurrency(db.monthly_expenses) },

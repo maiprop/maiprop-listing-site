@@ -29,7 +29,7 @@ type ProfilePublicRow = {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EXTERNAL_TAG_RE = /^[A-Za-z0-9:_-]{1,120}$/;
-const LISTING_DETAIL_CACHE_VERSION = "public-detail-v2";
+const LISTING_DETAIL_CACHE_VERSION = "open-house-transaction-v1";
 const PROJECT_UNIT_SELECT = [
   "id",
   "listing_id",
@@ -110,6 +110,7 @@ const LISTING_DETAIL_SELECT = [
   "cover_image_url",
   "property_type",
   "listing_type",
+  "open_house_transaction_type",
   "commercial_subtype",
   "heating_system",
   "construction_status",

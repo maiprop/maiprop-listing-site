@@ -50,6 +50,7 @@ export interface ListingCard {
   images: string[];
   type: PropertyType;
   listingType: ListingType;
+  openHouseTransactionType?: "sale" | "rent" | null;
   ownerParticipantType?: "agent" | "seller" | null;
   agent?: { name: string; verified: boolean; avatar?: string };
   auctionDate?: string;

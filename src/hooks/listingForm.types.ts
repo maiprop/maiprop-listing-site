@@ -12,6 +12,7 @@
 
 export type PropertyType = "apartment" | "house" | "villa" | "land" | "commercial" | "office";
 export type ListingType = "sale" | "rent" | "auction" | "open_house";
+export type OpenHouseTransactionType = "sale" | "rent";
 export type WizardStep = "type" | "details" | "features" | "location" | "pricing" | "photos";
 
 export interface AIPriceSuggestion {
@@ -24,6 +25,7 @@ export interface AIPriceSuggestion {
 
 export interface ListingFormData {
   listing_type: ListingType;
+  open_house_transaction_type: OpenHouseTransactionType;
   property_type: PropertyType;
   title: string;
   description: string;

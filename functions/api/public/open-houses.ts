@@ -16,7 +16,7 @@ import { getSupabaseRuntime } from "../../_seo";
 type OpenHouseRow = Record<string, unknown>;
 
 const OPEN_HOUSE_LIMIT_MAX = 200;
-const OPEN_HOUSE_CACHE_VERSION = "off-market-v2";
+const OPEN_HOUSE_CACHE_VERSION = "open-house-transaction-v1";
 const OPEN_HOUSE_SELECT = [
   "id",
   "title",
@@ -25,6 +25,7 @@ const OPEN_HOUSE_SELECT = [
   "region",
   "status",
   "listing_type",
+  "open_house_transaction_type",
   "property_type",
   "price",
   "price_per_sqm",

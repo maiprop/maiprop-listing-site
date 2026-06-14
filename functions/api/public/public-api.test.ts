@@ -479,7 +479,7 @@ describe("public listing detail endpoint", () => {
     expect(listingsUrl.searchParams.get("is_off_market")).toBe("eq.false");
     expect(listingsUrl.searchParams.get("listing_images.order")).toBe("sort_order.asc");
     expect(fetchUrls("/rest/v1/profiles_public")[0].searchParams.get("select")).toBe("user_id,display_name,avatar_url,role");
-    expect(cacheApi.put.mock.calls[0][0].url).toContain("v=public-detail-v2");
+    expect(cacheApi.put.mock.calls[0][0].url).toContain("v=open-house-transaction-v1");
   });
 
   it("requests and returns the linked project, project units, and project media for new-build details", async () => {
@@ -666,7 +666,7 @@ describe("public open houses endpoint", () => {
     expect(url.searchParams.get("open_house_date")).toMatch(/^lt\./);
     expect(url.searchParams.get("order")).toBe("open_house_date.desc");
     expect(cacheApi.put.mock.calls[0][0].url).toContain("showPast=1");
-    expect(cacheApi.put.mock.calls[0][0].url).toContain("v=off-market-v2");
+    expect(cacheApi.put.mock.calls[0][0].url).toContain("v=open-house-transaction-v1");
   });
 
   it("returns 503 instead of caching an empty open-house window on transient upstream failure", async () => {

@@ -2,7 +2,7 @@ import { Check, Crown, Loader2, RefreshCw, Sparkles, TrendingUp } from "lucide-r
 import { useTranslation } from "react-i18next";
 import {
   FieldLabel, FieldError, SectionTitle, ToggleChip,
-  FormInput as Input,
+  FormInput as Input, FormSelect,
 } from "@/components/listings/FormPrimitives";
 import type { ListingFormData, AIPriceSuggestion } from "@/hooks/useListingForm";
 import { tFallback, tInterpolate } from "@/lib/i18nFallback";
@@ -27,6 +27,7 @@ export function StepPricing({
 }: Props) {
   const { t } = useTranslation();
   const lt = form.listing_type;
+  const isRentalPricing = lt === "rent" || (lt === "open_house" && form.open_house_transaction_type === "rent");
   const tr = (key: string, fallback: string) => tFallback(t, key, fallback);
   const trv = (key: string, fallback: string, values: Record<string, string | number>) => tInterpolate(t, key, fallback, values);
 
@@ -103,8 +104,8 @@ export function StepPricing({
       </div>
 
       <div ref={setFieldRef("price") as React.Ref<HTMLDivElement>}>
-        <FieldLabel required>{lt === "rent" ? tr("createListing.pricing.monthlyRent", "Monthly Rent (€)") : tr("createListing.pricing.askingPrice", "Asking Price (€)")}</FieldLabel>
-        <Input type="number" placeholder={lt === "rent" ? "800" : "250000"} value={form.price} onChange={e => set("price", e.target.value)} hasError={!!errors.price} />
+        <FieldLabel required>{isRentalPricing ? tr("createListing.pricing.monthlyRent", "Monthly Rent (€)") : tr("createListing.pricing.askingPrice", "Asking Price (€)")}</FieldLabel>
+        <Input type="number" placeholder={isRentalPricing ? "800" : "250000"} value={form.price} onChange={e => set("price", e.target.value)} hasError={!!errors.price} />
         <FieldError msg={errors.price} />
         {!!form.sqm && !!form.price && (
           <p className="text-xs text-muted-foreground mt-1">
@@ -113,7 +114,7 @@ export function StepPricing({
         )}
       </div>
 
-      {lt === "rent" && (
+      {isRentalPricing && (
         <>
           <SectionTitle>{tr("createListing.pricing.rentalTerms", "Rental Terms")}</SectionTitle>
           <div className="grid grid-cols-2 gap-3">
@@ -146,6 +147,17 @@ export function StepPricing({
       {lt === "open_house" && (
         <>
           <SectionTitle>{tr("createListing.pricing.openHouseDetails", "Open House Details")}</SectionTitle>
+          <div>
+            <FieldLabel>{tr("createListing.pricing.openHouseTransaction", "Open house transaction")}</FieldLabel>
+            <FormSelect
+              aria-label={tr("createListing.pricing.openHouseTransaction", "Open house transaction")}
+              value={form.open_house_transaction_type}
+              onChange={e => set("open_house_transaction_type", e.target.value)}
+            >
+              <option value="sale">{tr("createListing.pricing.openHouseForSale", "Sale")}</option>
+              <option value="rent">{tr("createListing.pricing.openHouseForRent", "Rental")}</option>
+            </FormSelect>
+          </div>
           <div ref={setFieldRef("open_house_date") as React.Ref<HTMLDivElement>}>
             <FieldLabel required>{tr("createListing.pricing.dateTime", "Date & Time")}</FieldLabel>
             <Input type="datetime-local" value={form.open_house_date} onChange={e => set("open_house_date", e.target.value)} hasError={!!errors.open_house_date} />

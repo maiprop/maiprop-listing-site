@@ -33,8 +33,9 @@ export const BUDGETS_KB = {
   // react + react-dom + react-router-dom + scheduler; the floor is
   // ~182 kB raw on the current pinned versions.
   "vendor-react": 200,
-  // ~25 @radix-ui packages — sum is naturally ~200-220 kB raw.
-  "vendor-radix": 230,
+  // @radix-ui packages split into stable core and overlay/menu primitive chunks.
+  "vendor-radix-core": 230,
+  "vendor-radix-overlays": 90,
   // cmdk, vaul, sonner, embla-carousel, react-resizable-panels, input-otp,
   // react-day-picker, @hello-pangea — small UI companions.
   "vendor-ui-extra": 180,

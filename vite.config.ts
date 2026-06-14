@@ -29,12 +29,12 @@ export default defineConfig((_env) => ({
   build: {
     rollupOptions: {
       output: {
-        // Function form so ALL @radix-ui packages (~25 of them) land in a
-        // single chunk. The previous static list only captured 4, leaving
-        // the others to be auto-bundled into vendor-ui — pushing it well
-        // over its 150 kB budget. Other small UI companions (cmdk, vaul,
-        // sonner, embla-carousel, react-resizable-panels, input-otp,
-        // react-day-picker) share vendor-ui-extra.
+        // Function form so @radix-ui packages land in stable UI chunks.
+        // Core primitives and overlay/menu primitives are separated because
+        // Vite 8/Rolldown pushes the full Radix graph above the single-chunk
+        // budget. Other small UI companions (cmdk, vaul, sonner,
+        // embla-carousel, react-resizable-panels, input-otp, react-day-picker)
+        // share vendor-ui-extra.
         //
         // mapbox-gl / react-map-gl are intentionally NOT matched here —
         // they're only imported by lazy-loaded routes (MapView,
@@ -43,7 +43,31 @@ export default defineConfig((_env) => ({
         // gzip saved on first load).
         manualChunks(id) {
           if (!id.includes("node_modules")) return undefined;
-          if (id.includes("@radix-ui/")) return "vendor-radix";
+          if (id.includes("@radix-ui/")) {
+            if (
+              [
+                "@radix-ui/react-alert-dialog",
+                "@radix-ui/react-context-menu",
+                "@radix-ui/react-dialog",
+                "@radix-ui/react-dropdown-menu",
+                "@radix-ui/react-hover-card",
+                "@radix-ui/react-menubar",
+                "@radix-ui/react-navigation-menu",
+                "@radix-ui/react-popover",
+                "@radix-ui/react-select",
+                "@radix-ui/react-toast",
+                "@radix-ui/react-tooltip",
+                "@radix-ui/react-dismissable-layer",
+                "@radix-ui/react-focus-guards",
+                "@radix-ui/react-focus-scope",
+                "@radix-ui/react-popper",
+                "@radix-ui/react-roving-focus",
+              ].some((pkg) => id.includes(pkg))
+            ) {
+              return "vendor-radix-overlays";
+            }
+            return "vendor-radix-core";
+          }
           // recharts / d3 are intentionally NOT chunked here — they're only
           // imported by lazy-loaded routes (AnalyticsTab, AdminReports), so
           // Rollup places them in shared lazy auto-chunks that are NOT listed

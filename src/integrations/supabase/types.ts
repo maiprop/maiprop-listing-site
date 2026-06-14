@@ -1335,6 +1335,7 @@ export type Database = {
           monthly_expenses: number | null
           noise_score: number | null
           open_house_date: string | null
+          open_house_transaction_type: string | null
           owner_id: string | null
           pets_allowed: boolean | null
           plot_depth: number | null
@@ -1454,6 +1455,7 @@ export type Database = {
           monthly_expenses?: number | null
           noise_score?: number | null
           open_house_date?: string | null
+          open_house_transaction_type?: string | null
           owner_id?: string | null
           pets_allowed?: boolean | null
           plot_depth?: number | null
@@ -1573,6 +1575,7 @@ export type Database = {
           monthly_expenses?: number | null
           noise_score?: number | null
           open_house_date?: string | null
+          open_house_transaction_type?: string | null
           owner_id?: string | null
           pets_allowed?: boolean | null
           plot_depth?: number | null
