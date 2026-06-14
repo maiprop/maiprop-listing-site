@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.9.23](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.22...v1.9.23) (2026-06-14)
+
+
+### Bug Fixes
+
+* harden analytics open house and ecas gates ([#327](https://github.com/maiprop/maiprop-listing-site/issues/327)) ([1dbfbae](https://github.com/maiprop/maiprop-listing-site/commit/1dbfbaea82dc3d8faefdbf6f06fa6eb80f7b43ef))
+* simplify new build project flow ([90705c8](https://github.com/maiprop/maiprop-listing-site/commit/90705c8e0505a08d4bcc013fc6ce2ad39af7341a))
+* tolerate Supabase IPv6 index stat outages ([f51dad1](https://github.com/maiprop/maiprop-listing-site/commit/f51dad1ebfa5c8ae28a915a38c3221447f74655b))
+* unblock release safety checks ([cebeb86](https://github.com/maiprop/maiprop-listing-site/commit/cebeb868a80bdd44dba087714f5697157937e1a3))
+
 ## [1.9.22](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.21...v1.9.22) (2026-06-13)
 
 
