@@ -24,6 +24,14 @@ Deno.test("wrong cron secret header returns 401", async () => {
   assertEquals(res.status, 401);
 });
 
+Deno.test("valid cron secret with non-POST method returns 405 before work", async () => {
+  const res = await handler(new Request("https://functions.supabase.co/fn", {
+    method: "GET",
+    headers: { "x-cron-secret": CRON_VALUE },
+  }));
+  assertEquals(res.status, 405);
+});
+
 Deno.test("valid cron secret reaches handler and missing env fails closed", async () => {
   Deno.env.delete("SUPABASE_URL");
   const res = await handler(req("POST", {}, { "x-cron-secret": CRON_VALUE }));

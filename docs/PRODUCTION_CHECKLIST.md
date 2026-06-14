@@ -25,8 +25,9 @@ Go through every box **before** promoting a release to production. This is a saf
 - [ ] `supabase db push` against production has no warnings about destructive changes.
 - [ ] RLS policies on new tables reviewed — no `USING (true)` or `WITH CHECK (true)` without justification.
 - [ ] `e2e/rls-security.spec.ts` passes against staging credentials.
-- [ ] Supabase PITR / daily backups enabled and retention ≥ 7 days.
-- [ ] Last successful restore test ≤ 90 days ago (record date below).
+- [ ] Supabase PITR / daily backups enabled and retention >= 7 days. If the project is on Supabase Free, the free-tier logical backup fallback is active instead.
+- [ ] Supabase Free fallback, when applicable: latest logical backup exists as an encrypted off-site backup.
+- [ ] Last successful restore drill <= 90 days ago for paid PITR/daily backups, or <= 30 days ago for the Supabase Free logical-backup fallback (record date below).
 
 ## 4. Stripe & billing
 

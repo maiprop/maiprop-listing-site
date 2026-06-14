@@ -1,0 +1,115 @@
+import { findPublicApiFixtureMarker } from "./public-api-fixture-guard.mjs";
+
+const FETCH_TIMEOUT_MS = 30_000;
+const USER_AGENT = "maiprop-production-deploy-check/1.0";
+
+const publicApiPaths = [
+  "/api/public/listings?limit=1",
+  "/api/public/listings?listing_type=new_build&limit=1",
+  "/api/public/homepage?section=featured",
+  "/api/public/open-houses?limit=1",
+  "/api/public/auctions?limit=60",
+  "/api/public/homepage?section=open-houses",
+  "/api/public/homepage?section=type-counts",
+  "/api/public/homepage?section=price-index",
+  "/api/public/homepage?section=popular-locations",
+  "/api/public/homepage?section=auction-count",
+];
+
+const listingDetailSourcePaths = new Set([
+  "/api/public/listings?limit=1",
+  "/api/public/listings?listing_type=new_build&limit=1",
+  "/api/public/auctions?limit=60",
+]);
+
+const defaultAssertOk = (condition, message) => {
+  if (!condition) throw new Error(message);
+};
+
+const defaultFetchText = async (url, options = {}) => {
+  const res = await fetch(url, {
+    redirect: "follow",
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    headers: {
+      "user-agent": USER_AGENT,
+      ...(options.headers ?? {}),
+    },
+    ...options,
+  });
+  const text = await res.text();
+  defaultAssertOk(res.ok, `${url} returned HTTP ${res.status}: ${text.slice(0, 160)}`);
+  return { res, text };
+};
+
+function extractPublicListingIds(body) {
+  const rows = Array.isArray(body)
+    ? body
+    : body && typeof body === "object" && Array.isArray(body.data)
+      ? body.data
+      : [];
+
+  return rows
+    .map((row) => row && typeof row === "object" ? row.id : null)
+    .filter((id) => typeof id === "string" && id.trim().length > 0);
+}
+
+async function validateJsonApiPath(baseUrl, path, { assertOk, fetchText }) {
+  const apiUrl = new URL(path, baseUrl).toString();
+  const { res, text } = await fetchText(apiUrl, {
+    headers: { accept: "application/json" },
+  });
+  const contentType = res.headers.get("content-type") ?? "";
+  assertOk(
+    /application\/json/i.test(contentType),
+    `${apiUrl} returned ${contentType || "<missing>"} instead of JSON`,
+  );
+
+  let body;
+  try {
+    body = JSON.parse(text);
+  } catch (error) {
+    throw new Error(`${apiUrl} returned invalid JSON: ${error.message}`);
+  }
+
+  assertOk(
+    !(body && typeof body === "object" && "error" in body),
+    `${apiUrl} returned API error: ${JSON.stringify(body).slice(0, 240)}`,
+  );
+
+  const fixtureMarker = findPublicApiFixtureMarker(body);
+  assertOk(
+    fixtureMarker === null,
+    `${apiUrl} returned production-blocked fixture content (${fixtureMarker?.marker}) at ${fixtureMarker?.path}: ${fixtureMarker?.value}`,
+  );
+
+  return body;
+}
+
+export async function validatePublicApiEndpoints(
+  baseUrl,
+  {
+    assertOk = defaultAssertOk,
+    fetchText = defaultFetchText,
+  } = {},
+) {
+  const listingIds = new Set();
+
+  for (const path of publicApiPaths) {
+    const body = await validateJsonApiPath(baseUrl, path, { assertOk, fetchText });
+    if (listingDetailSourcePaths.has(path)) {
+      for (const id of extractPublicListingIds(body)) listingIds.add(id);
+    }
+  }
+
+  for (const id of listingIds) {
+    const detailPath = `/api/public/listing?id=${encodeURIComponent(id)}`;
+    const body = await validateJsonApiPath(baseUrl, detailPath, { assertOk, fetchText });
+    const detailId = body && typeof body === "object" && body.data && typeof body.data === "object"
+      ? body.data.id
+      : body?.id;
+    assertOk(
+      !detailId || detailId === id,
+      `${new URL(detailPath, baseUrl).toString()} returned listing id ${detailId} instead of ${id}`,
+    );
+  }
+}

@@ -11,7 +11,7 @@
  */
 
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { findPublicApiFixtureMarker } from "./public-api-fixture-guard.mjs";
+import { validatePublicApiEndpoints } from "./check-production-deploy-public-api.mjs";
 
 const DEFAULT_URLS = ["https://portal.maiprop.co"];
 const DEFAULT_ATTEMPTS = 8;
@@ -124,45 +124,6 @@ const validateEntrypointAsset = async (baseUrl, assetPath) => {
     !/from ["']\.\/App["'];?/.test(text),
     `${assetUrl} still looks like raw source instead of a bundled production asset`,
   );
-};
-
-const publicApiPaths = [
-  "/api/public/listings?limit=1",
-  "/api/public/homepage?section=featured",
-  "/api/public/open-houses?limit=1",
-  "/api/public/auctions?limit=60",
-];
-
-const validatePublicApiEndpoints = async (baseUrl) => {
-  for (const path of publicApiPaths) {
-    const apiUrl = new URL(path, baseUrl).toString();
-    const { res, text } = await fetchText(apiUrl, {
-      headers: { accept: "application/json" },
-    });
-    const contentType = res.headers.get("content-type") ?? "";
-    assertOk(
-      /application\/json/i.test(contentType),
-      `${apiUrl} returned ${contentType || "<missing>"} instead of JSON`,
-    );
-
-    let body;
-    try {
-      body = JSON.parse(text);
-    } catch (error) {
-      throw new Error(`${apiUrl} returned invalid JSON: ${error.message}`);
-    }
-
-    assertOk(
-      !(body && typeof body === "object" && "error" in body),
-      `${apiUrl} returned API error: ${JSON.stringify(body).slice(0, 240)}`,
-    );
-
-    const fixtureMarker = findPublicApiFixtureMarker(body);
-    assertOk(
-      fixtureMarker === null,
-      `${apiUrl} returned production-blocked fixture content (${fixtureMarker?.marker}) at ${fixtureMarker?.path}: ${fixtureMarker?.value}`,
-    );
-  }
 };
 
 const runBrowserCheck = async (url) => {

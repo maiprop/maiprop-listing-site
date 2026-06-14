@@ -133,6 +133,39 @@ Deno.test("invalid listing id is rejected before auth or registration lookup", a
   assertEquals(globalThis.__openHouseRegistrationScenario.calls.length, 0);
 });
 
+Deno.test("malformed uuid-shaped listing id is rejected before auth or registration lookup", async () => {
+  resetScenario();
+  const res = await handler(authedJson(registrationBody({
+    listingId: "zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz",
+  })));
+  assertEquals(res.status, 400);
+  const body = await res.json();
+  assertEquals(body.error, "Invalid listingId");
+  assertEquals(globalThis.__openHouseRegistrationScenario.calls.length, 0);
+});
+
+Deno.test("invalid contact email is rejected before auth or registration lookup", async () => {
+  resetScenario();
+  const res = await handler(authedJson(registrationBody({
+    contactEmail: "buyer at example dot com",
+  })));
+  assertEquals(res.status, 400);
+  const body = await res.json();
+  assertEquals(body.error, "Invalid contactEmail");
+  assertEquals(globalThis.__openHouseRegistrationScenario.calls.length, 0);
+});
+
+Deno.test("overlong note is rejected instead of silently truncated", async () => {
+  resetScenario();
+  const res = await handler(authedJson(registrationBody({
+    note: "x".repeat(1001),
+  })));
+  assertEquals(res.status, 400);
+  const body = await res.json();
+  assertEquals(body.error, "Invalid note");
+  assertEquals(globalThis.__openHouseRegistrationScenario.calls.length, 0);
+});
+
 Deno.test("registration is created for the verified caller only", async () => {
   const listingId = crypto.randomUUID();
   resetScenario({

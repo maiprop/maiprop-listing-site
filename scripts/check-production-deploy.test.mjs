@@ -54,4 +54,44 @@ describe("production deploy public API fixture guard", () => {
       ],
     })).toBeNull();
   });
+
+  it("follows public listing feed rows into the public detail API", async () => {
+    const { validatePublicApiEndpoints } = await import("./check-production-deploy-public-api.mjs");
+    const calls = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url) => {
+      const href = String(url);
+      calls.push(href);
+
+      if (href.endsWith("/api/public/listings?limit=1")) {
+        return Response.json({ data: [{ id: "listing-1", title: "Clean listing" }] });
+      }
+      if (href.endsWith("/api/public/listings?listing_type=new_build&limit=1")) {
+        return Response.json({ data: [{ id: "new-build-1", title: "Clean new build" }] });
+      }
+      if (href.endsWith("/api/public/auctions?limit=60")) {
+        return Response.json([{ id: "auction-1", title: "Clean auction" }]);
+      }
+      if (href.endsWith("/api/public/listing?id=listing-1")) {
+        return Response.json({ data: { id: "listing-1", title: "Clean listing detail" } });
+      }
+      if (href.endsWith("/api/public/listing?id=new-build-1")) {
+        return Response.json({ data: { id: "new-build-1", title: "Clean new build detail" } });
+      }
+      if (href.endsWith("/api/public/listing?id=auction-1")) {
+        return Response.json({ data: { id: "auction-1", title: "Clean auction detail" } });
+      }
+      return Response.json([]);
+    };
+
+    try {
+      await validatePublicApiEndpoints("https://portal.maiprop.co");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(calls).toContain("https://portal.maiprop.co/api/public/listing?id=listing-1");
+    expect(calls).toContain("https://portal.maiprop.co/api/public/listing?id=new-build-1");
+    expect(calls).toContain("https://portal.maiprop.co/api/public/listing?id=auction-1");
+  });
 });

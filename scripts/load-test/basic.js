@@ -13,7 +13,8 @@
  *   - Home page (cold)
  *   - Listings index
  *   - Sitemap (edge-function proxied)
- *   - AI search (public edge function, unauthenticated)
+ *   - Public listings API
+ *   - Public open-houses API
  *
  * Thresholds:
  *   - p(95) < 2500 ms across all endpoints
@@ -56,6 +57,8 @@ export default function () {
     { name: "listings",   url: `${BASE_URL}/listings` },
     { name: "auctions",   url: `${BASE_URL}/auctions` },
     { name: "pricing",    url: `${BASE_URL}/pricing` },
+    { name: "api_listings", url: `${BASE_URL}/api/public/listings?limit=24` },
+    { name: "api_open_houses", url: `${BASE_URL}/api/public/open-houses?limit=24` },
     { name: "sitemap",    url: `${BASE_URL}/sitemap-dynamic.xml` },
   ];
 

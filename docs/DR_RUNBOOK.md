@@ -14,6 +14,47 @@ This runbook documents backup, recovery, and failover procedures for the maiProp
 | Payments | Stripe | External; Stripe is source of truth for subscriptions |
 | Email | Brevo | External; transactional only, no state to recover |
 
+## 0. Free-tier logical backup fallback
+
+The live project may run on Supabase Free during early production hardening.
+Supabase Free is not equivalent to paid daily backups or PITR, so use this
+fallback until the project is upgraded.
+
+### Backup procedure
+
+1. Set an operator-only Postgres connection string and encryption passphrase:
+   ```powershell
+   $env:SUPABASE_DB_URL = "<postgres-connection-string>"
+   $env:MAIPROP_BACKUP_PASSPHRASE = "<long-random-passphrase>"
+   ```
+2. Run the logical backup:
+   ```powershell
+   npm run backup:supabase:logical -- --out-dir C:\maiprop-backups
+   ```
+   The backup script wraps `supabase db dump` for schema and data exports.
+3. Move the encrypted off-site backup outside Supabase and outside the GitHub
+   repository.
+4. Keep the manifest next to the encrypted file.
+
+### Restore drill
+
+Run a restore drill at least monthly while using this fallback:
+
+1. Decrypt the latest backup with `MAIPROP_BACKUP_PASSPHRASE`.
+2. Restore it into a disposable local Postgres database.
+3. Verify critical row counts: `profiles`, `listings`, `projects`,
+   `subscriptions`, and `open_house_registrations`.
+4. Record date, operator, and result in `docs/PRODUCTION_CHECKLIST.md`.
+
+### RPO and RTO
+
+This is a logical backup mitigation, not PITR. The RPO is the age of the latest
+successful backup. For daily backups, assume up to 24 hours of data loss. The
+RTO target for this fallback is less than 4 hours from incident declaration to a
+verified restored database and repointed runtime configuration.
+
+Detailed runbook: `docs/backups/FREE_TIER_LOGICAL_BACKUPS.md`.
+
 ## 1. Database recovery (Supabase PITR)
 
 ### When to use

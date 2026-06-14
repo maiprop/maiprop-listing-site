@@ -1,6 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { checkDisasterRecoveryReadiness } from "./check-dr-readiness.mjs";
+import { checkGithubGovernance } from "./check-github-governance.mjs";
+import { checkLoadTestContract } from "./check-load-test-contract.mjs";
+import { checkOpenApiCoverage } from "./check-openapi-coverage.mjs";
 
 const REQUIRED_NODE = "20.19.5";
 const REQUIRED_NPM = "10.8.2";
@@ -129,6 +133,57 @@ export function checkObservabilityContract(root = process.cwd()) {
   return result(failures);
 }
 
+export function checkObservabilityWiring(root = process.cwd()) {
+  const failures = [];
+  const requiredMarkers = [
+    [
+      "src/main.tsx",
+      [
+        "VITE_SENTRY_DSN",
+        "Sentry.init",
+        "__sentryClient",
+        "installWebVitalsMonitoring",
+      ],
+    ],
+    [
+      "src/lib/webVitals.ts",
+      [
+        "VITE_WEB_VITALS_SAMPLE_RATE",
+        "__maipropWebVitalsInstalled",
+        "addBreadcrumb",
+        "captureMessage",
+        "web-vitals-route",
+      ],
+    ],
+    [
+      "supabase/functions/_shared/logger.ts",
+      [
+        "SENTRY_DSN",
+        "parseSentryDsn",
+        "forwardToSentry",
+        "X-Sentry-Auth",
+      ],
+    ],
+    [
+      "supabase/functions/healthz/index.ts",
+      [
+        "SENTRY_DSN",
+        "checks.sentry",
+      ],
+    ],
+  ];
+
+  for (const [relativePath, markers] of requiredMarkers) {
+    const text = requireText(root, relativePath, failures);
+    if (!text) continue;
+    for (const marker of includesAll(text, markers)) {
+      failures.push(`${relativePath} must mention ${marker}`);
+    }
+  }
+
+  return result(failures);
+}
+
 export function checkGovernanceDocs(root = process.cwd()) {
   const failures = [];
   const prTemplate = requireText(root, ".github/PULL_REQUEST_TEMPLATE.md", failures);
@@ -166,7 +221,12 @@ export function checkEnterpriseReadinessBasics(root = process.cwd()) {
     checkRuntimeAlignment(root),
     checkPublicFunctionInventory(root),
     checkObservabilityContract(root),
+    checkObservabilityWiring(root),
     checkGovernanceDocs(root),
+    checkGithubGovernance(root),
+    checkDisasterRecoveryReadiness(root),
+    checkOpenApiCoverage(root),
+    checkLoadTestContract(root),
   ];
   return result(checks.flatMap((check) => check.failures));
 }

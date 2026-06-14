@@ -95,4 +95,39 @@ describe("check-live-security-posture script", () => {
       await server.close();
     }
   }, 15_000);
+
+  it("blocks future public-schema default grants to browser and service roles", async () => {
+    const server = await createJsonServer(200, [{
+      buckets: [
+        { id: "message-attachments", public: false, file_size_limit: 10485760, allowed_mime_types: ["application/pdf"] },
+        { id: "email-assets", public: true, file_size_limit: 1048576, allowed_mime_types: ["image/png"] },
+        { id: "firesale-photos", public: true, file_size_limit: 1048576, allowed_mime_types: ["image/jpeg"] },
+        { id: "property-images", public: true, file_size_limit: 1048576, allowed_mime_types: ["image/webp"] },
+      ],
+      rls_disabled_tables: [],
+      grants: [
+        { signature: "release_expired_firesale_reservations(uuid)", anon: false, authenticated: false, service_role: true },
+        { signature: "authoritative_role()", anon: false, authenticated: false, service_role: true },
+        { signature: "authoritative_role(uuid)", anon: false, authenticated: false, service_role: true },
+        { signature: "check_listing_quota()", anon: false, authenticated: false, service_role: true },
+        { signature: "has_platform_admin(uuid)", anon: false, authenticated: false, service_role: true },
+        { signature: "has_role(uuid,app_role)", anon: false, authenticated: false, service_role: true },
+        { signature: "has_role(uuid,user_role)", anon: false, authenticated: false, service_role: true },
+      ],
+      future_default_grants: [
+        { grantor_role: "postgres", object_type: "TABLES", grantee: "anon", privileges: ["SELECT", "INSERT"] },
+      ],
+      project_authenticated_select_policies: ["Projects are publicly viewable", "Projects are viewable by owner or admin"],
+    }]);
+
+    try {
+      const result = await runLiveSecurityScript(server.apiBase);
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("future public-schema default grants");
+      expect(result.stderr).toContain("project SELECT policies overlap for authenticated");
+    } finally {
+      await server.close();
+    }
+  }, 15_000);
 });

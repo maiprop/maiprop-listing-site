@@ -26,6 +26,7 @@ and local usage stay aligned.
 | `npm run check:secrets` | Scans tracked workspace text files for common committed secret/token patterns. | Runs in CI and pre-push; rotate any real value it flags before committing. |
 | `npm run check:production-deploy` | Verifies a live deployed URL serves the built Vite bundle and mounts the app. | CI deploy gate; pass URLs after `--` and use `--browser` for the Playwright mount check. |
 | `npm run check:bundle-size` | Checks built JS chunks in `dist/assets` against conservative size budgets. | Run after `npm run build`; fails on budget breaches and forbidden initial preloads. |
+| `npm run check:load-test-contract` | Verifies the baseline k6 script keeps p95/error thresholds, summary output, and critical public page/API coverage. | Static gate; run before changing `scripts/load-test/basic.js` or ECAS performance evidence. |
 | `npm run check:dependency-overrides` | Verifies every active `package.json` override has rationale and resolves in `package-lock.json`. | Run after dependency upgrades; pair with `npm audit` to decide whether an override can be removed. |
 | `npm run inventory:release` | Generates the release-safety inventory from functions, workflows, and env docs. | Read-only unless an output flag is added manually. |
 | `npm run check:release-safety` | Enforces release-safety invariants for CI. | Checks workflow coverage, public function posture, and documented env references. |

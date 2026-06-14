@@ -54,6 +54,13 @@ npx @redocly/cli build-docs docs/api/edge-functions.openapi.yaml -o docs/api/ind
 
 When adding / removing / changing an edge function:
 1. Update `supabase/config.toml` with the correct `verify_jwt` value.
-2. Add/update the corresponding path in `edge-functions.openapi.yaml`.
+2. Update docs/api/edge-functions.openapi.yaml with the corresponding path.
 3. Regenerate any client SDKs (if used).
 4. Commit both changes together.
+
+Public Edge Functions listed in `docs/public-edge-function-inventory.json` must
+also be represented in the OpenAPI paths. Verify before release:
+
+```powershell
+npm run check:openapi-coverage
+```
