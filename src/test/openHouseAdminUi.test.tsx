@@ -398,6 +398,7 @@ describe("OpenHouseDashboardSection", () => {
     );
 
     expect(screen.getByText(/My Open House Listings/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /edit listing/i })).toHaveAttribute("href", "/listings/listing-1/edit");
     expect(screen.getByText(/1 pending/i)).toBeInTheDocument();
     expect(screen.getByText(/1 approved/i)).toBeInTheDocument();
     expect(screen.getByText(/Offers remain/i)).toBeInTheDocument();

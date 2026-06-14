@@ -484,6 +484,7 @@ describe("OpenHouseDetail page behavior", () => {
     await renderOpenHouseDetail();
 
     expect(await screen.findByTestId("asset-control-panel")).toHaveTextContent("oh-1:true:420000");
+    expect(screen.getByRole("link", { name: /edit listing/i })).toHaveAttribute("href", "/listings/oh-1/edit");
     expect(screen.getByRole("link", { name: /manage in dashboard/i })).toHaveAttribute("href", "/dashboard?tab=open-houses");
 
     fireEvent.click(screen.getByRole("button", { name: /edit date/i }));

@@ -225,8 +225,13 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
           {isOwner && (
             <div className="flex flex-wrap gap-2 mb-6 p-4 rounded-xl bg-card border border-border">
               <span className="text-xs font-semibold text-muted-foreground uppercase self-center mr-2">{isGreek ? "Διαχείριση" : "Manage"}</span>
+              <Button size="sm" variant="outline" className="gap-1.5" asChild>
+                <Link to={`/listings/${id}/edit`}>
+                  <Pencil className="w-3.5 h-3.5" /> {isGreek ? "Επεξεργασία αγγελίας" : "Edit listing"}
+                </Link>
+              </Button>
               <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setEditingDate(!editingDate)}>
-                <Pencil className="w-3.5 h-3.5" /> {isGreek ? "Αλλαγή ημερομηνίας" : "Edit date"}
+                <Calendar className="w-3.5 h-3.5" /> {isGreek ? "Αλλαγή ημερομηνίας" : "Edit date"}
               </Button>
               <Button size="sm" variant="outline" className="gap-1.5" onClick={toggleStatus}>
                 {db.status === "active" ? <><Pause className="w-3.5 h-3.5" /> {isGreek ? "Παύση" : "Pause"}</> : <><Play className="w-3.5 h-3.5" /> {isGreek ? "Ενεργοποίηση" : "Activate"}</>}

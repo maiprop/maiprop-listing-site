@@ -156,6 +156,7 @@ export function UnitShowcase({
           </p>
         </div>
         <button
+          type="button"
           onClick={onContact}
           className="min-h-[40px] shrink-0 rounded-lg border border-primary/30 px-3.5 py-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/5"
         >
@@ -268,7 +269,7 @@ export function UnitShowcase({
           <p className="min-w-0 flex-1 text-xs text-muted-foreground">
             Prices, VAT treatment, and availability can change by unit. Request the current schedule before making a decision.
           </p>
-          <button onClick={onContact} className="shrink-0 text-xs font-semibold text-primary hover:underline">
+          <button type="button" onClick={onContact} className="shrink-0 text-xs font-semibold text-primary hover:underline">
             Ask developer
           </button>
         </div>
