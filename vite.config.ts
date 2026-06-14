@@ -1,11 +1,30 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 // Bundle size visualizer — run `ANALYZE=true npm run build` to generate report.html
 import { visualizer } from "rollup-plugin-visualizer";
 
+function getPublicApiProxyTarget(mode: string): string | undefined {
+  const env = loadEnv(mode, process.cwd(), "");
+  const target =
+    process.env.VITE_PUBLIC_API_ORIGIN ||
+    process.env.VITE_APP_URL ||
+    env.VITE_PUBLIC_API_ORIGIN ||
+    env.VITE_APP_URL;
+  if (!target) return undefined;
+  try {
+    const url = new URL(target);
+    if (!/^https?:$/.test(url.protocol)) return undefined;
+    return url.origin;
+  } catch {
+    return undefined;
+  }
+}
+
 // https://vitejs.dev/config/
-export default defineConfig((_env) => ({
+export default defineConfig(({ mode }) => {
+  const publicApiProxyTarget = getPublicApiProxyTarget(mode);
+  return {
   server: {
     host: "0.0.0.0",
     port: 8080,
@@ -15,6 +34,15 @@ export default defineConfig((_env) => ({
       // handled at runtime. Errors still appear in the browser console.
       overlay: false,
     },
+    proxy: publicApiProxyTarget
+      ? {
+          "/api/public": {
+            target: publicApiProxyTarget,
+            changeOrigin: true,
+            secure: true,
+          },
+        }
+      : undefined,
   },
   plugins: [
     react(),
@@ -115,4 +143,5 @@ export default defineConfig((_env) => ({
     },
     chunkSizeWarningLimit: 1050, // mapbox-gl lazy chunk (~276 kB gzip) and vendor-supabase are inherently large
   },
-}));
+};
+});

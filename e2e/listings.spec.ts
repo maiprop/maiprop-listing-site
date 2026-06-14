@@ -308,7 +308,9 @@ test.describe("Listings browse", () => {
     await expect(page.getByText("BuildCo").first()).toBeVisible();
     await expect(page.getByText("BP-2026-01").first()).toBeVisible();
     await expect(page.getByText("A101").first()).toBeVisible();
-    await expect(page.getByText("82 m2 internal").first()).toBeVisible();
+    const unitCard = page.locator("article").filter({ hasText: "Unit A101" }).first();
+    await expect(unitCard.getByText("Internal")).toBeVisible();
+    await expect(unitCard.getByText(/82\s*m/i)).toBeVisible();
     await expect(page.getByText("A101 floor plan").first()).toBeVisible();
     await expect(page.getByRole("link", { name: /project brochure/i }).first()).toBeVisible();
   });

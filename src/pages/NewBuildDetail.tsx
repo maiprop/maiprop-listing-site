@@ -12,7 +12,7 @@ import {
   ArrowLeft, Building2, MapPin, Calendar, Home,
   Zap, Eye, Thermometer, Check,
   ChevronDown, ChevronUp, Shield, Flame, Wifi, Car, TreePine, Phone,
-  Loader2, Maximize2, BedDouble, Bath, Layers, FileImage,
+  Loader2, Maximize2, FileImage,
 } from "lucide-react";
 import { useAuth, type Profile } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -26,7 +26,7 @@ import PropertyMiniMap from "@/components/PropertyMiniMap";
 import { ENERGY_SCALE, ENERGY_COLORS } from "@/types";
 import { CONSTRUCTION_PHASES, formatNewBuildPrice as formatPrice } from "@/lib/newBuildConfig";
 import { formatPrice as formatCurrency } from "@/lib/format";
-import { getPrimaryValuationEstimate } from "@/lib/valuationResult";
+import { getPrimaryValuationEstimate, type ValuationEstimateSource } from "@/lib/valuationResult";
 import { FeatureSection } from "@/components/property/DetailPrimitives";
 import { PropertyGallery as Gallery } from "@/components/new-build/PropertyGallery";
 import { ConstructionTimeline } from "@/components/new-build/ConstructionTimeline";
@@ -38,6 +38,7 @@ import { tFallback, tInterpolate } from "@/lib/i18nFallback";
 import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 import { fetchPublicApi } from "@/lib/publicApi";
 import { getListingDetailPath, shouldUseNewBuildRoute } from "@/lib/listingRoutes";
+import { invokeAuthenticatedFunction } from "@/lib/invokeAuthenticatedFunction";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const EnergyBadge = ({ cls }: { cls: string }) => {
@@ -59,6 +60,14 @@ type RegisterInterestPayload = {
   profile: Profile | null;
   form: RegisterInterestForm;
   contactName: string;
+};
+
+type AIInsightsResponse = ValuationEstimateSource & {
+  error?: string;
+  marketComparisonPct?: number;
+  rentalYieldEstimate?: number;
+  marketComparison?: string;
+  confidenceLabel?: string;
 };
 
 type NewBuildProjectUnit = Pick<
@@ -173,6 +182,46 @@ const isProjectImageMedia = (media: NewBuildProjectMedia): boolean => {
   const type = media.media_type?.toLowerCase() ?? "";
   const url = media.url.toLowerCase();
   return !type.includes("pdf") && !url.endsWith(".pdf");
+};
+
+const ACTIVE_UNIT_STATUSES = new Set(["available", "reserved", "under_offer"]);
+
+const finiteNumbers = (values: Array<number | null | undefined>) =>
+  values.filter((value): value is number => Number.isFinite(value) && Number(value) > 0);
+
+const formatValueRange = (values: number[], unit = ""): string | null => {
+  if (!values.length) return null;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const suffix = unit ? ` ${unit}` : "";
+  return min === max ? `${min}${suffix}` : `${min}-${max}${suffix}`;
+};
+
+const formatPriceRange = (values: number[]): string | null => {
+  if (!values.length) return null;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  return min === max ? formatPrice(min) : `${formatPrice(min)} - ${formatPrice(max)}`;
+};
+
+const formatLayoutRange = (beds: number[], baths: number[]): string | null => {
+  const bedRange = formatValueRange(beds);
+  const bathRange = formatValueRange(baths);
+  if (bedRange && bathRange) return `${bedRange} bed · ${bathRange} bath`;
+  if (bedRange) return `${bedRange} bed`;
+  if (bathRange) return `${bathRange} bath`;
+  return null;
+};
+
+const formatVatSummary = (units: NewBuildProjectUnit[]): string | null => {
+  const flags = units
+    .map((unit) => unit.vat_included)
+    .filter((value): value is boolean => typeof value === "boolean");
+  if (!flags.length) return null;
+  const hasIncluded = flags.includes(true);
+  const hasExcluded = flags.includes(false);
+  if (hasIncluded && hasExcluded) return "VAT varies by unit";
+  return hasIncluded ? "VAT included" : "VAT not included";
 };
 
 const formatProjectDate = (date: string | null | undefined): string | null => {
@@ -321,6 +370,57 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
     .filter((price) => Number.isFinite(price) && price > 0);
   const displayPrice = projectUnitPrices.length > 0 ? Math.min(...projectUnitPrices) : Number(listing?.price ?? 0);
   const isFromPrice = projectUnitPrices.length > 0;
+  const activeProjectUnits = projectUnits.filter((unit) => ACTIVE_UNIT_STATUSES.has(unit.availability_status ?? "available"));
+  const inventoryUnits = activeProjectUnits.length > 0 ? activeProjectUnits : projectUnits;
+  const unitSizeLabel = formatValueRange(finiteNumbers(inventoryUnits.map((unit) => unit.internal_sqm)), "m²");
+  const floorRangeLabel = formatValueRange(finiteNumbers(inventoryUnits.map((unit) => unit.floor)));
+  const layoutLabel = formatLayoutRange(
+    finiteNumbers(inventoryUnits.map((unit) => unit.bedrooms)),
+    finiteNumbers(inventoryUnits.map((unit) => unit.bathrooms)),
+  );
+  const priceRangeLabel = formatPriceRange(projectUnitPrices);
+  const vatSummary = formatVatSummary(inventoryUnits);
+  const projectPhaseLabel = listing?.construction_status
+    ? tr(`newBuildDetail.phases.${listing.construction_status}`, listing.construction_status.replace(/_/g, " "))
+    : null;
+  const projectSnapshot = [
+    {
+      icon: Building2,
+      label: tr("newBuildDetail.snapshot.inventory", "Inventory"),
+      value: projectUnits.length > 0 ? `${inventoryUnits.length}/${projectUnits.length} units` : tr("newBuildDetail.snapshot.requestUnits", "On request"),
+      note: tr("newBuildDetail.snapshot.available", "available or reservable"),
+    },
+    {
+      icon: Maximize2,
+      label: tr("newBuildDetail.snapshot.unitSizes", "Unit sizes"),
+      value: unitSizeLabel ?? (listing?.sqm != null ? `${listing.sqm} m²` : tr("newBuildDetail.snapshot.tba", "TBA")),
+      note: tr("newBuildDetail.snapshot.internalArea", "internal area range"),
+    },
+    {
+      icon: Home,
+      label: tr("newBuildDetail.snapshot.layouts", "Layouts"),
+      value: layoutLabel ?? tr("newBuildDetail.snapshot.tba", "TBA"),
+      note: floorRangeLabel ? trv("newBuildDetail.snapshot.floors", "floors {{range}}", { range: floorRangeLabel }) : tr("newBuildDetail.snapshot.byUnit", "confirmed by unit"),
+    },
+    {
+      icon: Calendar,
+      label: tr("newBuildDetail.snapshot.delivery", "Delivery"),
+      value: formatProjectDate(project?.delivery_date) ?? (listing?.year_built != null ? String(listing.year_built) : tr("newBuildDetail.snapshot.tba", "TBA")),
+      note: projectPhaseLabel ? trv("newBuildDetail.snapshot.phase", "{{phase}} phase", { phase: projectPhaseLabel }) : tr("newBuildDetail.snapshot.projectTimeline", "project timeline"),
+    },
+    {
+      icon: FileImage,
+      label: tr("newBuildDetail.snapshot.media", "Project media"),
+      value: projectMedia.length > 0 ? `${projectMedia.length} files` : tr("newBuildDetail.snapshot.requestMedia", "On request"),
+      note: tr("newBuildDetail.snapshot.photosPlans", "photos, plans, renders"),
+    },
+    {
+      icon: Zap,
+      label: tr("newBuildDetail.snapshot.terms", "Terms"),
+      value: vatSummary ?? tr("newBuildDetail.snapshot.askDeveloper", "Ask developer"),
+      note: listing?.energy_class ? trv("newBuildDetail.snapshot.energy", "energy {{class}} shown", { class: listing.energy_class }) : tr("newBuildDetail.snapshot.unitSpecific", "unit-specific details"),
+    },
+  ];
 
   const handleRegisterInterest = async (form: RegisterInterestForm) => {
     const ownerId = listing?.owner_id;
@@ -353,7 +453,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
   useEffect(() => {
     if (!listing || !user || !isCanonicalNewBuild) return;
     setAiInsightsLoading(true);
-    supabase.functions.invoke("property-valuation", {
+    invokeAuthenticatedFunction<AIInsightsResponse>("property-valuation", {
       body: {
         listingId: listing.id,
         title: displayTitle,
@@ -366,7 +466,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
         bedrooms: listing.bedrooms,
         bathrooms: listing.bathrooms,
         propertyType: listing.property_type,
-        listingType: "sale",
+        listingType: listing.listing_type ?? "new_build",
         floor: listing.floor,
         yearBuilt: listing.year_built,
         energyClass: listing.energy_class,
@@ -471,28 +571,39 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
               <div className="space-y-4">
                 <div className="flex items-start justify-between gap-6 flex-wrap">
                   <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 mb-2">
-                      {listing.construction_status && (
-                        <span className="text-[10px] font-bold uppercase tracking-widest bg-orange-500/15 text-orange-600 rounded-full px-2 py-0.5 capitalize">
-                          {tr(`newBuildDetail.phases.${listing.construction_status}`, listing.construction_status.replace(/_/g, " "))}
+                    <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Building2 className="h-3.5 w-3.5 text-primary" />
+                        {tr("newBuildDetail.projectLabel", "New-build project")}
+                      </span>
+                      {projectPhaseLabel && (
+                        <span className="inline-flex items-center gap-1.5">
+                          <Calendar className="h-3.5 w-3.5 text-orange-600" />
+                          {projectPhaseLabel}
                         </span>
                       )}
-                      <span className="text-[10px] font-bold uppercase tracking-widest bg-primary/15 text-primary rounded-full px-2 py-0.5">{tr("newBuildDetail.badges.newBuild", "New Building")}</span>
-                      {listing.energy_class && <EnergyBadge cls={listing.energy_class} />}
                     </div>
                     <h1 className="font-display text-2xl sm:text-3xl font-bold leading-tight">{displayTitle}</h1>
-                    <div className="flex items-center gap-1.5 mt-2 text-muted-foreground text-sm">
+                    <div className="mt-2 flex items-start gap-1.5 text-muted-foreground text-sm">
                       <MapPin className="w-4 h-4 shrink-0" />
-                      <span>{[displayAddress, displayCity, displayRegion].filter(Boolean).join(", ")}</span>
+                      <span className="min-w-0 break-words">{[displayAddress, displayCity, displayRegion].filter(Boolean).join(", ")}</span>
                     </div>
                   </div>
                   <div className="text-right shrink-0">
+                    <p className="mb-0.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                      {isFromPrice ? tr("newBuildDetail.priceRangeFrom", "Project starting price") : tr("newBuildDetail.priceGuide", "Price guide")}
+                    </p>
                     <div className="font-display text-3xl font-black text-foreground">
                       {isFromPrice
                         ? trv("newBuildDetail.fromPrice", "From {{price}}", { price: formatPrice(displayPrice) })
                         : formatPrice(displayPrice)}
                     </div>
-                    {listing.price_per_sqm != null && (
+                    {priceRangeLabel && (
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {trv("newBuildDetail.priceRange", "{{range}} range", { range: priceRangeLabel })}
+                      </div>
+                    )}
+                    {!priceRangeLabel && listing.price_per_sqm != null && (
                       <div className="text-xs text-muted-foreground mt-0.5">
                         {trv("newBuildDetail.pricePerSqm", "{{price}} per m²", { price: formatPrice(Number(listing.price_per_sqm)) })}
                       </div>
@@ -500,43 +611,17 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                   </div>
                 </div>
 
-                {/* Key stats bar — wrapped flex pills */}
-                <div className="flex items-center gap-2 flex-wrap">
-                  {listing.sqm != null && (
-                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
-                      <Maximize2 className="w-3.5 h-3.5 text-primary" />{listing.sqm} m²
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {projectSnapshot.map(({ icon: Icon, label, value, note }) => (
+                    <div key={label} className="rounded-xl border border-border bg-card/80 p-3.5 shadow-sm">
+                      <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                        <Icon className="h-3.5 w-3.5 text-primary" />
+                        <span className="min-w-0 truncate">{label}</span>
+                      </div>
+                      <p className="text-sm font-bold leading-snug text-foreground">{value}</p>
+                      <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{note}</p>
                     </div>
-                  )}
-                  {listing.bedrooms != null && (
-                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
-                      <BedDouble className="w-3.5 h-3.5 text-primary" />{trv("newBuildDetail.stats.bed", "{{count}} bed", { count: listing.bedrooms })}
-                    </div>
-                  )}
-                  {listing.bathrooms != null && (
-                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
-                      <Bath className="w-3.5 h-3.5 text-primary" />{trv("newBuildDetail.stats.bath", "{{count}} bath", { count: listing.bathrooms })}
-                    </div>
-                  )}
-                  {!!listing.total_floors && (
-                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
-                      <Layers className="w-3.5 h-3.5 text-primary" />{trv("newBuildDetail.stats.floors", "{{count}} floors", { count: listing.total_floors })}
-                    </div>
-                  )}
-                  {listing.year_built != null && (
-                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
-                      <Calendar className="w-3.5 h-3.5 text-primary" />{trv("newBuildDetail.stats.delivery", "Delivery {{year}}", { year: listing.year_built })}
-                    </div>
-                  )}
-                  {listing.energy_class && (
-                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
-                      <Zap className="w-3.5 h-3.5 text-primary" />{trv("newBuildDetail.stats.energy", "Energy {{class}}", { class: listing.energy_class })}
-                    </div>
-                  )}
-                  {listing.heating_system && (
-                    <div className="flex items-center gap-1.5 bg-secondary/80 border border-border px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium">
-                      <Thermometer className="w-3.5 h-3.5 text-primary" />{String(listing.heating_system).replace(/_/g, " ")}
-                    </div>
-                  )}
+                  ))}
                 </div>
               </div>
 

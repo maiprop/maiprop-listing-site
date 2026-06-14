@@ -65,7 +65,7 @@ Deno.test("provider usage limit returns fallback valuation instead of an unavail
     assertEquals(res.status, 200);
     assertEquals(typeof body.error, "undefined");
     assertEquals(body.generatedBy, "fallback");
-    assertEquals(body.estimatedValue, 200000);
+    assertEquals(body.estimatedValue, 208000);
   });
 });
 
@@ -81,7 +81,34 @@ Deno.test("provider server errors return fallback valuation instead of failing t
     assertEquals(res.status, 200);
     assertEquals(typeof body.error, "undefined");
     assertEquals(body.generatedBy, "fallback");
-    assertEquals(body.estimatedValue, 300000);
+    assertEquals(body.estimatedValue, 260000);
+  });
+});
+
+Deno.test("fallback valuation uses location benchmarks instead of copying the listed price", async () => {
+  await withQuotaAndProviderMock(new Response("upstream unavailable", { status: 503 }), async () => {
+    const res = await handler(req("POST", {
+      city: "Δήμος Γλυφάδας",
+      region: "Δήμος Γλυφάδας",
+      address: "11 Δημάρχου Άγγελου Μεταξά",
+      price: 275000,
+      sqm: 39,
+      propertyType: "apartment",
+      listingType: "new_build",
+    }, { authorization: "Bearer test-valid-token" }));
+    const body = await jsonBody(res) as {
+      generatedBy?: string;
+      estimatedValue?: number;
+      marketComparisonPct?: number;
+      methodUsed?: string;
+      summary?: string;
+    };
+    assertEquals(res.status, 200);
+    assertEquals(body.generatedBy, "fallback");
+    assertEquals(body.estimatedValue, 243360);
+    assertEquals(body.marketComparisonPct, -12);
+    assertEquals(body.methodUsed, "Deterministic fallback using 2026 Greece location/type benchmark ranges");
+    assertEquals(body.summary?.includes("copying the listed price"), true);
   });
 });
 

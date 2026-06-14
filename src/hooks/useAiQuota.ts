@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeAuthenticatedFunction } from "@/lib/invokeAuthenticatedFunction";
 
 export const FREE_AI_MONTHLY_LIMIT = 5;
 export const PRO_AI_MONTHLY_LIMIT = 50;
@@ -51,7 +51,7 @@ export function getAiQuotaTierLabel(quota: AIQuota | null | undefined): string {
 }
 
 export async function fetchAiQuota(bucket: string): Promise<AIQuota | null> {
-  const { data, error } = await supabase.functions.invoke("ai-quota-status", {
+  const { data, error } = await invokeAuthenticatedFunction("ai-quota-status", {
     body: { bucket },
   });
   if (error) throw error;
