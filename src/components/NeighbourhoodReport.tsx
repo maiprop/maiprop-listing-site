@@ -4,8 +4,8 @@ import {
   Minus, Loader2, Zap, MapPin, HardHat, CheckCircle2,
   AlertCircle, Clock,
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { getAiErrorMessage, isAiMonthlyLimitError } from "@/lib/aiErrorUtils";
+import { invokeAuthenticatedFunction } from "@/lib/invokeAuthenticatedFunction";
 import { useAuth } from "@/contexts/AuthContext";
 import { SignInForAI } from "@/components/SignInForAI";
 import { Button } from "@/components/ui/button";
@@ -203,7 +203,7 @@ export default function NeighbourhoodReport({ city, address, region, municipalit
     try {
       const currentQuota = await refreshQuota();
       if (currentQuota && !currentQuota.allowed) return;
-      const { data: result, error: fnErr } = await supabase.functions.invoke("neighbourhood-report", {
+      const { data: result, error: fnErr } = await invokeAuthenticatedFunction<NeighbourhoodData & { error?: string }>("neighbourhood-report", {
         body: { city, address, region, municipality, propertyType, lat, lng, listingId },
       });
       if (fnErr) throw fnErr;

@@ -737,22 +737,65 @@ Use benchmark table. Apply condition, location, feature adjustments. Range: ±15
 };
 
 // ── Main handler ───────────────────────────────────────────────────────────────
+const fallbackBenchmarkPricePerSqm = (input: {
+  city: string;
+  region?: string;
+  address?: string;
+  propertyType?: string;
+  listingType?: string;
+}): number => {
+  const location = [input.address, input.city, input.region].filter(Boolean).join(" ").toLowerCase();
+  const propertyType = input.propertyType?.toLowerCase() ?? "apartment";
+  const listingType = input.listingType?.toLowerCase() ?? "sale";
+
+  let benchmark = 2_600;
+  if (propertyType.includes("commercial") || propertyType.includes("retail")) benchmark = 2_800;
+  else if (propertyType.includes("office")) benchmark = 2_900;
+  else if (propertyType.includes("land") || propertyType.includes("plot")) benchmark = 850;
+  else if (propertyType.includes("villa")) benchmark = 4_800;
+
+  if (/glyf|γλυφ|voula|βούλα|vouliag|βουλιαγ|south athens|νότι/.test(location)) benchmark = 5_200;
+  else if (/kolonaki|κολων|psychiko|ψυχικ|kifiss|κηφισ|ekali|εκαλ/.test(location)) benchmark = 6_200;
+  else if (/pagkrati|παγκ|mets|koukaki|κουκακ|plaka|πλακ|exarch/.test(location)) benchmark = 3_900;
+  else if (/marousi|μαρουσ|halandri|χαλανδρ|cholarg|χολαργ/.test(location)) benchmark = 3_400;
+  else if (/zograf|ζωγραφ|kaisarian|καισαριαν|vyron|βυρων/.test(location)) benchmark = 2_600;
+  else if (/perister|περιστερ|ilion|ιλιον|aigaleo|αιγαλ/.test(location)) benchmark = 1_900;
+  else if (/piraeus|πειραι/.test(location)) benchmark = 2_550;
+  else if (/thessaloniki|θεσσαλον/.test(location)) benchmark = /center|κεντρ/.test(location) ? 3_100 : 2_050;
+  else if (/chania|χανι/.test(location)) benchmark = 3_200;
+  else if (/heraklion|ηρακλ/.test(location)) benchmark = 2_450;
+  else if (/mykonos|μυκον/.test(location)) benchmark = 12_000;
+  else if (/santorini|σαντοριν/.test(location)) benchmark = 14_000;
+  else if (/paros|παροσ|antiparos|αντιπαρ/.test(location)) benchmark = 5_500;
+
+  if (listingType.includes("new_build") || listingType.includes("pre_sale")) benchmark *= 1.2;
+  if (propertyType.includes("villa")) benchmark *= 1.15;
+  if (propertyType.includes("land") || propertyType.includes("plot")) benchmark *= 0.55;
+
+  return Math.round(benchmark);
+};
+
 const fallbackValuation = (input: { // skipcq: JS-R1005 - Deterministic valuation fallback keeps comparable scoring and confidence fields aligned.
   city: string;
+  address?: string;
+  region?: string;
   price: number;
   sqm: number;
   propertyType?: string;
   listingType?: string;
   reason?: string;
 }) => {
-  const listedPrice = Number.isFinite(input.price) && input.price > 0 ? input.price : input.sqm * 2500;
   const sqm = Number.isFinite(input.sqm) && input.sqm > 0 ? input.sqm : 1;
-  const pricePerSqm = Math.round(listedPrice / sqm);
+  const listedPrice = Number.isFinite(input.price) && input.price > 0 ? input.price : 0;
+  const pricePerSqm = fallbackBenchmarkPricePerSqm(input);
   const isAuction = input.listingType === "auction";
-  const estimatedValue = Math.round(listedPrice);
-  const rangeLow = Math.round(estimatedValue * 0.85);
-  const rangeHigh = Math.round(estimatedValue * 1.12);
-  const executionValue = Math.round(estimatedValue * (1 - (isAuction ? 0.25 : 0.14)));
+  const cleanMarketValue = Math.round(pricePerSqm * sqm);
+  const estimatedValue = isAuction ? Math.round(cleanMarketValue * 0.82) : cleanMarketValue;
+  const comparisonAnchor = isAuction ? cleanMarketValue : estimatedValue;
+  const deltaPct = listedPrice > 0 ? roundNumber(((comparisonAnchor - listedPrice) / listedPrice) * 100, 1) : 0;
+  const rangeLow = Math.round(comparisonAnchor * 0.88);
+  const rangeHigh = Math.round(comparisonAnchor * 1.14);
+  const executionValue = Math.round(comparisonAnchor * (1 - (isAuction ? 0.25 : 0.12)));
 
   return {
     estimatedValue,
@@ -760,17 +803,17 @@ const fallbackValuation = (input: { // skipcq: JS-R1005 - Deterministic valuatio
     rangeHigh,
     executionValue,
     pricePerSqmEstimate: pricePerSqm,
-    confidence: 35,
+    confidence: 45,
     confidenceLabel: "Low",
-    liquidityScore: input.propertyType === "apartment" ? 70 : 45,
-    marketComparison: "at_market",
-    marketComparisonPct: 0,
-    pricingPosition: "fair",
-    methodUsed: "Conservative fallback based on submitted listing price and standard transaction friction",
+    liquidityScore: input.propertyType === "apartment" ? 68 : 45,
+    marketComparison: toMarketComparison(deltaPct),
+    marketComparisonPct: deltaPct,
+    pricingPosition: toPricingPosition(deltaPct),
+    methodUsed: "Deterministic fallback using 2026 Greece location/type benchmark ranges",
     valuationMode: "MODE_1_LISTING_ONLY",
-    summary: `Fallback valuation for ${input.city}: ${input.reason ?? "the AI provider returned malformed JSON"}, so this uses the submitted price as the market anchor and applies conservative transaction/legal uncertainty adjustments. Treat this as a temporary estimate until a full AI valuation can be generated.`,
+    summary: `Fallback valuation for ${input.city}: ${input.reason ?? "the AI provider returned malformed JSON"}, so this uses a ${pricePerSqm.toLocaleString()} EUR/sqm 2026 market benchmark for the location and asset type rather than copying the listed price. Treat this as a temporary estimate until a full OS/OpenAI valuation can be generated.`,
     keyFactors: [
-      { factor: "Submitted price anchor", impact: "neutral", note: "Used because provider output was unavailable" },
+      { factor: "Location benchmark", impact: "neutral", note: `${pricePerSqm.toLocaleString()} EUR/sqm fallback benchmark` },
       { factor: "2026 market uncertainty", impact: "neutral", note: "Conservative confidence applied" },
       { factor: "Transaction costs", impact: "negative", note: "Execution value includes friction" },
       { factor: "Legal/planning data", impact: "negative", note: "Document status unknown" },
@@ -786,7 +829,7 @@ const fallbackValuation = (input: { // skipcq: JS-R1005 - Deterministic valuatio
     rentalYieldEstimate: input.propertyType === "apartment" ? 4.5 : 3.5,
     highestBestUseHint: null,
     redFlags: [`${input.reason ?? "AI provider returned malformed JSON"}; fallback valuation used`],
-    auctionAdjustedValue: isAuction ? Math.round(estimatedValue / 0.8) : null,
+    auctionAdjustedValue: isAuction ? cleanMarketValue : null,
     listingQualityScore: 40,
     generatedBy: "fallback",
   };
@@ -876,6 +919,8 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
       log.warn("property-valuation: AI provider key missing; using OS/fallback valuation", { city });
       const fallback = normalizeValuationResult(withOsDiagnostics(osValuationFallback ?? fallbackValuation({
         city: String(city),
+        address: optionalString(address),
+        region: optionalString(region),
         price: Number(price),
         sqm: Number(sqm),
         propertyType: typeof propertyType === "string" ? propertyType : undefined,
@@ -1035,6 +1080,8 @@ Rules:
       log.error("AI gateway error", { status: response.status, body: txt.slice(0, 500) });
       const fallback = normalizeValuationResult(withOsDiagnostics(osValuationFallback ?? fallbackValuation({
         city: String(city),
+        address: optionalString(address),
+        region: optionalString(region),
         price: Number(price),
         sqm: Number(sqm),
         propertyType: typeof propertyType === "string" ? propertyType : undefined,
@@ -1076,6 +1123,8 @@ Rules:
       });
       result = osValuationFallback ?? fallbackValuation({
         city: String(city),
+        address: optionalString(address),
+        region: optionalString(region),
         price: Number(price),
         sqm: Number(sqm),
         propertyType: typeof propertyType === "string" ? propertyType : undefined,

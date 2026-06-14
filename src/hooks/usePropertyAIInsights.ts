@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
-import { supabase as supabaseClient } from "@/integrations/supabase/client";
 import { isAiUsageLimitError } from "@/lib/aiErrorUtils";
 import { aiQuotaFromJson, fetchAiQuota } from "@/hooks/useAiQuota";
 import { toast } from "sonner";
 import type { User } from "@supabase/supabase-js";
 import type { ListingWithJoins } from "@/hooks/useListings";
 import { deriveListingMarketComparison, getPrimaryValuationEstimate } from "@/lib/valuationResult";
+import type { ValuationEstimateSource } from "@/lib/valuationResult";
+import { invokeAuthenticatedFunction } from "@/lib/invokeAuthenticatedFunction";
 
 export interface AIInsightsData {
   vsMarket: number;
@@ -24,6 +25,12 @@ export interface AIInsightsQuota {
 }
 
 const AI_INSIGHTS_BUCKET = "property-valuation";
+
+type PropertyInsightsResponse = ValuationEstimateSource & {
+  error?: string;
+  rentalYieldEstimate?: number;
+  confidenceLabel?: string;
+};
 
 export function usePropertyAIInsights(
   dbListing: ListingWithJoins | null | undefined,
@@ -85,7 +92,7 @@ export function usePropertyAIInsights(
     setAiInsightsLoaded(true);
 
     try {
-      const { data, error: fnErr } = await supabaseClient.functions.invoke("property-valuation", {
+      const { data, error: fnErr } = await invokeAuthenticatedFunction<PropertyInsightsResponse>("property-valuation", {
         body: {
           listingId: snapshot.id,
           title: snapshot.title,

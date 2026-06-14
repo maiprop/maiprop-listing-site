@@ -341,6 +341,12 @@ describe("NewBuildDetail", () => {
     renderPage();
 
     expect(screen.getAllByRole("heading", { name: "Marina Heights" }).length).toBeGreaterThan(0);
+    expect(screen.getByText("Inventory")).toBeInTheDocument();
+    expect(screen.getByText("1/1 units")).toBeInTheDocument();
+    expect(screen.getByText("Unit sizes")).toBeInTheDocument();
+    expect(screen.getByText("82 m²")).toBeInTheDocument();
+    expect(screen.getByText("Layouts")).toBeInTheDocument();
+    expect(screen.getByText("2 bed · 2 bath")).toBeInTheDocument();
     expect(screen.getByText("gallery title:Marina Heights")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Aegean Residences" })).not.toBeInTheDocument();
     expect(screen.getByText(/From/)).toHaveTextContent(/410[,.]000/);

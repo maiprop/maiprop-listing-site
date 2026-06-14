@@ -51,12 +51,14 @@ describe("new-build project sections", () => {
 
     render(<UnitShowcase listing={listing} units={units} onContact={onContact} />);
 
-    expect(screen.getByText("A101")).toBeInTheDocument();
-    expect(screen.getByText("82 m2 internal")).toBeInTheDocument();
-    expect(screen.getByText("VAT included")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Unit A101" })).toBeInTheDocument();
+    expect(screen.getByText("Internal")).toBeInTheDocument();
+    expect(screen.getByText(/82 m/)).toBeInTheDocument();
+    expect(screen.getByText("VAT")).toBeInTheDocument();
+    expect(screen.getByText("Included")).toBeInTheDocument();
     expect(screen.queryByText(/Additional configurations may be available/i)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /request units/i }));
+    fireEvent.click(screen.getByRole("button", { name: /request schedule/i }));
     expect(onContact).toHaveBeenCalledTimes(1);
   });
 

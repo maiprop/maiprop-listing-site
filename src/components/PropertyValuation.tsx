@@ -6,9 +6,9 @@ import {
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
 import { getAiErrorMessage } from "@/lib/aiErrorUtils";
 import { getPrimaryValuationEstimate, getRemoteValuationEstimate } from "@/lib/valuationResult";
+import { invokeAuthenticatedFunction } from "@/lib/invokeAuthenticatedFunction";
 import { useAuth } from "@/contexts/AuthContext";
 import { SignInForAI } from "@/components/SignInForAI";
 import { toast } from "sonner";
@@ -257,7 +257,7 @@ export default function PropertyValuation(props: PropertyValuationProps) {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("property-valuation", { body: props });
+      const { data, error } = await invokeAuthenticatedFunction<RawValuationResult & { error?: string }>("property-valuation", { body: props });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       if (!getRemoteValuationEstimate(data)) throw new Error(ui(isGreek, "Valuation returned no result", "Η εκτίμηση δεν επέστρεψε αποτέλεσμα"));
