@@ -6,6 +6,11 @@
 DROP POLICY IF EXISTS "Projects are publicly viewable" ON public.projects;
 DROP POLICY IF EXISTS "Projects are viewable by owner or admin" ON public.projects;
 DROP POLICY IF EXISTS "Projects are visible to authenticated users" ON public.projects;
+DROP POLICY IF EXISTS "Public can view active projects" ON public.projects;
+DROP POLICY IF EXISTS "Anyone can view active projects" ON public.projects;
+DROP POLICY IF EXISTS "projects_select" ON public.projects;
+DROP POLICY IF EXISTS "projects_public_select" ON public.projects;
+DROP POLICY IF EXISTS "projects_owner_admin_select" ON public.projects;
 
 CREATE POLICY "Projects are publicly viewable"
   ON public.projects

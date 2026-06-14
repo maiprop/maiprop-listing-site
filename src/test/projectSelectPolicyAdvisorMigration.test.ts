@@ -18,6 +18,7 @@ describe("project SELECT advisor policy migration", () => {
     expect(sql).toContain("TO authenticated");
     expect(sql).toContain("status = 'active'::text");
     expect(sql).toContain("private.has_platform_admin((SELECT auth.uid()))");
+    expect(sql).toContain('DROP POLICY IF EXISTS "Public can view active projects" ON public.projects');
     expect(sql).toContain("project SELECT policies still overlap for authenticated");
   });
 });
