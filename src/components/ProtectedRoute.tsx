@@ -2,13 +2,13 @@ import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading, profileLoading, needsOnboarding, profile, signOut } = useAuth();
+  const { user, loading, needsOnboarding, profile, signOut } = useAuth();
   const location = useLocation();
 
-  // Wait for auth AND the initial profile fetch before making routing decisions.
-  // Without this, needsOnboarding is briefly false (profile=null) then flips true,
-  // causing a mid-page redirect to /onboarding for users who haven't completed it.
-  if (loading || profileLoading) {
+  // Block only while the auth session itself is unresolved. Profile hydration is
+  // allowed to complete in the background so a valid sign-in does not leave the
+  // user on a full-screen loading shell after redirect.
+  if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">

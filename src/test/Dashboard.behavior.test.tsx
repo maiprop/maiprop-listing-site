@@ -166,6 +166,17 @@ describe("Dashboard behavior", () => {
     expect(container.querySelector(".animate-spin")).toBeTruthy();
   });
 
+  it("renders the dashboard shell for a signed-in user while profile details hydrate", () => {
+    authState.profileLoading = true;
+    authState.profile = null;
+
+    const { container } = renderWithProviders(<Dashboard />);
+
+    expect(container.querySelector(".animate-spin")).toBeNull();
+    expect(screen.getByText(/Good morning, casey/i)).toBeInTheDocument();
+    expect(screen.getByTestId("dashboard-plan-card")).toBeInTheDocument();
+  });
+
   it("offers session recovery and signs out when the user is missing", async () => {
     authState.user = null;
 

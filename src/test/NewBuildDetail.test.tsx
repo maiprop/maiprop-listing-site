@@ -359,6 +359,12 @@ describe("NewBuildDetail", () => {
   it("renders the linked project summary and passes project units and media to the new-build sections", () => {
     renderPage();
 
+    const heroRow = screen.getByTestId("new-build-title-price-row");
+    const priceBlock = screen.getByTestId("new-build-price-block");
+    expect(heroRow).toHaveClass("flex-col");
+    expect(heroRow).toHaveClass("sm:flex-row");
+    expect(priceBlock).toHaveClass("w-full");
+    expect(priceBlock).toHaveClass("sm:w-auto");
     expect(screen.getAllByRole("heading", { name: "Marina Heights" }).length).toBeGreaterThan(0);
     expect(screen.getByText("Inventory")).toBeInTheDocument();
     expect(screen.getByText("1/1 units")).toBeInTheDocument();

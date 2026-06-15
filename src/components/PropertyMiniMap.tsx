@@ -406,11 +406,11 @@ export default function PropertyMiniMap({
       <div className="glass-card rounded-xl overflow-hidden border border-border">
         <div
           data-property-map-header
-          className="px-5 py-4 border-b border-border flex items-start justify-between gap-3 flex-wrap"
+          className="px-5 py-4 border-b border-border flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
         >
-          <div className="flex min-w-0 flex-1 items-start gap-2">
+          <div className="flex min-w-0 w-full flex-1 items-start gap-2 sm:w-auto">
             <MapPin className="w-4 h-4 text-primary" />
-            <h3 className="min-w-0 break-words font-display font-semibold text-sm leading-tight">
+            <h3 className="min-w-0 w-full break-words font-display font-semibold text-sm leading-tight sm:w-auto">
               Location & Nearby
             </h3>
           </div>
@@ -444,11 +444,11 @@ export default function PropertyMiniMap({
       {/* Header */}
       <div
         data-property-map-header
-        className="px-5 py-4 border-b border-border flex items-start justify-between gap-3 flex-wrap"
+        className="px-5 py-4 border-b border-border flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
       >
-        <div className="flex min-w-0 flex-1 items-start gap-2">
+        <div className="flex min-w-0 w-full flex-1 items-start gap-2 sm:w-auto">
           <MapPin className="w-4 h-4 text-primary" />
-          <h3 className="min-w-0 break-words font-display font-semibold text-sm leading-tight">
+          <h3 className="min-w-0 w-full break-words font-display font-semibold text-sm leading-tight sm:w-auto">
             Location & Nearby Places
           </h3>
           {pois && (
@@ -457,7 +457,7 @@ export default function PropertyMiniMap({
             </span>
           )}
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <div data-property-map-actions className="grid w-full shrink-0 grid-cols-1 gap-2 min-[380px]:grid-cols-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
           <a href={streetViewUrl} target="_blank" rel="noopener noreferrer">
             <Button
               size="sm"

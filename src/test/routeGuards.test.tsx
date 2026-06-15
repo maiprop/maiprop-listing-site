@@ -91,7 +91,7 @@ describe("ProtectedRoute", () => {
     expect(screen.queryByText("SECRET")).toBeNull();
   });
 
-  it("renders a spinner while the profile is still loading even if auth is done", () => {
+  it("renders authenticated children while the profile is still loading to avoid post-login full-screen lag", () => {
     useAuthMock.mockReturnValue({
       user: { id: "u-1" },
       loading: false,
@@ -103,7 +103,8 @@ describe("ProtectedRoute", () => {
         <div>SECRET</div>
       </ProtectedRoute>,
     );
-    expect(container.querySelector(".animate-spin")).toBeTruthy();
+    expect(container.querySelector(".animate-spin")).toBeNull();
+    expect(screen.getByText("SECRET")).toBeInTheDocument();
   });
 
   it("redirects to /login when there is no user", () => {
