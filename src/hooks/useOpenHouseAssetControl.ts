@@ -99,8 +99,10 @@ export function useOpenHouseCapacity(listingId: string | undefined) {
     queryFn: async () => {
       if (!listingId || !user) return null;
       const parsedListingId = parseMutationInput(rowIdSchema("listing id"), listingId, "listing id");
-      const invoke = supabase.functions.invoke as unknown as InvokeOpenHouseCapacity;
-      const { data, error } = await invoke("open-house-capacity", { body: { listingId: parsedListingId } });
+      const { data, error } = await (supabase.functions.invoke as unknown as InvokeOpenHouseCapacity)(
+        "open-house-capacity",
+        { body: { listingId: parsedListingId } },
+      );
       if (error) throw error;
       const row = data;
       if (!row) return null;
@@ -205,8 +207,9 @@ export function useCreateOpenHouseRegistration() {
     }) => {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) throw new Error("Not authenticated");
-      const invoke = supabase.functions.invoke as unknown as InvokeOpenHouseRegistration;
-      const { data: result, error: invokeError } = await invoke("open-house-registration", {
+      const { data: result, error: invokeError } = await (
+        supabase.functions.invoke as unknown as InvokeOpenHouseRegistration
+      )("open-house-registration", {
         body: {
           listingId,
           timeslotIndex: timeslotIndex ?? null,
@@ -390,8 +393,7 @@ export function useSubmitOpenHouseOffer() {
     }) => {
       const uid = (await supabase.auth.getUser()).data.user?.id;
       if (!uid) throw new Error("Not authenticated");
-      const rpc = supabase.rpc as unknown as SubmitOpenHouseOfferRpc;
-      const { data, error } = await rpc("submit_open_house_offer", {
+      const { data, error } = await (supabase.rpc as unknown as SubmitOpenHouseOfferRpc)("submit_open_house_offer", {
         p_listing_id: listingId,
         p_amount: amount,
         p_message: message || null,
@@ -508,8 +510,9 @@ export function useAcceptOpenHouseOffer() {
       void uid;
       void _listingId;
       void allOfferIds;
-      const rpc = supabase.rpc as unknown as AcceptOpenHouseOfferRpc;
-      const { error } = await rpc("accept_open_house_offer", { p_offer_id: acceptId });
+      const { error } = await (supabase.rpc as unknown as AcceptOpenHouseOfferRpc)("accept_open_house_offer", {
+        p_offer_id: acceptId,
+      });
       if (error) throw error;
     },
     onSuccess: (_, v) => {
@@ -533,8 +536,10 @@ export function useReopenOpenHouseOfferSelection() {
       const uid = (await supabase.auth.getUser()).data.user?.id;
       if (!uid) throw new Error("Not authenticated");
       void uid;
-      const rpc = supabase.rpc as unknown as ReopenOpenHouseOfferSelectionRpc;
-      const { error } = await rpc("reopen_open_house_offer_selection", { p_listing_id: listingId });
+      const { error } = await (supabase.rpc as unknown as ReopenOpenHouseOfferSelectionRpc)(
+        "reopen_open_house_offer_selection",
+        { p_listing_id: listingId },
+      );
       if (error) throw error;
     },
     onSuccess: (_, v) => {

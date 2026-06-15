@@ -136,11 +136,12 @@ export const useBulkUpdateProjectUnitPrices = () => {
       );
 
       // Localized escape hatch: generated Supabase types can lag new migrations in PR CI.
-      const rpc = supabase.rpc as unknown as (
-        fn: "bulk_update_project_unit_prices",
-        args: { p_project_id: string; p_percentage: number },
-      ) => Promise<{ data: number | null; error: Error | null }>;
-      const { data, error } = await rpc("bulk_update_project_unit_prices", {
+      const { data, error } = await (
+        supabase.rpc as unknown as (
+          fn: "bulk_update_project_unit_prices",
+          args: { p_project_id: string; p_percentage: number },
+        ) => Promise<{ data: number | null; error: Error | null }>
+      )("bulk_update_project_unit_prices", {
         p_project_id: payload.projectId,
         p_percentage: payload.percentage,
       });
