@@ -42,8 +42,8 @@ const SECTIONS = [
   "auction-count",
 ] as const;
 const HOMEPAGE_CACHE_VERSION = "open-house-transaction-v1";
-const FEATURED_CACHE_VERSION = "featured-daily-v2";
-const FEATURED_DAILY_CACHE_SECONDS = 24 * 60 * 60;
+const FEATURED_CACHE_VERSION = "featured-card-v3";
+const FEATURED_CACHE_SECONDS = 5 * 60;
 const COUNTED_PROPERTY_TYPES = ["apartment", "land"] as const;
 const PRICE_INDEX_FALLBACK = [
   { city: "Athens", avg_price_per_sqm: 2180, listing_count: 0, is_live: false, trend_change_pct: null, trend_up: null, trend_is_live: false },
@@ -60,8 +60,14 @@ const POPULAR_LOCATION_FALLBACK: PopularLocation[] = [
   { name: "Santorini", listings: 1240, trend: "+1.9%", trendUp: true },
 ];
 
+const projectUnitCardSelect = ["id", "availability_status", "internal_sqm"].join(",");
+const featuredProjectSelect = [
+  "delivery_date",
+  `project_units!project_units_project_id_fkey(${projectUnitCardSelect})`,
+].join(",");
+
 const featuredSelect =
-  "id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,project_id,ai_score,views_count,tags,listing_images(url,sort_order)";
+  `id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,project_id,ai_score,views_count,tags,project:projects!listings_project_id_fkey(${featuredProjectSelect}),listing_images(url,sort_order)`;
 
 const openHouseSelect =
   "id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,open_house_transaction_type,ai_score,views_count,tags,open_house_date,latitude,longitude,listing_images(url,sort_order)";
@@ -287,9 +293,9 @@ async function publicHomepage(ctx: PublicApiCtx, requestUrl: URL): Promise<Respo
   const cacheKey = normalizedCacheUrl(requestUrl, "homepage", cacheParams);
   const cacheOptions = section === "featured"
     ? {
-        edgeTtlSeconds: FEATURED_DAILY_CACHE_SECONDS,
-        browserTtlSeconds: FEATURED_DAILY_CACHE_SECONDS,
-        staleSeconds: FEATURED_DAILY_CACHE_SECONDS,
+        edgeTtlSeconds: FEATURED_CACHE_SECONDS,
+        browserTtlSeconds: FEATURED_CACHE_SECONDS,
+        staleSeconds: FEATURED_CACHE_SECONDS,
       }
     : {
         edgeTtlSeconds: 180,

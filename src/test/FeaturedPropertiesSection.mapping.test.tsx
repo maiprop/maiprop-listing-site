@@ -12,12 +12,27 @@ vi.mock("@/components/PropertyCardSkeleton", () => ({
 }));
 
 vi.mock("@/components/PropertyCard", () => ({
-  PropertyCard: ({ property }: { property: { title: string; listingType: string; isPreSale?: boolean; images: string[] } }) => (
+  PropertyCard: ({ property }: { property: {
+    title: string;
+    listingType: string;
+    isPreSale?: boolean;
+    images: string[];
+    newBuildUnitSizeMin?: number;
+    newBuildUnitSizeMax?: number;
+    newBuildUnitCount?: number;
+    newBuildAvailableUnitCount?: number;
+    newBuildDeliveryYear?: number;
+  } }) => (
     <article
       data-testid="featured-property"
       data-listing-type={property.listingType}
       data-is-pre-sale={String(Boolean(property.isPreSale))}
       data-image={property.images[0] ?? ""}
+      data-unit-size-min={property.newBuildUnitSizeMin ?? ""}
+      data-unit-size-max={property.newBuildUnitSizeMax ?? ""}
+      data-unit-count={property.newBuildUnitCount ?? ""}
+      data-available-unit-count={property.newBuildAvailableUnitCount ?? ""}
+      data-delivery-year={property.newBuildDeliveryYear ?? ""}
     >
       {property.title}
     </article>
@@ -55,5 +70,50 @@ describe("FeaturedPropertiesSection mapping", () => {
     expect(card).toHaveAttribute("data-listing-type", "sale");
     expect(card).toHaveAttribute("data-is-pre-sale", "false");
     expect(card).toHaveAttribute("data-image", "https://cdn.test/glifada-cover.webp");
+  });
+
+  it("maps project inventory and delivery data into new-build cards", () => {
+    render(
+      <MemoryRouter>
+        <FeaturedPropertiesSection
+          isLoading={false}
+          isError={false}
+          listings={[
+            {
+              id: "project-listing-1",
+              title: "Glifada GV",
+              address: "11 Dimarchou Angelou Metaxa",
+              city: "Glyfada",
+              price: 275000,
+              price_per_sqm: 7051,
+              sqm: 39,
+              property_type: "apartment",
+              listing_type: "new_build",
+              project_id: "project-1",
+              cover_image_url: "https://cdn.test/new-cover.webp",
+              project: {
+                delivery_date: "2026-11-01",
+                project_units: [
+                  { id: "u1", availability_status: "available", internal_sqm: 39 },
+                  { id: "u2", availability_status: "reserved", internal_sqm: 42 },
+                  { id: "u3", availability_status: "sold", internal_sqm: 56 },
+                  { id: "u4", availability_status: "under_offer", internal_sqm: 49 },
+                ],
+              },
+            },
+          ]}
+        />
+      </MemoryRouter>,
+    );
+
+    const card = screen.getByTestId("featured-property");
+    expect(card).toHaveAttribute("data-listing-type", "new_build");
+    expect(card).toHaveAttribute("data-is-pre-sale", "true");
+    expect(card).toHaveAttribute("data-image", "https://cdn.test/new-cover.webp");
+    expect(card).toHaveAttribute("data-unit-size-min", "39");
+    expect(card).toHaveAttribute("data-unit-size-max", "56");
+    expect(card).toHaveAttribute("data-unit-count", "4");
+    expect(card).toHaveAttribute("data-available-unit-count", "3");
+    expect(card).toHaveAttribute("data-delivery-year", "2026");
   });
 });

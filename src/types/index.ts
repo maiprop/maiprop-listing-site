@@ -67,6 +67,11 @@ export interface ListingCard {
   priorityPlacement?: number;
   isPreSale?: boolean;
   constructionStatus?: string;
+  newBuildUnitSizeMin?: number;
+  newBuildUnitSizeMax?: number;
+  newBuildUnitCount?: number;
+  newBuildAvailableUnitCount?: number;
+  newBuildDeliveryYear?: number;
   /** Only present when dbListingToCard is called with includeCoordinates: true */
   latitude?: number;
   longitude?: number;

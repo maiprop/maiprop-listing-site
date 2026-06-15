@@ -82,6 +82,29 @@ describe("dbListingToCard — basic field mapping", () => {
     expect(card.yearBuilt).toBe(2015);
   });
 
+  it("maps new-build project unit summaries for compact project cards", () => {
+    const card = dbListingToCard(
+      makeDbListing({
+        listing_type: "new_build",
+        project: {
+          delivery_date: "2026-10-01",
+          project_units: [
+            { id: "u1", availability_status: "available", internal_sqm: 39 },
+            { id: "u2", availability_status: "reserved", internal_sqm: 42 },
+            { id: "u3", availability_status: "sold", internal_sqm: 56 },
+            { id: "u4", availability_status: "under_offer", internal_sqm: 49 },
+          ],
+        },
+      }),
+    );
+
+    expect(card.newBuildUnitSizeMin).toBe(39);
+    expect(card.newBuildUnitSizeMax).toBe(56);
+    expect(card.newBuildUnitCount).toBe(4);
+    expect(card.newBuildAvailableUnitCount).toBe(3);
+    expect(card.newBuildDeliveryYear).toBe(2026);
+  });
+
   it("falls back to city as address when address is null", () => {
     const card = dbListingToCard(makeDbListing({ address: null }));
     expect(card.address).toBe("Athens");
