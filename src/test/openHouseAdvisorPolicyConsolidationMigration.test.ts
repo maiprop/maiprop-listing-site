@@ -25,6 +25,7 @@ describe("open-house advisor policy consolidation migration", () => {
   });
 
   it("keeps registration creation pending and requester-owned", () => {
+    expect(migration).toContain('DROP POLICY IF EXISTS "oh_regs_requester"');
     expect(migration).toContain('CREATE POLICY "oh_regs_insert"');
     expect(migration).toContain("requester_id = (SELECT auth.uid())");
     expect(migration).toContain("AND status = 'pending'::oh_registration_status");

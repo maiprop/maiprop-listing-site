@@ -35,7 +35,13 @@ import {
   getOrCreateOwnedStripeCustomer,
   shortSha256,
 } from "./stripeCustomers.ts";
-import type { BillingCycle } from "./types.ts";
+import {
+  PRO_TRIAL_DAYS,
+  buildTrialMetadata,
+  isTrialCheckoutAudienceAllowed,
+  normalizeTrialCheckoutRequest,
+} from "./trials.ts";
+import type { BillingCycle, CheckoutPlan, CheckoutProfileRow } from "./types.ts";
 
 export {
   getStripePriceEnvKey,
@@ -78,14 +84,131 @@ const buildMockCheckoutUrl = (
   successPath: string | null,
   plan: string,
   billingCycle: BillingCycle,
+  extraParams: Record<string, string> = {},
 ): string => {
   return `${origin}${
     withMockBillingParams(successPath ?? "/pricing?checkout=success", {
       checkout: "success",
       plan,
       billing_cycle: billingCycle,
+      ...extraParams,
     })
   }`;
+};
+
+type SupabaseAdminClient = {
+  from(table: string): {
+    insert(payload: Record<string, unknown>): {
+      select(columns: string): {
+        single(): Promise<{ data: { id?: string } | null; error: unknown }>;
+      };
+    };
+    update(payload: Record<string, unknown>): {
+      eq(column: string, value: unknown): Promise<{ error: unknown }>;
+    };
+    delete(): {
+      eq(column: string, value: unknown): Promise<{ error: unknown }>;
+    };
+  };
+};
+
+const isAlreadyClaimedError = (error: unknown): boolean => {
+  const code = (error as { code?: string } | null)?.code;
+  return code === "23505";
+};
+
+const hasExistingPaidAccess = (profile: CheckoutProfileRow | null): boolean => {
+  return Boolean(
+    profile?.subscription_product_id ||
+      profile?.force_pro_access ||
+      profile?.is_platform_admin ||
+      profile?.role === "admin",
+  );
+};
+
+const jsonCheckoutError = (
+  corsHeaders: Record<string, string>,
+  status: number,
+  error: string,
+): Response =>
+  new Response(JSON.stringify({ error }), {
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    status,
+  });
+
+const reserveSubscriptionTrialClaim = async (
+  supabaseClient: SupabaseAdminClient,
+  userId: string,
+  checkoutPlan: CheckoutPlan,
+  customerId: string,
+  corsHeaders: Record<string, string>,
+): Promise<{ claimId: string } | { response: Response }> => {
+  const { data, error } = await supabaseClient
+    .from("subscription_trial_claims")
+    .insert({
+      user_id: userId,
+      plan_key: checkoutPlan.planKey,
+      pricing_audience: checkoutPlan.audience,
+      stripe_customer_id: customerId,
+      status: "checkout_started",
+      trial_days: PRO_TRIAL_DAYS,
+      metadata: buildTrialMetadata(),
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    if (isAlreadyClaimedError(error)) {
+      return {
+        response: jsonCheckoutError(
+          corsHeaders,
+          409,
+          "A free Pro trial has already been used on this account.",
+        ),
+      };
+    }
+    throw error;
+  }
+
+  const claimId = data?.id;
+  if (!claimId) throw new Error("Trial claim reservation failed");
+  return { claimId };
+};
+
+const markSubscriptionTrialCheckoutCreated = async (
+  supabaseClient: SupabaseAdminClient,
+  claimId: string,
+  session: Stripe.Checkout.Session,
+): Promise<void> => {
+  const { error } = await supabaseClient
+    .from("subscription_trial_claims")
+    .update({
+      status: "checkout_created",
+      stripe_checkout_session_id: session.id,
+      stripe_subscription_id: typeof session.subscription === "string"
+        ? session.subscription
+        : null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", claimId);
+  if (error) throw error;
+};
+
+const releaseSubscriptionTrialClaim = async (
+  supabaseClient: SupabaseAdminClient,
+  claimId: string | null,
+): Promise<void> => {
+  if (!claimId) return;
+  const { error } = await supabaseClient
+    .from("subscription_trial_claims")
+    .delete()
+    .eq("id", claimId);
+  if (error) {
+    log.warn("failed to release unused trial claim", {
+      claimId,
+      error: String((error as { message?: string }).message ?? error),
+    });
+  }
 };
 
 const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS-R1005 - Checkout coordinates auth, plan eligibility, Stripe customer/session creation, and consistent error responses.
@@ -129,6 +252,9 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
     const body = req.method === "POST" && req.body
       ? await req.json().catch(() => ({}))
       : {};
+    const wantsTrial = normalizeTrialCheckoutRequest(
+      body.trial ?? body.start_trial ?? body.startTrial,
+    );
     const addonKey = normalizeExplicitCheckoutKey(
       body.addon_key ?? body.addonKey,
     );
@@ -329,15 +455,29 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
         },
       );
     }
+    if (wantsTrial && hasExistingPaidAccess(profile)) {
+      return jsonCheckoutError(
+        corsHeaders,
+        409,
+        "A free Pro trial is available only to free accounts.",
+      );
+    }
 
     const origin = resolveCheckoutOrigin(req.headers.get("origin"));
     if (isStripeMockMode()) {
-      const url = buildMockCheckoutUrl(origin, successPath, plan, billingCycle);
+      const url = buildMockCheckoutUrl(
+        origin,
+        successPath,
+        plan,
+        billingCycle,
+        wantsTrial ? { trial: "true" } : {},
+      );
       logStep("Mock checkout session returned", {
         userId: user.id,
         plan,
         audience: entitlement.audience,
         billingCycle,
+        trial: wantsTrial,
       });
       return new Response(
         JSON.stringify({
@@ -346,6 +486,7 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
           mode: "mock",
           plan,
           billing_cycle: billingCycle,
+          trial: wantsTrial,
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -368,6 +509,16 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
         status: 404,
       });
     }
+    if (
+      wantsTrial &&
+      !isTrialCheckoutAudienceAllowed(checkoutPlan.audience)
+    ) {
+      return jsonCheckoutError(
+        corsHeaders,
+        403,
+        "A free Pro trial is not available for this plan.",
+      );
+    }
 
     logStep("Resolved price", {
       plan,
@@ -384,27 +535,33 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
     const success = `${origin}${successPath ?? "/pricing?checkout=success"}`;
     const cancel = `${origin}${cancelPath ?? "/pricing?checkout=cancelled"}`;
     const redirectHash = await shortSha256(`${success}|${cancel}`);
+    const trialMetadata = wantsTrial ? buildTrialMetadata() : {};
+    let trialClaimId: string | null = null;
 
-    const session = await stripe.checkout.sessions.create(
-      {
-        customer: customerId,
-        line_items: [{ price: checkoutPlan.priceId, quantity: 1 }],
-        mode: "subscription",
-        success_url: success,
-        cancel_url: cancel,
-        metadata: {
-          user_id: user.id,
-          plan,
-          plan_key: checkoutPlan.planKey,
-          audience: checkoutPlan.audience,
-          role: checkoutPlan.role,
-          billing_cycle: checkoutPlan.billingCycle,
-        },
-        // Propagate plan to the subscription object itself so the webhook can
-        // identify professional_* plans and update professionals.subscription_tier.
-        // Stripe does NOT auto-copy session.metadata onto the resulting subscription,
-        // so we set subscription_data.metadata explicitly.
-        subscription_data: {
+    if (wantsTrial) {
+      const reservation = await reserveSubscriptionTrialClaim(
+        supabaseClient as unknown as SupabaseAdminClient,
+        user.id,
+        checkoutPlan,
+        customerId,
+        corsHeaders,
+      );
+      if ("response" in reservation) return reservation.response;
+      trialClaimId = reservation.claimId;
+    }
+
+    let session: Stripe.Checkout.Session;
+    try {
+      session = await stripe.checkout.sessions.create(
+        {
+          customer: customerId,
+          line_items: [{ price: checkoutPlan.priceId, quantity: 1 }],
+          mode: "subscription",
+          success_url: success,
+          cancel_url: cancel,
+          ...(wantsTrial
+            ? { payment_method_collection: "always" as const }
+            : {}),
           metadata: {
             user_id: user.id,
             plan,
@@ -412,19 +569,58 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
             audience: checkoutPlan.audience,
             role: checkoutPlan.role,
             billing_cycle: checkoutPlan.billingCycle,
-            ...(checkoutPlan.productId
-              ? { product_id: checkoutPlan.productId }
+            ...(wantsTrial
+              ? { checkout_type: "subscription_trial", ...trialMetadata }
               : {}),
           },
+          // Propagate plan to the subscription object itself so the webhook can
+          // identify professional_* plans and update professionals.subscription_tier.
+          // Stripe does NOT auto-copy session.metadata onto the resulting subscription,
+          // so we set subscription_data.metadata explicitly.
+          subscription_data: {
+            ...(wantsTrial ? { trial_period_days: PRO_TRIAL_DAYS } : {}),
+            metadata: {
+              user_id: user.id,
+              plan,
+              plan_key: checkoutPlan.planKey,
+              audience: checkoutPlan.audience,
+              role: checkoutPlan.role,
+              billing_cycle: checkoutPlan.billingCycle,
+              ...(checkoutPlan.productId
+                ? { product_id: checkoutPlan.productId }
+                : {}),
+              ...(wantsTrial
+                ? { checkout_type: "subscription_trial", ...trialMetadata }
+                : {}),
+            },
+          },
         },
-      },
-      {
-        idempotencyKey:
-          `maiprop-checkout-${user.id}-${checkoutPlan.planKey}-${checkoutPlan.billingCycle}-${redirectHash}`,
-      },
-    );
+        {
+          idempotencyKey:
+            `maiprop-checkout-${user.id}-${checkoutPlan.planKey}-${checkoutPlan.billingCycle}-${wantsTrial ? "trial" : "paid"}-${redirectHash}`,
+        },
+      );
+    } catch (error) {
+      await releaseSubscriptionTrialClaim(
+        supabaseClient as unknown as SupabaseAdminClient,
+        trialClaimId,
+      );
+      throw error;
+    }
 
-    logStep("Checkout session created", { sessionId: session.id, plan });
+    if (trialClaimId) {
+      await markSubscriptionTrialCheckoutCreated(
+        supabaseClient as unknown as SupabaseAdminClient,
+        trialClaimId,
+        session,
+      );
+    }
+
+    logStep("Checkout session created", {
+      sessionId: session.id,
+      plan,
+      trial: wantsTrial,
+    });
 
     return new Response(JSON.stringify({ url: session.url }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

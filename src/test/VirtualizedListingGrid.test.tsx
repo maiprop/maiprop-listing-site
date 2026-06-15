@@ -80,7 +80,7 @@ describe("VirtualizedListingGrid", () => {
       );
 
       const grid = screen.getByTestId("grid");
-      expect(grid.style.minHeight).toBe("540px");
+      expect(grid.style.minHeight).toBe("430px");
       expect(grid).toHaveAttribute("data-total-count", "20");
     } finally {
       restoreClientWidth();

@@ -89,12 +89,14 @@ Deno.serve(async (req) => {
       case "customer.subscription.resumed": {
         const sub = event.data.object as Stripe.Subscription;
         await syncSubscription(supabase, stripe, sub);
+        await syncSubscriptionTrialStatus(supabase, sub);
         break;
       }
 
       case "customer.subscription.deleted": {
         const sub = event.data.object as Stripe.Subscription;
         await clearSubscription(supabase, stripe, sub);
+        await syncSubscriptionTrialStatus(supabase, sub);
         break;
       }
 
@@ -147,6 +149,7 @@ Deno.serve(async (req) => {
         if (session.subscription && session.customer) {
           const sub = await stripe.subscriptions.retrieve(session.subscription as string);
           await syncSubscription(supabase, stripe, sub);
+          await syncSubscriptionTrialClaim(supabase, session, sub);
           log.info("checkout.session.completed synced subscription", {
             session_id: session.id,
             customer_id: session.customer,
@@ -325,6 +328,95 @@ async function activateInvestorPaymentSession(
   if (existing) return true;
 
   throw new Error("investor payment session has no matching pending subscription");
+}
+
+type SubscriptionTrialClaimStatus =
+  | "checkout_created"
+  | "trialing"
+  | "active"
+  | "past_due"
+  | "canceled"
+  | "expired";
+
+function isSubscriptionTrialMetadata(
+  metadata: Stripe.Metadata | null | undefined,
+): boolean {
+  return metadata?.checkout_type === "subscription_trial";
+}
+
+function mapSubscriptionTrialStatus(status: string | null | undefined): SubscriptionTrialClaimStatus {
+  if (status === "trialing") return "trialing";
+  if (status === "active") return "active";
+  if (status === "past_due") return "past_due";
+  if (status === "canceled") return "canceled";
+  if (shouldRevokeSubscriptionAccess(status)) return "expired";
+  if (hasProvisionedSubscriptionAccess(status)) return "active";
+  return "checkout_created";
+}
+
+async function updateSubscriptionTrialClaim(
+  supabase: SupabaseAdminClient,
+  userId: string,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  const { error } = await supabase
+    .from("subscription_trial_claims")
+    .update({
+      ...payload,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("user_id", userId);
+  if (error) throw error;
+}
+
+// skipcq: JS-0067 - Top-level helper is used by the webhook switch.
+async function syncSubscriptionTrialClaim(
+  supabase: SupabaseAdminClient,
+  session: Stripe.Checkout.Session,
+  sub: Stripe.Subscription | null,
+): Promise<void> {
+  const sessionMetadata = session.metadata ?? {};
+  const subscriptionMetadata = sub?.metadata ?? {};
+  if (
+    !isSubscriptionTrialMetadata(sessionMetadata) &&
+    !isSubscriptionTrialMetadata(subscriptionMetadata)
+  ) {
+    return;
+  }
+
+  const userId = subscriptionMetadata.user_id ?? sessionMetadata.user_id;
+  if (!userId) throw new Error("subscription trial checkout missing user_id metadata");
+
+  await updateSubscriptionTrialClaim(supabase, userId, {
+    status: sub ? mapSubscriptionTrialStatus(sub.status) : "checkout_created",
+    stripe_checkout_session_id: session.id,
+    stripe_subscription_id: sub?.id ??
+      (typeof session.subscription === "string" ? session.subscription : null),
+    stripe_customer_id: typeof session.customer === "string" ? session.customer : null,
+    metadata: {
+      ...sessionMetadata,
+      ...subscriptionMetadata,
+    },
+  });
+}
+
+// skipcq: JS-0067 - Top-level helper is used by subscription lifecycle events.
+async function syncSubscriptionTrialStatus(
+  supabase: SupabaseAdminClient,
+  sub: Stripe.Subscription,
+): Promise<void> {
+  const metadata = sub.metadata ?? {};
+  if (!isSubscriptionTrialMetadata(metadata)) return;
+
+  const userId = metadata.user_id;
+  if (!userId) throw new Error("subscription trial subscription missing user_id metadata");
+
+  await updateSubscriptionTrialClaim(supabase, userId, {
+    status: mapSubscriptionTrialStatus(sub.status),
+    stripe_subscription_id: sub.id,
+    stripe_customer_id: typeof sub.customer === "string" ? sub.customer : null,
+    metadata,
+  });
 }
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
@@ -563,6 +655,7 @@ async function syncInvoiceSubscription(
 
   const sub = await stripe.subscriptions.retrieve(subscriptionId);
   await syncSubscription(supabase, stripe, sub);
+  await syncSubscriptionTrialStatus(supabase, sub);
 }
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.

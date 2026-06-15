@@ -229,6 +229,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
     property.listingType === "rent" ||
     (property.listingType === "open_house" && property.openHouseTransactionType === "rent");
   const displayPrice = `${formatPrice(property.price)}${isRentalPricing ? "/mo" : ""}`;
+  const hasPrimaryDetailAction = property.listingType === "auction" || property.listingType === "open_house";
 
   if (compact) {
     const thumb = imageChain[0] || MAIPROP_LOGO_FALLBACK_URL;
@@ -283,13 +284,13 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
   const mainImageIsLogoFallback = isMaiPropLogoFallback(mainImage);
 
   return (
-    <div data-testid={testId} className={`property-card rounded-2xl overflow-hidden group flex flex-col bg-card transition-shadow duration-300 ${
+    <div data-testid={testId} className={`property-card h-[360px] w-full min-w-0 rounded-2xl overflow-hidden group grid grid-rows-[150px_minmax(0,1fr)] bg-card transition-shadow duration-300 ${
       property.isFeatured
         ? "border-2 border-amber-400/70 shadow-[0_0_0_1px_rgba(251,191,36,0.15),0_4px_24px_rgba(251,191,36,0.22)] hover:shadow-[0_0_0_1px_rgba(251,191,36,0.25),0_8px_32px_rgba(251,191,36,0.35)]"
         : "border border-border"
     }`}>
       {/* Image — taller on mobile (4/3) for better thumbnail, 3/2 on larger screens */}
-      <div className="relative overflow-hidden bg-secondary aspect-[4/3] sm:aspect-[3/2]">
+      <div data-testid="property-card-media" className="relative h-[150px] overflow-hidden bg-secondary">
         <img
           src={mainImage}
           srcSet={mainImageSrcSet}
@@ -306,9 +307,9 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
 
         {/* Badges top-left */}
-        <div className="absolute top-3 left-3 right-16 flex gap-1.5 flex-wrap">
+        <div className="absolute top-2.5 left-2.5 right-14 flex gap-1.5 overflow-hidden">
           {countdown && (
-            <span className={`text-xs font-bold px-2.5 py-1 rounded-full shadow-sm flex items-center gap-1 ${
+            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold shadow-sm flex items-center gap-1 ${
               countdown.urgent ? "bg-destructive/90 text-white" : "bg-brand-gold text-background"
             }`}>
               {countdown.urgent ? <Flame className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
@@ -316,25 +317,25 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
             </span>
           )}
           {badges.map((b) => (
-            <span key={b.label} className={`text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wide shadow-sm ${b.cls} ${b.label === "Featured" ? "inline-flex items-center gap-1" : ""}`}>
+            <span key={b.label} className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide shadow-sm ${b.cls} ${b.label === "Featured" ? "inline-flex items-center gap-1" : ""}`}>
               {b.label === "Featured" && <Crown className="w-2.5 h-2.5" />}
               {b.label}
             </span>
           ))}
           {property.subtype && (
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-accent/90 text-accent-foreground shadow-sm capitalize">
+            <span className="shrink-0 rounded-full bg-accent/90 px-2 py-0.5 text-[11px] font-semibold capitalize text-accent-foreground shadow-sm">
               {getSubtypeLabel(property.type, property.subtype)}
             </span>
           )}
           {discountPct !== null && discountPct > 0 && (
-            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-destructive/90 text-white shadow-sm">
+            <span className="shrink-0 rounded-full bg-destructive/90 px-2 py-0.5 text-[11px] font-bold text-white shadow-sm">
               -{discountPct}% off
             </span>
           )}
         </div>
 
         {/* Top-right controls */}
-        <div className="absolute top-3 right-3 flex flex-col gap-1.5 items-end">
+        <div className="absolute top-2.5 right-2.5 flex flex-col gap-1.5 items-end">
           {property.hasVirtualTour && (
             <span className="bg-black/60 backdrop-blur-sm px-2 py-1 rounded-full text-xs text-white font-semibold">360°</span>
           )}
@@ -358,17 +359,17 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
         </div>
 
         {/* Price block — bottom-left overlay */}
-        <div className="absolute bottom-0 left-0 right-0 p-4">
+        <div className="absolute bottom-0 left-0 right-0 p-3">
           <div className="flex items-end justify-between">
             <div>
               {/* Amber-highlighted price */}
-              <div className="inline-flex items-baseline gap-1.5 bg-primary/90 backdrop-blur-sm rounded-xl px-3 py-1.5 sm:px-3 sm:py-1.5 shadow-md">
-                <span className="text-lg sm:text-xl font-display font-bold text-primary-foreground leading-none">
+              <div className="inline-flex items-baseline gap-1.5 rounded-xl bg-primary/90 px-2.5 py-1.5 shadow-md backdrop-blur-sm">
+                <span className="text-base sm:text-lg font-display font-bold text-primary-foreground leading-none">
                   {displayPrice}
                 </span>
               </div>
               {Boolean(property.pricePerSqm) && (
-                <div className="text-xs text-white/70 mt-1 ml-1">€{property.pricePerSqm}/m²</div>
+                <div className="ml-1 mt-0.5 text-[11px] text-white/70">€{property.pricePerSqm}/m²</div>
               )}
             </div>
             <div className="flex flex-col items-end gap-1">
@@ -393,26 +394,26 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
       </div>
 
       {/* Card body — more padding and slightly larger type on mobile for 2-col thumbnail view */}
-      <div className="p-4 sm:p-4 flex flex-col flex-1 gap-3">
+      <div data-testid="property-card-body" className="grid min-h-0 grid-rows-[4.25rem_1.625rem_minmax(0,1fr)_2.75rem] gap-2 p-3">
         {/* Title + location */}
-        <div>
+        <div className="min-h-0 overflow-hidden">
           <Link to={detailPath} state={detailState}>
-            <h3 className="font-display font-semibold text-[15px] sm:text-base text-foreground hover:text-primary transition-colors line-clamp-2 leading-snug">
+            <h3 className="min-h-[2.15rem] font-display text-sm font-semibold leading-snug text-foreground transition-colors line-clamp-2 hover:text-primary">
               {property.title}
             </h3>
           </Link>
           <Link
             to={detailPath}
             state={detailState}
-            className="flex items-center gap-1 mt-1.5 text-muted-foreground text-xs group/addr hover:text-primary transition-colors w-fit max-w-full"
+            className="flex h-4 max-w-full items-center gap-1 overflow-hidden text-muted-foreground text-xs group/addr hover:text-primary transition-colors"
           >
-            <MapPin className="w-3.5 h-3.5 sm:w-3 sm:h-3 shrink-0 text-primary/70 group-hover/addr:text-primary transition-colors" />
+            <MapPin className="w-3 h-3 shrink-0 text-primary/70 group-hover/addr:text-primary transition-colors" />
             <span className="truncate underline-offset-2 group-hover/addr:underline text-xs sm:text-xs">
               {property.address}, {property.city}
             </span>
           </Link>
           {property.ownerParticipantType && (
-            <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <div className="mt-1 flex h-5 min-w-0 items-center gap-1.5 overflow-hidden text-[11px] text-muted-foreground">
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary/80 border border-border/60">
                 <span className="w-1.5 h-1.5 rounded-full bg-primary" />
                 {property.ownerParticipantType === "agent" ? t("propertyCard.agentListing") : t("propertyCard.privateSeller")}
@@ -422,42 +423,45 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
         </div>
 
         {/* Key specs */}
-        <div className="flex items-center gap-1.5 text-xs flex-wrap">
-          <span className="flex items-center gap-1 bg-brand-purple/10 text-brand-purple border border-brand-purple/20 px-2.5 py-1 rounded-lg font-medium">
-            <Square className="w-3.5 h-3.5" aria-hidden="true" /> {property.sqm} {t("common.sqm")}
+        <div data-testid="property-card-specs" className="flex h-[1.625rem] items-center gap-1.5 overflow-hidden text-[10px] min-[1180px]:text-[11px]">
+          <span className="flex h-6 max-w-[4.75rem] shrink-0 items-center gap-1 rounded-lg border border-brand-purple/20 bg-brand-purple/10 px-1.5 font-medium text-brand-purple">
+            <Square className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
+            <span className="truncate">{property.sqm} {t("common.sqm")}</span>
           </span>
           {property.floor != null && (
-            <span className="flex items-center gap-1 bg-secondary text-muted-foreground border border-border px-2.5 py-1 rounded-lg font-medium">
-              <Layers className="w-3.5 h-3.5" />
-              {formatFloorLabel(property.floor, property.totalFloors, t)}
+            <span className="flex h-6 max-w-[4.75rem] shrink-0 items-center gap-1 rounded-lg border border-border bg-secondary px-1.5 font-medium text-muted-foreground">
+              <Layers className="w-2.5 h-2.5 shrink-0" />
+              <span className="truncate">{formatFloorLabel(property.floor, property.totalFloors, t)}</span>
             </span>
           )}
           {property.yearBuilt != null && (
-            <span className="flex items-center gap-1 bg-brand-gold/10 text-brand-gold border border-brand-gold/20 px-2.5 py-1 rounded-lg font-medium">
-              <Calendar className="w-3.5 h-3.5" /> {property.yearBuilt}
+            <span className="flex h-6 max-w-[4.75rem] shrink-0 items-center gap-1 rounded-lg border border-brand-gold/20 bg-brand-gold/10 px-1.5 font-medium text-brand-gold">
+              <Calendar className="w-2.5 h-2.5 shrink-0" />
+              <span className="truncate">{property.yearBuilt}</span>
             </span>
           )}
         </div>
 
+        <div className="min-h-0 overflow-hidden">
         {/* Auction banner */}
         {property.listingType === "open_house" && property.auctionDate && (
-          <div className="flex items-center gap-2 bg-brand-cyan/10 rounded-xl p-2.5 border border-brand-cyan/25">
+          <div className="flex h-full min-h-[2.25rem] items-center gap-2 rounded-xl border border-brand-cyan/25 bg-brand-cyan/10 px-2 py-1.5">
             <Calendar className="w-4 h-4 text-primary shrink-0" />
-            <div>
+            <div className="min-w-0">
               <div className="text-xs font-bold text-brand-purple">{t("propertyCard.openHouseDate")}</div>
-              <div className="text-[11px] text-muted-foreground truncate">{property.auctionDate}</div>
+              <div className="truncate text-[11px] text-muted-foreground">{property.auctionDate}</div>
             </div>
           </div>
         )}
         {property.listingType === "auction" && property.auctionDate && (
-          <div className="flex items-center gap-2 bg-brand-auction/10 rounded-xl p-2.5 border border-brand-auction/25">
+          <div className="flex h-full min-h-[2.25rem] items-center gap-2 rounded-xl border border-brand-auction/25 bg-brand-auction/10 px-2 py-1.5">
             <Gavel className="w-4 h-4 text-brand-auction shrink-0" />
-            <div className="flex-1 min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="text-xs font-semibold text-brand-auction">{t("propertyCard.auctionDate")}</div>
-              <div className="text-[11px] text-muted-foreground truncate">{property.auctionDate}</div>
+              <div className="truncate text-[11px] text-muted-foreground">{property.auctionDate}</div>
             </div>
             {property.auctionStartingBid && (
-              <div className="text-xs font-bold text-brand-auction shrink-0">
+              <div className="shrink-0 text-xs font-bold text-brand-auction">
                 From €{property.auctionStartingBid.toLocaleString()}
               </div>
             )}
@@ -466,59 +470,61 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
 
         {/* Firesale urgency */}
         {property.listingType === "firesale" && (
-          <div className="flex items-center gap-2 bg-destructive/10 rounded-xl p-2.5 border border-destructive/20">
+          <div className="flex h-full min-h-[2.25rem] items-center gap-2 rounded-xl border border-destructive/20 bg-destructive/10 px-2 py-1.5">
             <Flame className="w-4 h-4 text-destructive shrink-0" />
-            <div className="flex-1">
+            <div className="min-w-0 flex-1">
               <div className="text-xs font-semibold text-destructive">{t("propertyCard.badges.quickSale")}</div>
-              <div className="text-[11px] text-muted-foreground">{t("propertyCard.motivatedSeller")}</div>
+              <div className="truncate text-[11px] text-muted-foreground">{t("propertyCard.motivatedSeller")}</div>
             </div>
           </div>
         )}
 
+        </div>
+
         {/* Agent row + CTA */}
-        <div className="mt-auto pt-3 border-t border-border space-y-2.5">
+        <div data-testid="property-card-footer" className="flex min-h-[2.75rem] max-h-[2.75rem] items-center gap-2 overflow-hidden border-t border-border pt-2">
           {/* Agent info */}
           {property.agent && (
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full bg-gradient-primary flex items-center justify-center text-[11px] font-bold text-primary-foreground shrink-0">
+            <div className={`min-w-0 flex-1 items-center gap-2 ${hasPrimaryDetailAction ? "hidden min-[640px]:flex" : "flex"}`}>
+              <div className="w-6 h-6 rounded-full bg-gradient-primary flex items-center justify-center text-[10px] font-bold text-primary-foreground shrink-0">
                 {property.agent.name[0]}
               </div>
-              <span className="text-xs text-muted-foreground truncate flex-1">{property.agent.name}</span>
+              <span className="text-[11px] text-muted-foreground truncate flex-1">{property.agent.name}</span>
               {property.agent.verified && (
               <span className="flex items-center gap-0.5 text-[10px] text-primary font-semibold">
-                  <CheckCircle className="w-3 h-3" aria-hidden="true" /> {t("propertyCard.badges.verified")}
+                  <CheckCircle className="w-2.5 h-2.5" aria-hidden="true" /> {t("propertyCard.badges.verified")}
                 </span>
               )}
             </div>
           )}
           {/* Action row: detail CTA for special inventory + Share + Report */}
-          <div className={`flex items-center gap-2 ${property.listingType === "auction" || property.listingType === "open_house" ? "" : "justify-end"}`}>
+          <div className={`flex min-w-0 shrink-0 items-center gap-2 ${hasPrimaryDetailAction ? "flex-1" : "ml-auto"}`}>
             {property.listingType === "open_house" && (
-              <Link to={detailPath} state={detailState} className="flex-1">
-                <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-primary text-primary-foreground font-semibold text-sm transition-all hover:opacity-90 hover:shadow-md active:scale-[0.98]">
-                  <Calendar className="w-4 h-4" />
-                  {t("propertyCard.actions.viewOpenHouse")}
+              <Link to={detailPath} state={detailState} className="min-w-0 flex-1">
+                <button className="flex h-9 md:h-8 w-full items-center justify-center gap-1.5 truncate rounded-xl bg-gradient-primary px-2.5 text-[11px] font-semibold text-primary-foreground transition-all hover:opacity-90 hover:shadow-md active:scale-[0.98]">
+                  <Calendar className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">{t("propertyCard.actions.viewOpenHouse")}</span>
                 </button>
               </Link>
             )}
             {property.listingType === "auction" && (
-              <Link to={detailPath} state={detailState} className="flex-1">
-                <button className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-brand-auction text-white font-semibold text-sm transition-all hover:bg-brand-purple-dark hover:shadow-md active:scale-[0.98]">
-                  <Gavel className="w-4 h-4" aria-hidden="true" />
-                  {t("propertyCard.actions.viewAuction")}
+              <Link to={detailPath} state={detailState} className="min-w-0 flex-1">
+                <button className="flex h-9 md:h-8 w-full items-center justify-center gap-1.5 truncate rounded-xl bg-brand-auction px-2.5 text-[11px] font-semibold text-white transition-all hover:bg-brand-purple-dark hover:shadow-md active:scale-[0.98]">
+                  <Gavel className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{t("propertyCard.actions.viewAuction")}</span>
                 </button>
               </Link>
             )}
             <button
               onClick={handleShare}
-              className="p-2.5 rounded-xl border border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all"
+              className="flex h-9 w-9 md:h-8 md:w-8 shrink-0 items-center justify-center rounded-xl border border-border bg-secondary text-muted-foreground transition-all hover:border-foreground/20 hover:text-foreground"
               aria-label={t("propertyCard.actions.share")}
             >
               <Share2 className="w-4 h-4" />
             </button>
             <button
               onClick={handleReport}
-              className="p-2.5 rounded-xl border border-border bg-secondary text-muted-foreground/50 hover:text-muted-foreground transition-all"
+              className="flex h-9 w-9 md:h-8 md:w-8 shrink-0 items-center justify-center rounded-xl border border-border bg-secondary text-muted-foreground/50 transition-all hover:text-muted-foreground"
               aria-label={t("propertyCard.actions.report")}
             >
               <Flag className="w-4 h-4" />

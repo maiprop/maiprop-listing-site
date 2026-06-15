@@ -46,4 +46,7 @@ export type CheckoutAddon = {
 export type CheckoutProfileRow = {
   role?: string | null;
   participant_type?: string | null;
+  subscription_product_id?: string | null;
+  force_pro_access?: boolean | null;
+  is_platform_admin?: boolean | null;
 };
