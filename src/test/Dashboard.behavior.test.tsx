@@ -17,6 +17,7 @@ const {
   professionalState,
   servicesState,
   leadsState,
+  checkoutInvokeMock,
   signOutMock,
   updateProfileMock,
   refreshProfileMock,
@@ -38,6 +39,7 @@ const {
   professionalState: { data: null as Record<string, unknown> | null, isLoading: false },
   servicesState: { data: [] as Array<Record<string, unknown>>, isLoading: false },
   leadsState: { data: [] as Array<Record<string, unknown>>, isLoading: false },
+  checkoutInvokeMock: vi.fn().mockResolvedValue({ data: { url: "https://stripe.example/trial" }, error: null }),
   signOutMock: vi.fn().mockResolvedValue(undefined),
   updateProfileMock: vi.fn(),
   refreshProfileMock: vi.fn(),
@@ -73,6 +75,9 @@ vi.mock("@/hooks/useConsultations", () => ({
 }));
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
+    functions: {
+      invoke: checkoutInvokeMock,
+    },
     from: () => ({
       select: function () { return this; },
       eq: function () { return this; },
@@ -138,11 +143,14 @@ vi.mock("@/components/dashboard/DashboardMobileNav", () => ({ DashboardMobileNav
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 beforeEach(() => {
+  Object.defineProperty(window, "location", { writable: true, value: { href: "http://localhost/dashboard" } });
   authState.loading = false;
   authState.profileLoading = false;
   authState.user = { id: "u-1", email: "casey@example.com" };
   authState.profile = { id: "p-1", role: "buyer", participant_type: "buyer", first_name: "Casey", verified: true };
   subscriptionState.isPro = false;
+  subscriptionState.loading = false;
+  subscriptionState.refreshSubscription = vi.fn();
   quickSaleState.eligible = false;
   listingsState.data = [];
   favoritesState.data = [];
@@ -153,6 +161,7 @@ beforeEach(() => {
   professionalState.data = null;
   servicesState.data = [];
   leadsState.data = [];
+  checkoutInvokeMock.mockResolvedValue({ data: { url: "https://stripe.example/trial" }, error: null });
   vi.clearAllMocks();
 });
 
@@ -223,6 +232,33 @@ describe("Dashboard behavior", () => {
 
     expect(screen.getByRole("link", { name: /^Apply$/i })).toHaveAttribute("href", "/investor-dashboard");
     expect(screen.queryByRole("link", { name: /Upgrade to Pro to apply/i })).not.toBeInTheDocument();
+  });
+
+  it("starts a one-time 7-day Pro trial from the dashboard CTA", async () => {
+    renderWithProviders(<Dashboard />);
+
+    fireEvent.click(screen.getByRole("button", { name: /start 7-day pro trial/i }));
+
+    await waitFor(() =>
+      expect(checkoutInvokeMock).toHaveBeenCalledWith("create-checkout", {
+        body: {
+          plan: "pro",
+          billing_cycle: "monthly",
+          trial: true,
+          success_url: "/dashboard?checkout=trial_started",
+          cancel_url: "/dashboard?checkout=cancelled",
+        },
+      })
+    );
+    await waitFor(() => expect(window.location.href).toBe("https://stripe.example/trial"));
+  });
+
+  it("does not show the dashboard trial CTA to active Pro users", () => {
+    subscriptionState.isPro = true;
+
+    renderWithProviders(<Dashboard />);
+
+    expect(screen.queryByRole("button", { name: /start 7-day pro trial/i })).not.toBeInTheDocument();
   });
 
   it("does not lock the dashboard main area with overflow-hidden scrolling", () => {

@@ -11,6 +11,7 @@ import {
   FolderKanban, Users, Briefcase, Flame,
   ExternalLink,
   Bookmark, ArrowRight, Settings,
+  Sparkles,
 } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useEligibleForQuickSale } from "@/hooks/useEligibleForQuickSale";
@@ -30,8 +31,10 @@ import { useMyConsultationRequests, useUpdateConsultationRequest } from "@/hooks
 import ProfessionalServicesEditor from "@/components/ProfessionalServicesEditor";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import { getExplicitParticipantTypeFromProfile, getParticipantTypeFromProfile, PARTICIPANT_LABELS, type ParticipantId } from "@/lib/participantConfig";
+import { getExplicitParticipantTypeFromProfile, getParticipantTypeFromProfile, getPricingAudienceFromProfile, PARTICIPANT_LABELS, type ParticipantId, type PricingAudienceId } from "@/lib/participantConfig";
+import { ROLE_PLAN_MAP } from "@/lib/rolePlanMap";
 import { ProGate } from "@/components/gates/ProGate";
+import { toast } from "sonner";
 // ── Extracted subcomponents ───────────────────────────────────────────────────
 import { type NavKey, type DashboardRole, type NavItemResolved, getNavItemsForBioType } from "@/lib/dashboardNav";
 import { ContactsAndLeadsSection } from "./dashboard/ContactsAndLeadsSection";
@@ -56,6 +59,13 @@ const PortfoliosTab = lazy(() => import("./dashboard/PortfoliosTab"));
 const AnalyticsTab = lazy(() => import("./dashboard/AnalyticsTab"));
 const BillingTab = lazy(() => import("./dashboard/BillingTab"));
 const DataInputTab = lazy(() => import("./dashboard/DataInputTab"));
+
+const DASHBOARD_TRIAL_AUDIENCES: PricingAudienceId[] = [
+  "participant",
+  "agent",
+  "developer",
+  "professional",
+];
 
 /** Lazy-tab fallback with a 5-second timeout before showing a retry link */
 const TabFallback = () => {
@@ -178,7 +188,8 @@ export default function Dashboard() { // skipcq: JS-R1005
     [t],
   );
   const { profile, user, signOut, updateProfile, refreshProfile, loading } = useAuth();
-  const { isPro } = useSubscription();
+  const { isPro, loading: subscriptionLoading, refreshSubscription } = useSubscription();
+  const [trialCheckoutLoading, setTrialCheckoutLoading] = useState(false);
   const { eligible: eligibleForQuickSale } = useEligibleForQuickSale();
   const role: DashboardRole = (profile?.role as DashboardRole) || "buyer";
   const roleSwitchInProgress = profileRoleSwitchInProgress(profile);
@@ -261,6 +272,64 @@ export default function Dashboard() { // skipcq: JS-R1005
     setActiveSection(key);
     navigate(key === "overview" ? "/dashboard" : `/dashboard/${key}`);
   }, [navigate]);
+
+  const checkoutStatus = searchParams.get("checkout");
+  useEffect(() => {
+    if (checkoutStatus !== "trial_started") return;
+    toast.success("Your 7-day Pro trial is being activated.");
+    refreshSubscription?.();
+  }, [checkoutStatus, refreshSubscription]);
+
+  const pricingAudience = useMemo(
+    () => getPricingAudienceFromProfile(profile),
+    [profile],
+  );
+  const trialPlan = ROLE_PLAN_MAP[pricingAudience];
+  const trialPlanKey = trialPlan?.planKey ?? null;
+  const showTrialCta = Boolean(
+    user &&
+      !isPro &&
+      !subscriptionLoading &&
+      !roleSwitchInProgress &&
+      role !== "admin" &&
+      trialPlanKey &&
+      trialPlan &&
+      !trialPlan.inviteOnly &&
+      DASHBOARD_TRIAL_AUDIENCES.includes(pricingAudience),
+  );
+
+  const handleStartTrialCheckout = useCallback(async () => {
+    if (!user || !trialPlanKey) {
+      navigate("/login");
+      return;
+    }
+
+    setTrialCheckoutLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("create-checkout", {
+        body: {
+          plan: trialPlanKey,
+          billing_cycle: "monthly",
+          trial: true,
+          success_url: "/dashboard?checkout=trial_started",
+          cancel_url: "/dashboard?checkout=cancelled",
+        },
+      });
+      if (error) throw error;
+
+      const checkoutUrl = (data as { url?: string } | null)?.url;
+      if (!checkoutUrl) throw new Error("Stripe checkout URL was not returned.");
+
+      window.location.href = checkoutUrl;
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : "Could not start the trial. Please try again.";
+      toast.error(message);
+    } finally {
+      setTrialCheckoutLoading(false);
+    }
+  }, [navigate, trialPlanKey, user]);
 
   const displayName = useMemo(
     () => profile?.display_name || profile?.first_name || user?.email?.split("@")[0] || tr("dashboard.userFallback", "User"),
@@ -459,6 +528,31 @@ export default function Dashboard() { // skipcq: JS-R1005
               )}
 
               {/* Admin overview — unified Admin Dashboard */}
+              {showTrialCta && bioType !== "developer" && (
+                <div data-testid="dashboard-trial-cta" className="glass-card rounded-xl border border-primary/25 bg-primary/5 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                      <Sparkles className="w-5 h-5 text-primary" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm">{tr("dashboard.trial.title", "Try Pro free for 7 days")}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {tr("dashboard.trial.subtitle", "Unlock analytics, CRM, priority ads, and Pro workflow tools before choosing a paid plan.")}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="bg-gradient-primary border-0 text-primary-foreground gap-2 shrink-0"
+                    onClick={handleStartTrialCheckout}
+                    disabled={trialCheckoutLoading}
+                  >
+                    {trialCheckoutLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                    {tr("dashboard.trial.cta", "Start 7-day Pro trial")}
+                  </Button>
+                </div>
+              )}
+
               {role === "admin" && (
                 <div className="glass-card rounded-xl p-5 border border-primary/20 bg-primary/5">
                   <h2 className="font-display font-semibold mb-1 flex items-center gap-2 text-primary"><Shield className="w-4 h-4" /> {tr("dashboard.overview.admin.title", "Admin Dashboard")}</h2>
@@ -575,8 +669,14 @@ export default function Dashboard() { // skipcq: JS-R1005
                             {tr("dashboard.overview.developerPro.subtitle", "Unlimited listings, project showcases, project ad management, and featured placement are all part of the Developer Pro plan.")}
                           </p>
                           <div className="flex gap-2">
-                            <Button size="sm" className="bg-orange-500 hover:bg-orange-600 border-0 text-white" asChild>
-                              <Link to="/pricing?audience=developer">{tr("dashboard.overview.developerPro.trial", "Start 7-day free trial")}</Link>
+                            <Button
+                              size="sm"
+                              className="bg-orange-500 hover:bg-orange-600 border-0 text-white gap-2"
+                              onClick={handleStartTrialCheckout}
+                              disabled={trialCheckoutLoading}
+                            >
+                              {trialCheckoutLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                              {tr("dashboard.overview.developerPro.trial", "Start 7-day free trial")}
                             </Button>
                             <Button size="sm" variant="outline" className="border-orange-500/30 text-orange-400" asChild>
                               <Link to="/pricing?audience=developer">{tr("dashboard.overview.developerPro.previewTools", "View Developer Plan")}</Link>

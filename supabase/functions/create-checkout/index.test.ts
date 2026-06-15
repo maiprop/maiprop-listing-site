@@ -140,4 +140,20 @@ Deno.test("mock add-on checkout is gated by add-on availability and audience", a
   assertEquals(mockIndex > audienceIndex, true);
 });
 
+Deno.test("subscription trial checkout is reserved before Stripe session creation", async () => {
+  const source = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+  const reserveIndex = source.indexOf("reserveSubscriptionTrialClaim");
+  const sessionIndex = source.indexOf("stripe.checkout.sessions.create", source.indexOf("const checkoutPlan"));
+  const updateIndex = source.indexOf("await markSubscriptionTrialCheckoutCreated", sessionIndex);
+
+  assertEquals(source.includes("normalizeTrialCheckoutRequest"), true);
+  assertEquals(source.includes("trial_period_days: PRO_TRIAL_DAYS"), true);
+  assertEquals(source.includes('checkout_type: "subscription_trial"'), true);
+  assertEquals(source.includes('payment_method_collection: "always"'), true);
+  assertEquals(source.includes("subscription_trial_claims"), true);
+  assertEquals(reserveIndex >= 0, true);
+  assertEquals(sessionIndex > reserveIndex, true);
+  assertEquals(updateIndex > sessionIndex, true);
+});
+
 restore();

@@ -90,7 +90,7 @@ export const getCheckoutProfile = async (
   userId: string,
 ): Promise<CheckoutProfileRow | null> => {
   const { data } = await fromTable<CheckoutProfileRow>(supabase, "profiles")
-    .select("role, participant_type")
+    .select("role, participant_type, subscription_product_id, force_pro_access, is_platform_admin")
     .eq("user_id", userId)
     .maybeSingle();
   return (data as CheckoutProfileRow | null) ?? null;
