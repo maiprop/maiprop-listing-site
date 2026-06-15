@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.9.24](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.23...v1.9.24) (2026-06-15)
+
+
+### Bug Fixes
+
+* improve open house and auction listing UX ([#335](https://github.com/maiprop/maiprop-listing-site/issues/335)) ([d6ba188](https://github.com/maiprop/maiprop-listing-site/commit/d6ba18870550b04dd2da68bd4650071d96d1f16d))
+* wire open house ownership and new-build contact ([75f16b5](https://github.com/maiprop/maiprop-listing-site/commit/75f16b57a8f78c40fc342322697d89556e2c0f58))
+
+
+### Performance Improvements
+
+* defer property detail AI calls ([#334](https://github.com/maiprop/maiprop-listing-site/issues/334)) ([fb09a95](https://github.com/maiprop/maiprop-listing-site/commit/fb09a956566029ce71e8096ed3b60a2b449b4b58))
+
 ## [1.9.23](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.22...v1.9.23) (2026-06-14)
 
 
