@@ -349,6 +349,7 @@ export default function Dashboard() { // skipcq: JS-R1005
   const isInvestorLike = hasInvestorAccess;
   const isSellSide = role === "agent" || role === "developer";
   const isSellerLike = role === "seller" || bioType === "seller" || isSellSide;
+  const canSubmitSellerQuickSale = role === "seller";
   const { data: quickSaleRequests = [] } = useQuery<SellerQuickSaleRequest[]>({
     queryKey: ["seller-quick-sale-requests", user?.id],
     queryFn: async () => {
@@ -361,7 +362,7 @@ export default function Dashboard() { // skipcq: JS-R1005
       if (error) throw error;
       return (data || []) as SellerQuickSaleRequest[];
     },
-    enabled: !!user && isSellerLike,
+    enabled: !!user && canSubmitSellerQuickSale,
   });
 
   const upcomingViewingsCount = useMemo(
@@ -695,7 +696,7 @@ export default function Dashboard() { // skipcq: JS-R1005
                       <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground" asChild><Link to="/pricing">{tr("dashboard.overview.proUpgrade.cta", "Upgrade to Pro")}</Link></Button>
                     </div>
                   )}
-                  <SellerQuickSalePanel requests={quickSaleRequests} />
+                  {canSubmitSellerQuickSale && <SellerQuickSalePanel requests={quickSaleRequests} />}
                   {myListings.length > 0 ? (
                     <div>
                       <h2 className="font-display font-semibold mb-4">{tr("dashboard.overview.listings.title", "Your Active Listings")}</h2>
