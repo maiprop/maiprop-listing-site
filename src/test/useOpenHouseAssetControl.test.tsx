@@ -10,24 +10,62 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 
-const { fromMock, rpcMock, invokeMock, getUserMock, useAuthMock, storageBucket, toastMock } = vi.hoisted(() => ({
-  fromMock: vi.fn(),
-  rpcMock: vi.fn(),
-  invokeMock: vi.fn(),
-  getUserMock: vi.fn(),
-  useAuthMock: vi.fn(),
-  storageBucket: { upload: vi.fn(), createSignedUrl: vi.fn() },
-  toastMock: { success: vi.fn(), error: vi.fn() },
-}));
-
-vi.mock("@/integrations/supabase/client", () => ({
-  supabase: {
-    from: (...a: unknown[]) => fromMock(...a),
-    rpc: (...a: unknown[]) => rpcMock(...a),
-    functions: { invoke: (...a: unknown[]) => invokeMock(...a) },
+const {
+  fromMock,
+  rpcMock,
+  invokeMock,
+  getUserMock,
+  useAuthMock,
+  storageBucket,
+  toastMock,
+  supabaseClientMock,
+} = vi.hoisted(() => {
+  const fromMock = vi.fn();
+  const rpcMock = vi.fn();
+  const invokeMock = vi.fn();
+  const getUserMock = vi.fn();
+  const storageBucket = { upload: vi.fn(), createSignedUrl: vi.fn() };
+  const functionsClientMock: { invoke: (...args: unknown[]) => unknown } = {
+    invoke: vi.fn(function (this: unknown, ...args: unknown[]) {
+      if (this !== functionsClientMock) {
+        throw new TypeError("Cannot read properties of undefined (reading 'region')");
+      }
+      return invokeMock(...args);
+    }),
+  };
+  const supabaseClientMock: {
+    from: (...args: unknown[]) => unknown;
+    rpc: (...args: unknown[]) => unknown;
+    functions: { invoke: (...args: unknown[]) => unknown };
+    storage: { from: () => typeof storageBucket };
+    auth: { getUser: () => unknown };
+  } = {
+    from: (...args: unknown[]) => fromMock(...args),
+    rpc: vi.fn(function (this: unknown, ...args: unknown[]) {
+      if (this !== supabaseClientMock) {
+        throw new TypeError("Cannot read properties of undefined (reading 'rest')");
+      }
+      return rpcMock(...args);
+    }),
+    functions: functionsClientMock,
     storage: { from: () => storageBucket },
     auth: { getUser: () => getUserMock() },
-  },
+  };
+
+  return {
+    fromMock,
+    rpcMock,
+    invokeMock,
+    getUserMock,
+    useAuthMock: vi.fn(),
+    storageBucket,
+    toastMock: { success: vi.fn(), error: vi.fn() },
+    supabaseClientMock,
+  };
+});
+
+vi.mock("@/integrations/supabase/client", () => ({
+  supabase: supabaseClientMock,
 }));
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => useAuthMock() }));
 vi.mock("sonner", () => ({ toast: toastMock }));
