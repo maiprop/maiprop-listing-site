@@ -49,6 +49,7 @@ export function usePropertyAIInsights(
   useEffect(() => {
     setAiInsightsData(null);
     setAiInsightsLoaded(false);
+    setAiInsightsQuota(null);
   }, [listingId, user?.id]);
 
   const refreshAiInsightsQuota = useCallback(async () => {
@@ -69,10 +70,6 @@ export function usePropertyAIInsights(
       setAiInsightsQuotaLoading(false);
     }
   }, [dbListing, user]);
-
-  useEffect(() => {
-    void refreshAiInsightsQuota();
-  }, [refreshAiInsightsQuota]);
 
   const loadAiInsights = useCallback(async () => {
     if (!dbListing || !user || aiInsightsLoading) return;

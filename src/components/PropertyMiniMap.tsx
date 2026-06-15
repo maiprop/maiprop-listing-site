@@ -275,7 +275,7 @@ export default function PropertyMiniMap({
     quotaLoading: poiQuotaLoading,
     quotaChecked: poiQuotaChecked,
     refreshQuota: refreshPoiQuota,
-  } = useAiQuota("property-pois", user, { enabled: Boolean(lat && lng) });
+  } = useAiQuota("property-pois", user, { enabled: Boolean(lat && lng && shouldLoadMap) });
   const poiQuotaReached = isAiQuotaReached(poiQuota);
 
   useEffect(() => {
@@ -331,13 +331,12 @@ export default function PropertyMiniMap({
 
   // Auto-load POIs when coords are available (requires auth)
   const loadPOIs = useCallback(async () => {
-    if (!lat || !lng || !user) return;
+    if (!lat || !lng || !user || !shouldLoadMap) return;
     setLoadingPOIs(true);
     setPoiError(null);
     setPoiWarning(null);
     try {
-      const quota = await refreshPoiQuota();
-      if (quota && !quota.allowed) {
+      if (poiQuota && !poiQuota.allowed) {
         setPois(null);
         return;
       }
@@ -358,13 +357,14 @@ export default function PropertyMiniMap({
     } finally {
       setLoadingPOIs(false);
     }
-  }, [address, city, lat, lng, user, onWalkScoreChange, refreshPoiQuota]);
+  }, [address, city, lat, lng, shouldLoadMap, user, poiQuota, onWalkScoreChange, refreshPoiQuota]);
 
   useEffect(() => {
     if (
       !lat ||
       !lng ||
       !user ||
+      !shouldLoadMap ||
       pois ||
       poiError ||
       loadingPOIs ||
@@ -375,7 +375,7 @@ export default function PropertyMiniMap({
     }
     if (poiQuota && !poiQuota.allowed) return;
     void loadPOIs();
-  }, [lat, lng, user, pois, poiError, loadingPOIs, poiQuotaLoading, poiQuotaChecked, poiQuota, loadPOIs]);
+  }, [lat, lng, user, shouldLoadMap, pois, poiError, loadingPOIs, poiQuotaLoading, poiQuotaChecked, poiQuota, loadPOIs]);
 
   const filteredPOIs = pois
     ? activeCategory === "all"

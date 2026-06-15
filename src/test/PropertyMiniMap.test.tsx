@@ -8,7 +8,7 @@
  */
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 const { invokeMock, useAuthMock } = vi.hoisted(() => ({
@@ -31,12 +31,16 @@ vi.mock("@/components/SignInForAI", () => ({
 interface MapMockProps {
   children?: React.ReactNode;
   mapboxAccessToken?: unknown;
+  onLoad?: () => void;
 }
 
 vi.mock("react-map-gl", async () => {
   const React = await vi.importActual<typeof import("react")>("react");
-  const Map = React.forwardRef<{ getMap: () => null }, MapMockProps>(function MockMap({ children, ...rest }, ref) {
+  const Map = React.forwardRef<{ getMap: () => null }, MapMockProps>(function MockMap({ children, onLoad, ...rest }, ref) {
     React.useImperativeHandle(ref, () => ({ getMap: () => null }), []);
+    React.useEffect(() => {
+      onLoad?.();
+    }, [onLoad]);
     return (
       <div data-testid="mapbox-map" data-token={String(rest.mapboxAccessToken ?? "")}>
         {children}
@@ -128,11 +132,14 @@ describe("PropertyMiniMap", () => {
       expect(await screen.findByText(/Map loads when visible/i)).toBeInTheDocument();
       expect(screen.queryByTestId("mapbox-map")).not.toBeInTheDocument();
       expect(observe).toHaveBeenCalled();
+      expect(invokeCallsFor("ai-quota-status")).toHaveLength(0);
+      expect(invokeCallsFor("property-pois")).toHaveLength(0);
 
       act(() => triggerIntersect?.([{ isIntersecting: true }]));
       expect(await screen.findByTestId("mapbox-map")).toBeInTheDocument();
       expect(disconnect).toHaveBeenCalled();
       await waitFor(() => expect(invokeCallsFor("property-pois")).toHaveLength(1));
+      await waitFor(() => expect(invokeCallsFor("ai-quota-status")).toHaveLength(2));
     } finally {
       Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", {
         configurable: true,
@@ -200,6 +207,30 @@ describe("PropertyMiniMap", () => {
     // 3 unique-category POIs feed at least 3 markers (some may be more from
     // category offsets) — assert a non-zero count.
     expect(screen.getByText("Athens Metro")).toBeInTheDocument();
+  });
+
+  it("filters POI badges and map markers by selected category", async () => {
+    poisInvokeResult = {
+      data: {
+        pois: [
+          { name: "St Nicholas School", category: "school", distanceKm: 0.4, walkMinutes: 5 },
+          { name: "Athens Metro", category: "transit", distanceKm: 0.3, walkMinutes: 4 },
+          { name: "Cafe del Lungo", category: "cafe", distanceKm: 0.2, walkMinutes: 3 },
+        ],
+      },
+      error: null,
+    };
+
+    render(<PropertyMiniMap {...baseProps} />);
+    await waitFor(() => expect(screen.getByText("St Nicholas School")).toBeInTheDocument());
+    expect(screen.getByTitle("Cafe del Lungo")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Caf/i }));
+
+    expect(screen.queryByText("St Nicholas School")).not.toBeInTheDocument();
+    expect(screen.queryByText("Athens Metro")).not.toBeInTheDocument();
+    expect(screen.getByText("Cafe del Lungo")).toBeInTheDocument();
+    expect(screen.getByTitle("Cafe del Lungo")).toBeInTheDocument();
   });
 
   it("renders an inline error message when property-pois fails (message via error.message)", async () => {
