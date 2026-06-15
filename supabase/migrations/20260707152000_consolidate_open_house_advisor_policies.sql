@@ -66,6 +66,7 @@ CREATE POLICY "oh_offers_delete"
 DROP POLICY IF EXISTS "oh_regs_requester_insert" ON public.open_house_registrations;
 DROP POLICY IF EXISTS "oh_regs_requester_select" ON public.open_house_registrations;
 DROP POLICY IF EXISTS "oh_regs_requester_update" ON public.open_house_registrations;
+DROP POLICY IF EXISTS "oh_regs_requester" ON public.open_house_registrations;
 DROP POLICY IF EXISTS "oh_regs_owner_select" ON public.open_house_registrations;
 DROP POLICY IF EXISTS "oh_regs_owner_update" ON public.open_house_registrations;
 DROP POLICY IF EXISTS "oh_regs_insert" ON public.open_house_registrations;
