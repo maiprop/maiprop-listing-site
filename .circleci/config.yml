@@ -1,0 +1,182 @@
+version: 2.1
+
+executors:
+  node:
+    docker:
+      - image: cimg/node:20.19.5-browsers
+    resource_class: large
+    environment:
+      VITE_SUPABASE_URL: https://abcdefghijklmnop.supabase.co
+      VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder_not_real
+      VITE_SUPABASE_PROJECT_ID: abcdefghijklmnop
+
+commands:
+  npm_install:
+    steps:
+      - restore_cache:
+          keys:
+            - v1-npm-node20-{{ checksum "package-lock.json" }}
+      - run:
+          name: Install dependencies
+          command: npm ci --prefer-offline --no-audit
+      - save_cache:
+          key: v1-npm-node20-{{ checksum "package-lock.json" }}
+          paths:
+            - ~/.npm
+
+jobs:
+  quality:
+    executor: node
+    steps:
+      - checkout
+      - run:
+          name: Check runtime
+          command: npm run check:runtime
+      - npm_install
+      - run:
+          name: Security audit
+          command: npm audit --omit=dev --audit-level=high
+      - run:
+          name: Check committed secrets
+          command: npm run check:secrets
+      - run:
+          name: Check dependency overrides
+          command: npm run check:dependency-overrides
+      - run:
+          name: Type-check and build
+          command: npm run build
+      - run:
+          name: Type-check Cloudflare Pages Functions
+          command: npm run typecheck:functions
+      - run:
+          name: Type-check Remotion video runtime
+          command: npm run typecheck:remotion
+      - run:
+          name: Check bundle size
+          command: npm run check:bundle-size
+      - run:
+          name: Lint migrations
+          command: |
+            npm run lint:migrations
+            npm run lint:migrations:chronology
+      - run:
+          name: Check public edge function protections
+          command: npm run check:public-functions
+      - run:
+          name: Check OpenAPI coverage
+          command: npm run check:openapi-coverage
+      - run:
+          name: Check enterprise readiness basics
+          command: npm run check:enterprise-readiness-basics
+      - run:
+          name: Check GitHub governance evidence
+          command: npm run check:github-governance
+      - run:
+          name: Check disaster recovery evidence
+          command: npm run check:dr-readiness
+      - run:
+          name: Check type-debt ratchet
+          command: npm run check:type-debt
+      - run:
+          name: Lint
+          command: npm run lint
+      - run:
+          name: Test
+          command: |
+            mkdir -p test-results/vitest
+            npx vitest run \
+              --reporter=default \
+              --reporter=junit \
+              --outputFile.junit=test-results/vitest/results.xml
+          environment:
+            NODE_OPTIONS: --max-old-space-size=4096
+      - run:
+          name: Coverage
+          command: npm run test:coverage
+          environment:
+            NODE_OPTIONS: --max-old-space-size=4096
+      - run:
+          name: Check generated types freshness
+          command: |
+            TYPES_FILE="src/integrations/supabase/types.ts"
+            LINES=$(wc -l < "$TYPES_FILE")
+            echo "Generated types file: $LINES lines"
+            if [ "$LINES" -gt 5000 ]; then
+              echo "Generated types file has grown to $LINES lines (threshold: 5000)."
+            fi
+      - run:
+          name: SBOM generation
+          command: npm sbom --sbom-format cyclonedx > sbom.cdx.json
+      - run:
+          name: License compliance check
+          command: |
+            npx license-checker --production \
+              --failOn 'GPL-2.0;GPL-3.0;AGPL-1.0;AGPL-3.0;LGPL-2.0;LGPL-2.1;LGPL-3.0;MPL-1.0;MPL-1.1;MPL-2.0;EPL-1.0;EPL-2.0;CDDL-1.0;CDDL-1.1' \
+              --summary
+      - store_test_results:
+          path: test-results
+      - store_artifacts:
+          path: coverage
+          destination: coverage
+      - store_artifacts:
+          path: sbom.cdx.json
+          destination: sbom.cdx.json
+
+  migrations_validate:
+    docker:
+      - image: cimg/node:20.19.5
+      - image: postgres:15
+        environment:
+          POSTGRES_DB: maiprop_test
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+    resource_class: medium
+    environment:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: maiprop_test
+    steps:
+      - checkout
+      - run:
+          name: Install psql client
+          command: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - run:
+          name: Wait for Postgres
+          command: |
+            for attempt in $(seq 1 30); do
+              if pg_isready -h "$PGHOST" -U "$PGUSER" -d "$PGDATABASE"; then
+                exit 0
+              fi
+              sleep 2
+            done
+            pg_isready -h "$PGHOST" -U "$PGUSER" -d "$PGDATABASE"
+      - run:
+          name: Prepare Supabase compatibility stubs
+          command: psql -v ON_ERROR_STOP=1 -f scripts/ci/supabase-compat-stubs.sql
+      - run:
+          name: Strip unavailable Supabase-managed extensions
+          command: |
+            mkdir -p /tmp/maiprop-migrations
+            cp supabase/migrations/*.sql /tmp/maiprop-migrations/
+            find /tmp/maiprop-migrations -name '*.sql' -exec sed -i -E \
+              -e 's/CREATE EXTENSION (IF NOT EXISTS )?(pg_cron|pg_net|pgmq|supabase_vault)[^;]*;//g' \
+              {} +
+            find /tmp/maiprop-migrations -name '*.sql' -exec perl -i -0pe \
+              's/DO \$\$ BEGIN\s+IF NOT EXISTS \(SELECT 1 FROM pg_extension WHERE extname = '"'"'pg_cron'"'"'\) THEN\s+CREATE EXTENSION pg_cron;\s+END IF;\s+END \$\$;//g' \
+              {} +
+      - run:
+          name: Apply migrations in order
+          command: |
+            set -euo pipefail
+            shopt -s nullglob
+            for migration in $(ls /tmp/maiprop-migrations/*.sql | sort); do
+              echo "applying $migration"
+              psql -v ON_ERROR_STOP=1 -f "$migration"
+            done
+
+workflows:
+  build_test_and_migrations:
+    jobs:
+      - quality
+      - migrations_validate
