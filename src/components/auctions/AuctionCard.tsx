@@ -245,7 +245,7 @@ type AuctionDetailGroup = {
 };
 
 const AuctionGroupedDetails = ({ groups }: { groups: AuctionDetailGroup[] }) => (
-  <div className="space-y-2 border-y border-border/60 py-2.5">
+  <div data-testid="auction-card-details" className="min-h-[9rem] max-h-[9rem] overflow-hidden space-y-2 border-y border-border/60 py-2.5">
     {groups.map((group) => (
       <div key={group.title} className="space-y-1.5">
         <div className="flex items-center gap-2">
@@ -344,7 +344,7 @@ const AuctionActions = ({
   };
 
   return (
-    <div className="mt-auto pt-3 border-t border-border flex items-center gap-2">
+    <div data-testid="auction-card-actions" className="mt-auto flex min-h-[2.625rem] items-center gap-2 border-t border-border pt-3">
       <button
         onClick={handleFavorite}
         className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border ${
@@ -412,7 +412,7 @@ const AuctionCardComponent = ({ a, favoritedIds, onToggleFav }: AuctionCardProps
   ];
 
   return (
-    <div data-testid="auction-card" className="glass-card rounded-xl overflow-hidden border border-border hover:border-brand-gold/40 transition-all group flex flex-col">
+    <div data-testid="auction-card" className="glass-card rounded-xl overflow-hidden border border-border hover:border-brand-gold/40 transition-all group flex h-full min-h-[34rem] flex-col">
       <AuctionMedia
         a={a}
         imgSrc={imgSrc}
@@ -423,21 +423,27 @@ const AuctionCardComponent = ({ a, favoritedIds, onToggleFav }: AuctionCardProps
         isGreek={isGreek}
       />
 
-      <div className="p-4 space-y-2 flex-1 flex flex-col">
-        <Link to={`/auction/${a.id}`} state={{ auction: a }}>
-          <h2 className="font-semibold text-sm line-clamp-2 group-hover:text-brand-gold transition-colors">{a.title}</h2>
-        </Link>
-        <AuctionLocation address={a.address} city={a.city} />
-        <AuctionPropertyTypeChip label={propertyTypeLabel} />
-        <AuctionOwnershipChip ownershipBadge={ownershipBadge} ownershipPct={ownershipPct} />
-        <div className="flex flex-wrap items-center gap-1.5 mt-1 empty:hidden">
+      <div data-testid="auction-card-body" className="flex min-h-[21rem] flex-1 flex-col gap-2.5 p-4">
+        <div data-testid="auction-card-header" className="min-h-[4.75rem]">
+          <Link to={`/auction/${a.id}`} state={{ auction: a }}>
+            <h2 className="font-semibold text-sm line-clamp-2 group-hover:text-brand-gold transition-colors">{a.title}</h2>
+          </Link>
+          <AuctionLocation address={a.address} city={a.city} />
+        </div>
+        <div data-testid="auction-card-chips" className="flex min-h-[3.25rem] max-h-[3.25rem] flex-col gap-1 overflow-hidden">
+          <AuctionPropertyTypeChip label={propertyTypeLabel} />
+          <AuctionOwnershipChip ownershipBadge={ownershipBadge} ownershipPct={ownershipPct} />
+        </div>
+        <div data-testid="auction-card-pills" className="flex min-h-[1.625rem] max-h-[1.625rem] flex-wrap items-center gap-1.5 overflow-hidden">
           <AuctionYearBuiltPill yearBuilt={a.year_built} isGreek={isGreek} />
           <AuctionFloorPill floor={floor} totalFloors={totalFloors} isGreek={isGreek} />
           <AuctionSizePill sqm={a.sqm} />
         </div>
         <AuctionGroupedDetails groups={groupedDetails} />
-        <AuctionPrice amount={price} />
-        <AuctionCourt court={a.auction_court} />
+        <div data-testid="auction-card-price-zone" className="min-h-[2.25rem]">
+          <AuctionPrice amount={price} />
+          <AuctionCourt court={a.auction_court} />
+        </div>
         <AuctionActions a={a} isFav={isFav} onToggleFav={onToggleFav} isGreek={isGreek} />
       </div>
     </div>

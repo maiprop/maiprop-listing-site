@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderWithProviders } from "@/test/utils";
 
 const toastSuccess = vi.fn();
@@ -147,5 +147,64 @@ describe("AuctionCard behavior", () => {
     expect(screen.getByAltText("Auction Apartment")).toHaveAttribute("src", "/images/maiprop-logo.webp");
     expect(screen.getByText("0")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save" })).toHaveTextContent("Save");
+  });
+
+  it("uses fixed layout slots so sparse and metadata-heavy auction cards align", async () => {
+    const { AuctionCard } = await import("@/components/auctions/AuctionCard");
+
+    renderWithProviders(
+      <div>
+        <AuctionCard
+          a={auction({
+            id: "dense-auction",
+            title: "Auction Apartment with a Long Title and Dense Metadata",
+            floor: 6,
+            total_floors: 10,
+            year_built: 2020,
+            sqm: 281.42,
+            tags: ["ownership:partial", "ownership_pct:50"],
+          })}
+          favoritedIds={new Set()}
+          onToggleFav={vi.fn()}
+        />
+        <AuctionCard
+          a={auction({
+            id: "sparse-auction",
+            property_type: "",
+            auction_date: null,
+            year_built: null,
+            sqm: 1,
+            tags: [],
+            auction_court: "CODE_ONLY",
+            website_url: null,
+          })}
+          favoritedIds={new Set()}
+          onToggleFav={vi.fn()}
+        />
+      </div>,
+    );
+
+    for (const card of screen.getAllByTestId("auction-card")) {
+      expect(card).toHaveClass("h-full", "min-h-[34rem]");
+      expect(within(card).getByTestId("auction-card-body")).toHaveClass("min-h-[21rem]");
+      expect(within(card).getByTestId("auction-card-header")).toHaveClass("min-h-[4.75rem]");
+      expect(within(card).getByTestId("auction-card-chips")).toHaveClass(
+        "min-h-[3.25rem]",
+        "max-h-[3.25rem]",
+        "overflow-hidden",
+      );
+      expect(within(card).getByTestId("auction-card-pills")).toHaveClass(
+        "min-h-[1.625rem]",
+        "max-h-[1.625rem]",
+        "overflow-hidden",
+      );
+      expect(within(card).getByTestId("auction-card-details")).toHaveClass(
+        "min-h-[9rem]",
+        "max-h-[9rem]",
+        "overflow-hidden",
+      );
+      expect(within(card).getByTestId("auction-card-price-zone")).toHaveClass("min-h-[2.25rem]");
+      expect(within(card).getByTestId("auction-card-actions")).toHaveClass("min-h-[2.625rem]");
+    }
   });
 });
