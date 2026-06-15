@@ -24,6 +24,7 @@ const limiter = makeRateLimiter({
 
 type QuotaStatusRequest = {
   bucket?: unknown;
+  buckets?: unknown;
 };
 
 type QuotaStatus = {
@@ -43,14 +44,39 @@ const jsonResponse = (
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-function parseBucket(body: QuotaStatusRequest): string {
-  if (
-    typeof body.bucket !== "string" ||
-    !/^[a-z0-9-]{2,64}$/.test(body.bucket)
-  ) {
+const BUCKET_RE = /^[a-z0-9-]{2,64}$/;
+const MAX_BATCHED_BUCKETS = 12;
+
+function parseBucketValue(bucket: unknown): string {
+  if (typeof bucket !== "string" || !BUCKET_RE.test(bucket)) {
     throw new Error("Invalid bucket");
   }
-  return body.bucket;
+  return bucket;
+}
+
+function parseBucketRequest(body: QuotaStatusRequest): {
+  buckets: string[];
+  batched: boolean;
+} {
+  if (body.buckets !== undefined) {
+    if (!Array.isArray(body.buckets)) throw new Error("Invalid buckets");
+    const buckets = Array.from(new Set(body.buckets.map(parseBucketValue)));
+    if (buckets.length === 0 || buckets.length > MAX_BATCHED_BUCKETS) {
+      throw new Error("Invalid buckets");
+    }
+    return { buckets, batched: true };
+  }
+
+  return { buckets: [parseBucketValue(body.bucket)], batched: false };
+}
+
+function normalizeQuota(quota: Partial<QuotaStatus> | null): QuotaStatus {
+  return {
+    allowed: quota?.allowed === true,
+    reason: typeof quota?.reason === "string" ? quota.reason : null,
+    used: Number(quota?.used ?? 0),
+    limit: Number(quota?.limit ?? 0),
+  };
 }
 
 function errorMessage(err: unknown): string {
@@ -83,27 +109,34 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({})) as QuotaStatusRequest;
-    const bucket = parseBucket(body);
+    const { buckets, batched } = parseBucketRequest(body);
 
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },
     });
     const user = await verifyBearerToken(req, supabase);
 
-    const { data, error } = await supabase.rpc("check_ai_quota_for_user", {
-      _user_id: user.id,
-      p_bucket: bucket,
-    });
-    if (error) throw error;
+    const quotaEntries = await Promise.all(
+      buckets.map(async (bucket) => {
+        const { data, error } = await supabase.rpc("check_ai_quota_for_user", {
+          _user_id: user.id,
+          p_bucket: bucket,
+        });
+        if (error) throw error;
+        return [bucket, normalizeQuota(data as Partial<QuotaStatus> | null)] as const;
+      }),
+    );
 
-    const quota = data as Partial<QuotaStatus> | null;
+    if (batched) {
+      return jsonResponse(
+        { quotas: Object.fromEntries(quotaEntries) },
+        200,
+        corsHeaders,
+      );
+    }
+
     return jsonResponse(
-      {
-        allowed: quota?.allowed === true,
-        reason: typeof quota?.reason === "string" ? quota.reason : null,
-        used: Number(quota?.used ?? 0),
-        limit: Number(quota?.limit ?? 0),
-      },
+      quotaEntries[0][1],
       200,
       corsHeaders,
     );

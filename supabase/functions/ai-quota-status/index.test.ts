@@ -5,6 +5,7 @@ type MockScenario = {
   authError?: string;
   user?: { id: string; email: string };
   quota?: { allowed: boolean; reason: string | null; used: number; limit: number };
+  quotas?: Record<string, { allowed: boolean; reason: string | null; used: number; limit: number }>;
   rpcError?: string;
   calls: Array<{ name: string; args?: unknown }>;
 };
@@ -48,8 +49,11 @@ export function createClient() {
       if (scenario.rpcError) {
         return { data: null, error: { message: scenario.rpcError } };
       }
+      const bucket = typeof args === "object" && args
+        ? (args as Record<string, unknown>).p_bucket
+        : null;
       return {
-        data: scenario.quota ?? { allowed: true, reason: null, used: 1, limit: 5 },
+        data: scenario.quotas?.[String(bucket)] ?? scenario.quota ?? { allowed: true, reason: null, used: 1, limit: 5 },
         error: null,
       };
     },
@@ -158,6 +162,52 @@ Deno.test("quota status is returned for the verified caller only", async () => {
       })
     ),
     true,
+  );
+});
+
+Deno.test("batched quota status verifies once and returns quotas by bucket", async () => {
+  resetScenario({
+    user: { id: "verified-user", email: "verified@test.local" },
+    quotas: {
+      "property-valuation": { allowed: true, reason: null, used: 2, limit: 5 },
+      "neighbourhood-report": {
+        allowed: false,
+        reason: "monthly_limit_reached",
+        used: 5,
+        limit: 5,
+      },
+      "property-pois": { allowed: true, reason: null, used: 1, limit: 5 },
+    },
+  });
+
+  const res = await handler(authedJson({
+    buckets: ["property-valuation", "neighbourhood-report", "property-pois"],
+  }));
+  const body = await res.json();
+
+  assertEquals(res.status, 200);
+  assertEquals(body, {
+    quotas: {
+      "property-valuation": { allowed: true, reason: null, used: 2, limit: 5 },
+      "neighbourhood-report": {
+        allowed: false,
+        reason: "monthly_limit_reached",
+        used: 5,
+        limit: 5,
+      },
+      "property-pois": { allowed: true, reason: null, used: 1, limit: 5 },
+    },
+  });
+
+  const calls = globalThis.__aiQuotaStatusScenario.calls;
+  assertEquals(calls.filter((call) => call.name === "getUser").length, 1);
+  assertEquals(
+    calls
+      .filter((call) => call.name === "rpc")
+      .map((call) =>
+        ((call.args as { args?: { p_bucket?: string } }).args ?? {}).p_bucket
+      ),
+    ["property-valuation", "neighbourhood-report", "property-pois"],
   );
 });
 

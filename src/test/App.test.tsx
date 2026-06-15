@@ -98,12 +98,16 @@ function setLocation(pathname: string) {
 import App from "@/App";
 
 describe("App.tsx render smoke", () => {
-  it("renders the Index page at '/' and mounts the global AI widget on a non-hidden route", async () => {
+  it("renders the Index page at '/' and defers the global AI widget on a non-hidden route", async () => {
     setLocation("/");
     render(<App />);
     await waitFor(() => expect(screen.getByText("page-index")).toBeInTheDocument());
-    // Outside the hide-prefix list -> floating widget is mounted.
-    expect(screen.queryByText("ai-widget")).toBeInTheDocument();
+    // Outside the hide-prefix list -> floating widget still mounts, but only
+    // after the first-load path has had an idle window.
+    expect(screen.queryByText("ai-widget")).toBeNull();
+    await waitFor(() => expect(screen.getByText("ai-widget")).toBeInTheDocument(), {
+      timeout: 3000,
+    });
     // Bottom nav and cookie banner always render.
     expect(screen.getByText("bottom-nav")).toBeInTheDocument();
   });

@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  useAiQuota,
+  useAiQuotas,
   type AIQuota,
 } from "@/hooks/useAiQuota";
 import {
@@ -55,6 +55,11 @@ type UsageMetric = {
 type UsageCounter = Pick<UsageMetric, "used" | "limit">;
 
 const SELL_SIDE_PARTICIPANTS = new Set(["seller", "agent", "developer", "professional"]);
+const BILLING_AI_BUCKETS = [
+  "property-valuation",
+  "neighbourhood-report",
+  "property-pois",
+] as const;
 
 const usageFromQuota = (quota: AIQuota | null | undefined) => ({
   used: quota?.used ?? null,
@@ -198,9 +203,7 @@ export function BillingUsagePanel({
   onPurchaseAddon,
   onUpgrade,
 }: BillingUsagePanelProps) {
-  const valuations = useAiQuota("property-valuation", user, { enabled: Boolean(user) });
-  const neighbourhood = useAiQuota("neighbourhood-report", user, { enabled: Boolean(user) });
-  const pois = useAiQuota("property-pois", user, { enabled: Boolean(user) });
+  const aiQuotas = useAiQuotas(BILLING_AI_BUCKETS, user, { enabled: Boolean(user) });
   const { data: reportCount = 0, isLoading: reportsLoading, error: reportsError } = useReportUsage();
   const { data: priorityCount = 0, isLoading: priorityLoading, error: priorityError } = usePriorityAdsUsage();
   const showPriorityBoosts = SELL_SIDE_PARTICIPANTS.has(participantType);
@@ -211,9 +214,12 @@ export function BillingUsagePanel({
 
   const reportLimit = isPro ? REPORT_INCLUDED : 0;
   const priorityLimit = isPro ? PRIORITY_ADS_INCLUDED : 0;
-  const valuationUsage = usageFromQuota(valuations.quota);
-  const neighbourhoodUsage = usageFromQuota(neighbourhood.quota);
-  const poiUsage = usageFromQuota(pois.quota);
+  const valuationQuota = aiQuotas.quotas["property-valuation"];
+  const neighbourhoodQuota = aiQuotas.quotas["neighbourhood-report"];
+  const poiQuota = aiQuotas.quotas["property-pois"];
+  const valuationUsage = usageFromQuota(valuationQuota);
+  const neighbourhoodUsage = usageFromQuota(neighbourhoodQuota);
+  const poiUsage = usageFromQuota(poiQuota);
 
   const metrics: UsageMetric[] = [
     {
@@ -222,8 +228,8 @@ export function BillingUsagePanel({
       description: "AI market insights and valuation analysis.",
       icon: BarChart2,
       ...valuationUsage,
-      loading: valuations.quotaLoading,
-      action: !isPro && valuations.quota && isAtLimit(valuationUsage)
+      loading: aiQuotas.quotaLoading,
+      action: !isPro && valuationQuota && isAtLimit(valuationUsage)
         ? { type: "upgrade", label: "Upgrade" }
         : { type: "addon", addonKey: "valuation_single", label: "Buy add-on" },
     },
@@ -233,8 +239,8 @@ export function BillingUsagePanel({
       description: "Area trends, safety, walkability, and local signals.",
       icon: Globe,
       ...neighbourhoodUsage,
-      loading: neighbourhood.quotaLoading,
-      action: !isPro && neighbourhood.quota && isAtLimit(neighbourhoodUsage)
+      loading: aiQuotas.quotaLoading,
+      action: !isPro && neighbourhoodQuota && isAtLimit(neighbourhoodUsage)
         ? { type: "upgrade", label: "Upgrade" }
         : { type: "addon", addonKey: "neighbourhood_report_single", label: "Buy add-on" },
     },
@@ -244,7 +250,7 @@ export function BillingUsagePanel({
       description: "AI-curated places and nearby-location analysis.",
       icon: MapPin,
       ...poiUsage,
-      loading: pois.quotaLoading,
+      loading: aiQuotas.quotaLoading,
       action: poiUsage.limit != null && poiUsage.used != null && poiUsage.used >= poiUsage.limit
         ? isPro
           ? { type: "contact", label: "Request more" }
