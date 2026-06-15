@@ -21,6 +21,15 @@ type ListingRow = {
   id: string;
   owner_id?: string | null;
   price?: number | string | null;
+  listing_type?: string | null;
+  title?: string | null;
+  address?: string | null;
+  city?: string | null;
+  property_type?: string | null;
+  sqm?: number | string | null;
+  auction_date?: string | null;
+  auction_starting_bid?: number | string | null;
+  tags?: unknown;
   [key: string]: unknown;
 };
 
@@ -94,6 +103,52 @@ function sortByPriceProximity(rows: ListingRow[], price: number | null): Listing
   });
 }
 
+function normalizeIdentityPart(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function getOsAuctionTag(tags: unknown): string | null {
+  if (!Array.isArray(tags)) return null;
+  const tag = tags.find((value): value is string =>
+    typeof value === "string" && /^os_auction:/i.test(value.trim()),
+  );
+  return tag ? normalizeIdentityPart(tag) : null;
+}
+
+function similarListingIdentity(row: ListingRow): string {
+  const id = normalizeIdentityPart(row.id);
+  if (normalizeIdentityPart(row.listing_type) !== "auction") return `id:${id}`;
+
+  const osAuctionTag = getOsAuctionTag(row.tags);
+  if (osAuctionTag) return `auction:${osAuctionTag}`;
+
+  const parts = [
+    row.title,
+    row.address,
+    row.city,
+    row.property_type,
+    row.price,
+    row.sqm,
+    row.auction_date,
+    row.auction_starting_bid,
+  ].map(normalizeIdentityPart);
+  const hasEnoughAuctionShape = parts.slice(0, 3).every(Boolean) && (parts[4] || parts[5] || parts[6]);
+  return hasEnoughAuctionShape ? `auction:${parts.join("|")}` : `id:${id}`;
+}
+
+function dedupeSimilarRows<T extends ListingRow>(rows: T[]): T[] {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    const identity = similarListingIdentity(row);
+    if (seen.has(identity)) return false;
+    seen.add(identity);
+    return true;
+  });
+}
+
 async function publicSimilarListings(ctx: PublicApiCtx, requestUrl: URL): Promise<Response> {
   if (!getSupabaseRuntime(ctx.env)) return missingRuntime();
 
@@ -119,7 +174,7 @@ async function publicSimilarListings(ctx: PublicApiCtx, requestUrl: URL): Promis
       }));
 
       return jsonResponse({
-        data: sortByPriceProximity(withProfiles, built.price).slice(0, built.limit),
+        data: dedupeSimilarRows(sortByPriceProximity(withProfiles, built.price)).slice(0, built.limit),
       });
     } catch (error) {
       if (isSupabaseTransientError(error)) return upstreamUnavailable();

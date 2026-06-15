@@ -18,7 +18,7 @@ import { PropertyCard } from "@/components/PropertyCard";
 import ViewingDialog from "@/components/ViewingDialog";
 import { useListing, useOwnerProStatus, useTrackListingView } from "@/hooks/useListings";
 import type { ListingWithJoins } from "@/hooks/useListings";
-import { useSimilarListings } from "@/hooks/useSimilarListings";
+import { dedupeSimilarListings, useSimilarListings } from "@/hooks/useSimilarListings";
 import { useFavorites, useToggleFavorite } from "@/hooks/useFavorites";
 import { useStartConversation } from "@/hooks/useMessages";
 import { useAuth } from "@/contexts/AuthContext";
@@ -266,7 +266,7 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
   const { internalFeatures, externalFeatures, constructionFeatures, suitabilityFeatures } =
     buildPropertyFeatureGroups(db);
 
-  const similarListings = similarFromDb.filter(l => l.id !== id).slice(0, 6);
+  const similarListings = dedupeSimilarListings(similarFromDb, dbListing ?? null).filter(l => l.id !== id).slice(0, 6);
 
   const detailGroups = buildDetailGroups(db, price, sqm, pricePerSqm, isLandType);
 

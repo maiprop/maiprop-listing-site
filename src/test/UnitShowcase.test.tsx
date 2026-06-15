@@ -52,4 +52,30 @@ describe("UnitShowcase", () => {
     fireEvent.click(screen.getByRole("button", { name: "Request schedule" }));
     expect(onContact).toHaveBeenCalledTimes(1);
   });
+
+  it("shows every active unit option instead of hiding inventory behind a request-more note", () => {
+    render(
+      <UnitShowcase
+        listing={{ price: 275000, sqm: 39, bedrooms: 1, bathrooms: 1 }}
+        onContact={vi.fn()}
+        units={Array.from({ length: 8 }, (_, index) => ({
+          id: `u${index + 1}`,
+          unit_number: `${index + 1}`,
+          availability_status: "available",
+          internal_sqm: 39 + index,
+          bedrooms: 1,
+          bathrooms: 1,
+          price: 275000 + index * 10000,
+          price_per_sqm: 7051,
+        }))}
+      />,
+    );
+
+    for (let index = 1; index <= 8; index += 1) {
+      expect(screen.getByText(`Unit ${index}`)).toBeInTheDocument();
+    }
+    expect(screen.getByRole("columnheader", { name: "Status" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "€/m²" })).toBeInTheDocument();
+    expect(screen.queryByText(/more units available on request/i)).not.toBeInTheDocument();
+  });
 });

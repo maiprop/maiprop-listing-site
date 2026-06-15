@@ -49,6 +49,10 @@ const OPEN_HOUSES_FALLBACKS: Record<string, string> = {
   "openHouses.page.myOpenHouses": "My Open Houses",
   "openHouses.page.cityPlaceholder": "City...",
   "openHouses.page.citySearchAria": "Search open houses by city",
+  "openHouses.page.transactionType": "Open house type",
+  "openHouses.page.transactionTypes.all": "All open houses",
+  "openHouses.page.transactionTypes.sale": "Sale open houses",
+  "openHouses.page.transactionTypes.rent": "Rental open houses",
   "openHouses.page.viewModeAria": "View mode",
   "openHouses.page.showListAria": "Show as list",
   "openHouses.page.showMapAria": "Show on map",
@@ -196,8 +200,10 @@ type OpenHouseListingRow = Pick<
 // skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
 export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordinates filters, map/list view, query state, and card projection in one route shell.
   const { t, i18n } = useTranslation();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const cityParam = searchParams.get("city") || "";
+  const transactionParam = searchParams.get("transaction");
+  const transactionFilter = transactionParam === "rent" || transactionParam === "sale" ? transactionParam : "";
 
   // Filter state
   const [cityFilter, setCityFilter] = useState(cityParam);
@@ -234,6 +240,20 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
     { value: "office", label: getTranslatedValue(t, "openHouses.page.propertyTypes.office") },
     { value: "land", label: getTranslatedValue(t, "openHouses.page.propertyTypes.land") },
   ];
+  const TRANSACTION_TYPES = [
+    { value: "", label: getTranslatedValue(t, "openHouses.page.transactionTypes.all") },
+    { value: "sale", label: getTranslatedValue(t, "openHouses.page.transactionTypes.sale") },
+    { value: "rent", label: getTranslatedValue(t, "openHouses.page.transactionTypes.rent") },
+  ] as const;
+
+  const setTransactionFilter = (value: "" | "sale" | "rent") => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set("transaction", value);
+      else next.delete("transaction");
+      return next;
+    }, { replace: true });
+  };
 
   const isProductionVisibleOpenHouse = (listing: { title?: string | null; address?: string | null; city?: string | null }) => {
     const text = [listing.title, listing.address, listing.city].filter(Boolean).join(" ");
@@ -248,10 +268,11 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
     });
 
   const { data: listings = [], isLoading, isError, refetch } = useQuery({
-    queryKey: ["open-houses", showPast],
+    queryKey: ["open-houses", showPast, transactionFilter],
     queryFn: async () => { // skipcq: JS-R1005 - Query keeps time filtering, production cleanup, and media-first sorting together.
+      const transactionParam = transactionFilter ? `&transactionType=${transactionFilter}` : "";
       const cached = await fetchPublicApi<OpenHouseListingRow[]>(
-        `/api/public/open-houses?showPast=${showPast ? "1" : "0"}&limit=200`,
+        `/api/public/open-houses?showPast=${showPast ? "1" : "0"}&limit=200${transactionParam}`,
         { throwOnError: true },
       );
       if (!cached) throw new Error("Public open houses API returned no data");
@@ -264,6 +285,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
   const filtered = useMemo(() => { // skipcq: JS-R1005 - Client filters intentionally mirror the visible filter controls in one memoized pass.
     return listings.filter((l) => { // skipcq: JS-R1005 - Each listing is checked against the independent filter controls in display order.
       if (cityFilter && !l.city?.toLowerCase().includes(cityFilter.toLowerCase())) return false;
+      if (transactionFilter && (l.open_house_transaction_type ?? "sale") !== transactionFilter) return false;
       if (propertyType && l.property_type !== propertyType) return false;
       if (minPrice && Number(l.price) < Number(minPrice)) return false;
       if (maxPrice && Number(l.price) > Number(maxPrice)) return false;
@@ -282,14 +304,16 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
       }
       return true;
     });
-  }, [listings, cityFilter, propertyType, minPrice, maxPrice, minSqm, maxSqm, bedroomsMin, energyClass, filterYearRange, selectedFeatures]);
+  }, [listings, cityFilter, transactionFilter, propertyType, minPrice, maxPrice, minSqm, maxSqm, bedroomsMin, energyClass, filterYearRange, selectedFeatures]);
 
   const hasActiveFilters =
     Boolean(cityFilter) || Boolean(propertyType) || Boolean(minPrice) || Boolean(maxPrice) || Boolean(minSqm) ||
-    Boolean(maxSqm) || bedroomsMin !== null || Boolean(energyClass) || Boolean(filterYearRange) || selectedFeatures.length > 0;
+    Boolean(maxSqm) || bedroomsMin !== null || Boolean(energyClass) || Boolean(filterYearRange) ||
+    Boolean(transactionFilter) || selectedFeatures.length > 0;
 
   function clearFilters() {
     setCityFilter(""); setCityInput("");
+    setTransactionFilter("");
     setPropertyType(""); setMinPrice(""); setMaxPrice("");
     setMinSqm(""); setMaxSqm(""); setBedroomsMin(null);
     setEnergyClass(""); setFilterYearRange(""); setSelectedFeatures([]);
@@ -508,11 +532,30 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
                 <span className="hidden xs:inline">{getTranslatedValue(t, "openHouses.page.filters")}</span>
                 {hasActiveFilters && (
                   <span className="bg-primary text-primary-foreground text-[10px] px-1.5 rounded-full">
-                    {[cityFilter, propertyType, minPrice, maxPrice, minSqm, maxSqm, bedroomsMin !== null ? "1" : "", energyClass, filterYearRange, ...selectedFeatures].filter(Boolean).length}
+                    {[cityFilter, transactionFilter, propertyType, minPrice, maxPrice, minSqm, maxSqm, bedroomsMin !== null ? "1" : "", energyClass, filterYearRange, ...selectedFeatures].filter(Boolean).length}
                   </span>
                 )}
                 <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", showAdvanced && "rotate-180")} />
               </button>
+            </div>
+
+            <div className="flex items-center gap-2 overflow-x-auto pb-0.5" aria-label={getTranslatedValue(t, "openHouses.page.transactionType")}>
+              {TRANSACTION_TYPES.map((option) => (
+                <button
+                  key={option.value || "all"}
+                  type="button"
+                  onClick={() => setTransactionFilter(option.value)}
+                  aria-pressed={transactionFilter === option.value}
+                  className={cn(
+                    "min-h-[34px] rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors",
+                    transactionFilter === option.value
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-secondary text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                  )}
+                >
+                  {option.label}
+                </button>
+              ))}
             </div>
 
             {/* Advanced filters panel */}

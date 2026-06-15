@@ -14,11 +14,26 @@ interface Props {
 export function StepType({ form, set, toggle }: Props) {
   const { t } = useTranslation();
   const { listing_type: lt, property_type: pt } = form;
+  const isOpenHouse = lt === "open_house";
+  const openHouseTransactionType = form.open_house_transaction_type === "rent" ? "rent" : "sale";
+  const selectedListingIntent = isOpenHouse ? openHouseTransactionType : lt;
   const tr = (key: string, fallback: string) => tFallback(t, key, fallback);
   const propertyTypeLabel = (value: string, fallback: string) => tr(`createListing.propertyTypes.${value}.label`, fallback);
   const propertyTypeDescription = (value: string, fallback: string) => tr(`createListing.propertyTypes.${value}.description`, fallback);
   const subtypeLabel = (value: string, fallback: string) => tr(`createListing.subtypes.${value}.label`, fallback);
   const subtypeDescription = (value: string, fallback: string) => tr(`createListing.subtypes.${value}.description`, fallback);
+  const setListingIntent = (value: "sale" | "rent") => {
+    if (isOpenHouse) set("open_house_transaction_type", value);
+    else set("listing_type", value);
+  };
+  const toggleOpenHouse = () => {
+    if (isOpenHouse) {
+      set("listing_type", openHouseTransactionType);
+      return;
+    }
+    set("open_house_transaction_type", lt === "rent" ? "rent" : "sale");
+    set("listing_type", "open_house");
+  };
 
   return (
     <div className="space-y-6">
@@ -27,21 +42,40 @@ export function StepType({ form, set, toggle }: Props) {
       {/* Listing type */}
       <div>
         <FieldLabel>{tr("createListing.type.listingType", "Listing Type")}</FieldLabel>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           {([
             { v: "sale", label: tr("createListing.type.sale", "For Sale"), desc: tr("createListing.type.saleDesc", "Sell your property") },
             { v: "rent", label: tr("createListing.type.rent", "For Rent"), desc: tr("createListing.type.rentDesc", "Monthly or long-term") },
-            { v: "open_house", label: tr("createListing.type.openHouse", "Open House"), desc: tr("createListing.type.openHouseDesc", "Public viewing event") },
           ] as const).map(({ v, label, desc }) => (
-            <button key={v} onClick={() => set("listing_type", v)}
+            <button key={v} onClick={() => setListingIntent(v)}
               className={`p-4 rounded-xl border text-left transition-all ${
-                lt === v ? "border-primary bg-primary/10 text-primary" : "border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-primary/50"
+                selectedListingIntent === v ? "border-primary bg-primary/10 text-primary" : "border-border bg-secondary text-muted-foreground hover:text-foreground hover:border-primary/50"
               }`}>
               <div className="text-sm font-semibold">{label}</div>
               <div className="text-[11px] mt-0.5 opacity-70">{desc}</div>
             </button>
           ))}
         </div>
+        <label className={`mt-3 flex items-start gap-3 rounded-xl border p-3 cursor-pointer transition-colors ${
+          isOpenHouse ? "border-primary/40 bg-primary/10" : "border-border bg-secondary hover:border-primary/40"
+        }`}>
+          <input
+            type="checkbox"
+            checked={isOpenHouse}
+            onChange={toggleOpenHouse}
+            className="mt-0.5 rounded border-border"
+          />
+          <span className="min-w-0">
+            <span className={`block text-sm font-semibold ${isOpenHouse ? "text-primary" : "text-foreground"}`}>
+              {tr("createListing.type.openHouseViewing", "Open house viewing")}
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              {selectedListingIntent === "rent"
+                ? tr("createListing.type.openHouseRentDesc", "Schedule a public viewing for this rental listing.")
+                : tr("createListing.type.openHouseSaleDesc", "Schedule a public viewing for this sale listing.")}
+            </span>
+          </span>
+        </label>
       </div>
 
       <label className="flex items-center gap-2 cursor-pointer">

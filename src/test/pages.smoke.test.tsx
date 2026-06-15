@@ -298,6 +298,7 @@ vi.mock("@/hooks/usePropertyAIInsights", () => ({
 }));
 
 vi.mock("@/hooks/useSimilarListings", () => ({
+  dedupeSimilarListings: (rows: unknown[]) => rows,
   useSimilarListings: vi.fn().mockReturnValue({ data: [] }),
 }));
 

@@ -153,7 +153,10 @@ vi.mock("@/hooks/usePropertyAIInsights", () => ({
     loadAiInsights: vi.fn(),
   }),
 }));
-vi.mock("@/hooks/useSimilarListings", () => ({ useSimilarListings: vi.fn().mockReturnValue({ data: [] }) }));
+vi.mock("@/hooks/useSimilarListings", () => ({
+  dedupeSimilarListings: (rows: unknown[]) => rows,
+  useSimilarListings: vi.fn().mockReturnValue({ data: [] }),
+}));
 vi.mock("@/hooks/useMessages", () => ({
   useStartConversation: vi.fn().mockReturnValue({ mutateAsync: vi.fn(), isPending: false }),
   useConversations: vi.fn().mockReturnValue({ data: [] }),

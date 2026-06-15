@@ -81,6 +81,56 @@ describe("useSimilarListings", () => {
     expect(result.current.data).toEqual([]);
   });
 
+  it("deduplicates cloned OS auction rows before cards render", async () => {
+    publicApiMock.mockResolvedValue({
+      data: [
+        {
+          id: "auction-a",
+          listing_type: "auction",
+          title: "Auction Apartment Dionysou",
+          address: "Paianias 9",
+          city: "Dionysou",
+          property_type: "apartment",
+          price: 435920,
+          sqm: 281.42,
+          auction_date: "2026-06-17",
+          tags: ["source:maiprop-os", "os_auction:auction-123"],
+        },
+        {
+          id: "auction-b",
+          listing_type: "auction",
+          title: "Auction Apartment Dionysou",
+          address: "Paianias 9",
+          city: "Dionysou",
+          property_type: "apartment",
+          price: 435920,
+          sqm: 281.42,
+          auction_date: "2026-06-17",
+          tags: ["source:maiprop-os", "os_auction:auction-123"],
+        },
+        {
+          id: "auction-c",
+          listing_type: "auction",
+          title: "Different Auction",
+          address: "Other 1",
+          city: "Dionysou",
+          property_type: "apartment",
+          price: 440000,
+          sqm: 120,
+          auction_date: "2026-06-18",
+          tags: ["source:maiprop-os", "os_auction:auction-456"],
+        },
+      ],
+    });
+
+    const { result } = renderHookWithQuery(() =>
+      useSimilarListings({ city: "Dionysou", propertyType: "apartment", listingType: "auction" }),
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.map((row) => row.id)).toEqual(["auction-a", "auction-c"]);
+  });
+
   it("propagates public API errors", async () => {
     publicApiMock.mockRejectedValue(new Error("upstream unavailable"));
 
