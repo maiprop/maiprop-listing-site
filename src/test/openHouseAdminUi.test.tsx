@@ -218,6 +218,43 @@ describe("OpenHouseAssetControlPanel", () => {
     });
   });
 
+  it("allows rental open-house approval without sale-only financial blockers in the owner panel", () => {
+    useOpenHouseRegistrationsMock.mockReturnValue({
+      isLoading: false,
+      data: [
+        {
+          ...completeRegistration,
+          id: "reg-rental",
+          contact_name: "Rental Visitor",
+          proof_of_funds_url: null,
+          pof_verified_status: null,
+          proof_amount: null,
+          investor_declaration_signed_at: null,
+          mortgage_status: null,
+          budget_range: null,
+          working_with_agent: null,
+        },
+      ],
+    });
+
+    renderPanel({ listingPrice: 950, openHouseTransactionType: "rent" });
+
+    expect(screen.queryByText(/Proof of funds missing/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Investor declaration not signed/i)).not.toBeInTheDocument();
+
+    fireEvent.click(getActionButtons(/approve/i, "Approve")[0]);
+
+    expect(toastMock.error).not.toHaveBeenCalled();
+    expect(updateRegMock.mutate).toHaveBeenCalledWith({
+      id: "reg-rental",
+      updates: expect.objectContaining({
+        status: "approved",
+        approved_by: "owner-1",
+        approved_at: expect.any(String),
+      }),
+    });
+  });
+
   it("lets hosts review proof of funds before approval", () => {
     useOpenHouseRegistrationsMock.mockReturnValue({
       isLoading: false,

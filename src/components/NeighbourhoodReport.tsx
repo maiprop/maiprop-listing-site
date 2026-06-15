@@ -44,6 +44,11 @@ interface NeighbourhoodData {
   demographics: { primaryResidents: string; avgAge: number; tourismImpact: string };
   investmentOutlook: { rating: string; summary: string };
   areaHighlights: string[];
+  generatedBy?: string;
+  osMunicipalityStatus?: string;
+  osMunicipalityName?: string;
+  osPrefectureName?: string;
+  osMunicipalityDetail?: string;
 }
 
 export interface NeighbourhoodReportProps {
@@ -179,6 +184,21 @@ const IMPACT_ICON: Record<string, React.ReactNode> = {
 const OUTLOOK_COLOUR: Record<string, string> = {
   Excellent: "text-emerald-400", Good: "text-primary",
   Fair: "text-yellow-400", Poor: "text-red-400",
+};
+
+const getBenchmarkSourceDescription = (data: NeighbourhoodData): string => {
+  const source = data.generatedBy?.toLowerCase() ?? "";
+  const isOsBacked = data.osMunicipalityStatus === "ok" || source.includes("maiprop_os") || source.endsWith("_os");
+  if (isOsBacked) {
+    const area = data.osMunicipalityName ?? data.osPrefectureName;
+    return `Source: mAI Prop OS municipality market report${area ? ` for ${area}` : ""}, interpreted with AI. This is municipality-level residential intelligence, not a new-build or street-level asking-price benchmark. Treat it as directional market context, not a certified valuation.`;
+  }
+
+  if (source.includes("fallback")) {
+    return "Source: fallback city-level market benchmark plus property and location context. This is directional market intelligence, not a new-build or street-level asking-price benchmark or certified valuation.";
+  }
+
+  return "Source: AI-generated neighbourhood estimate from property type, address, coordinates, and available market context. Treat it as directional market intelligence, not a certified valuation.";
 };
 
 // ── Main component ─────────────────────────────────────────────────────────────
@@ -330,9 +350,7 @@ export default function NeighbourhoodReport({ city, address, region, municipalit
               </p>
               <div className="mt-2 rounded-lg bg-secondary/70 border border-border px-3 py-2 text-[10px] text-muted-foreground leading-relaxed">
                 <span className="font-semibold text-foreground">How this is estimated: </span>
-                The report blends area-level comparable sale and listing signals, local EUR/m2 benchmarks, property type,
-                neighbourhood, address or coordinates when available, and recent year-over-year plus five-year movement.
-                Treat it as directional market intelligence, not a certified valuation.
+                {getBenchmarkSourceDescription(data)}
               </div>
             </div>
 

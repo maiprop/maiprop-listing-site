@@ -93,10 +93,11 @@ export function useOpenHouseSettings(listingId: string | undefined) {
 }
 
 export function useOpenHouseCapacity(listingId: string | undefined) {
+  const { user } = useAuth();
   return useQuery({
     queryKey: ["open_house_capacity", listingId],
     queryFn: async () => {
-      if (!listingId) return null;
+      if (!listingId || !user) return null;
       const parsedListingId = parseMutationInput(rowIdSchema("listing id"), listingId, "listing id");
       const invoke = supabase.functions.invoke as unknown as InvokeOpenHouseCapacity;
       const { data, error } = await invoke("open-house-capacity", { body: { listingId: parsedListingId } });
@@ -105,7 +106,7 @@ export function useOpenHouseCapacity(listingId: string | undefined) {
       if (!row) return null;
       return normalizeOpenHouseCapacity(row);
     },
-    enabled: !!listingId,
+    enabled: !!listingId && !!user,
   });
 }
 
@@ -151,7 +152,7 @@ export function useOpenHouseRegistrations(listingId: string | undefined, _asOwne
   return useQuery({
     queryKey: ["open_house_registrations", listingId, user?.id ?? "anon"],
     queryFn: async () => {
-      if (!listingId) return [];
+      if (!listingId || !user?.id) return [];
       const { data, error } = await supabase
         .from("open_house_registrations")
         .select(OPEN_HOUSE_REGISTRATIONS_SELECT)
@@ -160,7 +161,7 @@ export function useOpenHouseRegistrations(listingId: string | undefined, _asOwne
       if (error) throw error;
       return (data ?? []) as unknown as OpenHouseRegistration[];
     },
-    enabled: !!listingId,
+    enabled: !!listingId && !!user?.id,
   });
 }
 
@@ -299,10 +300,12 @@ export function useUpdateOpenHouseRegistration() {
       if (isOwner && requestedStatus === "approved") {
         const registrationForApproval = buildRegistrationApprovalContext(updates, lookup);
         const settings = getFirstOpenHouseSetting(lookup?.listings?.open_house_settings);
+        const openHouseTransactionType = lookup?.listings?.open_house_transaction_type === "rent" ? "rent" : "sale";
         const blockers = getOpenHouseApprovalBlockers(
           registrationForApproval,
           settings ?? null,
-          lookup?.listings?.price ?? null
+          lookup?.listings?.price ?? null,
+          openHouseTransactionType
         );
         if (blockers.length > 0) {
           throw new Error(`Registration is incomplete: ${blockers.join(", ")}`);
@@ -338,10 +341,11 @@ export function useUpdateOpenHouseRegistration() {
 }
 
 export function useOpenHouseOffers(listingId: string | undefined) {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ["open_house_offers", listingId],
+    queryKey: ["open_house_offers", listingId, user?.id ?? "anon"],
     queryFn: async () => {
-      if (!listingId) return [];
+      if (!listingId || !user?.id) return [];
       const { data, error } = await supabase
         .from("open_house_offers")
         .select(OPEN_HOUSE_OFFERS_SELECT)
@@ -350,7 +354,7 @@ export function useOpenHouseOffers(listingId: string | undefined) {
       if (error) throw error;
       return (data ?? []) as OpenHouseOffer[];
     },
-    enabled: !!listingId,
+    enabled: !!listingId && !!user?.id,
   });
 }
 

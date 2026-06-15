@@ -282,6 +282,22 @@ describe("NeighbourhoodReport — full result UI", () => {
     expect(screen.getByText(/High tourism/i)).toBeInTheDocument();
   });
 
+  it("discloses when price trend data is municipality-level OS market intelligence", async () => {
+    mockQuotaAndReport({
+      ...fullData,
+      generatedBy: "openai_maiprop_os",
+      osMunicipalityStatus: "ok",
+      osMunicipalityName: "Dimos Glyfadas",
+    });
+    render(<NeighbourhoodReport {...baseProps} city="Glyfada" municipality="Dimos Glyfadas" />);
+    await loadReport();
+    await waitFor(() => expect(screen.getByText(/Plaka.*Glyfada/i)).toBeInTheDocument());
+
+    expect(screen.getByText(/mAI Prop OS municipality market report/i)).toBeInTheDocument();
+    expect(screen.getByText(/municipality-level residential intelligence/i)).toBeInTheDocument();
+    expect(screen.getByText(/not a new-build or street-level asking-price benchmark/i)).toBeInTheDocument();
+  });
+
   it("Refresh report re-invokes the edge fn", async () => {
     mockQuotaAndReport(fullData);
     render(<NeighbourhoodReport {...baseProps} />);

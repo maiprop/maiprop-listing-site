@@ -55,6 +55,7 @@ export const OPEN_HOUSE_REGISTRATION_LOOKUP_SELECT = `
   listings!inner(
     owner_id,
     price,
+    open_house_transaction_type,
     open_house_settings (
       id,
       listing_id,

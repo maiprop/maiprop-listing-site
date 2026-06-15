@@ -11,6 +11,7 @@ import type {
   OpenHouseRegistrationLookup,
   OpenHouseRegistrationUpdates,
   OpenHouseSettings,
+  OpenHouseTransactionType,
   RegistrationContext,
 } from "./types";
 
@@ -25,8 +26,11 @@ const REQUESTER_OWNER_ONLY_REGISTRATION_FIELDS = [
   "timeslot_index",
 ] as const;
 
-export function requiresOpenHouseScreening(listingPrice: number | null | undefined) {
-  return Number(listingPrice ?? 0) >= OPEN_HOUSE_SCREENING_PRICE_THRESHOLD;
+export function requiresOpenHouseScreening(
+  listingPrice: number | null | undefined,
+  openHouseTransactionType: OpenHouseTransactionType = "sale",
+) {
+  return openHouseTransactionType !== "rent" && Number(listingPrice ?? 0) >= OPEN_HOUSE_SCREENING_PRICE_THRESHOLD;
 }
 
 export function isDateInPast(value: string | null | undefined) {
@@ -50,9 +54,11 @@ export function getOpenHouseApprovalBlockers(
   registration: RegistrationContext,
   settings: OpenHouseSettings | null | undefined,
   listingPrice?: number | null,
+  openHouseTransactionType: OpenHouseTransactionType = "sale",
 ) {
   const blockers: string[] = [];
-  const requiresScreening = requiresOpenHouseScreening(listingPrice);
+  const isRentalOpenHouse = openHouseTransactionType === "rent";
+  const requiresScreening = requiresOpenHouseScreening(listingPrice, openHouseTransactionType);
 
   if ((settings?.timeslots?.length ?? 0) > 0 && registration.timeslot_index === null) {
     blockers.push("Timeslot not selected");
@@ -79,7 +85,7 @@ export function getOpenHouseApprovalBlockers(
     blockers.push("Waiver not signed");
   }
 
-  if (settings?.require_proof_of_funds) {
+  if (!isRentalOpenHouse && settings?.require_proof_of_funds) {
     if (!registration.proof_of_funds_url) {
       blockers.push("Proof of funds missing");
     } else if (registration.pof_verified_status !== "verified") {
@@ -90,7 +96,7 @@ export function getOpenHouseApprovalBlockers(
     }
   }
 
-  if (settings?.require_investor_declaration && !registration.investor_declaration_signed_at) {
+  if (!isRentalOpenHouse && settings?.require_investor_declaration && !registration.investor_declaration_signed_at) {
     blockers.push("Investor declaration not signed");
   }
 
@@ -165,6 +171,13 @@ export function buildOfferStatusUpdate(status: OHOfferStatus, uid: string): OHOf
   return updates;
 }
 
+const RAW_RUNTIME_ERROR_RE = /cannot read propert(?:y|ies)|undefined is not an object|is not a function/i;
+
 export function getErrorMessage(err: unknown, fallback: string) {
-  return err instanceof Error ? err.message : fallback;
+  if (!(err instanceof Error)) return fallback;
+  const message = err.message.trim();
+  if (!message || err instanceof TypeError || RAW_RUNTIME_ERROR_RE.test(message)) {
+    return fallback;
+  }
+  return message;
 }

@@ -119,6 +119,35 @@ describe("getOpenHouseApprovalBlockers", () => {
     expect(blockers).toEqual([]);
   });
 
+  it("does not apply sale-only qualification blockers to rental open houses", () => {
+    const blockers = getOpenHouseApprovalBlockers(
+      {
+        timeslot_index: 0,
+        contact_name: "Renter One",
+        contact_email: "renter@example.com",
+        contact_phone: "+306900000000",
+        contact_permission_at: new Date().toISOString(),
+        id_verification_consent_at: new Date().toISOString(),
+        privacy_acknowledged_at: new Date().toISOString(),
+        id_doc_url: "docs/id.pdf",
+        id_verified_at: new Date().toISOString(),
+        waiver_signed_at: new Date().toISOString(),
+        proof_of_funds_url: null,
+        pof_verified_status: null,
+        proof_amount: null,
+        investor_declaration_signed_at: null,
+        mortgage_status: null,
+        budget_range: null,
+        working_with_agent: null,
+      },
+      baseSettings,
+      350000,
+      "rent"
+    );
+
+    expect(blockers).toEqual([]);
+  });
+
   it("blocks approval when proof amount is below the seller minimum", () => {
     const blockers = getOpenHouseApprovalBlockers(
       {

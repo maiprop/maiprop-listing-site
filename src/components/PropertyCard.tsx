@@ -2,7 +2,7 @@ import { forwardRef, memo } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  MapPin, Bed, Bath, Square, Heart, Gavel, Flame,
+  MapPin, Square, Heart, Gavel, Flame,
   Eye, TrendingUp, Video, CheckCircle,
   Calendar, Layers,
   Share2, Flag, Crown, Clock,
@@ -81,19 +81,6 @@ interface PropertyCardProps {
   testId?: string;
 }
 
-const energyColors: Record<string, string> = {
-  /* A+/A use brand-cyan-deep so the white text in line ~369 meets AA contrast. */
-  "A+": "bg-brand-cyan-deep", A: "bg-brand-cyan-deep/85", "B+": "bg-primary/80",
-  B: "bg-primary/60", C: "bg-brand-gold/80", D: "bg-brand-gold/60",
-  E: "bg-destructive/80", F: "bg-destructive", G: "bg-destructive",
-};
-
-// Internal/system tag prefixes that should never be shown to users
-const SYSTEM_TAG_PREFIXES = [
-  "os_auction:", "source:", "auction_status:", "ownership:", "ownership_pct:",
-  "round:", "status:", "posted", "sync:", "auction_pool:", "land_type:", "commercial_type:",
-];
-
 const PROPERTY_IMAGE_WIDTHS = [320, 480, 768, 1024];
 const PROPERTY_CARD_IMAGE_SIZES = "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw";
 const COMPACT_PROPERTY_IMAGE_SIZES = "96px";
@@ -129,6 +116,21 @@ const getPropertyImageSrcSet = (src: string): string | undefined => {
     .join(", ");
 
   return srcSet || undefined;
+};
+
+const formatFloorLabel = (
+  floor: number,
+  totalFloors: number | undefined,
+  t: (key: string) => string,
+) => {
+  const floorLabel =
+    floor === -1
+      ? t("propertyCard.basement")
+      : floor === 0
+        ? t("propertyCard.groundFloor")
+        : `${floor}${t("propertyCard.floor")}`;
+
+  return totalFloors != null ? `${floorLabel}/${totalFloors}` : floorLabel;
 };
 
 export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(function PropertyCard({ property, compact = false, testId = "property-card" }, _ref) { // skipcq: JS-R1005, JS-W1044 - Card rendering branches compact, auction, and standard listing affordances in one reusable surface.
@@ -261,9 +263,14 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
           <div className="flex items-center gap-1 mt-1 text-muted-foreground text-[11px]">
             <MapPin className="w-3 h-3 shrink-0" /><span className="truncate">{property.city}</span>
           </div>
-          <div className="flex items-center gap-2 mt-1.5 text-[11px] text-muted-foreground">
-            {property.bedrooms != null && <span className="flex items-center gap-0.5"><Bed className="w-3 h-3" />{property.bedrooms}</span>}
-            <span className="flex items-center gap-0.5"><Square className="w-3 h-3" />{property.sqm}m²</span>
+          <div className="flex items-center gap-2 mt-1.5 text-[11px] text-muted-foreground flex-wrap">
+            <span className="flex items-center gap-0.5"><Square className="w-3 h-3" />{property.sqm} {t("common.sqm")}</span>
+            {property.floor != null && (
+              <span className="flex items-center gap-0.5"><Layers className="w-3 h-3" />{formatFloorLabel(property.floor, property.totalFloors, t)}</span>
+            )}
+            {property.yearBuilt != null && (
+              <span className="flex items-center gap-0.5"><Calendar className="w-3 h-3" />{property.yearBuilt}</span>
+            )}
           </div>
           <div className="font-display font-bold text-sm text-primary mt-1">{displayPrice}</div>
         </div>
@@ -274,16 +281,9 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
   const mainImage = imageChain[0] || MAIPROP_LOGO_FALLBACK_URL;
   const mainImageSrcSet = isMaiPropLogoFallback(mainImage) ? undefined : getPropertyImageSrcSet(mainImage);
   const mainImageIsLogoFallback = isMaiPropLogoFallback(mainImage);
-  const visibleTags = (property.tags || []).filter(
-    (tag: string) => !SYSTEM_TAG_PREFIXES.some(prefix => tag.toLowerCase().startsWith(prefix.toLowerCase()))
-  );
-  const hasContextPanel =
-    (property.listingType === "open_house" && Boolean(property.auctionDate)) ||
-    (property.listingType === "auction" && Boolean(property.auctionDate)) ||
-    property.listingType === "firesale";
 
   return (
-    <div data-testid={testId} className={`property-card rounded-2xl overflow-hidden group flex h-full min-h-[34rem] flex-col bg-card transition-shadow duration-300 ${
+    <div data-testid={testId} className={`property-card rounded-2xl overflow-hidden group flex flex-col bg-card transition-shadow duration-300 ${
       property.isFeatured
         ? "border-2 border-amber-400/70 shadow-[0_0_0_1px_rgba(251,191,36,0.15),0_4px_24px_rgba(251,191,36,0.22)] hover:shadow-[0_0_0_1px_rgba(251,191,36,0.25),0_8px_32px_rgba(251,191,36,0.35)]"
         : "border border-border"
@@ -393,9 +393,9 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
       </div>
 
       {/* Card body — more padding and slightly larger type on mobile for 2-col thumbnail view */}
-      <div data-testid="property-card-body" className="p-4 sm:p-4 flex min-h-[19rem] flex-1 flex-col gap-3">
+      <div className="p-4 sm:p-4 flex flex-col flex-1 gap-3">
         {/* Title + location */}
-        <div data-testid="property-card-header" className="min-h-[5.25rem]">
+        <div>
           <Link to={detailPath} state={detailState}>
             <h3 className="font-display font-semibold text-[15px] sm:text-base text-foreground hover:text-primary transition-colors line-clamp-2 leading-snug">
               {property.title}
@@ -422,25 +422,14 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
         </div>
 
         {/* Key specs */}
-        <div data-testid="property-card-specs" className="flex min-h-[4.75rem] max-h-[4.75rem] items-start gap-1.5 overflow-hidden text-xs flex-wrap">
-          {property.bedrooms != null && property.bedrooms > 0 && (
-            <span className="flex items-center gap-1 bg-primary/10 text-primary border border-primary/20 px-2.5 py-1 rounded-lg font-medium">
-              <Bed className="w-3.5 h-3.5" aria-hidden="true" /> {property.bedrooms} {t("common.bed")}
-            </span>
-          )}
-          {property.bathrooms != null && property.bathrooms > 0 && (
-            <span className="flex items-center gap-1 bg-accent/10 text-accent border border-accent/20 px-2.5 py-1 rounded-lg font-medium">
-              <Bath className="w-3.5 h-3.5" aria-hidden="true" /> {property.bathrooms} {t("common.bath")}
-            </span>
-          )}
+        <div className="flex items-center gap-1.5 text-xs flex-wrap">
           <span className="flex items-center gap-1 bg-brand-purple/10 text-brand-purple border border-brand-purple/20 px-2.5 py-1 rounded-lg font-medium">
             <Square className="w-3.5 h-3.5" aria-hidden="true" /> {property.sqm} {t("common.sqm")}
           </span>
           {property.floor != null && (
             <span className="flex items-center gap-1 bg-secondary text-muted-foreground border border-border px-2.5 py-1 rounded-lg font-medium">
               <Layers className="w-3.5 h-3.5" />
-              {property.floor === -1 ? t("propertyCard.basement") : property.floor === 0 ? t("propertyCard.groundFloor") : `${property.floor}${t("propertyCard.floor")}`}
-              {property.totalFloors != null && `/${property.totalFloors}`}
+              {formatFloorLabel(property.floor, property.totalFloors, t)}
             </span>
           )}
           {property.yearBuilt != null && (
@@ -448,54 +437,8 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
               <Calendar className="w-3.5 h-3.5" /> {property.yearBuilt}
             </span>
           )}
-          {property.energyClass && (
-            <span className={`px-2 py-1 rounded-lg text-[10px] font-bold text-primary-foreground ${energyColors[property.energyClass] || "bg-muted"}`}>
-              {property.energyClass}
-            </span>
-          )}
-          {/* Neighbourhood quality scores */}
-          {property.walkabilityScore != null && (
-            <span className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium text-[10px] border ${
-              property.walkabilityScore >= 70
-                ? "bg-brand-emerald/10 text-brand-emerald border-brand-emerald/25"
-                : property.walkabilityScore >= 40
-                ? "bg-brand-gold/10 text-brand-gold border-brand-gold/25"
-                : "bg-secondary text-muted-foreground border-border"
-            }`}>
-              🚶 {property.walkabilityScore}
-            </span>
-          )}
-          {property.safetyScore != null && (
-            <span className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium text-[10px] border ${
-              property.safetyScore >= 70
-                ? "bg-brand-emerald/10 text-brand-emerald border-brand-emerald/25"
-                : property.safetyScore >= 40
-                ? "bg-brand-gold/10 text-brand-gold border-brand-gold/25"
-                : "bg-secondary text-muted-foreground border-border"
-            }`}>
-              🛡 {property.safetyScore}
-            </span>
-          )}
-          {/* Ownership status pill */}
-          {property.ownershipStatus && (() => {
-            const ownershipMap: Record<string, { label: string; cls: string }> = {
-              full:    { label: t("propertyCard.ownership.full"), cls: "bg-primary/15 text-primary border border-primary/30" },
-              partial: { label: t("propertyCard.ownership.partial"), cls: "bg-brand-gold/15 text-brand-gold border border-brand-gold/30" },
-              common:  { label: t("propertyCard.ownership.undivided"), cls: "bg-brand-purple/15 text-brand-purple border border-brand-purple/30" },
-              none:    { label: t("propertyCard.ownership.none"), cls: "bg-destructive/15 text-destructive border border-destructive/30" },
-            };
-            const ow = ownershipMap[property.ownershipStatus] || { label: property.ownershipStatus, cls: "bg-secondary border border-border" };
-            return (
-              <span className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium text-[10px] ${ow.cls}`}>
-                {ow.label}
-                {property.ownershipPercentage != null && property.ownershipStatus !== "full" && ` ${property.ownershipPercentage}%`}
-              </span>
-            );
-          })()}
         </div>
 
-        {/* Context panel */}
-        <div data-testid="property-card-context" className="min-h-[3.25rem]" aria-hidden={!hasContextPanel}>
         {/* Auction banner */}
         {property.listingType === "open_house" && property.auctionDate && (
           <div className="flex items-center gap-2 bg-brand-cyan/10 rounded-xl p-2.5 border border-brand-cyan/25">
@@ -532,23 +475,10 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
           </div>
         )}
 
-        </div>
-
-        {/* Tags — system/internal tags are filtered out */}
-        <div data-testid="property-card-tags" className="flex min-h-[1.75rem] max-h-[1.75rem] gap-1.5 overflow-hidden flex-wrap">
-          {visibleTags.slice(0, 3).map(tag => (
-            <span key={tag} className="px-2.5 py-0.5 rounded-full bg-primary/10 border border-primary/20 text-[10px] text-primary font-medium">
-              {tag}
-            </span>
-          ))}
-        </div>
-
-
-
         {/* Agent row + CTA */}
-        <div data-testid="property-card-footer" className="mt-auto flex min-h-[5.75rem] flex-col justify-between gap-2.5 pt-3 border-t border-border">
+        <div className="mt-auto pt-3 border-t border-border space-y-2.5">
           {/* Agent info */}
-          {property.agent ? (
+          {property.agent && (
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-full bg-gradient-primary flex items-center justify-center text-[11px] font-bold text-primary-foreground shrink-0">
                 {property.agent.name[0]}
@@ -560,8 +490,6 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
                 </span>
               )}
             </div>
-          ) : (
-            <div className="min-h-7" aria-hidden="true" />
           )}
           {/* Action row: detail CTA for special inventory + Share + Report */}
           <div className={`flex items-center gap-2 ${property.listingType === "auction" || property.listingType === "open_house" ? "" : "justify-end"}`}>

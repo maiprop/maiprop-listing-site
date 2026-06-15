@@ -1027,7 +1027,8 @@ describe("Component smoke tests", () => {
   // ── Open houses ────────────────────────────────────────────────────────────
 
   it("OpenHousePrimitives render without throwing", async () => {
-    const { Pill, OpenHouseCard } = await import("@/components/open-houses/OpenHousePrimitives");
+    const { Pill, OpenHouseCard, OPEN_HOUSE_CARD_LAYOUT_CLASS } = await import("@/components/open-houses/OpenHousePrimitives");
+    expect(OPEN_HOUSE_CARD_LAYOUT_CLASS).not.toContain("min-h-");
     expect(() => renderWithProviders(<Pill onClick={() => {}}>Status</Pill>)).not.toThrow();
     expect(() => renderWithProviders(
       <OpenHouseCard card={{ id: "oh-1", listing_type: "open_house", price: 200000, ...MOCK_LISTING } as any} listing={{} as any} />

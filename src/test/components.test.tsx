@@ -275,11 +275,12 @@ describe("PropertyCard", () => {
     expect(addressEl).toBeInTheDocument();
   });
 
-  it("renders bedroom and bathroom counts via i18n keys", async () => {
+  it("renders only universal specs, not bedroom or bathroom counts", async () => {
     const { PropertyCard } = await import("@/components/PropertyCard");
-    renderWithProviders(<PropertyCard property={makeProperty({ bedrooms: 3, bathrooms: 2 })} />);
-    expect(screen.getByText(/3.*bed/i)).toBeInTheDocument();
-    expect(screen.getByText(/2.*bath/i)).toBeInTheDocument();
+    renderWithProviders(<PropertyCard property={makeProperty({ bedrooms: 3, bathrooms: 2, sqm: 90 })} />);
+    expect(screen.getByText(/90/)).toBeInTheDocument();
+    expect(screen.queryByText(/3.*bed/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/2.*bath/i)).not.toBeInTheDocument();
   });
 
   it("renders sqm with m² label", async () => {
@@ -361,12 +362,12 @@ describe("PropertyCard", () => {
     expect(screen.getByText("Piraeus")).toBeInTheDocument();
   });
 
-  it("shows user-visible tags and hides system tags", async () => {
+  it("hides all listing tags from cards to keep card heights universal", async () => {
     const { PropertyCard } = await import("@/components/PropertyCard");
     const tags = ["os_auction:123", "auction_pool:2026-06-04", "sea view", "source:manual", "renovated"];
     renderWithProviders(<PropertyCard property={makeProperty({ tags })} />);
-    expect(screen.getByText("sea view")).toBeInTheDocument();
-    expect(screen.getByText("renovated")).toBeInTheDocument();
+    expect(screen.queryByText("sea view")).not.toBeInTheDocument();
+    expect(screen.queryByText("renovated")).not.toBeInTheDocument();
     expect(screen.queryByText(/os_auction/)).not.toBeInTheDocument();
     expect(screen.queryByText(/auction_pool/)).not.toBeInTheDocument();
     expect(screen.queryByText(/source:/)).not.toBeInTheDocument();

@@ -116,7 +116,7 @@ const interpolateTranslation = (t: TFunction, key: string, values: Record<string
 // skipcq: JS-0067 - Skeleton helper is intentionally module-scoped.
 function OpenHouseCardSkeleton() {
   return (
-    <div className="property-card min-h-[33rem] sm:min-h-[34rem] lg:min-h-[33rem] rounded-2xl overflow-hidden bg-card border border-border flex flex-col">
+    <div className="property-card rounded-2xl overflow-hidden bg-card border border-border flex flex-col">
       <div className="aspect-[4/3] sm:aspect-[3/2] bg-secondary animate-pulse" />
       <div className="p-4 flex flex-1 flex-col gap-3">
         <div className="space-y-2">

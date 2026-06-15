@@ -252,7 +252,12 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
           {/* Owner: Asset Control panel */}
           {isOwner && id && (
             <div className="mb-6">
-              <OpenHouseAssetControlPanel listingId={id} isOwner={true} listingPrice={db?.price ?? null} />
+              <OpenHouseAssetControlPanel
+                listingId={id}
+                isOwner={true}
+                listingPrice={db?.price ?? null}
+                openHouseTransactionType={isRentalOpenHouse ? "rent" : "sale"}
+              />
             </div>
           )}
 
@@ -665,6 +670,7 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
         listingTitle={db.title}
         hasAssetControl={hasAssetControl}
         listingPrice={price}
+        openHouseTransactionType={isRentalOpenHouse ? "rent" : "sale"}
       />
       <OpenHouseOfferDialog
         open={modal.isOpen("offer")}

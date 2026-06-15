@@ -32,6 +32,7 @@ interface Props {
   listingId: string;
   isOwner: boolean;
   listingPrice?: number | null;
+  openHouseTransactionType?: "sale" | "rent" | null;
 }
 
 const STATUS_LABELS: Record<OHRegistrationStatus, string> = {
@@ -61,7 +62,7 @@ function getProofOfFundsDisplay(registration: OpenHouseRegistration) {
 }
 
 // skipcq: JS-0067 - Exported React component is intentionally module-scoped.
-export default function OpenHouseAssetControlPanel({ listingId, isOwner, listingPrice }: Props) { // skipcq: JS-R1005 - Owner control panel coordinates settings, approvals, documents, and offers in one surface.
+export default function OpenHouseAssetControlPanel({ listingId, isOwner, listingPrice, openHouseTransactionType = "sale" }: Props) { // skipcq: JS-R1005 - Owner control panel coordinates settings, approvals, documents, and offers in one surface.
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [registrationsOpen, setRegistrationsOpen] = useState(true);
   const [offersOpen, setOffersOpen] = useState(true);
@@ -93,7 +94,7 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
   if (!isOwner) return null;
 
   const handleApprove = (registration: OpenHouseRegistration) => {
-    const blockers = getOpenHouseApprovalBlockers(registration, settings, listingPrice);
+    const blockers = getOpenHouseApprovalBlockers(registration, settings, listingPrice, openHouseTransactionType ?? "sale");
     if (blockers.length > 0) {
       toast.error(`Approval blocked: ${blockers.join(", ")}`);
       return;
@@ -311,7 +312,7 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
                         </span>
                       </div>
                       {r.status === "pending" && (() => {
-                        const blockers = getOpenHouseApprovalBlockers(r, settings, listingPrice);
+                        const blockers = getOpenHouseApprovalBlockers(r, settings, listingPrice, openHouseTransactionType ?? "sale");
                         if (blockers.length === 0) return null;
                         return (
                           <p className="mt-2 text-xs text-amber-700">
