@@ -133,7 +133,7 @@
     "@radix-ui/react-toggle-group": "^1.1.12",
     "@radix-ui/react-tooltip": "^1.2.9",
     "@sentry/react": "^10.54.0",
-    "@supabase/supabase-js": "^2.108.0",
+    "@supabase/supabase-js": "^2.108.2",
     "@tanstack/react-query": "^5.101.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
