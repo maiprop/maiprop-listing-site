@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
-import { useProject, useUpdateProject } from "@/hooks/useProjects";
+import { useProject, useUpdateProject, useUpdateProjectListingCover } from "@/hooks/useProjects";
 import {
   useProjectUnits, useCreateProjectUnit, useUpdateProjectUnit, useBulkUpdateProjectUnitPrices, useDeleteProjectUnit,
   type ProjectUnitInsert, type ProjectUnit,
@@ -34,6 +34,7 @@ import {
   PDF_MIME_TYPES,
   assertAllowedUpload,
 } from "@/lib/uploadValidation";
+import { uploadListingImage } from "@/lib/buildingListingUploads";
 import { tFallback, tInterpolate } from "@/lib/i18nFallback";
 import { getListingDetailPath } from "@/lib/listingRoutes";
 
@@ -92,9 +93,11 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
   const deleteUnit = useDeleteProjectUnit();
   const addMedia = useAddProjectMedia();
   const deleteMedia = useDeleteProjectMedia();
+  const updateProjectListingCover = useUpdateProjectListingCover();
 
   const [form, setForm] = useState<Record<string, string | number | boolean | null | undefined>>({});
   const [saving, setSaving] = useState(false);
+  const [coverUploadingListingId, setCoverUploadingListingId] = useState<string | null>(null);
   const modal = useModal<"unitForm" | "leadForm" | "bulkPrice">();
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
   const [_editingLeadId, _setEditingLeadId] = useState<string | null>(null);
@@ -185,6 +188,24 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
       toast.error((err instanceof Error ? err.message : null) || tr("projects.detail.errors.uploadFailed", "Upload failed"));
     }
     e.target.value = "";
+  };
+
+  const handlePublicAdCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>, listingId: string) => {
+    const file = e.target.files?.[0];
+    if (!file || !user || !id) return;
+    setCoverUploadingListingId(listingId);
+    try {
+      const uploaded = await uploadListingImage(file, user.id);
+      updateProjectListingCover.mutate(
+        { projectId: id, listingId, coverImageUrl: uploaded.url },
+        { onSettled: () => setCoverUploadingListingId(null) },
+      );
+    } catch (err: unknown) {
+      setCoverUploadingListingId(null);
+      toast.error((err instanceof Error ? err.message : null) || tr("projects.detail.errors.coverUploadFailed", "Failed to update cover image"));
+    } finally {
+      e.target.value = "";
+    }
   };
 
   const handleAddUnit = (u: Partial<ProjectUnitInsert>) => {
@@ -521,12 +542,34 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
             {listings.length > 0 && (
               <div className="space-y-2 mb-4">
                 {listings.map((l) => (
-                  <div key={l.id} className="flex items-center gap-3 bg-secondary rounded-xl p-3">
-                    {l.cover_image_url && <img src={l.cover_image_url} alt="" className="w-12 h-12 rounded-lg object-cover" />}
+                  <div key={l.id} className="flex flex-col gap-3 bg-secondary rounded-xl p-3 sm:flex-row sm:items-center">
+                    {l.cover_image_url ? (
+                      <img src={l.cover_image_url} alt="" className="h-16 w-full rounded-lg object-cover sm:h-12 sm:w-12" />
+                    ) : (
+                      <div className="flex h-16 w-full items-center justify-center rounded-lg bg-background text-muted-foreground sm:h-12 sm:w-12">
+                        <Image className="h-5 w-5" />
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0"><Link to={getListingDetailPath(l)} className="font-medium hover:underline truncate block">{l.title}</Link><span className="text-xs text-muted-foreground">€{Number(l.price).toLocaleString()} · {l.sqm}m²</span></div>
-                    <Button variant="outline" size="sm" className="border-border" asChild>
-                      <Link to={getListingDetailPath(l)}>{tr("projects.detail.actions.viewPublicAd", "View ad")}</Link>
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className={`inline-flex min-h-[36px] cursor-pointer items-center justify-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium transition-colors hover:bg-secondary ${coverUploadingListingId === l.id ? "pointer-events-none opacity-60" : ""}`}>
+                        {coverUploadingListingId === l.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                        {coverUploadingListingId === l.id
+                          ? tr("projects.detail.actions.uploadingCover", "Uploading...")
+                          : tr("projects.detail.actions.replaceCover", "Replace cover")}
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          aria-label={tr("projects.detail.actions.replacePublicAdCover", "Replace public ad cover image")}
+                          className="sr-only"
+                          disabled={coverUploadingListingId === l.id}
+                          onChange={(e) => handlePublicAdCoverUpload(e, l.id)}
+                        />
+                      </label>
+                      <Button variant="outline" size="sm" className="border-border" asChild>
+                        <Link to={getListingDetailPath(l)}>{tr("projects.detail.actions.viewPublicAd", "View ad")}</Link>
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>

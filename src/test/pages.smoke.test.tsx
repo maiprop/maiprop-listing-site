@@ -373,6 +373,7 @@ vi.mock("@/hooks/useProjects", () => ({
   useProjects: vi.fn().mockReturnValue({ data: [], isLoading: false }),
   useProject: vi.fn().mockReturnValue({ data: null, isLoading: false }),
   useUpdateProject: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn() }),
+  useUpdateProjectListingCover: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn() }),
   useDeleteProject: vi.fn().mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn() }),
 }));
 
