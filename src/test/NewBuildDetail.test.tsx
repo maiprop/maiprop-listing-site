@@ -55,8 +55,27 @@ vi.mock("@/components/PropertyMiniMap", () => ({
     <button type="button" onClick={() => onWalkScoreChange?.(88)}>mini map</button>
   ),
 }));
-vi.mock("@/components/PropertyValuation", () => ({ default: () => <div data-testid="valuation" /> }));
-vi.mock("@/components/NeighbourhoodReport", () => ({ default: () => <div data-testid="neighbourhood" /> }));
+vi.mock("@/components/PropertyValuation", () => ({
+  default: (props: { price: number; sqm: number; pricePerSqm?: number | null; propertyType?: string | null }) => (
+    <div
+      data-testid="valuation"
+      data-price={String(props.price)}
+      data-sqm={String(props.sqm)}
+      data-price-per-sqm={props.pricePerSqm == null ? "" : String(props.pricePerSqm)}
+      data-property-type={props.propertyType ?? ""}
+    />
+  ),
+}));
+vi.mock("@/components/NeighbourhoodReport", () => ({
+  default: (props: { propertyType?: string | null; city?: string | null; region?: string | null }) => (
+    <div
+      data-testid="neighbourhood"
+      data-property-type={props.propertyType ?? ""}
+      data-city={props.city ?? ""}
+      data-region={props.region ?? ""}
+    />
+  ),
+}));
 vi.mock("@/components/property/PropertyScoresSection", () => ({
   PropertyScoresSection: ({ walkScore }: { walkScore: number | null }) => <div data-testid="scores">walk:{walkScore ?? "none"}</div>,
 }));
@@ -392,6 +411,61 @@ describe("NewBuildDetail", () => {
     expect(fromMock).toHaveBeenCalledWith("new_building_leads");
     expect(fromMock).not.toHaveBeenCalledWith("notifications");
     expect(toastMock.success).toHaveBeenCalledWith("Interest registered — the developer will be in touch");
+  });
+
+  it("uses all project units as representative metrics for new-build valuation", async () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "buyer-1", email: "buyer@example.com" },
+      profile: { display_name: "Buyer One", phone: "555-1" },
+    });
+    useQueryMock.mockReturnValue({
+      data: {
+        ...listing,
+        price: 275000,
+        price_per_sqm: 7051,
+        sqm: 39,
+        project: {
+          ...listing.project,
+          project_units: [
+            {
+              ...listing.project.project_units[0],
+              id: "unit-1",
+              internal_sqm: 50,
+              price: 350000,
+              price_per_sqm: 7000,
+            },
+            {
+              ...listing.project.project_units[0],
+              id: "unit-2",
+              unit_number: "A102",
+              internal_sqm: 100,
+              price: 750000,
+              price_per_sqm: 7500,
+            },
+          ],
+        },
+      },
+      isLoading: false,
+      error: null,
+    });
+
+    renderPage();
+
+    expect(screen.getByTestId("valuation")).toHaveAttribute("data-price", "550000");
+    expect(screen.getByTestId("valuation")).toHaveAttribute("data-sqm", "75");
+    expect(screen.getByTestId("valuation")).toHaveAttribute("data-price-per-sqm", "7333");
+    expect(screen.getByTestId("valuation")).toHaveAttribute("data-property-type", "apartment");
+    expect(screen.getByTestId("neighbourhood")).toHaveAttribute("data-property-type", "apartment");
+
+    await waitFor(() =>
+      expect(functionsInvokeMock).toHaveBeenCalledWith("property-valuation", expect.objectContaining({
+        body: expect.objectContaining({
+          price: 550000,
+          sqm: 75,
+          pricePerSqm: 7333,
+        }),
+      })),
+    );
   });
 
   it("wires the snapshot Ask developer fallback when unit terms are unavailable", async () => {

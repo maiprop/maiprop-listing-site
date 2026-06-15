@@ -286,6 +286,23 @@ describe("useCreateOpenHouseRegistration", () => {
     });
     expect(toastMock.error).toHaveBeenCalledWith("That timeslot is fully booked. Please choose another slot.");
   });
+
+  it("does not expose raw JavaScript runtime errors in the registration toast", async () => {
+    invokeMock.mockRejectedValue(new TypeError("Cannot read properties of undefined (reading 'region')"));
+    const { result } = renderHookWithQuery(() => useCreateOpenHouseRegistration());
+    await act(async () => {
+      await result.current
+        .mutateAsync({
+          listingId: "l-1",
+          timeslotIndex: 2,
+          contactName: "Buyer One",
+          contactEmail: "buyer@example.com",
+          contactPhone: "+306900000000",
+        })
+        .catch(() => {});
+    });
+    expect(toastMock.error).toHaveBeenCalledWith("Registration failed. Please try again.");
+  });
 });
 
 // ─── useUpdateOpenHouseRegistration ─────────────────────────────────────────
@@ -316,6 +333,7 @@ describe("useUpdateOpenHouseRegistration", () => {
     listings?: {
       owner_id?: string;
       price?: number | null;
+      open_house_transaction_type?: string | null;
       open_house_settings?: Array<Record<string, unknown>> | Record<string, unknown> | null;
     };
   } | null) {
@@ -448,6 +466,47 @@ describe("useUpdateOpenHouseRegistration", () => {
     expect(toastMock.error).toHaveBeenCalledWith(
       expect.stringContaining("Proof of funds not verified"),
     );
+  });
+
+  it("allows owner approval for rental open houses without sale-only qualification documents", async () => {
+    const { updateMock } = mockRegUpdate({
+      requester_id: "buyer-77",
+      status: "pending",
+      timeslot_index: 0,
+      contact_name: "Renter One",
+      contact_email: "renter@example.com",
+      contact_phone: "+306900000000",
+      contact_permission_at: "2026-01-01T09:00:00.000Z",
+      id_verification_consent_at: "2026-01-01T09:00:00.000Z",
+      privacy_acknowledged_at: "2026-01-01T09:00:00.000Z",
+      id_doc_url: "docs/id.pdf",
+      id_verified_at: "2026-01-01T10:00:00.000Z",
+      waiver_signed_at: "2026-01-01T10:05:00.000Z",
+      proof_of_funds_url: null,
+      pof_verified_status: null,
+      proof_amount: null,
+      investor_declaration_signed_at: null,
+      mortgage_status: null,
+      budget_range: null,
+      working_with_agent: null,
+      listings: {
+        owner_id: "u-1",
+        price: 350000,
+        open_house_transaction_type: "rent",
+        open_house_settings: {
+          timeslots: [],
+          require_proof_of_funds: true,
+          min_proof_amount: 200000,
+          require_investor_declaration: true,
+        },
+      },
+    });
+    const { result } = renderHookWithQuery(() => useUpdateOpenHouseRegistration());
+    await act(async () => {
+      await result.current.mutateAsync({ id: "r-1", updates: { status: "approved" } });
+    });
+    expect(updateMock).toHaveBeenCalledWith({ status: "approved" });
+    expect(toastMock.success).toHaveBeenCalledWith("Updated");
   });
 
   it("allows owner approval when proof of funds is verified in the same update", async () => {

@@ -59,8 +59,23 @@ vi.mock("@/components/PropertyCard", () => ({
   ),
 }));
 vi.mock("@/components/OpenHouseRegistrationDialog", () => ({
-  default: ({ open, hasAssetControl, listingPrice }: { open: boolean; hasAssetControl: boolean; listingPrice: number }) => (
-    <div data-testid="registration-dialog" data-open={String(open)} data-asset-control={String(hasAssetControl)}>
+  default: ({
+    open,
+    hasAssetControl,
+    listingPrice,
+    openHouseTransactionType,
+  }: {
+    open: boolean;
+    hasAssetControl: boolean;
+    listingPrice: number;
+    openHouseTransactionType?: string | null;
+  }) => (
+    <div
+      data-testid="registration-dialog"
+      data-open={String(open)}
+      data-asset-control={String(hasAssetControl)}
+      data-transaction-type={openHouseTransactionType ?? ""}
+    >
       Registration dialog {listingPrice}
     </div>
   ),
@@ -483,6 +498,22 @@ describe("OpenHouseDetail page behavior", () => {
     expect(screen.getByRole("button", { name: /submit offer/i })).toBeDisabled();
     expect(screen.getByTestId("registration-dialog")).toHaveAttribute("data-asset-control", "true");
     expect(screen.getByTestId("offer-dialog")).toHaveTextContent("Awaiting approval");
+  });
+
+  it("passes sale or rental open-house context into the registration dialog", async () => {
+    mocks.authUser = { id: "buyer-1" };
+    mocks.listing = createListing({ open_house_transaction_type: "rent", price: 950 });
+
+    const rentalRender = await renderOpenHouseDetail();
+
+    expect(await screen.findByTestId("registration-dialog")).toHaveAttribute("data-transaction-type", "rent");
+
+    rentalRender.unmount();
+    mocks.listing = createListing({ open_house_transaction_type: "sale", price: 420000 });
+
+    await renderOpenHouseDetail("/open-house/oh-sale");
+
+    expect(await screen.findByTestId("registration-dialog")).toHaveAttribute("data-transaction-type", "sale");
   });
 
   it("opens offer flow and starts contact for an attended buyer after the event has passed", async () => {

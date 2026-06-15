@@ -8,6 +8,7 @@ export type OHRegistrationStatus = "pending" | "approved" | "rejected" | "attend
 export type OHIdDocType = "id_card" | "passport";
 export type OHOfferStatus = "submitted" | "revealed" | "accepted" | "rejected" | "withdrawn";
 export type OHPofVerifiedStatus = "unreviewed" | "verified" | "rejected";
+export type OpenHouseTransactionType = "sale" | "rent";
 
 export interface OpenHouseSettings {
   id: string;
@@ -196,6 +197,7 @@ export type OpenHouseRegistrationLookup = {
   listings?: {
     owner_id?: string;
     price?: number | null;
+    open_house_transaction_type?: string | null;
     open_house_settings?: OpenHouseSettings[] | OpenHouseSettings | null;
   };
 };

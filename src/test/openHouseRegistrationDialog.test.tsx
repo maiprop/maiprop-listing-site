@@ -235,6 +235,29 @@ describe("OpenHouseRegistrationDialog", () => {
     expect(toastMock.success).toHaveBeenCalledWith("Registration complete. Awaiting approval from asset manager.");
   });
 
+  it("keeps rental open house registration out of sale-only buyer qualification", async () => {
+    useOpenHouseSettingsMock.mockReturnValue({
+      data: {
+        ...baseSettings,
+        require_proof_of_funds: true,
+        require_investor_declaration: true,
+      },
+    });
+    renderDialog({
+      listingPrice: 250000,
+      openHouseTransactionType: "rent",
+    } as Partial<React.ComponentProps<typeof OpenHouseRegistrationDialog>>);
+
+    acceptContactPacket();
+    fireEvent.click(screen.getByRole("button", { name: /continue/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /10:00/i }));
+    fireEvent.click(screen.getByRole("button", { name: /register/i }));
+
+    expect(await screen.findByText(/ID verification/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Pre-qualification/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Proof of funds/i)).not.toBeInTheDocument();
+  });
+
   it("warns but continues when optional screening document upload fails", async () => {
     useOpenHouseSettingsMock.mockReturnValue({ data: baseSettings });
     uploadOpenHouseDocMock.mockRejectedValueOnce(new Error("storage down"));

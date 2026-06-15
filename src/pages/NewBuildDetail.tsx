@@ -190,6 +190,51 @@ const ACTIVE_UNIT_STATUSES = new Set(["available", "reserved", "under_offer"]);
 const finiteNumbers = (values: Array<number | null | undefined>) =>
   values.filter((value): value is number => Number.isFinite(value) && Number(value) > 0);
 
+const averageNumber = (values: number[]): number | null => {
+  if (!values.length) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+};
+
+const roundNumber = (value: number, precision = 0): number => {
+  const factor = 10 ** precision;
+  return Math.round(value * factor) / factor;
+};
+
+const getPositiveNumber = (value: number | null | undefined): number | null => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+const buildProjectValuationMetrics = (
+  units: NewBuildProjectUnit[],
+  listing: NewBuildListing | null | undefined,
+) => {
+  const unitSizes = finiteNumbers(units.map((unit) => unit.internal_sqm));
+  const unitPrices = finiteNumbers(units.map((unit) => unit.price));
+  const unitsWithPriceAndSize = units.filter((unit) => {
+    return getPositiveNumber(unit.price) != null && getPositiveNumber(unit.internal_sqm) != null;
+  });
+
+  const totalUnitPrice = unitsWithPriceAndSize.reduce((sum, unit) => sum + Number(unit.price), 0);
+  const totalUnitSqm = unitsWithPriceAndSize.reduce((sum, unit) => sum + Number(unit.internal_sqm), 0);
+  const weightedUnitPricePerSqm = totalUnitPrice > 0 && totalUnitSqm > 0
+    ? Math.round(totalUnitPrice / totalUnitSqm)
+    : null;
+  const averageUnitPricePerSqm = averageNumber(finiteNumbers(units.map((unit) => unit.price_per_sqm)));
+
+  const averageUnitSize = averageNumber(unitSizes);
+  const averageUnitPrice = averageNumber(unitPrices);
+  const listingPrice = getPositiveNumber(listing?.price);
+  const listingSqm = getPositiveNumber(listing?.sqm);
+  const listingPricePerSqm = getPositiveNumber(listing?.price_per_sqm);
+
+  return {
+    price: averageUnitPrice != null ? Math.round(averageUnitPrice) : listingPrice ?? 0,
+    sqm: averageUnitSize != null ? roundNumber(averageUnitSize, 1) : listingSqm ?? 0,
+    pricePerSqm: weightedUnitPricePerSqm ?? (averageUnitPricePerSqm != null ? Math.round(averageUnitPricePerSqm) : listingPricePerSqm ?? undefined),
+  };
+};
+
 const formatValueRange = (values: number[], unit = ""): string | null => {
   if (!values.length) return null;
   const min = Math.min(...values);
@@ -371,6 +416,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
     .map((unit) => Number(unit.price))
     .filter((price) => Number.isFinite(price) && price > 0);
   const displayPrice = projectUnitPrices.length > 0 ? Math.min(...projectUnitPrices) : Number(listing?.price ?? 0);
+  const projectValuationMetrics = buildProjectValuationMetrics(projectUnits, listing);
   const isFromPrice = projectUnitPrices.length > 0;
   const activeProjectUnits = projectUnits.filter((unit) => ACTIVE_UNIT_STATUSES.has(unit.availability_status ?? "available"));
   const inventoryUnits = activeProjectUnits.length > 0 ? activeProjectUnits : projectUnits;
@@ -455,6 +501,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
 
   useEffect(() => {
     if (!listing || !user || !isCanonicalNewBuild) return;
+    if (!displayCity || projectValuationMetrics.price <= 0 || projectValuationMetrics.sqm <= 0) return;
     setAiInsightsLoading(true);
     invokeAuthenticatedFunction<AIInsightsResponse>("property-valuation", {
       body: {
@@ -462,8 +509,8 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
         title: displayTitle,
         city: displayCity,
         address: displayAddress,
-        price: Number(listing.price),
-        sqm: Number(listing.sqm),
+        price: projectValuationMetrics.price,
+        sqm: projectValuationMetrics.sqm,
         latitude: displayLatitude != null ? Number(displayLatitude) : undefined,
         longitude: displayLongitude != null ? Number(displayLongitude) : undefined,
         bedrooms: listing.bedrooms,
@@ -473,7 +520,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
         floor: listing.floor,
         yearBuilt: listing.year_built,
         energyClass: listing.energy_class,
-        pricePerSqm: listing.price_per_sqm ? Number(listing.price_per_sqm) : undefined,
+        pricePerSqm: projectValuationMetrics.pricePerSqm,
         hasParking: listing.has_parking,
         hasPool: listing.has_pool,
         hasElevator: listing.has_elevator,
@@ -485,7 +532,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
         setAiInsightsData({
           vsMarket: data.marketComparisonPct ?? 0,
           rentalYield: data.rentalYieldEstimate ?? 0,
-          estimatedValue: getPrimaryValuationEstimate(data, Number(listing.price)),
+          estimatedValue: getPrimaryValuationEstimate(data, projectValuationMetrics.price),
           marketComparison: data.marketComparison ?? "at_market",
           confidenceLabel: data.confidenceLabel ?? "Medium",
         });
@@ -558,10 +605,10 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
         </div>
 
         <div className="container max-w-5xl px-4">
-          <div className="grid lg:grid-cols-[1fr_340px] gap-8">
+          <div className="grid min-w-0 lg:grid-cols-[minmax(0,1fr)_340px] gap-8">
 
             {/* ── Left: main content ──────────────────────────────── */}
-            <div className="space-y-6">
+            <div className="min-w-0 space-y-6">
               <Gallery
                 images={uniqueImages}
                 isFavorited={isFavorited}
@@ -852,6 +899,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                   city={displayCity}
                   address={displayAddress}
                   region={displayRegion}
+                  propertyType={listing.property_type ?? undefined}
                   lat={displayLatitude != null ? Number(displayLatitude) : undefined}
                   lng={displayLongitude != null ? Number(displayLongitude) : undefined}
                   listingId={id ?? undefined}
@@ -866,13 +914,14 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                   title={displayTitle}
                   city={displayCity}
                   address={displayAddress || undefined}
-                  price={Number(listing.price)}
-                  sqm={Number(listing.sqm)}
+                  price={projectValuationMetrics.price}
+                  sqm={projectValuationMetrics.sqm}
                   bedrooms={listing.bedrooms}
                   bathrooms={listing.bathrooms}
                   propertyType={listing.property_type}
                   yearBuilt={listing.year_built}
                   energyClass={listing.energy_class}
+                  pricePerSqm={projectValuationMetrics.pricePerSqm}
                   floor={listing.floor}
                   totalFloors={listing.total_floors}
                   hasParking={listing.has_parking}
@@ -888,7 +937,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
             </div>
 
             {/* ── Right: sticky sidebar ───────────────────────────── */}
-            <div className="space-y-4 self-start lg:sticky lg:top-24">
+            <div className="min-w-0 space-y-4 self-start lg:sticky lg:top-24">
                 {/* Register Interest card */}
                 <RegisterInterestCard
                   listing={listing as Record<string, unknown>}

@@ -77,6 +77,7 @@ interface Props {
   listingTitle: string;
   hasAssetControl: boolean;
   listingPrice?: number;
+  openHouseTransactionType?: "sale" | "rent" | null;
 }
 
 export default function OpenHouseRegistrationDialog({
@@ -86,6 +87,7 @@ export default function OpenHouseRegistrationDialog({
   listingTitle,
   hasAssetControl,
   listingPrice,
+  openHouseTransactionType = "sale",
 }: Props) {
   const { i18n } = useTranslation();
   const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
@@ -98,8 +100,9 @@ export default function OpenHouseRegistrationDialog({
   const createReg = useCreateOpenHouseRegistration();
   const updateReg = useUpdateOpenHouseRegistration();
 
-  // Require screening when property is >= €200k or a screening flag is set
-  const requiresScreening = (listingPrice ?? 0) >= 200_000;
+  // Sale open houses use buyer qualification; rentals keep the visit-focused flow.
+  const isRentalOpenHouse = openHouseTransactionType === "rent";
+  const requiresScreening = !isRentalOpenHouse && (listingPrice ?? 0) >= 200_000;
 
   const [step, setStep] = useState<"contact" | "timeslot" | "screening" | "id" | "waiver" | "qualified" | "done">("contact");
   const [contactName, setContactName] = useState("");
@@ -150,8 +153,8 @@ export default function OpenHouseRegistrationDialog({
     r => new Date(r.created_at) >= startOfMonth && r.status !== "cancelled"
   ).length;
   const rsvpLimitReached = !myReg && rsvpLimit !== null && rsvpsThisMonth >= rsvpLimit;
-  const requirePOF = settings?.require_proof_of_funds ?? false;
-  const requireInvestor = settings?.require_investor_declaration ?? false;
+  const requirePOF = !isRentalOpenHouse && (settings?.require_proof_of_funds ?? false);
+  const requireInvestor = !isRentalOpenHouse && (settings?.require_investor_declaration ?? false);
   const budgetOptions = BUDGET_OPTIONS.map((option) => ({
     ...option,
     label: isGreek

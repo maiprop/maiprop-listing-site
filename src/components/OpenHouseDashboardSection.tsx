@@ -144,7 +144,12 @@ function OwnerListingCard({ listing }: { listing: DashboardListing }) {
       {/* Expanded: Asset Control Panel */}
       {expanded && (
         <div className="border-t border-border p-4 bg-secondary/20">
-          <OpenHouseAssetControlPanel listingId={listing.id} isOwner={true} listingPrice={listing.price} />
+          <OpenHouseAssetControlPanel
+            listingId={listing.id}
+            isOwner={true}
+            listingPrice={listing.price}
+            openHouseTransactionType={listing.open_house_transaction_type === "rent" ? "rent" : "sale"}
+          />
         </div>
       )}
     </div>

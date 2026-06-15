@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { renderWithProviders } from "@/test/utils";
 import type { Property } from "@/components/PropertyCard";
 
@@ -141,7 +141,7 @@ describe("PropertyCard behavior", () => {
     expect(toastSuccess).toHaveBeenCalledWith("propertyCard.reportSubmitted");
   });
 
-  it("covers open-house countdowns, floor labels, ownership, scores, and image error fallback", async () => {
+  it("covers open-house countdowns, universal specs, and image error fallback", async () => {
     const { PropertyCard } = await import("@/components/PropertyCard");
     const soon = new Date(Date.now() + 90 * 60_000).toISOString();
 
@@ -169,9 +169,11 @@ describe("PropertyCard behavior", () => {
 
     expect(screen.getByText(/1h (2[89]|30)m/)).toBeInTheDocument();
     expect(screen.getByText("propertyCard.groundFloor/5")).toBeInTheDocument();
-    expect(screen.getByText(/propertyCard.ownership.partial 50%/)).toBeInTheDocument();
+    expect(screen.queryByText(/propertyCard.ownership.partial 50%/)).not.toBeInTheDocument();
     expect(screen.getByText("propertyCard.privateSeller")).toBeInTheDocument();
-    expect(screen.getByText("Z")).toBeInTheDocument();
+    expect(screen.queryByText("Z")).not.toBeInTheDocument();
+    expect(screen.queryByText(/^25$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^80$/)).not.toBeInTheDocument();
     expect(screen.getByText("360°")).toBeInTheDocument();
 
     const image = screen.getByAltText("Athens Loft") as HTMLImageElement;
@@ -202,6 +204,42 @@ describe("PropertyCard behavior", () => {
     await waitFor(() => {
       expect(writeTextMock).toHaveBeenCalledWith("https://maiprop.test/open-house/p1");
     });
+  });
+
+  it("renders only universal card specs so property types stay the same size", async () => {
+    const { PropertyCard } = await import("@/components/PropertyCard");
+
+    renderWithProviders(
+      <PropertyCard
+        property={baseProperty({
+          bedrooms: 4,
+          bathrooms: 3,
+          sqm: 280,
+          floor: 2,
+          totalFloors: 4,
+          yearBuilt: 2026,
+          energyClass: "A",
+          walkabilityScore: 75,
+          safetyScore: 75,
+          ownershipStatus: "full",
+          tags: ["Pool", "Garden", "Parking", "exclusive"],
+        })}
+      />,
+    );
+
+    expect(screen.getByText("280 common.sqm")).toBeInTheDocument();
+    expect(screen.getByText("2propertyCard.floor/4")).toBeInTheDocument();
+    expect(screen.getByText("2026")).toBeInTheDocument();
+
+    expect(screen.queryByText(/common.bed/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/common.bath/)).not.toBeInTheDocument();
+    expect(screen.queryByText("A")).not.toBeInTheDocument();
+    expect(screen.queryByText("75")).not.toBeInTheDocument();
+    expect(screen.queryByText("propertyCard.ownership.full")).not.toBeInTheDocument();
+    expect(screen.queryByText("Pool")).not.toBeInTheDocument();
+    expect(screen.queryByText("Garden")).not.toBeInTheDocument();
+    expect(screen.queryByText("Parking")).not.toBeInTheDocument();
+    expect(screen.queryByText("exclusive")).not.toBeInTheDocument();
   });
 
   it("falls back from auction Street View to cover imagery before the logo", async () => {
@@ -243,72 +281,7 @@ describe("PropertyCard behavior", () => {
     expect(image).not.toHaveAttribute("srcset");
   });
 
-  it("uses fixed layout slots so extra badges and pills do not shift card actions", async () => {
-    const { PropertyCard } = await import("@/components/PropertyCard");
-
-    renderWithProviders(
-      <div>
-        <PropertyCard
-          testId="dense-card"
-          property={baseProperty({
-            id: "dense",
-            title: "Large waterfront penthouse with extended descriptive title",
-            address: "Long landmark avenue 123",
-            city: "Glyfada",
-            bedrooms: 5,
-            bathrooms: 4,
-            floor: 12,
-            totalFloors: 18,
-            yearBuilt: 2026,
-            energyClass: "A+",
-            walkabilityScore: 75,
-            safetyScore: 80,
-            ownershipStatus: "partial",
-            ownershipPercentage: 60,
-            tags: ["exclusive", "sea view", "pool", "garden", "parking"],
-            agent: { name: "MaiProp Admin", verified: true },
-          })}
-        />
-        <PropertyCard
-          testId="sparse-card"
-          property={baseProperty({
-            id: "sparse",
-            title: "Compact studio",
-            bedrooms: undefined,
-            bathrooms: undefined,
-            tags: [],
-            agent: undefined,
-          })}
-        />
-      </div>,
-    );
-
-    for (const testId of ["dense-card", "sparse-card"]) {
-      const card = screen.getByTestId(testId);
-      expect(card).toHaveClass("h-full", "min-h-[34rem]");
-      expect(within(card).getByTestId("property-card-body")).toHaveClass("min-h-[19rem]");
-      expect(within(card).getByTestId("property-card-header")).toHaveClass("min-h-[5.25rem]");
-      expect(within(card).getByTestId("property-card-specs")).toHaveClass(
-        "min-h-[4.75rem]",
-        "max-h-[4.75rem]",
-        "overflow-hidden",
-      );
-      expect(within(card).getByTestId("property-card-context")).toHaveClass("min-h-[3.25rem]");
-      expect(within(card).getByTestId("property-card-tags")).toHaveClass(
-        "min-h-[1.75rem]",
-        "max-h-[1.75rem]",
-        "overflow-hidden",
-      );
-      expect(within(card).getByTestId("property-card-footer")).toHaveClass("min-h-[5.75rem]");
-    }
-
-    expect(screen.getByText("exclusive")).toBeInTheDocument();
-    expect(screen.getByText("sea view")).toBeInTheDocument();
-    expect(screen.getByText("pool")).toBeInTheDocument();
-    expect(screen.queryByText("garden")).not.toBeInTheDocument();
-  });
-
-  it("renders remaining badges, non-urgent timers, price deltas, score tiers, and report errors", async () => {
+  it("renders remaining badges, non-urgent timers, price deltas, universal specs, and report errors", async () => {
     authMock.mockReturnValue({ user: { id: "u-error" }, profile: null, loading: false });
     insertMock.mockResolvedValueOnce({ error: new Error("duplicate") });
     const { PropertyCard } = await import("@/components/PropertyCard");
@@ -337,7 +310,9 @@ describe("PropertyCard behavior", () => {
     expect(screen.getByText("-4%")).toBeInTheDocument();
     expect(screen.getByText("42")).toBeInTheDocument();
     expect(screen.getByText("propertyCard.basement")).toBeInTheDocument();
-    expect(screen.getByText("propertyCard.ownership.full")).toBeInTheDocument();
+    expect(screen.queryByText("propertyCard.ownership.full")).not.toBeInTheDocument();
+    expect(screen.queryByText(/^50$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^20$/)).not.toBeInTheDocument();
     expect(screen.getByText("Agent One")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "propertyCard.actions.report" }));
@@ -367,7 +342,7 @@ describe("PropertyCard behavior", () => {
     expect(screen.getByText("propertyCard.badges.new")).toBeInTheDocument();
     expect(screen.getByText("+7%")).toBeInTheDocument();
     expect(screen.getByText("3propertyCard.floor/6")).toBeInTheDocument();
-    expect(screen.getByText(/leasehold 40%/)).toBeInTheDocument();
+    expect(screen.queryByText(/leasehold 40%/)).not.toBeInTheDocument();
     expect(screen.queryByText(/common.bed/)).not.toBeInTheDocument();
   });
 
@@ -393,9 +368,9 @@ describe("PropertyCard behavior", () => {
     expect(screen.getByText("propertyCard.badges.auction")).toBeInTheDocument();
     expect(screen.getByText("-40% off")).toBeInTheDocument();
     expect(screen.getByText("From €180,000")).toBeInTheDocument();
-    expect(screen.getByText("Sea view")).toBeInTheDocument();
-    expect(screen.getByText("Renovated")).toBeInTheDocument();
-    expect(screen.getByText("Top floor")).toBeInTheDocument();
+    expect(screen.queryByText("Sea view")).not.toBeInTheDocument();
+    expect(screen.queryByText("Renovated")).not.toBeInTheDocument();
+    expect(screen.queryByText("Top floor")).not.toBeInTheDocument();
     expect(screen.queryByText("source:sync")).not.toBeInTheDocument();
     expect(screen.getByText("propertyCard.badges.verified")).toBeInTheDocument();
     expect(screen.getByAltText("Athens Loft")).toHaveAttribute("src", "/images/maiprop-logo.webp");
@@ -412,6 +387,7 @@ describe("PropertyCard behavior", () => {
 
     rerender(<PropertyCard property={baseProperty({ images: ["https://example.test/thumb.jpg"], bedrooms: 0 })} compact />);
     expect(screen.getByAltText("Athens Loft")).toBeInTheDocument();
-    expect(screen.getByText("0")).toBeInTheDocument();
+    expect(screen.getByText("100 common.sqm")).toBeInTheDocument();
+    expect(screen.queryByText("0")).not.toBeInTheDocument();
   });
 });
