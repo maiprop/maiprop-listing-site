@@ -96,7 +96,7 @@ function AuctionRouter() {
 // Routes that render their own embedded AI widget or have no need for the floating one
 const HIDE_WIDGET_PREFIXES = [
   "/login", "/signup", "/auth/callback", "/onboarding", "/dashboard", "/messages", "/ai-assistant",
-  "/property/", "/auction/", "/new-build/", "/video-room/", "/video-viewing/",
+  "/property/", "/auction/", "/new-build/", "/open-house/", "/video-room/", "/video-viewing/",
 ];
 const GLOBAL_AI_WIDGET_IDLE_DELAY_MS = 1_200;
 const GLOBAL_AI_WIDGET_IDLE_TIMEOUT_MS = 2_000;
