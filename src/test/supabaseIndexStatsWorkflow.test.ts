@@ -110,4 +110,22 @@ describe("Supabase index stats workflow wiring", () => {
       /- name: Capture staging Supabase index stats\s+if: steps\.supabase_changes\.outputs\.deploy == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'\s+run: \|\s+set -euo pipefail\s+extra_args=\(\)\s+if \[ "\$\{\{ steps\.supabase_changes\.outputs\.db_changes \}\}" != "true" \]; then\s+extra_args\+=\(--allow-empty-when-unconfigured\)\s+fi\s+npm run capture:supabase-index-stats -- --out supabase-index-stats\.json "\$\{extra_args\[@\]\}"/,
     );
   });
+
+  it("repairs known staging-only migration aliases before staging dry-run validation", () => {
+    const repairStep = supabaseStagingWorkflow.indexOf("- name: Repair legacy staging migration aliases");
+    const dryRunStep = supabaseStagingWorkflow.indexOf("- name: Dry-run staging database migrations");
+
+    expect(repairStep).toBeGreaterThan(-1);
+    expect(dryRunStep).toBeGreaterThan(-1);
+    expect(repairStep).toBeLessThan(dryRunStep);
+
+    for (const version of ["20260614083000", "20260614090000", "20260614153000", "20260614154000"]) {
+      expect(supabaseStagingWorkflow).toContain(version);
+    }
+
+    expect(supabaseStagingWorkflow).toContain("supabase migration list --db-url \"$SUPABASE_STAGING_EFFECTIVE_DB_URL\"");
+    expect(supabaseStagingWorkflow).toContain(
+      "supabase migration repair \"${versions_to_revert[@]}\" --db-url \"$SUPABASE_STAGING_EFFECTIVE_DB_URL\" --status reverted --yes",
+    );
+  });
 });

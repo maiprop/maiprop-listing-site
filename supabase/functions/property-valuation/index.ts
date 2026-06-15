@@ -270,6 +270,11 @@ const clampScore = (value: unknown, fallback: number): number => {
 const isAuctionListing = (value: unknown): boolean =>
   optionalString(value)?.toLowerCase() === "auction";
 
+const isRentalListing = (value: unknown): boolean => {
+  const listingType = optionalString(value)?.toLowerCase();
+  return listingType === "rent" || listingType === "rental";
+};
+
 const isResidentialType = (value: unknown): boolean => {
   const propertyType = optionalString(value)?.toLowerCase() ?? "";
   return ["apartment", "house", "villa", "studio", "maisonette", "residence"].includes(propertyType);
@@ -352,11 +357,37 @@ const normalizeValuationResult = (
   const estimatedValue = coerceFiniteNumber(result.estimatedValue);
   const cleanAuctionMarketValue = coerceFiniteNumber(result.auctionAdjustedValue);
   const isAuction = isAuctionListing(source.listingType);
+  const isRental = isRentalListing(source.listingType);
   const marketAnchor = isAuction && cleanAuctionMarketValue != null && cleanAuctionMarketValue > 0
     ? cleanAuctionMarketValue
     : estimatedValue;
 
-  if (listedPrice > 0 && marketAnchor != null && marketAnchor > 0) {
+  if (isRental) {
+    const estimatedMonthlyRent =
+      coerceFiniteNumber(result.estimatedMonthlyRent) ??
+      coerceFiniteNumber(result.monthlyRentEstimate) ??
+      coerceFiniteNumber(result.marketRentEstimate);
+    if (listedPrice > 0 && estimatedValue != null && estimatedValue > listedPrice * 24) {
+      result.rentalYieldEstimate = roundNumber((listedPrice * 12 / estimatedValue) * 100, 1);
+    } else {
+      result.rentalYieldEstimate = normalizeAnnualYield(result.rentalYieldEstimate) ?? result.rentalYieldEstimate ?? 0;
+    }
+
+    if (listedPrice > 0 && estimatedMonthlyRent != null && estimatedMonthlyRent > 0) {
+      const deltaPct = roundNumber(((listedPrice - estimatedMonthlyRent) / estimatedMonthlyRent) * 100);
+      result.marketComparisonPct = deltaPct;
+      result.marketComparison = toMarketComparison(deltaPct);
+      result.pricingPosition = deltaPct > 5 ? "overpriced" : deltaPct < -5 ? "underpriced" : "fair";
+    } else {
+      const remoteDelta = coerceFiniteNumber(result.marketComparisonPct);
+      const shouldKeepRemoteDelta = remoteDelta != null && Math.abs(remoteDelta) <= 50;
+      result.marketComparisonPct = shouldKeepRemoteDelta ? remoteDelta : 0;
+      result.marketComparison = shouldKeepRemoteDelta ? toMarketComparison(remoteDelta) : "at_market";
+      result.pricingPosition = shouldKeepRemoteDelta
+        ? remoteDelta > 5 ? "overpriced" : remoteDelta < -5 ? "underpriced" : "fair"
+        : "fair";
+    }
+  } else if (listedPrice > 0 && marketAnchor != null && marketAnchor > 0) {
     const deltaPct = roundNumber(((marketAnchor - listedPrice) / listedPrice) * 100);
     result.marketComparisonPct = deltaPct;
     result.marketComparison = toMarketComparison(deltaPct);
