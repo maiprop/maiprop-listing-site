@@ -4,7 +4,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import type { TablesUpdate } from "@/integrations/supabase/types";
 import { USER_SCOPED_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
-import { parseMutationInput, projectUpdateMutationSchema, rowIdSchema } from "@/lib/mutationSchemas";
+import {
+  parseMutationInput,
+  projectListingCoverUpdateMutationSchema,
+  projectUpdateMutationSchema,
+  rowIdSchema,
+} from "@/lib/mutationSchemas";
 
 const PROJECT_SELECT = `
   id, owner_id, name, description, city, address, municipality, cover_image_url,
@@ -78,6 +83,35 @@ export function useUpdateProject() {
       toast.success("Project updated");
     },
     onError: () => toast.error("Failed to update project. Please try again."),
+  });
+}
+
+export function useUpdateProjectListingCover() {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async (input: { projectId: string; listingId: string; coverImageUrl: string }) => {
+      if (!user) throw new Error("Must be logged in");
+      const payload = parseMutationInput(projectListingCoverUpdateMutationSchema, input, "project listing cover update");
+      const { data, error } = await supabase
+        .from("listings")
+        .update({ cover_image_url: payload.coverImageUrl })
+        .eq("id", payload.listingId)
+        .eq("project_id", payload.projectId)
+        .select("id, project_id, cover_image_url")
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, { projectId, listingId }) => {
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["project", projectId] });
+      qc.invalidateQueries({ queryKey: ["listing", listingId] });
+      qc.invalidateQueries({ queryKey: ["listings"] });
+      qc.invalidateQueries({ queryKey: ["listings-paginated"] });
+      toast.success("Listing cover updated");
+    },
+    onError: () => toast.error("Failed to update cover image. Please try again."),
   });
 }
 

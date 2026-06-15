@@ -68,6 +68,7 @@ vi.mock("sonner", () => ({ toast: toastMock }));
 vi.mock("@/hooks/useProjects", () => ({
   useProject: (...args: unknown[]) => useProjectMock(...args),
   useUpdateProject: () => ({ mutate: updateProjectMock }),
+  useUpdateProjectListingCover: () => ({ mutate: updateListingMock }),
 }));
 vi.mock("@/hooks/useProjectUnits", () => ({
   useProjectUnits: (...args: unknown[]) => useProjectUnitsMock(...args),
@@ -90,7 +91,6 @@ vi.mock("@/hooks/useProjectLeads", () => ({
 vi.mock("@/hooks/useProjectViews", () => ({ useProjectViews: (...args: unknown[]) => useProjectViewsMock(...args) }));
 vi.mock("@/hooks/useListings", () => ({
   useMyListings: () => useMyListingsMock(),
-  useUpdateListing: () => ({ mutate: updateListingMock }),
 }));
 
 import ProjectDetail from "@/pages/ProjectDetail";
@@ -114,7 +114,15 @@ const project = {
   structural_completion_date: "2026-09-01",
   delivery_date: "2027-01-01",
   status: "active",
-  listings: [{ id: "listing-linked", title: "Penthouse", price: 750000, sqm: 120, views_count: 8, listing_type: "new_build" }],
+  listings: [{
+    id: "listing-linked",
+    title: "Penthouse",
+    price: 750000,
+    sqm: 120,
+    views_count: 8,
+    listing_type: "new_build",
+    cover_image_url: "https://cdn/current-cover.jpg",
+  }],
 };
 
 const renderPage = (initialEntry = "/projects/project-1") =>
@@ -434,5 +442,29 @@ describe("ProjectDetail", () => {
     expect(screen.queryByRole("button", { name: /unlink/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^\+ / })).not.toBeInTheDocument();
     expect(updateListingMock).not.toHaveBeenCalled();
+  });
+
+  it("replaces the public New Build ad cover image from the project editor", async () => {
+    renderPage();
+
+    const file = new File(["new cover"], "new-cover.webp", { type: "image/webp" });
+    fireEvent.change(screen.getByLabelText(/replace public ad cover image/i), {
+      target: { files: [file] },
+    });
+
+    await waitFor(() => expect(uploadMock).toHaveBeenCalledWith(
+      expect.stringMatching(/^user-1\/[^/]+\.webp$/),
+      file,
+      { upsert: false },
+    ));
+    expect(getPublicUrlMock).toHaveBeenCalledWith(expect.stringMatching(/^user-1\/[^/]+\.webp$/));
+    expect(updateListingMock).toHaveBeenCalledWith(
+      {
+        projectId: "project-1",
+        listingId: "listing-linked",
+        coverImageUrl: "https://cdn/uploaded.jpg",
+      },
+      expect.any(Object),
+    );
   });
 });

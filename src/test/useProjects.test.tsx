@@ -29,6 +29,7 @@ import {
   useProjects,
   useProject,
   useUpdateProject,
+  useUpdateProjectListingCover,
   useDeleteProject,
 } from "@/hooks/useProjects";
 
@@ -154,6 +155,48 @@ describe("useUpdateProject()", () => {
       await result.current.mutateAsync({ id: "pr1", updates: { name: "n" } });
     });
     expect(eqOwner).toHaveBeenCalledWith("owner_id", "u-1");
+  });
+});
+
+describe("useUpdateProjectListingCover()", () => {
+  it("rejects when not authenticated", async () => {
+    useAuthMock.mockReturnValue({ user: null });
+    const { result } = renderHookWithQuery(() => useUpdateProjectListingCover());
+    await expect(
+      act(async () => {
+        await result.current.mutateAsync({
+          projectId: "pr1",
+          listingId: "listing-1",
+          coverImageUrl: "https://cdn.example.com/cover.webp",
+        });
+      }),
+    ).rejects.toBeInstanceOf(Error);
+  });
+
+  it("updates the linked listing cover scoped to the project", async () => {
+    const update = vi.fn().mockReturnThis();
+    const eq = vi.fn().mockReturnThis();
+    const select = vi.fn().mockReturnThis();
+    const single = vi.fn().mockResolvedValue({
+      data: { id: "listing-1", project_id: "pr1", cover_image_url: "https://cdn.example.com/cover.webp" },
+      error: null,
+    });
+    fromMock.mockReturnValue({ update, eq, select, single });
+
+    const { result } = renderHookWithQuery(() => useUpdateProjectListingCover());
+    await act(async () => {
+      await result.current.mutateAsync({
+        projectId: "pr1",
+        listingId: "listing-1",
+        coverImageUrl: "https://cdn.example.com/cover.webp",
+      });
+    });
+
+    expect(fromMock).toHaveBeenCalledWith("listings");
+    expect(update).toHaveBeenCalledWith({ cover_image_url: "https://cdn.example.com/cover.webp" });
+    expect(eq).toHaveBeenCalledWith("id", "listing-1");
+    expect(eq).toHaveBeenCalledWith("project_id", "pr1");
+    expect(select).toHaveBeenCalledWith("id, project_id, cover_image_url");
   });
 });
 

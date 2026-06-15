@@ -759,6 +759,12 @@ export const listingUpdateMutationSchema = z.object({
   }).passthrough(),
 }).strict();
 
+export const projectListingCoverUpdateMutationSchema = z.object({
+  projectId: rowIdSchema("project id"),
+  listingId: rowIdSchema("listing id"),
+  coverImageUrl: z.string().trim().url("Invalid listing cover image").max(2048, "Invalid listing cover image"),
+}).strict();
+
 export const listingIdSchema = rowIdSchema("listing id");
 
 export const listingImageRowsSchema = z.array(z.object({
