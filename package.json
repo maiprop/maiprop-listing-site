@@ -187,7 +187,7 @@
     "esbuild": "^0.28.1",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^5.2.0",
-    "eslint-plugin-react-refresh": "^0.5.2",
+    "eslint-plugin-react-refresh": "^0.5.3",
     "globals": "^15.15.0",
     "husky": "^9.1.7",
     "i18next-scanner": "^4.6.0",
@@ -199,7 +199,7 @@
     "supabase": "^2.104.0",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3",
-    "typescript-eslint": "^8.61.0",
+    "typescript-eslint": "^8.61.1",
     "vite": "^8.0.16",
     "vitest": "^4.1.8",
     "ws": "8.21.0"
