@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderWithProviders } from "@/test/utils";
 import type { Property } from "@/components/PropertyCard";
 
@@ -241,6 +241,71 @@ describe("PropertyCard behavior", () => {
     const image = screen.getByAltText("Athens Loft") as HTMLImageElement;
     expect(image).toHaveAttribute("src", supabaseImage);
     expect(image).not.toHaveAttribute("srcset");
+  });
+
+  it("uses fixed layout slots so extra badges and pills do not shift card actions", async () => {
+    const { PropertyCard } = await import("@/components/PropertyCard");
+
+    renderWithProviders(
+      <div>
+        <PropertyCard
+          testId="dense-card"
+          property={baseProperty({
+            id: "dense",
+            title: "Large waterfront penthouse with extended descriptive title",
+            address: "Long landmark avenue 123",
+            city: "Glyfada",
+            bedrooms: 5,
+            bathrooms: 4,
+            floor: 12,
+            totalFloors: 18,
+            yearBuilt: 2026,
+            energyClass: "A+",
+            walkabilityScore: 75,
+            safetyScore: 80,
+            ownershipStatus: "partial",
+            ownershipPercentage: 60,
+            tags: ["exclusive", "sea view", "pool", "garden", "parking"],
+            agent: { name: "MaiProp Admin", verified: true },
+          })}
+        />
+        <PropertyCard
+          testId="sparse-card"
+          property={baseProperty({
+            id: "sparse",
+            title: "Compact studio",
+            bedrooms: undefined,
+            bathrooms: undefined,
+            tags: [],
+            agent: undefined,
+          })}
+        />
+      </div>,
+    );
+
+    for (const testId of ["dense-card", "sparse-card"]) {
+      const card = screen.getByTestId(testId);
+      expect(card).toHaveClass("h-full", "min-h-[34rem]");
+      expect(within(card).getByTestId("property-card-body")).toHaveClass("min-h-[19rem]");
+      expect(within(card).getByTestId("property-card-header")).toHaveClass("min-h-[5.25rem]");
+      expect(within(card).getByTestId("property-card-specs")).toHaveClass(
+        "min-h-[4.75rem]",
+        "max-h-[4.75rem]",
+        "overflow-hidden",
+      );
+      expect(within(card).getByTestId("property-card-context")).toHaveClass("min-h-[3.25rem]");
+      expect(within(card).getByTestId("property-card-tags")).toHaveClass(
+        "min-h-[1.75rem]",
+        "max-h-[1.75rem]",
+        "overflow-hidden",
+      );
+      expect(within(card).getByTestId("property-card-footer")).toHaveClass("min-h-[5.75rem]");
+    }
+
+    expect(screen.getByText("exclusive")).toBeInTheDocument();
+    expect(screen.getByText("sea view")).toBeInTheDocument();
+    expect(screen.getByText("pool")).toBeInTheDocument();
+    expect(screen.queryByText("garden")).not.toBeInTheDocument();
   });
 
   it("renders remaining badges, non-urgent timers, price deltas, score tiers, and report errors", async () => {

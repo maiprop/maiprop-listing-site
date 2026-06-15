@@ -274,9 +274,16 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
   const mainImage = imageChain[0] || MAIPROP_LOGO_FALLBACK_URL;
   const mainImageSrcSet = isMaiPropLogoFallback(mainImage) ? undefined : getPropertyImageSrcSet(mainImage);
   const mainImageIsLogoFallback = isMaiPropLogoFallback(mainImage);
+  const visibleTags = (property.tags || []).filter(
+    (tag: string) => !SYSTEM_TAG_PREFIXES.some(prefix => tag.toLowerCase().startsWith(prefix.toLowerCase()))
+  );
+  const hasContextPanel =
+    (property.listingType === "open_house" && Boolean(property.auctionDate)) ||
+    (property.listingType === "auction" && Boolean(property.auctionDate)) ||
+    property.listingType === "firesale";
 
   return (
-    <div data-testid={testId} className={`property-card rounded-2xl overflow-hidden group flex flex-col bg-card transition-shadow duration-300 ${
+    <div data-testid={testId} className={`property-card rounded-2xl overflow-hidden group flex h-full min-h-[34rem] flex-col bg-card transition-shadow duration-300 ${
       property.isFeatured
         ? "border-2 border-amber-400/70 shadow-[0_0_0_1px_rgba(251,191,36,0.15),0_4px_24px_rgba(251,191,36,0.22)] hover:shadow-[0_0_0_1px_rgba(251,191,36,0.25),0_8px_32px_rgba(251,191,36,0.35)]"
         : "border border-border"
@@ -386,9 +393,9 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
       </div>
 
       {/* Card body — more padding and slightly larger type on mobile for 2-col thumbnail view */}
-      <div className="p-4 sm:p-4 flex flex-col flex-1 gap-3">
+      <div data-testid="property-card-body" className="p-4 sm:p-4 flex min-h-[19rem] flex-1 flex-col gap-3">
         {/* Title + location */}
-        <div>
+        <div data-testid="property-card-header" className="min-h-[5.25rem]">
           <Link to={detailPath} state={detailState}>
             <h3 className="font-display font-semibold text-[15px] sm:text-base text-foreground hover:text-primary transition-colors line-clamp-2 leading-snug">
               {property.title}
@@ -415,7 +422,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
         </div>
 
         {/* Key specs */}
-        <div className="flex items-center gap-1.5 text-xs flex-wrap">
+        <div data-testid="property-card-specs" className="flex min-h-[4.75rem] max-h-[4.75rem] items-start gap-1.5 overflow-hidden text-xs flex-wrap">
           {property.bedrooms != null && property.bedrooms > 0 && (
             <span className="flex items-center gap-1 bg-primary/10 text-primary border border-primary/20 px-2.5 py-1 rounded-lg font-medium">
               <Bed className="w-3.5 h-3.5" aria-hidden="true" /> {property.bedrooms} {t("common.bed")}
@@ -487,6 +494,8 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
           })()}
         </div>
 
+        {/* Context panel */}
+        <div data-testid="property-card-context" className="min-h-[3.25rem]" aria-hidden={!hasContextPanel}>
         {/* Auction banner */}
         {property.listingType === "open_house" && property.auctionDate && (
           <div className="flex items-center gap-2 bg-brand-cyan/10 rounded-xl p-2.5 border border-brand-cyan/25">
@@ -523,29 +532,23 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
           </div>
         )}
 
+        </div>
+
         {/* Tags — system/internal tags are filtered out */}
-        {(() => {
-          const visibleTags = (property.tags || []).filter(
-            (t: string) => !SYSTEM_TAG_PREFIXES.some(p => t.toLowerCase().startsWith(p.toLowerCase()))
-          );
-          if (!visibleTags.length) return null;
-          return (
-            <div className="flex gap-1.5 flex-wrap">
-              {visibleTags.slice(0, 3).map(tag => (
-                <span key={tag} className="px-2.5 py-0.5 rounded-full bg-primary/10 border border-primary/20 text-[10px] text-primary font-medium">
-                  {tag}
-                </span>
-              ))}
-            </div>
-          );
-        })()}
+        <div data-testid="property-card-tags" className="flex min-h-[1.75rem] max-h-[1.75rem] gap-1.5 overflow-hidden flex-wrap">
+          {visibleTags.slice(0, 3).map(tag => (
+            <span key={tag} className="px-2.5 py-0.5 rounded-full bg-primary/10 border border-primary/20 text-[10px] text-primary font-medium">
+              {tag}
+            </span>
+          ))}
+        </div>
 
 
 
         {/* Agent row + CTA */}
-        <div className="mt-auto pt-3 border-t border-border space-y-2.5">
+        <div data-testid="property-card-footer" className="mt-auto flex min-h-[5.75rem] flex-col justify-between gap-2.5 pt-3 border-t border-border">
           {/* Agent info */}
-          {property.agent && (
+          {property.agent ? (
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-full bg-gradient-primary flex items-center justify-center text-[11px] font-bold text-primary-foreground shrink-0">
                 {property.agent.name[0]}
@@ -557,6 +560,8 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
                 </span>
               )}
             </div>
+          ) : (
+            <div className="min-h-7" aria-hidden="true" />
           )}
           {/* Action row: detail CTA for special inventory + Share + Report */}
           <div className={`flex items-center gap-2 ${property.listingType === "auction" || property.listingType === "open_house" ? "" : "justify-end"}`}>

@@ -25,7 +25,7 @@ export const ListingCompareButton = <TListing extends ListingCard>({
       onClick={() => onToggle(listing)}
       disabled={disabled}
       aria-pressed={isSelected}
-      className={`absolute bottom-[108px] right-2 z-10 flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border transition-all shadow-card ${
+      className={`absolute bottom-[5.75rem] right-2 z-10 flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border transition-all shadow-card ${
         isSelected
           ? "bg-accent/90 border-accent text-accent-foreground"
           : disabled
