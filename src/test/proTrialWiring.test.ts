@@ -24,6 +24,7 @@ describe("Pro trial wiring", () => {
     expect(sql).toContain(
       'CREATE POLICY "subscription_trial_claims_select_own"',
     );
+    expect(sql).toContain("USING ((SELECT auth.uid()) = user_id)");
     expect(sql).toContain(
       "GRANT SELECT ON TABLE public.subscription_trial_claims TO authenticated",
     );

@@ -33,7 +33,7 @@ CREATE POLICY "subscription_trial_claims_select_own"
   ON public.subscription_trial_claims
   FOR SELECT
   TO authenticated
-  USING (auth.uid() = user_id);
+  USING ((SELECT auth.uid()) = user_id);
 
 REVOKE ALL ON TABLE public.subscription_trial_claims FROM anon, authenticated;
 GRANT SELECT ON TABLE public.subscription_trial_claims TO authenticated;
