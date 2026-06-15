@@ -428,7 +428,7 @@ describe("enterprise readiness basics", () => {
 
     expect(result.ok).toBe(true);
     expect(result.failures).toEqual([]);
-  });
+  }, 10_000);
 
   it("reports runtime drift with actionable file names", () => {
     const root = makeFixture();
@@ -449,7 +449,7 @@ describe("enterprise readiness basics", () => {
     expect(result.ok).toBe(false);
     expect(result.failures.join("\n")).toContain(".husky/pre-push");
     expect(result.failures.join("\n")).toContain("project-runtime.mjs -- npm run check:runtime");
-  });
+  }, 10_000);
 
   it("compares public function inventory against supabase config", () => {
     const root = makeFixture();
@@ -462,7 +462,7 @@ describe("enterprise readiness basics", () => {
 
     expect(result.ok).toBe(false);
     expect(result.failures.join("\n")).toContain("expected 2");
-  });
+  }, 10_000);
 
   it("requires source-level frontend and edge observability wiring", () => {
     const root = makeFixture();

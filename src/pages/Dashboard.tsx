@@ -177,7 +177,7 @@ export default function Dashboard() { // skipcq: JS-R1005
     (key: string, fallback: string, values: Record<string, string | number>) => tInterpolate(t, key, fallback, values),
     [t],
   );
-  const { profile, user, signOut, updateProfile, refreshProfile, loading, profileLoading } = useAuth();
+  const { profile, user, signOut, updateProfile, refreshProfile, loading } = useAuth();
   const { isPro } = useSubscription();
   const { eligible: eligibleForQuickSale } = useEligibleForQuickSale();
   const role: DashboardRole = (profile?.role as DashboardRole) || "buyer";
@@ -353,8 +353,9 @@ export default function Dashboard() { // skipcq: JS-R1005
     [bioType, role, hasInvestorAccess]
   );
 
-  // Auth loading guard — show spinner while session/profile resolves
-  if (loading || profileLoading) {
+  // Auth loading guard — profile details hydrate in the background so the
+  // dashboard shell can paint immediately after a valid sign-in.
+  if (loading) {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />

@@ -619,7 +619,10 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
 
               {/* Title + Price hero row */}
               <div className="space-y-4">
-                <div className="flex items-start justify-between gap-6 flex-wrap">
+                <div
+                  data-testid="new-build-title-price-row"
+                  className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6"
+                >
                   <div className="flex-1 min-w-0">
                     <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
                       <span className="inline-flex items-center gap-1.5">
@@ -639,7 +642,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                       <span className="min-w-0 break-words">{[displayAddress, displayCity, displayRegion].filter(Boolean).join(", ")}</span>
                     </div>
                   </div>
-                  <div className="text-right shrink-0">
+                  <div data-testid="new-build-price-block" className="w-full shrink-0 text-left sm:w-auto sm:text-right">
                     <p className="mb-0.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                       {isFromPrice ? tr("newBuildDetail.priceRangeFrom", "Project starting price") : tr("newBuildDetail.priceGuide", "Price guide")}
                     </p>

@@ -164,9 +164,25 @@ describe("PropertyMiniMap", () => {
 
     const heading = screen.getByText("Location & Nearby");
     const header = heading.closest("[data-property-map-header]");
-    expect(header).toHaveClass("flex-wrap");
+    expect(header).toHaveClass("flex-col");
+    expect(header).toHaveClass("sm:flex-row");
     expect(heading).toHaveClass("break-words");
+    expect(heading).toHaveClass("w-full");
     expect(screen.getByRole("button", { name: /Open in Maps/i })).toHaveClass("whitespace-nowrap");
+  });
+
+  it("keeps the coordinates header from crushing the title beside map action buttons", async () => {
+    render(<PropertyMiniMap {...baseProps} />);
+
+    const heading = await screen.findByText("Location & Nearby Places");
+    const header = heading.closest("[data-property-map-header]");
+    const actions = header?.querySelector("[data-property-map-actions]");
+    expect(header).toHaveClass("flex-col");
+    expect(header).toHaveClass("sm:flex-row");
+    expect(heading).toHaveClass("w-full");
+    expect(actions).toHaveClass("grid");
+    expect(actions).toHaveClass("w-full");
+    expect(actions).toHaveClass("min-[380px]:grid-cols-2");
   });
 
   it("renders the SignInForAI fallback when there is no authenticated user", () => {
