@@ -41,6 +41,39 @@ const listing = {
 
 type AnyCtx = Parameters<typeof propertyRequest>[0];
 type FetchMock = ReturnType<typeof vi.fn>;
+type CacheApi = {
+  match: ReturnType<typeof vi.fn>;
+  put: ReturnType<typeof vi.fn>;
+};
+
+const realCachesDescriptor = Object.getOwnPropertyDescriptor(globalThis, "caches");
+let cacheStore: Map<string, Response> | undefined;
+let cacheApi: CacheApi | undefined;
+
+function installCache(): CacheApi {
+  cacheStore = new Map();
+  cacheApi = {
+    match: vi.fn(async (request: Request) => cacheStore?.get(request.url)?.clone()),
+    put: vi.fn(async (request: Request, response: Response) => {
+      cacheStore?.set(request.url, response.clone());
+    }),
+  };
+  Object.defineProperty(globalThis, "caches", {
+    configurable: true,
+    value: { default: cacheApi },
+  });
+  return cacheApi;
+}
+
+function restoreCache(): void {
+  if (realCachesDescriptor) {
+    Object.defineProperty(globalThis, "caches", realCachesDescriptor);
+  } else {
+    Reflect.deleteProperty(globalThis, "caches");
+  }
+  cacheStore = undefined;
+  cacheApi = undefined;
+}
 
 function makeCtx(
   url: string,
@@ -49,6 +82,7 @@ function makeCtx(
     status: 200,
     headers: { "Content-Type": "text/html; charset=utf-8" },
   }),
+  options: { waitUntil?: (promise: Promise<unknown>) => void } = {},
 ): AnyCtx {
   return {
     request: new Request(url),
@@ -60,6 +94,7 @@ function makeCtx(
         fetch: vi.fn().mockResolvedValue(shell),
       },
     },
+    waitUntil: options.waitUntil ?? vi.fn(),
   } as unknown as AnyCtx;
 }
 
@@ -88,6 +123,7 @@ beforeEach(() => {
 
 afterEach(() => {
   globalThis.fetch = realFetch;
+  restoreCache();
 });
 
 describe("SEO Pages Functions", () => {
@@ -212,6 +248,63 @@ describe("SEO Pages Functions", () => {
     expect(url.searchParams.get("listing_type")).toBe("in.(sale,rent,firesale,new_build)");
   });
 
+  it("starts the /listings SEO fetch before waiting for the app shell", async () => {
+    let resolveShell!: (response: Response) => void;
+    const shellPromise = new Promise<Response>((resolve) => {
+      resolveShell = resolve;
+    });
+    const ctx = makeCtx("https://portal.maiprop.co/listings?city=Athens");
+    ctx.env.ASSETS = {
+      fetch: vi.fn().mockReturnValue(shellPromise),
+    };
+
+    const responsePromise = listingsRequest(ctx);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(fetchMock()).toHaveBeenCalledTimes(1);
+
+    resolveShell(
+      new Response(htmlShell, {
+        status: 200,
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      }),
+    );
+    const res = await responsePromise;
+
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("Athens Penthouse With Acropolis View");
+  });
+
+  it("serves cached /listings HTML from the edge without repeating shell or Supabase work", async () => {
+    installCache();
+    const pendingWrites: Promise<unknown>[] = [];
+    const waitUntil = (promise: Promise<unknown>) => {
+      pendingWrites.push(promise);
+    };
+    const firstCtx = makeCtx("https://portal.maiprop.co/listings?city=Athens", {}, undefined, { waitUntil });
+    const assetFetch = firstCtx.env.ASSETS?.fetch as FetchMock;
+
+    const first = await listingsRequest(firstCtx);
+    const firstHtml = await first.clone().text();
+    await Promise.all(pendingWrites);
+
+    expect(first.status).toBe(200);
+    expect(first.headers.get("X-Maiprop-Cache")).toBe("MISS");
+    expect(first.headers.get("Server-Timing")).toContain("total;dur=");
+    expect(firstHtml).toContain("Athens Penthouse With Acropolis View");
+
+    const second = await listingsRequest(makeCtx("https://portal.maiprop.co/listings?city=Athens"));
+    const secondHtml = await second.text();
+
+    expect(second.headers.get("X-Maiprop-Cache")).toBe("HIT");
+    expect(second.headers.get("Server-Timing")).toContain("cache;desc=\"HIT\"");
+    expect(secondHtml).toBe(firstHtml);
+    expect(fetchMock()).toHaveBeenCalledTimes(1);
+    expect(assetFetch).toHaveBeenCalledTimes(1);
+    expect(cacheApi?.put).toHaveBeenCalledTimes(1);
+  });
+
   it("honors explicit /listings listing_type and includeAuctions query intent", async () => {
     await listingsRequest(makeCtx("https://portal.maiprop.co/listings?listing_type=rent"));
     expect(firstSupabaseRequestUrl().searchParams.get("listing_type")).toBe("eq.rent");
@@ -229,10 +322,11 @@ describe("SEO Pages Functions", () => {
   });
 
   it("passes through the index response when the app shell cannot be loaded", async () => {
+    installCache();
     const res = await listingsRequest(makeCtx("https://portal.maiprop.co/listings", {}, new Response("missing", { status: 503 })));
 
     expect(res.status).toBe(503);
     expect(await res.text()).toBe("missing");
-    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(cacheApi?.put).not.toHaveBeenCalled();
   });
 });
