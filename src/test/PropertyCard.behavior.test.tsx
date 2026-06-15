@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderWithProviders } from "@/test/utils";
 import type { Property } from "@/components/PropertyCard";
 
@@ -240,6 +240,56 @@ describe("PropertyCard behavior", () => {
     expect(screen.queryByText("Garden")).not.toBeInTheDocument();
     expect(screen.queryByText("Parking")).not.toBeInTheDocument();
     expect(screen.queryByText("exclusive")).not.toBeInTheDocument();
+  });
+
+  it("uses fixed compact layout slots so long and short cards keep the same frame", async () => {
+    const { PropertyCard } = await import("@/components/PropertyCard");
+    const { rerender } = renderWithProviders(
+      <PropertyCard
+        property={baseProperty({
+          title: "Short title",
+          address: "Short street",
+          city: "Athens",
+          sqm: 39,
+          floor: 1,
+          totalFloors: 4,
+          yearBuilt: 2026,
+        })}
+      />,
+    );
+
+    const card = screen.getByTestId("property-card");
+    expect(card).toHaveClass("h-[360px]");
+    expect(screen.getByTestId("property-card-media")).toHaveClass("h-[150px]");
+    expect(screen.getByTestId("property-card-body")).toHaveClass("grid");
+    expect(screen.getByTestId("property-card-specs")).toHaveClass("h-[1.625rem]", "overflow-hidden");
+    expect(screen.getByTestId("property-card-footer")).toHaveClass("min-h-[2.75rem]");
+
+    rerender(
+      <PropertyCard
+        property={baseProperty({
+          title: "Boutique Hotel with an intentionally long title that should not push the card taller",
+          address: "A very long address that should be truncated inside its fixed location slot",
+          city: "Santorini",
+          sqm: 540,
+          floor: 0,
+          totalFloors: 2,
+          yearBuilt: 2004,
+          bedrooms: 14,
+          bathrooms: 12,
+          tags: ["Pool", "Garden", "Parking", "Sea view"],
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId("property-card")).toHaveClass("h-[360px]");
+    const specs = within(screen.getByTestId("property-card-specs"));
+    expect(specs.getByText("540 common.sqm")).toBeInTheDocument();
+    expect(specs.getByText("propertyCard.groundFloor/2")).toBeInTheDocument();
+    expect(specs.getByText("2004")).toBeInTheDocument();
+    expect(screen.queryByText("Pool")).not.toBeInTheDocument();
+    expect(screen.queryByText("Garden")).not.toBeInTheDocument();
+    expect(screen.queryByText("Parking")).not.toBeInTheDocument();
   });
 
   it("falls back from auction Street View to cover imagery before the logo", async () => {

@@ -45,8 +45,10 @@ describe("Listings performance helpers", () => {
   it("computes responsive listing-grid columns for virtualization", () => {
     expect(getAutoListingGridColumns(390)).toBe(1);
     expect(getAutoListingGridColumns(640)).toBe(2);
-    expect(getAutoListingGridColumns(1100)).toBe(3);
-    expect(getAutoListingGridColumns(1440)).toBe(4);
+    expect(getAutoListingGridColumns(760)).toBe(3);
+    expect(getAutoListingGridColumns(1100)).toBe(4);
+    expect(getAutoListingGridColumns(1440)).toBe(5);
+    expect(getAutoListingGridColumns(1700)).toBe(6);
   });
 
   it("windows large listing collections by visible rows plus overscan", () => {
