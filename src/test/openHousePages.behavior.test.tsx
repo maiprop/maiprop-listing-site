@@ -327,6 +327,36 @@ describe("OpenHouses page behavior", () => {
     expect(screen.getByText("Voula House")).toBeInTheDocument();
   }, 15_000);
 
+  it("filters open houses by sale and rental subcategory from the shared open-house page", async () => {
+    mocks.publicApi.mockResolvedValue([
+      createListing({ id: "oh-sale", title: "Sale Open House", city: "Athens", open_house_transaction_type: "sale" }),
+      createListing({ id: "oh-rent", title: "Rental Open House", city: "Athens", open_house_transaction_type: "rent", price: 1800 }),
+    ]);
+
+    await renderOpenHouses("/open-houses?transaction=rent");
+
+    expect(await screen.findByText("Rental Open House")).toBeInTheDocument();
+    expect(screen.queryByText("Sale Open House")).not.toBeInTheDocument();
+    expect(mocks.publicApi).toHaveBeenCalledWith(
+      "/api/public/open-houses?showPast=0&limit=200&transactionType=rent",
+      { throwOnError: true },
+    );
+
+    mocks.publicApi.mockClear().mockResolvedValue([
+      createListing({ id: "oh-sale", title: "Sale Open House", city: "Athens", open_house_transaction_type: "sale" }),
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: /sale open houses/i }));
+
+    await waitFor(() =>
+      expect(mocks.publicApi).toHaveBeenCalledWith(
+        "/api/public/open-houses?showPast=0&limit=200&transactionType=sale",
+        { throwOnError: true },
+      ),
+    );
+    expect(await screen.findByText("Sale Open House")).toBeInTheDocument();
+    expect(screen.queryByText("Rental Open House")).not.toBeInTheDocument();
+  }, 15_000);
+
   it("shows the empty map state for listings without coordinates and can switch back to the list", async () => {
     mocks.publicApi.mockResolvedValue([createListing({ id: "oh-no-map", title: "No Map Home", latitude: null, longitude: null })]);
 

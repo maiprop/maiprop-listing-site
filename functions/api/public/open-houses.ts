@@ -6,6 +6,7 @@ import {
   missingRuntime,
   normalizedCacheUrl,
   safeInt,
+  safeToken,
   supabaseJson,
   upstreamUnavailable,
   type PublicApiCtx,
@@ -16,7 +17,8 @@ import { getSupabaseRuntime } from "../../_seo";
 type OpenHouseRow = Record<string, unknown>;
 
 const OPEN_HOUSE_LIMIT_MAX = 200;
-const OPEN_HOUSE_CACHE_VERSION = "open-house-transaction-v1";
+const OPEN_HOUSE_CACHE_VERSION = "open-house-subcategory-v2";
+const OPEN_HOUSE_TRANSACTION_TYPES = ["sale", "rent"] as const;
 const OPEN_HOUSE_SELECT = [
   "id",
   "title",
@@ -66,7 +68,12 @@ function isPastRequest(requestUrl: URL): boolean {
   return requestUrl.searchParams.get("showPast") === "true" || requestUrl.searchParams.get("showPast") === "1";
 }
 
-async function fetchOpenHouses(env: PublicApiEnv, showPast: boolean, limit: number): Promise<OpenHouseRow[]> {
+async function fetchOpenHouses(
+  env: PublicApiEnv,
+  showPast: boolean,
+  limit: number,
+  transactionType: (typeof OPEN_HOUSE_TRANSACTION_TYPES)[number] | null,
+): Promise<OpenHouseRow[]> {
   const now = new Date().toISOString();
   const params = new URLSearchParams();
   params.set("select", OPEN_HOUSE_SELECT);
@@ -76,6 +83,7 @@ async function fetchOpenHouses(env: PublicApiEnv, showPast: boolean, limit: numb
   params.set("limit", String(limit));
   params.set("listing_images.order", "sort_order.asc");
   params.set("listing_images.limit", "3");
+  if (transactionType) params.set("open_house_transaction_type", `eq.${transactionType}`);
 
   if (showPast) {
     params.set("open_house_date", `lt.${now}`);
@@ -93,16 +101,18 @@ async function publicOpenHouses(ctx: PublicApiCtx, requestUrl: URL): Promise<Res
 
   const showPast = isPastRequest(requestUrl);
   const limit = safeInt(requestUrl.searchParams.get("limit"), OPEN_HOUSE_LIMIT_MAX, 1, OPEN_HOUSE_LIMIT_MAX);
+  const transactionType = safeToken(requestUrl.searchParams.get("transactionType"), OPEN_HOUSE_TRANSACTION_TYPES);
   const cacheParams = new URLSearchParams([
     ["showPast", showPast ? "1" : "0"],
     ["limit", String(limit)],
     ["v", OPEN_HOUSE_CACHE_VERSION],
   ]);
+  if (transactionType) cacheParams.set("transactionType", transactionType);
   const cacheKey = normalizedCacheUrl(requestUrl, "open-houses", cacheParams);
 
   return cachedJson(ctx, cacheKey, async () => {
     try {
-      return jsonResponse(await fetchOpenHouses(ctx.env, showPast, limit));
+      return jsonResponse(await fetchOpenHouses(ctx.env, showPast, limit, transactionType));
     } catch (error) {
       if (isSupabaseTransientError(error)) return upstreamUnavailable();
       throw error;

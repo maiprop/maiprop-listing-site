@@ -89,6 +89,17 @@ const formatUnitName = (unit: ProjectUnit) => {
   return raw ? `Unit ${raw}` : "Unit";
 };
 
+const formatArea = (value: number | null | undefined) =>
+  value != null ? `${value} m²` : "—";
+
+const formatLayout = (unit: ProjectUnit) => {
+  const parts = [
+    unit.bedrooms != null ? `${unit.bedrooms} bed` : null,
+    unit.bathrooms != null ? `${unit.bathrooms} bath` : null,
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : "—";
+};
+
 const unitSpecs = (unit: ProjectUnit) => [
   unit.internal_sqm != null && {
     icon: Maximize2,
@@ -140,6 +151,7 @@ export function UnitShowcase({
   const baths = listing.bathrooms != null ? Number(listing.bathrooms) : null;
   const floors = listing.total_floors != null ? Number(listing.total_floors) : null;
   const startingPrice = getStartingPrice(listing, displayUnits);
+  const useComparisonTable = displayUnits.length > 6;
 
   return (
     <section className="overflow-hidden rounded-xl border border-border bg-card">
@@ -188,9 +200,56 @@ export function UnitShowcase({
           </div>
         </div>
 
-        {displayUnits.length > 0 ? (
-          <div className="grid gap-3 md:grid-cols-2">
-            {displayUnits.slice(0, 6).map((rawUnit) => {
+        {displayUnits.length > 0 && useComparisonTable ? (
+          <div className="overflow-hidden rounded-xl border border-border">
+            <div className="max-h-[30rem] overflow-auto">
+              <table className="w-full min-w-[46rem] text-left text-sm">
+                <thead className="sticky top-0 z-10 border-b border-border bg-card text-[10px] uppercase tracking-widest text-muted-foreground">
+                  <tr>
+                    <th scope="col" className="px-4 py-3 font-bold">Unit</th>
+                    <th scope="col" className="px-4 py-3 font-bold">Status</th>
+                    <th scope="col" className="px-4 py-3 font-bold">Floor</th>
+                    <th scope="col" className="px-4 py-3 font-bold">Layout</th>
+                    <th scope="col" className="px-4 py-3 font-bold">Internal</th>
+                    <th scope="col" className="px-4 py-3 font-bold">Balcony</th>
+                    <th scope="col" className="px-4 py-3 text-right font-bold">Price</th>
+                    <th scope="col" className="px-4 py-3 text-right font-bold">€/m²</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {displayUnits.map((rawUnit) => {
+                    const unit = { ...rawUnit, price_per_sqm: getUnitPricePerSqm(rawUnit) };
+                    const status = formatStatus(unit.availability_status);
+                    const unitPricePerSqm = getUnitPricePerSqm(unit);
+                    return (
+                      <tr key={unit.id} className="bg-background/70 align-middle">
+                        <th scope="row" className="px-4 py-3 font-semibold text-foreground">{formatUnitName(unit)}</th>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${status.className}`}>
+                            {status.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">{unit.floor ?? "—"}</td>
+                        <td className="px-4 py-3">{formatLayout(unit)}</td>
+                        <td className="px-4 py-3">{formatArea(unit.internal_sqm)}</td>
+                        <td className="px-4 py-3">{formatArea(unit.balcony_sqm)}</td>
+                        <td className="px-4 py-3 text-right font-display font-black text-primary">{formatOptionalPrice(unit.price)}</td>
+                        <td className="px-4 py-3 text-right text-muted-foreground">
+                          {unitPricePerSqm != null ? formatNewBuildPrice(unitPricePerSqm) : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : displayUnits.length > 0 ? (
+          <div
+            className="grid gap-3 md:grid-cols-2"
+            aria-label="All unit options"
+          >
+            {displayUnits.map((rawUnit) => {
               const unit = { ...rawUnit, price_per_sqm: getUnitPricePerSqm(rawUnit) };
               const status = formatStatus(unit.availability_status);
               const specs = unitSpecs(unit);
@@ -258,10 +317,6 @@ export function UnitShowcase({
               </div>
             )}
           </div>
-        )}
-
-        {displayUnits.length > 6 && (
-          <p className="text-xs text-muted-foreground">+{displayUnits.length - 6} more units available on request</p>
         )}
 
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-border bg-secondary/30 px-4 py-3">

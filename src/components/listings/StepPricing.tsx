@@ -148,14 +148,14 @@ export function StepPricing({
         <>
           <SectionTitle>{tr("createListing.pricing.openHouseDetails", "Open House Details")}</SectionTitle>
           <div>
-            <FieldLabel>{tr("createListing.pricing.openHouseTransaction", "Open house transaction")}</FieldLabel>
+            <FieldLabel>{tr("createListing.pricing.openHouseTransaction", "Open house subcategory")}</FieldLabel>
             <FormSelect
-              aria-label={tr("createListing.pricing.openHouseTransaction", "Open house transaction")}
+              aria-label={tr("createListing.pricing.openHouseTransaction", "Open house subcategory")}
               value={form.open_house_transaction_type}
               onChange={e => set("open_house_transaction_type", e.target.value)}
             >
-              <option value="sale">{tr("createListing.pricing.openHouseForSale", "Sale")}</option>
-              <option value="rent">{tr("createListing.pricing.openHouseForRent", "Rental")}</option>
+              <option value="sale">{tr("createListing.pricing.openHouseForSale", "Sale open house")}</option>
+              <option value="rent">{tr("createListing.pricing.openHouseForRent", "Rental open house")}</option>
             </FormSelect>
           </div>
           <div ref={setFieldRef("open_house_date") as React.Ref<HTMLDivElement>}>

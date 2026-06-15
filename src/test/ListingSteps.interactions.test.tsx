@@ -87,6 +87,22 @@ describe("listing step detail interactions", () => {
     expect(set).toHaveBeenCalledWith("commercial_subtype", "");
   });
 
+  it("treats open house as a sale/rental subcategory in the listing type step", () => {
+    const set = vi.fn();
+    renderWithProviders(
+      <StepType
+        form={baseForm({ listing_type: "rent", open_house_transaction_type: "rent", is_off_market: false })}
+        set={set}
+        toggle={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText(/open house viewing/i));
+
+    expect(set).toHaveBeenCalledWith("open_house_transaction_type", "rent");
+    expect(set).toHaveBeenCalledWith("listing_type", "open_house");
+  });
+
   it("shows validation messages and forwards residential field edits", () => {
     const set = vi.fn();
     const handleAiDescription = vi.fn().mockResolvedValue(undefined);
@@ -291,16 +307,22 @@ describe("listing step pricing interactions", () => {
     expect(screen.getByRole("button", { name: /analysing/i })).toBeDisabled();
     fireEvent.change(screen.getByPlaceholderText("2"), { target: { value: "1" } });
     fireEvent.change(screen.getByPlaceholderText("50"), { target: { value: "65" } });
+    fireEvent.change(screen.getByPlaceholderText("12"), { target: { value: "18" } });
+    fireEvent.change(document.querySelector('input[type="date"]') as HTMLInputElement, { target: { value: "2026-08-01" } });
     fireEvent.click(screen.getByRole("button", { name: /no agent fee/i }));
     fireEvent.click(screen.getByRole("button", { name: /pets allowed/i }));
+    fireEvent.click(screen.getByRole("button", { name: /short-term/i }));
     fireEvent.click(screen.getByRole("button", { name: "Exclusive" }));
     fireEvent.click(screen.getByRole("button", { name: /featured badge/i }));
     fireEvent.change(screen.getByDisplayValue("3"), { target: { value: "8" } });
 
     expect(set).toHaveBeenCalledWith("deposit_months", "1");
     expect(set).toHaveBeenCalledWith("monthly_expenses", "65");
+    expect(set).toHaveBeenCalledWith("min_rental_months", "18");
+    expect(set).toHaveBeenCalledWith("available_from", "2026-08-01");
     expect(toggle).toHaveBeenCalledWith("agent_fee_included");
     expect(toggle).toHaveBeenCalledWith("pets_allowed");
+    expect(toggle).toHaveBeenCalledWith("short_term_rental");
     expect(set).toHaveBeenCalledWith("is_exclusive", true);
     expect(set).toHaveBeenCalledWith("is_featured", false);
     expect(set).toHaveBeenCalledWith("priority_placement", 8);
@@ -308,7 +330,7 @@ describe("listing step pricing interactions", () => {
 
   it("renders auction and open-house validation branches", () => {
     const set = vi.fn();
-    const { rerender } = renderWithProviders(
+    const { rerender, container } = renderWithProviders(
       <StepPricing
         form={baseForm({ listing_type: "auction" })}
         set={set}
@@ -325,7 +347,11 @@ describe("listing step pricing interactions", () => {
 
     expect(screen.getByText(/Starting bid is required/)).toBeInTheDocument();
     fireEvent.change(screen.getAllByRole("spinbutton")[1], { target: { value: "100000" } });
+    fireEvent.change(container.querySelector('input[type="datetime-local"]') as HTMLInputElement, { target: { value: "2026-09-01T10:30" } });
+    fireEvent.change(screen.getByPlaceholderText(/eAuction/i), { target: { value: "Athens notary" } });
     expect(set).toHaveBeenCalledWith("auction_starting_bid", "100000");
+    expect(set).toHaveBeenCalledWith("auction_date", "2026-09-01T10:30");
+    expect(set).toHaveBeenCalledWith("auction_court", "Athens notary");
 
     rerender(
       <StepPricing
@@ -342,6 +368,8 @@ describe("listing step pricing interactions", () => {
       />,
     );
     expect(screen.getByText(/Open house date is required/)).toBeInTheDocument();
+    fireEvent.change(container.querySelector('input[type="datetime-local"]') as HTMLInputElement, { target: { value: "2026-09-02T18:00" } });
+    expect(set).toHaveBeenCalledWith("open_house_date", "2026-09-02T18:00");
   });
 
   it("shows rental pricing terms for rental open houses", () => {
@@ -365,7 +393,7 @@ describe("listing step pricing interactions", () => {
     expect(screen.getByText(/Monthly Rent/i)).toBeInTheDocument();
     expect(screen.getByText(/Rental Terms/i)).toBeInTheDocument();
     fireEvent.change(screen.getByPlaceholderText("800"), { target: { value: "1800" } });
-    fireEvent.change(screen.getByLabelText(/Open house transaction/i), { target: { value: "sale" } });
+    fireEvent.change(screen.getByLabelText(/Open house subcategory/i), { target: { value: "sale" } });
     expect(set).toHaveBeenCalledWith("price", "1800");
     expect(set).toHaveBeenCalledWith("open_house_transaction_type", "sale");
     fireEvent.click(screen.getByText(/Pets Allowed/i));

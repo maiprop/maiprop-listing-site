@@ -624,6 +624,70 @@ describe("public similar listings endpoint", () => {
     expect(cacheApi.put.mock.calls[0][0].url).toContain("v=similar-v1");
   });
 
+  it("deduplicates cloned OS auction rows before slicing related deals", async () => {
+    const mock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/rest/v1/listings") {
+        return jsonRows([
+          {
+            id: "auction-a",
+            owner_id: "owner-1",
+            listing_type: "auction",
+            title: "Πλειστηριασμός Διαμέρισμα | Διόνυσου – €435.920",
+            address: "Παιανίας 9",
+            city: "Διονύσου",
+            property_type: "apartment",
+            price: 435920,
+            sqm: 281.42,
+            auction_date: "2026-06-17",
+            tags: ["source:maiprop-os", "os_auction:auction-123"],
+          },
+          {
+            id: "auction-b",
+            owner_id: "owner-1",
+            listing_type: "auction",
+            title: "Πλειστηριασμός Διαμέρισμα | Διόνυσου – €435.920",
+            address: "Παιανίας 9",
+            city: "Διονύσου",
+            property_type: "apartment",
+            price: 435920,
+            sqm: 281.42,
+            auction_date: "2026-06-17",
+            tags: ["source:maiprop-os", "os_auction:auction-123"],
+          },
+          {
+            id: "auction-c",
+            owner_id: "owner-2",
+            listing_type: "auction",
+            title: "Different auction",
+            address: "Other 1",
+            city: "Διονύσου",
+            property_type: "apartment",
+            price: 500000,
+            sqm: 140,
+            auction_date: "2026-06-20",
+            tags: ["source:maiprop-os", "os_auction:auction-456"],
+          },
+        ]);
+      }
+      if (url.pathname === "/rest/v1/profiles_public") {
+        return jsonRows([
+          { user_id: "owner-1", display_name: "Maria Agent", avatar_url: null, role: "agent" },
+          { user_id: "owner-2", display_name: "Nikos Owner", avatar_url: null, role: "seller" },
+        ]);
+      }
+      return jsonRows([]);
+    }) as unknown as FetchMock;
+    globalThis.fetch = mock as unknown as typeof fetch;
+
+    const res = await similarListingsRequest(
+      makeCtx("https://portal.maiprop.co/api/public/similar-listings?city=Διονύσου&propertyType=apartment&listingType=auction&limit=6"),
+    );
+    const body = await res.json() as { data: Array<{ id: string }> };
+
+    expect(body.data.map((row) => row.id)).toEqual(["auction-a", "auction-c"]);
+  });
+
   it("returns an empty successful response when no similarity anchors are provided", async () => {
     const res = await similarListingsRequest(makeCtx("https://portal.maiprop.co/api/public/similar-listings"));
 
@@ -657,6 +721,16 @@ describe("public open houses endpoint", () => {
     expect(url.searchParams.get("listing_images.limit")).toBe("3");
   });
 
+  it("filters open houses by sale or rental transaction subcategory", async () => {
+    await openHousesRequest(makeCtx("https://portal.maiprop.co/api/public/open-houses?transactionType=rent&limit=24"));
+
+    const url = fetchUrls("/rest/v1/listings")[0];
+    expect(url.searchParams.get("limit")).toBe("24");
+    expect(url.searchParams.get("listing_type")).toBe("eq.open_house");
+    expect(url.searchParams.get("open_house_transaction_type")).toBe("eq.rent");
+    expect(cacheApi.put.mock.calls[0][0].url).toContain("transactionType=rent");
+  });
+
   it("supports past open houses using a separate cache key", async () => {
     await openHousesRequest(makeCtx("https://portal.maiprop.co/api/public/open-houses?showPast=true&limit=12"));
 
@@ -666,7 +740,7 @@ describe("public open houses endpoint", () => {
     expect(url.searchParams.get("open_house_date")).toMatch(/^lt\./);
     expect(url.searchParams.get("order")).toBe("open_house_date.desc");
     expect(cacheApi.put.mock.calls[0][0].url).toContain("showPast=1");
-    expect(cacheApi.put.mock.calls[0][0].url).toContain("v=open-house-transaction-v1");
+    expect(cacheApi.put.mock.calls[0][0].url).toContain("v=open-house-subcategory-v2");
   });
 
   it("returns 503 instead of caching an empty open-house window on transient upstream failure", async () => {
