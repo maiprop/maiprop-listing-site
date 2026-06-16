@@ -26,6 +26,11 @@ type ListingRowWithOwner = Database["public"]["Tables"]["listings"]["Row"] & {
 };
 
 const LISTING_CARD_IMAGE_LIMIT = 3;
+const PROJECT_UNIT_CARD_SELECT = ["id", "availability_status", "internal_sqm"].join(",");
+const LISTING_PROJECT_CARD_SELECT = [
+  "delivery_date",
+  `project_units!project_units_project_id_fkey(${PROJECT_UNIT_CARD_SELECT})`,
+].join(",");
 const LISTING_CARD_SELECT = [
   "id",
   "owner_id",
@@ -70,6 +75,7 @@ const LISTING_CARD_SELECT = [
   "has_elevator",
   "has_garden",
   "has_smart_home",
+  `project:projects!listings_project_id_fkey(${LISTING_PROJECT_CARD_SELECT})`,
 ].join(",");
 
 const LISTING_CARD_SELECT_WITH_IMAGES = `${LISTING_CARD_SELECT}, listing_images(url, sort_order)`;

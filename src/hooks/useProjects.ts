@@ -109,6 +109,7 @@ export function useUpdateProjectListingCover() {
       qc.invalidateQueries({ queryKey: ["listing", listingId] });
       qc.invalidateQueries({ queryKey: ["listings"] });
       qc.invalidateQueries({ queryKey: ["listings-paginated"] });
+      qc.invalidateQueries({ queryKey: ["homepage-featured"] });
       toast.success("Listing cover updated");
     },
     onError: () => toast.error("Failed to update cover image. Please try again."),

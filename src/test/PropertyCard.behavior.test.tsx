@@ -292,6 +292,32 @@ describe("PropertyCard behavior", () => {
     expect(screen.queryByText("Parking")).not.toBeInTheDocument();
   });
 
+  it("uses project-specific compact specs for new-build cards", async () => {
+    const { PropertyCard } = await import("@/components/PropertyCard");
+
+    renderWithProviders(
+      <PropertyCard
+        property={baseProperty({
+          listingType: "new_build",
+          sqm: 39,
+          floor: 0,
+          totalFloors: 4,
+          yearBuilt: 2026,
+          newBuildUnitSizeMin: 39,
+          newBuildUnitSizeMax: 56,
+          newBuildUnitCount: 4,
+          newBuildAvailableUnitCount: 3,
+          newBuildDeliveryYear: 2026,
+        })}
+      />,
+    );
+
+    expect(screen.getByText("39-56 common.sqm")).toBeInTheDocument();
+    expect(screen.getByText("3/4 units")).toBeInTheDocument();
+    expect(screen.getByText("2026")).toBeInTheDocument();
+    expect(screen.queryByText("propertyCard.groundFloor/4")).not.toBeInTheDocument();
+  });
+
   it("falls back from auction Street View to cover imagery before the logo", async () => {
     const { PropertyCard } = await import("@/components/PropertyCard");
 

@@ -5,6 +5,17 @@ export type HomepageListingImage = {
   sort_order?: number | null;
 };
 
+export type HomepageProjectUnit = {
+  id?: string | null;
+  availability_status?: string | null;
+  internal_sqm?: number | string | null;
+};
+
+export type HomepageProjectSummary = {
+  delivery_date?: string | null;
+  project_units?: HomepageProjectUnit[] | null;
+};
+
 export type HasHomepageImages = {
   cover_image_url?: string | null;
   listing_images?: HomepageListingImage[] | null;
@@ -36,6 +47,8 @@ export type HomepageListing = HasHomepageImages & {
   tags?: string[] | null;
   is_pre_sale?: boolean | null;
   construction_status?: string | null;
+  project?: HomepageProjectSummary | null;
+  projects?: HomepageProjectSummary | null;
   latitude?: number | string | null;
   longitude?: number | string | null;
   region?: string | null;

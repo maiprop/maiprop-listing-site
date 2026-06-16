@@ -33,17 +33,20 @@ import {
   useDeleteProject,
 } from "@/hooks/useProjects";
 
-function wrap(children: React.ReactNode) {
-  const qc = new QueryClient({
+function createQueryClient() {
+  return new QueryClient({
     defaultOptions: {
       queries: { retry: false, gcTime: 0, staleTime: 0 },
       mutations: { retry: false },
     },
   });
-  return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
 }
-function renderHookWithQuery<T>(hook: () => T) {
-  return renderHook(hook, { wrapper: ({ children }) => wrap(children) });
+
+function wrap(children: React.ReactNode, queryClient = createQueryClient()) {
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+}
+function renderHookWithQuery<T>(hook: () => T, queryClient?: QueryClient) {
+  return renderHook(hook, { wrapper: ({ children }) => wrap(children, queryClient) });
 }
 
 beforeEach(() => {
@@ -174,6 +177,8 @@ describe("useUpdateProjectListingCover()", () => {
   });
 
   it("updates the linked listing cover scoped to the project", async () => {
+    const queryClient = createQueryClient();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
     const update = vi.fn().mockReturnThis();
     const eq = vi.fn().mockReturnThis();
     const select = vi.fn().mockReturnThis();
@@ -183,7 +188,7 @@ describe("useUpdateProjectListingCover()", () => {
     });
     fromMock.mockReturnValue({ update, eq, select, single });
 
-    const { result } = renderHookWithQuery(() => useUpdateProjectListingCover());
+    const { result } = renderHookWithQuery(() => useUpdateProjectListingCover(), queryClient);
     await act(async () => {
       await result.current.mutateAsync({
         projectId: "pr1",
@@ -197,6 +202,7 @@ describe("useUpdateProjectListingCover()", () => {
     expect(eq).toHaveBeenCalledWith("id", "listing-1");
     expect(eq).toHaveBeenCalledWith("project_id", "pr1");
     expect(select).toHaveBeenCalledWith("id, project_id, cover_image_url");
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["homepage-featured"] });
   });
 });
 

@@ -4,6 +4,7 @@
  */
 
 import { getOwnerParticipantType } from "./participantConfig";
+import { getNewBuildCardSummary } from "./newBuildCardSummary";
 import type { ListingCard } from "@/types";
 
 const SYSTEM_TAG_PREFIXES = [
@@ -121,6 +122,7 @@ export function dbListingToCard(
     priorityPlacement: Number(l.priority_placement) || 0,
     isPreSale: l.listing_type === "new_build",
     constructionStatus: l.construction_status ?? undefined,
+    ...getNewBuildCardSummary(l),
     walkabilityScore: l.walkability_score != null ? Number(l.walkability_score) : undefined,
     safetyScore: l.safety_score != null ? Number(l.safety_score) : undefined,
     noiseScore: l.noise_score != null ? Number(l.noise_score) : undefined,

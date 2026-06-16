@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   MapPin, Square, Heart, Gavel, Flame,
   Eye, TrendingUp, Video, CheckCircle,
-  Calendar, Layers,
+  Calendar, Layers, Building2,
   Share2, Flag, Crown, Clock,
 } from "lucide-react";
 import { getSubtypeLabel, type PropertyTypeKey } from "@/lib/propertyTypes";
@@ -67,6 +67,11 @@ export interface Property {
   /** True when the card should show the New Building project badge */
   isPreSale?: boolean;
   constructionStatus?: string;
+  newBuildUnitSizeMin?: number;
+  newBuildUnitSizeMax?: number;
+  newBuildUnitCount?: number;
+  newBuildAvailableUnitCount?: number;
+  newBuildDeliveryYear?: number;
   /** Neighbourhood quality scores populated by the neighbourhood-report edge function */
   walkabilityScore?: number;
   safetyScore?: number;
@@ -131,6 +136,31 @@ const formatFloorLabel = (
         : `${floor}${t("propertyCard.floor")}`;
 
   return totalFloors != null ? `${floorLabel}/${totalFloors}` : floorLabel;
+};
+
+const formatCompactNumber = (value: number): string => {
+  if (Number.isInteger(value)) return String(value);
+  return value.toFixed(1).replace(/\.0$/, "");
+};
+
+const formatNewBuildSizeLabel = (property: Property, sqmLabel: string): string => {
+  const min = property.newBuildUnitSizeMin;
+  const max = property.newBuildUnitSizeMax;
+  if (min != null && max != null) {
+    const range = min === max
+      ? formatCompactNumber(min)
+      : `${formatCompactNumber(min)}-${formatCompactNumber(max)}`;
+    return `${range} ${sqmLabel}`;
+  }
+  return `${property.sqm} ${sqmLabel}`;
+};
+
+const formatNewBuildUnitLabel = (property: Property): string | null => {
+  const total = property.newBuildUnitCount;
+  if (!total) return null;
+  const available = property.newBuildAvailableUnitCount;
+  const prefix = available != null && available !== total ? `${available}/${total}` : String(total);
+  return `${prefix} unit${total === 1 ? "" : "s"}`;
 };
 
 export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(function PropertyCard({ property, compact = false, testId = "property-card" }, _ref) { // skipcq: JS-R1005, JS-W1044 - Card rendering branches compact, auction, and standard listing affordances in one reusable surface.
@@ -229,6 +259,51 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
     property.listingType === "rent" ||
     (property.listingType === "open_house" && property.openHouseTransactionType === "rent");
   const displayPrice = `${formatPrice(property.price)}${isRentalPricing ? "/mo" : ""}`;
+  const specItems = isNewBuildListing
+    ? [
+        {
+          key: "new-build-size",
+          icon: Square,
+          label: formatNewBuildSizeLabel(property, t("common.sqm")),
+          className: "bg-brand-purple/10 text-brand-purple border-brand-purple/20",
+        },
+        {
+          key: "new-build-units",
+          icon: Building2,
+          label: formatNewBuildUnitLabel(property),
+          className: "bg-secondary text-muted-foreground border-border",
+        },
+        {
+          key: "new-build-delivery",
+          icon: Calendar,
+          label: property.newBuildDeliveryYear != null ? String(property.newBuildDeliveryYear) : property.yearBuilt != null ? String(property.yearBuilt) : null,
+          className: "bg-brand-gold/10 text-brand-gold border-brand-gold/20",
+        },
+      ].filter((item): item is { key: string; icon: typeof Square; label: string; className: string } => Boolean(item.label))
+    : [
+        {
+          key: "size",
+          icon: Square,
+          label: `${property.sqm} ${t("common.sqm")}`,
+          className: "bg-brand-purple/10 text-brand-purple border-brand-purple/20",
+        },
+        property.floor != null
+          ? {
+              key: "floor",
+              icon: Layers,
+              label: formatFloorLabel(property.floor, property.totalFloors, t),
+              className: "bg-secondary text-muted-foreground border-border",
+            }
+          : null,
+        property.yearBuilt != null
+          ? {
+              key: "year",
+              icon: Calendar,
+              label: String(property.yearBuilt),
+              className: "bg-brand-gold/10 text-brand-gold border-brand-gold/20",
+            }
+          : null,
+      ].filter((item): item is { key: string; icon: typeof Square; label: string; className: string } => Boolean(item));
   const hasPrimaryDetailAction = property.listingType === "auction" || property.listingType === "open_house";
 
   if (compact) {
@@ -265,13 +340,14 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
             <MapPin className="w-3 h-3 shrink-0" /><span className="truncate">{property.city}</span>
           </div>
           <div className="flex items-center gap-2 mt-1.5 text-[11px] text-muted-foreground flex-wrap">
-            <span className="flex items-center gap-0.5"><Square className="w-3 h-3" />{property.sqm} {t("common.sqm")}</span>
-            {property.floor != null && (
-              <span className="flex items-center gap-0.5"><Layers className="w-3 h-3" />{formatFloorLabel(property.floor, property.totalFloors, t)}</span>
-            )}
-            {property.yearBuilt != null && (
-              <span className="flex items-center gap-0.5"><Calendar className="w-3 h-3" />{property.yearBuilt}</span>
-            )}
+            {specItems.slice(0, 3).map((spec) => {
+              const Icon = spec.icon;
+              return (
+                <span key={spec.key} className="flex items-center gap-0.5">
+                  <Icon className="w-3 h-3" aria-hidden="true" />{spec.label}
+                </span>
+              );
+            })}
           </div>
           <div className="font-display font-bold text-sm text-primary mt-1">{displayPrice}</div>
         </div>
@@ -424,22 +500,15 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
 
         {/* Key specs */}
         <div data-testid="property-card-specs" className="flex h-[1.625rem] items-center gap-1.5 overflow-hidden text-[10px] min-[1180px]:text-[11px]">
-          <span className="flex h-6 max-w-[4.75rem] shrink-0 items-center gap-1 rounded-lg border border-brand-purple/20 bg-brand-purple/10 px-1.5 font-medium text-brand-purple">
-            <Square className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
-            <span className="truncate">{property.sqm} {t("common.sqm")}</span>
-          </span>
-          {property.floor != null && (
-            <span className="flex h-6 max-w-[4.75rem] shrink-0 items-center gap-1 rounded-lg border border-border bg-secondary px-1.5 font-medium text-muted-foreground">
-              <Layers className="w-2.5 h-2.5 shrink-0" />
-              <span className="truncate">{formatFloorLabel(property.floor, property.totalFloors, t)}</span>
-            </span>
-          )}
-          {property.yearBuilt != null && (
-            <span className="flex h-6 max-w-[4.75rem] shrink-0 items-center gap-1 rounded-lg border border-brand-gold/20 bg-brand-gold/10 px-1.5 font-medium text-brand-gold">
-              <Calendar className="w-2.5 h-2.5 shrink-0" />
-              <span className="truncate">{property.yearBuilt}</span>
-            </span>
-          )}
+          {specItems.slice(0, 3).map((spec) => {
+            const Icon = spec.icon;
+            return (
+              <span key={spec.key} className={`flex h-6 max-w-[4.75rem] shrink-0 items-center gap-1 rounded-lg border px-1.5 font-medium ${spec.className}`}>
+                <Icon className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">{spec.label}</span>
+              </span>
+            );
+          })}
         </div>
 
         <div className="min-h-0 overflow-hidden">
