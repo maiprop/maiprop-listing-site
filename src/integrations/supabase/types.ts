@@ -2115,6 +2115,226 @@ export type Database = {
           },
         ]
       }
+      organization_domains: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          domain: string
+          id: string
+          organization_id: string
+          sso_required: boolean
+          updated_at: string
+          verification_status: string
+          verified_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          domain: string
+          id?: string
+          organization_id: string
+          sso_required?: boolean
+          updated_at?: string
+          verification_status?: string
+          verified_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          domain?: string
+          id?: string
+          organization_id?: string
+          sso_required?: boolean
+          updated_at?: string
+          verification_status?: string
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_domains_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "organization_domains_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_memberships: {
+        Row: {
+          created_at: string
+          id: string
+          invited_by: string | null
+          organization_id: string
+          role: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          invited_by?: string | null
+          organization_id: string
+          role?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          invited_by?: string | null
+          organization_id?: string
+          role?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_memberships_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "organization_memberships_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_memberships_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      organization_sso_providers: {
+        Row: {
+          attribute_mapping: Json
+          configured_by: string | null
+          created_at: string
+          domain_id: string | null
+          entity_id: string | null
+          id: string
+          metadata_url: string | null
+          organization_id: string
+          provider_type: string
+          status: string
+          supabase_provider_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          attribute_mapping?: Json
+          configured_by?: string | null
+          created_at?: string
+          domain_id?: string | null
+          entity_id?: string | null
+          id?: string
+          metadata_url?: string | null
+          organization_id: string
+          provider_type?: string
+          status?: string
+          supabase_provider_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          attribute_mapping?: Json
+          configured_by?: string | null
+          created_at?: string
+          domain_id?: string | null
+          entity_id?: string | null
+          id?: string
+          metadata_url?: string | null
+          organization_id?: string
+          provider_type?: string
+          status?: string
+          supabase_provider_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_sso_providers_configured_by_fkey"
+            columns: ["configured_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "organization_sso_providers_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "organization_domains"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_sso_providers_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organizations: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          plan: string
+          procurement_status: string
+          security_review_status: string
+          settings: Json
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          plan?: string
+          procurement_status?: string
+          security_review_status?: string
+          settings?: Json
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          plan?: string
+          procurement_status?: string
+          security_review_status?: string
+          settings?: Json
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organizations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       portfolios: {
         Row: {
           created_at: string
@@ -2225,6 +2445,63 @@ export type Database = {
           product_id?: string
         }
         Relationships: []
+      }
+      procurement_evidence: {
+        Row: {
+          created_at: string
+          evidence_type: string
+          evidence_url: string | null
+          expires_at: string | null
+          id: string
+          notes: string | null
+          organization_id: string | null
+          owner_user_id: string | null
+          reviewed_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          evidence_type: string
+          evidence_url?: string | null
+          expires_at?: string | null
+          id?: string
+          notes?: string | null
+          organization_id?: string | null
+          owner_user_id?: string | null
+          reviewed_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          evidence_type?: string
+          evidence_url?: string | null
+          expires_at?: string | null
+          id?: string
+          notes?: string | null
+          organization_id?: string | null
+          owner_user_id?: string | null
+          reviewed_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "procurement_evidence_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_evidence_owner_user_id_fkey"
+            columns: ["owner_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       professional_availability: {
         Row: {
@@ -3146,6 +3423,51 @@ export type Database = {
           last_alert_listing_ids?: string[] | null
           last_alert_sent_at?: string | null
           name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      subscription_trial_claims: {
+        Row: {
+          claimed_at: string
+          id: string
+          metadata: Json
+          plan_key: string
+          pricing_audience: string
+          status: string
+          stripe_checkout_session_id: string | null
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          trial_days: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          claimed_at?: string
+          id?: string
+          metadata?: Json
+          plan_key: string
+          pricing_audience: string
+          status?: string
+          stripe_checkout_session_id?: string | null
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          trial_days?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          claimed_at?: string
+          id?: string
+          metadata?: Json
+          plan_key?: string
+          pricing_audience?: string
+          status?: string
+          stripe_checkout_session_id?: string | null
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          trial_days?: number
           updated_at?: string
           user_id?: string
         }

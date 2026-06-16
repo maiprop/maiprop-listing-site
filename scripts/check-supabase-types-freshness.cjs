@@ -92,7 +92,7 @@ if (!projectId || !token) {
     !token ? "SUPABASE_ACCESS_TOKEN" : null,
   ].filter(Boolean).join(", ");
   const message = `[supabase-types] skipped live freshness check; missing ${missing}`;
-  if (strictMode) {
+  if (strictMode || process.env.CI === "true") {
     writeStderr(message);
     process.exit(1);
   }
