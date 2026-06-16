@@ -1,4 +1,4 @@
-import { forwardRef, memo } from "react";
+import { forwardRef, memo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -85,6 +85,7 @@ interface PropertyCardProps {
   compact?: boolean;
   testId?: string;
   imagePriority?: boolean;
+  footerAccessory?: ReactNode;
 }
 
 const PROPERTY_IMAGE_WIDTHS = [320, 480, 768, 1024];
@@ -164,7 +165,7 @@ const formatNewBuildUnitLabel = (property: Property): string | null => {
   return `${prefix} unit${total === 1 ? "" : "s"}`;
 };
 
-export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(function PropertyCard({ property, compact = false, testId = "property-card", imagePriority = false }, _ref) { // skipcq: JS-R1005, JS-W1044 - Card rendering branches compact, auction, and standard listing affordances in one reusable surface.
+export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(function PropertyCard({ property, compact = false, testId = "property-card", imagePriority = false, footerAccessory }, _ref) { // skipcq: JS-R1005, JS-W1044 - Card rendering branches compact, auction, and standard listing affordances in one reusable surface.
   const { t } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -320,7 +321,6 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
             sizes={thumbSrcSet ? COMPACT_PROPERTY_IMAGE_SIZES : undefined}
             alt={property.title}
             loading={imagePriority ? "eager" : "lazy"}
-            fetchPriority={imagePriority ? "high" : "auto"}
             decoding="async"
             data-image-fallback-index={imageChain.length ? "0" : undefined}
             className={`w-full h-full transition-transform duration-300 ${
@@ -363,20 +363,19 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
   const mainImageIsLogoFallback = isMaiPropLogoFallback(mainImage);
 
   return (
-    <div data-testid={testId} className={`property-card h-[360px] w-full min-w-0 rounded-2xl overflow-hidden group grid grid-rows-[150px_minmax(0,1fr)] bg-card transition-shadow duration-300 ${
+    <div data-testid={testId} className={`property-card h-[332px] w-full min-w-0 rounded-2xl overflow-hidden group grid grid-rows-[132px_minmax(0,1fr)] bg-card transition-shadow duration-300 ${
       property.isFeatured
         ? "border-2 border-amber-400/70 shadow-[0_0_0_1px_rgba(251,191,36,0.15),0_4px_24px_rgba(251,191,36,0.22)] hover:shadow-[0_0_0_1px_rgba(251,191,36,0.25),0_8px_32px_rgba(251,191,36,0.35)]"
         : "border border-border"
     }`}>
       {/* Image — taller on mobile (4/3) for better thumbnail, 3/2 on larger screens */}
-      <div data-testid="property-card-media" className="relative h-[150px] overflow-hidden bg-secondary">
+      <div data-testid="property-card-media" className="relative h-[132px] overflow-hidden bg-secondary">
         <img
           src={mainImage}
           srcSet={mainImageSrcSet}
           sizes={mainImageSrcSet ? PROPERTY_CARD_IMAGE_SIZES : undefined}
           alt={property.title}
           loading={imagePriority ? "eager" : "lazy"}
-          fetchPriority={imagePriority ? "high" : "auto"}
           decoding="async"
           data-image-fallback-index={imageChain.length ? "0" : undefined}
           className={`w-full h-full transition-transform duration-500 ${
@@ -475,7 +474,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
       </div>
 
       {/* Card body — more padding and slightly larger type on mobile for 2-col thumbnail view */}
-      <div data-testid="property-card-body" className="grid min-h-0 grid-rows-[4.25rem_1.625rem_minmax(0,1fr)_2.75rem] gap-2 p-3">
+      <div data-testid="property-card-body" className="grid min-h-0 grid-rows-[3.5rem_1.5rem_minmax(0,1fr)_2.5rem] gap-1.5 p-3">
         {/* Title + location */}
         <div className="min-h-0 overflow-hidden">
           <Link to={detailPath} state={detailState}>
@@ -493,22 +492,14 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
               {property.address}, {property.city}
             </span>
           </Link>
-          {property.ownerParticipantType && (
-            <div className="mt-1 flex h-5 min-w-0 items-center gap-1.5 overflow-hidden text-[11px] text-muted-foreground">
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary/80 border border-border/60">
-                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                {property.ownerParticipantType === "agent" ? t("propertyCard.agentListing") : t("propertyCard.privateSeller")}
-              </span>
-            </div>
-          )}
         </div>
 
         {/* Key specs */}
-        <div data-testid="property-card-specs" className="flex h-[1.625rem] items-center gap-1.5 overflow-hidden text-[10px] min-[1180px]:text-[11px]">
+        <div data-testid="property-card-specs" className="grid h-[1.5rem] grid-cols-3 items-center gap-1 overflow-hidden text-[10px] min-[1180px]:text-[11px]">
           {specItems.slice(0, 3).map((spec) => {
             const Icon = spec.icon;
             return (
-              <span key={spec.key} className={`flex h-6 max-w-[4.75rem] shrink-0 items-center gap-1 rounded-lg border px-1.5 font-medium ${spec.className}`}>
+              <span key={spec.key} className={`flex h-6 min-w-0 items-center gap-1 rounded-lg border px-1 font-medium ${spec.className}`}>
                 <Icon className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
                 <span className="truncate">{spec.label}</span>
               </span>
@@ -556,7 +547,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
         </div>
 
         {/* Agent row + CTA */}
-        <div data-testid="property-card-footer" className="flex min-h-[2.75rem] max-h-[2.75rem] items-center gap-2 overflow-hidden border-t border-border pt-2">
+        <div data-testid="property-card-footer" className="flex min-h-[2.5rem] max-h-[2.5rem] items-center gap-2 overflow-hidden border-t border-border pt-2">
           {/* Agent info */}
           {property.agent && (
             <div className={`min-w-0 flex-1 items-center gap-2 ${hasPrimaryDetailAction ? "hidden min-[640px]:flex" : "flex"}`}>
@@ -589,6 +580,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
                 </button>
               </Link>
             )}
+            {footerAccessory}
             <button
               onClick={handleShare}
               className="flex h-9 w-9 md:h-8 md:w-8 shrink-0 items-center justify-center rounded-xl border border-border bg-secondary text-muted-foreground transition-all hover:border-foreground/20 hover:text-foreground"

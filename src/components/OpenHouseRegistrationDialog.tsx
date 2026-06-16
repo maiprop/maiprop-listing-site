@@ -257,7 +257,7 @@ export default function OpenHouseRegistrationDialog({
       } else {
         const data = await createReg.mutateAsync({
           listingId,
-          timeslotIndex: timeslots.length ? (timeslotIndex ?? 0) : undefined,
+          timeslotIndex: timeslots.length > 0 ? timeslotIndex ?? undefined : undefined,
           note: undefined,
           contactName,
           contactEmail,

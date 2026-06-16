@@ -89,6 +89,22 @@ const formatUnitName = (unit: ProjectUnit) => {
   return raw ? `Unit ${raw}` : "Unit";
 };
 
+const getUnitSortParts = (unit: ProjectUnit) => {
+  const raw = String(unit.unit_number ?? unit.unit_id ?? "");
+  const numeric = raw.match(/\d+/)?.[0];
+  return {
+    numeric: numeric ? Number.parseInt(numeric, 10) : Number.MAX_SAFE_INTEGER,
+    label: raw,
+  };
+};
+
+const compareProjectUnits = (a: ProjectUnit, b: ProjectUnit) => {
+  const left = getUnitSortParts(a);
+  const right = getUnitSortParts(b);
+  if (left.numeric !== right.numeric) return left.numeric - right.numeric;
+  return left.label.localeCompare(right.label, undefined, { numeric: true, sensitivity: "base" });
+};
+
 const formatArea = (value: number | null | undefined) =>
   value != null ? `${value} m²` : "—";
 
@@ -144,8 +160,9 @@ export function UnitShowcase({
   units?: ProjectUnit[];
   onContact: () => void;
 }) {
-  const visibleUnits = units.filter((unit) => activeStatuses.has(unit.availability_status ?? "available"));
-  const displayUnits = visibleUnits.length > 0 ? visibleUnits : units;
+  const sortedUnits = [...units].sort(compareProjectUnits);
+  const visibleUnits = sortedUnits.filter((unit) => activeStatuses.has(unit.availability_status ?? "available"));
+  const displayUnits = visibleUnits.length > 0 ? visibleUnits : sortedUnits;
   const sqm = listing.sqm != null ? Number(listing.sqm) : null;
   const beds = listing.bedrooms != null ? Number(listing.bedrooms) : null;
   const baths = listing.bathrooms != null ? Number(listing.bathrooms) : null;

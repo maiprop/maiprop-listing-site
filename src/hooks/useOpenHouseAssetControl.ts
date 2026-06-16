@@ -58,6 +58,8 @@ const OPEN_HOUSE_DOC_MIME_TYPES = new Set<string>([
   "image/webp",
 ]);
 const OPEN_HOUSE_DOC_MAX_BYTES = 10 * 1024 * 1024;
+const OPEN_HOUSE_REGISTRATION_TRANSPORT_ERROR =
+  /edge function returned a non-2xx status code|failed to send a request/i;
 
 export { getOpenHouseApprovalBlockers } from "./openHouseAssetControl/helpers";
 export type {
@@ -205,8 +207,12 @@ export function useCreateOpenHouseRegistration() {
       contactPhone: string;
       visitPurpose?: string;
     }) => {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) throw new Error("Not authenticated");
+      const authResult = await supabase.auth.getUser();
+      if (authResult.error) {
+        throw new Error("Your session could not be verified. Please sign out and sign back in, then try again.");
+      }
+      const authUser = authResult.data.user;
+      if (!authUser) throw new Error("Please sign in to register for this open house.");
       const { data: result, error: invokeError } = await (
         supabase.functions.invoke as unknown as InvokeOpenHouseRegistration
       )("open-house-registration", {
@@ -225,6 +231,10 @@ export function useCreateOpenHouseRegistration() {
       });
       const error = invokeError ?? result?.error ?? null;
       if (error) {
+        const message = typeof error.message === "string" ? error.message : "";
+        if (OPEN_HOUSE_REGISTRATION_TRANSPORT_ERROR.test(message)) {
+          throw new Error("Registration could not be verified. Please refresh your session and try again.");
+        }
         // Handle duplicate registration gracefully — fetch existing and return it
         if (error.code === "23505") {
           const { data: existing, error: fetchErr } = await supabase
@@ -242,10 +252,10 @@ export function useCreateOpenHouseRegistration() {
         }
         // PostgrestError has a `.message` but does not extend Error — wrap it so
         // the onError handler always receives a true Error instance.
-        if (error.message && CAPACITY_ERROR_MESSAGES[error.message]) {
-          throw new Error(CAPACITY_ERROR_MESSAGES[error.message]);
+        if (message && CAPACITY_ERROR_MESSAGES[message]) {
+          throw new Error(CAPACITY_ERROR_MESSAGES[message]);
         }
-        throw new Error(error.message || "Registration failed. Please try again.");
+        throw new Error(message || "Registration failed. Please try again.");
       }
       if (!result?.data) throw new Error("Registration failed. Please try again.");
       return result.data;

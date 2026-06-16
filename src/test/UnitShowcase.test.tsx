@@ -78,4 +78,26 @@ describe("UnitShowcase", () => {
     expect(screen.getByRole("columnheader", { name: "€/m²" })).toBeInTheDocument();
     expect(screen.queryByText(/more units available on request/i)).not.toBeInTheDocument();
   });
+
+  it("sorts units by their numeric unit number before rendering", () => {
+    render(
+      <UnitShowcase
+        listing={{ price: 275000, sqm: 39, bedrooms: 1, bathrooms: 1 }}
+        onContact={vi.fn()}
+        units={[
+          { id: "u1", unit_number: "1", availability_status: "available", internal_sqm: 39, price: 275000 },
+          { id: "u3", unit_number: "3", availability_status: "available", internal_sqm: 51, price: 365000 },
+          { id: "u4", unit_number: "4", availability_status: "available", internal_sqm: 56, price: 410000 },
+          { id: "u2", unit_number: "2", availability_status: "available", internal_sqm: 49, price: 350000 },
+        ]}
+      />,
+    );
+
+    expect(screen.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual([
+      "Unit 1",
+      "Unit 2",
+      "Unit 3",
+      "Unit 4",
+    ]);
+  });
 });

@@ -17,7 +17,7 @@ const listing: ListingCard = {
 };
 
 describe("ListingCompareButton layout", () => {
-  it("anchors to the standardized card action zone instead of a legacy pixel offset", () => {
+  it("renders as a compact footer action instead of a floating overlay", () => {
     renderWithProviders(
       <div className="relative group">
         <ListingCompareButton
@@ -30,7 +30,8 @@ describe("ListingCompareButton layout", () => {
     );
 
     const button = screen.getByRole("button", { name: "Compare" });
-    expect(button).toHaveClass("bottom-[5.75rem]");
-    expect(button.className).not.toContain("bottom-[108px]");
+    expect(button).toHaveClass("h-9", "w-9", "rounded-xl");
+    expect(button.className).not.toContain("absolute");
+    expect(button.className).not.toContain("bottom-[5.75rem]");
   });
 });
