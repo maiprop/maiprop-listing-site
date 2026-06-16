@@ -113,10 +113,11 @@ jobs:
       - name: Check generated types freshness
         run: |
           TYPES_FILE="src/integrations/supabase/types.ts"
+          REVIEW_THRESHOLD=5500
           LINES=$(wc -l < "$TYPES_FILE")
           echo "Generated types file: $LINES lines"
-          if [ "$LINES" -gt 5000 ]; then
-            echo "::warning file=$TYPES_FILE::Generated types file has grown to $LINES lines (threshold: 5000). Consider reviewing schema size."
+          if [ "$LINES" -gt "$REVIEW_THRESHOLD" ]; then
+            echo "::warning file=$TYPES_FILE::Generated types file has grown to $LINES lines (threshold: $REVIEW_THRESHOLD). Consider reviewing schema size."
           fi
 
       - name: SBOM generation

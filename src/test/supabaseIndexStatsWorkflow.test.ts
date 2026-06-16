@@ -6,6 +6,11 @@ const releaseSafetyWorkflow = readFileSync(
   "utf8",
 );
 
+const ciWorkflow = readFileSync(
+  ".github/workflows/ci.yml",
+  "utf8",
+);
+
 const advisorReportWorkflow = readFileSync(
   ".github/workflows/supabase-advisor-report.yml",
   "utf8",
@@ -79,6 +84,12 @@ describe("Supabase index stats workflow wiring", () => {
     expect(supabaseTypesScript).toContain("src/integrations/supabase/types.ts is stale");
   });
 
+  it("keeps the generated type size review threshold above the current reviewed schema output", () => {
+    expect(ciWorkflow).toContain("REVIEW_THRESHOLD=5500");
+    expect(ciWorkflow).toContain('if [ "$LINES" -gt "$REVIEW_THRESHOLD" ]; then');
+    expect(ciWorkflow).toContain("threshold: $REVIEW_THRESHOLD");
+  });
+
   it("allows transient live-security posture timeouts without suppressing posture failures", () => {
     expect(liveSecurityScript).toContain("allowTransientUnavailable");
     expect(liveSecurityScript).toContain("isTransientManagementFailure");
@@ -108,6 +119,9 @@ describe("Supabase index stats workflow wiring", () => {
     );
     expect(supabaseStagingWorkflow).toMatch(
       /- name: Capture staging Supabase index stats\s+if: steps\.supabase_changes\.outputs\.deploy == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'\s+run: \|\s+set -euo pipefail\s+extra_args=\(\)\s+if \[ "\$\{\{ steps\.supabase_changes\.outputs\.db_changes \}\}" != "true" \]; then\s+extra_args\+=\(--allow-empty-when-unconfigured\)\s+fi\s+npm run capture:supabase-index-stats -- --out supabase-index-stats\.json "\$\{extra_args\[@\]\}"/,
+    );
+    expect(supabaseStagingWorkflow).toMatch(
+      /- name: Check staging Supabase generated types\s+if: steps\.supabase_changes\.outputs\.db_changes == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'/,
     );
   });
 
