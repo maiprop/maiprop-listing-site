@@ -420,7 +420,7 @@ jobs:
           SUPABASE_PROJECT_REF:  ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
 
       - name: Check staging Supabase generated types
-        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        if: steps.supabase_changes.outputs.db_changes == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: |
           if ! npm run check:supabase-types -- -- --strict; then
             echo "::warning title=Staging Supabase type drift::Staging generated types differ from the committed production types. Migration replay, staging apply, advisors, and security posture remain hard gates."
