@@ -26,4 +26,4 @@ export const MORE_LOADING_SKELETON_KEYS = [
   "more-loading-4",
 ];
 
-export const GRID_ESTIMATED_ROW_HEIGHT = 360;
+export const GRID_ESTIMATED_ROW_HEIGHT = 332;

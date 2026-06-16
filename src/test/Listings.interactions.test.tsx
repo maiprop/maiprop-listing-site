@@ -104,8 +104,11 @@ vi.mock("@/components/Footer", () => ({
 }));
 
 vi.mock("@/components/PropertyCard", () => ({
-  PropertyCard: ({ property }: { property: ListingCardWithRaw }) => (
-    <article data-testid="property-card">{property.title}</article>
+  PropertyCard: ({ property, footerAccessory }: { property: ListingCardWithRaw; footerAccessory?: React.ReactNode }) => (
+    <article data-testid="property-card">
+      {property.title}
+      {footerAccessory}
+    </article>
   ),
 }));
 

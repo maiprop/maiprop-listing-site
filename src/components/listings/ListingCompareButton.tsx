@@ -1,6 +1,6 @@
 import { Check, GitCompare } from "lucide-react";
-import type { ListingCard } from "@/types";
 import { useTranslation } from "react-i18next";
+import type { ListingCard } from "@/types";
 
 interface ListingCompareButtonProps<TListing extends ListingCard> {
   listing: TListing;
@@ -16,25 +16,28 @@ export const ListingCompareButton = <TListing extends ListingCard>({
   onToggle,
 }: ListingCompareButtonProps<TListing>) => {
   const { i18n } = useTranslation();
-  const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
   const disabled = !isSelected && isLimitReached;
+  const label = i18n.language?.toLowerCase().startsWith("el")
+    ? "\u03a3\u03cd\u03b3\u03ba\u03c1\u03b9\u03c3\u03b7"
+    : "Compare";
 
   return (
     <button
       type="button"
       onClick={() => onToggle(listing)}
       disabled={disabled}
+      aria-label={label}
       aria-pressed={isSelected}
-      className={`absolute bottom-[5.75rem] right-2 z-10 flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border transition-all shadow-card ${
+      title={label}
+      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all md:h-8 md:w-8 ${
         isSelected
-          ? "bg-accent/90 border-accent text-accent-foreground"
+          ? "border-accent bg-accent text-accent-foreground"
           : disabled
-          ? "bg-secondary/80 border-border text-muted-foreground opacity-50 cursor-not-allowed"
-          : "bg-card/80 border-border text-muted-foreground hover:border-accent/60 hover:text-accent backdrop-blur-sm opacity-0 group-hover:opacity-100"
+            ? "cursor-not-allowed border-border bg-secondary text-muted-foreground opacity-50"
+            : "border-border bg-secondary text-muted-foreground hover:border-accent/60 hover:text-accent"
       }`}
     >
-      {isSelected ? <Check className="w-3 h-3" /> : <GitCompare className="w-3 h-3" />}
-      {isGreek ? "Σύγκριση" : "Compare"}
+      {isSelected ? <Check className="h-4 w-4" /> : <GitCompare className="h-4 w-4" />}
     </button>
   );
 };

@@ -170,7 +170,7 @@ describe("PropertyCard behavior", () => {
     expect(screen.getByText(/1h (2[89]|30)m/)).toBeInTheDocument();
     expect(screen.getByText("propertyCard.groundFloor/5")).toBeInTheDocument();
     expect(screen.queryByText(/propertyCard.ownership.partial 50%/)).not.toBeInTheDocument();
-    expect(screen.getByText("propertyCard.privateSeller")).toBeInTheDocument();
+    expect(screen.queryByText("propertyCard.privateSeller")).not.toBeInTheDocument();
     expect(screen.queryByText("Z")).not.toBeInTheDocument();
     expect(screen.queryByText(/^25$/)).not.toBeInTheDocument();
     expect(screen.queryByText(/^80$/)).not.toBeInTheDocument();
@@ -259,11 +259,11 @@ describe("PropertyCard behavior", () => {
     );
 
     const card = screen.getByTestId("property-card");
-    expect(card).toHaveClass("h-[360px]");
-    expect(screen.getByTestId("property-card-media")).toHaveClass("h-[150px]");
+    expect(card).toHaveClass("h-[332px]");
+    expect(screen.getByTestId("property-card-media")).toHaveClass("h-[132px]");
     expect(screen.getByTestId("property-card-body")).toHaveClass("grid");
-    expect(screen.getByTestId("property-card-specs")).toHaveClass("h-[1.625rem]", "overflow-hidden");
-    expect(screen.getByTestId("property-card-footer")).toHaveClass("min-h-[2.75rem]");
+    expect(screen.getByTestId("property-card-specs")).toHaveClass("grid", "h-[1.5rem]", "overflow-hidden");
+    expect(screen.getByTestId("property-card-footer")).toHaveClass("min-h-[2.5rem]");
 
     rerender(
       <PropertyCard
@@ -282,7 +282,7 @@ describe("PropertyCard behavior", () => {
       />,
     );
 
-    expect(screen.getByTestId("property-card")).toHaveClass("h-[360px]");
+    expect(screen.getByTestId("property-card")).toHaveClass("h-[332px]");
     const specs = within(screen.getByTestId("property-card-specs"));
     expect(specs.getByText("540 common.sqm")).toBeInTheDocument();
     expect(specs.getByText("propertyCard.groundFloor/2")).toBeInTheDocument();
@@ -368,7 +368,7 @@ describe("PropertyCard behavior", () => {
     expect(image).toHaveAttribute("src", supabaseImage);
     expect(image).not.toHaveAttribute("srcset");
     expect(image).toHaveAttribute("loading", "eager");
-    expect(image).toHaveAttribute("fetchpriority", "high");
+    expect(image).not.toHaveAttribute("fetchpriority");
     expect(image).toHaveAttribute("decoding", "async");
   });
 
