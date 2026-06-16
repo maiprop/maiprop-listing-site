@@ -20,12 +20,18 @@
   },
   "type": "module",
   "overrides": {
+    "js-yaml": "4.2.0",
     "tmp": "^0.2.7",
-    "uuid": "^14.0.0"
+    "tar": "7.5.16",
+    "uuid": "^14.0.0",
+    "ws": "8.21.0"
   },
   "overridesRationale": {
+    "js-yaml": "ESLint, commitlint, and LHCI utilities can pull vulnerable js-yaml ranges. Pin to 4.2.0 to cover GHSA-h67p-54hq-rp68 across transitive dev tooling.",
     "tmp": "@lhci/cli@0.15.1 pulls old tmp ranges through Lighthouse and inquirer/external-editor. Pin tmp above GHSA-ph9p-34f9-6g65 until Lighthouse CI removes those transitive ranges.",
-    "uuid": "@lhci/cli@0.15.1 still declares uuid ^8.3.1. Pin to a supported uuid release because npm deprecates uuid@10 and below."
+    "tar": "@capacitor/cli pulls node-tar. Pin to 7.5.16 to cover GHSA-vmf3-w455-68vh until the upstream range is refreshed.",
+    "uuid": "@lhci/cli@0.15.1 still declares uuid ^8.3.1. Pin to a supported uuid release because npm deprecates uuid@10 and below.",
+    "ws": "Lighthouse pulls ws 7.x. Pin to the current safe 8.x runtime to cover GHSA-96hv-2xvq-fx4p while keeping the direct ws dependency aligned."
   },
   "scripts": {
     "dev": "vite",
