@@ -25,6 +25,9 @@ const mocks = vi.hoisted(() => ({
   publicApi: vi.fn(),
 }));
 
+const TEST_OPEN_HOUSE_ID = "11111111-1111-4111-8111-111111111111";
+const TEST_OPEN_HOUSE_SALE_ID = "22222222-2222-4222-8222-222222222222";
+
 vi.mock("@/components/Navbar", () => ({ Navbar: () => <nav data-testid="navbar" /> }));
 vi.mock("@/components/Footer", () => ({ Footer: () => <footer data-testid="footer" /> }));
 vi.mock("@/components/MapView", () => ({
@@ -202,7 +205,7 @@ vi.mock("sonner", () => ({
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function createListing(overrides: Record<string, unknown> = {}) {
   return {
-    id: "oh-1",
+    id: TEST_OPEN_HOUSE_ID,
     title: "Athens Loft Open House",
     city: "Athens",
     region: "Attica",
@@ -268,7 +271,7 @@ async function renderOpenHouses(initialPath = "/open-houses") {
 }
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-async function renderOpenHouseDetail(initialPath = "/open-house/oh-1") {
+async function renderOpenHouseDetail(initialPath = `/open-house/${TEST_OPEN_HOUSE_ID}`) {
   const { default: OpenHouseDetail } = await import("@/pages/OpenHouseDetail");
   return renderWithProviders(
     <Routes>
@@ -455,6 +458,18 @@ describe("OpenHouses page behavior", () => {
 });
 
 describe("OpenHouseDetail page behavior", () => {
+  it("renders the not-found shell immediately for malformed open-house ids", async () => {
+    mocks.listing = createListing();
+
+    await renderOpenHouseDetail("/open-house/non-existent-id-789");
+
+    expect(await screen.findByRole("heading", { name: /listing not found/i })).toBeInTheDocument();
+    expect(screen.getByText(/does not exist or has been removed/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /back to open houses/i })).toHaveAttribute("href", "/open-houses");
+    expect(mocks.trackView.mutate).not.toHaveBeenCalled();
+    expect(screen.queryByText(/athens loft open house/i)).not.toBeInTheDocument();
+  });
+
   it("shows guest contact gating, street-view fallback imagery, and no-appointment copy", async () => {
     mocks.listing = createListing({ cover_image_url: null, listing_images: [], latitude: 40.6, longitude: 22.9 });
 
@@ -467,7 +482,7 @@ describe("OpenHouseDetail page behavior", () => {
     expect(screen.getByTestId("property-valuation-locked")).toBeInTheDocument();
     expect(screen.queryByTestId("property-valuation")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /sign in to contact/i })).toHaveAttribute("href", "/login");
-    expect(mocks.trackView.mutate).toHaveBeenCalledWith("oh-1");
+    expect(mocks.trackView.mutate).toHaveBeenCalledWith(TEST_OPEN_HOUSE_ID);
   });
 
   it("uses the same Pro gate as listing and auction details for open-house valuation", async () => {
@@ -480,7 +495,7 @@ describe("OpenHouseDetail page behavior", () => {
     expect(screen.queryByTestId("property-valuation")).not.toBeInTheDocument();
 
     mocks.isPro = true;
-    await renderOpenHouseDetail("/open-house/oh-1?pro=true");
+    await renderOpenHouseDetail(`/open-house/${TEST_OPEN_HOUSE_ID}?pro=true`);
 
     expect(await screen.findByTestId("property-valuation")).toBeInTheDocument();
   });
@@ -488,7 +503,7 @@ describe("OpenHouseDetail page behavior", () => {
   it("gates a pending registrant from contact and offers while passing blocked reason to the offer dialog", async () => {
     mocks.authUser = { id: "buyer-1" };
     mocks.listing = createListing();
-    mocks.openHouseSettings = { listing_id: "oh-1", require_time_slot: true };
+    mocks.openHouseSettings = { listing_id: TEST_OPEN_HOUSE_ID, require_time_slot: true };
     mocks.registrations = [{ id: "reg-1", requester_id: "buyer-1", status: "pending" }];
 
     await renderOpenHouseDetail();
@@ -511,7 +526,7 @@ describe("OpenHouseDetail page behavior", () => {
     rentalRender.unmount();
     mocks.listing = createListing({ open_house_transaction_type: "sale", price: 420000 });
 
-    await renderOpenHouseDetail("/open-house/oh-sale");
+    await renderOpenHouseDetail(`/open-house/${TEST_OPEN_HOUSE_SALE_ID}`);
 
     expect(await screen.findByTestId("registration-dialog")).toHaveAttribute("data-transaction-type", "sale");
   });
@@ -532,7 +547,7 @@ describe("OpenHouseDetail page behavior", () => {
     await waitFor(() => {
       expect(mocks.startConversation.mutateAsync).toHaveBeenCalledWith({
         other_user_id: "owner-1",
-        listing_id: "oh-1",
+        listing_id: TEST_OPEN_HOUSE_ID,
       });
     });
     expect(await screen.findByText("Messages route")).toBeInTheDocument();
@@ -544,8 +559,8 @@ describe("OpenHouseDetail page behavior", () => {
 
     await renderOpenHouseDetail();
 
-    expect(await screen.findByTestId("asset-control-panel")).toHaveTextContent("oh-1:true:420000");
-    expect(screen.getByRole("link", { name: /edit listing/i })).toHaveAttribute("href", "/listings/oh-1/edit");
+    expect(await screen.findByTestId("asset-control-panel")).toHaveTextContent(`${TEST_OPEN_HOUSE_ID}:true:420000`);
+    expect(screen.getByRole("link", { name: /edit listing/i })).toHaveAttribute("href", `/listings/${TEST_OPEN_HOUSE_ID}/edit`);
     expect(screen.getByRole("link", { name: /manage in dashboard/i })).toHaveAttribute("href", "/dashboard?tab=open-houses");
 
     fireEvent.click(screen.getByRole("button", { name: /edit date/i }));
@@ -554,21 +569,21 @@ describe("OpenHouseDetail page behavior", () => {
 
     await waitFor(() => {
       expect(mocks.updateListing.mutateAsync).toHaveBeenCalledWith({
-        id: "oh-1",
+        id: TEST_OPEN_HOUSE_ID,
         updates: { open_house_date: new Date("2026-06-02T12:30").toISOString() },
       });
     });
 
     fireEvent.click(screen.getByRole("button", { name: /pause/i }));
     expect(mocks.updateListing.mutate).toHaveBeenCalledWith({
-      id: "oh-1",
+      id: TEST_OPEN_HOUSE_ID,
       updates: { status: "paused" },
     });
 
     fireEvent.click(screen.getByRole("button", { name: /delete/i }));
     fireEvent.click(within(screen.getByRole("dialog", { name: /delete open house listing/i })).getByRole("button", { name: /^delete$/i }));
 
-    expect(mocks.deleteListing.mutate).toHaveBeenCalledWith("oh-1", expect.any(Object));
+    expect(mocks.deleteListing.mutate).toHaveBeenCalledWith(TEST_OPEN_HOUSE_ID, expect.any(Object));
   });
 
   it("redirects non-open-house listings to the standard property detail route", async () => {

@@ -114,6 +114,82 @@ Deno.test("fallback valuation uses location benchmarks instead of copying the li
   });
 });
 
+Deno.test("rental listings compute yield from monthly rent and do not compare rent to capital value", async () => {
+  const prevOpenAI = Deno.env.get("OPENAI_API_KEY");
+  const prevGemini = Deno.env.get("GEMINI_API_KEY");
+  Deno.env.set("OPENAI_API_KEY", "openai-test");
+  Deno.env.delete("GEMINI_API_KEY");
+
+  await withQuotaAndProviderMock(okJson({
+    choices: [{
+      message: {
+        content: JSON.stringify({
+          estimatedValue: 178000,
+          rangeLow: 168000,
+          rangeHigh: 188000,
+          executionValue: 158000,
+          pricePerSqmEstimate: 4564,
+          confidence: 62,
+          confidenceLabel: "Medium",
+          liquidityScore: 74,
+          marketComparison: "below_market",
+          marketComparisonPct: -99,
+          pricingPosition: "underpriced",
+          methodUsed: "Rental listing capital-value benchmark",
+          valuationMode: "MODE_1_LISTING_ONLY",
+          summary: "Capital estimate for a rental open house.",
+          keyFactors: [],
+          legalCleanliness: 65,
+          planningCertainty: 70,
+          taxFriction: 30,
+          transferReadiness: 62,
+          legalSummary: "Standard rental listing.",
+          taxSummary: "Standard Greek transaction friction.",
+          objectiveValueProxy: null,
+          renovationPotential: null,
+          rentalYieldEstimate: 0.047,
+          highestBestUseHint: "Long-term rental",
+          redFlags: [],
+          auctionAdjustedValue: null,
+          listingQualityScore: 70,
+        }),
+      },
+    }],
+  }), async () => {
+    try {
+      const res = await handler(req("POST", {
+        listingId: "rent-open-house-1",
+        title: "Glyfada Loft rental open house",
+        city: "Glyfada",
+        address: "11 Dimitarchou Aggelou Metaxa",
+        price: 950,
+        sqm: 39,
+        propertyType: "apartment",
+        listingType: "rent",
+      }, { authorization: "Bearer test-valid-token" }));
+      const body = await jsonBody(res) as {
+        estimatedValue?: number;
+        marketComparison?: string;
+        marketComparisonPct?: number;
+        pricingPosition?: string;
+        rentalYieldEstimate?: number;
+      };
+
+      assertEquals(res.status, 200);
+      assertEquals(body.estimatedValue, 178000);
+      assertEquals(body.marketComparison, "at_market");
+      assertEquals(body.marketComparisonPct, 0);
+      assertEquals(body.pricingPosition, "fair");
+      assertEquals(body.rentalYieldEstimate, 6.4);
+    } finally {
+      if (prevOpenAI) Deno.env.set("OPENAI_API_KEY", prevOpenAI);
+      else Deno.env.delete("OPENAI_API_KEY");
+      if (prevGemini) Deno.env.set("GEMINI_API_KEY", prevGemini);
+      else Deno.env.delete("GEMINI_API_KEY");
+    }
+  });
+});
+
 Deno.test("uses OpenAI enriched with structured OS valuation when listing coordinates are available", async () => {
   const originalFetch = globalThis.fetch;
   const prevOsUrl = Deno.env.get("MAIPROP_OS_API_URL");
