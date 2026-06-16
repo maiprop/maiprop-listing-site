@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.9.25](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.24...v1.9.25) (2026-06-16)
+
+
+### Bug Fixes
+
+* allow project ad cover replacement ([0fec323](https://github.com/maiprop/maiprop-listing-site/commit/0fec323449802d105d3d3c60b1f62f386e500963))
+* harden open house and new-build flows ([2945d5a](https://github.com/maiprop/maiprop-listing-site/commit/2945d5ad399bca874281e006f1b7d9d2afcd709a))
+* improve mobile registration and auth loading ([#343](https://github.com/maiprop/maiprop-listing-site/issues/343)) ([d55a0c1](https://github.com/maiprop/maiprop-listing-site/commit/d55a0c1e0260e3768a892b4dfa894568ebf1a49e))
+* preserve Supabase client binding in open-house flows ([0455313](https://github.com/maiprop/maiprop-listing-site/commit/045531357a7b29f0eaecdf5d47220f32c391d1af))
+* standardize listing card layout ([a974fab](https://github.com/maiprop/maiprop-listing-site/commit/a974fabef6191f223239befea489ab363a584a7c))
+* sync stale branch listing fixes ([#351](https://github.com/maiprop/maiprop-listing-site/issues/351)) ([2828900](https://github.com/maiprop/maiprop-listing-site/commit/2828900cc0e2e96fc9fb57b4ae689a44e4228969))
+
+
+### Performance Improvements
+
+* reduce listings cold TTFB ([39ec3b2](https://github.com/maiprop/maiprop-listing-site/commit/39ec3b2b61fee5a927390c0ebaced274dab9ae1a))
+
 ## [1.9.24](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.23...v1.9.24) (2026-06-15)
 
 
