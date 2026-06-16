@@ -14,10 +14,10 @@ import { UNLIMITED_AI_LIMIT } from "@/hooks/useAiQuota";
 import type { AIInsightsQuota } from "@/hooks/usePropertyAIInsights";
 
 interface AIInsightsData {
-  vsMarket: number;
+  vsMarket: number | null;
   rentalYield: number;
   estimatedValue: number;
-  marketComparison: string;
+  marketComparison: string | null;
   confidenceLabel: string;
 }
 
@@ -126,17 +126,30 @@ export function PropertyAIInsightsSection({
         )}
 
         {user && !loading && data && (() => {
-          const cmp = COMPARISON_CONFIG[data.marketComparison] ?? COMPARISON_CONFIG.at_market;
+          const vsMarket = data.vsMarket;
+          const marketComparison = data.marketComparison;
+          const hasMarketComparison = vsMarket != null && marketComparison != null;
+          const cmp = hasMarketComparison
+            ? COMPARISON_CONFIG[marketComparison] ?? COMPARISON_CONFIG.at_market
+            : {
+                label: "Unavailable",
+                color: "text-muted-foreground",
+                bg: "bg-secondary/50 border-border",
+              };
           return (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className={`rounded-xl border p-4 flex flex-col gap-1 ${cmp.bg}`}>
                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest">vs Market</p>
                 <div className="flex items-baseline gap-1">
                   <span className={`font-display font-black text-3xl ${cmp.color}`}>
-                    {data.vsMarket > 0 ? "+" : ""}{data.vsMarket}%
+                    {hasMarketComparison
+                      ? `${vsMarket > 0 ? "+" : ""}${vsMarket}%`
+                      : "Unavailable"}
                   </span>
                 </div>
-                <p className={`text-[10px] font-semibold ${cmp.color}`}>{cmp.label}</p>
+                <p className={`text-[10px] font-semibold ${cmp.color}`}>
+                  {hasMarketComparison ? cmp.label : "Rent benchmark not returned"}
+                </p>
               </div>
 
               <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">

@@ -11,10 +11,10 @@ const PERF_USER_ID = "00000000-0000-4000-8000-000000000001";
 const PERF_LISTING_ID = "00000000-0000-4000-8000-000000000101";
 
 const ROUTE_JS_BUDGET_KB: Record<string, number> = {
-  [`/property/${PERF_LISTING_ID}`]: 2600,
-  "/dashboard": 2200,
-  "/admin": 2300,
-  "/platform-map": 2200,
+  [`/property/${PERF_LISTING_ID}`]: 2400,
+  "/dashboard": 2100,
+  "/admin": 2200,
+  "/platform-map": 2100,
 };
 
 const WEB_VITAL_ROUTES = [
@@ -27,8 +27,8 @@ const WEB_VITAL_ROUTES = [
   "/platform-map",
 ];
 const WEB_VITAL_BUDGETS = {
-  lcp: 4000,
-  cls: 0.15,
+  lcp: 3000,
+  cls: 0.1,
   inp: 200,
 };
 const INP_SAMPLE_ATTEMPTS = 3;

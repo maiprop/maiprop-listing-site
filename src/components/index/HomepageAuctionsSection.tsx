@@ -146,8 +146,8 @@ export const HomepageAuctionsSection = ({ listings, isLoading }: Props) => {
           </Button>
         </div>
         <div className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 reveal reveal-delay-1 ${inView ? "in-view" : ""}`}>
-          {featuredListings.map((listing) => (
-            <PropertyCard key={listing.id} property={toAuctionCardProperty(listing)} />
+          {featuredListings.map((listing, index) => (
+            <PropertyCard key={listing.id} property={toAuctionCardProperty(listing)} imagePriority={index < 4} />
           ))}
           {showLoadingCards &&
             LOADING_CARD_KEYS.map((key) => (

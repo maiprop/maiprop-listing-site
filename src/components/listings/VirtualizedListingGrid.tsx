@@ -4,7 +4,7 @@ import { getAutoListingGridColumns } from "@/lib/virtualizedGrid";
 
 type VirtualizedListingGridProps<T extends { id: string }> = {
   items: T[];
-  renderItem: (item: T) => ReactNode;
+  renderItem: (item: T, index: number) => ReactNode;
   className: string;
   scrollParentRef?: React.RefObject<HTMLElement>;
   estimateItemHeight?: number;
@@ -76,6 +76,7 @@ export function VirtualizedListingGrid<T extends { id: string }>({
 
       return {
         key: rowItems.map((item) => item.id).join("|"),
+        startIndex,
         items: rowItems,
         rowIndex,
       };
@@ -142,7 +143,7 @@ export function VirtualizedListingGrid<T extends { id: string }>({
           top={rowOffsets[row.rowIndex]}
           onHeight={handleRowHeight}
         >
-          {row.items.map((item) => renderItem(item))}
+          {row.items.map((item, itemOffset) => renderItem(item, row.startIndex + itemOffset))}
         </MeasuredGridRow>
       ))}
     </div>

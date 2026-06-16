@@ -30,7 +30,7 @@ export function FeaturedPropertiesSection({ listings, isLoading, isError }: Prop
             ? Array.from({ length: 4 }).map((_, i) => <PropertyCardSkeleton key={i} />)
             : isError
             ? <p className="col-span-4 py-8 text-center text-sm text-muted-foreground">Could not load featured listings.</p>
-            : visibleListings.map((l) => {
+            : visibleListings.map((l, index) => {
                 const imgs = homepageListingImages(l);
                 const isProjectNewBuild = l.listing_type === "new_build" && Boolean(l.project_id);
                 const listingType = l.listing_type === "new_build" && !isProjectNewBuild
@@ -40,6 +40,7 @@ export function FeaturedPropertiesSection({ listings, isLoading, isError }: Prop
                 return (
                   <PropertyCard
                     key={l.id}
+                    imagePriority={index < 4}
                     property={{
                       id: l.id,
                       title: l.title,

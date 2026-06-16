@@ -251,9 +251,9 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
     });
   }, []);
   const isComparing = useCallback((id: string) => compareList.some(l => l.id === id), [compareList]);
-  const renderListingCard = useCallback((property: ListingCardWithRaw) => (
+  const renderListingCard = useCallback((property: ListingCardWithRaw, index = 0) => (
     <div key={property.id} className="relative group">
-      <PropertyCard property={property} />
+      <PropertyCard property={property} imagePriority={index < 6} />
       <ListingCompareButton
         listing={property}
         isSelected={isComparing(property.id)}

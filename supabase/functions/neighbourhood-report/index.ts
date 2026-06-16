@@ -27,6 +27,11 @@ type MunicipalityContext = {
   prefectureName?: string;
   detail?: string;
   marketReportText?: string;
+  privateSalesAverage?: number;
+  publicListingsAverage?: number;
+  blendedSaleAverage?: number;
+  sourceDivergencePct?: number;
+  largeDivergence?: boolean;
 };
 
 const OS_PROPERTY_CATEGORY: Record<string, string> = {
@@ -280,6 +285,7 @@ const fetchOsMunicipalityContext = async (input: {
   const text = await response.text();
   if (!response.ok) throw new Error(`OS municipality market report failed with status ${response.status}`);
   const marketReportText = stripHtmlForPrompt(text);
+  const diagnostics = osMarketDiagnostics(marketReportText);
 
   return {
     status: "ok",
@@ -287,12 +293,20 @@ const fetchOsMunicipalityContext = async (input: {
     municipalityName,
     prefectureName,
     marketReportText,
+    ...diagnostics,
     promptContext: JSON.stringify({
       source: "mAI Prop OS market valuation report",
       municipalityId,
       municipalityName,
       prefectureName,
       propertyCategory: normalizeOsCategory(input.propertyType),
+      crossCheck: {
+        ...diagnostics,
+        method: "Use private-sales and public-listings data together. Treat private sales as achieved transaction evidence, public listings as asking-market pressure, and use blendedSaleAverage as the canonical displayed benchmark.",
+        warning: diagnostics.largeDivergence
+          ? "Large divergence detected between achieved-sales and asking-listing sources; explain uncertainty and do not replace blendedSaleAverage with either raw source."
+          : "No large source divergence detected.",
+      },
       reportText: marketReportText,
     }, null, 2),
   };
@@ -360,6 +374,37 @@ const extractOsAveragePrice = (marketReportText: string | undefined, section: st
   return numeric == null ? null : Math.round(numeric);
 };
 
+const blendedOsSaleAverage = (marketReportText: string | undefined): number | null => {
+  const privateSaleAverage = extractOsAveragePrice(marketReportText, "Private Sales Municipality");
+  const publicListingAverage = extractOsAveragePrice(marketReportText, "Public Listings Municipality");
+  if (privateSaleAverage != null && publicListingAverage != null) {
+    return Math.round(privateSaleAverage * 0.7 + publicListingAverage * 0.3);
+  }
+  return privateSaleAverage ?? publicListingAverage;
+};
+
+const oneDecimal = (value: number): number => Math.round(value * 10) / 10;
+const percentChange = (current: number, previous: number, fallback: number): number =>
+  previous > 0 ? oneDecimal(((current - previous) / previous) * 100) : fallback;
+const osSourceDivergencePct = (privateSalesAverage: number | null, publicListingsAverage: number | null, blendedSaleAverage: number | null): number | null =>
+  privateSalesAverage != null && publicListingsAverage != null && blendedSaleAverage != null && blendedSaleAverage > 0
+    ? oneDecimal((Math.abs(publicListingsAverage - privateSalesAverage) / blendedSaleAverage) * 100)
+    : null;
+
+const osMarketDiagnostics = (marketReportText: string | undefined) => {
+  const privateSalesAverage = extractOsAveragePrice(marketReportText, "Private Sales Municipality");
+  const publicListingsAverage = extractOsAveragePrice(marketReportText, "Public Listings Municipality");
+  const blendedSaleAverage = blendedOsSaleAverage(marketReportText);
+  const sourceDivergencePct = osSourceDivergencePct(privateSalesAverage, publicListingsAverage, blendedSaleAverage);
+  return {
+    privateSalesAverage: privateSalesAverage ?? undefined,
+    publicListingsAverage: publicListingsAverage ?? undefined,
+    blendedSaleAverage: blendedSaleAverage ?? undefined,
+    sourceDivergencePct: sourceDivergencePct ?? undefined,
+    largeDivergence: sourceDivergencePct != null ? sourceDivergencePct > 35 : undefined,
+  };
+};
+
 const applyOsMunicipalityContext = (
   report: JsonRecord,
   osMunicipalityContext: MunicipalityContext,
@@ -378,26 +423,38 @@ const applyOsMunicipalityContext = (
   if (osMunicipalityContext.municipalityName) enriched.osMunicipalityName = osMunicipalityContext.municipalityName;
   if (osMunicipalityContext.prefectureName) enriched.osPrefectureName = osMunicipalityContext.prefectureName;
   if (osMunicipalityContext.detail) enriched.osMunicipalityDetail = osMunicipalityContext.detail;
+  if (osMunicipalityContext.blendedSaleAverage != null) {
+    const parts = [
+      `OS blended benchmark: ${osMunicipalityContext.blendedSaleAverage} EUR/m²`,
+      osMunicipalityContext.privateSalesAverage != null ? `private sales: ${osMunicipalityContext.privateSalesAverage}` : null,
+      osMunicipalityContext.publicListingsAverage != null ? `public listings: ${osMunicipalityContext.publicListingsAverage}` : null,
+      osMunicipalityContext.sourceDivergencePct != null ? `source divergence: ${osMunicipalityContext.sourceDivergencePct}%` : null,
+    ].filter(Boolean);
+    enriched.osMunicipalityDetail = parts.join("; ");
+  }
 
-  if (source === "fallback" && osMunicipalityContext.status === "ok") {
-    const publicListingAverage = extractOsAveragePrice(osMunicipalityContext.marketReportText, "Public Listings Municipality");
-    const privateSaleAverage = extractOsAveragePrice(osMunicipalityContext.marketReportText, "Private Sales Municipality");
-    const current = publicListingAverage ?? privateSaleAverage;
+  if (osMunicipalityContext.status === "ok") {
+    const current = osMunicipalityContext.blendedSaleAverage ?? blendedOsSaleAverage(osMunicipalityContext.marketReportText);
     if (current != null) {
       const trend = enriched.pricePerSqmTrend && typeof enriched.pricePerSqmTrend === "object"
         ? enriched.pricePerSqmTrend as JsonRecord
         : {};
+      const oneYearAgo = coerceFiniteNumber(trend.oneYearAgo) ?? Math.round(current * 0.95);
+      const threeYearsAgo = coerceFiniteNumber(trend.threeYearsAgo) ?? Math.round(current * 0.84);
+      const fiveYearsAgo = coerceFiniteNumber(trend.fiveYearsAgo) ?? Math.round(current * 0.72);
       enriched.pricePerSqmTrend = {
         ...trend,
         current,
-        oneYearAgo: coerceFiniteNumber(trend.oneYearAgo) ?? Math.round(current * 0.95),
-        threeYearsAgo: coerceFiniteNumber(trend.threeYearsAgo) ?? Math.round(current * 0.84),
-        fiveYearsAgo: coerceFiniteNumber(trend.fiveYearsAgo) ?? Math.round(current * 0.72),
-        changeYoY: coerceFiniteNumber(trend.changeYoY) ?? 5.3,
-        change5Y: coerceFiniteNumber(trend.change5Y) ?? 38.9,
+        oneYearAgo,
+        threeYearsAgo,
+        fiveYearsAgo,
+        changeYoY: percentChange(current, oneYearAgo, 0),
+        change5Y: percentChange(current, fiveYearsAgo, 0),
       };
     }
+  }
 
+  if (source === "fallback" && osMunicipalityContext.status === "ok") {
     const highlights = Array.isArray(enriched.areaHighlights)
       ? enriched.areaHighlights.filter((item): item is string => typeof item === "string")
       : [];
