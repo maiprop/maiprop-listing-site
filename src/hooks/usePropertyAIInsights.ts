@@ -30,6 +30,36 @@ type PropertyInsightsResponse = ValuationEstimateSource & {
   error?: string;
   rentalYieldEstimate?: number;
   confidenceLabel?: string;
+  estimatedMonthlyRent?: number;
+  monthlyRentEstimate?: number;
+  marketRentEstimate?: number;
+};
+
+const toPositiveNumber = (value: unknown): number | null => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
+};
+
+const roundToOneDecimal = (value: number): number => Math.round(value * 10) / 10;
+
+const isRentalListing = (listing: ListingWithJoins): boolean =>
+  listing.listing_type === "rent" ||
+  (listing.listing_type === "open_house" && listing.open_house_transaction_type === "rent");
+
+const getRentalMarketRentEstimate = (data: PropertyInsightsResponse): number | null =>
+  toPositiveNumber(data.estimatedMonthlyRent) ??
+  toPositiveNumber(data.monthlyRentEstimate) ??
+  toPositiveNumber(data.marketRentEstimate);
+
+const getRentalYield = (
+  monthlyRent: number | null,
+  capitalEstimate: number,
+  remoteYield: unknown,
+): number => {
+  if (monthlyRent && capitalEstimate > monthlyRent * 24) {
+    return roundToOneDecimal((monthlyRent * 12 / capitalEstimate) * 100);
+  }
+  return toPositiveNumber(remoteYield) ?? 0;
 };
 
 export function usePropertyAIInsights(
@@ -86,6 +116,8 @@ export function usePropertyAIInsights(
 
     setAiInsightsLoading(true);
     const snapshot = dbListing;
+    const rentalListing = isRentalListing(snapshot);
+    const monthlyRent = rentalListing ? toPositiveNumber(snapshot.price) : null;
     setAiInsightsLoaded(true);
 
     try {
@@ -102,7 +134,9 @@ export function usePropertyAIInsights(
           bedrooms: snapshot.bedrooms,
           bathrooms: snapshot.bathrooms,
           propertyType: snapshot.property_type,
-          listingType: snapshot.listing_type,
+          listingType: rentalListing ? "rent" : snapshot.listing_type,
+          openHouseTransactionType: snapshot.open_house_transaction_type,
+          askingMonthlyRent: monthlyRent ?? undefined,
           floor: snapshot.floor,
           totalFloors: snapshot.total_floors,
           yearBuilt: snapshot.year_built,
@@ -148,10 +182,17 @@ export function usePropertyAIInsights(
       });
       if (data && !data.error) {
         const estimatedValue = getPrimaryValuationEstimate(data, Number(snapshot.price));
-        const comparison = deriveListingMarketComparison(snapshot.price, estimatedValue);
+        const marketRentEstimate = rentalListing ? getRentalMarketRentEstimate(data) : null;
+        const comparison = rentalListing
+          ? marketRentEstimate
+            ? deriveListingMarketComparison(monthlyRent, marketRentEstimate)
+            : { marketComparison: "at_market" as const, marketComparisonPct: 0 }
+          : deriveListingMarketComparison(snapshot.price, estimatedValue);
         setAiInsightsData({
           vsMarket: comparison.marketComparisonPct,
-          rentalYield: data.rentalYieldEstimate ?? 0,
+          rentalYield: rentalListing
+            ? getRentalYield(monthlyRent, estimatedValue, data.rentalYieldEstimate)
+            : data.rentalYieldEstimate ?? 0,
           estimatedValue,
           marketComparison: comparison.marketComparison,
           confidenceLabel: data.confidenceLabel ?? "Medium",

@@ -228,7 +228,7 @@ vi.mock("@/components/NeighbourhoodReport", () => ({ default: () => <div data-te
 vi.mock("@/components/AIAssistantWidget", () => ({ default: () => <div data-testid="ai-assistant" /> }));
 
 const professional = (overrides: Record<string, unknown> = {}) => ({
-  id: "pro-1",
+  id: "88888888-8888-4888-8888-888888888888",
   user_id: "pro-user-1",
   display_name: "Nora Notary",
   title: "Real Estate Lawyer",
@@ -564,7 +564,7 @@ describe("ProfessionalProfile focused page behavior", () => {
       <Routes>
         <Route path="/professionals/:id" element={<ProfessionalProfile />} />
       </Routes>,
-      { initialPath: "/professionals/pro-1" },
+      { initialPath: "/professionals/88888888-8888-4888-8888-888888888888" },
     );
 
     expect((await screen.findAllByText(/contact details/i)).length).toBeGreaterThan(0);
@@ -599,7 +599,7 @@ describe("ProfessionalProfile focused page behavior", () => {
       <Routes>
         <Route path="/professionals/:id" element={<ProfessionalProfile />} />
       </Routes>,
-      { initialPath: "/professionals/pro-1" },
+      { initialPath: "/professionals/88888888-8888-4888-8888-888888888888" },
     );
 
     fireEvent.click((await screen.findAllByRole("button", { name: /^Chat$/i }))[0]);
@@ -624,7 +624,7 @@ describe("ProfessionalProfile focused page behavior", () => {
       <Routes>
         <Route path="/professionals/:id" element={<ProfessionalProfile />} />
       </Routes>,
-      { initialPath: "/professionals/pro-1" },
+      { initialPath: "/professionals/88888888-8888-4888-8888-888888888888" },
     );
 
     fireEvent.click((await screen.findAllByRole("button", { name: /Send Inquiry/i }))[0]);
@@ -633,7 +633,7 @@ describe("ProfessionalProfile focused page behavior", () => {
 
     expect(modalOpen).not.toHaveBeenCalled();
     expect(mocks.navigateMock).toHaveBeenCalledWith("/login", {
-      state: { from: { pathname: "/professionals/pro-1" } },
+      state: { from: { pathname: "/professionals/88888888-8888-4888-8888-888888888888" } },
     });
     expect(mocks.toast.error).toHaveBeenCalledWith("Please sign in to send an inquiry.");
     expect(mocks.toast.error).toHaveBeenCalledWith("Please sign in to book a consultation.");

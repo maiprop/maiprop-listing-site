@@ -39,16 +39,20 @@ import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
 import { PropertyHeroSpecsBar } from "@/components/property/PropertyHeroSpecsBar";
 import { buildListingHeroSpecs } from "@/components/property/propertyHeroSpecs";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
 export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house detail coordinates listing data, registration, offers, and owner controls.
   const { i18n } = useTranslation();
   const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
   const dateLocale = isGreek ? "el-GR" : "en-GB";
   const { id } = useParams();
+  const hasValidListingId = Boolean(id && UUID_RE.test(id));
+  const listingIdParam = hasValidListingId ? id ?? "" : "";
   const navigate = useNavigate();
   const { user } = useAuth();
   const { isPro } = useSubscription();
-  const { data: listing, isLoading } = useListing(id || "", { publicScope: true });
+  const { data: listing, isLoading } = useListing(listingIdParam, { publicScope: true });
   const trackView = useTrackListingView();
   const updateListing = useUpdateListing();
   const deleteListing = useDeleteListing();
@@ -59,16 +63,16 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
   const [walkScore, setWalkScore] = useState<number | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
-  const { data: assetSettings } = useOpenHouseSettings(id || undefined);
-  const { data: registrations = [] } = useOpenHouseRegistrations(id || undefined, false);
-  const { data: offers = [] } = useOpenHouseOffers(id || undefined);
+  const { data: assetSettings } = useOpenHouseSettings(listingIdParam || undefined);
+  const { data: registrations = [] } = useOpenHouseRegistrations(listingIdParam || undefined, false);
+  const { data: offers = [] } = useOpenHouseOffers(listingIdParam || undefined);
   const hasAssetControl = !!assetSettings;
   const startConversation = useStartConversation();
 
   useEffect(() => {
-    if (id && listing) trackView.mutate(id);
+    if (listingIdParam && listing) trackView.mutate(listingIdParam);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, !!listing]);
+  }, [listingIdParam, !!listing]);
 
   const db = listing as ListingWithJoins;
   const {
@@ -78,16 +82,16 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
     aiInsightsQuota,
     aiInsightsQuotaLoading,
     loadAiInsights,
-  } = usePropertyAIInsights(db, user, id, isPro);
+  } = usePropertyAIInsights(db, user, listingIdParam || undefined, isPro);
   const myReg = registrations.find(r => r.requester_id === user?.id);
   const myOffer = offers.find(o => o.bidder_id === user?.id);
   const isOwner = !!(user?.id && db?.owner_id === user.id);
   const { data: favorites = [] } = useFavorites();
   const toggleFav = useToggleFavorite();
-  const isFavorited = !!id && favorites.some(f => f.listing_id === id);
+  const isFavorited = !!listingIdParam && favorites.some(f => f.listing_id === listingIdParam);
   const handleFavorite = () => {
     if (!user) { toast.error(isGreek ? "Συνδεθείτε για να αποθηκεύσετε ακίνητα" : "Sign in to save properties"); return; }
-    if (id) toggleFav.mutate({ listing_id: id, isFavorited });
+    if (listingIdParam) toggleFav.mutate({ listing_id: listingIdParam, isFavorited });
   };
   const handleShare = async () => {
     const url = window.location.href;
@@ -104,9 +108,9 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
 
   const handleContact = async () => { // skipcq: JS-R1005 - Contact action checks registration and conversation fallback paths.
     const ownerId = db?.owner_id;
-    if (!user || !ownerId || !id) return;
+    if (!user || !ownerId || !listingIdParam) return;
     try {
-      const convId = await startConversation.mutateAsync({ other_user_id: ownerId, listing_id: id });
+      const convId = await startConversation.mutateAsync({ other_user_id: ownerId, listing_id: listingIdParam });
       navigate("/messages", { state: { openConversationId: convId } });
     } catch (err: unknown) {
       toast.error(getPlanLimitErrorMessage(err) ?? (isGreek ? "Δεν ήταν δυνατή η έναρξη συνομιλίας" : "Could not start conversation"));
@@ -116,9 +120,9 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
   useEffect(() => {
     // Redirect if not an open house listing
     if (db?.listing_type && db.listing_type !== "open_house") {
-      navigate(`/property/${id}`, { replace: true });
+      navigate(`/property/${listingIdParam}`, { replace: true });
     }
-  }, [db?.listing_type, id, navigate]);
+  }, [db?.listing_type, listingIdParam, navigate]);
 
   useEffect(() => {
     if (db?.open_house_date) {
@@ -128,10 +132,10 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
   }, [db?.open_house_date]);
 
   const saveDate = async () => {
-    if (!id || !dateInput) return;
+    if (!listingIdParam || !dateInput) return;
     try {
       await updateListing.mutateAsync({
-        id,
+        id: listingIdParam,
         updates: { open_house_date: new Date(dateInput).toISOString() },
       });
       setEditingDate(false);
@@ -142,9 +146,9 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
   };
 
   const toggleStatus = () => {
-    if (!id) return;
+    if (!listingIdParam) return;
     const next = db?.status === "active" ? "paused" : "active";
-    updateListing.mutate({ id, updates: { status: next } });
+    updateListing.mutate({ id: listingIdParam, updates: { status: next } });
     toast.success(next === "active" ? (isGreek ? "Η αγγελία ενεργοποιήθηκε" : "Listing activated") : (isGreek ? "Η αγγελία τέθηκε σε παύση" : "Listing paused"));
   };
 
@@ -160,7 +164,7 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
     );
   }
 
-  if (!db) {
+  if (!hasValidListingId || !db) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <Navbar />
@@ -619,7 +623,7 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                   bedrooms={db.bedrooms}
                   bathrooms={db.bathrooms}
                   propertyType={db.property_type}
-                  listingType={db.listing_type}
+                  listingType={isRentalOpenHouse ? "rent" : db.listing_type}
                   floor={db.floor}
                   totalFloors={db.total_floors}
                   yearBuilt={db.year_built}

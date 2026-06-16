@@ -884,7 +884,7 @@ describe("Page smoke tests", () => {
     useSubscriptionMock.mockReturnValue({ isPro: true, loading: false });
     useListingMock.mockReturnValue({
       data: {
-        id: "oh-1",
+        id: "33333333-3333-4333-8333-333333333333",
         title: "Kolonaki Open House",
         city: "Athens",
         address: "Patriarchou Ioakim 1",
@@ -932,7 +932,7 @@ describe("Page smoke tests", () => {
           <Route path="/open-house/:id" element={<OpenHouseDetail />} />
         </Routes>
       </Suspense>,
-      { initialPath: "/open-house/oh-1" }
+      { initialPath: "/open-house/33333333-3333-4333-8333-333333333333" }
     );
 
     expect(await screen.findByTestId("property-valuation")).toBeInTheDocument();
@@ -1020,12 +1020,30 @@ describe("Page smoke tests", () => {
     ).not.toThrow();
   });
 
+  it("ProfessionalProfile short-circuits malformed public IDs", async () => {
+    const { useProfessional } = await import("@/hooks/useProfessionals");
+    const useProfessionalMock = useProfessional as ReturnType<typeof vi.fn>;
+    const { default: ProfessionalProfile } = await import("@/pages/ProfessionalProfile");
+
+    renderWithProviders(
+      <Suspense fallback={<div>loading</div>}>
+        <Routes>
+          <Route path="/professionals/:id" element={<ProfessionalProfile />} />
+        </Routes>
+      </Suspense>,
+      { initialPath: "/professionals/non-existent-id" }
+    );
+
+    expect(await screen.findByText(/Professional not found/i)).toBeInTheDocument();
+    expect(useProfessionalMock).toHaveBeenCalledWith("");
+  });
+
   it("ProfessionalProfile limits free professional profiles to contact details", async () => {
     const { useProfessional } = await import("@/hooks/useProfessionals");
     const useProfessionalMock = useProfessional as ReturnType<typeof vi.fn>;
     useProfessionalMock.mockReturnValue({
       data: {
-        id: "pro-free",
+        id: "55555555-5555-4555-8555-555555555555",
         user_id: "user-free",
         display_name: "Free Professional",
         title: "Architect",
@@ -1062,7 +1080,7 @@ describe("Page smoke tests", () => {
           <Route path="/professionals/:id" element={<ProfessionalProfile />} />
         </Routes>
       </Suspense>,
-      { initialPath: "/professionals/pro-free" }
+      { initialPath: "/professionals/55555555-5555-4555-8555-555555555555" }
     );
 
     expect((await screen.findAllByText(/contact details only/i)).length).toBeGreaterThan(0);
@@ -1078,7 +1096,7 @@ describe("Page smoke tests", () => {
     const useListingsMock = useListings as ReturnType<typeof vi.fn>;
     useProfessionalMock.mockReturnValue({
       data: {
-        id: "agent-pro",
+        id: "66666666-6666-4666-8666-666666666666",
         user_id: "agent-user",
         display_name: "Pro Agent",
         title: "Real Estate Agent",
@@ -1123,7 +1141,7 @@ describe("Page smoke tests", () => {
           <Route path="/professionals/:id" element={<ProfessionalProfile />} />
         </Routes>
       </Suspense>,
-      { initialPath: "/professionals/agent-pro" }
+      { initialPath: "/professionals/66666666-6666-4666-8666-666666666666" }
     );
 
     expect((await screen.findAllByText(/Average Deal Size/i)).length).toBeGreaterThan(0);
@@ -1277,7 +1295,7 @@ describe("Page smoke tests", () => {
 
     useListingMock.mockReturnValue({
       data: {
-        id: "oh-el",
+        id: "44444444-4444-4444-8444-444444444444",
         title: "Greek Open House",
         city: "Athens",
         address: "Solonos 1",
@@ -1466,7 +1484,7 @@ describe("Page smoke tests", () => {
             <Route path="/open-house/:id" element={<OpenHouseDetail />} />
           </Routes>
         </Suspense>,
-        { initialPath: "/open-house/oh-el" },
+        { initialPath: "/open-house/44444444-4444-4444-8444-444444444444" },
       )
     ).not.toThrow();
     cleanup();
@@ -1492,7 +1510,7 @@ describe("Page smoke tests", () => {
             <Route path="/professionals/:id" element={<ProfessionalProfile />} />
           </Routes>
         </Suspense>,
-        { initialPath: "/professionals/pro-el" },
+        { initialPath: "/professionals/77777777-7777-4777-8777-777777777777" },
       )
     ).not.toThrow();
 

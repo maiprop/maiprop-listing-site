@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -96,12 +96,50 @@ function AuctionRouter() {
 // Routes that render their own embedded AI widget or have no need for the floating one
 const HIDE_WIDGET_PREFIXES = [
   "/login", "/signup", "/auth/callback", "/onboarding", "/dashboard", "/messages", "/ai-assistant",
-  "/property/", "/auction/", "/new-build/", "/video-room/", "/video-viewing/",
+  "/property/", "/auction/", "/new-build/", "/open-house/", "/video-room/", "/video-viewing/",
 ];
+const GLOBAL_AI_WIDGET_IDLE_DELAY_MS = 1_200;
+const GLOBAL_AI_WIDGET_IDLE_TIMEOUT_MS = 2_000;
+
+type IdleScheduler = (callback: () => void, options?: { timeout?: number }) => number;
+type IdleCanceller = (handle: number) => void;
 
 function GlobalAIWidget() {
   const loc = useLocation();
-  if (HIDE_WIDGET_PREFIXES.some(p => loc.pathname.startsWith(p))) return null;
+  const hidden = HIDE_WIDGET_PREFIXES.some(p => loc.pathname.startsWith(p));
+  const [shouldMount, setShouldMount] = useState(false);
+
+  useEffect(() => {
+    setShouldMount(false);
+    if (hidden) return;
+
+    const idleWindow = window as typeof window & {
+      requestIdleCallback?: IdleScheduler;
+      cancelIdleCallback?: IdleCanceller;
+    };
+    let idleId: number | null = null;
+    const delayId = window.setTimeout(() => {
+      if (typeof idleWindow.requestIdleCallback === "function") {
+        idleId = idleWindow.requestIdleCallback(() => setShouldMount(true), {
+          timeout: GLOBAL_AI_WIDGET_IDLE_TIMEOUT_MS,
+        });
+        return;
+      }
+      idleId = window.setTimeout(() => setShouldMount(true), 0);
+    }, GLOBAL_AI_WIDGET_IDLE_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(delayId);
+      if (idleId === null) return;
+      if (typeof idleWindow.cancelIdleCallback === "function") {
+        idleWindow.cancelIdleCallback(idleId);
+      } else {
+        window.clearTimeout(idleId);
+      }
+    };
+  }, [hidden, loc.pathname]);
+
+  if (hidden || !shouldMount) return null;
   return <AIAssistantWidget variant="floating" />;
 }
 

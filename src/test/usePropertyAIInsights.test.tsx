@@ -177,6 +177,62 @@ describe("usePropertyAIInsights", () => {
     });
   });
 
+  it("treats rental open-house price as monthly rent instead of comparing it to capital value", async () => {
+    const rentalOpenHouse = {
+      ...baseListing,
+      listing_type: "open_house",
+      open_house_transaction_type: "rent",
+      price: 950,
+      sqm: 39,
+      price_per_sqm: 24,
+    } as unknown as ListingWithJoins;
+    invokeMock.mockImplementation(async (name: string) => {
+      if (name === "ai-quota-status") {
+        return { data: { allowed: true, reason: null, used: 0, limit: 5 }, error: null };
+      }
+      return {
+        data: {
+          estimatedValue: 178_000,
+          marketComparisonPct: -99,
+          rentalYieldEstimate: 0.047,
+          marketComparison: "below_market",
+          confidenceLabel: "Medium",
+        },
+        error: null,
+      };
+    });
+
+    const { result } = renderHook(() =>
+      usePropertyAIInsights(rentalOpenHouse, baseUser, "L-1", false),
+    );
+
+    await act(async () => {
+      await result.current.loadAiInsights();
+    });
+
+    await waitFor(() => expect(result.current.aiInsightsData).not.toBeNull());
+    expect(result.current.aiInsightsData).toEqual({
+      vsMarket: 0,
+      rentalYield: 6.4,
+      estimatedValue: 178_000,
+      marketComparison: "at_market",
+      confidenceLabel: "Medium",
+    });
+
+    const valuationCall = invokeMock.mock.calls.find(([name]) => name === "property-valuation");
+    expect(valuationCall).toMatchObject([
+      "property-valuation",
+      {
+        body: {
+          price: 950,
+          listingType: "rent",
+          openHouseTransactionType: "rent",
+          askingMonthlyRent: 950,
+        },
+      },
+    ]);
+  });
+
   it("uses the clean-market value as the AI estimate when auction adjustment data is returned", async () => {
     invokeMock.mockImplementation(async (name: string) => {
       if (name === "ai-quota-status") {

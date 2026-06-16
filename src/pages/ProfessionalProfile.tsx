@@ -71,14 +71,18 @@ const categoryLabels: Record<string, { label: string; emoji: string; description
   smart_home_installer: { label: "Smart Home Installer", emoji: "📱", description: "Automation, smart systems" },
 };
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export default function ProfessionalProfile() { // skipcq: JS-R1005 - Route shell coordinates profile data, actions, tabs, and modals; sections are delegated below.
   const { id } = useParams<{ id: string }>();
+  const hasValidProfessionalId = Boolean(id && UUID_RE.test(id));
+  const professionalIdParam = hasValidProfessionalId ? id ?? "" : "";
   const [searchParams, setSearchParams] = useSearchParams();
-  const { data: pro, isLoading } = useProfessional(id || "");
+  const { data: pro, isLoading } = useProfessional(professionalIdParam);
   const { data: allProfessionals = [] } = useProfessionals();
   const professionalIsPro = (pro?.subscription_tier || "").toLowerCase() === "pro";
-  const { data: dbServices = [] } = useProfessionalServices(professionalIsPro ? id || "" : "");
-  const { data: dbAvailability = [] } = useProfessionalAvailability(professionalIsPro ? id || "" : "");
+  const { data: dbServices = [] } = useProfessionalServices(professionalIsPro ? professionalIdParam : "");
+  const { data: dbAvailability = [] } = useProfessionalAvailability(professionalIsPro ? professionalIdParam : "");
   const queryClient = useQueryClient();
   const { data: agentListings = [] } = useListings(
     { owner_id: pro?.user_id, status: "active" },
@@ -141,7 +145,7 @@ export default function ProfessionalProfile() { // skipcq: JS-R1005 - Route shel
     return () => { supabase.removeChannel(channel); };
   }, [pro?.user_id, queryClient]);
 
-  const { data: reviews = [] } = useProfessionalReviews(id || "");
+  const { data: reviews = [] } = useProfessionalReviews(professionalIdParam);
   const reviewStats = computeStats(reviews);
 
   const [activeTab, setActiveTab] = useState<"overview" | "services" | "reviews" | "listings">("overview");
@@ -154,7 +158,7 @@ export default function ProfessionalProfile() { // skipcq: JS-R1005 - Route shel
   const isRealEstateAgent = pro?.category === "real_estate_agent";
 
   const displayName = pro?.display_name || "Professional";
-  const signInReturnPath = `/professionals/${pro?.id || id || ""}`;
+  const signInReturnPath = `/professionals/${pro?.id || professionalIdParam}`;
   const requireSignedIn = useCallback((action: string) => {
     toast.error(`Please sign in to ${action}.`);
     navigate("/login", { state: { from: { pathname: signInReturnPath } } });
@@ -209,7 +213,7 @@ export default function ProfessionalProfile() { // skipcq: JS-R1005 - Route shel
     </div>
   );
 
-  if (!pro) return (
+  if (!hasValidProfessionalId || !pro) return (
     <div className="min-h-screen bg-background">
       <Navbar />
       <div className="pt-24 flex flex-col items-center justify-center gap-4">
@@ -469,7 +473,7 @@ export default function ProfessionalProfile() { // skipcq: JS-R1005 - Route shel
               {/* ── Reviews ── */}
               {activeTab === "reviews" && professionalIsPro && (
                 <ProfessionalReviewsTab
-                  professionalId={id || ""}
+                  professionalId={professionalIdParam}
                   proCategory={pro.category}
                   displayName={displayName}
                   user={user}

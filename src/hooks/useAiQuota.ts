@@ -58,6 +58,41 @@ export async function fetchAiQuota(bucket: string): Promise<AIQuota | null> {
   return aiQuotaFromJson(data);
 }
 
+export async function fetchAiQuotas(
+  buckets: readonly string[],
+): Promise<Record<string, AIQuota | null>> {
+  const uniqueBuckets = Array.from(new Set(buckets.filter(Boolean)));
+  if (uniqueBuckets.length === 0) return {};
+  if (uniqueBuckets.length === 1) {
+    const quota = await fetchAiQuota(uniqueBuckets[0]);
+    return { [uniqueBuckets[0]]: quota };
+  }
+
+  try {
+    const { data, error } = await invokeAuthenticatedFunction("ai-quota-status", {
+      body: { buckets: uniqueBuckets },
+    });
+    if (error) throw error;
+
+    const quotas = data && typeof data === "object"
+      ? (data as { quotas?: unknown }).quotas
+      : null;
+    if (!quotas || typeof quotas !== "object") {
+      return Object.fromEntries(uniqueBuckets.map((bucket) => [bucket, null]));
+    }
+
+    const quotaByBucket = quotas as Record<string, unknown>;
+    return Object.fromEntries(
+      uniqueBuckets.map((bucket) => [bucket, aiQuotaFromJson(quotaByBucket[bucket])]),
+    );
+  } catch (_err: unknown) {
+    const entries = await Promise.all(
+      uniqueBuckets.map(async (bucket) => [bucket, await fetchAiQuota(bucket)] as const),
+    );
+    return Object.fromEntries(entries);
+  }
+}
+
 export function useAiQuota(
   bucket: string,
   user: User | null | undefined,
@@ -100,4 +135,49 @@ export function useAiQuota(
   }, [refreshQuota]);
 
   return { quota, quotaLoading, quotaChecked, refreshQuota };
+}
+
+export function useAiQuotas(
+  buckets: readonly string[],
+  user: User | null | undefined,
+  options: { enabled?: boolean } = {},
+) {
+  const enabled = options.enabled ?? true;
+  const bucketKey = Array.from(new Set(buckets.filter(Boolean))).join("|");
+  const [quotas, setQuotas] = useState<Record<string, AIQuota | null>>({});
+  const [quotaLoading, setQuotaLoading] = useState(false);
+  const [quotaChecked, setQuotaChecked] = useState(false);
+  const userId = user?.id ?? null;
+
+  useEffect(() => {
+    setQuotas({});
+    setQuotaChecked(false);
+  }, [bucketKey, enabled, userId]);
+
+  const refreshQuotas = useCallback(async () => {
+    if (!enabled || !userId || !bucketKey) {
+      setQuotas({});
+      setQuotaChecked(false);
+      return {};
+    }
+
+    setQuotaLoading(true);
+    try {
+      const parsed = await fetchAiQuotas(bucketKey.split("|"));
+      setQuotas(parsed);
+      return parsed;
+    } catch (_err: unknown) {
+      setQuotas({});
+      return {};
+    } finally {
+      setQuotaLoading(false);
+      setQuotaChecked(true);
+    }
+  }, [bucketKey, enabled, userId]);
+
+  useEffect(() => {
+    void refreshQuotas();
+  }, [refreshQuotas]);
+
+  return { quotas, quotaLoading, quotaChecked, refreshQuotas };
 }
