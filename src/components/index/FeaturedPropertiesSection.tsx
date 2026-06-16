@@ -4,6 +4,7 @@ import { PropertyCard } from "@/components/PropertyCard";
 import { PropertyCardSkeleton } from "@/components/PropertyCardSkeleton";
 import { useInView } from "@/hooks/useInView";
 import { homepageListingImages, type HomepageListing } from "@/lib/homepageListings";
+import { getNewBuildCardSummary } from "@/lib/newBuildCardSummary";
 
 interface Props {
   listings: HomepageListing[];
@@ -35,6 +36,7 @@ export function FeaturedPropertiesSection({ listings, isLoading, isError }: Prop
                 const listingType = l.listing_type === "new_build" && !isProjectNewBuild
                   ? "sale"
                   : l.listing_type ?? "sale";
+                const newBuildSummary = getNewBuildCardSummary(l);
                 return (
                   <PropertyCard
                     key={l.id}
@@ -60,6 +62,7 @@ export function FeaturedPropertiesSection({ listings, isLoading, isError }: Prop
                       tags: l.tags || [],
                       isPreSale: isProjectNewBuild,
                       constructionStatus: l.construction_status ?? undefined,
+                      ...newBuildSummary,
                     }}
                   />
                 );

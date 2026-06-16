@@ -42,6 +42,11 @@ const BOOLEAN_FEATURES = new Set([
   "has_cctv", "has_disability_access", "has_structured_cabling", "has_facade",
   "has_night_power", "has_solar_water",
 ]);
+const PROJECT_UNIT_CARD_SELECT = ["id", "availability_status", "internal_sqm"].join(",");
+const LISTING_PROJECT_CARD_SELECT = [
+  "delivery_date",
+  `project_units!project_units_project_id_fkey(${PROJECT_UNIT_CARD_SELECT})`,
+].join(",");
 
 const LISTING_SELECT = [
   "id",
@@ -85,6 +90,7 @@ const LISTING_SELECT = [
   "has_elevator",
   "has_garden",
   "has_smart_home",
+  `project:projects!listings_project_id_fkey(${LISTING_PROJECT_CARD_SELECT})`,
   "listing_images(url,sort_order)",
 ].join(",");
 

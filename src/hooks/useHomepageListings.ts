@@ -20,7 +20,7 @@ import {
 const HOMEPAGE_AUCTION_SOURCE_LIMIT = 60;
 const HOMEPAGE_AUCTION_DISPLAY_LIMIT = 6;
 const HOMEPAGE_PROPERTY_TYPES = ["apartment", "land"] as const;
-const FEATURED_DAILY_STALE_TIME_MS = 24 * 60 * 60 * 1000;
+const FEATURED_STALE_TIME_MS = 5 * 60 * 1000;
 
 /** Counts of active listings grouped by `property_type` for the BrowseByType section. */
 export function useHomepageTypeCounts() {
@@ -45,7 +45,7 @@ export function useHomepageFeaturedListings() {
       if (cached) return publicHomepageRows(cached, 4);
       return [];
     },
-    staleTime: FEATURED_DAILY_STALE_TIME_MS,
+    staleTime: FEATURED_STALE_TIME_MS,
     retry: 1,
   });
 }

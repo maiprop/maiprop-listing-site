@@ -289,6 +289,15 @@ describe("Dashboard behavior", () => {
     expect(screen.getByText("Chania Villa")).toBeInTheDocument();
   });
 
+  it("keeps seller Quick Sale submissions out of agent dashboards", () => {
+    authState.profile = { id: "p-1", role: "agent", participant_type: "agent", first_name: "Greca" };
+
+    renderWithProviders(<Dashboard />);
+
+    expect(screen.queryByText("Quick Sale Requests")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /New Request/i })).not.toBeInTheDocument();
+  });
+
   it("uses active listings, not all owned rows, in the plan usage card", () => {
     authState.profile = { id: "p-1", role: "seller", participant_type: "seller", first_name: "Sofia" };
     listingsState.data = [
