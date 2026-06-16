@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.26](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.25...v1.9.26) (2026-06-16)
+
+
+### Bug Fixes
+
+* resolve dependabot npm alerts ([d53a13b](https://github.com/maiprop/maiprop-listing-site/commit/d53a13b5cb43576589c004f1d0cfed9da5a47e94))
+
 ## [1.9.25](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.24...v1.9.25) (2026-06-16)
 
 
