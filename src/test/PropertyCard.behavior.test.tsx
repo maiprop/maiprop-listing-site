@@ -357,6 +357,21 @@ describe("PropertyCard behavior", () => {
     expect(image).not.toHaveAttribute("srcset");
   });
 
+  it("can prioritize above-the-fold card images without enabling Supabase transform srcsets", async () => {
+    const { PropertyCard } = await import("@/components/PropertyCard");
+    const supabaseImage =
+      "https://qvvicunqcrwpioqnvzxf.supabase.co/storage/v1/object/public/listing-images/user/hero.webp";
+
+    renderWithProviders(<PropertyCard property={baseProperty({ images: [supabaseImage] })} imagePriority />);
+
+    const image = screen.getByAltText("Athens Loft") as HTMLImageElement;
+    expect(image).toHaveAttribute("src", supabaseImage);
+    expect(image).not.toHaveAttribute("srcset");
+    expect(image).toHaveAttribute("loading", "eager");
+    expect(image).toHaveAttribute("fetchpriority", "high");
+    expect(image).toHaveAttribute("decoding", "async");
+  });
+
   it("renders remaining badges, non-urgent timers, price deltas, universal specs, and report errors", async () => {
     authMock.mockReturnValue({ user: { id: "u-error" }, profile: null, loading: false });
     insertMock.mockResolvedValueOnce({ error: new Error("duplicate") });

@@ -84,6 +84,7 @@ interface PropertyCardProps {
   property: Property;
   compact?: boolean;
   testId?: string;
+  imagePriority?: boolean;
 }
 
 const PROPERTY_IMAGE_WIDTHS = [320, 480, 768, 1024];
@@ -163,7 +164,7 @@ const formatNewBuildUnitLabel = (property: Property): string | null => {
   return `${prefix} unit${total === 1 ? "" : "s"}`;
 };
 
-export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(function PropertyCard({ property, compact = false, testId = "property-card" }, _ref) { // skipcq: JS-R1005, JS-W1044 - Card rendering branches compact, auction, and standard listing affordances in one reusable surface.
+export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(function PropertyCard({ property, compact = false, testId = "property-card", imagePriority = false }, _ref) { // skipcq: JS-R1005, JS-W1044 - Card rendering branches compact, auction, and standard listing affordances in one reusable surface.
   const { t } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -318,7 +319,9 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
             srcSet={thumbSrcSet}
             sizes={thumbSrcSet ? COMPACT_PROPERTY_IMAGE_SIZES : undefined}
             alt={property.title}
-            loading="lazy"
+            loading={imagePriority ? "eager" : "lazy"}
+            fetchPriority={imagePriority ? "high" : "auto"}
+            decoding="async"
             data-image-fallback-index={imageChain.length ? "0" : undefined}
             className={`w-full h-full transition-transform duration-300 ${
               thumbIsLogoFallback ? "object-contain p-3 bg-background" : "object-cover group-hover:scale-105"
@@ -372,7 +375,9 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
           srcSet={mainImageSrcSet}
           sizes={mainImageSrcSet ? PROPERTY_CARD_IMAGE_SIZES : undefined}
           alt={property.title}
-          loading="lazy"
+          loading={imagePriority ? "eager" : "lazy"}
+          fetchPriority={imagePriority ? "high" : "auto"}
+          decoding="async"
           data-image-fallback-index={imageChain.length ? "0" : undefined}
           className={`w-full h-full transition-transform duration-500 ${
             mainImageIsLogoFallback ? "object-contain p-8 bg-background" : "object-cover group-hover:scale-105"

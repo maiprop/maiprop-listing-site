@@ -37,7 +37,7 @@ export function HomepageOpenHousesSection({ listings }: Props) {
           ref={ref}
           className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 reveal reveal-delay-1 ${inView ? "in-view" : ""}`}
         >
-          {listings.slice(0, 4).map((l) => {
+          {listings.slice(0, 4).map((l, index) => {
             const imgs = homepageListingImages(l);
             const svFallback =
               l.latitude != null && l.longitude != null
@@ -47,6 +47,7 @@ export function HomepageOpenHousesSection({ listings }: Props) {
             return (
               <PropertyCard
                 key={l.id}
+                imagePriority={index < 4}
                 property={{
                   id: l.id,
                   title: l.title,

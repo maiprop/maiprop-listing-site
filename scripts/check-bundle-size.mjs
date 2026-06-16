@@ -28,7 +28,7 @@ const INDEX_HTML = "dist/index.html";
 // budget here in the same change so size growth is gated from day one.
 export const BUDGETS_KB = {
   // The initial entry chunk (Vite names it index-<hash>.js).
-  "index": 600,
+  "index": 500,
   // Manual chunks from vite.config.ts. vendor-react bundles
   // react + react-dom + react-router-dom + scheduler; the floor is
   // ~182 kB raw on the current pinned versions.
@@ -36,6 +36,9 @@ export const BUDGETS_KB = {
   // @radix-ui packages split into stable core and overlay/menu primitive chunks.
   "vendor-radix-core": 230,
   "vendor-radix-overlays": 90,
+  "vendor-supabase": 225,
+  "vendor-i18n": 80,
+  "lib": 140,
   // cmdk, vaul, sonner, embla-carousel, react-resizable-panels, input-otp,
   // react-day-picker, @hello-pangea — small UI companions.
   "vendor-ui-extra": 180,
@@ -43,7 +46,7 @@ export const BUDGETS_KB = {
   "vendor-icons": 250,
   "vendor-mapbox": 1200,
   // Catch-all: any other chunk — inform but don't fail unless huge.
-  "*": 1500,
+  "*": 300,
 };
 
 export const FORBIDDEN_INITIAL_PRELOAD_PATTERNS = [
@@ -106,7 +109,7 @@ export function budgetKeyFor(filename, budgets = BUDGETS_KB) {
     return "vendor-mapbox";
   }
 
-  if (/^(recharts|vendor-charts|BarChart|LineChart|AreaChart|PieChart|ResponsiveContainer)(-|$)|^d3-/.test(stem) && budgets["vendor-charts"] !== undefined) {
+  if (/^(LazyRecharts|recharts|vendor-charts|BarChart|LineChart|AreaChart|PieChart|ResponsiveContainer)(-|$)|^d3-/.test(stem) && budgets["vendor-charts"] !== undefined) {
     return "vendor-charts";
   }
 

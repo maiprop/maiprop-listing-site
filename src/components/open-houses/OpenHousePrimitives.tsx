@@ -65,10 +65,10 @@ export function RangeInput({
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function OpenHouseCard({ card }: { listing: any; card: any }) {
+export function OpenHouseCard({ card, imagePriority = false }: { listing: any; card: any; imagePriority?: boolean }) {
   return (
     <div className={OPEN_HOUSE_CARD_LAYOUT_CLASS}>
-      <PropertyCard property={card} testId="open-house-card" />
+      <PropertyCard property={card} testId="open-house-card" imagePriority={imagePriority} />
     </div>
   );
 }

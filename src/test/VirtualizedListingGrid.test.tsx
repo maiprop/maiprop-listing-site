@@ -64,6 +64,28 @@ describe("VirtualizedListingGrid", () => {
     expect(screen.getByText("Listing 1")).toBeInTheDocument();
   });
 
+  it("passes the absolute item index to renderItem so callers can prioritize visible cards", () => {
+    renderWithProviders(
+      <VirtualizedListingGrid
+        items={ITEMS.slice(0, 4)}
+        className="grid"
+        columns={2}
+        estimateItemHeight={100}
+        gap={10}
+        overscanRows={1}
+        data-testid="grid"
+        renderItem={(item, index) => (
+          <article key={item.id} data-testid={`item-${index}`}>
+            {index}:{item.title}
+          </article>
+        )}
+      />,
+    );
+
+    expect(screen.getByTestId("item-0")).toHaveTextContent("0:Listing 1");
+    expect(screen.getByTestId("item-3")).toHaveTextContent("3:Listing 4");
+  });
+
   it("uses the measured width for auto columns before settling layout", () => {
     const restoreClientWidth = mockElementClientWidth(1300);
 

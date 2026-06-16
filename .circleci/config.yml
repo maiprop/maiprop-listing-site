@@ -55,6 +55,9 @@ jobs:
           name: Check bundle size
           command: npm run check:bundle-size
       - run:
+          name: Check load-test contract
+          command: npm run check:load-test-contract
+      - run:
           name: Lint migrations
           command: |
             npm run lint:migrations

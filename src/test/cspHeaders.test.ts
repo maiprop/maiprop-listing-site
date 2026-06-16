@@ -3,6 +3,8 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const headers = readFileSync(resolve(process.cwd(), "public/_headers"), "utf8");
+const indexHtml = readFileSync(resolve(process.cwd(), "index.html"), "utf8");
+const indexCss = readFileSync(resolve(process.cwd(), "src/index.css"), "utf8");
 
 describe("Cloudflare Pages security headers", () => {
   it("sets core browser isolation headers without relying on paid Cloudflare controls", () => {
@@ -20,5 +22,13 @@ describe("Cloudflare Pages security headers", () => {
     expect(cspLine).toContain("frame-src");
     expect(cspLine).toContain("https://maps.google.com");
     expect(cspLine).toContain("https://www.google.com");
+  });
+
+  it("keeps render-blocking Google font requests out of the public shell", () => {
+    expect(indexHtml).not.toContain("fonts.googleapis.com");
+    expect(indexHtml).not.toContain("fonts.gstatic.com");
+    expect(indexCss).not.toContain("fonts.googleapis.com");
+    expect(headers).not.toContain("https://fonts.googleapis.com");
+    expect(headers).not.toContain("https://fonts.gstatic.com");
   });
 });

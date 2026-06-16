@@ -9,10 +9,10 @@ import type { ValuationEstimateSource } from "@/lib/valuationResult";
 import { invokeAuthenticatedFunction } from "@/lib/invokeAuthenticatedFunction";
 
 export interface AIInsightsData {
-  vsMarket: number;
+  vsMarket: number | null;
   rentalYield: number;
   estimatedValue: number;
-  marketComparison: string;
+  marketComparison: string | null;
   confidenceLabel: string;
 }
 
@@ -60,6 +60,16 @@ const getRentalYield = (
     return roundToOneDecimal((monthlyRent * 12 / capitalEstimate) * 100);
   }
   return toPositiveNumber(remoteYield) ?? 0;
+};
+
+const getRentalMarketComparison = (
+  monthlyRent: number | null,
+  marketRentEstimate: number | null,
+): { marketComparison: string | null; marketComparisonPct: number | null } => {
+  if (!monthlyRent || !marketRentEstimate) {
+    return { marketComparison: null, marketComparisonPct: null };
+  }
+  return deriveListingMarketComparison(monthlyRent, marketRentEstimate);
 };
 
 export function usePropertyAIInsights(
@@ -184,9 +194,7 @@ export function usePropertyAIInsights(
         const estimatedValue = getPrimaryValuationEstimate(data, Number(snapshot.price));
         const marketRentEstimate = rentalListing ? getRentalMarketRentEstimate(data) : null;
         const comparison = rentalListing
-          ? marketRentEstimate
-            ? deriveListingMarketComparison(monthlyRent, marketRentEstimate)
-            : { marketComparison: "at_market" as const, marketComparisonPct: 0 }
+          ? getRentalMarketComparison(monthlyRent, marketRentEstimate)
           : deriveListingMarketComparison(snapshot.price, estimatedValue);
         setAiInsightsData({
           vsMarket: comparison.marketComparisonPct,

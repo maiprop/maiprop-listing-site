@@ -217,7 +217,17 @@ describe("PropertyValuation — result UI", () => {
     expect(screen.getByText(/Older build/)).toBeInTheDocument();
     // Red flags.
     expect(screen.getByText(/Older electrical panel/)).toBeInTheDocument();
-    // Mode label.
+    expect(screen.queryByText(/Legal & Tax Overlay/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Public-enriched/)).not.toBeInTheDocument();
+  });
+
+  it("keeps the legal and tax overlay for auction valuations only", async () => {
+    invokeMock.mockResolvedValue({ data: validResult, error: null });
+    render(<PropertyValuation {...baseProps} listingType="auction" />);
+    fireEvent.click(screen.getByRole("button", { name: /Run AI Valuation/i }));
+    await waitFor(() => expect(screen.getByText(/240\.000/)).toBeInTheDocument());
+
+    expect(screen.getByText(/Legal & Tax Overlay/i)).toBeInTheDocument();
     expect(screen.getByText(/Public-enriched/)).toBeInTheDocument();
   });
 

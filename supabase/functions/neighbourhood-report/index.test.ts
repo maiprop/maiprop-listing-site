@@ -133,6 +133,7 @@ Deno.test("provider outage fallback keeps mAI Prop OS municipality market data",
       generatedBy?: string;
       osMunicipalityStatus?: string;
       osMunicipalityName?: string;
+      osMunicipalityDetail?: string;
       pricePerSqmTrend?: { current?: number };
       areaHighlights?: string[];
     };
@@ -142,7 +143,10 @@ Deno.test("provider outage fallback keeps mAI Prop OS municipality market data",
     assertEquals(body.generatedBy, "fallback_maiprop_os");
     assertEquals(body.osMunicipalityStatus, "ok");
     assertEquals(body.osMunicipalityName, "Agios Dimitrios");
-    assertEquals(body.pricePerSqmTrend?.current, 3105);
+    assertEquals(body.pricePerSqmTrend?.current, 1819);
+    assertEquals(body.osMunicipalityDetail?.includes("private sales: 1268"), true);
+    assertEquals(body.osMunicipalityDetail?.includes("public listings: 3105"), true);
+    assertEquals(body.osMunicipalityDetail?.includes("source divergence: 101%"), true);
     assertEquals(body.areaHighlights?.some((highlight) => highlight.includes("mAI Prop OS")), true);
   } finally {
     globalThis.fetch = originalFetch;
@@ -251,15 +255,23 @@ Deno.test("uses mAI Prop OS municipality market data in the neighbourhood prompt
       generatedBy?: string;
       osMunicipalityStatus?: string;
       osMunicipalityName?: string;
+      pricePerSqmTrend?: { current?: number };
     };
 
     assertEquals(res.status, 200);
     assertEquals(marketReportCalled, true);
     assertEquals(providerPrompt.includes("MAIPROP OS MUNICIPALITY MARKET DATA"), true);
     assertEquals(providerPrompt.includes("Public Listings Municipality - average price 3,104.8"), true);
+    assertEquals(providerPrompt.includes('"privateSalesAverage": 1268'), true);
+    assertEquals(providerPrompt.includes('"publicListingsAverage": 3105'), true);
+    assertEquals(providerPrompt.includes('"blendedSaleAverage": 1819'), true);
+    assertEquals(providerPrompt.includes('"sourceDivergencePct": 101'), true);
+    assertEquals(providerPrompt.includes('"largeDivergence": true'), true);
+    assertEquals(providerPrompt.includes("Large divergence detected"), true);
     assertEquals(body.generatedBy, "openai_maiprop_os");
     assertEquals(body.osMunicipalityStatus, "ok");
     assertEquals(body.osMunicipalityName, agiosDimitriosGreek);
+    assertEquals(body.pricePerSqmTrend?.current, 1819);
   } finally {
     globalThis.fetch = originalFetch;
     if (prevOsUrl) Deno.env.set("MAIPROP_OS_API_URL", prevOsUrl);

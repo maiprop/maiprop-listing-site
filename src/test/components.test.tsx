@@ -445,6 +445,33 @@ describe("PropertyAIInsightsSection", () => {
     expect(screen.getByText(/5\.440\.000/)).toBeInTheDocument();
   });
 
+  it("does not show a fake 0% vs-market value when rental benchmark is unavailable", async () => {
+    const { PropertyAIInsightsSection } = await import("@/components/property/PropertyAIInsightsSection");
+
+    renderWithProviders(
+      <PropertyAIInsightsSection
+        user={{ id: "u-1" } as import("@supabase/supabase-js").User}
+        isPro
+        loading={false}
+        data={{
+          vsMarket: null,
+          rentalYield: 6.4,
+          estimatedValue: 178_000,
+          marketComparison: null,
+          confidenceLabel: "Medium",
+        }}
+        quota={{ allowed: true, reason: null, used: 2, limit: 100, remaining: 98 }}
+        quotaLoading={false}
+        hasRequested
+        onLoad={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText(/^0%$/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Unavailable/i)).toBeInTheDocument();
+    expect(screen.getByText(/Rent benchmark not returned/i)).toBeInTheDocument();
+  });
+
   it("shows a manual load button and free request counter before spending an AI call", async () => {
     const { PropertyAIInsightsSection } = await import("@/components/property/PropertyAIInsightsSection");
     const onLoad = vi.fn();

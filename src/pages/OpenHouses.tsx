@@ -762,8 +762,8 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 items-stretch">
-              {displayData.map(({ listing, card }) => (
-                <OpenHouseCard key={card.id} listing={listing} card={card} />
+              {displayData.map(({ listing, card }, index) => (
+                <OpenHouseCard key={card.id} listing={listing} card={card} imagePriority={index < 6} />
               ))}
             </div>
           )}

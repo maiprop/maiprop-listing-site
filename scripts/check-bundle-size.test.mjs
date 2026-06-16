@@ -23,6 +23,7 @@ describe("budgetKeyFor — Vite 7 (base64url hash)", () => {
   });
 
   it("maps lazy chart auto-chunks to 'vendor-charts'", () => {
+    expect(budgetKeyFor("LazyRecharts-DiLdui5R.js")).toBe("vendor-charts");
     expect(budgetKeyFor("recharts-DiLdui5R.js")).toBe("vendor-charts");
     expect(budgetKeyFor("d3-array-AbCdEf12.js")).toBe("vendor-charts");
     expect(budgetKeyFor("BarChart-BJpoPrMY.js")).toBe("vendor-charts");

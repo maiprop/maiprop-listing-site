@@ -276,6 +276,7 @@ export default function PropertyValuation(props: PropertyValuationProps) {
   const primaryMarketValue = result ? getPrimaryValuationEstimate(result, props.price) : 0;
   const hasAuctionAdjustment = Boolean(result?.auctionAdjustedValue && result.auctionAdjustedValue > 0);
   const hasDistinctAuctionBidValue = Boolean(hasAuctionAdjustment && result && result.auctionAdjustedValue !== result.estimatedValue);
+  const isAuctionValuation = props.listingType === "auction" || Boolean(props.auctionCourt);
   const diff = result ? primaryMarketValue - props.price : 0;
   const diffPct = result ? Math.round((diff / props.price) * 100) : 0;
   const pricing = result ? PRICING_CONFIG[result.pricingPosition as keyof typeof PRICING_CONFIG] : null;
@@ -299,8 +300,12 @@ export default function PropertyValuation(props: PropertyValuationProps) {
             <p className="text-xs text-muted-foreground leading-relaxed">
               {ui(
                 isGreek,
-                "Type-specific AI valuation - price range, confidence, liquidity, and Greek legal/tax overlay (legal cleanliness, planning certainty, transfer readiness).",
-                "Εκτίμηση αξίας με AI ανά τύπο ακινήτου: εύρος τιμής, εμπιστοσύνη, ρευστότητα και ελληνική νομική/φορολογική επισκόπηση."
+                isAuctionValuation
+                  ? "Auction-specific AI valuation - price range, confidence, liquidity, and Greek legal/tax overlay (legal cleanliness, planning certainty, transfer readiness)."
+                  : "Type-specific AI valuation - price range, confidence, liquidity, and market evidence.",
+                isAuctionValuation
+                  ? "Εκτίμηση πλειστηριασμού με AI: εύρος τιμής, εμπιστοσύνη, ρευστότητα και ελληνική νομική/φορολογική επισκόπηση."
+                  : "Εκτίμηση αξίας με AI ανά τύπο ακινήτου: εύρος τιμής, εμπιστοσύνη, ρευστότητα και δεδομένα αγοράς."
               )}
             </p>
             <Button
@@ -380,6 +385,7 @@ export default function PropertyValuation(props: PropertyValuationProps) {
             </div>
 
             {/* ── LEGAL/TAX OVERLAY ── */}
+            {isAuctionValuation && (
             <div className="bg-secondary/40 border border-border rounded-xl p-3.5 space-y-3">
               <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                 <Scale className="w-3 h-3" /> {ui(isGreek, "Legal & Tax Overlay", "Νομική & φορολογική επισκόπηση")}
@@ -427,6 +433,7 @@ export default function PropertyValuation(props: PropertyValuationProps) {
                 </div>
               )}
             </div>
+            )}
 
             {/* Rental yield + listing quality */}
             <div className="grid grid-cols-2 gap-2">
@@ -543,7 +550,15 @@ export default function PropertyValuation(props: PropertyValuationProps) {
             )}
 
             <p className="text-[10px] text-muted-foreground text-center leading-relaxed">
-              {ui(isGreek, "AI estimate only - Not a formal appraisal - 2026 Greek market + legal overlay model", "Μόνο εκτίμηση AI - Δεν αποτελεί επίσημη εκτίμηση - Μοντέλο ελληνικής αγοράς και νομικής επισκόπησης 2026")}
+              {ui(
+                isGreek,
+                isAuctionValuation
+                  ? "AI estimate only - Not a formal appraisal - 2026 Greek market + legal overlay model"
+                  : "AI estimate only - Not a formal appraisal - 2026 Greek market model",
+                isAuctionValuation
+                  ? "Μόνο εκτίμηση AI - Δεν αποτελεί επίσημη εκτίμηση - Μοντέλο ελληνικής αγοράς και νομικής επισκόπησης 2026"
+                  : "Μόνο εκτίμηση AI - Δεν αποτελεί επίσημη εκτίμηση - Μοντέλο ελληνικής αγοράς 2026"
+              )}
             </p>
           </div>
         )}
