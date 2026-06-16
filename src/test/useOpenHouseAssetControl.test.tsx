@@ -325,6 +325,69 @@ describe("useCreateOpenHouseRegistration", () => {
     expect(toastMock.error).toHaveBeenCalledWith("That timeslot is fully booked. Please choose another slot.");
   });
 
+  it("maps invalid timeslot errors to visitor-friendly copy", async () => {
+    invokeMock.mockResolvedValue({
+      data: {
+        data: null,
+        error: { message: "open_house_timeslot_invalid" },
+      },
+      error: null,
+    });
+    const { result } = renderHookWithQuery(() => useCreateOpenHouseRegistration());
+    await act(async () => {
+      await result.current
+        .mutateAsync({
+          listingId: "l-1",
+          timeslotIndex: 0,
+          contactName: "Buyer One",
+          contactEmail: "buyer@example.com",
+          contactPhone: "+306900000000",
+        })
+        .catch(() => {});
+    });
+    expect(toastMock.error).toHaveBeenCalledWith("That timeslot is no longer available. Please choose another slot.");
+  });
+
+  it("maps stale auth sessions before invoking registration", async () => {
+    getUserMock.mockResolvedValue({ data: { user: null }, error: new Error("invalid JWT") });
+    const { result } = renderHookWithQuery(() => useCreateOpenHouseRegistration());
+    await act(async () => {
+      await result.current
+        .mutateAsync({
+          listingId: "l-1",
+          contactName: "Buyer One",
+          contactEmail: "buyer@example.com",
+          contactPhone: "+306900000000",
+        })
+        .catch(() => {});
+    });
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(toastMock.error).toHaveBeenCalledWith(
+      "Your session could not be verified. Please sign out and sign back in, then try again.",
+    );
+  });
+
+  it("maps Edge Function transport failures to actionable copy", async () => {
+    invokeMock.mockResolvedValue({
+      data: null,
+      error: { message: "Edge Function returned a non-2xx status code" },
+    });
+    const { result } = renderHookWithQuery(() => useCreateOpenHouseRegistration());
+    await act(async () => {
+      await result.current
+        .mutateAsync({
+          listingId: "l-1",
+          contactName: "Buyer One",
+          contactEmail: "buyer@example.com",
+          contactPhone: "+306900000000",
+        })
+        .catch(() => {});
+    });
+    expect(toastMock.error).toHaveBeenCalledWith(
+      "Registration could not be verified. Please refresh your session and try again.",
+    );
+  });
+
   it("does not expose raw JavaScript runtime errors in the registration toast", async () => {
     invokeMock.mockRejectedValue(new TypeError("Cannot read properties of undefined (reading 'region')"));
     const { result } = renderHookWithQuery(() => useCreateOpenHouseRegistration());
