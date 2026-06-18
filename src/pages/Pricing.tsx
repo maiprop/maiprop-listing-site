@@ -584,7 +584,7 @@ export default function Pricing() {
                       "rounded-full border px-1.5 py-0.5 text-[10px] font-bold leading-none",
                       billingCycle === "annual"
                         ? "border-primary-foreground/30 bg-primary-foreground/15 text-primary-foreground"
-                        : "border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+                        : "border-emerald-500/30 bg-emerald-500/15 text-emerald-800 dark:text-emerald-200",
                     )}
                   >
                     {tr("2 months FREE")}
@@ -594,7 +594,7 @@ export default function Pricing() {
             </div>
 
             {/* Audience tab strip */}
-            <div className="flex justify-center overflow-x-auto pb-1 -mx-4 px-4 scrollbar-hide">
+            <div className="w-full max-w-full overflow-x-auto pb-2 scrollbar-hide sm:flex sm:justify-center">
               <div className="inline-flex gap-1 bg-secondary/80 border border-border rounded-2xl p-1 min-w-max">
                 {AUDIENCE_TABS.map(({ id, label, mobileLabel, icon: Icon }) => (
                   <button

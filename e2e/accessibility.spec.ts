@@ -5,6 +5,32 @@
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
+const LANDMARK_ROUTES = [
+  "/firesale",
+  "/open-houses",
+  "/professionals",
+  "/contact",
+  "/privacy-policy",
+  "/terms-of-service",
+  "/cookie-policy",
+  "/missing-route-for-a11y-check",
+];
+
+const AXE_SCAN_ROUTES = [
+  "/",
+  "/listings",
+  "/auctions",
+  "/open-houses",
+  "/professionals",
+  "/pricing",
+  "/login",
+  "/contact",
+  "/privacy-policy",
+  "/terms-of-service",
+  "/cookie-policy",
+  "/api-docs",
+];
+
 test.describe("Accessibility", () => {
   test("skip-to-content link is focusable and targets #main-content", async ({ page }) => {
     await page.goto("/");
@@ -30,18 +56,7 @@ test.describe("Accessibility", () => {
   });
 
   test("public routes with the global skip link expose #main-content", async ({ page }) => {
-    const routes = [
-      "/firesale",
-      "/open-houses",
-      "/professionals",
-      "/contact",
-      "/privacy-policy",
-      "/terms-of-service",
-      "/cookie-policy",
-      "/missing-route-for-a11y-check",
-    ];
-
-    for (const route of routes) {
+    for (const route of LANDMARK_ROUTES) {
       await page.goto(route);
       await page.waitForLoadState("load");
       await expect(page.locator('a[href="#main-content"]'), `${route} skip link`).toBeAttached();
@@ -160,15 +175,9 @@ test.describe("Accessibility — automated axe-core scans", () => {
     expect(blocking, `axe blocking violations on ${url}`).toEqual([]);
   }
 
-  test("home page has no serious a11y violations", async ({ page }) => {
-    await scan(page, "/");
-  });
-
-  test("listings page has no serious a11y violations", async ({ page }) => {
-    await scan(page, "/listings");
-  });
-
-  test("login page has no serious a11y violations", async ({ page }) => {
-    await scan(page, "/login");
-  });
+  for (const route of AXE_SCAN_ROUTES) {
+    test(`${route} has no serious a11y violations`, async ({ page }) => {
+      await scan(page, route);
+    });
+  }
 });

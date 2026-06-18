@@ -78,6 +78,9 @@ jobs:
           name: Check disaster recovery evidence
           command: npm run check:dr-readiness
       - run:
+          name: Check standards readiness evidence
+          command: npm run check:standards-readiness
+      - run:
           name: Check type-debt ratchet
           command: npm run check:type-debt
       - run:
