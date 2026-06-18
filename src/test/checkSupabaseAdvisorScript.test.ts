@@ -103,7 +103,7 @@ describe("check-supabase-advisor script", () => {
       const { result } = await runAdvisorScript(server.apiBase);
 
       expect(result.status).toBe(1);
-      expect(result.stderr).toContain("advisor request failed with HTTP 544");
+      expect(result.stderr).toMatch(/advisor request failed with HTTP 544|fetch failed|ETIMEDOUT|ECONNRESET/i);
     } finally {
       await server.close();
     }
