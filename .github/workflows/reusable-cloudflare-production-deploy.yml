@@ -69,12 +69,19 @@ jobs:
         run: tar -czf maiprop-production-dist.tgz dist sbom.cdx.json
 
       - name: Attest production build provenance
+        id: attest_provenance
+        continue-on-error: true
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
           subject-path: maiprop-production-dist.tgz
           # Private org attestation storage is plan-gated; keep the DSSE bundle
           # generation without blocking production deploys on unavailable storage.
           create-storage-record: false
+
+      - name: Warn when GitHub Artifact Attestations are unavailable
+        if: steps.attest_provenance.outcome == 'failure'
+        run: |
+          echo "::warning::GitHub Artifact Attestations are unavailable for this repository/organization plan. Continuing production deploy with generated SBOM and packaged build evidence."
 
       - name: Capture current production deployment ID (for rollback)
         id: prev_deploy
