@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.9.27](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.26...v1.9.27) (2026-06-18)
+
+
+### Bug Fixes
+
+* avoid apt psql install in migration replay ([f40888e](https://github.com/maiprop/maiprop-listing-site/commit/f40888e6a7f0b9888ca0baab2010cabcbeaeffb2))
+* avoid plan-gated attestation storage ([#362](https://github.com/maiprop/maiprop-listing-site/issues/362)) ([40c5e36](https://github.com/maiprop/maiprop-listing-site/commit/40c5e36057766358a1f8fe4ffc3b5b2a1140d7c6))
+* grant deploy provenance permissions ([#359](https://github.com/maiprop/maiprop-listing-site/issues/359)) ([0f05c84](https://github.com/maiprop/maiprop-listing-site/commit/0f05c84a4cdb18b9d9008438a759143d8cdf6c46))
+* make build attestation best effort ([7bd6f24](https://github.com/maiprop/maiprop-listing-site/commit/7bd6f24677d52788786b749d1d7758564accf572))
+
 ## [1.9.26](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.25...v1.9.26) (2026-06-16)
 
 
