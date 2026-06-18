@@ -443,8 +443,39 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Install psql client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Prepare psql client
+        run: |
+          set -euo pipefail
+
+          if command -v psql >/dev/null 2>&1; then
+            psql --version
+            exit 0
+          fi
+
+          sudo tee /usr/local/bin/psql >/dev/null <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          args=()
+          while [ "$#" -gt 0 ]; do
+            if [ "$1" = "-h" ] && [ "${2:-}" = "localhost" ]; then
+              args+=("-h" "host.docker.internal")
+              shift 2
+            else
+              args+=("$1")
+              shift
+            fi
+          done
+
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e "PGPASSWORD=${PGPASSWORD:-}" \
+            -v "$PWD:$PWD" \
+            -w "$PWD" \
+            postgres:15 psql "${args[@]}"
+          SH
+          sudo chmod +x /usr/local/bin/psql
+          psql --version
 
       - name: Prepare extensions
         env:
