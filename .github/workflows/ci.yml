@@ -443,14 +443,15 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Install psql client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Verify containerized psql client
+        run: |
+          docker run --rm --network host -e PGPASSWORD=postgres postgres:15 \
+            psql -h localhost -U postgres -d maiprop_test -v ON_ERROR_STOP=1 -c 'select 1'
 
       - name: Prepare extensions
-        env:
-          PGPASSWORD: postgres
         run: |
-          psql -h localhost -U postgres -d maiprop_test -v ON_ERROR_STOP=1 <<'SQL'
+          docker run --rm --network host -e PGPASSWORD=postgres -i postgres:15 \
+            psql -h localhost -U postgres -d maiprop_test -v ON_ERROR_STOP=1 <<'SQL'
           CREATE EXTENSION IF NOT EXISTS pgcrypto;
           CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
           -- Supabase built-in roles used by RLS policies
@@ -587,15 +588,15 @@ jobs:
             {} +
 
       - name: Apply migrations in order
-        env:
-          PGPASSWORD: postgres
         run: |
           set -euo pipefail
           shopt -s nullglob
           failed=0
           for f in $(ls supabase/migrations/*.sql | sort); do
             echo "→ applying $f"
-            if ! psql -h localhost -U postgres -d maiprop_test -v ON_ERROR_STOP=1 -f "$f"; then
+            if ! docker run --rm --network host -e PGPASSWORD=postgres \
+              -v "$PWD:/workspace" -w /workspace postgres:15 \
+              psql -h localhost -U postgres -d maiprop_test -v ON_ERROR_STOP=1 -f "$f"; then
               echo "::error file=$f::Migration failed"
               failed=$((failed + 1))
             fi
