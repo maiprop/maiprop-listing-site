@@ -9,12 +9,12 @@ Target: SLSA 1.2 practical readiness for a GitHub Actions and Cloudflare Pages d
 | Source integrity | `.github/CODEOWNERS`, `docs/BRANCH_PROTECTION.md`, pinned GitHub Actions | `npm run check:github-governance` |
 | Build reproducibility guard | Node pinned through `.node-version`, `packageManager`, and runtime checks | `npm run check:runtime` |
 | Dependency transparency | CycloneDX SBOM generated in CI | `npm sbom --sbom-format cyclonedx` |
-| Artifact Attestations | Production deploy workflow packs `dist` and `sbom.cdx.json` into `maiprop-production-dist.tgz` and attests it | `npm run check:slsa-readiness` |
+| Artifact Attestations | Production deploy workflow packs `dist` and `sbom.cdx.json` into `maiprop-production-dist.tgz` and attempts a GitHub Artifact Attestation when the repository plan supports it | `npm run check:slsa-readiness` |
 | Release safety | Release inventory checks workflow, env, and function drift | `npm run check:release-safety` |
 
 ## Verification
 
-Production deploys on `main` should create a GitHub Artifact Attestation for the packaged production build. A release reviewer can verify the attestation from GitHub's release/deployment evidence and compare it to the commit SHA deployed by Cloudflare Pages.
+Production deploys on `main` generate a packaged production build and SBOM before deployment. GitHub Artifact Attestation upload is best-effort because private repositories require organization/repository support for attestation storage. If GitHub rejects attestation storage, the deploy emits a workflow warning and continues with the generated SBOM/package evidence.
 
 ## External blocker
 
