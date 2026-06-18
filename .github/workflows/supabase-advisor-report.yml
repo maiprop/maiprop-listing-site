@@ -84,6 +84,9 @@ jobs:
             `| Mapped to pg_stat_user_indexes | ${report.unused_index_review?.totals?.mapped_to_stats ?? 0} |`,
             `| With scans | ${report.unused_index_review?.totals?.with_scans ?? 0} |`,
             `| Zero-scan candidates needing extra review | ${report.unused_index_review?.totals?.zero_scan_candidates ?? 0} |`,
+            `| Managed-schema indexes, do not drop from advisor alone | ${report.unused_index_review?.totals?.managed_schema_indexes ?? 0} |`,
+            `| Protected constraint/unique indexes, do not drop | ${report.unused_index_review?.totals?.protected_indexes ?? 0} |`,
+            `| Public write-path candidates needing query-plan review | ${report.unused_index_review?.totals?.write_path_candidates ?? 0} |`,
             `| Needs stats snapshot | ${report.unused_index_review?.totals?.needs_stats_snapshot ?? 0} |`,
             `| Needs manual mapping | ${report.unused_index_review?.totals?.needs_manual_mapping ?? 0} |`,
             "",
@@ -104,4 +107,4 @@ jobs:
             supabase-advisor-report.json
             supabase-index-stats.json
           if-no-files-found: ignore
-          retention-days: 30
+          retention-days: 90

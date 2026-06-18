@@ -148,6 +148,9 @@ describe("unused index telemetry review", () => {
       mapped_to_stats: 0,
       with_scans: 0,
       zero_scan_candidates: 0,
+      managed_schema_indexes: 0,
+      protected_indexes: 0,
+      write_path_candidates: 0,
       needs_stats_snapshot: 1,
       needs_manual_mapping: 0,
     });
@@ -234,6 +237,110 @@ describe("unused index telemetry review", () => {
       table_name: "listings",
       index_name: "idx_listings_property_type",
       review_status: "candidate_needs_pg_stat_statements_and_release_review",
+    });
+  });
+
+  it("never promotes managed-schema or constraint-backed indexes to drop candidates", () => {
+    const review = buildUnusedIndexReview(
+      {
+        results: [
+          {
+            category: "performance",
+            lints: [
+              {
+                name: "unused_index",
+                title: "Unused Index",
+                level: "INFO",
+                metadata: { schema: "auth", table_name: "users", index_name: "users_pkey" },
+              },
+              {
+                name: "unused_index",
+                title: "Unused Index",
+                level: "INFO",
+                metadata: { schema: "public", table_name: "listings", index_name: "listings_slug_key" },
+              },
+            ],
+          },
+        ],
+      },
+      [
+        {
+          schemaname: "auth",
+          relname: "users",
+          indexrelname: "users_pkey",
+          idx_scan: 0,
+          is_primary: true,
+          is_unique: true,
+          has_constraint: true,
+        },
+        {
+          schemaname: "public",
+          relname: "listings",
+          indexrelname: "listings_slug_key",
+          idx_scan: 0,
+          is_unique: true,
+          has_constraint: true,
+        },
+      ],
+    );
+
+    expect(review.totals).toMatchObject({
+      managed_schema_indexes: 1,
+      protected_indexes: 1,
+      zero_scan_candidates: 0,
+    });
+    expect(review.by_review_status).toMatchObject({
+      managed_schema_do_not_drop_from_advisor_only: 1,
+      protected_index_do_not_drop: 1,
+    });
+    expect(review.items.every((item) => item.drop_allowed === false)).toBe(true);
+  });
+
+  it("flags public zero-scan indexes on write paths for query-plan review and observation", () => {
+    const review = buildUnusedIndexReview(
+      {
+        results: [
+          {
+            category: "performance",
+            lints: [
+              {
+                name: "unused_index",
+                title: "Unused Index",
+                level: "INFO",
+                metadata: { schema: "public", table_name: "listings", index_name: "idx_listings_price" },
+              },
+            ],
+          },
+        ],
+      },
+      [
+        {
+          schemaname: "public",
+          relname: "listings",
+          indexrelname: "idx_listings_price",
+          idx_scan: 0,
+          idx_tup_read: 0,
+          idx_tup_fetch: 0,
+          index_bytes: 270336,
+          table_writes: 1250,
+          is_primary: false,
+          is_unique: false,
+          has_constraint: false,
+        },
+      ],
+    );
+
+    expect(review.totals).toMatchObject({
+      zero_scan_candidates: 1,
+      write_path_candidates: 1,
+    });
+    expect(review.by_schema).toMatchObject({ public: 1 });
+    expect(review.items[0]).toMatchObject({
+      review_status: "candidate_needs_pg_stat_statements_and_release_review",
+      write_path_candidate: true,
+      requires_query_plan_review: true,
+      minimum_observation_days: 30,
+      drop_allowed: false,
     });
   });
 });
