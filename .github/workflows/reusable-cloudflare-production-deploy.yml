@@ -5,6 +5,8 @@ on:
 
 permissions:
   contents: read
+  id-token: write
+  attestations: write
 
 jobs:
   deploy:
@@ -59,6 +61,17 @@ jobs:
           VITE_GOOGLE_MAPS_API_KEY:      ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
           VITE_PLAUSIBLE_DOMAIN:         ${{ secrets.VITE_PLAUSIBLE_DOMAIN }}
           VITE_APP_URL:                  ${{ secrets.VITE_APP_URL }}
+
+      - name: Generate production SBOM for provenance
+        run: npm sbom --sbom-format cyclonedx > sbom.cdx.json
+
+      - name: Pack production build for provenance
+        run: tar -czf maiprop-production-dist.tgz dist sbom.cdx.json
+
+      - name: Attest production build provenance
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: maiprop-production-dist.tgz
 
       - name: Capture current production deployment ID (for rollback)
         id: prev_deploy

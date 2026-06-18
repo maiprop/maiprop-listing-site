@@ -61,14 +61,15 @@ through `/login` before Lighthouse measures protected routes.
 
 | Metric | Level | Threshold |
 |---|---|---:|
-| `categories:performance` | error | min 0.70 |
+| `categories:performance` | error | min 0.75 |
 | `categories:accessibility` | error | min 0.90 |
 | `categories:best-practices` | error | min 0.85 |
 | `categories:seo` | error | min 0.90 |
-| `first-contentful-paint` | error | <= 2500 ms |
-| `largest-contentful-paint` | error | <= 4000 ms |
+| `first-contentful-paint` | error | <= 2200 ms |
+| `largest-contentful-paint` | error | <= 3500 ms |
 | `total-blocking-time` | error | <= 400 ms |
-| `cumulative-layout-shift` | error | <= 0.15 |
+| `max-potential-fid` | error | <= 200 ms |
+| `cumulative-layout-shift` | error | <= 0.10 |
 
 Tighten these thresholds as the product improves. Do not relax them without a
 tracked performance decision.
