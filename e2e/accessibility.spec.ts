@@ -121,20 +121,22 @@ test.describe("Accessibility — automated axe-core scans", () => {
     // (`animate-slide-up`, 0.4s fade from opacity 0 -> 1) intersects with
     // `networkidle`, producing false-positive contrast violations from
     // partially-transparent text. Setting this key also avoids flakiness.
-    await page.addInitScript(() => {
-      try {
-        localStorage.setItem(
-          "maiprop_cookie_consent",
-          JSON.stringify({
-            accepted: true,
-            functional: true,
-            analytics: false,
-            mapping: true,
-            timestamp: Date.now(),
-          }),
-        );
-      } catch { /* storage may be blocked */ }
-    });
+    if (url !== "/api-docs") {
+      await page.addInitScript(() => {
+        try {
+          localStorage.setItem(
+            "maiprop_cookie_consent",
+            JSON.stringify({
+              accepted: true,
+              functional: true,
+              analytics: false,
+              mapping: true,
+              timestamp: Date.now(),
+            }),
+          );
+        } catch { /* storage may be blocked */ }
+      });
+    }
     await page.goto(url);
     // networkidle is unreliable on Mapbox-using pages; wait for `load` and
     // a React-rendered landmark instead. The Navbar (header) is rendered
@@ -143,10 +145,17 @@ test.describe("Accessibility — automated axe-core scans", () => {
     // reliable post-mount signal. Suitable for axe-core, which reads the
     // rendered DOM + computed styles (CSS is loaded by `load`).
     await page.waitForLoadState("load");
-    await page
-      .locator("#main-content, main, header, nav")
-      .first()
-      .waitFor({ state: "attached", timeout: 15_000 });
+    if (url === "/api-docs") {
+      await page
+        .getByRole("heading", { name: /mAI prop Supabase Edge Functions|maiProp Platform API/i })
+        .first()
+        .waitFor({ state: "visible", timeout: 30_000 });
+    } else {
+      await page
+        .locator("#main-content, main, header, nav")
+        .first()
+        .waitFor({ state: "attached", timeout: 20_000 });
+    }
     // Snap all scroll-reveal elements to their final state so axe doesn't
     // catch them mid-transition (opacity ~0.5 → computed blended colour fails
     // contrast even though the fully-rendered colour would pass).
