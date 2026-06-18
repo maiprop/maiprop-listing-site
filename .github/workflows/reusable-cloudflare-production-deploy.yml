@@ -72,6 +72,9 @@ jobs:
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
           subject-path: maiprop-production-dist.tgz
+          # Private org attestation storage is plan-gated; keep the DSSE bundle
+          # generation without blocking production deploys on unavailable storage.
+          create-storage-record: false
 
       - name: Capture current production deployment ID (for rollback)
         id: prev_deploy
