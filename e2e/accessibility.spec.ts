@@ -121,8 +121,7 @@ test.describe("Accessibility — automated axe-core scans", () => {
     // (`animate-slide-up`, 0.4s fade from opacity 0 -> 1) intersects with
     // `networkidle`, producing false-positive contrast violations from
     // partially-transparent text. Setting this key also avoids flakiness.
-    await page.goto(url);
-    await page.evaluate(() => {
+    await page.addInitScript(() => {
       try {
         localStorage.setItem(
           "maiprop_cookie_consent",
@@ -136,7 +135,7 @@ test.describe("Accessibility — automated axe-core scans", () => {
         );
       } catch { /* storage may be blocked */ }
     });
-    await page.reload();
+    await page.goto(url);
     // networkidle is unreliable on Mapbox-using pages; wait for `load` and
     // a React-rendered landmark instead. The Navbar (header) is rendered
     // by every scanned page (/, /listings, /login), and none of these
