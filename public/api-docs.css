@@ -1,0 +1,24 @@
+redoc p code,
+redoc li code,
+redoc td code,
+redoc code {
+  color: #2f251b !important;
+}
+
+redoc p code,
+redoc li code,
+redoc td code {
+  background: #fbf7f1 !important;
+  border: 1px solid #d8cec1;
+  border-radius: 4px;
+  padding: 0.1rem 0.25rem;
+}
+
+redoc h5,
+redoc h5 span {
+  color: #453a31 !important;
+}
+
+redoc li.tab-error[role="tab"] {
+  color: #ff9a90 !important;
+}
