@@ -28,6 +28,7 @@ import {
   OPEN_HOUSE_CARD_LAYOUT_CLASS,
 } from "@/components/open-houses/OpenHousePrimitives";
 import { LocationAutocompleteInput } from "@/components/location/LocationAutocompleteInput";
+import { VirtualizedListingGrid } from "@/components/listings/VirtualizedListingGrid";
 import { cn } from "@/lib/utils";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -339,6 +340,7 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
     if (!imgs.length && svFallback) imgs.push(svFallback);
     if (!imgs.length) imgs.push(MAIPROP_LOGO_FALLBACK_URL);
     return {
+      id: l.id,
       listing: l,
       card: {
         id: l.id,
@@ -761,11 +763,16 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
               <Button variant="outline" onClick={clearFilters}>{getTranslatedValue(t, "openHouses.page.clearFilters")}</Button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 items-stretch">
-              {displayData.map(({ listing, card }, index) => (
+            <VirtualizedListingGrid
+              items={displayData}
+              className="grid grid-cols-1 min-[420px]:grid-cols-2 min-[700px]:grid-cols-3 min-[960px]:grid-cols-4 min-[1180px]:grid-cols-5 min-[1536px]:grid-cols-6 gap-3 sm:gap-4 items-stretch"
+              gap={16}
+              estimateItemHeight={332}
+              data-testid="open-house-grid"
+              renderItem={({ listing, card }, index) => (
                 <OpenHouseCard key={card.id} listing={listing} card={card} imagePriority={index < 6} />
-              ))}
-            </div>
+              )}
+            />
           )}
         </div>
       </main>

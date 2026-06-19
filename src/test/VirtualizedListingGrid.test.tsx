@@ -1,5 +1,6 @@
-import { act, screen } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { vi } from "vitest";
 import { VirtualizedListingGrid } from "@/components/listings/VirtualizedListingGrid";
 import { renderWithProviders } from "@/test/utils";
 
@@ -109,7 +110,7 @@ describe("VirtualizedListingGrid", () => {
     }
   });
 
-  it("recalculates the visible window when a scroll parent moves", () => {
+  it("recalculates the visible window when a scroll parent moves", async () => {
     const scrollParent = document.createElement("div");
     Object.defineProperty(scrollParent, "clientHeight", { configurable: true, value: 120 });
     scrollParent.getBoundingClientRect = () => ({
@@ -157,7 +158,78 @@ describe("VirtualizedListingGrid", () => {
     });
 
     expect(screen.getByTestId("grid")).toHaveAttribute("data-total-count", "20");
-    expect(screen.queryByText("Listing 1")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText("Listing 1")).not.toBeInTheDocument());
     expect(screen.getByText("Listing 6")).toBeInTheDocument();
+  });
+
+  it("batches scroll-parent visible-window updates into animation frames", () => {
+    const animationFrames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      animationFrames.push(callback);
+      return animationFrames.length;
+    });
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+
+    const scrollParent = document.createElement("div");
+    Object.defineProperty(scrollParent, "clientHeight", { configurable: true, value: 120 });
+    scrollParent.getBoundingClientRect = () => ({
+      bottom: 120,
+      height: 120,
+      left: 0,
+      right: 600,
+      top: 0,
+      width: 600,
+      x: 0,
+      y: 0,
+      toJSON: () => ({ top: 0, bottom: 120 }),
+    });
+    const scrollParentRef = { current: scrollParent };
+
+    try {
+      const { container } = renderWithProviders(
+        <VirtualizedListingGrid
+          items={ITEMS}
+          className="grid"
+          columns={1}
+          estimateItemHeight={80}
+          gap={0}
+          overscanRows={0}
+          scrollParentRef={scrollParentRef}
+          data-testid="grid"
+          renderItem={(item) => <article key={item.id}>{item.title}</article>}
+        />,
+      );
+
+      const root = container.firstElementChild as HTMLElement;
+      root.getBoundingClientRect = () => ({
+        bottom: -280,
+        height: 1600,
+        left: 0,
+        right: 600,
+        top: -400,
+        width: 600,
+        x: 0,
+        y: -400,
+        toJSON: () => ({ top: -400, bottom: -280 }),
+      });
+
+      act(() => {
+        scrollParent.dispatchEvent(new Event("scroll"));
+        scrollParent.dispatchEvent(new Event("scroll"));
+        scrollParent.dispatchEvent(new Event("scroll"));
+      });
+
+      expect(animationFrames).toHaveLength(1);
+      expect(screen.getByText("Listing 1")).toBeInTheDocument();
+
+      act(() => {
+        animationFrames.shift()?.(performance.now());
+      });
+
+      expect(screen.queryByText("Listing 1")).not.toBeInTheDocument();
+      expect(screen.getByText("Listing 6")).toBeInTheDocument();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

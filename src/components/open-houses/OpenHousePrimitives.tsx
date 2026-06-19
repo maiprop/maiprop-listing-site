@@ -5,7 +5,7 @@ import { PropertyCard } from "@/components/PropertyCard";
 export { fmtDate, fmtTime } from "@/lib/format";
 
 export const OPEN_HOUSE_CARD_LAYOUT_CLASS =
-  "h-full [&_.property-card]:h-full";
+  "min-w-0";
 
 export function Pill({
   active, children, onClick,

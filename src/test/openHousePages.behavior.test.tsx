@@ -430,6 +430,26 @@ describe("OpenHouses page behavior", () => {
     expect(screen.getByTestId("open-house-card")).toHaveAttribute("data-image", "/images/maiprop-logo.webp");
   });
 
+  it("virtualizes large open-house result grids for responsive browsing", async () => {
+    mocks.publicApi.mockResolvedValue(
+      Array.from({ length: 30 }, (_, index) =>
+        createListing({
+          id: `oh-${index + 1}`,
+          title: `Open House ${index + 1}`,
+          latitude: null,
+          longitude: null,
+        }),
+      ),
+    );
+
+    await renderOpenHouses();
+
+    const grid = await screen.findByTestId("open-house-grid");
+    expect(grid).toHaveAttribute("data-total-count", "30");
+    expect(Number(grid.dataset.virtualizedCount)).toBeLessThan(30);
+    expect(screen.getAllByTestId("open-house-card").length).toBeLessThan(30);
+  });
+
   it("surfaces public API outages without direct Supabase fallback and switches paths for past open houses", async () => {
     mocks.publicApi.mockResolvedValue(null);
     makeListingsQuery([createListing({ id: "oh-db", title: "Direct DB Open House" })]);

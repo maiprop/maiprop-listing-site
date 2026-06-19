@@ -1,0 +1,36 @@
+{
+  "requirePinnedActions": true,
+  "allowedActionRepositories": [
+    "actions/attest-build-provenance",
+    "actions/checkout",
+    "actions/setup-java",
+    "actions/setup-node",
+    "actions/upload-artifact",
+    "cloudflare/wrangler-action",
+    "denoland/setup-deno",
+    "googleapis/release-please-action",
+    "gradle/actions/setup-gradle",
+    "supabase/setup-cli"
+  ],
+  "recommendedLiveRepositoryPolicy": {
+    "enabled": true,
+    "allowed_actions": "selected",
+    "sha_pinning_required": true
+  },
+  "selectedActionsRecommendation": {
+    "github_owned_allowed": true,
+    "verified_allowed": false,
+    "patterns_allowed": [
+      "actions/attest-build-provenance@*",
+      "actions/checkout@*",
+      "actions/setup-java@*",
+      "actions/setup-node@*",
+      "actions/upload-artifact@*",
+      "cloudflare/wrangler-action@*",
+      "denoland/setup-deno@*",
+      "googleapis/release-please-action@*",
+      "gradle/actions/setup-gradle@*",
+      "supabase/setup-cli@*"
+    ]
+  }
+}
