@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-06-03T20:49:00.315Z",
-  "total": 110,
+  "generated_at": "2026-06-19T05:48:21.805Z",
+  "total": 103,
   "by_pattern": {
-    "no-explicit-any-disable": 39,
-    "explicit-any": 71,
+    "no-explicit-any-disable": 37,
+    "explicit-any": 66,
     "ts-ignore": 0
   },
   "files": [
@@ -176,35 +176,7 @@
       ]
     },
     {
-      "file": "supabase/functions/_shared/entitlements.ts",
-      "total": 3,
-      "findings": [
-        {
-          "name": "no-explicit-any-disable",
-          "count": 1
-        },
-        {
-          "name": "explicit-any",
-          "count": 2
-        }
-      ]
-    },
-    {
       "file": "supabase/functions/agent-data-input/index.ts",
-      "total": 3,
-      "findings": [
-        {
-          "name": "no-explicit-any-disable",
-          "count": 1
-        },
-        {
-          "name": "explicit-any",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "file": "supabase/functions/check-subscription/index.ts",
       "total": 3,
       "findings": [
         {
@@ -228,20 +200,6 @@
         {
           "name": "explicit-any",
           "count": 1
-        }
-      ]
-    },
-    {
-      "file": "supabase/functions/sync-stripe-pricing/index.ts",
-      "total": 3,
-      "findings": [
-        {
-          "name": "no-explicit-any-disable",
-          "count": 1
-        },
-        {
-          "name": "explicit-any",
-          "count": 2
         }
       ]
     },
@@ -316,35 +274,7 @@
       ]
     },
     {
-      "file": "src/components/new-build/ConstructionSpecs.tsx",
-      "total": 2,
-      "findings": [
-        {
-          "name": "no-explicit-any-disable",
-          "count": 1
-        },
-        {
-          "name": "explicit-any",
-          "count": 1
-        }
-      ]
-    },
-    {
       "file": "src/components/new-build/RegisterInterestCard.tsx",
-      "total": 2,
-      "findings": [
-        {
-          "name": "no-explicit-any-disable",
-          "count": 1
-        },
-        {
-          "name": "explicit-any",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "file": "src/components/new-build/UnitShowcase.tsx",
       "total": 2,
       "findings": [
         {
@@ -400,6 +330,20 @@
       ]
     },
     {
+      "file": "supabase/functions/_shared/entitlements.ts",
+      "total": 2,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 1
+        },
+        {
+          "name": "explicit-any",
+          "count": 1
+        }
+      ]
+    },
+    {
       "file": "supabase/functions/auth-email-hook/index.ts",
       "total": 2,
       "findings": [
@@ -414,7 +358,35 @@
       ]
     },
     {
+      "file": "supabase/functions/check-subscription/index.ts",
+      "total": 2,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 1
+        },
+        {
+          "name": "explicit-any",
+          "count": 1
+        }
+      ]
+    },
+    {
       "file": "supabase/functions/neighbourhood-report/index.ts",
+      "total": 2,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 1
+        },
+        {
+          "name": "explicit-any",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "supabase/functions/sync-stripe-pricing/index.ts",
       "total": 2,
       "findings": [
         {
