@@ -1,6 +1,6 @@
 # WCAG Manual Test Plan
 
-Automated axe and Lighthouse checks catch regressions, but they do not prove full WCAG 2.2 conformance. Run this checklist before enterprise procurement review and after major UI changes.
+Automated axe, Lighthouse, skip-link, image-alt, and homepage link-name checks catch regressions, but they do not prove full WCAG 2.2 conformance. Run this checklist before enterprise procurement review and after major UI changes.
 
 | Flow | Viewport | Manual Check |
 |---|---|---|

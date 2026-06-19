@@ -52,6 +52,7 @@ import {
   buyPriceRanges, rentPriceRanges, listingTypeOptions, sortOptions,
 } from "@/lib/listingsConfig";
 import { mapListingFromCard } from "@/lib/listingsPerformance";
+import { APP_ORIGIN } from "@/lib/config";
 
 const getListingsResultLabel = ({ // skipcq: JS-R1005 - Result labels intentionally branch by map, area, viewport, and pagination states.
   viewMode,
@@ -328,17 +329,17 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
       <Helmet>
         <title>{metaTitle}</title>
         <meta name="description" content={metaDescription} />
-        <link rel="canonical" href="https://maiprop.co/listings" />
+        <link rel="canonical" href={`${APP_ORIGIN}/listings`} />
         <meta property="og:title" content={metaTitle} />
         <meta property="og:description" content={metaDescription} />
-        <meta property="og:url" content="https://maiprop.co/listings" />
+        <meta property="og:url" content={`${APP_ORIGIN}/listings`} />
         <script type="application/ld+json">{JSON.stringify({
           "@context": "https://schema.org",
           "@type": "SearchResultsPage",
           "name": metaName,
           "description": metaDescription,
-          "url": "https://maiprop.co/listings",
-          "provider": { "@type": "Organization", "name": "mAI prop", "url": "https://maiprop.co" },
+          "url": `${APP_ORIGIN}/listings`,
+          "provider": { "@type": "Organization", "name": "mAI prop", "url": APP_ORIGIN },
         })}</script>
       </Helmet>
       <Navbar />

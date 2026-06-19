@@ -19,8 +19,13 @@ test.describe("Offline / network failure handling", () => {
     await page.goto("/");
     await page.waitForLoadState("networkidle");
 
-    // Sanity: the SPA has mounted before we go offline.
+    // Sanity: the SPA shell has mounted before we go offline. `#root` exists
+    // in the static HTML, so waiting on the rendered landmarks avoids dropping
+    // the network while a lazy route chunk is still loading.
     await expect(page.locator("#root")).toBeAttached({ timeout: 10_000 });
+    await expect(page.locator("#main-content, main, nav, header").first()).toBeAttached({
+      timeout: 15_000,
+    });
 
     // Now simulate a network drop and block further requests.
     await context.setOffline(true);

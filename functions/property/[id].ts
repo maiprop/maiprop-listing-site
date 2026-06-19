@@ -2,6 +2,7 @@ import {
   fetchActiveListingById,
   fetchIndexHtml,
   injectSeoHead,
+  CANONICAL_ORIGIN,
   listingDetailPath,
   listingDescription,
   propertyJsonLd,
@@ -21,7 +22,7 @@ export const onRequestGet: PagesFunction<SeoEnv, "id"> = async (ctx) => {
     });
   }
 
-  const canonicalUrl = `https://maiprop.co${listingDetailPath(listing)}`;
+  const canonicalUrl = `${CANONICAL_ORIGIN}${listingDetailPath(listing)}`;
   const enriched = injectSeoHead(html, {
     title: `${listing.title} - mAI prop`,
     description: listingDescription(listing),

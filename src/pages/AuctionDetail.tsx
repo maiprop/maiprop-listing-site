@@ -53,6 +53,7 @@ import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
 import { useAuth } from "@/contexts/AuthContext";
 import type { ListingWithJoins } from "@/hooks/useListings";
 import { formatDate, formatPrice } from "@/lib/format";
+import { APP_ORIGIN } from "@/lib/config";
 import {
   countdownBadge,
   daysUntil,
@@ -422,7 +423,7 @@ const AuctionDetail = () => { // skipcq: JS-R1005 - This route coordinates aucti
   const ownershipStatus = normalizeOwnership(getOwnershipStatus(tags));
   const ownershipPct = getOwnershipPct(tags);
   const ownershipBadge = getOwnershipBadge(ownershipStatus, locale);
-  const canonicalUrl = `https://maiprop.co/auction/${id}`;
+  const canonicalUrl = `${APP_ORIGIN}/auction/${id}`;
   const missingDetailLabel = isGreek ? "\u0394\u03b5\u03bd \u03c0\u03b1\u03c1\u03ad\u03c7\u03b5\u03c4\u03b1\u03b9" : "Not provided";
   const floorDetailValue = formatFloorSpec(floor, totalFloors) ?? missingDetailLabel;
   const ogDescription = isGreek

@@ -12,11 +12,11 @@ const htmlShell = `<!doctype html>
   <meta name="description" content="Base description">
   <meta property="og:title" content="Base title">
   <meta property="og:description" content="Base OG description">
-  <meta property="og:url" content="https://maiprop.co/">
-  <meta property="og:image" content="https://maiprop.co/base.png">
+  <meta property="og:url" content="https://portal.maiprop.co/">
+  <meta property="og:image" content="https://portal.maiprop.co/base.png">
   <meta name="twitter:title" content="Base twitter">
   <meta name="twitter:description" content="Base twitter description">
-  <meta name="twitter:image" content="https://maiprop.co/base.png">
+  <meta name="twitter:image" content="https://portal.maiprop.co/base.png">
 </head>
 <body><div id="root"></div><script type="module" src="/assets/app.js"></script></body>
 </html>`;
@@ -134,7 +134,7 @@ describe("SEO Pages Functions", () => {
     expect(res.headers.get("Cache-Control")).toContain("s-maxage=300");
     expect(html).toContain("<title>Athens Penthouse With Acropolis View - mAI prop</title>");
     expect(html).toContain("Bright penthouse in central Athens.");
-    expect(html).toContain("https://maiprop.co/property/listing-1");
+    expect(html).toContain("https://portal.maiprop.co/property/listing-1");
     expect(html).toContain("\"price\":450000");
     expect(html).toContain("maiprop-seo");
 
@@ -154,7 +154,7 @@ describe("SEO Pages Functions", () => {
       }),
     );
     const auctionRes = await propertyRequest(makeCtx("https://portal.maiprop.co/property/listing-1", { id: "listing-1" }));
-    expect(await auctionRes.text()).toContain("https://maiprop.co/auction/listing-1");
+    expect(await auctionRes.text()).toContain("https://portal.maiprop.co/auction/listing-1");
 
     fetchMock().mockResolvedValueOnce(
       new Response(JSON.stringify([{ ...listing, listing_type: "new_build" }]), {
@@ -163,7 +163,7 @@ describe("SEO Pages Functions", () => {
       }),
     );
     const newBuildRes = await propertyRequest(makeCtx("https://portal.maiprop.co/property/listing-1", { id: "listing-1" }));
-    expect(await newBuildRes.text()).toContain("https://maiprop.co/new-build/listing-1");
+    expect(await newBuildRes.text()).toContain("https://portal.maiprop.co/new-build/listing-1");
   });
 
   it("keeps renovated sale listings on the property canonical URL", async () => {
@@ -177,8 +177,8 @@ describe("SEO Pages Functions", () => {
     const res = await propertyRequest(makeCtx("https://portal.maiprop.co/property/listing-1", { id: "listing-1" }));
     const html = await res.text();
 
-    expect(html).toContain("https://maiprop.co/property/listing-1");
-    expect(html).not.toContain("https://maiprop.co/new-build/listing-1");
+    expect(html).toContain("https://portal.maiprop.co/property/listing-1");
+    expect(html).not.toContain("https://portal.maiprop.co/new-build/listing-1");
   });
 
   it("leaves the shell renderable when Supabase runtime bindings are missing", async () => {

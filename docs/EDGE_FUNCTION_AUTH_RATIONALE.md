@@ -1,6 +1,6 @@
 # Edge Function Auth Rationale
 
-Last verified: 2026-05-17
+Last verified: 2026-06-19
 
 Sources: `supabase/config.toml`, `scripts/public-function-inventory.cjs`, local
 Edge Function tests, and `npm run check:public-functions`.

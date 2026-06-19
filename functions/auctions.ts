@@ -3,6 +3,7 @@ import {
   fetchListingPage,
   injectSeoHead,
   itemListJsonLd,
+  CANONICAL_ORIGIN,
   type SeoEnv,
 } from "./_seo";
 
@@ -12,7 +13,7 @@ export const onRequestGet: PagesFunction<SeoEnv> = async (ctx) => {
   if (!index.ok) return index;
   const html = await index.text();
   const listings = await fetchListingPage(ctx.env, requestUrl, { listingType: "auction" });
-  const canonicalUrl = "https://maiprop.co/auctions";
+  const canonicalUrl = `${CANONICAL_ORIGIN}/auctions`;
 
   const enriched = injectSeoHead(html, {
     title: "Property Auctions in Greece - mAI prop",

@@ -18,6 +18,7 @@ import { QuickSaleCTASection } from "@/components/index/QuickSaleCTASection";
 import { PopularLocationsSection } from "@/components/index/PopularLocationsSection";
 import { ProfessionalsCTASection } from "@/components/index/ProfessionalsCTASection";
 import { OSSection } from "@/components/index/OSSection";
+import { APP_ORIGIN } from "@/lib/config";
 
 const Footer = lazy(() => import("@/components/Footer").then(m => ({ default: m.Footer })));
 
@@ -57,23 +58,23 @@ export default function Index() {
       <Helmet>
         <title>mAI prop — Greek Real Estate | Buy, Rent &amp; Invest in Greece</title>
         <meta name="description" content="Browse verified Greek property listings — apartments, villas, land &amp; commercial. AI-powered search, auction alerts, and instant viewings." />
-        <link rel="canonical" href="https://maiprop.co/" />
+        <link rel="canonical" href={`${APP_ORIGIN}/`} />
         <link rel="preload" href="/hero-poster.jpg" as="image" />
         <meta property="og:title" content="mAI prop — Greek Real Estate | Buy, Rent &amp; Invest in Greece" />
         <meta property="og:description" content="Browse verified Greek property listings — apartments, villas, land &amp; commercial. AI-powered search, auction alerts, and instant viewings." />
-        <meta property="og:url" content="https://maiprop.co/" />
+        <meta property="og:url" content={`${APP_ORIGIN}/`} />
         <meta property="og:type" content="website" />
-        <meta property="og:image" content="https://maiprop.co/og-default.jpg" />
+        <meta property="og:image" content={`${APP_ORIGIN}/og-default.jpg`} />
         <meta name="twitter:card" content="summary_large_image" />
         <script type="application/ld+json">{JSON.stringify({
           "@context": "https://schema.org",
           "@type": "WebSite",
           "name": "mAI prop",
-          "url": "https://maiprop.co",
+          "url": APP_ORIGIN,
           "description": "Greek real estate marketplace — buy, sell, rent and invest",
           "potentialAction": {
             "@type": "SearchAction",
-            "target": "https://maiprop.co/listings?q={search_term_string}",
+            "target": `${APP_ORIGIN}/listings?q={search_term_string}`,
             "query-input": "required name=search_term_string",
           },
         })}</script>
