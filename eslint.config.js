@@ -11,6 +11,8 @@ export default tseslint.config(
       "coverage/**",
       "test-results/**",
       "playwright-report/**",
+      ".tmp/**",
+      ".codex-remote-attachments/**",
       ".claude/**",
       "mai-pro-os/**",
       "src/components/ui/**",
