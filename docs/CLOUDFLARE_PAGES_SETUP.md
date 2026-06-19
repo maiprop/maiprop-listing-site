@@ -148,7 +148,7 @@ apex and www as distinct origins.
 
 The CI `deploy` job captures the previous production deployment ID via the
 Cloudflare API before rolling out, and automatically rolls back if the
-post-deploy health check against `https://maiprop.co` fails after 8 retries.
+post-deploy health check against `https://portal.maiprop.co` fails after 8 retries.
 
 To manually roll back:
 

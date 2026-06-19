@@ -27,6 +27,7 @@ import {
   AUCTIONS_MAX_PAGES_PRO,
 } from "@/hooks/useAuctionsPipeline";
 import { useTrackUserSearch } from "@/hooks/useTrackUserSearch";
+import { APP_ORIGIN } from "@/lib/config";
 
 const AUCTION_URL_FILTER_MAX = "999999999";
 
@@ -257,17 +258,17 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
       <Helmet>
         <title>{metaTitle}</title>
         <meta name="description" content={metaDescription} />
-        <link rel="canonical" href="https://maiprop.co/auctions" />
+        <link rel="canonical" href={`${APP_ORIGIN}/auctions`} />
         <meta property="og:title" content={metaTitle} />
         <meta property="og:description" content={metaDescription} />
-        <meta property="og:url" content="https://maiprop.co/auctions" />
+        <meta property="og:url" content={`${APP_ORIGIN}/auctions`} />
         <script type="application/ld+json">{JSON.stringify({
           "@context": "https://schema.org",
           "@type": "ItemList",
           "name": metaName,
           "description": metaDescription,
-          "url": "https://maiprop.co/auctions",
-          "provider": { "@type": "Organization", "name": "mAI prop", "url": "https://maiprop.co" },
+          "url": `${APP_ORIGIN}/auctions`,
+          "provider": { "@type": "Organization", "name": "mAI prop", "url": APP_ORIGIN },
         })}</script>
       </Helmet>
       <Navbar />
@@ -287,6 +288,7 @@ const Auctions = () => { // skipcq: JS-R1005 - The auction route shell coordinat
             <div className="flex gap-2 items-center">
               <div className="relative flex-1 min-w-0">
                 <select
+                  aria-label="Auction city"
                   value={selectedCity}
                   onChange={(e) => setSelectedCity(e.target.value)}
                   className="w-full h-9 appearance-none bg-secondary border border-border rounded-xl pl-3 pr-8 text-sm text-foreground outline-none focus:border-primary cursor-pointer"

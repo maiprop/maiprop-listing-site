@@ -53,6 +53,7 @@ const SELECT_FIELDS = [
 const BASE_TITLE = "mAI prop - Greek Real Estate";
 const BASE_DESCRIPTION =
   "Buy, rent, or sell property in Greece. AI-powered listings, Greek auctions, Firesale instant offers, and verified professionals - all in one place.";
+export const CANONICAL_ORIGIN = "https://portal.maiprop.co";
 const DEFAULT_LISTING_TYPES = ["sale", "rent", "firesale", "new_build"] as const;
 const ALLOWED_LISTING_TYPES = ["sale", "rent", "firesale", "auction", "open_house", "new_build"] as const;
 const ALLOWED_PROPERTY_TYPES = ["apartment", "house", "villa", "land", "commercial", "office"] as const;
@@ -164,7 +165,7 @@ function compactText(value: string, fallback: string): string {
 }
 
 function absoluteUrl(path: string): string {
-  return `https://maiprop.co${path}`;
+  return `${CANONICAL_ORIGIN}${path}`;
 }
 
 function formatPrice(price: number): string {
@@ -282,7 +283,7 @@ export function injectSeoHead(
   let out = html;
   const title = compactText(opts.title, BASE_TITLE);
   const description = compactText(opts.description, BASE_DESCRIPTION);
-  const imageUrl = opts.imageUrl || "https://maiprop.co/og-image.png";
+  const imageUrl = opts.imageUrl || `${CANONICAL_ORIGIN}/og-image.png`;
   const titleTag = normalTag("title", {}, htmlEscape(title));
   const lowerHtml = out.toLowerCase();
   const titleStart = lowerHtml.indexOf("<title>");

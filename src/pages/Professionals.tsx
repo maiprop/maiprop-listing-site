@@ -12,6 +12,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { getPlanLimits } from "@/hooks/usePlanLimits";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { Link } from "react-router-dom";
+import { APP_ORIGIN } from "@/lib/config";
 
 // ─── Category Groups ──────────────────────────────────────────────────────────
 const categoryGroups = [
@@ -276,17 +277,17 @@ export default function Professionals() {
       <Helmet>
         <title>Find Property Professionals in Greece — mAI prop</title>
         <meta name="description" content="Connect with verified architects, lawyers, agents and contractors for your Greek property transaction." />
-        <link rel="canonical" href="https://maiprop.co/professionals" />
+        <link rel="canonical" href={`${APP_ORIGIN}/professionals`} />
         <meta property="og:title" content="Property Professionals Directory — mAI prop" />
         <meta property="og:description" content="Verified architects, lawyers, agents and contractors across Greece." />
-        <meta property="og:url" content="https://maiprop.co/professionals" />
+        <meta property="og:url" content={`${APP_ORIGIN}/professionals`} />
         <script type="application/ld+json">{JSON.stringify({
           "@context": "https://schema.org",
           "@type": "ItemList",
           "name": "Greek Property Professionals Directory",
-          "url": "https://maiprop.co/professionals",
+          "url": `${APP_ORIGIN}/professionals`,
           "description": "Verified architects, lawyers, agents and contractors across Greece.",
-          "provider": { "@type": "Organization", "name": "mAI prop", "url": "https://maiprop.co" },
+          "provider": { "@type": "Organization", "name": "mAI prop", "url": APP_ORIGIN },
         })}</script>
       </Helmet>
       <Navbar />

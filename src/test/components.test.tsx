@@ -113,6 +113,7 @@ vi.mock("react-i18next", () => ({
 }));
 
 vi.mock("@/lib/config", () => ({
+  APP_ORIGIN: "https://portal.maiprop.co",
   getStreetViewProxyUrl: vi.fn().mockReturnValue(""),
   SUPABASE_URL: "https://example.supabase.co",
   SUPABASE_ANON_KEY: "test-anon-key",

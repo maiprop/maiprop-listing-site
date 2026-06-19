@@ -119,6 +119,12 @@ async function signInViaUi(
   await page.waitForURL(/\/dashboard|\/onboarding|\/admin/, {
     timeout: 25_000,
   });
+  await expectRenderablePage(page);
+  await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {
+    // Some live dashboards keep analytics/realtime requests open. The render
+    // assertion above is authoritative; this wait only lets lazy chunks settle
+    // before tests navigate to another protected surface.
+  });
 }
 
 async function expectRenderablePage(page: Page): Promise<void> {
@@ -128,6 +134,17 @@ async function expectRenderablePage(page: Page): Promise<void> {
   ).toBeAttached({
     timeout: 10_000,
   });
+}
+
+async function gotoRouteAllowingNavigationAbort(page: Page, path: string): Promise<void> {
+  try {
+    await page.goto(path, { waitUntil: "domcontentloaded" });
+  } catch (error) {
+    const message = String(error);
+    if (!/(NS_BINDING_ABORTED|NS_ERROR_FAILURE|frame was detached)/i.test(message)) {
+      throw error;
+    }
+  }
 }
 
 test.describe("Live critical smoke checks", () => {
@@ -186,7 +203,7 @@ test.describe("Live critical smoke checks", () => {
     page.on("pageerror", (err) => errors.push(err.message));
 
     await signInViaUi(page, demoAccounts.buyerFree, demoPasswords.buyerFree);
-    await page.goto("/admin?tab=invitations");
+    await gotoRouteAllowingNavigationAbort(page, "/admin?tab=invitations");
     await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
 
     expect(page.url()).not.toContain("/admin");
@@ -227,7 +244,7 @@ test.describe("Live critical smoke checks", () => {
 
     await signInViaUi(page, demoAccounts.buyerFree, demoPasswords.buyerFree);
 
-    await page.goto("/firesale");
+    await gotoRouteAllowingNavigationAbort(page, "/firesale");
     await page.waitForLoadState("load", { timeout: 15_000 });
     await expect(page.locator("body")).toContainText(
       /Quick Sale|Investor|Invitation/i,
@@ -236,7 +253,7 @@ test.describe("Live critical smoke checks", () => {
       },
     );
 
-    await page.goto("/investor-dashboard");
+    await gotoRouteAllowingNavigationAbort(page, "/investor-dashboard");
     await page.waitForLoadState("load", { timeout: 15_000 });
     await expect(page.locator("body")).toContainText(
       /Investor Access Required|deal flow|Quick Sale/i,

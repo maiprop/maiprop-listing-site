@@ -32,7 +32,7 @@ const NeighbourhoodReport = lazy(() => import("@/components/NeighbourhoodReport"
 import { buildPropertyFeatureGroups, buildDetailGroups } from "@/lib/propertyFeatures";
 const AIAssistantWidget = lazy(() => import("@/components/AIAssistantWidget"));
 import { AuctionAlertModal } from "@/components/AuctionAlertModal";
-import { getStreetViewProxyUrl } from "@/lib/config";
+import { APP_ORIGIN, getStreetViewProxyUrl } from "@/lib/config";
 import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 import { dbListingToCard } from "@/lib/listingUtils";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
@@ -271,11 +271,11 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
   const detailGroups = buildDetailGroups(db, price, sqm, pricePerSqm, isLandType);
 
 
-  const ogImage = images[0] ?? "https://maiprop.co/og-default.jpg";
+  const ogImage = images[0] ?? `${APP_ORIGIN}/og-default.jpg`;
   const ogDescription = description
     ? description.slice(0, 160)
     : `${propertyType?.replace(/_/g, " ")} in ${city} — ${sqm} m² · €${price.toLocaleString()}`;
-  const canonicalUrl = `https://maiprop.co/${isAuction ? "auction" : "property"}/${db.id}`;
+  const canonicalUrl = `${APP_ORIGIN}/${isAuction ? "auction" : "property"}/${db.id}`;
 
   const jsonLd = {
     "@context": "https://schema.org",

@@ -79,6 +79,50 @@ test.describe("Accessibility", () => {
     await expect(page.locator("nav").first()).toBeAttached();
   });
 
+  test("homepage links expose accessible names", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForLoadState("load");
+    await page.locator("#main-content, main, header, nav").first().waitFor({ state: "attached", timeout: 20_000 });
+
+    const unnamedLinks = await page.locator("a").evaluateAll((links) =>
+      links
+        .filter((link) => {
+          const element = link as HTMLElement;
+          const rect = element.getBoundingClientRect();
+          const style = window.getComputedStyle(element);
+          return (
+            element.getAttribute("aria-hidden") !== "true" &&
+            rect.width > 0 &&
+            rect.height > 0 &&
+            style.visibility !== "hidden" &&
+            style.display !== "none"
+          );
+        })
+        .map((link) => {
+          const imageAlt = Array.from(link.querySelectorAll("img"))
+            .map((img) => img.getAttribute("alt")?.trim())
+            .filter(Boolean)
+            .join(" ");
+          const label = [
+            link.getAttribute("aria-label"),
+            link.getAttribute("title"),
+            link.textContent,
+            imageAlt,
+          ]
+            .map((value) => value?.replace(/\s+/g, " ").trim())
+            .find(Boolean);
+          return {
+            href: link.getAttribute("href") ?? "",
+            html: link.outerHTML.slice(0, 240),
+            label: label ?? "",
+          };
+        })
+        .filter((link) => link.label.length === 0),
+    );
+
+    expect(unnamedLinks).toEqual([]);
+  });
+
   test("all images have alt text or role=presentation", async ({ page }) => {
     await page.goto("/listings");
     // networkidle is unreliable on /listings (Mapbox tile fetches never settle).
