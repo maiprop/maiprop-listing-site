@@ -76,6 +76,8 @@ knip-report.txt
 src/integrations/supabase/types.ts.bak
 
 # Audit/assessment artifacts (regenerable)
+.tmp/
+.codex-remote-attachments/
 .sbom-*.json
 .complexity-report.json
 .madge-report.json
