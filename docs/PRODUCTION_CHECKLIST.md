@@ -104,4 +104,4 @@ Record here:
 
 | Date (UTC) | Performed by | Outcome |
 |---|---|---|
-| _none yet_ | | |
+| 2026-06-18 | Platform | Pending operator execution; no successful restore drill recorded yet. See `docs/compliance/dora/RESTORE_DRILL_LOG.md` and run `npm run check:dr-restore-proof` before procurement review or production promotion. |

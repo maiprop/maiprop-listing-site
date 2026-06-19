@@ -6,11 +6,14 @@ import {
   checkDisasterRecoveryReadiness,
   checkFreeTierBackupRunbook,
   checkProductionChecklistRecoveryEvidence,
+  checkRestoreDrillLog,
+  hasSuccessfulRestoreDrill,
 } from "./check-dr-readiness.mjs";
 
 const makeFixture = () => {
   const root = mkdtempSync(join(tmpdir(), "maiprop-dr-readiness-"));
   mkdirSync(join(root, "docs", "backups"), { recursive: true });
+  mkdirSync(join(root, "docs", "compliance", "dora"), { recursive: true });
   mkdirSync(join(root, "scripts"), { recursive: true });
 
   writeFileSync(
@@ -35,6 +38,15 @@ const makeFixture = () => {
       "encrypted off-site backup",
       "restore drill",
       "Last restore test",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "docs", "compliance", "dora", "RESTORE_DRILL_LOG.md"),
+    [
+      "# DORA Restore Drill Log",
+      "| Date | Environment | Restore drill | RPO | RTO | Evidence status | Operator |",
+      "|---|---|---|---|---|---|---|",
+      "| 2026-06-18 | Documentation baseline | Restore drill pending; source backup timestamp, restore target, verified row counts, release SHA, and cleanup confirmation are required. | Target: <= 24h | Target: <= 4h | Pending operator execution | Platform |",
     ].join("\n"),
   );
   writeFileSync(
@@ -86,5 +98,39 @@ describe("disaster recovery readiness check", () => {
 
     expect(result.ok).toBe(false);
     expect(result.failures.join("\n")).toContain("Supabase Free");
+  });
+
+  it("requires the DORA restore drill log evidence schema", () => {
+    const root = makeFixture();
+    writeFileSync(
+      join(root, "docs", "compliance", "dora", "RESTORE_DRILL_LOG.md"),
+      ["# DORA Restore Drill Log", "Restore drill", "RPO", "RTO"].join("\n"),
+    );
+
+    const result = checkRestoreDrillLog(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("source backup timestamp");
+    expect(result.failures.join("\n")).toContain("cleanup confirmation");
+  });
+
+  it("can enforce successful restore proof for procurement gates", () => {
+    const root = makeFixture();
+
+    expect(hasSuccessfulRestoreDrill(root)).toBe(false);
+    expect(checkDisasterRecoveryReadiness(root, { requireSuccessfulRestore: true }).ok).toBe(false);
+
+    writeFileSync(
+      join(root, "docs", "compliance", "dora", "RESTORE_DRILL_LOG.md"),
+      [
+        "# DORA Restore Drill Log",
+        "| Date | Environment | Restore drill | RPO | RTO | Evidence status | Operator |",
+        "|---|---|---|---|---|---|---|",
+        "| 2026-06-19 | Disposable staging restore | Restored backup; source backup timestamp 2026-06-19T00:00:00Z; restore target local; verified row counts for profiles, listings, projects, subscriptions, open_house_registrations; release SHA abc123; cleanup confirmation complete. | Actual: 1h | Actual: 45m | Successful | Platform |",
+      ].join("\n"),
+    );
+
+    expect(hasSuccessfulRestoreDrill(root)).toBe(true);
+    expect(checkDisasterRecoveryReadiness(root, { requireSuccessfulRestore: true }).ok).toBe(true);
   });
 });

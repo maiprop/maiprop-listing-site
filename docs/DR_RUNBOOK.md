@@ -45,6 +45,11 @@ Run a restore drill at least monthly while using this fallback:
 3. Verify critical row counts: `profiles`, `listings`, `projects`,
    `subscriptions`, and `open_house_registrations`.
 4. Record date, operator, and result in `docs/PRODUCTION_CHECKLIST.md`.
+5. Append the evidence row to `docs/compliance/dora/RESTORE_DRILL_LOG.md` with
+   source backup timestamp, restore target, verified row counts, release SHA,
+   and cleanup confirmation.
+6. Run `npm run check:dr-restore-proof` when the drill is required for
+   production promotion, DORA evidence, or enterprise procurement.
 
 ### RPO and RTO
 
@@ -185,5 +190,7 @@ Schedule a quarterly test to verify PITR works:
 
 1. Initiate a PITR restore to a throwaway project.
 2. Verify data integrity (row counts, recent records present).
-3. Record the result in `PRODUCTION_CHECKLIST.md` → "Last restore test" table.
-4. Delete the throwaway project.
+3. Record the result in `PRODUCTION_CHECKLIST.md` -> "Last restore test" table.
+4. Record the detailed evidence in `docs/compliance/dora/RESTORE_DRILL_LOG.md`.
+5. Run `npm run check:dr-restore-proof`.
+6. Delete the throwaway project.

@@ -21,6 +21,7 @@ const makeFixture = () => {
   mkdirSync(join(root, "docs", "adr"), { recursive: true });
   mkdirSync(join(root, "docs", "api"), { recursive: true });
   mkdirSync(join(root, "docs", "backups"), { recursive: true });
+  mkdirSync(join(root, "docs", "compliance", "dora"), { recursive: true });
   mkdirSync(join(root, "docs", "governance"), { recursive: true });
   mkdirSync(join(root, "scripts"), { recursive: true });
   mkdirSync(join(root, "scripts", "load-test"), { recursive: true });
@@ -324,6 +325,15 @@ const makeFixture = () => {
       "restore drill",
       "RPO",
       "RTO",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "docs", "compliance", "dora", "RESTORE_DRILL_LOG.md"),
+    [
+      "# DORA Restore Drill Log",
+      "| Date | Environment | Restore drill | RPO | RTO | Evidence status | Operator |",
+      "|---|---|---|---|---|---|---|",
+      "| 2026-06-18 | Documentation baseline | Restore drill pending; source backup timestamp, restore target, verified row counts, release SHA, and cleanup confirmation are required. | Target: <= 24h | Target: <= 4h | Pending operator execution | Platform |",
     ].join("\n"),
   );
   writeFileSync(join(root, "scripts", "supabase-logical-backup.mjs"), "process.exit(0);\n");

@@ -46,6 +46,35 @@ export function checkProductionChecklistRecoveryEvidence(root = process.cwd()) {
   ]));
 }
 
+export function hasSuccessfulRestoreDrill(root = process.cwd()) {
+  const text = readText(root, "docs/compliance/dora/RESTORE_DRILL_LOG.md") ?? "";
+  return text
+    .split(/\r?\n/)
+    .some((line) => /^\|\s*\d{4}-\d{2}-\d{2}\s+\|/.test(line) && /\|\s*Successful\s*\|/.test(line));
+}
+
+export function checkRestoreDrillLog(root = process.cwd(), options = {}) {
+  const failures = requireMarkers(root, "docs/compliance/dora/RESTORE_DRILL_LOG.md", [
+    "Restore drill",
+    "RPO",
+    "RTO",
+    "Evidence status",
+    "source backup timestamp",
+    "restore target",
+    "verified row counts",
+    "release SHA",
+    "cleanup confirmation",
+  ]);
+
+  if (options.requireSuccessfulRestore && !hasSuccessfulRestoreDrill(root)) {
+    failures.push(
+      "docs/compliance/dora/RESTORE_DRILL_LOG.md must include a dated restore drill row with Evidence status `Successful`",
+    );
+  }
+
+  return result(failures);
+}
+
 export function checkDisasterRecoveryRunbook(root = process.cwd()) {
   return result(requireMarkers(root, "docs/DR_RUNBOOK.md", [
     "Free-tier logical backup fallback",
@@ -58,17 +87,22 @@ export function checkDisasterRecoveryRunbook(root = process.cwd()) {
   ]));
 }
 
-export function checkDisasterRecoveryReadiness(root = process.cwd()) {
+export function checkDisasterRecoveryReadiness(root = process.cwd(), options = {}) {
   const checks = [
     checkFreeTierBackupRunbook(root),
     checkProductionChecklistRecoveryEvidence(root),
     checkDisasterRecoveryRunbook(root),
+    checkRestoreDrillLog(root, {
+      requireSuccessfulRestore: options.requireSuccessfulRestore === true,
+    }),
   ];
   return result(checks.flatMap((check) => check.failures));
 }
 
 const main = () => {
-  const check = checkDisasterRecoveryReadiness(process.cwd());
+  const check = checkDisasterRecoveryReadiness(process.cwd(), {
+    requireSuccessfulRestore: process.argv.includes("--require-successful-restore"),
+  });
   if (!check.ok) {
     for (const failure of check.failures) process.stderr.write(`${failure}\n`);
     process.exitCode = 1;
