@@ -2,6 +2,15 @@ import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import path from "path";
 
+const testSupabaseUrl =
+  process.env.VITE_SUPABASE_URL ??
+  process.env.VITE_SUPABASE_PROJECT_URL ??
+  "https://abcdefghijklmnopqrst.supabase.co";
+const testSupabasePublishableKey =
+  process.env.VITE_SUPABASE_PUBLISHABLE_KEY ??
+  process.env.VITE_SUPABASE_ANON_KEY ??
+  "sb_publishable_test_key";
+
 export default defineConfig({
   plugins: [react()],
   test: {
@@ -9,6 +18,10 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
+    env: {
+      VITE_SUPABASE_URL: testSupabaseUrl,
+      VITE_SUPABASE_PUBLISHABLE_KEY: testSupabasePublishableKey,
+    },
     include: [
       "src/**/*.{test,spec}.{ts,tsx}",
       "scripts/**/*.{test,spec}.{js,mjs}",

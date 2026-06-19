@@ -1,8 +1,13 @@
 # Supabase Advisor Remediation Plan
 
-**Status as of 2026-05-03:** 121 SECURITY warnings + 354 PERFORMANCE warnings reported by `https://api.supabase.com/v1/projects/{ref}/advisors`.
+**Status as of 2026-06-19:** the live Security Advisor for project
+`qvvicunqcrwpioqnvzxf` reports one remaining warning:
+`auth_leaked_password_protection`. RLS and SECURITY DEFINER remediation work is
+tracked in `docs/STRICT_RELEASE_ACTIONS.md`; this document is the due-diligence
+summary for what remains actionable.
 
-This document explains what was fixed, what is intentionally not fixed, and what needs explicit human/product decisions before fixing.
+This document explains what was fixed, what is intentionally not fixed, and what
+needs explicit human/product decisions before fixing.
 
 ---
 
@@ -21,7 +26,35 @@ These were chosen because both are zero-risk: the first is a no-op behaviourally
 
 ---
 
-## Needs explicit decision before fixing
+## Current security advisor blocker
+
+### `auth_leaked_password_protection`
+
+The remaining live Security Advisor warning is a Supabase Auth platform setting,
+not a migration. Supabase's documentation says leaked-password protection uses
+HaveIBeenPwned and is available on the Pro plan and above:
+<https://supabase.com/docs/guides/auth/password-security>.
+
+Enable it in:
+
+**Dashboard -> Authentication -> Providers -> Email -> Password protection ->
+"Check passwords against the HaveIBeenPwned database"**.
+
+Current compensating controls:
+
+- `src/lib/passwordPolicy.ts` rejects common compromised/demo passwords during
+  signup and password reset before calling Supabase Auth.
+- `src/test/passwordPolicy.test.ts` covers the compromised-password rejection and
+  visible requirement checklist.
+- `docs/STRICT_RELEASE_ACTIONS.md` records the accepted risk and plan-blocked
+  status.
+
+This is not fully equivalent to Supabase HIBP protection because the local
+denylist cannot cover the full breach corpus. Treat the advisor warning as
+accepted only while the project remains on a plan where HIBP is unavailable or
+while business risk does not justify the upgrade.
+
+## Historical decisions retained for context
 
 ### A. 112 `*_security_definer_function_executable` warnings (56 functions × 2 roles)
 
@@ -94,10 +127,8 @@ Before doing this, audit `supabase/functions` and `supabase/migrations` for `pg_
 
 ### E. `auth_leaked_password_protection`
 
-This is a Supabase **dashboard setting**, not a migration. Enable in:
-**Dashboard → Authentication → Providers → Email → Password protection → "Check passwords against the HaveIBeenPwned database"**.
-
-Once enabled, signups using a password that appears in HIBP are rejected with a clear error. Recommended; no app-side change needed unless you want to surface the rejection reason in the UI (the default error is clear enough).
+Superseded by the current status section above. This remains the only live
+Security Advisor warning as of 2026-06-19 and is plan/dashboard-controlled.
 
 ---
 

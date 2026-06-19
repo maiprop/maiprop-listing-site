@@ -24,6 +24,7 @@
     "tmp": "^0.2.7",
     "tar": "7.5.16",
     "uuid": "^14.0.0",
+    "undici": "7.28.0",
     "ws": "8.21.0"
   },
   "overridesRationale": {
@@ -31,6 +32,7 @@
     "tmp": "@lhci/cli@0.15.1 pulls old tmp ranges through Lighthouse and inquirer/external-editor. Pin tmp above GHSA-ph9p-34f9-6g65 until Lighthouse CI removes those transitive ranges.",
     "tar": "@capacitor/cli pulls node-tar. Pin to 7.5.16 to cover GHSA-vmf3-w455-68vh until the upstream range is refreshed.",
     "uuid": "@lhci/cli@0.15.1 still declares uuid ^8.3.1. Pin to a supported uuid release because npm deprecates uuid@10 and below.",
+    "undici": "Transitive tooling pulls undici 7.25.0, which is covered by open Dependabot advisories GHSA-vmh5-mc38-953g and GHSA-pr7r-676h-xcf6. Pin to 7.28.0 until upstream packages refresh their ranges.",
     "ws": "Lighthouse pulls ws 7.x. Pin to the current safe 8.x runtime to cover GHSA-96hv-2xvq-fx4p while keeping the direct ws dependency aligned."
   },
   "scripts": {

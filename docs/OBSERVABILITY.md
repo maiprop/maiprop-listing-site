@@ -4,11 +4,18 @@
 
 | Layer | Tool | Status |
 |-------|------|--------|
-| **Error tracking** | Sentry (`@sentry/react`) | ✅ Active — frontend + edge functions |
-| **Uptime monitoring** | UptimeRobot | ✅ 3 monitors (site, healthz, Supabase) |
-| **Performance** | Sentry Browser Tracing | ✅ `tracesSampleRate: 0.1` |
-| **CSP reporting** | `csp-report` edge function | ✅ Report-Only + enforced |
-| **Edge function errors** | Sentry via `SENTRY_DSN` secret | ✅ Forwarded from Deno runtime |
+| **Error tracking** | Sentry (`@sentry/react`) | Wired; live status requires `SENTRY_AUTH_TOKEN` audit query |
+| **Uptime monitoring** | UptimeRobot | Configured: 3 monitors (site, healthz, Supabase) |
+| **Performance** | Sentry Browser Tracing | Wired; `tracesSampleRate: 0.1` |
+| **CSP reporting** | `csp-report` edge function | Report-Only plus enforced |
+| **Edge function errors** | Sentry via `SENTRY_DSN` secret | Wired; forwarding active only when `SENTRY_DSN` is set |
+
+## Latest Audit Note
+
+As of 2026-06-19, this Codex environment does not have `SENTRY_AUTH_TOKEN`
+available, so production Sentry issue/event health is **not verified here**.
+Treat source-level Sentry wiring and CI build success as integration evidence,
+not as proof that production telemetry is flowing.
 
 ## Verification Contract
 
@@ -30,36 +37,41 @@ only an authenticated Sentry query proves that live events are flowing.
 
 ### OpenTelemetry (H1)
 
-**When to add:** Once traffic exceeds ~1,000 DAU or debugging distributed traces becomes necessary.
+**When to add:** Once traffic exceeds about 1,000 DAU or debugging distributed
+traces becomes necessary.
 
 **Recommended setup:**
-1. Add `@opentelemetry/sdk-trace-web` + `@opentelemetry/exporter-trace-otlp-http`
-2. Configure OTLP exporter pointing to Sentry (Sentry supports OTLP ingest)
-3. Instrument React Router transitions + Supabase RPC calls
+1. Add `@opentelemetry/sdk-trace-web` plus
+   `@opentelemetry/exporter-trace-otlp-http`.
+2. Configure OTLP exporter pointing to Sentry.
+3. Instrument React Router transitions and Supabase RPC calls.
 
-**Why not now:** Sentry Browser Tracing already provides ~80% of what OTEL gives for a client-side SPA. The marginal value is low until we have server-side rendering or a multi-service architecture.
+**Why not now:** Sentry Browser Tracing already provides most of the value for a
+client-side SPA. The marginal value is low until the platform has SSR or a
+larger multi-service architecture.
 
 ### Custom Metrics (H2)
 
 **Recommended metrics:**
-- `auth.signup.duration` — time from form submit to session created
-- `listing.search.latency` — time from filter change to results rendered
-- `auction.bid.latency` — time from bid submit to confirmation
-- `i18n.translation.cache_hit_rate` — cache hits vs API calls
-- `edge_function.invocation.duration` — per-function P50/P95/P99
+- `auth.signup.duration`: time from form submit to session created
+- `listing.search.latency`: time from filter change to results rendered
+- `auction.bid.latency`: time from bid submit to confirmation
+- `i18n.translation.cache_hit_rate`: cache hits vs API calls
+- `edge_function.invocation.duration`: per-function P50/P95/P99
 
 **Implementation path:**
-1. Use Sentry's `startSpan()` for transaction-level metrics
-2. For custom counters/histograms, use Sentry's `metrics` API (beta) or push to a Prometheus-compatible endpoint
+1. Use Sentry's `startSpan()` for transaction-level metrics.
+2. For custom counters/histograms, use Sentry's metrics API or push to a
+   Prometheus-compatible endpoint.
 
 ### Alerting
 
 | Alert | Threshold | Channel |
 |-------|-----------|---------|
-| Error rate spike | >5% of requests in 5 min | Sentry → Slack |
-| Healthz down | 2 consecutive failures | UptimeRobot → email + Slack |
-| P95 latency | >3s for 10 min | Sentry Performance → Slack |
-| CSP violation spike | >50 reports in 1 hour | Edge function → Slack webhook |
+| Error rate spike | >5% of requests in 5 min | Sentry -> Slack |
+| Healthz down | 2 consecutive failures | UptimeRobot -> email + Slack |
+| P95 latency | >3s for 10 min | Sentry Performance -> Slack |
+| CSP violation spike | >50 reports in 1 hour | Edge function -> Slack webhook |
 
 ## Dashboard
 
