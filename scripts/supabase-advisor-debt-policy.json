@@ -26,16 +26,6 @@
     {
       "match": {
         "name": "authenticated_security_definer_function_executable",
-        "cache_key_contains": "public_bulk_update_project_unit_prices"
-      },
-      "owner": "dashboard/projects",
-      "reason": "Project bulk price updates are intentionally authenticated RPCs used by the dashboard; the function performs server-side project ownership checks before mutation.",
-      "next_action": "Move the workflow behind an Edge Function or private helper when the project editor is split further.",
-      "review_cadence": "monthly"
-    },
-    {
-      "match": {
-        "name": "authenticated_security_definer_function_executable",
         "cache_key_contains": "public_get_open_house_capacity"
       },
       "owner": "open-house/platform",

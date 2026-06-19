@@ -63,7 +63,6 @@ describe("staging Supabase advisor drift hardening", () => {
 
   it("classifies only the known app-facing advisor items with owners and review cadence", () => {
     const expectedCacheKeySnippets = [
-      "public_bulk_update_project_unit_prices",
       "public_get_open_house_capacity",
       "public_submit_agent_data_input",
       "realtime_messages_video_room_channel",

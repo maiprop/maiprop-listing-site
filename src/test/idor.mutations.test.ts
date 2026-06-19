@@ -14,7 +14,12 @@ import React from "react";
 
 // ── Module mocks (hoisted above imports) ──────────────────────────────────
 vi.mock("@/integrations/supabase/client", () => ({
-  supabase: { from: vi.fn(), rpc: vi.fn(), auth: { getUser: vi.fn() } },
+  supabase: {
+    from: vi.fn(),
+    rpc: vi.fn(),
+    functions: { invoke: vi.fn() },
+    auth: { getUser: vi.fn() },
+  },
 }));
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: vi.fn(),
@@ -181,9 +186,9 @@ describe("IDOR ownership guards on project mutation hooks", () => {
     expect(ownerChain.eqCalls).toContainEqual(["owner_id", TEST_USER_ID]);
   });
 
-  it("useBulkUpdateProjectUnitPrices delegates available-unit ownership checks to the bulk RPC", async () => {
-    vi.mocked(supabase.rpc).mockResolvedValue({
-      data: 2,
+  it("useBulkUpdateProjectUnitPrices delegates available-unit ownership checks to the Edge Function", async () => {
+    vi.mocked(supabase.functions.invoke).mockResolvedValue({
+      data: { updatedCount: 2 },
       error: null,
       success: true,
       count: null,
@@ -206,9 +211,11 @@ describe("IDOR ownership guards on project mutation hooks", () => {
       });
     });
 
-    expect(supabase.rpc).toHaveBeenCalledWith("bulk_update_project_unit_prices", {
-      p_project_id: "proj-xyz",
-      p_percentage: 5,
+    expect(supabase.functions.invoke).toHaveBeenCalledWith("project-unit-prices", {
+      body: {
+        projectId: "proj-xyz",
+        percentage: 5,
+      },
     });
     expect(response?.updatedCount).toBe(2);
   });

@@ -166,6 +166,9 @@ verify_jwt = true
 [functions.owner-pro-status]
 verify_jwt = true
 
+[functions.project-unit-prices]
+verify_jwt = true
+
 [functions.followup-lead]
 verify_jwt = true
 
