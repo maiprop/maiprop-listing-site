@@ -26,6 +26,11 @@ const advisorScript = readFileSync(
   "utf8",
 );
 
+const indexStatsScript = readFileSync(
+  "scripts/capture-supabase-index-stats.mjs",
+  "utf8",
+);
+
 const supabaseTypesScript = readFileSync(
   "scripts/check-supabase-types-freshness.cjs",
   "utf8",
@@ -52,6 +57,25 @@ describe("Supabase index stats workflow wiring", () => {
         "--allow-empty-when-unconfigured",
       );
     }
+  });
+
+  it("captures enough index metadata to review unused-index risk cautiously", () => {
+    expect(indexStatsScript).toContain("from pg_stat_user_indexes s");
+    expect(indexStatsScript).not.toContain("where schemaname = 'public'");
+    expect(indexStatsScript).toContain("pg_index i");
+    expect(indexStatsScript).toContain("from pg_constraint con");
+    expect(indexStatsScript).toContain("where con.conindid = s.indexrelid");
+    expect(indexStatsScript).toContain("table_writes");
+    expect(indexStatsScript).toContain("is_primary");
+    expect(indexStatsScript).toContain("is_unique");
+    expect(indexStatsScript).toContain("has_constraint");
+  });
+
+  it("keeps weekly unused-index reports long enough for trend review", () => {
+    expect(advisorReportWorkflow).toContain("retention-days: 90");
+    expect(advisorReportWorkflow).toContain("Managed-schema indexes, do not drop from advisor alone");
+    expect(advisorReportWorkflow).toContain("Protected constraint/unique indexes, do not drop");
+    expect(advisorReportWorkflow).toContain("Public write-path candidates needing query-plan review");
   });
 
   it("allows transient advisor unavailability only in release-safety inventory", () => {

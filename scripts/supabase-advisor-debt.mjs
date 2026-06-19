@@ -12,6 +12,16 @@ function numberOrNull(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function booleanValue(value) {
+  if (value === true || value === false) return value;
+  if (value === 1 || value === "1") return true;
+  if (value === 0 || value === "0") return false;
+  const normalized = normalize(value);
+  if (normalized === "true" || normalized === "t" || normalized === "yes") return true;
+  if (normalized === "false" || normalized === "f" || normalized === "no") return false;
+  return false;
+}
+
 function matchesRule(lint, rule) {
   const match = rule?.match ?? {};
   if (match.name && normalize(lint.name) !== normalize(match.name)) return false;
@@ -46,6 +56,26 @@ function extractIndexName(lint) {
   }
 
   return null;
+}
+
+function extractSchemaName(lint) {
+  const metadata = lint?.metadata ?? {};
+  if (typeof metadata !== "object" || Array.isArray(metadata)) {
+    return "public";
+  }
+
+  const direct = metadata.schema_name ?? metadata.schemaname ?? metadata.schema;
+  if (typeof direct === "string" && direct.trim()) {
+    return direct.trim().replace(/^"|"$/g, "");
+  }
+
+  const cacheKey = String(lint?.cache_key ?? "");
+  if (cacheKey.startsWith("unused_index_")) {
+    const [, schemaName] = cacheKey.match(/^unused_index_([^_]+)_/) ?? [];
+    if (schemaName) return schemaName;
+  }
+
+  return "public";
 }
 
 function extractTableName(lint) {
@@ -153,20 +183,46 @@ export function assertAdvisorDebtIsActionable(debt, options = {}) {
 }
 
 export function buildUnusedIndexReview(summary, indexStatsRows = []) {
-  const statsByIndex = new Map(
-    indexStatsRows
-      .filter((row) => row && typeof row === "object")
-      .map((row) => [
-        normalize(row.indexrelname ?? row.index_name ?? row.index),
-        {
-          table_name: row.relname ?? row.table_name ?? row.table ?? null,
-          index_name: row.indexrelname ?? row.index_name ?? row.index ?? null,
-          idx_scan: numberOrNull(row.idx_scan),
-          idx_tup_read: numberOrNull(row.idx_tup_read),
-          idx_tup_fetch: numberOrNull(row.idx_tup_fetch),
-        },
-      ]),
+  const managedSchemas = new Set(["auth", "storage", "realtime", "pgmq", "cron", "supabase_migrations"]);
+  const normalizeStatsRow = (row) => {
+    const schemaName = row.schemaname ?? row.schema_name ?? row.schema ?? "public";
+    const indexName = row.indexrelname ?? row.index_name ?? row.index ?? null;
+    return {
+      schema_name: schemaName,
+      table_name: row.relname ?? row.table_name ?? row.table ?? null,
+      index_name: indexName,
+      idx_scan: numberOrNull(row.idx_scan),
+      idx_tup_read: numberOrNull(row.idx_tup_read),
+      idx_tup_fetch: numberOrNull(row.idx_tup_fetch),
+      index_bytes: numberOrNull(row.index_bytes),
+      table_writes: numberOrNull(row.table_writes),
+      table_seq_scan: numberOrNull(row.table_seq_scan ?? row.seq_scan),
+      table_live_rows: numberOrNull(row.table_live_rows ?? row.n_live_tup),
+      is_primary: booleanValue(row.is_primary),
+      is_unique: booleanValue(row.is_unique),
+      is_exclusion: booleanValue(row.is_exclusion),
+      has_constraint: booleanValue(row.has_constraint),
+      constraint_type: row.constraint_type ?? null,
+      indexdef: row.indexdef ?? null,
+    };
+  };
+
+  const statsRows = indexStatsRows
+    .filter((row) => row && typeof row === "object")
+    .map(normalizeStatsRow)
+    .filter((row) => row.index_name);
+
+  const statsByQualifiedIndex = new Map(
+    statsRows.map((row) => [
+      `${normalize(row.schema_name)}.${normalize(row.index_name)}`,
+      row,
+    ]),
   );
+  const statsByIndex = new Map();
+  for (const row of statsRows) {
+    const key = normalize(row.index_name);
+    if (!statsByIndex.has(key)) statsByIndex.set(key, row);
+  }
 
   const unusedIndexLints = flattenAdvisorLints(summary?.results ?? [])
     .filter((lint) => normalize(lint.name) === "unused_index");
@@ -174,12 +230,39 @@ export function buildUnusedIndexReview(summary, indexStatsRows = []) {
   const items = unusedIndexLints.map((lint) => {
     const indexName = extractIndexName(lint);
     const tableName = extractTableName(lint);
-    const stats = indexName ? statsByIndex.get(normalize(indexName)) ?? null : null;
+    const lintSchemaName = extractSchemaName(lint);
+    const stats = indexName
+      ? statsByQualifiedIndex.get(`${normalize(lintSchemaName)}.${normalize(indexName)}`) ??
+        statsByIndex.get(normalize(indexName)) ??
+        null
+      : null;
+    const schemaName = stats?.schema_name ?? lintSchemaName;
     const idxScan = stats?.idx_scan ?? null;
+    const isManagedSchema = managedSchemas.has(normalize(schemaName));
+    const isProtectedIndex = Boolean(
+      stats && (
+        stats.is_primary ||
+        stats.is_unique ||
+        stats.is_exclusion ||
+        stats.has_constraint ||
+        stats.constraint_type
+      ),
+    );
+    const tableWrites = stats?.table_writes ?? null;
+    const writePathCandidate = Boolean(
+      normalize(schemaName) === "public" &&
+      !isProtectedIndex &&
+      idxScan === 0 &&
+      (tableWrites ?? 0) > 0
+    );
     let reviewStatus = "needs_manual_mapping";
 
     if (indexName && !stats) {
       reviewStatus = "needs_pg_stat_user_indexes_snapshot";
+    } else if (isManagedSchema) {
+      reviewStatus = "managed_schema_do_not_drop_from_advisor_only";
+    } else if (isProtectedIndex) {
+      reviewStatus = "protected_index_do_not_drop";
     } else if (idxScan !== null && idxScan > 0) {
       reviewStatus = "keep_or_recheck_usage";
     } else if (idxScan === 0) {
@@ -191,23 +274,54 @@ export function buildUnusedIndexReview(summary, indexStatsRows = []) {
       title: lint.title,
       level: lint.level,
       cache_key: lint.cache_key,
+      schema_name: schemaName,
       index_name: indexName,
       table_name: tableName ?? stats?.table_name ?? null,
       idx_scan: idxScan,
       idx_tup_read: stats?.idx_tup_read ?? null,
       idx_tup_fetch: stats?.idx_tup_fetch ?? null,
+      index_bytes: stats?.index_bytes ?? null,
+      table_writes: tableWrites,
+      table_seq_scan: stats?.table_seq_scan ?? null,
+      table_live_rows: stats?.table_live_rows ?? null,
+      is_managed_schema: isManagedSchema,
+      is_protected_index: isProtectedIndex,
+      is_primary: stats?.is_primary ?? false,
+      is_unique: stats?.is_unique ?? false,
+      is_exclusion: stats?.is_exclusion ?? false,
+      has_constraint: stats?.has_constraint ?? false,
+      constraint_type: stats?.constraint_type ?? null,
+      write_path_candidate: writePathCandidate,
+      requires_query_plan_review: reviewStatus === "candidate_needs_pg_stat_statements_and_release_review",
+      minimum_observation_days: 30,
+      drop_allowed: false,
       review_status: reviewStatus,
     };
   });
+
+  const byReviewStatus = items.reduce((acc, item) => {
+    acc[item.review_status] = (acc[item.review_status] ?? 0) + 1;
+    return acc;
+  }, {});
+  const bySchema = items.reduce((acc, item) => {
+    const schemaName = item.schema_name ?? "unknown";
+    acc[schemaName] = (acc[schemaName] ?? 0) + 1;
+    return acc;
+  }, {});
 
   const totals = {
     unused_index_lints: items.length,
     mapped_to_stats: items.filter((item) => item.idx_scan !== null).length,
     with_scans: items.filter((item) => item.idx_scan !== null && item.idx_scan > 0).length,
-    zero_scan_candidates: items.filter((item) => item.idx_scan === 0).length,
+    zero_scan_candidates: items.filter((item) =>
+      item.review_status === "candidate_needs_pg_stat_statements_and_release_review"
+    ).length,
+    managed_schema_indexes: items.filter((item) => item.review_status === "managed_schema_do_not_drop_from_advisor_only").length,
+    protected_indexes: items.filter((item) => item.review_status === "protected_index_do_not_drop").length,
+    write_path_candidates: items.filter((item) => item.write_path_candidate).length,
     needs_stats_snapshot: items.filter((item) => item.review_status === "needs_pg_stat_user_indexes_snapshot").length,
     needs_manual_mapping: items.filter((item) => item.review_status === "needs_manual_mapping").length,
   };
 
-  return { totals, items };
+  return { totals, by_review_status: byReviewStatus, by_schema: bySchema, items };
 }

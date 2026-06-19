@@ -89,16 +89,33 @@ try {
     sqlPath,
     `
 select
-  schemaname,
-  relname,
-  indexrelname,
-  idx_scan,
-  idx_tup_read,
-  idx_tup_fetch,
-  pg_relation_size(indexrelid) as index_bytes
-from pg_stat_user_indexes
-where schemaname = 'public'
-order by relname, indexrelname;
+  s.schemaname,
+  s.relname,
+  s.indexrelname,
+  s.idx_scan,
+  s.idx_tup_read,
+  s.idx_tup_fetch,
+  pg_relation_size(s.indexrelid) as index_bytes,
+  coalesce(t.n_tup_ins, 0) + coalesce(t.n_tup_upd, 0) + coalesce(t.n_tup_del, 0) as table_writes,
+  t.seq_scan as table_seq_scan,
+  t.n_live_tup as table_live_rows,
+  i.indisprimary as is_primary,
+  i.indisunique as is_unique,
+  i.indisexclusion as is_exclusion,
+  coalesce(c.has_constraint, false) as has_constraint,
+  c.contype as constraint_type,
+  pg_get_indexdef(s.indexrelid) as indexdef
+from pg_stat_user_indexes s
+join pg_index i on i.indexrelid = s.indexrelid
+left join lateral (
+  select
+    count(*) > 0 as has_constraint,
+    string_agg(distinct con.contype::text, ',' order by con.contype::text) as contype
+  from pg_constraint con
+  where con.conindid = s.indexrelid
+) c on true
+left join pg_stat_user_tables t on t.relid = s.relid
+order by s.schemaname, s.relname, s.indexrelname;
 `.trimStart(),
     "utf8",
   );
