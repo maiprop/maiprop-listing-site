@@ -37,6 +37,11 @@ Free:
 4. Verify row counts for `profiles`, `listings`, `projects`, `subscriptions`,
    and `open_house_registrations`.
 5. Record the date and outcome in `docs/PRODUCTION_CHECKLIST.md`.
+6. Append the drill evidence to `docs/compliance/dora/RESTORE_DRILL_LOG.md`,
+   including source backup timestamp, restore target, verified row counts,
+   release SHA, and cleanup confirmation.
+7. Run `npm run check:dr-restore-proof` and keep the passing output with the
+   release or procurement evidence packet.
 
 ## RPO And RTO
 
@@ -50,4 +55,6 @@ than 4 hours for this free-tier fallback.
 - Encrypted off-site backup exists for the latest production day.
 - Restore drill completed in the last 30 days.
 - `npm run check:dr-readiness` passes.
+- `npm run check:dr-restore-proof` passes when a successful restore drill is
+  required for production promotion, DORA evidence, or enterprise procurement.
 - Operators understand that this does not replace Supabase PITR.
