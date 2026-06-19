@@ -234,7 +234,7 @@ Known remaining:
 | Fixed: Preview Cloudflare runtime env was not synced like production. | `.github/workflows/ci.yml` production env sync vs preview deploy path. | PR previews could build successfully but have broken Pages Functions. | Done. PR preview deploy now requires `STAGING_APP_URL`, syncs Preview runtime Supabase bindings through the Cloudflare API, verifies persisted Preview env vars, and writes staging `wrangler.toml` before deploy. |
 | Cloudflare deploy depends on CI rewriting `wrangler.toml`. | Minimal `wrangler.toml`; CI writes runtime config during deploy. | Reproducibility is weaker outside CI. | Move non-secret stable config into `wrangler.toml`; keep secrets in platform env. |
 | Canonical host is inconsistent. | Docs prefer `portal.maiprop.co`; SEO Functions hardcode `maiprop.co`. | SEO, sharing, and redirects can disagree. | Pick one canonical host and update docs, `_seo.ts`, route Functions, and redirects. |
-| Fixed: Supabase Edge deploy verified drift before deploy but not after. | `.github/workflows/deploy-edge-functions.yml`. | A failed/partial deploy could go unnoticed. | Done. Added post-deploy live function inventory capture artifact. |
+| Fixed: Supabase Edge deploy drift evidence could block first-time function deploys or miss post-deploy drift. | `.github/workflows/deploy-edge-functions.yml`. | New functions could be blocked before deployment because production was temporarily repo-ahead-of-live; failed/partial deploys also needed a blocking post-deploy check. | Done. Pre-deploy live inventory is advisory evidence; post-deploy live inventory remains the blocking deployment gate and artifact. |
 
 ## P1 - Production Data and UX Trust
 

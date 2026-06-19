@@ -109,8 +109,10 @@ jobs:
         if: inputs.dry_run != true
         run: npm run test:deno
 
-      - name: Capture production live function drift inventory
+      - name: Capture pre-deploy production live function drift inventory
         if: inputs.dry_run != true
+        # Evidence only: a first-time deploy can be repo-ahead-of-live until the deploy step below.
+        continue-on-error: true
         run: npm run check:release-safety -- --live-functions --out release-safety-production-live-functions.json
         env:
           RELEASE_SAFETY_SUPABASE_PROJECT_REF: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
