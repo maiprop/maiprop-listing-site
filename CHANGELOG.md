@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.28](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.27...v1.9.28) (2026-06-19)
+
+
+### Performance Improvements
+
+* optimize listing grid responsiveness ([9e9c17f](https://github.com/maiprop/maiprop-listing-site/commit/9e9c17f88ada584e693c528bd54fd4228aee6ed4))
+
 ## [1.9.27](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.26...v1.9.27) (2026-06-18)
 
 
