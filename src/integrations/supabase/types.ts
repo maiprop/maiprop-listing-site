@@ -4169,6 +4169,10 @@ export type Database = {
         Args: { _user_id: string }
         Returns: undefined
       }
+      bulk_update_project_unit_prices_for_user: {
+        Args: { _user_id: string; p_percentage: number; p_project_id: string }
+        Returns: number
+      }
       can_review_professional: {
         Args: { p_professional_id: string; p_reviewer_id: string }
         Returns: boolean
