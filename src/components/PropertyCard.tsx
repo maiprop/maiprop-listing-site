@@ -363,7 +363,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
   const mainImageIsLogoFallback = isMaiPropLogoFallback(mainImage);
 
   return (
-    <div data-testid={testId} className={`property-card h-[332px] w-full min-w-0 rounded-2xl overflow-hidden group grid grid-rows-[132px_minmax(0,1fr)] bg-card transition-shadow duration-300 ${
+    <div data-testid={testId} className={`property-card h-[332px] w-full min-w-0 rounded-2xl overflow-hidden group grid grid-rows-[132px_minmax(0,1fr)] bg-card transition-shadow duration-300 [content-visibility:auto] [contain-intrinsic-size:332px] ${
       property.isFeatured
         ? "border-2 border-amber-400/70 shadow-[0_0_0_1px_rgba(251,191,36,0.15),0_4px_24px_rgba(251,191,36,0.22)] hover:shadow-[0_0_0_1px_rgba(251,191,36,0.25),0_8px_32px_rgba(251,191,36,0.35)]"
         : "border border-border"

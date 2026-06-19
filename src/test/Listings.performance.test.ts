@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { getRenderedListings, mapListingFromCard } from "@/lib/listingsPerformance";
-import { getAutoListingGridColumns, getVirtualWindow } from "@/lib/virtualizedGrid";
+import { getAutoListingGridColumns, getVirtualRowsFromOffsets, getVirtualWindow } from "@/lib/virtualizedGrid";
 import type { ListingCardWithRaw } from "@/lib/listingsCardUtils";
 
 const makeListing = (overrides: Partial<ListingCardWithRaw> = {}): ListingCardWithRaw => ({
@@ -57,6 +57,15 @@ describe("Listings performance helpers", () => {
     expect(window.startIndex).toBe(0);
     expect(window.endIndex).toBe(28);
     expect(window.totalRows).toBe(250);
+  });
+
+  it("finds visible virtualized rows from measured offsets without scanning the whole list", () => {
+    const rowOffsets = Array.from({ length: 1_001 }, (_, index) => index * 340);
+
+    expect(getVirtualRowsFromOffsets(rowOffsets, 1_000, 34_100, 720, 2)).toEqual({
+      startRow: 98,
+      endRow: 105,
+    });
   });
 
   it("projects card listings into a lightweight map payload", () => {

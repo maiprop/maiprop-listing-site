@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -57,6 +57,42 @@ const requiredStatusChecks = [
   "Validate Supabase migrations",
   "E2E Tests",
 ];
+
+const workflowFiles = (root) => {
+  const workflowDir = join(root, ".github", "workflows");
+  if (!existsSync(workflowDir)) return [];
+
+  return readdirSync(workflowDir)
+    .filter((name) => name.endsWith(".yml") || name.endsWith(".yaml"))
+    .map((name) => `.github/workflows/${name}`);
+};
+
+const extractWorkflowUses = (text) => {
+  const uses = [];
+  const regex = /^\s*(?:-\s*)?uses:\s*([^#\s]+)/gm;
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    uses.push(match[1].trim().replace(/^['"]|['"]$/g, ""));
+  }
+
+  return uses;
+};
+
+const parseRemoteAction = (usesValue) => {
+  if (usesValue.startsWith("./")) return null;
+  if (usesValue.startsWith("docker://")) return null;
+
+  const atIndex = usesValue.lastIndexOf("@");
+  if (atIndex === -1) return { action: usesValue, ref: "" };
+
+  return {
+    action: usesValue.slice(0, atIndex),
+    ref: usesValue.slice(atIndex + 1),
+  };
+};
+
+const isPinnedSha = (ref) => /^[a-f0-9]{40}$/i.test(ref);
 
 export function checkCodeownersCoverage(root = process.cwd()) {
   const failures = [];
@@ -118,10 +154,51 @@ export function checkBranchProtectionEvidence(root = process.cwd()) {
   return result(failures);
 }
 
+export function checkGithubActionsPolicy(root = process.cwd()) {
+  const failures = [];
+  const expected = readJson(root, "docs/governance/github-actions-policy.expected.json");
+
+  if (!expected) {
+    return result(["docs/governance/github-actions-policy.expected.json is missing or invalid"]);
+  }
+
+  if (expected.requirePinnedActions !== true) {
+    failures.push("github-actions-policy.expected.json must require pinned workflow actions");
+  }
+  if (!Array.isArray(expected.allowedActionRepositories) || expected.allowedActionRepositories.length === 0) {
+    failures.push("github-actions-policy.expected.json must define allowedActionRepositories");
+  }
+  if (expected.recommendedLiveRepositoryPolicy?.allowed_actions !== "selected") {
+    failures.push("recommended live GitHub Actions policy must use allowed_actions=selected");
+  }
+  if (expected.recommendedLiveRepositoryPolicy?.sha_pinning_required !== true) {
+    failures.push("recommended live GitHub Actions policy must require SHA pinning");
+  }
+
+  const allowed = new Set(expected.allowedActionRepositories ?? []);
+  for (const file of workflowFiles(root)) {
+    const text = readText(root, file) ?? "";
+    for (const usesValue of extractWorkflowUses(text)) {
+      const remote = parseRemoteAction(usesValue);
+      if (remote === null) continue;
+
+      if (!allowed.has(remote.action)) {
+        failures.push(`${file} uses unapproved action repository: ${remote.action}`);
+      }
+      if (expected.requirePinnedActions === true && !isPinnedSha(remote.ref)) {
+        failures.push(`${file} action ${usesValue} must be pinned by commit SHA`);
+      }
+    }
+  }
+
+  return result(failures);
+}
+
 export function checkGithubGovernance(root = process.cwd()) {
   const checks = [
     checkCodeownersCoverage(root),
     checkBranchProtectionEvidence(root),
+    checkGithubActionsPolicy(root),
   ];
   return result(checks.flatMap((check) => check.failures));
 }

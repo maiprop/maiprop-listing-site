@@ -163,6 +163,17 @@ const makeFixture = () => {
     }),
   );
   writeFileSync(
+    join(root, "docs", "governance", "github-actions-policy.expected.json"),
+    JSON.stringify({
+      requirePinnedActions: true,
+      allowedActionRepositories: ["actions/checkout"],
+      recommendedLiveRepositoryPolicy: {
+        allowed_actions: "selected",
+        sha_pinning_required: true,
+      },
+    }),
+  );
+  writeFileSync(
     join(root, "docs", "governance", "ENTERPRISE_TENANCY_AND_SSO.md"),
     [
       "# Enterprise Tenancy and SSO",

@@ -29,3 +29,42 @@ export function getVirtualWindow(
     totalRows,
   };
 }
+
+export function getVirtualRowsFromOffsets(
+  rowOffsets: number[],
+  totalRows: number,
+  viewportTop: number,
+  viewportHeight: number,
+  overscanRows: number,
+) {
+  if (totalRows <= 0) return { startRow: 0, endRow: 0 };
+
+  const viewportBottom = viewportTop + viewportHeight;
+
+  let firstLow = 0;
+  let firstHigh = totalRows;
+  while (firstLow < firstHigh) {
+    const mid = Math.floor((firstLow + firstHigh) / 2);
+    if ((rowOffsets[mid + 1] ?? 0) < viewportTop) {
+      firstLow = mid + 1;
+    } else {
+      firstHigh = mid;
+    }
+  }
+
+  let lastLow = firstLow;
+  let lastHigh = totalRows;
+  while (lastLow < lastHigh) {
+    const mid = Math.floor((lastLow + lastHigh) / 2);
+    if ((rowOffsets[mid] ?? 0) <= viewportBottom) {
+      lastLow = mid + 1;
+    } else {
+      lastHigh = mid;
+    }
+  }
+
+  return {
+    startRow: Math.max(0, firstLow - overscanRows),
+    endRow: Math.min(totalRows, lastLow + overscanRows),
+  };
+}

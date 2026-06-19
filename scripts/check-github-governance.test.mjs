@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  checkGithubActionsPolicy,
   checkBranchProtectionEvidence,
   checkCodeownersCoverage,
   checkGithubGovernance,
@@ -11,6 +12,7 @@ import {
 const makeFixture = () => {
   const root = mkdtempSync(join(tmpdir(), "maiprop-github-governance-"));
   mkdirSync(join(root, ".github"), { recursive: true });
+  mkdirSync(join(root, ".github", "workflows"), { recursive: true });
   mkdirSync(join(root, "docs", "governance"), { recursive: true });
 
   writeFileSync(
@@ -46,6 +48,35 @@ const makeFixture = () => {
       allowDeletions: false,
       doNotAllowBypass: true,
     }),
+  );
+  writeFileSync(
+    join(root, "docs", "governance", "github-actions-policy.expected.json"),
+    JSON.stringify({
+      requirePinnedActions: true,
+      allowedActionRepositories: [
+        "actions/checkout",
+        "actions/setup-node",
+        "actions/upload-artifact",
+        "denoland/setup-deno",
+      ],
+      recommendedLiveRepositoryPolicy: {
+        allowed_actions: "selected",
+        sha_pinning_required: true,
+      },
+    }),
+  );
+  writeFileSync(
+    join(root, ".github", "workflows", "ci.yml"),
+    [
+      "name: CI",
+      "jobs:",
+      "  test:",
+      "    steps:",
+      "      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd",
+      "      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282",
+      "  local:",
+      "    uses: ./.github/workflows/reusable-release-safety.yml",
+    ].join("\n"),
   );
   writeFileSync(
     join(root, "docs", "BRANCH_PROTECTION.md"),
@@ -106,5 +137,26 @@ describe("GitHub governance check", () => {
     expect(result.ok).toBe(false);
     expect(result.failures.join("\n")).toContain("requiredApprovingReviewCount");
     expect(result.failures.join("\n")).toContain("doNotAllowBypass");
+  });
+
+  it("fails when workflow actions use floating refs or unapproved repositories", () => {
+    const root = makeFixture();
+    writeFileSync(
+      join(root, ".github", "workflows", "ci.yml"),
+      [
+        "name: CI",
+        "jobs:",
+        "  test:",
+        "    steps:",
+        "      - uses: actions/checkout@v4",
+        "      - uses: untrusted/example-action@0123456789012345678901234567890123456789",
+      ].join("\n"),
+    );
+
+    const result = checkGithubActionsPolicy(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("must be pinned by commit SHA");
+    expect(result.failures.join("\n")).toContain("unapproved action repository");
   });
 });

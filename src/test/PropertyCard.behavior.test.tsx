@@ -292,6 +292,17 @@ describe("PropertyCard behavior", () => {
     expect(screen.queryByText("Parking")).not.toBeInTheDocument();
   });
 
+  it("uses browser containment hints so dense card grids paint responsively", async () => {
+    const { PropertyCard } = await import("@/components/PropertyCard");
+
+    renderWithProviders(<PropertyCard property={baseProperty()} />);
+
+    expect(screen.getByTestId("property-card")).toHaveClass(
+      "[content-visibility:auto]",
+      "[contain-intrinsic-size:332px]",
+    );
+  });
+
   it("uses project-specific compact specs for new-build cards", async () => {
     const { PropertyCard } = await import("@/components/PropertyCard");
 

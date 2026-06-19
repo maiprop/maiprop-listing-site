@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { getAutoListingGridColumns } from "@/lib/virtualizedGrid";
+import { getAutoListingGridColumns, getVirtualRowsFromOffsets } from "@/lib/virtualizedGrid";
 
 type VirtualizedListingGridProps<T extends { id: string }> = {
   items: T[];
@@ -26,6 +26,7 @@ export function VirtualizedListingGrid<T extends { id: string }>({
   "data-testid": testId,
 }: VirtualizedListingGridProps<T>) {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const viewportFrameRef = useRef<number | null>(null);
   const [rootWidth, setRootWidth] = useState(0);
   const [viewportTop, setViewportTop] = useState(0);
   const [measuredRowHeights, setMeasuredRowHeights] = useState<Record<string, number>>({});
@@ -38,32 +39,51 @@ export function VirtualizedListingGrid<T extends { id: string }>({
     if (!node) return;
 
     const resizeObserver = new ResizeObserver((entries) => {
-      setRootWidth(entries[0]?.contentRect.width ?? node.clientWidth);
+      const nextWidth = entries[0]?.contentRect.width ?? node.clientWidth;
+      setRootWidth((current) => (current === nextWidth ? current : nextWidth));
     });
     resizeObserver.observe(node);
-    setRootWidth(node.clientWidth);
+    setRootWidth((current) => (current === node.clientWidth ? current : node.clientWidth));
 
     const updateViewport = () => {
       const rect = node.getBoundingClientRect();
       const scrollParent = scrollParentRef?.current ?? null;
       if (scrollParent) {
         const parentRect = scrollParent.getBoundingClientRect();
-        setViewportTop(Math.max(0, parentRect.top - rect.top));
-        setViewportHeight(scrollParent.clientHeight);
+        const nextTop = Math.max(0, parentRect.top - rect.top);
+        const nextHeight = scrollParent.clientHeight;
+        setViewportTop((current) => (current === nextTop ? current : nextTop));
+        setViewportHeight((current) => (current === nextHeight ? current : nextHeight));
         return;
       }
-      setViewportTop(Math.max(0, -rect.top));
-      setViewportHeight(window.innerHeight);
+      const nextTop = Math.max(0, -rect.top);
+      const nextHeight = window.innerHeight;
+      setViewportTop((current) => (current === nextTop ? current : nextTop));
+      setViewportHeight((current) => (current === nextHeight ? current : nextHeight));
+    };
+    const scheduleViewportUpdate = () => {
+      if (viewportFrameRef.current !== null) return;
+      const requestFrame = globalThis.requestAnimationFrame ?? ((callback: FrameRequestCallback) =>
+        window.setTimeout(() => callback(performance.now()), 16));
+      viewportFrameRef.current = requestFrame(() => {
+        viewportFrameRef.current = null;
+        updateViewport();
+      });
     };
     updateViewport();
     const scrollTarget = scrollParentRef?.current ?? window;
-    scrollTarget.addEventListener("scroll", updateViewport, { passive: true });
-    window.addEventListener("resize", updateViewport);
+    scrollTarget.addEventListener("scroll", scheduleViewportUpdate, { passive: true });
+    window.addEventListener("resize", scheduleViewportUpdate);
 
     return () => {
       resizeObserver.disconnect();
-      scrollTarget.removeEventListener("scroll", updateViewport);
-      window.removeEventListener("resize", updateViewport);
+      scrollTarget.removeEventListener("scroll", scheduleViewportUpdate);
+      window.removeEventListener("resize", scheduleViewportUpdate);
+      if (viewportFrameRef.current !== null) {
+        const cancelFrame = globalThis.cancelAnimationFrame ?? window.clearTimeout;
+        cancelFrame(viewportFrameRef.current);
+        viewportFrameRef.current = null;
+      }
     };
   }, [scrollParentRef]);
 
@@ -96,23 +116,10 @@ export function VirtualizedListingGrid<T extends { id: string }>({
   }, [estimateItemHeight, gap, measuredRowHeights, rows]);
 
   const totalHeight = Math.max(0, rowOffsets[totalRows] - gap);
-  const { startRow, endRow } = useMemo(() => {
-    const viewportBottom = viewportTop + viewportHeight;
-    let firstVisibleRow = 0;
-    while (firstVisibleRow < totalRows && rowOffsets[firstVisibleRow + 1] < viewportTop) {
-      firstVisibleRow += 1;
-    }
-
-    let lastVisibleRow = firstVisibleRow;
-    while (lastVisibleRow < totalRows && rowOffsets[lastVisibleRow] <= viewportBottom) {
-      lastVisibleRow += 1;
-    }
-
-    return {
-      startRow: Math.max(0, firstVisibleRow - overscanRows),
-      endRow: Math.min(totalRows, lastVisibleRow + overscanRows),
-    };
-  }, [overscanRows, rowOffsets, totalRows, viewportHeight, viewportTop]);
+  const { startRow, endRow } = useMemo(
+    () => getVirtualRowsFromOffsets(rowOffsets, totalRows, viewportTop, viewportHeight, overscanRows),
+    [overscanRows, rowOffsets, totalRows, viewportHeight, viewportTop],
+  );
 
   const visibleRows = rows.slice(startRow, endRow);
   const visibleItemCount = visibleRows.reduce((count, row) => count + row.items.length, 0);
