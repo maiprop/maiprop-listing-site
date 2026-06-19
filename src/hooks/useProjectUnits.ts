@@ -51,6 +51,11 @@ export type BulkUpdateProjectUnitPricesInput = {
   percentage: number;
 };
 
+type BulkUpdateProjectUnitPricesResponse = {
+  updatedCount?: number;
+  error?: string;
+};
+
 export const useProjectUnits = (projectId: string | undefined) => {
   return useQuery({
     queryKey: ["project_units", projectId],
@@ -135,19 +140,16 @@ export const useBulkUpdateProjectUnitPrices = () => {
         "project unit bulk price update",
       );
 
-      // Localized escape hatch: generated Supabase types can lag new migrations in PR CI.
-      const { data, error } = await (
-        supabase.rpc as unknown as (
-          fn: "bulk_update_project_unit_prices",
-          args: { p_project_id: string; p_percentage: number },
-        ) => Promise<{ data: number | null; error: Error | null }>
-      )("bulk_update_project_unit_prices", {
-        p_project_id: payload.projectId,
-        p_percentage: payload.percentage,
+      const { data, error } = await supabase.functions.invoke<BulkUpdateProjectUnitPricesResponse>("project-unit-prices", {
+        body: {
+          projectId: payload.projectId,
+          percentage: payload.percentage,
+        },
       });
 
       if (error) throw error;
-      return { updatedCount: data ?? 0 };
+      if (data?.error) throw new Error(data.error);
+      return { updatedCount: Number(data?.updatedCount ?? 0) };
     },
     onSuccess: (_data, { projectId }) => {
       qc.invalidateQueries({ queryKey: ["project_units", projectId] });

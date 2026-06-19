@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, parse } from "node:path";
 
 const root = process.cwd();
-const vitestBin = join(root, "node_modules", "vitest", "vitest.mjs");
 const coverageDir = join(root, "coverage");
 const coverageSummaryPath = join(root, "coverage", "coverage-summary.json");
 const coverageRunRoot = join(root, ".coverage-runs");
@@ -18,6 +17,22 @@ const thresholds = {
   branches: 71,
   statements: 81.9,
 };
+
+function findVitestBin(startDir) {
+  let current = startDir;
+  while (true) {
+    const candidate = join(current, "node_modules", "vitest", "vitest.mjs");
+    if (existsSync(candidate)) return candidate;
+
+    const parent = dirname(current);
+    if (parent === current || current === parse(current).root) {
+      return candidate;
+    }
+    current = parent;
+  }
+}
+
+const vitestBin = findVitestBin(root);
 
 function sleep(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);

@@ -3,22 +3,22 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 
-const { fromMock, rpcMock, useAuthMock, requireOwnedProjectMock, toastMock, supabaseClientMock } = vi.hoisted(() => {
+const { fromMock, functionsInvokeMock, useAuthMock, requireOwnedProjectMock, toastMock, supabaseClientMock } = vi.hoisted(() => {
   const fromMock = vi.fn();
-  const rpcMock = vi.fn();
-  const supabaseClientMock: { from: (...args: unknown[]) => unknown; rpc: (...args: unknown[]) => unknown } = {
+  const functionsInvokeMock = vi.fn();
+  const supabaseClientMock: {
+    from: (...args: unknown[]) => unknown;
+    functions: { invoke: (...args: unknown[]) => unknown };
+  } = {
     from: (...args: unknown[]) => fromMock(...args),
-    rpc: vi.fn(function (this: unknown, ...args: unknown[]) {
-      if (this !== supabaseClientMock) {
-        throw new TypeError("Cannot read properties of undefined (reading 'rest')");
-      }
-      return rpcMock(...args);
-    }),
+    functions: {
+      invoke: (...args: unknown[]) => functionsInvokeMock(...args),
+    },
   };
 
   return {
     fromMock,
-    rpcMock,
+    functionsInvokeMock,
     useAuthMock: vi.fn(),
     requireOwnedProjectMock: vi.fn(),
     toastMock: { success: vi.fn(), error: vi.fn() },
@@ -53,7 +53,7 @@ function wrapper({ children }: { children: React.ReactNode }) {
 
 beforeEach(() => {
   fromMock.mockReset();
-  rpcMock.mockReset();
+  functionsInvokeMock.mockReset();
   useAuthMock.mockReset();
   requireOwnedProjectMock.mockReset();
   toastMock.success.mockReset();
@@ -172,15 +172,15 @@ describe("project unit hooks", () => {
     expect(deleteEqProject).toHaveBeenCalledWith("project_id", "project-1");
   });
 
-  it("skips the bulk RPC when no units are provided and calls it otherwise", async () => {
+  it("skips the bulk price endpoint when no units are provided and calls it otherwise", async () => {
     const { result } = renderHook(() => useBulkUpdateProjectUnitPrices(), { wrapper });
 
     await act(async () => {
       await expect(result.current.mutateAsync({ projectId: "project-1", units: [], percentage: 5 })).resolves.toEqual({ updatedCount: 0 });
     });
-    expect(rpcMock).not.toHaveBeenCalled();
+    expect(functionsInvokeMock).not.toHaveBeenCalled();
 
-    rpcMock.mockResolvedValue({ data: 3, error: null });
+    functionsInvokeMock.mockResolvedValue({ data: { updatedCount: 3 }, error: null });
     await act(async () => {
       await expect(
         result.current.mutateAsync({
@@ -191,9 +191,11 @@ describe("project unit hooks", () => {
       ).resolves.toEqual({ updatedCount: 3 });
     });
 
-    expect(rpcMock).toHaveBeenCalledWith("bulk_update_project_unit_prices", {
-      p_project_id: "project-1",
-      p_percentage: -2,
+    expect(functionsInvokeMock).toHaveBeenCalledWith("project-unit-prices", {
+      body: {
+        projectId: "project-1",
+        percentage: -2,
+      },
     });
   });
 });

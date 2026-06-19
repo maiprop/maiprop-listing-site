@@ -4,8 +4,8 @@
  * Lets agents log closings they completed off-platform in exchange for a
  * 0.5% discount on their next subscription invoice (max 20 inputs/month).
  *
- * Submissions go through the `submit_agent_data_input` security-definer RPC
- * which enforces the role check, lifetime ban, and the monthly cap.
+ * Submissions go through the `agent-data-input` Edge Function, which verifies
+ * the caller JWT before enforcing the role check, lifetime ban, and monthly cap.
  * Verification is performed by an admin out-of-band; the Stripe credit is
  * applied only AFTER a submission is marked verified by the
  * `apply-data-input-credit` edge function.
