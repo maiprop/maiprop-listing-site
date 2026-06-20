@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   checkEcasHardeningContracts,
+  checkFunctionInvocationBoundaryEvidence,
   checkModuleSizeBudget,
   checkSensitiveMutationBoundaries,
 } from "./check-ecas-hardening-contracts.mjs";
@@ -52,6 +53,23 @@ const makeFixture = () => {
     "supabase.from('saved_searches').insert(payload);\n",
   );
   writeFileSync(
+    join(root, "docs", "governance", "function-invocation-boundaries.json"),
+    JSON.stringify({
+      version: 1,
+      reviewedFunctionBodies: [{
+        function: "ai-search",
+        boundary: "edge-schema-validated",
+        owner: "domain",
+        reviewBy: "2026-07-31",
+        rationale: "AI search request bodies are schema-normalized by the Edge Function before provider calls.",
+      }],
+    }),
+  );
+  writeFileSync(
+    join(root, "src", "hooks", "useAiSearch.ts"),
+    "await supabase.functions.invoke('ai-search', { body: { query } });\n",
+  );
+  writeFileSync(
     join(root, "docs", "governance", "LIVE_GITHUB_ADMIN_SETTINGS.md"),
     [
       "allowed_actions: selected",
@@ -68,6 +86,7 @@ const makeFixture = () => {
     [
       "ECAS_LOAD_PROFILE=baseline_100",
       "ECAS_LOAD_PROFILE=growth_10x",
+      "ECAS_LOAD_PROFILE=enterprise_soak",
       "LOAD_TEST_APPROVED_PRODUCTION=true",
       "load-test-summary.json",
       "approved time window",
@@ -108,5 +127,40 @@ describe("ECAS hardening contracts", () => {
 
     expect(result.ok).toBe(false);
     expect(result.failures.join("\n")).toContain("blocked table pricing_configs");
+  });
+
+  it("fails when a function request body has no boundary review", () => {
+    const root = makeFixture();
+    writeFileSync(
+      join(root, "src", "hooks", "useAiSearch.ts"),
+      "await supabase.functions.invoke('unreviewed-ai', { body: { query } });\n",
+    );
+
+    const result = checkFunctionInvocationBoundaryEvidence(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("unreviewed-ai");
+  });
+
+  it("fails when function boundary evidence points to a stale function", () => {
+    const root = makeFixture();
+    writeFileSync(
+      join(root, "docs", "governance", "function-invocation-boundaries.json"),
+      JSON.stringify({
+        version: 1,
+        reviewedFunctionBodies: [{
+          function: "stale-ai",
+          boundary: "edge-schema-validated",
+          owner: "domain",
+          reviewBy: "2026-07-31",
+          rationale: "This stale entry should fail when no source invokes the reviewed function.",
+        }],
+      }),
+    );
+
+    const result = checkFunctionInvocationBoundaryEvidence(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("stale-ai");
   });
 });

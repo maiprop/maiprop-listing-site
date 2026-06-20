@@ -1,0 +1,162 @@
+{
+  "version": 1,
+  "reviewedFunctionBodies": [
+    {
+      "function": "admin-review-invitation",
+      "boundary": "edge-schema-validated",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "Admin invitation decisions are checked inside the Edge Function before invitation state changes are written."
+    },
+    {
+      "function": "ai-search",
+      "boundary": "edge-schema-validated",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "AI search prompts are normalized and bounded by the Edge Function before provider calls are made."
+    },
+    {
+      "function": "ai-service-match",
+      "boundary": "edge-schema-validated",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "Service matching requests are validated at the Edge boundary before AI and professional matching logic runs."
+    },
+    {
+      "function": "ai-translate",
+      "boundary": "edge-schema-validated",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "Translation requests are routed through an Edge Function so text size and provider payloads stay controlled."
+    },
+    {
+      "function": "begin-role-switch",
+      "boundary": "edge-schema-validated",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "Role-switch requests are mediated by the Edge Function so client payloads cannot directly grant privileges."
+    },
+    {
+      "function": "complete-onboarding-role",
+      "boundary": "edge-schema-validated",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "Onboarding role completion is an Edge-mediated mutation that keeps role assignment checks out of direct UI writes."
+    },
+    {
+      "function": "create-checkout",
+      "boundary": "external-provider-contract",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "Checkout payloads are finalized by the Edge Function before Stripe session creation and billing redirects."
+    },
+    {
+      "function": "fetch-past-deals-from-os",
+      "boundary": "edge-schema-validated",
+      "owner": "data-access",
+      "reviewBy": "2026-07-31",
+      "rationale": "Past-deal imports are constrained by the Edge Function and do not expose OS credentials to the browser."
+    },
+    {
+      "function": "full-sync-from-os",
+      "boundary": "edge-schema-validated",
+      "owner": "data-access",
+      "reviewBy": "2026-07-31",
+      "rationale": "OS sync pagination and replacement options are interpreted server-side before database import work begins."
+    },
+    {
+      "function": "invitation-notify",
+      "boundary": "edge-schema-validated",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "Invitation notification payloads are sent through the Edge boundary rather than browser-controlled email logic."
+    },
+    {
+      "function": "listing-ai-assist",
+      "boundary": "edge-schema-validated",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "Listing AI prompts are centralized in the Edge Function so usage controls and prompt shaping remain server-side."
+    },
+    {
+      "function": "log-role-switch",
+      "boundary": "edge-schema-validated",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "Role-switch audit events are written through the Edge Function to preserve a consistent audit boundary."
+    },
+    {
+      "function": "neighbourhood-report",
+      "boundary": "edge-schema-validated",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "Neighbourhood report inputs are bounded by the Edge Function before AI generation and quota checks execute."
+    },
+    {
+      "function": "os-diagnose",
+      "boundary": "admin-diagnostic-only",
+      "owner": "data-access",
+      "reviewBy": "2026-07-31",
+      "rationale": "OS diagnostics use an empty body and are restricted to admin diagnostic connectivity checks."
+    },
+    {
+      "function": "owner-pro-status",
+      "boundary": "edge-schema-validated",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "Owner Pro status checks are resolved server-side so subscription state is not trusted from the browser."
+    },
+    {
+      "function": "property-pois",
+      "boundary": "edge-schema-validated",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "Property point-of-interest requests are normalized server-side before external map and location lookups."
+    },
+    {
+      "function": "property-valuation",
+      "boundary": "edge-schema-validated",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "Valuation requests are centralized in the Edge Function for quota, input shape, and AI provider controls."
+    },
+    {
+      "function": "record-listing-view",
+      "boundary": "edge-schema-validated",
+      "owner": "data-access",
+      "reviewBy": "2026-07-31",
+      "rationale": "Listing view events are written through an Edge Function to keep analytics writes consistent and bounded."
+    },
+    {
+      "function": "sync-firesale-to-os",
+      "boundary": "edge-schema-validated",
+      "owner": "data-access",
+      "reviewBy": "2026-07-31",
+      "rationale": "Firesale OS sync requests are interpreted by the Edge Function before any OS or database mutation occurs."
+    },
+    {
+      "function": "sync-to-os",
+      "boundary": "edge-schema-validated",
+      "owner": "data-access",
+      "reviewBy": "2026-07-31",
+      "rationale": "Listing OS sync requests are mediated by the Edge Function so browser payloads cannot reach OS credentials."
+    },
+    {
+      "function": "transfer-platform-admin",
+      "boundary": "edge-schema-validated",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "Platform admin transfer requests are routed through an Edge Function instead of direct privilege table writes."
+    }
+  ],
+  "reviewedDynamicInvocations": [
+    {
+      "file": "src/components/AdminPanel.tsx",
+      "symbol": "name",
+      "boundary": "admin-diagnostic-only",
+      "owner": "data-access",
+      "reviewBy": "2026-07-31",
+      "rationale": "The admin function tester only exposes a fixed UI allowlist of OS diagnostic and sync functions."
+    }
+  ]
+}

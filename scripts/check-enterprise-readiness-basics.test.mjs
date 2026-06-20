@@ -318,6 +318,21 @@ const makeFixture = () => {
     }),
   );
   writeFileSync(
+    join(root, "docs", "governance", "function-invocation-boundaries.json"),
+    JSON.stringify({
+      version: 1,
+      reviewedFunctionBodies: [],
+      reviewedDynamicInvocations: [],
+    }),
+  );
+  writeFileSync(
+    join(root, "docs", "governance", "edge-function-request-boundaries.json"),
+    JSON.stringify({
+      version: 1,
+      reviewedRawJsonBodies: [],
+    }),
+  );
+  writeFileSync(
     join(root, "docs", "governance", "LIVE_GITHUB_ADMIN_SETTINGS.md"),
     [
       "allowed_actions: selected",
@@ -334,6 +349,7 @@ const makeFixture = () => {
     [
       "ECAS_LOAD_PROFILE=baseline_100",
       "ECAS_LOAD_PROFILE=growth_10x",
+      "ECAS_LOAD_PROFILE=enterprise_soak",
       "LOAD_TEST_APPROVED_PRODUCTION=true",
       "load-test-summary.json",
       "approved time window",

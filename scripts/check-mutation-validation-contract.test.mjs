@@ -13,6 +13,8 @@ const makeFixture = () => {
   mkdirSync(join(root, "supabase", "functions", "admin-pricing-config"), { recursive: true });
   mkdirSync(join(root, "supabase", "functions", "create-stripe-price"), { recursive: true });
   mkdirSync(join(root, "supabase", "functions", "sync-stripe-pricing"), { recursive: true });
+  mkdirSync(join(root, "supabase", "functions", "ai-search"), { recursive: true });
+  mkdirSync(join(root, "docs", "governance"), { recursive: true });
   mkdirSync(join(root, "src", "pages"), { recursive: true });
 
   writeFileSync(
@@ -66,6 +68,23 @@ const makeFixture = () => {
     "const syncStripePricingBodySchema = z.object({}); try { await parseJsonBody(req, syncStripePricingBodySchema); await supabase.from('pricing_configs').update({}); } catch (error) { if (error instanceof SchemaValidationError) throw error; }\n",
   );
   writeFileSync(
+    join(root, "supabase", "functions", "ai-search", "index.ts"),
+    "const { query } = await req.json(); if (!query) throw new Error('query required');\n",
+  );
+  writeFileSync(
+    join(root, "docs", "governance", "edge-function-request-boundaries.json"),
+    JSON.stringify({
+      version: 1,
+      reviewedRawJsonBodies: [{
+        function: "ai-search",
+        validationStyle: "typed-manual-guards",
+        owner: "domain",
+        reviewBy: "2026-07-31",
+        rationale: "The function currently applies manual request guards and is tracked for schema-first migration.",
+      }],
+    }),
+  );
+  writeFileSync(
     join(root, "src", "pages", "AdminPricing.tsx"),
     "parseMutationInput(pricingConfigRowsSchema, rows, 'pricing'); await invokeAdminPricingConfig('admin-pricing-config');\n",
   );
@@ -97,5 +116,41 @@ describe("mutation validation contract", () => {
     expect(result.failures.join("\n")).toContain("src/hooks/useSavedSearches.ts");
     expect(result.failures.join("\n")).toContain("React Query mutation");
     expect(result.failures.join("\n")).toContain("supabase/functions/open-house-registration/index.ts");
+  });
+
+  it("fails when a raw Edge Function request body has no boundary review", () => {
+    const root = makeFixture();
+    mkdirSync(join(root, "supabase", "functions", "ai-unreviewed"), { recursive: true });
+    writeFileSync(
+      join(root, "supabase", "functions", "ai-unreviewed", "index.ts"),
+      "const body = await req.json();\n",
+    );
+
+    const result = checkMutationValidationContract(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("ai-unreviewed");
+  });
+
+  it("fails when Edge Function request boundary evidence is stale", () => {
+    const root = makeFixture();
+    writeFileSync(
+      join(root, "docs", "governance", "edge-function-request-boundaries.json"),
+      JSON.stringify({
+        version: 1,
+        reviewedRawJsonBodies: [{
+          function: "stale-function",
+          validationStyle: "typed-manual-guards",
+          owner: "domain",
+          reviewBy: "2026-07-31",
+          rationale: "Stale entries must fail so the evidence remains tied to source code.",
+        }],
+      }),
+    );
+
+    const result = checkMutationValidationContract(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("stale-function");
   });
 });

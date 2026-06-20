@@ -96,6 +96,8 @@ export function checkModuleSizeBudget(root = process.cwd()) {
 }
 
 const mutationPattern = /\.from\(\s*["'`]([^"'`]+)["'`]\s*\)[\s\S]{0,500}?\.(insert|update|upsert|delete)\s*\(/g;
+const functionInvokeBodyPattern = /\.functions\.invoke\(\s*["'`]([^"'`]+)["'`]\s*,\s*\{[\s\S]{0,1400}?\bbody\s*:/g;
+const dynamicFunctionInvokeBodyPattern = /\.functions\.invoke\(\s*([A-Za-z_$][\w$]*)\s*,\s*\{[\s\S]{0,1400}?\bbody\s*:/g;
 
 const scanBrowserMutations = (root) => {
   const mutations = [];
@@ -149,6 +151,111 @@ export function checkSensitiveMutationBoundaries(root = process.cwd()) {
   return result(failures);
 }
 
+const scanFunctionBodyInvocations = (root) => {
+  const invocations = [];
+  for (const { relativePath } of walkFiles(
+    root,
+    "src",
+    (path) => /\.(?:ts|tsx)$/.test(path) && !/\/test\/|\.test\.|\.spec\./.test(path),
+  )) {
+    const text = readText(root, relativePath) ?? "";
+    for (const match of text.matchAll(functionInvokeBodyPattern)) {
+      invocations.push({
+        file: relativePath,
+        function: match[1],
+        dynamic: false,
+      });
+    }
+    for (const match of text.matchAll(dynamicFunctionInvokeBodyPattern)) {
+      invocations.push({
+        file: relativePath,
+        symbol: match[1],
+        dynamic: true,
+      });
+    }
+  }
+  return invocations;
+};
+
+export function checkFunctionInvocationBoundaryEvidence(root = process.cwd()) {
+  const failures = [];
+  const inventory = readJson(root, "docs/governance/function-invocation-boundaries.json", failures);
+  if (!inventory) return result(failures);
+
+  const validBoundaries = new Set([
+    "client-schema-first",
+    "edge-schema-validated",
+    "admin-diagnostic-only",
+    "external-provider-contract",
+  ]);
+  const validOwners = new Set(["app-web", "shared-ui", "domain", "data-access"]);
+  const reviewedFunctions = new Map();
+  const reviewedDynamic = new Map();
+
+  for (const entry of inventory.reviewedFunctionBodies ?? []) {
+    if (typeof entry.function !== "string" || entry.function.trim().length === 0) {
+      failures.push("function-invocation-boundaries reviewedFunctionBodies entries must include function");
+      continue;
+    }
+    reviewedFunctions.set(entry.function, entry);
+  }
+
+  for (const entry of inventory.reviewedDynamicInvocations ?? []) {
+    if (typeof entry.file !== "string" || typeof entry.symbol !== "string") {
+      failures.push("function-invocation-boundaries reviewedDynamicInvocations entries must include file and symbol");
+      continue;
+    }
+    reviewedDynamic.set(`${entry.file}::${entry.symbol}`, entry);
+  }
+
+  const invocations = scanFunctionBodyInvocations(root);
+  const usedFunctions = new Set(invocations.filter((entry) => !entry.dynamic).map((entry) => entry.function));
+  const usedDynamic = new Set(
+    invocations.filter((entry) => entry.dynamic).map((entry) => `${entry.file}::${entry.symbol}`),
+  );
+
+  for (const invocation of invocations) {
+    const entry = invocation.dynamic
+      ? reviewedDynamic.get(`${invocation.file}::${invocation.symbol}`)
+      : reviewedFunctions.get(invocation.function);
+    const name = invocation.dynamic ? `${invocation.file} ${invocation.symbol}` : invocation.function;
+    if (!entry) {
+      failures.push(`${invocation.file} invokes ${name} with a request body without function-boundary evidence`);
+    }
+  }
+
+  const validateEntry = (entry, label) => {
+    if (!validBoundaries.has(entry.boundary)) {
+      failures.push(`${label} function-boundary evidence has unsupported boundary ${entry.boundary}`);
+    }
+    if (!validOwners.has(entry.owner)) {
+      failures.push(`${label} function-boundary evidence owner must map to a repository boundary`);
+    }
+    if (typeof entry.rationale !== "string" || entry.rationale.trim().length < 30) {
+      failures.push(`${label} function-boundary evidence needs a concrete rationale`);
+    }
+    if (typeof entry.reviewBy !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(entry.reviewBy)) {
+      failures.push(`${label} function-boundary evidence must include reviewBy as YYYY-MM-DD`);
+    }
+  };
+
+  for (const [functionName, entry] of reviewedFunctions) {
+    validateEntry(entry, functionName);
+    if (!usedFunctions.has(functionName)) {
+      failures.push(`function-boundary evidence points to unused function body invocation: ${functionName}`);
+    }
+  }
+
+  for (const [key, entry] of reviewedDynamic) {
+    validateEntry(entry, key);
+    if (!usedDynamic.has(key)) {
+      failures.push(`function-boundary evidence points to unused dynamic invocation: ${key}`);
+    }
+  }
+
+  return result(failures);
+}
+
 export function checkLiveGithubAdminEvidence(root = process.cwd()) {
   const failures = [];
   const text = readText(root, "docs/governance/LIVE_GITHUB_ADMIN_SETTINGS.md");
@@ -177,6 +284,7 @@ export function checkLoadProofEvidence(root = process.cwd()) {
   for (const marker of includesAll(text, [
     "ECAS_LOAD_PROFILE=baseline_100",
     "ECAS_LOAD_PROFILE=growth_10x",
+    "ECAS_LOAD_PROFILE=enterprise_soak",
     "LOAD_TEST_APPROVED_PRODUCTION=true",
     "load-test-summary.json",
     "approved time window",
@@ -191,6 +299,7 @@ export function checkEcasHardeningContracts(root = process.cwd()) {
   const checks = [
     checkModuleSizeBudget(root),
     checkSensitiveMutationBoundaries(root),
+    checkFunctionInvocationBoundaryEvidence(root),
     checkLiveGithubAdminEvidence(root),
     checkLoadProofEvidence(root),
   ];
