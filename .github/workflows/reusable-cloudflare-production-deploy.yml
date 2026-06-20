@@ -62,6 +62,9 @@ jobs:
           VITE_PLAUSIBLE_DOMAIN:         ${{ secrets.VITE_PLAUSIBLE_DOMAIN }}
           VITE_APP_URL:                  ${{ secrets.VITE_APP_URL }}
 
+      - name: Package Cloudflare Pages Functions worker
+        run: npm run build:cloudflare-pages-worker
+
       - name: Generate production SBOM for provenance
         run: npm sbom --sbom-format cyclonedx > sbom.cdx.json
 

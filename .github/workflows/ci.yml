@@ -939,6 +939,9 @@ jobs:
           VITE_GOOGLE_MAPS_API_KEY:      ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
           VITE_PLAUSIBLE_DOMAIN:         ${{ secrets.VITE_PLAUSIBLE_DOMAIN }}
 
+      - name: Package Cloudflare Pages Functions worker
+        run: npm run build:cloudflare-pages-worker
+
       - name: Deploy to Cloudflare Pages (PR preview)
         uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
         with:

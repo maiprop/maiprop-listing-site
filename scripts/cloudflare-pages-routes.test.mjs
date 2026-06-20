@@ -8,6 +8,8 @@ const productionDeployWorkflowPath = resolve(
   ".github/workflows/reusable-cloudflare-production-deploy.yml",
 );
 const ciWorkflowPath = resolve(process.cwd(), ".github/workflows/ci.yml");
+const packageJsonPath = resolve(process.cwd(), "package.json");
+const pagesWorkerBuildScriptPath = resolve(process.cwd(), "scripts/build-cloudflare-pages-worker.mjs");
 
 describe("Cloudflare Pages function routes", () => {
   it("routes public API and middleware paths through Pages Functions before SPA fallback", () => {
@@ -41,6 +43,32 @@ describe("Cloudflare Pages deploy workflow routing", () => {
     expect(workflow).toContain("id: deploy_pages");
     expect(workflow).toContain("Log Cloudflare Pages deployment outputs");
     expect(workflow).toContain("Inspect Cloudflare Pages deployment aliases");
+  });
+
+  it("packages Pages Functions into advanced worker output before Pages deploys", () => {
+    const productionWorkflow = readFileSync(productionDeployWorkflowPath, "utf8");
+    const ciWorkflow = readFileSync(ciWorkflowPath, "utf8");
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+    const buildScript = readFileSync(pagesWorkerBuildScriptPath, "utf8");
+
+    expect(packageJson.scripts["build:cloudflare-pages-worker"]).toBe("node scripts/build-cloudflare-pages-worker.mjs");
+    expect(buildScript).toContain("pages");
+    expect(buildScript).toContain("functions");
+    expect(buildScript).toContain("build");
+    expect(buildScript).toContain('routePath: "/api/public/listings"');
+    expect(buildScript).toContain('"_worker.js"');
+    expect(buildScript).toContain('"_routes.json"');
+
+    const productionPackageIndex = productionWorkflow.indexOf("Package Cloudflare Pages Functions worker");
+    const productionDeployIndex = productionWorkflow.indexOf("Deploy to Cloudflare Pages (production)");
+    expect(productionPackageIndex).toBeGreaterThan(-1);
+    expect(productionDeployIndex).toBeGreaterThan(productionPackageIndex);
+    expect(productionWorkflow).toContain("npm run build:cloudflare-pages-worker");
+
+    const previewPackageIndex = ciWorkflow.indexOf("Package Cloudflare Pages Functions worker");
+    const previewDeployIndex = ciWorkflow.indexOf("Deploy to Cloudflare Pages (PR preview)");
+    expect(previewPackageIndex).toBeGreaterThan(-1);
+    expect(previewDeployIndex).toBeGreaterThan(previewPackageIndex);
   });
 
   it("keeps PR previews on deterministic branch deployments", () => {
