@@ -47,6 +47,25 @@ Deno.test("errorResponse: body has error key with the message", async () => {
   assertStrictEquals(body.error, "not found");
 });
 
+Deno.test("errorResponse: body includes a stable machine-readable code", async () => {
+  const res = errorResponse("bad input", 400);
+  const body = await res.json();
+  assertEquals(body, { error: "bad input", code: "bad_request" });
+});
+
+Deno.test("errorResponse: forwards validation issues in the standard envelope", async () => {
+  const res = errorResponse("Invalid request body", 400, {}, {
+    code: "validation_error",
+    issues: [{ code: "invalid_type", path: ["email"], message: "Invalid email" }],
+  });
+  const body = await res.json();
+  assertEquals(body, {
+    error: "Invalid request body",
+    code: "validation_error",
+    issues: [{ code: "invalid_type", path: ["email"], message: "Invalid email" }],
+  });
+});
+
 Deno.test("errorResponse: custom status is reflected", () => {
   const res = errorResponse("bad input", 400);
   assertStrictEquals(res.status, 400);

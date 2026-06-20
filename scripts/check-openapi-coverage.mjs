@@ -24,6 +24,42 @@ export function extractOpenApiPaths(openApiText) {
     .sort();
 }
 
+function extractSchemaBlock(openApiText, schemaName) {
+  const lines = openApiText.split(/\r?\n/);
+  const start = lines.findIndex((line) => line === `    ${schemaName}:`);
+  if (start === -1) return null;
+  const block = [lines[start]];
+  for (let index = start + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (/^    [A-Za-z0-9_-]+:\s*$/.test(line)) break;
+    if (/^\S/.test(line)) break;
+    block.push(line);
+  }
+  return block.join("\n");
+}
+
+function checkErrorSchemaContract(openApiText, failures) {
+  const block = extractSchemaBlock(openApiText, "Error");
+  if (!block) {
+    failures.push("OpenAPI Error schema is missing");
+    return;
+  }
+  const requiredLine = block.match(/required:\s*\[([^\]]*)\]/)?.[1] ?? "";
+  const requiredFields = new Set(requiredLine.split(",").map((field) => field.trim()).filter(Boolean));
+  if (!requiredFields.has("error")) {
+    failures.push("OpenAPI Error schema must require error");
+  }
+  if (requiredFields.has("code")) {
+    failures.push("OpenAPI Error schema must not require code until all Edge Functions use the standard error envelope");
+  }
+  if (!/\n        code:\s*\n(?:\s+.*\n)*?\s+type:\s*string/.test(block)) {
+    failures.push("OpenAPI Error schema must document optional code");
+  }
+  if (!/\n        issues:\s*\n(?:\s+.*\n)*?\s+type:\s*array/.test(block)) {
+    failures.push("OpenAPI Error schema must document issues");
+  }
+}
+
 export function checkOpenApiCoverage(root = process.cwd()) {
   const failures = [];
   const inventory = readJson(root, "docs/public-edge-function-inventory.json");
@@ -39,6 +75,8 @@ export function checkOpenApiCoverage(root = process.cwd()) {
     ? inventory.entries.map((entry) => entry.name).sort()
     : [];
   const documentedPaths = extractOpenApiPaths(spec);
+
+  checkErrorSchemaContract(spec, failures);
 
   for (const functionName of publicFunctions) {
     if (!documentedPaths.includes(functionName)) {

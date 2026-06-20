@@ -18,7 +18,17 @@ import { parseMutationInput, rowUpdateMutationSchema } from "@/lib/mutationSchem
 
 type ListingStatus = Database["public"]["Enums"]["listing_status"];
 type PropertyType = Database["public"]["Enums"]["property_type"];
-type ListingUpdate = Database["public"]["Tables"]["listings"]["Update"];
+
+type FeaturedListingActionUpdates = {
+  is_featured?: boolean;
+  priority_placement?: number;
+  featured_until?: string | null;
+};
+
+type AdminFeaturedListingActionResponse = {
+  ok?: boolean;
+  error?: string | null;
+};
 
 type FeaturedListing = {
   id: string;
@@ -86,6 +96,25 @@ function performanceLabel(views: number): string {
   if (views > 100) return "High";
   if (views >= 50) return "Medium";
   return "Low";
+}
+
+async function updateFeaturedListing(
+  listingId: string,
+  updates: FeaturedListingActionUpdates,
+  label: string,
+): Promise<void> {
+  const payload = parseMutationInput(
+    rowUpdateMutationSchema,
+    { id: listingId, updates },
+    label,
+  );
+  const { data, error } = await supabase.functions.invoke<AdminFeaturedListingActionResponse>(
+    "admin-featured-listing-action",
+    { body: payload },
+  );
+
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
 }
 
 async function fetchFeaturedListings(): Promise<FeaturedListing[]> {
@@ -162,16 +191,7 @@ export default function AdminFeaturedListings() {
       setToggling((prev) => ({ ...prev, [listing.id]: true }));
       const next = !listing.is_featured;
       try {
-        const payload = parseMutationInput(
-          rowUpdateMutationSchema,
-          { id: listing.id, updates: { is_featured: next } },
-          "featured listing update",
-        );
-        const { error: updateError } = await supabase
-          .from("listings")
-          .update(payload.updates as ListingUpdate)
-          .eq("id", payload.id);
-        if (updateError) throw updateError;
+        await updateFeaturedListing(listing.id, { is_featured: next }, "featured listing update");
         await queryClient.invalidateQueries({ queryKey: ["admin-featured-listings"] });
         toast.success(next ? "Listing marked as featured" : "Listing removed from featured");
       } catch (e: unknown) {
@@ -210,16 +230,7 @@ export default function AdminFeaturedListings() {
 
       setUpdatingPriority((prev) => ({ ...prev, [listing.id]: true }));
       try {
-        const payload = parseMutationInput(
-          rowUpdateMutationSchema,
-          { id: listing.id, updates: { priority_placement: clamped } },
-          "featured priority update",
-        );
-        const { error: updateError } = await supabase
-          .from("listings")
-          .update(payload.updates as ListingUpdate)
-          .eq("id", payload.id);
-        if (updateError) throw updateError;
+        await updateFeaturedListing(listing.id, { priority_placement: clamped }, "featured priority update");
         await queryClient.invalidateQueries({ queryKey: ["admin-featured-listings"] });
         toast.success(`Priority updated to ${clamped}`);
       } catch (e: unknown) {
@@ -241,16 +252,7 @@ export default function AdminFeaturedListings() {
       setUpdatingUntil((prev) => ({ ...prev, [listing.id]: true }));
       const newVal = dateValue ? new Date(dateValue).toISOString() : null;
       try {
-        const payload = parseMutationInput(
-          rowUpdateMutationSchema,
-          { id: listing.id, updates: { featured_until: newVal } },
-          "featured expiry update",
-        );
-        const { error: updateError } = await supabase
-          .from("listings")
-          .update(payload.updates as ListingUpdate)
-          .eq("id", payload.id);
-        if (updateError) throw updateError;
+        await updateFeaturedListing(listing.id, { featured_until: newVal }, "featured expiry update");
         await queryClient.invalidateQueries({ queryKey: ["admin-featured-listings"] });
         toast.success(newVal ? `Expires ${formatDate(newVal)}` : "Expiry cleared");
       } catch (e: unknown) {

@@ -198,14 +198,6 @@
       "rationale": "Admin review state is constrained by admin-only RLS and kept out of billing and tenant control tables."
     },
     {
-      "file": "src/components/AdminFeaturedListings.tsx",
-      "table": "listings",
-      "operations": ["update"],
-      "boundary": "rls-scoped-browser",
-      "owner": "app-web",
-      "rationale": "Featured listing moderation updates are admin-scoped and do not touch billing, tenant, or auth role tables."
-    },
-    {
       "file": "src/components/AdminSubscribers.tsx",
       "table": "investor_subscriptions",
       "operations": ["update"],

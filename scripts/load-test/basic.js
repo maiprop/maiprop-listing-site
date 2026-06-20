@@ -1,20 +1,23 @@
 /**
- * k6 load test — baseline scenario.
+ * k6 load test - non-prod baseline scenario.
  *
  * Install k6: https://k6.io/docs/getting-started/installation/
  *
- * Run locally against staging:
- *   BASE_URL=https://staging--maiprop.netlify.app ECAS_LOAD_PROFILE=baseline_100 k6 run scripts/load-test/basic.js
+ * Run safely through the wrapper:
+ *   node scripts/perf-k6-run.mjs --base-url https://staging.example.com --profile smoke
+ *   node scripts/perf-k6-run.mjs --base-url https://staging.example.com --profile baseline_100
  *
- * Run against production (off-hours only, after ops confirmation):
- *   LOAD_TEST_APPROVED_PRODUCTION=true BASE_URL=https://portal.maiprop.co ECAS_LOAD_PROFILE=baseline_100 k6 run scripts/load-test/basic.js
+ * Run against production only after operations approval:
+ *   LOAD_TEST_APPROVED_PRODUCTION=true node scripts/perf-k6-run.mjs --base-url https://portal.maiprop.co --profile baseline_100
  *
  * Scenarios exercise:
- *   - Home page (cold)
+ *   - Home page
  *   - Listings index
- *   - Sitemap (edge-function proxied)
+ *   - Auctions index
+ *   - Pricing page
  *   - Public listings API
  *   - Public open-houses API
+ *   - Dynamic sitemap
  *
  * Thresholds:
  *   - p(95) < 2500 ms across all endpoints
@@ -28,16 +31,12 @@
  *
  * If a threshold fails, k6 exits non-zero.
  */
-// @ts-nocheck — k6 runs in its own runtime with its own globals.
+// @ts-nocheck - k6 runs in its own runtime with its own globals.
 import http from "k6/http";
 import { check, sleep } from "k6";
 import { Rate } from "k6/metrics";
 
-const BASE_URL = __ENV.BASE_URL || "https://staging--maiprop.netlify.app";
-const ECAS_LOAD_PROFILE = __ENV.ECAS_LOAD_PROFILE || "baseline_100";
-const LOAD_TEST_APPROVED_PRODUCTION = __ENV.LOAD_TEST_APPROVED_PRODUCTION === "true";
-
-const PRODUCTION_HOSTS = new Set(["maiprop.co", "www.maiprop.co", "portal.maiprop.co"]);
+const SUPPORTED_LOAD_PROFILES = ["smoke", "baseline_100", "growth_10x", "enterprise_soak"];
 
 const LOAD_PROFILES = {
   smoke: [
@@ -62,13 +61,13 @@ const LOAD_PROFILES = {
   ],
 };
 
+const LOAD_TEST_APPROVED_PRODUCTION = __ENV.LOAD_TEST_APPROVED_PRODUCTION === "true";
+const LOAD_TEST_SUMMARY_DIR = (__ENV.LOAD_TEST_SUMMARY_DIR || ".").replace(/\/$/, "");
+const BASE_URL = normalizeBaseUrl(requireEnv("BASE_URL"));
+const ECAS_LOAD_PROFILE = requireLoadProfile(requireEnv("ECAS_LOAD_PROFILE"));
 const selectedStages = LOAD_PROFILES[ECAS_LOAD_PROFILE];
-if (!selectedStages) {
-  throw new Error(`Unknown ECAS_LOAD_PROFILE: ${ECAS_LOAD_PROFILE}`);
-}
 
-const parsedBaseUrl = new URL(BASE_URL);
-if (PRODUCTION_HOSTS.has(parsedBaseUrl.hostname) && !LOAD_TEST_APPROVED_PRODUCTION) {
+if (isProductionHost(hostnameFromUrl(BASE_URL)) && !LOAD_TEST_APPROVED_PRODUCTION) {
   throw new Error("Production load tests require LOAD_TEST_APPROVED_PRODUCTION=true");
 }
 
@@ -92,48 +91,139 @@ export const options = {
 
 export default function () {
   const routes = [
-    { name: "home",       url: `${BASE_URL}/` },
-    { name: "listings",   url: `${BASE_URL}/listings` },
-    { name: "auctions",   url: `${BASE_URL}/auctions` },
-    { name: "pricing",    url: `${BASE_URL}/pricing` },
+    { name: "home", url: `${BASE_URL}/` },
+    { name: "listings", url: `${BASE_URL}/listings` },
+    { name: "auctions", url: `${BASE_URL}/auctions` },
+    { name: "pricing", url: `${BASE_URL}/pricing` },
     { name: "api_listings", url: `${BASE_URL}/api/public/listings?limit=24` },
     { name: "api_open_houses", url: `${BASE_URL}/api/public/open-houses?limit=24` },
-    { name: "sitemap",    url: `${BASE_URL}/sitemap-dynamic.xml` },
+    { name: "sitemap", url: `${BASE_URL}/sitemap-dynamic.xml` },
   ];
 
-  for (const r of routes) {
-    const res = http.get(r.url, { tags: { route: r.name } });
+  for (const route of routes) {
+    const res = http.get(route.url, { tags: { route: route.name } });
     const ok = check(res, {
-      [`${r.name}: status 2xx`]: (r) => r.status >= 200 && r.status < 300,
-      [`${r.name}: TTFB < 1500ms`]: (r) => r.timings.waiting < 1500,
+      [`${route.name}: status 2xx`]: (response) => response.status >= 200 && response.status < 300,
+      [`${route.name}: TTFB < 1500ms`]: (response) => response.timings.waiting < 1500,
     });
-    if (!ok) errorRate.add(1);
-    else errorRate.add(0);
+    errorRate.add(ok ? 0 : 1);
     sleep(0.5);
   }
 }
 
 export function handleSummary(data) {
-  // Emit both stdout and a JSON artefact for CI archival.
   return {
-    stdout: textSummary(data),
-    "load-test-summary.json": JSON.stringify(data, null, 2),
+    stdout: textSummary(normalizeSummary(data)),
+    [artifactPath("load-test-summary.json")]: JSON.stringify(normalizeSummary(data), null, 2),
+    [artifactPath("load-test-raw-summary.json")]: JSON.stringify(data, null, 2),
   };
 }
 
-function textSummary(data) {
-  const m = data.metrics;
-  const line = (k, v) => `${k.padEnd(30)} ${v}`;
-  const p95 = (m.http_req_duration?.values?.["p(95)"] ?? 0).toFixed(0);
-  const failRate = ((m.http_req_failed?.values?.rate ?? 0) * 100).toFixed(2);
+function requireEnv(name) {
+  const value = (__ENV[name] || "").trim();
+  if (!value) throw new Error(`${name} is required for load tests`);
+  return value;
+}
+
+function requireLoadProfile(profile) {
+  if (!SUPPORTED_LOAD_PROFILES.includes(profile)) {
+    throw new Error(`ECAS_LOAD_PROFILE must be one of: ${SUPPORTED_LOAD_PROFILES.join(", ")}`);
+  }
+  return profile;
+}
+
+function normalizeBaseUrl(value) {
+  if (!/^https?:\/\//.test(value)) {
+    throw new Error("BASE_URL must use http or https");
+  }
+  return value.replace(/\/+$/, "");
+}
+
+function isProductionHost(hostname) {
+  return hostname === "maiprop.co" || hostname.endsWith(".maiprop.co");
+}
+
+function hostnameFromUrl(value) {
+  return value.replace(/^https?:\/\//, "").split("/")[0].split(":")[0].toLowerCase();
+}
+
+function artifactPath(name) {
+  if (!LOAD_TEST_SUMMARY_DIR || LOAD_TEST_SUMMARY_DIR === ".") return name;
+  return `${LOAD_TEST_SUMMARY_DIR}/${name}`;
+}
+
+function metricValue(data, metricName, valueName) {
+  const value = data.metrics?.[metricName]?.values?.[valueName];
+  return typeof value === "number" ? value : null;
+}
+
+function normalizeSummary(data) {
+  const durationP95 = metricValue(data, "http_req_duration", "p(95)");
+  const failedRate = metricValue(data, "http_req_failed", "rate");
+  const errorsRate = metricValue(data, "errors", "rate");
+  const totalRequests = metricValue(data, "http_reqs", "count");
+  const peakVus = metricValue(data, "vus_max", "max");
+  const iterations = metricValue(data, "iterations", "count");
+
+  const thresholdResults = [
+    {
+      name: "http_req_duration_p95_ms",
+      actual: durationP95,
+      budget: 2500,
+      passed: typeof durationP95 === "number" && durationP95 < 2500,
+    },
+    {
+      name: "http_req_failed_rate",
+      actual: failedRate,
+      budget: 0.01,
+      passed: typeof failedRate === "number" && failedRate < 0.01,
+    },
+    {
+      name: "errors_rate",
+      actual: errorsRate,
+      budget: 0.01,
+      passed: typeof errorsRate === "number" && errorsRate < 0.01,
+    },
+  ];
+
+  return {
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    tool: "k6",
+    profile: ECAS_LOAD_PROFILE,
+    baseUrl: BASE_URL,
+    productionHost: isProductionHost(hostnameFromUrl(BASE_URL)),
+    productionApproved: LOAD_TEST_APPROVED_PRODUCTION,
+    summaryType: "normalized",
+    status: thresholdResults.every((threshold) => threshold.passed) ? "passed" : "failed",
+    traffic: {
+      totalRequests,
+      peakVus,
+      iterations,
+    },
+    thresholds: thresholdResults,
+  };
+}
+
+function textSummary(summary) {
+  const line = (key, value) => `${key.padEnd(30)} ${value}`;
+  const thresholdLine = (threshold) => {
+    const actual = threshold.actual === null ? "missing" : threshold.actual.toFixed(threshold.name.endsWith("_rate") ? 4 : 0);
+    return line(threshold.name, `${actual} <= ${threshold.budget} ${threshold.passed ? "PASS" : "FAIL"}`);
+  };
+
   return [
     "",
-    "──── Load test summary ────",
-    line("VUs peak",             m.vus_max?.values?.max ?? "—"),
-    line("Total requests",       m.http_reqs?.values?.count ?? "—"),
-    line("Request duration p95", `${p95} ms`),
-    line("Failed request rate",  `${failRate}%`),
-    "───────────────────────────",
+    "----- Load test summary -----",
+    line("Status", summary.status),
+    line("Profile", summary.profile),
+    line("Base URL", summary.baseUrl),
+    line("Production host", String(summary.productionHost)),
+    line("Production approved", String(summary.productionApproved)),
+    line("VUs peak", summary.traffic.peakVus ?? "missing"),
+    line("Total requests", summary.traffic.totalRequests ?? "missing"),
+    ...summary.thresholds.map(thresholdLine),
+    "-----------------------------",
     "",
   ].join("\n");
 }

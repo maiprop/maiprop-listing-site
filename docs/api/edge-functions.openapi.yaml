@@ -38,11 +38,30 @@ components:
   schemas:
     Error:
       type: object
+      required: [error]
       properties:
         error:
           type: string
         code:
           type: string
+          description: Machine-readable error code when the endpoint uses the shared standard error envelope.
+        issues:
+          type: array
+          description: Field-level validation details when request schema validation fails.
+          items:
+            type: object
+            required: [message]
+            properties:
+              code:
+                type: string
+              path:
+                type: array
+                items:
+                  oneOf:
+                    - type: string
+                    - type: integer
+              message:
+                type: string
 
     HealthzResponse:
       type: object

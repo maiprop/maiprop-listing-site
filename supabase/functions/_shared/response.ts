@@ -9,7 +9,7 @@
  *   HTTP 503
  *
  * Error contract:
- *   { error: string }
+ *   { error: string, code: string, issues?: Array<{ code?: string, path?: Array<string | number>, message: string }> }
  *   HTTP 4xx/5xx
  *
  * Success contract:
@@ -24,12 +24,45 @@ export function jsonResponse(body: unknown, status = 200, extraHeaders: Record<s
   });
 }
 
+export type ErrorResponseIssue = {
+  code?: string;
+  path?: Array<string | number>;
+  message: string;
+};
+
+export type ErrorResponseOptions = {
+  code?: string;
+  issues?: ErrorResponseIssue[];
+};
+
+function defaultErrorCode(status: number): string {
+  const known: Record<number, string> = {
+    400: "bad_request",
+    401: "unauthorized",
+    403: "forbidden",
+    404: "not_found",
+    405: "method_not_allowed",
+    409: "conflict",
+    422: "validation_error",
+    429: "rate_limited",
+    500: "internal_error",
+    503: "service_unavailable",
+  };
+  return known[status] ?? (status >= 500 ? "internal_error" : "request_failed");
+}
+
 export function errorResponse(
   message: string,
   status = 500,
   extraHeaders: Record<string, string> = {},
+  options: ErrorResponseOptions = {},
 ): Response {
-  return jsonResponse({ error: message }, status, extraHeaders);
+  const body: { error: string; code: string; issues?: ErrorResponseIssue[] } = {
+    error: message,
+    code: options.code ?? defaultErrorCode(status),
+  };
+  if (options.issues && options.issues.length > 0) body.issues = options.issues;
+  return jsonResponse(body, status, extraHeaders);
 }
 
 /**

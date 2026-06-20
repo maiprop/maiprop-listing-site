@@ -142,6 +142,39 @@ describe("ECAS hardening contracts", () => {
     expect(result.failures.join("\n")).toContain("unreviewed-ai");
   });
 
+  it("detects typed function request bodies with boundary review", () => {
+    const root = makeFixture();
+    writeFileSync(
+      join(root, "src", "hooks", "useAiSearch.ts"),
+      "await supabase.functions.invoke<SearchResponse>('ai-search', { body: { query } });\n",
+    );
+
+    const result = checkFunctionInvocationBoundaryEvidence(root);
+
+    expect(result.ok).toBe(true);
+    expect(result.failures).toEqual([]);
+  });
+
+  it("detects multiline typed function request bodies with boundary review", () => {
+    const root = makeFixture();
+    writeFileSync(
+      join(root, "src", "hooks", "useAiSearch.ts"),
+      [
+        "await supabase.functions.invoke<{",
+        "  data: string[];",
+        "  error?: string;",
+        "}>('ai-search', {",
+        "  body: { query },",
+        "});",
+      ].join("\n"),
+    );
+
+    const result = checkFunctionInvocationBoundaryEvidence(root);
+
+    expect(result.ok).toBe(true);
+    expect(result.failures).toEqual([]);
+  });
+
   it("fails when function boundary evidence points to a stale function", () => {
     const root = makeFixture();
     writeFileSync(

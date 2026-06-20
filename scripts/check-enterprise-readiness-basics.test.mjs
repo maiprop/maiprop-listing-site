@@ -132,6 +132,20 @@ const makeFixture = () => {
     join(root, "docs", "api", "edge-functions.openapi.yaml"),
     [
       "openapi: 3.0.3",
+      "components:",
+      "  schemas:",
+      "    Error:",
+      "      type: object",
+      "      required: [error]",
+      "      properties:",
+      "        error:",
+      "          type: string",
+      "        code:",
+      "          type: string",
+      "        issues:",
+      "          type: array",
+      "          items:",
+      "            type: object",
       "paths:",
       "  /ai-search:",
       "    post:",
@@ -284,6 +298,18 @@ const makeFixture = () => {
     ].join("\n"),
   );
   writeFileSync(
+    join(root, "supabase", "migrations", "20260620084356_org_permission_audit_foundation.sql"),
+    [
+      "CREATE TABLE IF NOT EXISTS public.organization_audit_ledger ();",
+      "ALTER TABLE public.organization_audit_ledger ENABLE ROW LEVEL SECURITY;",
+      "CREATE OR REPLACE FUNCTION private.has_org_permission() RETURNS boolean LANGUAGE sql AS $$ SELECT true $$;",
+      "CREATE OR REPLACE FUNCTION private.assert_org_permission() RETURNS void LANGUAGE plpgsql AS $$ BEGIN END $$;",
+      "CREATE OR REPLACE FUNCTION private.append_org_audit_event() RETURNS uuid LANGUAGE sql AS $$ SELECT gen_random_uuid() $$;",
+      "CREATE TRIGGER trg_prevent_organization_audit_ledger_mutation BEFORE UPDATE OR DELETE ON public.organization_audit_ledger FOR EACH ROW EXECUTE FUNCTION private.prevent_organization_audit_ledger_mutation();",
+      "CREATE POLICY organization_audit_ledger_select ON public.organization_audit_ledger USING (private.has_org_permission());",
+    ].join("\n"),
+  );
+  writeFileSync(
     join(root, "docs", "BRANCH_PROTECTION.md"),
     [
       "# Branch Protection",
@@ -413,9 +439,13 @@ const makeFixture = () => {
     join(root, "scripts", "load-test", "basic.js"),
     [
       "import http from \"k6/http\";",
-      "const ECAS_LOAD_PROFILE = 'baseline_100';",
-      "const LOAD_TEST_APPROVED_PRODUCTION = false;",
-      "const profiles = 'growth_10x enterprise_soak';",
+      "import { Rate } from \"k6/metrics\";",
+      "const requireEnv = (name) => { const value = __ENV[name]; if (!value) throw new Error(name); return value; };",
+      "const requireLoadProfile = (profile) => { const profiles = ['smoke', 'baseline_100', 'growth_10x', 'enterprise_soak']; if (!profiles.includes(profile)) throw new Error('invalid ECAS_LOAD_PROFILE'); return profile; };",
+      "const BASE_URL = requireEnv(\"BASE_URL\");",
+      "const ECAS_LOAD_PROFILE = requireLoadProfile(requireEnv(\"ECAS_LOAD_PROFILE\"));",
+      "const LOAD_TEST_APPROVED_PRODUCTION = __ENV.LOAD_TEST_APPROVED_PRODUCTION === 'true';",
+      "const LOAD_TEST_SUMMARY_DIR = __ENV.LOAD_TEST_SUMMARY_DIR;",
       "export const errorRate = new Rate('errors');",
       "export const options = {",
       "  scenarios: { browse: { executor: \"ramping-vus\", stages: [{ target: 1000 }] } },",
@@ -428,7 +458,9 @@ const makeFixture = () => {
       "  http.get(`${BASE_URL}/api/public/open-houses?limit=24`);",
       "  http.get(`${BASE_URL}/sitemap-dynamic.xml`);",
       "}",
-      "export function handleSummary() { return { 'load-test-summary.json': '{}' }; }",
+      "function artifactPath(name) { return LOAD_TEST_SUMMARY_DIR ? `${LOAD_TEST_SUMMARY_DIR}/${name}` : name; }",
+      "function normalizeSummary(data) { return { profile: ECAS_LOAD_PROFILE, approved: LOAD_TEST_APPROVED_PRODUCTION, metrics: data.metrics }; }",
+      "export function handleSummary(data) { return { [artifactPath(\"load-test-summary.json\")]: JSON.stringify(normalizeSummary(data), null, 2) }; }",
     ].join("\n"),
   );
   writeFileSync(
@@ -530,8 +562,8 @@ describe("enterprise readiness basics", () => {
 
     const result = checkEnterpriseReadinessBasics(root);
 
-    expect(result.ok).toBe(true);
     expect(result.failures).toEqual([]);
+    expect(result.ok).toBe(true);
   }, 10_000);
 
   it("reports runtime drift with actionable file names", () => {
@@ -587,6 +619,22 @@ describe("enterprise readiness basics", () => {
 
     expect(result.ok).toBe(false);
     expect(result.failures.join("\n")).toContain("PROCUREMENT_EVIDENCE_MATRIX.md");
+  });
+
+  it("requires org permission helpers and an append-only org audit ledger contract", () => {
+    const root = makeFixture();
+    writeFileSync(
+      join(root, "supabase", "migrations", "20260620084356_org_permission_audit_foundation.sql"),
+      "-- missing org permission and audit ledger markers\n",
+    );
+
+    const result = checkEnterpriseTenantContract(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("private.has_org_permission");
+    expect(result.failures.join("\n")).toContain("private.assert_org_permission");
+    expect(result.failures.join("\n")).toContain("public.organization_audit_ledger");
+    expect(result.failures.join("\n")).toContain("private.append_org_audit_event");
   });
 
   it("includes the load-test contract in enterprise readiness", () => {

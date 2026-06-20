@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import ts from "typescript";
 
 const result = (failures) => ({ ok: failures.length === 0, failures });
 
@@ -96,9 +97,6 @@ export function checkModuleSizeBudget(root = process.cwd()) {
 }
 
 const mutationPattern = /\.from\(\s*["'`]([^"'`]+)["'`]\s*\)[\s\S]{0,500}?\.(insert|update|upsert|delete)\s*\(/g;
-const functionInvokeBodyPattern = /\.functions\.invoke\(\s*["'`]([^"'`]+)["'`]\s*,\s*\{[\s\S]{0,1400}?\bbody\s*:/g;
-const dynamicFunctionInvokeBodyPattern = /\.functions\.invoke\(\s*([A-Za-z_$][\w$]*)\s*,\s*\{[\s\S]{0,1400}?\bbody\s*:/g;
-
 const scanBrowserMutations = (root) => {
   const mutations = [];
   for (const { relativePath } of walkFiles(
@@ -116,6 +114,27 @@ const scanBrowserMutations = (root) => {
     }
   }
   return mutations;
+};
+
+const propertyNameText = (name) => {
+  if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) return name.text;
+  return null;
+};
+
+const isFunctionsInvokeCall = (expression) => {
+  if (!ts.isPropertyAccessExpression(expression) || expression.name.text !== "invoke") return false;
+  const owner = expression.expression;
+  return ts.isPropertyAccessExpression(owner) && owner.name.text === "functions";
+};
+
+const hasBodyProperty = (node) => {
+  if (!node || !ts.isObjectLiteralExpression(node)) return false;
+  return node.properties.some((property) => {
+    if (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) {
+      return propertyNameText(property.name) === "body";
+    }
+    return false;
+  });
 };
 
 export function checkSensitiveMutationBoundaries(root = process.cwd()) {
@@ -159,20 +178,27 @@ const scanFunctionBodyInvocations = (root) => {
     (path) => /\.(?:ts|tsx)$/.test(path) && !/\/test\/|\.test\.|\.spec\./.test(path),
   )) {
     const text = readText(root, relativePath) ?? "";
-    for (const match of text.matchAll(functionInvokeBodyPattern)) {
-      invocations.push({
-        file: relativePath,
-        function: match[1],
-        dynamic: false,
-      });
-    }
-    for (const match of text.matchAll(dynamicFunctionInvokeBodyPattern)) {
-      invocations.push({
-        file: relativePath,
-        symbol: match[1],
-        dynamic: true,
-      });
-    }
+    const sourceFile = ts.createSourceFile(
+      relativePath,
+      text,
+      ts.ScriptTarget.Latest,
+      true,
+      relativePath.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+    );
+    const visit = (node) => {
+      if (ts.isCallExpression(node) && isFunctionsInvokeCall(node.expression) && hasBodyProperty(node.arguments[1])) {
+        const functionArg = node.arguments[0];
+        if (functionArg && ts.isStringLiteralLike(functionArg)) {
+          invocations.push({ file: relativePath, function: functionArg.text, dynamic: false });
+        } else if (functionArg && ts.isIdentifier(functionArg)) {
+          invocations.push({ file: relativePath, symbol: functionArg.text, dynamic: true });
+        } else {
+          invocations.push({ file: relativePath, symbol: "<computed>", dynamic: true });
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
   }
   return invocations;
 };
