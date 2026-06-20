@@ -1,10 +1,8 @@
 # Cloudflare Pages redirects
 # Syntax: https://developers.cloudflare.com/pages/configuration/redirects/
-# Note: /sitemap-dynamic.xml is served by functions/sitemap-dynamic.xml.ts
-# (Pages Functions take priority over _redirects).
+# Note: /sitemap-dynamic.xml is served by functions/sitemap-dynamic.xml.ts.
+# Keep this file limited to static fallbacks. Do not add a catch-all
+# SPA rewrite; Cloudflare Pages handles SPA fallback automatically.
 
 # Static fallback if the Function is unavailable.
 /sitemap-dynamic.xml  /sitemap.xml  200
-
-# SPA fallback — send all unmatched paths to index.html for React Router.
-/*  /index.html  200

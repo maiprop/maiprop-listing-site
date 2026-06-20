@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "include": [
+    "/*"
+  ],
+  "exclude": [
+    "/assets/*",
+    "/docs/*",
+    "/images/*",
+    "/lovable-uploads/*",
+    "/favicon.ico",
+    "/hero-bg.mp4",
+    "/hero-bg.webm",
+    "/hero-poster.jpg",
+    "/oauth-logo.png",
+    "/og-image.png",
+    "/placeholder.svg",
+    "/robots.txt",
+    "/sitemap-static.xml",
+    "/sitemap.xml",
+    "/api-docs.css"
+  ]
+}
