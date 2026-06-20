@@ -134,4 +134,21 @@ describe("load test contract", () => {
     expect(result.ok).toBe(false);
     expect(result.failures.join("\n")).toContain("scripts/load-test/basic.js must write normalized load-test-summary.json output");
   });
+
+  it("requires availability error rate to come from the status-only check", () => {
+    const root = makeFixture(contractScript({
+      extra: `
+        const ok = check(res, {
+          "status 2xx": (response) => response.status >= 200 && response.status < 300,
+          "TTFB < 1500ms": (response) => response.timings.waiting < 1500,
+        });
+        errorRate.add(ok ? 0 : 1, { route: route.name });
+      `,
+    }));
+
+    const result = checkLoadTestContract(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("scripts/load-test/basic.js must keep availability errorRate scoped to the status-only check");
+  });
 });

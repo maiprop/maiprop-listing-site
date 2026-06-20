@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const SCRIPT_PATH = "scripts/load-test/basic.js";
+const SUMMARY_PATH = "scripts/load-test/summary.js";
 
 const result = (failures) => ({ ok: failures.length === 0, failures });
 
@@ -30,6 +31,8 @@ export function checkLoadTestContract(root = process.cwd()) {
   const failures = [];
   const text = readText(root, SCRIPT_PATH);
   if (text === null) return result([`${SCRIPT_PATH} is missing`]);
+  const summaryText = readText(root, SUMMARY_PATH) ?? "";
+  const contractText = `${text}\n${summaryText}`;
 
   const requiredMarkers = [
     "import http from \"k6/http\"",
@@ -55,7 +58,7 @@ export function checkLoadTestContract(root = process.cwd()) {
     "normalizeSummary",
   ];
 
-  for (const marker of includesAll(text, requiredMarkers)) {
+  for (const marker of includesAll(contractText, requiredMarkers)) {
     failures.push(`${SCRIPT_PATH} must mention ${marker}`);
   }
 
@@ -74,9 +77,21 @@ export function checkLoadTestContract(root = process.cwd()) {
     failures.push(`${SCRIPT_PATH} must validate ECAS_LOAD_PROFILE against smoke, baseline_100, growth_10x, enterprise_soak`);
   }
 
-  const writesNormalizedSummary = /(?:\[\s*artifactPath\(["']load-test-summary\.json["']\)\s*\]|["']load-test-summary\.json["'])\s*:\s*JSON\.stringify\(\s*normalizeSummary\(data\)/.test(text);
+  const writesNormalizedSummary =
+    /(?:\[\s*artifactPath\(["']load-test-summary\.json["']\)\s*\]|["']load-test-summary\.json["'])\s*:\s*JSON\.stringify\(\s*normalizeSummary\(data\)/.test(text) ||
+    (
+      /const\s+summary\s*=\s*normalizeSummary\(\s*data\b/.test(text) &&
+      /(?:\[\s*artifactPath\(["']load-test-summary\.json["']\)\s*\]|["']load-test-summary\.json["'])\s*:\s*JSON\.stringify\(\s*summary\b/.test(text)
+    );
   if (!writesNormalizedSummary) {
     failures.push(`${SCRIPT_PATH} must write normalized load-test-summary.json output`);
+  }
+
+  if (
+    !/const\s+statusOk\s*=\s*check\(\s*res\b/.test(text) ||
+    !/errorRate\.add\(\s*statusOk\s*\?\s*0\s*:\s*1\s*,\s*\{\s*route:\s*route\.name\s*\}\s*\)/.test(text)
+  ) {
+    failures.push(`${SCRIPT_PATH} must keep availability errorRate scoped to the status-only check`);
   }
 
   return result(failures);
