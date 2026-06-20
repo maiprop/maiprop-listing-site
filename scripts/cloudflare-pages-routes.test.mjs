@@ -32,12 +32,15 @@ describe("Cloudflare Pages deploy workflow routing", () => {
     expect(workflow).toContain("Cloudflare Pages production branch verified: main");
   });
 
-  it("deploys production with the verified main branch so the custom domain updates", () => {
+  it("deploys production without an explicit branch after verifying production_branch", () => {
     const workflow = readFileSync(productionDeployWorkflowPath, "utf8");
     const deployCommand = workflow.match(/command:\s+pages deploy[^\n]+/)?.[0] ?? "";
 
     expect(deployCommand).toContain("pages deploy dist");
-    expect(deployCommand).toContain("--branch=main");
+    expect(deployCommand).not.toContain("--branch=");
+    expect(workflow).toContain("id: deploy_pages");
+    expect(workflow).toContain("Log Cloudflare Pages deployment outputs");
+    expect(workflow).toContain("Inspect Cloudflare Pages deployment aliases");
   });
 
   it("keeps PR previews on deterministic branch deployments", () => {

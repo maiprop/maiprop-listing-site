@@ -276,14 +276,60 @@ jobs:
         run: npx playwright install chromium
 
       - name: Deploy to Cloudflare Pages (production)
+        id: deploy_pages
         uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
         with:
           apiToken:   ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId:  ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # Direct Upload treats branch deployments as production only when the
-          # branch matches the Pages project's production_branch. The step above
-          # enforces that contract before this deploy runs.
-          command:    pages deploy dist --project-name=maiprop-listing-site --branch=main --commit-hash=${{ github.sha }} --commit-message=${{ github.sha }} --commit-dirty=true
+          # The step above verifies Cloudflare's production_branch is main.
+          # Omit an explicit Wrangler branch here so Direct Upload publishes the
+          # production alias instead of leaving the custom domain on an older
+          # preview/branch deployment.
+          command:    pages deploy dist --project-name=maiprop-listing-site --commit-hash=${{ github.sha }} --commit-message=${{ github.sha }} --commit-dirty=true
+
+      - name: Log Cloudflare Pages deployment outputs
+        run: |
+          echo "deployment-url=${{ steps.deploy_pages.outputs['deployment-url'] }}"
+          echo "pages-deployment-id=${{ steps.deploy_pages.outputs['pages-deployment-id'] }}"
+          echo "pages-deployment-alias-url=${{ steps.deploy_pages.outputs['pages-deployment-alias-url'] }}"
+          echo "pages-deployment-environment=${{ steps.deploy_pages.outputs['pages-deployment-environment'] }}"
+
+      - name: Inspect Cloudflare Pages deployment aliases
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          HTTP_CODE=$(curl -sS -o /tmp/cf_project.json -w "%{http_code}" \
+            -H "Authorization: Bearer $CF_API_TOKEN" \
+            "$CF_API_BASE/accounts/$CF_ACCOUNT_ID/pages/projects/$CF_PROJECT")
+          if [ "$HTTP_CODE" = "200" ] && jq -e '.success == true' /tmp/cf_project.json >/dev/null; then
+            jq -r '.result | {
+              name,
+              subdomain,
+              production_branch,
+              domains: (.domains // [])
+            } | @json' /tmp/cf_project.json
+          else
+            echo "::warning::Could not inspect Cloudflare Pages project metadata (HTTP $HTTP_CODE)."
+            cat /tmp/cf_project.json
+          fi
+
+          HTTP_CODE=$(curl -sS -o /tmp/cf_latest_deployments.json -w "%{http_code}" \
+            -H "Authorization: Bearer $CF_API_TOKEN" \
+            "$CF_API_BASE/accounts/$CF_ACCOUNT_ID/pages/projects/$CF_PROJECT/deployments?per_page=5")
+          if [ "$HTTP_CODE" != "200" ] || ! jq -e '.success == true' /tmp/cf_latest_deployments.json >/dev/null; then
+            echo "::warning::Could not inspect Cloudflare Pages deployment aliases (HTTP $HTTP_CODE)."
+            cat /tmp/cf_latest_deployments.json
+            exit 0
+          fi
+          jq -r '.result[] | {
+            id,
+            environment,
+            url,
+            aliases: (.aliases // []),
+            branch: (.deployment_trigger.metadata.branch // ""),
+            status: (.latest_stage.status // ""),
+            created_on
+          } | @json' /tmp/cf_latest_deployments.json
 
       - name: Post-deploy health check
         id: health_check
