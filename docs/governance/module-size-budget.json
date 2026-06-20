@@ -1,0 +1,180 @@
+{
+  "version": 1,
+  "defaultMaxBytes": 35000,
+  "generatedExemptions": [
+    {
+      "path": "src/integrations/supabase/types.ts",
+      "reason": "Generated Supabase database types; freshness is controlled separately."
+    }
+  ],
+  "legacyExceptions": [
+    {
+      "path": "src/pages/Dashboard.tsx",
+      "allowedMaxBytes": 70000,
+      "owner": "app-web",
+      "targetPackage": "apps/web",
+      "refactorStrategy": "Split dashboard sections into feature components before moving the app shell.",
+      "reviewBy": "2026-07-31"
+    },
+    {
+      "path": "src/pages/NewBuildDetail.tsx",
+      "allowedMaxBytes": 65000,
+      "owner": "app-web",
+      "targetPackage": "apps/web",
+      "refactorStrategy": "Extract valuation, neighbourhood report, inventory, and lead widgets into route-local components.",
+      "reviewBy": "2026-07-31"
+    },
+    {
+      "path": "src/pages/Pricing.tsx",
+      "allowedMaxBytes": 65000,
+      "owner": "app-web",
+      "targetPackage": "apps/web",
+      "refactorStrategy": "Extract plan cards, entitlement matrices, and Stripe CTA wiring.",
+      "reviewBy": "2026-07-31"
+    },
+    {
+      "path": "src/pages/ProjectDetail.tsx",
+      "allowedMaxBytes": 60000,
+      "owner": "app-web",
+      "targetPackage": "apps/web",
+      "refactorStrategy": "Move media, unit inventory, and inquiry sections into project feature components.",
+      "reviewBy": "2026-07-31"
+    },
+    {
+      "path": "src/lib/professionalServiceCatalog.ts",
+      "allowedMaxBytes": 60000,
+      "owner": "domain",
+      "targetPackage": "packages/domain",
+      "refactorStrategy": "Move static catalog data to typed JSON or split by service category.",
+      "reviewBy": "2026-07-31"
+    },
+    {
+      "path": "src/pages/Listings.tsx",
+      "allowedMaxBytes": 55000,
+      "owner": "app-web",
+      "targetPackage": "apps/web",
+      "refactorStrategy": "Extract filter orchestration, layout mode state, and results toolbar.",
+      "reviewBy": "2026-07-31"
+    },
+    {
+      "path": "src/pages/CreateNewBuildingListing.tsx",
+      "allowedMaxBytes": 55000,
+      "owner": "app-web",
+      "targetPackage": "apps/web",
+      "refactorStrategy": "Split wizard steps, project media handling, and unit validation into route-local modules.",
+      "reviewBy": "2026-07-31"
+    },
+    {
+      "path": "src/components/OpenHouseRegistrationDialog.tsx",
+      "allowedMaxBytes": 55000,
+      "owner": "shared-ui",
+      "targetPackage": "packages/ui",
+      "refactorStrategy": "Extract step content, registration payload assembly, and mobile layout helpers.",
+      "reviewBy": "2026-07-31"
+    },
+    {
+      "path": "src/pages/AdminPricing.tsx",
+      "allowedMaxBytes": 55000,
+      "owner": "app-web",
+      "targetPackage": "apps/web",
+      "refactorStrategy": "Extract pricing table, section editor, seed data, and Stripe action panel.",
+      "reviewBy": "2026-07-31"
+    },
+    {
+      "path": "src/pages/OpenHouseDetail.tsx",
+      "allowedMaxBytes": 52000,
+      "owner": "app-web",
+      "targetPackage": "apps/web",
+      "refactorStrategy": "Extract hero, map/location, schedule, and registration sections.",
+      "reviewBy": "2026-07-31"
+    },
+    {
+      "path": "src/pages/Onboarding.tsx",
+      "allowedMaxBytes": 50000,
+      "owner": "app-web",
+      "targetPackage": "apps/web",
+      "refactorStrategy": "Split role-specific onboarding forms and professional setup writes.",
+      "reviewBy": "2026-07-31"
+    },
+    {
+      "path": "src/lib/documentTemplateData.ts",
+      "allowedMaxBytes": 48000,
+      "owner": "domain",
+      "targetPackage": "packages/domain",
+      "refactorStrategy": "Move static document templates to typed data files.",
+      "reviewBy": "2026-07-31"
+    },
+    {
+      "path": "src/pages/OpenHouses.tsx",
+      "allowedMaxBytes": 48000,
+      "owner": "app-web",
+      "targetPackage": "apps/web",
+      "refactorStrategy": "Extract filters, card grid, and sale/rental open-house category controls.",
+      "reviewBy": "2026-07-31"
+    },
+    {
+      "path": "src/components/OpenHouseAssetControlPanel.tsx",
+      "allowedMaxBytes": 48000,
+      "owner": "shared-ui",
+      "targetPackage": "packages/ui",
+      "refactorStrategy": "Split image, floor-plan, and document management panels.",
+      "reviewBy": "2026-07-31"
+    },
+    {
+      "path": "src/pages/InvestorDashboard.tsx",
+      "allowedMaxBytes": 46000,
+      "owner": "app-web",
+      "targetPackage": "apps/web",
+      "refactorStrategy": "Extract dashboard cards, deal filters, and analytics sections.",
+      "reviewBy": "2026-07-31"
+    },
+    {
+      "path": "src/components/BookConsultationModal.tsx",
+      "allowedMaxBytes": 46000,
+      "owner": "shared-ui",
+      "targetPackage": "packages/ui",
+      "refactorStrategy": "Extract booking form schema, availability rendering, and confirmation view.",
+      "reviewBy": "2026-07-31"
+    },
+    {
+      "path": "src/components/listings/ListingsAdvancedFilters.tsx",
+      "allowedMaxBytes": 46000,
+      "owner": "shared-ui",
+      "targetPackage": "packages/ui",
+      "refactorStrategy": "Split property-type controls, numeric filters, and feature groups.",
+      "reviewBy": "2026-07-31"
+    },
+    {
+      "path": "src/lib/mutationSchemas.ts",
+      "allowedMaxBytes": 46000,
+      "owner": "domain",
+      "targetPackage": "packages/domain",
+      "refactorStrategy": "Split schemas by bounded context after shared package extraction.",
+      "reviewBy": "2026-07-31"
+    },
+    {
+      "path": "src/pages/AuctionDetail.tsx",
+      "allowedMaxBytes": 46000,
+      "owner": "app-web",
+      "targetPackage": "apps/web",
+      "refactorStrategy": "Extract auction hero, similar deals, OS report, and action panels.",
+      "reviewBy": "2026-07-31"
+    },
+    {
+      "path": "src/pages/ProfessionalProfile.tsx",
+      "allowedMaxBytes": 46000,
+      "owner": "app-web",
+      "targetPackage": "apps/web",
+      "refactorStrategy": "Extract portfolio, services, reviews, and booking sections.",
+      "reviewBy": "2026-07-31"
+    },
+    {
+      "path": "src/pages/Auctions.tsx",
+      "allowedMaxBytes": 46000,
+      "owner": "app-web",
+      "targetPackage": "apps/web",
+      "refactorStrategy": "Extract auction filters, grid orchestration, and OS sync affordances.",
+      "reviewBy": "2026-07-31"
+    }
+  ]
+}

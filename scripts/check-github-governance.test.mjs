@@ -39,6 +39,8 @@ const makeFixture = () => {
         "Release Safety Inventory",
         "Validate Supabase migrations",
         "E2E Tests",
+        "E2E Security (Live-safe)",
+        "Lighthouse CI",
       ],
       requiredApprovingReviewCount: 1,
       requireCodeOwnerReviews: true,
@@ -91,6 +93,8 @@ const makeFixture = () => {
       "Allow deletions | disabled",
       "Build / Lint / Test",
       "Validate Supabase migrations",
+      "E2E Security (Live-safe)",
+      "Lighthouse CI",
     ].join("\n"),
   );
 
@@ -137,6 +141,35 @@ describe("GitHub governance check", () => {
     expect(result.ok).toBe(false);
     expect(result.failures.join("\n")).toContain("requiredApprovingReviewCount");
     expect(result.failures.join("\n")).toContain("doNotAllowBypass");
+  });
+
+  it("requires the live security and Lighthouse release gates in branch protection evidence", () => {
+    const root = makeFixture();
+    writeFileSync(
+      join(root, "docs", "governance", "main-branch-protection.expected.json"),
+      JSON.stringify({
+        branch: "main",
+        requiredStatusChecks: [
+          "Build / Lint / Test",
+          "Release Safety Inventory",
+          "Validate Supabase migrations",
+          "E2E Tests",
+        ],
+        requiredApprovingReviewCount: 1,
+        requireCodeOwnerReviews: true,
+        dismissStaleReviews: true,
+        requireConversationResolution: true,
+        allowForcePushes: false,
+        allowDeletions: false,
+        doNotAllowBypass: true,
+      }),
+    );
+
+    const result = checkBranchProtectionEvidence(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("E2E Security (Live-safe)");
+    expect(result.failures.join("\n")).toContain("Lighthouse CI");
   });
 
   it("fails when workflow actions use floating refs or unapproved repositories", () => {

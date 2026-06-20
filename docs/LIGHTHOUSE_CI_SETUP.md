@@ -93,7 +93,10 @@ npm run lighthouse
 ```
 
 Reports land in `.lighthouseci/`. CI uploads reports to temporary public
-storage; the job log contains the report URL.
+storage and also persists the directory as the `lighthouse-reports` GitHub Actions artifact
+for 30 days. Use that artifact for trend review when a route
+gets close to a budget or a PR changes rendering, data loading, images, maps, or
+dashboard code.
 
 ## 7. Rotation
 

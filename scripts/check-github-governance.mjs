@@ -49,6 +49,8 @@ const requiredBranchDocMarkers = [
   "Allow deletions |",
   "Build / Lint / Test",
   "Validate Supabase migrations",
+  "E2E Security (Live-safe)",
+  "Lighthouse CI",
 ];
 
 const requiredStatusChecks = [
@@ -56,6 +58,8 @@ const requiredStatusChecks = [
   "Release Safety Inventory",
   "Validate Supabase migrations",
   "E2E Tests",
+  "E2E Security (Live-safe)",
+  "Lighthouse CI",
 ];
 
 const workflowFiles = (root) => {

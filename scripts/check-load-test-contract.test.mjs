@@ -34,7 +34,7 @@ describe("load test contract", () => {
     const result = checkLoadTestContract(root);
 
     expect(result.ok).toBe(false);
-    expect(result.failures.join("\n")).toContain("peak target must reach at least 100 VUs");
+    expect(result.failures.join("\n")).toContain("peak target must reach at least 1000 VUs");
     expect(result.failures.join("\n")).toContain("scripts/load-test/basic.js must mention http_req_failed");
     expect(result.failures.join("\n")).toContain("scripts/load-test/basic.js must mention /api/public/listings");
     expect(result.failures.join("\n")).toContain("scripts/load-test/basic.js must mention load-test-summary.json");

@@ -65,7 +65,7 @@ Go through every box **before** promoting a release to production. This is a saf
 ## 8. Accessibility & performance
 
 - [ ] Latest Lighthouse CI report on `main` shows no failed assertions (run locally: `npm run lighthouse`).
-- [ ] `e2e/accessibility.spec.ts` passes (includes axe scan on home / listings / login).
+- [ ] `e2e/accessibility.spec.ts` passes (includes axe scans across public listing, auction, open-house, quick-sale, pricing, legal, API-doc, and property-detail routes).
 - [ ] Hero video has a poster image and `preload="metadata"`; not blocking LCP.
 
 ## 9. GDPR & legal

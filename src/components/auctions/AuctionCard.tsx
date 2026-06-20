@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { daysUntil, countdownBadge, getPropertyTypeLabel } from "@/lib/auctionUtils";
 import { APP_ORIGIN } from "@/lib/config";
 import { AUCTION_FALLBACK_LOGO_URL, getAuctionImageList } from "@/lib/auctionStreetView";
-import { switchImageToNextFallback } from "@/lib/imageFallbacks";
+import { switchImageToNextFallback, switchImageToNextFallbackIfEmpty } from "@/lib/imageFallbacks";
 
 export const PremiumBadge = () => (
   <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gradient-primary text-primary-foreground border border-primary/30">
@@ -100,6 +100,7 @@ const AuctionMedia = ({
           ? "object-contain p-8 bg-background"
           : "object-cover group-hover:scale-105"
       }`}
+      onLoad={e => switchImageToNextFallbackIfEmpty(e.currentTarget, imageChain)}
       onError={e => switchImageToNextFallback(e.currentTarget, imageChain)}
     />
     <AuctionTopBadges isFeatured={Boolean(a.is_featured)} auctionDate={a.auction_date} isGreek={isGreek} />

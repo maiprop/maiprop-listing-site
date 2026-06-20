@@ -28,8 +28,8 @@ export function checkWcagCoverage(root = process.cwd()) {
 
   const axeRoutes = extractArrayCount(accessibilitySpec, "AXE_SCAN_ROUTES");
   const landmarkRoutes = extractArrayCount(accessibilitySpec, "LANDMARK_ROUTES");
-  if (axeRoutes < 10) failures.push("AXE_SCAN_ROUTES must cover at least 10 public critical routes");
-  if (landmarkRoutes < 8) failures.push("LANDMARK_ROUTES must cover at least 8 public routes");
+  if (axeRoutes < 14) failures.push("AXE_SCAN_ROUTES must cover at least 14 public critical routes");
+  if (landmarkRoutes < 10) failures.push("LANDMARK_ROUTES must cover at least 10 public routes");
 
   for (const marker of ["wcag2a", "wcag2aa", "serious", "critical", "skip-to-content"]) {
     if (!accessibilitySpec.includes(marker)) failures.push(`accessibility spec must include ${marker}`);

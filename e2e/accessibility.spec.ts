@@ -6,6 +6,8 @@ import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
 const LANDMARK_ROUTES = [
+  "/auctions",
+  "/pricing",
   "/firesale",
   "/open-houses",
   "/professionals",
@@ -21,6 +23,7 @@ const AXE_SCAN_ROUTES = [
   "/listings",
   "/auctions",
   "/open-houses",
+  "/firesale",
   "/professionals",
   "/pricing",
   "/login",
@@ -29,6 +32,7 @@ const AXE_SCAN_ROUTES = [
   "/terms-of-service",
   "/cookie-policy",
   "/api-docs",
+  "/property/00000000-0000-0000-0000-000000000000",
 ];
 
 test.describe("Accessibility", () => {

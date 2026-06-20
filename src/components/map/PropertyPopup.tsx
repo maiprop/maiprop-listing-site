@@ -4,7 +4,12 @@ import { MapPin, Square, Layers, Calendar, Building2 } from "lucide-react";
 import { getAuctionImageList } from "@/lib/auctionStreetView";
 import { getOwnershipStatus, getOwnershipPct } from "@/lib/auctionUtils";
 import { formatPrice } from "@/lib/format";
-import { MAIPROP_LOGO_FALLBACK_URL, isMaiPropLogoFallback, switchImageToNextFallback } from "@/lib/imageFallbacks";
+import {
+  MAIPROP_LOGO_FALLBACK_URL,
+  isMaiPropLogoFallback,
+  switchImageToNextFallback,
+  switchImageToNextFallbackIfEmpty,
+} from "@/lib/imageFallbacks";
 import { getListingDetailPath } from "@/lib/listingRoutes";
 import type { MapListing } from "./mapConfig";
 import { typeColour } from "./mapConfig";
@@ -201,6 +206,7 @@ const PopupImage = ({
       loading="lazy"
       data-image-fallback-index={images.length ? "0" : undefined}
       className={`w-full h-full ${isMaiPropLogoFallback(image) ? "object-contain p-6 bg-background" : "object-cover"}`}
+      onLoad={(event) => switchImageToNextFallbackIfEmpty(event.currentTarget, images)}
       onError={(event) => switchImageToNextFallback(event.currentTarget, images)}
     />
     <AuctionCountdownBadge daysLeft={daysLeft} />

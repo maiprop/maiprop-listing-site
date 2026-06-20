@@ -2,7 +2,11 @@ import { useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Heart, Share2, Eye, ChevronLeft, ChevronRight, Gavel, Maximize2, X } from "lucide-react";
 import { Dialog, DialogClose, DialogDescription, DialogOverlay, DialogPortal, DialogTitle } from "@/components/ui/dialog";
-import { isMaiPropLogoFallback, switchImageToNextFallback } from "@/lib/imageFallbacks";
+import {
+  isMaiPropLogoFallback,
+  switchImageToNextFallback,
+  switchImageToNextFallbackIfEmpty,
+} from "@/lib/imageFallbacks";
 
 interface PropertyGalleryProps {
   images: string[];
@@ -50,6 +54,7 @@ export default function PropertyGallery({
               className={`w-full h-full transition-opacity duration-300 ${
                 isMaiPropLogoFallback(currentSrc) ? "object-contain p-8 bg-background" : "object-cover"
               }`}
+              onLoad={(event) => switchImageToNextFallbackIfEmpty(event.currentTarget, images)}
               onError={(event) => switchImageToNextFallback(event.currentTarget, images)}
             />
           </button>
@@ -152,6 +157,7 @@ export default function PropertyGallery({
                 alt=""
                 data-image-fallback-index={String(i)}
                 className={`w-full h-full ${isMaiPropLogoFallback(img) ? "object-contain p-2 bg-background" : "object-cover"}`}
+                onLoad={(event) => switchImageToNextFallbackIfEmpty(event.currentTarget, images)}
                 onError={(event) => switchImageToNextFallback(event.currentTarget, images)}
               />
             </button>
@@ -192,6 +198,7 @@ export default function PropertyGallery({
                   className={`max-h-full max-w-full ${
                     isMaiPropLogoFallback(currentSrc) ? "object-contain p-8 bg-background" : "object-contain"
                   }`}
+                  onLoad={(event) => switchImageToNextFallbackIfEmpty(event.currentTarget, images)}
                   onError={(event) => switchImageToNextFallback(event.currentTarget, images)}
                 />
               </div>
@@ -236,6 +243,7 @@ export default function PropertyGallery({
                       alt=""
                       data-image-fallback-index={String(i)}
                       className={`h-full w-full ${isMaiPropLogoFallback(img) ? "object-contain p-2 bg-background" : "object-cover"}`}
+                      onLoad={(event) => switchImageToNextFallbackIfEmpty(event.currentTarget, images)}
                       onError={(event) => switchImageToNextFallback(event.currentTarget, images)}
                     />
                   </button>

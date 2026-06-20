@@ -105,6 +105,12 @@ describe("FiresaleQuickSaleForm", () => {
     expect(screen.getByText(/Property Details/i)).toBeInTheDocument();
   });
 
+  it("gives the property type select an accessible name even when the form is locked", () => {
+    isSellerRoleMock.mockReturnValue(false);
+    render(<FiresaleQuickSaleForm />);
+    expect(screen.getByRole("combobox", { name: /Property Type/i })).toBeDisabled();
+  });
+
   it("shows the 'Seller account required' banner when isSellerRole is false", () => {
     isSellerRoleMock.mockReturnValue(false);
     render(<FiresaleQuickSaleForm />);

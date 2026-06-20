@@ -100,7 +100,7 @@ export function FiresaleInvestorPanel({ invitationStatus, onRequestInvitation }:
           <div className="px-3 py-3 flex items-center justify-center gap-1.5 text-destructive border-r border-border min-[430px]:border-x text-center leading-snug">
             <Flame className="w-3 h-3" /> Quick Sale™
           </div>
-          <div className="px-3 py-3 text-center text-muted-foreground/60 leading-snug">{isGreek ? "Παραδοσιακή διαδικασία" : "Traditional"}</div>
+          <div className="px-3 py-3 text-center text-muted-foreground leading-snug">{isGreek ? "Παραδοσιακή διαδικασία" : "Traditional"}</div>
         </div>
         {comparisonRows.map((r, i) => (
           <div
@@ -115,7 +115,7 @@ export function FiresaleInvestorPanel({ invitationStatus, onRequestInvitation }:
               <span className="font-bold text-foreground text-center leading-tight">{r.firesale}</span>
             </div>
             <div className="min-w-0 px-3 py-3 flex items-center justify-center">
-              <span className="text-muted-foreground/60 line-through text-center leading-tight">{r.trad}</span>
+              <span className="text-muted-foreground line-through text-center leading-tight">{r.trad}</span>
             </div>
           </div>
         ))}

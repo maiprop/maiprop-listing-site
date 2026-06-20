@@ -10,6 +10,14 @@ const performanceGateSpec = readFileSync(
   resolve(process.cwd(), "e2e/performance-gates.spec.ts"),
   "utf8",
 );
+const ciWorkflow = readFileSync(
+  resolve(process.cwd(), ".github/workflows/ci.yml"),
+  "utf8",
+);
+const lighthouseDoc = readFileSync(
+  resolve(process.cwd(), "docs/LIGHTHOUSE_CI_SETUP.md"),
+  "utf8",
+);
 
 const lighthouseAssertion = (key) =>
   lighthouseConfig.ci.assert.assertions[key]?.[1] ?? {};
@@ -33,5 +41,12 @@ describe("performance budget configuration", () => {
     expect(BUDGETS_KB["vendor-i18n"]).toBeLessThanOrEqual(80);
     expect(BUDGETS_KB.lib).toBeLessThanOrEqual(140);
     expect(BUDGETS_KB["*"]).toBeLessThanOrEqual(300);
+  });
+
+  it("persists Lighthouse reports as CI artifacts for trend review", () => {
+    expect(ciWorkflow).toContain("name: Upload Lighthouse reports");
+    expect(ciWorkflow).toContain("path: .lighthouseci/");
+    expect(lighthouseDoc).toContain("GitHub Actions artifact");
+    expect(lighthouseDoc).toContain("trend review");
   });
 });
