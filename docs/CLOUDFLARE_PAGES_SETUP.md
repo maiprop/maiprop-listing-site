@@ -145,8 +145,11 @@ apex and www as distinct origins.
   - `functions/sitemap-dynamic.xml.ts` — proxies to the Supabase Edge Function
     that renders the SEO sitemap.
 - `public/_headers` — security + cache headers (applied to every response).
-- `public/_redirects` — SPA fallback (`/* → /index.html 200`) and static
-  fallback for the dynamic sitemap route.
+- `public/_routes.json` — routes dynamic Pages Functions, including
+  `/api/public/*`, before static fallback handling.
+- `public/_redirects` — static sitemap fallback only. Do not add a catch-all
+  SPA rewrite; Cloudflare Pages handles SPA fallback and Wrangler rejects
+  `/* -> /index.html` as an infinite loop.
 
 ## 6. Rollback
 
