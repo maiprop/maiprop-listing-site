@@ -245,7 +245,10 @@ jobs:
         with:
           apiToken:   ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId:  ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command:    pages deploy dist --project-name=maiprop-listing-site --branch=main --commit-hash=${{ github.sha }} --commit-message=${{ github.sha }} --commit-dirty=true
+          # Direct Upload treats explicit branch deployments as previews unless
+          # the Pages project has that exact production branch configured.
+          # Omit --branch here so the custom production domain is updated.
+          command:    pages deploy dist --project-name=maiprop-listing-site --commit-hash=${{ github.sha }} --commit-message=${{ github.sha }} --commit-dirty=true
 
       - name: Post-deploy health check
         id: health_check
