@@ -146,3 +146,41 @@ describe("production deploy public API fixture guard", () => {
     expect(calls).toContain("https://portal.maiprop.co/api/public/listing?id=auction-1");
   });
 });
+
+describe("production deploy version marker", () => {
+  it("accepts the expected deployment sha before smoke checks continue", async () => {
+    const { validateDeploymentVersion } = await import("./check-production-deploy-version.mjs");
+    const calls = [];
+
+    await validateDeploymentVersion("https://portal.maiprop.co", {
+      expectedSha: "abc123",
+      fetchText: async (url) => {
+        calls.push(url);
+        return {
+          res: new Response(JSON.stringify({ sha: "abc123" }), {
+            headers: { "Content-Type": "application/json; charset=utf-8" },
+          }),
+          text: JSON.stringify({ sha: "abc123" }),
+        };
+      },
+    });
+
+    expect(calls).toEqual(["https://portal.maiprop.co/deploy-version.json"]);
+  });
+
+  it("rejects stale deployment markers with a precise error", async () => {
+    const { validateDeploymentVersion } = await import("./check-production-deploy-version.mjs");
+
+    await expect(validateDeploymentVersion("https://portal.maiprop.co", {
+      expectedSha: "new-sha",
+      fetchText: async () => ({
+        res: new Response(JSON.stringify({ sha: "old-sha" }), {
+          headers: { "Content-Type": "application/json" },
+        }),
+        text: JSON.stringify({ sha: "old-sha" }),
+      }),
+    })).rejects.toThrow(
+      "https://portal.maiprop.co/deploy-version.json is serving deployment old-sha instead of new-sha",
+    );
+  });
+});
