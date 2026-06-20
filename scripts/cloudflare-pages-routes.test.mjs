@@ -23,12 +23,21 @@ describe("Cloudflare Pages function routes", () => {
 });
 
 describe("Cloudflare Pages deploy workflow routing", () => {
-  it("deploys production without a branch override so the custom domain updates", () => {
+  it("aligns the Cloudflare Pages production branch before deploying main", () => {
+    const workflow = readFileSync(productionDeployWorkflowPath, "utf8");
+
+    expect(workflow).toContain("Ensure Cloudflare Pages production branch is main");
+    expect(workflow).toContain("production_branch: $branch");
+    expect(workflow).toContain("CURRENT_BRANCH");
+    expect(workflow).toContain("Cloudflare Pages production branch verified: main");
+  });
+
+  it("deploys production with the verified main branch so the custom domain updates", () => {
     const workflow = readFileSync(productionDeployWorkflowPath, "utf8");
     const deployCommand = workflow.match(/command:\s+pages deploy[^\n]+/)?.[0] ?? "";
 
     expect(deployCommand).toContain("pages deploy dist");
-    expect(deployCommand).not.toContain("--branch=");
+    expect(deployCommand).toContain("--branch=main");
   });
 
   it("keeps PR previews on deterministic branch deployments", () => {
