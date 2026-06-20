@@ -2,11 +2,53 @@
   "version": 1,
   "reviewedFunctionBodies": [
     {
+      "function": "admin-broadcast-notification",
+      "boundary": "edge-schema-validated",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "Admin broadcast payloads are bounded at the Edge Function and forwarded to an explicit platform-admin RPC."
+    },
+    {
+      "function": "admin-content-report-action",
+      "boundary": "edge-schema-validated",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "Admin report moderation requests are mediated by an authenticated Edge Function before explicit admin RPC execution."
+    },
+    {
       "function": "admin-review-invitation",
       "boundary": "edge-schema-validated",
       "owner": "domain",
       "reviewBy": "2026-07-31",
       "rationale": "Admin invitation decisions are checked inside the Edge Function before invitation state changes are written."
+    },
+    {
+      "function": "admin-featured-listing-action",
+      "boundary": "edge-schema-validated",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "Featured listing moderation updates are routed through an authenticated Edge Function with schema validation and platform-admin authorization."
+    },
+    {
+      "function": "admin-firesale-action",
+      "boundary": "edge-schema-validated",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "Firesale moderation requests are authenticated at the Edge boundary before explicit platform-admin RPC execution."
+    },
+    {
+      "function": "admin-pricing-config",
+      "boundary": "edge-schema-validated",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "Pricing configuration writes are schema-validated and admin-authorized inside the Edge Function before database mutation."
+    },
+    {
+      "function": "agent-data-input",
+      "boundary": "edge-schema-validated",
+      "owner": "data-access",
+      "reviewBy": "2026-07-31",
+      "rationale": "Agent data-input submissions and review actions are normalized at the Edge Function before storage or admin review RPCs."
     },
     {
       "function": "ai-search",
@@ -51,11 +93,25 @@
       "rationale": "Checkout payloads are finalized by the Edge Function before Stripe session creation and billing redirects."
     },
     {
+      "function": "create-stripe-price",
+      "boundary": "external-provider-contract",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "Stripe price creation is admin-authorized and schema-validated at the Edge boundary before external Stripe calls."
+    },
+    {
       "function": "fetch-past-deals-from-os",
       "boundary": "edge-schema-validated",
       "owner": "data-access",
       "reviewBy": "2026-07-31",
       "rationale": "Past-deal imports are constrained by the Edge Function and do not expose OS credentials to the browser."
+    },
+    {
+      "function": "fetch-report-from-os",
+      "boundary": "external-provider-contract",
+      "owner": "data-access",
+      "reviewBy": "2026-07-31",
+      "rationale": "OS report requests keep MAIProp OS credentials server-side, require caller auth, and normalize listing/report inputs before fetch and billing."
     },
     {
       "function": "full-sync-from-os",
@@ -100,6 +156,13 @@
       "rationale": "OS diagnostics use an empty body and are restricted to admin diagnostic connectivity checks."
     },
     {
+      "function": "os-sales-coordinates",
+      "boundary": "external-provider-contract",
+      "owner": "data-access",
+      "reviewBy": "2026-07-31",
+      "rationale": "Coordinate-based comparable-sales requests are bounded by the Edge Function before proxying to the MAIProp OS API."
+    },
+    {
       "function": "owner-pro-status",
       "boundary": "edge-schema-validated",
       "owner": "domain",
@@ -121,6 +184,13 @@
       "rationale": "Valuation requests are centralized in the Edge Function for quota, input shape, and AI provider controls."
     },
     {
+      "function": "project-unit-prices",
+      "boundary": "edge-schema-validated",
+      "owner": "data-access",
+      "reviewBy": "2026-07-31",
+      "rationale": "Bulk project unit price changes are authenticated at the Edge boundary and routed through an owner-scoped RPC."
+    },
+    {
       "function": "record-listing-view",
       "boundary": "edge-schema-validated",
       "owner": "data-access",
@@ -128,11 +198,32 @@
       "rationale": "Listing view events are written through an Edge Function to keep analytics writes consistent and bounded."
     },
     {
+      "function": "smart-filters",
+      "boundary": "edge-schema-validated",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "Smart filter requests are interpreted server-side so browser-provided property criteria remain bounded."
+    },
+    {
+      "function": "submit-firesale-interest",
+      "boundary": "edge-schema-validated",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "Firesale interest submissions are authenticated and validated inside the Edge Function before workflow writes."
+    },
+    {
       "function": "sync-firesale-to-os",
       "boundary": "edge-schema-validated",
       "owner": "data-access",
       "reviewBy": "2026-07-31",
       "rationale": "Firesale OS sync requests are interpreted by the Edge Function before any OS or database mutation occurs."
+    },
+    {
+      "function": "sync-stripe-pricing",
+      "boundary": "external-provider-contract",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "Stripe price synchronization is admin-authorized and schema-validated before external Stripe reads and pricing upserts."
     },
     {
       "function": "sync-to-os",

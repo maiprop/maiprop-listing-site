@@ -16,8 +16,22 @@ const makeFixture = () => {
   );
   writeFileSync(
     join(root, "docs", "api", "edge-functions.openapi.yaml"),
-    [
-      "openapi: 3.0.3",
+      [
+        "openapi: 3.0.3",
+        "components:",
+        "  schemas:",
+        "    Error:",
+        "      type: object",
+        "      required: [error]",
+        "      properties:",
+        "        error:",
+        "          type: string",
+        "        code:",
+        "          type: string",
+      "        issues:",
+      "          type: array",
+      "          items:",
+      "            type: object",
       "paths:",
       "  /ai-search:",
       "    post:",
@@ -63,5 +77,140 @@ describe("OpenAPI coverage check", () => {
 
     expect(result.ok).toBe(false);
     expect(result.failures.join("\n")).toContain("record-listing-view");
+  });
+
+  it("fails when the OpenAPI Error schema does not require error", () => {
+    const root = makeFixture();
+    writeFileSync(
+      join(root, "docs", "api", "edge-functions.openapi.yaml"),
+      [
+        "openapi: 3.0.3",
+        "components:",
+        "  schemas:",
+        "    Error:",
+        "      type: object",
+        "      properties:",
+        "        error:",
+        "          type: string",
+        "        code:",
+        "          type: string",
+        "        issues:",
+        "          type: array",
+        "paths:",
+        "  /ai-search:",
+        "    post:",
+        "      operationId: aiSearch",
+        "  /record-listing-view:",
+        "    post:",
+        "      operationId: recordListingView",
+      ].join("\n"),
+    );
+
+    const result = checkOpenApiCoverage(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("OpenAPI Error schema must require error");
+  });
+
+  it("fails when the OpenAPI Error schema omits optional machine-readable code", () => {
+    const root = makeFixture();
+    writeFileSync(
+      join(root, "docs", "api", "edge-functions.openapi.yaml"),
+      [
+        "openapi: 3.0.3",
+        "components:",
+        "  schemas:",
+        "    Error:",
+        "      type: object",
+        "      required: [error]",
+        "      properties:",
+        "        error:",
+        "          type: string",
+        "        issues:",
+        "          type: array",
+        "          items:",
+        "            type: object",
+        "paths:",
+        "  /ai-search:",
+        "    post:",
+        "      operationId: aiSearch",
+        "  /record-listing-view:",
+        "    post:",
+        "      operationId: recordListingView",
+      ].join("\n"),
+    );
+
+    const result = checkOpenApiCoverage(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("OpenAPI Error schema must document optional code");
+  });
+
+  it("fails when the OpenAPI Error schema requires code before all endpoints conform", () => {
+    const root = makeFixture();
+    writeFileSync(
+      join(root, "docs", "api", "edge-functions.openapi.yaml"),
+      [
+        "openapi: 3.0.3",
+        "components:",
+        "  schemas:",
+        "    Error:",
+        "      type: object",
+        "      required: [error, code]",
+        "      properties:",
+        "        error:",
+        "          type: string",
+        "        code:",
+        "          type: string",
+        "        issues:",
+        "          type: array",
+        "          items:",
+        "            type: object",
+        "paths:",
+        "  /ai-search:",
+        "    post:",
+        "      operationId: aiSearch",
+        "  /record-listing-view:",
+        "    post:",
+        "      operationId: recordListingView",
+      ].join("\n"),
+    );
+
+    const result = checkOpenApiCoverage(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("must not require code");
+  });
+
+  it("fails when the OpenAPI Error schema omits validation issues", () => {
+    const root = makeFixture();
+    writeFileSync(
+      join(root, "docs", "api", "edge-functions.openapi.yaml"),
+      [
+        "openapi: 3.0.3",
+        "components:",
+      "  schemas:",
+      "    Error:",
+      "      type: object",
+      "      required: [error]",
+      "      properties:",
+      "        error:",
+          "          type: string",
+        "        code:",
+        "          type: string",
+        "paths:",
+        "  /ai-search:",
+        "    post:",
+        "      operationId: aiSearch",
+        "  /record-listing-view:",
+        "    post:",
+        "      operationId: recordListingView",
+      ].join("\n"),
+    );
+
+    const result = checkOpenApiCoverage(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("OpenAPI Error schema must document issues");
   });
 });

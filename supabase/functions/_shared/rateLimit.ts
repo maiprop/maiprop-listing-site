@@ -90,6 +90,7 @@ export function tooManyRequestsResponse(
   return new Response(
     JSON.stringify({
       error: "Too many requests. Please wait before trying again.",
+      code: "rate_limited",
     }),
     {
       status: 429,

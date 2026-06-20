@@ -212,6 +212,10 @@ const inventory = {
   business_term_coverage: termCoverage(businessTerms),
 };
 
+function stableInventory(value) {
+  return JSON.stringify({ ...value, generated_at: "<ignored>" }, null, 2);
+}
+
 const fullOut = join(root, outPath);
 const shouldWrite = !checkMode || outArgIndex >= 0;
 if (shouldWrite) {
@@ -224,6 +228,14 @@ console.error(shouldWrite ? `[audit-coverage-inventory] wrote ${outPath}` : "[au
 if (checkMode) {
   const failures = [];
   if (!coverage) failures.push("coverage/coverage-summary.json is missing; run npm run test:coverage first");
+  if (existsSync(fullOut)) {
+    const committed = JSON.parse(readFileSync(fullOut, "utf8"));
+    if (stableInventory(committed) !== stableInventory(inventory)) {
+      failures.push(`${outPath} is stale; run npm run inventory:audit-coverage`);
+    }
+  } else {
+    failures.push(`${outPath} is missing; run npm run inventory:audit-coverage`);
+  }
   if (zeroCoveredRuntimeFiles.length > 0) {
     failures.push(
       `runtime source files with 0% line coverage: ${zeroCoveredRuntimeFiles.map((item) => item.file).join(", ")}`,

@@ -15,6 +15,9 @@ verify_jwt = true
 [functions.admin-broadcast-notification]
 verify_jwt = true
 
+[functions.admin-featured-listing-action]
+verify_jwt = true
+
 [functions.admin-firesale-action]
 verify_jwt = true
 

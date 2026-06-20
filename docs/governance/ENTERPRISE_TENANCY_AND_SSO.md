@@ -22,6 +22,8 @@ The migration enables RLS on every enterprise table and restricts browser access
 
 - `private.is_org_member(org_id, user_id)` for tenant visibility.
 - `private.has_org_role(org_id, roles, user_id)` for owner/admin/security/billing workflows.
+- `private.has_org_permission(org_id, permission, user_id)` and `private.assert_org_permission(...)` for permission-name based policy and RPC guards.
+- `organization_audit_ledger` plus `private.append_org_audit_event(...)` for append-only tenant audit events.
 
 Owners and admins can manage memberships. Only owners can create or modify owner memberships. Users cannot update their own organization role or status. Deletes are not granted to browser roles; suspension/status changes preserve auditability.
 

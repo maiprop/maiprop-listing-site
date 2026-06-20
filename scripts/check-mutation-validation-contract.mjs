@@ -116,6 +116,16 @@ const requiredFiles = [
 const MUTATION_RE = /\.from\([^)]*\)[\s\S]{0,250}\.(?:insert|update|upsert|delete)\s*\(/m;
 const REACT_QUERY_MUTATION_RE = /\buseMutation(?:\s*<|\s*\()/m;
 const ignoredDirs = new Set(["node_modules", "dist", "coverage", ".git", ".next", "public"]);
+const transitionalRawBodyStyles = new Set([
+  "typed-manual-guards",
+  "ai-payload-normalized",
+  "admin-only-guarded",
+]);
+const terminalRawBodyStyles = new Set([
+  "raw-signature-verified",
+  "provider-contract-guarded",
+]);
+const rawBodyReviewWindowDays = 45;
 
 const walkSourceFiles = (root, relativeDir) => {
   const absoluteDir = join(root, relativeDir);
@@ -175,18 +185,22 @@ const scanRawEdgeRequestBodies = (root) => {
   return rawBodies;
 };
 
-const checkEdgeFunctionRawBodyInventory = (root, failures) => {
+const parseDateOnly = (value) => {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const daysUntil = (today, reviewBy) =>
+  Math.floor((reviewBy.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
+
+const checkEdgeFunctionRawBodyInventory = (root, failures, options = {}) => {
   const inventory = readJson(root, "docs/governance/edge-function-request-boundaries.json", failures);
   if (!inventory) return;
 
-  const validStyles = new Set([
-    "typed-manual-guards",
-    "ai-payload-normalized",
-    "webhook-signature-verified",
-    "admin-only-guarded",
-    "provider-contract-guarded",
-  ]);
+  const validStyles = new Set([...transitionalRawBodyStyles, ...terminalRawBodyStyles]);
   const validOwners = new Set(["app-web", "shared-ui", "domain", "data-access"]);
+  const today = parseDateOnly(options.today ?? new Date().toISOString().slice(0, 10));
   const rawBodies = scanRawEdgeRequestBodies(root);
   const used = new Set(rawBodies.map((entry) => entry.function));
   const reviewed = new Map();
@@ -218,13 +232,22 @@ const checkEdgeFunctionRawBodyInventory = (root, failures) => {
     if (typeof entry.rationale !== "string" || entry.rationale.trim().length < 30) {
       failures.push(`${functionName} edge-function request-boundary evidence needs a concrete rationale`);
     }
-    if (typeof entry.reviewBy !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(entry.reviewBy)) {
+    const reviewBy = parseDateOnly(entry.reviewBy);
+    if (!reviewBy) {
       failures.push(`${functionName} edge-function request-boundary evidence must include reviewBy as YYYY-MM-DD`);
+    }
+    if (today && reviewBy && transitionalRawBodyStyles.has(entry.validationStyle)) {
+      const days = daysUntil(today, reviewBy);
+      if (days < 0 || days > rawBodyReviewWindowDays) {
+        failures.push(
+          `${functionName} raw request-body evidence uses transitional validationStyle ${entry.validationStyle}; set reviewBy within ${rawBodyReviewWindowDays} days or migrate to parseJsonBody`,
+        );
+      }
     }
   }
 };
 
-export function checkMutationValidationContract(root = process.cwd()) {
+export function checkMutationValidationContract(root = process.cwd(), options = {}) {
   const failures = [];
 
   for (const file of requiredFiles) {
@@ -239,7 +262,7 @@ export function checkMutationValidationContract(root = process.cwd()) {
   }
 
   checkBrowserMutationFiles(root, failures);
-  checkEdgeFunctionRawBodyInventory(root, failures);
+  checkEdgeFunctionRawBodyInventory(root, failures, options);
 
   return result(failures);
 }

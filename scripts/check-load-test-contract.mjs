@@ -21,6 +21,11 @@ const maxTargetVus = (text) => {
   return matches.reduce((max, match) => Math.max(max, Number(match[1])), 0);
 };
 
+const usesDefaultFallback = (text, envName) => {
+  const escaped = envName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`__ENV\\.${escaped}\\s*(?:\\|\\||\\?\\?)`).test(text);
+};
+
 export function checkLoadTestContract(root = process.cwd()) {
   const failures = [];
   const text = readText(root, SCRIPT_PATH);
@@ -43,9 +48,11 @@ export function checkLoadTestContract(root = process.cwd()) {
     "load-test-summary.json",
     "ECAS_LOAD_PROFILE",
     "LOAD_TEST_APPROVED_PRODUCTION",
+    "LOAD_TEST_SUMMARY_DIR",
     "baseline_100",
     "growth_10x",
     "enterprise_soak",
+    "normalizeSummary",
   ];
 
   for (const marker of includesAll(text, requiredMarkers)) {
@@ -54,6 +61,22 @@ export function checkLoadTestContract(root = process.cwd()) {
 
   if (maxTargetVus(text) < 1000) {
     failures.push(`${SCRIPT_PATH} peak target must reach at least 1000 VUs for the ECAS growth_10x profile`);
+  }
+
+  if (usesDefaultFallback(text, "BASE_URL") || !/requireEnv\(["']BASE_URL["']\)/.test(text)) {
+    failures.push(`${SCRIPT_PATH} must require BASE_URL from __ENV without a default fallback`);
+  }
+
+  const validatesProfile =
+    !usesDefaultFallback(text, "ECAS_LOAD_PROFILE") &&
+    /requireLoadProfile\(\s*requireEnv\(["']ECAS_LOAD_PROFILE["']\)\s*\)/.test(text);
+  if (!validatesProfile) {
+    failures.push(`${SCRIPT_PATH} must validate ECAS_LOAD_PROFILE against smoke, baseline_100, growth_10x, enterprise_soak`);
+  }
+
+  const writesNormalizedSummary = /(?:\[\s*artifactPath\(["']load-test-summary\.json["']\)\s*\]|["']load-test-summary\.json["'])\s*:\s*JSON\.stringify\(\s*normalizeSummary\(data\)/.test(text);
+  if (!writesNormalizedSummary) {
+    failures.push(`${SCRIPT_PATH} must write normalized load-test-summary.json output`);
   }
 
   return result(failures);

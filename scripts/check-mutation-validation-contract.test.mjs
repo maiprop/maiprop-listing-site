@@ -77,10 +77,10 @@ const makeFixture = () => {
       version: 1,
       reviewedRawJsonBodies: [{
         function: "ai-search",
-        validationStyle: "typed-manual-guards",
-        owner: "domain",
-        reviewBy: "2026-07-31",
-        rationale: "The function currently applies manual request guards and is tracked for schema-first migration.",
+          validationStyle: "typed-manual-guards",
+          owner: "domain",
+          reviewBy: "2026-07-31",
+          rationale: "The function currently applies manual request guards and is tracked for schema-first migration.",
       }],
     }),
   );
@@ -93,7 +93,7 @@ const makeFixture = () => {
 
 describe("mutation validation contract", () => {
   it("accepts a fixture with schema-first browser and edge mutation validation", () => {
-    const result = checkMutationValidationContract(makeFixture());
+    const result = checkMutationValidationContract(makeFixture(), { today: "2026-06-20" });
 
     expect(result.ok).toBe(true);
     expect(result.failures).toEqual([]);
@@ -110,7 +110,7 @@ describe("mutation validation contract", () => {
       "const body = await req.json();\n",
     );
 
-    const result = checkMutationValidationContract(root);
+    const result = checkMutationValidationContract(root, { today: "2026-06-20" });
 
     expect(result.ok).toBe(false);
     expect(result.failures.join("\n")).toContain("src/hooks/useSavedSearches.ts");
@@ -126,7 +126,7 @@ describe("mutation validation contract", () => {
       "const body = await req.json();\n",
     );
 
-    const result = checkMutationValidationContract(root);
+    const result = checkMutationValidationContract(root, { today: "2026-06-20" });
 
     expect(result.ok).toBe(false);
     expect(result.failures.join("\n")).toContain("ai-unreviewed");
@@ -148,9 +148,57 @@ describe("mutation validation contract", () => {
       }),
     );
 
-    const result = checkMutationValidationContract(root);
+    const result = checkMutationValidationContract(root, { today: "2026-06-20" });
 
     expect(result.ok).toBe(false);
     expect(result.failures.join("\n")).toContain("stale-function");
+  });
+
+  it("fails when transitional raw-body evidence has no near-term schema-first review", () => {
+    const root = makeFixture();
+    writeFileSync(
+      join(root, "docs", "governance", "edge-function-request-boundaries.json"),
+      JSON.stringify({
+        version: 1,
+        reviewedRawJsonBodies: [{
+          function: "ai-search",
+          validationStyle: "typed-manual-guards",
+          owner: "domain",
+          reviewBy: "2099-07-31",
+          rationale: "The function currently applies manual request guards and is tracked for schema-first migration.",
+        }],
+      }),
+    );
+
+    const result = checkMutationValidationContract(root, { today: "2026-06-20" });
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("ai-search raw request-body evidence uses transitional validationStyle typed-manual-guards");
+  });
+
+  it("accepts raw-signature and provider-contract raw-body exceptions without schema-first migration pressure", () => {
+    const root = makeFixture();
+    writeFileSync(
+      join(root, "supabase", "functions", "ai-search", "index.ts"),
+      "const rawBody = await req.text(); const body = JSON.parse(rawBody);\n",
+    );
+    writeFileSync(
+      join(root, "docs", "governance", "edge-function-request-boundaries.json"),
+      JSON.stringify({
+        version: 1,
+        reviewedRawJsonBodies: [{
+          function: "ai-search",
+          validationStyle: "raw-signature-verified",
+          owner: "domain",
+          reviewBy: "2099-07-31",
+          rationale: "Raw body parsing is retained because a verified signature must be computed over the original payload bytes.",
+        }],
+      }),
+    );
+
+    const result = checkMutationValidationContract(root, { today: "2026-06-20" });
+
+    expect(result.ok).toBe(true);
+    expect(result.failures).toEqual([]);
   });
 });

@@ -116,6 +116,7 @@ Deno.test("tooManyRequestsResponse returns 429 with Retry-After header", async (
   assertStrictEquals(resp.headers.get("Access-Control-Allow-Origin"), "*");
   const body = await resp.json();
   assertEquals(typeof body.error, "string");
+  assertEquals(body.code, "rate_limited");
 });
 
 Deno.test("DB limiter failClosed blocks when backend cannot be reached", async () => {

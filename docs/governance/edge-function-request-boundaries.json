@@ -1,5 +1,17 @@
 {
   "version": 1,
+  "rawJsonExceptionPolicy": {
+    "terminalValidationStyles": [
+      "raw-signature-verified",
+      "provider-contract-guarded"
+    ],
+    "transitionalValidationStyles": [
+      "typed-manual-guards",
+      "ai-payload-normalized",
+      "admin-only-guarded"
+    ],
+    "transitionalReviewWindowDays": 45
+  },
   "reviewedRawJsonBodies": [
     {
       "function": "admin-broadcast-notification",
@@ -255,7 +267,7 @@
     },
     {
       "function": "receive-from-os",
-      "validationStyle": "webhook-signature-verified",
+      "validationStyle": "raw-signature-verified",
       "owner": "data-access",
       "reviewBy": "2026-07-31",
       "rationale": "Incoming OS webhook envelopes are parsed only inside the webhook boundary and guarded by webhook checks."
