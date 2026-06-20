@@ -322,7 +322,93 @@ describe("public API cache helpers", () => {
     expect(second.headers.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
     expect(await second.json()).toEqual(await first.clone().json());
     expect(fetchUrls("/rest/v1/listings")).toHaveLength(1);
-    expect(cacheApi.put).toHaveBeenCalledTimes(1);
+    expect(cacheApi.put).toHaveBeenCalledTimes(2);
+    expect(cacheApi.put.mock.calls.some(([request]) => request.url.includes("__maiprop_stale=1"))).toBe(true);
+  });
+
+  it("coalesces concurrent cache misses for the same public API key", async () => {
+    let releaseFetch!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseFetch = resolve;
+    });
+    fetchMock().mockImplementation(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/rest/v1/listings") {
+        await gate;
+        return jsonRows([{ id: "open-1", cover_image_url: "cover", listing_images: [] }]);
+      }
+      return jsonRows([]);
+    });
+
+    const first = openHousesRequest(makeCtx("https://portal.maiprop.co/api/public/open-houses?limit=2"));
+    const second = openHousesRequest(makeCtx("https://portal.maiprop.co/api/public/open-houses?limit=2"));
+    await Promise.resolve();
+    releaseFetch();
+
+    const [firstRes, secondRes] = await Promise.all([first, second]);
+
+    expect(firstRes.headers.get("X-Maiprop-Cache")).toBe("MISS");
+    expect(secondRes.headers.get("X-Maiprop-Cache")).toBe("COALESCED");
+    expect(fetchUrls("/rest/v1/listings")).toHaveLength(1);
+    await expect(firstRes.json()).resolves.toEqual(await secondRes.clone().json());
+  });
+
+  it("serves stale public cache instead of 503 when Supabase is transiently unavailable", async () => {
+    const first = await openHousesRequest(makeCtx("https://portal.maiprop.co/api/public/open-houses?limit=2"));
+    expect(first.headers.get("X-Maiprop-Cache")).toBe("MISS");
+
+    for (const key of [...cacheStore.keys()]) {
+      if (!key.includes("__maiprop_stale=1")) cacheStore.delete(key);
+    }
+    fetchMock().mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }));
+
+    const stale = await openHousesRequest(makeCtx("https://portal.maiprop.co/api/public/open-houses?limit=2"));
+
+    expect(stale.status).toBe(200);
+    expect(stale.headers.get("X-Maiprop-Cache")).toBe("STALE");
+    expect(stale.headers.get("Warning")).toContain("Response is stale");
+    await expect(stale.json()).resolves.toEqual(await first.clone().json());
+    expect(fetchUrls("/rest/v1/listings")).toHaveLength(2);
+  });
+
+  it("serves stale public cache immediately while refreshing the expired fresh key in the background", async () => {
+    const first = await openHousesRequest(makeCtx("https://portal.maiprop.co/api/public/open-houses?limit=2"));
+    for (const key of [...cacheStore.keys()]) {
+      if (!key.includes("__maiprop_stale=1")) cacheStore.delete(key);
+    }
+
+    let releaseFetch!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseFetch = resolve;
+    });
+    fetchMock().mockImplementation(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/rest/v1/listings") {
+        await gate;
+        return jsonRows([{ id: "open-refreshed", cover_image_url: "new", listing_images: [] }]);
+      }
+      return jsonRows([]);
+    });
+
+    const waitUntil = vi.fn();
+    const responsePromise = Promise.resolve(
+      openHousesRequest(makeCtx("https://portal.maiprop.co/api/public/open-houses?limit=2", { waitUntil })),
+    );
+    const returnedImmediately = await Promise.race([
+      responsePromise.then(() => true),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 10)),
+    ]);
+
+    expect(returnedImmediately).toBe(true);
+    const stale = await responsePromise;
+    expect(stale.headers.get("X-Maiprop-Cache")).toBe("STALE");
+    expect(stale.headers.get("Warning")).toContain("Response is stale");
+    await expect(stale.json()).resolves.toEqual(await first.clone().json());
+    expect(waitUntil).toHaveBeenCalled();
+
+    releaseFetch();
+    await Promise.all(waitUntil.mock.calls.map(([promise]) => promise));
+    expect(fetchUrls("/rest/v1/listings")).toHaveLength(2);
   });
 });
 
@@ -354,7 +440,8 @@ describe("public listings endpoint", () => {
 
     const profilesUrl = fetchUrls("/rest/v1/profiles_public")[0];
     expect(profilesUrl.searchParams.get("user_id")).toBe("in.(owner-1,owner-2)");
-    expect(cacheApi.put).toHaveBeenCalledTimes(1);
+    expect(cacheApi.put).toHaveBeenCalledTimes(2);
+    expect(cacheApi.put.mock.calls.some(([request]) => request.url.includes("__maiprop_stale=1"))).toBe(true);
   });
 
   it("uses the default public catalogue scope unless auctions are explicitly included", async () => {

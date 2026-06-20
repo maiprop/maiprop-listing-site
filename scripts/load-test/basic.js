@@ -35,6 +35,12 @@
 import http from "k6/http";
 import { check, sleep } from "k6";
 import { Rate } from "k6/metrics";
+import {
+  LOAD_TEST_ROUTES,
+  normalizeSummary,
+  routeMetricName,
+  textSummary,
+} from "./summary.js";
 
 const SUPPORTED_LOAD_PROFILES = ["smoke", "baseline_100", "growth_10x", "enterprise_soak"];
 
@@ -65,13 +71,33 @@ const LOAD_TEST_APPROVED_PRODUCTION = __ENV.LOAD_TEST_APPROVED_PRODUCTION === "t
 const LOAD_TEST_SUMMARY_DIR = (__ENV.LOAD_TEST_SUMMARY_DIR || ".").replace(/\/$/, "");
 const BASE_URL = normalizeBaseUrl(requireEnv("BASE_URL"));
 const ECAS_LOAD_PROFILE = requireLoadProfile(requireEnv("ECAS_LOAD_PROFILE"));
+const PRODUCTION_HOST = isProductionHost(hostnameFromUrl(BASE_URL));
+const LOAD_TEST_ABORT_ON_FAIL =
+  __ENV.LOAD_TEST_ABORT_ON_FAIL === "true" ||
+  (PRODUCTION_HOST && (ECAS_LOAD_PROFILE === "growth_10x" || ECAS_LOAD_PROFILE === "enterprise_soak"));
+const DURATION_P95_THRESHOLD = "p(95)<2500";
+const RATE_THRESHOLD = "rate<0.01";
 const selectedStages = LOAD_PROFILES[ECAS_LOAD_PROFILE];
 
-if (isProductionHost(hostnameFromUrl(BASE_URL)) && !LOAD_TEST_APPROVED_PRODUCTION) {
+if (PRODUCTION_HOST && !LOAD_TEST_APPROVED_PRODUCTION) {
   throw new Error("Production load tests require LOAD_TEST_APPROVED_PRODUCTION=true");
 }
 
 export const errorRate = new Rate("errors");
+
+function threshold(expression) {
+  return LOAD_TEST_ABORT_ON_FAIL
+    ? [{ threshold: expression, abortOnFail: true, delayAbortEval: "2m" }]
+    : [expression];
+}
+
+function routeThresholds(metricName, expression) {
+  const entries = {};
+  for (const route of LOAD_TEST_ROUTES) {
+    entries[routeMetricName(metricName, route.name)] = threshold(expression);
+  }
+  return entries;
+}
 
 export const options = {
   scenarios: {
@@ -83,38 +109,41 @@ export const options = {
     },
   },
   thresholds: {
-    http_req_duration: ["p(95)<2500"],
-    errors: ["rate<0.01"],
-    http_req_failed: ["rate<0.01"],
+    http_req_duration: threshold(DURATION_P95_THRESHOLD),
+    errors: threshold(RATE_THRESHOLD),
+    http_req_failed: threshold(RATE_THRESHOLD),
+    ...routeThresholds("http_req_duration", DURATION_P95_THRESHOLD),
+    ...routeThresholds("errors", RATE_THRESHOLD),
+    ...routeThresholds("http_req_failed", RATE_THRESHOLD),
   },
 };
 
 export default function () {
-  const routes = [
-    { name: "home", url: `${BASE_URL}/` },
-    { name: "listings", url: `${BASE_URL}/listings` },
-    { name: "auctions", url: `${BASE_URL}/auctions` },
-    { name: "pricing", url: `${BASE_URL}/pricing` },
-    { name: "api_listings", url: `${BASE_URL}/api/public/listings?limit=24` },
-    { name: "api_open_houses", url: `${BASE_URL}/api/public/open-houses?limit=24` },
-    { name: "sitemap", url: `${BASE_URL}/sitemap-dynamic.xml` },
-  ];
-
-  for (const route of routes) {
-    const res = http.get(route.url, { tags: { route: route.name } });
-    const ok = check(res, {
+  for (const route of LOAD_TEST_ROUTES) {
+    const res = http.get(`${BASE_URL}${route.path}`, { tags: { route: route.name } });
+    const statusOk = check(res, {
       [`${route.name}: status 2xx`]: (response) => response.status >= 200 && response.status < 300,
+    });
+    check(res, {
       [`${route.name}: TTFB < 1500ms`]: (response) => response.timings.waiting < 1500,
     });
-    errorRate.add(ok ? 0 : 1);
+    errorRate.add(statusOk ? 0 : 1, { route: route.name });
     sleep(0.5);
   }
 }
 
 export function handleSummary(data) {
+  const summary = normalizeSummary(data, {
+    profile: ECAS_LOAD_PROFILE,
+    baseUrl: BASE_URL,
+    productionHost: PRODUCTION_HOST,
+    productionApproved: LOAD_TEST_APPROVED_PRODUCTION,
+    abortOnFailEnabled: LOAD_TEST_ABORT_ON_FAIL,
+  });
+
   return {
-    stdout: textSummary(normalizeSummary(data)),
-    [artifactPath("load-test-summary.json")]: JSON.stringify(normalizeSummary(data), null, 2),
+    stdout: textSummary(summary),
+    [artifactPath("load-test-summary.json")]: JSON.stringify(summary, null, 2),
     [artifactPath("load-test-raw-summary.json")]: JSON.stringify(data, null, 2),
   };
 }
@@ -150,80 +179,4 @@ function hostnameFromUrl(value) {
 function artifactPath(name) {
   if (!LOAD_TEST_SUMMARY_DIR || LOAD_TEST_SUMMARY_DIR === ".") return name;
   return `${LOAD_TEST_SUMMARY_DIR}/${name}`;
-}
-
-function metricValue(data, metricName, valueName) {
-  const value = data.metrics?.[metricName]?.values?.[valueName];
-  return typeof value === "number" ? value : null;
-}
-
-function normalizeSummary(data) {
-  const durationP95 = metricValue(data, "http_req_duration", "p(95)");
-  const failedRate = metricValue(data, "http_req_failed", "rate");
-  const errorsRate = metricValue(data, "errors", "rate");
-  const totalRequests = metricValue(data, "http_reqs", "count");
-  const peakVus = metricValue(data, "vus_max", "max");
-  const iterations = metricValue(data, "iterations", "count");
-
-  const thresholdResults = [
-    {
-      name: "http_req_duration_p95_ms",
-      actual: durationP95,
-      budget: 2500,
-      passed: typeof durationP95 === "number" && durationP95 < 2500,
-    },
-    {
-      name: "http_req_failed_rate",
-      actual: failedRate,
-      budget: 0.01,
-      passed: typeof failedRate === "number" && failedRate < 0.01,
-    },
-    {
-      name: "errors_rate",
-      actual: errorsRate,
-      budget: 0.01,
-      passed: typeof errorsRate === "number" && errorsRate < 0.01,
-    },
-  ];
-
-  return {
-    schemaVersion: 1,
-    generatedAt: new Date().toISOString(),
-    tool: "k6",
-    profile: ECAS_LOAD_PROFILE,
-    baseUrl: BASE_URL,
-    productionHost: isProductionHost(hostnameFromUrl(BASE_URL)),
-    productionApproved: LOAD_TEST_APPROVED_PRODUCTION,
-    summaryType: "normalized",
-    status: thresholdResults.every((threshold) => threshold.passed) ? "passed" : "failed",
-    traffic: {
-      totalRequests,
-      peakVus,
-      iterations,
-    },
-    thresholds: thresholdResults,
-  };
-}
-
-function textSummary(summary) {
-  const line = (key, value) => `${key.padEnd(30)} ${value}`;
-  const thresholdLine = (threshold) => {
-    const actual = threshold.actual === null ? "missing" : threshold.actual.toFixed(threshold.name.endsWith("_rate") ? 4 : 0);
-    return line(threshold.name, `${actual} <= ${threshold.budget} ${threshold.passed ? "PASS" : "FAIL"}`);
-  };
-
-  return [
-    "",
-    "----- Load test summary -----",
-    line("Status", summary.status),
-    line("Profile", summary.profile),
-    line("Base URL", summary.baseUrl),
-    line("Production host", String(summary.productionHost)),
-    line("Production approved", String(summary.productionApproved)),
-    line("VUs peak", summary.traffic.peakVus ?? "missing"),
-    line("Total requests", summary.traffic.totalRequests ?? "missing"),
-    ...summary.thresholds.map(thresholdLine),
-    "-----------------------------",
-    "",
-  ].join("\n");
 }

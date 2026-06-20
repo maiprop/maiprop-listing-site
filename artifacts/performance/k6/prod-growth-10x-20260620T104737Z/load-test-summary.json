@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-06-20T10:56:48.053Z",
+  "tool": "k6",
+  "profile": "growth_10x",
+  "baseUrl": "https://portal.maiprop.co",
+  "productionHost": true,
+  "productionApproved": true,
+  "summaryType": "normalized",
+  "status": "failed",
+  "traffic": {
+    "totalRequests": 164521,
+    "peakVus": 1000,
+    "iterations": 23503
+  },
+  "thresholds": [
+    {
+      "name": "http_req_duration_p95_ms",
+      "actual": 2524.6472,
+      "budget": 2500,
+      "passed": false
+    },
+    {
+      "name": "http_req_failed_rate",
+      "actual": 0.19815707417290193,
+      "budget": 0.01,
+      "passed": false
+    },
+    {
+      "name": "errors_rate",
+      "actual": 0.44492192486065607,
+      "budget": 0.01,
+      "passed": false
+    }
+  ]
+}

@@ -7,6 +7,7 @@ export type PublicApiCtx = Parameters<PagesFunction<PublicApiEnv>>[0];
 const DEFAULT_EDGE_TTL_SECONDS = 120;
 const DEFAULT_BROWSER_TTL_SECONDS = 30;
 const DEFAULT_STALE_SECONDS = 300;
+const DEFAULT_STALE_FALLBACK_SECONDS = 30 * 60;
 const SUPABASE_FETCH_TIMEOUT_MS = 2500;
 const TRANSIENT_UPSTREAM_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504, 520, 522, 524, 544]);
 const SECURITY_HEADERS = {
@@ -34,6 +35,7 @@ type CacheOptions = {
   edgeTtlSeconds?: number;
   browserTtlSeconds?: number;
   staleSeconds?: number;
+  staleFallbackSeconds?: number;
 };
 
 type SupabaseFetchOptions = {
@@ -57,6 +59,8 @@ function applySecurityHeaders(headers: Headers): void {
     if (!headers.has(name)) headers.set(name, value);
   }
 }
+
+const inflightCacheMisses = new Map<string, Promise<Response>>();
 
 async function fetchWithTimeout(
   input: RequestInfo | URL,
@@ -132,6 +136,76 @@ export function upstreamUnavailable(): Response {
   );
 }
 
+function staleCacheUrl(cacheKey: URL): URL {
+  const key = new URL(cacheKey.toString());
+  key.searchParams.set("__maiprop_stale", "1");
+  return key;
+}
+
+function cacheHeaderResponse(response: Response, cacheState: string): Response {
+  const headers = new Headers(response.headers);
+  headers.set("X-Maiprop-Cache", cacheState);
+  applySecurityHeaders(headers);
+  return new Response(response.clone().body, { status: response.status, headers });
+}
+
+function staleFallbackCacheSeconds(cache: CacheOptions): number {
+  const requested = cache.staleFallbackSeconds;
+  if (typeof requested === "number" && Number.isFinite(requested) && requested > 0) return requested;
+  const edgeTtl = cache.edgeTtlSeconds ?? DEFAULT_EDGE_TTL_SECONDS;
+  const stale = cache.staleSeconds ?? DEFAULT_STALE_SECONDS;
+  return Math.max(DEFAULT_STALE_FALLBACK_SECONDS, edgeTtl + stale);
+}
+
+async function matchStaleFallback(cacheApi: Cache, cacheKey: URL): Promise<Response | null> {
+  const stale = await cacheApi.match(new Request(staleCacheUrl(cacheKey).toString(), { method: "GET" }));
+  if (!stale) return null;
+  const headers = new Headers(stale.headers);
+  headers.set("X-Maiprop-Cache", "STALE");
+  headers.set("Warning", '110 - "Response is stale due to transient upstream failure"');
+  applySecurityHeaders(headers);
+  return new Response(stale.body, { status: stale.status, headers });
+}
+
+async function putFreshAndStale(
+  ctx: PublicApiCtx,
+  cacheApi: Cache,
+  cacheRequest: Request,
+  staleRequest: Request,
+  outbound: Response,
+  cache: CacheOptions,
+): Promise<void> {
+  const staleHeaders = new Headers(outbound.headers);
+  const staleSeconds = staleFallbackCacheSeconds(cache);
+  staleHeaders.set("Cache-Control", `public, max-age=${staleSeconds}`);
+  staleHeaders.set("CDN-Cache-Control", `public, max-age=${staleSeconds}`);
+  staleHeaders.set("X-Maiprop-Cache", "STALE_SEED");
+  applySecurityHeaders(staleHeaders);
+  const staleResponse = new Response(outbound.clone().body, {
+    status: outbound.status,
+    headers: staleHeaders,
+  });
+
+  const putPromise = Promise.all([
+    cacheApi.put(cacheRequest, outbound.clone()),
+    cacheApi.put(staleRequest, staleResponse),
+  ]);
+  ctx.waitUntil?.(putPromise);
+}
+
+function scheduleBackgroundRefresh(ctx: PublicApiCtx, cacheId: string, refresh: Promise<Response>): void {
+  ctx.waitUntil?.(
+    refresh
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`[public-api] background refresh for ${cacheId} failed: ${message}`);
+      })
+      .finally(() => {
+        if (inflightCacheMisses.get(cacheId) === refresh) inflightCacheMisses.delete(cacheId);
+      }),
+  );
+}
+
 export async function cachedJson(
   ctx: PublicApiCtx,
   cacheKey: URL,
@@ -140,28 +214,67 @@ export async function cachedJson(
 ): Promise<Response> {
   const cacheApi = typeof caches !== "undefined" ? caches.default : null;
   const cacheRequest = new Request(cacheKey.toString(), { method: "GET" });
+  const staleRequest = new Request(staleCacheUrl(cacheKey).toString(), { method: "GET" });
   if (cacheApi) {
     const hit = await cacheApi.match(cacheRequest);
     if (hit) {
-      const headers = new Headers(hit.headers);
-      headers.set("X-Maiprop-Cache", "HIT");
-      applySecurityHeaders(headers);
-      return new Response(hit.body, { status: hit.status, headers });
+      return cacheHeaderResponse(hit, "HIT");
     }
   }
 
-  const response = await producer();
-  const headers = new Headers(response.headers);
-  if (response.ok) applyCacheHeaders(headers, cache, true);
-  headers.set("X-Maiprop-Cache", cacheApi ? "MISS" : "BYPASS");
-  applySecurityHeaders(headers);
-  const body = await response.text();
-  const outbound = new Response(body, { status: response.status, headers });
+  const cacheId = cacheRequest.url;
+  const produceAndCache = async (): Promise<Response> => {
+    const response = await producer();
+    if (cacheApi && TRANSIENT_UPSTREAM_STATUSES.has(response.status)) {
+      const stale = await matchStaleFallback(cacheApi, cacheKey);
+      if (stale) return stale;
+    }
 
-  if (cacheApi && response.ok) {
-    ctx.waitUntil?.(cacheApi.put(cacheRequest, outbound.clone()));
+    const headers = new Headers(response.headers);
+    if (response.ok) applyCacheHeaders(headers, cache, true);
+    headers.set("X-Maiprop-Cache", cacheApi ? "MISS" : "BYPASS");
+    applySecurityHeaders(headers);
+    const body = await response.text();
+    const outbound = new Response(body, { status: response.status, headers });
+
+    if (cacheApi && response.ok) {
+      await putFreshAndStale(ctx, cacheApi, cacheRequest, staleRequest, outbound, cache);
+    }
+    return outbound;
+  };
+
+  if (!cacheApi) {
+    return produceAndCache();
   }
-  return outbound;
+
+  const stale = await matchStaleFallback(cacheApi, cacheKey);
+  if (stale) {
+    let refresh = inflightCacheMisses.get(cacheId);
+    if (!refresh) {
+      refresh = produceAndCache();
+      inflightCacheMisses.set(cacheId, refresh);
+      scheduleBackgroundRefresh(ctx, cacheId, refresh);
+    } else {
+      scheduleBackgroundRefresh(ctx, cacheId, refresh);
+    }
+    return stale;
+  }
+
+  const existing = inflightCacheMisses.get(cacheId);
+  if (existing) {
+    const response = await existing;
+    const cacheState = response.headers.get("X-Maiprop-Cache") === "STALE" ? "STALE" : "COALESCED";
+    return cacheHeaderResponse(response, cacheState);
+  }
+
+  const pending = produceAndCache();
+  inflightCacheMisses.set(cacheId, pending);
+  try {
+    const response = await pending;
+    return response.clone();
+  } finally {
+    inflightCacheMisses.delete(cacheId);
+  }
 }
 
 export async function supabaseJson<T>(

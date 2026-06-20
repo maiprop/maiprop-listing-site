@@ -25,6 +25,19 @@ is set and operations has approved the window. The script writes
 normalized `load-test-summary.json` output and a raw
 `load-test-raw-summary.json` backup for evidence retention.
 
+## Diagnostics
+
+The normalized summary includes aggregate thresholds and per-route diagnostics
+for every exercised route. Review `failedRoutes` first when a run fails; this
+identifies whether the bottleneck is a page shell, public API route, sitemap, or
+another routed surface.
+
+For production `growth_10x` and `enterprise_soak` runs, threshold aborts are
+enabled by default. This prevents a known-bad run from continuing to generate
+avoidable production traffic after the p95 or error-rate budgets are already
+crossed. Set `LOAD_TEST_ABORT_ON_FAIL=true` explicitly to enable the same guard
+on other profiles.
+
 ## Non-Prod Guardrails
 
 - `BASE_URL` is required. The k6 script and wrapper do not default to staging or
@@ -33,6 +46,9 @@ normalized `load-test-summary.json` output and a raw
   `enterprise_soak`.
 - `maiprop.co` and `*.maiprop.co` hosts are blocked unless
   `LOAD_TEST_APPROVED_PRODUCTION=true` is set.
+- Route-level p95/error thresholds are emitted for the home page, listings,
+  auctions, pricing, public listings API, public open houses API, and dynamic
+  sitemap.
 - Prefer staging, preview, or disposable non-prod targets for proof collection
   unless an operations-approved production window exists.
 
