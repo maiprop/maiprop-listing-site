@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const ciWorkflow = readFileSync(join(process.cwd(), ".github", "workflows", "ci.yml"), "utf8");
+const wranglerConfig = readFileSync(join(process.cwd(), "wrangler.toml"), "utf8");
 
 describe("Cloudflare Pages preview env parity", () => {
   it("syncs and verifies Preview runtime env vars before deploying PR previews", () => {
@@ -30,5 +31,14 @@ describe("Cloudflare Pages preview env parity", () => {
     expect(ciWorkflow).toContain("STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}");
     expect(ciWorkflow).not.toContain("VITE_APP_URL:                  ${{ secrets.VITE_APP_URL }}");
     expect(ciWorkflow).not.toContain("VITE_APP_URL:                  ${{ secrets.STAGING_APP_URL }}");
+  });
+
+  it("keeps source-controlled Wrangler config stable and non-secret", () => {
+    expect(wranglerConfig).toContain('name = "maiprop-listing-site"');
+    expect(wranglerConfig).toContain('pages_build_output_dir = "./dist"');
+    expect(wranglerConfig).toContain("[vars]");
+    expect(wranglerConfig).toContain('VITE_APP_URL = "https://portal.maiprop.co"');
+    expect(wranglerConfig).not.toMatch(/SUPABASE_(?:PUBLISHABLE_KEY|ANON_KEY|SERVICE_ROLE_KEY)\s*=/);
+    expect(wranglerConfig).not.toContain("SITE_LOCK_PASSWORD");
   });
 });

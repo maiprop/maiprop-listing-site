@@ -14,7 +14,6 @@ import type { Database, Json } from "@/integrations/supabase/types";
 import {
   emptyFunctionBodySchema,
   parseMutationInput,
-  pricingConfigIdSchema,
   pricingConfigRowsSchema,
   stripePriceCreateBodySchema,
 } from "@/lib/mutationSchemas";
@@ -36,6 +35,18 @@ type PricingConfig = {
   is_active: boolean;
   sort_order: number;
   metadata: Json | null;
+};
+
+type AdminPricingConfigAction =
+  | { action: "upsert"; rows: PricingConfigUpsert[] }
+  | { action: "delete"; id: string };
+
+const invokeAdminPricingConfig = async (body: AdminPricingConfigAction) => {
+  const { data, error } = await supabase.functions.invoke("admin-pricing-config", { body });
+  if (error || data?.error) {
+    throw new Error(data?.error ?? error?.message ?? "Pricing configuration update failed");
+  }
+  return data as { ok: true; rows?: number; deleted?: number };
 };
 
 /** Predefined sections so admin can manage all pricings: users, professionals, agents, valuation, investors, ad-hoc */
@@ -169,8 +180,7 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
         metadata: rest.metadata ?? {},
       }));
       const validatedPayload = parseMutationInput(pricingConfigRowsSchema, payload, "pricing configuration") as PricingConfigUpsert[];
-      const { error } = await supabase.from("pricing_configs").upsert(validatedPayload, { onConflict: "id" });
-      if (error) throw error;
+      await invokeAdminPricingConfig({ action: "upsert", rows: validatedPayload });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-pricing-configs"] });
@@ -184,9 +194,7 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const pricingConfigId = parseMutationInput(pricingConfigIdSchema, id, "pricing config id");
-      const { error } = await supabase.from("pricing_configs").delete().eq("id", pricingConfigId);
-      if (error) throw error;
+      await invokeAdminPricingConfig({ action: "delete", id });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-pricing-configs"] });
@@ -206,8 +214,7 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
         updated_at: now,
       }));
       const validatedRows = parseMutationInput(pricingConfigRowsSchema, rows, "pricing seed") as PricingConfigUpsert[];
-      const { error } = await supabase.from("pricing_configs").upsert(validatedRows, { onConflict: "id" });
-      if (error) throw error;
+      await invokeAdminPricingConfig({ action: "upsert", rows: validatedRows });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-pricing-configs"] });

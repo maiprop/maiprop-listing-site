@@ -7,12 +7,12 @@ Generated from the deployment, Supabase, Cloudflare, CI/CD, UI/UX, dependency, m
 | Area | Grade | Summary |
 | --- | --- | --- |
 | Overall release readiness | B | Main repo/deploy gates, live production smoke, audit coverage, and local pinned-runtime launcher are passing. |
-| Repo and CI | B- | CI now covers app, Pages Functions, Remotion, and Supabase Edge runtime typechecks. |
+| Repo and CI | B | CI now covers app, Pages Functions, Remotion, Supabase Edge runtime typechecks, Lighthouse artifact retention, and stricter branch-protection evidence. |
 | Supabase | B+ | Live security advisor is down to Supabase leaked-password protection; live policy overlap is cleared, and remaining performance debt is unused-index telemetry. |
-| Cloudflare Pages and Functions | B- | Deploys work and public API smoke now catches fixture leakage; preview env/canonical-host gaps remain. |
+| Cloudflare Pages and Functions | B | Deploys work, public API smoke catches fixture leakage, site-lock-aware health checks are covered, and stable non-secret Pages config lives in `wrangler.toml`; DNS alias work remains external. |
 | Maintainability | B- | Type-debt ratchet exists and one large page slice was split; several giant modules remain. |
 | Scalability | B | Good frontend chunking/cache; Supabase policy-overlap advisor debt is cleared, while unused-index telemetry still needs trend review. |
-| UI/UX | B- design, B live polish | Homepage fixture data and H1 copy are fixed; deeper accessibility pass remains. |
+| UI/UX | B | Homepage fixture data, H1 copy, broken-image fallback behavior, and broader axe coverage are fixed; manual assistive-technology review remains. |
 | Dependencies | B- | Clean production audit, but major upgrades and edge import drift need planning. |
 
 ## Progress Log
@@ -215,6 +215,32 @@ Known remaining:
 
 - `npm run check:runtime:local` resolves the pinned Node 20/npm 10 runtime even when the shell defaults to Node 24/npm 11.
 
+### 2026-06-20 ECAS Final Hardening Sweep
+
+Completed:
+
+- Made production deploy smoke checks aware of the Cloudflare site lock by sending the same unlock cookie as the Pages middleware when `PRODUCTION_DEPLOY_SITE_LOCK_PASSWORD` or `SITE_LOCK_PASSWORD` is available.
+- Mapped the production deploy workflow's `SITE_LOCK_PASSWORD` secret into the deploy and rollback health checks, so a locked site no longer causes a false rollback.
+- Moved stable non-secret Cloudflare Pages metadata into `wrangler.toml` and added regression coverage that secrets stay out of source.
+- Tightened GitHub branch-protection evidence to require the live-safe E2E security gate and Lighthouse CI gate.
+- Persisted Lighthouse reports as 30-day GitHub Actions artifacts for trend review.
+- Added zero-natural-size image fallback handling across property cards, auction cards, property popups, and property galleries.
+- Added a route-level browser regression test proving an auction card falls back from a broken Street View image to cover imagery.
+- Expanded WCAG route coverage and fixed `/firesale` accessibility regressions: the property-type select now has an accessible name, low-contrast comparison text was strengthened, and the active Quick Sale nav chip uses an accessible solid state.
+
+Verified:
+
+- `npx vitest run scripts/check-production-deploy.test.mjs`
+- `npx vitest run scripts/check-github-governance.test.mjs`
+- `npx vitest run scripts/performance-budget-config.test.mjs`
+- `npx vitest run scripts/cloudflare-preview-env-parity.test.mjs`
+- `npx vitest run src/test/imageFallbacks.test.ts`
+- `npx vitest run src/test/AuctionCard.behavior.test.tsx src/test/PropertyCard.behavior.test.tsx src/test/PropertyPopup.behavior.test.tsx src/test/PropertyGallery.behavior.test.tsx`
+- `npx vitest run src/test/FiresaleQuickSaleForm.test.tsx src/test/FiresaleInvestorPanel.accessibility.test.tsx`
+- `npx playwright test e2e/auction-image-fallback.spec.ts --project=chromium`
+- `npm run check:wcag-coverage`
+- `npx playwright test e2e/accessibility.spec.ts --project=chromium`
+
 ## P0 - Release Blockers
 
 | Issue | Evidence | Health Impact | Recommended Fix |
@@ -230,9 +256,9 @@ Known remaining:
 | --- | --- | --- | --- |
 | Fixed: Cloudflare Pages Function typecheck was not in CI and failed locally. | `npx tsc --noEmit -p functions/tsconfig.json`; `functions/api/public/homepage.ts:116`. | Pages Functions could ship type errors even when `npm run build` passed. | Done. Added `typecheck:functions`, fixed the type error, and wired the check into CI. |
 | Fixed: Public API Pages Function responses lacked the full security header set. | Live `https://portal.maiprop.co/api/public/homepage?section=featured` response. | HTML was hardened, but JSON/function surfaces were weaker. | Done for public API JSON helpers and cache hits. Re-check live after deployment. |
-| `SITE_LOCK_PASSWORD` can conflict with production smoke checks. | `functions/_middleware.ts`; `scripts/check-production-deploy.mjs`; CI post-deploy health step. | A configured site lock can trigger false deploy failure or rollback. | Make smoke checks site-lock-aware or keep site lock disabled for production deploy checks. |
+| Fixed: `SITE_LOCK_PASSWORD` can conflict with production smoke checks. | `functions/_middleware.ts`; `scripts/check-production-deploy.mjs`; CI post-deploy health step. | A configured site lock no longer causes false deploy failure or rollback when the deploy secret is available. | Done. Smoke checks send the middleware unlock cookie from `PRODUCTION_DEPLOY_SITE_LOCK_PASSWORD`/`SITE_LOCK_PASSWORD`; missing-passcode failures now produce explicit site-lock guidance. |
 | Fixed: Preview Cloudflare runtime env was not synced like production. | `.github/workflows/ci.yml` production env sync vs preview deploy path. | PR previews could build successfully but have broken Pages Functions. | Done. PR preview deploy now requires `STAGING_APP_URL`, syncs Preview runtime Supabase bindings through the Cloudflare API, verifies persisted Preview env vars, and writes staging `wrangler.toml` before deploy. |
-| Cloudflare deploy depends on CI rewriting `wrangler.toml`. | Minimal `wrangler.toml`; CI writes runtime config during deploy. | Reproducibility is weaker outside CI. | Move non-secret stable config into `wrangler.toml`; keep secrets in platform env. |
+| Fixed: Cloudflare deploy depended on CI rewriting all of `wrangler.toml`. | Minimal `wrangler.toml`; CI writes runtime config during deploy. | Reproducibility is stronger for local/direct Pages deploys while secrets remain platform-managed. | Done. Stable non-secret Pages config is in `wrangler.toml`; Supabase bindings and site-lock secrets remain CI/platform env. |
 | Fixed: canonical host was inconsistent. | Docs prefer `portal.maiprop.co`; SEO Functions and route Helmet metadata previously hardcoded `maiprop.co`. | SEO, sharing, and redirects can disagree. | Done. `functions/_seo.ts`, Pages Functions, and React route metadata now use the live portal origin; `src/test/canonicalOrigin.test.ts` and `functions/seo-prerender.test.ts` cover the contract. |
 | Fixed: Supabase Edge deploy drift evidence could block first-time function deploys or miss post-deploy drift. | `.github/workflows/deploy-edge-functions.yml`. | New functions could be blocked before deployment because production was temporarily repo-ahead-of-live; failed/partial deploys also needed a blocking post-deploy check. | Done. Pre-deploy live inventory is advisory evidence; post-deploy live inventory remains the blocking deployment gate and artifact. |
 
@@ -244,7 +270,7 @@ Known remaining:
 | Fixed: Live public APIs exposed newer synthetic fixture families. | Re-audit found `E2E-FULL-PUBLISH-*`, `qa-full-publish`, `Test Free Listing`, and `Devin Test` content in public homepage/listing data. | Users and crawlers could still see synthetic marketplace content after the first supervisor cleanup. | Done. Guarded cleanup deleted 9 rows, dry-run inventory returned `total: 0`, public APIs/client fallback filter all blocked markers, and production deploy smoke now fails on fixture JSON. |
 | Fixed: Homepage H1 had missing spacing: `Greecewith AI precision`. | Browser DOM audit. | Visible copy polish issue on first viewport. | Done. Heading composition was fixed and covered by a text regression test. |
 | Fixed: homepage unnamed-link risk is now regression-gated. | Browser audit previously found 1 unnamed link. | Minor accessibility/navigation issue. | Done. `e2e/accessibility.spec.ts` now asserts all visible homepage links expose accessible names across desktop, Firefox, and mobile Chrome projects. |
-| Street View image in auction card reported natural size 0 in audit. | Browser audit largest image list. | Possible broken/late-loading auction imagery. | Verify fallback image loading and add browser test around auction image fallback. |
+| Fixed: Street View image in auction card reported natural size 0 in audit. | Browser audit largest image list; image fallback tests. | Broken/empty external imagery now falls through to cover/listing imagery before the logo. | Done. Added zero-natural-size fallback helper coverage plus a route-level Playwright auction fallback regression. |
 
 ## P1 - Supabase Security and Performance Debt
 
@@ -285,7 +311,7 @@ Known remaining:
 | Partially improved: CI workflow is large and dense. | `.github/workflows/ci.yml` is about 47 KB. | Harder to reason about failures and permissions. | Install steps are lighter and deployable runtime gates are broader now. Split deploy, quality, security, preview, and migration checks when practical. |
 | Fixed: CI did not catch every deployable runtime type surface. | App build covered Vite; Pages Functions now had a typecheck; Supabase Edge and Remotion were not first-class gates. | Edge/runtime-specific type failures could ship without Vite noticing. | Done. CI now checks Remotion and all Supabase Edge Function entrypoints via `deno check`; package has `check:deployable-runtimes`. |
 | Fixed: Audit coverage gate failed on a zero-covered runtime component. | `npm run check:audit-coverage`; `src/components/AdminBroadcastNotifications.tsx` had 0% runtime line coverage. | Audit health checks could not pass cleanly and admin broadcast behavior was unprotected. | Done. Added behavior coverage for validation, success, and RPC failure; gate now reports `zero_covered_runtime_files: 0`. |
-| Branch protection docs may be stale vs actual checks. | `docs/BRANCH_PROTECTION.md` lists selected required checks. | Required gates can drift from intended gates. | Update docs after finalizing CI changes. |
+| Fixed: Branch protection docs may be stale vs actual checks. | `docs/BRANCH_PROTECTION.md` and `docs/governance/main-branch-protection.expected.json`. | Required gate drift is now caught by governance tests. | Done. Evidence now requires `E2E Security (Live-safe)` and `Lighthouse CI`. |
 | Production Docker docs/build path can be misleading. | Docker health can pass even with placeholder build args. | Container artifact can be "healthy" but functionally misconfigured. | Either harden Docker production config or mark it as non-primary/local-only. |
 | Partially fixed: PR preview deploy reproducibility. | CI preview path now requires isolated staging and syncs Preview runtime env like production; fork/dependabot/release-please previews are still intentionally skipped because secrets are unavailable or not useful. | Same-repo PR previews are reproducible; external PRs still rely on quality/E2E gates without preview deploys. | Keep skipped state clear in CI summaries and add preview smoke URL checks if Cloudflare exposes a stable deployment URL in workflow outputs. |
 
@@ -293,8 +319,8 @@ Known remaining:
 
 | Issue | Evidence | Health Impact | Recommended Fix |
 | --- | --- | --- | --- |
-| UI polish needs an accessibility/audit pass beyond homepage. | Browser audit only covered live homepage. | Other flows may have accessible-name/layout issues. | Run axe/Playwright pass on listings, property detail, auth, dashboard, mobile nav. |
-| Performance data should be trended, not only gated. | Lighthouse CI exists; bundle checks pass. | Regressions are caught, but trends may not be visible. | Persist Lighthouse and bundle artifacts for trend review. |
+| Partially fixed: UI polish needs an accessibility/audit pass beyond homepage. | `e2e/accessibility.spec.ts` now covers public routes including listings, auctions, open houses, firesale, professionals, pricing, auth/legal pages, API docs, and property detail. | Serious/critical automated a11y regressions are better gated; manual AT testing still remains. | Keep expanding coverage for authenticated dashboard flows and run the manual WCAG test plan before procurement. |
+| Fixed: Performance data should be trended, not only gated. | Lighthouse CI exists; bundle checks pass. | Lighthouse reports are now retained as CI artifacts for trend review. | Done. The workflow uploads `.lighthouseci/` as `lighthouse-reports` for 30 days. |
 | Cloudflare Agents SDK is not used. | `npm ls agents` empty; no Durable Object/Agent config. | Not an issue unless agent features are planned. | Leave out until there is a concrete agent use case. |
 
 ## Suggested First Sprint

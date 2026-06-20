@@ -20,6 +20,7 @@ import {
   getImageFallbackChain,
   isMaiPropLogoFallback,
   switchImageToNextFallback,
+  switchImageToNextFallbackIfEmpty,
 } from "@/lib/imageFallbacks";
 import { getListingDetailPath, shouldUseNewBuildRoute } from "@/lib/listingRoutes";
 
@@ -326,6 +327,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
             className={`w-full h-full transition-transform duration-300 ${
               thumbIsLogoFallback ? "object-contain p-3 bg-background" : "object-cover group-hover:scale-105"
             }`}
+            onLoad={(e) => switchImageToNextFallbackIfEmpty(e.currentTarget, imageChain)}
             onError={(e) => switchImageToNextFallback(e.currentTarget, imageChain)}
           />
           <div className="absolute top-1 left-1 flex gap-1 flex-wrap">
@@ -381,6 +383,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
           className={`w-full h-full transition-transform duration-500 ${
             mainImageIsLogoFallback ? "object-contain p-8 bg-background" : "object-cover group-hover:scale-105"
           }`}
+          onLoad={(e) => switchImageToNextFallbackIfEmpty(e.currentTarget, imageChain)}
           onError={(e) => switchImageToNextFallback(e.currentTarget, imageChain)}
         />
         {/* Soft gradient overlay */}

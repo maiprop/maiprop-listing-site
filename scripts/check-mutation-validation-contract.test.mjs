@@ -10,6 +10,10 @@ const makeFixture = () => {
   mkdirSync(join(root, "src", "lib"), { recursive: true });
   mkdirSync(join(root, "supabase", "functions", "_shared"), { recursive: true });
   mkdirSync(join(root, "supabase", "functions", "open-house-registration"), { recursive: true });
+  mkdirSync(join(root, "supabase", "functions", "admin-pricing-config"), { recursive: true });
+  mkdirSync(join(root, "supabase", "functions", "create-stripe-price"), { recursive: true });
+  mkdirSync(join(root, "supabase", "functions", "sync-stripe-pricing"), { recursive: true });
+  mkdirSync(join(root, "src", "pages"), { recursive: true });
 
   writeFileSync(
     join(root, "src", "lib", "mutationSchemas.ts"),
@@ -48,6 +52,22 @@ const makeFixture = () => {
   writeFileSync(
     join(root, "supabase", "functions", "open-house-registration", "index.ts"),
     "const registrationRequestSchema = z.object({}); await parseJsonBody(req, registrationRequestSchema);\n",
+  );
+  writeFileSync(
+    join(root, "supabase", "functions", "admin-pricing-config", "index.ts"),
+    "const adminPricingActionSchema = z.object({}); await parseJsonBody(req, adminPricingActionSchema); await supabase.from('pricing_configs').upsert(rows); throw new Error('Platform admin only');\n",
+  );
+  writeFileSync(
+    join(root, "supabase", "functions", "create-stripe-price", "index.ts"),
+    "const createStripePriceBodySchema = z.object({}); try { await parseJsonBody(req, createStripePriceBodySchema); await supabase.from('pricing_configs').update({}); } catch (error) { if (error instanceof SchemaValidationError) throw error; }\n",
+  );
+  writeFileSync(
+    join(root, "supabase", "functions", "sync-stripe-pricing", "index.ts"),
+    "const syncStripePricingBodySchema = z.object({}); try { await parseJsonBody(req, syncStripePricingBodySchema); await supabase.from('pricing_configs').update({}); } catch (error) { if (error instanceof SchemaValidationError) throw error; }\n",
+  );
+  writeFileSync(
+    join(root, "src", "pages", "AdminPricing.tsx"),
+    "parseMutationInput(pricingConfigRowsSchema, rows, 'pricing'); await invokeAdminPricingConfig('admin-pricing-config');\n",
   );
   return root;
 };

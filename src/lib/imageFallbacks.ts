@@ -62,3 +62,14 @@ export const switchImageToNextFallback = (
 
   return true;
 };
+
+export const switchImageToNextFallbackIfEmpty = (
+  img: HTMLImageElement,
+  images: readonly (string | null | undefined)[],
+): boolean => {
+  const currentSrc = img.currentSrc || img.src;
+  if (isMaiPropLogoFallback(currentSrc)) return false;
+  if (img.naturalWidth > 0 && img.naturalHeight > 0) return false;
+
+  return switchImageToNextFallback(img, images);
+};

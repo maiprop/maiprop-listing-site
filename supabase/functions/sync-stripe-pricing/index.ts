@@ -14,6 +14,7 @@ import {
   tooManyRequestsResponse,
 } from "../_shared/rateLimit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { parseJsonBody, SchemaValidationError, z } from "../_shared/schema.ts";
 
 const _log = createLogger("sync-stripe-pricing");
 const limiter = makeRateLimiter({
@@ -50,6 +51,10 @@ type PricingConfigRow = {
   description?: string | null;
   metadata?: Record<string, string> | null;
 };
+
+const syncStripePricingBodySchema = z.object({
+  config_ids: z.array(z.string().trim().min(1, "Invalid pricing config id")).max(500, "Invalid pricing config id").optional(),
+}).strict();
 
 function normalizeAudience(raw: string | null | undefined): string | null { // skipcq: JS-R1005 - Legacy and current audience aliases stay centralized for Stripe price sync.
   if (
@@ -147,10 +152,7 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
       throw new Error("Platform admin only");
 
     // Optional: sync only specific config IDs, or all active configs
-    const body =
-      req.method === "POST" && req.body
-        ? await req.json().catch(() => ({}))
-        : {};
+    const body = await parseJsonBody(req, syncStripePricingBodySchema);
     const configIds: string[] | null = body.config_ids ?? null;
 
     let query = supabase
@@ -307,7 +309,7 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
     const message = error instanceof Error ? error.message : String(error);
     return new Response(JSON.stringify({ error: message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
+      status: error instanceof SchemaValidationError ? 400 : 500,
     });
   }
 });

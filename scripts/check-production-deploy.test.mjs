@@ -3,6 +3,57 @@ import {
   findPublicApiFixtureMarker,
   PUBLIC_API_FIXTURE_MARKERS,
 } from "./public-api-fixture-guard.mjs";
+import {
+  getSiteLockCookieHeader,
+  getSiteLockPlaywrightCookie,
+  getSiteLockPassword,
+  isSiteLockHtml,
+  mergeHeaders,
+} from "./check-production-deploy-site-lock.mjs";
+
+describe("production deploy site-lock smoke helpers", () => {
+  it("prefers the dedicated smoke-check passcode secret over the runtime site-lock secret", () => {
+    expect(getSiteLockPassword({
+      PRODUCTION_DEPLOY_SITE_LOCK_PASSWORD: "smoke-secret",
+      SITE_LOCK_PASSWORD: "runtime-secret",
+    })).toBe("smoke-secret");
+
+    expect(getSiteLockPassword({
+      SITE_LOCK_PASSWORD: "runtime-secret",
+    })).toBe("runtime-secret");
+  });
+
+  it("creates the Cloudflare middleware unlock cookie without exposing the passcode", async () => {
+    const header = await getSiteLockCookieHeader("correct horse battery staple");
+
+    expect(header).toMatch(/^maiprop_unlock=[a-f0-9]{64}$/);
+    expect(header).not.toContain("correct horse battery staple");
+
+    await expect(getSiteLockPlaywrightCookie("https://portal.maiprop.co/path", "passcode"))
+      .resolves.toMatchObject({
+        name: "maiprop_unlock",
+        domain: "portal.maiprop.co",
+        path: "/",
+        httpOnly: true,
+        secure: true,
+        sameSite: "Lax",
+      });
+  });
+
+  it("detects the private preview splash and merges smoke headers", () => {
+    expect(isSiteLockHtml("<title>Maiprop — Private preview</title><form action=\"/__unlock\">")).toBe(true);
+    expect(isSiteLockHtml("<div id=\"root\"></div><script type=\"module\" src=\"/assets/app.js\"></script>")).toBe(false);
+
+    expect(mergeHeaders(
+      { accept: "text/html" },
+      { cookie: "maiprop_unlock=abc", "x-smoke": "1" },
+    )).toEqual({
+      accept: "text/html",
+      cookie: "maiprop_unlock=abc",
+      "x-smoke": "1",
+    });
+  });
+});
 
 describe("production deploy public API fixture guard", () => {
   it("documents the production-blocked fixture markers", () => {

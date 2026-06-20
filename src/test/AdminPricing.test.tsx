@@ -90,6 +90,7 @@ beforeEach(() => {
   mocks.upsertMock.mockResolvedValue({ error: null });
   mocks.supabase?.from.mockReset();
   mocks.supabase?.functions.invoke.mockReset();
+  mocks.supabase?.functions.invoke.mockResolvedValue({ data: { ok: true }, error: null });
   mocks.toastMock.success.mockReset();
   mocks.toastMock.error.mockReset();
   mocks.useAuthMock.mockReturnValue({ profile: { role: "admin" } });
@@ -171,7 +172,11 @@ describe("AdminPricingContent", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete pricing row" }));
     fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
 
-    await waitFor(() => expect(mocks.deleteEqMock).toHaveBeenCalledWith("id", "price-config-1"));
+    await waitFor(() =>
+      expect(mocks.supabase?.functions.invoke).toHaveBeenCalledWith("admin-pricing-config", {
+        body: { action: "delete", id: "price-config-1" },
+      }),
+    );
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["admin-pricing-configs"] });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["pricing-configs-public"] });
     expect(mocks.toastMock.success).toHaveBeenCalledWith("Pricing row deleted.");
@@ -179,9 +184,14 @@ describe("AdminPricingContent", () => {
 
   it("adds rows, edits every table field, saves, dismisses sync banners, and closes the add modal paths", async () => {
     const row = baseRow({ metadata: { stripe_price_id: "price_old" } });
-    mocks.supabase?.functions.invoke.mockResolvedValueOnce({
-      data: { summary: { created: 0, price_updated: 0, product_updated: 0, no_change: 1 }, results: [] },
-      error: null,
+    mocks.supabase?.functions.invoke.mockImplementation(async (functionName: string) => {
+      if (functionName === "sync-stripe-pricing") {
+        return {
+          data: { summary: { created: 0, price_updated: 0, product_updated: 0, no_change: 1 }, results: [] },
+          error: null,
+        };
+      }
+      return { data: { ok: true }, error: null };
     });
 
     const { client } = renderAdminPricing([row]);
@@ -218,7 +228,14 @@ describe("AdminPricingContent", () => {
     fireEvent.change(screen.getByDisplayValue("price_old"), { target: { value: "price_new" } });
 
     fireEvent.click(screen.getByRole("button", { name: /^Save all$/i }));
-    await waitFor(() => expect(mocks.upsertMock).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(mocks.supabase?.functions.invoke).toHaveBeenCalledWith("admin-pricing-config", {
+        body: expect.objectContaining({
+          action: "upsert",
+          rows: expect.any(Array),
+        }),
+      }),
+    );
     expect(mocks.toastMock.success).toHaveBeenCalledWith("Pricing configuration saved.");
 
     fireEvent.click(screen.getByRole("button", { name: /Sync to Stripe/i }));
@@ -228,12 +245,20 @@ describe("AdminPricingContent", () => {
   });
 
   it("seeds empty pricing and reports save, seed, delete, and Stripe creation failures", async () => {
-    mocks.upsertMock
-      .mockResolvedValueOnce({ error: null })
-      .mockResolvedValueOnce({ error: new Error("save denied") })
-      .mockResolvedValueOnce({ error: new Error("seed denied") });
-    mocks.deleteEqMock.mockResolvedValueOnce({ error: new Error("delete denied") });
-    mocks.supabase?.functions.invoke.mockResolvedValueOnce({ data: { error: "stripe denied" }, error: null });
+    let adminPricingCalls = 0;
+    mocks.supabase?.functions.invoke.mockImplementation(async (functionName: string) => {
+      if (functionName === "admin-pricing-config") {
+        adminPricingCalls += 1;
+        if (adminPricingCalls === 1) return { data: { ok: true }, error: null };
+        if (adminPricingCalls === 2) return { data: { error: "save denied" }, error: null };
+        if (adminPricingCalls === 3) return { data: { error: "seed denied" }, error: null };
+        return { data: { error: "delete denied" }, error: null };
+      }
+      if (functionName === "create-stripe-price") {
+        return { data: { error: "stripe denied" }, error: null };
+      }
+      return { data: { ok: true }, error: null };
+    });
 
     renderAdminPricing([]);
 

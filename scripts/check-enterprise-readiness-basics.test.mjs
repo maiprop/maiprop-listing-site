@@ -23,6 +23,7 @@ const makeFixture = () => {
   mkdirSync(join(root, "docs", "backups"), { recursive: true });
   mkdirSync(join(root, "docs", "compliance", "dora"), { recursive: true });
   mkdirSync(join(root, "docs", "governance"), { recursive: true });
+  mkdirSync(join(root, "docs", "performance"), { recursive: true });
   mkdirSync(join(root, "scripts"), { recursive: true });
   mkdirSync(join(root, "scripts", "load-test"), { recursive: true });
   mkdirSync(join(root, "src", "hooks"), { recursive: true });
@@ -32,6 +33,10 @@ const makeFixture = () => {
   mkdirSync(join(root, "supabase", "functions", "_shared"), { recursive: true });
   mkdirSync(join(root, "supabase", "functions", "healthz"), { recursive: true });
   mkdirSync(join(root, "supabase", "functions", "open-house-registration"), { recursive: true });
+  mkdirSync(join(root, "supabase", "functions", "admin-pricing-config"), { recursive: true });
+  mkdirSync(join(root, "supabase", "functions", "create-stripe-price"), { recursive: true });
+  mkdirSync(join(root, "supabase", "functions", "sync-stripe-pricing"), { recursive: true });
+  mkdirSync(join(root, "src", "pages"), { recursive: true });
 
   writeFileSync(
     join(root, "package.json"),
@@ -153,6 +158,8 @@ const makeFixture = () => {
         "Release Safety Inventory",
         "Validate Supabase migrations",
         "E2E Tests",
+        "E2E Security (Live-safe)",
+        "Lighthouse CI",
       ],
       requiredApprovingReviewCount: 1,
       requireCodeOwnerReviews: true,
@@ -289,6 +296,47 @@ const makeFixture = () => {
       "Allow deletions | disabled",
       "Build / Lint / Test",
       "Validate Supabase migrations",
+      "E2E Security (Live-safe)",
+      "Lighthouse CI",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "docs", "governance", "module-size-budget.json"),
+    JSON.stringify({
+      version: 1,
+      defaultMaxBytes: 35000,
+      generatedExemptions: [],
+      legacyExceptions: [],
+    }),
+  );
+  writeFileSync(
+    join(root, "docs", "governance", "sensitive-mutation-boundaries.json"),
+    JSON.stringify({
+      version: 1,
+      blockedDirectTables: ["pricing_configs", "organization_memberships"],
+      allowedBrowserMutations: [],
+    }),
+  );
+  writeFileSync(
+    join(root, "docs", "governance", "LIVE_GITHUB_ADMIN_SETTINGS.md"),
+    [
+      "allowed_actions: selected",
+      "sha_pinning_required: true",
+      "patterns_allowed",
+      "Branch protection API result: blocked",
+      "Upgrade to GitHub Pro or make this repository public",
+      "Environment approvals: pending repository admin",
+      "Push protection: pending repository admin",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "docs", "performance", "LOAD_TEST_PROOF.md"),
+    [
+      "ECAS_LOAD_PROFILE=baseline_100",
+      "ECAS_LOAD_PROFILE=growth_10x",
+      "LOAD_TEST_APPROVED_PRODUCTION=true",
+      "load-test-summary.json",
+      "approved time window",
     ].join("\n"),
   );
   writeFileSync(
@@ -349,9 +397,12 @@ const makeFixture = () => {
     join(root, "scripts", "load-test", "basic.js"),
     [
       "import http from \"k6/http\";",
+      "const ECAS_LOAD_PROFILE = 'baseline_100';",
+      "const LOAD_TEST_APPROVED_PRODUCTION = false;",
+      "const profiles = 'growth_10x enterprise_soak';",
       "export const errorRate = new Rate('errors');",
       "export const options = {",
-      "  scenarios: { browse: { executor: \"ramping-vus\", stages: [{ target: 100 }] } },",
+      "  scenarios: { browse: { executor: \"ramping-vus\", stages: [{ target: 1000 }] } },",
       "  thresholds: { http_req_duration: [\"p(95)<2500\"], errors: [\"rate<0.01\"], http_req_failed: [\"rate<0.01\"] },",
       "};",
       "export default function () {",
@@ -437,6 +488,22 @@ const makeFixture = () => {
   writeFileSync(
     join(root, "supabase", "functions", "open-house-registration", "index.ts"),
     "const registrationRequestSchema = z.object({}); await parseJsonBody(req, registrationRequestSchema);\n",
+  );
+  writeFileSync(
+    join(root, "supabase", "functions", "admin-pricing-config", "index.ts"),
+    "const adminPricingActionSchema = z.object({}); await parseJsonBody(req, adminPricingActionSchema); await supabase.from('pricing_configs').upsert(rows); throw new Error('Platform admin only');\n",
+  );
+  writeFileSync(
+    join(root, "supabase", "functions", "create-stripe-price", "index.ts"),
+    "const createStripePriceBodySchema = z.object({}); try { await parseJsonBody(req, createStripePriceBodySchema); await supabase.from('pricing_configs').update({}); } catch (error) { if (error instanceof SchemaValidationError) throw error; }\n",
+  );
+  writeFileSync(
+    join(root, "supabase", "functions", "sync-stripe-pricing", "index.ts"),
+    "const syncStripePricingBodySchema = z.object({}); try { await parseJsonBody(req, syncStripePricingBodySchema); await supabase.from('pricing_configs').update({}); } catch (error) { if (error instanceof SchemaValidationError) throw error; }\n",
+  );
+  writeFileSync(
+    join(root, "src", "pages", "AdminPricing.tsx"),
+    "parseMutationInput(pricingConfigRowsSchema, rows, 'pricing'); await invokeAdminPricingConfig('admin-pricing-config');\n",
   );
   return root;
 };

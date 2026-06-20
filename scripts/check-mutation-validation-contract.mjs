@@ -61,6 +61,42 @@ const requiredFiles = [
       "z.object",
     ],
   },
+  {
+    path: "supabase/functions/admin-pricing-config/index.ts",
+    markers: [
+      "parseJsonBody",
+      "adminPricingActionSchema",
+      "pricing_configs",
+      "Platform admin only",
+    ],
+  },
+  {
+    path: "supabase/functions/create-stripe-price/index.ts",
+    markers: [
+      "parseJsonBody",
+      "createStripePriceBodySchema",
+      "SchemaValidationError",
+      "pricing_configs",
+    ],
+  },
+  {
+    path: "supabase/functions/sync-stripe-pricing/index.ts",
+    markers: [
+      "parseJsonBody",
+      "syncStripePricingBodySchema",
+      "SchemaValidationError",
+      "pricing_configs",
+    ],
+  },
+  {
+    path: "src/pages/AdminPricing.tsx",
+    markers: [
+      "parseMutationInput",
+      "pricingConfigRowsSchema",
+      "admin-pricing-config",
+      "invokeAdminPricingConfig",
+    ],
+  },
 ];
 
 const MUTATION_RE = /\.from\([^)]*\)[\s\S]{0,250}\.(?:insert|update|upsert|delete)\s*\(/m;

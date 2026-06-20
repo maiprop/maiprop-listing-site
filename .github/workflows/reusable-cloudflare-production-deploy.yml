@@ -249,10 +249,14 @@ jobs:
 
       - name: Post-deploy health check
         id: health_check
+        env:
+          PRODUCTION_DEPLOY_SITE_LOCK_PASSWORD: ${{ secrets.SITE_LOCK_PASSWORD }}
         run: npm run check:production-deploy -- https://portal.maiprop.co --browser --public-api
 
       - name: Rollback on health check failure
         if: failure() && steps.health_check.outcome == 'failure' && steps.prev_deploy.outputs.id != ''
+        env:
+          PRODUCTION_DEPLOY_SITE_LOCK_PASSWORD: ${{ secrets.SITE_LOCK_PASSWORD }}
         run: |
           set -euo pipefail
           ROLLBACK_ID="${{ steps.prev_deploy.outputs.id }}"

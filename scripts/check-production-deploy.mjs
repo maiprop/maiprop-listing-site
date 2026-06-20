@@ -12,6 +12,15 @@
 
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { validatePublicApiEndpoints } from "./check-production-deploy-public-api.mjs";
+import {
+  getSiteLockCookieHeader,
+  getSiteLockErrorMessage,
+  getSiteLockPassword,
+  getSiteLockPlaywrightCookie,
+  isSiteLockHtml,
+  isSiteLockPlainText,
+  mergeHeaders,
+} from "./check-production-deploy-site-lock.mjs";
 
 const DEFAULT_URLS = ["https://portal.maiprop.co"];
 const DEFAULT_ATTEMPTS = 8;
@@ -54,18 +63,37 @@ const assertOk = (condition, message) => {
   if (!condition) throw new Error(message);
 };
 
+let cachedSiteLockHeaders;
+const getSiteLockHeaders = async () => {
+  if (cachedSiteLockHeaders) return cachedSiteLockHeaders;
+  const password = getSiteLockPassword();
+  cachedSiteLockHeaders = password
+    ? { cookie: await getSiteLockCookieHeader(password) }
+    : {};
+  return cachedSiteLockHeaders;
+};
+
 const fetchText = async (url, options = {}) => {
+  const { headers, ...requestOptions } = options;
+  const siteLockHeaders = await getSiteLockHeaders();
   const res = await fetch(url, {
     redirect: "follow",
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    headers: {
-      "user-agent": USER_AGENT,
-      ...(options.headers ?? {}),
-    },
-    ...options,
+    headers: mergeHeaders(
+      { "user-agent": USER_AGENT },
+      siteLockHeaders,
+      headers,
+    ),
+    ...requestOptions,
   });
   const text = await res.text();
-  assertOk(res.ok, `${url} returned HTTP ${res.status}: ${text.slice(0, 160)}`);
+  const siteLockResponse = isSiteLockHtml(text) || isSiteLockPlainText(text);
+  assertOk(
+    res.ok,
+    siteLockResponse
+      ? getSiteLockErrorMessage(url)
+      : `${url} returned HTTP ${res.status}: ${text.slice(0, 160)}`,
+  );
   return { res, text };
 };
 
@@ -79,6 +107,7 @@ const extractModuleScripts = (html) => {
 };
 
 const validateHtml = (url, html) => {
+  assertOk(!isSiteLockHtml(html), getSiteLockErrorMessage(url));
   assertOk(html.includes('<div id="root"></div>'), `${url} is missing #root`);
 
   const scripts = extractModuleScripts(html);
@@ -129,7 +158,12 @@ const validateEntrypointAsset = async (baseUrl, assetPath) => {
 const runBrowserCheck = async (url) => {
   const { chromium } = await import("playwright");
   const browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage();
+  const context = await browser.newContext();
+  const siteLockPassword = getSiteLockPassword();
+  if (siteLockPassword) {
+    await context.addCookies([await getSiteLockPlaywrightCookie(url, siteLockPassword)]);
+  }
+  const page = await context.newPage();
   const moduleFailures = [];
   const pageErrors = [];
 
@@ -170,7 +204,7 @@ const checkUrl = async (url) => {
   });
   const assetPath = validateHtml(url, html);
   await validateEntrypointAsset(url, assetPath);
-  if (publicApiCheck) await validatePublicApiEndpoints(url);
+  if (publicApiCheck) await validatePublicApiEndpoints(url, { fetchText });
   if (browserCheck) await runBrowserCheck(url);
   const browserSuffix = browserCheck ? " and mounts the app" : "";
   const apiSuffix = publicApiCheck ? " with public APIs online" : "";

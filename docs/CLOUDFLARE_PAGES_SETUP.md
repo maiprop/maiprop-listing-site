@@ -15,6 +15,10 @@ gets a preview URL.
 4. Build output directory: `dist`. The repository also pins this in
    `wrangler.toml` with `pages_build_output_dir = "./dist"` so Git-connected
    or direct Wrangler deploys do not accidentally publish the repository root.
+   The same file may contain stable non-secret public metadata such as
+   `VITE_APP_URL`; Supabase bindings and `SITE_LOCK_PASSWORD` stay out of
+   source control and are synced by CI into Cloudflare Pages environment
+   variables.
 5. Build settings may otherwise stay empty — the site is built in GitHub
    Actions and the pre-built `dist/` is uploaded by Wrangler.
 
@@ -225,9 +229,13 @@ dashboard. All previously-issued cookies are invalidated automatically
 ### Troubleshooting
 
 - **Health check (`curl https://portal.maiprop.co`) fails after deploy.**
-  The splash page returns HTTP 200, so a naked `curl` still passes. If it
-  doesn't, check the CI deploy logs for the *Sync* step output — the last
-  line reports `site lock: ENABLED` or `disabled`.
+  The production deploy smoke check is site-lock-aware. When
+  `SITE_LOCK_PASSWORD` is configured in GitHub Actions, CI passes it to the
+  health check as `PRODUCTION_DEPLOY_SITE_LOCK_PASSWORD` and the script sends
+  the same `maiprop_unlock` cookie as the middleware. If the health check
+  reports a site-lock page, confirm the GitHub secret exists and matches the
+  Cloudflare runtime binding, or clear `SITE_LOCK_PASSWORD` before production
+  deploy checks.
 - **Preview deploys are also locked.** Production and preview use separate
   passcode secrets. The production sync writes `SITE_LOCK_PASSWORD` only to
   `deployment_configs.production`; PR previews write `STAGING_SITE_LOCK_PASSWORD`

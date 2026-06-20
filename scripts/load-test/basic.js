@@ -4,10 +4,10 @@
  * Install k6: https://k6.io/docs/getting-started/installation/
  *
  * Run locally against staging:
- *   BASE_URL=https://staging--maiprop.netlify.app k6 run scripts/load-test/basic.js
+ *   BASE_URL=https://staging--maiprop.netlify.app ECAS_LOAD_PROFILE=baseline_100 k6 run scripts/load-test/basic.js
  *
  * Run against production (off-hours only, after ops confirmation):
- *   BASE_URL=https://maiprop.co k6 run scripts/load-test/basic.js
+ *   LOAD_TEST_APPROVED_PRODUCTION=true BASE_URL=https://portal.maiprop.co ECAS_LOAD_PROFILE=baseline_100 k6 run scripts/load-test/basic.js
  *
  * Scenarios exercise:
  *   - Home page (cold)
@@ -20,6 +20,12 @@
  *   - p(95) < 2500 ms across all endpoints
  *   - error rate < 1%
  *
+ * Profiles:
+ *   - smoke: quick local/staging sanity check
+ *   - baseline_100: ECAS baseline, 100 concurrent VUs
+ *   - growth_10x: ECAS 10x target, 1,000 concurrent VUs
+ *   - enterprise_soak: sustained regression window
+ *
  * If a threshold fails, k6 exits non-zero.
  */
 // @ts-nocheck — k6 runs in its own runtime with its own globals.
@@ -28,6 +34,43 @@ import { check, sleep } from "k6";
 import { Rate } from "k6/metrics";
 
 const BASE_URL = __ENV.BASE_URL || "https://staging--maiprop.netlify.app";
+const ECAS_LOAD_PROFILE = __ENV.ECAS_LOAD_PROFILE || "baseline_100";
+const LOAD_TEST_APPROVED_PRODUCTION = __ENV.LOAD_TEST_APPROVED_PRODUCTION === "true";
+
+const PRODUCTION_HOSTS = new Set(["maiprop.co", "www.maiprop.co", "portal.maiprop.co"]);
+
+const LOAD_PROFILES = {
+  smoke: [
+    { duration: "10s", target: 5 },
+    { duration: "20s", target: 10 },
+    { duration: "10s", target: 0 },
+  ],
+  baseline_100: [
+    { duration: "30s", target: 20 },
+    { duration: "1m", target: 100 },
+    { duration: "30s", target: 0 },
+  ],
+  growth_10x: [
+    { duration: "2m", target: 250 },
+    { duration: "5m", target: 1000 },
+    { duration: "2m", target: 0 },
+  ],
+  enterprise_soak: [
+    { duration: "5m", target: 100 },
+    { duration: "30m", target: 250 },
+    { duration: "5m", target: 0 },
+  ],
+};
+
+const selectedStages = LOAD_PROFILES[ECAS_LOAD_PROFILE];
+if (!selectedStages) {
+  throw new Error(`Unknown ECAS_LOAD_PROFILE: ${ECAS_LOAD_PROFILE}`);
+}
+
+const parsedBaseUrl = new URL(BASE_URL);
+if (PRODUCTION_HOSTS.has(parsedBaseUrl.hostname) && !LOAD_TEST_APPROVED_PRODUCTION) {
+  throw new Error("Production load tests require LOAD_TEST_APPROVED_PRODUCTION=true");
+}
 
 export const errorRate = new Rate("errors");
 
@@ -36,11 +79,7 @@ export const options = {
     browse: {
       executor: "ramping-vus",
       startVUs: 0,
-      stages: [
-        { duration: "30s", target: 20 },   // ramp up
-        { duration: "1m",  target: 100 },  // sustained 100 concurrent VUs
-        { duration: "30s", target: 0 },    // ramp down
-      ],
+      stages: selectedStages,
       gracefulRampDown: "30s",
     },
   },

@@ -96,6 +96,9 @@ verify_jwt = true
 [functions.sync-stripe-pricing]
 verify_jwt = true
 
+[functions.admin-pricing-config]
+verify_jwt = true
+
 [functions.get-invoices]
 verify_jwt = true
 

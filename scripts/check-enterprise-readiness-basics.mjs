@@ -7,6 +7,7 @@ import { checkLoadTestContract } from "./check-load-test-contract.mjs";
 import { checkMutationValidationContract } from "./check-mutation-validation-contract.mjs";
 import { checkOpenApiCoverage } from "./check-openapi-coverage.mjs";
 import { checkRepositoryArchitecture } from "./check-repository-architecture.mjs";
+import { checkEcasHardeningContracts } from "./check-ecas-hardening-contracts.mjs";
 
 const REQUIRED_NODE = "20.19.5";
 const REQUIRED_NPM = "10.8.2";
@@ -340,6 +341,7 @@ export function checkEnterpriseReadinessBasics(root = process.cwd()) {
     checkMutationValidationContract(root),
     checkEnterpriseTenantContract(root),
     checkRepositoryArchitecture(root),
+    checkEcasHardeningContracts(root),
   ];
   return result(checks.flatMap((check) => check.failures));
 }

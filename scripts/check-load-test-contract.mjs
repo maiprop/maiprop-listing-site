@@ -41,14 +41,19 @@ export function checkLoadTestContract(root = process.cwd()) {
     "/sitemap-dynamic.xml",
     "handleSummary",
     "load-test-summary.json",
+    "ECAS_LOAD_PROFILE",
+    "LOAD_TEST_APPROVED_PRODUCTION",
+    "baseline_100",
+    "growth_10x",
+    "enterprise_soak",
   ];
 
   for (const marker of includesAll(text, requiredMarkers)) {
     failures.push(`${SCRIPT_PATH} must mention ${marker}`);
   }
 
-  if (maxTargetVus(text) < 100) {
-    failures.push(`${SCRIPT_PATH} peak target must reach at least 100 VUs`);
+  if (maxTargetVus(text) < 1000) {
+    failures.push(`${SCRIPT_PATH} peak target must reach at least 1000 VUs for the ECAS growth_10x profile`);
   }
 
   return result(failures);

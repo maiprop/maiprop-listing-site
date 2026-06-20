@@ -13,7 +13,7 @@ GitHub -> Settings -> Branches -> Add branch protection rule
 |---------|-------|-----------|
 | Branch name pattern | `main` | Production-bearing branch |
 | Require status checks to pass | enabled | Prevents merging broken code |
-| Required checks | `Build / Lint / Test`, `Release Safety Inventory`, `Validate Supabase migrations`, `E2E Tests` | Core quality, release, DB, and UI gates |
+| Required checks | `Build / Lint / Test`, `Release Safety Inventory`, `Validate Supabase migrations`, `E2E Tests`, `E2E Security (Live-safe)`, `Lighthouse CI` | Core quality, release, DB, UI, live-safe security, and performance/accessibility gates |
 | Require branches to be up to date | enabled | Ensures checks ran against the latest base |
 | Require pull request reviews | enabled | Stops direct unreviewed production changes |
 | Required approving reviews | `1` minimum | Raises governance above single-operator merge discipline |

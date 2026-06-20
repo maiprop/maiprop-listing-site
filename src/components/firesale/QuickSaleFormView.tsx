@@ -185,10 +185,11 @@ const PropertyMetricsFields = ({
 }) => (
   <div className="grid grid-cols-2 gap-4">
     <div>
-      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+      <label htmlFor="quick-sale-property-type" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
         {ui("Property Type", "Τύπος ακινήτου")} <span className="text-destructive">*</span>
       </label>
       <select
+        id="quick-sale-property-type"
         value={form.propertyType}
         disabled={disabled}
         onChange={disabled ? undefined : (e) => onUpdate("propertyType", e.target.value)}

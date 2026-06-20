@@ -7,6 +7,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createLogger } from "../_shared/logger.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import { parseJsonBody, SchemaValidationError, z } from "../_shared/schema.ts";
 
 const _log = createLogger("create-stripe-price");
 const limiter = makeRateLimiter({ bucket: "create-stripe-price", maxRequests: 5, windowMs: 60_000 });
@@ -25,6 +26,13 @@ interface PricingConfigRow {
   unit?: string | null;
   metadata?: Record<string, unknown> | null;
 }
+
+const createStripePriceBodySchema = z.object({
+  config_id: z.string().trim().min(1, "config_id required").optional(),
+  configId: z.string().trim().min(1, "config_id required").optional(),
+}).strict().refine((body) => Boolean(body.config_id ?? body.configId), {
+  message: "config_id required",
+});
 
 function normalizeAudience(raw: string | null | undefined): string | null {
   if (raw === "buyer" || raw === "seller" || raw === "participant" || raw === "pro") return "participant";
@@ -68,9 +76,8 @@ Deno.serve(async (req) => {
     const { data: profile } = await supabaseClient.from("profiles").select("role").eq("user_id", userData.user.id).single();
     if ((profile as ProfileRow | null)?.role !== "admin") throw new Error("Platform admin only");
 
-    const body = (req.method === "POST" && req.body) ? await req.json().catch(() => ({})) : {};
-    const configId = body.config_id ?? body.configId;
-    if (!configId) throw new Error("config_id required");
+    const body = await parseJsonBody(req, createStripePriceBodySchema);
+    const configId = (body.config_id ?? body.configId) as string;
 
     const { data: configRaw, error: configError } = await supabaseClient
       .from("pricing_configs")
@@ -147,7 +154,7 @@ Deno.serve(async (req) => {
     const message = error instanceof Error ? error.message : String(error);
     return new Response(JSON.stringify({ error: message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
+      status: error instanceof SchemaValidationError ? 400 : 500,
     });
   }
 });
