@@ -12,7 +12,7 @@
 | 3 | Document every public Edge Function auth model. | Done | See `docs/EDGE_FUNCTION_AUTH_RATIONALE.md`. |
 | 4 | Add owner filters to child-table mutations where possible. | Done | `project_units`, `project_leads`, `project_media`, `professional_services`, and `professional_availability` hooks now add client-side ownership preflights/payload checks. |
 | 5 | Fix or explain future-dated migrations. | Done | Added `npm run lint:migrations:chronology` plus `scripts/applied-future-migrations.json` because the future-dated migrations are already applied in the live project and cannot be safely renamed. |
-| 6 | Split large page components. | Started | Extracted shared listing compare-button UI into `ListingCompareButton`; larger page-section splits remain. |
+| 6 | Split large page components. | Started | Extracted shared listing compare-button UI into `ListingCompareButton`; extracted new-build project/unit sorting and valuation metric helpers into `src/lib/newBuildProjectDetail.ts`; extracted seller Quick Sale dashboard panel into `SellerQuickSalePanel`; larger page-section splits remain. |
 | 7 | Clean noisy test warnings. | Partially done | Added missing `DialogDescription`, test i18n mock, jsdom canvas/download stubs, and React Router future flags in direct wrappers. |
 | 8 | Add CI checks for migration timestamp/order sanity. | Done | Added script entry `lint:migrations:chronology`, unit coverage, and CI enforcement. |
 
