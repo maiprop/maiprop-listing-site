@@ -5,6 +5,12 @@ import { relative, resolve, sep } from "node:path";
 const repoRoot = resolve(import.meta.dirname, "..");
 const functionsDir = resolve(repoRoot, "supabase/functions");
 const requested = process.argv.slice(2);
+const DENO_CHECK_ATTEMPTS = 3;
+const DENO_CHECK_RETRY_DELAY_MS = 10_000;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function collectFunctionEntrypoints() {
   return readdirSync(functionsDir)
@@ -43,18 +49,29 @@ if (entrypoints.length === 0) {
 
 for (const entrypoint of entrypoints) {
   const relativeEntrypoint = relative(functionsDir, entrypoint);
-  console.log(`\n> deno check ${relativeEntrypoint}`);
-  const result = spawnSync(
-    "deno",
-    ["check", "--node-modules-dir=none", relativeEntrypoint],
-    {
-      cwd: functionsDir,
-      stdio: "inherit",
-    },
-  );
+  let result;
+  for (let attempt = 1; attempt <= DENO_CHECK_ATTEMPTS; attempt += 1) {
+    console.log(`\n> deno check ${relativeEntrypoint}${attempt > 1 ? ` (attempt ${attempt}/${DENO_CHECK_ATTEMPTS})` : ""}`);
+    result = spawnSync(
+      "deno",
+      ["check", "--node-modules-dir=none", relativeEntrypoint],
+      {
+        cwd: functionsDir,
+        stdio: "inherit",
+      },
+    );
 
-  if (result.status !== 0) {
-    process.exit(result.status ?? 1);
+    if (result.status === 0) break;
+    if (attempt < DENO_CHECK_ATTEMPTS) {
+      console.warn(
+        `[check-edge-functions] deno check failed for ${relativeEntrypoint} on attempt ${attempt}; retrying after transient dependency fetch failure...`,
+      );
+      await sleep(DENO_CHECK_RETRY_DELAY_MS);
+    }
+  }
+
+  if (!result || result.status !== 0) {
+    process.exit(result?.status ?? 1);
   }
 }
 
