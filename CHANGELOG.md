@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.31](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.30...v1.9.31) (2026-06-21)
+
+
+### Bug Fixes
+
+* remove esm supabase dependency from edge checks ([98889b9](https://github.com/maiprop/maiprop-listing-site/commit/98889b965e5316b729799f1858a8a6965a3c4d28))
+
 ## [1.9.30](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.29...v1.9.30) (2026-06-21)
 
 
