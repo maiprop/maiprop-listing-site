@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import * as React from 'npm:react@18.3.1'
 import { renderAsync } from 'npm:@react-email/components@0.0.22'
-import { Webhook } from 'https://esm.sh/standardwebhooks@1.0.0'
+import { Webhook } from 'npm:standardwebhooks@1.0.0'
 import { getBrevoSender, sendBrevoEmail } from '../_shared/brevo.ts'
 import { SignupEmail } from '../_shared/email-templates/signup.tsx'
 import { InviteEmail } from '../_shared/email-templates/invite.tsx'
