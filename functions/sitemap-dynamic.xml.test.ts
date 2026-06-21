@@ -15,6 +15,38 @@ import { onRequestGet } from "./sitemap-dynamic.xml";
 type Ctx = Parameters<typeof onRequestGet>[0];
 
 const realFetch = globalThis.fetch;
+const realCachesDescriptor = Object.getOwnPropertyDescriptor(globalThis, "caches");
+
+type CacheApi = {
+  match: ReturnType<typeof vi.fn>;
+  put: ReturnType<typeof vi.fn>;
+};
+
+let cacheStore: Map<string, Response> | undefined;
+
+function installCache(): CacheApi {
+  cacheStore = new Map();
+  const cacheApi = {
+    match: vi.fn(async (request: Request) => cacheStore?.get(request.url)?.clone()),
+    put: vi.fn(async (request: Request, response: Response) => {
+      cacheStore?.set(request.url, response.clone());
+    }),
+  };
+  Object.defineProperty(globalThis, "caches", {
+    configurable: true,
+    value: { default: cacheApi },
+  });
+  return cacheApi;
+}
+
+function restoreCache(): void {
+  if (realCachesDescriptor) {
+    Object.defineProperty(globalThis, "caches", realCachesDescriptor);
+  } else {
+    Reflect.deleteProperty(globalThis, "caches");
+  }
+  cacheStore = undefined;
+}
 
 function makeCtx(projectId: string | undefined, url = "https://portal.maiprop.co/sitemap-dynamic.xml"): Ctx {
   return {
@@ -28,6 +60,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   globalThis.fetch = realFetch;
+  restoreCache();
 });
 
 describe("sitemap-dynamic.xml Pages Function", () => {
@@ -36,6 +69,7 @@ describe("sitemap-dynamic.xml Pages Function", () => {
     (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(fallback);
     const res = await onRequestGet(makeCtx(undefined));
     expect(res.status).toBe(200);
+    expect(res.headers.get("X-Maiprop-Cache")).toBe("FALLBACK");
     const calledWith = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(String(calledWith)).toContain("/sitemap.xml");
   });
@@ -48,7 +82,9 @@ describe("sitemap-dynamic.xml Pages Function", () => {
     const res = await onRequestGet(makeCtx("abcdefghijklmnop"));
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("application/xml; charset=utf-8");
-    expect(res.headers.get("Cache-Control")).toBe("public, max-age=600, s-maxage=600");
+    expect(res.headers.get("Cache-Control")).toBe("public, max-age=600, s-maxage=600, stale-while-revalidate=3600");
+    expect(res.headers.get("CDN-Cache-Control")).toBe("public, max-age=600, stale-while-revalidate=3600");
+    expect(res.headers.get("X-Maiprop-Cache")).toBe("MISS");
     const text = await res.text();
     expect(text).toContain("<urlset>");
     const calledWith = String((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0]);
@@ -79,6 +115,7 @@ describe("sitemap-dynamic.xml Pages Function", () => {
     });
     const res = await onRequestGet(makeCtx("xyz1234567890"));
     expect(res.status).toBe(200);
+    expect(res.headers.get("X-Maiprop-Cache")).toBe("FALLBACK");
     expect(call).toBe(2);
     const fallbackUrl = String((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[1][0]);
     expect(fallbackUrl).toContain("/sitemap.xml");
@@ -93,6 +130,7 @@ describe("sitemap-dynamic.xml Pages Function", () => {
     });
     const res = await onRequestGet(makeCtx("xyz1234567890"));
     expect(res.status).toBe(200);
+    expect(res.headers.get("X-Maiprop-Cache")).toBe("FALLBACK");
     expect(call).toBe(2);
   });
 
@@ -110,7 +148,32 @@ describe("sitemap-dynamic.xml Pages Function", () => {
 
     const res = await onRequestGet(makeCtx("xyz1234567890"));
     expect(res.status).toBe(200);
+    expect(res.headers.get("X-Maiprop-Cache")).toBe("FALLBACK");
     expect(call).toBe(2);
     expect(observedSignal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("caches the upstream sitemap after the first render", async () => {
+    const cache = installCache();
+    const pendingWrites: Promise<unknown>[] = [];
+    const waitUntil = (promise: Promise<unknown>) => {
+      pendingWrites.push(promise);
+    };
+    const upstreamBody = "<urlset><url><loc>https://portal.maiprop.co/listings/1</loc></url></urlset>";
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(new Response(upstreamBody, { status: 200 }));
+
+    const first = await onRequestGet({
+      ...makeCtx("abcdefghijklmnop"),
+      waitUntil,
+    } as unknown as Ctx);
+    expect(first.headers.get("X-Maiprop-Cache")).toBe("MISS");
+    expect(await first.text()).toContain("<urlset>");
+    await Promise.all(pendingWrites);
+
+    const second = await onRequestGet(makeCtx("abcdefghijklmnop"));
+    expect(second.headers.get("X-Maiprop-Cache")).toBe("HIT");
+    expect(await second.text()).toContain("<urlset>");
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(cache.put).toHaveBeenCalledTimes(1);
   });
 });

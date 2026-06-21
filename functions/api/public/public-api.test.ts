@@ -309,6 +309,35 @@ describe("public API cache helpers", () => {
     expect(countInit.signal).toBeInstanceOf(AbortSignal);
   });
 
+  it("retries transient Supabase reads before failing a cold public cache miss", async () => {
+    fetchMock().mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }));
+
+    await expect(
+      supabaseJson(env, "/rest/v1/listings", new URLSearchParams([["select", "id"]]), {
+        failOnTransient: true,
+        retryDelayMs: 0,
+      }),
+    ).resolves.toEqual([
+      { id: "listing-1", owner_id: "owner-1", title: "Athens flat" },
+      { id: "listing-2", owner_id: "owner-2", title: "Piraeus loft" },
+    ]);
+    expect(fetchUrls("/rest/v1/listings")).toHaveLength(2);
+  });
+
+  it("recovers public open-house cold cache misses after one transient upstream failure", async () => {
+    fetchMock().mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }));
+
+    const res = await openHousesRequest(makeCtx("https://portal.maiprop.co/api/public/open-houses?limit=2"));
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("X-Maiprop-Cache")).toBe("MISS");
+    expect(fetchUrls("/rest/v1/listings")).toHaveLength(2);
+    await expect(res.json()).resolves.toEqual(expect.arrayContaining([
+      { id: "open-1", cover_image_url: null, listing_images: [{ url: "img", sort_order: 1 }] },
+      { id: "open-2", cover_image_url: "cover", listing_images: [] },
+    ]));
+  });
+
   it("returns cached edge responses without making another upstream request", async () => {
     const ctx = makeCtx("https://portal.maiprop.co/api/public/open-houses?limit=2");
 
@@ -536,7 +565,9 @@ describe("public listings endpoint", () => {
   });
 
   it("returns 503 instead of an empty successful catalogue when the listings upstream is transiently unavailable", async () => {
-    fetchMock().mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }));
+    fetchMock()
+      .mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }))
+      .mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }));
 
     const res = await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?limit=3"));
 
@@ -677,7 +708,9 @@ describe("public listing detail endpoint", () => {
   });
 
   it("returns 503 for transient exact-detail upstream failures", async () => {
-    fetchMock().mockResolvedValueOnce(new Response("timeout", { status: 504 }));
+    fetchMock()
+      .mockResolvedValueOnce(new Response("timeout", { status: 504 }))
+      .mockResolvedValueOnce(new Response("timeout", { status: 504 }));
 
     const res = await listingRequest(
       makeCtx("https://portal.maiprop.co/api/public/listing?id=11111111-1111-4111-8111-111111111111"),
@@ -784,7 +817,9 @@ describe("public similar listings endpoint", () => {
   });
 
   it("returns 503 for transient similar-listing upstream failures", async () => {
-    fetchMock().mockResolvedValueOnce(new Response("timeout", { status: 504 }));
+    fetchMock()
+      .mockResolvedValueOnce(new Response("timeout", { status: 504 }))
+      .mockResolvedValueOnce(new Response("timeout", { status: 504 }));
 
     const res = await similarListingsRequest(
       makeCtx("https://portal.maiprop.co/api/public/similar-listings?city=Athens"),
@@ -831,7 +866,9 @@ describe("public open houses endpoint", () => {
   });
 
   it("returns 503 instead of caching an empty open-house window on transient upstream failure", async () => {
-    fetchMock().mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }));
+    fetchMock()
+      .mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }))
+      .mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }));
 
     const res = await openHousesRequest(makeCtx("https://portal.maiprop.co/api/public/open-houses?limit=12"));
 
@@ -956,7 +993,9 @@ describe("public auctions endpoint", () => {
   });
 
   it("returns 503 instead of falling back to empty auctions on transient upstream failure", async () => {
-    fetchMock().mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }));
+    fetchMock()
+      .mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }))
+      .mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }));
 
     const res = await auctionsRequest(makeCtx("https://portal.maiprop.co/api/public/auctions?limit=12"));
 
@@ -1043,7 +1082,11 @@ describe("public homepage endpoint", () => {
   });
 
   it("returns 503 instead of caching zero homepage counts on transient upstream failure", async () => {
-    fetchMock().mockResolvedValueOnce(new Response(null, { status: 504 }));
+    fetchMock()
+      .mockResolvedValueOnce(new Response(null, { status: 504 }))
+      .mockResolvedValueOnce(new Response(null, { status: 504 }))
+      .mockResolvedValueOnce(new Response(null, { status: 504 }))
+      .mockResolvedValueOnce(new Response(null, { status: 504 }));
 
     const res = await homepageRequest(makeCtx("https://portal.maiprop.co/api/public/homepage?section=type-counts"));
 

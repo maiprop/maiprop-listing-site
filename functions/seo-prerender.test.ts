@@ -321,6 +321,35 @@ describe("SEO Pages Functions", () => {
     expect(firstSupabaseUrl()).toContain("listing_type=eq.auction");
   });
 
+  it("caches enriched /auctions HTML after the first render", async () => {
+    installCache();
+    const pendingWrites: Promise<unknown>[] = [];
+    const waitUntil = (promise: Promise<unknown>) => {
+      pendingWrites.push(promise);
+    };
+    const firstCtx = makeCtx("https://portal.maiprop.co/auctions", {}, undefined, { waitUntil });
+    const assetFetch = firstCtx.env.ASSETS?.fetch as FetchMock;
+
+    const first = await auctionsRequest(firstCtx);
+    const firstHtml = await first.clone().text();
+    await Promise.all(pendingWrites);
+
+    expect(first.status).toBe(200);
+    expect(first.headers.get("X-Maiprop-Cache")).toBe("MISS");
+    expect(first.headers.get("Server-Timing")).toContain("total;dur=");
+    expect(firstHtml).toContain("Greek Property Auctions");
+
+    const second = await auctionsRequest(makeCtx("https://portal.maiprop.co/auctions"));
+    const secondHtml = await second.text();
+
+    expect(second.headers.get("X-Maiprop-Cache")).toBe("HIT");
+    expect(second.headers.get("Server-Timing")).toContain("cache;desc=\"HIT\"");
+    expect(secondHtml).toBe(firstHtml);
+    expect(fetchMock()).toHaveBeenCalledTimes(1);
+    expect(assetFetch).toHaveBeenCalledTimes(1);
+    expect(cacheApi?.put).toHaveBeenCalledTimes(1);
+  });
+
   it("passes through the index response when the app shell cannot be loaded", async () => {
     installCache();
     const res = await listingsRequest(makeCtx("https://portal.maiprop.co/listings", {}, new Response("missing", { status: 503 })));

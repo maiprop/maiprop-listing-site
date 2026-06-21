@@ -9,6 +9,8 @@ const DEFAULT_BROWSER_TTL_SECONDS = 30;
 const DEFAULT_STALE_SECONDS = 300;
 const DEFAULT_STALE_FALLBACK_SECONDS = 30 * 60;
 const SUPABASE_FETCH_TIMEOUT_MS = 2500;
+const SUPABASE_TRANSIENT_STATUS_RETRIES = 1;
+const SUPABASE_TRANSIENT_RETRY_DELAY_MS = 50;
 const TRANSIENT_UPSTREAM_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504, 520, 522, 524, 544]);
 const SECURITY_HEADERS = {
   "X-Frame-Options": "DENY",
@@ -40,6 +42,8 @@ type CacheOptions = {
 
 type SupabaseFetchOptions = {
   failOnTransient?: boolean;
+  transientStatusRetries?: number;
+  retryDelayMs?: number;
 };
 
 function applyCacheHeaders(headers: Headers, cache: CacheOptions, force = false): void {
@@ -79,6 +83,24 @@ async function fetchWithTimeout(
 function warnTransientFetchFailure(label: string, path: string, error: unknown): void {
   const message = error instanceof Error ? error.message : String(error);
   console.warn(`[public-api] Supabase ${label} ${path} transiently unavailable: ${message}`);
+}
+
+function transientStatusRetryLimit(options: SupabaseFetchOptions): number {
+  if (typeof options.transientStatusRetries === "number" && Number.isFinite(options.transientStatusRetries)) {
+    return Math.max(0, Math.min(3, Math.floor(options.transientStatusRetries)));
+  }
+  return options.failOnTransient ? SUPABASE_TRANSIENT_STATUS_RETRIES : 0;
+}
+
+function transientRetryDelayMs(options: SupabaseFetchOptions): number {
+  if (typeof options.retryDelayMs === "number" && Number.isFinite(options.retryDelayMs)) {
+    return Math.max(0, Math.min(500, Math.floor(options.retryDelayMs)));
+  }
+  return SUPABASE_TRANSIENT_RETRY_DELAY_MS;
+}
+
+function sleepMs(ms: number): Promise<void> {
+  return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
 }
 
 export function jsonResponse(
@@ -291,34 +313,43 @@ export async function supabaseJson<T>(
     url.searchParams.append(key, value);
   }
 
-  let res: Response;
-  try {
-    res = await fetchWithTimeout(url, {
-      headers: {
-        apikey: runtime.key,
-        Authorization: `Bearer ${runtime.key}`,
-        Accept: "application/json",
-      },
-      cf: { cacheTtl: DEFAULT_EDGE_TTL_SECONDS, cacheEverything: true } as RequestInitCfProperties,
-    });
-  } catch (error) {
-    if (options.failOnTransient) {
-      throw new SupabaseTransientError("Supabase request timed out", path);
-    }
-    warnTransientFetchFailure("request", path, error);
-    return [];
-  }
-  if (!res.ok) {
-    if (TRANSIENT_UPSTREAM_STATUSES.has(res.status)) {
+  const retryLimit = transientStatusRetryLimit(options);
+  for (let attempt = 0; ; attempt += 1) {
+    let res: Response;
+    try {
+      res = await fetchWithTimeout(url, {
+        headers: {
+          apikey: runtime.key,
+          Authorization: `Bearer ${runtime.key}`,
+          Accept: "application/json",
+        },
+        cf: { cacheTtl: DEFAULT_EDGE_TTL_SECONDS, cacheEverything: true } as RequestInitCfProperties,
+      });
+    } catch (error) {
       if (options.failOnTransient) {
-        throw new SupabaseTransientError(`Supabase request failed with ${res.status}`, path, res.status);
+        throw new SupabaseTransientError("Supabase request timed out", path);
       }
-      console.warn(`[public-api] Supabase ${path} transiently unavailable with ${res.status}`);
+      warnTransientFetchFailure("request", path, error);
       return [];
     }
-    throw new Error(`Supabase request failed with ${res.status}`);
+
+    if (!res.ok) {
+      if (TRANSIENT_UPSTREAM_STATUSES.has(res.status)) {
+        if (attempt < retryLimit) {
+          await sleepMs(transientRetryDelayMs(options));
+          continue;
+        }
+        if (options.failOnTransient) {
+          throw new SupabaseTransientError(`Supabase request failed with ${res.status}`, path, res.status);
+        }
+        console.warn(`[public-api] Supabase ${path} transiently unavailable with ${res.status}`);
+        return [];
+      }
+      throw new Error(`Supabase request failed with ${res.status}`);
+    }
+
+    return (await res.json()) as T[];
   }
-  return (await res.json()) as T[];
 }
 
 export async function supabaseCount(
@@ -335,39 +366,47 @@ export async function supabaseCount(
     url.searchParams.append(key, value);
   }
 
-  let res: Response;
-  try {
-    res = await fetchWithTimeout(url, {
-      method: "HEAD",
-      headers: {
-        apikey: runtime.key,
-        Authorization: `Bearer ${runtime.key}`,
-        Accept: "application/json",
-        Prefer: "count=exact",
-      },
-      cf: { cacheTtl: DEFAULT_EDGE_TTL_SECONDS, cacheEverything: true } as RequestInitCfProperties,
-    });
-  } catch (error) {
-    if (options.failOnTransient) {
-      throw new SupabaseTransientError("Supabase count request timed out", path);
-    }
-    warnTransientFetchFailure("count", path, error);
-    return 0;
-  }
-  if (!res.ok) {
-    if (TRANSIENT_UPSTREAM_STATUSES.has(res.status)) {
+  const retryLimit = transientStatusRetryLimit(options);
+  for (let attempt = 0; ; attempt += 1) {
+    let res: Response;
+    try {
+      res = await fetchWithTimeout(url, {
+        method: "HEAD",
+        headers: {
+          apikey: runtime.key,
+          Authorization: `Bearer ${runtime.key}`,
+          Accept: "application/json",
+          Prefer: "count=exact",
+        },
+        cf: { cacheTtl: DEFAULT_EDGE_TTL_SECONDS, cacheEverything: true } as RequestInitCfProperties,
+      });
+    } catch (error) {
       if (options.failOnTransient) {
-        throw new SupabaseTransientError(`Supabase count failed with ${res.status}`, path, res.status);
+        throw new SupabaseTransientError("Supabase count request timed out", path);
       }
-      console.warn(`[public-api] Supabase count ${path} transiently unavailable with ${res.status}`);
+      warnTransientFetchFailure("count", path, error);
       return 0;
     }
-    throw new Error(`Supabase count failed with ${res.status}`);
-  }
 
-  const rangeParts = res.headers.get("Content-Range")?.split("/") ?? [];
-  const total = Number(rangeParts[rangeParts.length - 1]);
-  return Number.isFinite(total) ? total : 0;
+    if (!res.ok) {
+      if (TRANSIENT_UPSTREAM_STATUSES.has(res.status)) {
+        if (attempt < retryLimit) {
+          await sleepMs(transientRetryDelayMs(options));
+          continue;
+        }
+        if (options.failOnTransient) {
+          throw new SupabaseTransientError(`Supabase count failed with ${res.status}`, path, res.status);
+        }
+        console.warn(`[public-api] Supabase count ${path} transiently unavailable with ${res.status}`);
+        return 0;
+      }
+      throw new Error(`Supabase count failed with ${res.status}`);
+    }
+
+    const rangeParts = res.headers.get("Content-Range")?.split("/") ?? [];
+    const total = Number(rangeParts[rangeParts.length - 1]);
+    return Number.isFinite(total) ? total : 0;
+  }
 }
 
 export function normalizedCacheUrl(requestUrl: URL, namespace: string, params: URLSearchParams): URL {

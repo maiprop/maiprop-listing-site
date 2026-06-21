@@ -34,7 +34,7 @@
 // @ts-nocheck - k6 runs in its own runtime with its own globals.
 import http from "k6/http";
 import { check, sleep } from "k6";
-import { Rate } from "k6/metrics";
+import { Counter, Rate, Trend } from "k6/metrics";
 import {
   LOAD_TEST_ROUTES,
   normalizeSummary,
@@ -77,6 +77,7 @@ const LOAD_TEST_ABORT_ON_FAIL =
   (PRODUCTION_HOST && (ECAS_LOAD_PROFILE === "growth_10x" || ECAS_LOAD_PROFILE === "enterprise_soak"));
 const DURATION_P95_THRESHOLD = "p(95)<2500";
 const RATE_THRESHOLD = "rate<0.01";
+const ROUTE_COUNT_THRESHOLD = "count>0";
 const selectedStages = LOAD_PROFILES[ECAS_LOAD_PROFILE];
 
 if (PRODUCTION_HOST && !LOAD_TEST_APPROVED_PRODUCTION) {
@@ -84,6 +85,10 @@ if (PRODUCTION_HOST && !LOAD_TEST_APPROVED_PRODUCTION) {
 }
 
 export const errorRate = new Rate("errors");
+export const routeDuration = new Trend("route_http_req_duration", true);
+export const routeFailedRate = new Rate("route_http_req_failed");
+export const routeErrorRate = new Rate("route_errors");
+export const routeRequests = new Counter("route_http_reqs");
 
 function threshold(expression) {
   return LOAD_TEST_ABORT_ON_FAIL
@@ -115,19 +120,28 @@ export const options = {
     ...routeThresholds("http_req_duration", DURATION_P95_THRESHOLD),
     ...routeThresholds("errors", RATE_THRESHOLD),
     ...routeThresholds("http_req_failed", RATE_THRESHOLD),
+    ...routeThresholds("route_http_req_duration", DURATION_P95_THRESHOLD),
+    ...routeThresholds("route_http_req_failed", RATE_THRESHOLD),
+    ...routeThresholds("route_errors", RATE_THRESHOLD),
+    ...routeThresholds("route_http_reqs", ROUTE_COUNT_THRESHOLD),
   },
 };
 
 export default function () {
   for (const route of LOAD_TEST_ROUTES) {
-    const res = http.get(`${BASE_URL}${route.path}`, { tags: { route: route.name } });
+    const routeTags = { route: route.name };
+    const res = http.get(`${BASE_URL}${route.path}`, { tags: routeTags });
     const statusOk = check(res, {
       [`${route.name}: status 2xx`]: (response) => response.status >= 200 && response.status < 300,
     });
     check(res, {
       [`${route.name}: TTFB < 1500ms`]: (response) => response.timings.waiting < 1500,
     });
-    errorRate.add(statusOk ? 0 : 1, { route: route.name });
+    routeDuration.add(res.timings.duration, routeTags);
+    routeFailedRate.add(statusOk ? 0 : 1, routeTags);
+    routeErrorRate.add(statusOk ? 0 : 1, routeTags);
+    routeRequests.add(1, routeTags);
+    errorRate.add(statusOk ? 0 : 1, routeTags);
     sleep(0.5);
   }
 }

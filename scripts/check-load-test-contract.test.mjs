@@ -151,4 +151,16 @@ describe("load test contract", () => {
     expect(result.ok).toBe(false);
     expect(result.failures.join("\n")).toContain("scripts/load-test/basic.js must keep availability errorRate scoped to the status-only check");
   });
+
+  it("requires explicit per-route metrics for growth_10x failure isolation", () => {
+    const root = makeFixture(contractScript());
+
+    const result = checkLoadTestContract(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("scripts/load-test/basic.js must record route_http_req_duration");
+    expect(result.failures.join("\n")).toContain("scripts/load-test/basic.js must record route_http_req_failed");
+    expect(result.failures.join("\n")).toContain("scripts/load-test/basic.js must record route_errors");
+    expect(result.failures.join("\n")).toContain("scripts/load-test/basic.js must record route_http_reqs");
+  });
 });

@@ -76,6 +76,34 @@ describe("k6 load summary normalization", () => {
     expect(summary.failedRoutes).toEqual([]);
   });
 
+  it("uses custom route metrics when built-in k6 tagged submetrics are unavailable", () => {
+    const summary = normalizeSummary({
+      metrics: {
+        http_req_duration: metric({ "p(95)": 2525 }),
+        http_req_failed: metric({ rate: 0.2 }),
+        errors: metric({ rate: 0.4 }),
+        http_reqs: metric({ count: 100 }),
+        vus_max: metric({ max: 1000 }),
+        iterations: metric({ count: 10 }),
+        [routeMetricName("route_http_req_duration", "api_listings")]: metric({ "p(95)": 2600 }),
+        [routeMetricName("route_http_req_failed", "api_listings")]: metric({ rate: 0.2 }),
+        [routeMetricName("route_errors", "api_listings")]: metric({ rate: 0.4 }),
+        [routeMetricName("route_http_reqs", "api_listings")]: metric({ count: 25 }),
+      },
+    }, context);
+
+    const apiListings = summary.routes.find((route) => route.name === "api_listings");
+
+    expect(summary.failedRoutes).toEqual(["api_listings"]);
+    expect(apiListings.status).toBe("failed");
+    expect(apiListings.traffic.totalRequests).toBe(25);
+    expect(apiListings.thresholds).toEqual([
+      { name: "http_req_duration_p95_ms", actual: 2600, budget: 2500, passed: false },
+      { name: "http_req_failed_rate", actual: 0.2, budget: 0.01, passed: false },
+      { name: "errors_rate", actual: 0.4, budget: 0.01, passed: false },
+    ]);
+  });
+
   it("prints failed route names in the human summary", () => {
     const summary = normalizeSummary({
       metrics: {
