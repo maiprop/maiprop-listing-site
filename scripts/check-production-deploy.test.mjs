@@ -162,6 +162,26 @@ describe("production deploy public API fixture guard", () => {
     );
   });
 
+  it("can tolerate Cloudflare Pages fail-open HTML when app fallbacks are explicitly enabled", async () => {
+    const { validatePublicApiEndpoints } = await import("./check-production-deploy-public-api.mjs");
+    const previous = process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN;
+    process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN = "true";
+
+    try {
+      await expect(validatePublicApiEndpoints("https://portal.maiprop.co", {
+        fetchText: async () => ({
+          res: new Response("<!doctype html><div id=\"root\"></div>", {
+            headers: { "Content-Type": "text/html; charset=utf-8" },
+          }),
+          text: "<!doctype html><div id=\"root\"></div>",
+        }),
+      })).resolves.toBeUndefined();
+    } finally {
+      if (previous === undefined) delete process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN;
+      else process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN = previous;
+    }
+  });
+
   it("builds Cloudflare Access service-token headers for protected previews", () => {
     expect(getCloudflareAccessHeaders({
       CLOUDFLARE_ACCESS_CLIENT_ID: "client-id",

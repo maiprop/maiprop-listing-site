@@ -567,6 +567,7 @@ describe("public listings endpoint", () => {
   it("returns 503 instead of an empty successful catalogue when the listings upstream is transiently unavailable", async () => {
     fetchMock()
       .mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }))
+      .mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }))
       .mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }));
 
     const res = await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?limit=3"));
@@ -710,6 +711,7 @@ describe("public listing detail endpoint", () => {
   it("returns 503 for transient exact-detail upstream failures", async () => {
     fetchMock()
       .mockResolvedValueOnce(new Response("timeout", { status: 504 }))
+      .mockResolvedValueOnce(new Response("timeout", { status: 504 }))
       .mockResolvedValueOnce(new Response("timeout", { status: 504 }));
 
     const res = await listingRequest(
@@ -819,6 +821,7 @@ describe("public similar listings endpoint", () => {
   it("returns 503 for transient similar-listing upstream failures", async () => {
     fetchMock()
       .mockResolvedValueOnce(new Response("timeout", { status: 504 }))
+      .mockResolvedValueOnce(new Response("timeout", { status: 504 }))
       .mockResolvedValueOnce(new Response("timeout", { status: 504 }));
 
     const res = await similarListingsRequest(
@@ -867,6 +870,7 @@ describe("public open houses endpoint", () => {
 
   it("returns 503 instead of caching an empty open-house window on transient upstream failure", async () => {
     fetchMock()
+      .mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }))
       .mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }))
       .mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }));
 
@@ -995,6 +999,7 @@ describe("public auctions endpoint", () => {
   it("returns 503 instead of falling back to empty auctions on transient upstream failure", async () => {
     fetchMock()
       .mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }))
+      .mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }))
       .mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }));
 
     const res = await auctionsRequest(makeCtx("https://portal.maiprop.co/api/public/auctions?limit=12"));
@@ -1083,6 +1088,8 @@ describe("public homepage endpoint", () => {
 
   it("returns 503 instead of caching zero homepage counts on transient upstream failure", async () => {
     fetchMock()
+      .mockResolvedValueOnce(new Response(null, { status: 504 }))
+      .mockResolvedValueOnce(new Response(null, { status: 504 }))
       .mockResolvedValueOnce(new Response(null, { status: 504 }))
       .mockResolvedValueOnce(new Response(null, { status: 504 }))
       .mockResolvedValueOnce(new Response(null, { status: 504 }))

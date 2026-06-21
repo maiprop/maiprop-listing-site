@@ -18,6 +18,8 @@ import { getStreetViewProxyUrl } from "@/lib/config";
 import { MAIPROP_LOGO_FALLBACK_URL } from "@/lib/imageFallbacks";
 import { CATALOG_STATIC_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 import { fetchPublicApi } from "@/lib/publicApi";
+import { logger } from "@/lib/logger";
+import { fetchOpenHousesFallback } from "@/lib/publicListingFallbacks";
 import { ENERGY_CLASSES, FEATURES_RESIDENTIAL } from "@/lib/filterConfig";
 import {
   fmtDate,
@@ -271,13 +273,23 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
   const { data: listings = [], isLoading, isError, refetch } = useQuery({
     queryKey: ["open-houses", showPast, transactionFilter],
     queryFn: async () => { // skipcq: JS-R1005 - Query keeps time filtering, production cleanup, and media-first sorting together.
-      const transactionParam = transactionFilter ? `&transactionType=${transactionFilter}` : "";
-      const cached = await fetchPublicApi<OpenHouseListingRow[]>(
-        `/api/public/open-houses?showPast=${showPast ? "1" : "0"}&limit=200${transactionParam}`,
-        { throwOnError: true },
-      );
-      if (!cached) throw new Error("Public open houses API returned no data");
-      return normalizeOpenHouseRows(cached);
+      try {
+        const transactionParam = transactionFilter ? `&transactionType=${transactionFilter}` : "";
+        const cached = await fetchPublicApi<OpenHouseListingRow[]>(
+          `/api/public/open-houses?showPast=${showPast ? "1" : "0"}&limit=200${transactionParam}`,
+          { throwOnError: true },
+        );
+        if (cached) return normalizeOpenHouseRows(cached);
+        throw new Error("Public open houses API returned no data");
+      } catch (error) {
+        logger.warn("Public open houses API failed; falling back to constrained Supabase read:", error);
+        const fallback = await fetchOpenHousesFallback({
+          showPast,
+          transactionType: transactionFilter || null,
+          limit: 200,
+        });
+        return normalizeOpenHouseRows(fallback as OpenHouseListingRow[]);
+      }
     },
     staleTime: CATALOG_STATIC_QUERY_STALE_TIME,
   });

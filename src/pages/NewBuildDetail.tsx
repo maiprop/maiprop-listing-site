@@ -36,9 +36,11 @@ import { RegisterInterestCard } from "@/components/new-build/RegisterInterestCar
 import { tFallback, tInterpolate } from "@/lib/i18nFallback";
 import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 import { fetchPublicApi } from "@/lib/publicApi";
+import { logger } from "@/lib/logger";
 import { getListingDetailPath, shouldUseNewBuildRoute } from "@/lib/listingRoutes";
 import { invokeAuthenticatedFunction } from "@/lib/invokeAuthenticatedFunction";
 import { newBuildLeadSchema, parseMutationInput } from "@/lib/mutationSchemas";
+import { fetchNewBuildListingFallback } from "@/lib/newBuildListingFallback";
 import {
   ACTIVE_UNIT_STATUSES,
   buildProjectValuationMetrics,
@@ -214,11 +216,17 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
     queryKey: ["new-build-listing", id],
     queryFn: async () => {
       if (!id) return null;
-      const response = await fetchPublicApi<PublicListingResponse>(
-        `/api/public/listing?id=${encodeURIComponent(id)}`,
-        { throwOnError: true },
-      );
-      return response?.data ?? null;
+      try {
+        const response = await fetchPublicApi<PublicListingResponse>(
+          `/api/public/listing?id=${encodeURIComponent(id)}`,
+          { throwOnError: true },
+        );
+        if (response) return response.data ?? null;
+        throw new Error("Public new-build listing API returned no data");
+      } catch (apiError) {
+        logger.warn("Public new-build detail API failed; falling back to constrained Supabase read:", apiError);
+        return fetchNewBuildListingFallback(id);
+      }
     },
     enabled: !!id,
   });

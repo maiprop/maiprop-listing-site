@@ -38,7 +38,7 @@ const renderHookWithQuery = <T,>(hook: () => T) => {
 
 const makeThenableBuilder = (data: unknown[] = []) => {
   const b: Record<string, unknown> = {};
-  const chain = ["select", "order", "limit", "eq", "gte"];
+  const chain = ["select", "order", "limit", "eq", "gte", "in"];
   for (const method of chain) b[method] = vi.fn().mockReturnValue(b);
   b.then = (resolve: (value: unknown) => unknown, reject: (reason?: unknown) => unknown) =>
     Promise.resolve({ data, error: null }).then(resolve, reject);
@@ -51,27 +51,33 @@ beforeEach(() => {
 });
 
 describe("homepage public API fallback behavior", () => {
-  it("does not fall through to direct Supabase for featured listings when the public API is unavailable", async () => {
+  it("falls back to constrained Supabase reads for featured listings when the public API is unavailable", async () => {
     publicApiMock.mockResolvedValue(null);
-    fromMock.mockReturnValue(makeThenableBuilder([{ id: "db-featured" }]));
+    fromMock.mockReturnValue(makeThenableBuilder([{ id: "db-featured", title: "DB Featured", city: "Athens" }]));
 
     const { result } = renderHookWithQuery(() => useHomepageFeaturedListings());
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(result.current.data).toEqual([]);
-    expect(publicApiMock).toHaveBeenCalledWith("/api/public/homepage?section=featured");
-    expect(fromMock).not.toHaveBeenCalled();
+    expect(result.current.data?.[0]).toMatchObject({ id: "db-featured" });
+    expect(publicApiMock).toHaveBeenCalledWith(
+      "/api/public/homepage?section=featured",
+      { throwOnError: true },
+    );
+    expect(fromMock).toHaveBeenCalledWith("listings");
   });
 
-  it("does not fall through to direct Supabase for open houses when the public API is unavailable", async () => {
+  it("falls back to constrained Supabase reads for open houses when the public API is unavailable", async () => {
     publicApiMock.mockResolvedValue(null);
-    fromMock.mockReturnValue(makeThenableBuilder([{ id: "db-open-house" }]));
+    fromMock.mockReturnValue(makeThenableBuilder([{ id: "db-open-house", title: "DB Open House", city: "Athens" }]));
 
     const { result } = renderHookWithQuery(() => useHomepageOpenHouseListings());
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(result.current.data).toEqual([]);
-    expect(publicApiMock).toHaveBeenCalledWith("/api/public/homepage?section=open-houses");
-    expect(fromMock).not.toHaveBeenCalled();
+    expect(result.current.data?.[0]).toMatchObject({ id: "db-open-house" });
+    expect(publicApiMock).toHaveBeenCalledWith(
+      "/api/public/homepage?section=open-houses",
+      { throwOnError: true },
+    );
+    expect(fromMock).toHaveBeenCalledWith("listings");
   });
 });

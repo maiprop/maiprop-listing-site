@@ -256,9 +256,9 @@ function makeListingsQuery(data: Array<Record<string, unknown>>, error: Error | 
     gte: vi.fn().mockReturnThis(),
     lt: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
-    limit: vi.fn((_: number, options?: { referencedTable?: string }) =>
-      options?.referencedTable ? chain : Promise.resolve({ data, error })
-    ),
+    limit: vi.fn().mockReturnThis(),
+    then: (resolve: (value: unknown) => unknown, reject: (reason?: unknown) => unknown) =>
+      Promise.resolve({ data, error }).then(resolve, reject),
   };
   mocks.from.mockReturnValue(chain);
   return chain;
@@ -450,21 +450,21 @@ describe("OpenHouses page behavior", () => {
     expect(screen.getAllByTestId("open-house-card").length).toBeLessThan(30);
   });
 
-  it("surfaces public API outages without direct Supabase fallback and switches paths for past open houses", async () => {
+  it("falls back to constrained Supabase reads on public API outages and switches paths for past open houses", async () => {
     mocks.publicApi.mockResolvedValue(null);
     makeListingsQuery([createListing({ id: "oh-db", title: "Direct DB Open House" })]);
 
     await renderOpenHouses();
 
-    expect(await screen.findAllByText(/could not load open houses/i)).toHaveLength(2);
-    expect(screen.queryByText("Direct DB Open House")).not.toBeInTheDocument();
+    expect(await screen.findByText("Direct DB Open House")).toBeInTheDocument();
     expect(mocks.publicApi).toHaveBeenCalledWith(
       "/api/public/open-houses?showPast=0&limit=200",
       { throwOnError: true },
     );
-    expect(mocks.from).not.toHaveBeenCalled();
+    expect(mocks.from).toHaveBeenCalledWith("listings");
 
     mocks.publicApi.mockClear().mockResolvedValue([]);
+    mocks.from.mockClear();
     fireEvent.click(screen.getByRole("button", { name: "Past" }));
 
     await waitFor(() =>
