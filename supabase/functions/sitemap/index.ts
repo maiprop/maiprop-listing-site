@@ -10,7 +10,7 @@
  * verify_jwt = false - crawlers don't carry auth tokens.
  */
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 
 const SITE = "https://maiprop.co";
 const MAX_ROWS = 500; // Keep crawler traffic from amplifying DB incidents.
