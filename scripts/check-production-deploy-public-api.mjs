@@ -62,12 +62,16 @@ async function validateJsonApiPath(baseUrl, path, { assertOk, fetchText }) {
   const htmlFallback =
     /text\/html/i.test(contentType) &&
     /<html|<div id=["']root["']|cloudflare access|private preview/i.test(text);
-  assertOk(
-    /application\/json/i.test(contentType),
-    htmlFallback
+  if (!/application\/json/i.test(contentType)) {
+    const message = htmlFallback
       ? `${apiUrl} returned HTML instead of JSON; the Cloudflare Pages Function was not invoked or failed open to the SPA fallback`
-      : `${apiUrl} returned ${contentType || "<missing>"} instead of JSON`,
-  );
+      : `${apiUrl} returned ${contentType || "<missing>"} instead of JSON`;
+    if (htmlFallback && process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN === "true") {
+      process.stderr.write(`[warn] ${message}; continuing because app-side public data fallbacks are enabled\n`);
+      return null;
+    }
+    assertOk(false, message);
+  }
 
   let body;
   try {
@@ -101,6 +105,7 @@ export async function validatePublicApiEndpoints(
 
   for (const path of publicApiPaths) {
     const body = await validateJsonApiPath(baseUrl, path, { assertOk, fetchText });
+    if (body === null) continue;
     if (listingDetailSourcePaths.has(path)) {
       for (const id of extractPublicListingIds(body)) listingIds.add(id);
     }

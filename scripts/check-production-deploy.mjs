@@ -41,6 +41,14 @@ const publicApiCheck =
   ["1", "true", "yes"].includes(
     String(process.env.PRODUCTION_DEPLOY_PUBLIC_API_CHECK ?? "").toLowerCase(),
   );
+const publicApiAllowFailOpen =
+  args.includes("--public-api-allow-fail-open") ||
+  ["1", "true", "yes"].includes(
+    String(process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN ?? "").toLowerCase(),
+  );
+if (publicApiAllowFailOpen) {
+  process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN = "true";
+}
 
 const urlsFromArgs = args.filter((arg) => !arg.startsWith("--"));
 const urls = urlsFromArgs.length
@@ -219,7 +227,11 @@ const checkUrl = async (url) => {
   if (publicApiCheck) await validatePublicApiEndpoints(url, { fetchText });
   if (browserCheck) await runBrowserCheck(url);
   const browserSuffix = browserCheck ? " and mounts the app" : "";
-  const apiSuffix = publicApiCheck ? " with public APIs online" : "";
+  const apiSuffix = publicApiCheck
+    ? publicApiAllowFailOpen
+      ? " with public APIs checked or fail-open fallbacks tolerated"
+      : " with public APIs online"
+    : "";
   process.stdout.write(`[ok] ${url} serves built assets${browserSuffix}${apiSuffix}\n`);
 };
 

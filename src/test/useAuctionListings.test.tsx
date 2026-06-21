@@ -1,6 +1,7 @@
 /**
  * Tests for the useAuctionListings hook. Public auction list reads use the
- * cached public API so browser traffic does not fan out directly to Supabase.
+ * cached public API first and fall back to bounded public Supabase reads when
+ * Cloudflare Pages Functions fail open.
  */
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -72,11 +73,12 @@ const renderHookWithQuery = <T,>(hook: () => T) => {
   return renderHook(hook, { wrapper: ({ children }) => wrap(children) });
 };
 
-const makeMaybeSingleBuilder = (result: () => Promise<{ data: unknown | null; error: unknown }>) => {
+const makeThenableBuilder = (data: unknown[] = []) => {
   const b: Record<string, unknown> = {};
-  const chain = ["select", "eq", "or", "contains", "limit"];
+  const chain = ["select", "eq", "or", "contains", "limit", "order"];
   for (const method of chain) b[method] = vi.fn().mockReturnValue(b);
-  b.maybeSingle = vi.fn().mockImplementation(result);
+  b.then = (resolve: (value: unknown) => unknown, reject: (reason?: unknown) => unknown) =>
+    Promise.resolve({ data, error: null }).then(resolve, reject);
   return b;
 };
 
@@ -127,17 +129,15 @@ describe("useAuctionListings", () => {
     expect(result.current.data?.at(-1)?.id).toBe("api-19");
   });
 
-  it("surfaces public API outages without direct Supabase fallback", async () => {
+  it("falls back to constrained Supabase auction reads when the public API is unavailable", async () => {
     publicApiMock.mockResolvedValue(null);
-    fromMock.mockReturnValue(makeMaybeSingleBuilder(() => Promise.resolve({
-      data: auctionRow("db-a1"),
-      error: null,
-    })));
+    fromMock.mockReturnValue(makeThenableBuilder([auctionRow("db-a1")]));
 
     const { result } = renderHookWithQuery(() => useAuctionListings(60));
-    await waitFor(() => expect(result.current.isError).toBe(true));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(fromMock).not.toHaveBeenCalled();
+    expect(result.current.data?.[0]).toMatchObject({ id: "db-a1" });
+    expect(fromMock).toHaveBeenCalledWith("listings");
     expect(invokeMock).not.toHaveBeenCalled();
   });
 

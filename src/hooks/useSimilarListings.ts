@@ -1,7 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchPublicApi } from "@/lib/publicApi";
+import { supabase } from "@/integrations/supabase/client";
+import type { Enums } from "@/integrations/supabase/types";
+import { logger } from "@/lib/logger";
 
-type SimilarListingRow = {
+export type SimilarListingRow = {
   id: string;
   profiles?: Record<string, unknown> | null;
   listing_type?: unknown;
@@ -72,6 +75,65 @@ export function dedupeSimilarListings<T extends SimilarListingRow>(
   });
 }
 
+const SIMILAR_LISTINGS_SELECT =
+  "id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,property_type,listing_type,open_house_transaction_type,open_house_date,auction_date,auction_starting_bid,cover_image_url,owner_id,tags,has_video_tour,has_virtual_tour,is_featured,priority_placement,is_pre_sale,construction_status,walkability_score,safety_score,noise_score,listing_images(url,sort_order)";
+
+async function fetchSimilarListingsFallback({
+  excludeId,
+  city,
+  propertyType,
+  listingType,
+  price,
+  limit,
+}: {
+  excludeId?: string;
+  city?: string;
+  propertyType?: string;
+  listingType?: string;
+  price?: number;
+  limit: number;
+}): Promise<SimilarListingRow[]> {
+  let query = supabase
+    .from("listings")
+    .select(SIMILAR_LISTINGS_SELECT)
+    .eq("status", "active")
+    .eq("is_off_market", false)
+    .order("priority_placement", { ascending: false, nullsFirst: false })
+    .order("is_featured", { ascending: false })
+    .order("created_at", { ascending: false })
+    .order("sort_order", { referencedTable: "listing_images", ascending: true })
+    .limit(3, { referencedTable: "listing_images" })
+    .limit(48);
+
+  if (excludeId) query = query.neq("id", excludeId);
+  if (city) query = query.ilike("city", `%${city}%`);
+  if (propertyType) query = query.eq("property_type", propertyType as Enums<"property_type">);
+  if (listingType) query = query.eq("listing_type", listingType as Enums<"listing_type">);
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  const rows = (data ?? []) as SimilarListingRow[];
+  const ownerIds = [...new Set(rows.map((row) => row.owner_id).filter((id): id is string => typeof id === "string"))];
+  let profileMap = new Map<string, Record<string, unknown>>();
+  if (ownerIds.length > 0) {
+    const { data: profiles = [] } = await supabase
+      .from("profiles_public")
+      .select("user_id, display_name, avatar_url, role")
+      .in("user_id", ownerIds);
+    profileMap = new Map((profiles ?? []).map((profile) => [profile.user_id, profile as Record<string, unknown>]));
+  }
+
+  const withProfiles = rows.map((row) => ({
+    ...row,
+    profiles: typeof row.owner_id === "string" ? profileMap.get(row.owner_id) ?? null : null,
+  }));
+  const sorted = price != null && price > 0
+    ? [...withProfiles].sort((a, b) => Math.abs(Number(a.price ?? 0) - price) - Math.abs(Number(b.price ?? 0) - price))
+    : withProfiles;
+  return dedupeSimilarListings(sorted).slice(0, limit);
+}
+
 /**
  * Fetches similar listings/deals from the database (includes OS-synced auctions).
  * Matches by city, property_type, listing_type; sorts by price proximity.
@@ -99,12 +161,17 @@ export function useSimilarListings(params: {
       if (price != null) params.set("price", String(price));
       params.set("limit", String(limit));
 
-      const response = await fetchPublicApi<SimilarListingsResponse>(
-        `/api/public/similar-listings?${params.toString()}`,
-        { throwOnError: true },
-      );
-      if (!response) throw new Error("Public similar listings API returned no data");
-      return dedupeSimilarListings(response.data);
+      try {
+        const response = await fetchPublicApi<SimilarListingsResponse>(
+          `/api/public/similar-listings?${params.toString()}`,
+          { throwOnError: true },
+        );
+        if (!response) throw new Error("Public similar listings API returned no data");
+        return dedupeSimilarListings(response.data);
+      } catch (error) {
+        logger.warn("Public similar listings API failed; falling back to constrained Supabase read:", error);
+        return fetchSimilarListingsFallback({ excludeId, city, propertyType, listingType, price, limit });
+      }
     },
     enabled: !!(city || propertyType),
   });

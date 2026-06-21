@@ -1,6 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { fetchPublicApi } from "@/lib/publicApi";
+import { logger } from "@/lib/logger";
+import {
+  fetchHomepageFeaturedFallback,
+  fetchHomepageOpenHousesFallback,
+} from "@/lib/publicListingFallbacks";
 import { useAuctionListings } from "@/hooks/useAuctionListings";
 import {
   publicHomepageRows,
@@ -41,9 +46,17 @@ export function useHomepageFeaturedListings() {
   return useQuery({
     queryKey: ["homepage-featured"],
     queryFn: async () => {
-      const cached = await fetchPublicApi<HomepageListing[]>("/api/public/homepage?section=featured");
-      if (cached) return publicHomepageRows(cached, 4);
-      return [];
+      try {
+        const cached = await fetchPublicApi<HomepageListing[]>(
+          "/api/public/homepage?section=featured",
+          { throwOnError: true },
+        );
+        if (cached) return publicHomepageRows(cached, 4);
+        throw new Error("Public homepage featured API returned no data");
+      } catch (error) {
+        logger.warn("Public homepage featured API failed; falling back to constrained Supabase read:", error);
+        return fetchHomepageFeaturedFallback();
+      }
     },
     staleTime: FEATURED_STALE_TIME_MS,
     retry: 1,
@@ -65,9 +78,17 @@ export function useHomepageOpenHouseListings() {
   return useQuery({
     queryKey: ["homepage-open-houses"],
     queryFn: async () => {
-      const cached = await fetchPublicApi<HomepageListing[]>("/api/public/homepage?section=open-houses");
-      if (cached) return sortByImagePresence(publicHomepageRows(cached));
-      return [];
+      try {
+        const cached = await fetchPublicApi<HomepageListing[]>(
+          "/api/public/homepage?section=open-houses",
+          { throwOnError: true },
+        );
+        if (cached) return sortByImagePresence(publicHomepageRows(cached));
+        throw new Error("Public homepage open houses API returned no data");
+      } catch (error) {
+        logger.warn("Public homepage open houses API failed; falling back to constrained Supabase read:", error);
+        return fetchHomepageOpenHousesFallback();
+      }
     },
     staleTime: 2 * 60 * 1000,
   });

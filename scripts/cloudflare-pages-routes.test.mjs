@@ -121,5 +121,6 @@ describe("Cloudflare Pages deploy workflow routing", () => {
     expect(workflow).toContain("steps.deploy_pages_preview.outputs['deployment-url']");
     expect(workflow).toContain("CF_ACCESS_CLIENT_ID");
     expect(workflow).toContain("--public-api");
+    expect(workflow).not.toContain("--public-api-allow-fail-open");
   });
 });

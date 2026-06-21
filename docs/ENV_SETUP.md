@@ -240,6 +240,7 @@ fail-fast behavior.
 | `PRODUCTION_DEPLOY_URLS` | optional space-separated URL override for the post-deploy production smoke check; defaults to `https://portal.maiprop.co` | deploy diagnostics only |
 | `PRODUCTION_DEPLOY_BROWSER_CHECK` | optional boolean that enables the Chromium mount check when set instead of passing `--browser` | deploy diagnostics only |
 | `PRODUCTION_DEPLOY_PUBLIC_API_CHECK` | optional boolean that enables public Pages Functions checks when set instead of passing `--public-api` | deploy diagnostics only |
+| `PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN` | optional boolean that lets the deploy smoke check warn instead of fail when Cloudflare Pages Functions return fail-open SPA HTML for public API routes; only use when app-side public data fallbacks are enabled | deploy diagnostics only |
 | `PRODUCTION_DEPLOY_CHECK_ATTEMPTS` | optional retry count for the production deploy smoke check; defaults to `8` | deploy diagnostics only |
 | `PRODUCTION_DEPLOY_CHECK_DELAY_MS` | optional retry delay in milliseconds for the production deploy smoke check; defaults to `10000` | deploy diagnostics only |
 | `PRODUCTION_DEPLOY_EXPECTED_SHA` | optional commit SHA that the production smoke check must observe in `/deploy-version.json` before browser/API checks run | deploy diagnostics only |

@@ -1,6 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Database } from "@/integrations/supabase/types";
+import { supabase } from "@/integrations/supabase/client";
 import { fetchPublicApi } from "@/lib/publicApi";
+import { logger } from "@/lib/logger";
+import { fetchAuctionsFallback } from "@/lib/publicListingFallbacks";
 
 const QUERY_TIMEOUT_MS = 15_000;
 const PORTAL_AUCTION_FETCH_LIMIT = 600;
@@ -112,12 +115,46 @@ const fetchAuctionByIdFromPublicApi = async (
   return row;
 };
 
+const fetchAuctionByIdFromSupabase = async (
+  id: string,
+  today: string,
+): Promise<AuctionListingRow | null> => {
+  const auctionId = id.trim();
+  let query = supabase
+    .from("listings")
+    .select(`
+      id,title,city,address,price,auction_starting_bid,auction_date,auction_court,
+      property_type,listing_type,cover_image_url,sqm,bedrooms,bathrooms,floor,total_floors,
+      latitude,longitude,tags,year_built,construction_status,website_url,region,
+      is_featured,priority_placement,listing_images(url,sort_order)
+    `)
+    .eq("status", "active")
+    .eq("is_off_market", false)
+    .eq("listing_type", "auction")
+    .or(`auction_date.gte.${today},auction_date.is.null`)
+    .order("sort_order", { referencedTable: "listing_images", ascending: true })
+    .limit(3, { referencedTable: "listing_images" });
+
+  query = UUID_RE.test(auctionId)
+    ? query.eq("id", auctionId)
+    : query.contains("tags", [`os_auction:${auctionId}`]);
+
+  const { data, error } = await query.maybeSingle();
+  if (error) throw error;
+  return (data ?? null) as AuctionListingRow | null;
+};
+
 export const fetchAuctionListingById = async (id: string): Promise<AuctionListingRow | null> => {
   const auctionId = id.trim();
   if (!auctionId) return null;
 
   const today = getTodayDate();
-  return fetchAuctionByIdFromPublicApi(auctionId, today);
+  try {
+    return await fetchAuctionByIdFromPublicApi(auctionId, today);
+  } catch (error) {
+    logger.warn("Public auction detail API failed; falling back to constrained Supabase read:", error);
+    return fetchAuctionByIdFromSupabase(auctionId, today);
+  }
 };
 
 const fetchPublicAuctionListings = async (maxRows: number): Promise<AuctionListingRow[]> => {
@@ -131,7 +168,12 @@ const fetchPublicAuctionListings = async (maxRows: number): Promise<AuctionListi
 };
 
 const fetchAuctionListings = async (maxRows: number): Promise<AuctionListingRow[]> => {
-  return fetchPublicAuctionListings(maxRows);
+  try {
+    return await fetchPublicAuctionListings(maxRows);
+  } catch (error) {
+    logger.warn("Public auctions API failed; falling back to constrained Supabase read:", error);
+    return randomizeAuctionPresentation(await fetchAuctionsFallback<AuctionListingRow>(maxRows));
+  }
 };
 
 const getTimeoutRejection = (
