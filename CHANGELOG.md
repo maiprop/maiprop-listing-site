@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.30](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.29...v1.9.30) (2026-06-21)
+
+
+### Bug Fixes
+
+* add public listing failover fallbacks ([9a54732](https://github.com/maiprop/maiprop-listing-site/commit/9a54732ec319ee0be3ba7e5482dce91f9c33da64))
+
 ## [1.9.29](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.28...v1.9.29) (2026-06-21)
 
 
