@@ -7,6 +7,7 @@ import {
   getSiteLockCookieHeader,
   getSiteLockPlaywrightCookie,
   getSiteLockPassword,
+  getCloudflareAccessHeaders,
   isSiteLockHtml,
   mergeHeaders,
 } from "./check-production-deploy-site-lock.mjs";
@@ -159,6 +160,28 @@ describe("production deploy public API fixture guard", () => {
     })).rejects.toThrow(
       "https://portal.maiprop.co/api/public/listings?limit=1 returned HTML instead of JSON; the Cloudflare Pages Function was not invoked or failed open to the SPA fallback",
     );
+  });
+
+  it("builds Cloudflare Access service-token headers for protected previews", () => {
+    expect(getCloudflareAccessHeaders({
+      CLOUDFLARE_ACCESS_CLIENT_ID: "client-id",
+      CLOUDFLARE_ACCESS_CLIENT_SECRET: "client-secret",
+    })).toEqual({
+      "CF-Access-Client-Id": "client-id",
+      "CF-Access-Client-Secret": "client-secret",
+    });
+
+    expect(getCloudflareAccessHeaders({
+      CF_ACCESS_TOKEN: "jwt-token",
+    })).toEqual({
+      "cf-access-token": "jwt-token",
+    });
+  });
+
+  it("rejects incomplete Cloudflare Access service-token config", () => {
+    expect(() => getCloudflareAccessHeaders({
+      CF_ACCESS_CLIENT_ID: "client-id",
+    })).toThrow("both client id and client secret");
   });
 });
 

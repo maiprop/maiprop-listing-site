@@ -18,6 +18,7 @@ import {
   getSiteLockErrorMessage,
   getSiteLockPassword,
   getSiteLockPlaywrightCookie,
+  getCloudflareAccessHeaders,
   isSiteLockHtml,
   isSiteLockPlainText,
   mergeHeaders,
@@ -79,11 +80,13 @@ const getSiteLockHeaders = async () => {
 const fetchText = async (url, options = {}) => {
   const { headers, ...requestOptions } = options;
   const siteLockHeaders = await getSiteLockHeaders();
+  const cloudflareAccessHeaders = getCloudflareAccessHeaders();
   const res = await fetch(url, {
     redirect: "follow",
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     headers: mergeHeaders(
       { "user-agent": USER_AGENT },
+      cloudflareAccessHeaders,
       siteLockHeaders,
       headers,
     ),

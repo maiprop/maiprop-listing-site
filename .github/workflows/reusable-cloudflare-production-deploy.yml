@@ -353,6 +353,9 @@ jobs:
         id: health_check
         env:
           PRODUCTION_DEPLOY_SITE_LOCK_PASSWORD: ${{ secrets.SITE_LOCK_PASSWORD }}
+          CF_ACCESS_CLIENT_ID:                  ${{ secrets.CF_ACCESS_CLIENT_ID || secrets.CLOUDFLARE_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET:              ${{ secrets.CF_ACCESS_CLIENT_SECRET || secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET }}
+          CF_ACCESS_TOKEN:                      ${{ secrets.CF_ACCESS_TOKEN || secrets.CLOUDFLARE_ACCESS_TOKEN }}
           PRODUCTION_DEPLOY_EXPECTED_SHA: ${{ github.sha }}
           PRODUCTION_DEPLOY_CHECK_ATTEMPTS: 30
           PRODUCTION_DEPLOY_CHECK_DELAY_MS: 10000
@@ -362,6 +365,9 @@ jobs:
         if: failure() && steps.health_check.outcome == 'failure' && steps.prev_deploy.outputs.id != ''
         env:
           PRODUCTION_DEPLOY_SITE_LOCK_PASSWORD: ${{ secrets.SITE_LOCK_PASSWORD }}
+          CF_ACCESS_CLIENT_ID:                  ${{ secrets.CF_ACCESS_CLIENT_ID || secrets.CLOUDFLARE_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET:              ${{ secrets.CF_ACCESS_CLIENT_SECRET || secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET }}
+          CF_ACCESS_TOKEN:                      ${{ secrets.CF_ACCESS_TOKEN || secrets.CLOUDFLARE_ACCESS_TOKEN }}
         run: |
           set -euo pipefail
           ROLLBACK_ID="${{ steps.prev_deploy.outputs.id }}"

@@ -16,7 +16,15 @@ describe("Cloudflare Pages function routes", () => {
     const routes = JSON.parse(readFileSync(routesPath, "utf8"));
 
     expect(routes).toMatchObject({ version: 1 });
-    expect(routes.include).toEqual(["/*"]);
+    expect(routes.include).toEqual([
+      "/api/public/*",
+      "/sitemap-dynamic.xml",
+      "/listings",
+      "/auctions",
+      "/property/*",
+      "/__unlock",
+    ]);
+    expect(routes.include).not.toContain("/*");
     expect(routes.exclude ?? []).not.toContain("/api/*");
     expect(routes.exclude ?? []).not.toContain("/api/public/*");
     expect(routes.exclude ?? []).not.toContain("/sitemap-dynamic.xml");
@@ -83,6 +91,7 @@ describe("Cloudflare Pages deploy workflow routing", () => {
     expect(buildScript).toContain('"_routes.json"');
     expect(buildScript).toContain("curatedRoutesPath");
     expect(buildScript).toContain("requiredStaticExcludes");
+    expect(buildScript).toContain("curatedInclude.length > 0");
     expect(buildScript).toContain("Generated _routes.json would not invoke the Pages Function");
 
     const productionPackageIndex = productionWorkflow.indexOf("Package Cloudflare Pages Functions worker");
@@ -102,5 +111,15 @@ describe("Cloudflare Pages deploy workflow routing", () => {
     const deployCommand = workflow.match(/command:\s+pages deploy[^\n]+github\.head_ref[^\n]+/)?.[0] ?? "";
 
     expect(deployCommand).toContain("--branch=${{ github.head_ref }}");
+  });
+
+  it("runs a public API health check against protected PR previews after deploy", () => {
+    const workflow = readFileSync(ciWorkflowPath, "utf8");
+
+    expect(workflow).toContain("id: deploy_pages_preview");
+    expect(workflow).toContain("Validate Cloudflare Pages preview public APIs");
+    expect(workflow).toContain("steps.deploy_pages_preview.outputs['deployment-url']");
+    expect(workflow).toContain("CF_ACCESS_CLIENT_ID");
+    expect(workflow).toContain("--public-api");
   });
 });
