@@ -75,6 +75,9 @@ const PRODUCTION_HOST = isProductionHost(hostnameFromUrl(BASE_URL));
 const LOAD_TEST_ABORT_ON_FAIL =
   __ENV.LOAD_TEST_ABORT_ON_FAIL === "true" ||
   (PRODUCTION_HOST && (ECAS_LOAD_PROFILE === "growth_10x" || ECAS_LOAD_PROFILE === "enterprise_soak"));
+const CF_ACCESS_CLIENT_ID = (__ENV.CF_ACCESS_CLIENT_ID || __ENV.CLOUDFLARE_ACCESS_CLIENT_ID || "").trim();
+const CF_ACCESS_CLIENT_SECRET = (__ENV.CF_ACCESS_CLIENT_SECRET || __ENV.CLOUDFLARE_ACCESS_CLIENT_SECRET || "").trim();
+const CF_ACCESS_TOKEN = (__ENV.CF_ACCESS_TOKEN || __ENV.CLOUDFLARE_ACCESS_TOKEN || "").trim();
 const DURATION_P95_THRESHOLD = "p(95)<2500";
 const RATE_THRESHOLD = "rate<0.01";
 const ROUTE_COUNT_THRESHOLD = "count>0";
@@ -82,6 +85,10 @@ const selectedStages = LOAD_PROFILES[ECAS_LOAD_PROFILE];
 
 if (PRODUCTION_HOST && !LOAD_TEST_APPROVED_PRODUCTION) {
   throw new Error("Production load tests require LOAD_TEST_APPROVED_PRODUCTION=true");
+}
+
+if (Boolean(CF_ACCESS_CLIENT_ID) !== Boolean(CF_ACCESS_CLIENT_SECRET)) {
+  throw new Error("Cloudflare Access service auth requires both CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET");
 }
 
 export const errorRate = new Rate("errors");
@@ -130,18 +137,25 @@ export const options = {
 export default function () {
   for (const route of LOAD_TEST_ROUTES) {
     const routeTags = { route: route.name };
-    const res = http.get(`${BASE_URL}${route.path}`, { tags: routeTags });
+    const res = http.get(`${BASE_URL}${route.path}`, {
+      headers: loadTestHeaders(),
+      tags: routeTags,
+    });
     const statusOk = check(res, {
       [`${route.name}: status 2xx`]: (response) => response.status >= 200 && response.status < 300,
+    });
+    const accessOk = check(res, {
+      [`${route.name}: not Cloudflare Access login`]: (response) => !isCloudflareAccessLogin(response),
     });
     check(res, {
       [`${route.name}: TTFB < 1500ms`]: (response) => response.timings.waiting < 1500,
     });
+    const routeOk = statusOk && accessOk;
     routeDuration.add(res.timings.duration, routeTags);
-    routeFailedRate.add(statusOk ? 0 : 1, routeTags);
-    routeErrorRate.add(statusOk ? 0 : 1, routeTags);
+    routeFailedRate.add(routeOk ? 0 : 1, routeTags);
+    routeErrorRate.add(routeOk ? 0 : 1, routeTags);
     routeRequests.add(1, routeTags);
-    errorRate.add(statusOk ? 0 : 1, routeTags);
+    errorRate.add(routeOk ? 0 : 1, routeTags);
     sleep(0.5);
   }
 }
@@ -188,6 +202,32 @@ function isProductionHost(hostname) {
 
 function hostnameFromUrl(value) {
   return value.replace(/^https?:\/\//, "").split("/")[0].split(":")[0].toLowerCase();
+}
+
+function loadTestHeaders() {
+  const headers = {};
+  if (CF_ACCESS_CLIENT_ID && CF_ACCESS_CLIENT_SECRET) {
+    headers["CF-Access-Client-Id"] = CF_ACCESS_CLIENT_ID;
+    headers["CF-Access-Client-Secret"] = CF_ACCESS_CLIENT_SECRET;
+  }
+  if (CF_ACCESS_TOKEN) {
+    headers["cf-access-token"] = CF_ACCESS_TOKEN;
+  }
+  return headers;
+}
+
+function isCloudflareAccessLogin(response) {
+  const url = String(response.url || "").toLowerCase();
+  const accessDomain = response.headers?.["CF-Access-Domain"] || response.headers?.["cf-access-domain"];
+  const authenticate = response.headers?.["Www-Authenticate"] || response.headers?.["www-authenticate"];
+  const body = typeof response.body === "string" ? response.body.toLowerCase() : "";
+  return (
+    url.includes("cloudflareaccess.com/cdn-cgi/access/login") ||
+    url.includes("/cdn-cgi/access/login/") ||
+    Boolean(accessDomain) ||
+    String(authenticate || "").toLowerCase().includes("cloudflare-access") ||
+    body.includes("cloudflare access")
+  );
 }
 
 function artifactPath(name) {

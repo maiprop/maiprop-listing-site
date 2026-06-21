@@ -32,6 +32,13 @@ for every exercised route. Review `failedRoutes` first when a run fails; this
 identifies whether the bottleneck is a page shell, public API route, sitemap, or
 another routed surface.
 
+Protected Cloudflare Pages previews must be tested with Cloudflare Access
+service credentials, not the Cloudflare deploy API token. Set
+`CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` for service-token auth, or
+`CF_ACCESS_TOKEN` when you already have a valid `CF_Authorization` JWT. The k6
+script fails the run if it receives the Cloudflare Access login shell instead of
+the app, so a protected preview cannot create false performance evidence.
+
 For production `growth_10x` and `enterprise_soak` runs, threshold aborts are
 enabled by default. This prevents a known-bad run from continuing to generate
 avoidable production traffic after the p95 or error-rate budgets are already

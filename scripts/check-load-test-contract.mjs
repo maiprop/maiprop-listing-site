@@ -56,6 +56,11 @@ export function checkLoadTestContract(root = process.cwd()) {
     "growth_10x",
     "enterprise_soak",
     "normalizeSummary",
+    "CF-Access-Client-Id",
+    "CF-Access-Client-Secret",
+    "cf-access-token",
+    "isCloudflareAccessLogin",
+    "not Cloudflare Access login",
   ];
 
   for (const marker of includesAll(contractText, requiredMarkers)) {
@@ -89,9 +94,28 @@ export function checkLoadTestContract(root = process.cwd()) {
 
   if (
     !/const\s+statusOk\s*=\s*check\(\s*res\b/.test(text) ||
-    !/errorRate\.add\(\s*statusOk\s*\?\s*0\s*:\s*1\s*,\s*(?:routeTags|\{\s*route:\s*route\.name\s*\})\s*\)/.test(text)
+    !/const\s+accessOk\s*=\s*check\(\s*res\b/.test(text) ||
+    !/const\s+routeOk\s*=\s*statusOk\s*&&\s*accessOk/.test(text) ||
+    !/errorRate\.add\(\s*routeOk\s*\?\s*0\s*:\s*1\s*,\s*(?:routeTags|\{\s*route:\s*route\.name\s*\})\s*\)/.test(text)
   ) {
-    failures.push(`${SCRIPT_PATH} must keep availability errorRate scoped to the status-only check`);
+    failures.push(`${SCRIPT_PATH} must fail availability when status is bad or Cloudflare Access login is served`);
+  }
+
+  if (
+    !/function\s+loadTestHeaders\(\)/.test(text) ||
+    !/CF_ACCESS_CLIENT_ID/.test(text) ||
+    !/CF_ACCESS_CLIENT_SECRET/.test(text) ||
+    !/CF_ACCESS_TOKEN/.test(text)
+  ) {
+    failures.push(`${SCRIPT_PATH} must support Cloudflare Access service-token headers for protected previews`);
+  }
+
+  if (
+    !/function\s+isCloudflareAccessLogin\(\s*response\s*\)/.test(text) ||
+    !/cloudflareaccess\.com\/cdn-cgi\/access\/login/.test(text) ||
+    !/CF-Access-Domain/.test(text)
+  ) {
+    failures.push(`${SCRIPT_PATH} must reject Cloudflare Access login-page responses`);
   }
 
   const explicitRouteMetrics = [
@@ -103,12 +127,12 @@ export function checkLoadTestContract(root = process.cwd()) {
     {
       metric: "route_http_req_failed",
       declaration: /new\s+Rate\(\s*["']route_http_req_failed["']/,
-      recording: /routeFailedRate\.add\(\s*statusOk\s*\?\s*0\s*:\s*1\s*,\s*routeTags\s*\)/,
+      recording: /routeFailedRate\.add\(\s*routeOk\s*\?\s*0\s*:\s*1\s*,\s*routeTags\s*\)/,
     },
     {
       metric: "route_errors",
       declaration: /new\s+Rate\(\s*["']route_errors["']/,
-      recording: /routeErrorRate\.add\(\s*statusOk\s*\?\s*0\s*:\s*1\s*,\s*routeTags\s*\)/,
+      recording: /routeErrorRate\.add\(\s*routeOk\s*\?\s*0\s*:\s*1\s*,\s*routeTags\s*\)/,
     },
     {
       metric: "route_http_reqs",
