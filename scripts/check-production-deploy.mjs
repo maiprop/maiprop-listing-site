@@ -12,6 +12,7 @@
 
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { validatePublicApiEndpoints } from "./check-production-deploy-public-api.mjs";
+import { validateDeploymentVersion } from "./check-production-deploy-version.mjs";
 import {
   getSiteLockCookieHeader,
   getSiteLockErrorMessage,
@@ -45,6 +46,8 @@ const urls = urlsFromArgs.length
   ? urlsFromArgs
   : process.env.PRODUCTION_DEPLOY_URLS?.split(/\s+/).filter(Boolean) ??
     DEFAULT_URLS;
+const expectedDeploySha = process.env.PRODUCTION_DEPLOY_EXPECTED_SHA?.trim() ?? "";
+const deployVersionPath = process.env.PRODUCTION_DEPLOY_VERSION_PATH?.trim() || "/deploy-version.json";
 
 const attempts = Number.parseInt(
   process.env.PRODUCTION_DEPLOY_CHECK_ATTEMPTS ?? "",
@@ -199,6 +202,12 @@ const runBrowserCheck = async (url) => {
 };
 
 const checkUrl = async (url) => {
+  await validateDeploymentVersion(url, {
+    expectedSha: expectedDeploySha,
+    versionPath: deployVersionPath,
+    fetchText,
+    assertOk,
+  });
   const { text: html } = await fetchText(url, {
     headers: { accept: "text/html,application/xhtml+xml" },
   });

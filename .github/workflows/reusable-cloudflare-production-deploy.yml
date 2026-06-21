@@ -65,6 +65,22 @@ jobs:
       - name: Package Cloudflare Pages Functions worker
         run: npm run build:cloudflare-pages-worker
 
+      - name: Write deployment version marker
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg sha "${{ github.sha }}" \
+            --arg run_id "${{ github.run_id }}" \
+            --arg run_attempt "${{ github.run_attempt }}" \
+            --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{
+              sha: $sha,
+              run_id: $run_id,
+              run_attempt: $run_attempt,
+              created_at: $created_at
+            }' > dist/deploy-version.json
+          test -s dist/deploy-version.json
+
       - name: Generate production SBOM for provenance
         run: npm sbom --sbom-format cyclonedx > sbom.cdx.json
 
@@ -285,10 +301,9 @@ jobs:
           apiToken:   ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId:  ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           # The step above verifies Cloudflare's production_branch is main.
-          # Omit an explicit Wrangler branch here so Direct Upload publishes the
-          # production alias instead of leaving the custom domain on an older
-          # preview/branch deployment.
-          command:    pages deploy dist --project-name=maiprop-listing-site --commit-hash=${{ github.sha }} --commit-message=${{ github.sha }} --commit-dirty=true
+          # Keep the deploy branch explicit so Wrangler does not rely on
+          # detached-checkout branch inference in GitHub-hosted runners.
+          command:    pages deploy dist --project-name=maiprop-listing-site --branch=main --commit-hash=${{ github.sha }} --commit-message=${{ github.sha }} --commit-dirty=true
 
       - name: Log Cloudflare Pages deployment outputs
         run: |
@@ -338,6 +353,9 @@ jobs:
         id: health_check
         env:
           PRODUCTION_DEPLOY_SITE_LOCK_PASSWORD: ${{ secrets.SITE_LOCK_PASSWORD }}
+          PRODUCTION_DEPLOY_EXPECTED_SHA: ${{ github.sha }}
+          PRODUCTION_DEPLOY_CHECK_ATTEMPTS: 30
+          PRODUCTION_DEPLOY_CHECK_DELAY_MS: 10000
         run: npm run check:production-deploy -- https://portal.maiprop.co --browser --public-api
 
       - name: Rollback on health check failure

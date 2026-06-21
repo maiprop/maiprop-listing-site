@@ -34,15 +34,24 @@ describe("Cloudflare Pages deploy workflow routing", () => {
     expect(workflow).toContain("Cloudflare Pages production branch verified: main");
   });
 
-  it("deploys production without an explicit branch after verifying production_branch", () => {
+  it("deploys production with the verified main branch explicitly", () => {
     const workflow = readFileSync(productionDeployWorkflowPath, "utf8");
     const deployCommand = workflow.match(/command:\s+pages deploy[^\n]+/)?.[0] ?? "";
 
     expect(deployCommand).toContain("pages deploy dist");
-    expect(deployCommand).not.toContain("--branch=");
+    expect(deployCommand).toContain("--branch=main");
     expect(workflow).toContain("id: deploy_pages");
     expect(workflow).toContain("Log Cloudflare Pages deployment outputs");
     expect(workflow).toContain("Inspect Cloudflare Pages deployment aliases");
+  });
+
+  it("waits for the stable production domain to serve the deployed commit", () => {
+    const workflow = readFileSync(productionDeployWorkflowPath, "utf8");
+
+    expect(workflow).toContain("Write deployment version marker");
+    expect(workflow).toContain("dist/deploy-version.json");
+    expect(workflow).toContain("PRODUCTION_DEPLOY_EXPECTED_SHA: ${{ github.sha }}");
+    expect(workflow).toContain("PRODUCTION_DEPLOY_CHECK_ATTEMPTS: 30");
   });
 
   it("packages Pages Functions into advanced worker output before Pages deploys", () => {
