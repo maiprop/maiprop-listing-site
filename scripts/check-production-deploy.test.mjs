@@ -7,6 +7,7 @@ import {
   getSiteLockCookieHeader,
   getSiteLockPlaywrightCookie,
   getSiteLockPassword,
+  getCloudflareAccessHeaders,
   isSiteLockHtml,
   mergeHeaders,
 } from "./check-production-deploy-site-lock.mjs";
@@ -144,6 +145,43 @@ describe("production deploy public API fixture guard", () => {
     expect(calls).toContain("https://portal.maiprop.co/api/public/listing?id=listing-1");
     expect(calls).toContain("https://portal.maiprop.co/api/public/listing?id=new-build-1");
     expect(calls).toContain("https://portal.maiprop.co/api/public/listing?id=auction-1");
+  });
+
+  it("reports Cloudflare Pages fail-open HTML when public API functions are not invoked", async () => {
+    const { validatePublicApiEndpoints } = await import("./check-production-deploy-public-api.mjs");
+
+    await expect(validatePublicApiEndpoints("https://portal.maiprop.co", {
+      fetchText: async (url) => ({
+        res: new Response("<!doctype html><div id=\"root\"></div>", {
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        }),
+        text: "<!doctype html><div id=\"root\"></div>",
+      }),
+    })).rejects.toThrow(
+      "https://portal.maiprop.co/api/public/listings?limit=1 returned HTML instead of JSON; the Cloudflare Pages Function was not invoked or failed open to the SPA fallback",
+    );
+  });
+
+  it("builds Cloudflare Access service-token headers for protected previews", () => {
+    expect(getCloudflareAccessHeaders({
+      CLOUDFLARE_ACCESS_CLIENT_ID: "client-id",
+      CLOUDFLARE_ACCESS_CLIENT_SECRET: "client-secret",
+    })).toEqual({
+      "CF-Access-Client-Id": "client-id",
+      "CF-Access-Client-Secret": "client-secret",
+    });
+
+    expect(getCloudflareAccessHeaders({
+      CF_ACCESS_TOKEN: "jwt-token",
+    })).toEqual({
+      "cf-access-token": "jwt-token",
+    });
+  });
+
+  it("rejects incomplete Cloudflare Access service-token config", () => {
+    expect(() => getCloudflareAccessHeaders({
+      CF_ACCESS_CLIENT_ID: "client-id",
+    })).toThrow("both client id and client secret");
   });
 });
 

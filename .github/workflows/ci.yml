@@ -943,6 +943,7 @@ jobs:
         run: npm run build:cloudflare-pages-worker
 
       - name: Deploy to Cloudflare Pages (PR preview)
+        id: deploy_pages_preview
         uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
         with:
           apiToken:   ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -951,3 +952,13 @@ jobs:
           # PR gets a deterministic preview URL like:
           #   https://<branch>.maiprop-listing-site.pages.dev
           command:    pages deploy dist --project-name=maiprop-listing-site --branch=${{ github.head_ref }} --commit-dirty=true
+
+      - name: Validate Cloudflare Pages preview public APIs
+        env:
+          PRODUCTION_DEPLOY_SITE_LOCK_PASSWORD: ${{ secrets.STAGING_SITE_LOCK_PASSWORD }}
+          CF_ACCESS_CLIENT_ID:                  ${{ secrets.CF_ACCESS_CLIENT_ID || secrets.CLOUDFLARE_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET:              ${{ secrets.CF_ACCESS_CLIENT_SECRET || secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET }}
+          CF_ACCESS_TOKEN:                      ${{ secrets.CF_ACCESS_TOKEN || secrets.CLOUDFLARE_ACCESS_TOKEN }}
+          PRODUCTION_DEPLOY_CHECK_ATTEMPTS:     12
+          PRODUCTION_DEPLOY_CHECK_DELAY_MS:     10000
+        run: npm run check:production-deploy -- "${{ steps.deploy_pages_preview.outputs['deployment-url'] }}" --public-api

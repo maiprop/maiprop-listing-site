@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -40,6 +39,22 @@ import { fetchPublicApi } from "@/lib/publicApi";
 import { getListingDetailPath, shouldUseNewBuildRoute } from "@/lib/listingRoutes";
 import { invokeAuthenticatedFunction } from "@/lib/invokeAuthenticatedFunction";
 import { newBuildLeadSchema, parseMutationInput } from "@/lib/mutationSchemas";
+import {
+  ACTIVE_UNIT_STATUSES,
+  buildProjectValuationMetrics,
+  finiteNumbers,
+  formatLayoutRange,
+  formatPriceRange,
+  formatProjectDate,
+  formatValueRange,
+  formatVatSummary,
+  getListingProject,
+  isProjectImageMedia,
+  sortProjectMedia,
+  sortProjectUnits,
+  type NewBuildListing,
+  type NewBuildProject,
+} from "@/lib/newBuildProjectDetail";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const EnergyBadge = ({ cls }: { cls: string }) => {
@@ -71,66 +86,6 @@ type AIInsightsResponse = ValuationEstimateSource & {
   confidenceLabel?: string;
 };
 
-type NewBuildProjectUnit = Pick<
-  Database["public"]["Tables"]["project_units"]["Row"],
-  | "id"
-  | "listing_id"
-  | "unit_id"
-  | "unit_number"
-  | "floor"
-  | "availability_status"
-  | "internal_sqm"
-  | "balcony_sqm"
-  | "storage_sqm"
-  | "parking_sqm"
-  | "bedrooms"
-  | "bathrooms"
-  | "kitchen_type"
-  | "living_rooms"
-  | "price"
-  | "price_per_sqm"
-  | "vat_included"
-  | "parking_price"
-  | "storage_price"
-  | "sea_view"
-  | "city_view"
-  | "mountain_view"
-  | "energy_class"
-  | "heating_system"
-  | "cooling_system"
->;
-
-type NewBuildProjectMedia = Pick<
-  Database["public"]["Tables"]["project_media"]["Row"],
-  "id" | "url" | "media_type" | "title" | "sort_order"
->;
-
-type NewBuildProject = Pick<
-  Database["public"]["Tables"]["projects"]["Row"],
-  | "id"
-  | "name"
-  | "description"
-  | "address"
-  | "city"
-  | "municipality"
-  | "latitude"
-  | "longitude"
-  | "cover_image_url"
-  | "developer_company"
-  | "architect_group"
-  | "construction_company"
-  | "building_permit_number"
-  | "area_description"
-  | "permit_approval_date"
-  | "construction_start_date"
-  | "structural_completion_date"
-  | "delivery_date"
-  | "status"
-> & {
-  project_units?: NewBuildProjectUnit[] | null;
-  project_media?: NewBuildProjectMedia[] | null;
-};
-
 const cleanOptionalText = (value: string | null | undefined) => {
   const trimmed = value?.trim();
   return trimmed || undefined;
@@ -140,141 +95,8 @@ const getInterestPhone = (form: RegisterInterestForm, profile: Profile | null) =
   return cleanOptionalText(form.phone) ?? cleanOptionalText(profile?.phone) ?? null;
 };
 
-type NewBuildListing = Database["public"]["Tables"]["listings"]["Row"] & {
-  listing_images?: Array<Pick<Database["public"]["Tables"]["listing_images"]["Row"], "url" | "sort_order">> | null;
-  project?: NewBuildProject | null;
-  projects?: NewBuildProject | null;
-  profiles?: {
-    user_id: string;
-    display_name: string | null;
-    avatar_url: string | null;
-    phone?: string | null;
-  } | null;
-  walkability_score?: number | null;
-  safety_score?: number | null;
-  noise_score?: number | null;
-};
-
 type PublicListingResponse = {
   data: NewBuildListing | null;
-};
-
-const getListingProject = (listing: NewBuildListing | null | undefined): NewBuildProject | null => {
-  return listing?.project ?? listing?.projects ?? null;
-};
-
-const sortProjectUnits = (units: NewBuildProjectUnit[] | null | undefined): NewBuildProjectUnit[] => {
-  return [...(units ?? [])].sort((a, b) => {
-    const floorDelta = (a.floor ?? Number.MAX_SAFE_INTEGER) - (b.floor ?? Number.MAX_SAFE_INTEGER);
-    if (floorDelta !== 0) return floorDelta;
-    return (a.unit_number ?? a.unit_id ?? "").localeCompare(b.unit_number ?? b.unit_id ?? "");
-  });
-};
-
-const sortProjectMedia = (media: NewBuildProjectMedia[] | null | undefined): NewBuildProjectMedia[] => {
-  return [...(media ?? [])].sort((a, b) => {
-    const typeDelta = (a.media_type ?? "").localeCompare(b.media_type ?? "");
-    if (typeDelta !== 0) return typeDelta;
-    return (a.sort_order ?? 99) - (b.sort_order ?? 99);
-  });
-};
-
-const isProjectImageMedia = (media: NewBuildProjectMedia): boolean => {
-  const type = media.media_type?.toLowerCase() ?? "";
-  const url = media.url.toLowerCase();
-  return !type.includes("pdf") && !url.endsWith(".pdf");
-};
-
-const ACTIVE_UNIT_STATUSES = new Set(["available", "reserved", "under_offer"]);
-
-const finiteNumbers = (values: Array<number | null | undefined>) =>
-  values.filter((value): value is number => Number.isFinite(value) && Number(value) > 0);
-
-const averageNumber = (values: number[]): number | null => {
-  if (!values.length) return null;
-  return values.reduce((sum, value) => sum + value, 0) / values.length;
-};
-
-const roundNumber = (value: number, precision = 0): number => {
-  const factor = 10 ** precision;
-  return Math.round(value * factor) / factor;
-};
-
-const getPositiveNumber = (value: number | null | undefined): number | null => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-};
-
-const buildProjectValuationMetrics = (
-  units: NewBuildProjectUnit[],
-  listing: NewBuildListing | null | undefined,
-) => {
-  const unitSizes = finiteNumbers(units.map((unit) => unit.internal_sqm));
-  const unitPrices = finiteNumbers(units.map((unit) => unit.price));
-  const unitsWithPriceAndSize = units.filter((unit) => {
-    return getPositiveNumber(unit.price) != null && getPositiveNumber(unit.internal_sqm) != null;
-  });
-
-  const totalUnitPrice = unitsWithPriceAndSize.reduce((sum, unit) => sum + Number(unit.price), 0);
-  const totalUnitSqm = unitsWithPriceAndSize.reduce((sum, unit) => sum + Number(unit.internal_sqm), 0);
-  const weightedUnitPricePerSqm = totalUnitPrice > 0 && totalUnitSqm > 0
-    ? Math.round(totalUnitPrice / totalUnitSqm)
-    : null;
-  const averageUnitPricePerSqm = averageNumber(finiteNumbers(units.map((unit) => unit.price_per_sqm)));
-
-  const averageUnitSize = averageNumber(unitSizes);
-  const averageUnitPrice = averageNumber(unitPrices);
-  const listingPrice = getPositiveNumber(listing?.price);
-  const listingSqm = getPositiveNumber(listing?.sqm);
-  const listingPricePerSqm = getPositiveNumber(listing?.price_per_sqm);
-
-  return {
-    price: averageUnitPrice != null ? Math.round(averageUnitPrice) : listingPrice ?? 0,
-    sqm: averageUnitSize != null ? roundNumber(averageUnitSize, 1) : listingSqm ?? 0,
-    pricePerSqm: weightedUnitPricePerSqm ?? (averageUnitPricePerSqm != null ? Math.round(averageUnitPricePerSqm) : listingPricePerSqm ?? undefined),
-  };
-};
-
-const formatValueRange = (values: number[], unit = ""): string | null => {
-  if (!values.length) return null;
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const suffix = unit ? ` ${unit}` : "";
-  return min === max ? `${min}${suffix}` : `${min}-${max}${suffix}`;
-};
-
-const formatPriceRange = (values: number[]): string | null => {
-  if (!values.length) return null;
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  return min === max ? formatPrice(min) : `${formatPrice(min)} - ${formatPrice(max)}`;
-};
-
-const formatLayoutRange = (beds: number[], baths: number[]): string | null => {
-  const bedRange = formatValueRange(beds);
-  const bathRange = formatValueRange(baths);
-  if (bedRange && bathRange) return `${bedRange} bed · ${bathRange} bath`;
-  if (bedRange) return `${bedRange} bed`;
-  if (bathRange) return `${bathRange} bath`;
-  return null;
-};
-
-const formatVatSummary = (units: NewBuildProjectUnit[]): string | null => {
-  const flags = units
-    .map((unit) => unit.vat_included)
-    .filter((value): value is boolean => typeof value === "boolean");
-  if (!flags.length) return null;
-  const hasIncluded = flags.includes(true);
-  const hasExcluded = flags.includes(false);
-  if (hasIncluded && hasExcluded) return "VAT varies by unit";
-  return hasIncluded ? "VAT included" : "VAT not included";
-};
-
-const formatProjectDate = (date: string | null | undefined): string | null => {
-  if (!date) return null;
-  const parsed = new Date(date);
-  if (Number.isNaN(parsed.getTime())) return date;
-  return new Intl.DateTimeFormat("en-GB", { month: "short", year: "numeric" }).format(parsed);
 };
 
 function ProjectOverview({

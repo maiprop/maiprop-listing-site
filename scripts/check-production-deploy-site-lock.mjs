@@ -6,11 +6,53 @@ const normalizeSecret = (value) => {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : "";
 };
 
+const firstSecret = (env, names) => {
+  for (const name of names) {
+    const value = normalizeSecret(env[name]);
+    if (value) return value;
+  }
+  return "";
+};
+
 export const getSiteLockPassword = (env = process.env) => {
   return (
     normalizeSecret(env.PRODUCTION_DEPLOY_SITE_LOCK_PASSWORD) ||
     normalizeSecret(env.SITE_LOCK_PASSWORD)
   );
+};
+
+export const getCloudflareAccessHeaders = (env = process.env) => {
+  const clientId = firstSecret(env, [
+    "PRODUCTION_DEPLOY_CF_ACCESS_CLIENT_ID",
+    "CF_ACCESS_CLIENT_ID",
+    "CLOUDFLARE_ACCESS_CLIENT_ID",
+  ]);
+  const clientSecret = firstSecret(env, [
+    "PRODUCTION_DEPLOY_CF_ACCESS_CLIENT_SECRET",
+    "CF_ACCESS_CLIENT_SECRET",
+    "CLOUDFLARE_ACCESS_CLIENT_SECRET",
+  ]);
+  const accessToken = firstSecret(env, [
+    "PRODUCTION_DEPLOY_CF_ACCESS_TOKEN",
+    "CF_ACCESS_TOKEN",
+    "CLOUDFLARE_ACCESS_TOKEN",
+  ]);
+
+  if (Boolean(clientId) !== Boolean(clientSecret)) {
+    throw new Error(
+      "Cloudflare Access deploy checks require both client id and client secret.",
+    );
+  }
+
+  return {
+    ...(clientId && clientSecret
+      ? {
+          "CF-Access-Client-Id": clientId,
+          "CF-Access-Client-Secret": clientSecret,
+        }
+      : {}),
+    ...(accessToken ? { "cf-access-token": accessToken } : {}),
+  };
 };
 
 export const sha256Hex = (input) => {

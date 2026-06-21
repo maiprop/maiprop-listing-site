@@ -192,6 +192,9 @@ fail-fast behavior.
 | `GITLEAKS_LICENSE` | optional Gitleaks license for enhanced scanning | repo |
 | `CLOUDFLARE_API_TOKEN` | Cloudflare Pages production/preview deploy | production environment |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account for Pages deploy | production environment |
+| `CF_ACCESS_CLIENT_ID` / `CLOUDFLARE_ACCESS_CLIENT_ID` | optional Cloudflare Access service-token client id for protected preview/production deploy smoke checks | repo or environment scoped to deploy jobs |
+| `CF_ACCESS_CLIENT_SECRET` / `CLOUDFLARE_ACCESS_CLIENT_SECRET` | optional Cloudflare Access service-token secret paired with the client id above; required when either client-id alias is set | repo or environment scoped to deploy jobs |
+| `CF_ACCESS_TOKEN` / `CLOUDFLARE_ACCESS_TOKEN` | optional pre-issued Cloudflare Access JWT for deploy smoke checks when service-token headers are not used | repo or environment scoped to deploy jobs |
 | `VITE_SUPABASE_URL` | production Vite build Supabase URL | production environment |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | production Vite build anon/publishable key | production environment |
 | `VITE_SUPABASE_PROJECT_ID` | production Supabase project ref | production environment |

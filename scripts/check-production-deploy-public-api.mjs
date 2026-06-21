@@ -59,9 +59,14 @@ async function validateJsonApiPath(baseUrl, path, { assertOk, fetchText }) {
     headers: { accept: "application/json" },
   });
   const contentType = res.headers.get("content-type") ?? "";
+  const htmlFallback =
+    /text\/html/i.test(contentType) &&
+    /<html|<div id=["']root["']|cloudflare access|private preview/i.test(text);
   assertOk(
     /application\/json/i.test(contentType),
-    `${apiUrl} returned ${contentType || "<missing>"} instead of JSON`,
+    htmlFallback
+      ? `${apiUrl} returned HTML instead of JSON; the Cloudflare Pages Function was not invoked or failed open to the SPA fallback`
+      : `${apiUrl} returned ${contentType || "<missing>"} instead of JSON`,
   );
 
   let body;

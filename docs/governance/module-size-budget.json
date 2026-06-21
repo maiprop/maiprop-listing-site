@@ -10,18 +10,18 @@
   "legacyExceptions": [
     {
       "path": "src/pages/Dashboard.tsx",
-      "allowedMaxBytes": 70000,
+      "allowedMaxBytes": 58000,
       "owner": "app-web",
       "targetPackage": "apps/web",
-      "refactorStrategy": "Split dashboard sections into feature components before moving the app shell.",
+      "refactorStrategy": "Seller Quick Sale panel is extracted to src/components/dashboard/SellerQuickSalePanel.tsx; next split dashboard overview metrics and trial CTA sections into feature components before moving the app shell.",
       "reviewBy": "2026-07-31"
     },
     {
       "path": "src/pages/NewBuildDetail.tsx",
-      "allowedMaxBytes": 65000,
+      "allowedMaxBytes": 52000,
       "owner": "app-web",
       "targetPackage": "apps/web",
-      "refactorStrategy": "Extract valuation, neighbourhood report, inventory, and lead widgets into route-local components.",
+      "refactorStrategy": "Project/unit sorting and valuation metrics are extracted to src/lib/newBuildProjectDetail.ts; next extract valuation, neighbourhood report, and lead widgets into route-local components.",
       "reviewBy": "2026-07-31"
     },
     {
