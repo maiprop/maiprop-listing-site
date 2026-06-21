@@ -145,6 +145,21 @@ describe("production deploy public API fixture guard", () => {
     expect(calls).toContain("https://portal.maiprop.co/api/public/listing?id=new-build-1");
     expect(calls).toContain("https://portal.maiprop.co/api/public/listing?id=auction-1");
   });
+
+  it("reports Cloudflare Pages fail-open HTML when public API functions are not invoked", async () => {
+    const { validatePublicApiEndpoints } = await import("./check-production-deploy-public-api.mjs");
+
+    await expect(validatePublicApiEndpoints("https://portal.maiprop.co", {
+      fetchText: async (url) => ({
+        res: new Response("<!doctype html><div id=\"root\"></div>", {
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        }),
+        text: "<!doctype html><div id=\"root\"></div>",
+      }),
+    })).rejects.toThrow(
+      "https://portal.maiprop.co/api/public/listings?limit=1 returned HTML instead of JSON; the Cloudflare Pages Function was not invoked or failed open to the SPA fallback",
+    );
+  });
 });
 
 describe("production deploy version marker", () => {

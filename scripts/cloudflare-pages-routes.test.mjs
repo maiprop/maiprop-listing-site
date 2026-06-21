@@ -22,6 +22,20 @@ describe("Cloudflare Pages function routes", () => {
     expect(routes.exclude ?? []).not.toContain("/sitemap-dynamic.xml");
     expect(routes.exclude ?? []).not.toContain("/__unlock");
   });
+
+  it("excludes static assets from Pages Functions to protect the free invocation budget", () => {
+    const routes = JSON.parse(readFileSync(routesPath, "utf8"));
+
+    expect(routes.exclude).toEqual(expect.arrayContaining([
+      "/assets/*",
+      "/docs/*",
+      "/images/*",
+      "/lovable-uploads/*",
+      "/favicon.ico",
+      "/robots.txt",
+      "/sitemap.xml",
+    ]));
+  });
 });
 
 describe("Cloudflare Pages deploy workflow routing", () => {
@@ -67,6 +81,9 @@ describe("Cloudflare Pages deploy workflow routing", () => {
     expect(buildScript).toContain('routePath: "/api/public/listings"');
     expect(buildScript).toContain('"_worker.js"');
     expect(buildScript).toContain('"_routes.json"');
+    expect(buildScript).toContain("curatedRoutesPath");
+    expect(buildScript).toContain("requiredStaticExcludes");
+    expect(buildScript).toContain("Generated _routes.json would not invoke the Pages Function");
 
     const productionPackageIndex = productionWorkflow.indexOf("Package Cloudflare Pages Functions worker");
     const productionDeployIndex = productionWorkflow.indexOf("Deploy to Cloudflare Pages (production)");

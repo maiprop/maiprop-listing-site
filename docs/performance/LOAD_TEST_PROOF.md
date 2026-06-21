@@ -25,6 +25,13 @@ is set and operations has approved the window. The script writes
 normalized `load-test-summary.json` output and a raw
 `load-test-raw-summary.json` backup for evidence retention.
 
+High-volume `growth_10x` and `enterprise_soak` runs against Cloudflare Pages
+hosts also require `LOAD_TEST_APPROVED_CLOUDFLARE_QUOTA_BURN=true`. These runs
+can consume the Pages Functions daily invocation budget and can cause
+fail-open SPA HTML responses on API routes when the project is configured to
+fail open. Prefer local, staging, or provider-isolated load targets for routine
+capacity proof.
+
 ## Diagnostics
 
 The normalized summary includes aggregate thresholds and per-route diagnostics
@@ -53,6 +60,8 @@ on other profiles.
   `enterprise_soak`.
 - `maiprop.co` and `*.maiprop.co` hosts are blocked unless
   `LOAD_TEST_APPROVED_PRODUCTION=true` is set.
+- Cloudflare Pages `growth_10x` and `enterprise_soak` runs are blocked unless
+  `LOAD_TEST_APPROVED_CLOUDFLARE_QUOTA_BURN=true` is set.
 - Route-level p95/error thresholds are emitted for the home page, listings,
   auctions, pricing, public listings API, public open houses API, and dynamic
   sitemap.

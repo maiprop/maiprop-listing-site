@@ -47,6 +47,36 @@ describe("perf k6 wrapper", () => {
     expect(result.config.productionHost).toBe(true);
   });
 
+  it("blocks high-volume Cloudflare Pages runs without a quota-burn approval", () => {
+    const result = validateK6RunConfig({
+      env: {
+        BASE_URL: "https://codex-preview.maiprop-listing-site.pages.dev",
+        ECAS_LOAD_PROFILE: "growth_10x",
+      },
+      argv: [],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.failures).toContain(
+      "Cloudflare Pages growth_10x/enterprise_soak runs require LOAD_TEST_APPROVED_CLOUDFLARE_QUOTA_BURN=true.",
+    );
+  });
+
+  it("allows high-volume Cloudflare Pages runs only with explicit quota-burn approval", () => {
+    const result = validateK6RunConfig({
+      env: {
+        BASE_URL: "https://codex-preview.maiprop-listing-site.pages.dev",
+        ECAS_LOAD_PROFILE: "enterprise_soak",
+        LOAD_TEST_APPROVED_CLOUDFLARE_QUOTA_BURN: "true",
+      },
+      argv: [],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.config.cloudflarePagesHost).toBe(true);
+    expect(result.config.cloudflareQuotaBurnApproved).toBe(true);
+  });
+
   it("builds a k6 command with normalized environment and artifact directory", () => {
     const plan = buildK6RunPlan({
       env: {},

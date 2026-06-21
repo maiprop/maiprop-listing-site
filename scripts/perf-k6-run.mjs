@@ -42,12 +42,25 @@ export function isProductionHost(hostname) {
   return hostname === "maiprop.co" || hostname.endsWith(".maiprop.co");
 }
 
+function isCloudflarePagesHost(hostname) {
+  return (
+    hostname === "maiprop-listing-site.pages.dev" ||
+    hostname.endsWith(".maiprop-listing-site.pages.dev") ||
+    isProductionHost(hostname)
+  );
+}
+
+function isHighVolumeProfile(profile) {
+  return profile === "growth_10x" || profile === "enterprise_soak";
+}
+
 export function validateK6RunConfig({ env = process.env, argv = process.argv.slice(2) } = {}) {
   const failures = [];
   const requestedBaseUrl = clean(readArg(argv, "--base-url") || env.BASE_URL);
   const requestedProfile = clean(readArg(argv, "--profile") || env.ECAS_LOAD_PROFILE);
   const summaryDir = clean(readArg(argv, "--summary-dir") || env.LOAD_TEST_SUMMARY_DIR || DEFAULT_SUMMARY_DIR);
   const productionApproved = env.LOAD_TEST_APPROVED_PRODUCTION === "true";
+  const cloudflareQuotaBurnApproved = env.LOAD_TEST_APPROVED_CLOUDFLARE_QUOTA_BURN === "true";
 
   if (!requestedBaseUrl) {
     failures.push("BASE_URL is required. Set BASE_URL or pass --base-url.");
@@ -61,11 +74,14 @@ export function validateK6RunConfig({ env = process.env, argv = process.argv.sli
 
   let baseUrl = requestedBaseUrl;
   let productionHost = false;
+  let cloudflarePagesHost = false;
 
   if (requestedBaseUrl) {
     try {
       baseUrl = normalizeBaseUrl(requestedBaseUrl);
-      productionHost = isProductionHost(new URL(baseUrl).hostname);
+      const hostname = new URL(baseUrl).hostname;
+      productionHost = isProductionHost(hostname);
+      cloudflarePagesHost = isCloudflarePagesHost(hostname);
     } catch (error) {
       failures.push(error instanceof Error ? error.message : "BASE_URL is invalid.");
     }
@@ -74,6 +90,9 @@ export function validateK6RunConfig({ env = process.env, argv = process.argv.sli
   if (productionHost && !productionApproved) {
     failures.push("Production load tests require LOAD_TEST_APPROVED_PRODUCTION=true.");
   }
+  if (cloudflarePagesHost && isHighVolumeProfile(requestedProfile) && !cloudflareQuotaBurnApproved) {
+    failures.push("Cloudflare Pages growth_10x/enterprise_soak runs require LOAD_TEST_APPROVED_CLOUDFLARE_QUOTA_BURN=true.");
+  }
 
   return result(failures, {
     baseUrl,
@@ -81,6 +100,8 @@ export function validateK6RunConfig({ env = process.env, argv = process.argv.sli
     summaryDir,
     productionApproved,
     productionHost,
+    cloudflarePagesHost,
+    cloudflareQuotaBurnApproved,
   });
 }
 
@@ -100,6 +121,11 @@ export function buildK6RunPlan(options = {}) {
     env.LOAD_TEST_APPROVED_PRODUCTION = "true";
   } else {
     delete env.LOAD_TEST_APPROVED_PRODUCTION;
+  }
+  if (validation.config.cloudflareQuotaBurnApproved) {
+    env.LOAD_TEST_APPROVED_CLOUDFLARE_QUOTA_BURN = "true";
+  } else {
+    delete env.LOAD_TEST_APPROVED_CLOUDFLARE_QUOTA_BURN;
   }
 
   return {
