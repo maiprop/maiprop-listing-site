@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.9.29](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.28...v1.9.29) (2026-06-21)
+
+
+### Bug Fixes
+
+* align cloudflare production branch ([#382](https://github.com/maiprop/maiprop-listing-site/issues/382)) ([c18087f](https://github.com/maiprop/maiprop-listing-site/commit/c18087f66810a3c2713d2abc032cdb56153f73fc))
+* deploy cloudflare pages to production ([#381](https://github.com/maiprop/maiprop-listing-site/issues/381)) ([741df4c](https://github.com/maiprop/maiprop-listing-site/commit/741df4ca8984d606e7ad51bf76ad98352a73ed7e))
+* deploy cloudflare production alias ([#383](https://github.com/maiprop/maiprop-listing-site/issues/383)) ([3988d2d](https://github.com/maiprop/maiprop-listing-site/commit/3988d2d77becd05294266cc3f238a3531a4bd0b1))
+* harden cloudflare stable deploy checks ([#385](https://github.com/maiprop/maiprop-listing-site/issues/385)) ([efcca4f](https://github.com/maiprop/maiprop-listing-site/commit/efcca4f3055091b572b5309f0254c61c68be99a7))
+* package cloudflare pages worker ([#384](https://github.com/maiprop/maiprop-listing-site/issues/384)) ([8a8fb6b](https://github.com/maiprop/maiprop-listing-site/commit/8a8fb6bbbf2f651824280d8f034e8a164549aa49))
+* route cloudflare pages functions ([#379](https://github.com/maiprop/maiprop-listing-site/issues/379)) ([fa2033d](https://github.com/maiprop/maiprop-listing-site/commit/fa2033df7a4af35d039a6b25721b839d57ac9129))
+* stabilize auth email hook dependency ([#386](https://github.com/maiprop/maiprop-listing-site/issues/386)) ([376b63a](https://github.com/maiprop/maiprop-listing-site/commit/376b63ad831e4cb38b05825e9953d84706ef72a4))
+
 ## [1.9.28](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.27...v1.9.28) (2026-06-19)
 
 
