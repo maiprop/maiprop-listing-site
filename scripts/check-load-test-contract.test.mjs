@@ -135,7 +135,7 @@ describe("load test contract", () => {
     expect(result.failures.join("\n")).toContain("scripts/load-test/basic.js must write normalized load-test-summary.json output");
   });
 
-  it("requires availability error rate to come from the status-only check", () => {
+  it("requires availability error rate to include Cloudflare Access login detection", () => {
     const root = makeFixture(contractScript({
       extra: `
         const ok = check(res, {
@@ -149,6 +149,28 @@ describe("load test contract", () => {
     const result = checkLoadTestContract(root);
 
     expect(result.ok).toBe(false);
-    expect(result.failures.join("\n")).toContain("scripts/load-test/basic.js must keep availability errorRate scoped to the status-only check");
+    expect(result.failures.join("\n")).toContain("scripts/load-test/basic.js must fail availability when status is bad or Cloudflare Access login is served");
+  });
+
+  it("requires Cloudflare Access service-token support for protected previews", () => {
+    const root = makeFixture(contractScript());
+
+    const result = checkLoadTestContract(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("scripts/load-test/basic.js must support Cloudflare Access service-token headers for protected previews");
+    expect(result.failures.join("\n")).toContain("scripts/load-test/basic.js must reject Cloudflare Access login-page responses");
+  });
+
+  it("requires explicit per-route metrics for growth_10x failure isolation", () => {
+    const root = makeFixture(contractScript());
+
+    const result = checkLoadTestContract(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("scripts/load-test/basic.js must record route_http_req_duration");
+    expect(result.failures.join("\n")).toContain("scripts/load-test/basic.js must record route_http_req_failed");
+    expect(result.failures.join("\n")).toContain("scripts/load-test/basic.js must record route_errors");
+    expect(result.failures.join("\n")).toContain("scripts/load-test/basic.js must record route_http_reqs");
   });
 });

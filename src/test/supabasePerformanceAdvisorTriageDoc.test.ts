@@ -5,7 +5,7 @@ const doc = readFileSync("docs/SUPABASE_PERFORMANCE_ADVISOR_TRIAGE.md", "utf8");
 
 describe("Supabase performance advisor triage documentation", () => {
   it("tracks the current remediation chain instead of the historical no-op triage", () => {
-    expect(doc).toContain("Last reviewed:** 2026-06-19");
+    expect(doc).toContain("Last reviewed:** 2026-06-21");
     expect(doc).toContain("Current Repository-Remediated State");
     expect(doc).toContain("20260707143000_consolidate_public_media_rls.sql");
     expect(doc).toContain("20260707150000_reduce_advisor_policy_noise.sql");
@@ -14,6 +14,7 @@ describe("Supabase performance advisor triage documentation", () => {
     expect(doc).toContain("20260707153000_consolidate_firesale_advisor_policies.sql");
     expect(doc).toContain("20260707159000_fix_staging_advisor_drift.sql");
     expect(doc).toContain("20260707168000_cleanup_stale_advisor_indexes.sql");
+    expect(doc).toContain("20260621085826_cleanup_low_risk_advisor_indexes.sql");
     expect(doc).not.toContain("No policy consolidation in this PR");
   });
 

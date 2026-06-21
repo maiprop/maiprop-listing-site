@@ -41,6 +41,9 @@ mai-pro-os/
 supabase/.temp/
 supabase/.branches/
 
+# Cloudflare local temp/state (generated)
+.wrangler/
+
 # Test artifacts
 coverage/
 .coverage-runs/
@@ -78,6 +81,8 @@ src/integrations/supabase/types.ts.bak
 # Audit/assessment artifacts (regenerable)
 .tmp/
 .codex-remote-attachments/
+artifacts/performance/k6/local-*/
+artifacts/performance/k6/protected-preview-*/
 .sbom-*.json
 .complexity-report.json
 .madge-report.json

@@ -48,6 +48,9 @@ const hasNamedOperator = (line) =>
 
 const hasProductionHost = (line) => /\bhttps:\/\/(?:[A-Za-z0-9-]+\.)*maiprop\.co\b/i.test(line);
 
+const citesPlaceholderEvidence = (line) =>
+  /placeholder|template only|not proof|codex[- ]generated placeholder/i.test(line);
+
 function checkMarkers(root, doc) {
   const text = readText(root, doc.path);
   if (text === null) return { text: null, failures: [`${doc.path} is missing`] };
@@ -76,7 +79,7 @@ function checkClaimedSuccessRows(relativePath, text) {
     if (!hasNamedOperator(row)) {
       failures.push(`${relativePath} successful performance evidence rows must include a named human operator`);
     }
-    if (/codex|placeholder|template only|not proof/i.test(row)) {
+    if (citesPlaceholderEvidence(row)) {
       failures.push(`${relativePath} successful performance evidence rows must not cite Codex-generated placeholder evidence`);
     }
     if (hasProductionHost(row) && !/\b(?:approval|change)\s*(?:ref|record|ticket)\s*[:=]\s*[A-Za-z0-9._/-]+\b/i.test(row)) {

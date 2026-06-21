@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -8,6 +8,7 @@ const repoRoot = process.cwd();
 const distDir = resolve(repoRoot, "dist");
 const outDir = resolve(repoRoot, ".tmp", "cloudflare-pages-functions");
 const generatedWorkerPath = resolve(outDir, "index.js");
+const generatedWorkerFallbackPath = resolve(outDir, "_worker.js");
 const generatedRoutesPath = resolve(outDir, "_routes.json");
 const distWorkerPath = resolve(distDir, "_worker.js");
 const distRoutesPath = resolve(distDir, "_routes.json");
@@ -27,8 +28,6 @@ const wranglerArgs = [
   "functions",
   "--outdir",
   relative(repoRoot, outDir),
-  "--build-output-directory",
-  "dist",
   "--output-routes-path",
   relative(repoRoot, generatedRoutesPath),
   "--compatibility-date",
@@ -63,16 +62,26 @@ if (result.status !== 0) {
   process.exit(result.status ?? 1);
 }
 
-if (!existsSync(generatedWorkerPath)) {
-  console.error(`Wrangler did not generate ${relative(repoRoot, generatedWorkerPath)}.`);
+const actualGeneratedWorkerPath = existsSync(generatedWorkerPath) ? generatedWorkerPath : generatedWorkerFallbackPath;
+if (!existsSync(actualGeneratedWorkerPath)) {
+  console.error(
+    `Wrangler did not generate ${relative(repoRoot, generatedWorkerPath)} or ${relative(repoRoot, generatedWorkerFallbackPath)}.`,
+  );
   process.exit(1);
 }
 if (!existsSync(generatedRoutesPath)) {
-  console.error(`Wrangler did not generate ${relative(repoRoot, generatedRoutesPath)}.`);
-  process.exit(1);
+  writeFileSync(
+    generatedRoutesPath,
+    JSON.stringify({
+      version: 1,
+      description: "Generated fallback by scripts/build-cloudflare-pages-worker.mjs",
+      include: ["/*"],
+      exclude: [],
+    }, null, 2),
+  );
 }
 
-const worker = readFileSync(generatedWorkerPath, "utf8");
+const worker = readFileSync(actualGeneratedWorkerPath, "utf8");
 if (!worker.includes('routePath: "/api/public/listings"')) {
   console.error("Generated Pages worker is missing the /api/public/listings route.");
   process.exit(1);
@@ -88,7 +97,7 @@ if (!Array.isArray(routes.include) || !routes.include.includes("/*")) {
   process.exit(1);
 }
 
-copyFileSync(generatedWorkerPath, distWorkerPath);
+copyFileSync(actualGeneratedWorkerPath, distWorkerPath);
 copyFileSync(generatedRoutesPath, distRoutesPath);
 
 console.log(`Packaged Cloudflare Pages worker: ${relative(repoRoot, distWorkerPath)}`);

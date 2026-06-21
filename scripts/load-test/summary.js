@@ -23,6 +23,21 @@ function metricValue(data, metricName, valueName) {
   return typeof value === "number" ? value : null;
 }
 
+function firstMetricValue(data, metricNames, valueName) {
+  for (const metricName of metricNames) {
+    const value = metricValue(data, metricName, valueName);
+    if (value !== null) return value;
+  }
+  return null;
+}
+
+function routeMetricValue(data, routeName, metricName, valueName) {
+  return firstMetricValue(data, [
+    routeMetricName(`route_${metricName}`, routeName),
+    routeMetricName(metricName, routeName),
+  ], valueName);
+}
+
 function threshold(name, actual, budget) {
   return {
     name,
@@ -46,17 +61,17 @@ function routeSummary(data, route, baseUrl) {
   const thresholds = [
     threshold(
       "http_req_duration_p95_ms",
-      metricValue(data, routeMetricName("http_req_duration", route.name), "p(95)"),
+      routeMetricValue(data, route.name, "http_req_duration", "p(95)"),
       LOAD_TEST_BUDGETS.httpReqDurationP95Ms,
     ),
     threshold(
       "http_req_failed_rate",
-      metricValue(data, routeMetricName("http_req_failed", route.name), "rate"),
+      routeMetricValue(data, route.name, "http_req_failed", "rate"),
       LOAD_TEST_BUDGETS.httpReqFailedRate,
     ),
     threshold(
       "errors_rate",
-      metricValue(data, routeMetricName("errors", route.name), "rate"),
+      routeMetricValue(data, route.name, "errors", "rate"),
       LOAD_TEST_BUDGETS.errorsRate,
     ),
   ];
@@ -67,7 +82,7 @@ function routeSummary(data, route, baseUrl) {
     url: routeUrl(baseUrl, route.path),
     status: routeStatus(thresholds),
     traffic: {
-      totalRequests: metricValue(data, routeMetricName("http_reqs", route.name), "count"),
+      totalRequests: routeMetricValue(data, route.name, "http_reqs", "count"),
     },
     thresholds,
   };

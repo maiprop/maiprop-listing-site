@@ -64,6 +64,24 @@ describe("performance evidence contract", () => {
     expect(result.failures.join("\n")).toContain("successful performance evidence rows must not cite Codex-generated placeholder evidence");
   });
 
+  it("accepts successful protected preview rows whose branch hostname includes codex", () => {
+    const root = makeFixture({
+      loadTestEvidence: [
+        "# Performance Load Test Evidence",
+        "| Date | Environment | Profile | Base URL | Normalized summary artifact | Evidence status | Operator | Notes |",
+        "|---|---|---|---|---|---|---|---|",
+        "| 2026-06-21 | Protected preview | growth_10x | https://codex-fix-growth-load-proof.maiprop-listing-site.pages.dev | `artifacts/performance/k6/protected-preview-growth-20260621T1154Z/load-test-summary.json` | Successful | @krenios request | run timestamp: 2026-06-21T11:54:43Z; artifact SHA256: 2073d73ca5e211add6c09b871a37b1999873c425b1fe4c8a8b534992197357e8; release SHA: 52995a54b48f6baa62a65d20ca0a39170d4bfc62; monitoring window: local k6 stdout and normalized summary. |",
+        "| 2026-06-21 | Protected preview | enterprise_soak | Pending run completion | Pending operator execution | Pending operator execution | Pending operator execution | Not yet accepted as soak proof. |",
+        "Required live evidence fields: run timestamp, operator, BASE_URL, ECAS_LOAD_PROFILE, k6 command, normalized summary artifact, artifact SHA256, release SHA, monitoring window, and production approval record when applicable.",
+      ].join("\n"),
+    });
+
+    const result = checkPerformanceEvidenceContract(root);
+
+    expect(result.ok).toBe(true);
+    expect(result.failures).toEqual([]);
+  });
+
   it("requires both the performance and DORA evidence templates", () => {
     const result = checkPerformanceEvidenceContract(mkdtempSync(join(tmpdir(), "maiprop-perf-missing-")));
 

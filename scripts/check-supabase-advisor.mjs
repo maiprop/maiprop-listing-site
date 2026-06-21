@@ -6,6 +6,10 @@ import {
   classifyAdvisorDebt,
   loadAdvisorDebtPolicy,
 } from "./supabase-advisor-debt.mjs";
+import {
+  buildAdvisorStepSummary,
+  computeAdvisorActionability,
+} from "./supabase-advisor-summary.mjs";
 
 const args = process.argv.slice(2);
 
@@ -180,6 +184,10 @@ const unusedIndexReview = buildUnusedIndexReview(
   { results },
   await readIndexStats(indexStatsPath),
 );
+const advisorActionability = computeAdvisorActionability({
+  failingLintCount,
+  advisorDebt,
+});
 
 const summary = {
   generated_at: new Date().toISOString(),
@@ -190,6 +198,8 @@ const summary = {
   allow_transient_unavailable: allowTransientUnavailable,
   totals,
   failing_lint_count: failingLintCount,
+  actionable_lint_count: advisorActionability.actionable_lint_count,
+  known_debt_count: advisorActionability.known_debt_count,
   transient_advisor_unavailable: transientAdvisorUnavailable,
   advisor_debt: advisorDebt,
   unused_index_review: unusedIndexReview,
@@ -201,63 +211,16 @@ if (outPath) await writeFile(outPath, json);
 console.log(json);
 
 if (process.env.GITHUB_STEP_SUMMARY) {
-  const rows = results
-    .map((result) => {
-      const status = result.unavailable ? " (transient unavailable)" : "";
-      return `| ${result.category}${status} | ${result.lint_count} |`;
-    })
-    .join("\n");
-  const unavailableRows = transientAdvisorUnavailable
-    .map((result) => `| ${result.category} | ${result.http_status} | ${result.reason} |`)
-    .join("\n");
   await appendFile(
     process.env.GITHUB_STEP_SUMMARY,
-    [
-      "## Supabase Advisor",
-      "",
-      `Project: \`${projectRef}\``,
-      "",
-      "| Category | Lints |",
-      "|---|---:|",
-      rows,
-      "",
-      `Failing severity lints: ${failingLintCount}`,
-      "",
-      "### Advisor Debt",
-      "",
-      "| Status | Count |",
-      "|---|---:|",
-      `| Accepted | ${advisorDebt.accepted_count} |`,
-      `| Needs review | ${advisorDebt.review_count} |`,
-      `| Unknown | ${advisorDebt.unknown_count} |`,
-      "",
-      "### Unused Index Review",
-      "",
-      "| Status | Count |",
-      "|---|---:|",
-      `| Advisor lints | ${unusedIndexReview.totals.unused_index_lints} |`,
-      `| Mapped to pg_stat_user_indexes | ${unusedIndexReview.totals.mapped_to_stats} |`,
-      `| With scans | ${unusedIndexReview.totals.with_scans} |`,
-      `| Zero-scan candidates needing extra review | ${unusedIndexReview.totals.zero_scan_candidates} |`,
-      `| Managed-schema indexes, do not drop from advisor alone | ${unusedIndexReview.totals.managed_schema_indexes} |`,
-      `| Protected constraint/unique indexes, do not drop | ${unusedIndexReview.totals.protected_indexes} |`,
-      `| Public write-path candidates needing query-plan review | ${unusedIndexReview.totals.write_path_candidates} |`,
-      `| Needs stats snapshot | ${unusedIndexReview.totals.needs_stats_snapshot} |`,
-      `| Needs manual mapping | ${unusedIndexReview.totals.needs_manual_mapping} |`,
-      "",
-      ...(transientAdvisorUnavailable.length
-        ? [
-            "### Transient Advisor Unavailability",
-            "",
-            "Supabase Management API advisor checks timed out. This is recorded as release evidence and does not suppress real advisor findings when the API responds.",
-            "",
-            "| Category | HTTP status | Reason |",
-            "|---|---:|---|",
-            unavailableRows,
-            "",
-          ]
-        : []),
-    ].join("\n"),
+    buildAdvisorStepSummary({
+      projectRef,
+      results,
+      failingLintCount,
+      advisorDebt,
+      unusedIndexReview,
+      transientAdvisorUnavailable,
+    }),
   );
 }
 
