@@ -14,7 +14,11 @@ afterEach(() => {
   }
 });
 
-function runAdvisorScript(apiBase: string, extraArgs: string[] = []) {
+function runAdvisorScript(
+  apiBase: string,
+  extraArgs: string[] = [],
+  extraEnv: Record<string, string> = {},
+) {
   const tempDir = mkdtempSync(join(tmpdir(), "maiprop-advisor-"));
   tempDirs.push(tempDir);
   const outPath = join(tempDir, "advisor.json");
@@ -35,6 +39,7 @@ function runAdvisorScript(apiBase: string, extraArgs: string[] = []) {
         SUPABASE_ACCESS_TOKEN: "test-access-token",
         SUPABASE_PROJECT_REF: "test-project-ref",
         SUPABASE_MANAGEMENT_API_BASE: apiBase,
+        ...extraEnv,
       },
     });
 

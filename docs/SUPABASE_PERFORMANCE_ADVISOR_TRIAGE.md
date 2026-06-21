@@ -1,6 +1,6 @@
 # Supabase Performance Advisor Triage
 
-**Last reviewed:** 2026-06-19
+**Last reviewed:** 2026-06-21
 **Project:** `qvvicunqcrwpioqnvzxf`
 **Gate:** `npm run check:supabase-advisor -- --fail-on-error --fail-on-unknown`
 
@@ -30,6 +30,15 @@ Live read-only verification on 2026-06-19:
 - `pg_stat_user_indexes` still shows zero-scan indexes, including protected and
   feature-scaffolding indexes, so index cleanup remains telemetry-gated.
 
+Post-merge Advisor artifact review on 2026-06-21:
+
+- Release-safety Advisor output had zero failing lints and zero unknown lints.
+- Remaining visible debt was one plan/dashboard-controlled Auth warning plus
+  `unused_index` INFO findings.
+- Three low-risk indexes had no current read path and retained safer lookup
+  indexes for the active code paths; they are removed by
+  `20260621085826_cleanup_low_risk_advisor_indexes.sql`.
+
 The latest source-controlled remediation chain is:
 
 | Migration | Scope |
@@ -42,6 +51,7 @@ The latest source-controlled remediation chain is:
 | `20260707153000_consolidate_firesale_advisor_policies.sql` | Consolidates Quick Sale interest/feed policies while preserving subscription gates. |
 | `20260707159000_fix_staging_advisor_drift.sql` | Reasserts missing index/function-grant hardening observed in staging drift. |
 | `20260707168000_cleanup_stale_advisor_indexes.sql` | Adds two useful lookup indexes and drops three left-prefix redundant indexes. |
+| `20260621085826_cleanup_low_risk_advisor_indexes.sql` | Drops three zero-scan helper indexes that do not serve current read paths while keeping project/user lookup indexes used by the app. |
 
 Regression tests cover the high-risk parts of this chain:
 

@@ -82,6 +82,7 @@ src/integrations/supabase/types.ts.bak
 .tmp/
 .codex-remote-attachments/
 artifacts/performance/k6/local-*/
+artifacts/performance/k6/protected-preview-*/
 .sbom-*.json
 .complexity-report.json
 .madge-report.json

@@ -30,6 +30,10 @@ const staleAdvisorIndexesMigration = readFileSync(
   resolve(process.cwd(), "supabase/migrations/20260707168000_cleanup_stale_advisor_indexes.sql"),
   "utf8",
 );
+const lowRiskAdvisorIndexesMigration = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/20260621085826_cleanup_low_risk_advisor_indexes.sql"),
+  "utf8",
+);
 
 describe("Supabase advisor cleanup migration", () => {
   it("revokes trigger-only security definer functions from API roles without touching public RPCs", () => {
@@ -116,5 +120,20 @@ describe("Supabase advisor cleanup migration", () => {
     expect(staleAdvisorIndexesMigration).toContain("firesale_interest_deal_id_investor_id_key");
     expect(staleAdvisorIndexesMigration).toContain("open_house_registrations_listing_id_requester_id_key");
     expect(staleAdvisorIndexesMigration).toContain("open_house_offers_listing_id_bidder_id_key");
+  });
+
+  it("drops only low-risk advisor indexes with no current read path", () => {
+    for (const indexName of [
+      "idx_project_views_viewed_at",
+      "idx_subscription_trial_claims_status",
+      "idx_subscription_trial_claims_customer_id",
+    ]) {
+      expect(lowRiskAdvisorIndexesMigration).toContain(`DROP INDEX IF EXISTS public.${indexName}`);
+    }
+
+    expect(lowRiskAdvisorIndexesMigration).toContain("idx_project_views_project");
+    expect(lowRiskAdvisorIndexesMigration).toContain("idx_subscription_trial_claims_user_id");
+    expect(lowRiskAdvisorIndexesMigration).not.toContain("DROP INDEX IF EXISTS public.idx_project_views_project");
+    expect(lowRiskAdvisorIndexesMigration).not.toContain("DROP INDEX IF EXISTS public.idx_subscription_trial_claims_user_id");
   });
 });
