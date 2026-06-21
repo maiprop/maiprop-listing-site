@@ -28,6 +28,7 @@ export const ListingCompareButton = <TListing extends ListingCard>({
       disabled={disabled}
       aria-label={label}
       aria-pressed={isSelected}
+      data-testid={`listing-compare-${listing.id}`}
       title={label}
       className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all md:h-8 md:w-8 ${
         isSelected

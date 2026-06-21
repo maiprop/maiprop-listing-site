@@ -456,11 +456,11 @@ test.describe("AI valuation model e2e coverage", () => {
 
     await page.goto("/listings");
     await expect(page.getByText("Compare Clean Market").first()).toBeVisible();
-    await page.getByRole("button", { name: /^Compare$/ }).nth(0).click({ force: true });
-    await page.getByRole("button", { name: /^Compare$/ }).nth(1).click({ force: true });
-    const compareDrawer = page.locator('div.fixed:has-text("2/3 properties")');
+    await page.getByTestId(`listing-compare-${COMPARE_CLEAN_ID}`).click();
+    await page.getByTestId(`listing-compare-${COMPARE_SPARSE_ID}`).click();
+    const compareDrawer = page.getByTestId("compare-drawer").filter({ hasText: "2/3 properties" });
     await expect(compareDrawer).toBeVisible();
-    await compareDrawer.getByRole("button", { name: /^Compare$/ }).click();
+    await compareDrawer.getByTestId("open-compare-modal").click();
 
     const dialog = page.getByRole("dialog", { name: /Property comparison/i });
     await expect(dialog).toBeVisible();

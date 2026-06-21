@@ -80,6 +80,7 @@ export function CompareDrawer({
   return (
     <div
       className="fixed left-0 right-0 z-[45] shadow-elevated"
+      data-testid="compare-drawer"
       style={{ bottom: "calc(var(--bottom-nav-h, 56px) + env(safe-area-inset-bottom, 0px))" }}
     >
       {/* ── collapsed bar ── */}
@@ -123,7 +124,12 @@ function CompareModal({ listings, onRemove }: { listings: Listing[]; onRemove: (
 
   return (
     <>
-      <Button size="sm" className="bg-gradient-primary border-0 text-primary-foreground gap-1.5 text-xs" onClick={() => setOpen(true)}>
+      <Button
+        size="sm"
+        className="bg-gradient-primary border-0 text-primary-foreground gap-1.5 text-xs"
+        data-testid="open-compare-modal"
+        onClick={() => setOpen(true)}
+      >
         Compare <ArrowRight className="w-3.5 h-3.5" />
       </Button>
 
