@@ -1,6 +1,6 @@
 # Live GitHub Admin Settings Evidence
 
-Last verified: 2026-06-20
+Last verified: 2026-06-22
 
 This file records the live GitHub controls that are not fully expressible in
 source code. Source gates still validate the expected policy files, but ECAS
@@ -54,3 +54,15 @@ Push protection: pending repository admin.
 The repository has source secret scanning with `npm run check:secrets` and
 gitleaks in CI. GitHub Advanced Security push protection still requires live
 repository/security settings and should be verified by a repository admin.
+
+## Latest Main Health
+
+Latest main workflow health was checked with GitHub CLI on 2026-06-22:
+
+- `Release Please` success for `chore(main): release 1.11.0 (#400)`
+- `CI` success for `chore(main): release 1.11.0 (#400)`
+- `CodeQL` success for `Code Quality: Push on main`
+
+The GitHub connector could not fetch workflow runs in this Codex session
+because the API returned `404 Not Found`; the CLI check is the authoritative
+local evidence for this verification pass.

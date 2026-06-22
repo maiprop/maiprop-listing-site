@@ -24,6 +24,7 @@ const makeFixture = () => {
   mkdirSync(join(root, "docs", "compliance", "dora"), { recursive: true });
   mkdirSync(join(root, "docs", "governance"), { recursive: true });
   mkdirSync(join(root, "docs", "performance"), { recursive: true });
+  mkdirSync(join(root, "e2e"), { recursive: true });
   mkdirSync(join(root, "scripts"), { recursive: true });
   mkdirSync(join(root, "scripts", "load-test"), { recursive: true });
   mkdirSync(join(root, "src", "hooks"), { recursive: true });
@@ -219,6 +220,18 @@ const makeFixture = () => {
       "Backup restore drill",
       "SAML/SSO configuration",
       "SOC 2 / ISO evidence is external and not claimed by this repository",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "e2e", "rls-security.spec.ts"),
+    [
+      "organization_memberships",
+      "organization_audit_ledger",
+      "direct org audit ledger insert",
+      "org member and non-member boundaries deny cross-org reads and forged membership writes",
+      "forged role update",
+      "forged organization_id update",
+      "platform admin tenant fixture read",
     ].join("\n"),
   );
   writeFileSync(join(root, "apps", "README.md"), "# Apps\n");
@@ -661,6 +674,17 @@ describe("enterprise readiness basics", () => {
     expect(result.failures.join("\n")).toContain("private.assert_org_permission");
     expect(result.failures.join("\n")).toContain("public.organization_audit_ledger");
     expect(result.failures.join("\n")).toContain("private.append_org_audit_event");
+  });
+
+  it("requires enterprise RLS/IDOR tests for org boundaries and audit-ledger denial", () => {
+    const root = makeFixture();
+    writeFileSync(join(root, "e2e", "rls-security.spec.ts"), "// missing org boundary proof\n");
+
+    const result = checkEnterpriseTenantContract(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("e2e/rls-security.spec.ts");
+    expect(result.failures.join("\n")).toContain("forged organization_id update");
   });
 
   it("includes the load-test contract in enterprise readiness", () => {
