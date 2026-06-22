@@ -9,6 +9,8 @@ const RUNNING_QUERY_BUDGET_GATE =
 const AUTH_STORAGE_KEY = "sb-abcdefghijklmnop-auth-token";
 const PERF_USER_ID = "00000000-0000-4000-8000-000000000001";
 const PERF_LISTING_ID = "00000000-0000-4000-8000-000000000101";
+const PERF_NEW_BUILD_ID = "00000000-0000-4000-8000-000000000201";
+const PERF_OPEN_HOUSE_ID = "00000000-0000-4000-8000-000000000301";
 
 type RequestCounts = {
   auth: number;
@@ -25,6 +27,8 @@ const QUERY_BUDGETS: Record<string, QueryBudget> = {
   "/listings": { auth: 2, rest: 10, functions: 2, total: 14 },
   "/pricing": { auth: 2, rest: 8, functions: 3, total: 13 },
   [`/property/${PERF_LISTING_ID}`]: { auth: 2, rest: 14, functions: 6, total: 20 },
+  [`/new-build/${PERF_NEW_BUILD_ID}`]: { auth: 3, rest: 14, functions: 6, total: 22 },
+  [`/open-house/${PERF_OPEN_HOUSE_ID}`]: { auth: 3, rest: 18, functions: 8, total: 28 },
   "/dashboard": { auth: 3, rest: 22, functions: 8, total: 30 },
   "/admin": { auth: 3, rest: 26, functions: 8, total: 34 },
 };
@@ -75,6 +79,70 @@ const perfListing = {
   ai_score: 82,
   priority_placement: 0,
   is_featured: false,
+};
+
+const perfNewBuildListing = {
+  ...perfListing,
+  id: PERF_NEW_BUILD_ID,
+  title: "Performance Gate New Build",
+  listing_type: "new_build",
+  property_type: "apartment",
+  price: 275000,
+  sqm: 52,
+  bedrooms: 1,
+  bathrooms: 1,
+  construction_status: "under_construction",
+  project_id: "00000000-0000-4000-8000-000000000202",
+  project: {
+    id: "00000000-0000-4000-8000-000000000202",
+    name: "Performance Gate Project",
+    city: "Athens",
+    municipality: "Athens",
+    address: "2 Performance Avenue",
+    latitude: 37.9838,
+    longitude: 23.7275,
+    delivery_date: "2027-06-01",
+    project_units: [
+      {
+        id: "00000000-0000-4000-8000-000000000203",
+        project_id: "00000000-0000-4000-8000-000000000202",
+        listing_id: PERF_NEW_BUILD_ID,
+        unit_number: "1",
+        floor: 1,
+        price: 275000,
+        internal_sqm: 52,
+        bedrooms: 1,
+        bathrooms: 1,
+        availability_status: "available",
+        energy_class: "A",
+        vat_included: true,
+      },
+    ],
+    project_media: [
+      {
+        id: "00000000-0000-4000-8000-000000000204",
+        project_id: "00000000-0000-4000-8000-000000000202",
+        url: "https://images.example.test/new-build.jpg",
+        media_type: "image",
+        title: "Hero",
+        sort_order: 0,
+      },
+    ],
+  },
+};
+
+const perfOpenHouseListing = {
+  ...perfListing,
+  id: PERF_OPEN_HOUSE_ID,
+  title: "Performance Gate Open House",
+  listing_type: "open_house",
+  open_house_transaction_type: "sale",
+  open_house_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+  price: 410000,
+  sqm: 104,
+  bedrooms: 3,
+  bathrooms: 2,
+  cover_image_url: "https://images.example.test/open-house.jpg",
 };
 
 function emptyCounts(): RequestCounts {
@@ -153,6 +221,9 @@ async function installAuthenticatedSupabaseMocks(page: Page, counts: RequestCoun
       return json(route, { data: [perfListing], hasMore: false, page: 1, pageSize: 24 });
     }
     if (url.pathname.endsWith("/listing")) {
+      const id = url.searchParams.get("id");
+      if (id === PERF_NEW_BUILD_ID) return json(route, { data: perfNewBuildListing });
+      if (id === PERF_OPEN_HOUSE_ID) return json(route, { data: perfOpenHouseListing });
       return json(route, { data: perfListing });
     }
     if (url.pathname.endsWith("/auctions")) {
@@ -174,6 +245,8 @@ async function installAuthenticatedSupabaseMocks(page: Page, counts: RequestCoun
     if (path.endsWith("/owner-pro-status")) return json(route, { isPro: true });
     if (path.endsWith("/check-subscription")) return json(route, { subscribed: false, product_id: null, subscription_end: null });
     if (path.endsWith("/ai-quota-status")) return json(route, { used: 0, limit: 10, remaining: 10 });
+    if (path.endsWith("/open-house-capacity")) return json(route, { capacity: 12, registrations: 0, remaining: 12, slots: [] });
+    if (path.endsWith("/record-listing-view")) return json(route, { ok: true });
     return json(route, {});
   });
 
@@ -198,6 +271,8 @@ async function installAuthenticatedSupabaseMocks(page: Page, counts: RequestCoun
     if (url.pathname.includes("/profiles_public")) return json(route, wantsObject ? perfProfile : [perfProfile]);
     if (url.pathname.includes("/profiles")) return json(route, wantsObject ? perfProfile : [perfProfile]);
     if (url.pathname.includes("/listings")) {
+      if (url.search.includes(`id=eq.${PERF_NEW_BUILD_ID}`)) return json(route, wantsObject ? perfNewBuildListing : [perfNewBuildListing]);
+      if (url.search.includes(`id=eq.${PERF_OPEN_HOUSE_ID}`)) return json(route, wantsObject ? perfOpenHouseListing : [perfOpenHouseListing]);
       if (url.search.includes(`id=eq.${PERF_LISTING_ID}`) || wantsObject) return json(route, perfListing);
       return json(route, [perfListing]);
     }
