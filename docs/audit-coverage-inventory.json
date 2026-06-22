@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-06-22T08:53:02.347Z",
+  "generated_at": "2026-06-22T12:18:13.854Z",
   "totals": {
-    "source_files": 616,
-    "source_lines": 116748,
-    "test_files": 407,
+    "source_files": 619,
+    "source_lines": 117570,
+    "test_files": 408,
     "routes": 42,
-    "supabase_functions": 63,
-    "likely_tested_source_files": 557,
+    "supabase_functions": 64,
+    "likely_tested_source_files": 559,
     "coverage_available": true,
     "coverage_lines_pct": 87.52,
     "coverage_functions_pct": 82.73,
@@ -57,10 +57,11 @@
       ]
     },
     "src/hooks": {
-      "files": 68,
-      "lines": 11114,
+      "files": 69,
+      "lines": 11110,
       "likely_tested_files": 63,
       "likely_untested_files": [
+        "src/hooks/projectManagementBoundary.ts",
         "src/hooks/useFiresalePhotoUploader.ts",
         "src/hooks/useInvitationRequests.ts",
         "src/hooks/useNominatimAddressSuggestions.ts",
@@ -98,9 +99,9 @@
       "likely_untested_files": []
     },
     "supabase/functions": {
-      "files": 190,
-      "lines": 33420,
-      "likely_tested_files": 180,
+      "files": 192,
+      "lines": 34246,
+      "likely_tested_files": 182,
       "likely_untested_files": [
         "supabase/functions/fetch-os-auctions/auctionCache.ts",
         "supabase/functions/fetch-os-auctions/auctionMapping.ts",
@@ -1306,6 +1307,11 @@
       "has_test": true
     },
     {
+      "name": "project-management",
+      "has_index": true,
+      "has_test": true
+    },
+    {
       "name": "project-unit-prices",
       "has_index": true,
       "has_test": true
@@ -1518,8 +1524,8 @@
       ]
     },
     "agent": {
-      "source_files": 97,
-      "test_files": 79,
+      "source_files": 98,
+      "test_files": 80,
       "sample_source_files": [
         "src/pages/AdminPricing.tsx",
         "src/pages/AIAssistantPage.tsx",
@@ -1614,8 +1620,8 @@
       ]
     },
     "developer": {
-      "source_files": 72,
-      "test_files": 55,
+      "source_files": 74,
+      "test_files": 56,
       "sample_source_files": [
         "src/pages/AdminPricing.tsx",
         "src/pages/ApiDocs.tsx",
@@ -1710,7 +1716,7 @@
       ]
     },
     "admin": {
-      "source_files": 108,
+      "source_files": 109,
       "test_files": 110,
       "sample_source_files": [
         "src/pages/AdminDashboard.tsx",
@@ -2259,8 +2265,8 @@
       ]
     },
     "project": {
-      "source_files": 88,
-      "test_files": 72,
+      "source_files": 91,
+      "test_files": 73,
       "sample_source_files": [
         "src/pages/AdminPricing.tsx",
         "src/pages/ApiDocs.tsx",
@@ -2307,8 +2313,8 @@
       ]
     },
     "listing": {
-      "source_files": 243,
-      "test_files": 199,
+      "source_files": 245,
+      "test_files": 200,
       "sample_source_files": [
         "src/pages/AdminDashboard.tsx",
         "src/pages/AdminPricing.tsx",
@@ -2355,7 +2361,7 @@
       ]
     },
     "lead": {
-      "source_files": 109,
+      "source_files": 110,
       "test_files": 33,
       "sample_source_files": [
         "src/pages/AdminPricing.tsx",
@@ -2403,7 +2409,7 @@
       ]
     },
     "message": {
-      "source_files": 227,
+      "source_files": 228,
       "test_files": 124,
       "sample_source_files": [
         "src/pages/AdminPricing.tsx",
@@ -2595,8 +2601,8 @@
       ]
     },
     "role_switch": {
-      "source_files": 13,
-      "test_files": 26,
+      "source_files": 15,
+      "test_files": 27,
       "sample_source_files": [
         "src/pages/onboarding/onboardingHelpers.ts",
         "src/pages/Onboarding.tsx",
@@ -2609,6 +2615,8 @@
         "supabase/functions/create-new-building-listing/index.test.ts",
         "supabase/functions/create-new-building-listing/index.ts",
         "supabase/functions/log-role-switch/index.ts",
+        "supabase/functions/project-management/index.test.ts",
+        "supabase/functions/project-management/index.ts",
         "supabase/functions/submit-firesale-request/index.test.ts",
         "supabase/functions/submit-firesale-request/index.ts"
       ],

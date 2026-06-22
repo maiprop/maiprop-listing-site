@@ -85,16 +85,10 @@ describe("project media hooks", () => {
     expect(secondOrder).toHaveBeenCalledWith("sort_order");
   });
 
-  it("adds and deletes media after ownership checks", async () => {
-    const insertSingle = vi.fn().mockResolvedValue({ data: { id: "m2" }, error: null });
-    const deleteEqProject = vi.fn().mockResolvedValue({ error: null });
-    fromMock
-      .mockReturnValueOnce({
-        insert: vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single: insertSingle }) }),
-      })
-      .mockReturnValueOnce({
-        delete: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ eq: deleteEqProject }) }),
-      });
+  it("adds and deletes media through the project-management edge boundary", async () => {
+    functionsInvokeMock
+      .mockResolvedValueOnce({ data: { data: { id: "m2" }, error: null }, error: null })
+      .mockResolvedValueOnce({ data: { data: { id: "m2" }, error: null }, error: null });
 
     const add = renderHook(() => useAddProjectMedia(), { wrapper });
     await act(async () => {
@@ -106,8 +100,18 @@ describe("project media hooks", () => {
       await del.result.current.mutateAsync({ id: "m2", projectId: "project-1" });
     });
 
-    expect(requireOwnedProjectMock).toHaveBeenCalledWith("project-1", "user-1");
-    expect(deleteEqProject).toHaveBeenCalledWith("project_id", "project-1");
+    expect(requireOwnedProjectMock).not.toHaveBeenCalled();
+    expect(fromMock).not.toHaveBeenCalled();
+    expect(functionsInvokeMock).toHaveBeenNthCalledWith(1, "project-management", {
+      body: {
+        action: "add_media",
+        projectId: "project-1",
+        media: { project_id: "project-1", url: "u", media_type: "rendering" },
+      },
+    });
+    expect(functionsInvokeMock).toHaveBeenNthCalledWith(2, "project-management", {
+      body: { action: "delete_media", projectId: "project-1", id: "m2" },
+    });
   });
 });
 
@@ -127,22 +131,11 @@ describe("project unit hooks", () => {
     expect(orderUnit).toHaveBeenCalledWith("unit_number", { ascending: true, nullsFirst: false });
   });
 
-  it("creates, updates, and deletes units with project ownership enforced", async () => {
-    const createSingle = vi.fn().mockResolvedValue({ data: { id: "u2" }, error: null });
-    const updateSingle = vi.fn().mockResolvedValue({ data: { id: "u2" }, error: null });
-    const deleteEqProject = vi.fn().mockResolvedValue({ error: null });
-    fromMock
-      .mockReturnValueOnce({
-        insert: vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single: createSingle }) }),
-      })
-      .mockReturnValueOnce({
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single: updateSingle }) }) }),
-        }),
-      })
-      .mockReturnValueOnce({
-        delete: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ eq: deleteEqProject }) }),
-      });
+  it("creates, updates, and deletes units through the project-management edge boundary", async () => {
+    functionsInvokeMock
+      .mockResolvedValueOnce({ data: { data: { id: "u2" }, error: null }, error: null })
+      .mockResolvedValueOnce({ data: { data: { id: "u2" }, error: null }, error: null })
+      .mockResolvedValueOnce({ data: { data: { id: "u2" }, error: null }, error: null });
 
     const createUnit = renderHook(() => useCreateProjectUnit(), { wrapper });
     const updateUnit = renderHook(() => useUpdateProjectUnit(), { wrapper });
@@ -168,8 +161,26 @@ describe("project unit hooks", () => {
       });
     });
 
-    expect(requireOwnedProjectMock).toHaveBeenCalledTimes(3);
-    expect(deleteEqProject).toHaveBeenCalledWith("project_id", "project-1");
+    expect(requireOwnedProjectMock).not.toHaveBeenCalled();
+    expect(fromMock).not.toHaveBeenCalled();
+    expect(functionsInvokeMock).toHaveBeenNthCalledWith(1, "project-management", {
+      body: {
+        action: "create_unit",
+        projectId: "project-1",
+        unit: { project_id: "project-1", unit_id: "A1" },
+      },
+    });
+    expect(functionsInvokeMock).toHaveBeenNthCalledWith(2, "project-management", {
+      body: {
+        action: "update_unit",
+        projectId: "project-1",
+        id: "u2",
+        updates: { price: 200000 },
+      },
+    });
+    expect(functionsInvokeMock).toHaveBeenNthCalledWith(3, "project-management", {
+      body: { action: "delete_unit", projectId: "project-1", id: "u2" },
+    });
   });
 
   it("skips the bulk price endpoint when no units are provided and calls it otherwise", async () => {
@@ -214,22 +225,11 @@ describe("project lead hooks", () => {
     expect(order).toHaveBeenCalledWith("created_at", { ascending: false });
   });
 
-  it("creates, updates, and deletes leads with ownership checks", async () => {
-    const createSingle = vi.fn().mockResolvedValue({ data: { id: "lead-1" }, error: null });
-    const updateSingle = vi.fn().mockResolvedValue({ data: { id: "lead-1" }, error: null });
-    const deleteEqProject = vi.fn().mockResolvedValue({ error: null });
-    fromMock
-      .mockReturnValueOnce({
-        insert: vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single: createSingle }) }),
-      })
-      .mockReturnValueOnce({
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single: updateSingle }) }) }),
-        }),
-      })
-      .mockReturnValueOnce({
-        delete: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ eq: deleteEqProject }) }),
-      });
+  it("creates, updates, and deletes leads through the project-management edge boundary", async () => {
+    functionsInvokeMock
+      .mockResolvedValueOnce({ data: { data: { id: "lead-1" }, error: null }, error: null })
+      .mockResolvedValueOnce({ data: { data: { id: "lead-1" }, error: null }, error: null })
+      .mockResolvedValueOnce({ data: { data: { id: "lead-1" }, error: null }, error: null });
 
     const createLead = renderHook(() => useCreateProjectLead(), { wrapper });
     const updateLead = renderHook(() => useUpdateProjectLead(), { wrapper });
@@ -255,7 +255,25 @@ describe("project lead hooks", () => {
       });
     });
 
-    expect(requireOwnedProjectMock).toHaveBeenCalledTimes(3);
-    expect(deleteEqProject).toHaveBeenCalledWith("project_id", "project-1");
+    expect(requireOwnedProjectMock).not.toHaveBeenCalled();
+    expect(fromMock).not.toHaveBeenCalled();
+    expect(functionsInvokeMock).toHaveBeenNthCalledWith(1, "project-management", {
+      body: {
+        action: "create_lead",
+        projectId: "project-1",
+        lead: { project_id: "project-1", name: "Lead One" },
+      },
+    });
+    expect(functionsInvokeMock).toHaveBeenNthCalledWith(2, "project-management", {
+      body: {
+        action: "update_lead",
+        projectId: "project-1",
+        id: "lead-1",
+        updates: { status: "contacted" },
+      },
+    });
+    expect(functionsInvokeMock).toHaveBeenNthCalledWith(3, "project-management", {
+      body: { action: "delete_lead", projectId: "project-1", id: "lead-1" },
+    });
   });
 });

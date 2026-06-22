@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { requireOwnedProject } from "@/hooks/projectOwnership";
 import { toast } from "sonner";
 import type { Database } from "@/integrations/supabase/types";
 import { CATALOG_STATIC_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
+import { invokeProjectManagement } from "@/hooks/projectManagementBoundary";
 import { parseMutationInput, projectMediaCreateSchema, scopedRowDeleteMutationSchema } from "@/lib/mutationSchemas";
 
 export type ProjectMediaType =
@@ -59,25 +59,23 @@ export function useAddProjectMedia() {
       title?: string;
       sort_order?: number;
     }) => {
-      await requireOwnedProject(project_id, user?.id);
+      if (!user) throw new Error("Must be logged in");
       const payload = parseMutationInput(
         projectMediaCreateSchema,
         { project_id, url, media_type, title, sort_order },
         "project media",
       );
-      const { data, error } = await supabase
-        .from("project_media")
-        .insert({
+      return invokeProjectManagement<ProjectMedia>({
+        action: "add_media",
+        projectId: payload.project_id,
+        media: {
           project_id: payload.project_id,
           url: payload.url,
-          media_type: payload.media_type as ProjectMediaType,
-          title: payload.title || null,
-          sort_order: payload.sort_order ?? 0,
-        })
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+          media_type: payload.media_type,
+          title: payload.title,
+          sort_order: payload.sort_order,
+        },
+      });
     },
     onSuccess: (_: unknown, { project_id }: { project_id: string; url: string; media_type: ProjectMediaType; title?: string; sort_order?: number }) => {
       qc.invalidateQueries({ queryKey: ["project_media", project_id] });
@@ -93,14 +91,13 @@ export function useDeleteProjectMedia() {
   const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ id, projectId }: { id: string; projectId: string }) => {
-      await requireOwnedProject(projectId, user?.id);
+      if (!user) throw new Error("Must be logged in");
       const payload = parseMutationInput(scopedRowDeleteMutationSchema, { id, scopeId: projectId }, "project media delete");
-      const { error } = await supabase
-        .from("project_media")
-        .delete()
-        .eq("id", payload.id)
-        .eq("project_id", payload.scopeId);
-      if (error) throw error;
+      await invokeProjectManagement<{ id: string }>({
+        action: "delete_media",
+        projectId: payload.scopeId,
+        id: payload.id,
+      });
     },
     onSuccess: (_: unknown, { projectId }: { id: string; projectId: string }) => {
       qc.invalidateQueries({ queryKey: ["project_media", projectId] });
