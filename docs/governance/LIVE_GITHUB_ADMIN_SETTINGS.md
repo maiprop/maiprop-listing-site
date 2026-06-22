@@ -32,6 +32,16 @@ Branch protection API result: blocked.
 
 GitHub returned: `Upgrade to GitHub Pro or make this repository public to enable this feature.`
 
+The live capture command is:
+
+```bash
+npm run capture:github-admin-posture
+```
+
+It writes a redacted JSON artifact under
+`artifacts/compliance/live-evidence/` locally, or under
+`compliance-evidence/` in the monthly Standards Evidence workflow.
+
 Required target policy remains source-controlled in
 `docs/governance/main-branch-protection.expected.json` and documented in
 `docs/BRANCH_PROTECTION.md`, but live enforcement cannot be enabled from this
@@ -59,8 +69,8 @@ repository/security settings and should be verified by a repository admin.
 
 Latest main workflow health was checked with GitHub CLI on 2026-06-22:
 
-- `Release Please` success for `chore(main): release 1.11.0 (#400)`
-- `CI` success for `chore(main): release 1.11.0 (#400)`
+- `Release Please` success for `test: add ECAS phase 9-15 proof gates`
+- `CI` success for `test: add ECAS phase 9-15 proof gates`
 - `CodeQL` success for `Code Quality: Push on main`
 
 The GitHub connector could not fetch workflow runs in this Codex session

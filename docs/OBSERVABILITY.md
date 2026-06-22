@@ -28,6 +28,11 @@ Production telemetry is considered verifiable only when all of these pass:
 3. A local operator can run read-only Sentry issue/event checks with
    `SENTRY_AUTH_TOKEN` set in the shell. This token is an audit credential, not
    an app runtime secret, and must never be committed or exposed to the browser.
+4. The monthly Standards Evidence workflow uploads
+   `sentry-live-evidence.json` by running
+   `npm run capture:sentry-live-evidence`. If `SENTRY_AUTH_TOKEN`,
+   `SENTRY_ORG`, or `SENTRY_PROJECT` are missing, the artifact records
+   `unconfigured` instead of claiming healthy telemetry.
 
 If `SENTRY_AUTH_TOKEN` is absent during an audit, record production telemetry as
 **unknown**, not healthy. CI can prove that Sentry integration code builds, but

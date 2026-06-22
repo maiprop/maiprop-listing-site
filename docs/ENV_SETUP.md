@@ -230,6 +230,8 @@ fail-fast behavior.
 | `RELEASE_SAFETY_SUPABASE_PROJECT_REF` | optional project ref override for release-safety live inventory; defaults to `supabase/config.toml` `project_id` when unset | manual release certification |
 | `SUPABASE_MANAGEMENT_API_BASE` | optional override for Supabase Management API advisor checks; defaults to `https://api.supabase.com/v1` | local/CI diagnostics only |
 | `SENTRY_AUTH_TOKEN` | optional read-only token for local production telemetry checks; never required by app runtime | local operator shell only |
+| `SENTRY_ORG` | Sentry organization slug used by read-only compliance evidence capture | repo variable or local operator shell |
+| `SENTRY_PROJECT` | Sentry project slug used by read-only compliance evidence capture | repo variable or local operator shell |
 | `RLS_USER_A_EMAIL` | live-safe RLS test user A | repo or staging environment |
 | `RLS_USER_B_EMAIL` | live-safe RLS test user B | repo or staging environment |
 | `RLS_USER_PASSWORD` | shared live-safe RLS test password | repo or staging environment |
@@ -309,6 +311,8 @@ the operator shell:
 
 ```powershell
 $env:SENTRY_AUTH_TOKEN="<redacted>"
+$env:SENTRY_ORG="<sentry-org-slug>"
+$env:SENTRY_PROJECT="<sentry-project-slug>"
 ```
 
 Do not commit Sentry auth tokens or add them to browser-visible `VITE_*`
