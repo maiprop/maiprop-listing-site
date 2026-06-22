@@ -7,7 +7,10 @@ const defaultBaseURL = process.env.CI
   : "http://localhost:8080";
 const isPerformanceGate =
   process.env.npm_lifecycle_event === "test:perf" ||
-  process.argv.some((arg) => arg.includes("performance-gates.spec.ts"));
+  process.argv.some((arg) =>
+    arg.includes("performance-gates.spec.ts") ||
+    arg.includes("query-budget-gates.spec.ts")
+  );
 if (isPerformanceGate) process.env.MAIPROP_RUNNING_PERF_GATE = "1";
 const configuredBaseURL = process.env.PLAYWRIGHT_BASE_URL;
 const baseURL = configuredBaseURL ?? (isPerformanceGate ? "http://localhost:4173" : defaultBaseURL);
