@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -127,6 +127,17 @@ describe("ECAS hardening contracts", () => {
 
     expect(result.ok).toBe(false);
     expect(result.failures.join("\n")).toContain("blocked table pricing_configs");
+  });
+
+  it("keeps one-time trial claim ledger rows behind the service boundary", () => {
+    const root = process.cwd();
+    const result = checkSensitiveMutationBoundaries(root);
+    const inventory = JSON.parse(
+      readFileSync(join(root, "docs", "governance", "sensitive-mutation-boundaries.json"), "utf8"),
+    );
+
+    expect(inventory.blockedDirectTables).toContain("subscription_trial_claims");
+    expect(result.ok).toBe(true);
   });
 
   it("fails when a function request body has no boundary review", () => {

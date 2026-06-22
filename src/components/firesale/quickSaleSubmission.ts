@@ -3,8 +3,8 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { isAiUsageLimitError } from "@/lib/aiErrorUtils";
 import {
-  firesaleRequestSchema,
-  firesaleRollbackSchema,
+  firesaleRequestCreateBodySchema,
+  firesaleRequestRollbackBodySchema,
   parseMutationInput,
 } from "@/lib/mutationSchemas";
 import { getRemoteValuationEstimate } from "@/lib/valuationResult";
@@ -98,45 +98,56 @@ export const applyRemoteEstimate = (
 
 const insertFiresaleRequest = (
   form: QuickSaleFormValues,
-  userId: string,
+  _userId: string,
   estimate: number,
   propertyType: ReturnType<typeof getRequiredPropertyType>,
   metaLines: string[],
-) =>
-  supabase
-    .from("firesale_requests")
-    .insert(parseMutationInput(firesaleRequestSchema, {
+) => {
+  const body = parseMutationInput(firesaleRequestCreateBodySchema, {
+    action: "create",
+    request: {
       address: form.address.trim(),
       city: form.city.trim() || getCityFromAddress(form.address),
-      property_type: propertyType,
+      propertyType,
       sqm: Number(form.sqm),
-      condition: null,
-      asking_price: Number(form.askingPrice),
-      contact_email: form.contactEmail.trim(),
-      contact_phone: form.contactPhone.trim() || null,
+      askingPrice: Number(form.askingPrice),
+      contactEmail: form.contactEmail.trim(),
+      contactPhone: form.contactPhone.trim() || null,
       notes: metaLines.join("\n") || null,
-      ai_estimate: estimate,
-      user_id: userId,
-      status: "pending",
-    }, "quick sale request"))
-    .select("id")
-    .single();
+      aiEstimate: estimate,
+    },
+  }, "quick sale request");
 
-const rollbackFiresaleRequest = async (requestId: string, userId: string) => {
-  const payload = parseMutationInput(firesaleRollbackSchema, { requestId, userId }, "quick sale rollback");
-  await supabase.from("firesale_requests").delete().eq("id", payload.requestId).eq("user_id", payload.userId);
+  return supabase.functions.invoke("submit-firesale-request", { body })
+    .then(({ data, error }) => {
+      const envelope = data as { data?: { id?: string } | null; error?: { message?: string } | string | null } | null;
+      const envelopeError = envelope?.error
+        ? new Error(typeof envelope.error === "string" ? envelope.error : envelope.error.message || "Quick Sale request failed")
+        : null;
+      return {
+        data: envelope?.data ?? null,
+        error: error ?? envelopeError,
+      };
+    });
+};
+
+const rollbackFiresaleRequest = async (requestId: string) => {
+  const body = parseMutationInput(firesaleRequestRollbackBodySchema, {
+    action: "rollback",
+    requestId,
+  }, "quick sale rollback");
+  await supabase.functions.invoke("submit-firesale-request", { body });
 };
 
 const ensurePhotosUploaded = async (
   requestId: string | null,
-  userId: string,
   photoCount: number,
   uploadPhotos: (requestId: string) => Promise<string[]>,
 ) => {
   if (photoCount === 0 || !requestId) return;
   const uploadedUrls = await uploadPhotos(requestId);
   if (uploadedUrls.length === photoCount) return;
-  await rollbackFiresaleRequest(requestId, userId);
+  await rollbackFiresaleRequest(requestId);
   throw new Error(ui("Photo upload failed. Your request was not submitted; please retry the upload.", "Η μεταφόρτωση φωτογραφιών απέτυχε. Το αίτημα δεν υποβλήθηκε, δοκιμάστε ξανά."));
 };
 
@@ -152,6 +163,6 @@ export const submitValidatedQuickSale = async (
   const { data, error } = await insertFiresaleRequest(form, userId, estimate, propertyType, buildMetaLines(form, photoCount));
   if (error) throw error;
   const requestId = data?.id || null;
-  await ensurePhotosUploaded(requestId, userId, photoCount, uploadPhotos);
+  await ensurePhotosUploaded(requestId, photoCount, uploadPhotos);
   return { estimate, requestId };
 };

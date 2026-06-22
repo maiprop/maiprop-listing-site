@@ -98,13 +98,6 @@
       "rationale": "Role switch start requests are manually guarded so clients cannot directly grant active privileges."
     },
     {
-      "function": "complete-onboarding-role",
-      "validationStyle": "typed-manual-guards",
-      "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "Onboarding role completion requests use manual role guards before profile or role updates are persisted."
-    },
-    {
       "function": "create-checkout",
       "validationStyle": "provider-contract-guarded",
       "owner": "domain",

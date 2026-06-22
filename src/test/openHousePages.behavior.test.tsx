@@ -312,6 +312,17 @@ beforeEach(() => {
 });
 
 describe("OpenHouses page behavior", () => {
+  it("links My Open Houses to the dashboard open-house management tab", async () => {
+    mocks.publicApi.mockResolvedValue([createListing({ id: "oh-owned-entry", title: "Owned Entry Point" })]);
+
+    await renderOpenHouses();
+
+    expect(await screen.findByRole("link", { name: /my open houses/i })).toHaveAttribute(
+      "href",
+      "/dashboard?tab=open-houses",
+    );
+  });
+
   it("filters open house cards by city and property type, then clears filters", async () => {
     mocks.publicApi.mockResolvedValue([
       createListing({ id: "oh-athens", title: "Athens Apartment", city: "Athens", property_type: "apartment" }),

@@ -86,6 +86,13 @@
       "rationale": "Onboarding role completion is an Edge-mediated mutation that keeps role assignment checks out of direct UI writes."
     },
     {
+      "function": "save-professional-onboarding",
+      "boundary": "edge-schema-validated",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "Professional onboarding setup writes are schema-validated and owner-checked inside the Edge Function before service, availability, or video settings mutate."
+    },
+    {
       "function": "create-checkout",
       "boundary": "external-provider-contract",
       "owner": "domain",
@@ -210,6 +217,13 @@
       "owner": "domain",
       "reviewBy": "2026-07-31",
       "rationale": "Firesale interest submissions are authenticated and validated inside the Edge Function before workflow writes."
+    },
+    {
+      "function": "submit-firesale-request",
+      "boundary": "edge-schema-validated",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "Quick Sale request creation and rollback are authenticated, seller-gated, and schema-validated inside the Edge Function before firesale_requests is mutated."
     },
     {
       "function": "sync-firesale-to-os",

@@ -88,7 +88,8 @@ export function parseMutationInput<T>(
   const parsed = schema.safeParse(input);
   if (parsed.success) return parsed.data;
   const firstMessage = parsed.error.issues[0]?.message;
-  throw new Error(firstMessage?.startsWith("Invalid ") ? firstMessage : `Invalid ${label}`);
+  const hasDomainMessage = firstMessage?.startsWith("Invalid ") && !firstMessage.startsWith("Invalid option:");
+  throw new Error(hasDomainMessage ? firstMessage : `Invalid ${label}`);
 }
 
 export const savedSearchCreateSchema = z.object({
@@ -431,6 +432,28 @@ export const firesaleRequestSchema = z.object({
   | "user_id"
   | "status"
 >>;
+
+const firesaleRequestCreatePayloadSchema = z.object({
+  address: requiredString("quick sale address", 240),
+  city: requiredString("quick sale city", 160),
+  propertyType: propertyTypeSchema,
+  sqm: z.number().finite("Invalid quick sale sqm").positive("Invalid quick sale sqm").max(100_000, "Invalid quick sale sqm"),
+  askingPrice: z.number().finite("Invalid quick sale asking price").positive("Invalid quick sale asking price"),
+  contactEmail: z.string().trim().toLowerCase().email("Invalid quick sale email").max(320, "Invalid quick sale email"),
+  contactPhone: optionalString("quick sale phone", 60),
+  notes: optionalString("quick sale notes", 4000),
+  aiEstimate: z.number().finite("Invalid quick sale estimate").min(0, "Invalid quick sale estimate"),
+}).strict();
+
+export const firesaleRequestCreateBodySchema = z.object({
+  action: z.literal("create"),
+  request: firesaleRequestCreatePayloadSchema,
+}).strict();
+
+export const firesaleRequestRollbackBodySchema = z.object({
+  action: z.literal("rollback"),
+  requestId: rowIdSchema("quick sale request id"),
+}).strict();
 
 export const firesaleRollbackSchema = z.object({
   requestId: rowIdSchema("quick sale request id"),

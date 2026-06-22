@@ -4,6 +4,7 @@ import { Heart, Search, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PropertyCard } from "@/components/PropertyCard";
 import { dbListingToCard } from "@/lib/listingUtils";
+import type { DbListingCardRow } from "@/lib/domainContracts";
 
 const SAVED_TABS = [
   { label: "All",        value: "" },
@@ -16,7 +17,7 @@ const SAVED_TABS = [
 type FavoriteItem = {
   id?: string;
   listing_id: string;
-  listings?: { id: string; title: string; listing_type: string; [key: string]: unknown } | null;
+  listings?: DbListingCardRow | null;
 };
 
 export function SavedPropertiesSection({
@@ -28,7 +29,8 @@ export function SavedPropertiesSection({
 }) {
   const [tab, setTab] = useState<string>("");
   const filtered = favorites.filter(
-    (f) => f.listings && (!tab || f.listings.listing_type === tab),
+    (f): f is FavoriteItem & { listings: DbListingCardRow } =>
+      Boolean(f.listings) && (!tab || f.listings?.listing_type === tab),
   );
 
   return (

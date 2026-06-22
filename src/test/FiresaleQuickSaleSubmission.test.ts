@@ -1,19 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { QuickSaleFormValues } from "@/components/firesale/quickSaleFormModel";
 
-const { fromMock, insertMock, selectMock, singleMock, deleteMock, firstEqMock, secondEqMock, toastMock } = vi.hoisted(() => ({
+const { fromMock, invokeMock, toastMock } = vi.hoisted(() => ({
   fromMock: vi.fn(),
-  insertMock: vi.fn(),
-  selectMock: vi.fn(),
-  singleMock: vi.fn(),
-  deleteMock: vi.fn(),
-  firstEqMock: vi.fn(),
-  secondEqMock: vi.fn(),
+  invokeMock: vi.fn(),
   toastMock: { error: vi.fn(), info: vi.fn() },
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
-  supabase: { from: fromMock },
+  supabase: { from: fromMock, functions: { invoke: invokeMock } },
 }));
 
 vi.mock("sonner", () => ({ toast: toastMock }));
@@ -46,22 +41,10 @@ const validForm = (overrides: Partial<QuickSaleFormValues> = {}): QuickSaleFormV
 beforeEach(() => {
   vi.restoreAllMocks();
   fromMock.mockReset();
-  insertMock.mockReset();
-  selectMock.mockReset();
-  singleMock.mockReset();
-  deleteMock.mockReset();
-  firstEqMock.mockReset();
-  secondEqMock.mockReset();
+  invokeMock.mockReset();
   toastMock.error.mockReset();
   toastMock.info.mockReset();
-
-  insertMock.mockReturnValue({ select: selectMock });
-  selectMock.mockReturnValue({ single: singleMock });
-  singleMock.mockResolvedValue({ data: { id: "req-1" }, error: null });
-  deleteMock.mockReturnValue({ eq: firstEqMock });
-  firstEqMock.mockReturnValue({ eq: secondEqMock });
-  secondEqMock.mockResolvedValue({ error: null });
-  fromMock.mockReturnValue({ insert: insertMock, delete: deleteMock });
+  invokeMock.mockResolvedValue({ data: { data: { id: "req-1" }, error: null }, error: null });
 });
 
 describe("quick sale submission helpers", () => {
@@ -116,7 +99,7 @@ describe("quick sale submission helpers", () => {
     expect(toastMock.error).toHaveBeenCalledTimes(3);
   });
 
-  it("inserts the normalized firesale request, uploads every photo, and returns the stored request id", async () => {
+  it("submits the normalized firesale request through the Edge boundary, uploads every photo, and returns the stored request id", async () => {
     const uploadPhotos = vi.fn().mockResolvedValue(["one", "two", "three", "four", "five"]);
 
     await expect(submitValidatedQuickSale(validForm(), "user-1", 280000, 5, uploadPhotos)).resolves.toEqual({
@@ -124,27 +107,31 @@ describe("quick sale submission helpers", () => {
       requestId: "req-1",
     });
 
-    expect(fromMock).toHaveBeenCalledWith("firesale_requests");
-    expect(insertMock).toHaveBeenCalledWith(
+    expect(fromMock).not.toHaveBeenCalledWith("firesale_requests");
+    expect(invokeMock).toHaveBeenCalledWith(
+      "submit-firesale-request",
       expect.objectContaining({
-        address: "Kolonaki 12, Athens",
-        city: "Athens",
-        property_type: "commercial",
-        sqm: 100,
-        asking_price: 350000,
-        contact_email: "alice@example.com",
-        contact_phone: null,
-        ai_estimate: 280000,
-        user_id: "user-1",
-        status: "pending",
+        body: {
+          action: "create",
+          request: expect.objectContaining({
+            address: "Kolonaki 12, Athens",
+            city: "Athens",
+            propertyType: "commercial",
+            sqm: 100,
+            askingPrice: 350000,
+            contactEmail: "alice@example.com",
+            contactPhone: null,
+            aiEstimate: 280000,
+          }),
+        },
       }),
     );
-    expect(insertMock.mock.calls[0][0].notes).toContain("KAEK: 050240601001/0/1");
+    expect(invokeMock.mock.calls[0][1].body.request.notes).toContain("KAEK: 050240601001/0/1");
     expect(uploadPhotos).toHaveBeenCalledWith("req-1");
   });
 
   it("uses the fallback estimate and skips uploading when there are no photos or stored id", async () => {
-    singleMock.mockResolvedValueOnce({ data: {}, error: null });
+    invokeMock.mockResolvedValueOnce({ data: { data: {}, error: null }, error: null });
     const uploadPhotos = vi.fn();
 
     await expect(submitValidatedQuickSale(validForm({ sqm: "80" }), "user-1", null, 0, uploadPhotos)).resolves.toEqual({
@@ -160,13 +147,19 @@ describe("quick sale submission helpers", () => {
     await expect(submitValidatedQuickSale(validForm(), "user-1", 280000, 2, uploadPhotos)).rejects.toThrow(
       /Photo upload failed/i,
     );
-    expect(deleteMock).toHaveBeenCalled();
-    expect(firstEqMock).toHaveBeenCalledWith("id", "req-1");
-    expect(secondEqMock).toHaveBeenCalledWith("user_id", "user-1");
+    expect(invokeMock).toHaveBeenCalledWith(
+      "submit-firesale-request",
+      expect.objectContaining({
+        body: {
+          action: "rollback",
+          requestId: "req-1",
+        },
+      }),
+    );
   });
 
   it("throws insert and invalid-property errors before reporting a successful submission", async () => {
-    singleMock.mockResolvedValueOnce({ data: null, error: new Error("insert failed") });
+    invokeMock.mockResolvedValueOnce({ data: null, error: new Error("insert failed") });
     await expect(submitValidatedQuickSale(validForm(), "user-1", 280000, 0, vi.fn())).rejects.toThrow("insert failed");
 
     await expect(

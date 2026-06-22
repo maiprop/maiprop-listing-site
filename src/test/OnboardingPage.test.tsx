@@ -177,7 +177,15 @@ beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
   useAuthMock.mockReturnValue(authState());
-  invokeMock.mockResolvedValue({ data: {}, error: null });
+  invokeMock.mockImplementation((functionName: string, options?: { body?: Record<string, unknown> }) => {
+    if (
+      functionName === "complete-onboarding-role" &&
+      options?.body?.role === "professional"
+    ) {
+      return Promise.resolve({ data: { professionalId: "pro-1" }, error: null });
+    }
+    return Promise.resolve({ data: {}, error: null });
+  });
   fromMock.mockImplementation((table: string) => {
     if (table === "professionals") {
       return {
@@ -265,6 +273,19 @@ describe("Onboarding page handlers", () => {
     fireEvent.click(screen.getByRole("button", { name: /verify pro/i }));
 
     await screen.findByRole("button", { name: /save services/i });
+    expect(invokeMock).toHaveBeenCalledWith("complete-onboarding-role", {
+      body: expect.objectContaining({
+        role: "professional",
+        participantType: "professional",
+        phone: "+306900000000",
+        professionalProfile: expect.objectContaining({
+          title: "Pro Studio",
+          category: "architect",
+          displayName: "A Pro",
+          licenseNumber: "123456789",
+        }),
+      }),
+    });
     fireEvent.click(screen.getByRole("button", { name: /save services/i }));
     expect(toastMock.error).toHaveBeenCalledWith("Please select at least one service you offer");
 

@@ -5,8 +5,8 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { profileRoleSwitchInProgress, useAuth } from "@/contexts/AuthContext";
-import { isPlatformAdmin } from "@/lib/authUtils";
+import { useAuth } from "@/contexts/AuthContext";
+import { resolveQuickSaleEligibility } from "@/lib/quickSaleEntitlements";
 
 export function useEligibleForQuickSale() {
   const { user, profile } = useAuth();
@@ -28,17 +28,13 @@ export function useEligibleForQuickSale() {
     staleTime: 10 * 1000,
   });
 
-  const isAdmin = isPlatformAdmin(profile);
-  const hasActiveSubscription = !!(subscription?.status === "active" || subscription?.status === "trial");
-  const isInvestorRole =
-    !profileRoleSwitchInProgress(profile) &&
-    (profile?.role === "investor" || profile?.role === "institutional");
+  const eligibility = resolveQuickSaleEligibility({
+    profile,
+    subscriptionStatus: subscription?.status,
+  });
 
   return {
-    eligible: isAdmin || (isInvestorRole && hasActiveSubscription),
-    isAdmin,
-    hasActiveSubscription,
-    isInvestorRole,
+    ...eligibility,
     loading: isLoading,
   };
 }
