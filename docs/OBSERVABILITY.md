@@ -12,7 +12,7 @@
 
 ## Latest Audit Note
 
-As of 2026-06-19, this Codex environment does not have `SENTRY_AUTH_TOKEN`
+As of 2026-06-22, this Codex environment does not have `SENTRY_AUTH_TOKEN`
 available, so production Sentry issue/event health is **not verified here**.
 Treat source-level Sentry wiring and CI build success as integration evidence,
 not as proof that production telemetry is flowing.

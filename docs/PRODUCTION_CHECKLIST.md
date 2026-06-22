@@ -45,7 +45,7 @@ Go through every box **before** promoting a release to production. This is a saf
 - [ ] Source maps uploaded to Sentry (if enabled) and **not** served publicly (`/*.map` rule in `public/_headers`).
 - [ ] Supabase logs retention is adequate (pro tier → 7 days minimum).
 - [ ] On-call rota documented and current contact knows who escalates.
-- [ ] At least one synthetic uptime check (e.g. UptimeRobot, Better Stack) points at `https://maiprop.co/` and `/functions/v1/sitemap`.
+- [ ] At least one synthetic uptime check (e.g. UptimeRobot, Better Stack) points at `https://portal.maiprop.co/` and `/sitemap-dynamic.xml`.
 
 ## 6. Security headers & CSP
 
@@ -57,9 +57,9 @@ Go through every box **before** promoting a release to production. This is a saf
 
 ## 7. DNS, CDN, TLS
 
-- [ ] Custom domain `maiprop.co` resolves to Cloudflare Pages and serves the current build.
+- [ ] Active production domain `portal.maiprop.co` resolves to Cloudflare Pages and serves the current build.
 - [ ] TLS certificate is valid and renewal is automatic (Cloudflare managed cert).
-- [ ] `www.maiprop.co` and apex both work and one 301s to the other consistently.
+- [ ] Apex/alias DNS (`maiprop.co`, `www.maiprop.co`) is either intentionally parked or 301s consistently to the active production domain.
 - [ ] robots.txt + sitemap.xml accessible and up to date.
 
 ## 8. Accessibility & performance
@@ -83,7 +83,7 @@ Go through every box **before** promoting a release to production. This is a saf
 - [ ] Sign in / sign out works.
 - [ ] At least one successful upgrade via Stripe in live mode.
 - [ ] Sentry received at least one transaction and zero new `error`-level events from real users.
-- [ ] Cloudflare analytics shows traffic (rules out DNS misrouting).
+- [ ] Cloudflare analytics shows traffic for `portal.maiprop.co` (rules out DNS misrouting).
 - [ ] Stripe dashboard shows webhook delivered 200 for the test checkout.
 
 ---

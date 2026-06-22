@@ -269,6 +269,7 @@ export function checkEnterpriseTenantContract(root = process.cwd()) {
   const migrations = readSqlDirectoryText(root, "supabase/migrations", failures);
   const tenancyDoc = requireText(root, "docs/governance/ENTERPRISE_TENANCY_AND_SSO.md", failures);
   const procurementDoc = requireText(root, "docs/governance/PROCUREMENT_EVIDENCE_MATRIX.md", failures);
+  const rlsSecuritySpec = requireText(root, "e2e/rls-security.spec.ts", failures);
 
   if (migrations) {
     for (const marker of includesAll(migrations, [
@@ -333,6 +334,20 @@ export function checkEnterpriseTenantContract(root = process.cwd()) {
       "SOC 2 / ISO evidence is external and not claimed by this repository",
     ])) {
       failures.push(`docs/governance/PROCUREMENT_EVIDENCE_MATRIX.md must mention ${marker}`);
+    }
+  }
+
+  if (rlsSecuritySpec) {
+    for (const marker of includesAll(rlsSecuritySpec, [
+      "organization_memberships",
+      "organization_audit_ledger",
+      "direct org audit ledger insert",
+      "org member and non-member boundaries deny cross-org reads and forged membership writes",
+      "forged role update",
+      "forged organization_id update",
+      "platform admin tenant fixture read",
+    ])) {
+      failures.push(`e2e/rls-security.spec.ts must mention ${marker}`);
     }
   }
 
