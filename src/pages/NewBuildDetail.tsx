@@ -24,6 +24,7 @@ import NeighbourhoodReport from "@/components/NeighbourhoodReport";
 import PropertyMiniMap from "@/components/PropertyMiniMap";
 import { ENERGY_SCALE, ENERGY_COLORS } from "@/types";
 import { CONSTRUCTION_PHASES, formatNewBuildPrice as formatPrice } from "@/lib/newBuildConfig";
+import { getNewBuildCardImages } from "@/lib/newBuildCardSummary";
 import { formatPrice as formatCurrency } from "@/lib/format";
 import { getPrimaryValuationEstimate, type ValuationEstimateSource } from "@/lib/valuationResult";
 import { FeatureSection } from "@/components/property/DetailPrimitives";
@@ -51,7 +52,6 @@ import {
   formatValueRange,
   formatVatSummary,
   getListingProject,
-  isProjectImageMedia,
   sortProjectMedia,
   sortProjectUnits,
   type NewBuildListing,
@@ -235,7 +235,6 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
   const project = getListingProject(listing);
   const projectUnits = sortProjectUnits(project?.project_units);
   const projectMedia = sortProjectMedia(project?.project_media);
-  const projectImageUrls = projectMedia.filter(isProjectImageMedia).map((media) => media.url);
   const displayAddress = project?.address ?? listing?.address ?? "";
   const displayCity = project?.city ?? listing?.city ?? "";
   const displayRegion = project?.municipality ?? listing?.region ?? undefined;
@@ -404,18 +403,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
     </div>
   );
 
-  // Collect images
-  const sortedImages = [...(listing.listing_images ?? [])]
-    .sort((a: { sort_order: number | null }, b: { sort_order: number | null }) =>
-      (a.sort_order ?? 99) - (b.sort_order ?? 99))
-    .map((img: { url: string }) => img.url);
-  const allImages = [
-    listing.cover_image_url,
-    ...sortedImages,
-    project?.cover_image_url,
-    ...projectImageUrls,
-  ].filter((url): url is string => Boolean(url));
-  const uniqueImages = Array.from(new Set(allImages));
+  const uniqueImages = getNewBuildCardImages(listing);
 
   const owner = listing.profiles as { display_name?: string; avatar_url?: string; phone?: string } | null;
 

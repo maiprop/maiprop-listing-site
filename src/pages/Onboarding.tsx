@@ -35,16 +35,20 @@ import {
   parseServiceRate,
   readRoleSwitchCtx,
   resolvePresetType,
-  type ProfessionalInsert,
-  type ProfessionalUpdate,
 } from "./onboarding/onboardingHelpers";
 import {
   parseMutationInput,
   professionalAvailabilityRowsSchema,
-  professionalIdSchema,
   professionalServiceRowsSchema,
   professionalVideoSettingsMutationSchema,
 } from "@/lib/mutationSchemas";
+
+type RoleSelectionValues = { role: RoleKey; participant_type: ParticipantId } & Record<string, unknown>;
+type RoleSelectionResult = { ok: boolean; professionalId?: string };
+type ProfessionalOnboardingSetupBody =
+  | { action: "services"; professionalId: string; services: unknown[] }
+  | { action: "availability"; professionalId: string; availability: unknown[] }
+  | { action: "video"; professionalId: string; videoLink: string | null; calendarNotes: string | null };
 
 // skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
 export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a multi-step account setup workflow in one route shell.
@@ -90,19 +94,24 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
   const [calendarNotes, setCalendarNotes] = useState("");
   const [pendingCardId, setPendingCardId] = useState<string | null>(null);
 
-  const saveRoleSelection = useCallback(async (
-    values: { role: RoleKey; participant_type: ParticipantId } & Record<string, unknown>
-  ): Promise<boolean> => { // skipcq: JS-R1005 - Role save builds one edge-function payload from optional onboarding fields.
+  const invokeRoleSelection = useCallback(async (
+    values: RoleSelectionValues,
+  ): Promise<RoleSelectionResult> => { // skipcq: JS-R1005 - Role save builds one edge-function payload from optional onboarding fields.
     const displayName = typeof values.display_name === "string" ? values.display_name : null;
     const city = typeof values.city === "string" ? values.city : null;
     const phone = typeof values.phone === "string" ? values.phone : null;
-    const { error } = await supabase.functions.invoke("complete-onboarding-role", {
+    const professionalProfile = values.professionalProfile &&
+      typeof values.professionalProfile === "object"
+      ? values.professionalProfile
+      : undefined;
+    const { data, error } = await supabase.functions.invoke("complete-onboarding-role", {
       body: {
         role: values.role,
         participantType: values.participant_type,
         displayName,
         city,
         phone,
+        ...(professionalProfile ? { professionalProfile } : {}),
       },
     });
     if (error) {
@@ -135,15 +144,33 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
         error_code: errorCode ?? "unknown",
       });
       toast.error(msg);
-      return false;
+      return { ok: false };
     }
     trackAnalyticsEvent("onboarding_role_selected", {
       role: values.role,
       participant_type: values.participant_type,
     });
     await refreshProfile();
-    return true;
+    const professionalId = data && typeof data === "object" &&
+      typeof (data as { professionalId?: unknown }).professionalId === "string"
+      ? (data as { professionalId: string }).professionalId
+      : undefined;
+    return { ok: true, professionalId };
   }, [refreshProfile]);
+
+  const saveRoleSelection = useCallback(async (
+    values: RoleSelectionValues,
+  ): Promise<boolean> => (await invokeRoleSelection(values)).ok, [invokeRoleSelection]);
+
+  const saveProfessionalOnboardingSetup = useCallback(async (
+    body: ProfessionalOnboardingSetupBody,
+    errorMessage: string,
+  ): Promise<boolean> => {
+    const { error } = await supabase.functions.invoke("save-professional-onboarding", { body });
+    if (!error) return true;
+    toast.error(errorMessage);
+    return false;
+  }, []);
 
   // ── Role-switch billing context ───────────────────────────────────────────────
   // Set by Dashboard SettingsSection before navigating here for a role switch.
@@ -509,27 +536,27 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
 
     setLoading(true);
 
-    const professionalPayload: ProfessionalInsert = {
-      user_id: user.id,
-      title: proForm.businessName,
-      category: proCategory,
-      display_name: user.user_metadata?.full_name || proForm.businessName,
-      city: "",
+    const result = await invokeRoleSelection({
+      role: "professional",
+      participant_type: "professional",
+      phone: proForm.phone,
+      professionalProfile: {
+        title: proForm.businessName,
+        category: proCategory,
+        displayName: user.user_metadata?.full_name || proForm.businessName,
+        city: "",
       // AFM (Greek tax ID) stored in license_number when no dedicated field exists.
       // licenseNumber field takes priority if the user filled it in.
-      license_number: proForm.licenseNumber || proForm.taxId || null,
-    };
-
-    const { data: proData, error } = await supabase
-      .from("professionals")
-      .upsert(professionalPayload, { onConflict: "user_id" })
-      .select()
-      .single();
-
-    if (error) { toast.error("Could not save professional profile. Please try again."); setLoading(false); return; }
-    setProfessionalId((proData as { id: string }).id);
-    const ok = await saveRoleSelection({ role: "professional", participant_type: "professional", phone: proForm.phone });
-    if (!ok) { setLoading(false); return; }
+        licenseNumber: proForm.licenseNumber || proForm.taxId || null,
+      },
+    });
+    if (!result.ok) { setLoading(false); return; }
+    if (!result.professionalId) {
+      toast.error("Could not save professional profile. Please try again.");
+      setLoading(false);
+      return;
+    }
+    setProfessionalId(result.professionalId);
     setLoading(false);
     setStep("pro-services");
   };
@@ -552,16 +579,12 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
       is_active: true,
     }));
 
-    const { error: deleteError } = await supabase
-      .from("professional_services")
-      .delete()
-      .eq("professional_id", parseMutationInput(professionalIdSchema, professionalId, "professional id"));
-    if (deleteError) { toast.error("Could not update services. Please try again."); setLoading(false); return; }
-
-    const { error } = await supabase.from("professional_services").insert(
-      parseMutationInput(professionalServiceRowsSchema, rows, "professional services"),
+    const services = parseMutationInput(professionalServiceRowsSchema, rows, "professional services");
+    const saved = await saveProfessionalOnboardingSetup(
+      { action: "services", professionalId, services },
+      "Could not save services. Please try again.",
     );
-    if (error) { toast.error("Could not save services. Please try again."); setLoading(false); return; }
+    if (!saved) { setLoading(false); return; }
     setLoading(false);
     setStep("pro-availability");
   };
@@ -577,18 +600,12 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
       is_active: true,
     }));
      
-    const { error: deleteError } = await supabase
-      .from("professional_availability")
-      .delete()
-      .eq("professional_id", parseMutationInput(professionalIdSchema, professionalId, "professional id"));
-    if (deleteError) { toast.error("Could not update availability. Please try again."); setLoading(false); return; }
-
-    if (rows.length > 0) {
-      const { error } = await supabase.from("professional_availability").insert(
-        parseMutationInput(professionalAvailabilityRowsSchema, rows, "professional availability"),
-      );
-      if (error) { toast.error("Could not save availability. Please try again."); setLoading(false); return; }
-    }
+    const availabilityRows = parseMutationInput(professionalAvailabilityRowsSchema, rows, "professional availability");
+    const saved = await saveProfessionalOnboardingSetup(
+      { action: "availability", professionalId, availability: availabilityRows },
+      "Could not save availability. Please try again.",
+    );
+    if (!saved) { setLoading(false); return; }
     setLoading(false);
     setStep("pro-video");
   };
@@ -596,7 +613,7 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
   const canSaveVideoSettings = () => Boolean(user && professionalId);
 
   const persistVideoSettings = async (targetUserId: string, targetProfessionalId: string): Promise<boolean> => {
-    const videoSettings: ProfessionalUpdate = {
+    const videoSettings = {
       video_link: videoLink || null,
       calendar_notes: calendarNotes || null,
     };
@@ -605,13 +622,15 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
       { professionalId: targetProfessionalId, userId: targetUserId, ...videoSettings },
       "professional video settings",
     );
-    const { error } = await supabase.from("professionals")
-      .update({ video_link: payload.video_link, calendar_notes: payload.calendar_notes })
-      .eq("id", payload.professionalId)
-      .eq("user_id", payload.userId);
-    if (!error) return true;
-    toast.error("Could not save video settings. Please try again.");
-    return false;
+    return saveProfessionalOnboardingSetup(
+      {
+        action: "video",
+        professionalId: payload.professionalId,
+        videoLink: payload.video_link,
+        calendarNotes: payload.calendar_notes,
+      },
+      "Could not save video settings. Please try again.",
+    );
   };
 
   const saveVideoSettings = (): Promise<boolean> => {

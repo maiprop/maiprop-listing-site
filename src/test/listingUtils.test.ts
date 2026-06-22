@@ -139,6 +139,30 @@ describe("dbListingToCard — image handling", () => {
     );
     expect(card.images).toHaveLength(2);
   });
+
+  it("prefers new-build project cover and project media before stale listing media", () => {
+    const card = dbListingToCard(
+      makeDbListing({
+        listing_type: "new_build",
+        cover_image_url: "https://example.com/stale-listing-cover.jpg",
+        listing_images: [{ url: "https://example.com/listing-gallery.jpg" }],
+        project: {
+          cover_image_url: "https://example.com/project-cover.jpg",
+          project_media: [
+            { url: "https://example.com/floorplan.pdf", media_type: "pdf", sort_order: 1 },
+            { url: "https://example.com/project-render.jpg", media_type: "image", sort_order: 2 },
+          ],
+        },
+      }),
+    );
+
+    expect(card.images).toEqual([
+      "https://example.com/project-cover.jpg",
+      "https://example.com/stale-listing-cover.jpg",
+      "https://example.com/listing-gallery.jpg",
+      "https://example.com/project-render.jpg",
+    ]);
+  });
 });
 
 describe("dbListingToCard — agent/profiles", () => {

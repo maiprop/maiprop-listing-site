@@ -35,6 +35,7 @@ import { AuctionAlertModal } from "@/components/AuctionAlertModal";
 import { APP_ORIGIN, getStreetViewProxyUrl } from "@/lib/config";
 import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 import { dbListingToCard } from "@/lib/listingUtils";
+import type { DbListingCardRow } from "@/lib/domainContracts";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 import PropertyGallery from "@/components/property/PropertyGallery";
 import PropertyFeatureList from "@/components/property/PropertyFeatureList";
@@ -602,7 +603,7 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {similarListings.map((l) =>
-            <PropertyCard key={l.id} property={dbListingToCard(l, { includeOwnership: true, includeRaw: true, maxImages: 3 })} />
+            <PropertyCard key={l.id} property={dbListingToCard(l as unknown as DbListingCardRow, { includeOwnership: true, includeRaw: true, maxImages: 3 })} />
             )}
             </div>
           </div>

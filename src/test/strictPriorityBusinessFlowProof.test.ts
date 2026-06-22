@@ -131,7 +131,15 @@ const proof: readonly FlowProof[] = [
     artifacts: [
       {
         file: "src/components/firesale/quickSaleSubmission.ts",
-        snippets: ['from("firesale_requests")', "delete().eq", "user_id"],
+        snippets: ['supabase.functions.invoke("submit-firesale-request"', 'action: "rollback"'],
+      },
+      {
+        file: "supabase/functions/submit-firesale-request/index.ts",
+        snippets: ['from("firesale_requests")', "verifyBearerToken", "rollbackRequestSchema"],
+      },
+      {
+        file: "supabase/migrations/20260622072139_lock_firesale_request_edge_boundary.sql",
+        snippets: ["REVOKE INSERT, DELETE", "GRANT INSERT, DELETE", "submit-firesale-request"],
       },
       {
         file: "supabase/functions/submit-firesale-interest/index.ts",

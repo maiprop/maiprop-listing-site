@@ -1,10 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Shared utilities for converting DB listing rows to PropertyCard-compatible objects.
  */
 
 import { getOwnerParticipantType } from "./participantConfig";
-import { getNewBuildCardSummary } from "./newBuildCardSummary";
+import { getNewBuildCardImages, getNewBuildCardSummary } from "./newBuildCardSummary";
+import { normalizeOpenHouseTransactionType, type DbListingCardRow } from "@/lib/domainContracts";
 import type { ListingCard } from "@/types";
 
 const SYSTEM_TAG_PREFIXES = [
@@ -39,7 +39,7 @@ export interface DbListingToCardOptions {
  * Convert a DB listing row (with profiles join) to a PropertyCard-compatible object.
  */
 export function dbListingToCard(
-  l: any,
+  l: DbListingCardRow,
   options: DbListingToCardOptions = {}
 ): ListingCard {
   const {
@@ -52,7 +52,7 @@ export function dbListingToCard(
 
   const ownerParticipantType = getOwnerParticipantType(l.profiles ?? null);
 
-  const tags: string[] = l.tags || [];
+  const tags = Array.isArray(l.tags) ? l.tags.filter((tag): tag is string => typeof tag === "string") : [];
   let ownershipStatus: string | undefined;
   let ownershipPercentage: number | undefined;
   let displayTags = tags;
@@ -81,10 +81,10 @@ export function dbListingToCard(
           ].filter(Boolean) as string[];
   }
 
-  let images = [...(l.cover_image_url ? [l.cover_image_url] : []), ...(l.listing_images?.map((img: any) => img.url) || [])].filter(Boolean);
+  let images = getNewBuildCardImages(l);
   if (maxImages != null) images = images.slice(0, maxImages);
 
-  const result: any = {
+  const result: ListingCard = {
     id: l.id,
     title: l.title,
     address: l.address || l.city,
@@ -102,7 +102,7 @@ export function dbListingToCard(
     type: l.property_type,
     listingType: l.listing_type,
     openHouseTransactionType: l.listing_type === "open_house"
-      ? (l.open_house_transaction_type === "rent" ? "rent" : "sale")
+      ? normalizeOpenHouseTransactionType(l.open_house_transaction_type)
       : undefined,
     auctionDate: l.listing_type === "open_house" && l.open_house_date
       ? new Date(l.open_house_date).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
@@ -112,12 +112,12 @@ export function dbListingToCard(
     aiScore: l.ai_score ?? undefined,
     views: l.views_count ?? undefined,
     agent: l.profiles
-      ? { name: l.profiles.display_name || "Owner", verified: l.profiles.verified || false, avatar: l.profiles.avatar_url }
+      ? { name: l.profiles.display_name || "Owner", verified: l.profiles.verified || false, avatar: l.profiles.avatar_url ?? undefined }
       : undefined,
     ownerParticipantType,
     tags: filterDisplayTags ? displayTags : (tags.filter(Boolean) as string[]),
-    hasVideo: l.has_video_tour,
-    hasVirtualTour: l.has_virtual_tour,
+    hasVideo: l.has_video_tour ?? undefined,
+    hasVirtualTour: l.has_virtual_tour ?? undefined,
     isFeatured: !!l.is_featured,
     priorityPlacement: Number(l.priority_placement) || 0,
     isPreSale: l.listing_type === "new_build",
@@ -133,8 +133,8 @@ export function dbListingToCard(
     result.ownershipPercentage = ownershipPercentage;
   }
   if (includeCoordinates) {
-    result.latitude = l.latitude;
-    result.longitude = l.longitude;
+    result.latitude = l.latitude ?? undefined;
+    result.longitude = l.longitude ?? undefined;
   }
   if (includeRaw) result._raw = l;
 

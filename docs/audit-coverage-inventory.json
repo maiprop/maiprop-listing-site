@@ -1,22 +1,22 @@
 {
-  "generated_at": "2026-06-20T09:23:16.832Z",
+  "generated_at": "2026-06-22T07:53:13.188Z",
   "totals": {
-    "source_files": 603,
-    "source_lines": 114252,
-    "test_files": 395,
+    "source_files": 614,
+    "source_lines": 116210,
+    "test_files": 406,
     "routes": 42,
-    "supabase_functions": 60,
-    "likely_tested_source_files": 546,
+    "supabase_functions": 62,
+    "likely_tested_source_files": 555,
     "coverage_available": true,
-    "coverage_lines_pct": 87.5,
-    "coverage_functions_pct": 82.7,
+    "coverage_lines_pct": 87.52,
+    "coverage_functions_pct": 82.73,
     "coverage_branches_pct": 73.15,
     "zero_covered_runtime_files": 0
   },
   "by_root": {
     "src/pages": {
       "files": 58,
-      "lines": 20779,
+      "lines": 20547,
       "likely_tested_files": 56,
       "likely_untested_files": [
         "src/pages/dashboard/billing/AddonCard.tsx",
@@ -24,9 +24,9 @@
       ]
     },
     "src/components": {
-      "files": 224,
-      "lines": 41694,
-      "likely_tested_files": 198,
+      "files": 225,
+      "lines": 41800,
+      "likely_tested_files": 199,
       "likely_untested_files": [
         "src/components/firesale/QuickSaleFormView.tsx",
         "src/components/LegalPolicyPage.tsx",
@@ -58,7 +58,7 @@
     },
     "src/hooks": {
       "files": 68,
-      "lines": 11057,
+      "lines": 11183,
       "likely_tested_files": 63,
       "likely_untested_files": [
         "src/hooks/useFiresalePhotoUploader.ts",
@@ -69,9 +69,9 @@
       ]
     },
     "src/lib": {
-      "files": 68,
-      "lines": 8689,
-      "likely_tested_files": 54,
+      "files": 74,
+      "lines": 9385,
+      "likely_tested_files": 58,
       "likely_untested_files": [
         "src/lib/apiDocsData.ts",
         "src/lib/authErrorMessages.ts",
@@ -83,7 +83,9 @@
         "src/lib/locationSuggestions.ts",
         "src/lib/newBuildCardSummary.ts",
         "src/lib/newBuildConfig.ts",
+        "src/lib/newBuildListingFallback.ts",
         "src/lib/projectListingClassification.ts",
+        "src/lib/publicListingFallbacks.ts",
         "src/lib/queryCachePolicy.ts",
         "src/lib/statusColors.ts",
         "src/lib/videoRooms.ts"
@@ -96,9 +98,9 @@
       "likely_untested_files": []
     },
     "supabase/functions": {
-      "files": 184,
-      "lines": 31555,
-      "likely_tested_files": 174,
+      "files": 188,
+      "lines": 32817,
+      "likely_tested_files": 178,
       "likely_untested_files": [
         "supabase/functions/fetch-os-auctions/auctionCache.ts",
         "supabase/functions/fetch-os-auctions/auctionMapping.ts",
@@ -119,19 +121,6 @@
       "lines": 1231,
       "likely_tested": true,
       "coverage": null
-    },
-    {
-      "file": "src/pages/NewBuildDetail.tsx",
-      "lines": 1083,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 97.72,
-        "functions": 95.45,
-        "branches": 73.95,
-        "statements": 92.22,
-        "covered_lines": 215,
-        "total_lines": 220
-      }
     },
     {
       "file": "src/lib/professionalServiceCatalog.ts",
@@ -160,16 +149,29 @@
       }
     },
     {
-      "file": "src/pages/Dashboard.tsx",
-      "lines": 944,
+      "file": "src/pages/Onboarding.tsx",
+      "lines": 912,
       "likely_tested": true,
       "coverage": {
-        "lines": 80.81,
-        "functions": 71.79,
-        "branches": 79.88,
-        "statements": 78.46,
-        "covered_lines": 139,
-        "total_lines": 172
+        "lines": 63.27,
+        "functions": 67.14,
+        "branches": 52.61,
+        "statements": 58.9,
+        "covered_lines": 224,
+        "total_lines": 354
+      }
+    },
+    {
+      "file": "src/pages/NewBuildDetail.tsx",
+      "lines": 901,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 97.72,
+        "functions": 95.45,
+        "branches": 73.95,
+        "statements": 92.22,
+        "covered_lines": 215,
+        "total_lines": 220
       }
     },
     {
@@ -192,27 +194,8 @@
       "coverage": null
     },
     {
-      "file": "src/pages/Onboarding.tsx",
-      "lines": 893,
-      "likely_tested": true,
-      "coverage": {
-        "lines": 63.27,
-        "functions": 67.14,
-        "branches": 52.61,
-        "statements": 58.9,
-        "covered_lines": 224,
-        "total_lines": 354
-      }
-    },
-    {
-      "file": "supabase/functions/stripe-webhook/index.ts",
-      "lines": 850,
-      "likely_tested": true,
-      "coverage": null
-    },
-    {
       "file": "src/lib/mutationSchemas.ts",
-      "lines": 847,
+      "lines": 870,
       "likely_tested": true,
       "coverage": {
         "lines": 98.58,
@@ -222,6 +205,25 @@
         "covered_lines": 139,
         "total_lines": 141
       }
+    },
+    {
+      "file": "src/pages/Dashboard.tsx",
+      "lines": 860,
+      "likely_tested": true,
+      "coverage": {
+        "lines": 80.81,
+        "functions": 71.79,
+        "branches": 79.88,
+        "statements": 78.46,
+        "covered_lines": 139,
+        "total_lines": 172
+      }
+    },
+    {
+      "file": "supabase/functions/stripe-webhook/index.ts",
+      "lines": 850,
+      "likely_tested": true,
+      "coverage": null
     },
     {
       "file": "src/pages/Pricing.tsx",
@@ -251,7 +253,7 @@
     },
     {
       "file": "src/pages/OpenHouses.tsx",
-      "lines": 783,
+      "lines": 795,
       "likely_tested": true,
       "coverage": {
         "lines": 85.71,
@@ -425,7 +427,7 @@
     },
     {
       "file": "src/pages/PropertyDetail.tsx",
-      "lines": 674,
+      "lines": 675,
       "likely_tested": true,
       "coverage": {
         "lines": 68.9,
@@ -559,6 +561,12 @@
       }
     },
     {
+      "file": "src/lib/publicListingFallbacks.ts",
+      "lines": 154,
+      "likely_tested": false,
+      "coverage": null
+    },
+    {
       "file": "src/components/LegalPolicyPage.tsx",
       "lines": 147,
       "likely_tested": false,
@@ -604,8 +612,27 @@
       "coverage": null
     },
     {
+      "file": "src/lib/newBuildCardSummary.ts",
+      "lines": 114,
+      "likely_tested": false,
+      "coverage": {
+        "lines": 100,
+        "functions": 100,
+        "branches": 85.29,
+        "statements": 96,
+        "covered_lines": 21,
+        "total_lines": 21
+      }
+    },
+    {
       "file": "src/components/ui/sheet.tsx",
       "lines": 108,
+      "likely_tested": false,
+      "coverage": null
+    },
+    {
+      "file": "src/lib/newBuildListingFallback.ts",
+      "lines": 107,
       "likely_tested": false,
       "coverage": null
     },
@@ -699,19 +726,6 @@
       }
     },
     {
-      "file": "src/lib/newBuildCardSummary.ts",
-      "lines": 61,
-      "likely_tested": false,
-      "coverage": {
-        "lines": 100,
-        "functions": 100,
-        "branches": 85.29,
-        "statements": 96,
-        "covered_lines": 21,
-        "total_lines": 21
-      }
-    },
-    {
       "file": "supabase/functions/_shared/email-templates/email-change.tsx",
       "lines": 61,
       "likely_tested": false,
@@ -720,25 +734,6 @@
     {
       "file": "supabase/functions/_shared/email-templates/magic-link.tsx",
       "lines": 58,
-      "likely_tested": false,
-      "coverage": null
-    },
-    {
-      "file": "src/lib/listingsConfig.ts",
-      "lines": 56,
-      "likely_tested": false,
-      "coverage": {
-        "lines": 100,
-        "functions": 100,
-        "branches": 100,
-        "statements": 100,
-        "covered_lines": 9,
-        "total_lines": 9
-      }
-    },
-    {
-      "file": "supabase/functions/_shared/email-templates/reauthentication.tsx",
-      "lines": 55,
       "likely_tested": false,
       "coverage": null
     }
@@ -864,7 +859,7 @@
     },
     {
       "file": "src/pages/Onboarding.tsx",
-      "lines": 893,
+      "lines": 912,
       "likely_tested": true,
       "coverage": {
         "lines": 63.27,
@@ -942,7 +937,7 @@
     },
     {
       "file": "src/pages/PropertyDetail.tsx",
-      "lines": 674,
+      "lines": 675,
       "likely_tested": true,
       "coverage": {
         "lines": 68.9,
@@ -1336,6 +1331,11 @@
       "has_test": true
     },
     {
+      "name": "save-professional-onboarding",
+      "has_index": true,
+      "has_test": true
+    },
+    {
       "name": "scheduled-followups",
       "has_index": true,
       "has_test": true
@@ -1371,6 +1371,11 @@
       "has_test": true
     },
     {
+      "name": "submit-firesale-request",
+      "has_index": true,
+      "has_test": true
+    },
+    {
       "name": "sync-firesale-to-os",
       "has_index": true,
       "has_test": true
@@ -1394,7 +1399,7 @@
   "role_term_coverage": {
     "buyer": {
       "source_files": 61,
-      "test_files": 82,
+      "test_files": 83,
       "sample_source_files": [
         "src/pages/AdminPricing.tsx",
         "src/pages/AuctionDetail.tsx",
@@ -1441,8 +1446,8 @@
       ]
     },
     "seller": {
-      "source_files": 70,
-      "test_files": 64,
+      "source_files": 73,
+      "test_files": 67,
       "sample_source_files": [
         "src/pages/AdminPricing.tsx",
         "src/pages/CreateListing.tsx",
@@ -1508,8 +1513,8 @@
       ]
     },
     "agent": {
-      "source_files": 95,
-      "test_files": 76,
+      "source_files": 96,
+      "test_files": 78,
       "sample_source_files": [
         "src/pages/AdminPricing.tsx",
         "src/pages/AIAssistantPage.tsx",
@@ -1556,8 +1561,8 @@
       ]
     },
     "professional": {
-      "source_files": 99,
-      "test_files": 67,
+      "source_files": 102,
+      "test_files": 72,
       "sample_source_files": [
         "src/pages/AdminDashboard.tsx",
         "src/pages/AdminPricing.tsx",
@@ -1604,8 +1609,8 @@
       ]
     },
     "developer": {
-      "source_files": 68,
-      "test_files": 52,
+      "source_files": 70,
+      "test_files": 54,
       "sample_source_files": [
         "src/pages/AdminPricing.tsx",
         "src/pages/ApiDocs.tsx",
@@ -1644,16 +1649,16 @@
         "src/test/dashboardNav.test.ts",
         "src/test/DashboardTabs.behavior.test.tsx",
         "src/test/developerOnlyNewBuildsMigration.test.ts",
+        "src/test/domainContracts.test.ts",
         "src/test/highTrustRoleMigration.test.ts",
         "src/test/highTrustSubscriptionActivationMigration.test.ts",
         "src/test/interactionNotificationsMigration.test.ts",
-        "src/test/InvestorDashboard.behavior.test.tsx",
-        "src/test/NewBuildDetail.test.tsx"
+        "src/test/InvestorDashboard.behavior.test.tsx"
       ]
     },
     "investor": {
-      "source_files": 75,
-      "test_files": 72,
+      "source_files": 76,
+      "test_files": 73,
       "sample_source_files": [
         "src/pages/AdminDashboard.tsx",
         "src/pages/AdminPricing.tsx",
@@ -1701,7 +1706,7 @@
     },
     "admin": {
       "source_files": 107,
-      "test_files": 109,
+      "test_files": 110,
       "sample_source_files": [
         "src/pages/AdminDashboard.tsx",
         "src/pages/AdminPricing.tsx",
@@ -1789,8 +1794,8 @@
   },
   "business_term_coverage": {
     "pricing": {
-      "source_files": 88,
-      "test_files": 60,
+      "source_files": 90,
+      "test_files": 62,
       "sample_source_files": [
         "src/pages/AdminDashboard.tsx",
         "src/pages/AdminPricing.tsx",
@@ -1885,8 +1890,8 @@
       ]
     },
     "subscription": {
-      "source_files": 81,
-      "test_files": 67,
+      "source_files": 82,
+      "test_files": 69,
       "sample_source_files": [
         "src/pages/AdminPricing.tsx",
         "src/pages/AIAssistantPage.tsx",
@@ -2009,8 +2014,8 @@
       ]
     },
     "open_house": {
-      "source_files": 38,
-      "test_files": 45,
+      "source_files": 41,
+      "test_files": 46,
       "sample_source_files": [
         "src/pages/AdminDashboard.tsx",
         "src/pages/OpenHouseDetail.tsx",
@@ -2041,6 +2046,7 @@
         "src/test/criticalBusinessInvariants.test.ts",
         "src/test/criticalWorkflowProof.test.ts",
         "src/test/dashboardAdminWidgets.test.tsx",
+        "src/test/domainContracts.test.ts",
         "src/test/firesaleAdvisorPolicyConsolidationMigration.test.ts",
         "src/test/ListingSteps.interactions.test.tsx",
         "src/test/Navbar.behavior.test.tsx",
@@ -2052,13 +2058,12 @@
         "src/test/openHousePages.behavior.test.tsx",
         "src/test/OpenHousePrimitives.layout.test.tsx",
         "src/test/openHouseRegistrationMutationGuard.test.ts",
-        "src/test/openHouseRegistrationPolicyDriftMigration.test.ts",
-        "src/test/openHouseTransactionTypeMigration.test.ts"
+        "src/test/openHouseRegistrationPolicyDriftMigration.test.ts"
       ]
     },
     "auction": {
-      "source_files": 110,
-      "test_files": 76,
+      "source_files": 112,
+      "test_files": 77,
       "sample_source_files": [
         "src/pages/AdminDashboard.tsx",
         "src/pages/AdminPricing.tsx",
@@ -2105,8 +2110,8 @@
       ]
     },
     "firesale": {
-      "source_files": 46,
-      "test_files": 54,
+      "source_files": 50,
+      "test_files": 59,
       "sample_source_files": [
         "src/pages/AdminDashboard.tsx",
         "src/pages/AdminPricing.tsx",
@@ -2121,13 +2126,13 @@
         "src/components/AdminPanel.tsx",
         "src/components/AdminReports.tsx",
         "src/components/BottomNav.tsx",
+        "src/components/dashboard/SellerQuickSalePanel.tsx",
         "src/components/dashboard/SettingsSection.tsx",
         "src/components/DealChecklist.tsx",
         "src/components/firesale/FiresaleInvestorPanel.tsx",
         "src/components/firesale/FiresaleQuickSaleForm.tsx",
         "src/components/firesale/quickSaleFormModel.ts",
-        "src/components/firesale/QuickSaleFormView.tsx",
-        "src/components/firesale/quickSaleSubmission.ts"
+        "src/components/firesale/QuickSaleFormView.tsx"
       ],
       "sample_test_files": [
         "src/test/adminCrossUserWorkflowMigration.test.ts",
@@ -2143,20 +2148,20 @@
         "src/test/criticalWorkflowProof.test.ts",
         "src/test/dashboardAdminWidgets.test.tsx",
         "src/test/DealChecklist.test.tsx",
+        "src/test/domainContracts.test.ts",
         "src/test/firesaleAdvisorPolicyConsolidationMigration.test.ts",
         "src/test/FiresaleComponents.behavior.test.tsx",
         "src/test/firesaleInterestMessages.test.ts",
         "src/test/firesaleInterestSubmitGrantMigration.test.ts",
         "src/test/FiresaleInvestorPanel.accessibility.test.tsx",
-        "src/test/firesalePipelineBusinessLogicMigration.test.ts",
-        "src/test/firesaleProofDocsIsolationMigration.test.ts"
+        "src/test/firesalePipelineBusinessLogicMigration.test.ts"
       ]
     },
     "quick_sale": {
       "source_files": 2,
       "test_files": 2,
       "sample_source_files": [
-        "src/pages/Dashboard.tsx",
+        "src/components/dashboard/SellerQuickSalePanel.tsx",
         "src/components/Navbar.tsx"
       ],
       "sample_test_files": [
@@ -2249,8 +2254,8 @@
       ]
     },
     "project": {
-      "source_files": 82,
-      "test_files": 67,
+      "source_files": 86,
+      "test_files": 71,
       "sample_source_files": [
         "src/pages/AdminPricing.tsx",
         "src/pages/ApiDocs.tsx",
@@ -2288,17 +2293,17 @@
         "src/test/DashboardTabs.behavior.test.tsx",
         "src/test/DataInputTab.test.tsx",
         "src/test/developerOnlyNewBuildsMigration.test.ts",
+        "src/test/domainContracts.test.ts",
         "src/test/FeaturedPropertiesSection.mapping.test.tsx",
         "src/test/idor.mutations.test.ts",
         "src/test/interactionLeadMigration.test.ts",
         "src/test/LeadsCRM.behavior.test.tsx",
-        "src/test/LeadsCRM.test.tsx",
-        "src/test/Listings.performance.test.ts"
+        "src/test/LeadsCRM.test.tsx"
       ]
     },
     "listing": {
-      "source_files": 235,
-      "test_files": 196,
+      "source_files": 241,
+      "test_files": 198,
       "sample_source_files": [
         "src/pages/AdminDashboard.tsx",
         "src/pages/AdminPricing.tsx",
@@ -2393,8 +2398,8 @@
       ]
     },
     "message": {
-      "source_files": 219,
-      "test_files": 119,
+      "source_files": 224,
+      "test_files": 122,
       "sample_source_files": [
         "src/pages/AdminPricing.tsx",
         "src/pages/AuthCallback.tsx",
@@ -2489,8 +2494,8 @@
       ]
     },
     "consultation": {
-      "source_files": 28,
-      "test_files": 27,
+      "source_files": 29,
+      "test_files": 28,
       "sample_source_files": [
         "src/pages/BrandedVideoRoom.tsx",
         "src/pages/dashboard/AnalyticsTab.tsx",
@@ -2537,8 +2542,8 @@
       ]
     },
     "onboarding": {
-      "source_files": 38,
-      "test_files": 44,
+      "source_files": 40,
+      "test_files": 47,
       "sample_source_files": [
         "src/pages/AdminPricing.tsx",
         "src/pages/AuthCallback.tsx",
@@ -2585,17 +2590,20 @@
       ]
     },
     "role_switch": {
-      "source_files": 8,
-      "test_files": 23,
+      "source_files": 11,
+      "test_files": 25,
       "sample_source_files": [
         "src/pages/onboarding/onboardingHelpers.ts",
         "src/pages/Onboarding.tsx",
         "src/components/dashboard/SettingsSection.tsx",
         "src/hooks/useSubscription.ts",
+        "src/lib/quickSaleEntitlements.ts",
         "src/contexts/AuthContext.tsx",
         "supabase/functions/begin-role-switch/index.test.ts",
         "supabase/functions/begin-role-switch/index.ts",
-        "supabase/functions/log-role-switch/index.ts"
+        "supabase/functions/log-role-switch/index.ts",
+        "supabase/functions/submit-firesale-request/index.test.ts",
+        "supabase/functions/submit-firesale-request/index.ts"
       ],
       "sample_test_files": [
         "src/test/AuthContext.test.tsx",
@@ -2613,11 +2621,11 @@
         "src/test/pages.smoke.test.tsx",
         "src/test/participantTypeEntitlementHardeningMigration.test.ts",
         "src/test/pricing-dashboard-auction-specific.test.tsx",
+        "src/test/quickSaleEntitlements.test.ts",
         "src/test/roleSwitchAuditGrantMigration.test.ts",
         "src/test/routeGuards.test.tsx",
         "src/test/useEligibleForQuickSale.test.tsx",
-        "src/test/useSubscription.test.tsx",
-        "e2e/ai-valuation-model.spec.ts"
+        "src/test/useSubscription.test.tsx"
       ]
     },
     "agent_data": {

@@ -80,9 +80,20 @@ vi.mock("@/components/property/PropertyScoresSection", () => ({
   PropertyScoresSection: ({ walkScore }: { walkScore: number | null }) => <div data-testid="scores">walk:{walkScore ?? "none"}</div>,
 }));
 vi.mock("@/components/new-build/PropertyGallery", () => ({
-  PropertyGallery: ({ title, onFavorite, onShare }: { title: string; onFavorite: () => void; onShare: () => void }) => (
+  PropertyGallery: ({
+    title,
+    images,
+    onFavorite,
+    onShare,
+  }: {
+    title: string;
+    images: string[];
+    onFavorite: () => void;
+    onShare: () => void;
+  }) => (
     <div>
       <span>gallery title:{title}</span>
+      <span data-testid="gallery-first-image">{images[0] ?? ""}</span>
       <button type="button" onClick={onFavorite}>favorite</button>
       <button type="button" onClick={onShare}>share</button>
     </div>
@@ -193,6 +204,7 @@ const listing = {
     address: "Marina Avenue 10",
     city: "Piraeus",
     municipality: "Piraeus Municipality",
+    cover_image_url: "https://cdn/project-cover.jpg",
     developer_company: "Mai Developments",
     architect_group: "Aegean Studio",
     construction_company: "BuildCo",
@@ -373,6 +385,7 @@ describe("NewBuildDetail", () => {
     expect(screen.getByText("Layouts")).toBeInTheDocument();
     expect(screen.getByText("2 bed · 2 bath")).toBeInTheDocument();
     expect(screen.getByText("gallery title:Marina Heights")).toBeInTheDocument();
+    expect(screen.getByTestId("gallery-first-image")).toHaveTextContent("https://cdn/project-cover.jpg");
     expect(screen.queryByRole("heading", { name: "Aegean Residences" })).not.toBeInTheDocument();
     expect(screen.getByText(/From/)).toHaveTextContent(/410[,.]000/);
     expect(screen.getByText("Mai Developments")).toBeInTheDocument();

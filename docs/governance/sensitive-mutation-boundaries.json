@@ -2,6 +2,7 @@
   "version": 1,
   "blockedDirectTables": [
     "admin_audit_log",
+    "firesale_requests",
     "organization_domains",
     "organization_memberships",
     "organization_sso_providers",
@@ -10,6 +11,7 @@
     "procurement_evidence",
     "pro_product_ids",
     "role_change_requests",
+    "subscription_trial_claims",
     "subscriptions"
   ],
   "allowedBrowserMutations": [
@@ -126,22 +128,6 @@
       "rationale": "Report submissions are append-only moderation inputs."
     },
     {
-      "file": "src/pages/Onboarding.tsx",
-      "table": "professional_services",
-      "operations": ["insert"],
-      "boundary": "rls-scoped-browser",
-      "owner": "app-web",
-      "rationale": "Professional setup rows are generated during authenticated onboarding."
-    },
-    {
-      "file": "src/pages/Onboarding.tsx",
-      "table": "professional_availability",
-      "operations": ["insert"],
-      "boundary": "rls-scoped-browser",
-      "owner": "app-web",
-      "rationale": "Professional availability setup rows are generated during authenticated onboarding."
-    },
-    {
       "file": "src/pages/NewBuildDetail.tsx",
       "table": "new_building_leads",
       "operations": ["insert"],
@@ -174,14 +160,6 @@
       "rationale": "Invitation request submission is schema-validated and reviewed by admins."
     },
     {
-      "file": "src/components/firesale/quickSaleSubmission.ts",
-      "table": "firesale_requests",
-      "operations": ["delete"],
-      "boundary": "rls-scoped-browser",
-      "owner": "app-web",
-      "rationale": "Rollback deletion is scoped by request id and user id."
-    },
-    {
       "file": "src/components/PropertyCard.tsx",
       "table": "listing_reports",
       "operations": ["insert"],
@@ -204,14 +182,6 @@
       "boundary": "rls-scoped-browser",
       "owner": "app-web",
       "rationale": "Investor subscription review state is admin-scoped; payment entitlements remain handled by Stripe functions."
-    },
-    {
-      "file": "src/components/firesale/quickSaleSubmission.ts",
-      "table": "firesale_requests",
-      "operations": ["insert"],
-      "boundary": "rls-scoped-browser",
-      "owner": "app-web",
-      "rationale": "Quick sale request creation is user-scoped and schema-validated before insert."
     },
     {
       "file": "src/components/POFVerificationPanel.tsx",
@@ -468,30 +438,6 @@
       "boundary": "rls-scoped-browser",
       "owner": "data-access",
       "rationale": "Viewing requests and status updates are participant/listing-owner scoped."
-    },
-    {
-      "file": "src/pages/Onboarding.tsx",
-      "table": "professionals",
-      "operations": ["upsert", "update"],
-      "boundary": "rls-scoped-browser",
-      "owner": "app-web",
-      "rationale": "Professional onboarding profile writes are self-scoped and do not update platform role or billing state."
-    },
-    {
-      "file": "src/pages/Onboarding.tsx",
-      "table": "professional_services",
-      "operations": ["delete"],
-      "boundary": "rls-scoped-browser",
-      "owner": "app-web",
-      "rationale": "Professional service reset during onboarding is scoped to the authenticated professional profile."
-    },
-    {
-      "file": "src/pages/Onboarding.tsx",
-      "table": "professional_availability",
-      "operations": ["delete"],
-      "boundary": "rls-scoped-browser",
-      "owner": "app-web",
-      "rationale": "Professional availability reset during onboarding is scoped to the authenticated professional profile."
     }
   ]
 }

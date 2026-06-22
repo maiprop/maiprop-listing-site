@@ -24,6 +24,12 @@ verify_jwt = true
 [functions.submit-firesale-interest]
 verify_jwt = true
 
+[functions.submit-firesale-request]
+verify_jwt = true
+
+[functions.save-professional-onboarding]
+verify_jwt = true
+
 [functions.open-house-capacity]
 verify_jwt = true
 
