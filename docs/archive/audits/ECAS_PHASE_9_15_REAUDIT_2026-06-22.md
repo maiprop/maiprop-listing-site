@@ -59,6 +59,21 @@ The app is materially stronger than the earlier ECAS baseline, but this repo sho
 5. Restore-drill execution remains an operator task; the repository has the runbook and readiness gate.
 6. GitHub connector workflow reads returned 404 on this private repo; `gh` CLI was used for Actions evidence.
 
+## Added Live-Evidence Gate
+
+Follow-up branch `codex/ecas-live-evidence-hardening` adds redacted, read-only
+capture scripts for the remaining provider evidence:
+
+- `npm run capture:sentry-live-evidence`
+- `npm run capture:cloudflare-admin-posture`
+- `npm run capture:github-admin-posture`
+- `npm run check:ecas-live-evidence`
+
+These scripts are advisory by default so local development and CI are not
+blocked when provider audit tokens are absent. In procurement or release-audit
+mode, run `npm run check:ecas-live-evidence -- --strict` after all provider
+artifacts have been captured.
+
 ## 30/60/90-Day Roadmap
 
 | Window | Action |
