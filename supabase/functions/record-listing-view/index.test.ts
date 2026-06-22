@@ -23,6 +23,24 @@ Deno.test("invalid listing id is rejected before RPC work", async () => {
   assertEquals(res.status, 400);
 });
 
+Deno.test("invalid JSON is rejected before service-role work", async () => {
+  Deno.env.set("VIEW_TRACKING_SAMPLE_RATE", "1");
+  Deno.env.delete("SUPABASE_SERVICE_ROLE_KEY");
+  const res = await handler(new Request("https://functions.supabase.co/fn", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      origin: "https://maiprop.co",
+      "x-forwarded-for": crypto.randomUUID(),
+    },
+    body: "{",
+  }));
+  assertEquals(res.status, 400);
+  const body = await res.json();
+  assertEquals(body.error, "Invalid JSON body");
+  Deno.env.delete("VIEW_TRACKING_SAMPLE_RATE");
+});
+
 Deno.test("malformed UUID-shaped listing id is rejected before service-role work", async () => {
   Deno.env.set("VIEW_TRACKING_SAMPLE_RATE", "1");
   Deno.env.delete("SUPABASE_SERVICE_ROLE_KEY");

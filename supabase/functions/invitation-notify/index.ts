@@ -6,6 +6,7 @@ import {
   makeRateLimiter,
   tooManyRequestsResponse,
 } from "../_shared/rateLimit.ts";
+import { parseJsonBody, SchemaValidationError, z } from "../_shared/schema.ts";
 
 const log = createLogger("invitation-notify");
 const limiter = makeRateLimiter({
@@ -18,6 +19,14 @@ const requireEnv = (key: string): string => {
   if (!value) throw new Error(`Missing required environment variable: ${key}`);
   return value;
 };
+
+const invitationNotificationSchema = z.object({
+  type: z.enum(["approved", "rejected"]),
+  email: z.email(),
+  full_name: z.string().trim().min(1).optional().nullable(),
+  rejection_reason: z.string().trim().min(1).optional().nullable(),
+  tier: z.string().trim().min(1).optional().nullable(),
+});
 
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
@@ -66,18 +75,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    const body = await req.json();
+    const body = await parseJsonBody(req, invitationNotificationSchema);
     const { type, email, full_name, rejection_reason, tier } = body;
-
-    if (!type || !email) {
-      return new Response(
-        JSON.stringify({ error: "type and email are required" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
 
     const firstName = full_name?.split(" ")[0] || "there";
     const appUrl = "https://portal.maiprop.co/";
@@ -226,6 +225,12 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
+    if (err instanceof SchemaValidationError) {
+      return new Response(JSON.stringify({ error: err.message, code: err.code, issues: err.issues }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     log.error("invitation-notify error", {
       err: err instanceof Error ? err.message : String(err),
     });

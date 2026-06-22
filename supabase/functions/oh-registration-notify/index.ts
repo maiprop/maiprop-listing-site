@@ -3,8 +3,23 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getBrevoSender, sendBrevoEmail } from "../_shared/brevo.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createLogger } from "../_shared/logger.ts";
+import { parseJsonBody, SchemaValidationError, z } from "../_shared/schema.ts";
 
 const log = createLogger("oh-registration-notify");
+
+const webhookRecordSchema = z.record(z.string(), z.unknown()).and(z.object({
+  id: z.unknown().optional(),
+  requester_id: z.string().min(1),
+  listing_id: z.string().min(1),
+  status: z.string().min(1),
+  rejection_reason: z.string().optional().nullable(),
+  timeslot_index: z.number().int().optional().nullable(),
+}));
+
+const webhookPayloadSchema = z.record(z.string(), z.unknown()).and(z.object({
+  record: webhookRecordSchema.optional().nullable(),
+  old_record: webhookRecordSchema.optional().nullable(),
+}));
 
 function verifyWebhookSecret(req: Request): boolean {
   const secret = Deno.env.get("WEBHOOK_SECRET");
@@ -29,7 +44,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const payload = await req.json();
+    const payload = await parseJsonBody(req, webhookPayloadSchema);
     const { record, old_record } = payload;
 
     if (!record || !old_record) {
@@ -174,6 +189,12 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
+    if (err instanceof SchemaValidationError) {
+      return new Response(JSON.stringify({ ok: false, error: err.message, code: err.code, issues: err.issues }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     log.error("notify error", { err: err instanceof Error ? err.message : String(err) });
     return new Response(JSON.stringify({ ok: false, error: String(err) }), {
       status: 500,
