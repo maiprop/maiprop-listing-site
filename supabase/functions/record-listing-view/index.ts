@@ -2,6 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createLogger } from "../_shared/logger.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import { parseJsonBody, SchemaValidationError, z } from "../_shared/schema.ts";
 
 const log = createLogger("record-listing-view");
 const maxRequestsPerMinute = readPositiveInt("VIEW_TRACKING_MAX_REQUESTS_PER_MINUTE", 120);
@@ -12,16 +13,9 @@ const limiter = makeRateLimiter({
 });
 const LISTING_ID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-type ViewRequest = {
-  listingId?: unknown;
-};
-
-function parseListingId(body: ViewRequest): string {
-  if (typeof body.listingId !== "string" || !LISTING_ID_REGEX.test(body.listingId)) {
-    throw new Error("Invalid listingId");
-  }
-  return body.listingId;
-}
+const viewRequestSchema = z.object({
+  listingId: z.string().regex(LISTING_ID_REGEX, "Invalid listingId"),
+});
 
 function readPositiveInt(key: string, fallback: number): number {
   const raw = Deno.env.get(key);
@@ -54,8 +48,8 @@ Deno.serve(async (req) => {
   if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
 
   try {
-    const body = await req.json().catch(() => ({})) as ViewRequest;
-    const listingId = parseListingId(body);
+    const body = await parseJsonBody(req, viewRequestSchema);
+    const listingId = body.listingId;
     const sampleRate = readSampleRate();
     if (sampleRate <= 0 || Math.random() > sampleRate) {
       return new Response(JSON.stringify({ success: true, sampled: false }), {
@@ -97,7 +91,10 @@ Deno.serve(async (req) => {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to record listing view";
     log.warn("record failed", { err: message });
-    return new Response(JSON.stringify({ error: message }), {
+    return new Response(JSON.stringify({
+      error: message,
+      ...(err instanceof SchemaValidationError ? { code: err.code, issues: err.issues } : {}),
+    }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

@@ -161,13 +161,6 @@
       "rationale": "Full OS sync request bodies are admin-only and manually guard pagination and replacement options."
     },
     {
-      "function": "invitation-notify",
-      "validationStyle": "typed-manual-guards",
-      "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "Invitation notification bodies are manually checked before outbound notification work begins."
-    },
-    {
       "function": "listing-ai-assist",
       "validationStyle": "ai-payload-normalized",
       "owner": "domain",
@@ -187,20 +180,6 @@
       "owner": "domain",
       "reviewBy": "2026-07-31",
       "rationale": "Neighbourhood report inputs are normalized before AI generation, market heuristics, and quota tracking."
-    },
-    {
-      "function": "oh-registration-notify",
-      "validationStyle": "typed-manual-guards",
-      "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "Open-house registration notification bodies are manually checked before outbound notifications."
-    },
-    {
-      "function": "open-house-capacity",
-      "validationStyle": "typed-manual-guards",
-      "owner": "domain",
-      "reviewBy": "2026-07-31",
-      "rationale": "Open-house capacity requests are manually guarded before capacity counts are calculated."
     },
     {
       "function": "os-sales-coordinates",
@@ -264,13 +243,6 @@
       "owner": "data-access",
       "reviewBy": "2026-07-31",
       "rationale": "Incoming OS webhook envelopes are parsed only inside the webhook boundary and guarded by webhook checks."
-    },
-    {
-      "function": "record-listing-view",
-      "validationStyle": "typed-manual-guards",
-      "owner": "data-access",
-      "reviewBy": "2026-07-31",
-      "rationale": "Listing view events are manually bounded before analytics and deduplication writes occur."
     },
     {
       "function": "smart-filters",

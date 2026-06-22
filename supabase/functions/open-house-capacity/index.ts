@@ -14,6 +14,7 @@ import {
   makeRateLimiter,
   tooManyRequestsResponse,
 } from "../_shared/rateLimit.ts";
+import { parseJsonBody, SchemaValidationError, z } from "../_shared/schema.ts";
 
 const log = createLogger("open-house-capacity");
 const limiter = makeRateLimiter({
@@ -22,11 +23,11 @@ const limiter = makeRateLimiter({
   windowMs: 60_000,
 });
 
-type CapacityRequest = {
-  listingId?: unknown;
-};
-
 const UUID_RE = /^[0-9a-f-]{36}$/i;
+
+const capacityRequestSchema = z.object({
+  listingId: z.string().regex(UUID_RE, "Invalid listingId"),
+});
 
 const jsonResponse = (
   body: unknown,
@@ -37,13 +38,6 @@ const jsonResponse = (
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-
-function parseListingId(body: CapacityRequest): string {
-  if (typeof body.listingId !== "string" || !UUID_RE.test(body.listingId)) {
-    throw new Error("Invalid listingId");
-  }
-  return body.listingId;
-}
 
 function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
@@ -74,8 +68,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const body = await req.json().catch(() => ({})) as CapacityRequest;
-    const listingId = parseListingId(body);
+    const body = await parseJsonBody(req, capacityRequestSchema);
+    const listingId = body.listingId;
 
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },
@@ -95,6 +89,9 @@ Deno.serve(async (req) => {
   } catch (err: unknown) {
     if (err instanceof AuthError) {
       return jsonResponse({ error: err.message }, err.status, corsHeaders);
+    }
+    if (err instanceof SchemaValidationError) {
+      return jsonResponse({ error: err.message, code: err.code, issues: err.issues }, 400, corsHeaders);
     }
 
     const message = errorMessage(err);

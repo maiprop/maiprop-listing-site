@@ -53,8 +53,25 @@ Deno.test("correct webhook secret passes the guard", async () => {
 
 Deno.test("missing payload fields returns early with non-500", async () => {
   const res = await handler(req("POST", {}, { authorization: "Bearer correct-secret" }));
-  // Missing record/old_record returns { ok: false } with 200.
-  assertEquals([200, 400].includes(res.status), true);
+  assertEquals(res.status, 200);
+  const body = await res.json();
+  assertEquals(body.ok, false);
+});
+
+Deno.test("invalid JSON returns validation error instead of notify crash", async () => {
+  const res = await handler(new Request("https://functions.supabase.co/fn", {
+    method: "POST",
+    headers: {
+      authorization: "Bearer correct-secret",
+      "content-type": "application/json",
+      origin: "https://maiprop.co",
+    },
+    body: "{",
+  }));
+  assertEquals(res.status, 400);
+  const body = await res.json();
+  assertEquals(body.ok, false);
+  assertEquals(body.error, "Invalid JSON body");
 });
 
 restore();

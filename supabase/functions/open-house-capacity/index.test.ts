@@ -73,6 +73,7 @@ const transformedSource = functionSource
   .replace('from "../_shared/auth.ts"', `from "${shared("auth.ts")}"`)
   .replace('from "../_shared/cors.ts"', `from "${shared("cors.ts")}"`)
   .replace('from "../_shared/logger.ts"', `from "${shared("logger.ts")}"`)
+  .replace('from "../_shared/schema.ts"', `from "${shared("schema.ts")}"`)
   .replace(
     'from "../_shared/rateLimit.ts"',
     `from "${shared("rateLimit.ts")}"`,
@@ -131,6 +132,24 @@ Deno.test("invalid listing id is rejected before auth or capacity lookup", async
   assertEquals(res.status, 400);
   const body = await res.json();
   assertEquals(body.error, "Invalid listingId");
+  assertEquals(globalThis.__openHouseCapacityScenario.calls.length, 0);
+});
+
+Deno.test("invalid JSON is rejected before auth or capacity lookup", async () => {
+  resetScenario();
+  const res = await handler(new Request("https://functions.supabase.co/fn", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${crypto.randomUUID()}`,
+      "content-type": "application/json",
+      origin: "https://maiprop.co",
+      "x-forwarded-for": crypto.randomUUID(),
+    },
+    body: "{",
+  }));
+  assertEquals(res.status, 400);
+  const body = await res.json();
+  assertEquals(body.error, "Invalid JSON body");
   assertEquals(globalThis.__openHouseCapacityScenario.calls.length, 0);
 });
 
