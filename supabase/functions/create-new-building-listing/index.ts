@@ -1,0 +1,332 @@
+/**
+ * create-new-building-listing - authenticated new-build creation boundary.
+ *
+ * The browser may upload storage objects, but it does not write the project,
+ * unit, listing, project_media, or listing_images tables directly. This
+ * function verifies the caller, enforces developer/admin access, forces
+ * ownership from the verified user, and rolls back owned root rows on failure.
+ */
+
+import { createClient } from "npm:@supabase/supabase-js@2.57.2";
+import { AuthError, verifyBearerToken } from "../_shared/auth.ts";
+import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
+import { createLogger } from "../_shared/logger.ts";
+import {
+  makeRateLimiter,
+  tooManyRequestsResponse,
+} from "../_shared/rateLimit.ts";
+import { parseJsonBody, z } from "../_shared/schema.ts";
+import { logAuditEvent } from "../_shared/auditLog.ts";
+
+const log = createLogger("create-new-building-listing");
+const limiter = makeRateLimiter({
+  bucket: "create-new-building-listing",
+  maxRequests: 20,
+  windowMs: 60_000,
+});
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const jsonResponse = (
+  body: unknown,
+  status: number,
+  corsHeaders: Record<string, string>,
+) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+
+const uuidString = (field: string) =>
+  z.unknown().transform((value, ctx): string => {
+    if (typeof value !== "string" || !UUID_RE.test(value.trim())) {
+      ctx.addIssue({ code: "custom", message: `Invalid ${field}` });
+      return z.NEVER;
+    }
+    return value.trim();
+  });
+
+const requiredString = (field: string, maxLength: number) =>
+  z.unknown().transform((value, ctx): string => {
+    if (typeof value !== "string") {
+      ctx.addIssue({ code: "custom", message: `Invalid ${field}` });
+      return z.NEVER;
+    }
+    const trimmed = value.trim();
+    if (trimmed.length === 0 || trimmed.length > maxLength) {
+      ctx.addIssue({ code: "custom", message: `Invalid ${field}` });
+      return z.NEVER;
+    }
+    return trimmed;
+  });
+
+const optionalString = (field: string, maxLength: number) =>
+  z.unknown().optional().transform((value, ctx): string | null => {
+    if (value === null || value === undefined) return null;
+    if (typeof value !== "string") {
+      ctx.addIssue({ code: "custom", message: `Invalid ${field}` });
+      return z.NEVER;
+    }
+    const trimmed = value.trim();
+    if (trimmed.length > maxLength) {
+      ctx.addIssue({ code: "custom", message: `Invalid ${field}` });
+      return z.NEVER;
+    }
+    return trimmed.length === 0 ? null : trimmed;
+  });
+
+const nonNegativeNumber = (field: string, max: number) =>
+  z.unknown().optional().transform((value, ctx): number | null => {
+    if (value === null || value === undefined) return null;
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > max) {
+      ctx.addIssue({ code: "custom", message: `Invalid ${field}` });
+      return z.NEVER;
+    }
+    return value;
+  });
+
+const projectSchema = z.object({
+  id: uuidString("project id"),
+  name: requiredString("project name", 180),
+  building_permit_number: requiredString("building permit", 120),
+  city: requiredString("project city", 120),
+  owner_id: uuidString("owner id").optional(),
+}).passthrough();
+
+const unitSchema = z.object({
+  project_id: uuidString("unit project id"),
+  availability_status: optionalString("unit status", 80),
+  internal_sqm: nonNegativeNumber("unit size", 100_000),
+  price: nonNegativeNumber("unit price", 100_000_000),
+}).passthrough();
+
+const projectMediaSchema = z.object({
+  project_id: uuidString("project media project id"),
+  url: requiredString("project media URL", 2048),
+  media_type: requiredString("project media type", 80),
+  title: optionalString("project media title", 180),
+  sort_order: z.number().int().min(0).max(500).optional(),
+}).strict();
+
+const listingSchema = z.object({
+  title: requiredString("listing title", 180),
+  city: requiredString("listing city", 120),
+  price: nonNegativeNumber("listing price", 100_000_000).transform((value, ctx): number => {
+    if (typeof value !== "number") {
+      ctx.addIssue({ code: "custom", message: "Invalid listing price" });
+      return z.NEVER;
+    }
+    return value;
+  }),
+  sqm: nonNegativeNumber("listing size", 100_000).transform((value, ctx): number => {
+    if (typeof value !== "number") {
+      ctx.addIssue({ code: "custom", message: "Invalid listing size" });
+      return z.NEVER;
+    }
+    return value;
+  }),
+  property_type: requiredString("property type", 80),
+  listing_type: z.literal("new_build"),
+  owner_id: uuidString("owner id").optional(),
+  project_id: uuidString("listing project id"),
+}).passthrough();
+
+const requestSchema = z.object({
+  project: projectSchema,
+  unit: unitSchema,
+  projectMedia: z.array(projectMediaSchema).max(20),
+  listing: listingSchema,
+  additionalImageUrls: z.array(requiredString("listing image", 2048)).max(250),
+}).strict();
+
+type RequestPayload = z.infer<typeof requestSchema>;
+
+type ProfileRow = {
+  role: string | null;
+  role_switch_in_progress_at: string | null;
+};
+
+type ProfileLookupClient = {
+  from(table: string): unknown;
+};
+
+type ProfileLookupQuery = {
+  select(columns: string): {
+    eq(column: "user_id", value: string): {
+      maybeSingle(): PromiseLike<{
+        data: ProfileRow | null;
+        error: { message: string } | null;
+      }>;
+    };
+  };
+};
+
+type DeleteResult = { error: { message: string } | null };
+type DeleteFilterChain = PromiseLike<DeleteResult> & {
+  eq(column: string, value: string): DeleteFilterChain;
+};
+type OwnedRollbackClient = {
+  from(table: string): {
+    delete(): DeleteFilterChain;
+  };
+};
+
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === "object") {
+    const message = (err as Record<string, unknown>).message;
+    if (typeof message === "string" && message.length > 0) return message;
+  }
+  return "New building listing failed";
+}
+
+async function requireDeveloperAccess(supabase: ProfileLookupClient, userId: string) {
+  const profileQuery = supabase.from("profiles") as ProfileLookupQuery;
+  const { data, error } = await profileQuery
+    .select("role, role_switch_in_progress_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+
+  const role = data?.role;
+  if ((role !== "developer" && role !== "admin") || (role !== "admin" && data?.role_switch_in_progress_at)) {
+    throw new AuthError("developer_role_required", 403);
+  }
+}
+
+function assertProjectScope(payload: RequestPayload) {
+  const projectId = payload.project.id;
+  if (payload.unit.project_id !== projectId || payload.listing.project_id !== projectId) {
+    throw new AuthError("project_scope_mismatch", 400);
+  }
+  if (payload.projectMedia.some((media) => media.project_id !== projectId)) {
+    throw new AuthError("project_scope_mismatch", 400);
+  }
+}
+
+async function rollbackOwnedRoots(
+  supabase: OwnedRollbackClient,
+  userId: string,
+  projectId: string,
+  listingId: string | null,
+) {
+  if (listingId) {
+    await supabase.from("listings").delete().eq("id", listingId).eq("owner_id", userId);
+  }
+  await supabase.from("projects").delete().eq("id", projectId).eq("owner_id", userId);
+}
+
+Deno.serve(async (req) => {
+  const corsPreflightResponse = handleCors(req);
+  if (corsPreflightResponse) return corsPreflightResponse;
+  const corsHeaders = getCorsHeaders(req);
+
+  if (req.method !== "POST") {
+    return jsonResponse({ error: "Method not allowed" }, 405, corsHeaders);
+  }
+
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    "anonymous";
+  if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
+
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  if (!serviceRoleKey || !supabaseUrl) {
+    return jsonResponse({ error: "Service unavailable" }, 503, corsHeaders);
+  }
+
+  const supabase = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false },
+  });
+
+  let projectId: string | null = null;
+  let listingId: string | null = null;
+  let userId: string | null = null;
+
+  try {
+    const payload = await parseJsonBody(req, requestSchema);
+    assertProjectScope(payload);
+
+    const user = await verifyBearerToken(req, supabase);
+    userId = user.id;
+    projectId = payload.project.id;
+    await requireDeveloperAccess(supabase, user.id);
+
+    const { error: projectError } = await supabase
+      .from("projects")
+      .insert({ ...payload.project, owner_id: user.id });
+    if (projectError) throw projectError;
+
+    const { data: unit, error: unitError } = await supabase
+      .from("project_units")
+      .insert({ ...payload.unit, project_id: projectId })
+      .select("id")
+      .single();
+    if (unitError) throw unitError;
+
+    if (payload.projectMedia.length > 0) {
+      const { error: mediaError } = await supabase
+        .from("project_media")
+        .insert(payload.projectMedia.map((media) => ({ ...media, project_id: projectId })));
+      if (mediaError) throw mediaError;
+    }
+
+    const { data: listing, error: listingError } = await supabase
+      .from("listings")
+      .insert({
+        ...payload.listing,
+        owner_id: user.id,
+        project_id: projectId,
+        listing_type: "new_build",
+        is_pre_sale: false,
+      })
+      .select("id")
+      .single();
+    if (listingError) throw listingError;
+    listingId = listing?.id ?? null;
+    if (!listingId) throw new Error("listing_missing_id");
+
+    const { error: unitLinkError } = await supabase
+      .from("project_units")
+      .update({ listing_id: listingId })
+      .eq("id", unit?.id)
+      .eq("project_id", projectId);
+    if (unitLinkError) throw unitLinkError;
+
+    if (payload.additionalImageUrls.length > 0) {
+      const { error: imageError } = await supabase
+        .from("listing_images")
+        .insert(payload.additionalImageUrls.map((url, idx) => ({
+          listing_id: listingId,
+          url,
+          sort_order: idx + 1,
+        })));
+      if (imageError) throw imageError;
+    }
+
+    await logAuditEvent({
+      actor_id: user.id,
+      target_id: listingId,
+      entity: "new_build.listing",
+      action: "CREATED",
+      new_data: { project_id: projectId },
+      reason: "create_new_building_listing",
+    });
+
+    return jsonResponse({ data: { listingId, projectId }, error: null }, 200, corsHeaders);
+  } catch (err: unknown) {
+    if (userId && projectId) {
+      await rollbackOwnedRoots(supabase, userId, projectId, listingId).catch((rollbackErr) => {
+        log.warn("new building rollback failed", { err: errorMessage(rollbackErr), projectId, listingId });
+      });
+    }
+
+    if (err instanceof AuthError) {
+      return jsonResponse({ error: err.message }, err.status, corsHeaders);
+    }
+
+    const message = errorMessage(err);
+    log.warn("new building listing failed", { err: message, projectId, listingId });
+    return jsonResponse({ error: message }, 400, corsHeaders);
+  }
+});

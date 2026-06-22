@@ -6,36 +6,19 @@ import {
 } from "@/hooks/useCreateBuildingListing";
 
 const {
-  fromMock,
-  addMediaMock,
+  invokeMock,
   uploadProjectMediaMock,
-  chains,
 } = vi.hoisted(() => ({
-  fromMock: vi.fn(),
-  addMediaMock: vi.fn(),
+  invokeMock: vi.fn(),
   uploadProjectMediaMock: vi.fn(),
-  chains: {
-    projectInsert: vi.fn(),
-    projectDelete: vi.fn(),
-    projectDeleteEq: vi.fn(),
-    unitInsert: vi.fn(),
-    unitUpdate: vi.fn(),
-    unitUpdateEq: vi.fn(),
-    listingInsert: vi.fn(),
-    listingDelete: vi.fn(),
-    listingDeleteEq: vi.fn(),
-    imageInsert: vi.fn(),
-  },
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
-    from: (...args: unknown[]) => fromMock(...args),
+    functions: {
+      invoke: (...args: unknown[]) => invokeMock(...args),
+    },
   },
-}));
-
-vi.mock("@/hooks/useProjectMedia", () => ({
-  useAddProjectMedia: () => ({ mutateAsync: addMediaMock }),
 }));
 
 vi.mock("@/lib/buildingListingUploads", () => ({
@@ -43,7 +26,7 @@ vi.mock("@/lib/buildingListingUploads", () => ({
 }));
 
 const makeInput = (overrides: Partial<CreateBuildingListingInput> = {}): CreateBuildingListingInput => ({
-  userId: "user-1",
+  userId: "11111111-1111-4111-8111-111111111111",
   project: {
     name: "  Marina Heights  ",
     building_permit_number: "  123/2026  ",
@@ -102,126 +85,76 @@ const makeInput = (overrides: Partial<CreateBuildingListingInput> = {}): CreateB
   ...overrides,
 });
 
-const selectSingle = (value: unknown) => ({
-  select: vi.fn(() => ({
-    single: vi.fn().mockResolvedValue(value),
-  })),
-});
-
-function installSupabaseChains({
-  projectResult = { data: { id: "project-1" }, error: null },
-  unitResult = { data: { id: "unit-1" }, error: null },
-  listingResult = { data: { id: "listing-1" }, error: null },
-  imageResult = { error: null },
-} = {}) {
-  const projectDeleteChain = {
-    eq: chains.projectDeleteEq.mockReturnThis(),
-  };
-  const listingDeleteChain = {
-    eq: chains.listingDeleteEq.mockReturnThis(),
-  };
-
-  fromMock.mockImplementation((table: string) => {
-    if (table === "projects") {
-      return {
-        insert: chains.projectInsert.mockReturnValue(selectSingle(projectResult)),
-        delete: chains.projectDelete.mockReturnValue(projectDeleteChain),
-      };
-    }
-    if (table === "project_units") {
-      const unitUpdateChain = {
-        eq: chains.unitUpdateEq.mockReturnThis(),
-      };
-      return {
-        insert: chains.unitInsert.mockReturnValue(selectSingle(unitResult)),
-        update: chains.unitUpdate.mockReturnValue(unitUpdateChain),
-      };
-    }
-    if (table === "listings") {
-      return {
-        insert: chains.listingInsert.mockReturnValue(selectSingle(listingResult)),
-        delete: chains.listingDelete.mockReturnValue(listingDeleteChain),
-      };
-    }
-    if (table === "listing_images") {
-      return {
-        insert: chains.imageInsert.mockResolvedValue(imageResult),
-      };
-    }
-    throw new Error(`Unexpected table ${table}`);
-  });
-}
-
 describe("useCreateBuildingListing coverage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    addMediaMock.mockResolvedValue({});
+    vi.stubGlobal("crypto", {
+      randomUUID: vi.fn(() => "22222222-2222-4222-8222-222222222222"),
+    });
     uploadProjectMediaMock.mockResolvedValue("https://cdn.test/project-media/render.jpg");
-    installSupabaseChains();
+    invokeMock.mockResolvedValue({
+      data: { data: { listingId: "33333333-3333-4333-8333-333333333333" }, error: null },
+      error: null,
+    });
   });
 
-  it("creates project, unit, project media, listing, and secondary images", async () => {
+  it("uploads project media and creates the new build through the Edge boundary", async () => {
     const { result } = renderHook(() => useCreateBuildingListing());
 
-    await expect(act(async () => result.current(makeInput()))).resolves.toEqual({ listingId: "listing-1" });
+    await expect(act(async () => result.current(makeInput()))).resolves.toEqual({
+      listingId: "33333333-3333-4333-8333-333333333333",
+    });
 
-    expect(chains.projectInsert).toHaveBeenCalledWith(expect.objectContaining({
-      name: "Marina Heights",
-      building_permit_number: "123/2026",
-      developer_company: undefined,
-      architect_group: "Studio A",
-      city: "Athens",
-      latitude: 37.98,
-      longitude: undefined,
-      owner_id: "user-1",
-    }));
-    expect(chains.unitInsert).toHaveBeenCalledWith(expect.objectContaining({
-      project_id: "project-1",
-      internal_sqm: 100,
-      price: 250000,
-      price_per_sqm: 2500,
-      floor: undefined,
-      bedrooms: 2,
-      bathrooms: 1,
-      city_view: true,
-    }));
     expect(uploadProjectMediaMock).toHaveBeenCalledWith(
       expect.any(File),
-      "user-1",
-      "project-1",
+      "11111111-1111-4111-8111-111111111111",
+      "22222222-2222-4222-8222-222222222222",
       "rendering",
     );
-    expect(addMediaMock).toHaveBeenCalledWith({
-      project_id: "project-1",
-      url: "https://cdn.test/project-media/render.jpg",
-      media_type: "rendering",
+    expect(invokeMock).toHaveBeenCalledWith("create-new-building-listing", {
+      body: expect.objectContaining({
+        project: expect.objectContaining({
+          id: "22222222-2222-4222-8222-222222222222",
+          name: "Marina Heights",
+          building_permit_number: "123/2026",
+          architect_group: "Studio A",
+          city: "Athens",
+          latitude: 37.98,
+          longitude: undefined,
+          owner_id: "11111111-1111-4111-8111-111111111111",
+        }),
+        unit: expect.objectContaining({
+          project_id: "22222222-2222-4222-8222-222222222222",
+          internal_sqm: 100,
+          price: 250000,
+          price_per_sqm: 2500,
+          bedrooms: 2,
+          bathrooms: 1,
+          city_view: true,
+        }),
+        projectMedia: [{
+          project_id: "22222222-2222-4222-8222-222222222222",
+          url: "https://cdn.test/project-media/render.jpg",
+          media_type: "rendering",
+        }],
+        listing: expect.objectContaining({
+          title: "Marina Heights A1",
+          description: undefined,
+          project_id: "22222222-2222-4222-8222-222222222222",
+          price: 250000,
+          sqm: 100,
+          cover_image_url: "https://cdn.test/cover.jpg",
+          price_per_sqm: 2500,
+          status: "active",
+          listing_type: "new_build",
+          is_pre_sale: false,
+        }),
+        additionalImageUrls: ["https://cdn.test/2.jpg", "https://cdn.test/3.jpg"],
+      }),
     });
-    expect(chains.listingInsert).toHaveBeenCalledWith(expect.objectContaining({
-      title: "Marina Heights A1",
-      description: undefined,
-      project_id: "project-1",
-      price: 250000,
-      sqm: 100,
-      latitude: 37.98,
-      longitude: undefined,
-      cover_image_url: "https://cdn.test/cover.jpg",
-      price_per_sqm: 2500,
-      status: "active",
-      listing_type: "new_build",
-      is_pre_sale: false,
-    }));
-    expect(chains.unitUpdate).toHaveBeenCalledWith({ listing_id: "listing-1" });
-    expect(chains.unitUpdateEq).toHaveBeenCalledWith("id", "unit-1");
-    expect(chains.unitUpdateEq).toHaveBeenCalledWith("project_id", "project-1");
-    expect(chains.imageInsert).toHaveBeenCalledWith([
-      { listing_id: "listing-1", url: "https://cdn.test/2.jpg", sort_order: 1 },
-      { listing_id: "listing-1", url: "https://cdn.test/3.jpg", sort_order: 2 },
-    ]);
-    expect(chains.listingDelete).not.toHaveBeenCalled();
-    expect(chains.projectDelete).not.toHaveBeenCalled();
   });
 
-  it("skips optional media and image inserts when no optional assets are present", async () => {
+  it("skips project media upload when no optional project assets are present", async () => {
     const { result } = renderHook(() => useCreateBuildingListing());
 
     await act(async () => {
@@ -242,15 +175,19 @@ describe("useCreateBuildingListing coverage", () => {
     });
 
     expect(uploadProjectMediaMock).not.toHaveBeenCalled();
-    expect(addMediaMock).not.toHaveBeenCalled();
-    expect(chains.imageInsert).not.toHaveBeenCalled();
-    expect(chains.unitInsert).toHaveBeenCalledWith(expect.objectContaining({
-      internal_sqm: 0,
-      price_per_sqm: undefined,
-    }));
+    expect(invokeMock).toHaveBeenCalledWith("create-new-building-listing", {
+      body: expect.objectContaining({
+        projectMedia: [],
+        additionalImageUrls: [],
+        unit: expect.objectContaining({
+          internal_sqm: 0,
+          price_per_sqm: undefined,
+        }),
+      }),
+    });
   });
 
-  it("stores project delivery and phase metadata on the new-build listing", async () => {
+  it("stores project delivery and phase metadata on the Edge payload", async () => {
     const { result } = renderHook(() => useCreateBuildingListing());
 
     await act(async () => {
@@ -264,46 +201,33 @@ describe("useCreateBuildingListing coverage", () => {
       }));
     });
 
-    expect(chains.listingInsert).toHaveBeenCalledWith(expect.objectContaining({
-      listing_type: "new_build",
-      construction_status: "under_construction",
-      year_built: 2026,
-    }));
+    expect(invokeMock).toHaveBeenCalledWith("create-new-building-listing", {
+      body: expect.objectContaining({
+        listing: expect.objectContaining({
+          listing_type: "new_build",
+          construction_status: "under_construction",
+          year_built: 2026,
+        }),
+      }),
+    });
   });
 
-  it("throws project insert failures without rollback because no project exists yet", async () => {
-    const projectError = new Error("project insert failed");
-    installSupabaseChains({ projectResult: { data: null, error: projectError } });
+  it("does not invoke the Edge boundary when project media upload fails", async () => {
+    const uploadError = new Error("upload failed");
+    uploadProjectMediaMock.mockRejectedValue(uploadError);
     const { result } = renderHook(() => useCreateBuildingListing());
 
-    await expect(act(async () => result.current(makeInput()))).rejects.toThrow(projectError);
-    expect(chains.projectDelete).not.toHaveBeenCalled();
+    await expect(act(async () => result.current(makeInput()))).rejects.toThrow(uploadError);
+    expect(invokeMock).not.toHaveBeenCalled();
   });
 
-  it("rolls back the owned project when a later write fails", async () => {
-    const listingError = new Error("listing insert failed");
-    installSupabaseChains({ listingResult: { data: null, error: listingError } });
+  it("surfaces Edge function envelope errors", async () => {
+    invokeMock.mockResolvedValue({
+      data: { data: null, error: { message: "developer_role_required" } },
+      error: null,
+    });
     const { result } = renderHook(() => useCreateBuildingListing());
 
-    await expect(act(async () => result.current(makeInput()))).rejects.toThrow(listingError);
-
-    expect(chains.projectDelete).toHaveBeenCalled();
-    expect(chains.projectDeleteEq).toHaveBeenNthCalledWith(1, "id", "project-1");
-    expect(chains.projectDeleteEq).toHaveBeenNthCalledWith(2, "owner_id", "user-1");
-  });
-
-  it("rolls back the owned listing before the project if image linking fails after listing creation", async () => {
-    const imageError = new Error("listing image insert failed");
-    installSupabaseChains({ imageResult: { error: imageError } });
-    const { result } = renderHook(() => useCreateBuildingListing());
-
-    await expect(act(async () => result.current(makeInput()))).rejects.toThrow(imageError);
-
-    expect(chains.listingDelete).toHaveBeenCalled();
-    expect(chains.listingDeleteEq).toHaveBeenNthCalledWith(1, "id", "listing-1");
-    expect(chains.listingDeleteEq).toHaveBeenNthCalledWith(2, "owner_id", "user-1");
-    expect(chains.projectDelete).toHaveBeenCalled();
-    expect(chains.projectDeleteEq).toHaveBeenNthCalledWith(1, "id", "project-1");
-    expect(chains.projectDeleteEq).toHaveBeenNthCalledWith(2, "owner_id", "user-1");
+    await expect(act(async () => result.current(makeInput()))).rejects.toThrow("developer_role_required");
   });
 });
