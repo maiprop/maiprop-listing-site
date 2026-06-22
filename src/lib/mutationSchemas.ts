@@ -796,6 +796,10 @@ export const listingImageRowsSchema = z.array(z.object({
   sort_order: z.number().int("Invalid listing image order").min(0, "Invalid listing image order").max(500, "Invalid listing image order"),
 }).strict()).max(250, "Invalid listing image count");
 
+export const listingImageUrlsSchema = z.array(
+  z.string().trim().min(1, "Invalid listing image").max(2048, "Invalid listing image"),
+).max(250, "Invalid listing image count");
+
 export const listingImageSortUpdateSchema = z.object({
   listingId: rowIdSchema("listing id"),
   url: z.string().trim().min(1, "Invalid listing image").max(2048, "Invalid listing image"),

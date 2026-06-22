@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-06-22T07:53:13.188Z",
+  "generated_at": "2026-06-22T08:53:02.347Z",
   "totals": {
-    "source_files": 614,
-    "source_lines": 116210,
-    "test_files": 406,
+    "source_files": 616,
+    "source_lines": 116748,
+    "test_files": 407,
     "routes": 42,
-    "supabase_functions": 62,
-    "likely_tested_source_files": 555,
+    "supabase_functions": 63,
+    "likely_tested_source_files": 557,
     "coverage_available": true,
     "coverage_lines_pct": 87.52,
     "coverage_functions_pct": 82.73,
@@ -58,7 +58,7 @@
     },
     "src/hooks": {
       "files": 68,
-      "lines": 11183,
+      "lines": 11114,
       "likely_tested_files": 63,
       "likely_untested_files": [
         "src/hooks/useFiresalePhotoUploader.ts",
@@ -70,7 +70,7 @@
     },
     "src/lib": {
       "files": 74,
-      "lines": 9385,
+      "lines": 9389,
       "likely_tested_files": 58,
       "likely_untested_files": [
         "src/lib/apiDocsData.ts",
@@ -98,9 +98,9 @@
       "likely_untested_files": []
     },
     "supabase/functions": {
-      "files": 188,
-      "lines": 32817,
-      "likely_tested_files": 178,
+      "files": 190,
+      "lines": 33420,
+      "likely_tested_files": 180,
       "likely_untested_files": [
         "supabase/functions/fetch-os-auctions/auctionCache.ts",
         "supabase/functions/fetch-os-auctions/auctionMapping.ts",
@@ -195,7 +195,7 @@
     },
     {
       "file": "src/lib/mutationSchemas.ts",
-      "lines": 870,
+      "lines": 874,
       "likely_tested": true,
       "coverage": {
         "lines": 98.58,
@@ -1171,6 +1171,11 @@
       "has_test": true
     },
     {
+      "name": "create-new-building-listing",
+      "has_index": true,
+      "has_test": true
+    },
+    {
       "name": "create-stripe-price",
       "has_index": true,
       "has_test": true
@@ -1513,8 +1518,8 @@
       ]
     },
     "agent": {
-      "source_files": 96,
-      "test_files": 78,
+      "source_files": 97,
+      "test_files": 79,
       "sample_source_files": [
         "src/pages/AdminPricing.tsx",
         "src/pages/AIAssistantPage.tsx",
@@ -1609,8 +1614,8 @@
       ]
     },
     "developer": {
-      "source_files": 70,
-      "test_files": 54,
+      "source_files": 72,
+      "test_files": 55,
       "sample_source_files": [
         "src/pages/AdminPricing.tsx",
         "src/pages/ApiDocs.tsx",
@@ -1705,7 +1710,7 @@
       ]
     },
     "admin": {
-      "source_files": 107,
+      "source_files": 108,
       "test_files": 110,
       "sample_source_files": [
         "src/pages/AdminDashboard.tsx",
@@ -2254,8 +2259,8 @@
       ]
     },
     "project": {
-      "source_files": 86,
-      "test_files": 71,
+      "source_files": 88,
+      "test_files": 72,
       "sample_source_files": [
         "src/pages/AdminPricing.tsx",
         "src/pages/ApiDocs.tsx",
@@ -2302,8 +2307,8 @@
       ]
     },
     "listing": {
-      "source_files": 241,
-      "test_files": 198,
+      "source_files": 243,
+      "test_files": 199,
       "sample_source_files": [
         "src/pages/AdminDashboard.tsx",
         "src/pages/AdminPricing.tsx",
@@ -2398,8 +2403,8 @@
       ]
     },
     "message": {
-      "source_files": 224,
-      "test_files": 122,
+      "source_files": 227,
+      "test_files": 124,
       "sample_source_files": [
         "src/pages/AdminPricing.tsx",
         "src/pages/AuthCallback.tsx",
@@ -2590,8 +2595,8 @@
       ]
     },
     "role_switch": {
-      "source_files": 11,
-      "test_files": 25,
+      "source_files": 13,
+      "test_files": 26,
       "sample_source_files": [
         "src/pages/onboarding/onboardingHelpers.ts",
         "src/pages/Onboarding.tsx",
@@ -2601,6 +2606,8 @@
         "src/contexts/AuthContext.tsx",
         "supabase/functions/begin-role-switch/index.test.ts",
         "supabase/functions/begin-role-switch/index.ts",
+        "supabase/functions/create-new-building-listing/index.test.ts",
+        "supabase/functions/create-new-building-listing/index.ts",
         "supabase/functions/log-role-switch/index.ts",
         "supabase/functions/submit-firesale-request/index.test.ts",
         "supabase/functions/submit-firesale-request/index.ts"

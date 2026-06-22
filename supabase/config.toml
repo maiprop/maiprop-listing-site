@@ -30,6 +30,9 @@ verify_jwt = true
 [functions.save-professional-onboarding]
 verify_jwt = true
 
+[functions.create-new-building-listing]
+verify_jwt = true
+
 [functions.open-house-capacity]
 verify_jwt = true
 

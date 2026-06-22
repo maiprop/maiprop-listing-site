@@ -107,6 +107,13 @@
       "rationale": "Stripe price creation is admin-authorized and schema-validated at the Edge boundary before external Stripe calls."
     },
     {
+      "function": "create-new-building-listing",
+      "boundary": "edge-schema-validated",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "New-build project, unit, media, listing, and image creation is authenticated, developer-gated, schema-validated, and ownership-forced inside the Edge Function before database mutations."
+    },
+    {
       "function": "fetch-past-deals-from-os",
       "boundary": "edge-schema-validated",
       "owner": "data-access",
