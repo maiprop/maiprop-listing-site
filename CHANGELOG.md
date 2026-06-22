@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.1](https://github.com/maiprop/maiprop-listing-site/compare/v1.11.0...v1.11.1) (2026-06-22)
+
+
+### Bug Fixes
+
+* harden edge request validation ([b66889a](https://github.com/maiprop/maiprop-listing-site/commit/b66889a6aff04ebecd7a60b80207002d954d4257))
+
 ## [1.11.0](https://github.com/maiprop/maiprop-listing-site/compare/v1.10.0...v1.11.0) (2026-06-22)
 
 
