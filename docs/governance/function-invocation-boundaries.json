@@ -114,6 +114,13 @@
       "rationale": "New-build project, unit, media, listing, and image creation is authenticated, developer-gated, schema-validated, and ownership-forced inside the Edge Function before database mutations."
     },
     {
+      "function": "project-management",
+      "boundary": "edge-schema-validated",
+      "owner": "data-access",
+      "reviewBy": "2026-07-31",
+      "rationale": "Project, project listing cover, unit, media, and project lead mutations are authenticated, developer-gated, schema-validated, and project-owner checked inside the Edge Function before database writes."
+    },
+    {
       "function": "fetch-past-deals-from-os",
       "boundary": "edge-schema-validated",
       "owner": "data-access",

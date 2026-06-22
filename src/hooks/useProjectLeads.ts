@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { requireOwnedProject } from "@/hooks/projectOwnership";
 import { toast } from "sonner";
 import type { Database } from "@/integrations/supabase/types";
 import { FAST_CHANGING_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
+import { invokeProjectManagement } from "@/hooks/projectManagementBoundary";
 import {
   parseMutationInput,
   projectLeadCreateSchema,
@@ -54,15 +54,13 @@ export function useCreateProjectLead() {
   const { user } = useAuth();
   return useMutation({
     mutationFn: async (lead: ProjectLeadInsert) => {
-      await requireOwnedProject(lead.project_id, user?.id);
+      if (!user) throw new Error("Must be logged in");
       const payload = parseMutationInput(projectLeadCreateSchema, lead, "project lead") as ProjectLeadInsert;
-      const { data, error } = await supabase
-        .from("project_leads")
-        .insert(payload)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      return invokeProjectManagement<ProjectLead>({
+        action: "create_lead",
+        projectId: payload.project_id,
+        lead: payload,
+      });
     },
     onSuccess: (_: unknown, { project_id }: ProjectLeadInsert) => {
       qc.invalidateQueries({ queryKey: ["project_leads", project_id] });
@@ -77,21 +75,18 @@ export function useUpdateProjectLead() {
   const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ id, projectId, updates }: { id: string; projectId: string; updates: ProjectLeadUpdate }) => {
-      await requireOwnedProject(projectId, user?.id);
+      if (!user) throw new Error("Must be logged in");
       const payload = parseMutationInput(
         projectLeadUpdateMutationSchema,
         { id, projectId, updates },
         "project lead update",
       );
-      const { data, error } = await supabase
-        .from("project_leads")
-        .update(payload.updates as ProjectLeadUpdate)
-        .eq("id", payload.id)
-        .eq("project_id", payload.projectId)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      return invokeProjectManagement<ProjectLead>({
+        action: "update_lead",
+        projectId: payload.projectId,
+        id: payload.id,
+        updates: payload.updates,
+      });
     },
     onSuccess: (_: unknown, { projectId }: { id: string; projectId: string; updates: ProjectLeadUpdate }) => {
       qc.invalidateQueries({ queryKey: ["project_leads", projectId] });
@@ -106,14 +101,13 @@ export function useDeleteProjectLead() {
   const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ id, projectId }: { id: string; projectId: string }) => {
-      await requireOwnedProject(projectId, user?.id);
+      if (!user) throw new Error("Must be logged in");
       const payload = parseMutationInput(scopedRowDeleteMutationSchema, { id, scopeId: projectId }, "project lead delete");
-      const { error } = await supabase
-        .from("project_leads")
-        .delete()
-        .eq("id", payload.id)
-        .eq("project_id", payload.scopeId);
-      if (error) throw error;
+      await invokeProjectManagement<{ id: string }>({
+        action: "delete_lead",
+        projectId: payload.scopeId,
+        id: payload.id,
+      });
     },
     onSuccess: (_: unknown, { projectId }: { id: string; projectId: string }) => {
       qc.invalidateQueries({ queryKey: ["project_leads", projectId] });

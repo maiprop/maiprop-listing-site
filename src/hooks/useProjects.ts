@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import type { TablesUpdate } from "@/integrations/supabase/types";
 import { USER_SCOPED_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
+import { invokeProjectManagement } from "@/hooks/projectManagementBoundary";
 import {
   parseMutationInput,
   projectListingCoverUpdateMutationSchema,
@@ -67,15 +68,11 @@ export function useUpdateProject() {
     mutationFn: async ({ id, updates }: { id: string; updates: TablesUpdate<"projects"> }) => {
       if (!user) throw new Error("Must be logged in");
       const payload = parseMutationInput(projectUpdateMutationSchema, { id, updates }, "project update");
-      const { data, error } = await supabase
-        .from("projects")
-        .update(payload.updates as TablesUpdate<"projects">)
-        .eq("id", payload.id)
-        .eq("owner_id", user.id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      return invokeProjectManagement<TablesUpdate<"projects"> & { id: string }>({
+        action: "update_project",
+        id: payload.id,
+        updates: payload.updates,
+      });
     },
     onSuccess: (_, { id }) => {
       qc.invalidateQueries({ queryKey: ["projects"] });
@@ -93,15 +90,12 @@ export function useUpdateProjectListingCover() {
     mutationFn: async (input: { projectId: string; listingId: string; coverImageUrl: string }) => {
       if (!user) throw new Error("Must be logged in");
       const payload = parseMutationInput(projectListingCoverUpdateMutationSchema, input, "project listing cover update");
-      const { data, error } = await supabase
-        .from("listings")
-        .update({ cover_image_url: payload.coverImageUrl })
-        .eq("id", payload.listingId)
-        .eq("project_id", payload.projectId)
-        .select("id, project_id, cover_image_url")
-        .single();
-      if (error) throw error;
-      return data;
+      return invokeProjectManagement<{ id: string; project_id: string; cover_image_url: string }>({
+        action: "update_listing_cover",
+        projectId: payload.projectId,
+        listingId: payload.listingId,
+        coverImageUrl: payload.coverImageUrl,
+      });
     },
     onSuccess: (_, { projectId, listingId }) => {
       qc.invalidateQueries({ queryKey: ["projects"] });
@@ -124,10 +118,10 @@ export function useDeleteProject() {
     mutationFn: async (id: string) => {
       if (!user) throw new Error("Must be logged in");
       const projectId = parseMutationInput(rowIdSchema("project id"), id, "project id");
-      const { error } = await supabase.rpc("delete_project_and_unlink_listings", {
-        p_project_id: projectId,
+      await invokeProjectManagement<{ id: string }>({
+        action: "delete_project",
+        id: projectId,
       });
-      if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["projects"] });

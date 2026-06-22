@@ -184,6 +184,9 @@ verify_jwt = true
 [functions.project-unit-prices]
 verify_jwt = true
 
+[functions.project-management]
+verify_jwt = true
+
 [functions.followup-lead]
 verify_jwt = true
 

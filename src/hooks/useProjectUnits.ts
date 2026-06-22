@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { requireOwnedProject } from "@/hooks/projectOwnership";
 import { toast } from "sonner";
 import type { Database } from "@/integrations/supabase/types";
 import { FAST_CHANGING_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
+import { invokeProjectManagement } from "@/hooks/projectManagementBoundary";
 import {
   parseMutationInput,
   projectUnitBulkPriceMutationSchema,
@@ -80,15 +80,13 @@ export const useCreateProjectUnit = () => {
   const { user } = useAuth();
   return useMutation({
     mutationFn: async (unit: ProjectUnitInsert) => {
-      await requireOwnedProject(unit.project_id, user?.id);
+      if (!user) throw new Error("Must be logged in");
       const payload = parseMutationInput(projectUnitCreateSchema, unit, "project unit") as ProjectUnitInsert;
-      const { data, error } = await supabase
-        .from("project_units")
-        .insert(payload)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      return invokeProjectManagement<ProjectUnit>({
+        action: "create_unit",
+        projectId: payload.project_id,
+        unit: payload,
+      });
     },
     onSuccess: (_data, { project_id }) => {
       qc.invalidateQueries({ queryKey: ["project_units", project_id] });
@@ -104,21 +102,18 @@ export const useUpdateProjectUnit = () => {
   const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ id, projectId, updates }: { id: string; projectId: string; updates: ProjectUnitUpdate }) => {
-      await requireOwnedProject(projectId, user?.id);
+      if (!user) throw new Error("Must be logged in");
       const payload = parseMutationInput(
         projectUnitUpdateMutationSchema,
         { id, projectId, updates },
         "project unit update",
       );
-      const { data, error } = await supabase
-        .from("project_units")
-        .update(payload.updates as ProjectUnitUpdate)
-        .eq("id", payload.id)
-        .eq("project_id", payload.projectId)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      return invokeProjectManagement<ProjectUnit>({
+        action: "update_unit",
+        projectId: payload.projectId,
+        id: payload.id,
+        updates: payload.updates,
+      });
     },
     onSuccess: (_data, { projectId }) => {
       qc.invalidateQueries({ queryKey: ["project_units", projectId] });
@@ -164,14 +159,13 @@ export const useDeleteProjectUnit = () => {
   const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ id, projectId }: { id: string; projectId: string }) => {
-      await requireOwnedProject(projectId, user?.id);
+      if (!user) throw new Error("Must be logged in");
       const payload = parseMutationInput(scopedRowDeleteMutationSchema, { id, scopeId: projectId }, "project unit delete");
-      const { error } = await supabase
-        .from("project_units")
-        .delete()
-        .eq("id", payload.id)
-        .eq("project_id", payload.scopeId);
-      if (error) throw error;
+      await invokeProjectManagement<{ id: string }>({
+        action: "delete_unit",
+        projectId: payload.scopeId,
+        id: payload.id,
+      });
     },
     onSuccess: (_data, { projectId }) => {
       qc.invalidateQueries({ queryKey: ["project_units", projectId] });

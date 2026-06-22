@@ -10,12 +10,14 @@ import { renderHook, waitFor, act } from "@testing-library/react";
 
 const fromMock = vi.fn();
 const rpcMock = vi.fn();
+const functionsInvokeMock = vi.fn();
 const useAuthMock = vi.fn();
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: (...args: unknown[]) => fromMock(...args),
     rpc: (...args: unknown[]) => rpcMock(...args),
+    functions: { invoke: (...args: unknown[]) => functionsInvokeMock(...args) },
   },
 }));
 vi.mock("@/contexts/AuthContext", () => ({
@@ -52,6 +54,7 @@ function renderHookWithQuery<T>(hook: () => T, queryClient?: QueryClient) {
 beforeEach(() => {
   fromMock.mockReset();
   rpcMock.mockReset();
+  functionsInvokeMock.mockReset();
   useAuthMock.mockReset();
   useAuthMock.mockReturnValue({ user: { id: "u-1" } });
 });
@@ -146,18 +149,20 @@ describe("useUpdateProject()", () => {
     ).rejects.toBeInstanceOf(Error);
   });
 
-  it("updates the row scoped to the current user", async () => {
-    const single = vi.fn().mockResolvedValue({ data: { id: "pr1" }, error: null });
-    const eqOwner = vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({ single }),
-    });
-    const eqId = vi.fn().mockReturnValue({ eq: eqOwner });
-    fromMock.mockReturnValue({ update: vi.fn().mockReturnValue({ eq: eqId }) });
+  it("updates through the project-management edge boundary", async () => {
+    functionsInvokeMock.mockResolvedValue({ data: { data: { id: "pr1" }, error: null }, error: null });
     const { result } = renderHookWithQuery(() => useUpdateProject());
     await act(async () => {
       await result.current.mutateAsync({ id: "pr1", updates: { name: "n" } });
     });
-    expect(eqOwner).toHaveBeenCalledWith("owner_id", "u-1");
+    expect(fromMock).not.toHaveBeenCalled();
+    expect(functionsInvokeMock).toHaveBeenCalledWith("project-management", {
+      body: {
+        action: "update_project",
+        id: "pr1",
+        updates: { name: "n" },
+      },
+    });
   });
 });
 
@@ -176,17 +181,13 @@ describe("useUpdateProjectListingCover()", () => {
     ).rejects.toBeInstanceOf(Error);
   });
 
-  it("updates the linked listing cover scoped to the project", async () => {
+  it("updates the linked listing cover through the project-management edge boundary", async () => {
     const queryClient = createQueryClient();
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
-    const update = vi.fn().mockReturnThis();
-    const eq = vi.fn().mockReturnThis();
-    const select = vi.fn().mockReturnThis();
-    const single = vi.fn().mockResolvedValue({
-      data: { id: "listing-1", project_id: "pr1", cover_image_url: "https://cdn.example.com/cover.webp" },
+    functionsInvokeMock.mockResolvedValue({
+      data: { data: { id: "listing-1", project_id: "pr1", cover_image_url: "https://cdn.example.com/cover.webp" }, error: null },
       error: null,
     });
-    fromMock.mockReturnValue({ update, eq, select, single });
 
     const { result } = renderHookWithQuery(() => useUpdateProjectListingCover(), queryClient);
     await act(async () => {
@@ -197,11 +198,15 @@ describe("useUpdateProjectListingCover()", () => {
       });
     });
 
-    expect(fromMock).toHaveBeenCalledWith("listings");
-    expect(update).toHaveBeenCalledWith({ cover_image_url: "https://cdn.example.com/cover.webp" });
-    expect(eq).toHaveBeenCalledWith("id", "listing-1");
-    expect(eq).toHaveBeenCalledWith("project_id", "pr1");
-    expect(select).toHaveBeenCalledWith("id, project_id, cover_image_url");
+    expect(fromMock).not.toHaveBeenCalled();
+    expect(functionsInvokeMock).toHaveBeenCalledWith("project-management", {
+      body: {
+        action: "update_listing_cover",
+        projectId: "pr1",
+        listingId: "listing-1",
+        coverImageUrl: "https://cdn.example.com/cover.webp",
+      },
+    });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["homepage-featured"] });
   });
 });
@@ -217,14 +222,18 @@ describe("useDeleteProject()", () => {
     ).rejects.toBeInstanceOf(Error);
   });
 
-  it("deletes through the atomic unlink-and-delete RPC", async () => {
-    rpcMock.mockResolvedValue({ error: null });
+  it("deletes through the project-management edge boundary", async () => {
+    functionsInvokeMock.mockResolvedValue({ data: { data: { id: "pr1" }, error: null }, error: null });
     const { result } = renderHookWithQuery(() => useDeleteProject());
     await act(async () => {
       await result.current.mutateAsync("pr1");
     });
-    expect(rpcMock).toHaveBeenCalledWith("delete_project_and_unlink_listings", {
-      p_project_id: "pr1",
+    expect(rpcMock).not.toHaveBeenCalled();
+    expect(functionsInvokeMock).toHaveBeenCalledWith("project-management", {
+      body: {
+        action: "delete_project",
+        id: "pr1",
+      },
     });
   });
 });

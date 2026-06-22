@@ -82,12 +82,14 @@ describe("IDOR ownership guards on project mutation hooks", () => {
 
   // ── useDeleteProjectMedia ───────────────────────────────────────────────
 
-  it("useDeleteProjectMedia includes project_id filter", async () => {
-    const ownerChain = makeChainableMock({ data: { id: "proj-xyz" }, error: null });
-    const chain = makeChainableMock();
-    vi.mocked(supabase).from = vi.fn().mockImplementation((table: string) => {
-      if (table === "projects") return ownerChain;
-      return { delete: vi.fn().mockReturnValue(chain) };
+  it("useDeleteProjectMedia delegates project ownership to the edge boundary", async () => {
+    vi.mocked(supabase.functions.invoke).mockResolvedValue({
+      data: { data: { id: "media-1" }, error: null },
+      error: null,
+      success: true,
+      count: null,
+      status: 200,
+      statusText: "OK",
     });
 
     const { result } = renderHook(() => useDeleteProjectMedia(), { wrapper });
@@ -96,19 +98,22 @@ describe("IDOR ownership guards on project mutation hooks", () => {
       await result.current.mutateAsync({ id: "media-1", projectId: "proj-xyz" });
     });
 
-    expect(chain.eqCalls).toContainEqual(["id", "media-1"]);
-    expect(chain.eqCalls).toContainEqual(["project_id", "proj-xyz"]);
-    expect(ownerChain.eqCalls).toContainEqual(["owner_id", TEST_USER_ID]);
+    expect(supabase.from).not.toHaveBeenCalled();
+    expect(supabase.functions.invoke).toHaveBeenCalledWith("project-management", {
+      body: { action: "delete_media", projectId: "proj-xyz", id: "media-1" },
+    });
   });
 
   // ── useDeleteProjectLead ────────────────────────────────────────────────
 
-  it("useDeleteProjectLead includes project_id filter", async () => {
-    const ownerChain = makeChainableMock({ data: { id: "proj-xyz" }, error: null });
-    const chain = makeChainableMock();
-    vi.mocked(supabase).from = vi.fn().mockImplementation((table: string) => {
-      if (table === "projects") return ownerChain;
-      return { delete: vi.fn().mockReturnValue(chain) };
+  it("useDeleteProjectLead delegates project ownership to the edge boundary", async () => {
+    vi.mocked(supabase.functions.invoke).mockResolvedValue({
+      data: { data: { id: "lead-1" }, error: null },
+      error: null,
+      success: true,
+      count: null,
+      status: 200,
+      statusText: "OK",
     });
 
     const { result } = renderHook(() => useDeleteProjectLead(), { wrapper });
@@ -117,19 +122,22 @@ describe("IDOR ownership guards on project mutation hooks", () => {
       await result.current.mutateAsync({ id: "lead-1", projectId: "proj-xyz" });
     });
 
-    expect(chain.eqCalls).toContainEqual(["id", "lead-1"]);
-    expect(chain.eqCalls).toContainEqual(["project_id", "proj-xyz"]);
-    expect(ownerChain.eqCalls).toContainEqual(["owner_id", TEST_USER_ID]);
+    expect(supabase.from).not.toHaveBeenCalled();
+    expect(supabase.functions.invoke).toHaveBeenCalledWith("project-management", {
+      body: { action: "delete_lead", projectId: "proj-xyz", id: "lead-1" },
+    });
   });
 
   // ── useUpdateProjectLead ────────────────────────────────────────────────
 
-  it("useUpdateProjectLead includes project_id filter", async () => {
-    const ownerChain = makeChainableMock({ data: { id: "proj-xyz" }, error: null });
-    const chain = makeChainableMock({ data: { id: "lead-1" }, error: null });
-    vi.mocked(supabase).from = vi.fn().mockImplementation((table: string) => {
-      if (table === "projects") return ownerChain;
-      return { update: vi.fn().mockReturnValue(chain) };
+  it("useUpdateProjectLead delegates project ownership to the edge boundary", async () => {
+    vi.mocked(supabase.functions.invoke).mockResolvedValue({
+      data: { data: { id: "lead-1" }, error: null },
+      error: null,
+      success: true,
+      count: null,
+      status: 200,
+      statusText: "OK",
     });
 
     const { result } = renderHook(() => useUpdateProjectLead(), { wrapper });
@@ -138,19 +146,27 @@ describe("IDOR ownership guards on project mutation hooks", () => {
       await result.current.mutateAsync({ id: "lead-1", projectId: "proj-xyz", updates: { status: "qualified" } });
     });
 
-    expect(chain.eqCalls).toContainEqual(["id", "lead-1"]);
-    expect(chain.eqCalls).toContainEqual(["project_id", "proj-xyz"]);
-    expect(ownerChain.eqCalls).toContainEqual(["owner_id", TEST_USER_ID]);
+    expect(supabase.from).not.toHaveBeenCalled();
+    expect(supabase.functions.invoke).toHaveBeenCalledWith("project-management", {
+      body: {
+        action: "update_lead",
+        projectId: "proj-xyz",
+        id: "lead-1",
+        updates: { status: "qualified" },
+      },
+    });
   });
 
   // ── useDeleteProjectUnit ────────────────────────────────────────────────
 
-  it("useDeleteProjectUnit includes project_id filter", async () => {
-    const ownerChain = makeChainableMock({ data: { id: "proj-xyz" }, error: null });
-    const chain = makeChainableMock();
-    vi.mocked(supabase).from = vi.fn().mockImplementation((table: string) => {
-      if (table === "projects") return ownerChain;
-      return { delete: vi.fn().mockReturnValue(chain) };
+  it("useDeleteProjectUnit delegates project ownership to the edge boundary", async () => {
+    vi.mocked(supabase.functions.invoke).mockResolvedValue({
+      data: { data: { id: "unit-1" }, error: null },
+      error: null,
+      success: true,
+      count: null,
+      status: 200,
+      statusText: "OK",
     });
 
     const { result } = renderHook(() => useDeleteProjectUnit(), { wrapper });
@@ -159,31 +175,40 @@ describe("IDOR ownership guards on project mutation hooks", () => {
       await result.current.mutateAsync({ id: "unit-1", projectId: "proj-xyz" });
     });
 
-    expect(chain.eqCalls).toContainEqual(["id", "unit-1"]);
-    expect(chain.eqCalls).toContainEqual(["project_id", "proj-xyz"]);
-    expect(ownerChain.eqCalls).toContainEqual(["owner_id", TEST_USER_ID]);
+    expect(supabase.from).not.toHaveBeenCalled();
+    expect(supabase.functions.invoke).toHaveBeenCalledWith("project-management", {
+      body: { action: "delete_unit", projectId: "proj-xyz", id: "unit-1" },
+    });
   });
 
   // ── useUpdateProjectUnit ────────────────────────────────────────────────
 
-  it("useUpdateProjectUnit includes project_id filter", async () => {
-    const ownerChain = makeChainableMock({ data: { id: "proj-xyz" }, error: null });
-    const chain = makeChainableMock({ data: { id: "unit-1" }, error: null });
-    vi.mocked(supabase).from = vi.fn().mockImplementation((table: string) => {
-      if (table === "projects") return ownerChain;
-      return { update: vi.fn().mockReturnValue(chain) };
+  it("useUpdateProjectUnit delegates project ownership to the edge boundary", async () => {
+    vi.mocked(supabase.functions.invoke).mockResolvedValue({
+      data: { data: { id: "unit-1" }, error: null },
+      error: null,
+      success: true,
+      count: null,
+      status: 200,
+      statusText: "OK",
     });
 
     const { result } = renderHook(() => useUpdateProjectUnit(), { wrapper });
 
     await act(async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await result.current.mutateAsync({ id: "unit-1", projectId: "proj-xyz", updates: { status: "available" } as any });
+      await result.current.mutateAsync({ id: "unit-1", projectId: "proj-xyz", updates: { availability_status: "available" } as any });
     });
 
-    expect(chain.eqCalls).toContainEqual(["id", "unit-1"]);
-    expect(chain.eqCalls).toContainEqual(["project_id", "proj-xyz"]);
-    expect(ownerChain.eqCalls).toContainEqual(["owner_id", TEST_USER_ID]);
+    expect(supabase.from).not.toHaveBeenCalled();
+    expect(supabase.functions.invoke).toHaveBeenCalledWith("project-management", {
+      body: {
+        action: "update_unit",
+        projectId: "proj-xyz",
+        id: "unit-1",
+        updates: { availability_status: "available" },
+      },
+    });
   });
 
   it("useBulkUpdateProjectUnitPrices delegates available-unit ownership checks to the Edge Function", async () => {
