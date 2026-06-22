@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.10.0](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.31...v1.10.0) (2026-06-22)
+
+
+### Features
+
+* harden phase 1-8 mutation boundaries ([02b0fd1](https://github.com/maiprop/maiprop-listing-site/commit/02b0fd16b1c14ae2fed95b97f1e65291286bc223))
+* move new-build creation behind edge boundary ([#397](https://github.com/maiprop/maiprop-listing-site/issues/397)) ([008b65a](https://github.com/maiprop/maiprop-listing-site/commit/008b65aa38c28332024ead48230d50d3c3eccd0b))
+
 ## [1.9.31](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.30...v1.9.31) (2026-06-21)
 
 
