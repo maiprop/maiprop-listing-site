@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.0](https://github.com/maiprop/maiprop-listing-site/compare/v1.10.0...v1.11.0) (2026-06-22)
+
+
+### Features
+
+* route project writes through edge boundary ([f8092d0](https://github.com/maiprop/maiprop-listing-site/commit/f8092d02357ce8481670f33cd04d571264578e4d))
+
 ## [1.10.0](https://github.com/maiprop/maiprop-listing-site/compare/v1.9.31...v1.10.0) (2026-06-22)
 
 
