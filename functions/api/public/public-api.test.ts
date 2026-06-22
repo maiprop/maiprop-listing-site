@@ -6,6 +6,7 @@ import { onRequest as listingsRequest } from "./listings";
 import { onRequest as openHousesRequest } from "./open-houses";
 import { onRequest as similarListingsRequest } from "./similar-listings";
 import {
+  cachedJson,
   jsonResponse,
   methodNotAllowed,
   missingRuntime,
@@ -278,6 +279,19 @@ describe("public API cache helpers", () => {
     expect((init as RequestInit & { cf?: unknown }).cf).toEqual({ cacheTtl: 120, cacheEverything: true });
   });
 
+  it("supports estimated Supabase counts for high-traffic approximate counters", async () => {
+    await expect(
+      supabaseCount(env, "/rest/v1/listings", new URLSearchParams([["select", "id"]]), {
+        countStrategy: "estimated",
+      }),
+    ).resolves.toBe(3);
+
+    const init = initFor("/rest/v1/listings");
+    expect(init.headers).toMatchObject({
+      Prefer: "count=estimated",
+    });
+  });
+
   it("degrades transient Supabase public-read failures without hiding schema or auth errors", async () => {
     fetchMock().mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }));
     await expect(supabaseJson(env, "/rest/v1/listings", new URLSearchParams([["select", "id"]]))).resolves.toEqual([]);
@@ -380,6 +394,32 @@ describe("public API cache helpers", () => {
     expect(secondRes.headers.get("X-Maiprop-Cache")).toBe("COALESCED");
     expect(fetchUrls("/rest/v1/listings")).toHaveLength(1);
     await expect(firstRes.json()).resolves.toEqual(await secondRes.clone().json());
+  });
+
+  it("bounds cold cache miss latency when a producer stalls", async () => {
+    let releaseProducer!: () => void;
+    const producerGate = new Promise<Response>((resolve) => {
+      releaseProducer = () => resolve(jsonResponse({ late: true }));
+    });
+    const pending = cachedJson(
+      makeCtx("https://portal.maiprop.co/api/public/open-houses?timeout-test=1"),
+      new URL("https://portal.maiprop.co/api/public/open-houses?timeout-test=1"),
+      () => producerGate,
+      { producerTimeoutMs: 5 },
+    );
+
+    const result = await Promise.race([
+      pending.then(async (res) => ({ status: res.status, body: await res.json() })),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 150)),
+    ]);
+
+    try {
+      expect(result).toEqual({ status: 503, body: { error: "Supabase upstream unavailable" } });
+      expect(cacheApi.put).not.toHaveBeenCalled();
+    } finally {
+      releaseProducer();
+      await pending.catch(() => null);
+    }
   });
 
   it("serves stale public cache instead of 503 when Supabase is transiently unavailable", async () => {
@@ -1034,11 +1074,12 @@ describe("public homepage endpoint", () => {
     expect(url.searchParams.get("is_off_market")).toBe("eq.false");
     expect(url.searchParams.get("select")).toContain("project_id");
     expect(url.searchParams.get("select")).toContain("project:projects!listings_project_id_fkey");
-    expect(url.searchParams.get("select")).toContain("project_units!project_units_project_id_fkey");
+    expect(url.searchParams.get("select")).toContain("delivery_date");
+    expect(url.searchParams.get("select")).not.toContain("project_units!project_units_project_id_fkey");
     expect(url.searchParams.get("listing_images.limit")).toBe("3");
     const featuredCacheKey = new URL(cacheApi.put.mock.calls[0][0].url);
     expect(featuredCacheKey.searchParams.get("day")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(featuredCacheKey.searchParams.get("v")).toBe("featured-card-v3");
+    expect(featuredCacheKey.searchParams.get("v")).toBe("featured-card-v4");
     expect(featured.headers.get("Cache-Control")).toBe("public, max-age=300, stale-while-revalidate=300");
     expect(featured.headers.get("CDN-Cache-Control")).toBe("public, max-age=300, stale-while-revalidate=300");
 
@@ -1058,6 +1099,11 @@ describe("public homepage endpoint", () => {
     const typeCounts = await homepageRequest(makeCtx("https://portal.maiprop.co/api/public/homepage?section=type-counts"));
     await expect(typeCounts.json()).resolves.toEqual({ apartment: 3, land: 3 });
     expect(fetchMock().mock.calls.every(([, init]) => init?.method === "HEAD")).toBe(true);
+    expect(fetchMock().mock.calls.every(([, init]) => (init?.headers as Record<string, string>)?.Prefer === "count=estimated")).toBe(true);
+
+    fetchMock().mockClear();
+    await homepageRequest(makeCtx("https://portal.maiprop.co/api/public/homepage?section=auction-count"));
+    expect((initFor("/rest/v1/listings").headers as Record<string, string>).Prefer).toBe("count=estimated");
 
     fetchMock().mockClear();
     const priceIndex = await homepageRequest(makeCtx("https://portal.maiprop.co/api/public/homepage?section=price-index"));

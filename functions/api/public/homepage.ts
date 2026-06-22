@@ -42,8 +42,9 @@ const SECTIONS = [
   "auction-count",
 ] as const;
 const HOMEPAGE_CACHE_VERSION = "open-house-transaction-v1";
-const FEATURED_CACHE_VERSION = "featured-card-v3";
+const FEATURED_CACHE_VERSION = "featured-card-v4";
 const FEATURED_CACHE_SECONDS = 5 * 60;
+const HOMEPAGE_PRODUCER_TIMEOUT_MS = 4_500;
 const COUNTED_PROPERTY_TYPES = ["apartment", "land"] as const;
 const PRICE_INDEX_FALLBACK = [
   { city: "Athens", avg_price_per_sqm: 2180, listing_count: 0, is_live: false, trend_change_pct: null, trend_up: null, trend_is_live: false },
@@ -60,11 +61,7 @@ const POPULAR_LOCATION_FALLBACK: PopularLocation[] = [
   { name: "Santorini", listings: 1240, trend: "+1.9%", trendUp: true },
 ];
 
-const projectUnitCardSelect = ["id", "availability_status", "internal_sqm"].join(",");
-const featuredProjectSelect = [
-  "delivery_date",
-  `project_units!project_units_project_id_fkey(${projectUnitCardSelect})`,
-].join(",");
+const featuredProjectSelect = "delivery_date";
 
 const featuredSelect =
   `id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,project_id,ai_score,views_count,tags,project:projects!listings_project_id_fkey(${featuredProjectSelect}),listing_images(url,sort_order)`;
@@ -93,7 +90,10 @@ async function fetchPopularLocations(env: PublicApiEnv) {
       params.set("status", "eq.active");
       params.set("is_off_market", "eq.false");
       params.set("city", `eq.${city}`);
-      return [city, await supabaseCount(env, "/rest/v1/listings", params, { failOnTransient: true })] as const;
+      return [city, await supabaseCount(env, "/rest/v1/listings", params, {
+        failOnTransient: true,
+        countStrategy: "estimated",
+      })] as const;
     }),
   );
   const listingsByCity = Object.fromEntries(countEntries);
@@ -218,7 +218,10 @@ async function fetchSection(env: PublicApiEnv, section: (typeof SECTIONS)[number
         params.set("status", "eq.active");
         params.set("is_off_market", "eq.false");
         params.set("property_type", `eq.${propertyType}`);
-        return [propertyType, await supabaseCount(env, "/rest/v1/listings", params, { failOnTransient: true })] as const;
+        return [propertyType, await supabaseCount(env, "/rest/v1/listings", params, {
+          failOnTransient: true,
+          countStrategy: "estimated",
+        })] as const;
       }),
     );
     return Object.fromEntries(counts);
@@ -242,7 +245,10 @@ async function fetchSection(env: PublicApiEnv, section: (typeof SECTIONS)[number
   if (section === "auction-count") {
     params.set("select", "id");
     params.set("listing_type", "eq.auction");
-    return supabaseCount(env, "/rest/v1/listings", params, { failOnTransient: true });
+    return supabaseCount(env, "/rest/v1/listings", params, {
+      failOnTransient: true,
+      countStrategy: "estimated",
+    });
   }
 
   if (section === "popular-locations") {
@@ -296,11 +302,13 @@ async function publicHomepage(ctx: PublicApiCtx, requestUrl: URL): Promise<Respo
         edgeTtlSeconds: FEATURED_CACHE_SECONDS,
         browserTtlSeconds: FEATURED_CACHE_SECONDS,
         staleSeconds: FEATURED_CACHE_SECONDS,
+        producerTimeoutMs: HOMEPAGE_PRODUCER_TIMEOUT_MS,
       }
     : {
         edgeTtlSeconds: 180,
         browserTtlSeconds: 60,
         staleSeconds: 600,
+        producerTimeoutMs: HOMEPAGE_PRODUCER_TIMEOUT_MS,
       };
   return cachedJson(ctx, cacheKey, async () => {
     try {

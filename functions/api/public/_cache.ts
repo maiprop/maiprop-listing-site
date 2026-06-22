@@ -38,12 +38,14 @@ type CacheOptions = {
   browserTtlSeconds?: number;
   staleSeconds?: number;
   staleFallbackSeconds?: number;
+  producerTimeoutMs?: number;
 };
 
 type SupabaseFetchOptions = {
   failOnTransient?: boolean;
   transientStatusRetries?: number;
   retryDelayMs?: number;
+  countStrategy?: "exact" | "planned" | "estimated";
 };
 
 function applyCacheHeaders(headers: Headers, cache: CacheOptions, force = false): void {
@@ -101,6 +103,39 @@ function transientRetryDelayMs(options: SupabaseFetchOptions): number {
 
 function sleepMs(ms: number): Promise<void> {
   return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
+}
+
+function cacheProducerTimeoutMs(cache: CacheOptions): number | null {
+  const timeout = cache.producerTimeoutMs;
+  if (typeof timeout !== "number" || !Number.isFinite(timeout) || timeout <= 0) return null;
+  return Math.max(100, Math.min(10_000, Math.floor(timeout)));
+}
+
+async function producerWithTimeout(producer: () => Promise<Response>, cache: CacheOptions): Promise<Response> {
+  const timeoutMs = cacheProducerTimeoutMs(cache);
+  const producerPromise = Promise.resolve().then(producer);
+  if (!timeoutMs) return producerPromise;
+
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  let timedOut = false;
+  const timeoutPromise = new Promise<Response>((resolve) => {
+    timeoutId = setTimeout(() => {
+      timedOut = true;
+      resolve(upstreamUnavailable());
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([producerPromise, timeoutPromise]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+    if (timedOut) {
+      producerPromise.catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`[public-api] cache producer resolved after timeout: ${message}`);
+      });
+    }
+  }
 }
 
 export function jsonResponse(
@@ -246,7 +281,7 @@ export async function cachedJson(
 
   const cacheId = cacheRequest.url;
   const produceAndCache = async (): Promise<Response> => {
-    const response = await producer();
+    const response = await producerWithTimeout(producer, cache);
     if (cacheApi && TRANSIENT_UPSTREAM_STATUSES.has(response.status)) {
       const stale = await matchStaleFallback(cacheApi, cacheKey);
       if (stale) return stale;
@@ -376,7 +411,7 @@ export async function supabaseCount(
           apikey: runtime.key,
           Authorization: `Bearer ${runtime.key}`,
           Accept: "application/json",
-          Prefer: "count=exact",
+          Prefer: `count=${options.countStrategy ?? "exact"}`,
         },
         cf: { cacheTtl: DEFAULT_EDGE_TTL_SECONDS, cacheEverything: true } as RequestInitCfProperties,
       });
