@@ -43,6 +43,8 @@ describe("live operational smoke workflow", () => {
     expect(matrixIndex).toBeGreaterThan(-1);
     expect(repairIndex).toBeLessThan(matrixIndex);
     expect(workflow).toContain("Validate Supabase service role key");
+    expect(workflow).toContain('/auth/v1/admin/users');
+    expect(workflow).toContain("fetch(authAdminUrl");
     expect(workflow).toContain("Supabase service role key accepted by Auth Admin API.");
     expect(workflow).toContain("SUPABASE_SERVICE_ROLE_KEY is not accepted by");
     expect(workflow).toContain("E2E_RUN_SUPERVISOR_NETWORK: true");

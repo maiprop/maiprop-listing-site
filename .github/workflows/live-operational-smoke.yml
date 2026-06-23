@@ -83,8 +83,6 @@ jobs:
         shell: bash
         run: |
           node <<'NODE'
-          const { createClient } = await import("@supabase/supabase-js");
-
           const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
           const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -96,14 +94,24 @@ jobs:
             throw new Error("SUPABASE_SERVICE_ROLE_KEY must be configured for live role repair.");
           }
 
-          const client = createClient(supabaseUrl, serviceRoleKey, {
-            auth: { autoRefreshToken: false, persistSession: false },
-          });
-          const { error } = await client.auth.admin.listUsers({ page: 1, perPage: 1 });
+          const authAdminUrl = new URL("/auth/v1/admin/users", supabaseUrl);
+          authAdminUrl.searchParams.set("page", "1");
+          authAdminUrl.searchParams.set("per_page", "1");
 
-          if (error) {
+          const response = await fetch(authAdminUrl, {
+            headers: {
+              apikey: serviceRoleKey,
+              Authorization: `Bearer ${serviceRoleKey}`,
+              Accept: "application/json",
+            },
+          });
+
+          if (!response.ok) {
             const host = new URL(supabaseUrl).host;
-            throw new Error(`SUPABASE_SERVICE_ROLE_KEY is not accepted by ${host}: ${error.message}`);
+            const body = await response.text();
+            throw new Error(
+              `SUPABASE_SERVICE_ROLE_KEY is not accepted by ${host}: HTTP ${response.status} ${body.slice(0, 160)}`,
+            );
           }
 
           console.log("Supabase service role key accepted by Auth Admin API.");
