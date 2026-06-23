@@ -95,9 +95,10 @@ local evidence for this verification pass.
 
 Release `1.11.3` was squash-merged on 2026-06-23 as
 `7251316915bae10e20237628a8227c2a68a01c7f`. Release Please and CodeQL
-completed successfully for that SHA. The CI run was still in progress during
-this documentation update, after completing build, lint, migration, governance,
-and unit-test steps.
+completed successfully for that SHA. CI run `28043405941` completed
+successfully, including build, lint, tests, coverage, migration validation,
+Lighthouse, E2E, live-safe security checks, Cloudflare production deployment,
+and post-deploy health check.
 
 ## Standards Evidence Workflow
 

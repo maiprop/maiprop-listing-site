@@ -13,7 +13,7 @@ The app is materially stronger than the earlier ECAS baseline, but this repo sho
 | RLS CRUD proof | Live production read-only query on `qvvicunqcrwpioqnvzxf`: 73 public tables, 292 CRUD cells, 0 RLS-disabled cells, 0 unsafe classifications. |
 | Supabase advisors | Security advisor: only `auth_leaked_password_protection` WARN. Performance advisor: `unused_index` INFO findings only; no high/critical finding was observed. |
 | Supabase functions | Production Edge Function inventory lists active functions including recent service-boundary functions: `open-house-registration`, `create-new-building-listing`, `project-management`, `submit-firesale-request`, and related admin/service functions. |
-| GitHub Actions | Latest `main` release commit `72513169` has successful Release Please and CodeQL runs. CI run `28043405941` has completed build, lint, tests, migration validation, release safety, Supabase prep, and live-safe security jobs; Lighthouse and E2E remained in progress during this evidence update. |
+| GitHub Actions | Latest `main` release commit `72513169` has successful Release Please, CodeQL, and CI run `28043405941`, including Cloudflare production deployment and post-deploy health check. |
 | Cloudflare deploy smoke | `npm run check:production-deploy -- https://portal.maiprop.co --browser --public-api` passed with public APIs online. Standards Evidence run `28044234620` also captured the Cloudflare Pages project via GitHub secrets. |
 | Browser smoke | In-app browser loaded `https://portal.maiprop.co/`, app mounted, expected navigation links rendered, and 0 console errors were captured. |
 | Performance gate | `npm run test:perf` passed: build, typecheck, 10 Playwright performance/query-budget tests. |
