@@ -24,4 +24,12 @@ describe("live operational smoke workflow", () => {
     expect(liveAiQuotaSpec).toContain("page.waitForTimeout(LISTING_LOOKUP_DELAY_MS * attempt)");
     expect(liveAiQuotaSpec).toContain("public listings API did not return a listing after");
   });
+
+  it("asserts the current non-consuming live quota UI contract", () => {
+    expect(liveAiQuotaSpec).toContain("expectedTierStatus");
+    expect(liveAiQuotaSpec).toContain("AI Nearby Places requests");
+    expect(liveAiQuotaSpec).toContain("Neighbourhood Report requests");
+    expect(liveAiQuotaSpec).toContain("Free:\\s*5\\/month\\.\\s*Pro:\\s*50\\/month\\.");
+    expect(liveAiQuotaSpec).not.toContain("AI insight requests remaining this month");
+  });
 });

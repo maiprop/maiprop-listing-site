@@ -12,7 +12,7 @@ type QuotaAccount = {
   label: string;
   email: string;
   password: string;
-  expectedAllowance: RegExp;
+  expectedTierStatus: RegExp;
 };
 
 const enabled =
@@ -26,13 +26,13 @@ const accounts: QuotaAccount[] = [
     label: "buyer free",
     email: demoAccounts.buyerFree,
     password: demoPasswords.buyerFree,
-    expectedAllowance: /\bFree\b.*AI insight requests remaining this month/i,
+    expectedTierStatus: /(?:Monthly cap reached for your Free allowance|\d+ Free requests? remaining this month)/i,
   },
   {
     label: "buyer pro",
     email: demoAccounts.buyerPro,
     password: demoPasswords.buyerPro,
-    expectedAllowance: /\bPro\b.*AI insight requests remaining this month/i,
+    expectedTierStatus: /(?:Monthly cap reached for your Pro allowance|\d+ Pro requests? remaining this month)/i,
   },
 ];
 
@@ -82,7 +82,7 @@ test.describe("live AI quota smoke", () => {
   test.skip(!enabled, "Set PLAYWRIGHT_BASE_URL and E2E_USE_SEEDED_DEMO_ACCOUNTS=true to run live AI quota smoke.");
 
   for (const account of accounts) {
-    test(`${account.label} sees the correct AI insight quota copy`, async ({ page }) => {
+    test(`${account.label} sees the correct non-consuming AI quota copy`, async ({ page }) => {
       test.setTimeout(90_000);
       await signIn(page, account);
 
@@ -90,7 +90,10 @@ test.describe("live AI quota smoke", () => {
       await page.goto(listingPath);
       await expect(page.locator("body")).toContainText(/AI Market Insights/i, { timeout: 20_000 });
       await expect(page.locator("body")).toContainText(/Run AI analysis when you need it/i, { timeout: 20_000 });
-      await expect(page.locator("body")).toContainText(account.expectedAllowance, { timeout: 20_000 });
+      await expect(page.locator("body")).toContainText(/AI Nearby Places requests/i, { timeout: 20_000 });
+      await expect(page.locator("body")).toContainText(/Neighbourhood Report requests/i, { timeout: 20_000 });
+      await expect(page.locator("body")).toContainText(/Free:\s*5\/month\.\s*Pro:\s*50\/month\./i, { timeout: 20_000 });
+      await expect(page.locator("body")).toContainText(account.expectedTierStatus, { timeout: 20_000 });
       await expect(page.locator("body")).toContainText(/Load AI insights|Refresh AI insights/i);
     });
   }
