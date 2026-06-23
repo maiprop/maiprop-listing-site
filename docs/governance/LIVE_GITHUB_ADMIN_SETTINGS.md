@@ -54,6 +54,15 @@ change.
 
 Environment approvals: pending repository admin.
 
+The environment object exists, but the reviewer gate is still pending
+repository admin.
+
+GitHub API recheck on 2026-06-23 returned two environments:
+
+- `production`: configured with a branch policy protection rule and custom
+  branch policies; no required-reviewer protection rule was reported.
+- `staging`: configured without protection rules.
+
 The production workflow requires source gates before deployment, but live
 environment reviewer settings require repository administration. Before marking
 ECAS Deployment Readiness as top-grade, configure production environment
@@ -69,7 +78,8 @@ repository/security settings and should be verified by a repository admin.
 
 ## Latest Main Health
 
-Latest main workflow health was checked with GitHub CLI on 2026-06-23:
+Latest fully completed main workflow health before release `1.11.3` was checked
+with GitHub CLI on 2026-06-23:
 
 - `CI` success for `chore(main): release 1.11.2`
   ([run 28003451539](https://github.com/maiprop/maiprop-listing-site/actions/runs/28003451539))
@@ -82,3 +92,28 @@ Latest main workflow health was checked with GitHub CLI on 2026-06-23:
 The GitHub connector could not fetch workflow runs in this Codex session
 because the API returned `404 Not Found`; the CLI check is the authoritative
 local evidence for this verification pass.
+
+Release `1.11.3` was squash-merged on 2026-06-23 as
+`7251316915bae10e20237628a8227c2a68a01c7f`. Release Please and CodeQL
+completed successfully for that SHA. CI run `28043405941` completed
+successfully, including build, lint, tests, coverage, migration validation,
+Lighthouse, E2E, live-safe security checks, Cloudflare production deployment,
+and post-deploy health check.
+
+## Standards Evidence Workflow
+
+The `Standards Evidence` workflow requires `pull-requests: read` because it
+uses `gh pr list` to archive the open PR inventory. Without that permission,
+GitHub returns `Resource not accessible by integration`.
+
+Branch `codex/ecas-completion-admin-evidence` verified the permission fix on
+2026-06-23 with run `28044234620`. The run completed successfully and uploaded
+the `standards-evidence` artifact. Key captured statuses:
+
+- GitHub admin posture: `blocked`; branch protection API returned `403`.
+- Supabase live security: passed.
+- Cloudflare admin posture: `captured`; Pages project `maiprop-listing-site`,
+  production branch `main`, domains `maiprop-listing-site.pages.dev` and
+  `portal.maiprop.co`.
+- Sentry live evidence: `unconfigured`; missing `SENTRY_AUTH_TOKEN`,
+  `SENTRY_ORG`, and `SENTRY_PROJECT`.

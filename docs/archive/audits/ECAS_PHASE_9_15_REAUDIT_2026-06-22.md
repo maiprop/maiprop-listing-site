@@ -13,8 +13,8 @@ The app is materially stronger than the earlier ECAS baseline, but this repo sho
 | RLS CRUD proof | Live production read-only query on `qvvicunqcrwpioqnvzxf`: 73 public tables, 292 CRUD cells, 0 RLS-disabled cells, 0 unsafe classifications. |
 | Supabase advisors | Security advisor: only `auth_leaked_password_protection` WARN. Performance advisor: `unused_index` INFO findings only; no high/critical finding was observed. |
 | Supabase functions | Production Edge Function inventory lists active functions including recent service-boundary functions: `open-house-registration`, `create-new-building-listing`, `project-management`, `submit-firesale-request`, and related admin/service functions. |
-| GitHub Actions | Latest `main` commit `b0b25931` has successful Release Please, CI, and CodeQL runs. |
-| Cloudflare deploy smoke | `npm run check:production-deploy -- https://portal.maiprop.co --browser --public-api` passed with public APIs online. |
+| GitHub Actions | Latest `main` release commit `72513169` has successful Release Please, CodeQL, and CI run `28043405941`, including Cloudflare production deployment and post-deploy health check. |
+| Cloudflare deploy smoke | `npm run check:production-deploy -- https://portal.maiprop.co --browser --public-api` passed with public APIs online. Standards Evidence run `28044234620` also captured the Cloudflare Pages project via GitHub secrets. |
 | Browser smoke | In-app browser loaded `https://portal.maiprop.co/`, app mounted, expected navigation links rendered, and 0 console errors were captured. |
 | Performance gate | `npm run test:perf` passed: build, typecheck, 10 Playwright performance/query-budget tests. |
 | Standards gates | `check:ecas-hardening`, `check:enterprise-readiness-basics`, `check:github-governance`, `check:standards-readiness`, `check:perf-proof`, and `check:dr-readiness` passed. |
@@ -41,7 +41,7 @@ The app is materially stronger than the earlier ECAS baseline, but this repo sho
 | 15 | Observability | B- | 80% | Sentry wiring and health tests exist; live Sentry issue query is blocked by missing local `SENTRY_AUTH_TOKEN`. | Configure read-only Sentry token in the operator shell/CI and archive last-24h issue evidence. |
 | 16 | DevOps | B+ | 88% | GitHub Actions main is green; DR/deploy checks pass; CircleCI config validates as secondary. | Avoid duplicate CI spend by keeping GitHub as primary and CircleCI as optional mirror until needed. |
 | 17 | GitHub Governance | B | 82% | Source-controlled governance gates pass; latest main CI/CodeQL/Release Please are green. | Verify live branch protection, push protection, and environment approvals in GitHub admin UI/API. |
-| 18 | Cloudflare | B | 84% | Production smoke passes; management-level WAF/cache/rate-limit evidence is blocked by missing Cloudflare API token. | Capture Cloudflare Pages/WAF/rate-limit settings with a scoped read-only token. |
+| 18 | Cloudflare | B | 86% | Production smoke passes and Standards Evidence run `28044234620` captured Pages project posture via GitHub secrets. Detailed WAF/cache/rate-limit evidence is still not fully modeled in the capture script. | Extend Cloudflare capture to WAF, bot/rate-limit, and cache rules with a scoped read-only token. |
 | 19 | Infrastructure | B- | 80% | DR readiness docs and gates pass, but restore drill remains operator-executed evidence. | Run and record a non-production restore drill. |
 | 20 | Data Governance | B- | 80% | Governance docs exist for privacy, deletion, retention, and procurement evidence. | Automate DSAR/export and retention verification checks. |
 | 21 | AI Governance | B- | 80% | AI quota and latency/cost logging contracts exist, but live spend telemetry is not fully proven here. | Add release artifact for AI request latency/cost percentiles. |
@@ -54,7 +54,7 @@ The app is materially stronger than the earlier ECAS baseline, but this repo sho
 
 1. Supabase leaked-password protection remains disabled and must be enabled in Supabase Auth settings when available.
 2. Live Sentry issue/event audit was not run because `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT` are not configured locally.
-3. Cloudflare management evidence was not captured because `CLOUDFLARE_API_TOKEN` / Access credentials are not configured locally.
+3. Cloudflare Pages management evidence was captured in Standards Evidence run `28044234620` using GitHub secrets. Local shell capture remains unconfigured because `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, and `CLOUDFLARE_PAGES_PROJECT` are not exported locally. Detailed WAF, bot/rate-limit, and cache-rule capture remains a follow-up.
 4. Full production 10x/enterprise soak was not rerun in this pass; the repo has the proof framework and static gates, but production execution needs explicit cost/risk approval.
 5. Restore-drill execution remains an operator task; the repository has the runbook and readiness gate.
 6. GitHub connector workflow reads returned 404 on this private repo; `gh` CLI was used for Actions evidence.
@@ -103,6 +103,18 @@ artifacts have been captured.
 - Cloudflare management evidence was cross-checked with local Wrangler on
   2026-06-23; `npx wrangler whoami` reported the session is not authenticated,
   and no `CLOUDFLARE_*` or `CF_*` environment variables are set in the shell.
+- Release Please PR #412 was squash-merged on 2026-06-23 as
+  `7251316915bae10e20237628a8227c2a68a01c7f`; tag `v1.11.3` was created and
+  the release branch was deleted.
+- Standards Evidence workflow run `28043794057` failed because
+  `gh pr list` requires `pull-requests: read`. Branch
+  `codex/ecas-completion-admin-evidence` adds that permission, and verification
+  run `28044234620` passed.
+- Standards Evidence artifact `28044234620` captured Cloudflare Pages posture:
+  project `maiprop-listing-site`, production branch `main`, domains
+  `maiprop-listing-site.pages.dev` and `portal.maiprop.co`, latest deployment
+  environment `production`. The same artifact recorded Sentry as unconfigured
+  because `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT` are absent.
 
 ## 30/60/90-Day Roadmap
 
