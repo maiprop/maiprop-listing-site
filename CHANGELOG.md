@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.11.3](https://github.com/maiprop/maiprop-listing-site/compare/v1.11.2...v1.11.3) (2026-06-23)
+
+
+### Bug Fixes
+
+* stabilize live operational smoke ([#411](https://github.com/maiprop/maiprop-listing-site/issues/411)) ([6591e66](https://github.com/maiprop/maiprop-listing-site/commit/6591e66e7c75ccdff600c667c1f75ce1555f8511))
+* stabilize live professional smoke and CI security gates ([88dbb47](https://github.com/maiprop/maiprop-listing-site/commit/88dbb479e324ff40b7d702d664942e095c337913))
+
 ## [1.11.2](https://github.com/maiprop/maiprop-listing-site/compare/v1.11.1...v1.11.2) (2026-06-23)
 
 
