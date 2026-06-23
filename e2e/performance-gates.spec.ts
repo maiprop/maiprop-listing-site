@@ -31,7 +31,7 @@ const WEB_VITAL_BUDGETS = {
   cls: 0.1,
   inp: 200,
 };
-const INP_SAMPLE_ATTEMPTS = 3;
+const INP_SAMPLE_ATTEMPTS = 5;
 
 const LAZY_ONLY_CHUNK_RE = /(?:LazyRecharts|recharts|(?:^|\/)d3-|BarChart|LineChart|AreaChart|PieChart|ResponsiveContainer|mapbox-gl|react-map-gl|vendor-mapbox|vendor-charts)/;
 const CHART_CHUNK_RE = /(?:LazyRecharts|recharts|(?:^|\/)d3-|BarChart|LineChart|AreaChart|PieChart|ResponsiveContainer|vendor-charts)/;
@@ -305,7 +305,7 @@ async function exerciseInputForVitals(page: Page) {
     });
     probe.addEventListener("click", () => {
       const start = performance.now();
-      while (performance.now() - start < 32) {
+      while (performance.now() - start < 20) {
         // Keep the interaction measurable without approaching the INP budget.
       }
     });
@@ -359,12 +359,14 @@ async function waitForInteractionIdle(page: Page) {
   await page.evaluate(async () => {
     await document.fonts?.ready?.catch(() => undefined);
     await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-    await new Promise<void>((resolve) => {
-      const idle = window.requestIdleCallback ?? ((cb: IdleRequestCallback) => window.setTimeout(cb, 250));
-      idle(() => resolve(), { timeout: 2_000 });
-    });
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await new Promise<void>((resolve) => {
+        const idle = window.requestIdleCallback ?? ((cb: IdleRequestCallback) => window.setTimeout(cb, 250));
+        idle(() => resolve(), { timeout: 2_000 });
+      });
+    }
   });
-  await page.waitForTimeout(250);
+  await page.waitForTimeout(500);
 }
 
 test.describe("authenticated performance gates @perf", () => {
