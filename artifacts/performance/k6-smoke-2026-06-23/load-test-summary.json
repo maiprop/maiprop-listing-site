@@ -1,0 +1,247 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-23T07:43:07.271Z",
+  "tool": "k6",
+  "profile": "smoke",
+  "baseUrl": "https://portal.maiprop.co",
+  "productionHost": true,
+  "productionApproved": true,
+  "abortOnFailEnabled": false,
+  "summaryType": "normalized",
+  "status": "failed",
+  "traffic": {
+    "totalRequests": 441,
+    "peakVus": 10,
+    "iterations": 63
+  },
+  "thresholds": [
+    {
+      "name": "http_req_duration_p95_ms",
+      "actual": 25.346,
+      "budget": 2500,
+      "passed": true
+    },
+    {
+      "name": "http_req_failed_rate",
+      "actual": 0.006802721088435374,
+      "budget": 0.01,
+      "passed": true
+    },
+    {
+      "name": "errors_rate",
+      "actual": 0.006802721088435374,
+      "budget": 0.01,
+      "passed": true
+    }
+  ],
+  "failedRoutes": [
+    "api_listings",
+    "api_open_houses",
+    "sitemap"
+  ],
+  "routes": [
+    {
+      "name": "home",
+      "path": "/",
+      "url": "https://portal.maiprop.co/",
+      "status": "passed",
+      "traffic": {
+        "totalRequests": 63
+      },
+      "thresholds": [
+        {
+          "name": "http_req_duration_p95_ms",
+          "actual": 25.767,
+          "budget": 2500,
+          "passed": true
+        },
+        {
+          "name": "http_req_failed_rate",
+          "actual": 0,
+          "budget": 0.01,
+          "passed": true
+        },
+        {
+          "name": "errors_rate",
+          "actual": 0,
+          "budget": 0.01,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "name": "listings",
+      "path": "/listings",
+      "url": "https://portal.maiprop.co/listings",
+      "status": "passed",
+      "traffic": {
+        "totalRequests": 63
+      },
+      "thresholds": [
+        {
+          "name": "http_req_duration_p95_ms",
+          "actual": 20.36441,
+          "budget": 2500,
+          "passed": true
+        },
+        {
+          "name": "http_req_failed_rate",
+          "actual": 0,
+          "budget": 0.01,
+          "passed": true
+        },
+        {
+          "name": "errors_rate",
+          "actual": 0,
+          "budget": 0.01,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "name": "auctions",
+      "path": "/auctions",
+      "url": "https://portal.maiprop.co/auctions",
+      "status": "passed",
+      "traffic": {
+        "totalRequests": 63
+      },
+      "thresholds": [
+        {
+          "name": "http_req_duration_p95_ms",
+          "actual": 23.318929999999998,
+          "budget": 2500,
+          "passed": true
+        },
+        {
+          "name": "http_req_failed_rate",
+          "actual": 0,
+          "budget": 0.01,
+          "passed": true
+        },
+        {
+          "name": "errors_rate",
+          "actual": 0,
+          "budget": 0.01,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "name": "pricing",
+      "path": "/pricing",
+      "url": "https://portal.maiprop.co/pricing",
+      "status": "passed",
+      "traffic": {
+        "totalRequests": 63
+      },
+      "thresholds": [
+        {
+          "name": "http_req_duration_p95_ms",
+          "actual": 24.66318,
+          "budget": 2500,
+          "passed": true
+        },
+        {
+          "name": "http_req_failed_rate",
+          "actual": 0,
+          "budget": 0.01,
+          "passed": true
+        },
+        {
+          "name": "errors_rate",
+          "actual": 0,
+          "budget": 0.01,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "name": "api_listings",
+      "path": "/api/public/listings?limit=24",
+      "url": "https://portal.maiprop.co/api/public/listings?limit=24",
+      "status": "failed",
+      "traffic": {
+        "totalRequests": 63
+      },
+      "thresholds": [
+        {
+          "name": "http_req_duration_p95_ms",
+          "actual": 21.430950000000003,
+          "budget": 2500,
+          "passed": true
+        },
+        {
+          "name": "http_req_failed_rate",
+          "actual": 0.015873015873015872,
+          "budget": 0.01,
+          "passed": false
+        },
+        {
+          "name": "errors_rate",
+          "actual": 0.015873015873015872,
+          "budget": 0.01,
+          "passed": false
+        }
+      ]
+    },
+    {
+      "name": "api_open_houses",
+      "path": "/api/public/open-houses?limit=24",
+      "url": "https://portal.maiprop.co/api/public/open-houses?limit=24",
+      "status": "failed",
+      "traffic": {
+        "totalRequests": 63
+      },
+      "thresholds": [
+        {
+          "name": "http_req_duration_p95_ms",
+          "actual": 19.93797,
+          "budget": 2500,
+          "passed": true
+        },
+        {
+          "name": "http_req_failed_rate",
+          "actual": 0.015873015873015872,
+          "budget": 0.01,
+          "passed": false
+        },
+        {
+          "name": "errors_rate",
+          "actual": 0.015873015873015872,
+          "budget": 0.01,
+          "passed": false
+        }
+      ]
+    },
+    {
+      "name": "sitemap",
+      "path": "/sitemap-dynamic.xml",
+      "url": "https://portal.maiprop.co/sitemap-dynamic.xml",
+      "status": "failed",
+      "traffic": {
+        "totalRequests": 63
+      },
+      "thresholds": [
+        {
+          "name": "http_req_duration_p95_ms",
+          "actual": 27.83231,
+          "budget": 2500,
+          "passed": true
+        },
+        {
+          "name": "http_req_failed_rate",
+          "actual": 0.015873015873015872,
+          "budget": 0.01,
+          "passed": false
+        },
+        {
+          "name": "errors_rate",
+          "actual": 0.015873015873015872,
+          "budget": 0.01,
+          "passed": false
+        }
+      ]
+    }
+  ]
+}

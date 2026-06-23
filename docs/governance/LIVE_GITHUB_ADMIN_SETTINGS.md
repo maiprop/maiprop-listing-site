@@ -1,6 +1,6 @@
 # Live GitHub Admin Settings Evidence
 
-Last verified: 2026-06-22
+Last verified: 2026-06-23
 
 This file records the live GitHub controls that are not fully expressible in
 source code. Source gates still validate the expected policy files, but ECAS
@@ -28,7 +28,9 @@ nested dependency or the workflow is migrated to a direct CLI installation.
 
 ## Branch Protection
 
-Branch protection API result: blocked.
+Branch protection API result: blocked. Rechecked on 2026-06-23 with
+`npm run capture:github-admin-posture -- --strict` after loading the authenticated
+GitHub CLI token into `GITHUB_TOKEN`.
 
 GitHub returned: `Upgrade to GitHub Pro or make this repository public to enable this feature.`
 
@@ -67,11 +69,15 @@ repository/security settings and should be verified by a repository admin.
 
 ## Latest Main Health
 
-Latest main workflow health was checked with GitHub CLI on 2026-06-22:
+Latest main workflow health was checked with GitHub CLI on 2026-06-23:
 
-- `Release Please` success for `test: add ECAS phase 9-15 proof gates`
-- `CI` success for `test: add ECAS phase 9-15 proof gates`
+- `CI` success for `chore(main): release 1.11.2`
+  ([run 28003451539](https://github.com/maiprop/maiprop-listing-site/actions/runs/28003451539))
+- `Release Please` success for `chore(main): release 1.11.2`
+  ([run 28003451427](https://github.com/maiprop/maiprop-listing-site/actions/runs/28003451427))
 - `CodeQL` success for `Code Quality: Push on main`
+  ([run 28003450688](https://github.com/maiprop/maiprop-listing-site/actions/runs/28003450688))
+- Verified head SHA: `0145793152164ac0fe5b4da22c48914251a00fa8`
 
 The GitHub connector could not fetch workflow runs in this Codex session
 because the API returned `404 Not Found`; the CLI check is the authoritative
