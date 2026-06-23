@@ -72,6 +72,50 @@ jobs:
         if: steps.smoke.outputs.enabled == 'true'
         run: npm ci --prefer-offline --no-audit
 
+      - name: Warm live public listings API
+        if: steps.smoke.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          node <<'NODE'
+          const baseUrl = process.env.PLAYWRIGHT_BASE_URL;
+          const target = new URL("/api/public/listings?limit=1", baseUrl);
+          const attempts = 6;
+          let lastFailure = "not attempted";
+          let ready = false;
+
+          for (let attempt = 1; attempt <= attempts; attempt += 1) {
+            try {
+              const response = await fetch(target, {
+                headers: { Accept: "application/json" },
+              });
+              const text = await response.text();
+
+              if (response.ok) {
+                const payload = JSON.parse(text);
+                const listingId = payload?.data?.[0]?.id;
+                if (typeof listingId === "string" && listingId.length > 0) {
+                  console.log(`Public listings API is ready on attempt ${attempt}: ${listingId}`);
+                  ready = true;
+                  break;
+                }
+                lastFailure = `HTTP ${response.status} without a listing id: ${text.slice(0, 240)}`;
+              } else {
+                lastFailure = `HTTP ${response.status}: ${text.slice(0, 240)}`;
+              }
+            } catch (error) {
+              lastFailure = error instanceof Error ? error.message : String(error);
+            }
+
+            if (attempt < attempts) {
+              await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+            }
+          }
+
+          if (!ready) {
+            throw new Error(`Public listings API not ready after ${attempts} attempts: ${lastFailure}`);
+          }
+          NODE
+
       - name: Install Playwright
         if: steps.smoke.outputs.enabled == 'true'
         run: npx playwright install --with-deps chromium
