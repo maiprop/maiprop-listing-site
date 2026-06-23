@@ -74,6 +74,36 @@ blocked when provider audit tokens are absent. In procurement or release-audit
 mode, run `npm run check:ecas-live-evidence -- --strict` after all provider
 artifacts have been captured.
 
+## 2026-06-23 Evidence Follow-Up
+
+- `npm run check:ecas-hardening`, `npm run check:enterprise-readiness-basics`,
+  and `npm run check:standards-readiness` passed on commit
+  `0145793152164ac0fe5b4da22c48914251a00fa8`.
+- Production k6 smoke first run failed strict route-level availability gates:
+  `api_listings`, `api_open_houses`, and `sitemap` each failed once out of 63
+  route requests. Overall p95 and overall error rate still passed. Artifact:
+  `artifacts/performance/k6-smoke-2026-06-23/load-test-summary.json`.
+- Immediate production k6 smoke rerun passed: 448 requests, 10 peak VUs, zero
+  failed routes, p95 24.82 ms. Artifact:
+  `artifacts/performance/k6-smoke-2026-06-23-rerun/load-test-summary.json`.
+- Direct route probes after the rerun returned 25/25 HTTP 200 responses for
+  `/api/public/listings?limit=24`, `/api/public/open-houses?limit=24`, and
+  `/sitemap-dynamic.xml`; responses were served from Cloudflare cache/stale
+  cache where applicable.
+- Supabase connector read-only verification against project `qvvicunqcrwpioqnvzxf`
+  returned 73 public tables with RLS enabled, 0 public tables with RLS disabled,
+  and no RLS-disabled table names.
+- Supabase Security Advisor returned one WARN: `auth_leaked_password_protection`.
+  Supabase Performance Advisor returned INFO-level `unused_index` findings only;
+  no high/critical advisor finding was observed in this pass.
+- Strict live evidence gate remains blocked, not failed by source code:
+  Sentry evidence is unconfigured, Cloudflare evidence is unconfigured, and
+  GitHub live admin evidence is blocked by the GitHub branch-protection API
+  returning `403` for the current private repository/plan.
+- Cloudflare management evidence was cross-checked with local Wrangler on
+  2026-06-23; `npx wrangler whoami` reported the session is not authenticated,
+  and no `CLOUDFLARE_*` or `CF_*` environment variables are set in the shell.
+
 ## 30/60/90-Day Roadmap
 
 | Window | Action |
