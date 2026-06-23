@@ -78,6 +78,37 @@ jobs:
         if: steps.smoke.outputs.enabled == 'true'
         run: npm ci --prefer-offline --no-audit
 
+      - name: Validate Supabase service role key
+        if: steps.smoke.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          node <<'NODE'
+          const { createClient } = await import("@supabase/supabase-js");
+
+          const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+          const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+          if (!supabaseUrl) {
+            throw new Error("SUPABASE_URL or VITE_SUPABASE_URL must be configured for live role repair.");
+          }
+
+          if (!serviceRoleKey) {
+            throw new Error("SUPABASE_SERVICE_ROLE_KEY must be configured for live role repair.");
+          }
+
+          const client = createClient(supabaseUrl, serviceRoleKey, {
+            auth: { autoRefreshToken: false, persistSession: false },
+          });
+          const { error } = await client.auth.admin.listUsers({ page: 1, perPage: 1 });
+
+          if (error) {
+            const host = new URL(supabaseUrl).host;
+            throw new Error(`SUPABASE_SERVICE_ROLE_KEY is not accepted by ${host}: ${error.message}`);
+          }
+
+          console.log("Supabase service role key accepted by Auth Admin API.");
+          NODE
+
       - name: Warm live public listings API
         if: steps.smoke.outputs.enabled == 'true'
         shell: bash

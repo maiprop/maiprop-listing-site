@@ -237,7 +237,7 @@ fail-fast behavior.
 | `RLS_USER_PASSWORD` | shared live-safe RLS test password | repo or staging environment |
 | `ONBOARDING_TEST_EMAIL` | live-safe onboarding E2E user | repo or staging environment |
 | `ONBOARDING_TEST_PASSWORD` | live-safe onboarding E2E password | repo or staging environment |
-| `SUPABASE_SERVICE_ROLE_KEY` | staging `service_role` JWT API key for security tests and fixtures; destructive checks stay disabled unless an isolated staging project is configured; do not use the `sb_secret_*` key for PostgREST-backed fixtures | staging environment only |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase `service_role` JWT API key for Edge Functions, staging security fixtures, and the live operational smoke fixture-repair step; destructive checks stay disabled unless an isolated staging project is configured; do not use the `sb_secret_*` key for PostgREST/Auth Admin-backed fixtures | repo or environment scoped to deploy/test jobs |
 | `MAIPROP_EDGE_TEST_AUTH_BYPASS` | explicit CI-only bypass marker for edge-function tests that exercise handler internals without live Supabase Auth | CI test environment only |
 | `PRODUCTION_DEPLOY_URLS` | optional space-separated URL override for the post-deploy production smoke check; defaults to `https://portal.maiprop.co` | deploy diagnostics only |
 | `PRODUCTION_DEPLOY_BROWSER_CHECK` | optional boolean that enables the Chromium mount check when set instead of passing `--browser` | deploy diagnostics only |
@@ -260,6 +260,7 @@ Additional seeded E2E accounts:
 |---|---|
 | `E2E_DEMO_PASSWORD` | default password for seeded demo users |
 | `E2E_USE_SEEDED_DEMO_ACCOUNTS` | explicit marker that seeded demo-account E2E may use shared fixture accounts |
+| `E2E_ADMIN_SMOKE_ENABLED` | optional `true` opt-in that includes the admin fixture in the live role/tier smoke matrix after admin access has been explicitly validated |
 | `E2E_BUYER_FREE_EMAIL` / `E2E_BUYER_FREE_PASSWORD` | free buyer fixture |
 | `E2E_BUYER_PRO_EMAIL` / `E2E_BUYER_PRO_PASSWORD` | pro buyer fixture |
 | `E2E_SELLER_PRO_EMAIL` / `E2E_SELLER_PRO_PASSWORD` | pro seller fixture |
