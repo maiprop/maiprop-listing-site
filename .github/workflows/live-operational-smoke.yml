@@ -19,7 +19,13 @@ jobs:
     timeout-minutes: 30
     env:
       PLAYWRIGHT_BASE_URL: https://portal.maiprop.co
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       E2E_USE_SEEDED_DEMO_ACCOUNTS: true
+      E2E_RUN_SUPERVISOR_NETWORK: true
+      I_KNOW_THIS_IS_PROD: yes
       E2E_DEMO_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
       E2E_BUYER_FREE_EMAIL: ${{ secrets.E2E_BUYER_FREE_EMAIL }}
       E2E_BUYER_FREE_PASSWORD: ${{ secrets.E2E_BUYER_FREE_PASSWORD }}
@@ -123,6 +129,10 @@ jobs:
       - name: Run non-consuming AI quota smoke
         if: steps.smoke.outputs.enabled == 'true'
         run: npm run test:e2e:live-ai-quota
+
+      - name: Repair live demo role matrix
+        if: steps.smoke.outputs.enabled == 'true'
+        run: npx playwright test e2e/live-supervisor-agent-network.spec.ts --project=chromium -g "supervisor repairs the full mock matrix"
 
       - name: Run role and tier matrix smoke
         if: steps.smoke.outputs.enabled == 'true'

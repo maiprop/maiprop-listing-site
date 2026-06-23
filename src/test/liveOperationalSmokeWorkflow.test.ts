@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 
 const workflow = readFileSync(".github/workflows/live-operational-smoke.yml", "utf8");
 const liveAiQuotaSpec = readFileSync("e2e/live-ai-quota.spec.ts", "utf8");
+const liveRoleTierMatrixSpec = readFileSync("e2e/live-role-tier-matrix.spec.ts", "utf8");
+const liveSupervisorSpec = readFileSync("e2e/live-supervisor-agent-network.spec.ts", "utf8");
 
 describe("live operational smoke workflow", () => {
   it("warms the public listings API before Playwright live smoke tests", () => {
@@ -31,5 +33,20 @@ describe("live operational smoke workflow", () => {
     expect(liveAiQuotaSpec).toContain("Neighbourhood Report requests");
     expect(liveAiQuotaSpec).toContain("Free:\\s*5\\/month\\.\\s*Pro:\\s*50\\/month\\.");
     expect(liveAiQuotaSpec).not.toContain("AI insight requests remaining this month");
+  });
+
+  it("repairs seeded live role data before running the role matrix", () => {
+    const repairIndex = workflow.indexOf("Repair live demo role matrix");
+    const matrixIndex = workflow.indexOf("Run role and tier matrix smoke");
+
+    expect(repairIndex).toBeGreaterThan(-1);
+    expect(matrixIndex).toBeGreaterThan(-1);
+    expect(repairIndex).toBeLessThan(matrixIndex);
+    expect(workflow).toContain("E2E_RUN_SUPERVISOR_NETWORK: true");
+    expect(workflow).toContain("I_KNOW_THIS_IS_PROD: yes");
+    expect(workflow).toContain("SUPABASE_SERVICE_ROLE_KEY");
+    expect(workflow).toContain('e2e/live-supervisor-agent-network.spec.ts --project=chromium -g "supervisor repairs the full mock matrix"');
+    expect(liveSupervisorSpec).toContain('const PASSWORD = env("E2E_DEMO_PASSWORD", "E2E_TEST_PASSWORD") || "Demo2025!";');
+    expect(liveRoleTierMatrixSpec).toContain('process.env.E2E_ADMIN_SMOKE_ENABLED === "true"');
   });
 });

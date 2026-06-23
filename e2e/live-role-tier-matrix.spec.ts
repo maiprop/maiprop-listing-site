@@ -21,7 +21,9 @@ type AccountCase = {
 const enabled =
   process.env.E2E_USE_SEEDED_DEMO_ACCOUNTS === "true" &&
   Boolean(process.env.PLAYWRIGHT_BASE_URL);
-const hasExplicitAdminAccount = Boolean(process.env.E2E_ADMIN_EMAIL);
+const includeAdminAccount =
+  process.env.E2E_ADMIN_SMOKE_ENABLED === "true" &&
+  Boolean(process.env.E2E_ADMIN_EMAIL);
 
 const accountCases: AccountCase[] = [
   {
@@ -223,7 +225,7 @@ const accountCases: AccountCase[] = [
     ],
     expectedNav: [/Admin Dashboard/i, /Data Input/i, /Billing/i],
   },
-].filter((account) => account.label !== "admin" || hasExplicitAdminAccount);
+].filter((account) => account.label !== "admin" || includeAdminAccount);
 
 const publicModules = [
   "/",

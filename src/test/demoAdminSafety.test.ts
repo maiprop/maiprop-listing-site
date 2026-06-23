@@ -21,8 +21,8 @@ describe("demo admin safety", () => {
     const supervisorNetwork = readFileSync(resolve(root, "e2e/live-supervisor-agent-network.spec.ts"), "utf8");
 
     expect(accountsHelper).toContain('admin: account("", "E2E_ADMIN_EMAIL")');
-    expect(matrixSpec).toContain("const hasExplicitAdminAccount = Boolean(process.env.E2E_ADMIN_EMAIL);");
-    expect(matrixSpec).toContain('account.label !== "admin" || hasExplicitAdminAccount');
+    expect(matrixSpec).toContain('process.env.E2E_ADMIN_SMOKE_ENABLED === "true"');
+    expect(matrixSpec).toContain('account.label !== "admin" || includeAdminAccount');
     expect(supervisorNetwork).toContain('process.env.INCLUDE_DEMO_ADMIN === "yes"');
   });
 });

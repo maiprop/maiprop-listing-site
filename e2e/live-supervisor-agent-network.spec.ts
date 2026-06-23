@@ -49,7 +49,6 @@ type Listing = {
   kind: "sale" | "open_house" | "new_build";
 };
 
-const PASSWORD = "Demo2025!";
 const RUN_ID = `supervisor-${Date.now()}`;
 const knownProductionRef = "qvvicunqcrwpioqnvzxf";
 
@@ -80,6 +79,8 @@ const env = (...keys: string[]): string => {
   }
   return "";
 };
+
+const PASSWORD = env("E2E_DEMO_PASSWORD", "E2E_TEST_PASSWORD") || "Demo2025!";
 
 const SUPABASE_URL = env("VITE_SUPABASE_URL", "SUPABASE_URL");
 const ANON_KEY = env(
