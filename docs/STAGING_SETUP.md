@@ -44,10 +44,11 @@ E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS=<staging-ref> \
 ### 4. GitHub
 
 - Settings -> Environments -> create `staging` env. No reviewers required.
-- Add required `staging` secrets: `STAGING_SUPABASE_URL`, `STAGING_SUPABASE_PUBLISHABLE_KEY`, `STAGING_SUPABASE_PROJECT_ID`, `SUPABASE_ACCESS_TOKEN`, `SUPABASE_SERVICE_ROLE_KEY`, and seeded E2E account credentials.
+- Add required `staging` secrets: `STAGING_SUPABASE_URL`, `STAGING_SUPABASE_PUBLISHABLE_KEY`, `STAGING_SUPABASE_PROJECT_ID`, `STAGING_SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ACCESS_TOKEN`, and seeded E2E account credentials.
 - Optional: add `STAGING_APP_URL` when previews must use a fixed staging origin. If it is absent, CI derives the Cloudflare Pages branch preview URL and uses it as `VITE_APP_URL`.
 - Optional: add `STAGING_SITE_LOCK_PASSWORD` only when PR preview deployments should be passcode-protected.
-- Use the staging `service_role` JWT API key for `SUPABASE_SERVICE_ROLE_KEY`; the newer `sb_secret_*` key is not accepted by the PostgREST fixture paths used by live E2E.
+- Use the staging `service_role` JWT API key for `STAGING_SUPABASE_SERVICE_ROLE_KEY`; the newer `sb_secret_*` key is not accepted by the PostgREST fixture paths used by live E2E. If this secret is absent, PR live-safe security checks fall back to production runtime with destructive tests disabled.
+- Onboarding role-selection E2E guards run only when `STAGING_SUPABASE_SERVICE_ROLE_KEY` is present, so stale production fallback onboarding credentials cannot block unrelated PR CI.
 - Required when migrations change: add `SUPABASE_STAGING_DB_URL`, the percent-encoded Postgres connection string used by CI to run `supabase db push --db-url` before deploying staging edge functions. Without it, CI fails the staging migration path instead of deploying functions against a stale schema.
 - `STAGING_SUPABASE_PROJECT_ID`, `STAGING_SUPABASE_URL`, and `STAGING_SUPABASE_PUBLISHABLE_KEY` must all point to the same non-production project. CI skips staging DB/function deploys and Cloudflare preview deploys when any staging secret matches production or the URL project ref does not match the configured project id.
 

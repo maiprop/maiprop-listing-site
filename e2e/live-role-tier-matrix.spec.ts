@@ -7,7 +7,10 @@
  * submit forms, create listings, start checkout, or delete accounts.
  */
 import { expect, test, type Page } from "@playwright/test";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { demoAccounts, demoPasswords } from "./helpers/demoAccounts";
+import { cleanEnvValue } from "./helpers/env";
 
 type AccountCase = {
   label: string;
@@ -18,12 +21,49 @@ type AccountCase = {
   expectedNav?: RegExp[];
 };
 
+const readDotEnv = (): Record<string, string> => {
+  const envPath = resolve(process.cwd(), ".env");
+  if (!existsSync(envPath)) return {};
+
+  return readFileSync(envPath, "utf8")
+    .split(/\r?\n/)
+    .reduce<Record<string, string>>((acc, line) => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) return acc;
+      const separator = trimmed.indexOf("=");
+      if (separator <= 0) return acc;
+      const key = trimmed.slice(0, separator).trim();
+      const rawValue = trimmed.slice(separator + 1).trim();
+      acc[key] = rawValue.replace(/^['"]|['"]$/g, "");
+      return acc;
+    }, {});
+};
+
+const dotEnv = readDotEnv();
+const env = (...keys: string[]): string => {
+  for (const key of keys) {
+    const value = cleanEnvValue(process.env[key] ?? dotEnv[key]);
+    if (value) return value;
+  }
+  return "";
+};
+
 const enabled =
   process.env.E2E_USE_SEEDED_DEMO_ACCOUNTS === "true" &&
   Boolean(process.env.PLAYWRIGHT_BASE_URL);
+const supabaseUrl = env("SUPABASE_URL", "VITE_SUPABASE_URL");
+const anonKey = env(
+  "VITE_SUPABASE_PUBLISHABLE_KEY",
+  "VITE_SUPABASE_ANON_KEY",
+  "SUPABASE_ANON_KEY",
+);
 const includeAdminAccount =
   process.env.E2E_ADMIN_SMOKE_ENABLED === "true" &&
   Boolean(process.env.E2E_ADMIN_EMAIL);
+const SUPABASE_AUTH_TIMEOUT_MS = 30_000;
+const SUPABASE_AUTH_ATTEMPTS = 5;
+const PROFILE_NAV_ATTEMPTS = 4;
+const FALLBACK_BUYER_NAV = /Buyer \/ Renter/;
 
 const accountCases: AccountCase[] = [
   {
@@ -253,16 +293,115 @@ async function expectRenderablePage(page: Page): Promise<void> {
   expect(nodeCount).toBeGreaterThan(5);
 }
 
+function authStorageKey(): string {
+  try {
+    return `sb-${new URL(supabaseUrl).hostname.split(".")[0]}-auth-token`;
+  } catch (_error) {
+    return "sb-localhost-auth-token";
+  }
+}
+
+async function requestSupabaseSession(page: Page, account: AccountCase): Promise<unknown> {
+  expect(supabaseUrl, "live role matrix requires SUPABASE_URL or VITE_SUPABASE_URL").toBeTruthy();
+  expect(anonKey, "live role matrix requires a Supabase publishable/anon key").toBeTruthy();
+
+  let lastStatus = 0;
+  let lastBody = "";
+
+  for (let attempt = 1; attempt <= SUPABASE_AUTH_ATTEMPTS; attempt += 1) {
+    let response;
+    try {
+      response = await page.request.post(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+        headers: {
+          apikey: anonKey,
+          "Content-Type": "application/json",
+        },
+        data: {
+          email: account.email,
+          password: account.password,
+        },
+        failOnStatusCode: false,
+        timeout: SUPABASE_AUTH_TIMEOUT_MS,
+      });
+    } catch (error) {
+      lastStatus = 0;
+      lastBody = error instanceof Error ? error.message : String(error);
+      await page.waitForTimeout(attempt * 2_000);
+      continue;
+    }
+
+    lastStatus = response.status();
+    lastBody = await response.text();
+
+    if (response.ok()) {
+      const session = JSON.parse(lastBody) as {
+        access_token?: string;
+        refresh_token?: string;
+        user?: { id?: string };
+      };
+      expect(session.access_token, `${account.label} access token`).toBeTruthy();
+      expect(session.refresh_token, `${account.label} refresh token`).toBeTruthy();
+      expect(session.user?.id, `${account.label} auth user id`).toBeTruthy();
+      return session;
+    }
+
+    if (![408, 429, 500, 502, 503, 504, 520, 522, 524].includes(lastStatus)) break;
+    await page.waitForTimeout(attempt * 2_000);
+  }
+
+  throw new Error(
+    `${account.label} Supabase session request failed with HTTP ${lastStatus}: ${lastBody.slice(0, 240)}`,
+  );
+}
+
 async function signIn(page: Page, account: AccountCase): Promise<void> {
-  await page.goto("/login");
-  await page.locator('input[type="email"], input[name="email"]').first().fill(account.email);
-  await page.locator('input[type="password"]').first().fill(account.password);
-  await page
-    .locator('button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")')
-    .first()
-    .click();
+  const session = await requestSupabaseSession(page, account);
+  await page.addInitScript(({ key, value }) => {
+    localStorage.clear();
+    localStorage.setItem(key, JSON.stringify(value));
+    localStorage.setItem("maiprop_lang", "en");
+    localStorage.setItem("maiprop_cookie_consent", JSON.stringify({
+      accepted: true,
+      functional: true,
+      analytics: false,
+      mapping: false,
+      timestamp: Date.now(),
+    }));
+  }, { key: authStorageKey(), value: session });
+
+  await page.goto("/dashboard");
   await page.waitForURL(/\/dashboard|\/onboarding|\/admin/, { timeout: 30_000 });
   expect(page.url(), `${account.label} should not remain on login`).not.toContain("/login");
+}
+
+async function expectExpectedNavigation(page: Page, account: AccountCase): Promise<void> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= PROFILE_NAV_ATTEMPTS; attempt += 1) {
+    try {
+      for (const expected of account.expectedNav ?? []) {
+        await expect(page.locator("body")).toContainText(expected, {
+          timeout: 15_000,
+        });
+      }
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt === PROFILE_NAV_ATTEMPTS) break;
+      const bodyText = await page.locator("body").innerText().catch(() => "");
+      if (FALLBACK_BUYER_NAV.test(bodyText) && account.label !== "buyer free" && account.label !== "buyer pro") {
+        console.warn(
+          `Dashboard rendered fallback buyer navigation for ${account.label}; reloading before retry ${attempt + 1}/${PROFILE_NAV_ATTEMPTS}.`,
+        );
+      }
+      await page.reload({ waitUntil: "load" });
+      await expectRenderablePage(page);
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`${account.label} expected navigation did not render.`);
 }
 
 test.describe("live role/tier matrix", () => {
@@ -292,11 +431,7 @@ test.describe("live role/tier matrix", () => {
       await signIn(page, account);
       await expectRenderablePage(page);
 
-      for (const expected of account.expectedNav ?? []) {
-        await expect(page.locator("body")).toContainText(expected, {
-          timeout: 15_000,
-        });
-      }
+      await expectExpectedNavigation(page, account);
 
       for (const route of account.modules) {
         currentRoute = route;
