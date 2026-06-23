@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.2](https://github.com/maiprop/maiprop-listing-site/compare/v1.11.1...v1.11.2) (2026-06-23)
+
+
+### Bug Fixes
+
+* harden homepage public api latency ([25fa8d8](https://github.com/maiprop/maiprop-listing-site/commit/25fa8d8bf6c7418fb670aa10fc6444878bec791d))
+
 ## [1.11.1](https://github.com/maiprop/maiprop-listing-site/compare/v1.11.0...v1.11.1) (2026-06-22)
 
 
