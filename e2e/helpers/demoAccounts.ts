@@ -14,11 +14,21 @@ const readEnv = (...keys: string[]): string | undefined => {
   return undefined;
 };
 
+const forceCanonicalDemoAccounts =
+  cleanEnvValue(process.env.E2E_FORCE_CANONICAL_DEMO_ACCOUNTS) === "true";
+
 const account = (defaultEmail: string, ...envKeys: string[]): string =>
-  firstDefined(readEnv(...envKeys), defaultEmail) ?? defaultEmail;
+  forceCanonicalDemoAccounts && defaultEmail
+    ? defaultEmail
+    : firstDefined(readEnv(...envKeys), defaultEmail) ?? defaultEmail;
 
 const password = (...envKeys: string[]): string =>
-  firstDefined(readEnv(...envKeys), "Demo2025!") ?? "Demo2025!";
+  forceCanonicalDemoAccounts
+    ? firstDefined(
+        readEnv("E2E_DEMO_PASSWORD", "E2E_TEST_PASSWORD"),
+        "Demo2025!",
+      ) ?? "Demo2025!"
+    : firstDefined(readEnv(...envKeys), "Demo2025!") ?? "Demo2025!";
 
 export const demoAccounts = {
   buyerFree: account(

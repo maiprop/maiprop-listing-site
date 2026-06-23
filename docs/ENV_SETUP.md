@@ -216,6 +216,7 @@ fail-fast behavior.
 | `STAGING_SUPABASE_URL` | optional isolated staging Supabase URL for security/E2E jobs; PR preview deploys require it to be a non-production Supabase URL matching `STAGING_SUPABASE_PROJECT_ID` | repo or staging environment |
 | `STAGING_SUPABASE_PUBLISHABLE_KEY` | optional isolated staging anon/publishable key; PR preview deploys are skipped when it matches the production key | repo or staging environment |
 | `STAGING_SUPABASE_PROJECT_ID` | optional isolated staging Supabase project ref; if absent, matching production, or mismatched from `STAGING_SUPABASE_URL`, CI treats the setup as production-only and skips staging/preview deploys | repo or staging environment |
+| `STAGING_SUPABASE_SERVICE_ROLE_KEY` | optional isolated staging `service_role` JWT key for live-safe security fixtures; when absent, CI uses production runtime with destructive tests disabled instead of mixing staging publishable keys with the production service role | staging environment only |
 | `STAGING_APP_URL` | optional explicit Cloudflare Pages PR preview/staging origin; when absent, CI derives `https://<branch>.<project>.pages.dev` and bakes that into the preview bundle as `VITE_APP_URL` | repo or staging environment |
 | `STAGING_SITE_LOCK_PASSWORD` | optional Cloudflare Pages Preview runtime passcode gate; never reuse `SITE_LOCK_PASSWORD` unless preview should intentionally share the production passcode | staging environment only |
 | `SUPABASE_ACCESS_TOKEN` | Supabase CLI deploy/list token | repo or environment scoped to deploy jobs |
@@ -260,6 +261,7 @@ Additional seeded E2E accounts:
 |---|---|
 | `E2E_DEMO_PASSWORD` | default password for seeded demo users |
 | `E2E_USE_SEEDED_DEMO_ACCOUNTS` | explicit marker that seeded demo-account E2E may use shared fixture accounts |
+| `E2E_FORCE_CANONICAL_DEMO_ACCOUNTS` | optional `true` override that makes live smoke tests ignore stale per-account secret overrides and use the canonical seeded `@maiprop.demo` accounts repaired by the supervisor fixture |
 | `E2E_ADMIN_SMOKE_ENABLED` | optional `true` opt-in that includes the admin fixture in the live role/tier smoke matrix after admin access has been explicitly validated |
 | `E2E_BUYER_FREE_EMAIL` / `E2E_BUYER_FREE_PASSWORD` | free buyer fixture |
 | `E2E_BUYER_PRO_EMAIL` / `E2E_BUYER_PRO_PASSWORD` | pro buyer fixture |

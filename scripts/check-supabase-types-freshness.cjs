@@ -30,7 +30,7 @@ const errorOutput = (error) => [
 ].filter(Boolean).join("\n");
 
 const isTransientTypesFailure = (message) =>
-  /error code:\s*(?:520|522|524|504)|connection terminated|connection timeout|i\/o timeout|timed out|timeout|econnreset|etimedout/i.test(
+  /error code:\s*(?:520|522|524|504)|connection terminated|connection timeout|i\/o timeout|timed out|timeout|econnreset|etimedout|PGRST002|Could not query the database for the schema cache/i.test(
     String(message),
   );
 

@@ -175,15 +175,15 @@ describe("Dashboard behavior", () => {
     expect(container.querySelector(".animate-spin")).toBeTruthy();
   });
 
-  it("renders the dashboard shell for a signed-in user while profile details hydrate", () => {
+  it("keeps the dashboard in its loading shell while signed-in profile details hydrate", () => {
     authState.profileLoading = true;
     authState.profile = null;
 
     const { container } = renderWithProviders(<Dashboard />);
 
-    expect(container.querySelector(".animate-spin")).toBeNull();
-    expect(screen.getByText(/Good morning, casey/i)).toBeInTheDocument();
-    expect(screen.getByTestId("dashboard-plan-card")).toBeInTheDocument();
+    expect(container.querySelector(".animate-spin")).toBeTruthy();
+    expect(screen.queryByText(/Good morning/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("dashboard-plan-card")).not.toBeInTheDocument();
   });
 
   it("offers session recovery and signs out when the user is missing", async () => {

@@ -103,7 +103,7 @@ export default function Dashboard() { // skipcq: JS-R1005
     (key: string, fallback: string, values: Record<string, string | number>) => tInterpolate(t, key, fallback, values),
     [t],
   );
-  const { profile, user, signOut, updateProfile, refreshProfile, loading } = useAuth();
+  const { profile, user, signOut, updateProfile, refreshProfile, loading, profileLoading } = useAuth();
   const { isPro, loading: subscriptionLoading, refreshSubscription } = useSubscription();
   const [trialCheckoutLoading, setTrialCheckoutLoading] = useState(false);
   const { eligible: eligibleForQuickSale } = useEligibleForQuickSale();
@@ -339,9 +339,9 @@ export default function Dashboard() { // skipcq: JS-R1005
     [bioType, role, hasInvestorAccess]
   );
 
-  // Auth loading guard — profile details hydrate in the background so the
-  // dashboard shell can paint immediately after a valid sign-in.
-  if (loading) {
+  // Keep role-specific dashboard chrome behind profile hydration to avoid
+  // briefly rendering the buyer fallback after a valid sign-in.
+  if (loading || (user && profileLoading)) {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />

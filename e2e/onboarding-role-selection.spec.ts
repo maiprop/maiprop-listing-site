@@ -9,7 +9,25 @@ async function signIn(page: Page): Promise<void> {
   await page.locator('input[type="email"], input[name="email"]').first().fill(ONBOARDING_TEST_EMAIL);
   await page.locator('input[type="password"]').first().fill(ONBOARDING_TEST_PASSWORD);
   await page.locator('button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")').first().click();
-  await page.waitForURL(/\/dashboard|\/onboarding/, { timeout: 15_000 });
+  try {
+    await page.waitForFunction(
+      () => /\/(dashboard|onboarding|admin)(\/|$)/.test(window.location.pathname),
+      undefined,
+      { timeout: 30_000 },
+    );
+  } catch (error) {
+    const visibleError = await page
+      .locator('[role="alert"], .text-destructive, [data-testid="error"]')
+      .first()
+      .textContent({ timeout: 1_000 })
+      .catch(() => "");
+
+    throw new Error(
+      `Onboarding test sign-in did not reach an authenticated route. url=${page.url()} error=${visibleError || "none"}`,
+      { cause: error },
+    );
+  }
+
   if (!/\/onboarding/.test(page.url())) {
     await page.waitForURL(/\/onboarding/, { timeout: 10_000 }).catch(() => undefined);
   }
@@ -17,6 +35,8 @@ async function signIn(page: Page): Promise<void> {
 }
 
 test.describe("Onboarding role-selection guards", () => {
+  test.describe.configure({ mode: "serial" });
+
   test.skip(!hasCredentials, "Set ONBOARDING_TEST_EMAIL and ONBOARDING_TEST_PASSWORD to run onboarding flow tests");
 
   test("developer onboarding requires mandatory profile fields", async ({ page }) => {
