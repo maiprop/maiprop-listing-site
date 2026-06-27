@@ -17,6 +17,11 @@ const quotaStatusFunction = readFileSync(
   "utf8",
 );
 
+const supabaseConfig = readFileSync(
+  resolve(process.cwd(), "supabase/config.toml"),
+  "utf8",
+);
+
 const useAiQuotaHook = readFileSync(
   resolve(process.cwd(), "src/hooks/useAiQuota.ts"),
   "utf8",
@@ -26,6 +31,16 @@ const futureAdvisorHardeningMigration = readFileSync(
   resolve(process.cwd(), "supabase/migrations/20260707140000_harden_supabase_advisor_security.sql"),
   "utf8",
 );
+
+function functionConfigSection(name: string) {
+  const marker = `[functions.${name}]`;
+  const sectionStart = supabaseConfig.indexOf(marker);
+  expect(sectionStart).toBeGreaterThanOrEqual(0);
+
+  const sectionBody = supabaseConfig.slice(sectionStart + marker.length);
+  const nextSectionStart = sectionBody.search(/\n\[/);
+  return nextSectionStart === -1 ? sectionBody : sectionBody.slice(0, nextSectionStart);
+}
 
 describe("AI quota status grant hardening", () => {
   it("adds a service-role-only explicit-user quota status RPC", () => {
@@ -60,11 +75,15 @@ describe("AI quota status grant hardening", () => {
   });
 
   it("routes browser quota checks through the authenticated Edge Function", () => {
+    const aiQuotaStatusConfig = functionConfigSection("ai-quota-status");
+
     expect(useAiQuotaHook).toContain('"ai-quota-status"');
     expect(useAiQuotaHook).not.toContain('rpc("check_ai_quota"');
-    expect(quotaStatusFunction).toContain("verifyBearerToken");
+    expect(aiQuotaStatusConfig).toMatch(/\bverify_jwt\s*=\s*true\b/);
+    expect(quotaStatusFunction).toContain("verifiedUserIdFromJwt");
+    expect(quotaStatusFunction).toContain("role !== \"authenticated\"");
     expect(quotaStatusFunction).toContain('"check_ai_quota_for_user"');
-    expect(quotaStatusFunction).toContain("_user_id: user.id");
+    expect(quotaStatusFunction).toContain("_user_id: userId");
   });
 
   it("keeps future fresh builds aligned with the live hardening", () => {
