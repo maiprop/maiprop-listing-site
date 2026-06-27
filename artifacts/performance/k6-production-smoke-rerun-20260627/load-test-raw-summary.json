@@ -1,0 +1,1135 @@
+{
+  "root_group": {
+    "name": "",
+    "path": "",
+    "id": "d41d8cd98f00b204e9800998ecf8427e",
+    "groups": [],
+    "checks": [
+        {
+          "passes": 63,
+          "fails": 0,
+          "name": "home: status 2xx",
+          "path": "::home: status 2xx",
+          "id": "9c4cee1bbb4f6a4fe555003992994ce9"
+        },
+        {
+          "id": "742af24c819139cb44f1fbc203cbbb6c",
+          "passes": 63,
+          "fails": 0,
+          "name": "home: not Cloudflare Access login",
+          "path": "::home: not Cloudflare Access login"
+        },
+        {
+          "name": "home: TTFB < 1500ms",
+          "path": "::home: TTFB < 1500ms",
+          "id": "f8706fa1a91cfd40cfe230db028d9c32",
+          "passes": 63,
+          "fails": 0
+        },
+        {
+          "id": "95580ad2e9648b2deb45917e87637c08",
+          "passes": 63,
+          "fails": 0,
+          "name": "listings: status 2xx",
+          "path": "::listings: status 2xx"
+        },
+        {
+          "fails": 0,
+          "name": "listings: not Cloudflare Access login",
+          "path": "::listings: not Cloudflare Access login",
+          "id": "cb3f6ebac3eebf12356d81d7cbb1d1fa",
+          "passes": 63
+        },
+        {
+          "passes": 63,
+          "fails": 0,
+          "name": "listings: TTFB < 1500ms",
+          "path": "::listings: TTFB < 1500ms",
+          "id": "6d8764397da880f70851c7d9617940fe"
+        },
+        {
+          "path": "::auctions: status 2xx",
+          "id": "e065b3f8e870eafd98537b350f55a591",
+          "passes": 63,
+          "fails": 0,
+          "name": "auctions: status 2xx"
+        },
+        {
+          "name": "auctions: not Cloudflare Access login",
+          "path": "::auctions: not Cloudflare Access login",
+          "id": "ec18fa268ea5ff515993c15577dd4422",
+          "passes": 63,
+          "fails": 0
+        },
+        {
+          "name": "auctions: TTFB < 1500ms",
+          "path": "::auctions: TTFB < 1500ms",
+          "id": "6e790056bc9f06d2f12022d1292540d0",
+          "passes": 63,
+          "fails": 0
+        },
+        {
+          "name": "pricing: status 2xx",
+          "path": "::pricing: status 2xx",
+          "id": "3c6b394dcb9a10855fdb376a1a218652",
+          "passes": 63,
+          "fails": 0
+        },
+        {
+          "id": "2b0669d4ac8db64f22671a4a064f1d52",
+          "passes": 63,
+          "fails": 0,
+          "name": "pricing: not Cloudflare Access login",
+          "path": "::pricing: not Cloudflare Access login"
+        },
+        {
+          "name": "pricing: TTFB < 1500ms",
+          "path": "::pricing: TTFB < 1500ms",
+          "id": "f275859a9a3655b6b5d1156a02a61abc",
+          "passes": 63,
+          "fails": 0
+        },
+        {
+          "fails": 0,
+          "name": "api_listings: status 2xx",
+          "path": "::api_listings: status 2xx",
+          "id": "5913dd42d59798177a4f306a5a7fc301",
+          "passes": 63
+        },
+        {
+          "name": "api_listings: not Cloudflare Access login",
+          "path": "::api_listings: not Cloudflare Access login",
+          "id": "8bb3f12e8805b79f1d72ef970b496610",
+          "passes": 63,
+          "fails": 0
+        },
+        {
+          "name": "api_listings: TTFB < 1500ms",
+          "path": "::api_listings: TTFB < 1500ms",
+          "id": "32a035a6b0026ad2ad431ce57d0f8de7",
+          "passes": 63,
+          "fails": 0
+        },
+        {
+          "fails": 0,
+          "name": "api_open_houses: status 2xx",
+          "path": "::api_open_houses: status 2xx",
+          "id": "3ee771b27b09d8effca09249c0513c76",
+          "passes": 63
+        },
+        {
+          "name": "api_open_houses: not Cloudflare Access login",
+          "path": "::api_open_houses: not Cloudflare Access login",
+          "id": "c1ebc385d7160004e5c30c9d324cb31d",
+          "passes": 63,
+          "fails": 0
+        },
+        {
+          "path": "::api_open_houses: TTFB < 1500ms",
+          "id": "ee5fdd9d32016c200a07310b17e52a8c",
+          "passes": 63,
+          "fails": 0,
+          "name": "api_open_houses: TTFB < 1500ms"
+        },
+        {
+          "name": "sitemap: status 2xx",
+          "path": "::sitemap: status 2xx",
+          "id": "8916200468ac4d81a1bccac6997224c6",
+          "passes": 63,
+          "fails": 0
+        },
+        {
+          "fails": 0,
+          "name": "sitemap: not Cloudflare Access login",
+          "path": "::sitemap: not Cloudflare Access login",
+          "id": "7d6755d18d79770a6ede1c4e1bbae0af",
+          "passes": 63
+        },
+        {
+          "passes": 63,
+          "fails": 0,
+          "name": "sitemap: TTFB < 1500ms",
+          "path": "::sitemap: TTFB < 1500ms",
+          "id": "64c38f891bc067cef6fc69b90f4a80ce"
+        }
+      ]
+  },
+  "options": {
+    "summaryTrendStats": [
+      "avg",
+      "min",
+      "med",
+      "max",
+      "p(90)",
+      "p(95)"
+    ],
+    "summaryTimeUnit": "",
+    "noColor": true
+  },
+  "state": {
+    "isStdOutTTY": false,
+    "isStdErrTTY": false,
+    "testRunDurationMs": 42384.8837
+  },
+  "metrics": {
+    "http_req_failed{route:sitemap}": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "passes": 0,
+        "fails": 63,
+        "rate": 0
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      }
+    },
+    "route_errors{route:api_listings}": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 63
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      }
+    },
+    "errors{route:api_open_houses}": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "fails": 63,
+        "rate": 0,
+        "passes": 0
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      }
+    },
+    "route_http_reqs{route:listings}": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 63,
+        "rate": 1.4863789752477248
+      },
+      "thresholds": {
+        "count>0": {
+          "ok": true
+        }
+      }
+    },
+    "route_errors": {
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 441
+      },
+      "type": "rate",
+      "contains": "default"
+    },
+    "route_http_req_duration{route:api_open_houses}": {
+      "thresholds": {
+        "p(95)<2500": {
+          "ok": true
+        }
+      },
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "p(95)": 43.370979999999996,
+        "avg": 19.186280952380944,
+        "min": 12.8479,
+        "med": 15.5664,
+        "max": 79.1425,
+        "p(90)": 21.098780000000005
+      }
+    },
+    "http_req_failed{route:api_listings}": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 63
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      }
+    },
+    "errors{route:auctions}": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 63
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      }
+    },
+    "iterations": {
+      "contains": "default",
+      "values": {
+        "count": 63,
+        "rate": 1.4863789752477248
+      },
+      "type": "counter"
+    },
+    "route_http_reqs{route:sitemap}": {
+      "values": {
+        "rate": 1.4863789752477248,
+        "count": 63
+      },
+      "thresholds": {
+        "count>0": {
+          "ok": true
+        }
+      },
+      "type": "counter",
+      "contains": "default"
+    },
+    "http_req_tls_handshaking": {
+      "contains": "time",
+      "values": {
+        "min": 0,
+        "med": 0,
+        "max": 34.0952,
+        "p(90)": 0,
+        "p(95)": 0,
+        "avg": 0.3765349206349206
+      },
+      "type": "trend"
+    },
+    "http_req_waiting": {
+      "values": {
+        "p(95)": 40.7172,
+        "avg": 21.05467414965985,
+        "min": 12.1555,
+        "med": 17.0557,
+        "max": 145.1049,
+        "p(90)": 26.2175
+      },
+      "type": "trend",
+      "contains": "time"
+    },
+    "route_http_req_duration{route:pricing}": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "min": 17.3653,
+        "med": 22.0617,
+        "max": 145.1049,
+        "p(90)": 27.521440000000002,
+        "p(95)": 41.733879999999985,
+        "avg": 26.889268253968254
+      },
+      "thresholds": {
+        "p(95)<2500": {
+          "ok": true
+        }
+      }
+    },
+    "http_req_failed": {
+      "contains": "default",
+      "values": {
+        "passes": 0,
+        "fails": 441,
+        "rate": 0
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      },
+      "type": "rate"
+    },
+    "route_http_req_failed{route:home}": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 63
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      }
+    },
+    "vus_max": {
+      "type": "gauge",
+      "contains": "default",
+      "values": {
+        "value": 10,
+        "min": 10,
+        "max": 10
+      }
+    },
+    "http_req_duration{route:sitemap}": {
+      "values": {
+        "p(95)": 29.12484,
+        "avg": 23.13708571428572,
+        "min": 15.355,
+        "med": 20.1987,
+        "max": 118.8729,
+        "p(90)": 26.426280000000002
+      },
+      "thresholds": {
+        "p(95)<2500": {
+          "ok": true
+        }
+      },
+      "type": "trend",
+      "contains": "time"
+    },
+    "http_req_failed{route:listings}": {
+      "contains": "default",
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 63
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      },
+      "type": "rate"
+    },
+    "route_http_req_failed": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 441
+      }
+    },
+    "route_http_req_failed{route:listings}": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 63
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      }
+    },
+    "http_req_duration{route:api_listings}": {
+      "values": {
+        "min": 13.6862,
+        "med": 17.4474,
+        "max": 113.5024,
+        "p(90)": 21.688640000000003,
+        "p(95)": 39.570709999999984,
+        "avg": 20.778674603174608
+      },
+      "thresholds": {
+        "p(95)<2500": {
+          "ok": true
+        }
+      },
+      "type": "trend",
+      "contains": "time"
+    },
+    "route_http_req_failed{route:api_listings}": {
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      },
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 63
+      }
+    },
+    "route_http_req_duration{route:home}": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "min": 14.1191,
+        "med": 19.8688,
+        "max": 85.2918,
+        "p(90)": 32.669360000000005,
+        "p(95)": 37.13831999999999,
+        "avg": 22.94833015873016
+      },
+      "thresholds": {
+        "p(95)<2500": {
+          "ok": true
+        }
+      }
+    },
+    "checks": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 1,
+        "passes": 1323,
+        "fails": 0
+      }
+    },
+    "iteration_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "max": 3869.6213,
+        "p(90)": 3748.75778,
+        "p(95)": 3789.50687,
+        "avg": 3663.7609174603167,
+        "min": 3611.1871,
+        "med": 3639.3589
+      }
+    },
+    "route_http_reqs{route:home}": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 63,
+        "rate": 1.4863789752477248
+      },
+      "thresholds": {
+        "count>0": {
+          "ok": true
+        }
+      }
+    },
+    "http_req_duration{expected_response:true}": {
+      "contains": "time",
+      "values": {
+        "p(95)": 42.6499,
+        "avg": 21.9755133786848,
+        "min": 12.3675,
+        "med": 17.9395,
+        "max": 145.1049,
+        "p(90)": 26.8337
+      },
+      "type": "trend"
+    },
+    "route_http_reqs{route:pricing}": {
+      "contains": "default",
+      "values": {
+        "count": 63,
+        "rate": 1.4863789752477248
+      },
+      "thresholds": {
+        "count>0": {
+          "ok": true
+        }
+      },
+      "type": "counter"
+    },
+    "http_req_connecting": {
+      "values": {
+        "med": 0,
+        "max": 7.9635,
+        "p(90)": 0,
+        "p(95)": 0,
+        "avg": 0.1490410430839002,
+        "min": 0
+      },
+      "type": "trend",
+      "contains": "time"
+    },
+    "http_req_duration{route:api_open_houses}": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "max": 79.1425,
+        "p(90)": 21.098780000000005,
+        "p(95)": 43.370979999999996,
+        "avg": 19.186280952380944,
+        "min": 12.8479,
+        "med": 15.5664
+      },
+      "thresholds": {
+        "p(95)<2500": {
+          "ok": true
+        }
+      }
+    },
+    "route_errors{route:sitemap}": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "fails": 63,
+        "rate": 0,
+        "passes": 0
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      }
+    },
+    "errors": {
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      },
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 441
+      }
+    },
+    "http_req_sending": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "p(90)": 0.3738,
+        "p(95)": 0.5086,
+        "avg": 0.08442108843537416,
+        "min": 0,
+        "med": 0,
+        "max": 0.99
+      }
+    },
+    "route_http_reqs{route:api_open_houses}": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 63,
+        "rate": 1.4863789752477248
+      },
+      "thresholds": {
+        "count>0": {
+          "ok": true
+        }
+      }
+    },
+    "http_req_failed{route:auctions}": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 63
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      }
+    },
+    "http_req_duration{route:auctions}": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "max": 132.5279,
+        "p(90)": 19.27138,
+        "p(95)": 38.669779999999975,
+        "avg": 20.899971428571423,
+        "min": 12.3675,
+        "med": 16.5561
+      },
+      "thresholds": {
+        "p(95)<2500": {
+          "ok": true
+        }
+      }
+    },
+    "route_errors{route:api_open_houses}": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 63
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      }
+    },
+    "errors{route:listings}": {
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      },
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 63
+      }
+    },
+    "errors{route:sitemap}": {
+      "contains": "default",
+      "values": {
+        "passes": 0,
+        "fails": 63,
+        "rate": 0
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      },
+      "type": "rate"
+    },
+    "http_req_failed{route:pricing}": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "passes": 0,
+        "fails": 63,
+        "rate": 0
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      }
+    },
+    "route_http_req_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "avg": 21.9755133786848,
+        "min": 12.3675,
+        "med": 17.9395,
+        "max": 145.1049,
+        "p(90)": 26.8337,
+        "p(95)": 42.6499
+      }
+    },
+    "route_http_req_failed{route:api_open_houses}": {
+      "values": {
+        "fails": 63,
+        "rate": 0,
+        "passes": 0
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      },
+      "type": "rate",
+      "contains": "default"
+    },
+    "route_http_req_duration{route:auctions}": {
+      "thresholds": {
+        "p(95)<2500": {
+          "ok": true
+        }
+      },
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "avg": 20.899971428571423,
+        "min": 12.3675,
+        "med": 16.5561,
+        "max": 132.5279,
+        "p(90)": 19.27138,
+        "p(95)": 38.669779999999975
+      }
+    },
+    "errors{route:home}": {
+      "contains": "default",
+      "values": {
+        "fails": 63,
+        "rate": 0,
+        "passes": 0
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      },
+      "type": "rate"
+    },
+    "route_http_reqs{route:api_listings}": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 63,
+        "rate": 1.4863789752477248
+      },
+      "thresholds": {
+        "count>0": {
+          "ok": true
+        }
+      }
+    },
+    "data_sent": {
+      "type": "counter",
+      "contains": "data",
+      "values": {
+        "count": 65612,
+        "rate": 1548.0047194278368
+      }
+    },
+    "route_http_req_duration{route:sitemap}": {
+      "contains": "time",
+      "values": {
+        "max": 118.8729,
+        "p(90)": 26.426280000000002,
+        "p(95)": 29.12484,
+        "avg": 23.13708571428572,
+        "min": 15.355,
+        "med": 20.1987
+      },
+      "thresholds": {
+        "p(95)<2500": {
+          "ok": true
+        }
+      },
+      "type": "trend"
+    },
+    "errors{route:api_listings}": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 63
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      }
+    },
+    "route_http_reqs{route:auctions}": {
+      "contains": "default",
+      "values": {
+        "count": 63,
+        "rate": 1.4863789752477248
+      },
+      "thresholds": {
+        "count>0": {
+          "ok": true
+        }
+      },
+      "type": "counter"
+    },
+    "data_received": {
+      "contains": "data",
+      "values": {
+        "count": 9819639,
+        "rate": 231677.85641464434
+      },
+      "type": "counter"
+    },
+    "route_http_req_duration{route:api_listings}": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "med": 17.4474,
+        "max": 113.5024,
+        "p(90)": 21.688640000000003,
+        "p(95)": 39.570709999999984,
+        "avg": 20.778674603174608,
+        "min": 13.6862
+      },
+      "thresholds": {
+        "p(95)<2500": {
+          "ok": true
+        }
+      }
+    },
+    "http_req_blocked": {
+      "values": {
+        "avg": 0.5779634920634922,
+        "min": 0,
+        "med": 0,
+        "max": 63.5749,
+        "p(90)": 0,
+        "p(95)": 0
+      },
+      "type": "trend",
+      "contains": "time"
+    },
+    "http_reqs": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 441,
+        "rate": 10.404652826734074
+      }
+    },
+    "route_http_reqs": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 441,
+        "rate": 10.404652826734074
+      }
+    },
+    "route_errors{route:home}": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 63
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      }
+    },
+    "route_http_req_failed{route:sitemap}": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "fails": 63,
+        "rate": 0,
+        "passes": 0
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      }
+    },
+    "http_req_duration{route:listings}": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "max": 127.4368,
+        "p(90)": 23.323880000000006,
+        "p(95)": 32.64022,
+        "avg": 19.98898253968254,
+        "min": 12.8054,
+        "med": 16.5885
+      },
+      "thresholds": {
+        "p(95)<2500": {
+          "ok": true
+        }
+      }
+    },
+    "http_req_failed{route:api_open_houses}": {
+      "contains": "default",
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 63
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      },
+      "type": "rate"
+    },
+    "route_http_req_duration{route:listings}": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "avg": 19.98898253968254,
+        "min": 12.8054,
+        "med": 16.5885,
+        "max": 127.4368,
+        "p(90)": 23.323880000000006,
+        "p(95)": 32.64022
+      },
+      "thresholds": {
+        "p(95)<2500": {
+          "ok": true
+        }
+      }
+    },
+    "http_req_duration{route:pricing}": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "min": 17.3653,
+        "med": 22.0617,
+        "max": 145.1049,
+        "p(90)": 27.521440000000002,
+        "p(95)": 41.733879999999985,
+        "avg": 26.889268253968254
+      },
+      "thresholds": {
+        "p(95)<2500": {
+          "ok": true
+        }
+      }
+    },
+    "route_errors{route:listings}": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "fails": 63,
+        "rate": 0,
+        "passes": 0
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      }
+    },
+    "errors{route:pricing}": {
+      "values": {
+        "fails": 63,
+        "rate": 0,
+        "passes": 0
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      },
+      "type": "rate",
+      "contains": "default"
+    },
+    "route_errors{route:auctions}": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "passes": 0,
+        "fails": 63,
+        "rate": 0
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      }
+    },
+    "http_req_failed{route:home}": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 63
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      }
+    },
+    "http_req_duration{route:home}": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "med": 19.8688,
+        "max": 85.2918,
+        "p(90)": 32.669360000000005,
+        "p(95)": 37.13831999999999,
+        "avg": 22.94833015873016,
+        "min": 14.1191
+      },
+      "thresholds": {
+        "p(95)<2500": {
+          "ok": true
+        }
+      }
+    },
+    "route_http_req_failed{route:pricing}": {
+      "contains": "default",
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 63
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      },
+      "type": "rate"
+    },
+    "http_req_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "med": 17.9395,
+        "max": 145.1049,
+        "p(90)": 26.8337,
+        "p(95)": 42.6499,
+        "avg": 21.9755133786848,
+        "min": 12.3675
+      },
+      "thresholds": {
+        "p(95)<2500": {
+          "ok": true
+        }
+      }
+    },
+    "vus": {
+      "type": "gauge",
+      "contains": "default",
+      "values": {
+        "value": 1,
+        "min": 0,
+        "max": 10
+      }
+    },
+    "http_req_receiving": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "min": 0,
+        "med": 0,
+        "max": 11.9243,
+        "p(90)": 2.5085,
+        "p(95)": 3.732,
+        "avg": 0.8364181405895693
+      }
+    },
+    "route_http_req_failed{route:auctions}": {
+      "values": {
+        "passes": 0,
+        "fails": 63,
+        "rate": 0
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      },
+      "type": "rate",
+      "contains": "default"
+    },
+    "route_errors{route:pricing}": {
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 63
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      },
+      "type": "rate",
+      "contains": "default"
+    }
+  }
+}

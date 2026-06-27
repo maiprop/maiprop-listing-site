@@ -1,10 +1,9 @@
 # DORA Performance Proof Log
 
-Current status: production `baseline_100` proof exists, production
-`growth_10x` previously failed, and protected-preview `baseline_100`,
-`growth_10x`, and `enterprise_soak` proof exists for the current PR. This file
-is a DORA evidence index; preview proof must not be confused with production
-proof.
+Current status: production `baseline_100` and `growth_10x` proof exists.
+Production `enterprise_soak` was attempted on 2026-06-27 and failed the strict
+route-level `api_listings` threshold. This file is a DORA evidence index;
+preview proof must not be confused with production proof.
 
 Cloudflare Pages `growth_10x` and `enterprise_soak` runs are quota-impacting
 operations. Future runs against Pages hosts require explicit
@@ -13,6 +12,9 @@ outside routine CI.
 
 | Date | Scenario | Evidence status | Operator | Evidence link | Decision |
 |---|---|---|---|---|---|
+| 2026-06-27 | Production smoke against https://portal.maiprop.co | Successful | @krenios request | `artifacts/performance/k6-production-smoke-rerun-20260627/load-test-summary.json`; run timestamp: 2026-06-27T18:07:29Z; artifact SHA256: f9e527758609a0e616ceefb1712a21daee4613231046157d48c2e971b8c225ad; release SHA: 58937eaf5b53; monitoring window: local k6 stdout and normalized summary; approval ref: conversation-20260627-proceed-with-all | Accept as current production smoke proof: 441 requests, 10 peak VUs, zero failed routes, p95 42.65 ms, error rate 0. |
+| 2026-06-27 | Production growth_10x against https://portal.maiprop.co | Successful | @krenios request | `artifacts/performance/k6-production-growth-10x-20260627/load-test-summary.json`; run timestamp: 2026-06-27T18:16:52Z; artifact SHA256: 177b61a1a12dc80e4db9f016ca93d8a717be63be2502576e1581d097636f64cd; release SHA: 58937eaf5b53; monitoring window: local k6 stdout and normalized summary; approval ref: conversation-20260627-proceed-with-all | Accept as current production 10x proof: reached 1,000 VUs, 432,824 requests, no failed routes, p95 388.33 ms, aggregate error rate 0.0010. |
+| 2026-06-27 | Production enterprise_soak against https://portal.maiprop.co | Failed | @krenios request | `artifacts/performance/k6-production-enterprise-soak-20260627/load-test-summary.json`; run timestamp: 2026-06-27T18:37:42Z; artifact SHA256: 9b0639ca9d90e231e9983e8bdc47b511b7b5bbf25d7cff3de26732dc02cff41e; release SHA: 58937eaf5b53; monitoring window: local k6 stdout, normalized summary, and post-run direct probes; approval ref: conversation-20260627-proceed-with-all | Reject as enterprise soak proof: run aborted after 269,052 requests because `api_listings` route error rate reached 0.0135, above the strict 0.01 route budget. Local remediation hardens public API stale-cache seeding and reduces default listings cold-miss query cost before rerun. |
 | 2026-06-23 | Production smoke against https://portal.maiprop.co | Failed | @krenios request | `artifacts/performance/k6-smoke-2026-06-23/load-test-summary.json`; run timestamp: 2026-06-23T07:43:07Z; artifact SHA256: cd6b30f4f3695d13a9a66acd9bd29cdcbe094c49edee2badef72499ddb94c489; release SHA: 0145793152164ac0fe5b4da22c48914251a00fa8; approval ref: side-conversation-20260623-proceed | Reject as clean smoke proof because strict per-route thresholds failed once each on `api_listings`, `api_open_houses`, and `sitemap`, despite overall p95/error thresholds passing. |
 | 2026-06-23 | Production smoke rerun against https://portal.maiprop.co | Successful | @krenios request | `artifacts/performance/k6-smoke-2026-06-23-rerun/load-test-summary.json`; run timestamp: 2026-06-23T07:47:14Z; artifact SHA256: 52a846029c0c0635c48caee88a7b0fd6679f6bce6ca942ff894edb2d753700ee; release SHA: 0145793152164ac0fe5b4da22c48914251a00fa8; monitoring window: local k6 stdout, normalized summary, and 25-request direct probes per dynamic route; approval ref: side-conversation-20260623-proceed | Accept as smoke-only evidence: 448 requests, 10 peak VUs, zero failed routes, p95 24.82 ms. Not accepted as baseline, 10x, soak, DORA capacity, or procurement performance proof. |
 | 2026-06-20 | Production smoke against https://portal.maiprop.co | Smoke evidence captured | @krenios request | `artifacts/performance/k6/live-smoke-20260620T0948Z/load-test-summary.json`; run timestamp: 2026-06-20T09:44:09Z; artifact SHA256: 2a3254169e4443ed34e87b102d7f345d49f515cd2a6567b3a152a6982b999a9e; release SHA: 98616bb2862ed6ba9f7db9f23c34869fa4034cf1; approval ref: side-conversation-20260620-fix-them | Useful smoke signal only; not accepted as baseline, 10x, soak, DORA capacity, or procurement performance proof. |

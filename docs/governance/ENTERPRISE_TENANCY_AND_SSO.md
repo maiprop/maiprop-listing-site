@@ -43,6 +43,19 @@ Expected setup sequence:
 
 Supabase SSO/SAML availability depends on the Supabase plan and project configuration. This repository provides the safe app and database wiring, but it does not claim that a paid SSO provider has been enabled.
 
+## Live Verification Log
+
+| Date | Scope | Result | Evidence |
+|---|---|---|---|
+| 2026-06-27 | App and source-controlled DB contract | Verified | `npx vitest run src/test/enterpriseSso.test.ts --reporter=dot` passed 3/3 tests; `npm run check:enterprise-readiness-basics` passed. |
+| 2026-06-27 | Supabase production `qvvicunqcrwpioqnvzxf` | Provider not configured | Read-only Supabase SQL returned zero rows for `auth.sso_providers`, `auth.sso_domains`, `organization_sso_providers`, and `organization_domains`. |
+| 2026-06-27 | Supabase staging `xsiehskfgeoqyazcgauv` | Provider not configured | Read-only Supabase SQL returned zero rows for `auth.sso_providers`, `auth.sso_domains`, `organization_sso_providers`, and `organization_domains`. |
+
+ECAS status: the repository and database schema are ready for a test IdP, but
+enterprise SSO/SAML cannot be graded as live-ready until a staging IdP/domain is
+configured and a successful `signInWithSSO` browser flow is recorded. Do not
+mark SSO procurement evidence as complete from source code alone.
+
 ## Procurement Evidence
 
 Procurement evidence status lives in `procurement_evidence`. The source-controlled checklist is `docs/governance/PROCUREMENT_EVIDENCE_MATRIX.md`; organization-specific records should reference actual evidence URLs or storage paths without embedding secrets.

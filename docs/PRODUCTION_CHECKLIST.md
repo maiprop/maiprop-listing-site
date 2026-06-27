@@ -105,3 +105,4 @@ Record here:
 | Date (UTC) | Performed by | Outcome |
 |---|---|---|
 | 2026-06-18 | Platform | Pending operator execution; no successful restore drill recorded yet. See `docs/compliance/dora/RESTORE_DRILL_LOG.md` and run `npm run check:dr-restore-proof` before procurement review or production promotion. |
+| 2026-06-27 | Codex | Successful non-production app-schema logical restore drill. Source backup timestamp 2026-06-27T17:47:44.293Z; disposable local Postgres target; verified profiles=101, listings=15726, projects=8, subscriptions/investor_subscriptions=10, open_house_registrations=3; release SHA 58937eaf; plaintext restore artifacts removed after verification. |

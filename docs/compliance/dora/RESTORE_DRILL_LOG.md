@@ -1,14 +1,15 @@
 # DORA Restore Drill Log
 
-Current status: no successful restore drill has been recorded in this repository
-as of 2026-06-19. The runbooks and local readiness gate are in place, but ECAS,
-DORA, procurement, and production-readiness reviews should treat restore proof
-as pending until an operator executes the drill and records a successful row
-below.
+Current status: a successful non-production app-schema restore drill was
+recorded on 2026-06-27. This proves logical backup replay for the core
+application schema and business-critical public tables. It does not replace a
+Supabase-managed PITR restore drill for auth/storage internals on a paid restore
+target.
 
 | Date | Environment | Restore drill | RPO | RTO | Evidence status | Operator |
 |---|---|---|---|---|---|---|
 | 2026-06-18 | Documentation baseline | Logical backup and PITR procedures are source-controlled; production restore not executed in this Codex session. Required evidence fields: source backup timestamp, restore target, verified row counts, release SHA, and cleanup confirmation. | Target: <= 24h on free-tier logical backup, <= 5m with PITR | Target: <= 4h free-tier, <= 1h with PITR | Pending operator execution | Platform |
+| 2026-06-27 | Disposable local Postgres app-schema restore | Created a linked Supabase logical backup and replayed a scoped `public` data plus `public,private` schema restore into disposable local Postgres. Source backup timestamp 2026-06-27T17:47:44.293Z; restore target local-postgres-127.0.0.1:56895; verified row counts for profiles=101, listings=15726, projects=8, subscriptions/investor_subscriptions=10, open_house_registrations=3; release SHA 58937eaf; cleanup confirmation complete: local Postgres stopped and plaintext dump/restore temp directories removed. | Actual: same-day logical backup fallback | Actual: local replay completed in under 1 minute after backup/dump creation | Successful | Codex |
 
 Restore drill evidence must record source backup timestamp, restore target, verified row counts, release SHA, and cleanup confirmation.
 

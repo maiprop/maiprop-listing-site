@@ -46,6 +46,7 @@ type SupabaseFetchOptions = {
   transientStatusRetries?: number;
   retryDelayMs?: number;
   countStrategy?: "exact" | "planned" | "estimated";
+  timeoutMs?: number;
 };
 
 function applyCacheHeaders(headers: Headers, cache: CacheOptions, force = false): void {
@@ -99,6 +100,13 @@ function transientRetryDelayMs(options: SupabaseFetchOptions): number {
     return Math.max(0, Math.min(500, Math.floor(options.retryDelayMs)));
   }
   return SUPABASE_TRANSIENT_RETRY_DELAY_MS;
+}
+
+function supabaseFetchTimeoutMs(options: SupabaseFetchOptions): number {
+  if (typeof options.timeoutMs === "number" && Number.isFinite(options.timeoutMs)) {
+    return Math.max(500, Math.min(10_000, Math.floor(options.timeoutMs)));
+  }
+  return SUPABASE_FETCH_TIMEOUT_MS;
 }
 
 function sleepMs(ms: number): Promise<void> {
@@ -247,7 +255,12 @@ async function putFreshAndStale(
     cacheApi.put(cacheRequest, outbound.clone()),
     cacheApi.put(staleRequest, staleResponse),
   ]);
-  ctx.waitUntil?.(putPromise);
+  const guardedPut = putPromise.catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[public-api] cache seed failed for ${cacheRequest.url}: ${message}`);
+  });
+  ctx.waitUntil?.(guardedPut);
+  await guardedPut;
 }
 
 function scheduleBackgroundRefresh(ctx: PublicApiCtx, cacheId: string, refresh: Promise<Response>): void {
@@ -359,7 +372,7 @@ export async function supabaseJson<T>(
           Accept: "application/json",
         },
         cf: { cacheTtl: DEFAULT_EDGE_TTL_SECONDS, cacheEverything: true } as RequestInitCfProperties,
-      });
+      }, supabaseFetchTimeoutMs(options));
     } catch (error) {
       if (options.failOnTransient) {
         throw new SupabaseTransientError("Supabase request timed out", path);
@@ -414,7 +427,7 @@ export async function supabaseCount(
           Prefer: `count=${options.countStrategy ?? "exact"}`,
         },
         cf: { cacheTtl: DEFAULT_EDGE_TTL_SECONDS, cacheEverything: true } as RequestInitCfProperties,
-      });
+      }, supabaseFetchTimeoutMs(options));
     } catch (error) {
       if (options.failOnTransient) {
         throw new SupabaseTransientError("Supabase count request timed out", path);

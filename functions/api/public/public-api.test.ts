@@ -369,6 +369,32 @@ describe("public API cache helpers", () => {
     expect(cacheApi.put.mock.calls.some(([request]) => request.url.includes("__maiprop_stale=1"))).toBe(true);
   });
 
+  it("does not return successful public API misses before fresh and stale cache entries are committed", async () => {
+    let releasePut!: () => void;
+    const putGate = new Promise<void>((resolve) => {
+      releasePut = resolve;
+    });
+    cacheApi.put.mockImplementation(async (request: Request, response: Response) => {
+      await putGate;
+      cacheStore.set(request.url, response.clone());
+    });
+
+    const pending = Promise.resolve(openHousesRequest(makeCtx("https://portal.maiprop.co/api/public/open-houses?limit=2")));
+    await Promise.resolve();
+    const returnedBeforeCacheCommit = await Promise.race([
+      pending.then(() => true),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 20)),
+    ]);
+
+    expect(returnedBeforeCacheCommit).toBe(false);
+    releasePut();
+
+    const response = await pending;
+    expect(response.status).toBe(200);
+    expect(cacheApi.put).toHaveBeenCalledTimes(2);
+    expect([...cacheStore.keys()].some((key) => key.includes("__maiprop_stale=1"))).toBe(true);
+  });
+
   it("coalesces concurrent cache misses for the same public API key", async () => {
     let releaseFetch!: () => void;
     const gate = new Promise<void>((resolve) => {
@@ -515,13 +541,15 @@ describe("public listings endpoint", () => {
 
   it("uses the default public catalogue scope unless auctions are explicitly included", async () => {
     await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?sort=price-desc"));
-    expect(fetchUrls("/rest/v1/listings")[0].searchParams.get("listing_type")).toBe("in.(sale,rent,firesale,new_build)");
-    expect(fetchUrls("/rest/v1/listings")[0].searchParams.get("is_off_market")).toBe("eq.false");
-    expect(fetchUrls("/rest/v1/listings")[0].searchParams.getAll("order")).toContain("price.desc");
+    let url = fetchUrls("/rest/v1/listings")[0];
+    expect(url.searchParams.get("listing_type")).toBe("in.(sale,rent,firesale,new_build)");
+    expect(url.searchParams.get("is_off_market")).toBe("eq.false");
+    expect(url.searchParams.getAll("order")).toContain("price.desc");
+    expect(url.searchParams.get("select")).not.toContain("project_units!project_units_project_id_fkey");
 
     fetchMock().mockClear();
     await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?includeAuctions=true&sort=views"));
-    const url = fetchUrls("/rest/v1/listings")[0];
+    url = fetchUrls("/rest/v1/listings")[0];
     expect(url.searchParams.has("listing_type")).toBe(false);
     expect(url.searchParams.get("is_off_market")).toBe("eq.false");
     expect(url.searchParams.getAll("order")).toContain("views_count.desc.nullslast");
@@ -533,6 +561,7 @@ describe("public listings endpoint", () => {
 
     const url = fetchUrls("/rest/v1/listings")[0];
     expect(url.searchParams.get("listing_type")).toBe("eq.new_build");
+    expect(url.searchParams.get("select")).toContain("project_units!project_units_project_id_fkey");
     expect(url.searchParams.has("pre_sale")).toBe(false);
     expect(url.searchParams.has("is_pre_sale")).toBe(false);
     expect(body.data).toEqual([

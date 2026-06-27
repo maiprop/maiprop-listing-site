@@ -43,12 +43,21 @@ const BOOLEAN_FEATURES = new Set([
   "has_night_power", "has_solar_water",
 ]);
 const PROJECT_UNIT_CARD_SELECT = ["id", "availability_status", "internal_sqm"].join(",");
-const LISTING_PROJECT_CARD_SELECT = [
+const LISTING_PROJECT_CARD_SELECT = "delivery_date";
+const LISTING_PROJECT_CARD_SELECT_WITH_UNITS = [
   "delivery_date",
   `project_units!project_units_project_id_fkey(${PROJECT_UNIT_CARD_SELECT})`,
 ].join(",");
+const LISTINGS_CACHE_VERSION = "default-card-v2";
+const LISTINGS_CACHE_OPTIONS = {
+  edgeTtlSeconds: 300,
+  browserTtlSeconds: 60,
+  staleSeconds: 900,
+  producerTimeoutMs: 5_000,
+};
+const LISTINGS_SUPABASE_TIMEOUT_MS = 4_500;
 
-const LISTING_SELECT = [
+const LISTING_SELECT_BASE = [
   "id",
   "owner_id",
   "created_at",
@@ -90,9 +99,22 @@ const LISTING_SELECT = [
   "has_elevator",
   "has_garden",
   "has_smart_home",
-  `project:projects!listings_project_id_fkey(${LISTING_PROJECT_CARD_SELECT})`,
   "listing_images(url,sort_order)",
-].join(",");
+];
+
+function listingSelect(includeProjectUnits: boolean): string {
+  const projectSelect = includeProjectUnits ? LISTING_PROJECT_CARD_SELECT_WITH_UNITS : LISTING_PROJECT_CARD_SELECT;
+  return [
+    ...LISTING_SELECT_BASE.slice(0, -1),
+    `project:projects!listings_project_id_fkey(${projectSelect})`,
+    LISTING_SELECT_BASE[LISTING_SELECT_BASE.length - 1],
+  ].join(",");
+}
+
+function shouldIncludeProjectUnits(requestUrl: URL): boolean {
+  const listingType = safeToken(requestUrl.searchParams.get("listing_type"), LISTING_TYPES);
+  return listingType === "new_build" || requestUrl.searchParams.get("is_pre_sale") === "true";
+}
 
 function appendIfPresent(params: URLSearchParams, name: string, value: string | null): void {
   if (value) params.set(name, value);
@@ -110,7 +132,7 @@ function buildListingParams(requestUrl: URL): { params: URLSearchParams; page: n
   const from = (page - 1) * pageSize;
   const sort = safeToken(requestUrl.searchParams.get("sort"), SORTS) ?? "featured";
 
-  params.set("select", LISTING_SELECT);
+  params.set("select", listingSelect(shouldIncludeProjectUnits(requestUrl)));
   params.set("status", "eq.active");
   params.set("offset", String(from));
   params.set("limit", String(pageSize));
@@ -206,13 +228,18 @@ async function publicListings(ctx: PublicApiCtx, requestUrl: URL): Promise<Respo
   const { params, page, pageSize } = buildListingParams(requestUrl);
   params.set("page", String(page));
   params.set("pageSize", String(pageSize));
+  params.set("v", LISTINGS_CACHE_VERSION);
   const cacheKey = normalizedCacheUrl(requestUrl, "listings", params);
   params.delete("page");
   params.delete("pageSize");
+  params.delete("v");
 
   return cachedJson(ctx, cacheKey, async () => {
     try {
-      const rows = await supabaseJson<ListingRow>(ctx.env, "/rest/v1/listings", params, { failOnTransient: true });
+      const rows = await supabaseJson<ListingRow>(ctx.env, "/rest/v1/listings", params, {
+        failOnTransient: true,
+        timeoutMs: LISTINGS_SUPABASE_TIMEOUT_MS,
+      });
       const cleanRows = publicListingRows(rows);
       const ownerIds = cleanRows.map((row) => row.owner_id).filter((id): id is string => typeof id === "string");
       const profiles = await fetchOwnerProfiles(ctx.env, ownerIds);
@@ -231,7 +258,7 @@ async function publicListings(ctx: PublicApiCtx, requestUrl: URL): Promise<Respo
       if (isSupabaseTransientError(error)) return upstreamUnavailable();
       throw error;
     }
-  });
+  }, LISTINGS_CACHE_OPTIONS);
 }
 
 export const onRequest: PagesFunction<PublicApiEnv> = async (ctx) => {

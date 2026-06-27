@@ -1,0 +1,243 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-27T18:16:52.043Z",
+  "tool": "k6",
+  "profile": "growth_10x",
+  "baseUrl": "https://portal.maiprop.co",
+  "productionHost": true,
+  "productionApproved": true,
+  "abortOnFailEnabled": true,
+  "summaryType": "normalized",
+  "status": "passed",
+  "traffic": {
+    "totalRequests": 432824,
+    "peakVus": 1000,
+    "iterations": 61832
+  },
+  "thresholds": [
+    {
+      "name": "http_req_duration_p95_ms",
+      "actual": 388.32552499999997,
+      "budget": 2500,
+      "passed": true
+    },
+    {
+      "name": "http_req_failed_rate",
+      "actual": 0.0009588192891336894,
+      "budget": 0.01,
+      "passed": true
+    },
+    {
+      "name": "errors_rate",
+      "actual": 0.0009588192891336894,
+      "budget": 0.01,
+      "passed": true
+    }
+  ],
+  "failedRoutes": [],
+  "routes": [
+      {
+        "name": "home",
+        "path": "/",
+        "url": "https://portal.maiprop.co/",
+        "status": "passed",
+        "traffic": {
+          "totalRequests": 61832
+        },
+        "thresholds": [
+          {
+            "name": "http_req_duration_p95_ms",
+            "actual": 190.18872999999985,
+            "budget": 2500,
+            "passed": true
+          },
+          {
+            "name": "http_req_failed_rate",
+            "actual": 0,
+            "budget": 0.01,
+            "passed": true
+          },
+          {
+            "name": "errors_rate",
+            "actual": 0,
+            "budget": 0.01,
+            "passed": true
+          }
+        ]
+      },
+      {
+        "name": "listings",
+        "path": "/listings",
+        "url": "https://portal.maiprop.co/listings",
+        "status": "passed",
+        "traffic": {
+          "totalRequests": 61832
+        },
+        "thresholds": [
+          {
+            "name": "http_req_duration_p95_ms",
+            "actual": 189.48210499999988,
+            "budget": 2500,
+            "passed": true
+          },
+          {
+            "name": "http_req_failed_rate",
+            "actual": 0,
+            "budget": 0.01,
+            "passed": true
+          },
+          {
+            "name": "errors_rate",
+            "actual": 0,
+            "budget": 0.01,
+            "passed": true
+          }
+        ]
+      },
+      {
+        "name": "auctions",
+        "path": "/auctions",
+        "url": "https://portal.maiprop.co/auctions",
+        "status": "passed",
+        "traffic": {
+          "totalRequests": 61832
+        },
+        "thresholds": [
+          {
+            "name": "http_req_duration_p95_ms",
+            "actual": 258.08098499999994,
+            "budget": 2500,
+            "passed": true
+          },
+          {
+            "name": "http_req_failed_rate",
+            "actual": 0,
+            "budget": 0.01,
+            "passed": true
+          },
+          {
+            "name": "errors_rate",
+            "actual": 0,
+            "budget": 0.01,
+            "passed": true
+          }
+        ]
+      },
+      {
+        "name": "pricing",
+        "path": "/pricing",
+        "url": "https://portal.maiprop.co/pricing",
+        "status": "passed",
+        "traffic": {
+          "totalRequests": 61832
+        },
+        "thresholds": [
+          {
+            "name": "http_req_duration_p95_ms",
+            "actual": 194.5947499999999,
+            "budget": 2500,
+            "passed": true
+          },
+          {
+            "name": "http_req_failed_rate",
+            "actual": 0,
+            "budget": 0.01,
+            "passed": true
+          },
+          {
+            "name": "errors_rate",
+            "actual": 0,
+            "budget": 0.01,
+            "passed": true
+          }
+        ]
+      },
+      {
+        "name": "api_listings",
+        "path": "/api/public/listings?limit=24",
+        "url": "https://portal.maiprop.co/api/public/listings?limit=24",
+        "status": "passed",
+        "traffic": {
+          "totalRequests": 61832
+        },
+        "thresholds": [
+          {
+            "name": "http_req_duration_p95_ms",
+            "actual": 458.53466,
+            "budget": 2500,
+            "passed": true
+          },
+          {
+            "name": "http_req_failed_rate",
+            "actual": 0,
+            "budget": 0.01,
+            "passed": true
+          },
+          {
+            "name": "errors_rate",
+            "actual": 0,
+            "budget": 0.01,
+            "passed": true
+          }
+        ]
+      },
+      {
+        "name": "api_open_houses",
+        "path": "/api/public/open-houses?limit=24",
+        "url": "https://portal.maiprop.co/api/public/open-houses?limit=24",
+        "status": "passed",
+        "traffic": {
+          "totalRequests": 61832
+        },
+        "thresholds": [
+          {
+            "name": "http_req_duration_p95_ms",
+            "actual": 170.31842499999996,
+            "budget": 2500,
+            "passed": true
+          },
+          {
+            "name": "http_req_failed_rate",
+            "actual": 0,
+            "budget": 0.01,
+            "passed": true
+          },
+          {
+            "name": "errors_rate",
+            "actual": 0,
+            "budget": 0.01,
+            "passed": true
+          }
+        ]
+      },
+      {
+        "name": "sitemap",
+        "path": "/sitemap-dynamic.xml",
+        "url": "https://portal.maiprop.co/sitemap-dynamic.xml",
+        "status": "passed",
+        "traffic": {
+          "totalRequests": 61832
+        },
+        "thresholds": [
+          {
+            "name": "http_req_duration_p95_ms",
+            "actual": 1233.9163999999996,
+            "budget": 2500,
+            "passed": true
+          },
+          {
+            "name": "http_req_failed_rate",
+            "actual": 0.006711735023935826,
+            "budget": 0.01,
+            "passed": true
+          },
+          {
+            "name": "errors_rate",
+            "actual": 0.006711735023935826,
+            "budget": 0.01,
+            "passed": true
+          }
+        ]
+      }
+    ]
+}
