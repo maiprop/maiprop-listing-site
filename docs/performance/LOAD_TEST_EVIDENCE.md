@@ -1,11 +1,12 @@
 # Performance Load Test Evidence
 
-Current status: production `baseline_100` and `growth_10x` evidence has been
-captured. Production `enterprise_soak` was attempted on 2026-06-27 and failed
-the strict route-level `api_listings` threshold, even though aggregate latency
-and aggregate error-rate budgets passed. Protected-preview `baseline_100`,
+Current status: production `baseline_100`, `growth_10x`, and
+`enterprise_soak` evidence has been captured. The failed 2026-06-27
+production `enterprise_soak` attempt is retained below as remediation evidence;
+the later same-day rerun after public API cache/query hardening passed strict
+route-level and aggregate budgets. Protected-preview `baseline_100`,
 `growth_10x`, and `enterprise_soak` evidence remains useful PR evidence, but
-does not replace production soak proof.
+does not replace production proof.
 Procurement, DORA, ECAS, and production-readiness reviews must distinguish
 preview proof from production proof.
 
@@ -18,6 +19,7 @@ explicit quota-burn approval and should not be used as routine CI checks.
 |---|---|---|---|---|---|---|---|
 | 2026-06-27 | Production | smoke | https://portal.maiprop.co | `artifacts/performance/k6-production-smoke-rerun-20260627/load-test-summary.json` | Successful | @krenios request | run timestamp: 2026-06-27T18:07:29Z; artifact SHA256: f9e527758609a0e616ceefb1712a21daee4613231046157d48c2e971b8c225ad; release SHA: 58937eaf5b53; monitoring window: local k6 stdout and normalized summary; approval ref: conversation-20260627-proceed-with-all; 441 requests, 10 peak VUs, zero failed routes, p95 42.65 ms, error rate 0. |
 | 2026-06-27 | Production | growth_10x | https://portal.maiprop.co | `artifacts/performance/k6-production-growth-10x-20260627/load-test-summary.json` | Successful | @krenios request | run timestamp: 2026-06-27T18:16:52Z; artifact SHA256: 177b61a1a12dc80e4db9f016ca93d8a717be63be2502576e1581d097636f64cd; release SHA: 58937eaf5b53; monitoring window: local k6 stdout and normalized summary; approval ref: conversation-20260627-proceed-with-all; reached 1,000 VUs, 432,824 requests, no failed routes, p95 388.33 ms, aggregate error rate 0.0010. Accept as current production 10x proof for this release. |
+| 2026-06-27 | Production | enterprise_soak | https://portal.maiprop.co | `artifacts/performance/k6-production-enterprise-soak-rerun-20260627-de528c73/load-test-summary.json` | Successful | @krenios request | run timestamp: 2026-06-27T21:19:32Z; artifact SHA256: b0373d1e46a96c05d8e2eb413cf36d90e6d2db022474c5afe754dbd9205a6608; release SHA: de528c73; monitoring window: local k6 stdout, normalized summary, and post-run direct probes; approval ref: conversation-20260627-proceed-with-all; reached 250 VUs, 696,339 requests, no failed routes, p95 27.25 ms, aggregate error rate 0.0003. `api_open_houses` had a route error rate of 0.00001, below the strict 0.01 route budget. Post-run probes for home, listings API, new-build API, open-houses API, and `/new-build/1a296bc6-8941-405b-9b81-1c4f5776dd8f` all returned 200 in 59-90 ms. Accept as current production enterprise soak proof for this release. |
 | 2026-06-27 | Production | enterprise_soak | https://portal.maiprop.co | `artifacts/performance/k6-production-enterprise-soak-20260627/load-test-summary.json` | Failed | @krenios request | run timestamp: 2026-06-27T18:37:42Z; artifact SHA256: 9b0639ca9d90e231e9983e8bdc47b511b7b5bbf25d7cff3de26732dc02cff41e; release SHA: 58937eaf5b53; monitoring window: local k6 stdout, normalized summary, and post-run direct probes; approval ref: conversation-20260627-proceed-with-all; aborted after 269,052 requests because `api_listings` route error rate reached 0.0135, above the strict 0.01 route budget. Aggregate p95 25.68 ms and aggregate error rate 0.0022 passed, but this is not accepted as enterprise soak proof. |
 | 2026-06-23 | Production | smoke | https://portal.maiprop.co | `artifacts/performance/k6-smoke-2026-06-23/load-test-summary.json` | Failed | @krenios request | run timestamp: 2026-06-23T07:43:07Z; artifact SHA256: cd6b30f4f3695d13a9a66acd9bd29cdcbe094c49edee2badef72499ddb94c489; release SHA: 0145793152164ac0fe5b4da22c48914251a00fa8; monitoring window: local k6 stdout and normalized summary; approval ref: side-conversation-20260623-proceed; 441 requests, p95 25 ms, overall error rate 0.0068 passed, but route-level strict thresholds failed once each for `api_listings`, `api_open_houses`, and `sitemap`. |
 | 2026-06-23 | Production | smoke | https://portal.maiprop.co | `artifacts/performance/k6-smoke-2026-06-23-rerun/load-test-summary.json` | Successful | @krenios request | run timestamp: 2026-06-23T07:47:14Z; artifact SHA256: 52a846029c0c0635c48caee88a7b0fd6679f6bce6ca942ff894edb2d753700ee; release SHA: 0145793152164ac0fe5b4da22c48914251a00fa8; monitoring window: local k6 stdout, normalized summary, and 25-request direct probes per dynamic route; approval ref: side-conversation-20260623-proceed; 448 requests, 10 peak VUs, zero failed routes, p95 24.82 ms. This is smoke evidence only, not baseline_100, growth_10x, or enterprise_soak proof. |
