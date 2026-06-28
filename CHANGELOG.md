@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.5](https://github.com/maiprop/maiprop-listing-site/compare/v1.11.4...v1.11.5) (2026-06-28)
+
+
+### Bug Fixes
+
+* resolve live UX regression paths ([3e47d80](https://github.com/maiprop/maiprop-listing-site/commit/3e47d805ea8509ba38de03bf60df5b9111572994))
+
 ## [1.11.4](https://github.com/maiprop/maiprop-listing-site/compare/v1.11.3...v1.11.4) (2026-06-28)
 
 
