@@ -303,6 +303,15 @@ describe("PropertyCard behavior", () => {
     );
   });
 
+  it("can opt homepage priority cards out of offscreen containment", async () => {
+    const { PropertyCard } = await import("@/components/PropertyCard");
+
+    renderWithProviders(<PropertyCard property={baseProperty()} deferOffscreenRendering={false} />);
+
+    expect(screen.getByTestId("property-card")).not.toHaveClass("[content-visibility:auto]");
+    expect(screen.getByTestId("property-card")).not.toHaveClass("[contain-intrinsic-size:332px]");
+  });
+
   it("uses project-specific compact specs for new-build cards", async () => {
     const { PropertyCard } = await import("@/components/PropertyCard");
 
@@ -379,7 +388,7 @@ describe("PropertyCard behavior", () => {
     expect(image).toHaveAttribute("src", supabaseImage);
     expect(image).not.toHaveAttribute("srcset");
     expect(image).toHaveAttribute("loading", "eager");
-    expect(image).not.toHaveAttribute("fetchpriority");
+    expect(image).toHaveAttribute("fetchpriority", "high");
     expect(image).toHaveAttribute("decoding", "async");
   });
 
