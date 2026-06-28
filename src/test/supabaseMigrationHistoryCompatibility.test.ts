@@ -1,4 +1,4 @@
-import { readdirSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -14,6 +14,8 @@ describe("Supabase production migration history compatibility", () => {
       "20260614091438_add_open_house_transaction_type.sql",
       "20260614145537_revoke_future_public_default_grants.sql",
       "20260614145554_dedupe_project_select_policies.sql",
+      "20260628193711_reconcile_remote_migration_history.sql",
+      "20260628203708_reconcile_remote_migration_history.sql",
     ];
 
     const staleLocalAliases = [
@@ -29,6 +31,23 @@ describe("Supabase production migration history compatibility", () => {
 
     for (const alias of staleLocalAliases) {
       expect(names.has(alias), `${alias} must not replace the production-applied version`).toBe(false);
+    }
+  });
+
+  it("keeps remote-only reconciliation migrations schema-free", () => {
+    const reconciliationMigrations = [
+      "20260628193711_reconcile_remote_migration_history.sql",
+      "20260628203708_reconcile_remote_migration_history.sql",
+    ];
+
+    for (const migration of reconciliationMigrations) {
+      const sql = readFileSync(resolve(process.cwd(), "supabase/migrations", migration), "utf8");
+      const executableSql = sql
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/^\s*--.*$/gm, "")
+        .trim();
+
+      expect(executableSql, `${migration} should only reconcile Supabase migration history`).toBe("");
     }
   });
 });
