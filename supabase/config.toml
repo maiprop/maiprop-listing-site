@@ -102,6 +102,9 @@ verify_jwt = false
 [functions.create-stripe-price]
 verify_jwt = true
 
+[functions.create-investor-payment]
+verify_jwt = true
+
 [functions.process-email-queue]
 verify_jwt = true
 
