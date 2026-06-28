@@ -185,4 +185,31 @@ describe("useSubmitAgentDataInput", () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["agent-data-inputs"] });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["agent-data-input-quota"] });
   });
+
+  it("rejects edge responses that did not persist a submission row", async () => {
+    invokeMock.mockResolvedValue({
+      data: {
+        error: "monthly_limit_reached",
+        message: "You have already submitted 20 data inputs this month. Try again next month.",
+      },
+      error: null,
+    });
+
+    const { wrapper } = makeWrapper();
+    const { result } = renderHook(() => useSubmitAgentDataInput(), { wrapper });
+
+    await act(async () => {
+      await expect(result.current.mutateAsync({
+        closed_at: "2026-04-30",
+        property_address: "Ermou 12",
+        property_city: "Athens",
+        transaction_type: "sale",
+        agent_side: "seller",
+        closing_price: 250000,
+      })).rejects.toThrow(/20 data inputs/i);
+    });
+
+    expect(toastMock.success).not.toHaveBeenCalled();
+    expect(toastMock.error).toHaveBeenCalledWith("You have already submitted 20 data inputs this month. Try again next month.");
+  });
 });

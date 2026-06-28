@@ -231,10 +231,12 @@ export default function Dashboard() { // skipcq: JS-R1005
           cancel_url: "/dashboard?checkout=cancelled",
         },
       });
-      if (error) throw error;
+      const checkout = data as { url?: string; error?: string; message?: string } | null;
+      const checkoutFailure = checkout?.message ?? checkout?.error;
+      if (error) throw new Error(checkoutFailure ?? error.message);
 
-      const checkoutUrl = (data as { url?: string } | null)?.url;
-      if (!checkoutUrl) throw new Error("Stripe checkout URL was not returned.");
+      const checkoutUrl = checkout?.url;
+      if (!checkoutUrl) throw new Error(checkoutFailure ?? "Stripe checkout URL was not returned.");
 
       window.location.href = checkoutUrl;
     } catch (error) {

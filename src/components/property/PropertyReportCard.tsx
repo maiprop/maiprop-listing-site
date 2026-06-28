@@ -247,7 +247,6 @@ const UnavailableContent = ({ reason }: { reason: string }) => (
       <ClipboardList className="w-4 h-4" />
       {ui("Report unavailable", "Η αναφορά δεν είναι διαθέσιμη")}
     </Button>
-    <p className="text-[10px] text-muted-foreground">{ui("A downloadable OS HTML report is required for HTML/PDF export", "Απαιτείται αναφορά HTML από το OS για εξαγωγή HTML/PDF")}</p>
   </div>
 );
 

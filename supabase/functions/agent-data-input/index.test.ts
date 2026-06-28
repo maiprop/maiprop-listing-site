@@ -14,6 +14,7 @@ import { captureHandler, req } from "../_shared/testUtils.ts";
 type MockScenario = {
   user?: { id: string };
   submitError?: string;
+  submitData?: Record<string, unknown> | null;
   profileRole?: string | null;
   statusData?: Record<string, unknown>[];
   entriesData?: Record<string, unknown>[];
@@ -79,6 +80,9 @@ class QueryBuilder {
           single: async () => {
             if (this.scenario.submitError) {
               return { data: null, error: { message: this.scenario.submitError } };
+            }
+            if ("submitData" in this.scenario) {
+              return { data: this.scenario.submitData, error: null };
             }
             return {
               data: { id: "input-1", status: "pending", ...(row as Record<string, unknown>) },
@@ -224,6 +228,20 @@ Deno.test("submit maps DB lifetime ban enforcement to a 403 response", async () 
     body.message,
     "You no longer have access to the Data Input feature. This is permanent and cannot be reversed.",
   );
+});
+
+Deno.test("submit fails when the insert returns no persisted row", async () => {
+  resetScenario({ submitData: null });
+
+  const res = await handler(authedJson({
+    action: "submit",
+    payload: validSubmitPayload(),
+  }));
+  const body = await res.json();
+
+  assertEquals(res.status, 500);
+  assertEquals(body.error, "submission_not_persisted");
+  assertEquals(body.message, "Data input submission was not persisted. Please retry.");
 });
 
 Deno.test("admin_review rejects non-admin callers before invoking review RPC", async () => {

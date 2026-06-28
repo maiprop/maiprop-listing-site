@@ -100,6 +100,12 @@ type EdgeStatusResponse = {
   entries: EdgeEntry[];
 };
 
+type EdgeSubmitResponse = {
+  entry?: { id?: string | null } | null;
+  error?: string | null;
+  message?: string | null;
+};
+
 const nullable = <T>(value: T | null | undefined): T | null => value ?? null;
 
 const edgeTransactionType = (value: EdgeEntry["transaction_type"]): "sale" | "rent" =>
@@ -248,7 +254,15 @@ export const useSubmitAgentDataInput = () => {
         body,
       });
       if (error) throw error;
-      return ((data as { entry?: { id?: string } } | null)?.entry?.id) ?? "";
+      const response = data as EdgeSubmitResponse | null;
+      const edgeError = response?.message ?? response?.error;
+      if (edgeError) throw new Error(edgeError);
+
+      const entryId = response?.entry?.id;
+      if (!entryId) {
+        throw new Error("Data input submission was not saved. Please retry.");
+      }
+      return entryId;
     },
     onSuccess: () => {
       toast.success("Submission received - pending verification");
