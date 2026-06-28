@@ -7,7 +7,13 @@ import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 
-vi.mock("@/lib/config", () => ({ MAPBOX_TOKEN: "pk.test.token" }));
+const configMock = vi.hoisted(() => ({ mapboxToken: "pk.test.token" }));
+
+vi.mock("@/lib/config", () => ({
+  get MAPBOX_TOKEN() {
+    return configMock.mapboxToken;
+  },
+}));
 vi.mock("@/components/map/PropertyPopup", () => ({
   PropertyPopup: () => <div data-testid="property-popup" />,
 }));
@@ -85,6 +91,9 @@ import { MapView } from "@/components/MapView";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  configMock.mapboxToken = "pk.test.token";
+  handlerHolder.onClick = undefined;
+  handlerHolder.onMouseMove = undefined;
 });
 
 // MapListing uses `latitude`/`longitude` (not lat/lng) — using the wrong
@@ -170,12 +179,9 @@ describe("MapView", () => {
   });
 
   it("falls back to a placeholder when MAPBOX_TOKEN is empty", async () => {
-    vi.doMock("@/lib/config", () => ({ MAPBOX_TOKEN: "" }));
-    vi.resetModules();
-    const { MapView: NoTokenMap } = await import("@/components/MapView");
-    render(<NoTokenMap listings={baseListings} />);
+    configMock.mapboxToken = "";
+    render(<MapView listings={baseListings} />);
     expect(screen.getByText(/VITE_MAPBOX_TOKEN/i)).toBeInTheDocument();
-    vi.doMock("@/lib/config", () => ({ MAPBOX_TOKEN: "pk.test.token" }));
   });
 
   it("filters out listings with missing/zero coordinates from the cluster source", async () => {
