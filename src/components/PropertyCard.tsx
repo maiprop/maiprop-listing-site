@@ -86,6 +86,7 @@ interface PropertyCardProps {
   compact?: boolean;
   testId?: string;
   imagePriority?: boolean;
+  deferOffscreenRendering?: boolean;
   footerAccessory?: ReactNode;
 }
 
@@ -166,7 +167,7 @@ const formatNewBuildUnitLabel = (property: Property): string | null => {
   return `${prefix} unit${total === 1 ? "" : "s"}`;
 };
 
-export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(function PropertyCard({ property, compact = false, testId = "property-card", imagePriority = false, footerAccessory }, _ref) { // skipcq: JS-R1005, JS-W1044 - Card rendering branches compact, auction, and standard listing affordances in one reusable surface.
+export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(function PropertyCard({ property, compact = false, testId = "property-card", imagePriority = false, deferOffscreenRendering = true, footerAccessory }, _ref) { // skipcq: JS-R1005, JS-W1044 - Card rendering branches compact, auction, and standard listing affordances in one reusable surface.
   const { t } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -322,6 +323,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
             sizes={thumbSrcSet ? COMPACT_PROPERTY_IMAGE_SIZES : undefined}
             alt={property.title}
             loading={imagePriority ? "eager" : "lazy"}
+            fetchPriority={imagePriority ? "high" : undefined}
             decoding="async"
             data-image-fallback-index={imageChain.length ? "0" : undefined}
             className={`w-full h-full transition-transform duration-300 ${
@@ -363,9 +365,12 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
   const mainImage = imageChain[0] || MAIPROP_LOGO_FALLBACK_URL;
   const mainImageSrcSet = isMaiPropLogoFallback(mainImage) ? undefined : getPropertyImageSrcSet(mainImage);
   const mainImageIsLogoFallback = isMaiPropLogoFallback(mainImage);
+  const offscreenRenderingClass = deferOffscreenRendering
+    ? "[content-visibility:auto] [contain-intrinsic-size:332px]"
+    : "";
 
   return (
-    <div data-testid={testId} className={`property-card h-[332px] w-full min-w-0 rounded-2xl overflow-hidden group grid grid-rows-[132px_minmax(0,1fr)] bg-card transition-shadow duration-300 [content-visibility:auto] [contain-intrinsic-size:332px] ${
+    <div data-testid={testId} className={`property-card h-[332px] w-full min-w-0 rounded-2xl overflow-hidden group grid grid-rows-[132px_minmax(0,1fr)] bg-card transition-shadow duration-300 ${offscreenRenderingClass} ${
       property.isFeatured
         ? "border-2 border-amber-400/70 shadow-[0_0_0_1px_rgba(251,191,36,0.15),0_4px_24px_rgba(251,191,36,0.22)] hover:shadow-[0_0_0_1px_rgba(251,191,36,0.25),0_8px_32px_rgba(251,191,36,0.35)]"
         : "border border-border"
@@ -378,6 +383,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
           sizes={mainImageSrcSet ? PROPERTY_CARD_IMAGE_SIZES : undefined}
           alt={property.title}
           loading={imagePriority ? "eager" : "lazy"}
+          fetchPriority={imagePriority ? "high" : undefined}
           decoding="async"
           data-image-fallback-index={imageChain.length ? "0" : undefined}
           className={`w-full h-full transition-transform duration-500 ${

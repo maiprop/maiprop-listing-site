@@ -4,7 +4,7 @@ import { Gavel, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PropertyCard, type Property } from "@/components/PropertyCard";
 import { useInView } from "@/hooks/useInView";
-import { getAuctionImageList } from "@/lib/auctionStreetView";
+import { AUCTION_FALLBACK_LOGO_URL, getAuctionStreetViewCandidateUrl } from "@/lib/auctionStreetView";
 
 type HomepageAuctionImage = {
   sort_order?: number | null;
@@ -46,8 +46,41 @@ interface Props {
   isLoading: boolean;
 }
 
+const HOMEPAGE_AUCTION_STREET_VIEW_SIZE = "480x270";
+
+const hasText = (value: unknown): value is string =>
+  typeof value === "string" && value.trim().length > 0;
+
+const isStreetViewProxyUrl = (value: string): boolean =>
+  value.includes("/streetview-proxy") || value.includes("/functions/v1/streetview-proxy");
+
+const uniqueImageUrls = (images: Array<string | null | undefined>): string[] => {
+  const seen = new Set<string>();
+  return images.filter((image): image is string => {
+    if (!image || seen.has(image)) return false;
+    seen.add(image);
+    return true;
+  });
+};
+
+const getStoredPhotoUrl = (value: unknown): string | null => {
+  if (!hasText(value)) return null;
+  const url = value.trim();
+  return isStreetViewProxyUrl(url) ? null : url;
+};
+
 const getHomepageAuctionImages = (listing: HomepageAuctionListing): string[] => { // skipcq: JS-R1005
-  return getAuctionImageList(listing);
+  const existingImages = [
+    getStoredPhotoUrl(listing.cover_image_url),
+    ...(listing.listing_images ?? [])
+      .slice()
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+      .map((image) => image.url)
+      .map(getStoredPhotoUrl),
+  ];
+  const streetViewFallback = getAuctionStreetViewCandidateUrl(listing, HOMEPAGE_AUCTION_STREET_VIEW_SIZE);
+  const images = uniqueImageUrls([...existingImages, streetViewFallback]);
+  return images.length ? images : [AUCTION_FALLBACK_LOGO_URL];
 };
 
 const toOptionalNumber = (value: unknown): number | undefined =>
@@ -147,7 +180,12 @@ export const HomepageAuctionsSection = ({ listings, isLoading }: Props) => {
         </div>
         <div className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 reveal reveal-delay-1 ${inView ? "in-view" : ""}`}>
           {featuredListings.map((listing, index) => (
-            <PropertyCard key={listing.id} property={toAuctionCardProperty(listing)} imagePriority={index < 4} />
+            <PropertyCard
+              key={listing.id}
+              property={toAuctionCardProperty(listing)}
+              imagePriority={index < 4}
+              deferOffscreenRendering={false}
+            />
           ))}
           {showLoadingCards &&
             LOADING_CARD_KEYS.map((key) => (

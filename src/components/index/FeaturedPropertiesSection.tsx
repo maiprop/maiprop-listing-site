@@ -41,6 +41,7 @@ export function FeaturedPropertiesSection({ listings, isLoading, isError }: Prop
                   <PropertyCard
                     key={l.id}
                     imagePriority={index < 4}
+                    deferOffscreenRendering={false}
                     property={{
                       id: l.id,
                       title: l.title,
