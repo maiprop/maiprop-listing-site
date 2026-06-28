@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.11.4](https://github.com/maiprop/maiprop-listing-site/compare/v1.11.3...v1.11.4) (2026-06-28)
+
+
+### Bug Fixes
+
+* harden public listings load path ([fbeb6e0](https://github.com/maiprop/maiprop-listing-site/commit/fbeb6e0807a3fb09241972167bee5d7f4f7ad180))
+* improve homepage inventory loading ([bf33ad2](https://github.com/maiprop/maiprop-listing-site/commit/bf33ad2b53a44fca2d6c169edd757a81563f3ed1))
+* reduce ai quota status latency ([de528c7](https://github.com/maiprop/maiprop-listing-site/commit/de528c73ecefff9b9ed02f920508772ea07c276f))
+
 ## [1.11.3](https://github.com/maiprop/maiprop-listing-site/compare/v1.11.2...v1.11.3) (2026-06-23)
 
 
