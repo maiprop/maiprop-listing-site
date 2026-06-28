@@ -102,6 +102,7 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
   // UX: Contact only after approval; Offer only after attended + open house date passed
   const openHouseDate = db?.open_house_date ? new Date(db.open_house_date) : null;
   const ohDatePassed = openHouseDate ? openHouseDate < new Date() : false;
+  const registrationClosed = !myReg && (ohDatePassed || db?.status !== "active");
   const canContact = !!myReg && ["approved", "attended"].includes(myReg.status);
   const pofVerifiedForOffer = !assetSettings?.require_proof_of_funds || myReg?.pof_verified_status === "verified";
   const canSubmitOffer = !!myReg && myReg.status === "attended" && ohDatePassed && pofVerifiedForOffer;
@@ -476,6 +477,11 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                           <Users className="w-3.5 h-3.5 shrink-0" />
                           {isGreek ? "Εγγραφή" : "Registration"} {myReg.status === "approved" ? (isGreek ? "εγκρίθηκε ✓" : "approved ✓") : myReg.status === "attended" ? (isGreek ? "παρουσία ✓" : "attended ✓") : (isGreek ? "σε αναμονή ⏳" : "pending ⏳")} · {isGreek ? "Λεπτομέρειες" : "View details"}
                         </button>
+                      ) : registrationClosed ? (
+                        <div className="rounded-lg px-3 py-2 text-[11px] text-muted-foreground border border-border bg-muted/30 flex items-center gap-1.5">
+                          <Lock className="w-3 h-3 shrink-0" />
+                          {isGreek ? "Η προεγγραφή έχει κλείσει για αυτή την ανοικτή επίσκεψη." : "Registration closed for this open house."}
+                        </div>
                       ) : (
                         <Button className="w-full gap-2" onClick={() => modal.open("reg")}>
                           <Users className="w-4 h-4" /> {isGreek ? "Προεγγραφή για ανοιχτή επίσκεψη" : "Pre-register for Open House"}

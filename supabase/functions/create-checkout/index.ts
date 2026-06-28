@@ -465,6 +465,25 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
 
     const origin = resolveCheckoutOrigin(req.headers.get("origin"));
     if (isStripeMockMode()) {
+      if (wantsTrial) {
+        log.warn("blocked mock trial checkout", {
+          userId: user.id,
+          plan,
+          audience: entitlement.audience,
+          billingCycle,
+        });
+        return new Response(
+          JSON.stringify({
+            error: "trial_mock_billing_disabled",
+            message:
+              "Trial checkout requires live Stripe billing. Mock billing cannot activate a Pro trial.",
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 503,
+          },
+        );
+      }
       const url = buildMockCheckoutUrl(
         origin,
         successPath,

@@ -562,6 +562,17 @@ describe("OpenHouseDetail page behavior", () => {
     expect(await screen.findByTestId("registration-dialog")).toHaveAttribute("data-transaction-type", "sale");
   });
 
+  it("keeps past open houses from opening a new registration flow", async () => {
+    mocks.authUser = { id: "buyer-1" };
+    mocks.listing = createListing({ open_house_date: "2026-01-10T10:00:00.000Z" });
+
+    await renderOpenHouseDetail();
+
+    expect(await screen.findByText(/registration closed/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /pre-register for open house/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId("registration-dialog")).toHaveAttribute("data-open", "false");
+  });
+
   it("opens offer flow and starts contact for an attended buyer after the event has passed", async () => {
     mocks.authUser = { id: "buyer-1" };
     mocks.listing = createListing({ open_house_date: "2026-01-10T10:00:00.000Z" });

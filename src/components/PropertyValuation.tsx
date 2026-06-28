@@ -252,11 +252,13 @@ export default function PropertyValuation(props: PropertyValuationProps) {
   const [result, setResult] = useState<ValuationResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const runValuation = async () => {
     if (!user) return;
 
     setLoading(true);
+    setErrorMessage(null);
     try {
       const body = parseMutationInput(propertyValuationBodySchema, props, "property valuation");
       const { data, error } = await invokeAuthenticatedFunction<RawValuationResult & { error?: string }>("property-valuation", { body });
@@ -267,7 +269,9 @@ export default function PropertyValuation(props: PropertyValuationProps) {
       setExpanded(true);
       void queryClient.invalidateQueries({ queryKey: ["usage_ai_calls"] });
     } catch (e: unknown) {
-      toast.error(getAiErrorMessage(e, null, ui(isGreek, "Valuation failed", "Η εκτίμηση απέτυχε")));
+      const message = getAiErrorMessage(e, null, ui(isGreek, "Valuation failed", "Η εκτίμηση απέτυχε"));
+      setErrorMessage(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -308,6 +312,15 @@ export default function PropertyValuation(props: PropertyValuationProps) {
                   : "Εκτίμηση αξίας με AI ανά τύπο ακινήτου: εύρος τιμής, εμπιστοσύνη, ρευστότητα και δεδομένα αγοράς."
               )}
             </p>
+            {errorMessage && (
+              <div
+                role="alert"
+                className="flex items-start gap-2 rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-left text-xs text-destructive"
+              >
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
             <Button
               className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2"
               onClick={runValuation}

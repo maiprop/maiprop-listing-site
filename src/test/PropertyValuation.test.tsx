@@ -176,6 +176,19 @@ describe("PropertyValuation — happy paths", () => {
     await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith("rate-limited"));
   });
 
+  it("keeps AI quota failures visible inline instead of only showing a toast", async () => {
+    invokeMock.mockResolvedValue({
+      data: { error: "Monthly AI valuation limit reached. Upgrade to Pro." },
+      error: null,
+    });
+
+    render(<PropertyValuation {...baseProps} />);
+    fireEvent.click(screen.getByRole("button", { name: /Run AI Valuation/i }));
+
+    expect(await screen.findByText(/monthly ai valuation limit reached/i)).toBeInTheDocument();
+    expect(toastMock.error).toHaveBeenCalledWith("Monthly AI valuation limit reached. Upgrade to Pro.");
+  });
+
   it("toasts when the AI returns no valuation number", async () => {
     invokeMock.mockResolvedValue({ data: { confidence: 50 }, error: null });
     render(<PropertyValuation {...baseProps} />);

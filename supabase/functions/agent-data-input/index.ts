@@ -248,6 +248,14 @@ Deno.serve(async (req) => {
         return json({ error: m }, 400);
       }
 
+      if (!(data as { id?: string } | null)?.id) {
+        log.error("submit returned no persisted row", { user_id: user.id });
+        return json({
+          error: "submission_not_persisted",
+          message: "Data input submission was not persisted. Please retry.",
+        }, 500);
+      }
+
       log.info("data input submitted", { user_id: user.id, id: (data as { id?: string } | null)?.id });
       return json({ entry: data });
     }

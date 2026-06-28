@@ -59,6 +59,7 @@ describe("PropertyReportCard", () => {
 
     expect(screen.getByText(/needs map coordinates/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /report unavailable/i })).toBeDisabled();
+    expect(screen.queryByText(/downloadable os html report/i)).not.toBeInTheDocument();
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
 

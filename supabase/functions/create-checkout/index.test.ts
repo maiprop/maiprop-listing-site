@@ -156,4 +156,18 @@ Deno.test("subscription trial checkout is reserved before Stripe session creatio
   assertEquals(updateIndex > sessionIndex, true);
 });
 
+Deno.test("mock billing never fabricates successful Pro trial checkout", async () => {
+  const source = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+  const subscriptionCheckoutStart = source.indexOf("if (wantsTrial && hasExistingPaidAccess");
+  const mockBranchStart = source.indexOf("if (isStripeMockMode())", subscriptionCheckoutStart);
+  const stripeSessionStart = source.indexOf("const stripe = new Stripe", mockBranchStart);
+  const mockBranch = source.slice(mockBranchStart, stripeSessionStart);
+  const blockTrialIndex = mockBranch.indexOf("trial_mock_billing_disabled");
+  const mockUrlIndex = mockBranch.indexOf("buildMockCheckoutUrl");
+
+  assertEquals(mockBranch.includes("wantsTrial"), true);
+  assertEquals(blockTrialIndex >= 0, true);
+  assertEquals(mockUrlIndex > blockTrialIndex, true);
+});
+
 restore();
