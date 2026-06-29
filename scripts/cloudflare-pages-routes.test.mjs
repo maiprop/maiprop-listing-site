@@ -74,6 +74,7 @@ describe("Cloudflare Pages deploy workflow routing", () => {
     expect(workflow).toContain("dist/deploy-version.json");
     expect(workflow).toContain("PRODUCTION_DEPLOY_EXPECTED_SHA: ${{ github.sha }}");
     expect(workflow).toContain("PRODUCTION_DEPLOY_CHECK_ATTEMPTS: 30");
+    expect(workflow).toContain("--public-api --public-api-allow-fail-open");
   });
 
   it("packages Pages Functions into advanced worker output before Pages deploys", () => {
