@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.7](https://github.com/maiprop/maiprop-listing-site/compare/v1.11.6...v1.11.7) (2026-06-29)
+
+
+### Bug Fixes
+
+* refresh live Supabase types ([82890d9](https://github.com/maiprop/maiprop-listing-site/commit/82890d9c72e9ce4e2fcfcac9db09f8353427c381))
+
 ## [1.11.6](https://github.com/maiprop/maiprop-listing-site/compare/v1.11.5...v1.11.6) (2026-06-28)
 
 
