@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.11.6](https://github.com/maiprop/maiprop-listing-site/compare/v1.11.5...v1.11.6) (2026-06-28)
+
+
+### Bug Fixes
+
+* clear live Supabase advisor drift ([8fa5fe1](https://github.com/maiprop/maiprop-listing-site/commit/8fa5fe1797e1232d23724a804f06123445b648b7))
+* reconcile production migration history ([c7dcc32](https://github.com/maiprop/maiprop-listing-site/commit/c7dcc32907f7aff7aa91f93c343072b4ad1eace3))
+* refresh live Supabase types ([b3a68e2](https://github.com/maiprop/maiprop-listing-site/commit/b3a68e2bd9505f6086b73f285f3b27745c0a903a))
+* restore investor payment edge function source ([b4b9075](https://github.com/maiprop/maiprop-listing-site/commit/b4b9075c753d9c9fc63becbb1f0e0544b88b9ff8))
+
 ## [1.11.5](https://github.com/maiprop/maiprop-listing-site/compare/v1.11.4...v1.11.5) (2026-06-28)
 
 
