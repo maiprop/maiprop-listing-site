@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-06-19T05:48:21.805Z",
-  "total": 103,
+  "generated_at": "2026-06-29T23:44:04.399Z",
+  "total": 99,
   "by_pattern": {
-    "no-explicit-any-disable": 37,
-    "explicit-any": 66,
+    "no-explicit-any-disable": 36,
+    "explicit-any": 63,
     "ts-ignore": 0
   },
   "files": [
@@ -130,20 +130,6 @@
         {
           "name": "explicit-any",
           "count": 2
-        }
-      ]
-    },
-    {
-      "file": "src/lib/listingUtils.ts",
-      "total": 4,
-      "findings": [
-        {
-          "name": "no-explicit-any-disable",
-          "count": 1
-        },
-        {
-          "name": "explicit-any",
-          "count": 3
         }
       ]
     },

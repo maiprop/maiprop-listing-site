@@ -138,6 +138,31 @@ const hasExistingPaidAccess = (profile: CheckoutProfileRow | null): boolean => {
 
 const PROVISIONED_SUBSCRIPTION_STATUSES = ["active", "trialing", "past_due"];
 
+type ProvisionedSubscriptionRow = {
+  status?: string | null;
+  audience?: string | null;
+  current_period_end?: string | null;
+};
+
+type ProvisionedSubscriptionQueryResult = {
+  data?: ProvisionedSubscriptionRow[] | ProvisionedSubscriptionRow | null;
+  error?: { message?: string } | null;
+};
+
+type ProvisionedSubscriptionQueryBuilder =
+  PromiseLike<ProvisionedSubscriptionQueryResult> & {
+    eq(column: string, value: unknown): ProvisionedSubscriptionQueryBuilder;
+    in(column: string, values: string[]): ProvisionedSubscriptionQueryBuilder;
+    order(column: string, options: { ascending: boolean }): ProvisionedSubscriptionQueryBuilder;
+    limit(count: number): ProvisionedSubscriptionQueryBuilder;
+  };
+
+type BillingSubscriptionsClient = {
+  from(table: "billing_subscriptions"): {
+    select(columns: string): ProvisionedSubscriptionQueryBuilder;
+  };
+};
+
 const hasCurrentPeriodRemaining = (value: string | null | undefined) => {
   if (!value) return true;
   const periodEnd = new Date(value);
@@ -149,8 +174,7 @@ const hasProvisionedSameAudienceSubscription = async (
   userId: string,
   audience: string,
 ): Promise<boolean> => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabaseClient as { from: any })
+  const { data, error } = await (supabaseClient as BillingSubscriptionsClient)
     .from("billing_subscriptions")
     .select("status, audience, current_period_end")
     .eq("user_id", userId)
@@ -166,11 +190,13 @@ const hasProvisionedSameAudienceSubscription = async (
   }
 
   const rows = Array.isArray(data) ? data : data ? [data] : [];
-  return rows.some((row) =>
-    row?.audience === audience &&
-    PROVISIONED_SUBSCRIPTION_STATUSES.includes(row?.status) &&
-    hasCurrentPeriodRemaining(row?.current_period_end)
-  );
+  return rows.some((row) => {
+    const status = row?.status;
+    return row?.audience === audience &&
+      typeof status === "string" &&
+      PROVISIONED_SUBSCRIPTION_STATUSES.includes(status) &&
+      hasCurrentPeriodRemaining(row?.current_period_end);
+  });
 };
 
 const jsonCheckoutError = (

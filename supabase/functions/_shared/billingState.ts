@@ -70,14 +70,28 @@ type SupabaseAdminClient = {
       options?: Record<string, unknown>,
     ): Promise<{ error: unknown }>;
     insert(payload: Record<string, unknown>): Promise<{ error: unknown }>;
-    // Supabase's PostgREST builder changes shape as filters/selects are
-    // chained. Keep this structural type permissive inside Edge functions.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    select(columns: string): any;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    update(payload: Record<string, unknown>): any;
+    select(columns: string): SupabaseQueryBuilder;
+    update(payload: Record<string, unknown>): SupabaseQueryBuilder;
   };
 };
+
+type SupabaseQueryResult<T = Record<string, unknown>> = {
+  data?: T | T[] | null;
+  error?: { code?: string; message?: string } | null;
+};
+
+type SupabaseSingleResult<T = Record<string, unknown>> = {
+  data?: T | null;
+  error?: { code?: string; message?: string } | null;
+};
+
+type SupabaseQueryBuilder<T = Record<string, unknown>> =
+  PromiseLike<SupabaseQueryResult<T>> & {
+    eq(column: string, value: unknown): SupabaseQueryBuilder<T>;
+    lt(column: string, value: unknown): SupabaseQueryBuilder<T>;
+    select(columns: string): SupabaseQueryBuilder<T>;
+    maybeSingle(): Promise<SupabaseSingleResult<T>>;
+  };
 
 const WEBHOOK_PROCESSING_LEASE_MS = 10 * 60 * 1000;
 
@@ -229,10 +243,21 @@ export async function beginStripeWebhookEvent(
       .eq("event_id", event.id)
       .maybeSingle();
     if (lookupError) throw lookupError;
-    if (data?.status === "processing" && !isStaleProcessingWebhookEvent(data)) {
+    const existingEvent = data && typeof data === "object" && !Array.isArray(data)
+      ? data as {
+        status?: string | null;
+        updated_at?: string | null;
+        metadata?: Record<string, unknown> | null;
+      }
+      : null;
+    const existingStatus = existingEvent?.status ?? null;
+    if (existingStatus === "processing" && !isStaleProcessingWebhookEvent(existingEvent)) {
       return "in_progress";
     }
-    if (data?.status === "failed" || isStaleProcessingWebhookEvent(data)) {
+    if (
+      existingStatus === "failed" ||
+      (existingStatus === "processing" && isStaleProcessingWebhookEvent(existingEvent))
+    ) {
       const claimBase = supabase
         .from("stripe_webhook_events")
         .update({
@@ -242,8 +267,8 @@ export async function beginStripeWebhookEvent(
           metadata: { processing_started_at: processingStartedAt },
         })
         .eq("event_id", event.id)
-        .eq("status", data.status);
-      const claimQuery = data.status === "processing"
+        .eq("status", existingStatus);
+      const claimQuery = existingStatus === "processing"
         ? claimBase.lt(
           "updated_at",
           new Date(Date.now() - WEBHOOK_PROCESSING_LEASE_MS).toISOString(),

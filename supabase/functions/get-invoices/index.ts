@@ -38,6 +38,24 @@ type DurableBillingState = {
   customerFound: boolean;
 };
 
+type SupabaseQueryResult = {
+  data?: unknown;
+  error?: { message?: string } | null;
+};
+
+type SupabaseQueryBuilder = PromiseLike<SupabaseQueryResult> & {
+  eq(column: string, value: unknown): SupabaseQueryBuilder;
+  in(column: string, values: unknown[]): SupabaseQueryBuilder;
+  order(column: string, options: { ascending: boolean }): SupabaseQueryBuilder;
+  limit(count: number): SupabaseQueryBuilder;
+};
+
+type SupabaseReadClient = {
+  from(table: "billing_subscriptions" | "billing_customers"): {
+    select(columns: string): SupabaseQueryBuilder;
+  };
+};
+
 type StripeInvoiceTaxEntry = {
   amount?: number | null;
   tax_rate?: string | {
@@ -126,8 +144,7 @@ async function readDurableBillingState(
   supabase: unknown,
   userId: string,
 ): Promise<DurableBillingState> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const client = supabase as { from: any };
+  const client = supabase as SupabaseReadClient;
   const [subscriptionResult, customerResult] = await Promise.all([
     client.from("billing_subscriptions")
       .select("stripe_subscription_id, stripe_product_id, stripe_price_id, plan_key, status, billing_cycle, current_period_end, cancel_at_period_end")
@@ -221,7 +238,7 @@ function nestedChargeFromPaymentIntent(
 }
 
 function extractInvoiceReceipt(inv: StripeInvoiceWithTaxDetails) {
-  const rawInvoice = inv as Record<string, unknown>;
+  const rawInvoice = inv as unknown as Record<string, unknown>;
   const directCharge = isRecord(rawInvoice.charge)
     ? rawInvoice.charge as StripeChargeLike
     : null;
@@ -357,15 +374,19 @@ function normalizeInvoiceTaxes(inv: StripeInvoiceWithTaxDetails) {
 }
 
 function normalizeInvoiceTaxIds(inv: StripeInvoiceWithTaxDetails) {
-  return (inv.customer_tax_ids ?? []).map((taxId) =>
-    typeof taxId === "string"
-      ? { id: taxId, type: null, value: null }
-      : {
-        id: taxId.id ?? null,
-        type: taxId.type ?? null,
-        value: taxId.value ?? null,
-      }
-  );
+  return (inv.customer_tax_ids ?? []).map((taxId: unknown) => {
+    if (typeof taxId === "string") {
+      return { id: taxId, type: null, value: null };
+    }
+    if (!isRecord(taxId)) {
+      return { id: null, type: null, value: null };
+    }
+    return {
+      id: typeof taxId.id === "string" ? taxId.id : null,
+      type: typeof taxId.type === "string" ? taxId.type : null,
+      value: typeof taxId.value === "string" ? taxId.value : null,
+    };
+  });
 }
 
 async function listOwnedCustomers(stripe: Stripe, userId: string) {
