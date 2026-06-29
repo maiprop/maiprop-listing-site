@@ -106,6 +106,7 @@ export type Database = {
       agent_data_inputs: {
         Row: {
           agent_side: string
+          applied_to_invoice_at: string | null
           buyer_name: string | null
           city: string | null
           closing_date: string
@@ -126,12 +127,16 @@ export type Database = {
           sale_price: number
           seller_name: string | null
           status: string
+          stripe_credit_amount_cents: number | null
+          stripe_credit_currency: string | null
+          stripe_credit_id: string | null
           transaction_type: string
           updated_at: string
           user_id: string
         }
         Insert: {
           agent_side: string
+          applied_to_invoice_at?: string | null
           buyer_name?: string | null
           city?: string | null
           closing_date: string
@@ -152,12 +157,16 @@ export type Database = {
           sale_price: number
           seller_name?: string | null
           status?: string
+          stripe_credit_amount_cents?: number | null
+          stripe_credit_currency?: string | null
+          stripe_credit_id?: string | null
           transaction_type: string
           updated_at?: string
           user_id: string
         }
         Update: {
           agent_side?: string
+          applied_to_invoice_at?: string | null
           buyer_name?: string | null
           city?: string | null
           closing_date?: string
@@ -178,6 +187,9 @@ export type Database = {
           sale_price?: number
           seller_name?: string | null
           status?: string
+          stripe_credit_amount_cents?: number | null
+          stripe_credit_currency?: string | null
+          stripe_credit_id?: string | null
           transaction_type?: string
           updated_at?: string
           user_id?: string
@@ -4112,6 +4124,7 @@ export type Database = {
             Args: { p_action: string; p_id: string; p_reason?: string }
             Returns: {
               agent_side: string
+              applied_to_invoice_at: string | null
               buyer_name: string | null
               city: string | null
               closing_date: string
@@ -4132,6 +4145,9 @@ export type Database = {
               sale_price: number
               seller_name: string | null
               status: string
+              stripe_credit_amount_cents: number | null
+              stripe_credit_currency: string | null
+              stripe_credit_id: string | null
               transaction_type: string
               updated_at: string
               user_id: string
@@ -4153,6 +4169,7 @@ export type Database = {
             }
             Returns: {
               agent_side: string
+              applied_to_invoice_at: string | null
               buyer_name: string | null
               city: string | null
               closing_date: string
@@ -4173,6 +4190,9 @@ export type Database = {
               sale_price: number
               seller_name: string | null
               status: string
+              stripe_credit_amount_cents: number | null
+              stripe_credit_currency: string | null
+              stripe_credit_id: string | null
               transaction_type: string
               updated_at: string
               user_id: string
