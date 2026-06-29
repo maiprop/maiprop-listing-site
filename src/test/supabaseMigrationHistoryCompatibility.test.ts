@@ -14,8 +14,8 @@ describe("Supabase production migration history compatibility", () => {
       "20260614091438_add_open_house_transaction_type.sql",
       "20260614145537_revoke_future_public_default_grants.sql",
       "20260614145554_dedupe_project_select_policies.sql",
-      "20260628193711_reconcile_remote_migration_history.sql",
-      "20260628203708_reconcile_remote_migration_history.sql",
+      "20260629231100_reconcile_remote_migration_history.sql",
+      "20260629231101_reconcile_remote_migration_history.sql",
     ];
 
     const staleLocalAliases = [
@@ -36,8 +36,8 @@ describe("Supabase production migration history compatibility", () => {
 
   it("keeps remote-only reconciliation migrations schema-free", () => {
     const reconciliationMigrations = [
-      "20260628193711_reconcile_remote_migration_history.sql",
-      "20260628203708_reconcile_remote_migration_history.sql",
+      "20260629231100_reconcile_remote_migration_history.sql",
+      "20260629231101_reconcile_remote_migration_history.sql",
     ];
 
     for (const migration of reconciliationMigrations) {
