@@ -359,7 +359,7 @@ jobs:
           PRODUCTION_DEPLOY_EXPECTED_SHA: ${{ github.sha }}
           PRODUCTION_DEPLOY_CHECK_ATTEMPTS: 30
           PRODUCTION_DEPLOY_CHECK_DELAY_MS: 10000
-        run: npm run check:production-deploy -- https://portal.maiprop.co --browser --public-api --public-api-allow-fail-open
+        run: npm run check:production-deploy -- https://portal.maiprop.co --browser --public-api
 
       - name: Rollback on health check failure
         if: failure() && steps.health_check.outcome == 'failure' && steps.prev_deploy.outputs.id != ''
@@ -383,5 +383,5 @@ jobs:
           fi
           ROLLED_BACK_ID=$(jq -r '.result.id // empty' /tmp/cf_rollback.json)
           echo "Rollback API accepted deployment: ${ROLLED_BACK_ID:-$ROLLBACK_ID}"
-          npm run check:production-deploy -- https://portal.maiprop.co --browser --public-api --public-api-allow-fail-open
+          npm run check:production-deploy -- https://portal.maiprop.co --browser --public-api
 

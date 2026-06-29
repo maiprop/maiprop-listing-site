@@ -108,10 +108,23 @@ function GlobalAIWidget() {
   const loc = useLocation();
   const hidden = HIDE_WIDGET_PREFIXES.some(p => loc.pathname.startsWith(p));
   const [shouldMount, setShouldMount] = useState(false);
+  const [isOnline, setIsOnline] = useState(() => (
+    typeof navigator === "undefined" ? true : navigator.onLine
+  ));
+
+  useEffect(() => {
+    const updateOnlineState = () => setIsOnline(navigator.onLine);
+    window.addEventListener("online", updateOnlineState);
+    window.addEventListener("offline", updateOnlineState);
+    return () => {
+      window.removeEventListener("online", updateOnlineState);
+      window.removeEventListener("offline", updateOnlineState);
+    };
+  }, []);
 
   useEffect(() => {
     setShouldMount(false);
-    if (hidden) return;
+    if (hidden || !isOnline) return;
 
     const idleWindow = window as typeof window & {
       requestIdleCallback?: IdleScheduler;
@@ -137,9 +150,9 @@ function GlobalAIWidget() {
         window.clearTimeout(idleId);
       }
     };
-  }, [hidden, loc.pathname]);
+  }, [hidden, isOnline, loc.pathname]);
 
-  if (hidden || !shouldMount) return null;
+  if (hidden || !isOnline || !shouldMount) return null;
   return <AIAssistantWidget variant="floating" />;
 }
 

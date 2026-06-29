@@ -19,6 +19,7 @@ interface RecoveryOptions {
   now?: () => number;
   reload?: ReloadAction;
   storage?: ReloadStorage;
+  isOnline?: () => boolean;
 }
 
 type VitePreloadErrorEvent = Event & { payload?: unknown };
@@ -153,6 +154,11 @@ const invokeReload = (reload: ReloadAction): boolean => {
   }
 };
 
+const browserIsOnline = (win: Window | undefined): boolean => {
+  if (!win?.navigator) return true;
+  return win.navigator.onLine;
+};
+
 const isSameChunkCooldownActive = (state: ChunkRecoveryState, nowMs: number, chunkKey: string): boolean =>
   state.lastChunkKey === chunkKey && nowMs - state.lastReloadAt < SAME_CHUNK_COOLDOWN_MS;
 
@@ -187,6 +193,8 @@ export const recoverFromChunkLoadError = (error: unknown, options: RecoveryOptio
   if (!isChunkLoadError(error)) return false;
 
   const win = currentWindow();
+  if (!(options.isOnline?.() ?? browserIsOnline(win))) return false;
+
   const nowMs = options.now?.() ?? Date.now();
   const chunkKey = chunkKeyFrom(error);
   const storage = options.storage ?? storageForWindow(win);

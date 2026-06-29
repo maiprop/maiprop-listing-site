@@ -22,6 +22,8 @@ const AUCTION_ID = "0308050d-8d62-4fc8-b421-7c74116343b3";
 const NEW_BUILD_ID = "1308050d-8d62-4fc8-b421-7c74116343b3";
 const COMPARE_CLEAN_ID = "2308050d-8d62-4fc8-b421-7c74116343b3";
 const COMPARE_SPARSE_ID = "3308050d-8d62-4fc8-b421-7c74116343b3";
+const LOCAL_E2E_SUPABASE_URL = "https://abcdefghijklmnopqrst.supabase.co";
+const CI_E2E_SUPABASE_PROJECT_ID = "abcdefghijklmnop";
 
 const fixtureImage =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 640 360'%3E%3Crect width='640' height='360' fill='%23f3eee8'/%3E%3Crect x='120' y='120' width='400' height='180' fill='%238160d8'/%3E%3C/svg%3E";
@@ -118,7 +120,7 @@ const fakeJwt = () => {
   return `${header}.${payload}.e2e`;
 };
 
-const authStorageKey = () => {
+const authStorageKeys = () => {
   const readDotEnvUrl = () => {
     for (const file of [".env.local", ".env"]) {
       if (!fs.existsSync(file)) continue;
@@ -127,16 +129,26 @@ const authStorageKey = () => {
     }
     return null;
   };
-  const configuredUrl =
-    process.env.VITE_SUPABASE_URL ??
-    process.env.VITE_SUPABASE_PROJECT_URL ??
-    readDotEnvUrl() ??
-    "http://localhost:54321";
-  try {
-    return `sb-${new URL(configuredUrl).hostname.split(".")[0]}-auth-token`;
-  } catch (_error) {
-    return "sb-localhost-auth-token";
+  const configuredUrls = [
+    process.env.VITE_SUPABASE_URL,
+    process.env.VITE_SUPABASE_PROJECT_URL,
+    readDotEnvUrl(),
+    LOCAL_E2E_SUPABASE_URL,
+  ].filter((value): value is string => Boolean(value));
+  const projectIds = [
+    process.env.VITE_SUPABASE_PROJECT_ID,
+    CI_E2E_SUPABASE_PROJECT_ID,
+  ].filter((value): value is string => Boolean(value));
+  const keys = new Set(projectIds.map((projectId) => `sb-${projectId}-auth-token`));
+  for (const configuredUrl of configuredUrls) {
+    try {
+      keys.add(`sb-${new URL(configuredUrl).hostname.split(".")[0]}-auth-token`);
+    } catch (_error) {
+      keys.add("sb-localhost-auth-token");
+    }
   }
+  if (keys.size === 0) keys.add("sb-localhost-auth-token");
+  return [...keys];
 };
 
 const makeProfile = (role: "buyer" | "seller") => ({
@@ -188,9 +200,21 @@ const mockAuth = async (page: Page, role: "buyer" | "seller") => {
   };
   const profile = makeProfile(role);
 
-  await page.addInitScript(({ key, value }) => {
+  await page.addInitScript(({ keys, value }) => {
     localStorage.clear();
-    localStorage.setItem(key, JSON.stringify(value));
+    const sessionJson = JSON.stringify(value);
+    for (const key of keys) localStorage.setItem(key, sessionJson);
+    const originalGetItem = Storage.prototype.getItem;
+    Storage.prototype.getItem = function getItemWithE2ESupabaseSession(key) {
+      if (
+        typeof key === "string" &&
+        key.startsWith("sb-") &&
+        key.endsWith("-auth-token")
+      ) {
+        return originalGetItem.call(this, key) ?? sessionJson;
+      }
+      return originalGetItem.call(this, key);
+    };
     localStorage.setItem("maiprop_lang", "en");
     localStorage.setItem("maiprop_cookie_consent", JSON.stringify({
       accepted: true,
@@ -199,7 +223,7 @@ const mockAuth = async (page: Page, role: "buyer" | "seller") => {
       mapping: false,
       timestamp: Date.now(),
     }));
-  }, { key: authStorageKey(), value: session });
+  }, { keys: authStorageKeys(), value: session });
 
   await page.route("**/auth/v1/**", async (route) => {
     const url = new URL(route.request().url());

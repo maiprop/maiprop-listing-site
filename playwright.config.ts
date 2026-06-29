@@ -16,6 +16,22 @@ const configuredBaseURL = process.env.PLAYWRIGHT_BASE_URL;
 const baseURL = configuredBaseURL ?? (isPerformanceGate ? "http://localhost:4173" : defaultBaseURL);
 const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR ??
   (isPerformanceGate ? join(tmpdir(), "maiprop-playwright-perf-results") : "test-results");
+const webServerSupabaseUrl =
+  process.env.VITE_SUPABASE_URL ??
+  process.env.VITE_SUPABASE_PROJECT_URL ??
+  "https://abcdefghijklmnopqrst.supabase.co";
+const webServerSupabasePublishableKey =
+  process.env.VITE_SUPABASE_PUBLISHABLE_KEY ??
+  process.env.VITE_SUPABASE_ANON_KEY ??
+  "sb_publishable_e2e_placeholder_not_real_000000000000";
+const webServerEnv = {
+  ...Object.fromEntries(
+    Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+  ),
+  VITE_SUPABASE_URL: webServerSupabaseUrl,
+  VITE_SUPABASE_PUBLISHABLE_KEY: webServerSupabasePublishableKey,
+  VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY ?? webServerSupabasePublishableKey,
+};
 const shouldStartLocalServer =
   !configuredBaseURL &&
   (baseURL.startsWith("http://localhost") ||
@@ -78,12 +94,14 @@ export default defineConfig({
     ? process.env.CI || isPerformanceGate
       ? {
           command: "npm run preview",
+          env: webServerEnv,
           url: "http://localhost:4173",
           reuseExistingServer: !process.env.CI,
           timeout: 30_000,
         }
       : {
           command: "npm run dev -- --host 127.0.0.1 --port 8080",
+          env: webServerEnv,
           url: "http://localhost:8080",
           reuseExistingServer: true,
           timeout: 30_000,

@@ -95,6 +95,15 @@ function setLocation(pathname: string) {
   window.history.replaceState(null, "", pathname);
 }
 
+function setNavigatorOnline(value: boolean) {
+  Object.defineProperty(window.navigator, "onLine", {
+    configurable: true,
+    value,
+  });
+}
+
+const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
 import App from "@/App";
 
 describe("App.tsx render smoke", () => {
@@ -118,6 +127,26 @@ describe("App.tsx render smoke", () => {
     await waitFor(() => expect(screen.getByText("page-login")).toBeInTheDocument());
     // Inside HIDE_WIDGET_PREFIXES — GlobalAIWidget returns null.
     expect(screen.queryByText("ai-widget")).toBeNull();
+  });
+
+  it("does not lazy-load the floating AI widget while the browser is offline", async () => {
+    setNavigatorOnline(false);
+    setLocation("/");
+
+    try {
+      render(<App />);
+      await waitFor(() => expect(screen.getByText("page-index")).toBeInTheDocument());
+      await wait(1400);
+      expect(screen.queryByText("ai-widget")).toBeNull();
+
+      setNavigatorOnline(true);
+      window.dispatchEvent(new Event("online"));
+      await waitFor(() => expect(screen.getByText("ai-widget")).toBeInTheDocument(), {
+        timeout: 3000,
+      });
+    } finally {
+      setNavigatorOnline(true);
+    }
   });
 
   it("hides the AI widget on a deep prefix match (e.g. /property/123)", async () => {

@@ -34,6 +34,9 @@ Find these in Supabase -> Project Settings -> API. If the Supabase project has
 an activated custom domain for Auth/API traffic, `VITE_SUPABASE_URL` can be that
 origin instead, for example `https://auth.maiprop.co`.
 
+`VITE_SUPABASE_ANON_KEY` is accepted only as a legacy alias for the same anon key.
+Use `VITE_SUPABASE_PUBLISHABLE_KEY` for new local, staging, and production configuration.
+
 ### 3. Optional for specific features
 
 | Feature | Variable | Where to get it |
@@ -87,6 +90,7 @@ See [`STAGING_SETUP.md`](./STAGING_SETUP.md) for the full walkthrough. Variables
 |---|---|---|
 | `VITE_SUPABASE_URL` | ✅ | Production Supabase project URL, or activated Supabase custom domain for branded OAuth |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | ✅ | Anon key, public |
+| `VITE_SUPABASE_ANON_KEY` | optional legacy alias | Same value as `VITE_SUPABASE_PUBLISHABLE_KEY`; prefer the publishable-key name for new configuration |
 | `VITE_SUPABASE_PROJECT_ID` | ✅ | Used by sitemap redirect |
 | `VITE_SENTRY_DSN` | strongly recommended | See audit item #4 |
 | `VITE_PLAUSIBLE_DOMAIN` | optional | GDPR analytics |
