@@ -193,14 +193,14 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.11.3",
+    "@axe-core/playwright": "^4.12.1",
     "@capacitor/cli": "7.6.5",
     "@cloudflare/workers-types": "^4.20260608.1",
     "@commitlint/cli": "^20.5.3",
     "@commitlint/config-conventional": "^20.5.3",
     "@eslint/js": "^9.32.0",
     "@lhci/cli": "^0.15.1",
-    "@playwright/test": "^1.61.0",
+    "@playwright/test": "^1.61.1",
     "@remotion/google-fonts": "^4.0.471",
     "@remotion/transitions": "^4.0.474",
     "@tailwindcss/typography": "^0.5.16",
