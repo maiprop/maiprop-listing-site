@@ -182,6 +182,44 @@ describe("production deploy public API fixture guard", () => {
     }
   });
 
+  it("rejects Supabase upstream outages unless fail-open dependency mode is explicit", async () => {
+    const { validatePublicApiEndpoints } = await import("./check-production-deploy-public-api.mjs");
+    const previous = process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN;
+    delete process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN;
+
+    try {
+      await expect(validatePublicApiEndpoints("https://portal.maiprop.co", {
+        fetchText: async () => ({
+          res: Response.json({ error: "Supabase upstream unavailable" }, { status: 503 }),
+          text: JSON.stringify({ error: "Supabase upstream unavailable" }),
+        }),
+      })).rejects.toThrow(
+        'https://portal.maiprop.co/api/public/listings?limit=1 returned HTTP 503: {"error":"Supabase upstream unavailable"}',
+      );
+    } finally {
+      if (previous === undefined) delete process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN;
+      else process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN = previous;
+    }
+  });
+
+  it("can tolerate explicit Supabase upstream outages when production deploy fallbacks are enabled", async () => {
+    const { validatePublicApiEndpoints } = await import("./check-production-deploy-public-api.mjs");
+    const previous = process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN;
+    process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN = "true";
+
+    try {
+      await expect(validatePublicApiEndpoints("https://portal.maiprop.co", {
+        fetchText: async () => ({
+          res: Response.json({ error: "Supabase upstream unavailable" }, { status: 503 }),
+          text: JSON.stringify({ error: "Supabase upstream unavailable" }),
+        }),
+      })).resolves.toBeUndefined();
+    } finally {
+      if (previous === undefined) delete process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN;
+      else process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN = previous;
+    }
+  });
+
   it("builds Cloudflare Access service-token headers for protected previews", () => {
     expect(getCloudflareAccessHeaders({
       CLOUDFLARE_ACCESS_CLIENT_ID: "client-id",

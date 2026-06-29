@@ -1,0 +1,6 @@
+-- Production migration ledger reconciliation.
+--
+-- The production database already records version 20260628203708 in
+-- supabase_migrations.schema_migrations, but the corresponding SQL was not
+-- present in main when the production DB deploy gate ran. Keep this file as a
+-- no-op so Supabase CLI history comparison can proceed without changing schema.

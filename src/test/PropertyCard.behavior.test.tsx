@@ -392,6 +392,17 @@ describe("PropertyCard behavior", () => {
     expect(image).toHaveAttribute("decoding", "async");
   });
 
+  it("does not emit React DOM warnings for priority image attributes", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { PropertyCard } = await import("@/components/PropertyCard");
+
+    renderWithProviders(<PropertyCard property={baseProperty({ images: ["https://img.example/hero.jpg"] })} imagePriority />);
+
+    expect(
+      consoleError.mock.calls.some((args) => args.join(" ").includes("fetchPriority")),
+    ).toBe(false);
+  });
+
   it("renders remaining badges, non-urgent timers, price deltas, universal specs, and report errors", async () => {
     authMock.mockReturnValue({ user: { id: "u-error" }, profile: null, loading: false });
     insertMock.mockResolvedValueOnce({ error: new Error("duplicate") });

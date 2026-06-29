@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { lazy, Suspense, useState, useEffect } from "react";
 import { useModal } from "@/hooks/useModal";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -15,9 +15,6 @@ import { Footer } from "@/components/Footer";
 import OpenHouseRegistrationDialog from "@/components/OpenHouseRegistrationDialog";
 import OpenHouseAssetControlPanel from "@/components/OpenHouseAssetControlPanel";
 import OpenHouseOfferDialog from "@/components/OpenHouseOfferDialog";
-import PropertyMiniMap from "@/components/PropertyMiniMap";
-import PropertyValuation from "@/components/PropertyValuation";
-import NeighbourhoodReport from "@/components/NeighbourhoodReport";
 import { PropertyReportCard } from "@/components/property/PropertyReportCard";
 import { useListing, useTrackListingView, useUpdateListing, useDeleteListing, type ListingWithJoins } from "@/hooks/useListings";
 import { useAuth } from "@/contexts/AuthContext";
@@ -38,6 +35,10 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
 import { PropertyHeroSpecsBar } from "@/components/property/PropertyHeroSpecsBar";
 import { buildListingHeroSpecs } from "@/components/property/propertyHeroSpecs";
+
+const PropertyMiniMap = lazy(() => import("@/components/PropertyMiniMap"));
+const NeighbourhoodReport = lazy(() => import("@/components/NeighbourhoodReport"));
+const PropertyValuation = lazy(() => import("@/components/PropertyValuation"));
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -159,9 +160,9 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <main id="main-content" className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
+      </main>
     );
   }
 
@@ -169,7 +170,7 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <Navbar />
-        <div className="flex-1 flex items-center justify-center px-4 pt-20 pb-12">
+        <main id="main-content" className="flex-1 flex items-center justify-center px-4 pt-20 pb-12">
           <div className="text-center max-w-md">
             <h2 className="font-display font-bold text-xl mb-3">{isGreek ? "Η αγγελία δεν βρέθηκε" : "Listing not found"}</h2>
             <p className="text-muted-foreground text-sm mb-6">
@@ -182,7 +183,7 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
               </Link>
             </Button>
           </div>
-        </div>
+        </main>
       </div>
     );
   }
@@ -213,7 +214,7 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <div className="pt-16">
+      <main id="main-content" className="pt-16">
         {/* Breadcrumb — same as PropertyDetail */}
         <div className="container py-2 sm:py-3">
           <div className="flex items-center gap-1 sm:gap-1.5 text-xs text-muted-foreground overflow-x-auto scrollbar-none">
@@ -411,26 +412,30 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
 
               {/* Mini map */}
               <div className="rounded-2xl overflow-hidden">
-                <PropertyMiniMap
-                  address={db.address ?? city}
-                  city={city}
-                  title={db.title}
-                  latitude={db.latitude}
-                  longitude={db.longitude}
-                  onWalkScoreChange={setWalkScore}
-                />
+                <Suspense fallback={<div className="h-96 rounded-2xl bg-muted animate-pulse" />}>
+                  <PropertyMiniMap
+                    address={db.address ?? city}
+                    city={city}
+                    title={db.title}
+                    latitude={db.latitude}
+                    longitude={db.longitude}
+                    onWalkScoreChange={setWalkScore}
+                  />
+                </Suspense>
               </div>
 
               {/* Neighbourhood Report */}
               {db.address && (
-                <NeighbourhoodReport
-                  city={city}
-                  address={db.address}
-                  region={db.region}
-                  lat={db.latitude != null ? Number(db.latitude) : undefined}
-                  lng={db.longitude != null ? Number(db.longitude) : undefined}
-                  listingId={id ?? undefined}
-                />
+                <Suspense fallback={<div className="h-64 rounded-2xl bg-muted animate-pulse" />}>
+                  <NeighbourhoodReport
+                    city={city}
+                    address={db.address}
+                    region={db.region}
+                    lat={db.latitude != null ? Number(db.latitude) : undefined}
+                    lng={db.longitude != null ? Number(db.longitude) : undefined}
+                    listingId={id ?? undefined}
+                  />
+                </Suspense>
               )}
 
               {/* Professionals */}
@@ -619,50 +624,52 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
 
               {/* AI Valuation + Property Report, matching the main listing detail sidebar */}
               {id && isPro ? (
-                <PropertyValuation
-                  listingId={id}
-                  title={db.title}
-                  city={city}
-                  address={db.address ?? undefined}
-                  price={price}
-                  sqm={sqm}
-                  bedrooms={db.bedrooms}
-                  bathrooms={db.bathrooms}
-                  propertyType={db.property_type}
-                  listingType={isRentalOpenHouse ? "rent" : db.listing_type}
-                  floor={db.floor}
-                  totalFloors={db.total_floors}
-                  yearBuilt={db.year_built}
-                  heatingSystem={db.heating_system}
-                  energyClass={db.energy_class}
-                  pricePerSqm={pricePerSqm}
-                  hasParking={db.has_parking}
-                  hasPool={db.has_pool}
-                  hasElevator={db.has_elevator}
-                  hasGarden={db.has_garden}
-                  hasStorage={db.has_storage}
-                  hasBalcony={db.has_balcony}
-                  hasView={db.has_view}
-                  hasFurnished={db.has_furnished}
-                  region={db.region}
-                  description={db.description}
-                  tags={db.tags}
-                  plotSurface={db.plot_surface}
-                  condition={db.construction_status ?? undefined}
-                  isNeoclassical={db.is_neoclassical}
-                  isPreserved={db.is_preserved}
-                  distanceFromSea={db.distance_from_sea}
-                  withinCityPlan={db.within_city_plan}
-                  withinSettlement={db.within_settlement}
-                  buildingAllowance={db.building_allowance}
-                  coverageRatio={db.coverage_ratio}
-                  isBuildable={db.is_buildable}
-                  cadastreNumber={db.cadastre_number}
-                  hasLandConcession={db.has_land_concession}
-                  landUse={db.land_use}
-                  latitude={db.latitude != null ? Number(db.latitude) : undefined}
-                  longitude={db.longitude != null ? Number(db.longitude) : undefined}
-                />
+                <Suspense fallback={<div className="h-64 rounded-2xl bg-muted animate-pulse" />}>
+                  <PropertyValuation
+                    listingId={id}
+                    title={db.title}
+                    city={city}
+                    address={db.address ?? undefined}
+                    price={price}
+                    sqm={sqm}
+                    bedrooms={db.bedrooms}
+                    bathrooms={db.bathrooms}
+                    propertyType={db.property_type}
+                    listingType={isRentalOpenHouse ? "rent" : db.listing_type}
+                    floor={db.floor}
+                    totalFloors={db.total_floors}
+                    yearBuilt={db.year_built}
+                    heatingSystem={db.heating_system}
+                    energyClass={db.energy_class}
+                    pricePerSqm={pricePerSqm}
+                    hasParking={db.has_parking}
+                    hasPool={db.has_pool}
+                    hasElevator={db.has_elevator}
+                    hasGarden={db.has_garden}
+                    hasStorage={db.has_storage}
+                    hasBalcony={db.has_balcony}
+                    hasView={db.has_view}
+                    hasFurnished={db.has_furnished}
+                    region={db.region}
+                    description={db.description}
+                    tags={db.tags}
+                    plotSurface={db.plot_surface}
+                    condition={db.construction_status ?? undefined}
+                    isNeoclassical={db.is_neoclassical}
+                    isPreserved={db.is_preserved}
+                    distanceFromSea={db.distance_from_sea}
+                    withinCityPlan={db.within_city_plan}
+                    withinSettlement={db.within_settlement}
+                    buildingAllowance={db.building_allowance}
+                    coverageRatio={db.coverage_ratio}
+                    isBuildable={db.is_buildable}
+                    cadastreNumber={db.cadastre_number}
+                    hasLandConcession={db.has_land_concession}
+                    landUse={db.land_use}
+                    latitude={db.latitude != null ? Number(db.latitude) : undefined}
+                    longitude={db.longitude != null ? Number(db.longitude) : undefined}
+                  />
+                </Suspense>
               ) : (
                 <PropertyValuationLockedCard />
               )}
@@ -671,7 +678,7 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
             </div>
           </div>
         </div>
-      </div>
+      </main>
 
       <OpenHouseRegistrationDialog
         open={modal.isOpen("reg")}

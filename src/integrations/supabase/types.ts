@@ -106,6 +106,7 @@ export type Database = {
       agent_data_inputs: {
         Row: {
           agent_side: string
+          applied_to_invoice_at: string | null
           buyer_name: string | null
           city: string | null
           closing_date: string
@@ -126,12 +127,16 @@ export type Database = {
           sale_price: number
           seller_name: string | null
           status: string
+          stripe_credit_amount_cents: number | null
+          stripe_credit_currency: string | null
+          stripe_credit_id: string | null
           transaction_type: string
           updated_at: string
           user_id: string
         }
         Insert: {
           agent_side: string
+          applied_to_invoice_at?: string | null
           buyer_name?: string | null
           city?: string | null
           closing_date: string
@@ -152,12 +157,16 @@ export type Database = {
           sale_price: number
           seller_name?: string | null
           status?: string
+          stripe_credit_amount_cents?: number | null
+          stripe_credit_currency?: string | null
+          stripe_credit_id?: string | null
           transaction_type: string
           updated_at?: string
           user_id: string
         }
         Update: {
           agent_side?: string
+          applied_to_invoice_at?: string | null
           buyer_name?: string | null
           city?: string | null
           closing_date?: string
@@ -178,6 +187,9 @@ export type Database = {
           sale_price?: number
           seller_name?: string | null
           status?: string
+          stripe_credit_amount_cents?: number | null
+          stripe_credit_currency?: string | null
+          stripe_credit_id?: string | null
           transaction_type?: string
           updated_at?: string
           user_id?: string
@@ -291,6 +303,127 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      billing_customers: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          livemode: boolean
+          metadata: Json
+          runtime_mode: string
+          stripe_customer_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          livemode?: boolean
+          metadata?: Json
+          runtime_mode?: string
+          stripe_customer_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          livemode?: boolean
+          metadata?: Json
+          runtime_mode?: string
+          stripe_customer_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_customers_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      billing_subscriptions: {
+        Row: {
+          audience: string | null
+          billing_cycle: string | null
+          cancel_at_period_end: boolean
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string | null
+          id: string
+          livemode: boolean
+          metadata: Json
+          plan_key: string | null
+          runtime_mode: string
+          status: string
+          stripe_customer_id: string
+          stripe_price_id: string | null
+          stripe_product_id: string | null
+          stripe_subscription_id: string
+          trial_end: string | null
+          trial_start: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          audience?: string | null
+          billing_cycle?: string | null
+          cancel_at_period_end?: boolean
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          livemode?: boolean
+          metadata?: Json
+          plan_key?: string | null
+          runtime_mode?: string
+          status: string
+          stripe_customer_id: string
+          stripe_price_id?: string | null
+          stripe_product_id?: string | null
+          stripe_subscription_id: string
+          trial_end?: string | null
+          trial_start?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          audience?: string | null
+          billing_cycle?: string | null
+          cancel_at_period_end?: boolean
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          livemode?: boolean
+          metadata?: Json
+          plan_key?: string | null
+          runtime_mode?: string
+          status?: string
+          stripe_customer_id?: string
+          stripe_price_id?: string | null
+          stripe_product_id?: string | null
+          stripe_subscription_id?: string
+          trial_end?: string | null
+          trial_start?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       consultation_requests: {
         Row: {
@@ -3488,6 +3621,48 @@ export type Database = {
         }
         Relationships: []
       }
+      stripe_webhook_events: {
+        Row: {
+          api_version: string | null
+          created_at: string
+          error: string | null
+          event_id: string
+          event_type: string
+          livemode: boolean
+          metadata: Json
+          processed_at: string | null
+          runtime_mode: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          api_version?: string | null
+          created_at?: string
+          error?: string | null
+          event_id: string
+          event_type: string
+          livemode?: boolean
+          metadata?: Json
+          processed_at?: string | null
+          runtime_mode?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          api_version?: string | null
+          created_at?: string
+          error?: string | null
+          event_id?: string
+          event_type?: string
+          livemode?: boolean
+          metadata?: Json
+          processed_at?: string | null
+          runtime_mode?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       subscription_trial_claims: {
         Row: {
           claimed_at: string
@@ -3876,6 +4051,11 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      addon_credit_bucket: { Args: { p_addon_key: string }; Returns: string }
+      addon_credit_units: {
+        Args: { p_addon_key: string; p_quantity?: number }
+        Returns: number
+      }
       admin_ban_reported_content_owner: {
         Args: { p_reason?: string; p_report_id: string }
         Returns: string
@@ -3944,6 +4124,7 @@ export type Database = {
             Args: { p_action: string; p_id: string; p_reason?: string }
             Returns: {
               agent_side: string
+              applied_to_invoice_at: string | null
               buyer_name: string | null
               city: string | null
               closing_date: string
@@ -3964,6 +4145,9 @@ export type Database = {
               sale_price: number
               seller_name: string | null
               status: string
+              stripe_credit_amount_cents: number | null
+              stripe_credit_currency: string | null
+              stripe_credit_id: string | null
               transaction_type: string
               updated_at: string
               user_id: string
@@ -3985,6 +4169,7 @@ export type Database = {
             }
             Returns: {
               agent_side: string
+              applied_to_invoice_at: string | null
               buyer_name: string | null
               city: string | null
               closing_date: string
@@ -4005,6 +4190,9 @@ export type Database = {
               sale_price: number
               seller_name: string | null
               status: string
+              stripe_credit_amount_cents: number | null
+              stripe_credit_currency: string | null
+              stripe_credit_id: string | null
               transaction_type: string
               updated_at: string
               user_id: string
@@ -4268,6 +4456,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      consume_addon_credit_for_user: {
+        Args: { p_bucket: string; p_user_id: string }
+        Returns: boolean
+      }
       create_open_house_registration: {
         Args: {
           p_contact_email?: string
@@ -4415,6 +4607,10 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: number
       }
+      get_ai_call_monthly_base_limit: {
+        Args: { p_bucket: string; p_user_id: string }
+        Returns: number
+      }
       get_ai_call_monthly_limit: {
         Args: { p_bucket: string; p_user_id: string }
         Returns: number
@@ -4422,6 +4618,10 @@ export type Database = {
       get_auction_alert_limit: { Args: { p_user_id: string }; Returns: number }
       get_auction_listing_visible_limit: {
         Args: { p_user_id: string }
+        Returns: number
+      }
+      get_available_addon_credits: {
+        Args: { p_bucket: string; p_user_id: string }
         Returns: number
       }
       get_contact_monthly_limit: {
@@ -4504,6 +4704,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      get_report_monthly_base_limit: {
+        Args: { p_user_id: string }
+        Returns: number
       }
       get_report_monthly_limit: { Args: { p_user_id: string }; Returns: number }
       get_saved_search_limit: { Args: { p_user_id: string }; Returns: number }
@@ -4779,6 +4983,10 @@ export type Database = {
       uuid_from_realtime_topic: {
         Args: { p_prefix: string; p_topic: string }
         Returns: string
+      }
+      validate_role_switch_for_user: {
+        Args: { _user_id: string }
+        Returns: undefined
       }
     }
     Enums: {

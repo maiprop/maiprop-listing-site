@@ -497,6 +497,7 @@ describe("OpenHouseDetail page behavior", () => {
     expect(await screen.findByRole("heading", { name: /listing not found/i })).toBeInTheDocument();
     expect(screen.getByText(/does not exist or has been removed/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /back to open houses/i })).toHaveAttribute("href", "/open-houses");
+    expect(document.querySelector("#main-content")).toBeTruthy();
     expect(mocks.trackView.mutate).not.toHaveBeenCalled();
     expect(screen.queryByText(/athens loft open house/i)).not.toBeInTheDocument();
   });

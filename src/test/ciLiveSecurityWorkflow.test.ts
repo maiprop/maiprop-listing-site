@@ -22,7 +22,7 @@ describe("CI live-safe security workflow", () => {
     );
   });
 
-  it("validates the selected service-role key before live-safe Playwright tests run", () => {
+  it("validates the selected service-role key before destructive live security tests run", () => {
     const validationStepIndex = ciWorkflow.indexOf(
       "Validate selected Supabase service role key",
     );
@@ -32,6 +32,12 @@ describe("CI live-safe security workflow", () => {
 
     expect(validationStepIndex).toBeGreaterThan(0);
     expect(playwrightStepIndex).toBeGreaterThan(validationStepIndex);
+    expect(ciWorkflow).toContain(
+      "steps.pr_supabase_changes.outputs.has_supabase_changes != 'true' && env.E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS == 'true'",
+    );
+    expect(ciWorkflow).toContain(
+      "Skipping Auth Admin service-role validation because destructive live security tests are disabled",
+    );
     expect(ciWorkflow).toContain("/auth/v1/admin/users?page=1&per_page=1");
     expect(ciWorkflow).toContain(
       "Selected SUPABASE_SERVICE_ROLE_KEY is not accepted by",
@@ -50,6 +56,21 @@ describe("CI live-safe security workflow", () => {
     );
     expect(ciWorkflow).toContain(
       "Skipping onboarding role-selection tests because live-safe security is using production fallback runtime",
+    );
+  });
+
+  it("does not hard-fail production-fallback security tests when the live data plane is unavailable", () => {
+    expect(ciWorkflow).toContain(
+      "Probe production Supabase data plane before fallback security tests",
+    );
+    expect(ciWorkflow).toContain(
+      "steps.supabase_data_plane_probe.outputs.ready == 'true'",
+    );
+    expect(ciWorkflow).toContain(
+      "Skipped production-fallback live-safe security tests because the production Supabase REST data plane did not respond",
+    );
+    expect(ciWorkflow).toContain(
+      "Configure isolated staging to make these tests a hard PR gate independent of production availability",
     );
   });
 });

@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.11.8](https://github.com/maiprop/maiprop-listing-site/compare/v1.11.7...v1.11.8) (2026-06-29)
+
+
+### Bug Fixes
+
+* refresh live Supabase generated types ([f844829](https://github.com/maiprop/maiprop-listing-site/commit/f844829ec2814335c3cd3c2bf6d6d81e57945a6d))
+* tolerate upstream outages in deploy smoke ([2201cb1](https://github.com/maiprop/maiprop-listing-site/commit/2201cb19030dd04db1f3a2787ec6534d241f8443))
+
+## [1.11.7](https://github.com/maiprop/maiprop-listing-site/compare/v1.11.6...v1.11.7) (2026-06-29)
+
+
+### Bug Fixes
+
+* refresh live Supabase types ([82890d9](https://github.com/maiprop/maiprop-listing-site/commit/82890d9c72e9ce4e2fcfcac9db09f8353427c381))
+
+## [1.11.6](https://github.com/maiprop/maiprop-listing-site/compare/v1.11.5...v1.11.6) (2026-06-28)
+
+
+### Bug Fixes
+
+* clear live Supabase advisor drift ([8fa5fe1](https://github.com/maiprop/maiprop-listing-site/commit/8fa5fe1797e1232d23724a804f06123445b648b7))
+* reconcile production migration history ([c7dcc32](https://github.com/maiprop/maiprop-listing-site/commit/c7dcc32907f7aff7aa91f93c343072b4ad1eace3))
+* refresh live Supabase types ([b3a68e2](https://github.com/maiprop/maiprop-listing-site/commit/b3a68e2bd9505f6086b73f285f3b27745c0a903a))
+* restore investor payment edge function source ([b4b9075](https://github.com/maiprop/maiprop-listing-site/commit/b4b9075c753d9c9fc63becbb1f0e0544b88b9ff8))
+
+## [1.11.5](https://github.com/maiprop/maiprop-listing-site/compare/v1.11.4...v1.11.5) (2026-06-28)
+
+
+### Bug Fixes
+
+* resolve live UX regression paths ([3e47d80](https://github.com/maiprop/maiprop-listing-site/commit/3e47d805ea8509ba38de03bf60df5b9111572994))
+
 ## [1.11.4](https://github.com/maiprop/maiprop-listing-site/compare/v1.11.3...v1.11.4) (2026-06-28)
 
 

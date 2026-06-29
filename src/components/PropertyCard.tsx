@@ -94,6 +94,9 @@ const PROPERTY_IMAGE_WIDTHS = [320, 480, 768, 1024];
 const PROPERTY_CARD_IMAGE_SIZES = "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw";
 const COMPACT_PROPERTY_IMAGE_SIZES = "96px";
 
+const getPriorityImageAttributes = (priority: boolean) =>
+  priority ? { fetchpriority: "high" as const } : {};
+
 const withUnsplashImageParams = (url: URL, width: number): string | null => {
   if (!url.hostname.includes("images.unsplash.com")) return null;
 
@@ -323,7 +326,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
             sizes={thumbSrcSet ? COMPACT_PROPERTY_IMAGE_SIZES : undefined}
             alt={property.title}
             loading={imagePriority ? "eager" : "lazy"}
-            fetchPriority={imagePriority ? "high" : undefined}
+            {...getPriorityImageAttributes(imagePriority)}
             decoding="async"
             data-image-fallback-index={imageChain.length ? "0" : undefined}
             className={`w-full h-full transition-transform duration-300 ${
@@ -383,7 +386,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
           sizes={mainImageSrcSet ? PROPERTY_CARD_IMAGE_SIZES : undefined}
           alt={property.title}
           loading={imagePriority ? "eager" : "lazy"}
-          fetchPriority={imagePriority ? "high" : undefined}
+          {...getPriorityImageAttributes(imagePriority)}
           decoding="async"
           data-image-fallback-index={imageChain.length ? "0" : undefined}
           className={`w-full h-full transition-transform duration-500 ${

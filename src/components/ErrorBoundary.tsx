@@ -33,13 +33,13 @@ export class ErrorBoundary extends Component<Props, State> {
         <header className="sticky top-0 z-50 border-b border-border bg-background px-4 py-3">
           <a href="/" className="text-lg font-bold text-foreground">maiProp</a>
         </header>
-        <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4 text-center px-4">
+        <main id="main-content" className="min-h-screen bg-background flex flex-col items-center justify-center gap-4 text-center px-4">
           <p className="text-lg font-semibold">Something went wrong loading this page.</p>
           <p className="text-sm text-muted-foreground max-w-sm">
             {this.state.error?.message ?? "An unexpected error occurred."}
           </p>
           <Button onClick={() => window.location.reload()}>Reload</Button>
-        </div>
+        </main>
       </>
     );
   }
