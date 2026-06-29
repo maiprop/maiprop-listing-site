@@ -38,6 +38,27 @@ type DurableBillingState = {
   customerFound: boolean;
 };
 
+type DurableBillingReadResult = {
+  data?: unknown[] | unknown | null;
+  error?: { message?: string } | null;
+};
+
+type DurableBillingReadFilter = {
+  eq(column: string, value: string): DurableBillingReadFilter;
+  in(column: string, values: string[]): DurableBillingReadFilter;
+  order(
+    column: string,
+    options: { ascending: boolean },
+  ): DurableBillingReadFilter;
+  limit(count: number): PromiseLike<DurableBillingReadResult>;
+};
+
+type DurableBillingReadClient = {
+  from(table: "billing_subscriptions" | "billing_customers"): {
+    select(columns: string): DurableBillingReadFilter;
+  };
+};
+
 type StripeInvoiceTaxEntry = {
   amount?: number | null;
   tax_rate?: string | {
@@ -123,19 +144,17 @@ function normalizeDurableBillingSubscription(
 }
 
 async function readDurableBillingState(
-  supabase: unknown,
+  supabase: DurableBillingReadClient,
   userId: string,
 ): Promise<DurableBillingState> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const client = supabase as { from: any };
   const [subscriptionResult, customerResult] = await Promise.all([
-    client.from("billing_subscriptions")
+    supabase.from("billing_subscriptions")
       .select("stripe_subscription_id, stripe_product_id, stripe_price_id, plan_key, status, billing_cycle, current_period_end, cancel_at_period_end")
       .eq("user_id", userId)
       .in("status", ["active", "trialing", "past_due"])
       .order("updated_at", { ascending: false })
       .limit(1),
-    client.from("billing_customers")
+    supabase.from("billing_customers")
       .select("stripe_customer_id")
       .eq("user_id", userId)
       .order("updated_at", { ascending: false })
@@ -503,7 +522,7 @@ Deno.serve(async (req) => {
     };
     try {
       durableBilling = await readDurableBillingState(
-        supabase,
+        supabase as unknown as DurableBillingReadClient,
         userData.user.id,
       );
     } catch (durableError: unknown) {

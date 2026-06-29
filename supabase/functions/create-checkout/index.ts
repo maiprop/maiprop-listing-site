@@ -122,6 +122,34 @@ type SupabaseAdminClient = {
   };
 };
 
+type BillingSubscriptionLookupRow = {
+  audience?: string | null;
+  status?: string | null;
+  current_period_end?: string | null;
+};
+
+type BillingSubscriptionLookupResult = {
+  data?: BillingSubscriptionLookupRow[] | BillingSubscriptionLookupRow | null;
+  error?: { message?: string } | null;
+};
+
+type SupabaseBillingLookupClient = {
+  from(table: "billing_subscriptions"): {
+    select(columns: string): {
+      eq(column: string, value: string): {
+        in(column: string, values: string[]): {
+          order(
+            column: string,
+            options: { ascending: boolean },
+          ): {
+            limit(count: number): PromiseLike<BillingSubscriptionLookupResult>;
+          };
+        };
+      };
+    };
+  };
+};
+
 const isAlreadyClaimedError = (error: unknown): boolean => {
   const code = (error as { code?: string } | null)?.code;
   return code === "23505";
@@ -145,12 +173,11 @@ const hasCurrentPeriodRemaining = (value: string | null | undefined) => {
 };
 
 const hasProvisionedSameAudienceSubscription = async (
-  supabaseClient: unknown,
+  supabaseClient: SupabaseBillingLookupClient,
   userId: string,
   audience: string,
 ): Promise<boolean> => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabaseClient as { from: any })
+  const { data, error } = await supabaseClient
     .from("billing_subscriptions")
     .select("status, audience, current_period_end")
     .eq("user_id", userId)
@@ -166,11 +193,13 @@ const hasProvisionedSameAudienceSubscription = async (
   }
 
   const rows = Array.isArray(data) ? data : data ? [data] : [];
-  return rows.some((row) =>
-    row?.audience === audience &&
-    PROVISIONED_SUBSCRIPTION_STATUSES.includes(row?.status) &&
-    hasCurrentPeriodRemaining(row?.current_period_end)
-  );
+  return rows.some((row) => {
+    const status = row?.status;
+    return row?.audience === audience &&
+      typeof status === "string" &&
+      PROVISIONED_SUBSCRIPTION_STATUSES.includes(status) &&
+      hasCurrentPeriodRemaining(row?.current_period_end);
+  });
 };
 
 const jsonCheckoutError = (
@@ -620,7 +649,7 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
     }
     if (
       await hasProvisionedSameAudienceSubscription(
-        supabaseClient,
+        supabaseClient as unknown as SupabaseBillingLookupClient,
         user.id,
         entitlement.audience,
       )

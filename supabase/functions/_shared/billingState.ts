@@ -34,6 +34,30 @@ type BillingSubscriptionInput = {
   subscription: StripeSubscriptionLike;
 };
 
+type SupabaseQueryResult<T = unknown> = {
+  data?: T | null;
+  error?: unknown;
+};
+
+type SupabaseFilterBuilder<T = unknown> =
+  & PromiseLike<SupabaseQueryResult<T>>
+  & {
+    select<U = T>(columns: string): SupabaseFilterBuilder<U>;
+    eq(column: string, value: unknown): SupabaseFilterBuilder<T>;
+    lt(column: string, value: unknown): SupabaseFilterBuilder<T>;
+    maybeSingle(): PromiseLike<SupabaseQueryResult<T>>;
+  };
+
+type StripeWebhookEventLeaseRow = {
+  status?: string | null;
+  updated_at?: string | null;
+  metadata?: Record<string, unknown> | null;
+};
+
+type StripeWebhookEventClaimRow = {
+  event_id?: string | null;
+};
+
 export type BillingCustomerRow = {
   user_id: string;
   stripe_customer_id: string;
@@ -70,12 +94,8 @@ type SupabaseAdminClient = {
       options?: Record<string, unknown>,
     ): Promise<{ error: unknown }>;
     insert(payload: Record<string, unknown>): Promise<{ error: unknown }>;
-    // Supabase's PostgREST builder changes shape as filters/selects are
-    // chained. Keep this structural type permissive inside Edge functions.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    select(columns: string): any;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    update(payload: Record<string, unknown>): any;
+    select<T = unknown>(columns: string): SupabaseFilterBuilder<T>;
+    update(payload: Record<string, unknown>): SupabaseFilterBuilder;
   };
 };
 
@@ -225,14 +245,17 @@ export async function beginStripeWebhookEvent(
   if (isDuplicateWebhookInsertError(error)) {
     const { data, error: lookupError } = await supabase
       .from("stripe_webhook_events")
-      .select("status, updated_at, metadata")
+      .select<StripeWebhookEventLeaseRow>("status, updated_at, metadata")
       .eq("event_id", event.id)
       .maybeSingle();
     if (lookupError) throw lookupError;
-    if (data?.status === "processing" && !isStaleProcessingWebhookEvent(data)) {
+    const row = data ?? null;
+    if (row?.status === "processing" && !isStaleProcessingWebhookEvent(row)) {
       return "in_progress";
     }
-    if (data?.status === "failed" || isStaleProcessingWebhookEvent(data)) {
+    const rowStatus = row?.status ?? null;
+    if (rowStatus === "failed" || isStaleProcessingWebhookEvent(row)) {
+      if (!rowStatus) return "duplicate";
       const claimBase = supabase
         .from("stripe_webhook_events")
         .update({
@@ -242,15 +265,15 @@ export async function beginStripeWebhookEvent(
           metadata: { processing_started_at: processingStartedAt },
         })
         .eq("event_id", event.id)
-        .eq("status", data.status);
-      const claimQuery = data.status === "processing"
+        .eq("status", rowStatus);
+      const claimQuery = rowStatus === "processing"
         ? claimBase.lt(
           "updated_at",
           new Date(Date.now() - WEBHOOK_PROCESSING_LEASE_MS).toISOString(),
         )
         : claimBase;
       const claim = await claimQuery
-        .select("event_id")
+        .select<StripeWebhookEventClaimRow>("event_id")
         .maybeSingle();
       if (claim.error) throw claim.error;
       return claim.data?.event_id ? "started" : "duplicate";

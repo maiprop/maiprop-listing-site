@@ -90,6 +90,25 @@ type FunctionDatabase = Database & {
 
 type SupabaseAdminClient = ReturnType<typeof createClient<FunctionDatabase>>;
 
+type ChargePropertyReportFetchResult = {
+  charged?: boolean;
+  alreadyPaid?: boolean;
+};
+
+type ReportBillingRpcClient = SupabaseAdminClient & {
+  rpc(
+    functionName: "charge_property_report_fetch_for_user",
+    args: {
+      p_user_id: string;
+      p_listing_id: string;
+      p_cache_generated_at: string;
+    },
+  ): PromiseLike<{
+    data: ChargePropertyReportFetchResult | null;
+    error: { hint?: string; message?: string } | null;
+  }>;
+};
+
 class ReportBillingError extends Error {
   status = 402;
 }
@@ -282,8 +301,8 @@ async function chargeReportFetchIfNeeded(
   listingId: string,
   cacheGeneratedAt: string,
 ): Promise<{ charged: boolean; alreadyPaid: boolean }> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any).rpc(
+  const rpcClient = supabase as ReportBillingRpcClient;
+  const { data, error } = await rpcClient.rpc(
     "charge_property_report_fetch_for_user",
     {
       p_user_id: userId,
@@ -296,10 +315,9 @@ async function chargeReportFetchIfNeeded(
     throw new ReportBillingError(error.hint ?? error.message ?? "Property report charge failed");
   }
 
-  const result = data as { charged?: boolean; alreadyPaid?: boolean } | null;
   return {
-    charged: result?.charged === true,
-    alreadyPaid: result?.alreadyPaid === true,
+    charged: data?.charged === true,
+    alreadyPaid: data?.alreadyPaid === true,
   };
 }
 
