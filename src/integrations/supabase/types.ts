@@ -4984,6 +4984,10 @@ export type Database = {
         Args: { p_prefix: string; p_topic: string }
         Returns: string
       }
+      validate_role_switch_for_user: {
+        Args: { _user_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
