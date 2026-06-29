@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.11.8](https://github.com/maiprop/maiprop-listing-site/compare/v1.11.7...v1.11.8) (2026-06-29)
+
+
+### Bug Fixes
+
+* refresh live Supabase generated types ([f844829](https://github.com/maiprop/maiprop-listing-site/commit/f844829ec2814335c3cd3c2bf6d6d81e57945a6d))
+* tolerate upstream outages in deploy smoke ([2201cb1](https://github.com/maiprop/maiprop-listing-site/commit/2201cb19030dd04db1f3a2787ec6534d241f8443))
+
 ## [1.11.7](https://github.com/maiprop/maiprop-listing-site/compare/v1.11.6...v1.11.7) (2026-06-29)
 
 
