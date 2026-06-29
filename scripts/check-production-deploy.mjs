@@ -86,7 +86,7 @@ const getSiteLockHeaders = async () => {
 };
 
 const fetchText = async (url, options = {}) => {
-  const { headers, ...requestOptions } = options;
+  const { allowHttpError = false, headers, ...requestOptions } = options;
   const siteLockHeaders = await getSiteLockHeaders();
   const cloudflareAccessHeaders = getCloudflareAccessHeaders();
   const res = await fetch(url, {
@@ -102,12 +102,14 @@ const fetchText = async (url, options = {}) => {
   });
   const text = await res.text();
   const siteLockResponse = isSiteLockHtml(text) || isSiteLockPlainText(text);
-  assertOk(
-    res.ok,
-    siteLockResponse
-      ? getSiteLockErrorMessage(url)
-      : `${url} returned HTTP ${res.status}: ${text.slice(0, 160)}`,
-  );
+  if (!allowHttpError) {
+    assertOk(
+      res.ok,
+      siteLockResponse
+        ? getSiteLockErrorMessage(url)
+        : `${url} returned HTTP ${res.status}: ${text.slice(0, 160)}`,
+    );
+  }
   return { res, text };
 };
 

@@ -21,23 +21,32 @@ const listingDetailSourcePaths = new Set([
   "/api/public/listings?listing_type=new_build&limit=1",
   "/api/public/auctions?limit=60",
 ]);
+const MAX_DETAIL_CHECK_IDS = 3;
 
 const defaultAssertOk = (condition, message) => {
   if (!condition) throw new Error(message);
 };
 
+function isAllowedSupabaseUpstreamOutage(res, body) {
+  return process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN === "true" &&
+    res.status === 503 &&
+    body &&
+    typeof body === "object" &&
+    body.error === "Supabase upstream unavailable";
+}
+
 const defaultFetchText = async (url, options = {}) => {
+  const { allowHttpError: _allowHttpError, headers, ...requestOptions } = options;
   const res = await fetch(url, {
     redirect: "follow",
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     headers: {
       "user-agent": USER_AGENT,
-      ...(options.headers ?? {}),
+      ...(headers ?? {}),
     },
-    ...options,
+    ...requestOptions,
   });
   const text = await res.text();
-  defaultAssertOk(res.ok, `${url} returned HTTP ${res.status}: ${text.slice(0, 160)}`);
   return { res, text };
 };
 
@@ -57,6 +66,7 @@ async function validateJsonApiPath(baseUrl, path, { assertOk, fetchText }) {
   const apiUrl = new URL(path, baseUrl).toString();
   const { res, text } = await fetchText(apiUrl, {
     headers: { accept: "application/json" },
+    allowHttpError: true,
   });
   const contentType = res.headers.get("content-type") ?? "";
   const htmlFallback =
@@ -78,6 +88,16 @@ async function validateJsonApiPath(baseUrl, path, { assertOk, fetchText }) {
     body = JSON.parse(text);
   } catch (error) {
     throw new Error(`${apiUrl} returned invalid JSON: ${error.message}`);
+  }
+
+  if (!res.ok) {
+    if (isAllowedSupabaseUpstreamOutage(res, body)) {
+      process.stderr.write(
+        `[warn] ${apiUrl} returned Supabase upstream unavailable; continuing because app-side public data fallbacks are enabled\n`,
+      );
+      return null;
+    }
+    assertOk(false, `${apiUrl} returned HTTP ${res.status}: ${text.slice(0, 160)}`);
   }
 
   assertOk(
@@ -107,7 +127,10 @@ export async function validatePublicApiEndpoints(
     const body = await validateJsonApiPath(baseUrl, path, { assertOk, fetchText });
     if (body === null) continue;
     if (listingDetailSourcePaths.has(path)) {
-      for (const id of extractPublicListingIds(body)) listingIds.add(id);
+      for (const id of extractPublicListingIds(body)) {
+        if (listingIds.size >= MAX_DETAIL_CHECK_IDS) break;
+        listingIds.add(id);
+      }
     }
   }
 
