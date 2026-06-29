@@ -324,11 +324,13 @@ describe("NewBuildDetail", () => {
   it("renders loading and not-found branches", () => {
     useQueryMock.mockReturnValue({ data: null, isLoading: true, error: null });
     const loading = renderPage();
+    expect(loading.container.querySelector("#main-content")).toBeTruthy();
     expect(loading.container.querySelector(".animate-spin")).toBeTruthy();
     loading.unmount();
 
     useQueryMock.mockReturnValue({ data: null, isLoading: false, error: new Error("missing") });
-    renderPage();
+    const notFound = renderPage();
+    expect(notFound.container.querySelector("#main-content")).toBeTruthy();
     expect(screen.getByText("Property not found.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /back to listings/i })).toHaveAttribute("href", "/listings");
   });

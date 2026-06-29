@@ -75,6 +75,16 @@ describe("chunk load recovery", () => {
     expect(reload).not.toHaveBeenCalled();
   });
 
+  it("does not reload a chunk failure while the browser is offline", () => {
+    const reload = vi.fn();
+    const storage = memoryStorage();
+    const error = new Error("Failed to fetch dynamically imported module: /assets/AIAssistant-old.js");
+
+    expect(recoverFromChunkLoadError(error, { reload, storage, isOnline: () => false })).toBe(false);
+    expect(reload).not.toHaveBeenCalled();
+    expect(storage.setItem).not.toHaveBeenCalled();
+  });
+
   it("does not report recovery when reload throws", () => {
     const storage = memoryStorage();
     const reload = vi.fn(() => {

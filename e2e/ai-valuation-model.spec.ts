@@ -22,6 +22,7 @@ const AUCTION_ID = "0308050d-8d62-4fc8-b421-7c74116343b3";
 const NEW_BUILD_ID = "1308050d-8d62-4fc8-b421-7c74116343b3";
 const COMPARE_CLEAN_ID = "2308050d-8d62-4fc8-b421-7c74116343b3";
 const COMPARE_SPARSE_ID = "3308050d-8d62-4fc8-b421-7c74116343b3";
+const LOCAL_E2E_SUPABASE_URL = "https://abcdefghijklmnopqrst.supabase.co";
 
 const fixtureImage =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 640 360'%3E%3Crect width='640' height='360' fill='%23f3eee8'/%3E%3Crect x='120' y='120' width='400' height='180' fill='%238160d8'/%3E%3C/svg%3E";
@@ -131,7 +132,7 @@ const authStorageKey = () => {
     process.env.VITE_SUPABASE_URL ??
     process.env.VITE_SUPABASE_PROJECT_URL ??
     readDotEnvUrl() ??
-    "http://localhost:54321";
+    LOCAL_E2E_SUPABASE_URL;
   try {
     return `sb-${new URL(configuredUrl).hostname.split(".")[0]}-auth-token`;
   } catch (_error) {

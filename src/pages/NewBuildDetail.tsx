@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, type ElementType } from "react";
+﻿import { lazy, Suspense, useState, useEffect, type ElementType } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -19,9 +19,6 @@ import { useIsFavorited, useToggleFavorite } from "@/hooks/useFavorites";
 import { PropertyScoresSection } from "@/components/property/PropertyScoresSection";
 import { useStartConversation } from "@/hooks/useMessages";
 import { toast } from "sonner";
-import PropertyValuation from "@/components/PropertyValuation";
-import NeighbourhoodReport from "@/components/NeighbourhoodReport";
-import PropertyMiniMap from "@/components/PropertyMiniMap";
 import { ENERGY_SCALE, ENERGY_COLORS } from "@/types";
 import { CONSTRUCTION_PHASES, formatNewBuildPrice as formatPrice } from "@/lib/newBuildConfig";
 import { getNewBuildCardImages } from "@/lib/newBuildCardSummary";
@@ -57,6 +54,10 @@ import {
   type NewBuildListing,
   type NewBuildProject,
 } from "@/lib/newBuildProjectDetail";
+
+const PropertyMiniMap = lazy(() => import("@/components/PropertyMiniMap"));
+const NeighbourhoodReport = lazy(() => import("@/components/NeighbourhoodReport"));
+const PropertyValuation = lazy(() => import("@/components/PropertyValuation"));
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const EnergyBadge = ({ cls }: { cls: string }) => {
@@ -378,28 +379,28 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
   if (isLoading) return (
     <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
-      <div className="flex-1 flex items-center justify-center">
+      <main id="main-content" className="flex-1 flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
+      </main>
     </div>
   );
 
   if (error || !listing) return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <div className="pt-24 text-center px-4">
+      <main id="main-content" className="pt-24 text-center px-4">
         <p className="text-muted-foreground">{tr("property.errorLoad", "Property not found.")}</p>
         <Link to="/listings"><Button variant="outline" className="mt-4">{tr("property.backToListings", "Back to listings")}</Button></Link>
-      </div>
+      </main>
     </div>
   );
 
   if (!isCanonicalNewBuild) return (
     <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
-      <div className="flex-1 flex items-center justify-center">
+      <main id="main-content" className="flex-1 flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
+      </main>
     </div>
   );
 
@@ -410,7 +411,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <div className="pt-16 pb-24">
+      <main id="main-content" className="pt-16 pb-24">
 
         {/* Back link */}
         <div className="container max-w-5xl px-4 pt-6 pb-2">
@@ -704,56 +705,62 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
 
               {/* Mini Map */}
               <div className="rounded-2xl overflow-hidden">
-                <PropertyMiniMap
-                  latitude={displayLatitude}
-                  longitude={displayLongitude}
-                  address={displayAddress}
-                  city={displayCity}
-                  title={displayTitle}
-                  onWalkScoreChange={setWalkScore}
-                />
+                <Suspense fallback={<div className="h-96 rounded-2xl bg-muted animate-pulse" />}>
+                  <PropertyMiniMap
+                    latitude={displayLatitude}
+                    longitude={displayLongitude}
+                    address={displayAddress}
+                    city={displayCity}
+                    title={displayTitle}
+                    onWalkScoreChange={setWalkScore}
+                  />
+                </Suspense>
               </div>
 
               {/* Neighbourhood Report */}
               {displayAddress && (
-                <NeighbourhoodReport
-                  city={displayCity}
-                  address={displayAddress}
-                  region={displayRegion}
-                  propertyType={listing.property_type ?? undefined}
-                  lat={displayLatitude != null ? Number(displayLatitude) : undefined}
-                  lng={displayLongitude != null ? Number(displayLongitude) : undefined}
-                  listingId={id ?? undefined}
-                  isPro={isPro}
-                />
+                <Suspense fallback={<div className="h-64 rounded-2xl bg-muted animate-pulse" />}>
+                  <NeighbourhoodReport
+                    city={displayCity}
+                    address={displayAddress}
+                    region={displayRegion}
+                    propertyType={listing.property_type ?? undefined}
+                    lat={displayLatitude != null ? Number(displayLatitude) : undefined}
+                    lng={displayLongitude != null ? Number(displayLongitude) : undefined}
+                    listingId={id ?? undefined}
+                    isPro={isPro}
+                  />
+                </Suspense>
               )}
 
               {/* Property Valuation */}
               {id && (
-                <PropertyValuation
-                  listingId={id}
-                  title={displayTitle}
-                  city={displayCity}
-                  address={displayAddress || undefined}
-                  price={projectValuationMetrics.price}
-                  sqm={projectValuationMetrics.sqm}
-                  bedrooms={listing.bedrooms}
-                  bathrooms={listing.bathrooms}
-                  propertyType={listing.property_type}
-                  yearBuilt={listing.year_built}
-                  energyClass={listing.energy_class}
-                  pricePerSqm={projectValuationMetrics.pricePerSqm}
-                  floor={listing.floor}
-                  totalFloors={listing.total_floors}
-                  hasParking={listing.has_parking}
-                  hasPool={listing.has_pool}
-                  hasElevator={listing.has_elevator}
-                  hasGarden={listing.has_garden}
-                  region={displayRegion}
-                  condition={listing.construction_status}
-                  latitude={displayLatitude != null ? Number(displayLatitude) : undefined}
-                  longitude={displayLongitude != null ? Number(displayLongitude) : undefined}
-                />
+                <Suspense fallback={<div className="h-64 rounded-2xl bg-muted animate-pulse" />}>
+                  <PropertyValuation
+                    listingId={id}
+                    title={displayTitle}
+                    city={displayCity}
+                    address={displayAddress || undefined}
+                    price={projectValuationMetrics.price}
+                    sqm={projectValuationMetrics.sqm}
+                    bedrooms={listing.bedrooms}
+                    bathrooms={listing.bathrooms}
+                    propertyType={listing.property_type}
+                    yearBuilt={listing.year_built}
+                    energyClass={listing.energy_class}
+                    pricePerSqm={projectValuationMetrics.pricePerSqm}
+                    floor={listing.floor}
+                    totalFloors={listing.total_floors}
+                    hasParking={listing.has_parking}
+                    hasPool={listing.has_pool}
+                    hasElevator={listing.has_elevator}
+                    hasGarden={listing.has_garden}
+                    region={displayRegion}
+                    condition={listing.construction_status}
+                    latitude={displayLatitude != null ? Number(displayLatitude) : undefined}
+                    longitude={displayLongitude != null ? Number(displayLongitude) : undefined}
+                  />
+                </Suspense>
               )}
             </div>
 
@@ -893,7 +900,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
 
           </div>
         </div>
-      </div>
+      </main>
       <Footer />
     </div>
   );
