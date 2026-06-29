@@ -2,6 +2,7 @@
  * Tests for customer-portal edge function.
  */
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { captureHandler, req, authedReq } from "../_shared/testUtils.ts";
 
 const { handler, restore } = await captureHandler(import.meta.url, "./index.ts");
@@ -26,6 +27,12 @@ Deno.test("rate limiter allows < 10 requests from same IP", async () => {
   // Just verify the first request hits auth (not rate limit)
   const res = await handler(authedReq("POST"));
   assertEquals(res.status !== 429, true);
+});
+
+Deno.test("portal return URL uses the allowlisted Checkout origin resolver", async () => {
+  const source = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+  assertStringIncludes(source, "resolveCheckoutOrigin");
+  assertStringIncludes(source, "const origin = resolveCheckoutOrigin(req.headers.get(\"origin\"))");
 });
 
 restore();

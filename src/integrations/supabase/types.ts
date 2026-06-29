@@ -20,6 +20,8 @@ export type Database = {
           audience: string
           checkout_mode: string
           created_at: string
+          credits_consumed: number
+          credits_granted: number
           id: string
           metadata: Json
           module: string
@@ -37,6 +39,8 @@ export type Database = {
           audience: string
           checkout_mode: string
           created_at?: string
+          credits_consumed?: number
+          credits_granted?: number
           id?: string
           metadata?: Json
           module: string
@@ -54,6 +58,8 @@ export type Database = {
           audience?: string
           checkout_mode?: string
           created_at?: string
+          credits_consumed?: number
+          credits_granted?: number
           id?: string
           metadata?: Json
           module?: string

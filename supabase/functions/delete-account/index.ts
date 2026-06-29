@@ -32,12 +32,13 @@
  *   professionals, and every other table with a FK to auth.users.
  */
 
-import Stripe from "npm:stripe@18.5.0";
+import Stripe from "npm:stripe@22.3.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { verifyBearerToken, AuthError } from "../_shared/auth.ts";
 import { createLogger } from "../_shared/logger.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import { createStripeClient } from "../_shared/stripeClient.ts";
 
 const log = createLogger("delete-account");
 const limiter = makeRateLimiter({ bucket: "delete-account", maxRequests: 3, windowMs: 60_000 });
@@ -136,7 +137,7 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - Account deletion coordinates a
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (stripeKey) {
       try {
-        const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+        const stripe = createStripeClient(stripeKey);
         let customerId: string | null = null;
         try {
           const search = await stripe.customers.search({
@@ -148,8 +149,15 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - Account deletion coordinates a
           // Search API may not be enabled — fall through to email lookup.
         }
         if (!customerId) {
-          const byEmail = await stripe.customers.list({ email: user.email, limit: 1 });
-          if (byEmail.data[0]) customerId = byEmail.data[0].id;
+          const { data: billingCustomers, error: billingCustomerError } = await supabase
+            .from("billing_customers")
+            .select("stripe_customer_id")
+            .eq("user_id", user.id)
+            .order("updated_at", { ascending: false })
+            .limit(1);
+          if (billingCustomerError) throw billingCustomerError;
+          customerId = (billingCustomers as Array<{ stripe_customer_id?: string | null }> | null)
+            ?.[0]?.stripe_customer_id ?? null;
         }
         if (customerId) {
           const active = await stripe.subscriptions.list({ customer: customerId, status: "active", limit: 100 });

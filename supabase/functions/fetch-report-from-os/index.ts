@@ -282,25 +282,25 @@ async function chargeReportFetchIfNeeded(
   listingId: string,
   cacheGeneratedAt: string,
 ): Promise<{ charged: boolean; alreadyPaid: boolean }> {
-  const { data: existing, error: existingError } = await supabase
-    .from("usage_property_reports")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("listing_id", listingId)
-    .gte("created_at", cacheGeneratedAt)
-    .limit(1);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc(
+    "charge_property_report_fetch_for_user",
+    {
+      p_user_id: userId,
+      p_listing_id: listingId,
+      p_cache_generated_at: cacheGeneratedAt,
+    },
+  );
 
-  if (existingError) throw existingError;
-  if ((existing ?? []).length > 0) return { charged: false, alreadyPaid: true };
-
-  const { error: insertError } = await supabase
-    .from("usage_property_reports")
-    .insert({ user_id: userId, listing_id: listingId });
-
-  if (insertError) {
-    throw new ReportBillingError(insertError.hint ?? insertError.message ?? "Property report charge failed");
+  if (error) {
+    throw new ReportBillingError(error.hint ?? error.message ?? "Property report charge failed");
   }
-  return { charged: true, alreadyPaid: false };
+
+  const result = data as { charged?: boolean; alreadyPaid?: boolean } | null;
+  return {
+    charged: result?.charged === true,
+    alreadyPaid: result?.alreadyPaid === true,
+  };
 }
 
 async function chargeExternalReportFetch(

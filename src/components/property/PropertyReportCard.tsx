@@ -1,5 +1,5 @@
 /* eslint complexity: "off" */
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ClipboardList, Download, Loader2, Printer, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
@@ -7,7 +7,13 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
-import { useReportUsage, REPORT_INCLUDED, REPORT_EXTRA_COST } from "@/hooks/useUsageAddons";
+import { createAddonCheckoutUrl } from "@/pages/dashboard/billing/checkoutActions";
+import {
+  usePropertyReportAddonCredits,
+  useReportUsage,
+  REPORT_INCLUDED,
+  REPORT_EXTRA_COST,
+} from "@/hooks/useUsageAddons";
 import { supabase } from "@/integrations/supabase/client";
 import type { ListingWithJoins } from "@/hooks/useListings";
 import i18next from "i18next";
@@ -168,6 +174,36 @@ const refreshReportUsage = (queryClient: QueryClient, osRes: OsReportResponse | 
   queryClient.invalidateQueries({ queryKey: ["usage_property_reports"] }).catch(() => undefined);
 };
 
+const invalidateReportBillingState = (queryClient: QueryClient) => {
+  queryClient.invalidateQueries({ queryKey: ["addon_purchases"] }).catch(() => undefined);
+  queryClient.invalidateQueries({ queryKey: ["usage_property_reports"] }).catch(() => undefined);
+};
+
+const buildReportCheckoutReturnPath = (
+  listingId: string,
+  checkoutStatus: "success" | "cancelled",
+): string => {
+  const params = new URLSearchParams(window.location.search);
+  params.set("checkout", checkoutStatus);
+  params.set("addon", "property_report_single");
+  params.set("target_id", listingId);
+  const query = params.toString();
+  return `${window.location.pathname}${query ? `?${query}` : ""}`;
+};
+
+const clearReportCheckoutReturnParams = () => {
+  const params = new URLSearchParams(window.location.search);
+  params.delete("checkout");
+  params.delete("addon");
+  params.delete("target_id");
+  const query = params.toString();
+  window.history.replaceState(
+    null,
+    "",
+    `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`,
+  );
+};
+
 const usePropertyReportLoader = (listingId: string, listing?: ListingWithJoins | null) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -276,13 +312,24 @@ const LoadedReportContent = ({ osReport }: { osReport: OsPrintableReport }) => (
   </div>
 );
 
-const ExtraReportContent = () => (
+const ExtraReportContent = ({
+  checkoutLoading,
+  onPurchaseExtraReport,
+}: {
+  checkoutLoading: boolean;
+  onPurchaseExtraReport: () => void;
+}) => (
   <div className="text-center space-y-3">
     <p className="text-xs text-muted-foreground leading-relaxed">
       {ui(`Included reports used this month. Extra reports cost EUR ${REPORT_EXTRA_COST} each.`, `Οι περιλαμβανόμενες αναφορές του μήνα έχουν χρησιμοποιηθεί. Κάθε επιπλέον αναφορά κοστίζει EUR ${REPORT_EXTRA_COST}.`)}
     </p>
-    <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
-      <Link to="/pricing"><Zap className="w-4 h-4" /> {ui("Get Extra Report", "Αγορά επιπλέον αναφοράς")}</Link>
+    <Button
+      className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2"
+      onClick={onPurchaseExtraReport}
+      disabled={checkoutLoading}
+    >
+      {checkoutLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+      {ui("Get Extra Report", "Αγορά επιπλέον αναφοράς")}
     </Button>
     <p className="text-[10px] text-muted-foreground">{ui(`EUR ${REPORT_EXTRA_COST} per extra report`, `EUR ${REPORT_EXTRA_COST} ανά επιπλέον αναφορά`)}</p>
   </div>
@@ -292,12 +339,14 @@ const LoadReportContent = ({
   currentUnavailableReason,
   isPro,
   loadReport,
+  remainingAddonCredits,
   reportCount,
   reportLoading,
 }: {
   currentUnavailableReason: string | null;
   isPro: boolean;
   loadReport: () => void;
+  remainingAddonCredits: number;
   reportCount: number;
   reportLoading: boolean;
 }) => (
@@ -305,8 +354,8 @@ const LoadReportContent = ({
     {isPro && (
       <p className="text-[10px] text-muted-foreground">
         {ui(
-          `${Math.max(0, REPORT_INCLUDED - reportCount)} of ${REPORT_INCLUDED} reports remaining this month`,
-          `${Math.max(0, REPORT_INCLUDED - reportCount)} από ${REPORT_INCLUDED} αναφορές απομένουν αυτόν τον μήνα`,
+          `${Math.max(0, REPORT_INCLUDED + remainingAddonCredits - reportCount)} reports remaining this month`,
+          `${Math.max(0, REPORT_INCLUDED + remainingAddonCredits - reportCount)} αναφορές απομένουν αυτόν τον μήνα`,
         )}
       </p>
     )}
@@ -330,6 +379,9 @@ type ReportContentContext = {
   isPro: boolean;
   loadReport: () => void;
   osReport: OsPrintableReport | null;
+  purchaseExtraReport: () => void;
+  purchaseExtraReportLoading: boolean;
+  remainingAddonCredits: number;
   reportCount: number;
   reportLoading: boolean;
 };
@@ -357,8 +409,14 @@ const REPORT_CONTENT_RULES = [
     ),
   },
   {
-    when: ({ reportCount }: ReportContentContext) => reportCount >= REPORT_INCLUDED,
-    render: () => <ExtraReportContent />,
+    when: ({ remainingAddonCredits, reportCount }: ReportContentContext) =>
+      reportCount >= REPORT_INCLUDED + remainingAddonCredits,
+    render: ({ purchaseExtraReport, purchaseExtraReportLoading }: ReportContentContext) => (
+      <ExtraReportContent
+        checkoutLoading={purchaseExtraReportLoading}
+        onPurchaseExtraReport={purchaseExtraReport}
+      />
+    ),
   },
 ];
 
@@ -373,7 +431,10 @@ const getReportCardClass = (reportLoaded: boolean) => [
 
 const usePropertyReportCardView = ({ listingId, listing }: Props): ReportCardViewState => {
   const { isPro } = useSubscription();
+  const queryClient = useQueryClient();
   const { data: reportCount = 0 } = useReportUsage();
+  const { data: remainingAddonCredits = 0 } = usePropertyReportAddonCredits();
+  const [purchaseExtraReportLoading, setPurchaseExtraReportLoading] = useState(false);
   const {
     currentUnavailableReason,
     loadReport,
@@ -381,7 +442,55 @@ const usePropertyReportCardView = ({ listingId, listing }: Props): ReportCardVie
     reportLoaded,
     reportLoading,
   } = usePropertyReportLoader(listingId, listing);
-  const contentContext = { currentUnavailableReason, isPro, loadReport, osReport, reportCount, reportLoading };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("addon") !== "property_report_single" || params.get("target_id") !== listingId) return;
+
+    const checkoutStatus = params.get("checkout");
+    if (checkoutStatus === "success") {
+      invalidateReportBillingState(queryClient);
+      toast.success(
+        ui(
+          "Report credit added. You can load the property report now.",
+          "Η πίστωση αναφοράς προστέθηκε. Μπορείτε να φορτώσετε την αναφορά ακινήτου τώρα.",
+        ),
+      );
+      clearReportCheckoutReturnParams();
+    } else if (checkoutStatus === "cancelled") {
+      toast.info(ui("Report checkout cancelled. No charge was made.", "Το checkout αναφοράς ακυρώθηκε. Δεν έγινε χρέωση."));
+      clearReportCheckoutReturnParams();
+    }
+  }, [listingId, queryClient]);
+
+  const purchaseExtraReport = async () => {
+    setPurchaseExtraReportLoading(true);
+    try {
+      window.location.href = await createAddonCheckoutUrl("property_report_single", {
+        targetType: "listing",
+        targetId: listingId,
+        successUrl: buildReportCheckoutReturnPath(listingId, "success"),
+        cancelUrl: buildReportCheckoutReturnPath(listingId, "cancelled"),
+      });
+    } catch (err: unknown) {
+      toast.error(
+        (err instanceof Error ? err.message : null) ??
+          ui("Could not start report checkout.", "Δεν ήταν δυνατή η έναρξη checkout για την αναφορά."),
+      );
+      setPurchaseExtraReportLoading(false);
+    }
+  };
+  const contentContext = {
+    currentUnavailableReason,
+    isPro,
+    loadReport,
+    osReport,
+    purchaseExtraReport,
+    purchaseExtraReportLoading,
+    remainingAddonCredits,
+    reportCount,
+    reportLoading,
+  };
   const contentRule = REPORT_CONTENT_RULES.find((rule) => rule.when(contentContext)) ?? FALLBACK_CONTENT_RULE;
   const content = contentRule.render(contentContext);
   return { content, reportLoaded };

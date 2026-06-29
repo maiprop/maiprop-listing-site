@@ -901,12 +901,8 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
-  // Enforce AI quota before processing
-  const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
-  if (quota.errorResponse) return quota.errorResponse;
-  const quotaUserId = quota.userId;
 
-  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? quotaUserId ?? "anonymous";
+  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
   if (await valuationLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
   // Signed-in access gate is handled by enforceAiQuota; free vs Pro caps live in the DB.
@@ -932,6 +928,10 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
+    if (quota.errorResponse) return quota.errorResponse;
+    const quotaUserId = quota.userId;
 
     const structuredValuationInput: StructuredValuationInput = {
       listingId: typeof listingId === "string" ? listingId : null,

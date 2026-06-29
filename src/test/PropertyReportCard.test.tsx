@@ -8,6 +8,7 @@ import type { ListingWithJoins } from "@/hooks/useListings";
 const mocks = vi.hoisted(() => ({
   useAuth: vi.fn(),
   useSubscription: vi.fn(),
+  usePropertyReportAddonCredits: vi.fn(),
   useReportUsage: vi.fn(),
   mutateAsync: vi.fn(),
   invoke: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock("@/hooks/useUsageAddons", () => ({
   REPORT_EXTRA_COST: 49,
   REPORT_INCLUDED: 3,
   useRecordReport: () => ({ mutateAsync: mocks.mutateAsync }),
+  usePropertyReportAddonCredits: () => mocks.usePropertyReportAddonCredits(),
   useReportUsage: () => mocks.useReportUsage(),
 }));
 vi.mock("@/integrations/supabase/client", () => ({
@@ -48,9 +50,11 @@ function renderCard(props = {}) {
 describe("PropertyReportCard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.history.pushState({}, "", "/property/listing-1");
     mocks.useAuth.mockReturnValue({ user: { id: "user-1" } });
     mocks.useSubscription.mockReturnValue({ isPro: true });
     mocks.useReportUsage.mockReturnValue({ data: 0 });
+    mocks.usePropertyReportAddonCredits.mockReturnValue({ data: 0 });
     mocks.mutateAsync.mockResolvedValue(undefined);
   });
 
@@ -107,6 +111,54 @@ describe("PropertyReportCard", () => {
 
     await waitFor(() => expect(screen.getByRole("button", { name: /download html/i })).toBeInTheDocument());
     expect(screen.getByRole("button", { name: /print \/ save pdf/i })).toBeInTheDocument();
+  });
+
+  it("allows a paid add-on credit after included property reports are used", async () => {
+    mocks.useReportUsage.mockReturnValue({ data: 3 });
+    mocks.usePropertyReportAddonCredits.mockReturnValue({ data: 1 });
+    mocks.invoke.mockResolvedValue({
+      data: {
+        ok: true,
+        report: {
+          html: "<html><body>Paid credit report</body></html>",
+          fileName: "paid-credit-report.html",
+        },
+      },
+      error: null,
+    });
+
+    renderCard();
+    fireEvent.click(screen.getByRole("button", { name: /load report/i }));
+
+    await waitFor(() =>
+      expect(mocks.invoke).toHaveBeenCalledWith("fetch-report-from-os", expect.anything())
+    );
+  });
+
+  it("starts property report add-on checkout when included reports and paid credits are exhausted", async () => {
+    mocks.useReportUsage.mockReturnValue({ data: 3 });
+    mocks.usePropertyReportAddonCredits.mockReturnValue({ data: 0 });
+    mocks.invoke.mockResolvedValue({
+      data: { url: "#stripe-checkout-session" },
+      error: null,
+    });
+
+    renderCard();
+
+    fireEvent.click(screen.getByRole("button", { name: /get extra report/i }));
+
+    await waitFor(() =>
+      expect(mocks.invoke).toHaveBeenCalledWith("create-checkout", {
+        body: {
+          addon_key: "property_report_single",
+          target_type: "listing",
+          target_id: "listing-1",
+          success_url: "/property/listing-1?checkout=success&addon=property_report_single&target_id=listing-1",
+          cancel_url: "/property/listing-1?checkout=cancelled&addon=property_report_single&target_id=listing-1",
+        },
+      })
+    );
+    expect(screen.queryByRole("button", { name: /load report/i })).not.toBeInTheDocument();
   });
 
   it("opens printable reports without injecting executable script into the HTML blob", async () => {

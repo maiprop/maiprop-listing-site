@@ -22,4 +22,23 @@ Deno.test("fake Bearer returns 401 (Supabase getUser rejects)", async () => {
   assertEquals([401, 503].includes(res.status), true);
 });
 
+Deno.test("role switch cancellation iterates core billable subscriptions without cancelling add-ons", async () => {
+  const source = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+  assertEquals(source.includes("for (const sub of billableSubs)"), true);
+  assertEquals(source.includes("shouldSkipProfileEntitlementSync"), true);
+  assertEquals(source.includes("sub_cancelled_count"), true);
+  assertEquals(source.includes("billableSubs[0]"), false);
+});
+
+Deno.test("role switch preflight does not write audit rows before a destination role exists", async () => {
+  const source = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+  assertEquals(source.includes("if (toType) {"), true);
+  assertEquals(
+    source.includes("Audit insert skipped until destination role is selected"),
+    true,
+  );
+  assertEquals(source.includes("_to_type: toType,"), true);
+  assertEquals(source.includes('_to_type: toType || ""'), false);
+});
+
 restore();

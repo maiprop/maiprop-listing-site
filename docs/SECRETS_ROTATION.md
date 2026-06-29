@@ -16,8 +16,15 @@ add a row here in the same PR.
 | `SUPABASE_DB_PASSWORD` | Supabase CLI; psql admin | Supabase dashboard | **90 days** | Platform lead |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | Browser bundle (anon key) | Cloudflare Pages env (public) | Only if Supabase project rotated | Platform lead |
 | `SUPABASE_ANON_KEY` | Edge fns calling supabase-js with end-user JWT | Supabase fn secrets | Only if Supabase project rotated | Platform lead |
-| `STRIPE_SECRET_KEY` (live) | `create-checkout`, `customer-portal`, `check-subscription`, `stripe-webhook`, `sync-stripe-pricing`, `create-stripe-price`, `get-invoices` | Supabase fn secrets | **180 days** or on compromise | Finance lead |
+| `STRIPE_SECRET_KEY` (test/live) | `create-checkout`, `create-investor-payment`, `customer-portal`, `check-subscription`, `stripe-webhook`, `sync-stripe-pricing`, `create-stripe-price`, `get-invoices`, `apply-data-input-credit`, `delete-account`, `log-role-switch` | Supabase fn secrets | **180 days** or on compromise | Finance lead |
+| `STRIPE_RUNTIME_MODE` / `STRIPE_LIVE_MODE` | Runtime guard for all Stripe secret-key consumers; defaults to test mode and requires `STRIPE_LIVE_MODE=true` for `sk_live_...` | Supabase fn secrets | Only when switching test/live billing mode | Finance lead |
+| `STRIPE_ENVIRONMENT` / `STRIPE_RUN_MODE` | Legacy aliases for `STRIPE_RUNTIME_MODE`; keep unset in new environments | Supabase fn secrets | Remove when all environments use `STRIPE_RUNTIME_MODE` | Finance lead |
+| `STRIPE_API_VERSION` | Optional Stripe catalog setup override; keep aligned with the shared Edge Stripe client version | Local operator shell / CI catalog setup | Only when Stripe API version is upgraded | Finance lead |
+| `STRIPE_API_KEY` | Local Stripe operator script fallback; prefer `STRIPE_SECRET_KEY` | Local operator shell / CI catalog setup | Rotate with `STRIPE_SECRET_KEY` if ever set | Finance lead |
+| `STRIPE_SAAS_PERSONAL_TAX_CODE` / `STRIPE_SAAS_BUSINESS_TAX_CODE` / `STRIPE_AI_PERSONAL_TAX_CODE` / `STRIPE_AI_BUSINESS_TAX_CODE` | Optional Stripe catalog setup tax-code overrides | Local operator shell / CI catalog setup | Only when tax counsel changes catalog classification | Finance lead |
+| `STRIPE_TAX_CHECK_INVOICE` / `STRIPE_TAX_EXPECT_COUNTRY` / `STRIPE_TAX_EXPECT_RATE` / `STRIPE_TAX_READINESS_STRICT` | Stripe Tax readiness check controls; defaults verify Greek VAT at 24% | Local operator shell / CI tax checks | Only when tax jurisdiction or check target changes | Finance lead |
 | `STRIPE_WEBHOOK_SECRET` | `stripe-webhook` | Supabase fn secrets | On every webhook endpoint recreate | Platform lead |
+| `STRIPE_CUSTOMER_PORTAL_CONFIGURATION_ID` | `customer-portal` flow-specific Billing Portal sessions | Supabase fn secrets | When changing Stripe Customer Portal configuration | Finance lead |
 
 ### High (cron / inter-service auth)
 
@@ -37,6 +44,8 @@ add a row here in the same PR.
 | `GOOGLE_MAPS_API_KEY` | `streetview-proxy` | Supabase fn secrets | **365 days** | Platform lead |
 | `GOOGLE_MAPS_REFERER` | Optional `streetview-proxy` HTTP referrer override for Google Maps API key restrictions | Supabase fn secrets | Only when the Google Maps key referrer policy changes | Platform lead |
 | `VITE_MAPBOX_TOKEN` | Browser bundle (map components) | Cloudflare Pages env | **365 days** | Platform lead |
+| `AUTH_VERIFY_TIMEOUT_MS` | Optional timeout for shared Edge JWT verification | Supabase fn secrets | Operational tuning only | Platform lead |
+| `RATE_LIMIT_DB_TIMEOUT_MS` | Optional database timeout for shared Edge rate-limit checks | Supabase fn secrets | Operational tuning only | Platform lead |
 
 ### CI / test
 
@@ -137,7 +146,7 @@ Stripe supports overlapping live keys via "rolling":
 
 # 2. Update the new key everywhere it's referenced:
 supabase secrets set STRIPE_SECRET_KEY=<new-key>
-supabase functions deploy create-checkout customer-portal check-subscription stripe-webhook sync-stripe-pricing create-stripe-price get-invoices
+supabase functions deploy create-checkout create-investor-payment customer-portal check-subscription stripe-webhook sync-stripe-pricing create-stripe-price get-invoices apply-data-input-credit delete-account log-role-switch
 
 # 3. Verify with a low-risk Stripe call, e.g.:
 curl https://<project>.supabase.co/functions/v1/check-subscription `

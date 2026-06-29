@@ -54,6 +54,8 @@
     "check:runtime": "node scripts/check-runtime.mjs",
     "check:runtime:local": "node scripts/project-runtime.mjs -- npm run check:runtime",
     "check:secrets": "node scripts/check-secrets.mjs",
+    "stripe:setup-catalog": "node scripts/setup-stripe-catalog.mjs",
+    "check:stripe-tax-readiness": "node scripts/check-stripe-tax-readiness.mjs",
     "check:production-deploy": "node scripts/check-production-deploy.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "typecheck:functions": "tsc --noEmit -p functions/tsconfig.json",

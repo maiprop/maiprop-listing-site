@@ -18,10 +18,11 @@ const REPORT_EXTRA_COST = 49; // euros, property_report_single
 const PRIORITY_ADS_INCLUDED = 10;
 const PRIORITY_ADS_EXTRA_COST = 59; // euros, priority_placement
 const PROFESSIONAL_PRIORITY_AD_EXTRA_COST = 8; // euros, extra_priority_ad
+const PROPERTY_REPORT_CREDIT_ADDONS = ["property_report_single"] as const;
 
 function startOfMonth() {
   const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString();
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString();
 }
 
 export function useValuationUsage() {
@@ -78,6 +79,30 @@ export function useReportUsage() {
         .gte("created_at", monthStart);
       if (error) throw error;
       return (data ?? []).length;
+    },
+  });
+}
+
+export function usePropertyReportAddonCredits() {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ["addon_purchases", "property-report-credits", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      if (!user) return 0;
+      const { data, error } = await supabase
+        .from("addon_purchases")
+        .select("credits_granted, credits_consumed")
+        .eq("user_id", user.id)
+        .in("addon_key", [...PROPERTY_REPORT_CREDIT_ADDONS])
+        .in("status", ["paid", "active"]);
+      if (error) throw error;
+      return (data ?? []).reduce((sum, row) => {
+        const granted = Number(row.credits_granted ?? 0);
+        const consumed = Number(row.credits_consumed ?? 0);
+        return sum + Math.max(granted - consumed, 0);
+      }, 0);
     },
   });
 }

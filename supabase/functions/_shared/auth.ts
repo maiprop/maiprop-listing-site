@@ -31,6 +31,38 @@ export class AuthError extends Error {
   }
 }
 
+const DEFAULT_AUTH_VERIFY_TIMEOUT_MS = 5_000;
+
+function readPositiveIntEnv(key: string, fallback: number): number {
+  try {
+    const raw = Deno.env.get(key);
+    const parsed = raw ? Number(raw) : NaN;
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+async function withAuthTimeout<T>(promise: Promise<T>): Promise<T> {
+  const timeoutMs = readPositiveIntEnv(
+    "AUTH_VERIFY_TIMEOUT_MS",
+    DEFAULT_AUTH_VERIFY_TIMEOUT_MS,
+  );
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new AuthError("Authentication service timeout", 503));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== null) clearTimeout(timeoutId);
+  }
+}
+
 export async function verifyBearerToken(
   req: Request,
   supabase: SupabaseAuth,
@@ -41,7 +73,7 @@ export async function verifyBearerToken(
   const token = authHeader.replace(/^Bearer\s*/i, "").trim();
   if (!token) throw new AuthError("Empty bearer token");
 
-  const { data, error } = await supabase.auth.getUser(token);
+  const { data, error } = await withAuthTimeout(supabase.auth.getUser(token));
   if (error || !data.user?.email) {
     throw new AuthError(error?.message ?? "Authentication failed");
   }

@@ -52,8 +52,21 @@ export function SettingsSection({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const logRoleSwitchStart = async (): Promise<void> => {
-    if (!currentType || !hasActiveSub) return;
+  const invokeBeginRoleSwitch = async (validateOnly: boolean): Promise<boolean> => {
+    const { error } = await supabase.functions.invoke("begin-role-switch", {
+      body: validateOnly ? { validate_only: true } : {},
+    });
+    if (error) {
+      const friendlyMsg = ROLE_SWITCH_ERROR_MESSAGES[error.message]
+        ?? "Could not start role switch. Please try again or contact support.";
+      toast.error(friendlyMsg);
+      return false;
+    }
+    return true;
+  };
+
+  const logRoleSwitchStart = async (): Promise<boolean> => {
+    if (!currentType || !hasActiveSub) return true;
 
     try {
       const { data, error } = await supabase.functions.invoke("log-role-switch", {
@@ -67,32 +80,44 @@ export function SettingsSection({
       });
       if (error) {
         logger.warn("[SettingsSection] log-role-switch start failed:", error.message);
-        toast.warning("We couldn't cancel your active subscription automatically. Please manage it from your billing settings.");
-        return;
+        toast.error("We couldn't cancel your active Stripe subscription. Please manage it from Billing before switching account type.");
+        return false;
       }
       if (stripeErrorFromResponse(data)) {
-        toast.warning("We couldn't cancel your active subscription automatically. Please manage it from your billing settings.");
+        toast.error("We couldn't cancel your active Stripe subscription. Please manage it from Billing before switching account type.");
+        return false;
       }
+      return true;
     } catch (err: unknown) {
       logger.warn("[SettingsSection] log-role-switch start threw:", err instanceof Error ? err.message : err);
-      toast.warning("We couldn't cancel your active subscription automatically. Please manage it from your billing settings.");
+      toast.error("We couldn't cancel your active Stripe subscription. Please manage it from Billing before switching account type.");
+      return false;
     }
   };
 
-  // Role switch is initiated via the begin-role-switch Edge Function, which
-  // verifies the caller and invokes the service-only begin_role_switch_for_user
-  // RPC. The database operation atomically:
+  // Role switch starts with a validate-only begin-role-switch call. That checks
+  // business blockers without mutating the profile, so Stripe is not cancelled
+  // for users who cannot switch yet. Once the current core subscription is
+  // safely marked cancel-at-period-end, the real begin-role-switch call:
   //   - clears participant_type + bio,
   //   - stamps profiles.role_switch_in_progress_at,
   //   - pauses/cancels active role-specific public and counterparty workflows.
-  // Paid subscriptions are cancelled immediately after the sentinel is created;
-  // onboarding later records the final destination and reuses the same idempotent
-  // Stripe path.
   // The subsequent /onboarding flow finalises the switch with
   // complete_onboarding_role_for_user(), which clears the sentinel and
   // unarchives the destination role's rows (idempotent).
   const handleSwitchRole = async () => {
     setSwitching(true);
+
+    if (!(await invokeBeginRoleSwitch(true))) {
+      setSwitching(false);
+      return;
+    }
+
+    if (!(await logRoleSwitchStart())) {
+      setSwitching(false);
+      return;
+    }
+
     try {
       sessionStorage.setItem("role_switch_ctx", JSON.stringify({
         fromType: currentType,
@@ -100,18 +125,11 @@ export function SettingsSection({
       }));
     } catch (_err: unknown) { /* ignore storage errors */ }
 
-    const { error } = await supabase.functions.invoke("begin-role-switch", {
-      body: {},
-    });
-    if (error) {
-      const friendlyMsg = ROLE_SWITCH_ERROR_MESSAGES[error.message]
-        ?? "Could not start role switch. Please try again or contact support.";
-      toast.error(friendlyMsg);
+    if (!(await invokeBeginRoleSwitch(false))) {
       try { sessionStorage.removeItem("role_switch_ctx"); } catch { /* ignore */ }
       setSwitching(false);
       return;
     }
-    await logRoleSwitchStart();
     await refreshProfile();
     setSwitching(false);
     toast.success("Account type cleared — redirecting to setup…");

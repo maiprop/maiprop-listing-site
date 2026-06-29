@@ -46,11 +46,18 @@ vi.mock("@/components/onboarding/OnboardingShell", () => ({
   ),
 }));
 vi.mock("@/components/onboarding/DoneScreen", () => ({
-  DoneScreen: ({ actions }: { actions: { primary: { href: string; label: string }; subtitle: string } }) => (
+  DoneScreen: ({
+    actions,
+    onUpgradeToPro,
+  }: {
+    actions: { primary: { href: string; label: string }; subtitle: string };
+    onUpgradeToPro?: () => void;
+  }) => (
     <div>
       <p>done-screen</p>
       <p>{actions.subtitle}</p>
       <p>{actions.primary.href}</p>
+      {onUpgradeToPro && <button onClick={onUpgradeToPro}>upgrade professional pro</button>}
     </div>
   ),
 }));
@@ -299,6 +306,47 @@ describe("Onboarding page handlers", () => {
     expect(await screen.findByText("done-screen")).toBeInTheDocument();
   });
 
+  it("starts professional Pro checkout from onboarding with relative redirect paths", async () => {
+    invokeMock.mockImplementation((functionName: string, options?: { body?: Record<string, unknown> }) => {
+      if (
+        functionName === "complete-onboarding-role" &&
+        options?.body?.role === "professional"
+      ) {
+        return Promise.resolve({ data: { professionalId: "pro-1" }, error: null });
+      }
+      if (functionName === "create-checkout") {
+        return Promise.resolve({ data: { url: "#stripe-checkout" }, error: null });
+      }
+      return Promise.resolve({ data: {}, error: null });
+    });
+    renderOnboarding();
+
+    fireEvent.click(screen.getByRole("button", { name: /professional role/i }));
+    fireEvent.click(screen.getByRole("button", { name: /architect/i }));
+    fireEvent.click(screen.getByRole("button", { name: /category next/i }));
+    fireEvent.change(screen.getByLabelText("business"), { target: { value: "Pro Studio" } });
+    fireEvent.change(screen.getByLabelText("tax"), { target: { value: "123456789" } });
+    fireEvent.change(screen.getByLabelText("phone"), { target: { value: "+306900000000" } });
+    fireEvent.click(screen.getByRole("button", { name: /verify pro/i }));
+
+    fireEvent.click(await screen.findByRole("button", { name: /select service/i }));
+    fireEvent.click(screen.getByRole("button", { name: /save services/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /skip availability/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /skip video/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /upgrade professional pro/i }));
+
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("create-checkout", {
+        body: {
+          plan: "professional_basic",
+          success_url: "/dashboard?pro=success",
+          cancel_url: "/pricing",
+        },
+      }),
+    );
+    expect(window.location.hash).toBe("#stripe-checkout");
+  });
+
   it("keeps role-switch confirmation cancellable before proceeding", async () => {
     sessionStorage.setItem("role_switch_ctx", JSON.stringify({ fromType: "agent", hadActiveSub: true }));
     renderOnboarding();
@@ -316,6 +364,27 @@ describe("Onboarding page handlers", () => {
     await waitFor(() => expect(screen.getByText("done-screen")).toBeInTheDocument());
     expect(invokeMock).toHaveBeenCalledWith("log-role-switch", {
       body: expect.objectContaining({ from_type: "agent", to_type: "seller", had_active_sub: true }),
+    });
+  });
+
+  it("routes paid role-switch upgrades to the target pricing audience", async () => {
+    sessionStorage.setItem("role_switch_ctx", JSON.stringify({ fromType: "buyer", hadActiveSub: true }));
+    renderOnboarding();
+
+    fireEvent.click(screen.getByRole("button", { name: /agent role/i }));
+    fireEvent.click(screen.getByRole("button", { name: /confirm switch/i }));
+
+    await waitFor(() => expect(screen.getByText("done-screen")).toBeInTheDocument());
+    expect(screen.getByText("/pricing?audience=agent")).toBeInTheDocument();
+    expect(screen.getByText(/Activate your Agent Pro/i)).toBeInTheDocument();
+    expect(invokeMock).toHaveBeenCalledWith("log-role-switch", {
+      body: expect.objectContaining({
+        from_type: "buyer",
+        to_type: "agent",
+        switch_kind: "upgrade",
+        had_active_sub: true,
+        cancel_subscription: true,
+      }),
     });
   });
 });

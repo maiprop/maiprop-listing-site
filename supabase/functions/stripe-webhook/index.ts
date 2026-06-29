@@ -12,7 +12,7 @@
  *   invoice.payment_failed           → keep grace access, resync status
  */
 
-import Stripe from "npm:stripe@18.5.0";
+import Stripe from "npm:stripe@22.3.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { createLogger } from "../_shared/logger.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
@@ -20,6 +20,15 @@ import {
   hasProvisionedSubscriptionAccess,
   shouldRevokeSubscriptionAccess,
 } from "../_shared/subscriptionStatus.ts";
+import {
+  beginStripeWebhookEvent,
+  finishStripeWebhookEvent,
+  upsertBillingCustomer,
+  upsertBillingSubscription,
+} from "../_shared/billingState.ts";
+import { createStripeClient } from "../_shared/stripeClient.ts";
+import { pricingConfigMatchesStripeItem } from "../_shared/entitlements.ts";
+import { SELF_SERVE_ADDON_CREDITS } from "../create-checkout/constants.ts";
 import { shouldSkipProfileEntitlementSync } from "./addonGuard.ts";
 
 const log = createLogger("stripe-webhook");
@@ -30,6 +39,12 @@ type PricingConfigRow = {
   module?: string | null;
   metadata?: {
     stripe_price_id?: string | null;
+    stripe_price_id_monthly?: string | null;
+    stripe_monthly_price_id?: string | null;
+    stripe_price_id_annual?: string | null;
+    stripe_annual_price_id?: string | null;
+    stripe_price_id_yearly?: string | null;
+    stripe_yearly_price_id?: string | null;
     stripe_product_id?: string | null;
   } | null;
 };
@@ -48,28 +63,44 @@ type SupabaseAdminClient = any;
 
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req, "stripe-signature");
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
 
   const signature = req.headers.get("stripe-signature");
-  if (!signature) return errorResponse("Missing stripe-signature header", 400, corsHeaders);
+  if (!signature) {
+    return errorResponse("Missing stripe-signature header", 400, corsHeaders);
+  }
 
   const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
   const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-  if (!stripeKey) return errorResponse("STRIPE_SECRET_KEY not set", 500, corsHeaders);
-  if (!webhookSecret) return errorResponse("STRIPE_WEBHOOK_SECRET not set", 500, corsHeaders);
-  if (!supabaseUrl || !serviceRoleKey) return errorResponse("Supabase env not set", 500, corsHeaders);
+  if (!stripeKey) {
+    return errorResponse("STRIPE_SECRET_KEY not set", 500, corsHeaders);
+  }
+  if (!webhookSecret) {
+    return errorResponse("STRIPE_WEBHOOK_SECRET not set", 500, corsHeaders);
+  }
+  if (!supabaseUrl || !serviceRoleKey) {
+    return errorResponse("Supabase env not set", 500, corsHeaders);
+  }
 
   const body = await req.text();
-  const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+  const stripe = createStripeClient(stripeKey);
 
   let event: Stripe.Event;
   try {
-    event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret);
+    event = await stripe.webhooks.constructEventAsync(
+      body,
+      signature,
+      webhookSecret,
+    );
   } catch (err: unknown) {
-    log.error("signature verification failed", { err: err instanceof Error ? err.message : String(err) });
+    log.error("signature verification failed", {
+      err: err instanceof Error ? err.message : String(err),
+    });
     return errorResponse("Webhook signature invalid", 400, corsHeaders);
   }
 
@@ -80,6 +111,34 @@ Deno.serve(async (req) => {
   log.info("event received", { event_type: event.type });
 
   try {
+    const eventStart = await beginStripeWebhookEvent(supabase, event);
+    if (eventStart === "in_progress") {
+      log.info("webhook event already processing", {
+        event_id: event.id,
+        event_type: event.type,
+      });
+      return new Response(
+        JSON.stringify({ received: false, retry: true, in_progress: true }),
+        {
+          status: 503,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+            "Retry-After": "30",
+          },
+        },
+      );
+    }
+    if (eventStart === "duplicate") {
+      log.info("webhook event already handled", {
+        event_id: event.id,
+        event_type: event.type,
+      });
+      return new Response(JSON.stringify({ received: true, duplicate: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     switch (event.type) {
       case "customer.subscription.created":
       case "customer.subscription.updated":
@@ -102,7 +161,12 @@ Deno.serve(async (req) => {
 
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice;
-        await syncInvoiceSubscription(supabase, stripe, invoice, "invoice.payment_failed");
+        await syncInvoiceSubscription(
+          supabase,
+          stripe,
+          invoice,
+          "invoice.payment_failed",
+        );
         break;
       }
 
@@ -147,7 +211,9 @@ Deno.serve(async (req) => {
           break;
         }
         if (session.subscription && session.customer) {
-          const sub = await stripe.subscriptions.retrieve(session.subscription as string);
+          const sub = await stripe.subscriptions.retrieve(
+            session.subscription as string,
+          );
           await syncSubscription(supabase, stripe, sub);
           await syncSubscriptionTrialClaim(supabase, session, sub);
           log.info("checkout.session.completed synced subscription", {
@@ -162,7 +228,12 @@ Deno.serve(async (req) => {
         // Fires on every successful recurring charge. Re-sync to handle plan upgrades
         // where the subscription object may already be updated before this fires.
         const invoice = event.data.object as Stripe.Invoice;
-        await syncInvoiceSubscription(supabase, stripe, invoice, "invoice.payment_succeeded");
+        await syncInvoiceSubscription(
+          supabase,
+          stripe,
+          invoice,
+          "invoice.payment_succeeded",
+        );
         break;
       }
 
@@ -183,9 +254,18 @@ Deno.serve(async (req) => {
       default:
         log.info("unhandled event type", { event_type: event.type });
     }
+    await finishStripeWebhookEvent(supabase, event.id, "processed");
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     log.error("handler error", { event_type: event.type, err: msg });
+    try {
+      await finishStripeWebhookEvent(supabase, event.id, "failed", msg);
+    } catch (finishErr: unknown) {
+      log.error("failed to mark webhook event failed", {
+        event_id: event.id,
+        err: finishErr instanceof Error ? finishErr.message : String(finishErr),
+      });
+    }
     // Return 500 so Stripe retries transient failures (DB unavailable, network error, etc.)
     // Only return 200 for truly non-retryable outcomes (unknown event type falls through to the 200 below)
     return new Response(JSON.stringify({ error: msg }), {
@@ -200,33 +280,41 @@ Deno.serve(async (req) => {
 });
 
 /** Resolve which column/value to use when matching the Supabase profile.
- *  Prefers user_id from customer metadata (set at checkout).
- *  Falls back to email for legacy customers created before the metadata change. */
+ *  Only metadata.user_id is trusted for entitlement writes. */
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-function resolveProfileFilter(customer: Stripe.Customer): { column: string; value: string } | null {
+function resolveProfileFilter(
+  customer: Stripe.Customer,
+): { column: string; value: string } | null {
   const userId = customer.metadata?.user_id;
   if (userId) return { column: "user_id", value: userId };
-  if (customer.email) return { column: "email", value: customer.email };
   return null;
 }
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function normalizeAudience(raw: string | null | undefined): string | null {
-  if (raw === "buyer" || raw === "seller" || raw === "participant" || raw === "pro") return "participant";
-  if (raw === "agent" || raw === "developer" || raw === "professional" || raw === "investor" || raw === "institutional") {
+  if (
+    raw === "buyer" || raw === "seller" || raw === "participant" ||
+    raw === "pro"
+  ) return "participant";
+  if (
+    raw === "agent" || raw === "developer" || raw === "professional" ||
+    raw === "investor" || raw === "institutional"
+  ) {
     return raw;
   }
   return null;
 }
 
-function investorTierFromPlanKey(planKey: string | null | undefined): string | null {
+function investorTierFromPlanKey(
+  planKey: string | null | undefined,
+): string | null {
   if (planKey === "investor_private") return "private";
   if (planKey === "investor_institutional") return "institutional";
   return null;
 }
 
 function isPaidCheckoutSession(session: Stripe.Checkout.Session): boolean {
-  return session.payment_status === "paid" || session.status === "complete";
+  return session.payment_status === "paid";
 }
 
 function normalizePositiveQuantity(raw: string | null | undefined): number {
@@ -237,9 +325,50 @@ function normalizePositiveQuantity(raw: string | null | undefined): number {
   return parsed;
 }
 
-function normalizeAddonCheckoutMode(mode: Stripe.Checkout.Session.Mode | null): "payment" | "subscription" {
+function normalizeAddonCheckoutMode(
+  mode: Stripe.Checkout.Session.Mode | null,
+): "payment" | "subscription" {
   if (mode === "payment" || mode === "subscription") return mode;
   throw new Error("addon checkout session has unsupported checkout mode");
+}
+
+export function addonPurchaseStatusForSubscription(
+  sub: Pick<Stripe.Subscription, "status">,
+): "active" | "cancelled" {
+  return hasProvisionedSubscriptionAccess(sub.status) ? "active" : "cancelled";
+}
+
+async function syncAddonSubscriptionLifecycle(
+  supabase: SupabaseAdminClient,
+  sub: Stripe.Subscription,
+): Promise<boolean> {
+  if (!shouldSkipProfileEntitlementSync(sub)) return false;
+
+  const status = addonPurchaseStatusForSubscription(sub);
+  const { error } = await supabase
+    .from("addon_purchases")
+    .update({
+      status,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("stripe_subscription_id", sub.id);
+
+  if (error) throw error;
+  log.info("synced add-on subscription lifecycle", {
+    sub_id: sub.id,
+    addon_key: sub.metadata?.addon_key ?? null,
+    stripe_status: sub.status,
+    addon_status: status,
+  });
+  return true;
+}
+
+export function addonCreditsGranted(addonKey: string, quantity: number): number {
+  const units = SELF_SERVE_ADDON_CREDITS[addonKey];
+  if (!units) {
+    throw new Error(`unsupported self-serve add-on key: ${addonKey}`);
+  }
+  return units * quantity;
 }
 
 // skipcq: JS-0067 - Top-level helper is used by the webhook switch.
@@ -260,6 +389,7 @@ async function fulfillAddonCheckoutSession(
     throw new Error("addon checkout session missing required metadata");
   }
   const checkoutMode = normalizeAddonCheckoutMode(session.mode);
+  const quantity = normalizePositiveQuantity(metadata.quantity);
 
   const { error } = await supabase
     .from("addon_purchases")
@@ -269,12 +399,17 @@ async function fulfillAddonCheckoutSession(
       module,
       audience,
       unit,
-      quantity: normalizePositiveQuantity(metadata.quantity),
+      quantity,
       checkout_mode: checkoutMode,
       status: checkoutMode === "subscription" ? "active" : "paid",
       stripe_session_id: session.id,
-      stripe_subscription_id: typeof session.subscription === "string" ? session.subscription : null,
-      stripe_customer_id: typeof session.customer === "string" ? session.customer : null,
+      stripe_subscription_id: typeof session.subscription === "string"
+        ? session.subscription
+        : null,
+      stripe_customer_id: typeof session.customer === "string"
+        ? session.customer
+        : null,
+      credits_granted: addonCreditsGranted(addonKey, quantity),
       metadata,
     }, { onConflict: "stripe_session_id" });
 
@@ -294,7 +429,9 @@ async function activateInvestorPaymentSession(
   const userId = metadata.user_id;
   const tier = investorTierFromPlanKey(metadata.plan_key);
   if (!userId || !tier) {
-    throw new Error("investor payment session missing user_id or supported plan_key");
+    throw new Error(
+      "investor payment session missing user_id or supported plan_key",
+    );
   }
 
   const { data, error } = await supabase
@@ -305,11 +442,14 @@ async function activateInvestorPaymentSession(
       expires_at: null,
       updated_at: new Date().toISOString(),
       activated_at: new Date().toISOString(),
-      stripe_customer_id: typeof session.customer === "string" ? session.customer : null,
+      stripe_customer_id: typeof session.customer === "string"
+        ? session.customer
+        : null,
       stripe_session_id: session.id,
     })
     .eq("user_id", userId)
     .eq("tier", tier)
+    .eq("stripe_session_id", session.id)
     .eq("status", "pending_payment")
     .select("id, status, stripe_session_id")
     .maybeSingle();
@@ -327,7 +467,9 @@ async function activateInvestorPaymentSession(
   if (existingError) throw existingError;
   if (existing) return true;
 
-  throw new Error("investor payment session has no matching pending subscription");
+  throw new Error(
+    "investor payment session has no matching pending subscription",
+  );
 }
 
 type SubscriptionTrialClaimStatus =
@@ -344,7 +486,9 @@ function isSubscriptionTrialMetadata(
   return metadata?.checkout_type === "subscription_trial";
 }
 
-function mapSubscriptionTrialStatus(status: string | null | undefined): SubscriptionTrialClaimStatus {
+function mapSubscriptionTrialStatus(
+  status: string | null | undefined,
+): SubscriptionTrialClaimStatus {
   if (status === "trialing") return "trialing";
   if (status === "active") return "active";
   if (status === "past_due") return "past_due";
@@ -385,14 +529,18 @@ async function syncSubscriptionTrialClaim(
   }
 
   const userId = subscriptionMetadata.user_id ?? sessionMetadata.user_id;
-  if (!userId) throw new Error("subscription trial checkout missing user_id metadata");
+  if (!userId) {
+    throw new Error("subscription trial checkout missing user_id metadata");
+  }
 
   await updateSubscriptionTrialClaim(supabase, userId, {
     status: sub ? mapSubscriptionTrialStatus(sub.status) : "checkout_created",
     stripe_checkout_session_id: session.id,
     stripe_subscription_id: sub?.id ??
       (typeof session.subscription === "string" ? session.subscription : null),
-    stripe_customer_id: typeof session.customer === "string" ? session.customer : null,
+    stripe_customer_id: typeof session.customer === "string"
+      ? session.customer
+      : null,
     metadata: {
       ...sessionMetadata,
       ...subscriptionMetadata,
@@ -409,7 +557,9 @@ async function syncSubscriptionTrialStatus(
   if (!isSubscriptionTrialMetadata(metadata)) return;
 
   const userId = metadata.user_id;
-  if (!userId) throw new Error("subscription trial subscription missing user_id metadata");
+  if (!userId) {
+    throw new Error("subscription trial subscription missing user_id metadata");
+  }
 
   await updateSubscriptionTrialClaim(supabase, userId, {
     status: mapSubscriptionTrialStatus(sub.status),
@@ -426,18 +576,27 @@ function firstSubscriptionItem(sub: Stripe.Subscription) {
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function getInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
-  const legacySubscription = (invoice as unknown as { subscription?: string | Stripe.Subscription | null }).subscription;
+  const legacySubscription = (invoice as unknown as {
+    subscription?: string | Stripe.Subscription | null;
+  }).subscription;
   if (typeof legacySubscription === "string") return legacySubscription;
-  if (legacySubscription && typeof legacySubscription === "object") return legacySubscription.id;
+  if (legacySubscription && typeof legacySubscription === "object") {
+    return legacySubscription.id;
+  }
 
-  const parentSubscription =
-    (invoice as unknown as { parent?: { subscription_details?: { subscription?: string | null } | null } | null })
-      .parent?.subscription_details?.subscription;
+  const parentSubscription = (invoice as unknown as {
+    parent?: {
+      subscription_details?: { subscription?: string | null } | null;
+    } | null;
+  })
+    .parent?.subscription_details?.subscription;
   return parentSubscription ?? null;
 }
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-function getScheduleSubscriptionId(schedule: Stripe.SubscriptionSchedule): string | null {
+function getScheduleSubscriptionId(
+  schedule: Stripe.SubscriptionSchedule,
+): string | null {
   const subscription = schedule.subscription;
   if (typeof subscription === "string") return subscription;
   if (subscription && typeof subscription === "object") return subscription.id;
@@ -452,10 +611,12 @@ async function resolveSubscriptionEntitlement(
   if (shouldSkipProfileEntitlementSync(sub)) return null;
   const item = firstSubscriptionItem(sub);
   const priceId = item?.price?.id ?? null;
-  const productId = typeof item?.price?.product === "string" ? item.price.product : null;
+  const product = item?.price?.product;
+  const productId = typeof product === "string" ? product : product?.id ?? null;
   if (!productId) return null;
 
-  const metadataPlan = (sub.metadata?.plan_key ?? sub.metadata?.plan ?? "") as string;
+  const metadataPlan =
+    (sub.metadata?.plan_key ?? sub.metadata?.plan ?? "") as string;
   const { data } = await supabase
     .from("pricing_configs")
     .select("key, audience, module, metadata")
@@ -464,27 +625,54 @@ async function resolveSubscriptionEntitlement(
   const rows = (data ?? []) as PricingConfigRow[];
   const row = rows.find((candidate) => {
     if (
-      !["user_subscription", "agent_subscription", "developer_subscription", "professional_subscription"]
+      ![
+        "user_subscription",
+        "agent_subscription",
+        "developer_subscription",
+        "professional_subscription",
+      ]
         .includes(candidate.module ?? "")
     ) {
       return false;
     }
-    const meta = candidate.metadata ?? {};
-    const matchesProductOrPrice = meta.stripe_product_id === productId || meta.stripe_price_id === priceId;
+    const matchesProductOrPrice = pricingConfigMatchesStripeItem(candidate, {
+      productId,
+      priceId,
+    });
     if (metadataPlan) {
       return candidate.key === metadataPlan && matchesProductOrPrice;
     }
     return matchesProductOrPrice;
   });
-  const audience = normalizeAudience(row?.audience ?? sub.metadata?.audience ?? null);
+  const audience = normalizeAudience(
+    row?.audience ?? sub.metadata?.audience ?? null,
+  );
   if (!row?.key || !audience) return null;
 
   return {
     planKey: row.key,
     audience,
-    role: normalizeAudience(sub.metadata?.role as string | undefined) ?? audience,
+    role: normalizeAudience(sub.metadata?.role as string | undefined) ??
+      audience,
     productId,
   };
+}
+
+export async function findProvisionedReplacementSubscription(
+  stripe: Stripe,
+  customerId: string,
+  deletedSubscriptionId: string,
+): Promise<Stripe.Subscription | null> {
+  const subscriptions = await stripe.subscriptions.list({
+    customer: customerId,
+    status: "all",
+    limit: 100,
+  });
+  return subscriptions.data.find((candidate) =>
+    candidate.id !== deletedSubscriptionId &&
+    !shouldSkipProfileEntitlementSync(candidate) &&
+    hasProvisionedSubscriptionAccess(candidate.status)
+  ) ?? null;
 }
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
@@ -493,30 +681,45 @@ async function syncSubscription(
   stripe: Stripe,
   sub: Stripe.Subscription,
 ) {
-  if (shouldSkipProfileEntitlementSync(sub)) {
-    log.info("skipping profile entitlement sync for add-on subscription", {
-      sub_id: sub.id,
-      addon_key: sub.metadata?.addon_key ?? null,
-    });
+  if (await syncAddonSubscriptionLifecycle(supabase, sub)) {
     return;
   }
 
   const customerId = sub.customer as string;
-  const customer = await stripe.customers.retrieve(customerId) as Stripe.Customer;
+  const customer = await stripe.customers.retrieve(
+    customerId,
+  ) as Stripe.Customer;
   const filter = resolveProfileFilter(customer);
   if (!filter) {
-    log.warn("customer has no user_id metadata or email", { customer_id: customerId });
+    log.warn("customer has no user_id metadata or email", {
+      customer_id: customerId,
+    });
     return;
   }
 
   const hasAccess = hasProvisionedSubscriptionAccess(sub.status);
   const shouldRevoke = shouldRevokeSubscriptionAccess(sub.status);
-  const userId = customer.metadata?.user_id as string | undefined
-    ?? await resolveUserIdByEmail(supabase, customer.email ?? null);
+  const userId = customer.metadata?.user_id as string | undefined;
+  if (userId) {
+    await upsertBillingCustomer(supabase, {
+      userId,
+      stripeCustomerId: customerId,
+      email: customer.email ?? null,
+      livemode: sub.livemode,
+      metadata: customer.metadata ?? {},
+    });
+    await upsertBillingSubscription(supabase, {
+      userId,
+      stripeCustomerId: customerId,
+      subscription: sub,
+    });
+  }
   const hasManualAccess = shouldRevoke && userId
     ? await hasManualProAccess(supabase, userId)
     : false;
-  const entitlement = hasAccess ? await resolveSubscriptionEntitlement(supabase, sub) : null;
+  const entitlement = hasAccess
+    ? await resolveSubscriptionEntitlement(supabase, sub)
+    : null;
   const productId = entitlement?.productId ?? null;
 
   const { error } = await supabase
@@ -525,7 +728,10 @@ async function syncSubscription(
     .eq(filter.column, filter.value);
 
   if (error) {
-    log.error("failed to update profile", { filter, err: String(error.message ?? error) });
+    log.error("failed to update profile", {
+      filter,
+      err: String(error.message ?? error),
+    });
   } else {
     log.info("updated profile subscription", {
       filter,
@@ -541,15 +747,23 @@ async function syncSubscription(
   // by create-checkout. The BEFORE UPDATE trigger
   // public.professionals_guard_subscription_tier permits service-role writes
   // because auth.uid() is NULL on edge-function calls without a user JWT.
-  await syncProfessionalTier(supabase, sub, hasAccess || hasManualAccess, entitlement);
+  await syncProfessionalTier(
+    supabase,
+    sub,
+    hasAccess || hasManualAccess,
+    entitlement,
+  );
 
   if (shouldRevoke && userId && !hasManualAccess) {
     await applySubscriptionLapseControls(supabase, userId, sub.status);
   } else if (shouldRevoke && hasManualAccess) {
-    log.info("terminal Stripe status received but manual/admin entitlement remains active", {
-      user_id: userId,
-      status: sub.status,
-    });
+    log.info(
+      "terminal Stripe status received but manual/admin entitlement remains active",
+      {
+        user_id: userId,
+        status: sub.status,
+      },
+    );
   }
 }
 
@@ -559,11 +773,53 @@ async function clearSubscription(
   stripe: Stripe,
   sub: Stripe.Subscription,
 ) {
+  if (await syncAddonSubscriptionLifecycle(supabase, sub)) {
+    return;
+  }
+
   const customerId = sub.customer as string;
-  const customer = await stripe.customers.retrieve(customerId) as Stripe.Customer;
+  const customer = await stripe.customers.retrieve(
+    customerId,
+  ) as Stripe.Customer;
   const filter = resolveProfileFilter(customer);
   if (!filter) {
-    log.warn("customer has no user_id metadata or email", { customer_id: customerId });
+    log.warn("customer has no user_id metadata or email", {
+      customer_id: customerId,
+    });
+    return;
+  }
+
+  const userId = customer.metadata?.user_id as string | undefined;
+
+  if (!userId) return;
+
+  await upsertBillingCustomer(supabase, {
+    userId,
+    stripeCustomerId: customerId,
+    email: customer.email ?? null,
+    livemode: sub.livemode,
+    metadata: customer.metadata ?? {},
+  });
+  await upsertBillingSubscription(supabase, {
+    userId,
+    stripeCustomerId: customerId,
+    subscription: sub,
+  });
+
+  const replacement = await findProvisionedReplacementSubscription(
+    stripe,
+    customerId,
+    sub.id,
+  );
+  if (replacement) {
+    log.info("deleted subscription has active replacement; syncing replacement", {
+      user_id: userId,
+      deleted_sub_id: sub.id,
+      replacement_sub_id: replacement.id,
+      replacement_status: replacement.status,
+    });
+    await syncSubscription(supabase, stripe, replacement);
+    await syncSubscriptionTrialStatus(supabase, replacement);
     return;
   }
 
@@ -573,22 +829,23 @@ async function clearSubscription(
     .eq(filter.column, filter.value);
 
   if (error) {
-    log.error("failed to clear subscription", { filter, err: String(error.message ?? error) });
+    log.error("failed to clear subscription", {
+      filter,
+      err: String(error.message ?? error),
+    });
   } else {
     log.info("cleared subscription", { filter });
   }
 
-  const userId = customer.metadata?.user_id as string | undefined
-    ?? await resolveUserIdByEmail(supabase, customer.email ?? null);
-
-  if (!userId) return;
-
   if (await hasManualProAccess(supabase, userId)) {
     await syncProfessionalTier(supabase, sub, true, null);
-    log.info("deleted Stripe subscription cleared product but kept manual/admin Pro access", {
-      user_id: userId,
-      sub_id: sub.id,
-    });
+    log.info(
+      "deleted Stripe subscription cleared product but kept manual/admin Pro access",
+      {
+        user_id: userId,
+        sub_id: sub.id,
+      },
+    );
     return;
   }
 
@@ -599,7 +856,10 @@ async function clearSubscription(
       .update({ subscription_tier: "free" })
       .eq("user_id", userId);
     if (profErr) {
-      log.error("failed to clear professional tier", { user_id: userId, err: String(profErr.message ?? profErr) });
+      log.error("failed to clear professional tier", {
+        user_id: userId,
+        err: String(profErr.message ?? profErr),
+      });
     }
   }
 
@@ -614,12 +874,18 @@ async function syncProfessionalTier(
   isActive: boolean,
   entitlement: SubscriptionEntitlement,
 ) {
-  const planKey = entitlement?.planKey ?? (sub.metadata?.plan_key ?? sub.metadata?.plan ?? "") as string;
-  if (entitlement?.audience !== "professional" && !planKey.startsWith("professional_")) return;
+  const planKey = entitlement?.planKey ??
+    (sub.metadata?.plan_key ?? sub.metadata?.plan ?? "") as string;
+  if (
+    entitlement?.audience !== "professional" &&
+    !planKey.startsWith("professional_")
+  ) return;
 
   const userId = (sub.metadata?.user_id ?? "") as string;
   if (!userId) {
-    log.warn("professional plan subscription missing user_id metadata", { sub_id: sub.id });
+    log.warn("professional plan subscription missing user_id metadata", {
+      sub_id: sub.id,
+    });
     return;
   }
 
@@ -630,9 +896,17 @@ async function syncProfessionalTier(
     .eq("user_id", userId);
 
   if (error) {
-    log.error("failed to update professional tier", { user_id: userId, tier, err: String(error.message ?? error) });
+    log.error("failed to update professional tier", {
+      user_id: userId,
+      tier,
+      err: String(error.message ?? error),
+    });
   } else {
-    log.info("updated professional tier", { user_id: userId, tier, plan_key: planKey });
+    log.info("updated professional tier", {
+      user_id: userId,
+      tier,
+      plan_key: planKey,
+    });
   }
 }
 
@@ -695,9 +969,12 @@ async function applySubscriptionLapseControls(
   userId: string,
   status: string,
 ) {
-  const { data, error } = await supabase.rpc("apply_subscription_lapse_controls", {
-    p_user_id: userId,
-  });
+  const { data, error } = await supabase.rpc(
+    "apply_subscription_lapse_controls",
+    {
+      p_user_id: userId,
+    },
+  );
 
   if (error) {
     log.error("subscription lapse controls failed", {
@@ -716,21 +993,11 @@ async function applySubscriptionLapseControls(
 }
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-async function resolveUserIdByEmail(
-  supabase: SupabaseAdminClient,
-  email: string | null,
-): Promise<string | null> {
-  if (!email) return null;
-  const { data } = await supabase
-    .from("profiles")
-    .select("user_id")
-    .eq("email", email)
-    .maybeSingle();
-  return (data as { user_id?: string } | null)?.user_id ?? null;
-}
-
-// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-function errorResponse(message: string, status: number, corsHeaders: Record<string, string>) {
+function errorResponse(
+  message: string,
+  status: number,
+  corsHeaders: Record<string, string>,
+) {
   return new Response(JSON.stringify({ error: message }), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -766,29 +1033,50 @@ async function applyAgentDataInputDiscount(
   if (invoice.status && invoice.status !== "draft") return;
   if (!invoice.id || !invoice.customer) return;
   // Skip initial signup invoices — no prior verified inputs are possible yet.
-  if ((invoice as unknown as Record<string, unknown>).billing_reason === "subscription_create") return;
+  if (
+    (invoice as unknown as Record<string, unknown>).billing_reason ===
+      "subscription_create"
+  ) return;
 
-  const customer = await stripe.customers.retrieve(invoice.customer as string) as Stripe.Customer;
-  const userId = customer.metadata?.user_id ?? await resolveUserIdByEmail(supabase, customer.email ?? null);
+  const customer = await stripe.customers.retrieve(
+    invoice.customer as string,
+  ) as Stripe.Customer;
+  const userId = customer.metadata?.user_id ?? null;
   if (!userId) {
-    log.info("invoice.created: cannot resolve user_id, skipping data input discount", { invoice_id: invoice.id });
+    log.info(
+      "invoice.created: cannot resolve user_id, skipping data input discount",
+      { invoice_id: invoice.id },
+    );
     return;
   }
 
-  const { data, error } = await supabase.rpc("apply_verified_data_input_discount", {
-    p_user_id: userId,
-    p_invoice_id: invoice.id,
-  });
+  const { data, error } = await supabase.rpc(
+    "apply_verified_data_input_discount",
+    {
+      p_user_id: userId,
+      p_invoice_id: invoice.id,
+    },
+  );
   if (error) {
-    log.error("apply_verified_data_input_discount rpc failed", { user_id: userId, invoice_id: invoice.id, err: String(error.message ?? error) });
+    log.error("apply_verified_data_input_discount rpc failed", {
+      user_id: userId,
+      invoice_id: invoice.id,
+      err: String(error.message ?? error),
+    });
     return;
   }
 
-  const row = (Array.isArray(data) ? data[0] : data) as { applied_count?: number; applied_pct?: number | string } | null;
+  const row = (Array.isArray(data) ? data[0] : data) as {
+    applied_count?: number;
+    applied_pct?: number | string;
+  } | null;
   const appliedCount = Number(row?.applied_count ?? 0);
   const appliedPct = Number(row?.applied_pct ?? 0);
   if (!appliedCount || appliedPct <= 0) {
-    log.info("no verified data inputs to apply", { user_id: userId, invoice_id: invoice.id });
+    log.info("no verified data inputs to apply", {
+      user_id: userId,
+      invoice_id: invoice.id,
+    });
     return;
   }
 
@@ -796,7 +1084,10 @@ async function applyAgentDataInputDiscount(
   // toward the nearest cent. Stripe expects integer minor units.
   const subtotalMinor = invoice.subtotal ?? 0;
   if (subtotalMinor <= 0) {
-    log.warn("invoice subtotal non-positive — skipping discount", { invoice_id: invoice.id, subtotal: subtotalMinor });
+    log.warn("invoice subtotal non-positive — skipping discount", {
+      invoice_id: invoice.id,
+      subtotal: subtotalMinor,
+    });
     return;
   }
   const discountMinor = Math.round((subtotalMinor * appliedPct) / 100);
@@ -808,7 +1099,8 @@ async function applyAgentDataInputDiscount(
       invoice: invoice.id,
       amount: -discountMinor, // negative = credit
       currency: invoice.currency,
-      description: `Data Input reward — ${appliedCount} verified closing(s) × 0.5% (${appliedPct}% off)`,
+      description:
+        `Data Input reward — ${appliedCount} verified closing(s) × 0.5% (${appliedPct}% off)`,
       metadata: {
         type: "agent_data_input_discount",
         user_id: userId,
@@ -825,16 +1117,29 @@ async function applyAgentDataInputDiscount(
       err: stripeErr instanceof Error ? stripeErr.message : String(stripeErr),
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: rollbackErr } = await (supabase as any).from("agent_data_inputs")
-      .update({ discount_applied: false, discount_applied_at: null, discount_invoice_id: null })
+    const { error: rollbackErr } = await (supabase as any).from(
+      "agent_data_inputs",
+    )
+      .update({
+        discount_applied: false,
+        discount_applied_at: null,
+        discount_invoice_id: null,
+        applied_to_invoice_at: null,
+        stripe_credit_id: null,
+        stripe_credit_amount_cents: null,
+        stripe_credit_currency: null,
+      })
       .eq("user_id", userId)
       .eq("discount_invoice_id", invoice.id);
     if (rollbackErr) {
-      log.error("CRITICAL: rollback of discount rows failed — credits permanently lost", {
-        user_id: userId,
-        invoice_id: invoice.id,
-        err: String(rollbackErr.message ?? rollbackErr),
-      });
+      log.error(
+        "CRITICAL: rollback of discount rows failed — credits permanently lost",
+        {
+          user_id: userId,
+          invoice_id: invoice.id,
+          err: String(rollbackErr.message ?? rollbackErr),
+        },
+      );
     }
     return;
   }

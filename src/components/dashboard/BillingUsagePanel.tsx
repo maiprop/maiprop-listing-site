@@ -20,6 +20,7 @@ import {
   PROFESSIONAL_PRIORITY_AD_EXTRA_COST,
   REPORT_EXTRA_COST,
   REPORT_INCLUDED,
+  usePropertyReportAddonCredits,
   usePriorityAdsUsage,
   useReportUsage,
 } from "@/hooks/useUsageAddons";
@@ -205,14 +206,21 @@ export function BillingUsagePanel({
 }: BillingUsagePanelProps) {
   const aiQuotas = useAiQuotas(BILLING_AI_BUCKETS, user, { enabled: Boolean(user) });
   const { data: reportCount = 0, isLoading: reportsLoading, error: reportsError } = useReportUsage();
+  const {
+    data: reportCreditCount = 0,
+    isLoading: reportCreditsLoading,
+    error: reportCreditsError,
+  } = usePropertyReportAddonCredits();
   const { data: priorityCount = 0, isLoading: priorityLoading, error: priorityError } = usePriorityAdsUsage();
   const showPriorityBoosts = SELL_SIDE_PARTICIPANTS.has(participantType);
-  const priorityAddonKey = participantType === "professional" ? "extra_priority_ad" : "priority_placement";
   const priorityFootnote = participantType === "professional"
     ? `Extra professional priority ads cost EUR ${PROFESSIONAL_PRIORITY_AD_EXTRA_COST} each.`
     : `Priority placement costs EUR ${PRIORITY_ADS_EXTRA_COST} for 30 days; featured listings start at EUR 39.`;
 
-  const reportLimit = isPro ? REPORT_INCLUDED : 0;
+  const reportBaseLimit = isPro ? REPORT_INCLUDED : 0;
+  const reportLimit = reportBaseLimit +
+    reportCreditCount +
+    Math.max(reportCount - reportBaseLimit, 0);
   const priorityLimit = isPro ? PRIORITY_ADS_INCLUDED : 0;
   const valuationQuota = aiQuotas.quotas["property-valuation"];
   const neighbourhoodQuota = aiQuotas.quotas["neighbourhood-report"];
@@ -264,8 +272,8 @@ export function BillingUsagePanel({
       icon: FileText,
       used: reportCount,
       limit: reportLimit,
-      loading: reportsLoading,
-      error: Boolean(reportsError),
+      loading: reportsLoading || reportCreditsLoading,
+      error: Boolean(reportsError || reportCreditsError),
       action: isPro
         ? { type: "addon", addonKey: "property_report_single", label: "Buy report" }
         : { type: "upgrade", label: "Upgrade" },
@@ -285,7 +293,7 @@ export function BillingUsagePanel({
       limit: priorityLimit,
       loading: priorityLoading,
       error: Boolean(priorityError),
-      action: { type: "addon", addonKey: priorityAddonKey, label: "Buy boost" },
+      action: { type: "contact", label: "Contact team" },
       footnote: isPro ? priorityFootnote : "Buy a boost without changing your plan.",
     });
   }

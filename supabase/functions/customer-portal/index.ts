@@ -1,4 +1,4 @@
-import Stripe from "npm:stripe@18.5.0";
+import Stripe from "npm:stripe@22.3.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import {
@@ -11,6 +11,14 @@ import {
   isStripeMockMode,
   withMockBillingParams,
 } from "../_shared/stripeMode.ts";
+import { createStripeClient } from "../_shared/stripeClient.ts";
+import {
+  buildPortalSessionParams,
+  parsePortalActionRequest,
+  PortalActionValidationError,
+  type CustomerPortalAction,
+} from "./portalActions.ts";
+import { resolveCheckoutOrigin } from "../create-checkout/origins.ts";
 
 const log = createLogger("customer-portal");
 
@@ -33,13 +41,13 @@ const logStep = (step: string, details?: unknown): void => {
 };
 
 /**
- * Resolve the Stripe customer for the authenticated user. Prefers
- * metadata.user_id (set by create-checkout) so an email change after
- * subscription does not orphan the user from their billing portal. Falls back
- * to email lookup with a metadata backfill for legacy customers.
+ * Resolve the Stripe customer for the authenticated user. Prefer immutable
+ * ownership signals: Stripe metadata.user_id first, then durable billing state.
+ * Never claim a Stripe customer by email alone.
  */
 async function resolveCustomer(
   stripe: Stripe,
+  supabase: { from: (table: string) => unknown },
   user: { id: string; email: string },
 ): Promise<string | null> {
   try {
@@ -49,18 +57,84 @@ async function resolveCustomer(
     });
     if (search.data[0]) return search.data[0].id;
   } catch (_err) {
-    // customers.search requires the search API; fall through.
+    // customers.search requires the search API; fall through to durable state.
   }
-  const byEmail = await stripe.customers.list({ email: user.email, limit: 1 });
-  if (byEmail.data[0]) {
-    if (!byEmail.data[0].metadata?.user_id) {
-      await stripe.customers.update(byEmail.data[0].id, {
-        metadata: { ...(byEmail.data[0].metadata ?? {}), user_id: user.id },
-      });
+
+  try {
+    const { data, error } = await (supabase.from("billing_customers") as {
+      select: (columns: string) => {
+        eq: (column: string, value: string) => {
+          order: (
+            column: string,
+            opts: { ascending: boolean },
+          ) => {
+            limit: (count: number) => PromiseLike<{
+              data?: Array<{ stripe_customer_id?: string | null }> | null;
+              error?: { message?: string } | null;
+            }>;
+          };
+        };
+      };
+    }).select("stripe_customer_id")
+      .eq("user_id", user.id)
+      .order("updated_at", { ascending: false })
+      .limit(1);
+    if (error) throw new Error(error.message ?? "billing customer lookup failed");
+    const customerId = data?.[0]?.stripe_customer_id ?? null;
+    if (customerId) {
+      const customer = await stripe.customers.retrieve(customerId);
+      if (!("deleted" in customer && customer.deleted)) return customer.id;
     }
-    return byEmail.data[0].id;
+  } catch (err) {
+    log.warn("durable billing customer lookup failed", {
+      user_id: user.id,
+      err: err instanceof Error ? err.message : String(err),
+    });
   }
+
   return null;
+}
+
+const BILLABLE_SUBSCRIPTION_STATUSES = new Set([
+  "active",
+  "trialing",
+  "past_due",
+]);
+
+async function resolveOwnedSubscriptionId(
+  stripe: Stripe,
+  customerId: string,
+  action: CustomerPortalAction,
+  requestedSubscriptionId: string | null,
+): Promise<string | null> {
+  if (
+    action !== "subscription_cancel" &&
+    action !== "subscription_update" &&
+    action !== "resume_subscription"
+  ) {
+    return null;
+  }
+
+  const subscriptions = await stripe.subscriptions.list({
+    customer: customerId,
+    status: "all",
+    limit: 100,
+  });
+  const owned = requestedSubscriptionId
+    ? subscriptions.data.find((subscription) =>
+      subscription.id === requestedSubscriptionId
+    )
+    : subscriptions.data.find((subscription) =>
+      BILLABLE_SUBSCRIPTION_STATUSES.has(subscription.status)
+    );
+
+  if (!owned) {
+    throw new AuthError("Subscription not found for this customer", 403);
+  }
+  if (action !== "resume_subscription" && !BILLABLE_SUBSCRIPTION_STATUSES.has(owned.status)) {
+    throw new Error("Subscription is not eligible for this portal action");
+  }
+  return owned.id;
 }
 
 Deno.serve(async (req) => {
@@ -84,13 +158,34 @@ Deno.serve(async (req) => {
     logStep("Function started");
     const user = await verifyBearerToken(req, supabaseClient);
     logStep("User authenticated", { userId: user.id, email: user.email });
+    const body = req.method === "POST" && req.body
+      ? await req.json().catch(() => ({}))
+      : {};
+    const portalAction = parsePortalActionRequest(body);
 
-    const origin = req.headers.get("origin") || "https://portal.maiprop.co";
+    const origin = resolveCheckoutOrigin(req.headers.get("origin"));
+    const returnUrl = `${origin}/dashboard/billing`;
     if (isStripeMockMode()) {
+      if (portalAction.action === "resume_subscription") {
+        return new Response(
+          JSON.stringify({
+            resumed: true,
+            mock: true,
+            billing_reason: "stripe_mock",
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          },
+        );
+      }
       return new Response(
         JSON.stringify({
           url: `${origin}${
-            withMockBillingParams("/dashboard/billing", { portal: "mock" })
+            withMockBillingParams("/dashboard/billing", {
+              portal: "mock",
+              action: portalAction.action,
+            })
           }`,
           mock: true,
           billing_reason: "stripe_mock",
@@ -105,8 +200,8 @@ Deno.serve(async (req) => {
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
-    const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
-    const customerId = await resolveCustomer(stripe, user);
+    const stripe = createStripeClient(stripeKey);
+    const customerId = await resolveCustomer(stripe, supabaseClient, user);
     if (!customerId) {
       return new Response(
         JSON.stringify({ error: "No Stripe customer found" }),
@@ -118,12 +213,34 @@ Deno.serve(async (req) => {
     }
     logStep("Customer found", { customerId });
 
-    const portalSession = await stripe.billingPortal.sessions.create({
-      customer: customerId,
-      // /dashboard/billing is a real route (Dashboard.tsx renders BillingTab for :section=billing).
-      // The previous return_url=/pro landed users on the SPA 404 page after Stripe portal exit.
-      return_url: `${origin}/dashboard/billing`,
-    });
+    const subscriptionId = await resolveOwnedSubscriptionId(
+      stripe,
+      customerId,
+      portalAction.action,
+      portalAction.subscriptionId,
+    );
+    if (portalAction.action === "resume_subscription") {
+      await stripe.subscriptions.update(subscriptionId as string, {
+        cancel_at_period_end: false,
+      });
+      return new Response(
+        JSON.stringify({ resumed: true, subscription_id: subscriptionId }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        },
+      );
+    }
+
+    const portalSession = await stripe.billingPortal.sessions.create(
+      buildPortalSessionParams(
+        customerId,
+        returnUrl,
+        portalAction.action,
+        subscriptionId,
+        Deno.env.get("STRIPE_CUSTOMER_PORTAL_CONFIGURATION_ID") ?? null,
+      ) as Stripe.BillingPortal.SessionCreateParams,
+    );
 
     logStep("Portal session created", { sessionId: portalSession.id });
 
@@ -132,7 +249,11 @@ Deno.serve(async (req) => {
       status: 200,
     });
   } catch (error: unknown) {
-    const status = error instanceof AuthError ? error.status : 500;
+    const status = error instanceof AuthError
+      ? error.status
+      : error instanceof PortalActionValidationError
+      ? error.status
+      : 500;
     const message = error instanceof Error ? error.message : String(error);
     logStep("ERROR", { message, status });
     return new Response(JSON.stringify({ error: message }), {

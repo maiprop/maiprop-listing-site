@@ -40,7 +40,7 @@ origin instead, for example `https://auth.maiprop.co`.
 |---|---|---|
 | Maps | `VITE_MAPBOX_TOKEN` | mapbox.com → Account → Access Tokens |
 | AI search / assist | `GEMINI_API_KEY` or `OPENAI_API_KEY` | Gemini or OpenAI dashboard (set in Supabase Edge Function secrets) |
-| Stripe checkout | `VITE_STRIPE_PRO_PRODUCT_ID` + all `VITE_STRIPE_PRICE_*` | Stripe dashboard → Products |
+| Stripe checkout | `VITE_STRIPE_PRO_PRODUCT_ID` + all `VITE_STRIPE_PRICE_*` for display; `STRIPE_PRICE_*` or Admin Pricing sync for Edge checkout | Stripe dashboard → Products |
 | Error monitoring | `VITE_SENTRY_DSN` | sentry.io → Project → Client Keys |
 | Production telemetry audit | `SENTRY_AUTH_TOKEN` | sentry.io → User Settings → Auth Tokens; local/read-only audit only |
 | Analytics | `VITE_PLAUSIBLE_DOMAIN` | plausible.io → Sites |
@@ -145,8 +145,26 @@ Dashboard → Project Settings → Edge Functions → Secrets.
 | `BILLING_MODE=mock` | Temporary billing mode for health, checkout, billing portal, and invoice surfaces while real Stripe IDs/secrets are unavailable. Remove before real paid launch. |
 | `STRIPE_MODE=mock` | Alternate explicit mock billing-mode flag; prefer `BILLING_MODE=mock` for new environments. |
 | `STRIPE_MOCK_MODE=true` | Legacy equivalent of `BILLING_MODE=mock`; prefer `BILLING_MODE=mock`. |
-| `STRIPE_SECRET_KEY` | `stripe-webhook`, `create-checkout`, `customer-portal`, `get-invoices`, `create-stripe-price`, `sync-stripe-pricing` |
+| `STRIPE_RUNTIME_MODE` | Optional Stripe runtime guard. Defaults to `test`; set to `live` only for production live billing. |
+| `STRIPE_ENVIRONMENT` / `STRIPE_RUN_MODE` | Legacy aliases accepted by the Stripe runtime guard; prefer `STRIPE_RUNTIME_MODE` in new environments. |
+| `STRIPE_LIVE_MODE=true` | Required together with `STRIPE_RUNTIME_MODE=live` before any `sk_live_...` key is accepted by Edge billing functions. |
+| `STRIPE_API_VERSION` | Optional Stripe catalog setup override; defaults to `2026-06-24.dahlia` and should match the shared Edge Stripe client. |
+| `STRIPE_PRODUCT_TAX_CODE` | Optional global Stripe catalog setup override for Product `tax_code`. By default the app resolves Greek software/AI tax codes per product: personal SaaS `txcd_10103000`, business SaaS `txcd_10103001`, personal AI software services `txcd_10105001`, and business AI software services `txcd_10105002`. Review overrides with tax counsel before live launch. |
+| `STRIPE_SAAS_PERSONAL_TAX_CODE` / `STRIPE_SAAS_BUSINESS_TAX_CODE` | Optional Stripe catalog setup overrides for SaaS subscription and report products; defaults to Greek software product tax codes `txcd_10103000` and `txcd_10103001`. |
+| `STRIPE_AI_PERSONAL_TAX_CODE` / `STRIPE_AI_BUSINESS_TAX_CODE` | Optional Stripe catalog setup overrides for AI valuation/report add-ons; defaults to Greek AI software service tax codes `txcd_10105001` and `txcd_10105002`. |
+| `STRIPE_TAX_BEHAVIOR` | Optional Stripe catalog setup override for Price `tax_behavior`; defaults to `exclusive` so VAT/tax is calculated separately on invoices. Allowed: `exclusive`, `inclusive`. |
+| `STRIPE_SECRET_KEY` | Billing Edge Functions: `stripe-webhook`, `create-checkout`, `create-investor-payment`, `customer-portal`, `check-subscription`, `get-invoices`, `create-stripe-price`, `sync-stripe-pricing`, `apply-data-input-credit`, `delete-account`, `log-role-switch` |
+| `STRIPE_API_KEY` | Local Stripe operator scripts fallback; prefer `STRIPE_SECRET_KEY` so Edge and scripts use one key name. |
 | `STRIPE_WEBHOOK_SECRET` | `stripe-webhook` |
+| `STRIPE_CUSTOMER_PORTAL_CONFIGURATION_ID` | Optional Stripe Customer Portal configuration used by `customer-portal` |
+| `STRIPE_TAX_CHECK_INVOICE` | Optional invoice id for `npm run check:stripe-tax-readiness` invoice-level VAT verification. |
+| `STRIPE_TAX_EXPECT_COUNTRY` / `STRIPE_TAX_EXPECT_RATE` | Stripe Tax readiness expectations; defaults are `GR` and `0.24` for Greek VAT. |
+| `STRIPE_TAX_READINESS_STRICT` | Set to `true` to make Stripe Tax readiness warnings fail the check. |
+| `STRIPE_PRICE_*` | Optional server-side Checkout price fallbacks. Prefer Admin Pricing sync because it stores monthly and annual price IDs distinctly in `pricing_configs.metadata`. |
+| `STRIPE_PRICE_PARTICIPANT_MONTHLY` / `STRIPE_PRICE_PARTICIPANT_ANNUAL` | Optional fallback for `pro` participant Checkout when DB metadata is unavailable |
+| `STRIPE_PRICE_AGENT_MONTHLY` / `STRIPE_PRICE_AGENT_ANNUAL` | Optional fallback for `agent_basic` Checkout when DB metadata is unavailable |
+| `STRIPE_PRICE_DEVELOPER_MONTHLY` / `STRIPE_PRICE_DEVELOPER_ANNUAL` | Optional fallback for `developer_pro` Checkout when DB metadata is unavailable |
+| `STRIPE_PRICE_PROFESSIONAL_MONTHLY` / `STRIPE_PRICE_PROFESSIONAL_ANNUAL` | Optional fallback for `professional_basic` Checkout when DB metadata is unavailable |
 | `MAIPROP_OS_WEBHOOK_SECRET` | `receive-from-os` (HMAC, see `WEBHOOK_VERIFICATION.md`) |
 | `MAIPROP_OS_URL` | OS import/sync functions |
 | `MAIPROP_OS_API_URL` | Optional OS API base URL alias used by `property-valuation`; falls back to `MAIPROP_OS_URL` |
@@ -157,6 +175,8 @@ Dashboard → Project Settings → Edge Functions → Secrets.
 | `WEBHOOK_SECRET` | `oh-registration-notify` |
 | `SENTRY_DSN` | edge-function structured logger forwarding |
 | `ENVIRONMENT` | edge-function environment tag and CORS tightening |
+| `AUTH_VERIFY_TIMEOUT_MS` | Optional Supabase JWT verification timeout for shared Edge auth helpers; defaults to `5000`. |
+| `RATE_LIMIT_DB_TIMEOUT_MS` | Optional database timeout for shared Edge rate-limit checks; defaults to `2500`. |
 | `GEMINI_API_KEY` | AI provider fallback for report/search/assist functions when `OPENAI_API_KEY` is not configured |
 | `GEMINI_MODEL` | Optional Gemini model override; defaults to `gemini-2.5-flash` |
 | `OPENAI_API_KEY` | Primary AI provider for `ai-search`, `property-chat`, `pro-ai-tools`, `listing-ai-assist`, `ai-translate`, `smart-filters`, `neighbourhood-report`, `ai-service-match`, `property-valuation`, `property-pois` |

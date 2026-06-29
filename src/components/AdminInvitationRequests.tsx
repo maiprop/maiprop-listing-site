@@ -10,7 +10,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
   MailPlus, Loader2, Check, ChevronDown, ChevronUp,
   Building2, Globe, TrendingUp, DollarSign,
-  ExternalLink, RefreshCw, Filter, MessageSquare, Mail
+  ExternalLink, RefreshCw, Filter, MessageSquare, Mail, Link as LinkIcon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -50,6 +50,11 @@ const TIER_OPTIONS = [
   { value: "developer", label: "Developer" },
 ];
 
+const INVESTOR_PAYMENT_PLAN_OPTIONS = [
+  { value: "investor_private", label: "Private" },
+  { value: "investor_institutional", label: "Institutional" },
+] as const;
+
 function ExpandedDetail({ label, value }: { label: string; value: string | null }) {
   if (!value) return null;
   return (
@@ -65,6 +70,7 @@ async function sendNotificationEmail(params: {
   email: string;
   full_name: string | null;
   tier?: string;
+  payment_url?: string;
   rejection_reason?: string;
 }) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -103,6 +109,31 @@ async function reviewInvitationRequest(params: {
   };
 }
 
+async function createInvestorPaymentLink(params: {
+  requestId: string;
+  userId: string;
+  planKey: "investor_private" | "investor_institutional";
+  amount: number;
+}) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("Admin session expired");
+
+  const { data, error } = await supabase.functions.invoke("create-investor-payment", {
+    body: {
+      request_id: params.requestId,
+      user_id: params.userId,
+      plan_key: params.planKey,
+      amount: params.amount,
+    },
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+
+  if (error || data?.error) {
+    throw new Error(data?.error ?? error?.message ?? "Could not create payment link");
+  }
+  return data as { url: string; session_id: string };
+}
+
 export default function AdminInvitationRequests() {
   const { profile } = useAuth();
   const qc = useQueryClient();
@@ -110,9 +141,12 @@ export default function AdminInvitationRequests() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "approved" | "rejected">("all");
   const [tierMap, setTierMap] = useState<Record<string, string>>({});
+  const [paymentPlanMap, setPaymentPlanMap] = useState<Record<string, "investor_private" | "investor_institutional">>({});
+  const [paymentAmountMap, setPaymentAmountMap] = useState<Record<string, string>>({});
   const [rejectionReasonMap, setRejectionReasonMap] = useState<Record<string, string>>({});
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [approveTarget, setApproveTarget] = useState<InvitationRequest | null>(null);
+  const [creatingPaymentLink, setCreatingPaymentLink] = useState<string | null>(null);
 
   const isAdmin = isPlatformAdmin(profile);
 
@@ -131,6 +165,57 @@ export default function AdminInvitationRequests() {
 
   const getTier = (id: string) => tierMap[id] ?? "private";
   const getRejectionReason = (id: string) => rejectionReasonMap[id] ?? "";
+  const getPaymentPlan = (id: string) => paymentPlanMap[id] ?? "investor_private";
+  const getPaymentAmount = (id: string) => paymentAmountMap[id] ?? "";
+
+  const createPaymentLink = async (req: InvitationRequest) => {
+    if (!req.user_id) {
+      toast.error("Cannot create a payment link without a linked user account.");
+      return;
+    }
+    const amount = Number(getPaymentAmount(req.id));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Enter a payment amount greater than 0.");
+      return;
+    }
+    setCreatingPaymentLink(req.id);
+    try {
+      const result = await createInvestorPaymentLink({
+        requestId: req.id,
+        userId: req.user_id,
+        planKey: getPaymentPlan(req.id),
+        amount,
+      });
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(result.url).catch(() => undefined);
+      }
+      const emailSent = await sendNotificationEmail({
+        type: "approved",
+        email: req.email,
+        full_name: req.full_name,
+        tier: getPaymentPlan(req.id).replace("investor_", ""),
+        payment_url: result.url,
+      }).then(
+        () => true,
+        (emailError: unknown) => {
+          logger.warn(
+            "Investor payment link email failed:",
+            emailError instanceof Error ? emailError.message : emailError,
+          );
+          return false;
+        },
+      );
+      if (emailSent) {
+        toast.success("Investor payment link created, emailed, and copied.");
+      } else {
+        toast.warning("Investor payment link created and copied, but email failed.");
+      }
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Could not create payment link");
+    } finally {
+      setCreatingPaymentLink(null);
+    }
+  };
 
   const approve = async (req: InvitationRequest) => {
     if (!req.user_id) {
@@ -403,6 +488,49 @@ export default function AdminInvitationRequests() {
                             {isRejectOpen ? "Cancel" : "Reject"}
                           </Button>
                         </>
+                      )}
+                      {req.status === "approved" && req.user_id && (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <select
+                            aria-label={`Payment plan for ${req.email}`}
+                            value={getPaymentPlan(req.id)}
+                            onChange={e =>
+                              setPaymentPlanMap(prev => ({
+                                ...prev,
+                                [req.id]: e.target.value as "investor_private" | "investor_institutional",
+                              }))
+                            }
+                            className="bg-secondary border border-border rounded-lg px-2 py-1.5 text-xs text-foreground outline-none focus:border-primary"
+                            disabled={creatingPaymentLink === req.id}
+                          >
+                            {INVESTOR_PAYMENT_PLAN_OPTIONS.map(plan => (
+                              <option key={plan.value} value={plan.value}>{plan.label}</option>
+                            ))}
+                          </select>
+                          <input
+                            aria-label={`Payment amount for ${req.email}`}
+                            type="number"
+                            min="1"
+                            step="1"
+                            placeholder="Amount"
+                            value={getPaymentAmount(req.id)}
+                            onChange={e => setPaymentAmountMap(prev => ({ ...prev, [req.id]: e.target.value }))}
+                            className="w-24 bg-secondary border border-border rounded-lg px-2 py-1.5 text-xs text-foreground outline-none focus:border-primary"
+                            disabled={creatingPaymentLink === req.id}
+                          />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 text-xs gap-1.5"
+                            onClick={() => createPaymentLink(req)}
+                            disabled={creatingPaymentLink === req.id}
+                          >
+                            {creatingPaymentLink === req.id
+                              ? <Loader2 className="w-3 h-3 animate-spin" />
+                              : <LinkIcon className="w-3 h-3" />}
+                            Create payment link
+                          </Button>
+                        </div>
                       )}
                       <button
                         onClick={() => setExpanded(isExpanded ? null : req.id)}

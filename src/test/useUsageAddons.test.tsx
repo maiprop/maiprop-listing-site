@@ -24,6 +24,7 @@ import {
   PROFESSIONAL_PRIORITY_AD_EXTRA_COST,
   REPORT_EXTRA_COST,
   REPORT_INCLUDED,
+  usePropertyReportAddonCredits,
   usePriorityAdsUsage,
   useRecordPriorityAd,
   useRecordReport,
@@ -49,6 +50,15 @@ function selectUsage(data: unknown[] = [], error: Error | null = null) {
   const eqUser = vi.fn().mockReturnValue({ eq: eqBucket, gte });
   const select = vi.fn().mockReturnValue({ eq: eqUser });
   return { select, eqUser, eqBucket, gte };
+}
+
+// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
+function selectAddonCredits(data: unknown[] = [], error: Error | null = null) {
+  const inStatus = vi.fn().mockResolvedValue({ data, error });
+  const inAddon = vi.fn().mockReturnValue({ in: inStatus });
+  const eqUser = vi.fn().mockReturnValue({ in: inAddon });
+  const select = vi.fn().mockReturnValue({ eq: eqUser });
+  return { select, eqUser, inAddon, inStatus };
 }
 
 describe("useUsageAddons", () => {
@@ -98,6 +108,7 @@ describe("useUsageAddons", () => {
     expect(mocks.from).toHaveBeenNthCalledWith(3, "usage_priority_ads");
     expect(first.eqBucket).toHaveBeenCalledWith("bucket", "property-valuation");
     expect(second.eqBucket).not.toHaveBeenCalled();
+    expect(first.gte.mock.calls[0][1]).toMatch(/T00:00:00\.000Z$/);
   });
 
   it("does not query anonymous users and throws query errors for callers to handle", async () => {
@@ -111,6 +122,25 @@ describe("useUsageAddons", () => {
     mocks.from.mockReturnValueOnce(selectUsage([], new Error("usage db")));
     const failing = renderHook(() => useReportUsage(), { wrapper: makeWrapper() });
     await waitFor(() => expect(failing.result.current.isError).toBe(true));
+  });
+
+  it("counts remaining paid property-report add-on credits from the durable purchase ledger", async () => {
+    const credits = selectAddonCredits([
+      { credits_granted: 3, credits_consumed: 1 },
+      { credits_granted: 1, credits_consumed: 0 },
+      { credits_granted: 1, credits_consumed: 1 },
+    ]);
+    mocks.from.mockReturnValueOnce(credits);
+
+    const result = renderHook(() => usePropertyReportAddonCredits(), {
+      wrapper: makeWrapper(),
+    });
+
+    await waitFor(() => expect(result.result.current.data).toBe(3));
+    expect(mocks.from).toHaveBeenCalledWith("addon_purchases");
+    expect(credits.eqUser).toHaveBeenCalledWith("user_id", "u1");
+    expect(credits.inAddon).toHaveBeenCalledWith("addon_key", ["property_report_single"]);
+    expect(credits.inStatus).toHaveBeenCalledWith("status", ["paid", "active"]);
   });
 
   it("rejects direct browser usage writes because usage is recorded by server workflows", async () => {

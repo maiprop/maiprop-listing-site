@@ -17,6 +17,53 @@ BEGIN
   END IF;
 END $$;
 
+-- Keep AI quota status credit-aware after the signed-in quota migration.
+-- The reservation RPC consumes add-on credits atomically; this helper makes
+-- status/UI reads report the same effective limit.
+
+CREATE OR REPLACE FUNCTION public.get_ai_call_monthly_limit(
+  p_user_id uuid,
+  p_bucket text
+)
+RETURNS integer
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_base integer;
+  v_available integer;
+  v_count integer;
+  v_month_start timestamptz;
+BEGIN
+  v_base := public.get_ai_call_monthly_base_limit(p_user_id, p_bucket);
+  IF v_base >= 999999 THEN
+    RETURN v_base;
+  END IF;
+
+  v_available := public.get_available_addon_credits(p_user_id, p_bucket);
+  v_month_start := date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC';
+
+  SELECT COUNT(*)::integer
+  INTO v_count
+  FROM public.usage_ai_calls
+  WHERE user_id = p_user_id
+    AND bucket = p_bucket
+    AND created_at >= v_month_start;
+
+  RETURN v_base + v_available + GREATEST(v_count - v_base, 0);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.get_ai_call_monthly_limit(uuid, text)
+  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.get_ai_call_monthly_limit(uuid, text)
+  TO authenticated, service_role;
+
+COMMENT ON FUNCTION public.get_ai_call_monthly_limit(uuid, text) IS
+  'Returns per-user monthly AI quota, including unconsumed paid add-on credits and already-consumed overage for stable status reads.';
+
 DO $$
 DECLARE
   fn regprocedure;

@@ -6,6 +6,7 @@ import {
   PLAN_KEY_RE,
   PLAN_PRICE_ENV_ALIASES,
   PUBLIC_CHECKOUT_PLAN_KEYS,
+  SELF_SERVE_ADDON_KEYS,
   SELF_SERVE_ADDON_MODULES,
 } from "./constants.ts";
 import type {
@@ -69,6 +70,12 @@ export const isSupportedCheckoutAddonModule = (
   module: string | null | undefined,
 ): boolean => {
   return Boolean(module && SELF_SERVE_ADDON_MODULES.has(module));
+};
+
+export const isSupportedCheckoutAddonKey = (
+  addonKey: string | null | undefined,
+): boolean => {
+  return Boolean(addonKey && SELF_SERVE_ADDON_KEYS.has(addonKey));
 };
 
 export const getPlanEntitlement = (
@@ -206,7 +213,10 @@ const queryActiveAddonConfig = async (
   addonKey: string,
 ): Promise<PricingConfigRow | null> => {
   const row = await queryActivePricingConfig(supabase, addonKey);
-  return isSupportedCheckoutAddonModule(row?.module) ? row : null;
+  return isSupportedCheckoutAddonKey(row?.key) &&
+      isSupportedCheckoutAddonModule(row?.module)
+    ? row
+    : null;
 };
 
 const buildCheckoutPlan = (

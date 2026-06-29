@@ -37,6 +37,9 @@ type DataInputRow = {
   stripe_credit_id: string | null;
   stripe_credit_amount_cents: number | null;
   stripe_credit_currency: string | null;
+  discount_applied: boolean;
+  discount_applied_at: string | null;
+  discount_invoice_id: string | null;
 };
 
 type MockScenario = {
@@ -54,6 +57,9 @@ const baseRow: DataInputRow = {
   stripe_credit_id: null,
   stripe_credit_amount_cents: null,
   stripe_credit_currency: null,
+  discount_applied: false,
+  discount_applied_at: null,
+  discount_invoice_id: null,
 };
 
 function json(data: unknown, status = 200): Response {
@@ -65,7 +71,7 @@ function json(data: unknown, status = 200): Response {
 
 function installFetchMock(scenario: MockScenario) {
   const originalFetch = globalThis.fetch;
-  const balanceTransactions: Array<{ amount: string | null; url: string }> = [];
+  const balanceTransactions: Array<{ amount: string | null; url: string; idempotencyKey: string | null }> = [];
   const patches: unknown[] = [];
 
   globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -129,7 +135,11 @@ function installFetchMock(scenario: MockScenario) {
       if (url.pathname === "/v1/customers/cus_agent/balance_transactions") {
         const form = new URLSearchParams(await request.text());
         const id = `cbtxn_${balanceTransactions.length + 1}`;
-        balanceTransactions.push({ amount: form.get("amount"), url: url.href });
+        balanceTransactions.push({
+          amount: form.get("amount"),
+          url: url.href,
+          idempotencyKey: request.headers.get("Idempotency-Key"),
+        });
         return json({ id, object: "customer_balance_transaction" });
       }
     }
@@ -220,6 +230,38 @@ Deno.test("already-applied input returns idempotent response without Stripe cred
   }
 });
 
+Deno.test("legacy applied input is idempotent before Stripe credit", async () => {
+  const mock = installFetchMock({
+    row: {
+      ...baseRow,
+      discount_applied: true,
+      discount_applied_at: "2026-05-10T12:00:00.000Z",
+      discount_invoice_id: "in_legacy",
+    },
+  });
+
+  try {
+    const res = await handler(
+      authedReq("POST", { data_input_id: "input-1" }, {
+        "x-forwarded-for": "2.2.2.3",
+      }),
+    );
+    const body = await res.json();
+
+    assertEquals(res.status, 200);
+    assertEquals(body, {
+      applied: true,
+      idempotent: true,
+      stripe_credit_id: "in_legacy",
+      amount_cents: null,
+      currency: null,
+    });
+    assertEquals(mock.balanceTransactions.length, 0);
+  } finally {
+    mock.restore();
+  }
+});
+
 Deno.test("credit amount is capped to remaining monthly allowance", async () => {
   const mock = installFetchMock({
     row: baseRow,
@@ -239,15 +281,22 @@ Deno.test("credit amount is capped to remaining monthly allowance", async () => 
     assertEquals(body.idempotent, false);
     assertEquals(body.amount_cents, 25);
     assertEquals(mock.balanceTransactions.map((tx) => tx.amount), ["-25"]);
+    assertEquals(
+      mock.balanceTransactions[0].idempotencyKey?.startsWith("maiprop-data-input-credit-"),
+      true,
+    );
+    const appliedAt = mock.patches[0] && typeof mock.patches[0] === "object"
+      ? (mock.patches[0] as { applied_to_invoice_at?: string })
+        .applied_to_invoice_at
+      : undefined;
     assertEquals(mock.patches[0], {
-      applied_to_invoice_at:
-        mock.patches[0] && typeof mock.patches[0] === "object"
-          ? (mock.patches[0] as { applied_to_invoice_at?: string })
-            .applied_to_invoice_at
-          : undefined,
+      applied_to_invoice_at: appliedAt,
       stripe_credit_id: "cbtxn_1",
       stripe_credit_amount_cents: 25,
       stripe_credit_currency: "eur",
+      discount_applied: true,
+      discount_applied_at: appliedAt,
+      discount_invoice_id: "cbtxn_1",
     });
   } finally {
     mock.restore();
@@ -307,6 +356,14 @@ Deno.test("lost concurrent update reverses orphan Stripe credit", async () => {
       "-50",
       "50",
     ]);
+    assertEquals(
+      mock.balanceTransactions[0].idempotencyKey?.startsWith("maiprop-data-input-credit-"),
+      true,
+    );
+    assertEquals(
+      mock.balanceTransactions[1].idempotencyKey?.startsWith("maiprop-data-input-credit-reversal-"),
+      true,
+    );
   } finally {
     mock.restore();
   }

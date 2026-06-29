@@ -1,5 +1,5 @@
 // deno-lint-ignore no-import-prefix
-import Stripe from "npm:stripe@18.5.0";
+import Stripe from "npm:stripe@22.3.0";
 // deno-lint-ignore no-import-prefix
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { AuthError, verifyBearerToken } from "../_shared/auth.ts";
@@ -9,6 +9,13 @@ import {
   makeRateLimiter,
   tooManyRequestsResponse,
 } from "../_shared/rateLimit.ts";
+import {
+  CHECKOUT_TAX_COLLECTION_PARAMS,
+  buildIdempotencyKey,
+  buildPaymentModeInvoiceCreationParams,
+  createStripeClient,
+  getStripeRuntimeMode,
+} from "../_shared/stripeClient.ts";
 import {
   isStripeMockMode,
   withMockBillingParams,
@@ -24,6 +31,7 @@ import {
   isCheckoutAddonAudienceAllowed,
   isCheckoutAudienceAllowed,
   isInviteOnlyCheckoutPlan,
+  isSupportedCheckoutAddonKey,
   isSupportedCheckoutAddonModule,
   isSupportedCheckoutPlan,
   normalizeBillingCycle,
@@ -31,17 +39,18 @@ import {
   normalizePlanKey,
 } from "./pricing.ts";
 import { sanitizeRedirectPath } from "./redirects.ts";
+import { getOrCreateOwnedStripeCustomer } from "./stripeCustomers.ts";
 import {
-  getOrCreateOwnedStripeCustomer,
-  shortSha256,
-} from "./stripeCustomers.ts";
-import {
-  PRO_TRIAL_DAYS,
   buildTrialMetadata,
   isTrialCheckoutAudienceAllowed,
   normalizeTrialCheckoutRequest,
+  PRO_TRIAL_DAYS,
 } from "./trials.ts";
-import type { BillingCycle, CheckoutPlan, CheckoutProfileRow } from "./types.ts";
+import type {
+  BillingCycle,
+  CheckoutPlan,
+  CheckoutProfileRow,
+} from "./types.ts";
 
 export {
   getStripePriceEnvKey,
@@ -49,6 +58,7 @@ export {
   isCheckoutAddonAudienceAllowed,
   isCheckoutAudienceAllowed,
   isInviteOnlyCheckoutPlan,
+  isSupportedCheckoutAddonKey,
   isSupportedCheckoutAddonModule,
   isSupportedCheckoutPlan,
   normalizeBillingCycle,
@@ -126,6 +136,43 @@ const hasExistingPaidAccess = (profile: CheckoutProfileRow | null): boolean => {
   );
 };
 
+const PROVISIONED_SUBSCRIPTION_STATUSES = ["active", "trialing", "past_due"];
+
+const hasCurrentPeriodRemaining = (value: string | null | undefined) => {
+  if (!value) return true;
+  const periodEnd = new Date(value);
+  return !Number.isNaN(periodEnd.getTime()) && periodEnd > new Date();
+};
+
+const hasProvisionedSameAudienceSubscription = async (
+  supabaseClient: unknown,
+  userId: string,
+  audience: string,
+): Promise<boolean> => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabaseClient as { from: any })
+    .from("billing_subscriptions")
+    .select("status, audience, current_period_end")
+    .eq("user_id", userId)
+    .in("status", PROVISIONED_SUBSCRIPTION_STATUSES)
+    .order("updated_at", { ascending: false })
+    .limit(10);
+  if (error) {
+    throw new Error(
+      `billing subscription lookup failed: ${
+        String(error.message ?? error)
+      }`,
+    );
+  }
+
+  const rows = Array.isArray(data) ? data : data ? [data] : [];
+  return rows.some((row) =>
+    row?.audience === audience &&
+    PROVISIONED_SUBSCRIPTION_STATUSES.includes(row?.status) &&
+    hasCurrentPeriodRemaining(row?.current_period_end)
+  );
+};
+
 const jsonCheckoutError = (
   corsHeaders: Record<string, string>,
   status: number,
@@ -135,6 +182,57 @@ const jsonCheckoutError = (
     headers: { ...corsHeaders, "Content-Type": "application/json" },
     status,
   });
+
+const CHECKOUT_TARGET_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+const CHECKOUT_TARGET_ID_RE = /^[A-Za-z0-9][A-Za-z0-9:_-]{0,127}$/;
+const MAX_ADDON_CHECKOUT_QUANTITY = 100;
+
+type CheckoutTarget =
+  | { targetType: string | null; targetId: string | null }
+  | { error: string };
+
+const normalizeCheckoutTarget = (
+  rawType: unknown,
+  rawId: unknown,
+): CheckoutTarget => {
+  const targetType = typeof rawType === "string" && rawType.trim()
+    ? rawType.trim()
+    : null;
+  const targetId = typeof rawId === "string" && rawId.trim()
+    ? rawId.trim()
+    : null;
+
+  if (!targetType && !targetId) return { targetType: null, targetId: null };
+  if (!targetType || !targetId) {
+    return { error: "target_type and target_id must be provided together" };
+  }
+  if (!CHECKOUT_TARGET_RE.test(targetType)) {
+    return { error: "target_type is invalid" };
+  }
+  if (!CHECKOUT_TARGET_ID_RE.test(targetId)) {
+    return { error: "target_id is invalid" };
+  }
+  return { targetType, targetId };
+};
+
+const normalizeCheckoutQuantity = (rawQuantity: unknown): number | null => {
+  if (rawQuantity === null || rawQuantity === undefined || rawQuantity === "") {
+    return 1;
+  }
+  const parsed = typeof rawQuantity === "number"
+    ? rawQuantity
+    : typeof rawQuantity === "string"
+    ? Number(rawQuantity.trim())
+    : Number.NaN;
+  if (
+    !Number.isInteger(parsed) ||
+    parsed < 1 ||
+    parsed > MAX_ADDON_CHECKOUT_QUANTITY
+  ) {
+    return null;
+  }
+  return parsed;
+};
 
 const reserveSubscriptionTrialClaim = async (
   supabaseClient: SupabaseAdminClient,
@@ -223,10 +321,6 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
     });
   }
 
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    "anonymous";
-  if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
-
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!serviceRoleKey) {
     log.error(
@@ -248,6 +342,9 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
   try {
     const user = await verifyBearerToken(req, supabaseClient);
     logStep("User authenticated", { userId: user.id, email: user.email });
+    if (await limiter.isLimited(user.id)) {
+      return tooManyRequestsResponse(corsHeaders);
+    }
 
     const body = req.method === "POST" && req.body
       ? await req.json().catch(() => ({}))
@@ -259,6 +356,25 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
       body.addon_key ?? body.addonKey,
     );
     if (addonKey) {
+      const checkoutTarget = normalizeCheckoutTarget(
+        body.target_type ?? body.targetType,
+        body.target_id ?? body.targetId,
+      );
+      if ("error" in checkoutTarget) {
+        return new Response(JSON.stringify({ error: checkoutTarget.error }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400,
+        });
+      }
+      const checkoutQuantity = normalizeCheckoutQuantity(
+        body.quantity ?? body.qty,
+      );
+      if (!checkoutQuantity) {
+        return new Response(JSON.stringify({ error: "quantity is invalid" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400,
+        });
+      }
       const profile = await getCheckoutProfile(supabaseClient, user.id);
       const origin = resolveCheckoutOrigin(req.headers.get("origin"));
       const checkoutAddon = await getCheckoutAddon(supabaseClient, addonKey);
@@ -297,18 +413,32 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
         );
       }
       if (isStripeMockMode()) {
+        const mockParams = {
+          checkout: "success",
+          addon: addonKey,
+          quantity: String(checkoutQuantity),
+          ...(checkoutTarget.targetType
+            ? { target_type: checkoutTarget.targetType }
+            : {}),
+          ...(checkoutTarget.targetId
+            ? { target_id: checkoutTarget.targetId }
+            : {}),
+        };
         const url = `${origin}${
           withMockBillingParams(
             sanitizeRedirectPath(body.success_url) ??
               "/dashboard/billing?checkout=success",
-            { checkout: "success", addon: addonKey },
+            mockParams,
           )
         }`;
         return new Response(
           JSON.stringify({
             url,
+            session_id: null,
+            checkout_type: "addon",
             mock: true,
-            mode: "mock",
+            billing_mode: "mock",
+            mode: getStripeRuntimeMode(),
             addon_key: addonKey,
           }),
           {
@@ -318,7 +448,7 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
         );
       }
 
-      const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "");
+      const stripe = createStripeClient();
       const customerId = await getOrCreateOwnedStripeCustomer(
         stripe,
         user,
@@ -332,56 +462,82 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
         sanitizeRedirectPath(body.cancel_url) ??
           "/dashboard/billing?checkout=cancelled"
       }`;
-      const redirectHash = await shortSha256(`${success}|${cancel}`);
+      const addonMetadata = {
+        user_id: user.id,
+        checkout_type: "addon",
+        addon_key: checkoutAddon.addonKey,
+        audience: checkoutAddon.audience,
+        module: checkoutAddon.module,
+        unit: checkoutAddon.unit,
+        quantity: String(checkoutQuantity),
+        ...(checkoutTarget.targetType
+          ? { target_type: checkoutTarget.targetType }
+          : {}),
+        ...(checkoutTarget.targetId
+          ? { target_id: checkoutTarget.targetId }
+          : {}),
+        ...(checkoutAddon.productId
+          ? { product_id: checkoutAddon.productId }
+          : {}),
+      };
       const session = await stripe.checkout.sessions.create(
         {
+          ...CHECKOUT_TAX_COLLECTION_PARAMS,
           customer: customerId,
-          line_items: [{ price: checkoutAddon.priceId, quantity: 1 }],
+          line_items: [{
+            price: checkoutAddon.priceId,
+            quantity: checkoutQuantity,
+          }],
           mode: checkoutAddon.checkoutMode,
+          payment_method_types: ["card"],
           success_url: success,
           cancel_url: cancel,
-          metadata: {
-            user_id: user.id,
-            checkout_type: "addon",
-            addon_key: checkoutAddon.addonKey,
-            audience: checkoutAddon.audience,
-            module: checkoutAddon.module,
-            unit: checkoutAddon.unit,
-            ...(checkoutAddon.productId
-              ? { product_id: checkoutAddon.productId }
-              : {}),
-          },
+          metadata: addonMetadata,
+          ...(checkoutAddon.checkoutMode === "payment"
+            ? buildPaymentModeInvoiceCreationParams(addonMetadata)
+            : {}),
           ...(checkoutAddon.checkoutMode === "subscription"
             ? {
               subscription_data: {
-                metadata: {
-                  user_id: user.id,
-                  checkout_type: "addon",
-                  addon_key: checkoutAddon.addonKey,
-                  audience: checkoutAddon.audience,
-                  module: checkoutAddon.module,
-                  unit: checkoutAddon.unit,
-                  ...(checkoutAddon.productId
-                    ? { product_id: checkoutAddon.productId }
-                    : {}),
-                },
+                metadata: addonMetadata,
               },
             }
             : {}),
         },
         {
-          idempotencyKey:
-            `maiprop-addon-${user.id}-${checkoutAddon.addonKey}-${redirectHash}`,
+          idempotencyKey: await buildIdempotencyKey("checkout-addon-v2", [
+            user.id,
+            checkoutAddon.addonKey,
+            checkoutAddon.priceId,
+            checkoutAddon.checkoutMode,
+            checkoutQuantity,
+            checkoutTarget.targetType,
+            checkoutTarget.targetId,
+            success,
+            cancel,
+            "card",
+            "stripe-tax-v1",
+          ]),
         },
       );
       logStep("Add-on checkout session created", {
         sessionId: session.id,
         addonKey: checkoutAddon.addonKey,
+        quantity: checkoutQuantity,
       });
-      return new Response(JSON.stringify({ url: session.url }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      });
+      return new Response(
+        JSON.stringify({
+          url: session.url,
+          session_id: session.id,
+          checkout_type: "addon",
+          mode: getStripeRuntimeMode(),
+          quantity: checkoutQuantity,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        },
+      );
     }
 
     const plan = normalizePlanKey(body.plan);
@@ -462,6 +618,19 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
         "A free Pro trial is available only to free accounts.",
       );
     }
+    if (
+      await hasProvisionedSameAudienceSubscription(
+        supabaseClient,
+        user.id,
+        entitlement.audience,
+      )
+    ) {
+      return jsonCheckoutError(
+        corsHeaders,
+        409,
+        "An active subscription already exists for this account type. Manage it from Billing.",
+      );
+    }
 
     const origin = resolveCheckoutOrigin(req.headers.get("origin"));
     if (isStripeMockMode()) {
@@ -501,8 +670,11 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
       return new Response(
         JSON.stringify({
           url,
+          session_id: null,
+          checkout_type: "subscription",
           mock: true,
-          mode: "mock",
+          billing_mode: "mock",
+          mode: getStripeRuntimeMode(),
           plan,
           billing_cycle: billingCycle,
           trial: wantsTrial,
@@ -514,7 +686,7 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
       );
     }
 
-    const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "");
+    const stripe = createStripeClient();
 
     const checkoutPlan = await getCheckoutPlan(
       supabaseClient,
@@ -553,7 +725,6 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
     );
     const success = `${origin}${successPath ?? "/pricing?checkout=success"}`;
     const cancel = `${origin}${cancelPath ?? "/pricing?checkout=cancelled"}`;
-    const redirectHash = await shortSha256(`${success}|${cancel}`);
     const trialMetadata = wantsTrial ? buildTrialMetadata() : {};
     let trialClaimId: string | null = null;
 
@@ -573,9 +744,11 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
     try {
       session = await stripe.checkout.sessions.create(
         {
+          ...CHECKOUT_TAX_COLLECTION_PARAMS,
           customer: customerId,
           line_items: [{ price: checkoutPlan.priceId, quantity: 1 }],
           mode: "subscription",
+          payment_method_types: ["card"],
           success_url: success,
           cancel_url: cancel,
           ...(wantsTrial
@@ -615,8 +788,20 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
           },
         },
         {
-          idempotencyKey:
-            `maiprop-checkout-${user.id}-${checkoutPlan.planKey}-${checkoutPlan.billingCycle}-${wantsTrial ? "trial" : "paid"}-${redirectHash}`,
+          idempotencyKey: await buildIdempotencyKey("checkout-v2", [
+            user.id,
+            checkoutPlan.planKey,
+            checkoutPlan.billingCycle,
+            checkoutPlan.priceId,
+            checkoutPlan.productId,
+            wantsTrial ? "trial" : "paid",
+            wantsTrial ? PRO_TRIAL_DAYS : null,
+            trialClaimId,
+            success,
+            cancel,
+            "card",
+            "stripe-tax-v1",
+          ]),
         },
       );
     } catch (error) {
@@ -641,10 +826,18 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
       trial: wantsTrial,
     });
 
-    return new Response(JSON.stringify({ url: session.url }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200,
-    });
+    return new Response(
+      JSON.stringify({
+        url: session.url,
+        session_id: session.id,
+        checkout_type: wantsTrial ? "subscription_trial" : "subscription",
+        mode: getStripeRuntimeMode(),
+      }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      },
+    );
   } catch (error: unknown) {
     const status = error instanceof AuthError ? error.status : 500;
     const message = error instanceof Error ? error.message : String(error);

@@ -58,10 +58,7 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
 
-  const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
-  if (quota.errorResponse) return quota.errorResponse;
-
-  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? quota.userId ?? "anonymous";
+  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
   if (await poisLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
   try {
@@ -76,6 +73,9 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
+    if (quota.errorResponse) return quota.errorResponse;
 
     if (!hasAIProviderCredentials()) {
       return fallbackPoisResponse(

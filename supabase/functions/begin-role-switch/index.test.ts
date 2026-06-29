@@ -125,12 +125,34 @@ Deno.test("verified caller is passed explicitly to service RPC", async () => {
   const body = await res.json();
 
   assertEquals(res.status, 200);
-  assertEquals(body, { success: true });
+  assertEquals(body, { success: true, validate_only: false });
   assertEquals(
     globalThis.__beginRoleSwitchScenario.calls.some((call) =>
       call.name === "rpc" &&
       JSON.stringify(call.args) === JSON.stringify({
         name: "begin_role_switch_for_user",
+        args: { _user_id: "verified-user" },
+      })
+    ),
+    true,
+  );
+});
+
+Deno.test("validate-only role switch preflight calls the non-mutating validation RPC", async () => {
+  resetScenario({
+    user: { id: "verified-user", email: "verified@test.local" },
+  });
+
+  const res = await handler(authedJson({ validate_only: true }));
+  const body = await res.json();
+
+  assertEquals(res.status, 200);
+  assertEquals(body, { success: true, validate_only: true });
+  assertEquals(
+    globalThis.__beginRoleSwitchScenario.calls.some((call) =>
+      call.name === "rpc" &&
+      JSON.stringify(call.args) === JSON.stringify({
+        name: "validate_role_switch_for_user",
         args: { _user_id: "verified-user" },
       })
     ),

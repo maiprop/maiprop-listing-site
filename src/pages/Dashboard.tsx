@@ -104,7 +104,7 @@ export default function Dashboard() { // skipcq: JS-R1005
     [t],
   );
   const { profile, user, signOut, updateProfile, refreshProfile, loading, profileLoading } = useAuth();
-  const { isPro, loading: subscriptionLoading, refreshSubscription } = useSubscription();
+  const { isPro, loading: subscriptionLoading, refreshSubscription, hasStripeBilling } = useSubscription();
   const [trialCheckoutLoading, setTrialCheckoutLoading] = useState(false);
   const { eligible: eligibleForQuickSale } = useEligibleForQuickSale();
   const role: DashboardRole = (profile?.role as DashboardRole) || "buyer";
@@ -847,7 +847,7 @@ export default function Dashboard() { // skipcq: JS-R1005
               onUpdate={updateProfile}
               refreshProfile={refreshProfile}
               currentType={bioType}
-              hasActiveSub={isPro}
+              hasActiveSub={hasStripeBilling}
             />
           )}
 

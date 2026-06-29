@@ -39,6 +39,20 @@ describe("role-switch audit RPC grant hardening", () => {
     expect(edgeFunction).not.toContain('supabase.rpc("record_role_switch_audit"');
   });
 
+  it("cancels Stripe subscriptions using app-owned customer metadata before durable billing fallback", () => {
+    const metadataSearchIndex = edgeFunction.indexOf("stripe.customers.search");
+    const durableFallbackIndex = edgeFunction.indexOf("billing_customers");
+    const subscriptionListIndex = edgeFunction.indexOf("stripe.subscriptions.list");
+
+    expect(edgeFunction).toContain("findOwnedStripeCustomerForRoleSwitch");
+    expect(edgeFunction).toContain("metadata['user_id']");
+    expect(metadataSearchIndex).toBeGreaterThanOrEqual(0);
+    expect(durableFallbackIndex).toBeGreaterThan(metadataSearchIndex);
+    expect(subscriptionListIndex).toBeGreaterThan(durableFallbackIndex);
+    expect(edgeFunction).not.toContain("stripe.customers.list");
+    expect(edgeFunction).toContain("customer: customer.id");
+  });
+
   it("removes browser execution from the legacy caller-context RPC", () => {
     expect(serviceRpcMigration).toContain(
       "to_regprocedure('public.record_role_switch_audit(text,text,text,boolean,boolean)')",

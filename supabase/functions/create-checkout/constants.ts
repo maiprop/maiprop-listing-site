@@ -75,5 +75,16 @@ export const PLAN_PRICE_ENV_ALIASES: Record<
 
 export const SELF_SERVE_ADDON_MODULES = new Set([
   "valuation_reports",
-  "adhoc_charges",
 ]);
+
+export const SELF_SERVE_ADDON_CREDITS: Record<string, number> = {
+  valuation_single: 1,
+  valuation_bundle: 5,
+  property_report_single: 1,
+  neighbourhood_report_single: 1,
+  neighbourhood_report_bundle: 3,
+};
+
+export const SELF_SERVE_ADDON_KEYS = new Set(
+  Object.keys(SELF_SERVE_ADDON_CREDITS),
+);

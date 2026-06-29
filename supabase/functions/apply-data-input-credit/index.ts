@@ -12,15 +12,26 @@
  * a defence-in-depth check against config drift.
  */
 
-import Stripe from "npm:stripe@18.5.0";
+import Stripe from "npm:stripe@22.3.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
-import { verifyBearerToken, AuthError } from "../_shared/auth.ts";
+import { AuthError, verifyBearerToken } from "../_shared/auth.ts";
 import { createLogger } from "../_shared/logger.ts";
-import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import {
+  makeRateLimiter,
+  tooManyRequestsResponse,
+} from "../_shared/rateLimit.ts";
+import {
+  buildIdempotencyKey,
+  createStripeClient,
+} from "../_shared/stripeClient.ts";
 
 const log = createLogger("apply-data-input-credit");
-const limiter = makeRateLimiter({ bucket: "apply-data-input-credit", maxRequests: 30, windowMs: 60_000 });
+const limiter = makeRateLimiter({
+  bucket: "apply-data-input-credit",
+  maxRequests: 30,
+  windowMs: 60_000,
+});
 
 interface AgentDataInputRow {
   id: string;
@@ -31,6 +42,9 @@ interface AgentDataInputRow {
   stripe_credit_id: string | null;
   stripe_credit_amount_cents: number | null;
   stripe_credit_currency: string | null;
+  discount_applied: boolean | null;
+  discount_applied_at: string | null;
+  discount_invoice_id: string | null;
 }
 
 interface ProfileRow {
@@ -42,8 +56,8 @@ const MAX_DISCOUNT_PCT_PER_MONTH = 10; // 20 inputs × 0.5%
 
 async function resolveCustomer(
   stripe: Stripe,
+  supabase: { from: (table: string) => unknown },
   userId: string,
-  email: string,
 ): Promise<string | null> {
   try {
     const search = await stripe.customers.search({
@@ -54,8 +68,26 @@ async function resolveCustomer(
   } catch (_err) {
     // search API may be unavailable — fall through to email lookup.
   }
-  const byEmail = await stripe.customers.list({ email, limit: 1 });
-  return byEmail.data[0]?.id ?? null;
+  const { data, error } = await (supabase.from("billing_customers") as {
+    select: (columns: string) => {
+      eq: (column: string, value: string) => {
+        order: (
+          column: string,
+          opts: { ascending: boolean },
+        ) => {
+          limit: (count: number) => PromiseLike<{
+            data?: Array<{ stripe_customer_id?: string | null }> | null;
+            error?: { message?: string } | null;
+          }>;
+        };
+      };
+    };
+  }).select("stripe_customer_id")
+    .eq("user_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(1);
+  if (error) throw new Error(error.message ?? "billing customer lookup failed");
+  return data?.[0]?.stripe_customer_id ?? null;
 }
 
 Deno.serve(async (req) => {
@@ -63,14 +95,19 @@ Deno.serve(async (req) => {
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
 
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    "anonymous";
   if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
 
   const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   if (!stripeKey || !serviceRoleKey || !supabaseUrl) {
-    log.error("missing env", { hasStripe: !!stripeKey, hasService: !!serviceRoleKey, hasUrl: !!supabaseUrl });
+    log.error("missing env", {
+      hasStripe: !!stripeKey,
+      hasService: !!serviceRoleKey,
+      hasUrl: !!supabaseUrl,
+    });
     return new Response(JSON.stringify({ error: "Service not configured" }), {
       status: 503,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -91,7 +128,8 @@ Deno.serve(async (req) => {
       .eq("user_id", caller.id)
       .maybeSingle();
     if (profileErr) throw new Error(profileErr.message);
-    const isAdmin = callerProfile?.role === "admin" || callerProfile?.is_platform_admin === true;
+    const isAdmin = callerProfile?.role === "admin" ||
+      callerProfile?.is_platform_admin === true;
     if (!isAdmin) {
       return new Response(JSON.stringify({ error: "Admin access required" }), {
         status: 403,
@@ -107,7 +145,9 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json().catch(() => ({}));
-    const dataInputId = typeof body.data_input_id === "string" ? body.data_input_id : null;
+    const dataInputId = typeof body.data_input_id === "string"
+      ? body.data_input_id
+      : null;
     if (!dataInputId) {
       return new Response(JSON.stringify({ error: "data_input_id required" }), {
         status: 400,
@@ -119,8 +159,12 @@ Deno.serve(async (req) => {
     // generated Supabase types; cast through the narrow `from` overload bridge
     // that the rest of this codebase uses for unregistered tables.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: rowRaw, error: rowErr } = await (supabase as any).from("agent_data_inputs")
-      .select("id, user_id, status, discount_pct, applied_to_invoice_at, stripe_credit_id, stripe_credit_amount_cents, stripe_credit_currency")
+    const { data: rowRaw, error: rowErr } = await (supabase as any).from(
+      "agent_data_inputs",
+    )
+      .select(
+        "id, user_id, status, discount_pct, applied_to_invoice_at, stripe_credit_id, stripe_credit_amount_cents, stripe_credit_currency, discount_applied, discount_applied_at, discount_invoice_id",
+      )
       .eq("id", dataInputId)
       .maybeSingle();
     if (rowErr) throw new Error(rowErr.message);
@@ -133,28 +177,42 @@ Deno.serve(async (req) => {
     const row = rowRaw as AgentDataInputRow;
 
     if (row.status !== "verified") {
-      return new Response(JSON.stringify({ error: `Cannot apply credit to row with status=${row.status}` }), {
-        status: 409,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          error: `Cannot apply credit to row with status=${row.status}`,
+        }),
+        {
+          status: 409,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Idempotency: if already applied, return the existing record.
-    if (row.applied_to_invoice_at && row.stripe_credit_id) {
-      log.info("already applied", { id: row.id, stripe_credit_id: row.stripe_credit_id });
-      return new Response(JSON.stringify({
-        applied: true,
-        idempotent: true,
-        stripe_credit_id: row.stripe_credit_id,
-        amount_cents: row.stripe_credit_amount_cents,
-        currency: row.stripe_credit_currency,
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
+    const existingAppliedAt = row.applied_to_invoice_at ??
+      row.discount_applied_at;
+    const existingCreditId = row.stripe_credit_id ?? row.discount_invoice_id;
+    if (existingAppliedAt && (existingCreditId || row.discount_applied)) {
+      log.info("already applied", {
+        id: row.id,
+        stripe_credit_id: existingCreditId,
       });
+      return new Response(
+        JSON.stringify({
+          applied: true,
+          idempotent: true,
+          stripe_credit_id: existingCreditId,
+          amount_cents: row.stripe_credit_amount_cents,
+          currency: row.stripe_credit_currency,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        },
+      );
     }
 
-    // Resolve the agent's email + Stripe customer.
+    // Resolve the agent profile before applying a Stripe customer balance credit.
     const { data: agentProfileRaw, error: agentProfileErr } = await supabase
       .from("profiles")
       .select("user_id")
@@ -168,64 +226,78 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { data: authUser, error: authUserErr } = await supabase.auth.admin.getUserById(row.user_id);
-    if (authUserErr) throw new Error(authUserErr.message);
-    const agentEmail = authUser?.user?.email ?? null;
-    if (!agentEmail) {
-      return new Response(JSON.stringify({ error: "Agent has no email on file" }), {
-        status: 422,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
-    const customerId = await resolveCustomer(stripe, row.user_id, agentEmail);
+    const stripe = createStripeClient(stripeKey);
+    const customerId = await resolveCustomer(stripe, supabase, row.user_id);
     if (!customerId) {
-      return new Response(JSON.stringify({ error: "No Stripe customer for this agent" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "No Stripe customer for this agent" }),
+        {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Find the agent's active or trialing subscription to compute the credit
     // base. `check-subscription` and `delete-account` both treat trialing as
     // subscribed, so accept either here for consistency.
     const [activeSubs, trialingSubs] = await Promise.all([
-      stripe.subscriptions.list({ customer: customerId, status: "active", limit: 1 }),
-      stripe.subscriptions.list({ customer: customerId, status: "trialing", limit: 1 }),
+      stripe.subscriptions.list({
+        customer: customerId,
+        status: "active",
+        limit: 1,
+      }),
+      stripe.subscriptions.list({
+        customer: customerId,
+        status: "trialing",
+        limit: 1,
+      }),
     ]);
     const sub = activeSubs.data[0] ?? trialingSubs.data[0];
     if (!sub) {
-      return new Response(JSON.stringify({ error: "Agent has no active subscription" }), {
-        status: 422,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Agent has no active subscription" }),
+        {
+          status: 422,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const price = sub.items.data[0]?.price;
     const unitAmount = price?.unit_amount ?? null; // cents
     const currency = price?.currency ?? "eur";
     if (!unitAmount || unitAmount <= 0) {
-      return new Response(JSON.stringify({ error: "Active subscription has no unit amount" }), {
-        status: 422,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Active subscription has no unit amount" }),
+        {
+          status: 422,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Defence-in-depth: never apply more than 10% cumulatively in any one
     // calendar month, even if more verified rows than the DB cap somehow
     // exist (e.g. data drift).
-    const monthStart = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)).toISOString();
+    const monthStart = new Date(
+      Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1),
+    ).toISOString();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: appliedThisMonthRaw } = await (supabase as any).from("agent_data_inputs")
+    const { data: appliedThisMonthRaw } = await (supabase as any).from(
+      "agent_data_inputs",
+    )
       .select("stripe_credit_amount_cents")
       .eq("user_id", row.user_id)
       .gte("applied_to_invoice_at", monthStart);
     const appliedCents = (appliedThisMonthRaw ?? []).reduce(
-      (sum: number, r: { stripe_credit_amount_cents: number | null }) => sum + (r.stripe_credit_amount_cents ?? 0),
+      (sum: number, r: { stripe_credit_amount_cents: number | null }) =>
+        sum + (r.stripe_credit_amount_cents ?? 0),
       0,
     );
-    const monthlyCapCents = Math.floor((unitAmount * MAX_DISCOUNT_PCT_PER_MONTH) / 100);
+    const monthlyCapCents = Math.floor(
+      (unitAmount * MAX_DISCOUNT_PCT_PER_MONTH) / 100,
+    );
 
     let creditCents = Math.floor((unitAmount * Number(row.discount_pct)) / 100);
     if (appliedCents + creditCents > monthlyCapCents) {
@@ -233,28 +305,49 @@ Deno.serve(async (req) => {
     }
 
     if (creditCents <= 0) {
-      log.info("monthly cap reached, no credit applied", { id: row.id, applied_cents: appliedCents, cap_cents: monthlyCapCents });
-      return new Response(JSON.stringify({
-        applied: false,
-        reason: "monthly_cap_reached",
+      log.info("monthly cap reached, no credit applied", {
+        id: row.id,
         applied_cents: appliedCents,
         cap_cents: monthlyCapCents,
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
       });
+      return new Response(
+        JSON.stringify({
+          applied: false,
+          reason: "monthly_cap_reached",
+          applied_cents: appliedCents,
+          cap_cents: monthlyCapCents,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        },
+      );
     }
 
     // Apply credit on Stripe (negative amount = credit toward next invoice).
-    const balanceTx = await stripe.customers.createBalanceTransaction(customerId, {
-      amount: -creditCents,
-      currency,
-      description: `maiProp data-input loyalty credit (${Number(row.discount_pct)}% × subscription)`,
-      metadata: {
-        agent_data_input_id: row.id,
-        user_id: row.user_id,
+    const balanceTx = await stripe.customers.createBalanceTransaction(
+      customerId,
+      {
+        amount: -creditCents,
+        currency,
+        description: `maiProp data-input loyalty credit (${
+          Number(row.discount_pct)
+        }% × subscription)`,
+        metadata: {
+          agent_data_input_id: row.id,
+          user_id: row.user_id,
+        },
       },
-    });
+      {
+        idempotencyKey: await buildIdempotencyKey("data-input-credit", [
+          row.id,
+          row.user_id,
+          customerId,
+          creditCents,
+          currency,
+        ]),
+      },
+    );
 
     // Persist to DB so we never double-apply. The conditional `.is(..., null)`
     // filter is the atomic guard that closes the read-then-write race: two
@@ -264,17 +357,24 @@ Deno.serve(async (req) => {
     // asking PostgREST to RETURN the affected row and treat a missing row as
     // "another caller won the race", in which case we reverse the orphaned
     // Stripe credit so the customer is never charged twice.
+    const appliedAt = new Date().toISOString();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: claimed, error: updateErr } = await (supabase as any).from("agent_data_inputs")
+    const { data: claimed, error: updateErr } = await (supabase as any).from(
+      "agent_data_inputs",
+    )
       .update({
-        applied_to_invoice_at: new Date().toISOString(),
+        applied_to_invoice_at: appliedAt,
         stripe_credit_id: balanceTx.id,
         stripe_credit_amount_cents: creditCents,
         stripe_credit_currency: currency,
+        discount_applied: true,
+        discount_applied_at: appliedAt,
+        discount_invoice_id: balanceTx.id,
       })
       .eq("id", row.id)
       .eq("status", "verified")
       .is("stripe_credit_id", null)
+      .is("discount_invoice_id", null)
       .select("id")
       .maybeSingle();
 
@@ -286,13 +386,16 @@ Deno.serve(async (req) => {
         stripe_credit_id: balanceTx.id,
         err: updateErr.message,
       });
-      return new Response(JSON.stringify({
-        error: "Credit applied on Stripe but DB update failed",
-        stripe_credit_id: balanceTx.id,
-      }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          error: "Credit applied on Stripe but DB update failed",
+          stripe_credit_id: balanceTx.id,
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     if (!claimed) {
@@ -304,16 +407,26 @@ Deno.serve(async (req) => {
         orphan_balance_tx: balanceTx.id,
       });
       try {
-        await stripe.customers.createBalanceTransaction(customerId, {
-          amount: creditCents, // positive = revoke the negative credit above
-          currency,
-          description: `Reversal: duplicate apply attempt on data input ${row.id}`,
-          metadata: {
-            reversed_for: balanceTx.id,
-            agent_data_input_id: row.id,
-            user_id: row.user_id,
+        await stripe.customers.createBalanceTransaction(
+          customerId,
+          {
+            amount: creditCents, // positive = revoke the negative credit above
+            currency,
+            description:
+              `Reversal: duplicate apply attempt on data input ${row.id}`,
+            metadata: {
+              reversed_for: balanceTx.id,
+              agent_data_input_id: row.id,
+              user_id: row.user_id,
+            },
           },
-        });
+          {
+            idempotencyKey: await buildIdempotencyKey(
+              "data-input-credit-reversal",
+              [row.id, balanceTx.id],
+            ),
+          },
+        );
       } catch (revErr: unknown) {
         // If the reversal fails, the Stripe balance is over-credited and an
         // operator must manually reverse using the metadata above. Logging is
@@ -324,14 +437,17 @@ Deno.serve(async (req) => {
           err: revErr instanceof Error ? revErr.message : String(revErr),
         });
       }
-      return new Response(JSON.stringify({
-        applied: false,
-        reason: "duplicate_concurrent_apply",
-        orphan_balance_tx: balanceTx.id,
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      });
+      return new Response(
+        JSON.stringify({
+          applied: false,
+          reason: "duplicate_concurrent_apply",
+          orphan_balance_tx: balanceTx.id,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        },
+      );
     }
 
     log.info("credit applied", {
@@ -342,16 +458,19 @@ Deno.serve(async (req) => {
       stripe_credit_id: balanceTx.id,
     });
 
-    return new Response(JSON.stringify({
-      applied: true,
-      idempotent: false,
-      stripe_credit_id: balanceTx.id,
-      amount_cents: creditCents,
-      currency,
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200,
-    });
+    return new Response(
+      JSON.stringify({
+        applied: true,
+        idempotent: false,
+        stripe_credit_id: balanceTx.id,
+        amount_cents: creditCents,
+        currency,
+      }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      },
+    );
   } catch (error: unknown) {
     const status = error instanceof AuthError ? error.status : 500;
     const message = error instanceof Error ? error.message : String(error);

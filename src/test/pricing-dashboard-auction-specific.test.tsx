@@ -362,7 +362,7 @@ describe("Pricing focused page behavior", () => {
       loading: false,
       profileLoading: false,
     });
-    mocks.useSubscriptionMock.mockReturnValue({ isPro: true, loading: false, refreshSubscription: vi.fn() });
+    mocks.useSubscriptionMock.mockReturnValue({ isPro: true, loading: false, hasStripeBilling: true, refreshSubscription: vi.fn() });
     mocks.invokeMock.mockResolvedValue({ data: { url: "https://stripe.example/portal" }, error: null });
     const { default: Pricing } = await import("@/pages/Pricing");
 
@@ -373,6 +373,24 @@ describe("Pricing focused page behavior", () => {
 
     await waitFor(() => expect(mocks.invokeMock).toHaveBeenCalledWith("customer-portal", {}));
     expect(window.open).toHaveBeenCalledWith("https://stripe.example/portal", "_blank");
+  });
+
+  it("does not open Stripe portal for manually managed Pro access", async () => {
+    mocks.useAuthMock.mockReturnValue({
+      user: { id: "u-managed", email: "managed@example.com" },
+      profile: { role: "professional", participant_type: "professional" },
+      loading: false,
+      profileLoading: false,
+    });
+    mocks.useSubscriptionMock.mockReturnValue({ isPro: true, loading: false, hasStripeBilling: false, refreshSubscription: vi.fn() });
+    const { default: Pricing } = await import("@/pages/Pricing");
+
+    renderWithProviders(<Pricing />, { initialPath: "/pricing?audience=professional" });
+
+    fireEvent.click(await screen.findByRole("button", { name: /Manage Subscription/i }));
+
+    expect(mocks.invokeMock).not.toHaveBeenCalledWith("customer-portal", {});
+    expect(mocks.toast.info).toHaveBeenCalledWith("This plan is managed outside Stripe billing.");
   });
 });
 

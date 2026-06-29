@@ -12,6 +12,11 @@ const legacyRevokeMigration = readFileSync(
   "utf8",
 );
 
+const roleSwitchPreflightMigration = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/20260629142237_add_role_switch_preflight_rpc.sql"),
+  "utf8",
+);
+
 const beginRoleSwitchFunction = readFileSync(
   resolve(process.cwd(), "supabase/functions/begin-role-switch/index.ts"),
   "utf8",
@@ -60,8 +65,31 @@ describe("begin role switch grant hardening", () => {
     expect(settingsSection).toContain('"begin-role-switch"');
     expect(settingsSection).not.toContain('rpc("begin_role_switch"');
     expect(beginRoleSwitchFunction).toContain("verifyBearerToken");
+    expect(beginRoleSwitchFunction).toContain('"validate_role_switch_for_user"');
     expect(beginRoleSwitchFunction).toContain('"begin_role_switch_for_user"');
     expect(beginRoleSwitchFunction).toContain("_user_id: user.id");
+  });
+
+  it("adds a service-role-only preflight RPC before Stripe cancellation", () => {
+    expect(roleSwitchPreflightMigration).toContain(
+      "CREATE OR REPLACE FUNCTION public.validate_role_switch_for_user",
+    );
+    expect(roleSwitchPreflightMigration).toContain(
+      "active_firesale_commitment_blocks_role_switch",
+    );
+    expect(roleSwitchPreflightMigration).toContain(
+      "accepted_open_house_offer_blocks_role_switch",
+    );
+    expect(roleSwitchPreflightMigration).not.toContain(
+      "public.release_expired_firesale_reservations(NULL)",
+    );
+    expect(roleSwitchPreflightMigration).toContain(
+      "REVOKE ALL ON FUNCTION public.validate_role_switch_for_user(UUID)",
+    );
+    expect(roleSwitchPreflightMigration).toContain(
+      "GRANT EXECUTE ON FUNCTION public.validate_role_switch_for_user(UUID)",
+    );
+    expect(settingsSection).toContain("validate_only: true");
   });
 
   it("keeps future fresh builds aligned with the live hardening", () => {

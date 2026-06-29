@@ -339,7 +339,11 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
     );
   };
 
-  const handleMetadataChange = (id: string, key: string, value: string) => {
+  const handleStripePriceIdChange = (
+    id: string,
+    cycle: "monthly" | "annual",
+    value: string,
+  ) => {
     qc.setQueryData<PricingConfig[]>(["admin-pricing-configs"], (prev = []) =>
       prev.map((row) => {
         if (row.id !== id) return row;
@@ -347,10 +351,47 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
           row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
             ? row.metadata
             : {};
-        const meta: Json = { ...currentMetadata, [key]: value || undefined };
+        const nextValue = value || undefined;
+        const meta: Record<string, Json | undefined> = { ...currentMetadata };
+        if (cycle === "monthly") {
+          meta.stripe_price_id_monthly = nextValue;
+          meta.stripe_monthly_price_id = nextValue;
+          if (row.unit !== "yearly" && row.unit !== "annual") {
+            meta.stripe_price_id = nextValue;
+          }
+        } else {
+          meta.stripe_price_id_annual = nextValue;
+          meta.stripe_annual_price_id = nextValue;
+          meta.stripe_price_id_yearly = nextValue;
+          meta.stripe_yearly_price_id = nextValue;
+          if (row.unit === "yearly" || row.unit === "annual") {
+            meta.stripe_price_id = nextValue;
+          }
+        }
         return { ...row, metadata: meta };
       }),
     );
+  };
+
+  const getStripePriceIdForCycle = (
+    row: PricingConfig,
+    cycle: "monthly" | "annual",
+  ): string => {
+    const meta = row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+      ? row.metadata as Record<string, string | undefined>
+      : {};
+    if (cycle === "monthly") {
+      return meta.stripe_price_id_monthly ??
+        meta.stripe_monthly_price_id ??
+        (row.unit !== "yearly" && row.unit !== "annual" ? meta.stripe_price_id : "") ??
+        "";
+    }
+    return meta.stripe_price_id_annual ??
+      meta.stripe_annual_price_id ??
+      meta.stripe_price_id_yearly ??
+      meta.stripe_yearly_price_id ??
+      ((row.unit === "yearly" || row.unit === "annual") ? meta.stripe_price_id : "") ??
+      "";
   };
 
   const handleCreateStripePrice = async (row: PricingConfig) => { // skipcq: JS-R1005 - Admin-only price creation coordinates validation, edge call, cache refresh, and feedback.
@@ -371,7 +412,14 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
       if (error || data?.error) throw new Error(data?.error ?? error?.message ?? "Failed");
       const priceId = data?.price_id;
       if (priceId) {
-        handleMetadataChange(row.id, "stripe_price_id", priceId);
+        handleStripePriceIdChange(
+          row.id,
+          row.unit === "yearly" || row.unit === "annual" ? "annual" : "monthly",
+          priceId,
+        );
+        if (data?.annual_price_id) {
+          handleStripePriceIdChange(row.id, "annual", data.annual_price_id);
+        }
         toast.success(`Stripe price created: ${priceId}`);
         qc.invalidateQueries({ queryKey: ["admin-pricing-configs"] });
         qc.invalidateQueries({ queryKey: ["pricing-configs-public"] });
@@ -490,7 +538,8 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
                             <th className="text-left py-2 pr-3">Active</th>
                             <th className="text-left py-2 pr-3">Sort</th>
                             <th className="text-left py-2 pr-3">Description</th>
-                            <th className="text-left py-2 pr-3">Stripe Price ID</th>
+                            <th className="text-left py-2 pr-3">Stripe Monthly</th>
+                            <th className="text-left py-2 pr-3">Stripe Annual</th>
                             <th className="text-left py-2 pr-2">Stripe</th>
                             <th className="py-2 pl-2 text-right">Actions</th>
                           </tr>
@@ -566,9 +615,19 @@ export function AdminPricingContent({ embed = false }: { embed?: boolean }) {
                               <td className="py-2 pr-3">
                                 <input
                                   className="w-28 bg-transparent border border-border rounded px-2 py-1 text-xs font-mono"
-                                  placeholder="price_xxx"
-                                  value={(row.metadata as Record<string, string> | undefined)?.stripe_price_id ?? ""}
-                                  onChange={(e) => handleMetadataChange(row.id, "stripe_price_id", e.target.value)}
+                                  aria-label="Monthly Stripe price ID"
+                                  placeholder="monthly price_xxx"
+                                  value={getStripePriceIdForCycle(row, "monthly")}
+                                  onChange={(e) => handleStripePriceIdChange(row.id, "monthly", e.target.value)}
+                                />
+                              </td>
+                              <td className="py-2 pr-3">
+                                <input
+                                  className="w-28 bg-transparent border border-border rounded px-2 py-1 text-xs font-mono"
+                                  aria-label="Annual Stripe price ID"
+                                  placeholder="annual price_xxx"
+                                  value={getStripePriceIdForCycle(row, "annual")}
+                                  onChange={(e) => handleStripePriceIdChange(row.id, "annual", e.target.value)}
                                 />
                               </td>
                               <td className="py-2 pr-2">

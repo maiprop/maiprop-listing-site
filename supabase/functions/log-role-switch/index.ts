@@ -18,12 +18,14 @@
  * user id removes that dependency entirely.
  */
 
-import Stripe from "npm:stripe@18.5.0";
+import Stripe from "npm:stripe@22.3.0";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { createLogger } from "../_shared/logger.ts";
 import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
 import { AuthError, verifyBearerToken } from "../_shared/auth.ts";
+import { createStripeClient } from "../_shared/stripeClient.ts";
+import { shouldSkipProfileEntitlementSync } from "../stripe-webhook/addonGuard.ts";
 
 const log = createLogger("log-role-switch");
 const limiter = makeRateLimiter({ bucket: "log-role-switch", maxRequests: 5, windowMs: 60_000 });
@@ -32,6 +34,49 @@ const limiter = makeRateLimiter({ bucket: "log-role-switch", maxRequests: 5, win
 const logStep = (step: string, details?: unknown) => {
   log.info(step, details && typeof details === "object" ? details as Record<string, unknown> : details !== undefined ? { details } : undefined);
 };
+
+async function findOwnedStripeCustomerForRoleSwitch(
+  stripe: Stripe,
+  supabase: { from: (table: string) => unknown },
+  user: { id: string; email: string },
+): Promise<Stripe.Customer | null> {
+  try {
+    const search = await stripe.customers.search({
+      query: `metadata['user_id']:'${user.id}'`,
+      limit: 1,
+    });
+    if (search.data[0]) return search.data[0];
+  } catch (err: unknown) {
+    logStep("Stripe customer metadata search failed; falling back to durable billing state", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  const { data, error } = await (supabase.from("billing_customers") as {
+    select: (columns: string) => {
+      eq: (column: string, value: string) => {
+        order: (
+          column: string,
+          opts: { ascending: boolean },
+        ) => {
+          limit: (count: number) => PromiseLike<{
+            data?: Array<{ stripe_customer_id?: string | null }> | null;
+            error?: { message?: string } | null;
+          }>;
+        };
+      };
+    };
+  }).select("stripe_customer_id")
+    .eq("user_id", user.id)
+    .order("updated_at", { ascending: false })
+    .limit(1);
+  if (error) throw new Error(error.message ?? "billing customer lookup failed");
+  const customerId = data?.[0]?.stripe_customer_id ?? null;
+  if (!customerId) return null;
+  const customer = await stripe.customers.retrieve(customerId);
+  if ("deleted" in customer && customer.deleted) return null;
+  return customer as Stripe.Customer;
+}
 
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
@@ -98,14 +143,16 @@ Deno.serve(async (req) => {
     // have changed.
     let subCancelled = false;
     let subAlreadyCancelling = false;
+    let subCancelledCount = 0;
+    let subAlreadyCancellingCount = 0;
     let stripeError: string | null = null;
     if (cancelSubscription) {
       const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-      if (stripeKey && user.email) {
+      if (stripeKey) {
         try {
-          const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
-          const customers = await stripe.customers.list({ email: user.email, limit: 1 });
-          if (customers.data.length > 0) {
+          const stripe = createStripeClient(stripeKey);
+          const customer = await findOwnedStripeCustomerForRoleSwitch(stripe, supabaseAdmin, user);
+          if (customer) {
             // Stripe's `status` filter only accepts a single value per call. To
             // cancel the user's subscription regardless of which billable state
             // it's in, fetch with status="all" and filter client-side.
@@ -124,23 +171,26 @@ Deno.serve(async (req) => {
               "past_due",
             ]);
             const allSubs = await stripe.subscriptions.list({
-              customer: customers.data[0].id,
+              customer: customer.id,
               status: "all",
               limit: 100,
             });
             const billableSubs = allSubs.data.filter(
-              (s: Stripe.Subscription) => billableStatuses.has(s.status),
+              (s: Stripe.Subscription) =>
+                billableStatuses.has(s.status) &&
+                !shouldSkipProfileEntitlementSync(s),
             );
-            if (billableSubs.length > 0) {
-              const sub = billableSubs[0];
+            for (const sub of billableSubs) {
               if (sub.cancel_at_period_end === true) {
                 subAlreadyCancelling = true;
+                subAlreadyCancellingCount += 1;
                 logStep("Subscription already pending cancellation — skipping update", {
                   subId: sub.id,
                 });
               } else {
                 await stripe.subscriptions.update(sub.id, { cancel_at_period_end: true });
                 subCancelled = true;
+                subCancelledCount += 1;
                 logStep("Subscription set to cancel at period end", { subId: sub.id });
               }
             }
@@ -149,6 +199,9 @@ Deno.serve(async (req) => {
           stripeError = stripeErr instanceof Error ? stripeErr.message : String(stripeErr);
           logStep("Stripe cancellation failed", { error: stripeError });
         }
+      } else {
+        stripeError = "STRIPE_SECRET_KEY is not set";
+        logStep("Stripe cancellation unavailable", { error: stripeError });
       }
     }
 
@@ -159,27 +212,41 @@ Deno.serve(async (req) => {
     // active sub. This preserves the pre-PR semantic (which always re-issued the
     // update and recorded true) while keeping the Stripe call idempotent.
     const subPendingCancellation = subCancelled || subAlreadyCancelling;
-    const { error: insertError } = await supabaseAdmin.rpc("record_role_switch_audit_for_user", {
-      _user_id: user.id,
-      _from_type: fromType,
-      _to_type: toType || "",
-      _switch_kind: switchKind,
-      _had_active_sub: hadActiveSub,
-      _sub_cancelled: subPendingCancellation,
-    });
+    if (toType) {
+      const { error: insertError } = await supabaseAdmin.rpc("record_role_switch_audit_for_user", {
+        _user_id: user.id,
+        _from_type: fromType,
+        _to_type: toType,
+        _switch_kind: switchKind,
+        _had_active_sub: hadActiveSub,
+        _sub_cancelled: subPendingCancellation,
+      });
 
-    if (insertError) {
-      logStep("Audit insert failed", { error: insertError.message });
-      // Non-fatal — return success to avoid blocking the UX
+      if (insertError) {
+        logStep("Audit insert failed", { error: insertError.message });
+        // Non-fatal — return success to avoid blocking the UX
+      }
+    } else {
+      logStep("Audit insert skipped until destination role is selected");
     }
 
-    logStep("Done", { fromType, toType, subCancelled, subAlreadyCancelling, stripeError });
+    logStep("Done", {
+      fromType,
+      toType,
+      subCancelled,
+      subAlreadyCancelling,
+      subCancelledCount,
+      subAlreadyCancellingCount,
+      stripeError,
+    });
 
     return new Response(
       JSON.stringify({
         success: true,
         sub_cancelled: subCancelled,
         sub_already_cancelling: subAlreadyCancelling,
+        sub_cancelled_count: subCancelledCount,
+        sub_already_cancelling_count: subAlreadyCancellingCount,
         stripe_error: stripeError,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }

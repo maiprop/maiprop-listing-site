@@ -8,9 +8,9 @@ import {
 import { StatusBadge } from "@/pages/dashboard/billing/StatusBadge";
 
 describe("billing add-on helpers", () => {
-  it("maps exact and bundled add-ons to the checkout keys used by Stripe", () => {
-    expect(resolveAddonKey({ name: "Featured + Priority" })).toBe(
-      "featured_priority_bundle",
+  it("maps delivered report add-ons to Stripe checkout keys and keeps manual add-ons contact-only", () => {
+    expect(resolveAddonKey({ name: "Property Report" })).toBe(
+      "property_report_single",
     );
     expect(resolveAddonKey({ name: "Valuation Bundle x 5" })).toBe(
       "valuation_bundle",
@@ -18,6 +18,8 @@ describe("billing add-on helpers", () => {
     expect(resolveAddonKey({ name: "Neighbourhood Bundle x 3" })).toBe(
       "neighbourhood_report_bundle",
     );
+    expect(resolveAddonKey({ name: "Featured + Priority" })).toBeNull();
+    expect(resolveAddonKey({ name: "Extra Agent Seat" })).toBeNull();
     expect(resolveAddonKey({ name: "Market Intelligence", manual: true })).toBeNull();
     expect(resolveAddonKey({ name: "Custom onboarding" })).toBeNull();
   });

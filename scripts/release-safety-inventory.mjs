@@ -312,6 +312,7 @@ function collectInventory() {
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .filter((name) => !ignoredFunctionDirs.has(name))
+    .filter((name) => existsSync(join(functionDir, name, "index.ts")))
     .sort();
 
   const configuredFunctions = [...configured.keys()].sort();

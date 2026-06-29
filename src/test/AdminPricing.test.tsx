@@ -101,12 +101,16 @@ describe("AdminPricingContent", () => {
     renderAdminPricing([
       baseRow({
         amount: 0,
-        metadata: { stripe_price_id: "price_existing_zero" },
+        metadata: {
+          stripe_price_id_monthly: "price_existing_zero",
+          stripe_price_id_annual: "price_existing_annual",
+        },
       }),
     ]);
 
-    const stripeInput = await screen.findByPlaceholderText("price_xxx");
-    expect(stripeInput).toHaveValue("price_existing_zero");
+    const monthlyStripeInput = await screen.findByLabelText("Monthly Stripe price ID");
+    expect(monthlyStripeInput).toHaveValue("price_existing_zero");
+    expect(screen.getByLabelText("Annual Stripe price ID")).toHaveValue("price_existing_annual");
     expect(screen.getByRole("button", { name: "Create Stripe price" })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Create Stripe price" }));
@@ -118,7 +122,7 @@ describe("AdminPricingContent", () => {
   it("creates a Stripe price for a paid row and writes the returned price ID into metadata", async () => {
     const paidRow = baseRow();
     mocks.supabase?.functions.invoke.mockImplementationOnce(async () => {
-      paidRow.metadata = { stripe_price_id: "price_created_123" };
+      paidRow.metadata = { stripe_price_id_monthly: "price_created_123" };
       return {
         data: { price_id: "price_created_123" },
         error: null,
@@ -137,7 +141,7 @@ describe("AdminPricingContent", () => {
     );
 
     await waitFor(() =>
-      expect(screen.getByPlaceholderText("price_xxx")).toHaveValue("price_created_123"),
+      expect(screen.getByLabelText("Monthly Stripe price ID")).toHaveValue("price_created_123"),
     );
     expect(mocks.toastMock.success).toHaveBeenCalledWith("Stripe price created: price_created_123");
   });
@@ -183,7 +187,12 @@ describe("AdminPricingContent", () => {
   });
 
   it("adds rows, edits every table field, saves, dismisses sync banners, and closes the add modal paths", async () => {
-    const row = baseRow({ metadata: { stripe_price_id: "price_old" } });
+    const row = baseRow({
+      metadata: {
+        stripe_price_id_monthly: "price_old",
+        stripe_price_id_annual: "price_year_old",
+      },
+    });
     mocks.supabase?.functions.invoke.mockImplementation(async (functionName: string) => {
       if (functionName === "sync-stripe-pricing") {
         return {
@@ -226,13 +235,21 @@ describe("AdminPricingContent", () => {
     fireEvent.change(screen.getAllByDisplayValue("2")[0], { target: { value: "9" } });
     fireEvent.change(screen.getByDisplayValue("Unlimited listings"), { target: { value: "Priority plus" } });
     fireEvent.change(screen.getByDisplayValue("price_old"), { target: { value: "price_new" } });
+    fireEvent.change(screen.getByDisplayValue("price_year_old"), { target: { value: "price_year_new" } });
 
     fireEvent.click(screen.getByRole("button", { name: /^Save all$/i }));
     await waitFor(() =>
       expect(mocks.supabase?.functions.invoke).toHaveBeenCalledWith("admin-pricing-config", {
         body: expect.objectContaining({
           action: "upsert",
-          rows: expect.any(Array),
+          rows: expect.arrayContaining([
+            expect.objectContaining({
+              metadata: expect.objectContaining({
+                stripe_price_id_monthly: "price_new",
+                stripe_price_id_annual: "price_year_new",
+              }),
+            }),
+          ]),
         }),
       }),
     );

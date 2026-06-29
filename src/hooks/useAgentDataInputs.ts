@@ -87,6 +87,10 @@ type EdgeEntry = {
   status: AgentDataInputStatus | "flagged";
   rejection_reason: string | null;
   discount_pct?: number | string | null;
+  applied_to_invoice_at?: string | null;
+  stripe_credit_id?: string | null;
+  stripe_credit_amount_cents?: number | string | null;
+  stripe_credit_currency?: string | null;
   discount_applied_at?: string | null;
   discount_invoice_id?: string | null;
   created_at: string;
@@ -130,6 +134,12 @@ const entryDiscountPct = (entry: EdgeEntry): number => {
   return Number.isFinite(value) ? value : 0;
 };
 
+const entryCreditAmountCents = (entry: EdgeEntry): number | null => {
+  if (entry.stripe_credit_amount_cents == null) return null;
+  const value = Number(entry.stripe_credit_amount_cents);
+  return Number.isFinite(value) ? value : null;
+};
+
 const normalizeEntry = (entry: EdgeEntry, userId: string): AgentDataInput => { // skipcq: JS-R1005 - Keep the edge response adapter centralized so the legacy dashboard shape does not drift.
   return {
     id: entry.id,
@@ -151,10 +161,10 @@ const normalizeEntry = (entry: EdgeEntry, userId: string): AgentDataInput => { /
     reviewed_at: entry.reviewed_at,
     reviewed_by: null,
     discount_pct: entryDiscountPct(entry),
-    applied_to_invoice_at: nullable(entry.discount_applied_at),
-    stripe_credit_id: nullable(entry.discount_invoice_id),
-    stripe_credit_amount_cents: null,
-    stripe_credit_currency: null,
+    applied_to_invoice_at: nullable(entry.applied_to_invoice_at ?? entry.discount_applied_at),
+    stripe_credit_id: nullable(entry.stripe_credit_id ?? entry.discount_invoice_id),
+    stripe_credit_amount_cents: entryCreditAmountCents(entry),
+    stripe_credit_currency: nullable(entry.stripe_credit_currency),
     created_at: entry.created_at,
     updated_at: entryUpdatedAt(entry),
   };

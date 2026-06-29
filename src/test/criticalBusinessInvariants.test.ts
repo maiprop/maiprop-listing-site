@@ -92,7 +92,9 @@ describe("critical business invariants", () => {
 
     expect(statusPolicy).toContain('"past_due"');
     expect(statusPolicy).toContain("PROVISIONED_ACCESS_STATUSES");
-    expect(webhook).toContain("syncInvoiceSubscription(supabase, stripe, invoice, \"invoice.payment_failed\")");
+    expect(webhook).toContain('case "invoice.payment_failed"');
+    expect(webhook).toContain('"invoice.payment_failed"');
+    expect(webhook).toContain("syncInvoiceSubscription(");
     expect(webhook).toContain("hasProvisionedSubscriptionAccess(sub.status)");
     expect(webhook).toContain("shouldRevokeSubscriptionAccess(sub.status)");
     expect(webhook).toContain("apply_subscription_lapse_controls");

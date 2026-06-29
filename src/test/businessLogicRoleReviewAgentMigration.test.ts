@@ -26,6 +26,10 @@ const agentQuotaMigration = readFileSync(
   resolve(process.cwd(), "supabase/migrations/20260707020000_serialize_agent_data_input_quota.sql"),
   "utf8",
 );
+const agentCreditCompatMigration = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/20260707170000_align_agent_data_input_stripe_credit_columns.sql"),
+  "utf8",
+);
 
 describe("business logic role/review/agent hardening migration", () => {
   it("cleans up role-switch dependencies and blocks live commitments", () => {
@@ -57,5 +61,14 @@ describe("business logic role/review/agent hardening migration", () => {
     expect(agentReviewMigration).toContain("reject_and_ban");
     expect(agentQuotaMigration).toContain("p_agent_side TEXT DEFAULT 'seller'");
     expect(agentQuotaMigration).toContain("public.agent_data_input_discount_pct_per_input()");
+    expect(agentCreditCompatMigration).toContain("ADD COLUMN IF NOT EXISTS applied_to_invoice_at");
+    expect(agentCreditCompatMigration).toContain("ADD COLUMN IF NOT EXISTS stripe_credit_id");
+    expect(agentCreditCompatMigration).toContain("ADD COLUMN IF NOT EXISTS discount_applied");
+    expect(agentCreditCompatMigration).toContain("COALESCE(discount_applied, FALSE) = FALSE");
+    expect(agentCreditCompatMigration).toContain(
+      "REVOKE ALL ON FUNCTION public.get_agent_data_input_status(UUID) FROM PUBLIC, anon, authenticated",
+    );
+    expect(agentCreditCompatMigration).toContain("GRANT EXECUTE ON FUNCTION public.get_agent_data_input_status(UUID) TO service_role");
+    expect(agentCreditCompatMigration).toContain("GRANT EXECUTE ON FUNCTION public.apply_verified_data_input_discount(UUID, TEXT) TO service_role");
   });
 });

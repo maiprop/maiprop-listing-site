@@ -26,6 +26,7 @@ const invitationNotificationSchema = z.object({
   full_name: z.string().trim().min(1).optional().nullable(),
   rejection_reason: z.string().trim().min(1).optional().nullable(),
   tier: z.string().trim().min(1).optional().nullable(),
+  payment_url: z.string().trim().url("Invalid payment URL").optional().nullable(),
 });
 
 Deno.serve(async (req) => {
@@ -76,10 +77,11 @@ Deno.serve(async (req) => {
     }
 
     const body = await parseJsonBody(req, invitationNotificationSchema);
-    const { type, email, full_name, rejection_reason, tier } = body;
+    const { type, email, full_name, rejection_reason, tier, payment_url } = body;
 
     const firstName = full_name?.split(" ")[0] || "there";
     const appUrl = "https://portal.maiprop.co/";
+    const paymentUrl = payment_url ?? `${appUrl}investor-dashboard?payment=pending`;
 
     let subject: string;
     let html: string;
@@ -130,7 +132,7 @@ Deno.serve(async (req) => {
 
             <table width="100%" cellpadding="0" cellspacing="0">
               <tr><td align="center">
-                <a href="${appUrl}pricing" style="display:inline-block;background:#0a0e1a;color:#d4af37;text-decoration:none;font-size:14px;font-weight:700;padding:14px 36px;border-radius:10px;letter-spacing:0.5px;">
+                <a href="${paymentUrl}" style="display:inline-block;background:#0a0e1a;color:#d4af37;text-decoration:none;font-size:14px;font-weight:700;padding:14px 36px;border-radius:10px;letter-spacing:0.5px;">
                   Complete Payment
                 </a>
               </td></tr>

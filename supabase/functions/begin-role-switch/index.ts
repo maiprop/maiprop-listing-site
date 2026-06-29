@@ -41,6 +41,13 @@ function errorMessage(err: unknown): string {
   return "Failed to begin role switch";
 }
 
+function isValidateOnlyBody(body: unknown): boolean {
+  if (!body || typeof body !== "object") return false;
+  const payload = body as Record<string, unknown>;
+  return payload.validate_only === true || payload.validateOnly === true ||
+    payload.dry_run === true || payload.dryRun === true;
+}
+
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
@@ -61,18 +68,22 @@ Deno.serve(async (req) => {
   }
 
   try {
-    await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({}));
+    const validateOnly = isValidateOnlyBody(body);
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },
     });
     const user = await verifyBearerToken(req, supabase);
 
-    const { error } = await supabase.rpc("begin_role_switch_for_user", {
-      _user_id: user.id,
-    });
+    const { error } = await supabase.rpc(
+      validateOnly
+        ? "validate_role_switch_for_user"
+        : "begin_role_switch_for_user",
+      { _user_id: user.id },
+    );
     if (error) throw error;
 
-    return jsonResponse({ success: true }, 200, corsHeaders);
+    return jsonResponse({ success: true, validate_only: validateOnly }, 200, corsHeaders);
   } catch (err: unknown) {
     if (err instanceof AuthError) {
       return jsonResponse({ error: err.message }, err.status, corsHeaders);

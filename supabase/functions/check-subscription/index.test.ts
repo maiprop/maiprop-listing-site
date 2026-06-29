@@ -39,9 +39,11 @@ const mockSupabase = (
     investorStatus = "active",
     investorExpiresAt = "2099-06-30T00:00:00.000Z",
     investorRows,
+    billingRows = [],
     pricingRows = [],
     profileError = null,
     investorError = null,
+    billingError = null,
   }: {
     profileProductId?: string | null;
     profileRole?: string | null;
@@ -51,9 +53,11 @@ const mockSupabase = (
     investorRows?: Array<
       { status?: string | null; expires_at?: string | null }
     >;
+    billingRows?: Array<Record<string, unknown>>;
     pricingRows?: Array<Record<string, unknown>>;
     profileError?: { message: string } | null;
     investorError?: { message: string } | null;
+    billingError?: { message: string } | null;
   },
 ) => ({
   marker: "this-aware-supabase-mock",
@@ -72,6 +76,9 @@ const mockSupabase = (
         return chain;
       },
       limit() {
+        return chain;
+      },
+      order() {
         return chain;
       },
       maybeSingle() {
@@ -93,6 +100,12 @@ const mockSupabase = (
             error: null,
           });
         }
+        if (table === "billing_subscriptions") {
+          return Promise.resolve({
+            data: billingRows[0] ?? null,
+            error: billingError,
+          });
+        }
         return Promise.resolve({ data: null, error: null });
       },
       then(resolve: (value: unknown) => void) {
@@ -106,6 +119,10 @@ const mockSupabase = (
           });
           return;
         }
+        if (table === "billing_subscriptions") {
+          resolve({ data: billingRows, error: billingError });
+          return;
+        }
         if (table === "pricing_configs") {
           resolve({ data: pricingRows, error: null });
           return;
@@ -115,6 +132,95 @@ const mockSupabase = (
     };
     return chain;
   },
+});
+
+Deno.test("database fallback prefers durable Stripe billing subscriptions over live Stripe lookups", async () => {
+  const state = await getDatabaseFallback(
+    mockSupabase({
+      profileRole: "buyer",
+      participantType: "buyer",
+      investorStatus: null,
+      billingRows: [
+        {
+          status: "active",
+          stripe_product_id: "prod_participant",
+          current_period_end: "2099-06-30T00:00:00.000Z",
+          plan_key: "pro",
+          audience: "participant",
+          billing_cycle: "monthly",
+        },
+      ],
+    }),
+    "00000000-0000-0000-0000-000000000013",
+  );
+
+  assertEquals(state.subscribed, true);
+  assertEquals(state.product_id, "prod_participant");
+  assertEquals(state.subscription_end, "2099-06-30T00:00:00.000Z");
+  assertEquals(state.source, "billing_state");
+  assertEquals(state.plan_key, "pro");
+  assertEquals(state.audience, "participant");
+  assertEquals(state.billing_cycle, "monthly");
+});
+
+Deno.test("database fallback ignores durable subscriptions from a previous role audience", async () => {
+  const state = await getDatabaseFallback(
+    mockSupabase({
+      profileRole: "developer",
+      participantType: "developer",
+      investorStatus: null,
+      billingRows: [
+        {
+          status: "active",
+          stripe_product_id: "prod_participant",
+          current_period_end: "2099-06-30T00:00:00.000Z",
+          plan_key: "pro",
+          audience: "participant",
+          billing_cycle: "monthly",
+        },
+      ],
+    }),
+    "00000000-0000-0000-0000-000000000014",
+  );
+
+  assertEquals(state.subscribed, false);
+  assertEquals(state.product_id, null);
+  assertEquals(state.source, "database");
+});
+
+Deno.test("database fallback picks the current audience when old and new durable subscriptions overlap", async () => {
+  const state = await getDatabaseFallback(
+    mockSupabase({
+      profileRole: "developer",
+      participantType: "developer",
+      investorStatus: null,
+      billingRows: [
+        {
+          status: "active",
+          stripe_product_id: "prod_participant",
+          current_period_end: "2099-06-30T00:00:00.000Z",
+          plan_key: "pro",
+          audience: "participant",
+          billing_cycle: "monthly",
+        },
+        {
+          status: "active",
+          stripe_product_id: "prod_developer",
+          current_period_end: "2099-07-31T00:00:00.000Z",
+          plan_key: "developer_pro",
+          audience: "developer",
+          billing_cycle: "annual",
+        },
+      ],
+    }),
+    "00000000-0000-0000-0000-000000000015",
+  );
+
+  assertEquals(state.subscribed, true);
+  assertEquals(state.product_id, "prod_developer");
+  assertEquals(state.plan_key, "developer_pro");
+  assertEquals(state.audience, "developer");
+  assertEquals(state.billing_cycle, "annual");
 });
 
 Deno.test("subscription response preserves active invite-only investor fallback when Stripe has no entitlement", async () => {

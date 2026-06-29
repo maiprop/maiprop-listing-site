@@ -8,7 +8,11 @@
  *   2. The two early-throw branches in verifyBearerToken — no auth header, and
  *      empty token — using a minimal stub that is never actually called.
  */
-import { assertEquals, assertStrictEquals, assertRejects } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import {
+  assertEquals,
+  assertRejects,
+  assertStrictEquals,
+} from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { AuthError, verifyBearerToken } from "./auth.ts";
 
 // Minimal stub — getUser should never be reached in these tests
@@ -67,4 +71,42 @@ Deno.test("verifyBearerToken: throws AuthError (not generic Error) for missing h
   }
   assertEquals(thrown instanceof AuthError, true);
   assertStrictEquals((thrown as AuthError).status, 401);
+});
+
+Deno.test("verifyBearerToken: times out when auth service never answers", async () => {
+  const previousTimeout = Deno.env.get("AUTH_VERIFY_TIMEOUT_MS");
+  Deno.env.set("AUTH_VERIFY_TIMEOUT_MS", "10");
+  const req = new Request("https://maiprop.co/api", {
+    headers: { Authorization: "Bearer test-token" },
+  });
+  const hangingSupabase = {
+    auth: {
+      getUser: () => new Promise(() => {}),
+    },
+  } as Parameters<typeof verifyBearerToken>[1];
+  let guardTimer: ReturnType<typeof setTimeout> | null = null;
+
+  try {
+    const result = await Promise.race([
+      verifyBearerToken(req, hangingSupabase).catch((error) => error),
+      new Promise((resolve) => {
+        guardTimer = setTimeout(() => resolve("hung"), 100);
+      }),
+    ]);
+    if (guardTimer !== null) clearTimeout(guardTimer);
+
+    assertEquals(result instanceof AuthError, true);
+    assertStrictEquals((result as AuthError).status, 503);
+    assertStrictEquals(
+      (result as AuthError).message,
+      "Authentication service timeout",
+    );
+  } finally {
+    if (guardTimer !== null) clearTimeout(guardTimer);
+    if (previousTimeout === undefined) {
+      Deno.env.delete("AUTH_VERIFY_TIMEOUT_MS");
+    } else {
+      Deno.env.set("AUTH_VERIFY_TIMEOUT_MS", previousTimeout);
+    }
+  }
 });

@@ -190,6 +190,7 @@ const PRICING_EL: Record<string, string> = {
   Redirecting: "Γίνεται ανακατεύθυνση",
   Opening: "Άνοιγμα",
   "Manage Subscription": "Διαχείριση συνδρομής",
+  "This plan is managed outside Stripe billing.": "Αυτό το πλάνο διαχειρίζεται εκτός του Stripe billing.",
   "Go to Investor Dashboard": "Μετάβαση στον επενδυτικό πίνακα",
   "Invitation only": "Μόνο με πρόσκληση",
   "Custom pricing": "Εξατομικευμένη τιμολόγηση",
@@ -396,10 +397,10 @@ const PLANS: Record<AudienceId, PlanDef> = {
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function Pricing() {
   const { user, profile, profileLoading } = useAuth();
-  const { isPro, loading: subLoading, refreshSubscription } = useSubscription();
+  const { isPro, loading: subLoading, refreshSubscription, hasStripeBilling } = useSubscription();
   const { i18n } = useTranslation();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const tr = (value: string) => (isGreekLocale(i18n.language) ? PRICING_EL[value] ?? value : value);
 
   // B2B / institutional data products: shown to institutional, developer, admin, or unauthenticated
@@ -448,6 +449,10 @@ export default function Pricing() {
   };
 
   const handleManageSubscription = async () => {
+    if (!hasStripeBilling) {
+      toast.info(tr("This plan is managed outside Stripe billing."));
+      return;
+    }
     setPortalLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("customer-portal", {});
@@ -463,18 +468,29 @@ export default function Pricing() {
 
   useEffect(() => {
     const checkoutStatus = searchParams.get("checkout");
+    let retryRefresh: number | undefined;
     if (checkoutStatus === "success") {
       if (searchParams.get("billing_mode") === "mock") {
         toast.info(tr("Mock checkout completed. No live payment or subscription entitlement was created."));
       } else {
         toast.success(tr("Payment successful! Your plan has been activated."));
       }
-      refreshSubscription();
+      void refreshSubscription();
+      retryRefresh = window.setTimeout(() => void refreshSubscription(), 2500);
     } else if (checkoutStatus === "cancelled") {
       toast.info(tr("Checkout cancelled — no charge was made."));
+    } else {
+      return undefined;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+
+    const nextParams = new URLSearchParams(searchParams);
+    ["checkout", "billing_mode", "plan", "billing_cycle", "session_id"].forEach((key) => nextParams.delete(key));
+    setSearchParams(nextParams, { replace: true });
+
+    return () => {
+      if (retryRefresh !== undefined) window.clearTimeout(retryRefresh);
+    };
+  }, [refreshSubscription, searchParams, setSearchParams, tr]);
 
   useEffect(() => {
     if (hasAutoSelected) return;

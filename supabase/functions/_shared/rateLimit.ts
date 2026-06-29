@@ -63,6 +63,8 @@ export interface RateLimiterOptions {
   failClosed?: boolean;
 }
 
+const DEFAULT_RATE_LIMIT_DB_TIMEOUT_MS = 2_000;
+
 // ── Public factory ───────────────────────────────────────────────────────────
 
 /**
@@ -199,15 +201,20 @@ export function makeDbRateLimiter(
   }
 
   async function callRpc(key: string): Promise<RpcResponse | null> {
+    const timeoutMs = readPositiveIntEnv(
+      "RATE_LIMIT_DB_TIMEOUT_MS",
+      DEFAULT_RATE_LIMIT_DB_TIMEOUT_MS,
+    );
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const { data, error } = await getClient().rpc(
-        "check_and_increment_rate_limit",
-        {
+      const { data, error } = await getClient()
+        .rpc("check_and_increment_rate_limit", {
           p_bucket: `${bucket}:${key}`,
           p_window_seconds: windowSeconds,
           p_limit: maxRequests,
-        },
-      );
+        })
+        .abortSignal(controller.signal);
       if (error) {
         console.error(
           JSON.stringify({
@@ -237,6 +244,8 @@ export function makeDbRateLimiter(
         }),
       );
       return null;
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
@@ -274,4 +283,10 @@ function safeEnv(key: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+function readPositiveIntEnv(key: string, fallback: number): number {
+  const raw = safeEnv(key);
+  const parsed = raw ? Number(raw) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }

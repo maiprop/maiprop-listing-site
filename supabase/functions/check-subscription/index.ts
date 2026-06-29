@@ -1,4 +1,4 @@
-import Stripe from "npm:stripe@18.5.0";
+import Stripe from "npm:stripe@22.3.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import {
@@ -7,8 +7,13 @@ import {
 } from "../_shared/rateLimit.ts";
 import { AuthError, verifyBearerToken } from "../_shared/auth.ts";
 import { createLogger } from "../_shared/logger.ts";
-import { resolveSubscriptionEntitlement } from "../_shared/entitlements.ts";
+import {
+  getProfilePricingAudience,
+  normalizeEntitlementAudience,
+  resolveSubscriptionEntitlement,
+} from "../_shared/entitlements.ts";
 import { hasProvisionedSubscriptionAccess } from "../_shared/subscriptionStatus.ts";
+import { createStripeClient } from "../_shared/stripeClient.ts";
 
 const log = createLogger("check-subscription");
 const checkSubLimiter = makeRateLimiter({
@@ -22,6 +27,10 @@ export type FallbackSubscriptionState = {
   product_id: string | null;
   subscription_end: string | null;
   source?: string;
+  plan_key?: string | null;
+  audience?: string | null;
+  billing_cycle?: string | null;
+  status?: string | null;
 };
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
@@ -63,6 +72,53 @@ function subscriptionUnavailableResponse(corsHeaders: Record<string, string>) {
   );
 }
 
+type DurableBillingSubscriptionRow = {
+  status?: string | null;
+  stripe_product_id?: string | null;
+  current_period_end?: string | null;
+  plan_key?: string | null;
+  audience?: string | null;
+  billing_cycle?: string | null;
+};
+
+type ProfileSubscriptionRow = {
+  role?: string | null;
+  participant_type?: string | null;
+  subscription_product_id?: string | null;
+};
+
+function isValidDurableBillingSubscription(
+  row: DurableBillingSubscriptionRow | null,
+  now = new Date(),
+) {
+  if (!row || !hasProvisionedSubscriptionAccess(row.status)) return false;
+  if (!row.current_period_end) return true;
+  const periodEnd = new Date(row.current_period_end);
+  return !Number.isNaN(periodEnd.getTime()) && periodEnd > now;
+}
+
+function durableBillingStateFromRows(
+  rows: DurableBillingSubscriptionRow[],
+  profileAudience: string | null,
+): FallbackSubscriptionState | null {
+  const row = rows.find((candidate) => {
+    if (!isValidDurableBillingSubscription(candidate)) return false;
+    const rowAudience = normalizeEntitlementAudience(candidate.audience);
+    return Boolean(profileAudience && rowAudience === profileAudience);
+  });
+  if (!row) return null;
+  return {
+    subscribed: true,
+    product_id: row.stripe_product_id ?? null,
+    subscription_end: row.current_period_end ?? null,
+    source: "billing_state",
+    plan_key: row.plan_key ?? null,
+    audience: row.audience ?? null,
+    billing_cycle: row.billing_cycle ?? null,
+    status: row.status ?? null,
+  };
+}
+
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export async function getDatabaseFallback( // skipcq: JS-R1005 - Fallback subscription resolution intentionally checks product IDs, direct subscription state, and investor grants.
   supabaseClient: unknown,
@@ -72,15 +128,21 @@ export async function getDatabaseFallback( // skipcq: JS-R1005 - Fallback subscr
 ): Promise<FallbackSubscriptionState> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const client = supabaseClient as { from: any };
-  const [profileResult, investorResult] = await Promise.all([
+  const [profileResult, investorResult, billingResult] = await Promise.all([
     client.from("profiles")
-      .select("subscription_product_id")
+      .select("role, participant_type, subscription_product_id")
       .eq("user_id", userId)
       .maybeSingle(),
     client.from("investor_subscriptions")
       .select("status, expires_at")
       .eq("user_id", userId)
       .in("status", ["active", "trial"]),
+    client.from("billing_subscriptions")
+      .select("status, stripe_product_id, current_period_end, plan_key, audience, billing_cycle")
+      .eq("user_id", userId)
+      .in("status", ["active", "trialing", "past_due"])
+      .order("updated_at", { ascending: false })
+      .limit(5),
   ]);
   const profileError = queryErrorMessage(profileResult.error);
   if (profileError) {
@@ -90,10 +152,26 @@ export async function getDatabaseFallback( // skipcq: JS-R1005 - Fallback subscr
   if (investorError) {
     throw new Error(`investor subscription lookup failed: ${investorError}`);
   }
+  const billingError = queryErrorMessage(billingResult.error);
+  if (billingError) {
+    throw new Error(`billing subscription lookup failed: ${billingError}`);
+  }
 
-  const productId =
-    (profileResult.data as { subscription_product_id?: string | null } | null)
-      ?.subscription_product_id ?? null;
+  const billingRows =
+    (Array.isArray(billingResult.data)
+      ? billingResult.data
+      : billingResult.data
+      ? [billingResult.data]
+      : []) as DurableBillingSubscriptionRow[];
+  const profileRow = profileResult.data as ProfileSubscriptionRow | null;
+  const profileAudience = getProfilePricingAudience(profileRow);
+  const durableBillingState = durableBillingStateFromRows(
+    billingRows,
+    profileAudience,
+  );
+  if (durableBillingState) return durableBillingState;
+
+  const productId = profileRow?.subscription_product_id ?? null;
   const entitlement = allowProfileEntitlement && productId
     ? await resolveSubscriptionEntitlement(supabaseClient, userId, {
       productId,
@@ -185,29 +263,41 @@ async function listOwnedCustomers(stripe: Stripe, userId: string) {
 }
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-async function getSubscribedStripeRecord(stripe: Stripe, customerId: string) {
-  const subs = await stripe.subscriptions.list({
-    customer: customerId,
-    status: "all",
-    limit: 10,
-  });
-  return subs.data.find((subscription) =>
-    isStripeSubscribed(subscription.status)
-  ) ?? null;
-}
-
-// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-async function resolveCustomerAndSubscription(stripe: Stripe, userId: string) {
+async function resolveCustomerAndSubscription(
+  stripe: Stripe,
+  supabaseClient: unknown,
+  userId: string,
+) {
   const candidates = await listOwnedCustomers(stripe, userId);
   let chosenCustomer: Stripe.Customer | null = null;
   let chosenSubscription: Stripe.Subscription | null = null;
+  let chosenEntitlement: Awaited<ReturnType<typeof resolveSubscriptionEntitlement>> =
+    null;
 
   for (const customer of candidates) {
-    const subscription = await getSubscribedStripeRecord(stripe, customer.id);
-    if (subscription) {
+    const subs = await stripe.subscriptions.list({
+      customer: customer.id,
+      status: "all",
+      limit: 100,
+    });
+    if (!chosenCustomer) chosenCustomer = customer;
+
+    for (const subscription of subs.data) {
+      if (!isStripeSubscribed(subscription.status)) continue;
+      const entitlement = await resolveSubscriptionEntitlement(
+        supabaseClient,
+        userId,
+        getSubscriptionItemIds(subscription),
+      );
+      if (!entitlement) continue;
       chosenCustomer = customer;
       chosenSubscription = subscription;
-      break;
+      chosenEntitlement = entitlement;
+      return {
+        customer: chosenCustomer,
+        subscription: chosenSubscription,
+        entitlement: chosenEntitlement,
+      };
     }
   }
 
@@ -215,7 +305,11 @@ async function resolveCustomerAndSubscription(stripe: Stripe, userId: string) {
     chosenCustomer = candidates[0];
   }
 
-  return { customer: chosenCustomer, subscription: chosenSubscription };
+  return {
+    customer: chosenCustomer,
+    subscription: chosenSubscription,
+    entitlement: chosenEntitlement,
+  };
 }
 
 Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates auth, Stripe lookup, DB fallback, and normalized subscription response.
@@ -262,20 +356,14 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
     }
 
     try {
-      const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
-      const { customer, subscription } = await resolveCustomerAndSubscription(
+      const stripe = createStripeClient(stripeKey);
+      const { customer, subscription, entitlement } =
+        await resolveCustomerAndSubscription(
         stripe,
+        supabaseClient,
         user.id,
       );
 
-      const stripeItem = getSubscriptionItemIds(subscription);
-      const entitlement = subscription
-        ? await resolveSubscriptionEntitlement(
-          supabaseClient,
-          user.id,
-          stripeItem,
-        )
-        : null;
       const currentPeriodEnd =
         (subscription as unknown as { current_period_end?: number } | null)
           ?.current_period_end;

@@ -48,7 +48,7 @@ beforeEach(() => {
 });
 
 describe("useAgentDataInputs", () => {
-  it("normalizes edge entries with billing credit invoice metadata", async () => {
+  it("normalizes edge entries with Stripe credit metadata", async () => {
     invokeMock.mockResolvedValue({
       data: {
         monthly_count: 1,
@@ -68,8 +68,10 @@ describe("useAgentDataInputs", () => {
             status: "verified",
             rejection_reason: null,
             discount_pct: 0.5,
-            discount_applied_at: "2026-05-01T10:00:00.000Z",
-            discount_invoice_id: "in_credit_123",
+            applied_to_invoice_at: "2026-05-01T10:00:00.000Z",
+            stripe_credit_id: "cbtxn_123",
+            stripe_credit_amount_cents: 50,
+            stripe_credit_currency: "eur",
             created_at: "2026-04-30T09:00:00.000Z",
             reviewed_at: "2026-05-01T09:30:00.000Z",
           },
@@ -97,9 +99,9 @@ describe("useAgentDataInputs", () => {
         status: "verified",
         discount_pct: 0.5,
         applied_to_invoice_at: "2026-05-01T10:00:00.000Z",
-        stripe_credit_id: "in_credit_123",
-        stripe_credit_amount_cents: null,
-        stripe_credit_currency: null,
+        stripe_credit_id: "cbtxn_123",
+        stripe_credit_amount_cents: 50,
+        stripe_credit_currency: "eur",
         updated_at: "2026-05-01T09:30:00.000Z",
       }),
     ]);

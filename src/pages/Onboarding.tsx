@@ -5,7 +5,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
-import { APP_ORIGIN } from "@/lib/config";
 import { trackAnalyticsEvent } from "@/lib/analytics";
 import { usePricingConfigs, formatPrice, PRICING_KEYS } from "@/hooks/usePricingConfigs";
 import { RoleSwitchModal } from "@/components/RoleSwitchModal";
@@ -389,7 +388,7 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
   const invokeLogRoleSwitch = async (
     ctx: { fromType: ParticipantId; hadActiveSub: boolean },
     toType: ParticipantId,
-  ): Promise<void> => {
+  ): Promise<boolean> => {
     try {
       const { data, error } = await supabase.functions.invoke("log-role-switch", {
         body: {
@@ -402,14 +401,19 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
       });
       if (error) {
         logger.warn("[Onboarding] log-role-switch invoke error:", error.message);
-        return;
+        toast.error("We couldn't update your active Stripe subscription. Please manage it from Billing before completing this switch.");
+        return false;
       }
       const stripeError = extractStripeError(data);
       if (stripeError) {
-        toast.warning("We couldn't cancel your active subscription automatically. Please manage it from your billing settings.");
+        toast.error("We couldn't update your active Stripe subscription. Please manage it from Billing before completing this switch.");
+        return false;
       }
+      return true;
     } catch (err: unknown) {
       logger.warn("[Onboarding] log-role-switch threw:", err instanceof Error ? err.message : err);
+      toast.error("We couldn't update your active Stripe subscription. Please manage it from Billing before completing this switch.");
+      return false;
     }
   };
 
@@ -426,11 +430,13 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
     proceed: (() => void) | null,
   ): Promise<void> => {
     setBillingConfirming(true);
+    let canProceed = false;
     try {
-      await invokeLogRoleSwitch(ctx, toType);
+      canProceed = await invokeLogRoleSwitch(ctx, toType);
     } finally {
       setBillingConfirming(false);
     }
+    if (!canProceed) return;
     setBillingModalProceed(null);
     setBillingModalToType(null);
     setSwitchCtx(null);
@@ -671,7 +677,7 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
   const handleUpgradeToPro = async () => { // skipcq: JS-R1005 - Checkout launcher keeps edge-function response and toast fallback together.
     try {
       const { data, error } = await supabase.functions.invoke("create-checkout", {
-        body: { plan: "professional_basic", success_url: `${APP_ORIGIN}/dashboard?pro=success`, cancel_url: `${APP_ORIGIN}/pricing` },
+        body: { plan: "professional_basic", success_url: "/dashboard?pro=success", cancel_url: "/pricing" },
       });
       if (error || !data?.url) throw new Error(error?.message ?? data?.error ?? "Checkout failed");
       window.location.href = data.url;
@@ -818,7 +824,9 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
     const participantId = selected?.id ?? "buyer";
 
     // Per participant-id: primary redirect + secondary actions
-    const isProOnly = getPlanForParticipant(participantId as ParticipantId).proOnly;
+    const targetPlan = getPlanForParticipant(participantId as ParticipantId);
+    const isProOnly = targetPlan.proOnly;
+    const pricingHref = `/pricing?audience=${targetPlan.audienceId}`;
 
     // Detect upgrade-from-paid: user was on a paid plan, switched to a pricier role, and the
     // old subscription was cancelled. switchCtx is only set from the Dashboard role-switch flow.
@@ -829,12 +837,14 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
       ? classifySwitch(ctx.fromType, participantId as ParticipantId)
       : null;
     const wasUpgrade = switchKind === "upgrade" && ctx?.hadActiveSub === true;
+    const needsPaidSwitchCheckout =
+      (wasUpgrade || switchKind === "proonly") && !targetPlan.inviteOnly;
 
     const upgradedPlanName = wasUpgrade
-      ? getPlanForParticipant(participantId as ParticipantId).planName
+      ? targetPlan.planName
       : null;
     const upgradeSubtitle = upgradedPlanName
-      ? `Your previous subscription was cancelled at period end. Visit Pricing to activate your ${upgradedPlanName}.`
+      ? `Your previous subscription was cancelled at period end. Activate your ${upgradedPlanName} to complete the paid upgrade.`
       : null;
 
     const isRoleSwitch = Boolean(ctx);
@@ -854,11 +864,15 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
     }> = {
       buyer:         { primary: { label: "Go to Dashboard", href: "/dashboard" },          subtitle: "Your account is ready. Start exploring properties." },
       seller:        sellerAction,
-      agent:         { primary: { label: "Go to Dashboard", href: "/dashboard/listings" }, subtitle: upgradeSubtitle ?? "Your agent account is ready." },
+      agent:         needsPaidSwitchCheckout
+        ? { primary: { label: `Activate ${targetPlan.planName}`, href: pricingHref }, subtitle: upgradeSubtitle ?? "Activate your Agent Pro plan to finish setup." }
+        : { primary: { label: "Go to Dashboard", href: "/dashboard/listings" }, subtitle: upgradeSubtitle ?? "Your agent account is ready." },
       developer:     isProOnly
-        ? { primary: { label: "Set up your subscription", href: "/pricing?tab=developer" }, subtitle: "A paid plan is required to start creating projects." }
+        ? { primary: { label: "Set up your subscription", href: pricingHref }, subtitle: "A paid plan is required to start creating projects." }
         : { primary: { label: "Go to Dashboard", href: "/dashboard/projects" }, subtitle: upgradeSubtitle ?? "Your developer account is ready." },
-      professional:  { primary: { label: "Go to Dashboard", href: "/dashboard/services" }, subtitle: upgradeSubtitle ?? "Your profile is live. We'll review and add your verified badge shortly." },
+      professional:  needsPaidSwitchCheckout
+        ? { primary: { label: `Activate ${targetPlan.planName}`, href: pricingHref }, subtitle: upgradeSubtitle ?? "Activate your Professional Pro plan to finish setup." }
+        : { primary: { label: "Go to Dashboard", href: "/dashboard/services" }, subtitle: upgradeSubtitle ?? "Your profile is live. We'll review and add your verified badge shortly." },
     };
 
     const actions = PARTICIPANT_ACTIONS[participantId] ?? PARTICIPANT_ACTIONS.buyer;

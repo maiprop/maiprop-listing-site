@@ -448,10 +448,19 @@ const ADDON_KEY_PREFIXES: Array<[string, string]> = [
   ["Neighbourhood Bundle", "neighbourhood_report_bundle"],
 ];
 
+const SELF_SERVE_ADDON_KEYS = new Set([
+  "valuation_single",
+  "valuation_bundle",
+  "property_report_single",
+  "neighbourhood_report_single",
+  "neighbourhood_report_bundle",
+]);
+
 export const resolveAddonKey = (item: Pick<AddonItem, "name" | "manual">): string | null => {
   if (item.manual) return null;
   const prefixMatch = ADDON_KEY_PREFIXES.find(([prefix]) => item.name.startsWith(prefix));
-  return prefixMatch?.[1] ?? ADDON_KEY_BY_NAME[item.name] ?? null;
+  const key = prefixMatch?.[1] ?? ADDON_KEY_BY_NAME[item.name] ?? null;
+  return key && SELF_SERVE_ADDON_KEYS.has(key) ? key : null;
 };
 
 export const getAddonSectionsForParticipant = (participantType: string): AddonSection[] =>

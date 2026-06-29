@@ -31,7 +31,10 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createLogger } from "../_shared/logger.ts";
-import { makeRateLimiter, tooManyRequestsResponse } from "../_shared/rateLimit.ts";
+import {
+  makeRateLimiter,
+  tooManyRequestsResponse,
+} from "../_shared/rateLimit.ts";
 
 const log = createLogger("agent-data-input");
 const limiter = makeRateLimiter({
@@ -40,7 +43,13 @@ const limiter = makeRateLimiter({
   windowMs: 60_000,
 });
 
-const PROPERTY_TYPES = ["apartment", "house", "commercial", "land", "other"] as const;
+const PROPERTY_TYPES = [
+  "apartment",
+  "house",
+  "commercial",
+  "land",
+  "other",
+] as const;
 const TRANSACTION_TYPES = ["sale", "rental"] as const;
 const AGENT_SIDES = ["buyer", "seller", "both"] as const;
 const DECISIONS = ["pending", "verified", "rejected", "flagged"] as const;
@@ -60,31 +69,60 @@ type SubmitPayload = {
   notes?: string | null;
 };
 
-function validateSubmitPayload(p: unknown): { ok: true; value: SubmitPayload } | { ok: false; error: string } {
-  if (!p || typeof p !== "object") return { ok: false, error: "Missing payload" };
+function validateSubmitPayload(
+  p: unknown,
+): { ok: true; value: SubmitPayload } | { ok: false; error: string } {
+  if (!p || typeof p !== "object") {
+    return { ok: false, error: "Missing payload" };
+  }
   const v = p as Record<string, unknown>;
 
-  const property_address = typeof v.property_address === "string" ? v.property_address.trim() : "";
+  const property_address = typeof v.property_address === "string"
+    ? v.property_address.trim()
+    : "";
   if (property_address.length < 5 || property_address.length > 300) {
-    return { ok: false, error: "Property address must be between 5 and 300 characters." };
+    return {
+      ok: false,
+      error: "Property address must be between 5 and 300 characters.",
+    };
   }
 
   const property_type = String(v.property_type ?? "");
-  if (!PROPERTY_TYPES.includes(property_type as (typeof PROPERTY_TYPES)[number])) {
-    return { ok: false, error: `property_type must be one of ${PROPERTY_TYPES.join(", ")}.` };
+  if (
+    !PROPERTY_TYPES.includes(property_type as (typeof PROPERTY_TYPES)[number])
+  ) {
+    return {
+      ok: false,
+      error: `property_type must be one of ${PROPERTY_TYPES.join(", ")}.`,
+    };
   }
   const transaction_type = String(v.transaction_type ?? "");
-  if (!TRANSACTION_TYPES.includes(transaction_type as (typeof TRANSACTION_TYPES)[number])) {
-    return { ok: false, error: `transaction_type must be one of ${TRANSACTION_TYPES.join(", ")}.` };
+  if (
+    !TRANSACTION_TYPES.includes(
+      transaction_type as (typeof TRANSACTION_TYPES)[number],
+    )
+  ) {
+    return {
+      ok: false,
+      error: `transaction_type must be one of ${TRANSACTION_TYPES.join(", ")}.`,
+    };
   }
   const agent_side = String(v.agent_side ?? "");
   if (!AGENT_SIDES.includes(agent_side as (typeof AGENT_SIDES)[number])) {
-    return { ok: false, error: `agent_side must be one of ${AGENT_SIDES.join(", ")}.` };
+    return {
+      ok: false,
+      error: `agent_side must be one of ${AGENT_SIDES.join(", ")}.`,
+    };
   }
 
   const priceNum = Number(v.sale_price);
-  if (!Number.isFinite(priceNum) || priceNum <= 0 || priceNum >= 1_000_000_000) {
-    return { ok: false, error: "sale_price must be a positive number under 1,000,000,000." };
+  if (
+    !Number.isFinite(priceNum) || priceNum <= 0 || priceNum >= 1_000_000_000
+  ) {
+    return {
+      ok: false,
+      error: "sale_price must be a positive number under 1,000,000,000.",
+    };
   }
 
   const closing_date = String(v.closing_date ?? "");
@@ -102,7 +140,10 @@ function validateSubmitPayload(p: unknown): { ok: true; value: SubmitPayload } |
   const fiveYearsAgo = new Date(today);
   fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
   if (closing.getTime() < fiveYearsAgo.getTime()) {
-    return { ok: false, error: "closing_date cannot be more than 5 years old." };
+    return {
+      ok: false,
+      error: "closing_date cannot be more than 5 years old.",
+    };
   }
 
   const trim = (s: unknown): string | null => {
@@ -140,12 +181,15 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    "anonymous";
   if (await limiter.isLimited(ip)) return tooManyRequestsResponse(corsHeaders);
 
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  if (!serviceRoleKey || !supabaseUrl) return json({ error: "Service unavailable" }, 503);
+  if (!serviceRoleKey || !supabaseUrl) {
+    return json({ error: "Service unavailable" }, 503);
+  }
 
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) return json({ error: "Missing Authorization header" }, 401);
@@ -163,7 +207,14 @@ Deno.serve(async (req) => {
   if (userErr || !userData.user) return json({ error: "Unauthenticated" }, 401);
   const user = userData.user;
 
-  let body: { action?: string; payload?: unknown; input_id?: string; decision?: string; reason?: string; lifetime_ban?: boolean } = {};
+  let body: {
+    action?: string;
+    payload?: unknown;
+    input_id?: string;
+    decision?: string;
+    reason?: string;
+    lifetime_ban?: boolean;
+  } = {};
   try {
     if (req.method === "POST" && req.body) body = await req.json();
   } catch {
@@ -178,7 +229,7 @@ Deno.serve(async (req) => {
         supabase.rpc("get_agent_data_input_status", { p_user_id: user.id }),
         (supabase as any).from("agent_data_inputs")
           .select(
-            "id, property_address, city, postal_code, property_type, transaction_type, agent_side, sale_price, closing_date, status, rejection_reason, discount_pct, discount_applied, discount_applied_at, discount_invoice_id, created_at, reviewed_at",
+            "id, property_address, city, postal_code, property_type, transaction_type, agent_side, sale_price, closing_date, status, rejection_reason, discount_pct, discount_applied, discount_applied_at, discount_invoice_id, applied_to_invoice_at, stripe_credit_id, stripe_credit_amount_cents, stripe_credit_currency, created_at, reviewed_at",
           )
           .eq("user_id", user.id)
           .order("created_at", { ascending: false })
@@ -186,11 +237,17 @@ Deno.serve(async (req) => {
       ]);
 
       if (statusRes.error) {
-        log.error("status rpc failed", { user_id: user.id, err: statusRes.error.message });
+        log.error("status rpc failed", {
+          user_id: user.id,
+          err: statusRes.error.message,
+        });
         return json({ error: statusRes.error.message }, 500);
       }
       if (entriesRes.error) {
-        log.error("list entries failed", { user_id: user.id, err: entriesRes.error.message });
+        log.error("list entries failed", {
+          user_id: user.id,
+          err: entriesRes.error.message,
+        });
         return json({ error: entriesRes.error.message }, 500);
       }
 
@@ -235,13 +292,15 @@ Deno.serve(async (req) => {
         if (m.includes("agent_data_input_monthly_limit_reached")) {
           return json({
             error: "monthly_limit_reached",
-            message: "You have already submitted 20 data inputs this month. Try again next month.",
+            message:
+              "You have already submitted 20 data inputs this month. Try again next month.",
           }, 429);
         }
         if (m.includes("agent_role_required")) {
           return json({
             error: "agent_role_required",
-            message: "Only agents can submit closings for the Data Input discount.",
+            message:
+              "Only agents can submit closings for the Data Input discount.",
           }, 403);
         }
         log.error("submit failed", { user_id: user.id, err: m });
@@ -256,7 +315,10 @@ Deno.serve(async (req) => {
         }, 500);
       }
 
-      log.info("data input submitted", { user_id: user.id, id: (data as { id?: string } | null)?.id });
+      log.info("data input submitted", {
+        user_id: user.id,
+        id: (data as { id?: string } | null)?.id,
+      });
       return json({ entry: data });
     }
 
@@ -273,10 +335,14 @@ Deno.serve(async (req) => {
 
       const inputId = String(body.input_id ?? "");
       const decision = String(body.decision ?? "");
-      const reason = body.reason != null ? String(body.reason).slice(0, 500) : null;
+      const reason = body.reason != null
+        ? String(body.reason).slice(0, 500)
+        : null;
       const lifetimeBan = body.lifetime_ban === true;
 
-      if (!/^[0-9a-f-]{36}$/i.test(inputId)) return json({ error: "Invalid input_id" }, 400);
+      if (!/^[0-9a-f-]{36}$/i.test(inputId)) {
+        return json({ error: "Invalid input_id" }, 400);
+      }
       if (!DECISIONS.includes(decision as (typeof DECISIONS)[number])) {
         return json({ error: "Invalid decision" }, 400);
       }
@@ -285,15 +351,21 @@ Deno.serve(async (req) => {
       // correctly. The RPC trusts service_role callers (auth.uid() is NULL)
       // when an explicit reviewer id is supplied; we already verified the
       // caller is an admin above.
-      const { data, error } = await supabase.rpc("admin_review_agent_data_input", {
-        p_input_id: inputId,
-        p_decision: decision,
-        p_reason: reason,
-        p_lifetime_ban: lifetimeBan,
-        p_reviewer_id: user.id,
-      });
+      const { data, error } = await supabase.rpc(
+        "admin_review_agent_data_input",
+        {
+          p_input_id: inputId,
+          p_decision: decision,
+          p_reason: reason,
+          p_lifetime_ban: lifetimeBan,
+          p_reviewer_id: user.id,
+        },
+      );
       if (error) {
-        log.error("admin_review failed", { user_id: user.id, err: error.message });
+        log.error("admin_review failed", {
+          user_id: user.id,
+          err: error.message,
+        });
         return json({ error: error.message }, 400);
       }
       return json({ entry: data });

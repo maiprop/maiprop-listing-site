@@ -1,4 +1,4 @@
-import { CreditCard, Loader2 } from "lucide-react";
+import { CreditCard, Loader2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { AddonItem } from "./addons";
@@ -7,11 +7,13 @@ export const AddonCard = ({
   item,
   accent,
   loading,
+  checkoutAvailable,
   onPurchase,
 }: {
   item: AddonItem;
   accent: string;
   loading: boolean;
+  checkoutAvailable: boolean;
   onPurchase: () => void;
 }) => {
   const accentClasses = {
@@ -78,10 +80,12 @@ export const AddonCard = ({
       >
         {loading ? (
           <Loader2 className="w-3.5 h-3.5 animate-spin" />
-        ) : (
+        ) : checkoutAvailable ? (
           <CreditCard className="w-3.5 h-3.5" />
+        ) : (
+          <Mail className="w-3.5 h-3.5" />
         )}
-        {item.manual ? "Contact team" : "Buy add-on"}
+        {checkoutAvailable ? "Buy add-on" : "Contact team"}
       </Button>
     </div>
   );

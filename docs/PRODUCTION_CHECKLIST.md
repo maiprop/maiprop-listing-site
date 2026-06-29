@@ -35,9 +35,15 @@ Go through every box **before** promoting a release to production. This is a saf
 - [ ] Production webhook endpoint exists in Stripe dashboard and points at `https://<prod-ref>.supabase.co/functions/v1/stripe-webhook`.
 - [ ] `STRIPE_WEBHOOK_SECRET` in Supabase matches the one shown in Stripe dashboard (they rotate on endpoint recreate).
 - [ ] `BILLING_MODE`/`STRIPE_MOCK_MODE` are unset before paid production launch; mock mode is only for pre-Stripe smoke checks and never proves real payment activation.
+- [ ] Test-mode deployment uses `STRIPE_RUNTIME_MODE=test` or leaves it unset, an `sk_test_...` `STRIPE_SECRET_KEY`, and Stripe test webhook/price IDs.
+- [ ] Live launch explicitly sets `STRIPE_RUNTIME_MODE=live` and `STRIPE_LIVE_MODE=true` before replacing `STRIPE_SECRET_KEY` with an `sk_live_...` key.
+- [ ] Stripe Tax is enabled and verified in Checkout: sessions have `automatic_tax.enabled=true`, billing address collection, tax ID collection, Customer name/address updates, Product `tax_code`, Price `tax_behavior`, and payment-mode `invoice_creation.enabled=true`.
+- [ ] `STRIPE_SECRET_KEY=sk_live_... npm run check:stripe-tax-readiness -- --strict` passes and confirms an active Greek/EU Stripe Tax registration plus tax-ready product/price metadata.
 - [ ] `npm run test:deno` passes — signature tests are green.
-- [ ] `VITE_STRIPE_PRICE_*` point to **live-mode** price IDs. No `_test_` substring.
-- [ ] Manual test: complete a checkout with a real card in an off-hours window; verify subscription appears in profile and webhook delivered 200.
+- [ ] Admin Pricing sync has created/stored separate **live-mode** monthly and annual price IDs, or `STRIPE_PRICE_*` Edge secrets point to live-mode prices. Browser `VITE_STRIPE_PRICE_*` display fallbacks also match live mode. No `_test_` substring.
+- [ ] Manual test: complete a checkout with a real card in an off-hours window; verify subscription appears in profile, webhook delivered 200, the Stripe invoice/PDF/receipt exist, and the Billing tab displays Greek VAT at 24% plus VAT ID when provided. For VAT launch gating, run the paid E2E with `E2E_REQUIRE_STRIPE_TAX_AMOUNT=true E2E_EXPECT_STRIPE_TAX_RATE=0.24`.
+- [ ] Stripe customer emails are enabled in Stripe Billing email settings; after the live card smoke test, confirm the customer inbox received the Stripe invoice/receipt email.
+- [ ] Manual test: approved investor request can create a bespoke Stripe Checkout URL via `create-investor-payment`, and completing it activates the pending investor subscription.
 
 ## 5. Monitoring & observability
 

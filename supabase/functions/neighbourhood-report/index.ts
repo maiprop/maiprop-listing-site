@@ -487,10 +487,8 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
-  const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
-  if (quota.errorResponse) return quota.errorResponse;
 
-  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? quota.userId ?? "anonymous";
+  const _ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
   if (await neighbourhoodLimiter.isLimited(_ip)) return tooManyRequestsResponse(corsHeaders);
 
   // Signed-in access gate is handled by enforceAiQuota; free vs Pro caps live in the DB.
@@ -503,6 +501,9 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    const quota = await enforceAiQuota(req, BUCKET, corsHeaders);
+    if (quota.errorResponse) return quota.errorResponse;
 
     const locationStr = [address, city, region, "Greece"].filter(Boolean).join(", ");
     const coordStr = lat && lng ? ` (coords: ${lat}, ${lng})` : "";

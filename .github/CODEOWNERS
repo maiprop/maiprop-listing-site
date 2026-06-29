@@ -43,9 +43,15 @@
 
 # Stripe / payments edge functions — financial impact.
 /supabase/functions/stripe-webhook/              @krenios
-/supabase/functions/create-checkout-session/     @krenios
-/supabase/functions/create-customer-portal/      @krenios
-/supabase/functions/cancel-subscription/         @krenios
+/supabase/functions/create-checkout/             @krenios
+/supabase/functions/customer-portal/             @krenios
+/supabase/functions/create-investor-payment/     @krenios
+/supabase/functions/check-subscription/          @krenios
+/supabase/functions/get-invoices/                @krenios
+/supabase/functions/create-stripe-price/         @krenios
+/supabase/functions/sync-stripe-pricing/         @krenios
+/src/pages/dashboard/billing/                    @krenios
+/src/pages/dashboard/BillingTab.tsx              @krenios
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Tier 2 — High blast radius (CI, headers, top-level shell)

@@ -241,7 +241,10 @@ Deno.test("submit fails when the insert returns no persisted row", async () => {
 
   assertEquals(res.status, 500);
   assertEquals(body.error, "submission_not_persisted");
-  assertEquals(body.message, "Data input submission was not persisted. Please retry.");
+  assertEquals(
+    body.message,
+    "Data input submission was not persisted. Please retry.",
+  );
 });
 
 Deno.test("admin_review rejects non-admin callers before invoking review RPC", async () => {
@@ -333,7 +336,20 @@ Deno.test("status returns ban/quota metrics and starts RPC plus entries query", 
   assert(
     globalThis.__agentDataInputScenario.calls.some((call) =>
       call.name === "select" &&
-      String((call.args as { columns?: string }).columns).includes("discount_pct")
+      String((call.args as { columns?: string }).columns).includes(
+        "discount_pct",
+      )
+    ),
+  );
+  assert(
+    globalThis.__agentDataInputScenario.calls.some((call) =>
+      call.name === "select" &&
+      String((call.args as { columns?: string }).columns).includes(
+        "applied_to_invoice_at",
+      ) &&
+      String((call.args as { columns?: string }).columns).includes(
+        "stripe_credit_id",
+      )
     ),
   );
 });

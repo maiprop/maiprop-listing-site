@@ -1,6 +1,6 @@
 /* eslint complexity: "off" */
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAuth } from "@/contexts/AuthContext";
@@ -21,13 +21,26 @@ import {
 import { toast } from "sonner";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
+import { getPlanForParticipant } from "@/lib/rolePlanMap";
 import { BillingUsagePanel } from "@/components/dashboard/BillingUsagePanel";
 import { formatDate } from "@/lib/format";
 import { AddonCard } from "./billing/AddonCard";
 import { getAddonSectionsForParticipant, resolveAddonKey, type AddonItem } from "./billing/addons";
-import { createAddonCheckoutUrl, formatBillingAmount } from "./billing/checkoutActions";
+import {
+  createAddonCheckoutUrl,
+  createSubscriptionCheckoutUrl,
+  formatBillingAmount,
+  type SubscriptionBillingCycle,
+} from "./billing/checkoutActions";
 import { StatusBadge } from "./billing/StatusBadge";
 import type { BillingInfo } from "./billing/types";
+
+type PortalAction =
+  | "manage"
+  | "payment_method_update"
+  | "subscription_cancel"
+  | "subscription_update"
+  | "resume_subscription";
 
 const showManualAddonToast = () => {
   toast.info("This add-on is handled by the maiProp team.");
@@ -37,6 +50,13 @@ const showAddonCheckoutError = (e: unknown) => {
   toast.error(
     (e instanceof Error ? e.message : null) ?? "Could not start add-on checkout",
   );
+};
+
+const getInvoiceTaxIdLabel = (
+  invoice: BillingInfo["invoices"][number],
+): string | null => {
+  const taxId = invoice.customer_tax_ids?.find((entry) => entry.value)?.value;
+  return taxId ? `VAT ID ${taxId}` : null;
 };
 
 const useBillingInfo = () => {
@@ -54,6 +74,7 @@ const useBillingInfo = () => {
 export default function BillingTab() { // skipcq: JS-0067
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const queryClient = useQueryClient();
   const {
     isPro,
     subscriptionEnd,
@@ -67,18 +88,33 @@ export default function BillingTab() { // skipcq: JS-0067
   const { data, isLoading, refetch, isRefetching, error } = useBillingInfo();
   const [portalLoading, setPortalLoading] = useState(false);
   const [addonLoadingKey, setAddonLoadingKey] = useState<string | null>(null);
+  const [subscriptionCheckoutLoading, setSubscriptionCheckoutLoading] =
+    useState(false);
+  const [subscriptionBillingCycle, setSubscriptionBillingCycle] =
+    useState<SubscriptionBillingCycle>("monthly");
 
   const participantType = getParticipantTypeFromProfile(profile) ?? "buyer";
+  const rolePlan = getPlanForParticipant(participantType);
   const addonSections = getAddonSectionsForParticipant(participantType);
 
   useEffect(() => {
     if (searchParams.get("checkout") !== "success") return;
+    void refetch();
+    for (const queryKey of [
+      ["billing-info"],
+      ["addon_purchases"],
+      ["usage_property_reports"],
+      ["usage_priority_ads"],
+      ["usage_ai_calls"],
+    ]) {
+      void queryClient.invalidateQueries({ queryKey });
+    }
     if (searchParams.get("billing_mode") === "mock") {
       toast.info("Mock add-on checkout completed. No live payment or add-on entitlement was created.");
     }
-  }, [searchParams]);
+  }, [queryClient, refetch, searchParams]);
 
-  const openPortal = async () => {
+  const openPortal = async (action: PortalAction = "manage") => {
     if (isLoading || !data) {
       toast.info("Billing details are still loading.");
       return;
@@ -87,14 +123,36 @@ export default function BillingTab() { // skipcq: JS-0067
       toast.info("This plan is managed outside the self-serve Stripe portal.");
       return;
     }
+    if (
+      action !== "manage" &&
+      action !== "payment_method_update" &&
+      !data.subscription?.id
+    ) {
+      toast.info("Subscription details are still loading.");
+      return;
+    }
     setPortalLoading(true);
     try {
       const { data: pData, error } =
-        await supabase.functions.invoke("customer-portal");
-      if (error || !pData?.url)
+        await supabase.functions.invoke("customer-portal", {
+          body: {
+            action,
+            ...(data.subscription?.id
+              ? { subscription_id: data.subscription.id }
+              : {}),
+          },
+        });
+      if (action === "resume_subscription" && pData?.resumed) {
+        toast.success("Your subscription renewal has been resumed.");
+        await refetch();
+        setPortalLoading(false);
+        return;
+      }
+      if (error || !pData?.url) {
         throw new Error(
           pData?.error ?? error?.message ?? "Could not open billing portal",
         );
+      }
       window.location.href = pData.url;
     } catch (e: unknown) {
       toast.error(
@@ -124,7 +182,28 @@ export default function BillingTab() { // skipcq: JS-0067
     await purchaseAddonKey(addonKey);
   };
 
+  const startSubscriptionCheckout = async () => {
+    if (rolePlan.inviteOnly) {
+      navigate(participantType === "institutional" ? "/contact" : "/investor-dashboard");
+      return;
+    }
+    setSubscriptionCheckoutLoading(true);
+    try {
+      window.location.href = await createSubscriptionCheckoutUrl(
+        rolePlan.planKey,
+        { billingCycle: subscriptionBillingCycle },
+      );
+    } catch (e: unknown) {
+      toast.error(
+        (e instanceof Error ? e.message : null) ??
+          "Could not start subscription checkout",
+      );
+      setSubscriptionCheckoutLoading(false);
+    }
+  };
+
   const sub = data?.subscription ?? null;
+  const isPastDue = sub?.status === "past_due";
   const invoices = data?.invoices ?? [];
   const canManageBilling =
     isPro && hasStripeBilling && data?.portal_eligible !== false;
@@ -200,7 +279,7 @@ export default function BillingTab() { // skipcq: JS-0067
                 variant="outline"
                 size="sm"
                 className="gap-1.5"
-                onClick={openPortal}
+                onClick={() => void openPortal("manage")}
                 disabled={portalLoading}
               >
                 {portalLoading ? (
@@ -219,9 +298,15 @@ export default function BillingTab() { // skipcq: JS-0067
               <Button
                 size="sm"
                 className="gap-1.5 bg-gradient-primary border-0 text-primary-foreground"
-                onClick={() => navigate("/pricing")}
+                onClick={() => void startSubscriptionCheckout()}
+                disabled={subscriptionCheckoutLoading}
               >
-                <Zap className="w-3.5 h-3.5" /> Upgrade
+                {subscriptionCheckoutLoading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Zap className="w-3.5 h-3.5" />
+                )}
+                Upgrade
               </Button>
             )}
           </div>
@@ -259,7 +344,7 @@ export default function BillingTab() { // skipcq: JS-0067
               </p>
               <p className="font-semibold flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
-                {formatDate(sub.current_period_end)}
+                {sub.current_period_end ? formatDate(sub.current_period_end) : "Not available"}
               </p>
             </div>
           </div>
@@ -274,15 +359,76 @@ export default function BillingTab() { // skipcq: JS-0067
                 : "This access is active but managed outside the self-serve billing portal."}
           </div>
         ) : (
-          <div className="rounded-xl bg-secondary p-4 text-sm text-muted-foreground">
-            You're on the free plan. Upgrade to unlock analytics, unlimited
-            viewings, saved searches and more.
+          <div className="rounded-xl bg-secondary p-4 space-y-3">
+            <div className="text-sm text-muted-foreground">
+              You're on the free plan. Upgrade to unlock analytics, unlimited
+              viewings, saved searches and more.
+            </div>
+            {!rolePlan.inviteOnly && (
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="inline-flex rounded-lg border border-border bg-background p-1">
+                  {(["monthly", "annual"] as const).map((cycle) => (
+                    <button
+                      key={cycle}
+                      type="button"
+                      className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+                        subscriptionBillingCycle === cycle
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                      onClick={() => setSubscriptionBillingCycle(cycle)}
+                    >
+                      {cycle === "monthly"
+                        ? `${formatBillingAmount(rolePlan.monthlyPrice, "EUR")}/mo`
+                        : `${formatBillingAmount(rolePlan.annualPrice, "EUR")}/yr`}
+                    </button>
+                  ))}
+                </div>
+                <Button
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => void startSubscriptionCheckout()}
+                  disabled={subscriptionCheckoutLoading}
+                >
+                  {subscriptionCheckoutLoading ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Zap className="w-3.5 h-3.5" />
+                  )}
+                  Get {rolePlan.planName}
+                </Button>
+              </div>
+            )}
           </div>
         )}
         {error && (
           <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-muted-foreground">
             Live billing details could not be fully refreshed right now. Your
             access state is still shown from the account profile.
+          </div>
+        )}
+        {isPastDue && canManageBilling && (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-muted-foreground flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <p className="font-semibold text-foreground">Payment needs attention</p>
+              <p className="mt-1">
+                Stripe could not collect the latest payment. Update your card to keep the plan active.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 shrink-0"
+              onClick={() => void openPortal("payment_method_update")}
+              disabled={portalLoading}
+            >
+              {portalLoading ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <CreditCard className="w-3.5 h-3.5" />
+              )}
+              Update card
+            </Button>
           </div>
         )}
       </div>
@@ -300,20 +446,52 @@ export default function BillingTab() { // skipcq: JS-0067
                 portal.
               </p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 shrink-0"
-              onClick={openPortal}
-              disabled={portalLoading}
-            >
-              {portalLoading ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <ExternalLink className="w-3.5 h-3.5" />
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              {sub?.cancel_at_period_end && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 shrink-0"
+                  onClick={() => void openPortal("resume_subscription")}
+                  disabled={portalLoading}
+                >
+                  {portalLoading ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  )}
+                  Resume plan
+                </Button>
               )}
-              Update card
-            </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 shrink-0"
+                onClick={() => void openPortal("subscription_update")}
+                disabled={portalLoading}
+              >
+                {portalLoading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <ExternalLink className="w-3.5 h-3.5" />
+                )}
+                Change plan
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 shrink-0"
+                onClick={() => void openPortal("payment_method_update")}
+                disabled={portalLoading}
+              >
+                {portalLoading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <ExternalLink className="w-3.5 h-3.5" />
+                )}
+                Update card
+              </Button>
+            </div>
           </div>
         </div>
       )}
@@ -324,7 +502,7 @@ export default function BillingTab() { // skipcq: JS-0067
         participantType={participantType}
         addonLoadingKey={addonLoadingKey}
         onPurchaseAddon={(addonKey) => void purchaseAddonKey(addonKey)}
-        onUpgrade={() => navigate("/pricing")}
+        onUpgrade={() => void startSubscriptionCheckout()}
       />
 
       {/* Invoices */}
@@ -372,6 +550,11 @@ export default function BillingTab() { // skipcq: JS-0067
                       inv.period_end &&
                       ` · ${formatDate(inv.period_start)} – ${formatDate(inv.period_end)}`}
                     {inv.description && ` · ${inv.description}`}
+                    {inv.tax_amount != null &&
+                      inv.tax_amount > 0 &&
+                      ` Â· VAT/tax ${formatBillingAmount(inv.tax_amount, inv.currency)}`}
+                    {getInvoiceTaxIdLabel(inv) &&
+                      ` Â· ${getInvoiceTaxIdLabel(inv)}`}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -399,6 +582,16 @@ export default function BillingTab() { // skipcq: JS-0067
                         PDF
                       </a>
                     )}
+                    {inv.receipt_url && (
+                      <a
+                        href={inv.receipt_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline ml-2"
+                      >
+                        Receipt
+                      </a>
+                    )}
                   </div>
                 </div>
               </div>
@@ -415,7 +608,7 @@ export default function BillingTab() { // skipcq: JS-0067
               To cancel your subscription, click{" "}
               <button
                 className="underline hover:text-foreground"
-                onClick={openPortal}
+                onClick={() => void openPortal("subscription_cancel")}
               >
                 Manage billing
               </button>{" "}
@@ -491,6 +684,7 @@ export default function BillingTab() { // skipcq: JS-0067
                       key={item.name}
                       item={item}
                       accent={section.accent}
+                      checkoutAvailable={Boolean(addonKey)}
                       loading={Boolean(addonKey && addonLoadingKey === addonKey)}
                       onPurchase={() => purchaseAddon(item)}
                     />

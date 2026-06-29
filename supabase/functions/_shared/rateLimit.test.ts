@@ -145,3 +145,63 @@ Deno.test("DB limiter fail-open default allows when backend cannot be reached", 
 
   assertStrictEquals(await limiter.isLimited("user-1"), false);
 });
+
+Deno.test({
+  name: "DB limiter failClosed respects RPC timeout when backend hangs",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const previousTimeout = Deno.env.get("RATE_LIMIT_DB_TIMEOUT_MS");
+    Deno.env.set("RATE_LIMIT_DB_TIMEOUT_MS", "10");
+    const blockers: Array<() => void> = [];
+    const server = Deno.serve(
+      { hostname: "127.0.0.1", port: 0, onListen: () => {} },
+      () =>
+        new Promise<Response>((resolve) => {
+          blockers.push(() =>
+            resolve(
+              new Response("{}", {
+                status: 500,
+                headers: { "content-type": "application/json" },
+              }),
+            )
+          );
+        }),
+    );
+    const addr = server.addr as Deno.NetAddr;
+    const limiter = makeDbRateLimiter({
+      bucket: "expensive-timeout",
+      maxRequests: 1,
+      windowMs: 60_000,
+      supabaseUrl: `http://127.0.0.1:${addr.port}`,
+      serviceRoleKey: "test",
+      failClosed: true,
+    });
+
+    try {
+      const pending = limiter.isLimited("user-1");
+      const result = await Promise.race([
+        pending.then((value) => ({ kind: "resolved", value })),
+        new Promise((resolve) =>
+          setTimeout(() => resolve({ kind: "hung" }), 100)
+        ),
+      ]);
+
+      for (const release of blockers) release();
+      await Promise.race([
+        pending.catch(() => undefined),
+        new Promise((resolve) => setTimeout(resolve, 100)),
+      ]);
+
+      assertEquals(result, { kind: "resolved", value: true });
+    } finally {
+      for (const release of blockers) release();
+      await server.shutdown();
+      if (previousTimeout === undefined) {
+        Deno.env.delete("RATE_LIMIT_DB_TIMEOUT_MS");
+      } else {
+        Deno.env.set("RATE_LIMIT_DB_TIMEOUT_MS", previousTimeout);
+      }
+    }
+  },
+});

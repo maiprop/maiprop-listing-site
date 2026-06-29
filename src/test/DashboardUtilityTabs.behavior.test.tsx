@@ -158,7 +158,7 @@ describe("dashboard utility tabs", () => {
 
     fireEvent.click(screen.getAllByRole("button", { name: /Buy add-on/i })[0]);
     await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("create-checkout", expect.objectContaining({
-      body: expect.objectContaining({ addon_key: "featured_listing" }),
+      body: expect.objectContaining({ addon_key: "valuation_single" }),
     })));
 
     mocks.invoke.mockImplementationOnce((fn: string) => (
@@ -241,6 +241,9 @@ describe("dashboard utility tabs", () => {
     fireEvent.click(screen.getByRole("button", { name: /Switch Participant Type/i }));
     fireEvent.click(screen.getByRole("button", { name: /switch my type/i }));
     await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("begin-role-switch", {
+      body: { validate_only: true },
+    }));
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("begin-role-switch", {
       body: {},
     }));
     expect(mocks.invoke).toHaveBeenCalledWith("log-role-switch", {
@@ -251,6 +254,20 @@ describe("dashboard utility tabs", () => {
         cancel_subscription: true,
       }),
     });
+    const preflightIndex = mocks.invoke.mock.calls.findIndex(([fn, options]) =>
+      fn === "begin-role-switch" &&
+      JSON.stringify(options) === JSON.stringify({ body: { validate_only: true } })
+    );
+    const logIndex = mocks.invoke.mock.calls.findIndex(([fn]) =>
+      fn === "log-role-switch"
+    );
+    const beginIndex = mocks.invoke.mock.calls.findIndex(([fn, options]) =>
+      fn === "begin-role-switch" &&
+      JSON.stringify(options) === JSON.stringify({ body: {} })
+    );
+    expect(preflightIndex).toBeGreaterThanOrEqual(0);
+    expect(logIndex).toBeGreaterThan(preflightIndex);
+    expect(beginIndex).toBeGreaterThan(logIndex);
     expect(sessionStorage.getItem("role_switch_ctx")).toContain("agent");
     expect(refreshProfile).toHaveBeenCalled();
     expect(mocks.navigate).toHaveBeenCalledWith("/onboarding");

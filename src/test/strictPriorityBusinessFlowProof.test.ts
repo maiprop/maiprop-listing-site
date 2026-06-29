@@ -320,7 +320,7 @@ const proof: readonly FlowProof[] = [
       },
       {
         file: "supabase/functions/create-checkout/index.ts",
-        snippets: ["idempotencyKey", "maiprop-checkout", "maiprop-addon"],
+        snippets: ["buildIdempotencyKey", "checkout-v2", "checkout-addon-v2"],
       },
     ],
   },
