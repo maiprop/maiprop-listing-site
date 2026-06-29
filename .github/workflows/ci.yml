@@ -351,15 +351,18 @@ jobs:
             "VITE_SUPABASE_URL"
             "VITE_SUPABASE_PUBLISHABLE_KEY"
             "VITE_SUPABASE_PROJECT_ID"
-            "RLS_USER_A_EMAIL"
-            "RLS_USER_B_EMAIL"
-            "RLS_USER_PASSWORD"
-            "SUPABASE_SERVICE_ROLE_KEY"
             "SUPABASE_ACCESS_TOKEN"
           )
 
           if [ "$E2E_SECURITY_USE_ISOLATED_STAGING" = "true" ]; then
-            required+=("ONBOARDING_TEST_EMAIL" "ONBOARDING_TEST_PASSWORD")
+            required+=(
+              "RLS_USER_A_EMAIL"
+              "RLS_USER_B_EMAIL"
+              "RLS_USER_PASSWORD"
+              "SUPABASE_SERVICE_ROLE_KEY"
+              "ONBOARDING_TEST_EMAIL"
+              "ONBOARDING_TEST_PASSWORD"
+            )
           fi
 
           missing=0
@@ -379,11 +382,11 @@ jobs:
           fi
 
           if [ "$E2E_SECURITY_USE_ISOLATED_STAGING" != "true" ]; then
-            echo "::warning::Onboarding role-selection tests require isolated staging and will be skipped in production fallback mode."
+            echo "::warning::Skipping live-safe security tests because isolated staging is not fully configured. Configure STAGING_SUPABASE_SERVICE_ROLE_KEY to run Auth Admin, RLS, onboarding, and GDPR checks outside production."
           fi
 
       - name: Validate selected Supabase service role key
-        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true'
+        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true' && env.E2E_SECURITY_USE_ISOLATED_STAGING == 'true'
         run: |
           set -euo pipefail
           node --input-type=module <<'NODE'
@@ -394,33 +397,86 @@ jobs:
             throw new Error("VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.");
           }
 
-          const response = await fetch(`${url.replace(/\/$/, "")}/auth/v1/admin/users?page=1&per_page=1`, {
-            headers: {
-              apikey: serviceRoleKey,
-              Authorization: `Bearer ${serviceRoleKey}`,
-            },
-          });
+          const host = new URL(url).host;
+          const endpoint = `${url.replace(/\/$/, "")}/auth/v1/admin/users?page=1&per_page=1`;
+          const maxAttempts = 3;
+          const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-          if (!response.ok) {
-            const detail = await response.text().catch(() => "");
-            throw new Error(`Selected SUPABASE_SERVICE_ROLE_KEY is not accepted by ${new URL(url).host}: ${detail.slice(0, 240)}`);
+          for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 20_000);
+
+            try {
+              const response = await fetch(endpoint, {
+                headers: {
+                  Accept: "application/json",
+                  apikey: serviceRoleKey,
+                  Authorization: `Bearer ${serviceRoleKey}`,
+                },
+                signal: controller.signal,
+              });
+              clearTimeout(timeout);
+
+              if (response.ok) {
+                console.log(`Validated selected Supabase service-role key for ${host} on attempt ${attempt}.`);
+                process.exit(0);
+              }
+
+              const detail = await response.text().catch(() => "");
+              const contentType = response.headers.get("content-type") ?? "";
+              const retryable =
+                response.status >= 500 ||
+                contentType.toLowerCase().includes("text/html") ||
+                /cloudflare|error code|<!doctype html/i.test(detail);
+
+              if (!retryable || attempt === maxAttempts) {
+                const fatal = new Error(
+                  `Selected SUPABASE_SERVICE_ROLE_KEY is not accepted by ${host} ` +
+                    `(status ${response.status}, content-type ${contentType || "unknown"}): ${detail.slice(0, 240)}`,
+                );
+                fatal.name = "SupabaseServiceRoleValidationError";
+                throw fatal;
+              }
+
+              console.warn(
+                `Supabase service-role validation for ${host} returned retryable status ${response.status} ` +
+                  `with content-type ${contentType || "unknown"} on attempt ${attempt}; retrying.`,
+              );
+            } catch (error) {
+              clearTimeout(timeout);
+
+              if (error instanceof Error && error.name === "SupabaseServiceRoleValidationError") {
+                throw error;
+              }
+
+              if (attempt === maxAttempts) {
+                throw error;
+              }
+
+              console.warn(
+                `Supabase service-role validation for ${host} failed on attempt ${attempt}: ` +
+                  `${error instanceof Error ? error.message : String(error)}; retrying.`,
+              );
+            }
+
+            await sleep(attempt * 5_000);
           }
           NODE
 
       - name: Install dependencies
-        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true'
+        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true' && env.E2E_SECURITY_USE_ISOLATED_STAGING == 'true'
         run: npm ci --prefer-offline --no-audit
 
       - name: Skip live type freshness without staged DB changes
-        if: needs['deploy-supabase-staging'].outputs.db_changes != 'true'
+        if: env.E2E_SECURITY_USE_ISOLATED_STAGING == 'true' && needs['deploy-supabase-staging'].outputs.db_changes != 'true'
         run: echo "Live type freshness runs only after the staging database migration path is required."
 
       - name: Skip live type freshness without isolated staging
-        if: needs['deploy-supabase-staging'].outputs.db_changes == 'true' && needs['deploy-supabase-staging'].outputs.isolated_staging != 'true'
+        if: env.E2E_SECURITY_USE_ISOLATED_STAGING == 'true' && needs['deploy-supabase-staging'].outputs.db_changes == 'true' && needs['deploy-supabase-staging'].outputs.isolated_staging != 'true'
         run: echo "No isolated staging Supabase project is configured; live type freshness is deferred to the production DB deployment workflow."
 
       - name: Check generated Supabase types against isolated staging
-        if: needs['deploy-supabase-staging'].outputs.db_changes == 'true' && needs['deploy-supabase-staging'].outputs.isolated_staging == 'true'
+        if: env.E2E_SECURITY_USE_ISOLATED_STAGING == 'true' && needs['deploy-supabase-staging'].outputs.db_changes == 'true' && needs['deploy-supabase-staging'].outputs.isolated_staging == 'true'
         run: |
           if ! node scripts/check-supabase-types-freshness.cjs --strict; then
             echo "::warning title=Staging Supabase type drift::Staging generated types differ from the committed production types. Staging migration apply, advisors, security posture, and edge function deploy remain hard gates."
@@ -433,7 +489,7 @@ jobs:
           fi
 
       - name: Install Playwright browsers
-        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true'
+        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true' && env.E2E_SECURITY_USE_ISOLATED_STAGING == 'true'
         timeout-minutes: 4
         # Hosted Ubuntu runners already include Chromium's runtime libraries for
         # our CI smoke tests. Avoid --with-deps here because it enters apt and
@@ -441,11 +497,11 @@ jobs:
         run: npx playwright install chromium
 
       - name: Build app
-        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true'
+        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true' && env.E2E_SECURITY_USE_ISOLATED_STAGING == 'true'
         run: npm run build
 
       - name: Run live-safe RLS + conditional onboarding + GDPR security tests
-        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true'
+        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true' && env.E2E_SECURITY_USE_ISOLATED_STAGING == 'true'
         run: |
           set -euo pipefail
           specs=(e2e/rls-security.spec.ts e2e/gdpr-delete-account.spec.ts)

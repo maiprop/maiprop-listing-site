@@ -34,14 +34,20 @@ describe("CI live-safe security workflow", () => {
     expect(playwrightStepIndex).toBeGreaterThan(validationStepIndex);
     expect(ciWorkflow).toContain("/auth/v1/admin/users?page=1&per_page=1");
     expect(ciWorkflow).toContain(
+      "env.E2E_SECURITY_USE_ISOLATED_STAGING == 'true'",
+    );
+    expect(ciWorkflow).toContain("const maxAttempts = 3");
+    expect(ciWorkflow).toContain("AbortController");
+    expect(ciWorkflow).toContain("Supabase service-role validation");
+    expect(ciWorkflow).toContain(
       "Selected SUPABASE_SERVICE_ROLE_KEY is not accepted by",
     );
+    expect(ciWorkflow).toContain("SupabaseServiceRoleValidationError");
   });
 
   it("runs onboarding guard tests only against isolated staging", () => {
-    expect(ciWorkflow).toContain(
-      'required+=("ONBOARDING_TEST_EMAIL" "ONBOARDING_TEST_PASSWORD")',
-    );
+    expect(ciWorkflow).toContain("ONBOARDING_TEST_EMAIL");
+    expect(ciWorkflow).toContain("ONBOARDING_TEST_PASSWORD");
     expect(ciWorkflow).toContain(
       'specs=(e2e/rls-security.spec.ts e2e/gdpr-delete-account.spec.ts)',
     );
@@ -49,7 +55,7 @@ describe("CI live-safe security workflow", () => {
       'specs+=(e2e/onboarding-role-selection.spec.ts)',
     );
     expect(ciWorkflow).toContain(
-      "Skipping onboarding role-selection tests because live-safe security is using production fallback runtime",
+      "Skipping live-safe security tests because isolated staging is not fully configured",
     );
   });
 });
