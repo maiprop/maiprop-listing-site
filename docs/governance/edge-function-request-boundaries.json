@@ -105,6 +105,13 @@
       "rationale": "Checkout request bodies are converted to Stripe session parameters only after server-side product checks."
     },
     {
+      "function": "customer-portal",
+      "validationStyle": "typed-manual-guards",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "Customer portal action bodies are manually narrowed before Stripe portal sessions or subscription resume calls run."
+    },
+    {
       "function": "csp-report",
       "validationStyle": "provider-contract-guarded",
       "owner": "data-access",

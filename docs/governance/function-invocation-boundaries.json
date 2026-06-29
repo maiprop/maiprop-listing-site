@@ -100,11 +100,25 @@
       "rationale": "Checkout payloads are finalized by the Edge Function before Stripe session creation and billing redirects."
     },
     {
+      "function": "create-investor-payment",
+      "boundary": "external-provider-contract",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "Investor payment link bodies are admin-authorized and converted server-side before bespoke Stripe Checkout sessions are created."
+    },
+    {
       "function": "create-stripe-price",
       "boundary": "external-provider-contract",
       "owner": "domain",
       "reviewBy": "2026-07-31",
       "rationale": "Stripe price creation is admin-authorized and schema-validated at the Edge boundary before external Stripe calls."
+    },
+    {
+      "function": "customer-portal",
+      "boundary": "external-provider-contract",
+      "owner": "domain",
+      "reviewBy": "2026-07-31",
+      "rationale": "Portal action bodies are resolved by the Edge Function before Stripe customer portal or subscription resume operations run."
     },
     {
       "function": "create-new-building-listing",
