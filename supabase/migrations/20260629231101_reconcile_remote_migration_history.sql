@@ -1,0 +1,4 @@
+-- Production migration ledger reconciliation.
+--
+-- This no-op migration preserves a unique local migration version for
+-- production history compatibility without changing schema.
