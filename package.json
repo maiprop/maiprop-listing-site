@@ -194,7 +194,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",
-    "@capacitor/cli": "7.6.5",
+    "@capacitor/cli": "7.6.7",
     "@cloudflare/workers-types": "^4.20260608.1",
     "@commitlint/cli": "^20.5.3",
     "@commitlint/config-conventional": "^20.5.3",
