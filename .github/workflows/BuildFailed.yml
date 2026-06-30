@@ -1,0 +1,16 @@
+﻿name: Ghost Buster
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ghost-buster:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reclaim stale BuildFailed workflow index
+        run: echo "ghost-buster-ok"
