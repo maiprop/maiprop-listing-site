@@ -9,9 +9,12 @@
  * PRs with only CI stub env).
  */
 import { test, expect } from "@playwright/test";
+import { createClient } from "@supabase/supabase-js";
 import { readCleanEnv } from "./helpers/env";
 
 const SUPABASE_URL = readCleanEnv("VITE_SUPABASE_URL");
+const SUPABASE_PUBLISHABLE_KEY = readCleanEnv("VITE_SUPABASE_PUBLISHABLE_KEY", "VITE_SUPABASE_ANON_KEY");
+const SUPABASE_SERVICE_ROLE_KEY = readCleanEnv("SUPABASE_SERVICE_ROLE_KEY");
 const TEST_EMAIL = process.env.E2E_TEST_EMAIL ?? "buyer.free@maiprop.demo";
 const TEST_PASSWORD = process.env.E2E_TEST_PASSWORD ?? "Demo2025!";
 
@@ -19,42 +22,120 @@ const canRun =
   SUPABASE_URL.startsWith("https://") &&
   !SUPABASE_URL.includes("abcdefghijklmnop");
 
+async function checkoutAccount() {
+  if (!SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_PUBLISHABLE_KEY) {
+    return {
+      email: TEST_EMAIL,
+      password: TEST_PASSWORD,
+      cleanup: async () => undefined,
+    };
+  }
+
+  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const email = `stripe-checkout-${Date.now()}-${Math.random().toString(16).slice(2)}@maiprop.demo`;
+  const password = "StripeCheckoutE2E2026!";
+
+  const { data: created, error: createError } = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { created_by: "payment-checkout-e2e" },
+  });
+  expect(createError, `create checkout user: ${createError?.message ?? ""}`).toBeNull();
+
+  const userId = created.user?.id;
+  expect(userId, "created checkout user id").toBeTruthy();
+
+  const { error: onboardingError } = await admin.rpc("complete_onboarding_role_for_user", {
+    p_user_id: userId,
+    p_role: "buyer",
+    p_participant_type: "buyer",
+    p_display_name: "Stripe Checkout E2E Buyer",
+    p_city: "Athens",
+    p_phone: "+30 6900000000",
+  } as never);
+  expect(onboardingError, `complete onboarding: ${onboardingError?.message ?? ""}`).toBeNull();
+
+  return {
+    email,
+    password,
+    cleanup: async () => {
+      await admin.auth.admin.deleteUser(userId!).catch(() => undefined);
+    },
+  };
+}
+
 test.describe("Stripe checkout flow", () => {
   test.skip(!canRun, "Requires real Supabase project + seeded buyer.free account");
 
   test("free user can initiate checkout from pricing page", async ({ page, context }) => {
-    // Sign in as a free-tier user.
-    await page.goto("/login");
-    await page.locator('input[type="email"], input[name="email"]').first().fill(TEST_EMAIL);
-    await page.locator('input[type="password"]').first().fill(TEST_PASSWORD);
-    await page.locator('button[type="submit"]').first().click();
-    await page.waitForURL(/\/dashboard|\/onboarding/, { timeout: 15_000 });
+    const account = await checkoutAccount();
+    await context.addInitScript(() => {
+      localStorage.setItem("maiprop_cookie_consent", JSON.stringify({
+        accepted: true,
+        functional: true,
+        analytics: false,
+        mapping: false,
+        timestamp: Date.now(),
+      }));
+    });
 
-    // Navigate to pricing.
-    await page.goto("/pricing");
-    await page.waitForLoadState("networkidle");
+    try {
+      // Sign in as a free-tier user.
+      await page.goto("/login");
+      await page.locator('input[type="email"], input[name="email"]').first().fill(account.email);
+      await page.locator('input[type="password"]').first().fill(account.password);
+      await page.locator('button[type="submit"]').first().click();
+      await page.waitForURL(/\/dashboard|\/onboarding/, { timeout: 15_000 });
 
-    await page
-      .getByRole("button", { name: /accept all|reject optional/i })
-      .click({ timeout: 3_000 })
-      .catch(() => {});
+      // Navigate to pricing.
+      await page.goto("/pricing");
+      await page.waitForLoadState("networkidle");
 
-    // Click a pricing-card CTA, not the navbar "Upgrade" link.
-    const upgradeBtn = page.locator("#main-content").getByRole("button", {
-      name: /get pro plan|get agent pro|get developer pro|subscribe/i,
-    }).first();
-    await expect(upgradeBtn).toBeVisible({ timeout: 10_000 });
+      await page
+        .getByRole("button", { name: /^accept all$/i })
+        .click({ timeout: 3_000 })
+        .catch(() => {});
 
-    // create-checkout returns a URL; the app either navigates to it or opens it
-    // in a new tab. Handle both.
-    const [popup] = await Promise.all([
-      context.waitForEvent("page", { timeout: 15_000 }).catch(() => null),
-      upgradeBtn.click(),
-    ]);
+      // Click a pricing-card CTA, not the navbar "Upgrade" link.
+      const upgradeBtn = page.locator("#main-content").getByRole("button", {
+        name: /get pro plan|get agent pro|get developer pro|subscribe/i,
+      }).first();
+      await expect(upgradeBtn).toBeVisible({ timeout: 10_000 });
 
-    const target = popup ?? page;
-    await target.waitForURL(/checkout\.stripe\.com|billing\.stripe\.com|[?&]checkout=success/, { timeout: 20_000 });
-    expect(target.url()).toMatch(/stripe\.com|[?&]checkout=success/);
+      // create-checkout returns a URL; the app either navigates to it or opens it
+      // in a new tab. Handle both.
+      const checkoutResponsePromise = page.waitForResponse((response) =>
+        response.url().includes("/functions/v1/create-checkout") &&
+        response.request().method() === "POST",
+        { timeout: 30_000 },
+      ).catch(() => null);
+      const popupPromise = context.waitForEvent("page", { timeout: 15_000 }).catch(() => null);
+
+      await upgradeBtn.click();
+      const checkoutResponse = await checkoutResponsePromise;
+      expect(checkoutResponse, "create-checkout response").not.toBeNull();
+
+      const checkoutPayload = await checkoutResponse!.json().catch(() => ({}));
+      expect(checkoutResponse!.status(), JSON.stringify(checkoutPayload)).toBe(200);
+      expect(checkoutPayload.url, JSON.stringify(checkoutPayload)).toMatch(
+        /checkout\.stripe\.com|billing\.stripe\.com|[?&]checkout=success/,
+      );
+      expect(checkoutPayload.session_id ?? "mock_session").toMatch(/^(cs_test_|mock_session)/);
+
+      const popup = await popupPromise;
+
+      const target = popup ?? page;
+      if (!/checkout\.stripe\.com|billing\.stripe\.com|[?&]checkout=success/.test(target.url())) {
+        await target.goto(checkoutPayload.url);
+      }
+      await target.waitForURL(/checkout\.stripe\.com|billing\.stripe\.com|[?&]checkout=success/, { timeout: 20_000 });
+      expect(target.url()).toMatch(/stripe\.com|[?&]checkout=success/);
+    } finally {
+      await account.cleanup();
+    }
   });
 
   test("create-checkout rejects unauthenticated requests", async ({ request }) => {

@@ -8,6 +8,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, test, type APIRequestContext, type Locator, type Page } from "@playwright/test";
+import { createClient } from "@supabase/supabase-js";
 import { readCleanEnv } from "./helpers/env";
 
 function readDotEnv(): Record<string, string> {
@@ -46,6 +47,7 @@ const SUPABASE_ANON_KEY = env(
   "VITE_SUPABASE_ANON_KEY",
   "SUPABASE_SERVICE_ROLE_KEY",
 );
+const SUPABASE_SERVICE_ROLE_KEY = env("SUPABASE_SERVICE_ROLE_KEY");
 const COMPLETE_PAYMENT = env("E2E_COMPLETE_STRIPE_PAYMENT") === "true";
 const TEST_EMAIL = env("E2E_STRIPE_PAYMENT_EMAIL", "E2E_TEST_EMAIL");
 const TEST_PASSWORD = env("E2E_STRIPE_PAYMENT_PASSWORD", "E2E_TEST_PASSWORD", "E2E_DEMO_PASSWORD") || "Demo2025!";
@@ -61,7 +63,10 @@ const API_SUBSCRIPTION_CYCLES = (env("E2E_STRIPE_API_SUBSCRIPTION_CYCLES") || ""
 const REQUIRE_STRIPE_TAX_AMOUNT = env("E2E_REQUIRE_STRIPE_TAX_AMOUNT") === "true";
 const EXPECTED_STRIPE_TAX_RATE = Number(env("E2E_EXPECT_STRIPE_TAX_RATE") || "0.24");
 
-const canRun = COMPLETE_PAYMENT && SUPABASE_URL.startsWith("https://") && Boolean(SUPABASE_ANON_KEY) && Boolean(TEST_EMAIL);
+const canRun = COMPLETE_PAYMENT &&
+  SUPABASE_URL.startsWith("https://") &&
+  Boolean(SUPABASE_ANON_KEY) &&
+  Boolean(TEST_EMAIL || SUPABASE_SERVICE_ROLE_KEY);
 const SUPABASE_AUTH_ATTEMPTS = 3;
 
 type SupabasePasswordSession = {
@@ -77,6 +82,19 @@ type CheckoutPayload = {
   mode?: string;
   error?: string;
 };
+
+type PaymentAccount = {
+  email: string;
+  password: string;
+  session: SupabasePasswordSession;
+};
+
+function adminClient() {
+  if (!SUPABASE_SERVICE_ROLE_KEY) return null;
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
 
 async function fillFirstVisible(candidates: Locator[], value: string) {
   for (const candidate of candidates) {
@@ -181,7 +199,11 @@ function authStorageKey(): string {
   return `sb-${new URL(SUPABASE_URL).hostname.split(".")[0]}-auth-token`;
 }
 
-async function requestSupabaseSession(request: APIRequestContext): Promise<SupabasePasswordSession> {
+async function requestSupabaseSession(
+  request: APIRequestContext,
+  email = TEST_EMAIL,
+  password = TEST_PASSWORD,
+): Promise<SupabasePasswordSession> {
   let lastStatus = 0;
   let lastBody = "";
 
@@ -194,8 +216,8 @@ async function requestSupabaseSession(request: APIRequestContext): Promise<Supab
           "Content-Type": "application/json",
         },
         data: {
-          email: TEST_EMAIL,
-          password: TEST_PASSWORD,
+          email,
+          password,
         },
         failOnStatusCode: false,
         timeout: 30_000,
@@ -221,6 +243,50 @@ async function requestSupabaseSession(request: APIRequestContext): Promise<Supab
   }
 
   throw new Error(`Supabase Auth login failed with HTTP ${lastStatus}: ${lastBody.slice(0, 240)}`);
+}
+
+async function createPaymentAccount(
+  request: APIRequestContext,
+  label: string,
+): Promise<PaymentAccount> {
+  const admin = adminClient();
+  if (!admin) {
+    return {
+      email: TEST_EMAIL,
+      password: TEST_PASSWORD,
+      session: await requestSupabaseSession(request),
+    };
+  }
+
+  const email = `stripe-payment-${label}-${Date.now()}-${Math.random().toString(16).slice(2)}@maiprop.demo`;
+  const password = "StripePaymentE2E2026!";
+
+  const { data: created, error: createError } = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { created_by: "stripe-payment-complete-e2e", label },
+  });
+  expect(createError, `create payment user: ${createError?.message ?? ""}`).toBeNull();
+
+  const userId = created.user?.id;
+  expect(userId, "created payment user id").toBeTruthy();
+
+  const { error: onboardingError } = await admin.rpc("complete_onboarding_role_for_user", {
+    p_user_id: userId,
+    p_role: "buyer",
+    p_participant_type: "buyer",
+    p_display_name: `Stripe Payment E2E ${label}`,
+    p_city: "Athens",
+    p_phone: "+30 6900000000",
+  } as never);
+  expect(onboardingError, `complete onboarding: ${onboardingError?.message ?? ""}`).toBeNull();
+
+  return {
+    email,
+    password,
+    session: await requestSupabaseSession(request, email, password),
+  };
 }
 
 async function installSupabaseSession(page: Page, session: SupabasePasswordSession): Promise<void> {
@@ -473,7 +539,8 @@ test.describe("Stripe test payment completion", () => {
 
   test("completes test-card subscription checkout and observes synced entitlement", async ({ page, context, request }) => {
     test.setTimeout(240_000);
-    const session = await requestSupabaseSession(request);
+    const account = await createPaymentAccount(request, "browser-subscription");
+    const session = account.session;
     await installSupabaseSession(page, session);
 
     await page.goto("/pricing?audience=participant");
@@ -520,7 +587,8 @@ test.describe("Stripe test payment completion", () => {
   for (const billingCycle of API_SUBSCRIPTION_CYCLES) {
     test(`completes test-card ${billingCycle} subscription checkout via create-checkout`, async ({ page, request }) => {
       test.setTimeout(240_000);
-      const session = await requestSupabaseSession(request);
+      const account = await createPaymentAccount(request, `api-${billingCycle}`);
+      const session = account.session;
       await installSupabaseSession(page, session);
 
       await page.goto("/dashboard/billing");
@@ -542,7 +610,8 @@ test.describe("Stripe test payment completion", () => {
   for (const addonKey of PAID_ADDON_KEYS) {
     test(`completes test-card ${addonKey} add-on checkout and observes delivered credits`, async ({ page, request }) => {
       test.setTimeout(240_000);
-      const session = await requestSupabaseSession(request);
+      const account = await createPaymentAccount(request, `addon-${addonKey}`);
+      const session = account.session;
       await installSupabaseSession(page, session);
 
       await page.goto("/dashboard/billing");
