@@ -179,16 +179,16 @@ export function StepPricing({
       {isPro && (
         <div className="rounded-xl border border-brand-gold/30 bg-brand-gold/5 p-4">
           <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2">
-            <Crown className="w-4 h-4 text-brand-gold" /> {tr("createListing.pricing.featuredListing", "Featured Listing (Pro)")}
+            <Crown className="w-4 h-4 text-brand-gold" /> {tr("createListing.pricing.featuredListing", "Listing Promotion (Pro)")}
           </div>
-          <p className="text-xs text-muted-foreground mb-3">{tr("createListing.pricing.featuredHint", "Get priority placement in search results with a featured badge.")}</p>
+          <p className="text-xs text-muted-foreground mb-3">{tr("createListing.pricing.featuredHint", "Use Spotlight for a badge and featured sections. Add Priority Rank only when this listing should rank higher.")}</p>
           <div className="flex flex-wrap gap-3">
             <ToggleChip active={form.is_featured} onClick={() => set("is_featured", !form.is_featured)}>
-              <Crown className="w-3 h-3 inline" /> {tr("createListing.pricing.featuredBadge", "Featured badge")}
+              <Crown className="w-3 h-3 inline" /> {tr("createListing.pricing.featuredBadge", "Spotlight badge")}
             </ToggleChip>
             {form.is_featured && (
               <div className="flex items-center gap-2">
-                <FieldLabel>{tr("createListing.pricing.priority", "Priority (0-10)")}</FieldLabel>
+                <FieldLabel>{tr("createListing.pricing.priority", "Priority Rank (0-10)")}</FieldLabel>
                 <input
                   type="number" min={0} max={10}
                   value={form.priority_placement}

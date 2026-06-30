@@ -76,6 +76,7 @@ type DurableBillingSubscriptionRow = {
   status?: string | null;
   stripe_product_id?: string | null;
   current_period_end?: string | null;
+  trial_end?: string | null;
   plan_key?: string | null;
   audience?: string | null;
   billing_cycle?: string | null;
@@ -92,8 +93,11 @@ function isValidDurableBillingSubscription(
   now = new Date(),
 ) {
   if (!row || !hasProvisionedSubscriptionAccess(row.status)) return false;
-  if (!row.current_period_end) return true;
-  const periodEnd = new Date(row.current_period_end);
+  const entitlementEnd = row.status === "trialing"
+    ? row.trial_end ?? row.current_period_end
+    : row.current_period_end;
+  if (!entitlementEnd) return row.status !== "trialing";
+  const periodEnd = new Date(entitlementEnd);
   return !Number.isNaN(periodEnd.getTime()) && periodEnd > now;
 }
 
@@ -110,7 +114,9 @@ function durableBillingStateFromRows(
   return {
     subscribed: true,
     product_id: row.stripe_product_id ?? null,
-    subscription_end: row.current_period_end ?? null,
+    subscription_end: row.status === "trialing"
+      ? row.trial_end ?? row.current_period_end ?? null
+      : row.current_period_end ?? null,
     source: "billing_state",
     plan_key: row.plan_key ?? null,
     audience: row.audience ?? null,
@@ -138,7 +144,7 @@ export async function getDatabaseFallback( // skipcq: JS-R1005 - Fallback subscr
       .eq("user_id", userId)
       .in("status", ["active", "trial"]),
     client.from("billing_subscriptions")
-      .select("status, stripe_product_id, current_period_end, plan_key, audience, billing_cycle")
+      .select("status, stripe_product_id, current_period_end, trial_end, plan_key, audience, billing_cycle")
       .eq("user_id", userId)
       .in("status", ["active", "trialing", "past_due"])
       .order("updated_at", { ascending: false })

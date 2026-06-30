@@ -10,6 +10,13 @@ export const STRIPE_AI_PERSONAL_TAX_CODE = "txcd_10105001";
 export const STRIPE_AI_BUSINESS_TAX_CODE = "txcd_10105002";
 export const STRIPE_DEFAULT_PRODUCT_TAX_CODE = STRIPE_SAAS_BUSINESS_TAX_CODE;
 export const STRIPE_DEFAULT_TAX_BEHAVIOR = "exclusive";
+export const STRIPE_COMPANY_VAT_ID_DEFAULT = "EL802708301";
+export const STRIPE_COMPANY_VAT_CUSTOM_FIELD_NAME = "Company VAT";
+
+type StripeInvoiceCustomField = {
+  name: string;
+  value: string;
+};
 
 const BUSINESS_SOFTWARE_AUDIENCES = new Set([
   "agent",
@@ -123,15 +130,108 @@ export const CHECKOUT_TAX_COLLECTION_PARAMS = {
   tax_id_collection: { enabled: true },
 } satisfies Partial<Stripe.Checkout.SessionCreateParams>;
 
+export function getStripeCompanyVatId(): string | null {
+  const value = (
+    Deno.env.get("STRIPE_COMPANY_VAT_ID") ??
+      Deno.env.get("COMPANY_VAT_ID") ??
+      STRIPE_COMPANY_VAT_ID_DEFAULT
+  ).trim();
+  return value || null;
+}
+
+export function getStripeAccountTaxId(): string | null {
+  const value = (Deno.env.get("STRIPE_ACCOUNT_TAX_ID") ?? "").trim();
+  return value || null;
+}
+
+export function buildCompanyVatInvoiceCustomFields(
+  existing: StripeInvoiceCustomField[] | null | undefined = undefined,
+): StripeInvoiceCustomField[] | undefined {
+  const vatId = getStripeCompanyVatId();
+  if (!vatId) return existing?.length ? existing : undefined;
+
+  const withoutCompanyVat = (existing ?? []).filter((field) =>
+    field.name !== STRIPE_COMPANY_VAT_CUSTOM_FIELD_NAME
+  );
+  return [
+    { name: STRIPE_COMPANY_VAT_CUSTOM_FIELD_NAME, value: vatId },
+    ...withoutCompanyVat,
+  ].slice(0, 4);
+}
+
 export function buildPaymentModeInvoiceCreationParams(
   metadata: Stripe.MetadataParam,
 ): Pick<Stripe.Checkout.SessionCreateParams, "invoice_creation"> {
+  const accountTaxId = getStripeAccountTaxId();
+  const customFields = buildCompanyVatInvoiceCustomFields();
   return {
     invoice_creation: {
       enabled: true,
-      invoice_data: { metadata },
+      invoice_data: {
+        metadata,
+        ...(accountTaxId ? { account_tax_ids: [accountTaxId] } : {}),
+        ...(customFields ? { custom_fields: customFields } : {}),
+      },
     },
   };
+}
+
+const stripeObjectId = (
+  value: string | { id?: string | null } | null | undefined,
+): string | null => {
+  if (typeof value === "string") return value;
+  return value?.id ?? null;
+};
+
+export function buildSubscriptionCompanyInvoiceSettingsUpdateParams(
+  sub: Pick<Stripe.Subscription, "invoice_settings">,
+): Stripe.SubscriptionUpdateParams | null {
+  const invoiceSettings = sub.invoice_settings;
+  const accountTaxId = getStripeAccountTaxId();
+  const existingAccountTaxIds = (invoiceSettings?.account_tax_ids ?? [])
+    .map(stripeObjectId)
+    .filter((id): id is string => Boolean(id));
+  const existingCustomFields = (invoiceSettings?.custom_fields ?? []) as
+    | StripeInvoiceCustomField[]
+    | null;
+  const customFields = buildCompanyVatInvoiceCustomFields(existingCustomFields);
+  const vatId = getStripeCompanyVatId();
+
+  const needsAccountTaxId = Boolean(accountTaxId) &&
+    !existingAccountTaxIds.includes(accountTaxId as string);
+  const needsVatField = Boolean(vatId) &&
+    !(existingCustomFields ?? []).some((field) =>
+      field.name === STRIPE_COMPANY_VAT_CUSTOM_FIELD_NAME &&
+      field.value === vatId
+    );
+
+  if (!needsAccountTaxId && !needsVatField) return null;
+
+  return {
+    invoice_settings: {
+      ...(accountTaxId ? { account_tax_ids: [accountTaxId] } : {}),
+      ...(customFields ? { custom_fields: customFields } : {}),
+    },
+  };
+}
+
+export async function ensureSubscriptionCompanyInvoiceSettings(
+  stripe: Stripe,
+  sub: Stripe.Subscription,
+): Promise<Stripe.Subscription> {
+  const params = buildSubscriptionCompanyInvoiceSettingsUpdateParams(sub);
+  if (!params) return sub;
+  try {
+    return await stripe.subscriptions.update(sub.id, params);
+  } catch (error) {
+    const customFields = buildCompanyVatInvoiceCustomFields(
+      (sub.invoice_settings?.custom_fields ?? []) as StripeInvoiceCustomField[],
+    );
+    if (!getStripeAccountTaxId() || !customFields) throw error;
+    return await stripe.subscriptions.update(sub.id, {
+      invoice_settings: { custom_fields: customFields },
+    });
+  }
 }
 
 const metadataValue = (

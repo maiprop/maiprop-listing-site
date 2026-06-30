@@ -223,10 +223,10 @@ export function BillingUsagePanel({
     error: reportCreditsError,
   } = usePropertyReportAddonCredits();
   const { data: priorityCount = 0, isLoading: priorityLoading, error: priorityError } = usePriorityAdsUsage();
-  const showPriorityBoosts = SELL_SIDE_PARTICIPANTS.has(participantType);
+  const showListingPromotions = SELL_SIDE_PARTICIPANTS.has(participantType);
   const priorityFootnote = participantType === "professional"
     ? `Extra professional priority ads cost EUR ${PROFESSIONAL_PRIORITY_AD_EXTRA_COST} each.`
-    : `Priority placement costs EUR ${PRIORITY_ADS_EXTRA_COST} for 30 days; featured listings start at EUR 39.`;
+    : `Priority Rank costs EUR ${PRIORITY_ADS_EXTRA_COST} for 30 days; Spotlight starts at EUR 39.`;
 
   const reportBaseLimit = isPro ? REPORT_INCLUDED : 0;
   const reportLimit = reportBaseLimit +
@@ -309,11 +309,11 @@ export function BillingUsagePanel({
     },
   ];
 
-  if (showPriorityBoosts) {
+  if (showListingPromotions) {
     metrics.push({
-      id: "priority-boosts",
-      label: "Priority ads / boosts",
-      description: "Featured listing and priority-placement usage.",
+      id: "listing-promotions",
+      label: "Listing promotions",
+      description: "Spotlight badges, featured sections, and Priority Rank usage.",
       icon: Bell,
       used: priorityCount,
       limit: priorityLimit,
@@ -323,11 +323,12 @@ export function BillingUsagePanel({
         type: "contact",
         label: "Contact team",
         href: buildBillingContactHref({
-          topic: "Priority ads / boosts",
+          topic: "Listing promotions",
+          addonName: "Listing promotions",
           participantType,
         }),
       }],
-      footnote: isPro ? priorityFootnote : "Buy a boost without changing your plan.",
+      footnote: isPro ? priorityFootnote : "Choose Spotlight for visual promotion, Priority Rank for search placement.",
     });
   }
 
@@ -341,7 +342,7 @@ export function BillingUsagePanel({
           <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">
             Monthly usage
           </p>
-          <h2 className="font-display text-lg font-bold">AI, reports & boosts</h2>
+          <h2 className="font-display text-lg font-bold">AI, reports & promotions</h2>
         </div>
         <p className="text-xs text-muted-foreground sm:text-right">
           Counters reset on the 1st of each month.

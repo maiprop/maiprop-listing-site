@@ -32,7 +32,7 @@ CREATE INDEX IF NOT EXISTS idx_listings_owner_status
   ON listings(owner_id, status)
   WHERE owner_id IS NOT NULL;
 
--- Featured listings (homepage hero)
+-- Spotlight listings (homepage hero)
 -- Note: idx_listings_featured already exists from a prior migration but only covers
 -- (is_featured, priority_placement DESC) without a WHERE clause — this new partial
 -- index is more selective and avoids scanning non-active rows.

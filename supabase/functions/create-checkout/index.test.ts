@@ -231,10 +231,35 @@ Deno.test("subscription trial checkout is reserved before Stripe session creatio
   assertEquals(source.includes("trial_period_days: PRO_TRIAL_DAYS"), true);
   assertEquals(source.includes('checkout_type: "subscription_trial"'), true);
   assertEquals(source.includes('payment_method_collection: "always"'), true);
+  assertEquals(source.includes('missing_payment_method: "cancel"'), true);
   assertEquals(source.includes("subscription_trial_claims"), true);
   assertEquals(reserveIndex >= 0, true);
   assertEquals(sessionIndex > reserveIndex, true);
   assertEquals(updateIndex > sessionIndex, true);
+});
+
+Deno.test("subscription trial checkout requires a card before trial activation", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./index.ts", import.meta.url),
+  );
+  const subscriptionBranch = source.slice(
+    source.indexOf("const checkoutPlan = await getCheckoutPlan"),
+  );
+
+  assertEquals(subscriptionBranch.includes('payment_method_types: ["card"]'), true);
+  assertEquals(
+    subscriptionBranch.includes('payment_method_collection: "always" as const'),
+    true,
+  );
+  assertEquals(subscriptionBranch.includes("trial_period_days: PRO_TRIAL_DAYS"), true);
+  assertEquals(
+    subscriptionBranch.includes('missing_payment_method: "cancel" as const'),
+    true,
+  );
+  assertEquals(
+    subscriptionBranch.includes('"missing-payment-method-cancel"'),
+    true,
+  );
 });
 
 Deno.test("subscription checkout blocks duplicate active subscriptions for the same audience", async () => {

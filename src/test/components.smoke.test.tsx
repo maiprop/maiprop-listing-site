@@ -137,10 +137,10 @@ vi.mock("react-router-dom", async () => {
 });
 
 vi.mock("react-map-gl", () => ({
-  default: ({ children }: { children?: React.ReactNode }) => <div data-testid="map">{children}</div>,
-  Map: ({ children }: { children?: React.ReactNode }) => <div data-testid="map">{children}</div>,
-  Marker: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-  NavigationControl: () => null,
+  default: ({ children }: { children?: React.ReactNode }) => <div data-testid="mapbox-map">{children}</div>,
+  Map: ({ children }: { children?: React.ReactNode }) => <div data-testid="mapbox-map">{children}</div>,
+  Marker: ({ children }: { children?: React.ReactNode }) => <div data-testid="mapbox-marker">{children}</div>,
+  NavigationControl: () => <div data-testid="nav-control" />,
   Popup: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
   Source: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
   Layer: () => null,

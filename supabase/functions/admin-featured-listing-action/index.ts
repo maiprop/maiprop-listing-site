@@ -1,7 +1,7 @@
 /**
- * admin-featured-listing-action - authenticated featured listing moderation.
+ * admin-featured-listing-action - authenticated Spotlight listing moderation.
  *
- * Keeps admin-only featured listing updates off direct browser table writes.
+ * Keeps admin-only Spotlight listing updates off direct browser table writes.
  * The function verifies the caller JWT, checks platform-admin authorization,
  * validates the update body, then applies only the allowed listing fields.
  */
@@ -64,7 +64,7 @@ function errorMessage(err: unknown): string {
     const message = (err as Record<string, unknown>).message;
     if (typeof message === "string" && message.length > 0) return message;
   }
-  return "Featured listing update failed";
+  return "Spotlight listing update failed";
 }
 
 function databaseStatus(message: string): number {
@@ -120,11 +120,11 @@ Deno.serve(async (req) => {
 
     if (error) {
       const message = errorMessage(error);
-      log.warn("featured listing update rejected", { listingId: action.id, err: message });
+      log.warn("spotlight listing update rejected", { listingId: action.id, err: message });
       return jsonErrorResponse(req, message, databaseStatus(message));
     }
 
-    log.info("featured listing update completed", { listingId: action.id, adminId: caller.id });
+    log.info("spotlight listing update completed", { listingId: action.id, adminId: caller.id });
     return jsonResponse(req, { ok: true });
   } catch (err: unknown) {
     const status = err instanceof AuthError
@@ -133,7 +133,7 @@ Deno.serve(async (req) => {
       ? 400
       : 500;
     const message = errorMessage(err);
-    log.warn("featured listing update failed", { status, err: message });
+    log.warn("spotlight listing update failed", { status, err: message });
     return jsonErrorResponse(
       req,
       message,

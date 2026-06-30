@@ -445,7 +445,7 @@ describe("dashboard tab behavior", () => {
     fireEvent.click(screen.getByRole("button", { name: /off-market/i }));
     expect(screen.getByText("Quiet off-market")).toBeInTheDocument();
     expect(screen.queryByText("Future launch")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByTitle(/Add featured badge/i));
+    fireEvent.click(screen.getByTitle(/Add Spotlight badge/i));
     expect(updateListingMutate).toHaveBeenCalledWith({ id: "l-1", updates: { is_featured: true } });
     const priorityInput = screen.getByTitle(/Priority/i);
     fireEvent.change(priorityInput, { target: { value: "20" } });

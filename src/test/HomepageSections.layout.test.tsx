@@ -20,7 +20,7 @@ vi.mock("@/components/PropertyCard", () => ({
 
 const listing = (index: number): HomepageListing => ({
   id: `featured-${index}`,
-  title: `Featured ${index}`,
+  title: `Spotlight ${index}`,
   address: `Address ${index}`,
   city: "Athens",
   price: 200_000 + index,
@@ -43,7 +43,7 @@ describe("homepage section layout contracts", () => {
     );
 
     expect(screen.getAllByTestId("featured-property-card")).toHaveLength(4);
-    expect(screen.queryByText("Featured 5")).not.toBeInTheDocument();
+    expect(screen.queryByText("Spotlight 5")).not.toBeInTheDocument();
   });
 
   it("keeps popular location imagery but uses the smaller landscape card shape", async () => {

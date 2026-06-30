@@ -73,7 +73,7 @@
     },
     "sections": {
       "newListings": "Νέες αγγελίες",
-      "featuredProperties": "Προβεβλημένα ακίνητα",
+      "featuredProperties": "Ακίνητα Spotlight",
       "upcomingAuctions": "Επερχόμενοι πλειστηριασμοί",
       "viewAll": "Όλα",
       "forSale": "Προς πώληση",
@@ -308,7 +308,7 @@
       "architect": "Αρχιτέκτονας"
     },
     "verified": "Επαληθευμένος",
-    "featured": "Προβεβλημένος",
+    "featured": "Spotlight",
     "rating": "Βαθμολογία",
     "reviews": "κριτικές",
     "experience": "Εμπειρία",
@@ -551,13 +551,13 @@
       },
       "developerPro": {
         "title": "Τα εργαλεία developer απαιτούν Pro",
-        "subtitle": "Απεριόριστες αγγελίες, παρουσιάσεις έργων, διαχείριση προπώλησης και προβεβλημένη τοποθέτηση περιλαμβάνονται στο Developer Pro.",
+        "subtitle": "Απεριόριστες αγγελίες, παρουσιάσεις έργων, διαχείριση έργων, Spotlight και Priority Rank περιλαμβάνονται στο Developer Pro.",
         "trial": "Έναρξη δωρεάν δοκιμής 7 ημερών",
         "previewTools": "Προβολή Developer Plan"
       },
       "proUpgrade": {
         "title": "Ξεκλειδώστε ολόκληρο τον πίνακα",
-        "subtitle": "Analytics, CRM, priority ads και περισσότερα με Pro.",
+        "subtitle": "Analytics, CRM, προωθήσεις αγγελιών και περισσότερα με Pro.",
         "cta": "Αναβάθμιση σε Pro"
       },
       "listings": {
@@ -755,7 +755,7 @@
     "rejected": "Απορρίφθηκε",
     "verified": "Επαληθευμένο",
     "unverified": "Μη επαληθευμένο",
-    "featured": "Προβεβλημένο",
+    "featured": "Spotlight",
     "premium": "Premium",
     "pro": "Pro",
     "free": "Δωρεάν",
@@ -842,7 +842,7 @@
       "newBuild": "Νεόδμητο",
       "new": "Νέο",
       "premium": "Premium",
-      "featured": "Προβεβλημένο",
+      "featured": "Spotlight",
       "verified": "Επαληθευμένο"
     },
     "noPhoto": "Χωρίς φωτογραφία",
@@ -879,7 +879,7 @@
   "listingsPage": {
     "sortOptions": {
       "relevant": "Πιο σχετικά",
-      "featured": "Προβεβλημένα πρώτα",
+      "featured": "Spotlight πρώτα",
       "priceAsc": "Τιμή: χαμηλότερη πρώτα",
       "priceDesc": "Τιμή: υψηλότερη πρώτα",
       "newest": "Νεότερα πρώτα",
@@ -1632,10 +1632,10 @@
       "agentListing": "Μεσιτική αγγελία",
       "exclusiveHint": "Σημειώστε την ως αποκλειστική αγγελία (είστε ο μοναδικός μεσίτης).",
       "exclusive": "Αποκλειστική",
-      "featuredListing": "Προβεβλημένη αγγελία (Pro)",
-      "featuredHint": "Αποκτήστε προτεραιότητα στα αποτελέσματα αναζήτησης με ειδική ένδειξη.",
-      "featuredBadge": "Ένδειξη προβεβλημένης",
-      "priority": "Προτεραιότητα (0-10)"
+      "featuredListing": "Προώθηση αγγελίας (Pro)",
+      "featuredHint": "Το Spotlight προσθέτει σήμανση και προβολή σε ειδικές ενότητες. Προσθέστε Priority Rank μόνο όταν η αγγελία πρέπει να εμφανίζεται ψηλότερα.",
+      "featuredBadge": "Σήμανση Spotlight",
+      "priority": "Priority Rank (0-10)"
     },
     "photos": {
       "heading": "Φωτογραφίες ακινήτου",

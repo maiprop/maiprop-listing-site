@@ -337,8 +337,8 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
           />
           <div className="absolute top-1 left-1 flex gap-1 flex-wrap">
             {badges.map((b) => (
-              <span key={b.label} className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${b.cls} ${b.label === "Featured" ? "inline-flex items-center gap-0.5" : ""}`}>
-                {b.label === "Featured" && <Crown className="w-2 h-2" />}
+              <span key={b.label} className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${b.cls} ${b.label === t("propertyCard.badges.featured") ? "inline-flex items-center gap-0.5" : ""}`}>
+                {b.label === t("propertyCard.badges.featured") && <Crown className="w-2 h-2" />}
                 {b.label}
               </span>
             ))}
@@ -409,8 +409,8 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
             </span>
           )}
           {badges.map((b) => (
-            <span key={b.label} className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide shadow-sm ${b.cls} ${b.label === "Featured" ? "inline-flex items-center gap-1" : ""}`}>
-              {b.label === "Featured" && <Crown className="w-2.5 h-2.5" />}
+            <span key={b.label} className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide shadow-sm ${b.cls} ${b.label === t("propertyCard.badges.featured") ? "inline-flex items-center gap-1" : ""}`}>
+              {b.label === t("propertyCard.badges.featured") && <Crown className="w-2.5 h-2.5" />}
               {b.label}
             </span>
           ))}

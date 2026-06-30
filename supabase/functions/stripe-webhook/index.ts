@@ -26,7 +26,10 @@ import {
   upsertBillingCustomer,
   upsertBillingSubscription,
 } from "../_shared/billingState.ts";
-import { createStripeClient } from "../_shared/stripeClient.ts";
+import {
+  createStripeClient,
+  ensureSubscriptionCompanyInvoiceSettings,
+} from "../_shared/stripeClient.ts";
 import { pricingConfigMatchesStripeItem } from "../_shared/entitlements.ts";
 import { SELF_SERVE_ADDON_CREDITS } from "../create-checkout/constants.ts";
 import { shouldSkipProfileEntitlementSync } from "./addonGuard.ts";
@@ -486,7 +489,7 @@ function isSubscriptionTrialMetadata(
   return metadata?.checkout_type === "subscription_trial";
 }
 
-function mapSubscriptionTrialStatus(
+export function mapSubscriptionTrialStatus(
   status: string | null | undefined,
 ): SubscriptionTrialClaimStatus {
   if (status === "trialing") return "trialing";
@@ -681,6 +684,15 @@ async function syncSubscription(
   stripe: Stripe,
   sub: Stripe.Subscription,
 ) {
+  try {
+    sub = await ensureSubscriptionCompanyInvoiceSettings(stripe, sub);
+  } catch (err: unknown) {
+    log.error("failed to stamp subscription invoice settings", {
+      sub_id: sub.id,
+      err: err instanceof Error ? err.message : String(err),
+    });
+  }
+
   if (await syncAddonSubscriptionLifecycle(supabase, sub)) {
     return;
   }

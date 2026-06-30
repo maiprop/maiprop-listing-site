@@ -277,7 +277,7 @@ Deno.serve(async (req) => {
           amountCents,
           success,
           cancel,
-          "stripe-tax-v1",
+          "stripe-tax-v2-company-vat",
         ]),
       },
     );

@@ -313,7 +313,7 @@ describe("listing step pricing interactions", () => {
     fireEvent.click(screen.getByRole("button", { name: /pets allowed/i }));
     fireEvent.click(screen.getByRole("button", { name: /short-term/i }));
     fireEvent.click(screen.getByRole("button", { name: "Exclusive" }));
-    fireEvent.click(screen.getByRole("button", { name: /featured badge/i }));
+    fireEvent.click(screen.getByRole("button", { name: /spotlight badge/i }));
     fireEvent.change(screen.getByDisplayValue("3"), { target: { value: "8" } });
 
     expect(set).toHaveBeenCalledWith("deposit_months", "1");

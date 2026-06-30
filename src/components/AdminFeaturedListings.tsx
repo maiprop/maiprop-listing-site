@@ -1,5 +1,5 @@
 /**
- * Featured Listings admin panel. Admin-only.
+ * Listing Promotions admin panel. Admin-only.
  * Manage is_featured and priority_placement for all active listings.
  * Includes view analytics: views_count, featured_since, and a performance indicator.
  */
@@ -191,11 +191,11 @@ export default function AdminFeaturedListings() {
       setToggling((prev) => ({ ...prev, [listing.id]: true }));
       const next = !listing.is_featured;
       try {
-        await updateFeaturedListing(listing.id, { is_featured: next }, "featured listing update");
+        await updateFeaturedListing(listing.id, { is_featured: next }, "spotlight listing update");
         await queryClient.invalidateQueries({ queryKey: ["admin-featured-listings"] });
-        toast.success(next ? "Listing marked as featured" : "Listing removed from featured");
+        toast.success(next ? "Spotlight enabled for listing" : "Spotlight removed from listing");
       } catch (e: unknown) {
-        toast.error((e as Error)?.message ?? "Failed to update featured status");
+        toast.error((e as Error)?.message ?? "Failed to update Spotlight status");
       } finally {
         setToggling((prev) => ({ ...prev, [listing.id]: false }));
       }
@@ -232,7 +232,7 @@ export default function AdminFeaturedListings() {
       try {
         await updateFeaturedListing(listing.id, { priority_placement: clamped }, "featured priority update");
         await queryClient.invalidateQueries({ queryKey: ["admin-featured-listings"] });
-        toast.success(`Priority updated to ${clamped}`);
+        toast.success(`Priority Rank updated to ${clamped}`);
       } catch (e: unknown) {
         toast.error((e as Error)?.message ?? "Failed to update priority");
       } finally {
@@ -287,16 +287,16 @@ export default function AdminFeaturedListings() {
         <div>
           <h2 className="font-display text-lg font-semibold flex items-center gap-2">
             <Star className="w-5 h-5 text-primary" />
-            Featured Listings
+            Listing Promotions
           </h2>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Control which listings appear as featured and set their display priority.
+            Control Spotlight badges and Priority Rank values for active listings.
           </p>
         </div>
         <div className="flex items-center gap-2 text-sm shrink-0">
           <Badge variant="default" className="gap-1.5 text-xs">
             <Star className="w-3 h-3" />
-            {featuredCount} featured
+            {featuredCount} Spotlight
           </Badge>
           <span className="text-muted-foreground">of {listings.length} total</span>
         </div>
@@ -306,11 +306,11 @@ export default function AdminFeaturedListings() {
       {!isLoading && featuredCount > 0 && (
         <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-4 py-2.5 text-sm">
           <TrendingUp className="w-4 h-4 text-primary shrink-0" />
-          <span className="text-muted-foreground">Total featured impressions:</span>
+          <span className="text-muted-foreground">Total Spotlight impressions:</span>
           <span className="font-semibold tabular-nums">
             {totalFeaturedImpressions.toLocaleString("en-US")}
           </span>
-          <span className="text-muted-foreground">views across {featuredCount} featured listing{featuredCount !== 1 ? "s" : ""}</span>
+          <span className="text-muted-foreground">views across {featuredCount} Spotlight listing{featuredCount !== 1 ? "s" : ""}</span>
         </div>
       )}
 
@@ -350,8 +350,8 @@ export default function AdminFeaturedListings() {
                 <th className="text-center px-4 py-3 font-medium text-muted-foreground hidden xl:table-cell">Since</th>
                 <th className="text-center px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Perf.</th>
                 <th className="text-center px-4 py-3 font-medium text-muted-foreground hidden xl:table-cell">Expires</th>
-                <th className="text-center px-4 py-3 font-medium text-muted-foreground">Featured</th>
-                <th className="text-center px-4 py-3 font-medium text-muted-foreground">Priority</th>
+                <th className="text-center px-4 py-3 font-medium text-muted-foreground">Spotlight</th>
+                <th className="text-center px-4 py-3 font-medium text-muted-foreground">Priority Rank</th>
                 <th className="text-center px-4 py-3 font-medium text-muted-foreground w-10"></th>
               </tr>
             </thead>
@@ -419,7 +419,7 @@ export default function AdminFeaturedListings() {
                       {listing.views_count.toLocaleString("en-US")}
                     </td>
 
-                    {/* Featured since (approximated via updated_at) */}
+                    {/* Spotlight since (approximated via updated_at) */}
                     <td className="px-4 py-3 text-center hidden xl:table-cell text-muted-foreground text-xs whitespace-nowrap">
                       {listing.is_featured ? formatDate(listing.featured_since) : "—"}
                     </td>
@@ -448,18 +448,18 @@ export default function AdminFeaturedListings() {
                             ? "border-destructive text-destructive"
                             : "border-border text-foreground"
                         }`}
-                        aria-label={`Featured until for ${listing.title}`}
-                        title={listing.featured_until ? `Expires ${formatDate(listing.featured_until)}` : "No expiry set"}
+                        aria-label={`Spotlight until for ${listing.title}`}
+                        title={listing.featured_until ? `Expires ${formatDate(listing.featured_until)}` : "No Spotlight expiry set"}
                       />
                     </td>
 
-                    {/* Featured toggle */}
+                    {/* Spotlight toggle */}
                     <td className="px-4 py-3 text-center">
                       <Switch
                         checked={listing.is_featured}
                         disabled={isTogglingThis}
                         onCheckedChange={() => handleToggleFeatured(listing)}
-                        aria-label={`Toggle featured for ${listing.title}`}
+                        aria-label={`Toggle Spotlight for ${listing.title}`}
                       />
                     </td>
 
@@ -484,7 +484,7 @@ export default function AdminFeaturedListings() {
                           }
                         }}
                         className="w-16 h-8 text-center rounded-md border border-border bg-background text-sm outline-none focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                        aria-label={`Priority for ${listing.title}`}
+                        aria-label={`Priority Rank for ${listing.title}`}
                       />
                     </td>
 

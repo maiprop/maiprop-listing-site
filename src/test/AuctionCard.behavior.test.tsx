@@ -48,7 +48,7 @@ describe("AuctionCard behavior", () => {
     });
   });
 
-  it("renders featured auction metadata, universal specs, saved state, and external eAuction link", async () => {
+  it("renders spotlight auction metadata, universal specs, saved state, and external eAuction link", async () => {
     const { AuctionCard } = await import("@/components/auctions/AuctionCard");
     const onToggleFav = vi.fn();
 
@@ -56,7 +56,7 @@ describe("AuctionCard behavior", () => {
       <AuctionCard a={auction()} favoritedIds={new Set(["a1"])} onToggleFav={onToggleFav} />,
     );
 
-    expect(screen.getByText("Featured")).toBeInTheDocument();
+    expect(screen.getByText("Spotlight")).toBeInTheDocument();
     expect(screen.getAllByText(/Apartment/).length).toBeGreaterThan(0);
     expect(screen.getByText(/^76\b/)).toBeInTheDocument();
     expect(screen.getByText("Built 1980")).toBeInTheDocument();

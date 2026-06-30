@@ -336,7 +336,11 @@ export default function BillingTab() { // skipcq: JS-0067
             </div>
             <div className="bg-secondary rounded-xl p-3">
               <p className="text-xs text-muted-foreground mb-0.5">
-                {sub.cancel_at_period_end ? "Cancels on" : "Renews on"}
+                {sub.status === "trialing"
+                  ? "Trial ends on"
+                  : sub.cancel_at_period_end
+                    ? "Cancels on"
+                    : "Renews on"}
               </p>
               <p className="font-semibold flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5 text-muted-foreground" />

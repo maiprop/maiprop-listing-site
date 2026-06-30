@@ -20,7 +20,7 @@ export function FeaturedPropertiesSection({ listings, isLoading, isError }: Prop
     <section className="py-10 sm:py-16 bg-background">
       <div ref={ref} className="container">
         <div className={`flex items-center justify-between mb-6 sm:mb-8 reveal ${inView ? "in-view" : ""}`}>
-          <h2 className="font-display text-xl sm:text-2xl font-bold">Featured Properties</h2>
+          <h2 className="font-display text-xl sm:text-2xl font-bold">Spotlight Properties</h2>
           <Button variant="outline" size="sm" className="border-border text-xs" asChild>
             <Link to="/listings">View All</Link>
           </Button>
@@ -29,7 +29,7 @@ export function FeaturedPropertiesSection({ listings, isLoading, isError }: Prop
           {isLoading
             ? Array.from({ length: 4 }).map((_, i) => <PropertyCardSkeleton key={i} />)
             : isError
-            ? <p className="col-span-4 py-8 text-center text-sm text-muted-foreground">Could not load featured listings.</p>
+            ? <p className="col-span-4 py-8 text-center text-sm text-muted-foreground">Could not load Spotlight listings.</p>
             : visibleListings.map((l, index) => {
                 const imgs = homepageListingImages(l);
                 const isProjectNewBuild = l.listing_type === "new_build" && Boolean(l.project_id);

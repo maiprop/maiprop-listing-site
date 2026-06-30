@@ -167,10 +167,14 @@ describe("BillingTab add-on checkout", () => {
   it("shows seller-relevant add-ons and starts Stripe checkout only for fulfilled report add-ons", async () => {
     renderWithProviders(<BillingTab />);
 
-    const featuredCard = (await screen.findByText("Featured Listing")).closest("div");
-    expect(featuredCard).not.toBeNull();
-    expect(within(featuredCard as HTMLElement).getByRole("link", { name: /Contact team/i }))
+    const spotlightCard = (await screen.findByText("Spotlight Listing")).closest("div");
+    expect(spotlightCard).not.toBeNull();
+    expect(within(spotlightCard as HTMLElement).getByText("Badge + featured sections. Visual promotion only."))
+      .toBeInTheDocument();
+    expect(within(spotlightCard as HTMLElement).getByRole("link", { name: /Contact team/i }))
       .toHaveAttribute("href", expect.stringContaining("mailto:support@maiprop.co"));
+    expect(screen.getByText("Priority Rank")).toBeInTheDocument();
+    expect(screen.getByText("Maximum Exposure")).toBeInTheDocument();
 
     const propertyReportCard = (await screen.findByText("Property Report")).closest("div");
     expect(propertyReportCard).not.toBeNull();
@@ -216,10 +220,47 @@ describe("BillingTab add-on checkout", () => {
     });
   });
 
+  it("labels active trials by their trial end date in billing", async () => {
+    mocks.supabase?.functions.invoke.mockImplementation((fn: string) => {
+      if (fn === "get-invoices") {
+        return Promise.resolve({
+          data: {
+            invoices: [],
+            billing_configured: true,
+            customer_found: true,
+            portal_eligible: true,
+            subscription: {
+              id: "sub_trialing",
+              status: "trialing",
+              current_period_end: "2026-07-07T06:04:38.000Z",
+              cancel_at_period_end: false,
+              plan_name: "Pro Plan",
+              amount: 29,
+              currency: "EUR",
+              interval: "month",
+              plan_key: "pro",
+            },
+          },
+          error: null,
+        });
+      }
+      if (fn === "ai-quota-status") {
+        return Promise.resolve({ data: { quotas: {} }, error: null });
+      }
+      return Promise.resolve({ data: null, error: null });
+    });
+
+    renderWithProviders(<BillingTab />);
+
+    expect(await screen.findByText("Trial ends on")).toBeInTheDocument();
+    expect(screen.getByText(/2026/)).toBeInTheDocument();
+  });
+
   it("shows unified AI/report consumption and wires usage add-ons to Stripe", async () => {
     renderWithProviders(<BillingTab />);
 
     const panel = await screen.findByRole("region", { name: /monthly ai and report usage/i });
+    expect(within(panel).getByText("AI, reports & promotions")).toBeInTheDocument();
     expect(within(panel).getByText("AI valuations")).toBeInTheDocument();
     expect(within(panel).getByText("48 / 50")).toBeInTheDocument();
     expect(within(panel).getByText("Neighbourhood reports")).toBeInTheDocument();
@@ -229,7 +270,7 @@ describe("BillingTab add-on checkout", () => {
     expect(within(panel).getByText("Nearby places / POIs")).toBeInTheDocument();
     expect(within(panel).getByText("Property reports")).toBeInTheDocument();
     await waitFor(() => expect(within(panel).getByText("2 / 4")).toBeInTheDocument());
-    expect(within(panel).getByText("Priority ads / boosts")).toBeInTheDocument();
+    expect(within(panel).getByText("Listing promotions")).toBeInTheDocument();
     await waitFor(() => expect(within(panel).getByText("10 / 10")).toBeInTheDocument());
     await waitFor(() => {
       const quotaCalls = mocks.supabase?.functions.invoke.mock.calls.filter(

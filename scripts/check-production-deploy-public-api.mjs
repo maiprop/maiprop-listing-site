@@ -2,6 +2,8 @@ import { findPublicApiFixtureMarker } from "./public-api-fixture-guard.mjs";
 
 const FETCH_TIMEOUT_MS = 30_000;
 const USER_AGENT = "maiprop-production-deploy-check/1.0";
+const SUPABASE_TRANSIENT_RETRIES = 2;
+const SUPABASE_TRANSIENT_RETRY_DELAY_MS = 250;
 
 const publicApiPaths = [
   "/api/public/listings?limit=1",
@@ -35,6 +37,17 @@ function isAllowedSupabaseUpstreamOutage(res, body) {
     body.error === "Supabase upstream unavailable";
 }
 
+function isSupabaseUpstreamUnavailable(res, body) {
+  return res.status === 503 &&
+    body &&
+    typeof body === "object" &&
+    body.error === "Supabase upstream unavailable";
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 const defaultFetchText = async (url, options = {}) => {
   const { allowHttpError: _allowHttpError, headers, ...requestOptions } = options;
   const res = await fetch(url, {
@@ -64,54 +77,60 @@ function extractPublicListingIds(body) {
 
 async function validateJsonApiPath(baseUrl, path, { assertOk, fetchText }) {
   const apiUrl = new URL(path, baseUrl).toString();
-  const { res, text } = await fetchText(apiUrl, {
-    headers: { accept: "application/json" },
-    allowHttpError: true,
-  });
-  const contentType = res.headers.get("content-type") ?? "";
-  const htmlFallback =
-    /text\/html/i.test(contentType) &&
-    /<html|<div id=["']root["']|cloudflare access|private preview/i.test(text);
-  if (!/application\/json/i.test(contentType)) {
-    const message = htmlFallback
-      ? `${apiUrl} returned HTML instead of JSON; the Cloudflare Pages Function was not invoked or failed open to the SPA fallback`
-      : `${apiUrl} returned ${contentType || "<missing>"} instead of JSON`;
-    if (htmlFallback && process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN === "true") {
-      process.stderr.write(`[warn] ${message}; continuing because app-side public data fallbacks are enabled\n`);
-      return null;
+  for (let attempt = 0; ; attempt += 1) {
+    const { res, text } = await fetchText(apiUrl, {
+      headers: { accept: "application/json" },
+      allowHttpError: true,
+    });
+    const contentType = res.headers.get("content-type") ?? "";
+    const htmlFallback =
+      /text\/html/i.test(contentType) &&
+      /<html|<div id=["']root["']|cloudflare access|private preview/i.test(text);
+    if (!/application\/json/i.test(contentType)) {
+      const message = htmlFallback
+        ? `${apiUrl} returned HTML instead of JSON; the Cloudflare Pages Function was not invoked or failed open to the SPA fallback`
+        : `${apiUrl} returned ${contentType || "<missing>"} instead of JSON`;
+      if (htmlFallback && process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN === "true") {
+        process.stderr.write(`[warn] ${message}; continuing because app-side public data fallbacks are enabled\n`);
+        return null;
+      }
+      assertOk(false, message);
     }
-    assertOk(false, message);
-  }
 
-  let body;
-  try {
-    body = JSON.parse(text);
-  } catch (error) {
-    throw new Error(`${apiUrl} returned invalid JSON: ${error.message}`);
-  }
-
-  if (!res.ok) {
-    if (isAllowedSupabaseUpstreamOutage(res, body)) {
-      process.stderr.write(
-        `[warn] ${apiUrl} returned Supabase upstream unavailable; continuing because app-side public data fallbacks are enabled\n`,
-      );
-      return null;
+    let body;
+    try {
+      body = JSON.parse(text);
+    } catch (error) {
+      throw new Error(`${apiUrl} returned invalid JSON: ${error.message}`);
     }
-    assertOk(false, `${apiUrl} returned HTTP ${res.status}: ${text.slice(0, 160)}`);
+
+    if (!res.ok) {
+      if (isSupabaseUpstreamUnavailable(res, body) && attempt < SUPABASE_TRANSIENT_RETRIES) {
+        await sleep(SUPABASE_TRANSIENT_RETRY_DELAY_MS);
+        continue;
+      }
+      if (isAllowedSupabaseUpstreamOutage(res, body)) {
+        process.stderr.write(
+          `[warn] ${apiUrl} returned Supabase upstream unavailable; continuing because app-side public data fallbacks are enabled\n`,
+        );
+        return null;
+      }
+      assertOk(false, `${apiUrl} returned HTTP ${res.status}: ${text.slice(0, 160)}`);
+    }
+
+    assertOk(
+      !(body && typeof body === "object" && "error" in body),
+      `${apiUrl} returned API error: ${JSON.stringify(body).slice(0, 240)}`,
+    );
+
+    const fixtureMarker = findPublicApiFixtureMarker(body);
+    assertOk(
+      fixtureMarker === null,
+      `${apiUrl} returned production-blocked fixture content (${fixtureMarker?.marker}) at ${fixtureMarker?.path}: ${fixtureMarker?.value}`,
+    );
+
+    return body;
   }
-
-  assertOk(
-    !(body && typeof body === "object" && "error" in body),
-    `${apiUrl} returned API error: ${JSON.stringify(body).slice(0, 240)}`,
-  );
-
-  const fixtureMarker = findPublicApiFixtureMarker(body);
-  assertOk(
-    fixtureMarker === null,
-    `${apiUrl} returned production-blocked fixture content (${fixtureMarker?.marker}) at ${fixtureMarker?.path}: ${fixtureMarker?.value}`,
-  );
-
-  return body;
 }
 
 export async function validatePublicApiEndpoints(

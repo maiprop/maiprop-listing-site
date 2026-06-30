@@ -12,6 +12,7 @@ const {
   addonCreditsGranted,
   addonPurchaseStatusForSubscription,
   findProvisionedReplacementSubscription,
+  mapSubscriptionTrialStatus,
 } = await import("./index.ts");
 
 Deno.test("OPTIONS preflight returns 200", async () => {
@@ -141,6 +142,83 @@ Deno.test("add-on subscription lifecycle maps to add-on ledger status without pr
   );
   assertEquals(
     source.indexOf("syncAddonSubscriptionLifecycle", clearStart) > clearStart,
+    true,
+  );
+});
+
+Deno.test("subscription sync stamps company invoice settings before fulfillment", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./index.ts", import.meta.url),
+  );
+  const syncStart = source.indexOf("async function syncSubscription");
+  const companySettingsIndex = source.indexOf(
+    "ensureSubscriptionCompanyInvoiceSettings",
+    syncStart,
+  );
+  const addonLifecycleIndex = source.indexOf(
+    "syncAddonSubscriptionLifecycle",
+    syncStart,
+  );
+  const customerRetrieveIndex = source.indexOf(
+    "stripe.customers.retrieve",
+    syncStart,
+  );
+
+  assertEquals(syncStart >= 0, true);
+  assertEquals(companySettingsIndex > syncStart, true);
+  assertEquals(companySettingsIndex < addonLifecycleIndex, true);
+  assertEquals(companySettingsIndex < customerRetrieveIndex, true);
+});
+
+Deno.test("subscription trial status mapping covers post-trial lifecycle", () => {
+  assertEquals(mapSubscriptionTrialStatus("trialing"), "trialing");
+  assertEquals(mapSubscriptionTrialStatus("active"), "active");
+  assertEquals(mapSubscriptionTrialStatus("past_due"), "past_due");
+  assertEquals(mapSubscriptionTrialStatus("canceled"), "canceled");
+  assertEquals(mapSubscriptionTrialStatus("unpaid"), "expired");
+  assertEquals(mapSubscriptionTrialStatus("paused"), "expired");
+  assertEquals(mapSubscriptionTrialStatus("incomplete_expired"), "expired");
+  assertEquals(mapSubscriptionTrialStatus("incomplete"), "checkout_created");
+});
+
+Deno.test("webhook post-trial events resync subscriptions and lapse terminal states", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./index.ts", import.meta.url),
+  );
+  const updatedCase = source.indexOf('case "customer.subscription.updated"');
+  const pausedCase = source.indexOf('case "customer.subscription.paused"');
+  const deletedCase = source.indexOf('case "customer.subscription.deleted"');
+  const paymentSucceededCase = source.indexOf('case "invoice.payment_succeeded"');
+  const paymentFailedCase = source.indexOf('case "invoice.payment_failed"');
+  const syncStart = source.indexOf("async function syncSubscription");
+  const clearStart = source.indexOf("async function clearSubscription");
+
+  assertEquals(updatedCase >= 0, true);
+  assertEquals(pausedCase > updatedCase, true);
+  assertEquals(deletedCase > updatedCase, true);
+  assertEquals(paymentSucceededCase > updatedCase, true);
+  assertEquals(paymentFailedCase > updatedCase, true);
+  assertEquals(
+    source.indexOf("await syncSubscriptionTrialStatus(supabase, sub)", updatedCase) >
+      updatedCase,
+    true,
+  );
+  assertEquals(
+    source.indexOf("await syncInvoiceSubscription(", paymentSucceededCase) >
+      paymentSucceededCase,
+    true,
+  );
+  assertEquals(
+    source.indexOf("await syncInvoiceSubscription(", paymentFailedCase) >
+      paymentFailedCase,
+    true,
+  );
+  assertEquals(
+    source.indexOf("applySubscriptionLapseControls", syncStart) > syncStart,
+    true,
+  );
+  assertEquals(
+    source.indexOf("applySubscriptionLapseControls", clearStart) > clearStart,
     true,
   );
 });

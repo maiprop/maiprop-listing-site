@@ -175,7 +175,7 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
                   <p className="font-semibold text-sm truncate">{l.title}</p>
                   {l.is_featured && (
                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold border border-brand-gold/30">
-                      Featured
+                      Spotlight
                     </span>
                   )}
                   {(l.tags || []).includes("exclusive") && (
@@ -226,8 +226,8 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
                       )}
                       title={
                         l.is_featured
-                          ? "Featured (click to remove)"
-                          : "Add featured badge"
+                          ? "Spotlight (click to remove)"
+                          : "Add Spotlight badge"
                       }
                     >
                       <Crown className="w-4 h-4" />

@@ -27,6 +27,11 @@ const addonServiceRoleGrantMigration = readFileSync(
   "utf8",
 );
 
+const addonBrowserPrivilegeLockMigration = readFileSync(
+  join(process.cwd(), "supabase/migrations/20260630072117_restrict_addon_purchases_browser_privileges.sql"),
+  "utf8",
+);
+
 const aiCreditStatusRestoreMigration = readFileSync(
   join(process.cwd(), "supabase/migrations/20260707159000_fix_staging_advisor_drift.sql"),
   "utf8",
@@ -76,6 +81,12 @@ describe("stripe webhook add-on and investor custom-payment fulfillment", () => 
     expect(migration).toContain("idx_investor_subscriptions_stripe_session_id");
     expect(addonServiceRoleGrantMigration).toContain(
       "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.addon_purchases TO service_role",
+    );
+    expect(addonBrowserPrivilegeLockMigration).toContain(
+      "REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER",
+    );
+    expect(addonBrowserPrivilegeLockMigration).toContain(
+      "addon_purchases must not grant browser write or schema-control privileges",
     );
   });
 

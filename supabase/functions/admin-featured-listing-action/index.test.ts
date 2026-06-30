@@ -135,7 +135,7 @@ const authedJson = (body: unknown) =>
 
 const validListingId = () => crypto.randomUUID();
 
-Deno.test("anonymous featured listing updates are rejected before DB writes", async () => {
+Deno.test("anonymous Spotlight listing updates are rejected before DB writes", async () => {
   resetScenario();
 
   const res = await handler(req("POST", {
@@ -153,7 +153,7 @@ Deno.test("anonymous featured listing updates are rejected before DB writes", as
   );
 });
 
-Deno.test("non-admin callers are forbidden before featured listing updates", async () => {
+Deno.test("non-admin callers are forbidden before Spotlight listing updates", async () => {
   resetScenario({ profile: { role: "agent", is_platform_admin: false } });
 
   const res = await handler(authedJson({
@@ -171,7 +171,7 @@ Deno.test("non-admin callers are forbidden before featured listing updates", asy
   );
 });
 
-Deno.test("platform-admin flag without admin role is not enough for featured listing updates", async () => {
+Deno.test("platform-admin flag without admin role is not enough for Spotlight listing updates", async () => {
   resetScenario({ profile: { role: "agent", is_platform_admin: true } });
 
   const res = await handler(authedJson({
@@ -189,7 +189,7 @@ Deno.test("platform-admin flag without admin role is not enough for featured lis
   );
 });
 
-Deno.test("admin callers update only allowed featured listing fields", async () => {
+Deno.test("admin callers update only allowed Spotlight listing fields", async () => {
   const id = validListingId();
   resetScenario({ profile: { role: "admin", is_platform_admin: false } });
 

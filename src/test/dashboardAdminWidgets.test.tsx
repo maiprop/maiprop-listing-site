@@ -205,7 +205,7 @@ describe("AdminDashboard tab routing", () => {
   it("opens the requested admin section from the tab query string", async () => {
     renderAdminRoute("/admin?tab=featured");
 
-    expect(await screen.findByText(/Featured Listings/i)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /Listing Promotions/i })).toBeInTheDocument();
   });
 
   it("routes platform contact submissions to the admin inbox tab", async () => {
@@ -294,15 +294,15 @@ describe("AdminFeaturedListings", () => {
     expect(detailLinks[2]).toHaveAttribute("href", "/open-house/listing-3");
     expect(detailLinks[3]).toHaveAttribute("href", "/new-build/listing-4");
 
-    fireEvent.click(screen.getByRole("switch", { name: /Toggle featured for Sea View Flat/i }));
-    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Listing removed from featured"));
+    fireEvent.click(screen.getByRole("switch", { name: /Toggle Spotlight for Sea View Flat/i }));
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Spotlight removed from listing"));
 
-    const priority = screen.getByLabelText(/Priority for Sea View Flat/i);
+    const priority = screen.getByLabelText(/Priority Rank for Sea View Flat/i);
     fireEvent.change(priority, { target: { value: "11" } });
     fireEvent.blur(priority);
-    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Priority updated to 10"));
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Priority Rank updated to 10"));
 
-    const expiry = screen.getByLabelText(/Featured until for Sea View Flat/i);
+    const expiry = screen.getByLabelText(/Spotlight until for Sea View Flat/i);
     fireEvent.change(expiry, { target: { value: "2026-06-20" } });
     await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith(expect.stringMatching(/Expires/i)));
   });
@@ -312,7 +312,7 @@ describe("AdminFeaturedListings", () => {
 
     renderWithProviders(<AdminFeaturedListings />);
 
-    const priority = await screen.findByLabelText(/Priority for Sea View Flat/i);
+    const priority = await screen.findByLabelText(/Priority Rank for Sea View Flat/i);
     fireEvent.change(priority, { target: { value: "abc" } });
     fireEvent.blur(priority);
 

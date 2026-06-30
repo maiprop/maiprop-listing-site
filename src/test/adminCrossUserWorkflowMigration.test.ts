@@ -16,7 +16,7 @@ describe("admin cross-user workflow migration", () => {
     expect(migration).toContain("status = 'expired'");
   });
 
-  it("notifies admin decisions for POF, professional verification, featured ads, and subscriptions", () => {
+  it("notifies admin decisions for POF, professional verification, listing promotions, and subscriptions", () => {
     expect(migration).toContain("private.notify_open_house_pof_status_change");
     expect(migration).toContain("trg_open_house_pof_notify");
     expect(migration).toContain("private.notify_professional_verification_change");

@@ -27,16 +27,14 @@ type AuctionCountdownBadge = ReturnType<typeof countdownBadge>;
 const AuctionTopBadges = ({
   isFeatured,
   auctionDate,
-  isGreek,
 }: {
   isFeatured: boolean;
   auctionDate?: string | null;
-  isGreek: boolean;
 }) => (
   <div className="absolute top-2 left-2 flex items-center gap-1.5 flex-wrap">
     {isFeatured && (
       <span className="inline-flex items-center gap-1 bg-gradient-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded-full">
-        <Crown className="w-2.5 h-2.5" /> {isGreek ? "Προβεβλημένο" : "Featured"}
+        <Crown className="w-2.5 h-2.5" /> Spotlight
       </span>
     )}
     {auctionDate && (
@@ -76,7 +74,6 @@ const AuctionMedia = ({
   isLogoFallback,
   propertyTypeLabel,
   badge,
-  isGreek,
 }: {
   a: AuctionCardProps["a"];
   imgSrc: string;
@@ -84,7 +81,6 @@ const AuctionMedia = ({
   isLogoFallback: boolean;
   propertyTypeLabel: string | null;
   badge: AuctionCountdownBadge;
-  isGreek: boolean;
 }) => (
   <Link to={`/auction/${a.id}`} state={{ auction: a }} className="relative h-44 bg-secondary overflow-hidden block">
     <img
@@ -103,7 +99,7 @@ const AuctionMedia = ({
       onLoad={e => switchImageToNextFallbackIfEmpty(e.currentTarget, imageChain)}
       onError={e => switchImageToNextFallback(e.currentTarget, imageChain)}
     />
-    <AuctionTopBadges isFeatured={Boolean(a.is_featured)} auctionDate={a.auction_date} isGreek={isGreek} />
+    <AuctionTopBadges isFeatured={Boolean(a.is_featured)} auctionDate={a.auction_date} />
     <AuctionPropertyTypeBadge label={propertyTypeLabel} />
     <AuctionCountdown badge={badge} />
   </Link>
@@ -325,7 +321,6 @@ const AuctionCardComponent = ({ a, favoritedIds, onToggleFav }: AuctionCardProps
         isLogoFallback={isLogoFallback}
         propertyTypeLabel={propertyTypeLabel}
         badge={badge}
-        isGreek={isGreek}
       />
 
       <div className="p-4 space-y-2 flex-1 flex flex-col">

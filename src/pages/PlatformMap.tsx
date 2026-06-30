@@ -115,8 +115,8 @@ const PRICING: Record<string, { free: string; pro: string; proPrice: string }> =
 const FLOWS: Record<string, string[]> = {
   buyer:        ["Signup", "Onboarding (__type:buyer)", "Dashboard", "Browse Listings / Auctions / Open Houses", "Save & Alert", "Book Viewing", "Contact Agent", "Upgrade to Pro"],
   seller:       ["Signup", "Onboarding (__type:seller)", "Dashboard", "Create Listing", "Manage Viewings", "Open House Hosting", "Quick Sale Submit (Pro)", "Analytics (Pro)"],
-  agent:        ["Signup", "Onboarding (__type:agent)", "Dashboard", "Manage Listings (5 free / ∞ Pro)", "CRM — Leads & Contacts (Pro)", "Analytics (Pro)", "Priority Ads (Pro)", "Professional Profile"],
-  developer:    ["Signup", "Onboarding (__type:developer)", "Dashboard", "Create New Buildings (Pro only)", "Portfolio Tracking (Pro)", "Featured Placement (Pro)", "Project Ads (Pro)"],
+  agent:        ["Signup", "Onboarding (__type:agent)", "Dashboard", "Manage Listings (5 free / ∞ Pro)", "CRM — Leads & Contacts (Pro)", "Analytics (Pro)", "Listing Promotions (Pro)", "Professional Profile"],
+  developer:    ["Signup", "Onboarding (__type:developer)", "Dashboard", "Create New Buildings (Pro only)", "Portfolio Tracking (Pro)", "Spotlight Placement (Pro)", "Project Ads (Pro)"],
   professional: ["Signup", "Onboarding (__type:professional)", "Dashboard", "Professional Directory Listing", "Receive Leads", "Booking Calendar (Pro)", "AI Service Match (Pro)", "Branded Video Room (Pro)"],
 };
 

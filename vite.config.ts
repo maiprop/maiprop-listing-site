@@ -3,6 +3,20 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 // Bundle size visualizer — run `ANALYZE=true npm run build` to generate report.html
 import { visualizer } from "rollup-plugin-visualizer";
+import { createLocalPublicApiResponse } from "./scripts/local-public-api-fixtures.mjs";
+
+type PublicApiMiddlewareReq = {
+  method?: string;
+  url?: string;
+};
+
+type PublicApiMiddlewareRes = {
+  statusCode: number;
+  setHeader(name: string, value: string): void;
+  end(body?: string): void;
+};
+
+type PublicApiMiddlewareNext = () => void;
 
 function getPublicApiProxyTarget(mode: string): string | undefined {
   const env = loadEnv(mode, process.cwd(), "");
@@ -19,6 +33,49 @@ function getPublicApiProxyTarget(mode: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+function sendLocalPublicApiResponse(
+  req: PublicApiMiddlewareReq,
+  res: PublicApiMiddlewareRes,
+  next: PublicApiMiddlewareNext,
+): void {
+  if (!req.url?.startsWith("/api/public")) {
+    next();
+    return;
+  }
+
+  const response = createLocalPublicApiResponse(
+    new URL(req.url, "http://localhost"),
+    req.method ?? "GET",
+  );
+  res.statusCode = response.status;
+  response.headers.forEach((value, name) => res.setHeader(name, value));
+
+  if ((req.method ?? "GET").toUpperCase() === "HEAD") {
+    res.end();
+    return;
+  }
+
+  response.text()
+    .then((body) => res.end(body))
+    .catch(() => {
+      res.statusCode = 500;
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.end(JSON.stringify({ error: "Local public API fixture failed" }));
+    });
+}
+
+function localPublicApiFixturesPlugin() {
+  return {
+    name: "maiprop-local-public-api-fixtures",
+    configureServer(server) {
+      server.middlewares.use(sendLocalPublicApiResponse);
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(sendLocalPublicApiResponse);
+    },
+  };
 }
 
 // https://vitejs.dev/config/
@@ -46,6 +103,7 @@ export default defineConfig(({ mode }) => {
   },
   plugins: [
     react(),
+    !publicApiProxyTarget && localPublicApiFixturesPlugin(),
     process.env.ANALYZE === "true" && visualizer({ open: true, filename: "dist/report.html", gzipSize: true }),
   ].filter(Boolean),
   resolve: {
