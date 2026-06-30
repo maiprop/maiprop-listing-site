@@ -67,9 +67,10 @@ jobs:
         with:
           deno-version: 2.7.12
 
-      - uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf # v2.1.1
-        with:
-          version: 2.104.0
+      - name: Install Supabase CLI
+        run: |
+          npm install -g supabase@2.104.0
+          supabase --version
 
       - name: Guard production deploy ref
         if: inputs.dry_run != true

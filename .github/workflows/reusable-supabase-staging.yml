@@ -289,11 +289,11 @@ jobs:
         if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: npm ci --prefer-offline --no-audit
 
-      - name: Setup Supabase CLI
+      - name: Install Supabase CLI
         if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
-        uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf # v2.1.1
-        with:
-          version: 2.104.0
+        run: |
+          npm install -g supabase@2.104.0
+          supabase --version
 
       - name: Check staging database migration secret
         if: steps.supabase_changes.outputs.db_changes == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
