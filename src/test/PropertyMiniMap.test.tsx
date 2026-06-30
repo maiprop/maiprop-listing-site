@@ -34,8 +34,7 @@ interface MapMockProps {
   onLoad?: () => void;
 }
 
-vi.mock("react-map-gl", async () => {
-  const React = await vi.importActual<typeof import("react")>("react");
+vi.mock("react-map-gl", () => {
   const Map = React.forwardRef<{ getMap: () => null }, MapMockProps>(function MockMap({ children, onLoad, ...rest }, ref) {
     React.useImperativeHandle(ref, () => ({ getMap: () => null }), []);
     React.useEffect(() => {
