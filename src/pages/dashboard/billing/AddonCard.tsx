@@ -8,12 +8,14 @@ export const AddonCard = ({
   accent,
   loading,
   checkoutAvailable,
+  contactHref,
   onPurchase,
 }: {
   item: AddonItem;
   accent: string;
   loading: boolean;
   checkoutAvailable: boolean;
+  contactHref: string;
   onPurchase: () => void;
 }) => {
   const accentClasses = {
@@ -70,23 +72,30 @@ export const AddonCard = ({
       <p className="text-xs text-muted-foreground leading-relaxed">
         {item.desc}
       </p>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        className="mt-auto gap-1.5"
-        onClick={onPurchase}
-        disabled={loading}
-      >
-        {loading ? (
-          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-        ) : checkoutAvailable ? (
-          <CreditCard className="w-3.5 h-3.5" />
-        ) : (
-          <Mail className="w-3.5 h-3.5" />
-        )}
-        {checkoutAvailable ? "Buy add-on" : "Contact team"}
-      </Button>
+      {checkoutAvailable ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="mt-auto gap-1.5"
+          onClick={onPurchase}
+          disabled={loading}
+        >
+          {loading ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <CreditCard className="w-3.5 h-3.5" />
+          )}
+          Buy add-on
+        </Button>
+      ) : (
+        <Button asChild size="sm" variant="outline" className="mt-auto gap-1.5">
+          <a href={contactHref}>
+            <Mail className="w-3.5 h-3.5" />
+            Contact team
+          </a>
+        </Button>
+      )}
     </div>
   );
 };

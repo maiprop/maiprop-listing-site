@@ -41,9 +41,9 @@
 | Key | Label | Price | Unit | Description |
 |-----|-------|-------|------|-------------|
 | `extra_listing` | Extra Listing Slot | €12 | per_listing | Additional listing beyond quota |
-| `featured_listing` | Featured Listing | €39 | per_listing | Homepage carousel + spotlight (30 days) |
-| `priority_placement` | Priority Placement | €59 | per_listing | Pinned above non-priority results (30 days) |
-| `featured_priority_bundle` | Featured + Priority Bundle | €79 | per_listing | Both boosts combined |
+| `featured_listing` | Spotlight Listing | €39 | per_listing | Badge and featured-section exposure (30 days) |
+| `priority_placement` | Priority Rank | €59 | per_listing | Higher position above non-priority results (30 days) |
+| `featured_priority_bundle` | Maximum Exposure | €79 | per_listing | Spotlight Listing + Priority Rank |
 
 ### AI Reports (Valuation Reports)
 | Key | Label | Price | Unit | Savings |
@@ -76,9 +76,9 @@
 | `agency_branded_profile` | Agency-branded profile | €49 | monthly |
 | `agency_dedicated_manager` | Dedicated account manager | €199 | monthly |
 | `agency_white_label` | White-label domain | €149 | monthly |
-| `extra_priority_ad` | Extra priority ad | €8 | per_ad |
-| `featured_professional` | Featured professional | €59 | monthly |
-| `extra_listing` / `featured_listing` / `priority_placement` / `featured_priority_bundle` | Listing boosts | €12–€79 | varies |
+| `extra_priority_ad` | Extra Priority Rank Ad | €8 | per_ad |
+| `featured_professional` | Spotlight Professional | €59 | monthly |
+| `extra_listing` / `featured_listing` / `priority_placement` / `featured_priority_bundle` | Listing promotions | €12–€79 | varies |
 
 ---
 
@@ -118,8 +118,8 @@
 ### Professional Add-ons
 | Key | Label | Price | Unit |
 |-----|-------|-------|------|
-| `featured_professional` | Featured Professional | €59 | monthly |
-| `extra_priority_ad` | Extra Priority Ad | €8 | per_ad |
+| `featured_professional` | Spotlight Professional | €59 | monthly |
+| `extra_priority_ad` | Extra Priority Rank Ad | €8 | per_ad |
 | `professional_api_access` | Professional API access | €59 | monthly |
 | `professional_referral_network` | Referral network slot | €39 | monthly |
 | `professional_extra_seat` | Extra client seat | €19 | monthly |
@@ -180,11 +180,11 @@ Cross-cutting products available to all B2B users:
 | Feature | Price | Status |
 |---------|-------|--------|
 | Extra listing slot | €12 | 🔧 Implemented |
-| Featured listing | €39 | 🔧 Implemented |
-| Priority placement | €59 | 🔧 Implemented |
-| Featured + Priority bundle | €79 | 🔧 Implemented |
-| Featured professional | €59 | 🔧 Implemented |
-| Extra priority ad | €8 | 🔧 Implemented |
+| Spotlight Listing | €39 | 🔧 Implemented |
+| Priority Rank | €59 | 🔧 Implemented |
+| Maximum Exposure bundle | €79 | 🔧 Implemented |
+| Spotlight Professional | €59 | 🔧 Implemented |
+| Extra Priority Rank Ad | €8 | 🔧 Implemented |
 
 ---
 
@@ -196,8 +196,8 @@ Cross-cutting products available to all B2B users:
 | Active Seller (Pro) | €29 | 2× extra (€24) | Bundle (€149) | - | **€53 + reports** |
 | Solo Agent | €149 | 5× priority (€40) | - | - | **€189** |
 | Small Agency (3 seats) | €249 | 10× priority (€80) | - | MI (€199) | **€528** |
-| Developer | €129 | Featured (€39×N) | - | - | **€129+** |
-| Professional | €69 | Featured (€59) | - | - | **€128** |
+| Developer | €129 | Spotlight (€39×N) | - | - | **€129+** |
+| Professional | €69 | Spotlight (€59) | - | - | **€128** |
 | Private Investor | €49 | - | Included | - | **€49** |
 | Institutional | €199 | - | Included | AVM (€299) | **€498** |
 | Full B2B Enterprise | €749 | Unlimited | Included | All (€647) | **€1,396** |

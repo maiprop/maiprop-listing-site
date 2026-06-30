@@ -105,7 +105,7 @@ export function DashboardPlanCard({ audience, isPro, usage, className }: Props) 
       )}
 
       {audience === "developer" && isPro && (
-        <p className="text-xs text-muted-foreground mt-2">Unlimited listings, project showcases & featured placement.</p>
+        <p className="text-xs text-muted-foreground mt-2">Unlimited listings, project showcases, Spotlight and Priority Rank.</p>
       )}
     </div>
   );

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   findPublicApiFixtureMarker,
   PUBLIC_API_FIXTURE_MARKERS,
@@ -165,6 +165,7 @@ describe("production deploy public API fixture guard", () => {
   it("can tolerate Cloudflare Pages fail-open HTML when app fallbacks are explicitly enabled", async () => {
     const { validatePublicApiEndpoints } = await import("./check-production-deploy-public-api.mjs");
     const previous = process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN;
+    const stderrWrite = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN = "true";
 
     try {
@@ -177,6 +178,7 @@ describe("production deploy public API fixture guard", () => {
         }),
       })).resolves.toBeUndefined();
     } finally {
+      stderrWrite.mockRestore();
       if (previous === undefined) delete process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN;
       else process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN = previous;
     }
@@ -202,9 +204,34 @@ describe("production deploy public API fixture guard", () => {
     }
   });
 
+  it("retries transient Supabase upstream outages before failing the deploy check", async () => {
+    const { validatePublicApiEndpoints } = await import("./check-production-deploy-public-api.mjs");
+    const calls = [];
+
+    await expect(validatePublicApiEndpoints("https://portal.maiprop.co", {
+      fetchText: async (url) => {
+        calls.push(url);
+        if (calls.length === 1) {
+          return {
+            res: Response.json({ error: "Supabase upstream unavailable" }, { status: 503 }),
+            text: JSON.stringify({ error: "Supabase upstream unavailable" }),
+          };
+        }
+        return {
+          res: Response.json([]),
+          text: "[]",
+        };
+      },
+    })).resolves.toBeUndefined();
+
+    expect(calls[0]).toBe("https://portal.maiprop.co/api/public/listings?limit=1");
+    expect(calls[1]).toBe("https://portal.maiprop.co/api/public/listings?limit=1");
+  });
+
   it("can tolerate explicit Supabase upstream outages when production deploy fallbacks are enabled", async () => {
     const { validatePublicApiEndpoints } = await import("./check-production-deploy-public-api.mjs");
     const previous = process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN;
+    const stderrWrite = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN = "true";
 
     try {
@@ -215,6 +242,7 @@ describe("production deploy public API fixture guard", () => {
         }),
       })).resolves.toBeUndefined();
     } finally {
+      stderrWrite.mockRestore();
       if (previous === undefined) delete process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN;
       else process.env.PRODUCTION_DEPLOY_PUBLIC_API_ALLOW_FAIL_OPEN = previous;
     }

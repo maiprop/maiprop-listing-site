@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
@@ -68,7 +68,7 @@ const PARTICIPANT_PRO: PlanFeature[] = [
   { label: "Buyer/Seller viewings",      icon: MessageSquare,free: "Buyer: 1/month", paid: "Buyers: 10/month; sellers: unlimited" },
   { label: "Sellers: up to 5 listings", icon: Layers,        free: "2 max",     paid: "5 max" },
   { label: "AI listing description",     icon: Sparkles,     free: false,        paid: true },
-  { label: "Seller listing boost",       icon: Crown,        free: false,        paid: "1 included · extra boosts from €39" },
+  { label: "Seller listing promotions",  icon: Crown,        free: false,        paid: "1 Spotlight included · extras from €39" },
   { label: "Listing performance analytics", icon: BarChart2, free: false,        paid: true },
   { label: "Priority matching",          icon: Star,         free: false,        paid: true },
   { label: "Full professionals directory", icon: Users,      free: "5 per cat.", paid: "Unlimited" },
@@ -88,8 +88,8 @@ const AGENT_PRO: PlanFeature[] = [
   { label: "Listing performance analytics", icon: BarChart2, free: "—",         paid: "Per-listing" },
   { label: "Auction alerts (unlimited)", icon: Gavel,        free: "—",         paid: "Unlimited" },
   { label: "Private owner listing alerts", icon: Bell,       free: false,        paid: true },
-  { label: "Priority ads",               icon: Star,         free: false,        paid: "10 included · extra priority €59/30 days" },
-  { label: "Featured directory placement", icon: Crown,      free: "Basic",      paid: "Advanced" },
+  { label: "Priority Rank ads",          icon: Star,         free: false,        paid: "10 included · extra Priority Rank €59/30 days" },
+  { label: "Spotlight directory placement", icon: Crown,      free: "Basic",      paid: "Advanced" },
   { label: "Up to 10 viewings/month",     icon: MessageSquare,free: "3/month",  paid: "10/month" },
   { label: "Open House full management", icon: Eye,          free: "—",         paid: "Full analytics & bidding" },
   { label: "AI Valuations & Reports",    icon: FileText,     free: false,        paid: "50/month core AI · 3 property reports/month" },
@@ -100,7 +100,7 @@ const DEVELOPER_PRO: PlanFeature[] = [
   { label: "New Building showcase pages", icon: Building2,    free: false,        paid: true },
   { label: "Project ad and unit management", icon: Eye,      free: false,        paid: true },
   { label: "Construction timeline & floor plans", icon: FileText, free: false,  paid: true },
-  { label: "Priority in New Buildings section", icon: Star,     free: false,        paid: true },
+  { label: "Priority Rank in New Buildings", icon: Star,     free: false,        paid: true },
   { label: "AI listing & description tools", icon: Sparkles, free: false,        paid: true },
   { label: "Project analytics dashboard", icon: BarChart2,   free: false,        paid: true },
   { label: "AI Neighbourhood Reports",   icon: Globe,        free: false,        paid: "3/month included" },
@@ -212,6 +212,7 @@ const PRICING_EL: Record<string, string> = {
   "Checkout cancelled — no charge was made.": "Το checkout ακυρώθηκε — δεν έγινε καμία χρέωση.",
   "Checkout failed": "Το checkout απέτυχε",
   "Could not start checkout": "Δεν ήταν δυνατή η έναρξη checkout",
+  "Switch account type first": "Αλλάξτε πρώτα τύπο λογαριασμού",
   "Failed to open billing portal": "Δεν ήταν δυνατό το άνοιγμα της πύλης χρέωσης",
   "Search, browse & list your own property": "Αναζήτηση, περιήγηση και καταχώρηση δικών σας ακινήτων",
   "AI valuations, reports, pro auction filters & up to 5 listings": "AI εκτιμήσεις, αναφορές, Pro φίλτρα πλειστηριασμών και έως 5 αγγελίες",
@@ -234,8 +235,8 @@ const PRICING_EL: Record<string, string> = {
   "Up to 10 viewings/month": "Έως 10 επισκέψεις/μήνα",
   "Sellers: up to 5 listings": "Πωλητές: έως 5 αγγελίες",
   "AI listing description": "AI περιγραφή αγγελίας",
-  "Seller listing boost": "Ενίσχυση αγγελίας πωλητή",
-  "Featured directory placement": "Προβεβλημένη θέση στον κατάλογο",
+  "Seller listing promotions": "Προωθήσεις αγγελιών πωλητή",
+  "Spotlight directory placement": "Θέση Spotlight στον κατάλογο",
   "Listing performance analytics": "Αναλυτικά απόδοσης αγγελίας",
   "Priority matching": "Προτεραιότητα σε αντιστοιχίσεις",
   "Full professionals directory": "Πλήρης κατάλογος επαγγελματιών",
@@ -253,7 +254,7 @@ const PRICING_EL: Record<string, string> = {
   "10/month": "10/μήνα",
   "2 max": "έως 2",
   "5 max": "έως 5",
-  "1 included · extra boosts from €39": "1 περιλαμβάνεται · πρόσθετες ενισχύσεις από €39",
+  "1 Spotlight included · extras from €39": "1 Spotlight περιλαμβάνεται · πρόσθετα από €39",
   "5 per cat.": "5 ανά κατηγορία",
   "Up to 5 listings & basic tools": "Έως 5 αγγελίες και βασικά εργαλεία",
   "Start Free": "Ξεκινήστε δωρεάν",
@@ -271,7 +272,7 @@ const PRICING_EL: Record<string, string> = {
   "Per-listing": "Ανά αγγελία",
   "Auction alerts (unlimited)": "Ειδοποιήσεις πλειστηριασμών απεριόριστες",
   "Private owner listing alerts": "Ειδοποιήσεις αγγελιών ιδιωτών",
-  "Priority ads": "Διαφημίσεις προτεραιότητας",
+  "Priority Rank ads": "Διαφημίσεις Priority Rank",
   "10 included · extra priority €59/30 days": "10 περιλαμβάνονται · πρόσθετη προτεραιότητα €59/30 ημέρες",
   Basic: "Βασικό",
   Advanced: "Προηγμένο",
@@ -281,13 +282,13 @@ const PRICING_EL: Record<string, string> = {
   "50/month core AI · 3 property reports/month": "50/μήνα για βασικά AI εργαλεία · 3 αναφορές ακινήτου/μήνα",
   "Developer plan required": "Απαιτείται πλάνο κατασκευαστή",
   "Developer Pro": "Pro κατασκευαστή",
-  "Unlimited projects, new building showcase, project ad management & priority placement": "Απεριόριστα έργα, προβολή νέων κατασκευών, διαχείριση αγγελιών έργου και προτεραιότητα προβολής",
+  "Unlimited projects, new building showcase, project ads, Spotlight and Priority Rank": "Απεριόριστα έργα, προβολή νέων κατασκευών, αγγελίες έργων, Spotlight και Priority Rank",
   "Get Developer Pro": "Απόκτηση Developer Pro",
   "Unlimited project listings": "Απεριόριστες αγγελίες έργων",
   "New Building showcase pages": "Σελίδες προβολής νέων κατασκευών",
   "Project ad and unit management": "Διαχείριση αγγελιών έργου και μονάδων",
   "Construction timeline & floor plans": "Χρονοδιάγραμμα κατασκευής και κατόψεις",
-  "Priority in New Buildings section": "Προτεραιότητα στην ενότητα Νέων Κατασκευών",
+  "Priority Rank in New Buildings": "Priority Rank στην ενότητα Νέων Κατασκευών",
   "AI listing & description tools": "AI εργαλεία αγγελίας και περιγραφής",
   "Project analytics dashboard": "Πίνακας αναλυτικών έργου",
   "AI Neighbourhood Reports": "AI αναφορές περιοχής",
@@ -362,7 +363,7 @@ const PLANS: Record<AudienceId, PlanDef> = {
   developer: {
     freeLabel: "—", freePrice: "—", freeDesc: "Developer plan required", freeCTA: "—", freeHref: "#",
     paidLabel: "Developer Pro", monthlyPrice: 129, annualPrice: 1290,
-    paidDesc: "Unlimited projects, new building showcase, project ad management & priority placement", paidCTA: "Get Developer Pro", paidHref: "/pricing",
+    paidDesc: "Unlimited projects, new building showcase, project ads, Spotlight and Priority Rank", paidCTA: "Get Developer Pro", paidHref: "/pricing",
     freeList: [], features: DEVELOPER_PRO,
     accent: "text-orange-600 dark:text-orange-400", accentBg: "bg-orange-500/10", accentBorder: "border-orange-500/40",
     proOnly: true,
@@ -401,7 +402,10 @@ export default function Pricing() {
   const { i18n } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tr = (value: string) => (isGreekLocale(i18n.language) ? PRICING_EL[value] ?? value : value);
+  const tr = useCallback(
+    (value: string) => (isGreekLocale(i18n.language) ? PRICING_EL[value] ?? value : value),
+    [i18n.language],
+  );
 
   // B2B / institutional data products: shown to institutional, developer, admin, or unauthenticated
   const participantType = getParticipantTypeFromProfile(profile);
@@ -425,9 +429,22 @@ export default function Pricing() {
     investor:      ROLE_PLAN_MAP.investor.planKey,
     institutional: ROLE_PLAN_MAP.institutional.planKey,
   };
+  const currentAudience = profile ? getPricingAudienceFromProfile(profile) : null;
+  const isCrossAudienceSelection = Boolean(
+    user &&
+    profile &&
+    currentAudience &&
+    activeTab !== currentAudience &&
+    !isPlatformAdmin(profile),
+  );
 
   const handleCheckout = async () => {
     if (!user) { navigate("/signup"); return; }
+    if (isCrossAudienceSelection) {
+      toast.info(`Switch your account type before buying ${PLANS[activeTab].paidLabel}.`);
+      navigate("/dashboard/settings");
+      return;
+    }
     if (PLANS[activeTab].inviteOnly) {
       navigate(activeTab === "institutional" ? "/contact" : "/investor-dashboard");
       return;
@@ -438,7 +455,7 @@ export default function Pricing() {
       const { data, error } = await supabase.functions.invoke("create-checkout", {
         body: { plan: planKey, billing_cycle: billingCycle },
       });
-      if (error || !data?.url) throw new Error(error?.message ?? data?.error ?? tr("Checkout failed"));
+      if (error || !data?.url) throw new Error(data?.error ?? error?.message ?? tr("Checkout failed"));
       window.location.href = data.url;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : tr("Could not start checkout");
@@ -541,6 +558,11 @@ export default function Pricing() {
 
   const participant = getPricingAudienceFromProfile(profile);
   const hasAudiencePro = !subLoading && isPro && activeTab === participant;
+  const paidCtaLabel = isCrossAudienceSelection
+    ? tr("Switch account type first")
+    : user
+      ? (checkoutLoading ? `${tr("Redirecting")}…` : tr(plan.paidCTA))
+      : tr("Get Started");
 
   return (
     <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
@@ -789,7 +811,7 @@ export default function Pricing() {
                     disabled={checkoutLoading}
                   >
                     {checkoutLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-                    {user ? (checkoutLoading ? `${tr("Redirecting")}…` : tr(plan.paidCTA)) : tr("Get Started")}
+                    {paidCtaLabel}
                     {!checkoutLoading && <ArrowRight className="w-4 h-4" />}
                   </Button>
                 )}

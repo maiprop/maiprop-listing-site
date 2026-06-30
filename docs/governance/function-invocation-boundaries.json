@@ -27,7 +27,7 @@
       "boundary": "edge-schema-validated",
       "owner": "domain",
       "reviewBy": "2026-07-31",
-      "rationale": "Featured listing moderation updates are routed through an authenticated Edge Function with schema validation and platform-admin authorization."
+      "rationale": "Spotlight listing moderation updates are routed through an authenticated Edge Function with schema validation and platform-admin authorization."
     },
     {
       "function": "admin-firesale-action",

@@ -26,7 +26,7 @@ Deno.test("create-investor-payment creates an admin-only bespoke investor Checko
   assertEquals(source.includes("STRIPE_DEFAULT_TAX_BEHAVIOR"), true);
   assertEquals(source.includes('tax_behavior: STRIPE_DEFAULT_TAX_BEHAVIOR'), true);
   assertEquals(source.includes('tax_code: STRIPE_SAAS_BUSINESS_TAX_CODE'), true);
-  assertEquals(source.includes('"stripe-tax-v1"'), true);
+  assertEquals(source.includes('"stripe-tax-v2-company-vat"'), true);
   assertEquals(source.includes("An investor payment link already exists for this pending subscription"), true);
   assertEquals(source.includes('.is("stripe_session_id", null)'), true);
 });

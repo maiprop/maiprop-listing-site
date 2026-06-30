@@ -81,7 +81,7 @@ The pricing page is a *promise/marketing list*, while dashboard visibility is im
 
 ### developer pro
 - Dashboard shows **Analytics**, **Leads**, **Contacts**, **Projects**, and **Portfolios** in the nav when Pro is enabled.
-- Pricing lists project showcase pages / pre-sale management / featured placement / priority, but does not explicitly enumerate Leads/Contacts/Portfolios/Analytics as standalone bullets (UI becomes visible via nav).
+- Pricing lists project showcase pages / project ad management / Spotlight / Priority Rank, but does not explicitly enumerate Leads/Contacts/Portfolios/Analytics as standalone bullets (UI becomes visible via nav).
 
 ### professional pro
 - Dashboard shows **Booking**, **Contacts**, **Analytics**, and **Viewings** in the nav when Pro is enabled.

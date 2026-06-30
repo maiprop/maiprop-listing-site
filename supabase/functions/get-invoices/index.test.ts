@@ -36,6 +36,9 @@ Deno.test("invoice response can fall back to durable billing state", async () =>
   assertStringIncludes(source, "billing_subscriptions");
   assertStringIncludes(source, "billing_customers");
   assertStringIncludes(source, "normalizeDurableBillingSubscription");
+  assertStringIncludes(source, "isValidDurableBillingSubscription");
+  assertStringIncludes(source, "trial_end");
+  assertStringIncludes(source, 'row.status === "trialing"');
   assertStringIncludes(source, '"billing_state"');
   assertStringIncludes(source, 'log.warn("customer lookup failed"');
   assertStringIncludes(source, "customer_lookup_unavailable");
@@ -51,6 +54,14 @@ Deno.test("invoice response includes VAT and Stripe Tax details", async () => {
   assertStringIncludes(source, "automatic_tax");
   assertStringIncludes(source, "customer_tax_exempt");
   assertStringIncludes(source, "taxes");
+});
+
+Deno.test("live Stripe trial subscriptions expose trial_end as the displayed period end", async () => {
+  const source = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+  assertStringIncludes(source, "const trialEnd");
+  assertStringIncludes(source, "const subscriptionDisplayEnd");
+  assertStringIncludes(source, 'subscription?.status === "trialing"');
+  assertStringIncludes(source, "trialEnd ?? currentPeriodEnd");
 });
 
 Deno.test("invoice response exposes Stripe receipt and payment evidence when available", async () => {

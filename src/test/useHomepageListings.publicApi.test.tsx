@@ -51,9 +51,9 @@ beforeEach(() => {
 });
 
 describe("homepage public API fallback behavior", () => {
-  it("falls back to constrained Supabase reads for featured listings when the public API is unavailable", async () => {
+  it("falls back to constrained Supabase reads for Spotlight listings when the public API is unavailable", async () => {
     publicApiMock.mockResolvedValue(null);
-    fromMock.mockReturnValue(makeThenableBuilder([{ id: "db-featured", title: "DB Featured", city: "Athens" }]));
+    fromMock.mockReturnValue(makeThenableBuilder([{ id: "db-featured", title: "DB Spotlight", city: "Athens" }]));
 
     const { result } = renderHookWithQuery(() => useHomepageFeaturedListings());
     await waitFor(() => expect(result.current.isSuccess).toBe(true));

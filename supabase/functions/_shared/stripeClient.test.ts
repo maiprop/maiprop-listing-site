@@ -4,11 +4,17 @@ import {
   STRIPE_API_VERSION,
   STRIPE_AI_BUSINESS_TAX_CODE,
   STRIPE_AI_PERSONAL_TAX_CODE,
+  STRIPE_COMPANY_VAT_CUSTOM_FIELD_NAME,
+  STRIPE_COMPANY_VAT_ID_DEFAULT,
   STRIPE_SAAS_BUSINESS_TAX_CODE,
   STRIPE_SAAS_PERSONAL_TAX_CODE,
+  buildCompanyVatInvoiceCustomFields,
   buildPaymentModeInvoiceCreationParams,
+  buildSubscriptionCompanyInvoiceSettingsUpdateParams,
   assertStripeKeyMatchesRuntimeMode,
   buildIdempotencyKey,
+  ensureSubscriptionCompanyInvoiceSettings,
+  getStripeCompanyVatId,
   getStripeRuntimeMode,
   resolveStripeSoftwareTaxCode,
   stripeMetadata,
@@ -25,13 +31,22 @@ function withEnv(
     if (value === undefined) Deno.env.delete(key);
     else Deno.env.set(key, value);
   }
-  try {
-    return fn();
-  } finally {
+  const restore = () => {
     for (const [key, value] of previous) {
       if (value === undefined) Deno.env.delete(key);
       else Deno.env.set(key, value);
     }
+  };
+  try {
+    const result = fn();
+    if (result instanceof Promise) {
+      return result.finally(restore);
+    }
+    restore();
+    return result;
+  } catch (error) {
+    restore();
+    throw error;
   }
 }
 
@@ -57,19 +72,152 @@ Deno.test("Stripe Checkout tax helper requires VAT-ready customer details", () =
 });
 
 Deno.test("Stripe payment-mode Checkout helper creates hosted invoices with metadata", () => {
-  assertEquals(buildPaymentModeInvoiceCreationParams({
-    checkout_type: "addon",
-    user_id: "user-1",
-  }), {
-    invoice_creation: {
-      enabled: true,
-      invoice_data: {
-        metadata: {
-          checkout_type: "addon",
-          user_id: "user-1",
+  withEnv({
+    STRIPE_ACCOUNT_TAX_ID: undefined,
+    STRIPE_COMPANY_VAT_ID: undefined,
+    COMPANY_VAT_ID: undefined,
+  }, () => {
+    assertEquals(buildPaymentModeInvoiceCreationParams({
+      checkout_type: "addon",
+      user_id: "user-1",
+    }), {
+      invoice_creation: {
+        enabled: true,
+        invoice_data: {
+          metadata: {
+            checkout_type: "addon",
+            user_id: "user-1",
+          },
+          custom_fields: [{
+            name: STRIPE_COMPANY_VAT_CUSTOM_FIELD_NAME,
+            value: STRIPE_COMPANY_VAT_ID_DEFAULT,
+          }],
         },
       },
-    },
+    });
+  });
+});
+
+Deno.test("Stripe invoice helpers stamp company VAT and account tax IDs", () => {
+  withEnv({
+    STRIPE_COMPANY_VAT_ID: "EL802708301",
+    STRIPE_ACCOUNT_TAX_ID: "txi_test_company_vat",
+  }, () => {
+    assertEquals(getStripeCompanyVatId(), "EL802708301");
+    assertEquals(buildCompanyVatInvoiceCustomFields(), [{
+      name: STRIPE_COMPANY_VAT_CUSTOM_FIELD_NAME,
+      value: "EL802708301",
+    }]);
+    assertEquals(buildPaymentModeInvoiceCreationParams({
+      checkout_type: "addon",
+      user_id: "user-1",
+    }), {
+      invoice_creation: {
+        enabled: true,
+        invoice_data: {
+          metadata: {
+            checkout_type: "addon",
+            user_id: "user-1",
+          },
+          account_tax_ids: ["txi_test_company_vat"],
+          custom_fields: [{
+            name: STRIPE_COMPANY_VAT_CUSTOM_FIELD_NAME,
+            value: "EL802708301",
+          }],
+        },
+      },
+    });
+    assertEquals(
+      buildSubscriptionCompanyInvoiceSettingsUpdateParams({
+        invoice_settings: {
+          account_tax_ids: [],
+          custom_fields: null,
+        },
+      } as never),
+      {
+        invoice_settings: {
+          account_tax_ids: ["txi_test_company_vat"],
+          custom_fields: [{
+            name: STRIPE_COMPANY_VAT_CUSTOM_FIELD_NAME,
+            value: "EL802708301",
+          }],
+        },
+      },
+    );
+    assertEquals(
+      buildSubscriptionCompanyInvoiceSettingsUpdateParams({
+        invoice_settings: {
+          account_tax_ids: ["txi_test_company_vat"],
+          custom_fields: [{
+            name: STRIPE_COMPANY_VAT_CUSTOM_FIELD_NAME,
+            value: "EL802708301",
+          }],
+        },
+      } as never),
+      null,
+    );
+  });
+});
+
+Deno.test("subscription invoice settings fall back to company VAT custom field", async () => {
+  await withEnv({
+    STRIPE_COMPANY_VAT_ID: "EL802708301",
+    STRIPE_ACCOUNT_TAX_ID: "txi_wrong_mode",
+  }, async () => {
+    const calls: unknown[] = [];
+    const sub = {
+      id: "sub_123",
+      invoice_settings: {
+        account_tax_ids: [],
+        custom_fields: null,
+      },
+    };
+    const stripe = {
+      subscriptions: {
+        update(_id: string, params: unknown) {
+          calls.push(params);
+          if (calls.length === 1) {
+            return Promise.reject(new Error("No such tax id"));
+          }
+          return Promise.resolve({
+            ...sub,
+            invoice_settings: (params as {
+              invoice_settings: unknown;
+            }).invoice_settings,
+          });
+        },
+      },
+    };
+
+    const updated = await ensureSubscriptionCompanyInvoiceSettings(
+      stripe as never,
+      sub as never,
+    );
+
+    assertEquals(calls, [
+      {
+        invoice_settings: {
+          account_tax_ids: ["txi_wrong_mode"],
+          custom_fields: [{
+            name: STRIPE_COMPANY_VAT_CUSTOM_FIELD_NAME,
+            value: "EL802708301",
+          }],
+        },
+      },
+      {
+        invoice_settings: {
+          custom_fields: [{
+            name: STRIPE_COMPANY_VAT_CUSTOM_FIELD_NAME,
+            value: "EL802708301",
+          }],
+        },
+      },
+    ]);
+    assertEquals((updated as {
+      invoice_settings: {
+        custom_fields: Array<{ name: string; value: string }>;
+      };
+    }).invoice_settings.custom_fields[0].value, "EL802708301");
   });
 });
 

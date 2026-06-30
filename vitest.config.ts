@@ -19,7 +19,7 @@ export default defineConfig({
     globals: true,
     // Full-suite jsdom/component imports can exceed Vitest's 5s default on CI
     // and pre-push hooks even when the same tests pass in isolation.
-    testTimeout: 10_000,
+    testTimeout: 15_000,
     setupFiles: ["./src/test/setup.ts"],
     env: {
       VITE_SUPABASE_URL: testSupabaseUrl,

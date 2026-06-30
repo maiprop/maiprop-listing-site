@@ -61,8 +61,8 @@ describe("Stripe client runtime guard", () => {
       expect(source, `${name} should enable Stripe Tax collection`).toContain(
         "CHECKOUT_TAX_COLLECTION_PARAMS",
       );
-      expect(source, `${name} should include tax settings in idempotency`).toContain(
-        '"stripe-tax-v1"',
+      expect(source, `${name} should include tax settings in idempotency`).toMatch(
+        /"stripe-tax-v\d[^"]*"/,
       );
     }
 

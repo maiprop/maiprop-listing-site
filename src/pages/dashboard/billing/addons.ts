@@ -74,28 +74,28 @@ export const ADDONS_BY_ROLE: Record<string, AddonSection[]> = {
   ],
   seller: [
     {
-      category: "Listing Boosts",
+      category: "Listing Promotions",
       accent: "amber",
       items: [
         {
-          name: "Featured Listing",
+          name: "Spotlight Listing",
           price: "€39",
           unit: "/ 30 days",
-          desc: "Homepage carousel + search top placement. Avg. 3× more views.",
+          desc: "Badge + featured sections. Visual promotion only.",
           icon: Crown,
         },
         {
-          name: "Priority Placement",
+          name: "Priority Rank",
           price: "€59",
           unit: "/ 30 days",
-          desc: "Pinned above all non-priority results for your area and type.",
+          desc: "Higher position in search results. Ranking boost only.",
           icon: Star,
         },
         {
-          name: "Featured + Priority",
+          name: "Maximum Exposure",
           price: "€79",
           unit: "/ 30 days",
-          desc: "Both boosts together — maximum exposure at a bundled rate.",
+          desc: "Badge, featured sections, and higher ranking.",
           icon: Zap,
           badge: "Best value",
         },
@@ -131,28 +131,28 @@ export const ADDONS_BY_ROLE: Record<string, AddonSection[]> = {
   ],
   agent: [
     {
-      category: "Listing Boosts",
+      category: "Listing Promotions",
       accent: "amber",
       items: [
         {
-          name: "Featured Listing",
+          name: "Spotlight Listing",
           price: "€39",
           unit: "/ 30 days",
-          desc: "Homepage carousel + search top placement. Avg. 3× more views.",
+          desc: "Badge + featured sections. Visual promotion only.",
           icon: Crown,
         },
         {
-          name: "Priority Placement",
+          name: "Priority Rank",
           price: "€59",
           unit: "/ 30 days",
-          desc: "Pinned above all non-priority results for your area and type.",
+          desc: "Higher position in search results. Ranking boost only.",
           icon: Star,
         },
         {
-          name: "Featured + Priority",
+          name: "Maximum Exposure",
           price: "€79",
           unit: "/ 30 days",
-          desc: "Both boosts together — maximum exposure at a bundled rate.",
+          desc: "Badge, featured sections, and higher ranking.",
           icon: Zap,
           badge: "Best value",
         },
@@ -231,21 +231,21 @@ export const ADDONS_BY_ROLE: Record<string, AddonSection[]> = {
   ],
   developer: [
     {
-      category: "Listing Boosts",
+      category: "Listing Promotions",
       accent: "amber",
       items: [
         {
-          name: "Featured New Building",
+          name: "Spotlight New Building",
           price: "€39",
           unit: "/ 30 days",
-          desc: "Showcase at the top of the New Buildings section — high-intent buyers.",
+          desc: "Badge + New Buildings showcase. Visual promotion only.",
           icon: Crown,
         },
         {
-          name: "Priority Placement",
+          name: "Priority Rank",
           price: "€59",
           unit: "/ 30 days",
-          desc: "Pinned above all non-priority results across all listing types.",
+          desc: "Higher position in search results. Ranking boost only.",
           icon: Star,
         },
         {
@@ -288,18 +288,18 @@ export const ADDONS_BY_ROLE: Record<string, AddonSection[]> = {
   ],
   professional: [
     {
-      category: "Directory & Lead Boosts",
+      category: "Directory & Lead Promotions",
       accent: "rose",
       items: [
         {
-          name: "Featured Professional",
+          name: "Spotlight Professional",
           price: "€59",
           unit: "/ month",
           desc: "Top-of-category placement in the Professionals directory for 30 days.",
           icon: Crown,
         },
         {
-          name: "Extra Priority Ad",
+          name: "Extra Priority Rank Ad",
           price: "€8",
           unit: "/ ad",
           desc: "Push a listing to the top of search results when acting as a property manager.",
@@ -425,18 +425,18 @@ const ADDON_KEY_BY_NAME: Record<string, string> = {
   "AI Property Valuation": "valuation_single",
   "Property Report": "property_report_single",
   "Neighbourhood Report": "neighbourhood_report_single",
-  "Featured Listing": "featured_listing",
-  "Featured New Building": "featured_listing",
-  "Priority Placement": "priority_placement",
-  "Featured + Priority": "featured_priority_bundle",
+  "Spotlight Listing": "featured_listing",
+  "Spotlight New Building": "featured_listing",
+  "Priority Rank": "priority_placement",
+  "Maximum Exposure": "featured_priority_bundle",
   "Extra Listing Slot": "extra_listing",
   "Extra Project Listing": "extra_listing",
   "Extra Agent Seat": "agent_extra_seat",
   "Agency-Branded Profile": "agency_branded_profile",
   "Dedicated Account Mgr": "agency_dedicated_manager",
   "White-label Domain": "agency_white_label",
-  "Featured Professional": "featured_professional",
-  "Extra Priority Ad": "extra_priority_ad",
+  "Spotlight Professional": "featured_professional",
+  "Extra Priority Rank Ad": "extra_priority_ad",
   "API Access": "professional_api_access",
   "Referral Network Slot": "professional_referral_network",
   "Extra Client Seat": "professional_extra_seat",
@@ -463,5 +463,11 @@ export const resolveAddonKey = (item: Pick<AddonItem, "name" | "manual">): strin
   return key && SELF_SERVE_ADDON_KEYS.has(key) ? key : null;
 };
 
+const cloneAddonSections = (sections: AddonSection[]): AddonSection[] =>
+  sections.map((section) => ({
+    ...section,
+    items: section.items.map((item) => ({ ...item })),
+  }));
+
 export const getAddonSectionsForParticipant = (participantType: string): AddonSection[] =>
-  ADDONS_BY_ROLE[participantType] ?? ADDONS_BY_ROLE["buyer"];
+  cloneAddonSections(ADDONS_BY_ROLE[participantType] ?? ADDONS_BY_ROLE["buyer"]);

@@ -151,13 +151,19 @@ function registrationCountry(registration) {
 }
 
 async function listPricesByLookupKeys(lookupKeys) {
-  const prices = await stripeRequest("GET", "/v1/prices", {
-    limit: 100,
-    active: true,
-    "expand[]": "data.product",
-    "lookup_keys[]": lookupKeys,
-  });
-  return Array.isArray(prices.data) ? prices.data : [];
+  const chunkSize = 10;
+  const results = [];
+  for (let index = 0; index < lookupKeys.length; index += chunkSize) {
+    const chunk = lookupKeys.slice(index, index + chunkSize);
+    const prices = await stripeRequest("GET", "/v1/prices", {
+      limit: 100,
+      active: true,
+      "expand[]": "data.product",
+      "lookup_keys[]": chunk,
+    });
+    if (Array.isArray(prices.data)) results.push(...prices.data);
+  }
+  return results;
 }
 
 async function retrieveInvoice(invoice) {

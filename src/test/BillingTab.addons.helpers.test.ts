@@ -18,7 +18,7 @@ describe("billing add-on helpers", () => {
     expect(resolveAddonKey({ name: "Neighbourhood Bundle x 3" })).toBe(
       "neighbourhood_report_bundle",
     );
-    expect(resolveAddonKey({ name: "Featured + Priority" })).toBeNull();
+    expect(resolveAddonKey({ name: "Maximum Exposure" })).toBeNull();
     expect(resolveAddonKey({ name: "Extra Agent Seat" })).toBeNull();
     expect(resolveAddonKey({ name: "Market Intelligence", manual: true })).toBeNull();
     expect(resolveAddonKey({ name: "Custom onboarding" })).toBeNull();
@@ -27,11 +27,35 @@ describe("billing add-on helpers", () => {
   it("keeps institutional add-ons aligned with investor add-ons and falls back to buyer", () => {
     const investorSections = getAddonSectionsForParticipant("investor");
 
-    expect(getAddonSectionsForParticipant("institutional")).toBe(
-      investorSections,
-    );
+    const institutionalSections = getAddonSectionsForParticipant("institutional");
+    expect(institutionalSections).toEqual(investorSections);
+    expect(institutionalSections).not.toBe(investorSections);
     expect(getAddonSectionsForParticipant("unknown-role")[0].category).toContain(
       "AI Reports",
+    );
+  });
+
+  it("returns isolated add-on sections so callers cannot mutate shared billing copy", () => {
+    const firstRead = getAddonSectionsForParticipant("seller");
+    firstRead[0].category = "Mutated category";
+    firstRead[0].items[0].name = "Mutated item";
+
+    const secondRead = getAddonSectionsForParticipant("seller");
+
+    expect(secondRead[0].category).toBe("Listing Promotions");
+    expect(secondRead[0].items[0].name).toBe("Spotlight Listing");
+  });
+
+  it("uses distinct promotion names for visual exposure, search ranking, and the bundle", () => {
+    const sellerPromotions = getAddonSectionsForParticipant("seller")
+      .find((section) => section.category === "Listing Promotions");
+
+    expect(sellerPromotions?.items.map((item) => item.name)).toEqual(
+      expect.arrayContaining([
+        "Spotlight Listing",
+        "Priority Rank",
+        "Maximum Exposure",
+      ]),
     );
   });
 

@@ -16,6 +16,7 @@ type PriceWithRecurring = Stripe.Price & {
 
 type SubscriptionWithPeriodEnd = Stripe.Subscription & {
   current_period_end?: number | null;
+  trial_end?: number | null;
 };
 
 type DurableBillingSubscriptionRow = {
@@ -26,6 +27,7 @@ type DurableBillingSubscriptionRow = {
   status?: string | null;
   billing_cycle?: "monthly" | "annual" | null;
   current_period_end?: string | null;
+  trial_end?: string | null;
   cancel_at_period_end?: boolean | null;
 };
 
@@ -127,10 +129,13 @@ function normalizeDurableBillingSubscription(
   row: DurableBillingSubscriptionRow | null,
 ): Record<string, unknown> | null {
   if (!row?.stripe_subscription_id) return null;
+  const effectivePeriodEnd = row.status === "trialing"
+    ? row.trial_end ?? row.current_period_end ?? null
+    : row.current_period_end ?? null;
   return {
     id: row.stripe_subscription_id,
     status: row.status ?? "unknown",
-    current_period_end: row.current_period_end ?? null,
+    current_period_end: effectivePeriodEnd,
     cancel_at_period_end: row.cancel_at_period_end === true,
     plan_name: row.plan_key ?? row.stripe_product_id ?? "Subscription",
     amount: null,
@@ -143,13 +148,26 @@ function normalizeDurableBillingSubscription(
   };
 }
 
+function isValidDurableBillingSubscription(
+  row: DurableBillingSubscriptionRow | null,
+  now = new Date(),
+): boolean {
+  if (!row || !hasProvisionedSubscriptionAccess(row.status)) return false;
+  const entitlementEnd = row.status === "trialing"
+    ? row.trial_end ?? row.current_period_end
+    : row.current_period_end;
+  if (!entitlementEnd) return row.status !== "trialing";
+  const periodEnd = new Date(entitlementEnd);
+  return !Number.isNaN(periodEnd.getTime()) && periodEnd > now;
+}
+
 async function readDurableBillingState(
   supabase: DurableBillingReadClient,
   userId: string,
 ): Promise<DurableBillingState> {
   const [subscriptionResult, customerResult] = await Promise.all([
     supabase.from("billing_subscriptions")
-      .select("stripe_subscription_id, stripe_product_id, stripe_price_id, plan_key, status, billing_cycle, current_period_end, cancel_at_period_end")
+      .select("stripe_subscription_id, stripe_product_id, stripe_price_id, plan_key, status, billing_cycle, current_period_end, trial_end, cancel_at_period_end")
       .eq("user_id", userId)
       .in("status", ["active", "trialing", "past_due"])
       .order("updated_at", { ascending: false })
@@ -173,6 +191,8 @@ async function readDurableBillingState(
     : subscriptionResult.data
     ? [subscriptionResult.data]
     : [];
+  const subscription = ((subscriptionRows as DurableBillingSubscriptionRow[])
+    .find((row) => isValidDurableBillingSubscription(row)) ?? null);
   const customerRows = Array.isArray(customerResult.data)
     ? customerResult.data
     : customerResult.data
@@ -180,7 +200,7 @@ async function readDurableBillingState(
     : [];
   return {
     subscription: normalizeDurableBillingSubscription(
-      (subscriptionRows[0] ?? null) as DurableBillingSubscriptionRow | null,
+      subscription,
     ),
     customerFound: Boolean(
       (customerRows[0] as DurableBillingCustomerRow | undefined)
@@ -669,6 +689,10 @@ Deno.serve(async (req) => {
     const subscriptionItemId = subscription?.items.data[0]?.id ?? null;
     const recurringInterval = (price as PriceWithRecurring | undefined)?.recurring?.interval ?? "month";
     const currentPeriodEnd = (subscription as SubscriptionWithPeriodEnd | null)?.current_period_end ?? null;
+    const trialEnd = (subscription as SubscriptionWithPeriodEnd | null)?.trial_end ?? null;
+    const subscriptionDisplayEnd = subscription?.status === "trialing"
+      ? trialEnd ?? currentPeriodEnd
+      : currentPeriodEnd;
     const product = price?.product as Stripe.Product | null | undefined;
     const productId = typeof price?.product === "string"
       ? price.product
@@ -677,8 +701,8 @@ Deno.serve(async (req) => {
       ? {
         id: subscription.id,
         status: subscription.status,
-        current_period_end: currentPeriodEnd
-          ? new Date(currentPeriodEnd * 1000).toISOString()
+        current_period_end: subscriptionDisplayEnd
+          ? new Date(subscriptionDisplayEnd * 1000).toISOString()
           : null,
         cancel_at_period_end: subscription.cancel_at_period_end,
         plan_name: product?.name ?? "Pro",

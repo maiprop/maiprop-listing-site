@@ -1,4 +1,4 @@
--- Enable pg_cron for featured listing expiry.
+-- Enable pg_cron for Spotlight listing expiry.
 -- Requires the pg_cron extension to be enabled in Supabase dashboard:
 --   Dashboard → Database → Extensions → cron
 --

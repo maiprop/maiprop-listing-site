@@ -157,6 +157,8 @@ Dashboard → Project Settings → Edge Functions → Secrets.
 | `STRIPE_SAAS_PERSONAL_TAX_CODE` / `STRIPE_SAAS_BUSINESS_TAX_CODE` | Optional Stripe catalog setup overrides for SaaS subscription and report products; defaults to Greek software product tax codes `txcd_10103000` and `txcd_10103001`. |
 | `STRIPE_AI_PERSONAL_TAX_CODE` / `STRIPE_AI_BUSINESS_TAX_CODE` | Optional Stripe catalog setup overrides for AI valuation/report add-ons; defaults to Greek AI software service tax codes `txcd_10105001` and `txcd_10105002`. |
 | `STRIPE_TAX_BEHAVIOR` | Optional Stripe catalog setup override for Price `tax_behavior`; defaults to `exclusive` so VAT/tax is calculated separately on invoices. Allowed: `exclusive`, `inclusive`. |
+| `STRIPE_COMPANY_VAT_ID` / `COMPANY_VAT_ID` | Optional seller VAT ID written to Stripe invoice metadata and PDFs when no Stripe account tax ID object is configured. Prefer `STRIPE_COMPANY_VAT_ID`; `COMPANY_VAT_ID` is a legacy fallback. |
+| `STRIPE_ACCOUNT_TAX_ID` | Optional Stripe Tax ID object (`txi_...`) used for invoice issuer tax identity when the Stripe account already has the VAT ID configured. |
 | `STRIPE_SECRET_KEY` | Billing Edge Functions: `stripe-webhook`, `create-checkout`, `create-investor-payment`, `customer-portal`, `check-subscription`, `get-invoices`, `create-stripe-price`, `sync-stripe-pricing`, `apply-data-input-credit`, `delete-account`, `log-role-switch` |
 | `STRIPE_API_KEY` | Local Stripe operator scripts fallback; prefer `STRIPE_SECRET_KEY` so Edge and scripts use one key name. |
 | `STRIPE_WEBHOOK_SECRET` | `stripe-webhook` |

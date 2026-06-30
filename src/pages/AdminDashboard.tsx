@@ -84,7 +84,7 @@ export default function AdminDashboard() {
     { key: "broadcasts", label: "Broadcasts", icon: Megaphone },
     { key: "pricing", label: "Pricing", icon: SlidersHorizontal },
     { key: "os-sync", label: "OS Sync", icon: Wifi },
-    { key: "featured", label: "Featured Ads", icon: Star },
+    { key: "featured", label: "Listing Promotions", icon: Star },
     { key: "pro-verification", label: "Pro Verification", icon: BadgeCheck },
     { key: "pof-review", label: "POF Review", icon: Wallet },
   ];
@@ -105,7 +105,7 @@ export default function AdminDashboard() {
                 <Shield className="w-6 h-6 text-primary" />
                 <div>
                   <h1 className="font-display text-2xl font-bold">Admin Dashboard</h1>
-                  <p className="text-sm text-muted-foreground">Listings, firesale, auctions, pricing, users, featured ads & more</p>
+                  <p className="text-sm text-muted-foreground">Listings, firesale, auctions, pricing, users, listing promotions & more</p>
                 </div>
               </div>
             </div>

@@ -59,7 +59,7 @@ const byUserSort = (selectedSort: ListingsSort) =>
 const sortListings = (rows: ListingCardWithRaw[], selectedSort: ListingsSort): ListingCardWithRaw[] => {
   const userSort = byUserSort(selectedSort);
   return [...rows].sort((a, b) => {
-    // "Featured First" sort: explicit featured ordering, skip automatic promo-first
+    // "Spotlight First" sort: explicit spotlight ordering, skip automatic promo-first
     if (selectedSort === "featured") return userSort(a, b);
     const aPromo = isPromoted(a);
     const bPromo = isPromoted(b);

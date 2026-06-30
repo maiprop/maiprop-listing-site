@@ -156,9 +156,9 @@ await recordAiCall(quota.userId, BUCKET);
 |--------|-------|----------|
 | Extra Valuation | €3 | `usage_ai_valuations` > 5 |
 | Extra Report | €9 | `usage_property_reports` > 3 |
-| Extra Priority Ad | €8 | `usage_priority_ads` > included |
-| Featured Listing | €39 | One-time purchase |
-| Priority Placement | €59 | One-time purchase |
+| Extra Priority Rank Ad | €8 | `usage_priority_ads` > included |
+| Spotlight Listing | €39 | One-time purchase |
+| Priority Rank | €59 | One-time purchase |
 
 ---
 
@@ -228,7 +228,7 @@ get_ai_call_monthly_limit(user_id, bucket) → INTEGER
 | AI Valuation | ❌ | ✅ 5/mo | `property-valuation` + `usage_ai_valuations` |
 | Property Reports | ❌ | ✅ 3/mo | `usage_property_reports` |
 | Neighbourhood Report | ✅ 2 | ✅ 30/mo | `neighbourhood-report` + `usage_ai_calls` |
-| Featured listing | ❌ | ✅ €39 | `usage_priority_ads` |
+| Spotlight Listing | ❌ | ✅ €39 | `usage_priority_ads` |
 
 ### Agent Features
 | Feature | Free | Pro | Wiring |
@@ -236,7 +236,7 @@ get_ai_call_monthly_limit(user_id, bucket) → INTEGER
 | Listings | ✅ 5 | ✅ 999 | `trg_check_listing_limit` |
 | CRM & Leads | ✅ | ✅ | `LeadsCRM.tsx` + `useLeads.ts` |
 | Lead pipeline | ✅ | ✅ | 7-stage pipeline |
-| Priority ads | ❌ | ✅ 10/mo | `usage_priority_ads` |
+| Priority Rank ads | ❌ | ✅ 10/mo | `usage_priority_ads` |
 | Open House mgmt | ✅ | ✅ | `OpenHouseDetail.tsx` |
 | AI tools | ❌ | ✅ unlimited | `pro-ai-tools` bucket |
 | Auction alerts | ✅ | ✅ | `useAuctionAlerts.ts` |

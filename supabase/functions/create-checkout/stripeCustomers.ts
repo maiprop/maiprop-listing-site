@@ -1,3 +1,9 @@
+import {
+  STRIPE_COMPANY_VAT_CUSTOM_FIELD_NAME,
+  buildCompanyVatInvoiceCustomFields,
+  getStripeCompanyVatId,
+} from "../_shared/stripeClient.ts";
+
 type CheckoutUser = {
   id: string;
   email: string;
@@ -7,6 +13,20 @@ type LogStep = (step: string, details?: unknown) => void;
 
 type StripeCustomer = {
   id: string;
+  invoice_settings?: {
+    custom_fields?: StripeInvoiceCustomField[] | null;
+  } | null;
+};
+
+type StripeInvoiceCustomField = {
+  name: string;
+  value: string;
+};
+
+type StripeCustomerInvoiceSettingsParams = {
+  invoice_settings: {
+    custom_fields: StripeInvoiceCustomField[];
+  };
 };
 
 type StripeCustomerClient = {
@@ -19,10 +39,34 @@ type StripeCustomerClient = {
       params: {
         email: string;
         metadata: { user_id: string };
+        invoice_settings?: {
+          custom_fields?: StripeInvoiceCustomField[];
+        };
       },
       options: { idempotencyKey: string },
     ): Promise<StripeCustomer>;
+    update(
+      customerId: string,
+      params: StripeCustomerInvoiceSettingsParams,
+    ): Promise<StripeCustomer>;
   };
+};
+
+export const buildCustomerCompanyInvoiceSettingsParams = (
+  customer?: StripeCustomer | null,
+): StripeCustomerInvoiceSettingsParams | null => {
+  const vatId = getStripeCompanyVatId();
+  if (!vatId) return null;
+  const existing = customer?.invoice_settings?.custom_fields ?? [];
+  const alreadyStamped = existing.some((field) =>
+    field.name === STRIPE_COMPANY_VAT_CUSTOM_FIELD_NAME &&
+    field.value === vatId
+  );
+  if (alreadyStamped) return null;
+
+  const customFields = buildCompanyVatInvoiceCustomFields(existing);
+  if (!customFields?.length) return null;
+  return { invoice_settings: { custom_fields: customFields } };
 };
 
 const findOwnedStripeCustomer = async (
@@ -43,15 +87,24 @@ export const getOrCreateOwnedStripeCustomer = async (
 ): Promise<string> => {
   const existing = await findOwnedStripeCustomer(stripe, user.id);
   if (existing) {
+    const invoiceSettings = buildCustomerCompanyInvoiceSettingsParams(existing);
+    if (invoiceSettings) {
+      await stripe.customers.update(existing.id, invoiceSettings);
+      logStep("Stamped Stripe customer invoice VAT settings", {
+        customerId: existing.id,
+      });
+    }
     logStep("Existing Stripe customer found by user metadata", {
       customerId: existing.id,
     });
     return existing.id;
   }
 
+  const invoiceSettings = buildCustomerCompanyInvoiceSettingsParams();
   const created = await stripe.customers.create({
     email: user.email,
     metadata: { user_id: user.id },
+    ...(invoiceSettings ?? {}),
   }, {
     idempotencyKey: `maiprop-customer-${user.id}`,
   });

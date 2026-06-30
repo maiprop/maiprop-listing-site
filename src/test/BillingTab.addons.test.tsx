@@ -167,10 +167,14 @@ describe("BillingTab add-on checkout", () => {
   it("shows seller-relevant add-ons and starts Stripe checkout only for fulfilled report add-ons", async () => {
     renderWithProviders(<BillingTab />);
 
-    const featuredCard = (await screen.findByText("Featured Listing")).closest("div");
-    expect(featuredCard).not.toBeNull();
-    fireEvent.click(within(featuredCard as HTMLElement).getByRole("button", { name: /Contact team/i }));
-    expect(toast.info).toHaveBeenCalledWith("This add-on is handled by the maiProp team.");
+    const spotlightCard = (await screen.findByText("Spotlight Listing")).closest("div");
+    expect(spotlightCard).not.toBeNull();
+    expect(within(spotlightCard as HTMLElement).getByText("Badge + featured sections. Visual promotion only."))
+      .toBeInTheDocument();
+    expect(within(spotlightCard as HTMLElement).getByRole("link", { name: /Contact team/i }))
+      .toHaveAttribute("href", expect.stringContaining("mailto:support@maiprop.co"));
+    expect(screen.getByText("Priority Rank")).toBeInTheDocument();
+    expect(screen.getByText("Maximum Exposure")).toBeInTheDocument();
 
     const propertyReportCard = (await screen.findByText("Property Report")).closest("div");
     expect(propertyReportCard).not.toBeNull();
@@ -216,18 +220,57 @@ describe("BillingTab add-on checkout", () => {
     });
   });
 
+  it("labels active trials by their trial end date in billing", async () => {
+    mocks.supabase?.functions.invoke.mockImplementation((fn: string) => {
+      if (fn === "get-invoices") {
+        return Promise.resolve({
+          data: {
+            invoices: [],
+            billing_configured: true,
+            customer_found: true,
+            portal_eligible: true,
+            subscription: {
+              id: "sub_trialing",
+              status: "trialing",
+              current_period_end: "2026-07-07T06:04:38.000Z",
+              cancel_at_period_end: false,
+              plan_name: "Pro Plan",
+              amount: 29,
+              currency: "EUR",
+              interval: "month",
+              plan_key: "pro",
+            },
+          },
+          error: null,
+        });
+      }
+      if (fn === "ai-quota-status") {
+        return Promise.resolve({ data: { quotas: {} }, error: null });
+      }
+      return Promise.resolve({ data: null, error: null });
+    });
+
+    renderWithProviders(<BillingTab />);
+
+    expect(await screen.findByText("Trial ends on")).toBeInTheDocument();
+    expect(screen.getByText(/2026/)).toBeInTheDocument();
+  });
+
   it("shows unified AI/report consumption and wires usage add-ons to Stripe", async () => {
     renderWithProviders(<BillingTab />);
 
     const panel = await screen.findByRole("region", { name: /monthly ai and report usage/i });
+    expect(within(panel).getByText("AI, reports & promotions")).toBeInTheDocument();
     expect(within(panel).getByText("AI valuations")).toBeInTheDocument();
     expect(within(panel).getByText("48 / 50")).toBeInTheDocument();
     expect(within(panel).getByText("Neighbourhood reports")).toBeInTheDocument();
     expect(within(panel).getByText("50 / 50")).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: /Buy Neighbourhood reports add-on/i }))
+      .toHaveTextContent("Top up");
     expect(within(panel).getByText("Nearby places / POIs")).toBeInTheDocument();
     expect(within(panel).getByText("Property reports")).toBeInTheDocument();
     await waitFor(() => expect(within(panel).getByText("2 / 4")).toBeInTheDocument());
-    expect(within(panel).getByText("Priority ads / boosts")).toBeInTheDocument();
+    expect(within(panel).getByText("Listing promotions")).toBeInTheDocument();
     await waitFor(() => expect(within(panel).getByText("10 / 10")).toBeInTheDocument());
     await waitFor(() => {
       const quotaCalls = mocks.supabase?.functions.invoke.mock.calls.filter(
@@ -256,6 +299,36 @@ describe("BillingTab add-on checkout", () => {
     });
   });
 
+  it("offers free users both upgrade and top-up when a monthly add-on-backed quota is consumed", async () => {
+    Object.assign(mocks.subscription, {
+      isPro: false,
+      hasStripeBilling: false,
+      accessSource: null,
+    });
+
+    renderWithProviders(<BillingTab />);
+
+    const panel = await screen.findByRole("region", { name: /monthly ai and report usage/i });
+    const neighbourhoodTopUp = within(panel).getByRole("button", {
+      name: /Buy Neighbourhood reports add-on/i,
+    });
+
+    expect(within(panel).getAllByRole("button", { name: /^Upgrade$/i }).length).toBeGreaterThan(0);
+    expect(neighbourhoodTopUp).toHaveTextContent("Top up");
+
+    fireEvent.click(neighbourhoodTopUp);
+
+    await waitFor(() => {
+      expect(mocks.supabase?.functions.invoke).toHaveBeenCalledWith("create-checkout", {
+        body: {
+          addon_key: "neighbourhood_report_single",
+          success_url: "/dashboard/billing?checkout=success",
+          cancel_url: "/dashboard/billing?checkout=cancelled",
+        },
+      });
+    });
+  });
+
   it("keeps developer Market Intelligence as a team-handled add-on", async () => {
     authState.profile.role = "developer";
     authState.profile.participant_type = "developer";
@@ -267,17 +340,39 @@ describe("BillingTab add-on checkout", () => {
     );
     const marketIntelligenceCard = marketIntelligenceTitle?.closest("div");
     expect(marketIntelligenceCard).not.toBeNull();
-    fireEvent.click(
-      within(marketIntelligenceCard as HTMLElement).getByRole("button", {
+    expect(
+      within(marketIntelligenceCard as HTMLElement).getByRole("link", {
         name: /Contact team/i,
       }),
-    );
+    ).toHaveAttribute("href", expect.stringContaining("mailto:support@maiprop.co"));
 
-    expect(toast.info).toHaveBeenCalledWith("This add-on is handled by the maiProp team.");
     expect(mocks.supabase?.functions.invoke).not.toHaveBeenCalledWith(
       "create-checkout",
       expect.objectContaining({
         body: expect.objectContaining({ addon_key: "market_intelligence" }),
+      }),
+    );
+  });
+
+  it("makes agency add-on contact buttons functional without starting checkout", async () => {
+    authState.profile.role = "agent";
+    authState.profile.participant_type = "agent";
+
+    renderWithProviders(<BillingTab />);
+
+    const extraSeatCard = (await screen.findByText("Extra Agent Seat")).closest("div");
+    expect(extraSeatCard).not.toBeNull();
+
+    expect(
+      within(extraSeatCard as HTMLElement).getByRole("link", {
+        name: /Contact team/i,
+      }),
+    ).toHaveAttribute("href", expect.stringContaining("mailto:support@maiprop.co"));
+
+    expect(mocks.supabase?.functions.invoke).not.toHaveBeenCalledWith(
+      "create-checkout",
+      expect.objectContaining({
+        body: expect.objectContaining({ addon_key: "agent_extra_seat" }),
       }),
     );
   });

@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { getPlanForParticipant } from "@/lib/rolePlanMap";
+import { buildBillingContactHref } from "@/lib/billingContact";
 import { BillingUsagePanel } from "@/components/dashboard/BillingUsagePanel";
 import { formatDate } from "@/lib/format";
 import { AddonCard } from "./billing/AddonCard";
@@ -41,10 +42,6 @@ type PortalAction =
   | "subscription_cancel"
   | "subscription_update"
   | "resume_subscription";
-
-const showManualAddonToast = () => {
-  toast.info("This add-on is handled by the maiProp team.");
-};
 
 const showAddonCheckoutError = (e: unknown) => {
   toast.error(
@@ -176,7 +173,6 @@ export default function BillingTab() { // skipcq: JS-0067
   const purchaseAddon = async (item: AddonItem) => { // skipcq: JS-R1005
     const addonKey = resolveAddonKey(item);
     if (!addonKey) {
-      showManualAddonToast();
       return;
     }
     await purchaseAddonKey(addonKey);
@@ -340,7 +336,11 @@ export default function BillingTab() { // skipcq: JS-0067
             </div>
             <div className="bg-secondary rounded-xl p-3">
               <p className="text-xs text-muted-foreground mb-0.5">
-                {sub.cancel_at_period_end ? "Cancels on" : "Renews on"}
+                {sub.status === "trialing"
+                  ? "Trial ends on"
+                  : sub.cancel_at_period_end
+                    ? "Cancels on"
+                    : "Renews on"}
               </p>
               <p className="font-semibold flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
@@ -685,6 +685,11 @@ export default function BillingTab() { // skipcq: JS-0067
                       item={item}
                       accent={section.accent}
                       checkoutAvailable={Boolean(addonKey)}
+                      contactHref={buildBillingContactHref({
+                        topic: item.name,
+                        participantType,
+                        addonName: item.name,
+                      })}
                       loading={Boolean(addonKey && addonLoadingKey === addonKey)}
                       onPurchase={() => purchaseAddon(item)}
                     />

@@ -394,14 +394,14 @@ BEGIN
   END IF;
 
   IF NEW.is_featured IS DISTINCT FROM OLD.is_featured THEN
-    v_title := CASE WHEN NEW.is_featured THEN 'Listing featured' ELSE 'Listing removed from featured' END;
+    v_title := CASE WHEN NEW.is_featured THEN 'Spotlight enabled' ELSE 'Spotlight removed' END;
     v_body := CASE
-      WHEN NEW.is_featured THEN concat_ws(' ', 'Your listing', COALESCE(NULLIF(NEW.title, ''), NEW.id::TEXT), 'is now featured.')
-      ELSE concat_ws(' ', 'Your listing', COALESCE(NULLIF(NEW.title, ''), NEW.id::TEXT), 'is no longer featured.')
+      WHEN NEW.is_featured THEN concat_ws(' ', 'Your listing', COALESCE(NULLIF(NEW.title, ''), NEW.id::TEXT), 'now has Spotlight visibility.')
+      ELSE concat_ws(' ', 'Your listing', COALESCE(NULLIF(NEW.title, ''), NEW.id::TEXT), 'no longer has Spotlight visibility.')
     END;
   ELSIF NEW.priority_placement IS DISTINCT FROM OLD.priority_placement THEN
-    v_title := 'Listing priority updated';
-    v_body := concat_ws(' ', 'The priority placement was updated for', COALESCE(NULLIF(NEW.title, ''), NEW.id::TEXT) || '.');
+    v_title := 'Priority Rank updated';
+    v_body := concat_ws(' ', 'The Priority Rank was updated for', COALESCE(NULLIF(NEW.title, ''), NEW.id::TEXT) || '.');
   ELSE
     RETURN NEW;
   END IF;

@@ -545,7 +545,7 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
             success,
             cancel,
             "card",
-            "stripe-tax-v1",
+            "stripe-tax-v2-company-vat",
           ]),
         },
       );
@@ -799,7 +799,16 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
           // Stripe does NOT auto-copy session.metadata onto the resulting subscription,
           // so we set subscription_data.metadata explicitly.
           subscription_data: {
-            ...(wantsTrial ? { trial_period_days: PRO_TRIAL_DAYS } : {}),
+            ...(wantsTrial
+              ? {
+                trial_period_days: PRO_TRIAL_DAYS,
+                trial_settings: {
+                  end_behavior: {
+                    missing_payment_method: "cancel" as const,
+                  },
+                },
+              }
+              : {}),
             metadata: {
               user_id: user.id,
               plan,
@@ -825,6 +834,7 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
             checkoutPlan.productId,
             wantsTrial ? "trial" : "paid",
             wantsTrial ? PRO_TRIAL_DAYS : null,
+            wantsTrial ? "missing-payment-method-cancel" : null,
             trialClaimId,
             success,
             cancel,

@@ -73,7 +73,7 @@
     },
     "sections": {
       "newListings": "New Listings",
-      "featuredProperties": "Featured Properties",
+      "featuredProperties": "Spotlight Properties",
       "upcomingAuctions": "Upcoming Auctions",
       "viewAll": "View all",
       "forSale": "For Sale",
@@ -308,7 +308,7 @@
       "architect": "Architect"
     },
     "verified": "Verified",
-    "featured": "Featured",
+    "featured": "Spotlight",
     "rating": "Rating",
     "reviews": "reviews",
     "experience": "Experience",
@@ -551,13 +551,13 @@
       },
       "developerPro": {
         "title": "Developer tools require Pro",
-        "subtitle": "Unlimited listings, project showcases, project ad management, and featured placement are all part of the Developer Pro plan.",
+        "subtitle": "Unlimited listings, project showcases, project ad management, Spotlight and Priority Rank are all part of the Developer Pro plan.",
         "trial": "Start 7-day free trial",
         "previewTools": "View Developer Plan"
       },
       "proUpgrade": {
         "title": "Unlock the full Dashboard",
-        "subtitle": "Analytics, CRM, priority ads & more with Pro.",
+        "subtitle": "Analytics, CRM, listing promotions & more with Pro.",
         "cta": "Upgrade to Pro"
       },
       "listings": {
@@ -755,7 +755,7 @@
     "rejected": "Rejected",
     "verified": "Verified",
     "unverified": "Unverified",
-    "featured": "Featured",
+    "featured": "Spotlight",
     "premium": "Premium",
     "pro": "Pro",
     "free": "Free",
@@ -842,7 +842,7 @@
       "newBuild": "New Building",
       "new": "New",
       "premium": "Premium",
-      "featured": "Featured",
+      "featured": "Spotlight",
       "verified": "Verified"
     },
     "noPhoto": "No photo",
@@ -879,7 +879,7 @@
   "listingsPage": {
     "sortOptions": {
       "relevant": "Most Relevant",
-      "featured": "Featured First",
+      "featured": "Spotlight First",
       "priceAsc": "Price: Low → High",
       "priceDesc": "Price: High → Low",
       "newest": "Newest First",
@@ -1632,10 +1632,10 @@
       "agentListing": "Agent Listing",
       "exclusiveHint": "Mark this as an exclusive listing (you are the sole agent).",
       "exclusive": "Exclusive",
-      "featuredListing": "Featured Listing (Pro)",
-      "featuredHint": "Get priority placement in search results with a featured badge.",
-      "featuredBadge": "Featured badge",
-      "priority": "Priority (0-10)"
+      "featuredListing": "Listing Promotion (Pro)",
+      "featuredHint": "Use Spotlight for a badge and featured sections. Add Priority Rank only when this listing should rank higher.",
+      "featuredBadge": "Spotlight badge",
+      "priority": "Priority Rank (0-10)"
     },
     "photos": {
       "heading": "Property Photos",

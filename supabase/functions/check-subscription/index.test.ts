@@ -223,6 +223,138 @@ Deno.test("database fallback picks the current audience when old and new durable
   assertEquals(state.billing_cycle, "annual");
 });
 
+Deno.test("database fallback treats active post-trial renewal as subscribed", async () => {
+  const state = await getDatabaseFallback(
+    mockSupabase({
+      profileRole: "agent",
+      participantType: "agent",
+      investorStatus: null,
+      billingRows: [
+        {
+          status: "active",
+          stripe_product_id: "prod_agent",
+          current_period_end: "2099-07-31T00:00:00.000Z",
+          plan_key: "agent_basic",
+          audience: "agent",
+          billing_cycle: "monthly",
+        },
+      ],
+    }),
+    "00000000-0000-0000-0000-000000000016",
+  );
+
+  assertEquals(state.subscribed, true);
+  assertEquals(state.product_id, "prod_agent");
+  assertEquals(state.plan_key, "agent_basic");
+  assertEquals(state.audience, "agent");
+});
+
+Deno.test("database fallback keeps failed post-trial payment in recovery grace", async () => {
+  const state = await getDatabaseFallback(
+    mockSupabase({
+      profileRole: "professional",
+      participantType: "professional",
+      investorStatus: null,
+      billingRows: [
+        {
+          status: "past_due",
+          stripe_product_id: "prod_professional",
+          current_period_end: "2099-07-31T00:00:00.000Z",
+          plan_key: "professional_basic",
+          audience: "professional",
+          billing_cycle: "monthly",
+        },
+      ],
+    }),
+    "00000000-0000-0000-0000-000000000017",
+  );
+
+  assertEquals(state.subscribed, true);
+  assertEquals(state.product_id, "prod_professional");
+  assertEquals(state.plan_key, "professional_basic");
+  assertEquals(state.audience, "professional");
+});
+
+Deno.test("database fallback uses trial_end for active trial access", async () => {
+  const trialEnd = "2099-07-07T00:00:00.000Z";
+  const state = await getDatabaseFallback(
+    mockSupabase({
+      profileRole: "buyer",
+      participantType: "buyer",
+      investorStatus: null,
+      billingRows: [
+        {
+          status: "trialing",
+          stripe_product_id: "prod_participant",
+          current_period_end: null,
+          trial_end: trialEnd,
+          plan_key: "pro",
+          audience: "participant",
+          billing_cycle: "monthly",
+        },
+      ],
+    }),
+    "00000000-0000-0000-0000-000000000019",
+  );
+
+  assertEquals(state.subscribed, true);
+  assertEquals(state.product_id, "prod_participant");
+  assertEquals(state.subscription_end, trialEnd);
+  assertEquals(state.plan_key, "pro");
+});
+
+Deno.test("database fallback rejects stale trial rows after the period expires", async () => {
+  const state = await getDatabaseFallback(
+    mockSupabase({
+      profileRole: "developer",
+      participantType: "developer",
+      investorStatus: null,
+      billingRows: [
+        {
+          status: "trialing",
+          stripe_product_id: "prod_developer",
+          current_period_end: null,
+          trial_end: "2000-01-01T00:00:00.000Z",
+          plan_key: "developer_pro",
+          audience: "developer",
+          billing_cycle: "monthly",
+        },
+      ],
+    }),
+    "00000000-0000-0000-0000-000000000018",
+  );
+
+  assertEquals(state.subscribed, false);
+  assertEquals(state.product_id, null);
+  assertEquals(state.source, "database");
+});
+
+Deno.test("database fallback ignores terminal post-trial statuses", async () => {
+  for (const status of ["canceled", "unpaid", "paused", "incomplete_expired"]) {
+    const state = await getDatabaseFallback(
+      mockSupabase({
+        profileRole: "buyer",
+        participantType: "buyer",
+        investorStatus: null,
+        billingRows: [
+          {
+            status,
+            stripe_product_id: "prod_participant",
+            current_period_end: "2099-07-31T00:00:00.000Z",
+            plan_key: "pro",
+            audience: "participant",
+            billing_cycle: "monthly",
+          },
+        ],
+      }),
+      `00000000-0000-0000-0000-0000000000${status.length}`,
+    );
+
+    assertEquals(state.subscribed, false, status);
+    assertEquals(state.product_id, null, status);
+  }
+});
+
 Deno.test("subscription response preserves active invite-only investor fallback when Stripe has no entitlement", async () => {
   const state = await resolveSubscriptionResponse(
     mockSupabase({
