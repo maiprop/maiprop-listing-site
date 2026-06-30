@@ -160,8 +160,10 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
             return (
             <div
               key={l.id}
-              className="glass-card rounded-xl p-4 flex items-center gap-4"
+              data-testid={`my-listing-card-${l.id}`}
+              className="glass-card rounded-xl p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4"
             >
+              <div className="flex min-w-0 gap-3 sm:flex-1 sm:items-center">
               <img
                 src={
                   l.cover_image_url ||
@@ -171,30 +173,33 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
                 className="w-16 h-16 rounded-lg object-cover shrink-0"
               />
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="font-semibold text-sm truncate">{l.title}</p>
+                <div className="flex items-start gap-2 flex-wrap">
+                  <p className="min-w-0 basis-full font-semibold text-sm leading-tight sm:basis-auto sm:flex-1 sm:truncate">{l.title}</p>
                   {l.is_featured && (
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold border border-brand-gold/30">
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold border border-brand-gold/30 whitespace-nowrap">
                       Spotlight
                     </span>
                   )}
                   {(l.tags || []).includes("exclusive") && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-primary font-medium">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-primary font-medium whitespace-nowrap">
                       Exclusive
                     </span>
                   )}
                   {l.is_off_market && (
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground">
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground whitespace-nowrap">
                       Off-market
                     </span>
                   )}
                   {l.listing_type === "new_build" && (
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 whitespace-nowrap">
                       New Building
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5">
+                <p
+                  data-testid={`my-listing-meta-${l.id}`}
+                  className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 break-words"
+                >
                   {l.city} · €{Number(l.price).toLocaleString()} · {l.sqm}m²
                 </p>
                 <span
@@ -208,7 +213,11 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
                   {l.status}
                 </span>
               </div>
-              <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+              </div>
+              <div
+                data-testid={`my-listing-actions-${l.id}`}
+                className="flex w-full items-center gap-1 flex-wrap justify-between border-t border-border/60 pt-3 sm:w-auto sm:shrink-0 sm:justify-end sm:border-t-0 sm:pt-0"
+              >
                 {isSellSide && (
                   <>
                     <button
@@ -254,7 +263,7 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
                     />
                   </>
                 )}
-                <span className="text-xs text-muted-foreground mr-2">
+                <span className="text-xs text-muted-foreground mr-auto sm:mr-2 whitespace-nowrap">
                   {l.views_count} views
                 </span>
                 <Link

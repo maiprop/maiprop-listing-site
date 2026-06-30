@@ -181,6 +181,14 @@ describe("OpenHouseAssetControlPanel", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it("uses wrapping mobile-safe layout for participant pipeline and row actions", () => {
+    renderPanel();
+
+    expect(screen.getByTestId("open-house-pipeline")).toHaveClass("flex-col", "sm:flex-row");
+    expect(screen.getAllByTestId("open-house-registration-row")[0]).toHaveClass("overflow-hidden");
+    expect(screen.getAllByTestId("open-house-registration-actions")[0]).toHaveClass("w-full", "sm:w-auto");
+  });
+
   it("blocks incomplete approval but allows verify, approve, reject, and attendance actions", () => {
     renderPanel();
 

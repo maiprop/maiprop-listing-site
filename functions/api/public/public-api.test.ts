@@ -1104,11 +1104,11 @@ describe("public homepage endpoint", () => {
     expect(url.searchParams.get("select")).toContain("project_id");
     expect(url.searchParams.get("select")).toContain("project:projects!listings_project_id_fkey");
     expect(url.searchParams.get("select")).toContain("delivery_date");
-    expect(url.searchParams.get("select")).not.toContain("project_units!project_units_project_id_fkey");
+    expect(url.searchParams.get("select")).toContain("project_units!project_units_project_id_fkey(id,availability_status,internal_sqm)");
     expect(url.searchParams.get("listing_images.limit")).toBe("3");
     const featuredCacheKey = new URL(cacheApi.put.mock.calls[0][0].url);
     expect(featuredCacheKey.searchParams.get("day")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(featuredCacheKey.searchParams.get("v")).toBe("featured-card-v4");
+    expect(featuredCacheKey.searchParams.get("v")).toBe("featured-card-v5");
     expect(featured.headers.get("Cache-Control")).toBe("public, max-age=300, stale-while-revalidate=300");
     expect(featured.headers.get("CDN-Cache-Control")).toBe("public, max-age=300, stale-while-revalidate=300");
 
