@@ -56,6 +56,7 @@ const PRICING_SECTIONS = [
   { key: "developers",   label: "Developers",                module: "developer_subscription",    audience: "developer" },
   { key: "professionals",label: "Professionals",             module: "professional_subscription", audience: "professional" },
   { key: "investors",    label: "Investors",                 module: "investor_subscription",     audience: "investor" },
+  { key: "institutional",label: "Institutional Investors",   module: "investor_subscription",     audience: "institutional" },
   { key: "valuation",    label: "Valuation / AI reports",    module: "valuation_reports",         audience: "participant" },
   { key: "adhoc_user",   label: "Ad-hoc — listings / users", module: "adhoc_charges",             audience: "participant" },
   { key: "adhoc_agent",  label: "Add-ons — agents",          module: "adhoc_charges",             audience: "agent" },
@@ -84,9 +85,9 @@ const AUDIENCES = ["participant", "professional", "agent", "developer", "investo
  * Participant Pro €29/mo · Agent Pro €149/mo · Developer Pro €129/mo
  * Professional Pro €69/mo
  *
- * Investor & Institutional are invitation-only — their `amount` is 0 here
- * and the canonical price is set per application via a one-off Stripe
- * Payment Link. The `metadata.by_application` flag indicates this.
+ * Investor & Institutional are invitation-only. Their `amount` is 0 here
+ * because public checkout is blocked; create-investor-payment requires admins
+ * to enter a custom annual amount for each approved Checkout link.
  *
  * Agents and Professionals only have **Free + Pro** plans on the public
  * pricing page. Anything beyond that (extra seats, branding, white-label,
@@ -112,9 +113,9 @@ const DEFAULT_SEED: Omit<PricingConfig, "id" | "created_at" | "updated_at">[] = 
   { key: "professional_basic",        label: "Professional Pro",        description: "Priority leads, booking calendar, verified badge & AI tools",              audience: "professional", module: "professional_subscription", unit: "monthly",    currency: "EUR", amount: 69,   is_active: true, sort_order: 1,  metadata: {} },
   // Legacy Premium tier — replaced by API access, referral network and seat add-ons.
   { key: "professional_premium",      label: "Professional Premium (legacy)", description: "Replaced by API, referral-network and seat add-ons.",                  audience: "professional", module: "professional_subscription", unit: "monthly",    currency: "EUR", amount: 129,  is_active: false, sort_order: 2,  metadata: { deprecated: true } },
-  // ── Investors (invitation-only — pricing set per application) ─────────────
-  { key: "investor_private",          label: "Private Investor",        description: "Invitation-only — pricing set per application via one-off payment link.",  audience: "investor",     module: "investor_subscription",    unit: "monthly",    currency: "EUR", amount: 0,    is_active: true, sort_order: 1,  metadata: { by_application: true } },
-  { key: "investor_institutional",    label: "Institutional Investor",  description: "Invitation-only — pricing set per application via one-off payment link.",  audience: "investor",     module: "investor_subscription",    unit: "monthly",    currency: "EUR", amount: 0,    is_active: true, sort_order: 2,  metadata: { by_application: true } },
+  // Investors (invitation-only - custom annual admin Checkout after approval)
+  { key: "investor_private",          label: "Private Investor",        description: "Invitation-only - custom annual amount via admin-created Checkout after approval.",  audience: "investor",     module: "investor_subscription",    unit: "annual",     currency: "EUR", amount: 0,    is_active: true, sort_order: 1,  metadata: { invite_only: true, custom_annual_amount: true } },
+  { key: "investor_institutional",    label: "Institutional Investor",  description: "Invitation-only - custom annual amount via admin-created Checkout after approval.",  audience: "institutional",module: "investor_subscription",    unit: "annual",     currency: "EUR", amount: 0,    is_active: true, sort_order: 2,  metadata: { invite_only: true, custom_annual_amount: true } },
   // ── Valuation / AI reports ────────────────────────────────────────────────
   { key: "valuation_single",          label: "AI Valuation (single)",   description: "Full AI valuation: market comp, yield estimate & confidence score",        audience: "participant",         module: "valuation_reports",        unit: "per_report", currency: "EUR", amount: 39,   is_active: true, sort_order: 1,  metadata: {} },
   { key: "valuation_bundle",          label: "AI Valuation × 5",        description: "5 valuation reports — save 24% vs single",                                 audience: "participant",         module: "valuation_reports",        unit: "bundle",     currency: "EUR", amount: 149,  is_active: true, sort_order: 2,  metadata: {} },

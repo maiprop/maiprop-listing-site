@@ -17,12 +17,11 @@ describe("firesale advisor policy consolidation migration", () => {
     expect(migration).toContain("investor_id = (SELECT auth.uid()) OR public.has_platform_admin((SELECT auth.uid()))");
   });
 
-  it("keeps firesale interest insert gated by active subscription or platform admin", () => {
+  it("keeps firesale interest insert gated by current subscription or platform admin", () => {
     expect(migration).toContain('CREATE POLICY "firesale_interest_insert"');
     expect(migration).toContain("public.has_platform_admin((SELECT auth.uid())) OR");
     expect(migration).toContain("investor_id = (SELECT auth.uid())");
-    expect(migration).toContain("FROM public.investor_subscriptions s");
-    expect(migration).toContain("s.status IN ('active', 'trial')");
+    expect(migration).toContain("public.has_current_investor_subscription((SELECT auth.uid()))");
   });
 
   it("keeps published Quick Sale feed access subscription-based", () => {
@@ -30,11 +29,10 @@ describe("firesale advisor policy consolidation migration", () => {
     expect(migration).toContain('CREATE POLICY "firesale_requests_select"');
     expect(migration).toContain("user_id = (SELECT auth.uid())");
     expect(migration).toContain("published_to_investors = true");
-    expect(migration).toContain("s.user_id = (SELECT auth.uid())");
-    expect(migration).toContain("s.status IN ('active', 'trial')");
+    expect(migration).toContain("public.has_current_investor_subscription((SELECT auth.uid()))");
   });
 
-  it("does not require investor profile role for custom payment-link access", () => {
+  it("does not require investor profile role for custom annual admin Checkout access", () => {
     expect(migration).not.toContain("role::text IN ('investor', 'institutional')");
     expect(migration).not.toContain("participant_type::text IN ('investor', 'institutional')");
   });

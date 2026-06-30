@@ -512,10 +512,10 @@ export default function AdminInvitationRequests() {
                             type="number"
                             min="1"
                             step="1"
-                            placeholder="Amount"
+                            placeholder="EUR amount"
                             value={getPaymentAmount(req.id)}
                             onChange={e => setPaymentAmountMap(prev => ({ ...prev, [req.id]: e.target.value }))}
-                            className="w-24 bg-secondary border border-border rounded-lg px-2 py-1.5 text-xs text-foreground outline-none focus:border-primary"
+                            className="w-28 bg-secondary border border-border rounded-lg px-2 py-1.5 text-xs text-foreground outline-none focus:border-primary"
                             disabled={creatingPaymentLink === req.id}
                           />
                           <Button

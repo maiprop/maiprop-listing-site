@@ -526,7 +526,8 @@ describe("public listings endpoint", () => {
     expect(listingsUrl.searchParams.get("limit")).toBe("200");
     expect(listingsUrl.searchParams.get("offset")).toBe("200");
     expect(listingsUrl.searchParams.get("city")).toBe("ilike.*Athens*");
-    expect(listingsUrl.searchParams.get("listing_type")).toBe("eq.sale");
+    expect(listingsUrl.searchParams.get("listing_type")).toBe("in.(sale,new_build)");
+    expect(listingsUrl.searchParams.get("select")).toContain("project_units!project_units_project_id_fkey");
     expect(listingsUrl.searchParams.get("is_off_market")).toBe("eq.false");
     expect(listingsUrl.searchParams.get("listing_images.limit")).toBe("3");
     expect(listingsUrl.searchParams.get("has_pool")).toBe("eq.true");
@@ -553,6 +554,19 @@ describe("public listings endpoint", () => {
     expect(url.searchParams.has("listing_type")).toBe(false);
     expect(url.searchParams.get("is_off_market")).toBe("eq.false");
     expect(url.searchParams.getAll("order")).toContain("views_count.desc.nullslast");
+  });
+
+  it("includes canonical new-build project ads on explicit sale and rent catalogue pages", async () => {
+    await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?listing_type=sale"));
+    let url = fetchUrls("/rest/v1/listings")[0];
+    expect(url.searchParams.get("listing_type")).toBe("in.(sale,new_build)");
+    expect(url.searchParams.get("select")).toContain("project_units!project_units_project_id_fkey");
+
+    fetchMock().mockClear();
+    await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?listing_type=rent"));
+    url = fetchUrls("/rest/v1/listings")[0];
+    expect(url.searchParams.get("listing_type")).toBe("in.(rent,new_build)");
+    expect(url.searchParams.get("select")).toContain("project_units!project_units_project_id_fkey");
   });
 
   it("returns canonical new-build listings by listing_type instead of the legacy pre-sale flag", async () => {

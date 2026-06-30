@@ -31,14 +31,14 @@ export type PricingConfigMap = Record<
 /** Plan keys used across the app — keep in sync with AdminPricing DEFAULT_SEED */
 export const PRICING_KEYS = {
   pro: "pro",
-  seller_pro: "seller_pro",
   agent_basic: "agent_basic",
-  agent_plus: "agent_plus",
   developer_pro: "developer_pro",
   professional_basic: "professional_basic",
-  professional_premium: "professional_premium",
   valuation_single: "valuation_single",
   valuation_bundle: "valuation_bundle",
+  property_report_single: "property_report_single",
+  neighbourhood_report_single: "neighbourhood_report_single",
+  neighbourhood_report_bundle: "neighbourhood_report_bundle",
   investor_private: "investor_private",
   investor_institutional: "investor_institutional",
 } as const;

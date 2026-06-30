@@ -339,9 +339,11 @@ describe("AdminInvitationRequests", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Approved/i }));
     expect(screen.queryByText("Iris Investor")).not.toBeInTheDocument();
     expect(screen.getByText("done@example.com")).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText(/Payment amount for done@example.com/i), {
-      target: { value: "2500" },
-    });
+    const amountInput = screen.getByLabelText(/Payment amount for done@example.com/i);
+    expect(amountInput).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Create payment link/i }));
+    expect(toastMock.error).toHaveBeenCalledWith("Enter a payment amount greater than 0.");
+    fireEvent.change(amountInput, { target: { value: "12500" } });
     fireEvent.click(screen.getByRole("button", { name: /Create payment link/i }));
     await waitFor(() =>
       expect(invokeMock).toHaveBeenCalledWith("create-investor-payment", {
@@ -349,7 +351,7 @@ describe("AdminInvitationRequests", () => {
           request_id: "req-2",
           user_id: "user-1",
           plan_key: "investor_private",
-          amount: 2500,
+          amount: 12500,
         },
         headers: { Authorization: "Bearer token" },
       }),

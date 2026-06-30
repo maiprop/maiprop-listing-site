@@ -94,4 +94,25 @@ describe("Stripe client runtime guard", () => {
       );
     }
   });
+
+  it("keeps public subscription catalog rows monthly with annual companions", () => {
+    const catalogSource = fs.readFileSync(
+      path.join(root, "scripts", "setup-stripe-catalog.mjs"),
+      "utf8",
+    );
+
+    for (const [planKey, monthlyAmount] of [
+      ["pro", 29],
+      ["agent_basic", 149],
+      ["developer_pro", 129],
+      ["professional_basic", 69],
+    ] as const) {
+      const planBlock = catalogSource.match(
+        new RegExp(`key: "${planKey}",[\\s\\S]*?amountMajor: ${monthlyAmount},[\\s\\S]*?annualCompanion: true,`),
+      )?.[0];
+
+      expect(planBlock, `${planKey} should be present in catalog`).toBeTruthy();
+      expect(planBlock, `${planKey} should seed monthly amount before annual companion`).toContain('unit: "monthly"');
+    }
+  });
 });

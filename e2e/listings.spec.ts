@@ -87,7 +87,9 @@ const mockPublicListingApis = async (
     const url = new URL(route.request().url());
     listingRequests.push(url.toString());
     const listingType = url.searchParams.get("listing_type");
-    const data = listingType
+    const data = listingType === "sale" || listingType === "rent"
+      ? listings.filter((listing) => listing.listing_type === listingType || listing.listing_type === "new_build")
+      : listingType
       ? listings.filter((listing) => listing.listing_type === listingType)
       : listings;
 
@@ -200,6 +202,34 @@ test.describe("Listings browse", () => {
       const url = new URL(requestUrl);
       return url.searchParams.get("listing_type") === "new_build" && !url.searchParams.has("pre_sale");
     })).toBe(true);
+  });
+
+  test("sale and rent catalogue pages include new-build project ads", async ({ page }) => {
+    const sale = makeListing({ id: "sale-card", title: "Sale Card", listing_type: "sale" });
+    const rent = makeListing({ id: "rent-card", title: "Rent Card", listing_type: "rent", price: 1800 });
+    const newBuild = makeListing({
+      id: "new-build-sale-rent-card",
+      title: "Project Ad Visible In Catalogues",
+      listing_type: "new_build",
+      is_pre_sale: false,
+      construction_status: "under_construction",
+    });
+    const requests = await mockPublicListingApis(page, [sale, rent, newBuild]);
+
+    await page.goto("/listings?listing_type=sale");
+    await page.waitForLoadState("load");
+    await expect(page.getByText("Project Ad Visible In Catalogues").first()).toBeVisible();
+    await expect(page.locator('[data-testid="property-card"] a[href="/new-build/new-build-sale-rent-card"]').first()).toBeVisible();
+
+    await page.goto("/listings?listing_type=rent");
+    await page.waitForLoadState("load");
+    await expect(page.getByText("Project Ad Visible In Catalogues").first()).toBeVisible();
+
+    const listingTypes = requests
+      .map((requestUrl) => new URL(requestUrl).searchParams.get("listing_type"))
+      .filter(Boolean);
+    expect(listingTypes).toContain("sale");
+    expect(listingTypes).toContain("rent");
   });
 
   test("canonical redirects use listing_type instead of the legacy is_pre_sale flag", async ({ page }) => {

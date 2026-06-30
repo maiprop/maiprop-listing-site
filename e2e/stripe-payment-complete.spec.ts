@@ -7,8 +7,15 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, test, type APIRequestContext, type Locator, type Page } from "@playwright/test";
+import {
+  type APIRequestContext,
+  expect,
+  type Locator,
+  type Page,
+  test,
+} from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
+import WebSocket from "ws";
 import { readCleanEnv } from "./helpers/env";
 
 function readDotEnv(): Record<string, string> {
@@ -50,18 +57,32 @@ const SUPABASE_ANON_KEY = env(
 const SUPABASE_SERVICE_ROLE_KEY = env("SUPABASE_SERVICE_ROLE_KEY");
 const COMPLETE_PAYMENT = env("E2E_COMPLETE_STRIPE_PAYMENT") === "true";
 const TEST_EMAIL = env("E2E_STRIPE_PAYMENT_EMAIL", "E2E_TEST_EMAIL");
-const TEST_PASSWORD = env("E2E_STRIPE_PAYMENT_PASSWORD", "E2E_TEST_PASSWORD", "E2E_DEMO_PASSWORD") || "Demo2025!";
+const TEST_PASSWORD = env(
+  "E2E_STRIPE_PAYMENT_PASSWORD",
+  "E2E_TEST_PASSWORD",
+  "E2E_DEMO_PASSWORD",
+) || "Demo2025!";
+const USE_EXISTING_PAYMENT_ACCOUNT =
+  env("E2E_STRIPE_USE_EXISTING_ACCOUNT") === "true";
 const APP_ORIGIN = env("PLAYWRIGHT_BASE_URL") || "http://localhost:8080";
-const PAID_ADDON_KEYS = (env("E2E_STRIPE_ADDON_KEYS") || "valuation_single,property_report_single")
+const PAID_ADDON_KEYS = (env("E2E_STRIPE_ADDON_KEYS") ||
+  "valuation_single,valuation_bundle,property_report_single,neighbourhood_report_single,neighbourhood_report_bundle")
   .split(",")
   .map((key) => key.trim())
   .filter(Boolean);
-const API_SUBSCRIPTION_CYCLES = (env("E2E_STRIPE_API_SUBSCRIPTION_CYCLES") || "")
-  .split(",")
-  .map((cycle) => cycle.trim())
-  .filter((cycle): cycle is "monthly" | "annual" => cycle === "monthly" || cycle === "annual");
-const REQUIRE_STRIPE_TAX_AMOUNT = env("E2E_REQUIRE_STRIPE_TAX_AMOUNT") === "true";
-const EXPECTED_STRIPE_TAX_RATE = Number(env("E2E_EXPECT_STRIPE_TAX_RATE") || "0.24");
+const API_SUBSCRIPTION_CYCLES =
+  (env("E2E_STRIPE_API_SUBSCRIPTION_CYCLES") || "")
+    .split(",")
+    .map((cycle) => cycle.trim())
+    .filter((cycle): cycle is "monthly" | "annual" =>
+      cycle === "monthly" || cycle === "annual"
+    );
+const REQUIRE_STRIPE_TAX_AMOUNT =
+  env("E2E_REQUIRE_STRIPE_TAX_AMOUNT") === "true";
+const EXPECTED_STRIPE_TAX_RATE = Number(
+  env("E2E_EXPECT_STRIPE_TAX_RATE") || "0.24",
+);
+const CHECK_DECLINED_CARD = env("E2E_STRIPE_CHECK_DECLINED_CARD") === "true";
 
 const canRun = COMPLETE_PAYMENT &&
   SUPABASE_URL.startsWith("https://") &&
@@ -89,11 +110,30 @@ type PaymentAccount = {
   session: SupabasePasswordSession;
 };
 
+type PaymentAdminClient = NonNullable<ReturnType<typeof adminClient>>;
+
 function adminClient() {
   if (!SUPABASE_SERVICE_ROLE_KEY) return null;
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
+    realtime: { transport: WebSocket },
   });
+}
+
+async function expectPaymentProfile(
+  admin: PaymentAdminClient,
+  userId: string,
+  label: string,
+): Promise<void> {
+  const { data, error } = await admin
+    .from("profiles")
+    .select("user_id,role,participant_type")
+    .eq("user_id", userId)
+    .maybeSingle();
+  expect(error, `${label} profile lookup: ${error?.message ?? ""}`).toBeNull();
+  expect(data?.user_id, `${label} profile row must exist before Checkout`).toBe(
+    userId,
+  );
 }
 
 async function fillFirstVisible(candidates: Locator[], value: string) {
@@ -111,8 +151,16 @@ async function fillFirstVisible(candidates: Locator[], value: string) {
   throw new Error(`Could not fill Stripe Checkout field with value ${value}`);
 }
 
-async function fillStripeCheckoutCard(page: Page) {
-  const secureFrame = page.frameLocator('iframe[title*="Secure"], iframe[name^="__privateStripeFrame"]').first();
+const wait = (ms: number) =>
+  new Promise((resolveWait) => setTimeout(resolveWait, ms));
+
+async function fillStripeCheckoutCard(
+  page: Page,
+  cardNumber = "4242424242424242",
+) {
+  const secureFrame = page.frameLocator(
+    'iframe[title*="Secure"], iframe[name^="__privateStripeFrame"]',
+  ).first();
   await fillFirstVisible([
     page.getByLabel(/card number/i),
     page.locator('input[name="cardNumber"]'),
@@ -122,7 +170,7 @@ async function fillStripeCheckoutCard(page: Page) {
     secureFrame.locator('input[name="cardNumber"]'),
     secureFrame.locator('input[autocomplete="cc-number"]'),
     secureFrame.getByPlaceholder(/1234 1234/i),
-  ], "4242424242424242");
+  ], cardNumber);
   await fillFirstVisible([
     page.getByLabel(/expiration|expiry/i),
     page.locator('input[name="cardExpiry"]'),
@@ -144,11 +192,16 @@ async function fillStripeCheckoutCard(page: Page) {
     secureFrame.getByPlaceholder(/CVC|CVV/i),
   ], "123");
 
-  await page.getByLabel(/cardholder name|name on card/i).fill("Codex Stripe Test", { timeout: 2_000 }).catch(() => undefined);
+  await page.getByLabel(/cardholder name|name on card/i).fill(
+    "Codex Stripe Test",
+    { timeout: 2_000 },
+  ).catch(() => undefined);
 }
 
 async function fillStripeBillingAddress(page: Page) {
-  await page.getByLabel(/country|region/i).selectOption({ label: "Greece" }, { timeout: 2_000 }).catch(() => undefined);
+  await page.getByLabel(/country|region/i).selectOption({ label: "Greece" }, {
+    timeout: 2_000,
+  }).catch(() => undefined);
   await fillFirstVisible([
     page.getByLabel(/address line 1/i),
     page.locator('input[name="billingAddressLine1"]'),
@@ -174,10 +227,32 @@ async function completeStripeCheckout(page: Page) {
   await fillStripeBillingAddress(page);
   await page.keyboard.press("Tab").catch(() => undefined);
   await page.waitForTimeout(1_500);
-  const submitButton = page.getByRole("button", { name: /subscribe|pay|start trial/i });
+  const submitButton = page.getByRole("button", {
+    name: /subscribe|pay|start trial/i,
+  });
   await expect(submitButton).toBeEnabled({ timeout: 10_000 });
   await submitButton.click();
   await page.waitForURL(/[?&]checkout=success/, { timeout: 120_000 });
+}
+
+async function submitDeclinedStripeCheckout(page: Page) {
+  await fillStripeCheckoutCard(page, "4000000000000002");
+  await fillStripeBillingAddress(page);
+  await page.keyboard.press("Tab").catch(() => undefined);
+  await page.waitForTimeout(1_500);
+  const submitButton = page.getByRole("button", {
+    name: /subscribe|pay|start trial/i,
+  });
+  await expect(submitButton).toBeEnabled({ timeout: 10_000 });
+  await submitButton.click();
+  await expect(
+    page.getByText(
+      /declined|card was declined|try another card|payment failed/i,
+    ).first(),
+  )
+    .toBeVisible({ timeout: 30_000 });
+  expect(page.url()).toContain("checkout.stripe.com");
+  expect(page.url()).not.toContain("checkout=success");
 }
 
 async function accessTokenFromStorage(page: Page): Promise<string> {
@@ -209,40 +284,53 @@ async function requestSupabaseSession(
 
   for (let attempt = 1; attempt <= SUPABASE_AUTH_ATTEMPTS; attempt += 1) {
     try {
-      const response = await request.post(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-          "Content-Type": "application/json",
+      const response = await request.post(
+        `${SUPABASE_URL}/auth/v1/token?grant_type=password`,
+        {
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json",
+          },
+          data: {
+            email,
+            password,
+          },
+          failOnStatusCode: false,
+          timeout: 30_000,
         },
-        data: {
-          email,
-          password,
-        },
-        failOnStatusCode: false,
-        timeout: 30_000,
-      });
+      );
       lastStatus = response.status();
       lastBody = await response.text();
 
       if (response.ok()) {
-        const session = JSON.parse(lastBody) as Partial<SupabasePasswordSession>;
+        const session = JSON.parse(lastBody) as Partial<
+          SupabasePasswordSession
+        >;
         expect(session.access_token, "access token").toBeTruthy();
         expect(session.refresh_token, "refresh token").toBeTruthy();
         expect(session.user?.id, "auth user id").toBeTruthy();
         return session as SupabasePasswordSession;
       }
 
-      if (![408, 429, 500, 502, 503, 504, 520, 522, 524].includes(lastStatus)) break;
+      if (![408, 429, 500, 502, 503, 504, 520, 522, 524].includes(lastStatus)) {
+        break;
+      }
     } catch (error) {
       lastStatus = 0;
       lastBody = error instanceof Error ? error.message : String(error);
     }
 
-    await new Promise((resolveRetry) => setTimeout(resolveRetry, attempt * 2_000));
+    await new Promise((resolveRetry) =>
+      setTimeout(resolveRetry, attempt * 2_000)
+    );
   }
 
-  throw new Error(`Supabase Auth login failed with HTTP ${lastStatus}: ${lastBody.slice(0, 240)}`);
+  throw new Error(
+    `Supabase Auth login failed with HTTP ${lastStatus}: ${
+      lastBody.slice(0, 240)
+    }`,
+  );
 }
 
 async function createPaymentAccount(
@@ -250,6 +338,22 @@ async function createPaymentAccount(
   label: string,
 ): Promise<PaymentAccount> {
   const admin = adminClient();
+  if (USE_EXISTING_PAYMENT_ACCOUNT) {
+    expect(
+      TEST_EMAIL,
+      "E2E_STRIPE_USE_EXISTING_ACCOUNT requires E2E_STRIPE_PAYMENT_EMAIL",
+    ).toBeTruthy();
+    const session = await requestSupabaseSession(request);
+    if (admin && session.user?.id) {
+      await expectPaymentProfile(admin, session.user.id, `existing ${label}`);
+    }
+    return {
+      email: TEST_EMAIL,
+      password: TEST_PASSWORD,
+      session,
+    };
+  }
+
   if (!admin) {
     return {
       email: TEST_EMAIL,
@@ -258,29 +362,40 @@ async function createPaymentAccount(
     };
   }
 
-  const email = `stripe-payment-${label}-${Date.now()}-${Math.random().toString(16).slice(2)}@maiprop.demo`;
+  const email = `stripe-payment-${label}-${Date.now()}-${
+    Math.random().toString(16).slice(2)
+  }@maiprop.demo`;
   const password = "StripePaymentE2E2026!";
 
-  const { data: created, error: createError } = await admin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-    user_metadata: { created_by: "stripe-payment-complete-e2e", label },
-  });
-  expect(createError, `create payment user: ${createError?.message ?? ""}`).toBeNull();
+  const { data: created, error: createError } = await admin.auth.admin
+    .createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { created_by: "stripe-payment-complete-e2e", label },
+    });
+  expect(createError, `create payment user: ${createError?.message ?? ""}`)
+    .toBeNull();
 
   const userId = created.user?.id;
   expect(userId, "created payment user id").toBeTruthy();
 
-  const { error: onboardingError } = await admin.rpc("complete_onboarding_role_for_user", {
-    p_user_id: userId,
-    p_role: "buyer",
-    p_participant_type: "buyer",
-    p_display_name: `Stripe Payment E2E ${label}`,
-    p_city: "Athens",
-    p_phone: "+30 6900000000",
-  } as never);
-  expect(onboardingError, `complete onboarding: ${onboardingError?.message ?? ""}`).toBeNull();
+  const { error: onboardingError } = await admin.rpc(
+    "complete_onboarding_role_for_user",
+    {
+      p_user_id: userId,
+      p_role: "buyer",
+      p_participant_type: "buyer",
+      p_display_name: `Stripe Payment E2E ${label}`,
+      p_city: "Athens",
+      p_phone: "+30 6900000000",
+    } as never,
+  );
+  expect(
+    onboardingError,
+    `complete onboarding: ${onboardingError?.message ?? ""}`,
+  ).toBeNull();
+  await expectPaymentProfile(admin, userId!, `created ${label}`);
 
   return {
     email,
@@ -289,18 +404,24 @@ async function createPaymentAccount(
   };
 }
 
-async function installSupabaseSession(page: Page, session: SupabasePasswordSession): Promise<void> {
+async function installSupabaseSession(
+  page: Page,
+  session: SupabasePasswordSession,
+): Promise<void> {
   await page.addInitScript(({ key, value }) => {
     localStorage.clear();
     localStorage.setItem(key, JSON.stringify(value));
     localStorage.setItem("maiprop_lang", "en");
-    localStorage.setItem("maiprop_cookie_consent", JSON.stringify({
-      accepted: true,
-      functional: true,
-      analytics: false,
-      mapping: false,
-      timestamp: Date.now(),
-    }));
+    localStorage.setItem(
+      "maiprop_cookie_consent",
+      JSON.stringify({
+        accepted: true,
+        functional: true,
+        analytics: false,
+        mapping: false,
+        timestamp: Date.now(),
+      }),
+    );
   }, { key: authStorageKey(), value: session });
 }
 
@@ -321,22 +442,37 @@ async function startAddonCheckout(
   token: string,
   addonKey: string,
 ): Promise<CheckoutPayload> {
-  const response = await request.post(`${SUPABASE_URL}/functions/v1/create-checkout`, {
-    headers: {
-      ...authedHeaders(token),
-      Origin: APP_ORIGIN,
-    },
-    data: {
-      addon_key: addonKey,
-      success_url: `/dashboard/billing?checkout=success&e2e_addon=${addonKey}`,
-      cancel_url: `/dashboard/billing?checkout=cancelled&e2e_addon=${addonKey}`,
-    },
-    failOnStatusCode: false,
-    timeout: 30_000,
-  });
-  const body = await response.json().catch(() => ({}));
-  expect(response.status(), JSON.stringify(body)).toBe(200);
-  expect(body.url, "Stripe Checkout URL").toContain("https://checkout.stripe.com/");
+  let body: Record<string, unknown> = {};
+  let status = 0;
+  const checkoutNonce = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    const response = await request.post(
+      `${SUPABASE_URL}/functions/v1/create-checkout`,
+      {
+        headers: {
+          ...authedHeaders(token),
+          Origin: APP_ORIGIN,
+        },
+        data: {
+          addon_key: addonKey,
+          success_url:
+            `/dashboard/billing?checkout=success&e2e_addon=${addonKey}&e2e_nonce=${checkoutNonce}`,
+          cancel_url:
+            `/dashboard/billing?checkout=cancelled&e2e_addon=${addonKey}&e2e_nonce=${checkoutNonce}`,
+        },
+        failOnStatusCode: false,
+        timeout: 30_000,
+      },
+    );
+    status = response.status();
+    body = await response.json().catch(() => ({}));
+    if (status !== 429) break;
+    await wait(attempt * 10_000);
+  }
+  expect(status, JSON.stringify(body)).toBe(200);
+  expect(body.url, "Stripe Checkout URL").toContain(
+    "https://checkout.stripe.com/",
+  );
   expect(body.session_id, "Stripe Checkout Session id").toMatch(/^cs_test_/);
   expect(body.checkout_type).toBe("addon");
   return body as CheckoutPayload;
@@ -347,23 +483,37 @@ async function startSubscriptionCheckout(
   token: string,
   billingCycle: "monthly" | "annual",
 ): Promise<CheckoutPayload> {
-  const response = await request.post(`${SUPABASE_URL}/functions/v1/create-checkout`, {
-    headers: {
-      ...authedHeaders(token),
-      Origin: APP_ORIGIN,
-    },
-    data: {
-      plan: "pro",
-      billing_cycle: billingCycle,
-      success_url: `/dashboard/billing?checkout=success&e2e_cycle=${billingCycle}`,
-      cancel_url: `/dashboard/billing?checkout=cancelled&e2e_cycle=${billingCycle}`,
-    },
-    failOnStatusCode: false,
-    timeout: 30_000,
-  });
-  const body = await response.json().catch(() => ({}));
-  expect(response.status(), JSON.stringify(body)).toBe(200);
-  expect(body.url, "Stripe Checkout URL").toContain("https://checkout.stripe.com/");
+  let body: Record<string, unknown> = {};
+  let status = 0;
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    const response = await request.post(
+      `${SUPABASE_URL}/functions/v1/create-checkout`,
+      {
+        headers: {
+          ...authedHeaders(token),
+          Origin: APP_ORIGIN,
+        },
+        data: {
+          plan: "pro",
+          billing_cycle: billingCycle,
+          success_url:
+            `/dashboard/billing?checkout=success&e2e_cycle=${billingCycle}`,
+          cancel_url:
+            `/dashboard/billing?checkout=cancelled&e2e_cycle=${billingCycle}`,
+        },
+        failOnStatusCode: false,
+        timeout: 30_000,
+      },
+    );
+    status = response.status();
+    body = await response.json().catch(() => ({}));
+    if (status !== 429) break;
+    await wait(attempt * 10_000);
+  }
+  expect(status, JSON.stringify(body)).toBe(200);
+  expect(body.url, "Stripe Checkout URL").toContain(
+    "https://checkout.stripe.com/",
+  );
   expect(body.session_id, "Stripe Checkout Session id").toMatch(/^cs_test_/);
   expect(body.checkout_type).toBe("subscription");
   expect(body.mode ?? "test").toBe("test");
@@ -375,12 +525,17 @@ async function pollSyncedSubscription(
   token: string,
 ) {
   await expect.poll(async () => {
-    const response = await request.post(`${SUPABASE_URL}/functions/v1/check-subscription`, {
-      headers: authedHeaders(token),
-      data: { refresh: true },
-      failOnStatusCode: false,
-    });
-    if (!response.ok()) return { subscribed: false, product_id: null, status: response.status() };
+    const response = await request.post(
+      `${SUPABASE_URL}/functions/v1/check-subscription`,
+      {
+        headers: authedHeaders(token),
+        data: { refresh: true },
+        failOnStatusCode: false,
+      },
+    );
+    if (!response.ok()) {
+      return { subscribed: false, product_id: null, status: response.status() };
+    }
     const body = await response.json();
     return {
       subscribed: Boolean(body.subscribed),
@@ -399,12 +554,15 @@ async function pollPaidInvoiceAndReceipt(
   token: string,
 ) {
   await expect.poll(async () => {
-    const response = await request.post(`${SUPABASE_URL}/functions/v1/get-invoices`, {
-      headers: authedHeaders(token),
-      data: {},
-      failOnStatusCode: false,
-      timeout: 30_000,
-    });
+    const response = await request.post(
+      `${SUPABASE_URL}/functions/v1/get-invoices`,
+      {
+        headers: authedHeaders(token),
+        data: {},
+        failOnStatusCode: false,
+        timeout: 30_000,
+      },
+    );
     if (!response.ok()) {
       return {
         paid_invoice: false,
@@ -416,17 +574,19 @@ async function pollPaidInvoiceAndReceipt(
       };
     }
     const body = await response.json();
-    const invoice = (body.invoices ?? []).find((candidate: Record<string, unknown>) =>
+    const invoice = (body.invoices ?? []).find((
+      candidate: Record<string, unknown>,
+    ) =>
       candidate.status === "paid" &&
       Number(candidate.amount_paid ?? 0) > 0 &&
       Boolean(candidate.hosted_invoice_url) &&
       Boolean(candidate.invoice_pdf)
     );
-      return {
-        paid_invoice: Boolean(invoice),
-        hosted_invoice_url: Boolean(invoice?.hosted_invoice_url),
-        invoice_pdf: Boolean(invoice?.invoice_pdf),
-        receipt_url: Boolean(invoice?.receipt_url),
+    return {
+      paid_invoice: Boolean(invoice),
+      hosted_invoice_url: Boolean(invoice?.hosted_invoice_url),
+      invoice_pdf: Boolean(invoice?.invoice_pdf),
+      receipt_url: Boolean(invoice?.receipt_url),
       automatic_tax_enabled: invoice?.automatic_tax
         ? (invoice.automatic_tax as { enabled?: boolean }).enabled === true
         : false,
@@ -448,15 +608,22 @@ async function pollPaidInvoiceAndReceipt(
 
   if (REQUIRE_STRIPE_TAX_AMOUNT) {
     await expect.poll(async () => {
-      const response = await request.post(`${SUPABASE_URL}/functions/v1/get-invoices`, {
-        headers: authedHeaders(token),
-        data: {},
-        failOnStatusCode: false,
-        timeout: 30_000,
-      });
-      if (!response.ok()) return { tax_amount_positive: false, status: response.status() };
+      const response = await request.post(
+        `${SUPABASE_URL}/functions/v1/get-invoices`,
+        {
+          headers: authedHeaders(token),
+          data: {},
+          failOnStatusCode: false,
+          timeout: 30_000,
+        },
+      );
+      if (!response.ok()) {
+        return { tax_amount_positive: false, status: response.status() };
+      }
       const body = await response.json();
-      const invoice = (body.invoices ?? []).find((candidate: Record<string, unknown>) =>
+      const invoice = (body.invoices ?? []).find((
+        candidate: Record<string, unknown>,
+      ) =>
         candidate.status === "paid" &&
         Number(candidate.amount_paid ?? 0) > 0 &&
         Boolean(candidate.hosted_invoice_url) &&
@@ -466,7 +633,10 @@ async function pollPaidInvoiceAndReceipt(
         tax_amount_positive: Number(invoice?.tax_amount ?? 0) > 0,
         tax_amount: Number(invoice?.tax_amount ?? 0),
         tax_rate_matches: Number(invoice?.subtotal ?? 0) > 0 &&
-          Math.abs(Number(invoice?.tax_amount ?? 0) - Number(invoice?.subtotal ?? 0) * EXPECTED_STRIPE_TAX_RATE) < 0.02,
+          Math.abs(
+              Number(invoice?.tax_amount ?? 0) -
+                Number(invoice?.subtotal ?? 0) * EXPECTED_STRIPE_TAX_RATE,
+            ) < 0.02,
         subtotal: Number(invoice?.subtotal ?? 0),
         automatic_tax_enabled: invoice?.automatic_tax
           ? (invoice.automatic_tax as { enabled?: boolean }).enabled === true
@@ -490,16 +660,20 @@ async function pollAddonDelivery(
   addonKey: string,
 ) {
   const query = new URLSearchParams({
-    select: "addon_key,status,credits_granted,credits_consumed,stripe_session_id,checkout_mode",
+    select:
+      "addon_key,status,credits_granted,credits_consumed,stripe_session_id,checkout_mode",
     stripe_session_id: `eq.${sessionId}`,
     limit: "1",
   });
   await expect.poll(async () => {
-    const response = await request.get(`${SUPABASE_URL}/rest/v1/addon_purchases?${query}`, {
-      headers: authedHeaders(token),
-      failOnStatusCode: false,
-      timeout: 30_000,
-    });
+    const response = await request.get(
+      `${SUPABASE_URL}/rest/v1/addon_purchases?${query}`,
+      {
+        headers: authedHeaders(token),
+        failOnStatusCode: false,
+        timeout: 30_000,
+      },
+    );
     if (!response.ok()) {
       return {
         delivered: false,
@@ -514,7 +688,8 @@ async function pollAddonDelivery(
     const granted = Number(row?.credits_granted ?? 0);
     const consumed = Number(row?.credits_consumed ?? 0);
     return {
-      delivered: Boolean(row) && row.addon_key === addonKey && granted > consumed,
+      delivered: Boolean(row) && row.addon_key === addonKey &&
+        granted > consumed,
       addon_key: row?.addon_key ?? null,
       ledger_status: row?.status ?? null,
       checkout_mode: row?.checkout_mode ?? null,
@@ -533,9 +708,47 @@ async function pollAddonDelivery(
   });
 }
 
+async function expectNoAddonDelivery(
+  request: APIRequestContext,
+  token: string,
+  sessionId: string,
+) {
+  const query = new URLSearchParams({
+    select:
+      "id,addon_key,status,credits_granted,credits_consumed,stripe_session_id,checkout_mode",
+    stripe_session_id: `eq.${sessionId}`,
+    limit: "1",
+  });
+  await expect.poll(async () => {
+    const response = await request.get(
+      `${SUPABASE_URL}/rest/v1/addon_purchases?${query}`,
+      {
+        headers: authedHeaders(token),
+        failOnStatusCode: false,
+        timeout: 30_000,
+      },
+    );
+    if (!response.ok()) return { delivered: false, status: response.status() };
+    const rows = await response.json();
+    const row = Array.isArray(rows) ? rows[0] : null;
+    return {
+      delivered: Boolean(row) && row.status === "paid" &&
+        Number(row.credits_granted ?? 0) > 0,
+      ledger_status: row?.status ?? null,
+      status: response.status(),
+    };
+  }, {
+    intervals: [2_000, 4_000, 8_000, 12_000],
+    timeout: 45_000,
+  }).toMatchObject({ delivered: false });
+}
+
 test.describe("Stripe test payment completion", () => {
   test.describe.configure({ mode: "serial", retries: 0 });
-  test.skip(!canRun, "Set E2E_COMPLETE_STRIPE_PAYMENT=true, Supabase URL/key, and E2E_STRIPE_PAYMENT_EMAIL to create a Stripe test subscription");
+  test.skip(
+    !canRun,
+    "Set E2E_COMPLETE_STRIPE_PAYMENT=true, Supabase URL/key, and E2E_STRIPE_PAYMENT_EMAIL to create a Stripe test subscription",
+  );
 
   test("completes test-card subscription checkout and observes synced entitlement", async ({ page, context, request }) => {
     test.setTimeout(240_000);
@@ -545,16 +758,18 @@ test.describe("Stripe test payment completion", () => {
 
     await page.goto("/pricing?audience=participant");
     await page.waitForLoadState("networkidle");
-    await page.getByRole("button", { name: /accept all|reject optional/i }).click({ timeout: 3_000 }).catch(() => {});
+    await page.getByRole("button", { name: /accept all|reject optional/i })
+      .click({ timeout: 3_000 }).catch(() => {});
 
     const upgradeButton = page.locator("#main-content").getByRole("button", {
-      name: /get pro plan|get started|get pro/i,
+      name: /get pro plan|get pro/i,
     }).first();
     await expect(upgradeButton).toBeVisible({ timeout: 10_000 });
 
-    const checkoutResponsePromise = page.waitForResponse((response) =>
-      response.url().includes("/functions/v1/create-checkout") &&
-      response.request().method() === "POST",
+    const checkoutResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url().includes("/functions/v1/create-checkout") &&
+        response.request().method() === "POST",
       { timeout: 30_000 },
     );
     const [popup, checkoutResponse] = await Promise.all([
@@ -562,16 +777,24 @@ test.describe("Stripe test payment completion", () => {
       checkoutResponsePromise,
       upgradeButton.click(),
     ]);
-    const checkoutPayload = await checkoutResponse.json().catch(() => ({})) as CheckoutPayload;
+    const checkoutPayload = await checkoutResponse.json().catch(
+      () => ({}),
+    ) as CheckoutPayload;
 
     const checkoutPage = popup ?? page;
     await checkoutPage.waitForURL(/checkout\.stripe\.com/, { timeout: 25_000 });
     const checkoutUrl = checkoutPage.url();
-    expect(checkoutUrl, "must be Stripe test-mode Checkout").toContain("cs_test_");
+    expect(checkoutUrl, "must be Stripe test-mode Checkout").toContain(
+      "cs_test_",
+    );
     const checkoutSessionId = checkoutPayload.session_id ??
       checkoutSessionIdFromUrl(checkoutPayload.url ?? checkoutUrl);
-    expect(checkoutSessionId, JSON.stringify(checkoutPayload)).toMatch(/^cs_test_/);
-    expect(checkoutPayload.checkout_type ?? "subscription").toBe("subscription");
+    expect(checkoutSessionId, JSON.stringify(checkoutPayload)).toMatch(
+      /^cs_test_/,
+    );
+    expect(checkoutPayload.checkout_type ?? "subscription").toBe(
+      "subscription",
+    );
     expect(checkoutPayload.mode ?? "test").toBe("test");
 
     await completeStripeCheckout(checkoutPage);
@@ -587,7 +810,10 @@ test.describe("Stripe test payment completion", () => {
   for (const billingCycle of API_SUBSCRIPTION_CYCLES) {
     test(`completes test-card ${billingCycle} subscription checkout via create-checkout`, async ({ page, request }) => {
       test.setTimeout(240_000);
-      const account = await createPaymentAccount(request, `api-${billingCycle}`);
+      const account = await createPaymentAccount(
+        request,
+        `api-${billingCycle}`,
+      );
       const session = account.session;
       await installSupabaseSession(page, session);
 
@@ -596,10 +822,16 @@ test.describe("Stripe test payment completion", () => {
       const token = await accessTokenFromStorage(page) || session.access_token;
       expect(token).toBeTruthy();
 
-      const checkout = await startSubscriptionCheckout(request, token, billingCycle);
+      const checkout = await startSubscriptionCheckout(
+        request,
+        token,
+        billingCycle,
+      );
       await page.goto(checkout.url!);
       await page.waitForURL(/checkout\.stripe\.com/, { timeout: 25_000 });
-      expect(page.url(), "must be Stripe test-mode Checkout").toContain("cs_test_");
+      expect(page.url(), "must be Stripe test-mode Checkout").toContain(
+        "cs_test_",
+      );
 
       await completeStripeCheckout(page);
       await pollSyncedSubscription(request, token);
@@ -622,11 +854,44 @@ test.describe("Stripe test payment completion", () => {
       const checkout = await startAddonCheckout(request, token, addonKey);
       await page.goto(checkout.url!);
       await page.waitForURL(/checkout\.stripe\.com/, { timeout: 25_000 });
-      expect(page.url(), "must be Stripe test-mode Checkout").toContain("cs_test_");
+      expect(page.url(), "must be Stripe test-mode Checkout").toContain(
+        "cs_test_",
+      );
 
       await completeStripeCheckout(page);
       expect(checkout.session_id).toBeTruthy();
       await pollAddonDelivery(request, token, checkout.session_id!, addonKey);
     });
   }
+
+  test("declined test-card add-on checkout does not deliver credits", async ({ page, request }) => {
+    test.skip(
+      !CHECK_DECLINED_CARD,
+      "Set E2E_STRIPE_CHECK_DECLINED_CARD=true to exercise Stripe's declined-card path",
+    );
+    test.setTimeout(180_000);
+    const account = await createPaymentAccount(request, "declined-addon");
+    const session = account.session;
+    await installSupabaseSession(page, session);
+
+    await page.goto("/dashboard/billing");
+    await page.waitForLoadState("domcontentloaded");
+    const token = await accessTokenFromStorage(page) || session.access_token;
+    expect(token).toBeTruthy();
+
+    const checkout = await startAddonCheckout(
+      request,
+      token,
+      "valuation_single",
+    );
+    await page.goto(checkout.url!);
+    await page.waitForURL(/checkout\.stripe\.com/, { timeout: 25_000 });
+    expect(page.url(), "must be Stripe test-mode Checkout").toContain(
+      "cs_test_",
+    );
+    expect(checkout.session_id).toBeTruthy();
+
+    await submitDeclinedStripeCheckout(page);
+    await expectNoAddonDelivery(request, token, checkout.session_id!);
+  });
 });

@@ -5,6 +5,7 @@ import {
   getPricingAudienceFromProfile,
 } from "@/lib/participantConfig";
 import { isSubscriptionAudienceAllowed } from "@/lib/subscriptionUtils";
+import { hasCurrentQuickSaleSubscription } from "@/lib/quickSaleEntitlements";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -43,20 +44,20 @@ const useInvestorProStatus = (userId: string | undefined, enabled: boolean) => {
       if (!userId) return null;
       const { data } = await supabase
         .from("investor_subscriptions")
-        .select("status")
+        .select("status, expires_at")
         .eq("user_id", userId)
         .in("status", ["active", "trial"])
         .limit(1)
         .maybeSingle();
-      return data as unknown as { status: string } | null;
+      return data as unknown as { status: string; expires_at: string | null } | null;
     },
     enabled: Boolean(userId) && enabled,
     staleTime: 30_000,
   });
 };
 
-const isActiveInvestorStatus = (status: string | undefined) =>
-  status === "active" || status === "trial";
+const isActiveInvestorStatus = (status: string | undefined, expiresAt?: string | null) =>
+  hasCurrentQuickSaleSubscription(status, expiresAt);
 const hasAnyProAccess = (flags: boolean[]) => flags.includes(true);
 type SubscriptionAccessSource =
   | "admin"
@@ -159,7 +160,8 @@ export const useSubscription = () => {
     useInvestorProStatus(user?.id, isInvestorRole);
   const hasStripePro = subscription.subscribed && Boolean(validatedProProduct);
   const hasInvestorPro =
-    isInvestorRole && isActiveInvestorStatus(investorSubStatus?.status);
+    isInvestorRole &&
+    isActiveInvestorStatus(investorSubStatus?.status, investorSubStatus?.expires_at);
   const isPro = hasAnyProAccess([
     isAdmin,
     hasStripePro,

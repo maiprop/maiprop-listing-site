@@ -545,7 +545,7 @@
       },
       "investorAccess": {
         "title": "Investor access",
-        "subtitle": "Apply for reviewed Quick Sale deal-flow access. Approval and a custom payment link are required before activation.",
+        "subtitle": "Apply for reviewed Quick Sale deal-flow access. Approval and a custom annual payment link are required before activation.",
         "apply": "Apply",
         "upgradeToApply": "Upgrade to Pro to apply"
       },
@@ -615,7 +615,7 @@
     "includes": "Includes",
     "addOns": "Add-ons",
     "enterprise": "Enterprise",
-    "customPricing": "Custom pricing",
+    "customPricing": "Custom annual access",
     "allPlansInclude": "All plans include"
   },
   "auth": {
@@ -1303,7 +1303,7 @@
       "noneBadge": "Invitation-only access",
       "noneTitle": "Request Access to the",
       "noneTitleHighlight": "Deal Flow",
-      "noneDesc": "Quick Sale™ deal flow is exclusively available to verified investors and institutional buyers. Submit your profile and our team will review your application — no subscription fee, access is purely by invitation.",
+      "noneDesc": "Quick Sale™ deal flow is exclusively available to verified investors and institutional buyers. Submit your profile and our team will review your application; approved access is billed through a custom annual payment link before activation.",
       "cta": "Request an Invitation",
       "reApply": "Re-apply",
       "alreadyApplied": "Already applied?",

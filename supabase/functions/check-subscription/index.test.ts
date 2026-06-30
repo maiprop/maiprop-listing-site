@@ -1,7 +1,7 @@
 /**
  * Tests for check-subscription edge function.
  */
-import { assertEquals, assertRejects } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assertEquals, assertRejects, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { authedReq, captureHandler, req } from "../_shared/testUtils.ts";
 
 const { handler, restore } = await captureHandler(
@@ -301,6 +301,14 @@ Deno.test("database fallback uses trial_end for active trial access", async () =
   assertEquals(state.product_id, "prod_participant");
   assertEquals(state.subscription_end, trialEnd);
   assertEquals(state.plan_key, "pro");
+});
+
+Deno.test("live Stripe subscription checks fall back to item period fields", async () => {
+  const source = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+  assertStringIncludes(source, "function getSubscriptionCurrentPeriodEnd");
+  assertStringIncludes(source, "current_period_end?: number | null");
+  assertStringIncludes(source, "subscription?.items.data[0]");
+  assertStringIncludes(source, "rootPeriodEnd ?? itemPeriodEnd ?? null");
 });
 
 Deno.test("database fallback rejects stale trial rows after the period expires", async () => {

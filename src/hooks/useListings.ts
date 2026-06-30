@@ -79,6 +79,13 @@ const LISTING_CARD_SELECT = [
 ].join(",");
 
 const LISTING_CARD_SELECT_WITH_IMAGES = `${LISTING_CARD_SELECT}, listing_images(url, sort_order)`;
+/** Paginated listings for grid view — fetches 40 per page, server-side filtering */
+export const PAGE_SIZE = 40;
+
+const SALE_RENT_CATALOG_TYPES_WITH_NEW_BUILD: Partial<Record<Enums<"listing_type">, Enums<"listing_type">[]>> = {
+  sale: ["sale", "new_build"],
+  rent: ["rent", "new_build"],
+};
 
 const LISTING_DETAIL_SELECT = [
   "id",
@@ -266,7 +273,7 @@ type ListingsQueryScope = {
  * full hook + react-query wrapper. The shape of the returned object mirrors
  * the supabase-js query builder so consumers can `await` it directly.
  */
-export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize = 24, scope: ListingsQueryScope = {}) => { // skipcq: JS-R1005 - Listing filters intentionally map one public search model onto Supabase query clauses.
+export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize = PAGE_SIZE, scope: ListingsQueryScope = {}) => { // skipcq: JS-R1005 - Listing filters intentionally map one public search model onto Supabase query clauses.
   const sort = filters?.sort ?? "featured";
   const ownerScoped = Boolean(filters?.owner_id) && !scope.publicScope;
   let query = supabase
@@ -308,7 +315,9 @@ export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize
 
   if (filters?.city) query = query.ilike("city", `%${filters.city}%`);
   if (filters?.listing_type) {
-    query = query.eq("listing_type", filters.listing_type as Enums<"listing_type">);
+    const listingType = filters.listing_type as Enums<"listing_type">;
+    const catalogTypes = SALE_RENT_CATALOG_TYPES_WITH_NEW_BUILD[listingType];
+    query = catalogTypes ? query.in("listing_type", catalogTypes) : query.eq("listing_type", listingType);
   } else if (!ownerScoped && !filters?.includeAuctions) {
     query = query.in("listing_type", ["sale", "rent", "firesale", "new_build"] as Enums<"listing_type">[]);
   }
@@ -428,7 +437,7 @@ type UseListingsOptions = {
 const fetchListingsPageFromSupabase = async (
   filters?: ListingsFilters,
   page = 1,
-  pageSize = 24,
+  pageSize = PAGE_SIZE,
   options: UseListingsOptions = {},
 ) => { // skipcq: JS-R1005 - Page fetch keeps listing rows and owner profile enrichment together.
   const from = (page - 1) * pageSize;
@@ -460,7 +469,7 @@ const fetchListingsPageFromSupabase = async (
   return { data: enriched, hasMore: rows.length === pageSize };
 };
 
-const fetchListingsPage = async (filters?: ListingsFilters, page = 1, pageSize = 24, options: UseListingsOptions = {}) => { // skipcq: JS-R1005 - Page fetch keeps listing rows and owner profile enrichment together.
+const fetchListingsPage = async (filters?: ListingsFilters, page = 1, pageSize = PAGE_SIZE, options: UseListingsOptions = {}) => { // skipcq: JS-R1005 - Page fetch keeps listing rows and owner profile enrichment together.
   if (shouldUsePublicListingsApi(filters)) {
     try {
       const cached = await fetchPublicApi<PublicListingsResponse>(
@@ -477,9 +486,6 @@ const fetchListingsPage = async (filters?: ListingsFilters, page = 1, pageSize =
 
   return fetchListingsPageFromSupabase(filters, page, pageSize, options);
 };
-
-/** Paginated listings for grid view — fetches 24 per page, server-side filtering */
-export const PAGE_SIZE = 24;
 
 export const useListingsPaginated = (
   filters?: ListingsFilters,

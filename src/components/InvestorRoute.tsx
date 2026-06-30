@@ -83,7 +83,7 @@ function InvestorAccessRequired({ user, isPro }: { user: User | null; isPro: boo
         <div>
           <h1 className="font-display text-2xl font-bold mb-2">Investor Access Required</h1>
           <p className="text-muted-foreground text-sm">
-            Quick Sale™ deal flow is exclusive to approved maiProp investors. Your account must be approved first; then our team sends a payment link and activates access after payment is confirmed.
+            Quick Sale™ deal flow is exclusive to approved maiProp investors. Your account must be approved first; then our team sends a custom annual payment link and activates access after payment is confirmed.
           </p>
         </div>
         <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-4 text-left space-y-2">
@@ -92,7 +92,7 @@ function InvestorAccessRequired({ user, isPro }: { user: User | null; isPro: boo
             "Apply for Private or Institutional Investor access",
             "Complete identity verification (KYC)",
             "Upload proof of funds if requested",
-            "Receive approval and a custom payment link",
+            "Receive approval and the custom annual payment link",
           ].map((step) => (
             <div key={step} className="flex items-start gap-2 text-sm">
               <CheckCircle2 className="w-4 h-4 text-orange-400 mt-0.5 shrink-0" />

@@ -257,6 +257,16 @@ function getSubscriptionItemIds(subscription: Stripe.Subscription | null): {
   };
 }
 
+function getSubscriptionCurrentPeriodEnd(subscription: Stripe.Subscription | null) {
+  const rootPeriodEnd = (subscription as unknown as {
+    current_period_end?: number | null;
+  } | null)?.current_period_end;
+  const itemPeriodEnd = (subscription?.items.data[0] as
+    | { current_period_end?: number | null }
+    | undefined)?.current_period_end;
+  return rootPeriodEnd ?? itemPeriodEnd ?? null;
+}
+
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 async function listOwnedCustomers(stripe: Stripe, userId: string) {
   const search = await stripe.customers.search({
@@ -370,9 +380,7 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
         user.id,
       );
 
-      const currentPeriodEnd =
-        (subscription as unknown as { current_period_end?: number } | null)
-          ?.current_period_end;
+      const currentPeriodEnd = getSubscriptionCurrentPeriodEnd(subscription);
       const subscriptionEnd = currentPeriodEnd
         ? new Date(currentPeriodEnd * 1000).toISOString()
         : null;

@@ -672,12 +672,12 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
   };
 
   const { data: pricingConfigs = {} } = usePricingConfigs();
-  const professionalProPrice = formatPrice(pricingConfigs?.[PRICING_KEYS.professional_basic], { showUnit: true, fallback: "€49/mo" });
+  const professionalProPrice = formatPrice(pricingConfigs?.[PRICING_KEYS.professional_basic], { showUnit: true, fallback: "EUR 69/mo" });
 
   const handleUpgradeToPro = async () => { // skipcq: JS-R1005 - Checkout launcher keeps edge-function response and toast fallback together.
     try {
       const { data, error } = await supabase.functions.invoke("create-checkout", {
-        body: { plan: "professional_basic", success_url: "/dashboard?pro=success", cancel_url: "/pricing" },
+        body: { plan: "professional_basic", billing_cycle: "monthly", success_url: "/dashboard?pro=success", cancel_url: "/pricing" },
       });
       if (error || !data?.url) throw new Error(error?.message ?? data?.error ?? "Checkout failed");
       window.location.href = data.url;

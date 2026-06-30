@@ -145,7 +145,7 @@ const INSTITUTIONAL_FEATURES: PlanFeature[] = [
   { label: "Custom data exports (CSV, JSON)",                  icon: FileText, free: false, paid: true },
   { label: "Multi-user / team seats",                          icon: Users, free: false, paid: true },
   { label: "Priority deal sourcing & exclusives",              icon: Star, free: false, paid: true },
-  { label: "Bespoke market intelligence reports",              icon: BarChart2, free: false, paid: true },
+  { label: "Curated market intelligence reports",              icon: BarChart2, free: false, paid: true },
 ];
 
 // ── Pricing plan definitions ───────────────────────────────────────────────────
@@ -193,9 +193,9 @@ const PRICING_EL: Record<string, string> = {
   "This plan is managed outside Stripe billing.": "Αυτό το πλάνο διαχειρίζεται εκτός του Stripe billing.",
   "Go to Investor Dashboard": "Μετάβαση στον επενδυτικό πίνακα",
   "Invitation only": "Μόνο με πρόσκληση",
-  "Custom pricing": "Εξατομικευμένη τιμολόγηση",
-  "Custom pricing · a payment link is sent after your application is approved.": "Εξατομικευμένη τιμολόγηση · ο σύνδεσμος πληρωμής αποστέλλεται μετά την έγκριση της αίτησής σας.",
-  "Invitation-based access · Pricing by arrangement": "Πρόσβαση με πρόσκληση · τιμολόγηση κατόπιν συμφωνίας",
+  "Custom annual access": "Προσαρμοσμένη ετήσια πρόσβαση",
+  "Custom annual payment link · sent after your application is approved.": "Προσαρμοσμένος ετήσιος σύνδεσμος πληρωμής · αποστέλλεται μετά την έγκριση της αίτησής σας.",
+  "Invitation-based access · Custom annual payment link": "Πρόσβαση με πρόσκληση · προσαρμοσμένος ετήσιος σύνδεσμος πληρωμής",
   "Cancel anytime · No setup fees": "Ακύρωση ανά πάσα στιγμή · χωρίς χρεώσεις εγκατάστασης",
   "Everything in Free, plus all Pro features": "Όλα του δωρεάν πλάνου, μαζί με όλες τις Pro λειτουργίες",
   "All prices are in EUR and exclude VAT where applicable.": "Όλες οι τιμές είναι σε ευρώ και δεν περιλαμβάνουν ΦΠΑ όπου εφαρμόζεται.",
@@ -340,7 +340,7 @@ const PRICING_EL: Record<string, string> = {
   "Custom data exports (CSV, JSON)": "Εξατομικευμένες εξαγωγές δεδομένων CSV, JSON",
   "Multi-user / team seats": "Πολλαπλοί χρήστες / θέσεις ομάδας",
   "Priority deal sourcing & exclusives": "Προτεραιότητα στον εντοπισμό συμφωνιών και αποκλειστικές ευκαιρίες",
-  "Bespoke market intelligence reports": "Εξατομικευμένες αναφορές πληροφόρησης αγοράς",
+  "Curated market intelligence reports": "Επιμελημένες αναφορές πληροφόρησης αγοράς",
 };
 
 const isGreekLocale = (language?: string) => language?.toLowerCase().startsWith("el") ?? false;
@@ -750,7 +750,7 @@ export default function Pricing() {
                   </p>
                 ))}
                 {plan.inviteOnly && (
-                  <p className="text-xs text-muted-foreground">{tr("Custom pricing · a payment link is sent after your application is approved.")}</p>
+                  <p className="text-xs text-muted-foreground">{tr("Custom annual payment link · sent after your application is approved.")}</p>
                 )}
                 <p className="text-xs text-muted-foreground mt-1">{tr(plan.paidDesc)}</p>
               </div>
@@ -817,7 +817,7 @@ export default function Pricing() {
                 )}
                 {plan.inviteOnly ? (
                   <p className="text-[11px] text-muted-foreground text-center">
-                    {tr("Invitation-based access · Pricing by arrangement")}
+                    {tr("Invitation-based access · Custom annual payment link")}
                   </p>
                 ) : (
                   <p className="text-[11px] text-muted-foreground text-center">

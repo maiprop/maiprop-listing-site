@@ -29,7 +29,7 @@ export function DoneScreen({
   onUpgradeToPro?: () => Promise<void>;
   professionalProPrice?: string;
 }) {
-  const proPrice = professionalProPrice ?? "€49/mo";
+  const proPrice = professionalProPrice ?? "EUR 69/mo";
   const [countdown, setCountdown] = useState(4);
   const [redirectCancelled, setRedirectCancelled] = useState(false);
 

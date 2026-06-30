@@ -21,10 +21,10 @@ Live repository Actions permissions were updated and verified with GitHub API:
 This satisfies the source-controlled SLSA-style requirement that GitHub Actions
 are selected and SHA pinning is required.
 
-`oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6` is allowed only
-because the pinned `supabase/setup-cli` action invokes it internally. It should
-remain pinned to that exact SHA unless the Supabase setup action removes the
-nested dependency or the workflow is migrated to a direct CLI installation.
+Supabase deployment workflows install the pinned Supabase CLI directly with npm.
+They do not use `supabase/setup-cli`, because that action invokes
+`oven-sh/setup-bun` internally and the live repository action policy rejects
+that nested action.
 
 ## Branch Protection
 

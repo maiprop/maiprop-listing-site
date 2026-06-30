@@ -25,7 +25,10 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
   <QueryClientProvider client={qc}>{children}</QueryClientProvider>
 );
 
-function setupMock(profile: Record<string, unknown>, subscriptionData: { status: string } | null) {
+function setupMock(
+  profile: Record<string, unknown>,
+  subscriptionData: { status: string; expires_at?: string | null } | null,
+) {
   (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({ user: { id: "u1" }, profile });
   mockFrom.mockReturnValue({
     select: vi.fn().mockReturnValue({
@@ -55,10 +58,22 @@ describe("useEligibleForQuickSale", () => {
   });
 
   it("active investor subscription is eligible", async () => {
-    setupMock({ role: "investor", participant_type: "investor" }, { status: "active" });
+    setupMock({ role: "investor", participant_type: "investor" }, { status: "active", expires_at: null });
     const { result } = renderHook(() => useEligibleForQuickSale(), { wrapper });
     await waitFor(() => expect(result.current.hasActiveSubscription).toBe(true));
     expect(result.current.eligible).toBe(true);
+  });
+
+  it("expired investor subscription is not eligible", async () => {
+    setupMock(
+      { role: "investor", participant_type: "investor" },
+      { status: "active", expires_at: "2000-01-01T00:00:00.000Z" },
+    );
+    const { result } = renderHook(() => useEligibleForQuickSale(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.hasActiveSubscription).toBe(false);
+    expect(result.current.eligible).toBe(false);
+    expect(mockFrom.mock.results[0]?.value.select).toHaveBeenCalledWith("status, expires_at");
   });
 
   it("force_pro_access alone does not grant eligibility", async () => {
@@ -73,7 +88,7 @@ describe("useEligibleForQuickSale", () => {
       role: "investor",
       participant_type: "investor",
       role_switch_in_progress_at: "2026-05-14T10:00:00.000Z",
-    }, { status: "active" });
+    }, { status: "active", expires_at: null });
     const { result } = renderHook(() => useEligibleForQuickSale(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.eligible).toBe(false);

@@ -73,7 +73,7 @@ export function InvestorAccessGate({ invitationStatus, onRequestClick }: Props) 
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
                   {[
-                    { icon: "🔒", label: "No public pricing" },
+                    { icon: "🔒", label: "Custom annual link" },
                     { icon: "✅", label: "Admin-vetted" },
                     { icon: "⚡", label: "48h response" },
                     { icon: "🤝", label: "NDA protected" },

@@ -24,11 +24,6 @@ CREATE POLICY "firesale_feed_select"
             OR p.participant_type::text IN ('investor', 'institutional')
           )
       )
-      AND EXISTS (
-        SELECT 1
-        FROM public.investor_subscriptions s
-        WHERE s.user_id = (SELECT auth.uid())
-          AND s.status IN ('active', 'trial')
-      )
+      AND public.has_current_investor_subscription((SELECT auth.uid()))
     )
   );

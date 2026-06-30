@@ -72,12 +72,7 @@ AS $$
       FALSE
     )
     OR public.has_audience_scoped_pro_entitlement(p_user_id)
-    OR EXISTS (
-      SELECT 1
-      FROM public.investor_subscriptions s
-      WHERE s.user_id = p_user_id
-        AND s.status IN ('active', 'trial')
-    )
+    OR public.has_current_investor_subscription(p_user_id)
 $$;
 
 CREATE OR REPLACE FUNCTION public.check_listing_quota()
@@ -242,7 +237,7 @@ COMMENT ON FUNCTION public.profile_pricing_audience(public.user_role, text) IS
 COMMENT ON FUNCTION public.has_audience_scoped_pro_entitlement(uuid) IS
   'True only when profiles.subscription_product_id matches an active Pro subscription pricing_configs product for the profile pricing audience.';
 COMMENT ON FUNCTION public.is_pro(uuid) IS
-  'Canonical Pro-status reader. Returns true for platform admins, audience-scoped Pro products, or active/trial investor subscriptions.';
+  'Canonical Pro-status reader. Returns true for platform admins, audience-scoped Pro products, or current active/trial investor subscriptions.';
 
 DO $$
 BEGIN

@@ -339,6 +339,7 @@ describe("Onboarding page handlers", () => {
       expect(invokeMock).toHaveBeenCalledWith("create-checkout", {
         body: {
           plan: "professional_basic",
+          billing_cycle: "monthly",
           success_url: "/dashboard?pro=success",
           cancel_url: "/pricing",
         },

@@ -84,6 +84,7 @@ describe("public listings API fallback behavior", () => {
       expect.stringContaining("/api/public/listings?"),
       { throwOnError: true },
     );
+    expect(publicApiMock.mock.calls[0][0]).toContain("pageSize=40");
     expect(fromMock).toHaveBeenCalledWith("listings");
     expect(result.current.data?.pages[0]?.data).toEqual([
       expect.objectContaining({ id: "db-listing", profiles: null }),

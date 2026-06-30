@@ -64,6 +64,13 @@ Deno.test("live Stripe trial subscriptions expose trial_end as the displayed per
   assertStringIncludes(source, "trialEnd ?? currentPeriodEnd");
 });
 
+Deno.test("live Stripe subscription display falls back to item period fields", async () => {
+  const source = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+  assertStringIncludes(source, "type SubscriptionItemWithPeriodEnd");
+  assertStringIncludes(source, "subscriptionItem?.current_period_end");
+  assertStringIncludes(source, "current_period_end ??");
+});
+
 Deno.test("invoice response exposes Stripe receipt and payment evidence when available", async () => {
   const source = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
   assertStringIncludes(source, "listCustomerInvoices");

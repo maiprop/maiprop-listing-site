@@ -17,11 +17,11 @@
  *
  *   Layer B — `usePricingConfigs.ts` + `pricing_configs` table. Fine-
  *             grained DB-driven keys editable by admins at runtime,
- *             including add-on tiers (`agent_plus`, `professional_premium`,
- *             `valuation_*`) that don't appear here.
+ *             including add-ons and deprecated legacy tiers that don't appear
+ *             here.
  *
  * The actual amount charged is determined by the Stripe Price ID resolved
- * by `create-checkout` (env override → DB lookup → fallback). The numbers
+ * by `create-checkout` (DB lookup first, then env fallback). The numbers
  * in this file are display fallbacks only.
  *
  * If you change anything here, update:
@@ -42,7 +42,7 @@ export interface RolePlan {
   /**
    * Monthly price in EUR.
    *   0 + `inviteOnly: false` = free tier available
-   *   0 + `inviteOnly: true`  = no public price; bespoke per-application pricing
+   *   0 + `inviteOnly: true`  = no public price; custom annual invite-only checkout
    */
   monthlyPrice: number;
   /** Annual price in EUR (same semantics as monthlyPrice) */
@@ -51,8 +51,8 @@ export interface RolePlan {
   proOnly: boolean;
   /**
    * When true the plan is invitation-only — there is no public price.
-   * After application approval, an automated Stripe Payment Link with a
-   * per-application amount is emailed. UI consumers must NOT display the
+   * After application approval, an app-generated Stripe Checkout URL for the
+   * admin-entered custom annual amount is emailed. UI consumers must NOT display the
    * `monthlyPrice`/`annualPrice` for invitation-only plans (they are 0).
    */
   inviteOnly: boolean;
@@ -127,10 +127,9 @@ export const ROLE_PLAN_MAP: Record<PricingAudienceId, RolePlan> = {
     stripePriceAnnual:  PRICE_IDS.professional_annual,
   },
   // Investor & Institutional are invitation-only.
-  // Pricing is bespoke per application — a one-off Stripe payment link is
-  // generated and emailed after the application is approved. The 0/0 values
-  // here mean "no public price"; the canonical figure is the per-application
-  // payment link's amount, not these display fallbacks.
+  // A custom-amount annual Stripe Checkout URL is generated and emailed after
+  // approval. The 0/0 values here mean "no public price"; the canonical amount
+  // is supplied server-side by create-investor-payment, not these display fallbacks.
   investor: {
     planKey: "investor_private",
     planName: "Investor Plan",
@@ -187,7 +186,7 @@ export type SwitchKind = "same-tier" | "upgrade" | "downgrade" | "proonly" | "in
  *                price and the user must apply rather than pay at checkout.
  *
  * Note: switching FROM an invite-only role to any non-invite role is treated
- * as a "downgrade" (the user is leaving a bespoke / paid tier). The price
+ * as a "downgrade" (the user is leaving an invite-only paid tier). The price
  * comparison is skipped because invite-only fallback prices are 0.
  */
 export function classifySwitch(from: ParticipantId, to: ParticipantId): SwitchKind {

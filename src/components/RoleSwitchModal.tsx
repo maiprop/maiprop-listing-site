@@ -52,7 +52,7 @@ function SwitchKindBadge({ kind }: { kind: SwitchKind }) {
 
 /** Format a plan's monthly price for the role-switch summary row. */
 function formatPlanLine(plan: { monthlyPrice: number; inviteOnly: boolean }): string {
-  if (plan.inviteOnly) return "By application";
+  if (plan.inviteOnly) return "Custom annual link";
   if (plan.monthlyPrice === 0) return "Free";
   return `€${plan.monthlyPrice}/mo`;
 }
@@ -131,7 +131,7 @@ export function RoleSwitchModal({
                   : "text-blue-400"
               )}>
                 {toPlan.inviteOnly
-                  ? "By application"
+                  ? "Custom annual link"
                   : toPlan.proOnly
                     ? `€${toPlan.monthlyPrice}/mo required`
                     : toPlan.monthlyPrice === 0
@@ -148,7 +148,7 @@ export function RoleSwitchModal({
               <Notice
                 icon={<Mail className="w-4 h-4 text-emerald-400" />}
                 title="Invitation required"
-                body={`The ${toLabel} role is invitation-only. Submit an application — once approved, you'll receive an email with a payment link at your bespoke rate. Your current account stays active in the meantime.`}
+                body={`The ${toLabel} role is invitation-only. Submit an application — once approved, you'll receive an email with a custom annual payment link. Your current account stays active in the meantime.`}
                 color="emerald"
               />
             )}

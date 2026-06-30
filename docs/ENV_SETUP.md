@@ -11,6 +11,17 @@ This repo runs in three environments. Each has its own variables and its own sou
 
 Edge-function secrets (Stripe keys, service role, OpenAI) live in **Supabase → Project Settings → Edge Functions → Secrets**, **not** in Cloudflare Pages. They never reach the browser.
 
+Stripe account routing:
+
+| Purpose | Stripe account | Account id |
+|---|---|---|
+| Testing / sandbox / staging | `mAI prop sandbox` | `acct_1TnuLbGfkWWBWEyh` |
+| Live production billing | `mAI prop` | `acct_1TnuLTGfOEgBOxtl` |
+
+Set `STRIPE_EXPECTED_ACCOUNT_ID` to the account for the environment and run
+`npm run check:stripe-account` before syncing products, replacing price IDs,
+rotating webhook secrets, or launching live billing.
+
 ---
 
 ## Local development
@@ -152,6 +163,9 @@ Dashboard → Project Settings → Edge Functions → Secrets.
 | `STRIPE_RUNTIME_MODE` | Optional Stripe runtime guard. Defaults to `test`; set to `live` only for production live billing. |
 | `STRIPE_ENVIRONMENT` / `STRIPE_RUN_MODE` | Legacy aliases accepted by the Stripe runtime guard; prefer `STRIPE_RUNTIME_MODE` in new environments. |
 | `STRIPE_LIVE_MODE=true` | Required together with `STRIPE_RUNTIME_MODE=live` before any `sk_live_...` key is accepted by Edge billing functions. |
+| `STRIPE_TEST_ACCOUNT_ID` | Expected Stripe sandbox account id. For MaiProp: `acct_1TnuLbGfkWWBWEyh` (`mAI prop sandbox`). |
+| `STRIPE_LIVE_ACCOUNT_ID` | Expected Stripe live account id. For MaiProp: `acct_1TnuLTGfOEgBOxtl` (`mAI prop`). |
+| `STRIPE_EXPECTED_ACCOUNT_ID` | Environment-specific guard used by `npm run check:stripe-account`; set to the sandbox account in test/staging and live account in production. |
 | `STRIPE_API_VERSION` | Optional Stripe catalog setup override; defaults to `2026-06-24.dahlia` and should match the shared Edge Stripe client. |
 | `STRIPE_PRODUCT_TAX_CODE` | Optional global Stripe catalog setup override for Product `tax_code`. By default the app resolves Greek software/AI tax codes per product: personal SaaS `txcd_10103000`, business SaaS `txcd_10103001`, personal AI software services `txcd_10105001`, and business AI software services `txcd_10105002`. Review overrides with tax counsel before live launch. |
 | `STRIPE_SAAS_PERSONAL_TAX_CODE` / `STRIPE_SAAS_BUSINESS_TAX_CODE` | Optional Stripe catalog setup overrides for SaaS subscription and report products; defaults to Greek software product tax codes `txcd_10103000` and `txcd_10103001`. |
@@ -356,5 +370,6 @@ CI intentionally uses **stub** Supabase URL + key (format-valid placeholders in 
 
 - **App boots but all requests fail with 401** — `VITE_SUPABASE_PUBLISHABLE_KEY` is wrong or mismatched with the URL's project ref.
 - **"Invalid API key" during Stripe checkout** — `VITE_STRIPE_PRICE_*` was set to a price from the wrong mode (test vs live).
+- **"No such price" during Stripe checkout** — the Stripe key is pointed at the wrong account for the configured price IDs. Run `npm run check:stripe-account`; test/staging prices must be from `acct_1TnuLbGfkWWBWEyh`, while live prices must be from `acct_1TnuLTGfOEgBOxtl`.
 - **Sentry never receives events** — `VITE_SENTRY_DSN` must be set at **build** time; Vite inlines it. Re-deploy after changing.
 - **Seed script refuses to run** — the prod guard triggered. See the script output for the override flag, and verify you actually meant to target that project.
