@@ -225,16 +225,16 @@ const CATALOG = [
   {
     key: "investor_private",
     label: "Private Investor",
-    description: "Invitation-only investor access with per-application pricing.",
+    description: "Invitation-only investor access with admin-created custom annual Checkout links.",
     audience: "investor",
     role: "investor",
     module: "investor_subscription",
-    unit: "monthly",
+    unit: "annual",
     currency: "EUR",
     amountMajor: 0,
     sortOrder: 1,
     checkoutType: "investor_payment",
-    metadata: { by_application: true },
+    metadata: { invite_only: true, custom_annual_amount: true },
     marketingFeatures: [
       "Private deal flow",
       "AI matching",
@@ -250,16 +250,16 @@ const CATALOG = [
   {
     key: "investor_institutional",
     label: "Institutional Investor",
-    description: "Invitation-only institutional investor access with bespoke pricing.",
-    audience: "investor",
+    description: "Invitation-only institutional investor access with admin-created custom annual Checkout links.",
+    audience: "institutional",
     role: "institutional",
     module: "investor_subscription",
-    unit: "monthly",
+    unit: "annual",
     currency: "EUR",
     amountMajor: 0,
     sortOrder: 2,
     checkoutType: "investor_payment",
-    metadata: { by_application: true },
+    metadata: { invite_only: true, custom_annual_amount: true },
     marketingFeatures: [
       "Institutional pipeline",
       "Bulk opportunity view",
@@ -1123,7 +1123,7 @@ function printDryRun() {
     const specs = priceSpecsForItem(item);
     const prices = specs.length
       ? specs.map((spec) => `${spec.lookupKey} ${spec.amountMajor} ${spec.currency.toUpperCase()} ${spec.billingCycle}`).join(", ")
-      : "bespoke checkout amount only";
+      : "custom annual admin Checkout only";
     console.log(`- ${item.key}: ${item.label} [${item.module}/${item.audience}] -> ${prices}`);
     console.log(`  tax: ${taxCodeForItem(item)}`);
     console.log(`  features: ${item.entitlementFeatures.map((featureKey) => `maiprop.${featureKey}`).join(", ")}`);

@@ -141,8 +141,8 @@ await recordAiCall(quota.userId, BUCKET);
 | Agent Pro | `agent_basic` | €149 | €1,490 | `agent_subscription` |
 | Developer Pro | `developer_pro` | €129 | €1,290 | `developer_subscription` |
 | Professional Pro | `professional_basic` | €69 | €690 | `professional_subscription` |
-| Investor Private | `investor_private` | €49 | €490 | `investor_subscription` |
-| Institutional | `investor_institutional` | €199 | €1,990 | `investor_subscription` |
+| Investor Private | `investor_private` | Invite-only | Custom annual link | `investor_subscription` |
+| Institutional | `investor_institutional` | Invite-only | Custom annual link | `investor_subscription` |
 
 ### Checkout Flow
 1. **Frontend** → `create-checkout` edge function
@@ -154,8 +154,9 @@ await recordAiCall(quota.userId, BUCKET);
 ### Usage-Based Add-ons
 | Add-on | Price | Tracking |
 |--------|-------|----------|
-| Extra Valuation | €3 | `usage_ai_valuations` > 5 |
-| Extra Report | €9 | `usage_property_reports` > 3 |
+| AI Valuation | EUR 39 single / EUR 149 bundle | `addon_purchases` + quota consumption |
+| Property Report | EUR 49 | `addon_purchases` + `usage_property_reports` |
+| Neighbourhood Report | EUR 19 single / EUR 39 bundle | `addon_purchases` + quota consumption |
 | Extra Priority Rank Ad | €8 | `usage_priority_ads` > included |
 | Spotlight Listing | €39 | One-time purchase |
 | Priority Rank | €59 | One-time purchase |

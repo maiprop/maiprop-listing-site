@@ -1,10 +1,10 @@
 -- Consolidate Quick Sale / firesale advisor policy duplicates without
 -- changing access:
---   - interest rows: investor owns the row, INSERT still requires active/trial
+--   - interest rows: investor owns the row, INSERT still requires current
 --     investor subscription, platform admins retain full access;
 --   - request feed: owners/admins retain access, and published deals remain
---     visible to users with active/trial investor subscriptions regardless of
---     profile role, matching the custom-payment-link access model.
+--     visible to users with current investor subscriptions regardless of
+--     profile role, matching the custom annual investor payment access model.
 
 BEGIN;
 
@@ -35,12 +35,7 @@ CREATE POLICY "firesale_interest_insert"
     public.has_platform_admin((SELECT auth.uid()))
     OR (
       investor_id = (SELECT auth.uid())
-      AND EXISTS (
-        SELECT 1
-        FROM public.investor_subscriptions s
-        WHERE s.user_id = (SELECT auth.uid())
-          AND s.status IN ('active', 'trial')
-      )
+      AND public.has_current_investor_subscription((SELECT auth.uid()))
     )
   );
 
@@ -78,12 +73,7 @@ CREATE POLICY "firesale_requests_select"
     OR public.has_platform_admin((SELECT auth.uid()))
     OR (
       published_to_investors = true
-      AND EXISTS (
-        SELECT 1
-        FROM public.investor_subscriptions s
-        WHERE s.user_id = (SELECT auth.uid())
-          AND s.status IN ('active', 'trial')
-      )
+      AND public.has_current_investor_subscription((SELECT auth.uid()))
     )
   );
 

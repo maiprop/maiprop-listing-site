@@ -12,6 +12,8 @@ type StripeSubscriptionLike = {
   metadata?: Record<string, string | undefined> | null;
   items?: {
     data?: Array<{
+      current_period_start?: number | null;
+      current_period_end?: number | null;
       price?: {
         id?: string | null;
         product?: string | { id?: string | null } | null;
@@ -116,6 +118,9 @@ const isoFromUnixSeconds = (value?: number | null): string | null => {
 const firstSubscriptionPrice = (subscription: StripeSubscriptionLike) =>
   subscription.items?.data?.[0]?.price ?? null;
 
+const firstSubscriptionItem = (subscription: StripeSubscriptionLike) =>
+  subscription.items?.data?.[0] ?? null;
+
 const productIdFromPrice = (
   product: string | { id?: string | null } | null | undefined,
 ): string | null => {
@@ -148,6 +153,7 @@ export function buildBillingSubscriptionRow(
   input: BillingSubscriptionInput,
 ): BillingSubscriptionRow {
   const subscription = input.subscription;
+  const item = firstSubscriptionItem(subscription);
   const price = firstSubscriptionPrice(subscription);
   const livemode = Boolean(subscription.livemode);
   const metadata = subscription.metadata ?? {};
@@ -161,8 +167,12 @@ export function buildBillingSubscriptionRow(
     audience: metadata.audience ?? null,
     status: subscription.status ?? "unknown",
     billing_cycle: normalizedBillingCycle(metadata.billing_cycle),
-    current_period_start: isoFromUnixSeconds(subscription.current_period_start),
-    current_period_end: isoFromUnixSeconds(subscription.current_period_end),
+    current_period_start: isoFromUnixSeconds(
+      subscription.current_period_start ?? item?.current_period_start,
+    ),
+    current_period_end: isoFromUnixSeconds(
+      subscription.current_period_end ?? item?.current_period_end,
+    ),
     cancel_at_period_end: Boolean(subscription.cancel_at_period_end),
     trial_start: isoFromUnixSeconds(subscription.trial_start),
     trial_end: isoFromUnixSeconds(subscription.trial_end),

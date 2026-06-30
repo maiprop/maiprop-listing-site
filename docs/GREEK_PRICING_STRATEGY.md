@@ -1,6 +1,10 @@
 # maiProp Pricing Strategy — Greek Market
 **Research Date: March 2026**
 
+> Historical strategy note. Current implemented billing lives in
+> `docs/PRICING_MATRIX.md`, `scripts/setup-stripe-catalog.mjs`, and
+> `pricing_configs`.
+
 ---
 
 ## 1. Greek Real Estate Market Context
@@ -41,7 +45,7 @@
 
 3. **Annual billing incentive** — Greeks prefer to pay once a year vs. monthly recurring. 2 months free on annual = ~16.7% discount, which feels significant.
 
-4. **Trial before commitment** — 14-day free trial on all Pro plans (not 7). Greeks need enough time to actually use the product.
+4. **Trial before commitment** — 7-day free trial on self-serve Pro plans, with card collection required before activation.
 
 5. **Quick Sale / Investor access is ROI-justified standalone** — A distressed deal at 30–50% below market saves €50,000–200,000+ on a typical Athens property. An annual pass at €249–499 is a trivial cost vs. the upside. Frame as "access fee," not "subscription."
 
@@ -156,11 +160,11 @@ The Quick Sale offering (discounted distressed property deals) must NOT be bundl
 >
 > | Plan | Strategy (This Doc) | Actual (Implemented) |
 > |------|---------------------|-------------------|
-> | Participant Pro | €19/mo | €29/mo |
-> | Agent Pro | €49/mo | €149/mo |
-> | Developer Pro | €89/mo | €129/mo |
-> | Professional Pro | €49/mo | €69/mo |
-> | Investor Plan | €299/yr | €49/mo (€490/yr) |
-> | Institutional Plan | — | €199/mo (€1,990/yr) |
+> | Participant Pro | EUR 19/mo | EUR 29/mo |
+> | Agent Pro | EUR 49/mo | EUR 149/mo |
+> | Developer Pro | EUR 89/mo | EUR 129/mo |
+> | Professional Pro | EUR 49/mo | EUR 69/mo |
+> | Investor Plan | Invite-only | Custom annual link |
+> | Institutional Plan | Invite-only | Custom annual link |
 >
 > See `docs/PRICING_MATRIX.md` and `MAIPROP_PLATFORM_REFERENCE.md` for current pricing.

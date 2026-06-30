@@ -8,6 +8,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { resolveQuickSaleEligibility } from "@/lib/quickSaleEntitlements";
 
+type InvestorSubscriptionGate = {
+  status: string;
+  expires_at: string | null;
+};
+
 export function useEligibleForQuickSale() {
   const { user, profile } = useAuth();
 
@@ -17,12 +22,12 @@ export function useEligibleForQuickSale() {
       if (!user?.id) return null;
       const { data } = await supabase
         .from("investor_subscriptions")
-        .select("status")
+        .select("status, expires_at")
         .eq("user_id", user.id)
         .in("status", ["active", "trial"])
         .limit(1)
         .maybeSingle();
-      return (data as unknown) as { status: string } | null;
+      return (data as unknown) as InvestorSubscriptionGate | null;
     },
     enabled: !!user?.id,
     staleTime: 10 * 1000,
@@ -31,6 +36,7 @@ export function useEligibleForQuickSale() {
   const eligibility = resolveQuickSaleEligibility({
     profile,
     subscriptionStatus: subscription?.status,
+    subscriptionExpiresAt: subscription?.expires_at,
   });
 
   return {

@@ -7,6 +7,12 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
+const { investorSubscriptionRow } = vi.hoisted(() => ({
+  investorSubscriptionRow: {
+    current: null as { status: string; expires_at: string | null } | null,
+  },
+}));
+
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: vi.fn((table: string) => {
@@ -28,6 +34,12 @@ vi.mock("@/integrations/supabase/client", () => ({
       };
       if (table === "pricing_configs") {
         chain.eq = vi.fn().mockReturnValue(Promise.resolve({ data: pricingRows, error: null }));
+      }
+      if (table === "investor_subscriptions") {
+        chain.maybeSingle = vi.fn().mockResolvedValue({
+          data: investorSubscriptionRow.current,
+          error: null,
+        });
       }
       return chain;
     }),
@@ -51,6 +63,7 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
 beforeEach(() => {
   vi.clearAllMocks();
   qc.clear();
+  investorSubscriptionRow.current = null;
 });
 
 describe("useSubscription", () => {
@@ -158,5 +171,22 @@ describe("useSubscription", () => {
     const { result } = renderHook(() => useSubscription(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.isPro).toBe(false);
+  });
+
+  it("does not grant investor-managed Pro after annual access expires", async () => {
+    investorSubscriptionRow.current = {
+      status: "active",
+      expires_at: "2000-01-01T00:00:00.000Z",
+    };
+    (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
+      subscription: { subscribed: false, productId: null, subscriptionEnd: null, loading: false },
+      refreshSubscription: vi.fn(),
+      profile: { role: "investor", participant_type: "investor" },
+      user: { id: "u8" },
+    });
+    const { result } = renderHook(() => useSubscription(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.isPro).toBe(false);
+    expect(result.current.accessSource).toBe("free");
   });
 });

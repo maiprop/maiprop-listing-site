@@ -165,10 +165,21 @@ describe("buildListingsQuery — listing-type / status scoping", () => {
     expect(inCall).toBeUndefined();
   });
 
-  it("explicit listing_type uses .eq() instead of the allowlist", () => {
+  it("explicit auction listing_type uses .eq() instead of the allowlist", () => {
     buildListingsQuery({ listing_type: "auction" });
     expect(calls("eq").some((c) => c.args[0] === "listing_type" && c.args[1] === "auction")).toBe(true);
     expect(calls("in").find((c) => c.args[0] === "listing_type")).toBeUndefined();
+  });
+
+  it("explicit sale and rent catalogue searches include canonical new-build project ads", () => {
+    buildListingsQuery({ listing_type: "sale" });
+    expect(calls("in").find((c) => c.args[0] === "listing_type")?.args[1]).toEqual(["sale", "new_build"]);
+    expect(calls("eq").some((c) => c.args[0] === "listing_type" && c.args[1] === "sale")).toBe(false);
+
+    recorded.length = 0;
+    buildListingsQuery({ listing_type: "rent" });
+    expect(calls("in").find((c) => c.args[0] === "listing_type")?.args[1]).toEqual(["rent", "new_build"]);
+    expect(calls("eq").some((c) => c.args[0] === "listing_type" && c.args[1] === "rent")).toBe(false);
   });
 
   it("explicit new_build listing_type searches project ads by type rather than pre-sale flag", () => {
@@ -328,9 +339,9 @@ describe("buildListingsQuery — feature column allowlist (column-injection guar
 });
 
 describe("buildListingsQuery — pagination range", () => {
-  it("uses range(from, from + pageSize - 1) for the first page of 24", () => {
-    buildListingsQuery(undefined, 0, 24);
-    expect(calls("range")[0].args).toEqual([0, 23]);
+  it("uses range(from, from + pageSize - 1) for the default 40-row page", () => {
+    buildListingsQuery();
+    expect(calls("range")[0].args).toEqual([0, 39]);
   });
 
   it("respects custom from offset and pageSize", () => {

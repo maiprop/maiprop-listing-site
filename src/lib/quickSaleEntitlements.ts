@@ -18,15 +18,34 @@ export type QuickSaleEligibility = {
 export const quickSaleRoleSwitchInProgress = (profile: QuickSaleEntitlementProfile): boolean =>
   Boolean(profile?.role_switch_in_progress_at);
 
+export function hasCurrentQuickSaleSubscription(
+  status: QuickSaleSubscriptionStatus,
+  expiresAt?: string | null,
+  now = new Date(),
+): boolean {
+  if (status !== "active" && status !== "trial") return false;
+  if (!expiresAt) return true;
+  const expiry = new Date(expiresAt);
+  return !Number.isNaN(expiry.getTime()) && expiry > now;
+}
+
 export function resolveQuickSaleEligibility({
   profile,
   subscriptionStatus,
+  subscriptionExpiresAt,
+  now,
 }: {
   profile: QuickSaleEntitlementProfile;
   subscriptionStatus: QuickSaleSubscriptionStatus;
+  subscriptionExpiresAt?: string | null;
+  now?: Date;
 }): QuickSaleEligibility {
   const isAdmin = isPlatformAdmin(profile);
-  const hasActiveSubscription = subscriptionStatus === "active" || subscriptionStatus === "trial";
+  const hasActiveSubscription = hasCurrentQuickSaleSubscription(
+    subscriptionStatus,
+    subscriptionExpiresAt,
+    now,
+  );
   const isInvestorRole =
     !quickSaleRoleSwitchInProgress(profile) &&
     (profile?.role === "investor" || profile?.role === "institutional");

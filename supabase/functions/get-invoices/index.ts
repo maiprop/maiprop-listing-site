@@ -19,6 +19,11 @@ type SubscriptionWithPeriodEnd = Stripe.Subscription & {
   trial_end?: number | null;
 };
 
+type SubscriptionItemWithPeriodEnd = Stripe.SubscriptionItem & {
+  current_period_end?: number | null;
+  current_period_start?: number | null;
+};
+
 type DurableBillingSubscriptionRow = {
   stripe_subscription_id?: string | null;
   stripe_product_id?: string | null;
@@ -685,10 +690,16 @@ Deno.serve(async (req) => {
       });
     }
 
-    const price = subscription?.items.data[0]?.price;
-    const subscriptionItemId = subscription?.items.data[0]?.id ?? null;
+    const subscriptionItem = subscription?.items.data[0] as
+      | SubscriptionItemWithPeriodEnd
+      | undefined;
+    const price = subscriptionItem?.price;
+    const subscriptionItemId = subscriptionItem?.id ?? null;
     const recurringInterval = (price as PriceWithRecurring | undefined)?.recurring?.interval ?? "month";
-    const currentPeriodEnd = (subscription as SubscriptionWithPeriodEnd | null)?.current_period_end ?? null;
+    const currentPeriodEnd =
+      (subscription as SubscriptionWithPeriodEnd | null)?.current_period_end ??
+        subscriptionItem?.current_period_end ??
+        null;
     const trialEnd = (subscription as SubscriptionWithPeriodEnd | null)?.trial_end ?? null;
     const subscriptionDisplayEnd = subscription?.status === "trialing"
       ? trialEnd ?? currentPeriodEnd

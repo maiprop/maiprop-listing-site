@@ -100,7 +100,7 @@ export function useListingsPipeline(opts: UseListingsPipelineOptions) {
     minWalkability = 0,
   } = opts;
 
-  // Grid view paginates 24 at a time (infinite scroll). Map / split views need
+  // Grid view paginates 40 at a time (infinite scroll). Map / split views need
   // every visible marker at once, so they use the bounded full-fetch (200 cap).
   // Only one query is enabled at a time to avoid wasting bandwidth.
   const isGrid = viewMode === "grid";
@@ -119,7 +119,7 @@ export function useListingsPipeline(opts: UseListingsPipelineOptions) {
   const isError = isGrid ? paginated.isError : fullFetch.isError;
   const error = isGrid ? paginated.error : fullFetch.error;
 
-  // Infinite-scroll sentinel — load the next 24 when the user nears it.
+  // Infinite-scroll sentinel — load the next page when the user nears it.
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!isGrid) return;

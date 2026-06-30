@@ -10,21 +10,21 @@
 
 | User Role | Base Plan | Monthly | Annual | Free Tier |
 |-----------|-----------|---------|--------|-----------|
-| **Buyer / Seller** (Participant) | Pro | €29 | €290 | ✅ Yes |
-| **Agent** | Agent Pro | €149 | €1,490 | ✅ Yes (5 listings) |
-| **Developer** | Developer Pro | €129 | €1,290 | ❌ No |
-| **Professional** | Professional Pro | €69 | €690 | ✅ Yes |
-| **Investor** (Private) | Investor Plan | _by application_ | _by application_ | ❌ Invitation-only |
-| **Institutional** | Institutional Plan | _by application_ | _by application_ | ❌ Invitation-only |
+| **Buyer / Seller** (Participant) | Pro | EUR 29 | EUR 290 | Yes |
+| **Agent** | Agent Pro | EUR 149 | EUR 1,490 | Yes (5 listings) |
+| **Developer** | Developer Pro | EUR 129 | EUR 1,290 | No |
+| **Professional** | Professional Pro | EUR 69 | EUR 690 | Yes |
+| **Investor** (Private) | Investor Plan | - | Custom annual link | Invitation-only |
+| **Institutional** | Institutional Plan | - | Custom annual link | Invitation-only |
 
-> **Investor & Institutional** tiers are invitation-only and have **no public price**.
-> After an application is approved, a one-off Stripe **Payment Link** with a
-> per-application amount is emailed to the applicant. Subscriptions are then
-> activated in Supabase via the Stripe webhook.
+> **Investor & Institutional** tiers are invitation-only and are sold through
+> admin-created Checkout links with a custom annual amount per approved request.
+> After an approved applicant pays, the Stripe webhook activates access in
+> Supabase for one year.
 >
 > **Agents & Professionals** have only **Free + Pro** plans. Anything beyond Pro
 > (extra seats, branded profile, white-label, API access, referral network) is
-> sold as an **add-on** from the dashboard's Billing tab — there is no Agency
+> sold as an **add-on** from the dashboard's Billing tab - there is no Agency
 > tier and no Professional Premium tier.
 
 ---
@@ -34,25 +34,25 @@
 ### Subscription Plans
 | Plan Key | Label | Module | Price | Unit | Features |
 |----------|-------|--------|-------|------|----------|
-| `participant_free` | Free | user_subscription | €0 | monthly | Basic search, 1 alert, 1 viewing/mo, 2 listings |
-| `pro` | Participant Pro | user_subscription | €29 | monthly | AI insights, 5 listings, 10 viewings/mo, unlimited alerts |
+| `participant_free` | Free | user_subscription | EUR 0 | monthly | Basic search, 1 alert, 1 viewing/mo, 2 listings |
+| `pro` | Participant Pro | user_subscription | EUR 29 | monthly | AI insights, 5 listings, 10 viewings/mo, unlimited alerts |
 
 ### Add-ons (Ad-hoc Charges)
 | Key | Label | Price | Unit | Description |
 |-----|-------|-------|------|-------------|
-| `extra_listing` | Extra Listing Slot | €12 | per_listing | Additional listing beyond quota |
-| `featured_listing` | Spotlight Listing | €39 | per_listing | Badge and featured-section exposure (30 days) |
-| `priority_placement` | Priority Rank | €59 | per_listing | Higher position above non-priority results (30 days) |
-| `featured_priority_bundle` | Maximum Exposure | €79 | per_listing | Spotlight Listing + Priority Rank |
+| `extra_listing` | Extra Listing Slot | EUR 12 | per_listing | Additional listing beyond quota |
+| `featured_listing` | Spotlight Listing | EUR 39 | per_listing | Badge and featured-section exposure (30 days) |
+| `priority_placement` | Priority Rank | EUR 59 | per_listing | Higher position above non-priority results (30 days) |
+| `featured_priority_bundle` | Maximum Exposure | EUR 79 | per_listing | Spotlight Listing + Priority Rank |
 
 ### AI Reports (Valuation Reports)
 | Key | Label | Price | Unit | Savings |
 |-----|-------|-------|------|---------|
-| `valuation_single` | AI Valuation (single) | €39 | per_report | - |
-| `valuation_bundle` | AI Valuation (×5) | €149 | bundle | Save 24% |
-| `property_report_single` | Property Report | €49 | per_report | - |
-| `neighbourhood_report_single` | Neighbourhood Report | €19 | per_report | - |
-| `neighbourhood_report_bundle` | Neighbourhood Bundle (×3) | €39 | bundle | Save 31% |
+| `valuation_single` | AI Valuation (single) | EUR 39 | per_report | - |
+| `valuation_bundle` | AI Valuation (x5) | EUR 149 | bundle | Save 24% |
+| `property_report_single` | Property Report | EUR 49 | per_report | - |
+| `neighbourhood_report_single` | Neighbourhood Report | EUR 19 | per_report | - |
+| `neighbourhood_report_bundle` | Neighbourhood Bundle (x3) | EUR 39 | bundle | Save 31% |
 
 ---
 
@@ -61,8 +61,8 @@
 ### Subscription Plans
 | Plan Key | Label | Module | Price | Seats | Features |
 |----------|-------|--------|-------|-------|----------|
-| `agent_free` | Agent Free | agent_subscription | €0 | 1 | 5 listings, 3 viewings/mo, basic profile |
-| `agent_basic` | Agent Pro | agent_subscription | €149 | 1 | Unlimited listings, CRM, 10 priority ads |
+| `agent_free` | Agent Free | agent_subscription | EUR 0 | 1 | 5 listings, 3 viewings/mo, basic profile |
+| `agent_basic` | Agent Pro | agent_subscription | EUR 149 | 1 | Unlimited listings, CRM, 10 priority ads |
 
 > Legacy `agency_starter` / `agency_growth` / `agency_enterprise` tiers are deprecated
 > (`is_active: false` in `pricing_configs`). They are kept for historical reference
@@ -72,13 +72,11 @@
 ### Agent Add-ons
 | Key | Label | Price | Unit |
 |-----|-------|-------|------|
-| `agent_extra_seat` | Extra agent seat | €39 | monthly |
-| `agency_branded_profile` | Agency-branded profile | €49 | monthly |
-| `agency_dedicated_manager` | Dedicated account manager | €199 | monthly |
-| `agency_white_label` | White-label domain | €149 | monthly |
-| `extra_priority_ad` | Extra Priority Rank Ad | €8 | per_ad |
-| `featured_professional` | Spotlight Professional | €59 | monthly |
-| `extra_listing` / `featured_listing` / `priority_placement` / `featured_priority_bundle` | Listing promotions | €12–€79 | varies |
+| `agent_extra_seat` | Extra agent seat | EUR 39 | monthly |
+| `agency_branded_profile` | Agency-branded profile | EUR 49 | monthly |
+| `agency_dedicated_manager` | Dedicated account manager | EUR 199 | monthly |
+| `agency_white_label` | White-label domain | EUR 149 | monthly |
+| `extra_listing` / `featured_listing` / `priority_placement` / `featured_priority_bundle` | Listing promotions | EUR 12-EUR 79 | varies |
 
 ---
 
@@ -87,7 +85,7 @@
 ### Subscription Plans
 | Plan Key | Label | Module | Price | Listing Limit |
 |----------|-------|--------|-------|---------------|
-| `developer_pro` | Developer Pro | developer_subscription | €129 | Unlimited |
+| `developer_pro` | Developer Pro | developer_subscription | EUR 129 | Unlimited |
 
 **Features:**
 - Unlimited project listings
@@ -109,8 +107,8 @@
 ### Subscription Plans
 | Plan Key | Label | Module | Price | Features |
 |----------|-------|--------|-------|----------|
-| Free (implied) | Directory Only | - | €0 | Basic listing, enquiries |
-| `professional_basic` | Professional Pro | professional_subscription | €69 | Priority leads, calendar, verified badge, 3 AI tools/mo |
+| Free (implied) | Directory Only | - | EUR 0 | Basic listing, enquiries |
+| `professional_basic` | Professional Pro | professional_subscription | EUR 69 | Priority leads, calendar, verified badge, 3 AI tools/mo |
 
 > Legacy `professional_premium` tier is deprecated (`is_active: false`). API access,
 > referral network and additional client seats are now sold as add-ons.
@@ -118,12 +116,12 @@
 ### Professional Add-ons
 | Key | Label | Price | Unit |
 |-----|-------|-------|------|
-| `featured_professional` | Spotlight Professional | €59 | monthly |
-| `extra_priority_ad` | Extra Priority Rank Ad | €8 | per_ad |
-| `professional_api_access` | Professional API access | €59 | monthly |
-| `professional_referral_network` | Referral network slot | €39 | monthly |
-| `professional_extra_seat` | Extra client seat | €19 | monthly |
-| `professional_branded_email` | Branded email templates | €15 | monthly |
+| `featured_professional` | Spotlight Professional | EUR 59 | monthly |
+| `extra_priority_ad` | Extra Priority Rank Ad | EUR 8 | per_ad |
+| `professional_api_access` | Professional API access | EUR 59 | monthly |
+| `professional_referral_network` | Referral network slot | EUR 39 | monthly |
+| `professional_extra_seat` | Extra client seat | EUR 19 | monthly |
+| `professional_branded_email` | Branded email templates | EUR 15 | monthly |
 
 ---
 
@@ -132,19 +130,22 @@
 ### Subscription Plans (invitation-only)
 | Plan Key | Label | Module | Price | Features |
 |----------|-------|--------|-------|----------|
-| `investor_private` | Private Investor | investor_subscription | _by application_ | Deal-flow, AI matching, 5 reports/mo |
-| `investor_institutional` | Institutional Investor | investor_subscription | _by application_ | Full pipeline, bulk view, dedicated manager |
+| `investor_private` | Private Investor | investor_subscription | Custom annual link | Deal-flow, AI matching, 5 reports/mo |
+| `investor_institutional` | Institutional Investor | investor_subscription | Custom annual link | Full pipeline, bulk view, dedicated manager |
 
 **Flow:**
 1. Applicant submits the **Investor / Institutional Application** form.
 2. The maiProp team reviews KYC + portfolio fit.
-3. On approval, an automated email is sent containing a Stripe **Payment Link**
-   with a **per-application amount** (the price is bespoke — not a public price).
+3. On approval, an automated email is sent containing an admin-created Stripe
+   Checkout URL for the approved custom annual investor access amount.
 4. After the payment is captured, the Stripe webhook activates the
-   `investor_subscriptions` row and grants access to the Investor / Firesale tabs.
+   `investor_subscriptions` row, grants access to the Investor / Firesale tabs,
+   and sets expiry one year after activation.
 
-`pricing_configs` rows for these tiers carry `metadata.by_application: true` and
-`amount: 0` to signal that the amount is set on the Payment Link, not in the DB.
+`pricing_configs` rows for these tiers are informational; the
+`create-investor-payment` Edge Function enforces the admin-provided custom
+amount, EUR currency, annual billing cycle, and one-year access period
+server-side.
 
 ---
 
@@ -154,9 +155,9 @@ Cross-cutting products available to all B2B users:
 
 | Key | Label | Module | Price | Target |
 |-----|-------|--------|-------|--------|
-| `market_intelligence` | Market Intelligence | os_data_products | €199/mo | All B2B |
-| `avm_api` | AVM API | os_data_products | €299/mo | Lenders, valuers |
-| `auction_intelligence` | Auction Intelligence | os_data_products | €149/mo | Legal pros, agents |
+| `market_intelligence` | Market Intelligence | os_data_products | EUR 199/mo | All B2B |
+| `avm_api` | AVM API | os_data_products | EUR 299/mo | Lenders, valuers |
+| `auction_intelligence` | Auction Intelligence | os_data_products | EUR 149/mo | Legal pros, agents |
 
 **Discount:** 20% off any maiProp subscription for active OS subscribers.
 
@@ -167,24 +168,24 @@ Cross-cutting products available to all B2B users:
 ### Core Platform Features
 | Feature | Free | Pro | Agent | Developer | Professional | Investor |
 |---------|------|-----|-------|-----------|--------------|----------|
-| Browse listings | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Browse listings | Yes | Yes | Yes | Yes | Yes | Yes |
 | Create listings | 2 | 5 | Unlimited | Unlimited | - | - |
-| Direct messaging | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Direct messaging | Yes | Yes | Yes | Yes | Yes | Yes |
 | Saved searches | 1 | Unlimited | Unlimited | Unlimited | Unlimited | Unlimited |
 | AI Valuation | - | 5/mo | 5/mo | 3/mo | 3/mo | 5/mo |
 | Neighbourhood Reports | - | 3/mo | Included | 3/mo | 3/mo | Included |
-| Priority matching | - | ✅ | ✅ | ✅ | ✅ | ✅ |
-| CRM access | - | - | ✅ | ✅ | ✅ | ✅ |
+| Priority matching | - | Yes | Yes | Yes | Yes | Yes |
+| CRM access | - | - | Yes | Yes | Yes | Yes |
 
 ### Addon Features
 | Feature | Price | Status |
 |---------|-------|--------|
-| Extra listing slot | €12 | 🔧 Implemented |
-| Spotlight Listing | €39 | 🔧 Implemented |
-| Priority Rank | €59 | 🔧 Implemented |
-| Maximum Exposure bundle | €79 | 🔧 Implemented |
-| Spotlight Professional | €59 | 🔧 Implemented |
-| Extra Priority Rank Ad | €8 | 🔧 Implemented |
+| Extra listing slot | EUR 12 | Implemented |
+| Spotlight Listing | EUR 39 | Implemented |
+| Priority Rank | EUR 59 | Implemented |
+| Maximum Exposure bundle | EUR 79 | Implemented |
+| Spotlight Professional | EUR 59 | Implemented |
+| Extra Priority Rank Ad | EUR 8 | Implemented |
 
 ---
 
@@ -192,30 +193,30 @@ Cross-cutting products available to all B2B users:
 
 | Scenario | Base | Add-ons | Reports | OS | **Total** |
 |----------|------|---------|---------|-----|-----------|
-| Casual Buyer (Free) | €0 | - | 1× valuation (€39) | - | **€0-39** |
-| Active Seller (Pro) | €29 | 2× extra (€24) | Bundle (€149) | - | **€53 + reports** |
-| Solo Agent | €149 | 5× priority (€40) | - | - | **€189** |
-| Small Agency (3 seats) | €249 | 10× priority (€80) | - | MI (€199) | **€528** |
-| Developer | €129 | Spotlight (€39×N) | - | - | **€129+** |
-| Professional | €69 | Spotlight (€59) | - | - | **€128** |
-| Private Investor | €49 | - | Included | - | **€49** |
-| Institutional | €199 | - | Included | AVM (€299) | **€498** |
-| Full B2B Enterprise | €749 | Unlimited | Included | All (€647) | **€1,396** |
+| Casual Buyer (Free) | EUR 0 | - | 1x valuation (EUR 39) | - | **EUR 0-39** |
+| Active Seller (Pro) | EUR 29 | 2x extra (EUR 24) | Bundle (EUR 149) | - | **EUR 53 + reports** |
+| Solo Agent | EUR 149 | 5x priority (EUR 40) | - | - | **EUR 189** |
+| Small Agency (3 seats) | EUR 249 | 10x priority (EUR 80) | - | MI (EUR 199) | **EUR 528** |
+| Developer | EUR 129 | Spotlight (EUR 39 x N) | - | - | **EUR 129+** |
+| Professional | EUR 69 | Spotlight (EUR 59) | - | - | **EUR 128** |
+| Private Investor | Custom annual link | - | Included | - | **Custom annual link** |
+| Institutional | Custom annual link | - | Included | AVM (EUR 299) | **Custom annual link + OS** |
+| Full B2B Enterprise | EUR 749 | Unlimited | Included | All (EUR 647) | **EUR 1,396** |
 
 ---
 
-## Recent Fixes ✅
+## Recent Fixes
 
 1. **Pricing Discrepancies Resolved:**
-   - ✅ Investor Plan: Fixed €490 → €49/month (annual €490)
-   - ✅ Institutional Plan: Fixed €1,490 → €199/month (annual €1,990)
-   - ✅ Pricing page now uses database values dynamically
-   - ✅ rolePlanMap.ts updated with correct fallback values
+   - Investor and Institutional pricing is invite-only with a custom annual amount via admin-created Checkout.
+   - Public subscription rows align with Stripe monthly and annual Price IDs.
+   - Pricing page now uses database values dynamically.
+   - rolePlanMap.ts keeps display fallback values only.
 
 2. **Database Synchronization:**
-   - ✅ Frontend now reads from `pricing_configs` table
-   - ✅ Hardcoded values only used as fallback when DB unavailable
-   - ✅ All tests passing (1,091 tests)
+   - Frontend now reads from `pricing_configs` table
+   - Hardcoded values only used as fallback when DB unavailable
+   - All tests passing (1,091 tests)
 
 ---
 
@@ -231,8 +232,8 @@ Cross-cutting products available to all B2B users:
 - `ROLE_PLAN_MAP` - Hardcoded fallback (source of discrepancy)
 
 ### Stripe Integration
-- Price IDs stored in environment variables: `STRIPE_PRICE_<KEY>`
-- Fallback to DB: `pricing_configs.metadata.stripe_price_id`
+- Price IDs are resolved from DB metadata first: `pricing_configs.metadata`
+- Environment variables such as `STRIPE_PRICE_<KEY>` are fallback-only
 - Checkout via `create-checkout` edge function
 
 ---

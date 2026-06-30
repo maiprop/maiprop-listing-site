@@ -37,7 +37,17 @@ const aiCreditStatusRestoreMigration = readFileSync(
   "utf8",
 );
 
-describe("stripe webhook add-on and investor custom-payment fulfillment", () => {
+const aiBundleCreditReservationFixMigration = readFileSync(
+  join(process.cwd(), "supabase/migrations/20260630121222_fix_ai_bundle_credit_reservation_limit.sql"),
+  "utf8",
+);
+
+const aiBundleCreditTriggerFixMigration = readFileSync(
+  join(process.cwd(), "supabase/migrations/20260630121353_fix_ai_bundle_credit_trigger_limit.sql"),
+  "utf8",
+);
+
+describe("stripe webhook add-on and custom annual investor payment fulfillment", () => {
   it("records add-on checkout sessions in a durable ledger without profile entitlement sync", () => {
     expect(webhook).toContain("fulfillAddonCheckoutSession(supabase, session)");
     expect(webhook).toContain("metadata.checkout_type !== \"addon\"");
@@ -117,6 +127,36 @@ describe("stripe webhook add-on and investor custom-payment fulfillment", () => 
     );
     expect(aiCreditReservationFixMigration).not.toContain(
       "v_consumed_credit := public.consume_addon_credit_for_user",
+    );
+  });
+
+  it("keeps bundle credit reservations from denying already-consumed overage", () => {
+    expect(aiBundleCreditReservationFixMigration).toContain(
+      "CREATE OR REPLACE FUNCTION public.reserve_ai_quota_for_user",
+    );
+    expect(aiBundleCreditReservationFixMigration).toContain(
+      "v_base_limit + v_available_credits + GREATEST(v_count - v_base_limit, 0)",
+    );
+    expect(aiBundleCreditReservationFixMigration).toContain(
+      "bundle credits can be fully consumed",
+    );
+    expect(aiBundleCreditReservationFixMigration).not.toContain(
+      "v_consumed_credit := public.consume_addon_credit_for_user",
+    );
+  });
+
+  it("keeps the AI usage trigger aligned with bundle credit reservations", () => {
+    expect(aiBundleCreditTriggerFixMigration).toContain(
+      "CREATE OR REPLACE FUNCTION public.check_ai_call_monthly_limit_trigger()",
+    );
+    expect(aiBundleCreditTriggerFixMigration).toContain(
+      "v_base_limit + v_available_credits + GREATEST(v_count - v_base_limit, 0)",
+    );
+    expect(aiBundleCreditTriggerFixMigration).toContain(
+      "public.consume_addon_credit_for_user(NEW.user_id, NEW.bucket)",
+    );
+    expect(aiBundleCreditTriggerFixMigration).toContain(
+      "bundles can be fully consumed",
     );
   });
 });

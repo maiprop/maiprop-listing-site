@@ -31,6 +31,10 @@ type ProfilePublicRow = {
 };
 
 const LISTING_TYPES = ["sale", "rent", "firesale", "auction", "open_house", "new_build"] as const;
+const SALE_RENT_CATALOG_TYPES_WITH_NEW_BUILD: Partial<Record<(typeof LISTING_TYPES)[number], string>> = {
+  sale: "in.(sale,new_build)",
+  rent: "in.(rent,new_build)",
+};
 const PROPERTY_TYPES = ["apartment", "house", "villa", "land", "commercial", "office", "warehouse", "hotel"] as const;
 const SORTS = ["featured", "newest", "price-asc", "price-desc", "ai-score", "views"] as const;
 const ENERGY_CLASSES = ["A+", "A", "B+", "B", "C", "D", "E", "F", "G"] as const;
@@ -48,7 +52,7 @@ const LISTING_PROJECT_CARD_SELECT_WITH_UNITS = [
   "delivery_date",
   `project_units!project_units_project_id_fkey(${PROJECT_UNIT_CARD_SELECT})`,
 ].join(",");
-const LISTINGS_CACHE_VERSION = "default-card-v2";
+const LISTINGS_CACHE_VERSION = "default-card-v3";
 const LISTINGS_CACHE_OPTIONS = {
   edgeTtlSeconds: 300,
   browserTtlSeconds: 60,
@@ -113,7 +117,10 @@ function listingSelect(includeProjectUnits: boolean): string {
 
 function shouldIncludeProjectUnits(requestUrl: URL): boolean {
   const listingType = safeToken(requestUrl.searchParams.get("listing_type"), LISTING_TYPES);
-  return listingType === "new_build" || requestUrl.searchParams.get("is_pre_sale") === "true";
+  return listingType === "new_build" ||
+    listingType === "sale" ||
+    listingType === "rent" ||
+    requestUrl.searchParams.get("is_pre_sale") === "true";
 }
 
 function appendIfPresent(params: URLSearchParams, name: string, value: string | null): void {
@@ -125,7 +132,7 @@ function buildListingParams(requestUrl: URL): { params: URLSearchParams; page: n
   const page = safeInt(requestUrl.searchParams.get("page"), 1, 1, 500);
   const pageSize = safeInt(
     requestUrl.searchParams.get("pageSize") ?? requestUrl.searchParams.get("limit"),
-    24,
+    40,
     1,
     200,
   );
@@ -156,7 +163,7 @@ function buildListingParams(requestUrl: URL): { params: URLSearchParams; page: n
 
   const listingType = safeToken(requestUrl.searchParams.get("listing_type"), LISTING_TYPES);
   if (listingType) {
-    params.set("listing_type", `eq.${listingType}`);
+    params.set("listing_type", SALE_RENT_CATALOG_TYPES_WITH_NEW_BUILD[listingType] ?? `eq.${listingType}`);
   } else if (requestUrl.searchParams.get("includeAuctions") !== "true") {
     params.set("listing_type", "in.(sale,rent,firesale,new_build)");
   }

@@ -102,11 +102,11 @@ describe("classifySwitch", () => {
     expect(classifySwitch("developer", "developer")).toBe("same-tier");
   });
 
-  it("investor → buyer is downgrade (leaving bespoke tier)", () => {
+  it("investor → buyer is downgrade (leaving invite-only paid tier)", () => {
     expect(classifySwitch("investor", "buyer")).toBe("downgrade");
   });
 
-  it("institutional → agent is downgrade (leaving bespoke tier)", () => {
+  it("institutional → agent is downgrade (leaving invite-only paid tier)", () => {
     expect(classifySwitch("institutional", "agent")).toBe("downgrade");
   });
 
@@ -179,7 +179,7 @@ describe("ROLE_PLAN_MAP canonical pricing snapshot", () => {
       developer:     { planKey: "developer_pro",          monthlyPrice: 129,  annualPrice: 1290,  proOnly: true,  inviteOnly: false },
       professional:  { planKey: "professional_basic",     monthlyPrice: 69,   annualPrice: 690,   proOnly: false, inviteOnly: false },
       // Investor & Institutional are invitation-only — no public price.
-      // The actual price is set per application via a one-off Stripe Payment Link.
+      // The custom annual amount is supplied to create-investor-payment by admins.
       investor:      { planKey: "investor_private",       monthlyPrice: 0,    annualPrice: 0,     proOnly: true,  inviteOnly: true  },
       institutional: { planKey: "investor_institutional", monthlyPrice: 0,    annualPrice: 0,     proOnly: true,  inviteOnly: true  },
     };

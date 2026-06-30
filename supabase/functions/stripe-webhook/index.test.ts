@@ -12,6 +12,8 @@ const {
   addonCreditsGranted,
   addonPurchaseStatusForSubscription,
   findProvisionedReplacementSubscription,
+  investorPaymentAccessPeriodDays,
+  investorPaymentExpiresAt,
   mapSubscriptionTrialStatus,
 } = await import("./index.ts");
 
@@ -188,7 +190,9 @@ Deno.test("webhook post-trial events resync subscriptions and lapse terminal sta
   const updatedCase = source.indexOf('case "customer.subscription.updated"');
   const pausedCase = source.indexOf('case "customer.subscription.paused"');
   const deletedCase = source.indexOf('case "customer.subscription.deleted"');
-  const paymentSucceededCase = source.indexOf('case "invoice.payment_succeeded"');
+  const paymentSucceededCase = source.indexOf(
+    'case "invoice.payment_succeeded"',
+  );
   const paymentFailedCase = source.indexOf('case "invoice.payment_failed"');
   const syncStart = source.indexOf("async function syncSubscription");
   const clearStart = source.indexOf("async function clearSubscription");
@@ -199,7 +203,10 @@ Deno.test("webhook post-trial events resync subscriptions and lapse terminal sta
   assertEquals(paymentSucceededCase > updatedCase, true);
   assertEquals(paymentFailedCase > updatedCase, true);
   assertEquals(
-    source.indexOf("await syncSubscriptionTrialStatus(supabase, sub)", updatedCase) >
+    source.indexOf(
+      "await syncSubscriptionTrialStatus(supabase, sub)",
+      updatedCase,
+    ) >
       updatedCase,
     true,
   );
@@ -258,7 +265,10 @@ Deno.test("agent data-input discount rollback clears legacy and Stripe credit ma
   assertEquals(rollbackBlock.includes("discount_invoice_id: null"), true);
   assertEquals(rollbackBlock.includes("applied_to_invoice_at: null"), true);
   assertEquals(rollbackBlock.includes("stripe_credit_id: null"), true);
-  assertEquals(rollbackBlock.includes("stripe_credit_amount_cents: null"), true);
+  assertEquals(
+    rollbackBlock.includes("stripe_credit_amount_cents: null"),
+    true,
+  );
   assertEquals(rollbackBlock.includes("stripe_credit_currency: null"), true);
 });
 
@@ -274,6 +284,79 @@ Deno.test("one-time checkout fulfillment requires paid status and metadata-owned
   assertEquals(source.includes("resolveUserIdByEmail"), false);
   assertEquals(source.includes('return { column: "email"'), false);
   assertEquals(source.includes('.eq("stripe_session_id", session.id)'), true);
+});
+
+Deno.test("add-on fulfillment skips orphaned sessions before ledger insert", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./index.ts", import.meta.url),
+  );
+  const addonStart = source.indexOf(
+    "async function fulfillAddonCheckoutSession",
+  );
+  const addonEnd = source.indexOf(
+    "async function activateInvestorPaymentSession",
+    addonStart,
+  );
+  const addonBlock = source.slice(addonStart, addonEnd);
+  const profileCheck = addonBlock.indexOf(
+    "await addonCheckoutProfileExists(supabase, userId)",
+  );
+  const ledgerInsert = addonBlock.indexOf('.from("addon_purchases")');
+
+  assertEquals(profileCheck > 0, true);
+  assertEquals(ledgerInsert > profileCheck, true);
+  assertEquals(addonBlock.includes("orphaned add-on checkout session"), true);
+  assertEquals(addonBlock.includes("return true;"), true);
+});
+
+Deno.test("investor payment activation computes a one-year expiry from one activation timestamp", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./index.ts", import.meta.url),
+  );
+  const activationStart = source.indexOf(
+    "async function activateInvestorPaymentSession",
+  );
+  const activationEnd = source.indexOf(
+    "type SubscriptionTrialClaimStatus",
+    activationStart,
+  );
+  const activationBlock = source.slice(activationStart, activationEnd);
+
+  assertEquals(
+    investorPaymentAccessPeriodDays({ access_period_days: "365" } as never),
+    365,
+  );
+  assertEquals(
+    investorPaymentAccessPeriodDays({ access_period_days: "0" } as never),
+    365,
+  );
+  assertEquals(
+    investorPaymentExpiresAt(
+      new Date("2026-01-01T00:00:00.000Z"),
+      { access_period_days: "365" } as never,
+    ).toISOString(),
+    "2027-01-01T00:00:00.000Z",
+  );
+  assertEquals(
+    activationBlock.includes("const activatedAt = new Date();"),
+    true,
+  );
+  assertEquals(
+    activationBlock.includes(
+      "const activatedAtIso = activatedAt.toISOString();",
+    ),
+    true,
+  );
+  assertEquals(activationBlock.includes("started_at: activatedAtIso"), true);
+  assertEquals(activationBlock.includes("activated_at: activatedAtIso"), true);
+  assertEquals(activationBlock.includes("updated_at: activatedAtIso"), true);
+  assertEquals(
+    activationBlock.includes(
+      "expires_at: investorPaymentExpiresAt(activatedAt, metadata).toISOString()",
+    ),
+    true,
+  );
+  assertEquals(activationBlock.includes("expires_at: null"), false);
 });
 
 restore();

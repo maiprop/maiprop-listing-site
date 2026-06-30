@@ -209,12 +209,12 @@ export function InvitationRequestModal({ user, onClose, onSuccess }: Props) {
           <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
 
             <div className="rounded-xl border border-border bg-card/50 p-4">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">{isGreek ? "Εξατομικευμένη πρόσβαση Quick Sale™" : "Custom Quick Sale™ Access"}</p>
-              <p className="text-sm text-foreground font-medium">{isGreek ? "Η πρόσβαση στον επενδυτικό πίνακα εξετάζεται και τιμολογείται εξατομικευμένα." : "Investor dashboard access is reviewed and priced individually."}</p>
+              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">{isGreek ? "Πρόσβαση Quick Sale™ με έγκριση" : "Approved Quick Sale™ Access"}</p>
+              <p className="text-sm text-foreground font-medium">{isGreek ? "Η πρόσβαση στον επενδυτικό πίνακα εγκρίνεται από την ομάδα και χρεώνεται με προσαρμοσμένο ετήσιο σύνδεσμο πληρωμής." : "Investor dashboard access is reviewed by the team and billed through a custom annual payment link."}</p>
               <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
                 {isGreek
-                  ? "Μετά την έγκριση της αίτησης, η ομάδα μας στέλνει εξατομικευμένο σύνδεσμο πληρωμής ανάλογα με τις ανάγκες ροής ευκαιριών, το επίπεδο επαλήθευσης και το εύρος πρόσβασης. Δεν υπάρχουν δημόσια σταθερά μηνιαία πακέτα."
-                  : "After your application is approved, our team sends a custom payment link that matches your deal flow needs, verification level, and access scope. There are no public fixed monthly tiers."}
+                  ? "Μετά την έγκριση της αίτησης, η ομάδα μας στέλνει σύνδεσμο Stripe Checkout με το εγκεκριμένο ετήσιο ποσό. Δεν υπάρχουν δημόσια μηνιαία πακέτα."
+                  : "After your application is approved, our team sends a Stripe Checkout link with the approved annual amount. There are no public monthly tiers."}
               </p>
             </div>
 

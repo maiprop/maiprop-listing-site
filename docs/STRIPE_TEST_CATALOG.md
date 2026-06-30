@@ -64,9 +64,11 @@ Public subscriptions:
 Invite-only investor products:
 
 - `investor_private`: product and Entitlements Features only. The
-  `create-investor-payment` Edge Function supplies the bespoke Checkout amount.
+  `create-investor-payment` Edge Function creates invite-only Checkout with
+  the admin-entered custom annual amount and stamps annual access metadata.
 - `investor_institutional`: product and Entitlements Features only. The
-  `create-investor-payment` Edge Function supplies the bespoke Checkout amount.
+  `create-investor-payment` Edge Function creates invite-only Checkout with
+  the admin-entered custom annual amount and stamps annual access metadata.
 
 Self-serve add-ons:
 
@@ -76,7 +78,7 @@ Self-serve add-ons:
 
 Cataloged contact/admin-managed add-ons and data products:
 
-These Products/Prices are provisioned in Stripe so Admin Pricing, bespoke sales,
+These Products/Prices are provisioned in Stripe so Admin Pricing, admin-led sales,
 and future fulfillment work can reference stable Stripe IDs, but
 `create-checkout` does not expose them as self-serve purchases until an
 operational delivery path exists.

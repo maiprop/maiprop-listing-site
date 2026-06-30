@@ -104,7 +104,7 @@
       "boundary": "external-provider-contract",
       "owner": "domain",
       "reviewBy": "2026-07-31",
-      "rationale": "Investor payment link bodies are admin-authorized and converted server-side before bespoke Stripe Checkout sessions are created."
+      "rationale": "Investor payment link bodies are admin-authorized and constrained server-side to custom annual Stripe Checkout sessions."
     },
     {
       "function": "create-stripe-price",

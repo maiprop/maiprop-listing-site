@@ -320,6 +320,25 @@ function isPaidCheckoutSession(session: Stripe.Checkout.Session): boolean {
   return session.payment_status === "paid";
 }
 
+export function investorPaymentAccessPeriodDays(
+  metadata: Stripe.Metadata | null | undefined,
+): number {
+  const parsed = Number(metadata?.access_period_days ?? 365);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 3660) return 365;
+  return parsed;
+}
+
+export function investorPaymentExpiresAt(
+  activatedAt: Date,
+  metadata: Stripe.Metadata | null | undefined,
+): Date {
+  const expiresAt = new Date(activatedAt.getTime());
+  expiresAt.setUTCDate(
+    expiresAt.getUTCDate() + investorPaymentAccessPeriodDays(metadata),
+  );
+  return expiresAt;
+}
+
 function normalizePositiveQuantity(raw: string | null | undefined): number {
   const parsed = Number(raw ?? 1);
   if (!Number.isInteger(parsed) || parsed < 1 || parsed > 10_000) {
@@ -366,12 +385,28 @@ async function syncAddonSubscriptionLifecycle(
   return true;
 }
 
-export function addonCreditsGranted(addonKey: string, quantity: number): number {
+export function addonCreditsGranted(
+  addonKey: string,
+  quantity: number,
+): number {
   const units = SELF_SERVE_ADDON_CREDITS[addonKey];
   if (!units) {
     throw new Error(`unsupported self-serve add-on key: ${addonKey}`);
   }
   return units * quantity;
+}
+
+async function addonCheckoutProfileExists(
+  supabase: SupabaseAdminClient,
+  userId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("user_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data?.user_id);
 }
 
 // skipcq: JS-0067 - Top-level helper is used by the webhook switch.
@@ -390,6 +425,14 @@ async function fulfillAddonCheckoutSession(
   const unit = metadata.unit;
   if (!userId || !addonKey || !module || !audience || !unit) {
     throw new Error("addon checkout session missing required metadata");
+  }
+  if (!(await addonCheckoutProfileExists(supabase, userId))) {
+    log.warn("orphaned add-on checkout session", {
+      session_id: session.id,
+      user_id: userId,
+      addon_key: addonKey,
+    });
+    return true;
   }
   const checkoutMode = normalizeAddonCheckoutMode(session.mode);
   const quantity = normalizePositiveQuantity(metadata.quantity);
@@ -436,15 +479,17 @@ async function activateInvestorPaymentSession(
       "investor payment session missing user_id or supported plan_key",
     );
   }
+  const activatedAt = new Date();
+  const activatedAtIso = activatedAt.toISOString();
 
   const { data, error } = await supabase
     .from("investor_subscriptions")
     .update({
       status: "active",
-      started_at: new Date().toISOString(),
-      expires_at: null,
-      updated_at: new Date().toISOString(),
-      activated_at: new Date().toISOString(),
+      started_at: activatedAtIso,
+      expires_at: investorPaymentExpiresAt(activatedAt, metadata).toISOString(),
+      updated_at: activatedAtIso,
+      activated_at: activatedAtIso,
       stripe_customer_id: typeof session.customer === "string"
         ? session.customer
         : null,
@@ -824,12 +869,15 @@ async function clearSubscription(
     sub.id,
   );
   if (replacement) {
-    log.info("deleted subscription has active replacement; syncing replacement", {
-      user_id: userId,
-      deleted_sub_id: sub.id,
-      replacement_sub_id: replacement.id,
-      replacement_status: replacement.status,
-    });
+    log.info(
+      "deleted subscription has active replacement; syncing replacement",
+      {
+        user_id: userId,
+        deleted_sub_id: sub.id,
+        replacement_sub_id: replacement.id,
+        replacement_status: replacement.status,
+      },
+    );
     await syncSubscription(supabase, stripe, replacement);
     await syncSubscriptionTrialStatus(supabase, replacement);
     return;

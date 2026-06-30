@@ -105,11 +105,11 @@ const NAV_FREE: Record<string, string[]> = {
 const PRO_GATED = ["analytics", "contacts", "leads", "booking", "projects", "portfolios", "saved-searches"];
 
 const PRICING: Record<string, { free: string; pro: string; proPrice: string }> = {
-  buyer:        { free: "€0",  pro: "Participant Pro", proPrice: "€19/mo" },
-  seller:       { free: "€0",  pro: "Participant Pro", proPrice: "€19/mo" },
-  agent:        { free: "€0",  pro: "Agent Pro",       proPrice: "€149/mo" },
-  developer:    { free: "—",   pro: "Developer Pro",   proPrice: "€89/mo" },
-  professional: { free: "€0",  pro: "Pro Plan",        proPrice: "€49/mo" },
+  buyer:        { free: "EUR 0",  pro: "Participant Pro", proPrice: "EUR 29/mo" },
+  seller:       { free: "EUR 0",  pro: "Participant Pro", proPrice: "EUR 29/mo" },
+  agent:        { free: "EUR 0",  pro: "Agent Pro",       proPrice: "EUR 149/mo" },
+  developer:    { free: "-",      pro: "Developer Pro",   proPrice: "EUR 129/mo" },
+  professional: { free: "EUR 0",  pro: "Pro Plan",        proPrice: "EUR 69/mo" },
 };
 
 const FLOWS: Record<string, string[]> = {

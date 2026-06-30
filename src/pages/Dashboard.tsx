@@ -558,7 +558,7 @@ export default function Dashboard() { // skipcq: JS-R1005
                       <Flame className="w-8 h-8 text-amber-400 shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-sm">{tr("dashboard.overview.investorAccess.title", "Investor access")}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{tr("dashboard.overview.investorAccess.subtitle", "Apply for reviewed Quick Sale deal-flow access. Approval and a custom payment link are required before activation.")}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{tr("dashboard.overview.investorAccess.subtitle", "Apply for reviewed Quick Sale deal-flow access. Approval and a custom annual payment link are required before activation.")}</p>
                       </div>
                       <Button size="sm" className="shrink-0 text-xs h-8 bg-amber-500 hover:bg-amber-600 border-0 text-white" asChild>
                         <Link to={isPro ? "/investor-dashboard" : "/pricing?audience=participant"}>

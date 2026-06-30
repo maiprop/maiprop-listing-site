@@ -13,7 +13,7 @@ describe("investor feed select policy migration", () => {
     expect(migration).toContain('CREATE POLICY "firesale_feed_select"');
     expect(migration).toContain("p.role::text IN ('investor', 'institutional')");
     expect(migration).toContain("p.participant_type::text IN ('investor', 'institutional')");
-    expect(migration).toContain("s.status IN ('active', 'trial')");
+    expect(migration).toContain("public.has_current_investor_subscription((SELECT auth.uid()))");
     expect(migration).toContain("public.has_platform_admin((SELECT auth.uid()))");
   });
 });

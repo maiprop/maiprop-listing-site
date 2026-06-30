@@ -75,6 +75,39 @@ Deno.test("billing subscription rows normalize Stripe item and period fields", (
   assertEquals(row.runtime_mode, "test");
 });
 
+Deno.test("billing subscription rows fall back to item period fields for newer Stripe API shapes", () => {
+  const row = buildBillingSubscriptionRow({
+    userId: "user-1",
+    stripeCustomerId: "cus_test",
+    subscription: {
+      id: "sub_test",
+      status: "active",
+      livemode: false,
+      metadata: {
+        plan_key: "agent_basic",
+        audience: "agent",
+        billing_cycle: "annual",
+      },
+      items: {
+        data: [
+          {
+            current_period_start: 1_780_000_000,
+            current_period_end: 1_811_536_000,
+            price: {
+              id: "price_agent_annual",
+              product: "prod_agent",
+            },
+          },
+        ],
+      },
+    },
+  });
+
+  assertEquals(row.current_period_start, "2026-05-28T20:26:40.000Z");
+  assertEquals(row.current_period_end, "2027-05-28T20:26:40.000Z");
+  assertEquals(row.billing_cycle, "annual");
+});
+
 Deno.test("billing state helpers recognize runtime mode and duplicate event errors", () => {
   assertEquals(stripeRuntimeModeFromLivemode(false), "test");
   assertEquals(stripeRuntimeModeFromLivemode(true), "live");

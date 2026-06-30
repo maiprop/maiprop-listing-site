@@ -163,14 +163,26 @@ export default function AdminSubscribers() {
   };
 
   const filtered = allSubs.filter(s => subsFilter === "all" || s.status === subsFilter);
+  const investorPriceLabel = (tier: "private" | "institutional") => {
+    const config = pricingConfigs[INVESTOR_TIER_TO_KEY[tier]];
+    return config && Number(config.amount) > 0
+      ? formatPrice(config, { showUnit: true, fallback: "Custom annual link" })
+      : "Custom annual link";
+  };
+  const estimatedMrr = allSubs
+    .filter(s => s.status === "active")
+    .reduce((total, sub) => {
+      if (sub.tier !== "private" && sub.tier !== "institutional") return total;
+      return total + Number(pricingConfigs[INVESTOR_TIER_TO_KEY[sub.tier]]?.amount ?? 0);
+    }, 0);
   const tierConfig: Record<string, { color: string; price: string }> = {
     private: {
       color: "text-primary border-primary/20 bg-primary/10",
-      price: formatPrice(pricingConfigs[INVESTOR_TIER_TO_KEY.private], { showUnit: true, fallback: "€490/mo" }),
+      price: investorPriceLabel("private"),
     },
     institutional: {
       color: "text-accent border-accent/20 bg-accent/10",
-      price: formatPrice(pricingConfigs[INVESTOR_TIER_TO_KEY.institutional], { showUnit: true, fallback: "€1,490/mo" }),
+      price: investorPriceLabel("institutional"),
     },
     developer: { color: "text-brand-gold border-brand-gold/20 bg-brand-gold/10", price: "Custom" },
   };
@@ -178,7 +190,7 @@ export default function AdminSubscribers() {
 
   return (
     <div className="space-y-6">
-      {/* Transfer platform admin — only current admin can grant */}
+      {/* Transfer platform admin â€” only current admin can grant */}
       <div className="glass-card rounded-xl border border-primary/30 p-4 space-y-3">
         <p className="font-display font-semibold text-sm flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-primary" /> Transfer platform admin
@@ -204,10 +216,15 @@ export default function AdminSubscribers() {
       </div>
       <div className="glass-card rounded-xl border border-primary/20 p-4 flex items-center justify-between flex-wrap gap-4">
         <div>
-          <p className="text-xs text-muted-foreground mb-1">Estimated MRR</p>
+          <p className="text-xs text-muted-foreground mb-1">Configured MRR</p>
           <p className="font-display font-black text-2xl text-primary">
-            €{(allSubs.filter(s => s.status === "active" && s.tier === "private").length * (pricingConfigs[INVESTOR_TIER_TO_KEY.private]?.amount ?? 490) + allSubs.filter(s => s.status === "active" && s.tier === "institutional").length * (pricingConfigs[INVESTOR_TIER_TO_KEY.institutional]?.amount ?? 1490)).toLocaleString()}
+            €{estimatedMrr.toLocaleString()}
           </p>
+          {estimatedMrr === 0 && (
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Investor payments use custom annual Checkout links and are reconciled from Stripe payments.
+            </p>
+          )}
         </div>
         <Button size="sm" variant="outline" className="border-border text-xs h-8 gap-1.5" onClick={() => refetch()}><RefreshCw className={`w-3 h-3 ${subsLoading ? "animate-spin" : ""}`} /> Refresh</Button>
       </div>
@@ -233,10 +250,10 @@ export default function AdminSubscribers() {
                   <div className="w-9 h-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center font-bold text-sm text-primary shrink-0 uppercase">{(sub.display_name || "?")[0]}</div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm truncate">{sub.display_name || "Unknown"}</p>
-                    <p className="text-[10px] text-muted-foreground">Since {new Date(sub.started_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}{sub.expires_at && <> · Expires {new Date(sub.expires_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</>}</p>
+                    <p className="text-[10px] text-muted-foreground">Since {new Date(sub.started_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}{sub.expires_at && <> Â· Expires {new Date(sub.expires_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</>}</p>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap shrink-0">
-                    <span className={`text-[10px] font-bold uppercase tracking-widest border px-2 py-0.5 rounded-full capitalize ${tierConfig[sub.tier]?.color}`}>{sub.tier} · {tierConfig[sub.tier]?.price}</span>
+                    <span className={`text-[10px] font-bold uppercase tracking-widest border px-2 py-0.5 rounded-full capitalize ${tierConfig[sub.tier]?.color}`}>{sub.tier} Â· {tierConfig[sub.tier]?.price}</span>
                     <span className={`text-[10px] font-bold uppercase tracking-widest border px-2 py-0.5 rounded-full capitalize ${statusColor[sub.status]}`}>{sub.status}</span>
                     {subDaysLeft !== null && subDaysLeft <= 7 && subDaysLeft >= 0 && <span className="text-[10px] font-bold text-destructive border border-destructive/20 bg-destructive/10 px-2 py-0.5 rounded-full">Expires in {subDaysLeft}d</span>}
                   </div>
@@ -248,9 +265,9 @@ export default function AdminSubscribers() {
                       <div>
                         <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5 block">Tier</label>
                         <select value={editTier} onChange={e => setEditTier(e.target.value)} className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs text-foreground outline-none focus:border-primary">
-                          <option value="private">Private — {formatPrice(pricingConfigs[INVESTOR_TIER_TO_KEY.private], { showUnit: true, fallback: "€490/mo" })}</option>
-                          <option value="institutional">Institutional — {formatPrice(pricingConfigs[INVESTOR_TIER_TO_KEY.institutional], { showUnit: true, fallback: "€1,490/mo" })}</option>
-                          <option value="developer">Developer — Custom</option>
+                          <option value="private">Private - {investorPriceLabel("private")}</option>
+                          <option value="institutional">Institutional - {investorPriceLabel("institutional")}</option>
+                          <option value="developer">Developer - Custom</option>
                         </select>
                       </div>
                       <div>

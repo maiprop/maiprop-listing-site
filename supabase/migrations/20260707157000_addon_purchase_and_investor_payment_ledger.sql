@@ -1,5 +1,5 @@
--- Durable payment ledgers for add-on fulfillment and custom investor payment
--- link activation. Stripe webhook writes these rows with the service role.
+-- Durable payment ledgers for add-on fulfillment and custom annual investor
+-- payment link activation. Stripe webhook writes these rows with the service role.
 
 ALTER TABLE public.investor_subscriptions
   ADD COLUMN IF NOT EXISTS stripe_customer_id text,
