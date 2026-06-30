@@ -4425,6 +4425,14 @@ export type Database = {
         Args: { p_professional_id: string; p_reviewer_id: string }
         Returns: boolean
       }
+      charge_property_report_fetch_for_user: {
+        Args: {
+          p_cache_generated_at: string
+          p_listing_id: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
       check_ai_quota: { Args: { p_bucket: string }; Returns: Json }
       check_ai_quota_for_user: {
         Args: { _user_id: string; p_bucket: string }
