@@ -1,0 +1,110 @@
+name: Direct Cloudflare Production Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type DEPLOY_PRODUCTION to deploy main to Cloudflare Pages"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: direct-cloudflare-pages-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy current main to Cloudflare Pages
+    if: github.ref == 'refs/heads/main' && inputs.confirm == 'DEPLOY_PRODUCTION'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Check runtime
+        run: npm run check:runtime
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Build app with production environment
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL:             ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SUPABASE_PROJECT_ID:      ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+          VITE_MAPBOX_TOKEN:             ${{ secrets.VITE_MAPBOX_TOKEN }}
+          VITE_SENTRY_DSN:               ${{ secrets.VITE_SENTRY_DSN }}
+          VITE_STRIPE_PRO_PRODUCT_ID:    ${{ secrets.VITE_STRIPE_PRO_PRODUCT_ID }}
+          VITE_TURNSTILE_SITE_KEY:       ${{ secrets.VITE_TURNSTILE_SITE_KEY }}
+          VITE_GOOGLE_MAPS_API_KEY:      ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+          VITE_PLAUSIBLE_DOMAIN:         ${{ secrets.VITE_PLAUSIBLE_DOMAIN }}
+          VITE_APP_URL:                  ${{ secrets.VITE_APP_URL }}
+
+      - name: Package Cloudflare Pages Functions worker
+        run: npm run build:cloudflare-pages-worker
+
+      - name: Write deployment version marker
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg sha "${{ github.sha }}" \
+            --arg run_id "${{ github.run_id }}" \
+            --arg run_attempt "${{ github.run_attempt }}" \
+            --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{
+              sha: $sha,
+              run_id: $run_id,
+              run_attempt: $run_attempt,
+              created_at: $created_at
+            }' > dist/deploy-version.json
+          test -s dist/deploy-version.json
+
+      - name: Prepare Wrangler runtime config
+        env:
+          SUPABASE_URL:             ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_PROJECT_ID:      ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          SITE_LOCK_PASSWORD:       ${{ secrets.SITE_LOCK_PASSWORD }}
+        run: |
+          set -euo pipefail
+          toml_quote() {
+            jq -Rn --arg value "$1" '$value'
+          }
+          {
+            echo 'name = "maiprop-listing-site"'
+            echo 'pages_build_output_dir = "./dist"'
+            echo 'compatibility_date = "2026-05-19"'
+            echo
+            echo '[vars]'
+            printf 'SUPABASE_URL = %s\n' "$(toml_quote "$SUPABASE_URL")"
+            printf 'VITE_SUPABASE_URL = %s\n' "$(toml_quote "$SUPABASE_URL")"
+            printf 'SUPABASE_PROJECT_ID = %s\n' "$(toml_quote "$SUPABASE_PROJECT_ID")"
+            printf 'VITE_SUPABASE_PROJECT_ID = %s\n' "$(toml_quote "$SUPABASE_PROJECT_ID")"
+            printf 'SUPABASE_PUBLISHABLE_KEY = %s\n' "$(toml_quote "$SUPABASE_PUBLISHABLE_KEY")"
+            printf 'VITE_SUPABASE_PUBLISHABLE_KEY = %s\n' "$(toml_quote "$SUPABASE_PUBLISHABLE_KEY")"
+            printf 'VITE_SUPABASE_ANON_KEY = %s\n' "$(toml_quote "$SUPABASE_PUBLISHABLE_KEY")"
+            if [ -n "${SITE_LOCK_PASSWORD}" ]; then
+              printf 'SITE_LOCK_PASSWORD = %s\n' "$(toml_quote "$SITE_LOCK_PASSWORD")"
+            fi
+          } > wrangler.toml
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+        with:
+          apiToken:  ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=maiprop-listing-site --branch=main --commit-hash=${{ github.sha }} --commit-message=${{ github.sha }} --commit-dirty=true
+
