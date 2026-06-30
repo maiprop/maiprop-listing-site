@@ -238,14 +238,17 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
         {registrationsOpen && (
           <div className="border-t border-border">
             {/* Pipeline: track where each application stands */}
-            <div className="flex items-center gap-2 px-4 py-3 bg-muted/30 border-b border-border text-xs">
+            <div
+              data-testid="open-house-pipeline"
+              className="flex flex-col items-start gap-2 px-4 py-3 bg-muted/30 border-b border-border text-xs sm:flex-row sm:items-center"
+            >
               <span className="font-semibold text-muted-foreground">Pipeline:</span>
-              <span className="flex items-center gap-1">
-                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 font-medium">{pendingCount} Pending</span>
+              <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 font-medium whitespace-nowrap">{pendingCount} Pending</span>
                 <span className="text-muted-foreground">→</span>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 font-medium">{approvedCount} Approved</span>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 font-medium whitespace-nowrap">{approvedCount} Approved</span>
                 <span className="text-muted-foreground">→</span>
-                <span className="px-2 py-0.5 rounded-full bg-primary/20 text-primary font-medium">{attendedCount} Attended</span>
+                <span className="px-2 py-0.5 rounded-full bg-primary/20 text-primary font-medium whitespace-nowrap">{attendedCount} Attended</span>
               </span>
             </div>
             <div>
@@ -256,31 +259,35 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
             ) : (
               <div className="divide-y divide-border">
                 {registrations.map((r: OpenHouseRegistration) => ( // skipcq: JS-R1005 - Registration row renders optional contact and approval states together.
-                  <div key={r.id} className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div
+                    key={r.id}
+                    data-testid="open-house-registration-row"
+                    className="p-4 flex flex-col gap-4 overflow-hidden sm:flex-row sm:items-center sm:justify-between"
+                  >
                     <div className="min-w-0 flex-1">
-                      <div className="font-medium">
+                      <div className="font-medium truncate">
                         {r.contact_name || r.profiles?.display_name || [r.profiles?.first_name, r.profiles?.last_name].filter(Boolean).join(" ") || "Visitor"}
                       </div>
-                      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-[11px] text-muted-foreground">
+                      <div className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 mt-1 text-[11px] text-muted-foreground">
                         {r.contact_email && (
-                          <span className="inline-flex items-center gap-1">
-                            <Mail className="w-3 h-3" /> {r.contact_email}
+                          <span className="inline-flex min-w-0 max-w-full items-center gap-1">
+                            <Mail className="w-3 h-3 shrink-0" /> <span className="truncate">{r.contact_email}</span>
                           </span>
                         )}
                         {r.contact_phone && (
-                          <span className="inline-flex items-center gap-1">
-                            <Phone className="w-3 h-3" /> {r.contact_phone}
+                          <span className="inline-flex max-w-full items-center gap-1">
+                            <Phone className="w-3 h-3 shrink-0" /> <span className="truncate">{r.contact_phone}</span>
                           </span>
                         )}
                         {r.visit_purpose && (
-                          <span className="inline-flex items-center gap-1">
-                            <UserRound className="w-3 h-3" /> {r.visit_purpose}
+                          <span className="inline-flex max-w-full items-center gap-1">
+                            <UserRound className="w-3 h-3 shrink-0" /> <span className="truncate">{r.visit_purpose}</span>
                           </span>
                         )}
                       </div>
-                      <div className="flex flex-wrap gap-2 mt-2 text-[11px]">
+                      <div className="flex min-w-0 flex-wrap gap-x-2 gap-y-1.5 mt-2 text-[11px]">
                         <span className={cn(
-                          "inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium capitalize",
+                          "inline-flex max-w-full items-center gap-1 px-2 py-0.5 rounded-full font-medium capitalize whitespace-nowrap",
                           r.status === "pending" ? "bg-amber-500/15 text-amber-700" :
                           r.status === "approved" ? "bg-emerald-500/15 text-emerald-700" :
                           r.status === "attended" ? "bg-primary/15 text-primary" :
@@ -289,8 +296,8 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
                         )}>
                           {STATUS_LABELS[(r.status as import("@/hooks/useOpenHouseAssetControl").OHRegistrationStatus)] || r.status}
                         </span>
-                        <span className={cn("inline-flex items-center gap-0.5", r.id_doc_url ? "text-emerald-600" : "text-muted-foreground")}>
-                          <FileCheck className="w-3 h-3" />
+                        <span className={cn("inline-flex max-w-full items-center gap-0.5 whitespace-nowrap", r.id_doc_url ? "text-emerald-600" : "text-muted-foreground")}>
+                          <FileCheck className="w-3 h-3 shrink-0" />
                           {r.id_doc_url ? (
                             <button
                               onClick={() => r.id_doc_url && handleViewDoc(r.id_doc_url)}
@@ -301,13 +308,13 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
                             </button>
                           ) : "ID —"}
                         </span>
-                        <span className={cn("inline-flex items-center gap-0.5", r.waiver_signed_at ? "text-emerald-600" : "text-muted-foreground")}>
+                        <span className={cn("inline-flex max-w-full items-center gap-0.5 whitespace-nowrap", r.waiver_signed_at ? "text-emerald-600" : "text-muted-foreground")}>
                           <FileText className="w-3 h-3" /> {r.waiver_signed_at ? "Waiver ✓" : "Waiver —"}
                         </span>
-                        <span className={cn("inline-flex items-center gap-0.5", getProofOfFundsDisplay(r).className)}>
+                        <span className={cn("inline-flex max-w-full items-center gap-0.5 whitespace-nowrap", getProofOfFundsDisplay(r).className)}>
                           <Wallet className="w-3 h-3" /> {getProofOfFundsDisplay(r).label}
                         </span>
-                        <span className={cn("inline-flex items-center gap-0.5", r.investor_declaration_signed_at ? "text-emerald-600" : "text-muted-foreground")}>
+                        <span className={cn("inline-flex max-w-full items-center gap-0.5 whitespace-nowrap", r.investor_declaration_signed_at ? "text-emerald-600" : "text-muted-foreground")}>
                           <Shield className="w-3 h-3" /> {r.investor_declaration_signed_at ? "Investor ✓" : "Investor —"}
                         </span>
                       </div>
@@ -328,7 +335,10 @@ export default function OpenHouseAssetControlPanel({ listingId, isOwner, listing
                       const canMarkAttended = r.status === "approved";
                       if (!canVerifyId && !canReviewPof && !canReview && !canMarkAttended) return null;
                       return (
-                        <div className="flex gap-2 flex-wrap">
+                        <div
+                          data-testid="open-house-registration-actions"
+                          className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end"
+                        >
                           {canVerifyId && (
                             <Button
                               size="sm"

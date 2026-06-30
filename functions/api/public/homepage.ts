@@ -42,7 +42,7 @@ const SECTIONS = [
   "auction-count",
 ] as const;
 const HOMEPAGE_CACHE_VERSION = "open-house-transaction-v1";
-const FEATURED_CACHE_VERSION = "featured-card-v4";
+const FEATURED_CACHE_VERSION = "featured-card-v5";
 const FEATURED_CACHE_SECONDS = 5 * 60;
 const HOMEPAGE_PRODUCER_TIMEOUT_MS = 4_500;
 const COUNTED_PROPERTY_TYPES = ["apartment", "land"] as const;
@@ -61,7 +61,11 @@ const POPULAR_LOCATION_FALLBACK: PopularLocation[] = [
   { name: "Santorini", listings: 1240, trend: "+1.9%", trendUp: true },
 ];
 
-const featuredProjectSelect = "delivery_date";
+const PROJECT_UNIT_CARD_SELECT = ["id", "availability_status", "internal_sqm"].join(",");
+const featuredProjectSelect = [
+  "delivery_date",
+  `project_units!project_units_project_id_fkey(${PROJECT_UNIT_CARD_SELECT})`,
+].join(",");
 
 const featuredSelect =
   `id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,project_id,ai_score,views_count,tags,project:projects!listings_project_id_fkey(${featuredProjectSelect}),listing_images(url,sort_order)`;

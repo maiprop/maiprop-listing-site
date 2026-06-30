@@ -504,6 +504,31 @@ describe("dashboard tab behavior", () => {
     expect(screen.queryByRole("link", { name: /edit listing/i })).not.toBeInTheDocument();
   });
 
+  it("keeps my listing cards from squeezing text under mobile actions", () => {
+    listingsState.data = [{
+      id: "l-mobile",
+      project_id: "project-mobile",
+      title: "Long mobile title that should keep readable spacing",
+      city: "Athens",
+      price: 275000,
+      sqm: 39,
+      status: "active",
+      views_count: 12,
+      listing_type: "new_build",
+      is_off_market: false,
+      is_pre_sale: false,
+      is_featured: true,
+      priority_placement: 0,
+      tags: ["exclusive"],
+    }];
+
+    renderWithProviders(<MyListingsSection bioType="developer" role="developer" />);
+
+    expect(screen.getByTestId("my-listing-card-l-mobile")).toHaveClass("flex-col", "sm:flex-row");
+    expect(screen.getByTestId("my-listing-meta-l-mobile")).toHaveClass("flex-wrap");
+    expect(screen.getByTestId("my-listing-actions-l-mobile")).toHaveClass("w-full", "sm:w-auto");
+  });
+
   it("does not expose the old partial inline listing editor", () => {
     listingsState.data = [{
       id: "l-edit-empty-price",
