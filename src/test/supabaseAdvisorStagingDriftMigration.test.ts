@@ -65,6 +65,7 @@ describe("staging Supabase advisor drift hardening", () => {
     const expectedCacheKeySnippets = [
       "public_get_open_house_capacity",
       "public_submit_agent_data_input",
+      "public_has_current_investor_subscription",
       "realtime_messages_video_room_channel",
       "public_listings_listing_insert_quota",
     ];
@@ -84,11 +85,15 @@ describe("staging Supabase advisor drift hardening", () => {
   it("keeps the migration ordered after the existing applied future-dated hardening chain", () => {
     expect(appliedFutureMigrations).toContain("20260707159000");
     expect(appliedFutureMigrations).toContain("20260707170000");
+    expect(appliedFutureMigrations).toContain("20260707172000");
     expect(
       appliedFutureMigrations.indexOf("20260707159000"),
     ).toBeGreaterThan(appliedFutureMigrations.indexOf("20260707158000"));
     expect(
       appliedFutureMigrations.indexOf("20260707170000"),
     ).toBeGreaterThan(appliedFutureMigrations.indexOf("20260707169000"));
+    expect(
+      appliedFutureMigrations.indexOf("20260707172000"),
+    ).toBeGreaterThan(appliedFutureMigrations.indexOf("20260707170000"));
   });
 });
