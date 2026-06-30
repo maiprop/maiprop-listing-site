@@ -355,6 +355,29 @@ describe("Pricing focused page behavior", () => {
     );
   });
 
+  it("does not let a logged-in user start checkout for a different account type", async () => {
+    mocks.useAuthMock.mockReturnValue({
+      user: { id: "u-agent", email: "agent@example.com" },
+      profile: { role: "agent", participant_type: "agent" },
+      loading: false,
+      profileLoading: false,
+    });
+    const { default: Pricing } = await import("@/pages/Pricing");
+
+    renderWithProviders(<Pricing />, { initialPath: "/pricing?audience=developer" });
+
+    fireEvent.click(await screen.findByRole("button", { name: /Switch account type first/i }));
+
+    expect(mocks.invokeMock).not.toHaveBeenCalledWith(
+      "create-checkout",
+      expect.anything(),
+    );
+    expect(mocks.toast.info).toHaveBeenCalledWith(
+      "Switch your account type before buying Developer Pro.",
+    );
+    expect(mocks.navigateMock).toHaveBeenCalledWith("/dashboard/settings");
+  });
+
   it("shows current Pro state for the matching audience and opens the billing portal", async () => {
     mocks.useAuthMock.mockReturnValue({
       user: { id: "u-pro", email: "pro@example.com" },

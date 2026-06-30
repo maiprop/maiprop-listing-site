@@ -212,6 +212,7 @@ const PRICING_EL: Record<string, string> = {
   "Checkout cancelled — no charge was made.": "Το checkout ακυρώθηκε — δεν έγινε καμία χρέωση.",
   "Checkout failed": "Το checkout απέτυχε",
   "Could not start checkout": "Δεν ήταν δυνατή η έναρξη checkout",
+  "Switch account type first": "Αλλάξτε πρώτα τύπο λογαριασμού",
   "Failed to open billing portal": "Δεν ήταν δυνατό το άνοιγμα της πύλης χρέωσης",
   "Search, browse & list your own property": "Αναζήτηση, περιήγηση και καταχώρηση δικών σας ακινήτων",
   "AI valuations, reports, pro auction filters & up to 5 listings": "AI εκτιμήσεις, αναφορές, Pro φίλτρα πλειστηριασμών και έως 5 αγγελίες",
@@ -425,9 +426,22 @@ export default function Pricing() {
     investor:      ROLE_PLAN_MAP.investor.planKey,
     institutional: ROLE_PLAN_MAP.institutional.planKey,
   };
+  const currentAudience = profile ? getPricingAudienceFromProfile(profile) : null;
+  const isCrossAudienceSelection = Boolean(
+    user &&
+    profile &&
+    currentAudience &&
+    activeTab !== currentAudience &&
+    !isPlatformAdmin(profile),
+  );
 
   const handleCheckout = async () => {
     if (!user) { navigate("/signup"); return; }
+    if (isCrossAudienceSelection) {
+      toast.info(`Switch your account type before buying ${PLANS[activeTab].paidLabel}.`);
+      navigate("/dashboard/settings");
+      return;
+    }
     if (PLANS[activeTab].inviteOnly) {
       navigate(activeTab === "institutional" ? "/contact" : "/investor-dashboard");
       return;
@@ -438,7 +452,7 @@ export default function Pricing() {
       const { data, error } = await supabase.functions.invoke("create-checkout", {
         body: { plan: planKey, billing_cycle: billingCycle },
       });
-      if (error || !data?.url) throw new Error(error?.message ?? data?.error ?? tr("Checkout failed"));
+      if (error || !data?.url) throw new Error(data?.error ?? error?.message ?? tr("Checkout failed"));
       window.location.href = data.url;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : tr("Could not start checkout");
@@ -541,6 +555,11 @@ export default function Pricing() {
 
   const participant = getPricingAudienceFromProfile(profile);
   const hasAudiencePro = !subLoading && isPro && activeTab === participant;
+  const paidCtaLabel = isCrossAudienceSelection
+    ? tr("Switch account type first")
+    : user
+      ? (checkoutLoading ? `${tr("Redirecting")}…` : tr(plan.paidCTA))
+      : tr("Get Started");
 
   return (
     <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
@@ -789,7 +808,7 @@ export default function Pricing() {
                     disabled={checkoutLoading}
                   >
                     {checkoutLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-                    {user ? (checkoutLoading ? `${tr("Redirecting")}…` : tr(plan.paidCTA)) : tr("Get Started")}
+                    {paidCtaLabel}
                     {!checkoutLoading && <ArrowRight className="w-4 h-4" />}
                   </Button>
                 )}

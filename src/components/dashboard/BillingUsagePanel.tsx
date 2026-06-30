@@ -24,6 +24,7 @@ import {
   usePriorityAdsUsage,
   useReportUsage,
 } from "@/hooks/useUsageAddons";
+import { buildBillingContactHref } from "@/lib/billingContact";
 import { cn } from "@/lib/utils";
 
 type BillingUsagePanelProps = {
@@ -38,7 +39,7 @@ type BillingUsagePanelProps = {
 type MetricAction =
   | { type: "addon"; addonKey: string; label: string }
   | { type: "upgrade"; label: string }
-  | { type: "contact"; label: string };
+  | { type: "contact"; label: string; href: string };
 
 type UsageMetric = {
   id: string;
@@ -49,7 +50,7 @@ type UsageMetric = {
   limit: number | null;
   loading?: boolean;
   error?: boolean;
-  action?: MetricAction;
+  actions?: MetricAction[];
   footnote?: string;
 };
 
@@ -113,7 +114,7 @@ function MetricActionButton({
   if (action.type === "contact") {
     return (
       <Button asChild size="sm" variant="outline" className={cn("shrink-0", actionClasses(metric))}>
-        <a href="mailto:support@maiprop.co?subject=AI%20usage%20limit">{action.label}</a>
+        <a href={action.href}>{action.label}</a>
       </Button>
     );
   }
@@ -149,8 +150,7 @@ function UsageRow({
 }) {
   const Icon = metric.icon;
   const percent = getUsagePercent(metric);
-  const actionLoading =
-    metric.action?.type === "addon" && addonLoadingKey === metric.action.addonKey;
+  const actions = metric.actions ?? [];
 
   return (
     <div className="rounded-xl border border-border bg-card p-4">
@@ -171,13 +171,24 @@ function UsageRow({
             <p className="text-sm font-bold text-foreground">{getCounterLabel(metric)}</p>
             <p className="text-[11px] text-muted-foreground">{getRemainingLabel(metric)}</p>
           </div>
-          <MetricActionButton
-            action={metric.action}
-            metric={metric}
-            loading={actionLoading}
-            onPurchaseAddon={onPurchaseAddon}
-            onUpgrade={onUpgrade}
-          />
+          <div className="flex shrink-0 items-center gap-2">
+            {actions.map((action) => {
+              const actionLoading =
+                action.type === "addon" && addonLoadingKey === action.addonKey;
+              const key = action.type === "addon" ? `${action.type}-${action.addonKey}` : action.type;
+
+              return (
+                <MetricActionButton
+                  key={key}
+                  action={action}
+                  metric={metric}
+                  loading={actionLoading}
+                  onPurchaseAddon={onPurchaseAddon}
+                  onUpgrade={onUpgrade}
+                />
+              );
+            })}
+          </div>
         </div>
       </div>
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-secondary">
@@ -228,6 +239,15 @@ export function BillingUsagePanel({
   const valuationUsage = usageFromQuota(valuationQuota);
   const neighbourhoodUsage = usageFromQuota(neighbourhoodQuota);
   const poiUsage = usageFromQuota(poiQuota);
+  const limitActions = (usage: UsageCounter, addonKey: string): MetricAction[] =>
+    isAtLimit(usage)
+      ? isPro
+        ? [{ type: "addon", addonKey, label: "Top up" }]
+        : [
+            { type: "upgrade", label: "Upgrade" },
+            { type: "addon", addonKey, label: "Top up" },
+          ]
+      : [{ type: "addon", addonKey, label: "Buy add-on" }];
 
   const metrics: UsageMetric[] = [
     {
@@ -237,9 +257,7 @@ export function BillingUsagePanel({
       icon: BarChart2,
       ...valuationUsage,
       loading: aiQuotas.quotaLoading,
-      action: !isPro && valuationQuota && isAtLimit(valuationUsage)
-        ? { type: "upgrade", label: "Upgrade" }
-        : { type: "addon", addonKey: "valuation_single", label: "Buy add-on" },
+      actions: limitActions(valuationUsage, "valuation_single"),
     },
     {
       id: "neighbourhood-report",
@@ -248,9 +266,7 @@ export function BillingUsagePanel({
       icon: Globe,
       ...neighbourhoodUsage,
       loading: aiQuotas.quotaLoading,
-      action: !isPro && neighbourhoodQuota && isAtLimit(neighbourhoodUsage)
-        ? { type: "upgrade", label: "Upgrade" }
-        : { type: "addon", addonKey: "neighbourhood_report_single", label: "Buy add-on" },
+      actions: limitActions(neighbourhoodUsage, "neighbourhood_report_single"),
     },
     {
       id: "property-pois",
@@ -259,10 +275,17 @@ export function BillingUsagePanel({
       icon: MapPin,
       ...poiUsage,
       loading: aiQuotas.quotaLoading,
-      action: poiUsage.limit != null && poiUsage.used != null && poiUsage.used >= poiUsage.limit
+      actions: poiUsage.limit != null && poiUsage.used != null && poiUsage.used >= poiUsage.limit
         ? isPro
-          ? { type: "contact", label: "Request more" }
-          : { type: "upgrade", label: "Upgrade" }
+          ? [{
+              type: "contact",
+              label: "Request more",
+              href: buildBillingContactHref({
+                topic: "Nearby places / POIs",
+                participantType,
+              }),
+            }]
+          : [{ type: "upgrade", label: "Upgrade" }]
         : undefined,
     },
     {
@@ -274,12 +297,15 @@ export function BillingUsagePanel({
       limit: reportLimit,
       loading: reportsLoading || reportCreditsLoading,
       error: Boolean(reportsError || reportCreditsError),
-      action: isPro
-        ? { type: "addon", addonKey: "property_report_single", label: "Buy report" }
-        : { type: "upgrade", label: "Upgrade" },
+      actions: isPro
+        ? [{ type: "addon", addonKey: "property_report_single", label: isAtLimit({ used: reportCount, limit: reportLimit }) ? "Top up" : "Buy report" }]
+        : [
+            { type: "upgrade", label: "Upgrade" },
+            { type: "addon", addonKey: "property_report_single", label: "Buy report" },
+          ],
       footnote: isPro
         ? `Extra reports cost EUR ${REPORT_EXTRA_COST} each.`
-        : "Property reports require Pro access.",
+        : "Upgrade for included reports, or buy a one-off report add-on.",
     },
   ];
 
@@ -293,7 +319,14 @@ export function BillingUsagePanel({
       limit: priorityLimit,
       loading: priorityLoading,
       error: Boolean(priorityError),
-      action: { type: "contact", label: "Contact team" },
+      actions: [{
+        type: "contact",
+        label: "Contact team",
+        href: buildBillingContactHref({
+          topic: "Priority ads / boosts",
+          participantType,
+        }),
+      }],
       footnote: isPro ? priorityFootnote : "Buy a boost without changing your plan.",
     });
   }
