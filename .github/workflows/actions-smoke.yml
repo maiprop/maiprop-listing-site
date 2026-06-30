@@ -1,0 +1,14 @@
+name: Actions Smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prove GitHub Actions can start a job
+        run: echo "actions-smoke-ok"
