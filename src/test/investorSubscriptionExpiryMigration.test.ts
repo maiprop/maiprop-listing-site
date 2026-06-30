@@ -6,6 +6,7 @@ const migration = readFileSync(
   resolve(process.cwd(), "supabase/migrations/20260701144610_enforce_investor_subscription_expiry.sql"),
   "utf8",
 );
+const normalizedMigration = migration.replace(/\r\n/g, "\n");
 
 describe("investor subscription expiry migration", () => {
   it("centralizes current investor subscription checks", () => {
@@ -23,7 +24,7 @@ describe("investor subscription expiry migration", () => {
   it("backfills paid annual rows and expires elapsed grants", () => {
     expect(migration).toContain("stripe_session_id IS NOT NULL");
     expect(migration).toContain("+ interval '365 days'");
-    expect(migration).toContain("SET\n  status = 'expired'");
+    expect(normalizedMigration).toContain("SET\n  status = 'expired'");
     expect(migration).toContain("expires_at <= now()");
   });
 
