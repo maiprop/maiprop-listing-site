@@ -478,6 +478,49 @@ jobs:
           }
           NODE
 
+      - name: Probe production fallback RLS test credentials
+        id: production_rls_auth_probe
+        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true' && env.E2E_SECURITY_USE_ISOLATED_STAGING != 'true' && steps.supabase_data_plane_probe.outputs.ready == 'true'
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { appendFileSync } from "node:fs";
+
+          const output = process.env.GITHUB_OUTPUT;
+          const url = process.env.VITE_SUPABASE_URL;
+          const key = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+          const password = process.env.RLS_USER_PASSWORD;
+          const emails = [
+            process.env.RLS_USER_A_EMAIL,
+            process.env.RLS_USER_B_EMAIL,
+          ].filter(Boolean);
+
+          if (!output || !url || !key || !password || emails.length < 2) {
+            appendFileSync(output ?? "/dev/null", "ready=false\n");
+            console.log("::warning::Production fallback RLS test credentials are incomplete; skipping production-fallback live-safe security tests.");
+            process.exit(0);
+          }
+
+          let ready = true;
+          for (const email of emails) {
+            const response = await fetch(`${url.replace(/\/$/, "")}/auth/v1/token?grant_type=password`, {
+              method: "POST",
+              headers: {
+                apikey: key,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ email, password }),
+            });
+            if (!response.ok) {
+              ready = false;
+              console.log(`::warning::A production fallback RLS test account could not sign in (HTTP ${response.status}); skipping production-fallback live-safe security tests. Refresh RLS_USER_A_EMAIL/RLS_USER_B_EMAIL/RLS_USER_PASSWORD or configure isolated staging.`);
+              break;
+            }
+          }
+
+          appendFileSync(output, `ready=${ready ? "true" : "false"}\n`);
+          NODE
+
       - name: Install Playwright browsers
         if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true'
         timeout-minutes: 4
@@ -491,7 +534,7 @@ jobs:
         run: npm run build
 
       - name: Run live-safe RLS + conditional onboarding + GDPR security tests
-        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true' && (env.E2E_SECURITY_USE_ISOLATED_STAGING == 'true' || steps.supabase_data_plane_probe.outputs.ready == 'true')
+        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true' && (env.E2E_SECURITY_USE_ISOLATED_STAGING == 'true' || (steps.supabase_data_plane_probe.outputs.ready == 'true' && steps.production_rls_auth_probe.outputs.ready == 'true'))
         run: |
           set -euo pipefail
           specs=(e2e/rls-security.spec.ts e2e/gdpr-delete-account.spec.ts)
@@ -505,9 +548,9 @@ jobs:
           npx playwright test --project=chromium "${specs[@]}"
 
       - name: Skip production-fallback live-safe security tests while data plane is unavailable
-        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true' && env.E2E_SECURITY_USE_ISOLATED_STAGING != 'true' && steps.supabase_data_plane_probe.outputs.ready != 'true'
+        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true' && env.E2E_SECURITY_USE_ISOLATED_STAGING != 'true' && (steps.supabase_data_plane_probe.outputs.ready != 'true' || steps.production_rls_auth_probe.outputs.ready != 'true')
         run: |
-          echo "::warning::Skipped production-fallback live-safe security tests because the production Supabase REST data plane did not respond to the preflight probe. Configure isolated staging to make these tests a hard PR gate independent of production availability."
+          echo "::warning::Skipped production-fallback live-safe security tests because production Supabase fallback preflight did not pass. This can be data-plane unavailability or stale RLS demo-account credentials. Configure isolated staging to make these tests a hard PR gate independent of production availability."
 
       - name: Upload Playwright report
         if: failure()
