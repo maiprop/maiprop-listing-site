@@ -240,7 +240,7 @@ function nestedChargeFromPaymentIntent(
 }
 
 function extractInvoiceReceipt(inv: StripeInvoiceWithTaxDetails) {
-  const rawInvoice = inv as Record<string, unknown>;
+  const rawInvoice = inv as unknown as Record<string, unknown>;
   const directCharge = isRecord(rawInvoice.charge)
     ? rawInvoice.charge as StripeChargeLike
     : null;
@@ -376,15 +376,19 @@ function normalizeInvoiceTaxes(inv: StripeInvoiceWithTaxDetails) {
 }
 
 function normalizeInvoiceTaxIds(inv: StripeInvoiceWithTaxDetails) {
-  return (inv.customer_tax_ids ?? []).map((taxId) =>
-    typeof taxId === "string"
-      ? { id: taxId, type: null, value: null }
-      : {
-        id: taxId.id ?? null,
-        type: taxId.type ?? null,
-        value: taxId.value ?? null,
-      }
-  );
+  return (inv.customer_tax_ids ?? []).map((taxId: unknown) => {
+    if (typeof taxId === "string") {
+      return { id: taxId, type: null, value: null };
+    }
+    if (!isRecord(taxId)) {
+      return { id: null, type: null, value: null };
+    }
+    return {
+      id: typeof taxId.id === "string" ? taxId.id : null,
+      type: typeof taxId.type === "string" ? taxId.type : null,
+      value: typeof taxId.value === "string" ? taxId.value : null,
+    };
+  });
 }
 
 async function listOwnedCustomers(stripe: Stripe, userId: string) {
