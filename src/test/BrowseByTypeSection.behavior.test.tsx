@@ -15,7 +15,7 @@ describe("BrowseByTypeSection", () => {
     expect(grid).toHaveClass("grid-cols-3");
     const links = within(grid).getAllByRole("link");
     expect(links).toHaveLength(9);
-    expect(grid).toHaveClass("max-w-3xl");
+    expect(grid).toHaveClass("max-w-3xl", "gap-1");
     expect(grid.querySelectorAll("svg[aria-hidden='true']")).toHaveLength(9);
     links.forEach((link) => {
       const icon = link.querySelector(".browse-type-icon");
@@ -25,7 +25,7 @@ describe("BrowseByTypeSection", () => {
       expect(icon).toHaveClass("h-4", "w-4");
       expect(iconShell).toHaveClass("h-7", "w-7");
       expect(label).toHaveClass("text-[10px]", "sm:text-xs", "whitespace-nowrap");
-      expect(link).toHaveClass("min-h-[54px]", "flex-row", "text-left");
+      expect(link).toHaveClass("h-[54px]", "sm:h-[58px]", "w-full", "flex-row", "justify-start", "text-left", "gap-0.5");
     });
     expect(new Set(links.map((link) => link.getAttribute("data-accent"))).size).toBeGreaterThanOrEqual(6);
     expect(within(grid).getByText("New Build")).toBeInTheDocument();

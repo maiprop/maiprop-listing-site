@@ -11,6 +11,15 @@ function migrationSql(): string {
   return readFileSync(resolve(migrationsDir, fileName!), "utf8");
 }
 
+function migrationSqlBySuffix(suffix: string): string {
+  const migrationsDir = resolve(process.cwd(), "supabase/migrations");
+  const fileName = readdirSync(migrationsDir).find((name) => name.endsWith(suffix));
+
+  expect(fileName, `missing migration ending ${suffix}`).toBeDefined();
+
+  return readFileSync(resolve(migrationsDir, fileName!), "utf8");
+}
+
 describe("ECAS privacy governance migration", () => {
   it("adds privacy export tracking and a redacted audit ledger", () => {
     const sql = migrationSql();
@@ -47,5 +56,18 @@ describe("ECAS privacy governance migration", () => {
     expect(sql).toContain("acl.grantee = 0");
     expect(sql).not.toContain("has_schema_privilege('PUBLIC'");
     expect(sql).toContain("public schema CREATE must remain revoked from client roles");
+  });
+
+  it("keeps long-lived staging projects aligned with optimized privacy RLS policies", () => {
+    const sql = migrationSqlBySuffix("_optimize_privacy_rls_initplans.sql");
+
+    expect(sql).toContain('DROP POLICY IF EXISTS "privacy_export_requests_select_own_or_admin"');
+    expect(sql).toContain('CREATE POLICY "privacy_export_requests_select_own_or_admin"');
+    expect(sql).toContain("user_id = (SELECT auth.uid())");
+    expect(sql).toContain("public.has_platform_admin((SELECT auth.uid()))");
+    expect(sql).toContain('CREATE POLICY "privacy_export_requests_insert_own"');
+    expect(sql).toContain('CREATE POLICY "privacy_export_requests_update_admin"');
+    expect(sql).toContain('CREATE POLICY "privacy_audit_log_select_admin"');
+    expect(sql.replaceAll("(SELECT auth.uid())", "")).not.toContain("auth.uid()");
   });
 });

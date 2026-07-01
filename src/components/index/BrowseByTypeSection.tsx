@@ -229,7 +229,7 @@ export function BrowseByTypeSection() {
 
         <div
           data-testid="browse-by-type-grid"
-          className={`grid grid-cols-3 gap-1.5 sm:gap-2 max-w-3xl reveal reveal-delay-1 ${browseInView ? "in-view" : ""}`}
+          className={`grid grid-cols-3 gap-1 sm:gap-2 max-w-3xl reveal reveal-delay-1 ${browseInView ? "in-view" : ""}`}
         >
           {BROWSE_TILES.map(({ key, label, displayLabel, browseLabel, href, icon, accent, surfaceClass, stripeClass, textClass }) => {
             return (
@@ -238,7 +238,7 @@ export function BrowseByTypeSection() {
                 to={href}
                 aria-label={`Browse ${browseLabel}`}
                 data-accent={accent}
-                className={`group relative overflow-hidden rounded-xl border bg-card min-h-[54px] sm:min-h-[58px] px-1 py-1.5 sm:px-2.5 flex flex-row items-center justify-center gap-1 sm:gap-2 text-left hover:shadow-soft transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${surfaceClass}`}
+                className={`group relative overflow-hidden rounded-xl border bg-card h-[54px] sm:h-[58px] w-full px-1 py-1.5 sm:px-3 flex flex-row items-center justify-start gap-0.5 sm:gap-2 text-left hover:shadow-soft transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${surfaceClass}`}
               >
                 <span className={`absolute inset-x-0 top-0 h-0.5 opacity-70 transition-opacity group-hover:opacity-100 ${stripeClass}`} />
                 <span className={`browse-type-icon-shell flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-current/20 bg-background/65 ${textClass}`}>
