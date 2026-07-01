@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createLocalPublicApiResponse } from "./local-public-api-fixtures.mjs";
 
@@ -10,6 +12,14 @@ async function jsonFor(path) {
 }
 
 describe("local public API fixtures", () => {
+  it("does not disable local fixtures just because VITE_APP_URL is configured for canonical links", () => {
+    const viteConfig = readFileSync(resolve(process.cwd(), "vite.config.ts"), "utf8");
+
+    expect(viteConfig).toContain("VITE_PUBLIC_API_ORIGIN");
+    expect(viteConfig).not.toMatch(/process\.env\.VITE_APP_URL\s*\|\|/);
+    expect(viteConfig).not.toMatch(/env\.VITE_APP_URL/);
+  });
+
   it("serves production-shaped JSON for public listing routes in Vite dev and preview", async () => {
     const listings = await jsonFor("/api/public/listings?limit=1");
     expect(listings).toMatchObject({

@@ -23,6 +23,15 @@ export class PublicApiError extends Error {
   }
 }
 
+export function shouldLogPublicApiFallback(error: unknown): boolean {
+  if (!import.meta.env.DEV) return true;
+  if (error instanceof DOMException && error.name === "AbortError") return false;
+  if (error instanceof TypeError && /failed to fetch|networkerror|load failed/i.test(error.message)) {
+    return false;
+  }
+  return true;
+}
+
 export async function fetchPublicApi<T>(path: string, options: PublicApiOptions = {}): Promise<T | null> {
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), options.timeoutMs ?? PUBLIC_API_TIMEOUT_MS);

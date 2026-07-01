@@ -30,32 +30,12 @@ import {
 
 const HOMEPAGE_AUCTION_SOURCE_LIMIT = 6;
 const HOMEPAGE_AUCTION_DISPLAY_LIMIT = 6;
-const HOMEPAGE_PROPERTY_TYPES = ["apartment", "land"] as const;
-const DEFAULT_HOMEPAGE_TYPE_COUNTS = Object.fromEntries(
-  HOMEPAGE_PROPERTY_TYPES.map((propertyType) => [propertyType, 0]),
-) as Record<string, number>;
 const FEATURED_STALE_TIME_MS = 5 * 60 * 1000;
 const HOMEPAGE_SECTION_TIMEOUT_MS = 2_500;
 
 type HomepageQueryOptions = {
   enabled?: boolean;
 };
-
-/** Counts of active listings grouped by `property_type` for the BrowseByType section. */
-export function useHomepageTypeCounts(options: HomepageQueryOptions = {}) {
-  return useQuery({
-    queryKey: ["homepage-type-counts"],
-    staleTime: 10 * 60 * 1000,
-    queryFn: async () => {
-      const cached = await fetchPublicApi<Record<string, number>>("/api/public/homepage?section=type-counts");
-      if (cached) return cached;
-
-      return DEFAULT_HOMEPAGE_TYPE_COUNTS;
-    },
-    placeholderData: DEFAULT_HOMEPAGE_TYPE_COUNTS,
-    enabled: options.enabled ?? true,
-  });
-}
 
 /** 4 most recent active sale listings for the FeaturedProperties section. */
 export function useHomepageFeaturedListings(options: HomepageQueryOptions = {}) {

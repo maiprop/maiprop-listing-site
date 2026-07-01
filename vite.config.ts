@@ -22,9 +22,7 @@ function getPublicApiProxyTarget(mode: string): string | undefined {
   const env = loadEnv(mode, process.cwd(), "");
   const target =
     process.env.VITE_PUBLIC_API_ORIGIN ||
-    process.env.VITE_APP_URL ||
-    env.VITE_PUBLIC_API_ORIGIN ||
-    env.VITE_APP_URL;
+    env.VITE_PUBLIC_API_ORIGIN;
   if (!target) return undefined;
   try {
     const url = new URL(target);

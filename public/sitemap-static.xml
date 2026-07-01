@@ -3,396 +3,396 @@
         xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <!-- Homepage -->
   <url>
-    <loc>https://maiprop.co/</loc>
+    <loc>https://portal.maiprop.co/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
-    <xhtml:link rel="alternate" hreflang="en"        href="https://maiprop.co/" />
-    <xhtml:link rel="alternate" hreflang="en-US"     href="https://maiprop.co/" />
-    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://maiprop.co/" />
-    <xhtml:link rel="alternate" hreflang="el"        href="https://maiprop.co/?lang=el" />
-    <xhtml:link rel="alternate" hreflang="ar"        href="https://maiprop.co/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://maiprop.co/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="zh"        href="https://maiprop.co/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://maiprop.co/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="ru"        href="https://maiprop.co/?lang=ru" />
-    <xhtml:link rel="alternate" hreflang="fr"        href="https://maiprop.co/?lang=fr" />
-    <xhtml:link rel="alternate" hreflang="hi"        href="https://maiprop.co/?lang=hi" />
-    <xhtml:link rel="alternate" hreflang="he"        href="https://maiprop.co/?lang=he" />
-    <xhtml:link rel="alternate" hreflang="tr"        href="https://maiprop.co/?lang=tr" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://maiprop.co/" />
+    <xhtml:link rel="alternate" hreflang="en"        href="https://portal.maiprop.co/" />
+    <xhtml:link rel="alternate" hreflang="en-US"     href="https://portal.maiprop.co/" />
+    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://portal.maiprop.co/" />
+    <xhtml:link rel="alternate" hreflang="el"        href="https://portal.maiprop.co/?lang=el" />
+    <xhtml:link rel="alternate" hreflang="ar"        href="https://portal.maiprop.co/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://portal.maiprop.co/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="zh"        href="https://portal.maiprop.co/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://portal.maiprop.co/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="ru"        href="https://portal.maiprop.co/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="fr"        href="https://portal.maiprop.co/?lang=fr" />
+    <xhtml:link rel="alternate" hreflang="hi"        href="https://portal.maiprop.co/?lang=hi" />
+    <xhtml:link rel="alternate" hreflang="he"        href="https://portal.maiprop.co/?lang=he" />
+    <xhtml:link rel="alternate" hreflang="tr"        href="https://portal.maiprop.co/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://portal.maiprop.co/" />
   </url>
   <!-- Core pages -->
   <url>
-    <loc>https://maiprop.co/greek-golden-visa/</loc>
+    <loc>https://portal.maiprop.co/greek-golden-visa/</loc>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
-    <xhtml:link rel="alternate" hreflang="en"        href="https://maiprop.co/greek-golden-visa/" />
-    <xhtml:link rel="alternate" hreflang="en-US"     href="https://maiprop.co/greek-golden-visa/" />
-    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://maiprop.co/greek-golden-visa/" />
-    <xhtml:link rel="alternate" hreflang="el"        href="https://maiprop.co/greek-golden-visa/?lang=el" />
-    <xhtml:link rel="alternate" hreflang="ar"        href="https://maiprop.co/greek-golden-visa/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://maiprop.co/greek-golden-visa/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="zh"        href="https://maiprop.co/greek-golden-visa/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://maiprop.co/greek-golden-visa/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="ru"        href="https://maiprop.co/greek-golden-visa/?lang=ru" />
-    <xhtml:link rel="alternate" hreflang="fr"        href="https://maiprop.co/greek-golden-visa/?lang=fr" />
-    <xhtml:link rel="alternate" hreflang="hi"        href="https://maiprop.co/greek-golden-visa/?lang=hi" />
-    <xhtml:link rel="alternate" hreflang="he"        href="https://maiprop.co/greek-golden-visa/?lang=he" />
-    <xhtml:link rel="alternate" hreflang="tr"        href="https://maiprop.co/greek-golden-visa/?lang=tr" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://maiprop.co/greek-golden-visa/" />
+    <xhtml:link rel="alternate" hreflang="en"        href="https://portal.maiprop.co/greek-golden-visa/" />
+    <xhtml:link rel="alternate" hreflang="en-US"     href="https://portal.maiprop.co/greek-golden-visa/" />
+    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://portal.maiprop.co/greek-golden-visa/" />
+    <xhtml:link rel="alternate" hreflang="el"        href="https://portal.maiprop.co/greek-golden-visa/?lang=el" />
+    <xhtml:link rel="alternate" hreflang="ar"        href="https://portal.maiprop.co/greek-golden-visa/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://portal.maiprop.co/greek-golden-visa/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="zh"        href="https://portal.maiprop.co/greek-golden-visa/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://portal.maiprop.co/greek-golden-visa/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="ru"        href="https://portal.maiprop.co/greek-golden-visa/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="fr"        href="https://portal.maiprop.co/greek-golden-visa/?lang=fr" />
+    <xhtml:link rel="alternate" hreflang="hi"        href="https://portal.maiprop.co/greek-golden-visa/?lang=hi" />
+    <xhtml:link rel="alternate" hreflang="he"        href="https://portal.maiprop.co/greek-golden-visa/?lang=he" />
+    <xhtml:link rel="alternate" hreflang="tr"        href="https://portal.maiprop.co/greek-golden-visa/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://portal.maiprop.co/greek-golden-visa/" />
   </url>
   <url>
-    <loc>https://maiprop.co/greek-golden-visa-requirements/</loc>
+    <loc>https://portal.maiprop.co/greek-golden-visa-requirements/</loc>
     <changefreq>monthly</changefreq>
     <priority>0.85</priority>
-    <xhtml:link rel="alternate" hreflang="en"        href="https://maiprop.co/greek-golden-visa-requirements/" />
-    <xhtml:link rel="alternate" hreflang="en-US"     href="https://maiprop.co/greek-golden-visa-requirements/" />
-    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://maiprop.co/greek-golden-visa-requirements/" />
-    <xhtml:link rel="alternate" hreflang="el"        href="https://maiprop.co/greek-golden-visa-requirements/?lang=el" />
-    <xhtml:link rel="alternate" hreflang="ar"        href="https://maiprop.co/greek-golden-visa-requirements/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://maiprop.co/greek-golden-visa-requirements/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="zh"        href="https://maiprop.co/greek-golden-visa-requirements/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://maiprop.co/greek-golden-visa-requirements/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="ru"        href="https://maiprop.co/greek-golden-visa-requirements/?lang=ru" />
-    <xhtml:link rel="alternate" hreflang="fr"        href="https://maiprop.co/greek-golden-visa-requirements/?lang=fr" />
-    <xhtml:link rel="alternate" hreflang="hi"        href="https://maiprop.co/greek-golden-visa-requirements/?lang=hi" />
-    <xhtml:link rel="alternate" hreflang="he"        href="https://maiprop.co/greek-golden-visa-requirements/?lang=he" />
-    <xhtml:link rel="alternate" hreflang="tr"        href="https://maiprop.co/greek-golden-visa-requirements/?lang=tr" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://maiprop.co/greek-golden-visa-requirements/" />
+    <xhtml:link rel="alternate" hreflang="en"        href="https://portal.maiprop.co/greek-golden-visa-requirements/" />
+    <xhtml:link rel="alternate" hreflang="en-US"     href="https://portal.maiprop.co/greek-golden-visa-requirements/" />
+    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://portal.maiprop.co/greek-golden-visa-requirements/" />
+    <xhtml:link rel="alternate" hreflang="el"        href="https://portal.maiprop.co/greek-golden-visa-requirements/?lang=el" />
+    <xhtml:link rel="alternate" hreflang="ar"        href="https://portal.maiprop.co/greek-golden-visa-requirements/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://portal.maiprop.co/greek-golden-visa-requirements/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="zh"        href="https://portal.maiprop.co/greek-golden-visa-requirements/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://portal.maiprop.co/greek-golden-visa-requirements/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="ru"        href="https://portal.maiprop.co/greek-golden-visa-requirements/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="fr"        href="https://portal.maiprop.co/greek-golden-visa-requirements/?lang=fr" />
+    <xhtml:link rel="alternate" hreflang="hi"        href="https://portal.maiprop.co/greek-golden-visa-requirements/?lang=hi" />
+    <xhtml:link rel="alternate" hreflang="he"        href="https://portal.maiprop.co/greek-golden-visa-requirements/?lang=he" />
+    <xhtml:link rel="alternate" hreflang="tr"        href="https://portal.maiprop.co/greek-golden-visa-requirements/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://portal.maiprop.co/greek-golden-visa-requirements/" />
   </url>
   <url>
-    <loc>https://maiprop.co/250k-golden-visa-properties/</loc>
+    <loc>https://portal.maiprop.co/250k-golden-visa-properties/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
-    <xhtml:link rel="alternate" hreflang="en"        href="https://maiprop.co/250k-golden-visa-properties/" />
-    <xhtml:link rel="alternate" hreflang="en-US"     href="https://maiprop.co/250k-golden-visa-properties/" />
-    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://maiprop.co/250k-golden-visa-properties/" />
-    <xhtml:link rel="alternate" hreflang="el"        href="https://maiprop.co/250k-golden-visa-properties/?lang=el" />
-    <xhtml:link rel="alternate" hreflang="ar"        href="https://maiprop.co/250k-golden-visa-properties/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://maiprop.co/250k-golden-visa-properties/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="zh"        href="https://maiprop.co/250k-golden-visa-properties/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://maiprop.co/250k-golden-visa-properties/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="ru"        href="https://maiprop.co/250k-golden-visa-properties/?lang=ru" />
-    <xhtml:link rel="alternate" hreflang="fr"        href="https://maiprop.co/250k-golden-visa-properties/?lang=fr" />
-    <xhtml:link rel="alternate" hreflang="hi"        href="https://maiprop.co/250k-golden-visa-properties/?lang=hi" />
-    <xhtml:link rel="alternate" hreflang="he"        href="https://maiprop.co/250k-golden-visa-properties/?lang=he" />
-    <xhtml:link rel="alternate" hreflang="tr"        href="https://maiprop.co/250k-golden-visa-properties/?lang=tr" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://maiprop.co/250k-golden-visa-properties/" />
+    <xhtml:link rel="alternate" hreflang="en"        href="https://portal.maiprop.co/250k-golden-visa-properties/" />
+    <xhtml:link rel="alternate" hreflang="en-US"     href="https://portal.maiprop.co/250k-golden-visa-properties/" />
+    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://portal.maiprop.co/250k-golden-visa-properties/" />
+    <xhtml:link rel="alternate" hreflang="el"        href="https://portal.maiprop.co/250k-golden-visa-properties/?lang=el" />
+    <xhtml:link rel="alternate" hreflang="ar"        href="https://portal.maiprop.co/250k-golden-visa-properties/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://portal.maiprop.co/250k-golden-visa-properties/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="zh"        href="https://portal.maiprop.co/250k-golden-visa-properties/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://portal.maiprop.co/250k-golden-visa-properties/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="ru"        href="https://portal.maiprop.co/250k-golden-visa-properties/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="fr"        href="https://portal.maiprop.co/250k-golden-visa-properties/?lang=fr" />
+    <xhtml:link rel="alternate" hreflang="hi"        href="https://portal.maiprop.co/250k-golden-visa-properties/?lang=hi" />
+    <xhtml:link rel="alternate" hreflang="he"        href="https://portal.maiprop.co/250k-golden-visa-properties/?lang=he" />
+    <xhtml:link rel="alternate" hreflang="tr"        href="https://portal.maiprop.co/250k-golden-visa-properties/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://portal.maiprop.co/250k-golden-visa-properties/" />
   </url>
   <url>
-    <loc>https://maiprop.co/golden-visa-journey/</loc>
+    <loc>https://portal.maiprop.co/golden-visa-journey/</loc>
     <changefreq>monthly</changefreq>
     <priority>0.85</priority>
-    <xhtml:link rel="alternate" hreflang="en"        href="https://maiprop.co/golden-visa-journey/" />
-    <xhtml:link rel="alternate" hreflang="en-US"     href="https://maiprop.co/golden-visa-journey/" />
-    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://maiprop.co/golden-visa-journey/" />
-    <xhtml:link rel="alternate" hreflang="el"        href="https://maiprop.co/golden-visa-journey/?lang=el" />
-    <xhtml:link rel="alternate" hreflang="ar"        href="https://maiprop.co/golden-visa-journey/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://maiprop.co/golden-visa-journey/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="zh"        href="https://maiprop.co/golden-visa-journey/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://maiprop.co/golden-visa-journey/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="ru"        href="https://maiprop.co/golden-visa-journey/?lang=ru" />
-    <xhtml:link rel="alternate" hreflang="fr"        href="https://maiprop.co/golden-visa-journey/?lang=fr" />
-    <xhtml:link rel="alternate" hreflang="hi"        href="https://maiprop.co/golden-visa-journey/?lang=hi" />
-    <xhtml:link rel="alternate" hreflang="he"        href="https://maiprop.co/golden-visa-journey/?lang=he" />
-    <xhtml:link rel="alternate" hreflang="tr"        href="https://maiprop.co/golden-visa-journey/?lang=tr" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://maiprop.co/golden-visa-journey/" />
+    <xhtml:link rel="alternate" hreflang="en"        href="https://portal.maiprop.co/golden-visa-journey/" />
+    <xhtml:link rel="alternate" hreflang="en-US"     href="https://portal.maiprop.co/golden-visa-journey/" />
+    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://portal.maiprop.co/golden-visa-journey/" />
+    <xhtml:link rel="alternate" hreflang="el"        href="https://portal.maiprop.co/golden-visa-journey/?lang=el" />
+    <xhtml:link rel="alternate" hreflang="ar"        href="https://portal.maiprop.co/golden-visa-journey/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://portal.maiprop.co/golden-visa-journey/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="zh"        href="https://portal.maiprop.co/golden-visa-journey/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://portal.maiprop.co/golden-visa-journey/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="ru"        href="https://portal.maiprop.co/golden-visa-journey/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="fr"        href="https://portal.maiprop.co/golden-visa-journey/?lang=fr" />
+    <xhtml:link rel="alternate" hreflang="hi"        href="https://portal.maiprop.co/golden-visa-journey/?lang=hi" />
+    <xhtml:link rel="alternate" hreflang="he"        href="https://portal.maiprop.co/golden-visa-journey/?lang=he" />
+    <xhtml:link rel="alternate" hreflang="tr"        href="https://portal.maiprop.co/golden-visa-journey/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://portal.maiprop.co/golden-visa-journey/" />
   </url>
   <url>
-    <loc>https://maiprop.co/process/</loc>
+    <loc>https://portal.maiprop.co/process/</loc>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
-    <xhtml:link rel="alternate" hreflang="en"        href="https://maiprop.co/process/" />
-    <xhtml:link rel="alternate" hreflang="en-US"     href="https://maiprop.co/process/" />
-    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://maiprop.co/process/" />
-    <xhtml:link rel="alternate" hreflang="el"        href="https://maiprop.co/process/?lang=el" />
-    <xhtml:link rel="alternate" hreflang="ar"        href="https://maiprop.co/process/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://maiprop.co/process/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="zh"        href="https://maiprop.co/process/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://maiprop.co/process/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="ru"        href="https://maiprop.co/process/?lang=ru" />
-    <xhtml:link rel="alternate" hreflang="fr"        href="https://maiprop.co/process/?lang=fr" />
-    <xhtml:link rel="alternate" hreflang="hi"        href="https://maiprop.co/process/?lang=hi" />
-    <xhtml:link rel="alternate" hreflang="he"        href="https://maiprop.co/process/?lang=he" />
-    <xhtml:link rel="alternate" hreflang="tr"        href="https://maiprop.co/process/?lang=tr" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://maiprop.co/process/" />
+    <xhtml:link rel="alternate" hreflang="en"        href="https://portal.maiprop.co/process/" />
+    <xhtml:link rel="alternate" hreflang="en-US"     href="https://portal.maiprop.co/process/" />
+    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://portal.maiprop.co/process/" />
+    <xhtml:link rel="alternate" hreflang="el"        href="https://portal.maiprop.co/process/?lang=el" />
+    <xhtml:link rel="alternate" hreflang="ar"        href="https://portal.maiprop.co/process/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://portal.maiprop.co/process/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="zh"        href="https://portal.maiprop.co/process/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://portal.maiprop.co/process/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="ru"        href="https://portal.maiprop.co/process/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="fr"        href="https://portal.maiprop.co/process/?lang=fr" />
+    <xhtml:link rel="alternate" hreflang="hi"        href="https://portal.maiprop.co/process/?lang=hi" />
+    <xhtml:link rel="alternate" hreflang="he"        href="https://portal.maiprop.co/process/?lang=he" />
+    <xhtml:link rel="alternate" hreflang="tr"        href="https://portal.maiprop.co/process/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://portal.maiprop.co/process/" />
   </url>
   <url>
-    <loc>https://maiprop.co/properties/</loc>
+    <loc>https://portal.maiprop.co/properties/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.85</priority>
-    <xhtml:link rel="alternate" hreflang="en"        href="https://maiprop.co/properties/" />
-    <xhtml:link rel="alternate" hreflang="en-US"     href="https://maiprop.co/properties/" />
-    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://maiprop.co/properties/" />
-    <xhtml:link rel="alternate" hreflang="el"        href="https://maiprop.co/properties/?lang=el" />
-    <xhtml:link rel="alternate" hreflang="ar"        href="https://maiprop.co/properties/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://maiprop.co/properties/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="zh"        href="https://maiprop.co/properties/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://maiprop.co/properties/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="ru"        href="https://maiprop.co/properties/?lang=ru" />
-    <xhtml:link rel="alternate" hreflang="fr"        href="https://maiprop.co/properties/?lang=fr" />
-    <xhtml:link rel="alternate" hreflang="hi"        href="https://maiprop.co/properties/?lang=hi" />
-    <xhtml:link rel="alternate" hreflang="he"        href="https://maiprop.co/properties/?lang=he" />
-    <xhtml:link rel="alternate" hreflang="tr"        href="https://maiprop.co/properties/?lang=tr" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://maiprop.co/properties/" />
+    <xhtml:link rel="alternate" hreflang="en"        href="https://portal.maiprop.co/properties/" />
+    <xhtml:link rel="alternate" hreflang="en-US"     href="https://portal.maiprop.co/properties/" />
+    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://portal.maiprop.co/properties/" />
+    <xhtml:link rel="alternate" hreflang="el"        href="https://portal.maiprop.co/properties/?lang=el" />
+    <xhtml:link rel="alternate" hreflang="ar"        href="https://portal.maiprop.co/properties/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://portal.maiprop.co/properties/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="zh"        href="https://portal.maiprop.co/properties/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://portal.maiprop.co/properties/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="ru"        href="https://portal.maiprop.co/properties/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="fr"        href="https://portal.maiprop.co/properties/?lang=fr" />
+    <xhtml:link rel="alternate" hreflang="hi"        href="https://portal.maiprop.co/properties/?lang=hi" />
+    <xhtml:link rel="alternate" hreflang="he"        href="https://portal.maiprop.co/properties/?lang=he" />
+    <xhtml:link rel="alternate" hreflang="tr"        href="https://portal.maiprop.co/properties/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://portal.maiprop.co/properties/" />
   </url>
   <url>
-    <loc>https://maiprop.co/trackrecord/</loc>
+    <loc>https://portal.maiprop.co/trackrecord/</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
-    <xhtml:link rel="alternate" hreflang="en"        href="https://maiprop.co/trackrecord/" />
-    <xhtml:link rel="alternate" hreflang="en-US"     href="https://maiprop.co/trackrecord/" />
-    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://maiprop.co/trackrecord/" />
-    <xhtml:link rel="alternate" hreflang="el"        href="https://maiprop.co/trackrecord/?lang=el" />
-    <xhtml:link rel="alternate" hreflang="ar"        href="https://maiprop.co/trackrecord/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://maiprop.co/trackrecord/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="zh"        href="https://maiprop.co/trackrecord/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://maiprop.co/trackrecord/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="ru"        href="https://maiprop.co/trackrecord/?lang=ru" />
-    <xhtml:link rel="alternate" hreflang="fr"        href="https://maiprop.co/trackrecord/?lang=fr" />
-    <xhtml:link rel="alternate" hreflang="hi"        href="https://maiprop.co/trackrecord/?lang=hi" />
-    <xhtml:link rel="alternate" hreflang="he"        href="https://maiprop.co/trackrecord/?lang=he" />
-    <xhtml:link rel="alternate" hreflang="tr"        href="https://maiprop.co/trackrecord/?lang=tr" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://maiprop.co/trackrecord/" />
+    <xhtml:link rel="alternate" hreflang="en"        href="https://portal.maiprop.co/trackrecord/" />
+    <xhtml:link rel="alternate" hreflang="en-US"     href="https://portal.maiprop.co/trackrecord/" />
+    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://portal.maiprop.co/trackrecord/" />
+    <xhtml:link rel="alternate" hreflang="el"        href="https://portal.maiprop.co/trackrecord/?lang=el" />
+    <xhtml:link rel="alternate" hreflang="ar"        href="https://portal.maiprop.co/trackrecord/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://portal.maiprop.co/trackrecord/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="zh"        href="https://portal.maiprop.co/trackrecord/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://portal.maiprop.co/trackrecord/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="ru"        href="https://portal.maiprop.co/trackrecord/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="fr"        href="https://portal.maiprop.co/trackrecord/?lang=fr" />
+    <xhtml:link rel="alternate" hreflang="hi"        href="https://portal.maiprop.co/trackrecord/?lang=hi" />
+    <xhtml:link rel="alternate" hreflang="he"        href="https://portal.maiprop.co/trackrecord/?lang=he" />
+    <xhtml:link rel="alternate" hreflang="tr"        href="https://portal.maiprop.co/trackrecord/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://portal.maiprop.co/trackrecord/" />
   </url>
   <url>
-    <loc>https://maiprop.co/guides/</loc>
+    <loc>https://portal.maiprop.co/guides/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
-    <xhtml:link rel="alternate" hreflang="en"        href="https://maiprop.co/guides/" />
-    <xhtml:link rel="alternate" hreflang="en-US"     href="https://maiprop.co/guides/" />
-    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://maiprop.co/guides/" />
-    <xhtml:link rel="alternate" hreflang="ar"        href="https://maiprop.co/guides/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://maiprop.co/guides/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="zh"        href="https://maiprop.co/guides/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://maiprop.co/guides/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="ru"        href="https://maiprop.co/guides/?lang=ru" />
-    <xhtml:link rel="alternate" hreflang="tr"        href="https://maiprop.co/guides/?lang=tr" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://maiprop.co/guides/" />
+    <xhtml:link rel="alternate" hreflang="en"        href="https://portal.maiprop.co/guides/" />
+    <xhtml:link rel="alternate" hreflang="en-US"     href="https://portal.maiprop.co/guides/" />
+    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://portal.maiprop.co/guides/" />
+    <xhtml:link rel="alternate" hreflang="ar"        href="https://portal.maiprop.co/guides/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://portal.maiprop.co/guides/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="zh"        href="https://portal.maiprop.co/guides/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://portal.maiprop.co/guides/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="ru"        href="https://portal.maiprop.co/guides/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="tr"        href="https://portal.maiprop.co/guides/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://portal.maiprop.co/guides/" />
   </url>
   <!-- SEO Landing Pages -->
   <url>
-    <loc>https://maiprop.co/buy-the-lifestyle/</loc>
+    <loc>https://portal.maiprop.co/buy-the-lifestyle/</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
-    <xhtml:link rel="alternate" hreflang="en"        href="https://maiprop.co/buy-the-lifestyle/" />
-    <xhtml:link rel="alternate" hreflang="en-US"     href="https://maiprop.co/buy-the-lifestyle/" />
-    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://maiprop.co/buy-the-lifestyle/" />
-    <xhtml:link rel="alternate" hreflang="ar"        href="https://maiprop.co/buy-the-lifestyle/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://maiprop.co/buy-the-lifestyle/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="zh"        href="https://maiprop.co/buy-the-lifestyle/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://maiprop.co/buy-the-lifestyle/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="ru"        href="https://maiprop.co/buy-the-lifestyle/?lang=ru" />
-    <xhtml:link rel="alternate" hreflang="tr"        href="https://maiprop.co/buy-the-lifestyle/?lang=tr" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://maiprop.co/buy-the-lifestyle/" />
+    <xhtml:link rel="alternate" hreflang="en"        href="https://portal.maiprop.co/buy-the-lifestyle/" />
+    <xhtml:link rel="alternate" hreflang="en-US"     href="https://portal.maiprop.co/buy-the-lifestyle/" />
+    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://portal.maiprop.co/buy-the-lifestyle/" />
+    <xhtml:link rel="alternate" hreflang="ar"        href="https://portal.maiprop.co/buy-the-lifestyle/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://portal.maiprop.co/buy-the-lifestyle/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="zh"        href="https://portal.maiprop.co/buy-the-lifestyle/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://portal.maiprop.co/buy-the-lifestyle/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="ru"        href="https://portal.maiprop.co/buy-the-lifestyle/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="tr"        href="https://portal.maiprop.co/buy-the-lifestyle/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://portal.maiprop.co/buy-the-lifestyle/" />
   </url>
   <url>
-    <loc>https://maiprop.co/greece-vs-portugal-golden-visa/</loc>
+    <loc>https://portal.maiprop.co/greece-vs-portugal-golden-visa/</loc>
     <changefreq>monthly</changefreq>
     <priority>0.85</priority>
-    <xhtml:link rel="alternate" hreflang="en"        href="https://maiprop.co/greece-vs-portugal-golden-visa/" />
-    <xhtml:link rel="alternate" hreflang="en-US"     href="https://maiprop.co/greece-vs-portugal-golden-visa/" />
-    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://maiprop.co/greece-vs-portugal-golden-visa/" />
-    <xhtml:link rel="alternate" hreflang="ar"        href="https://maiprop.co/greece-vs-portugal-golden-visa/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://maiprop.co/greece-vs-portugal-golden-visa/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="zh"        href="https://maiprop.co/greece-vs-portugal-golden-visa/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://maiprop.co/greece-vs-portugal-golden-visa/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="ru"        href="https://maiprop.co/greece-vs-portugal-golden-visa/?lang=ru" />
-    <xhtml:link rel="alternate" hreflang="tr"        href="https://maiprop.co/greece-vs-portugal-golden-visa/?lang=tr" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://maiprop.co/greece-vs-portugal-golden-visa/" />
+    <xhtml:link rel="alternate" hreflang="en"        href="https://portal.maiprop.co/greece-vs-portugal-golden-visa/" />
+    <xhtml:link rel="alternate" hreflang="en-US"     href="https://portal.maiprop.co/greece-vs-portugal-golden-visa/" />
+    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://portal.maiprop.co/greece-vs-portugal-golden-visa/" />
+    <xhtml:link rel="alternate" hreflang="ar"        href="https://portal.maiprop.co/greece-vs-portugal-golden-visa/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://portal.maiprop.co/greece-vs-portugal-golden-visa/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="zh"        href="https://portal.maiprop.co/greece-vs-portugal-golden-visa/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://portal.maiprop.co/greece-vs-portugal-golden-visa/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="ru"        href="https://portal.maiprop.co/greece-vs-portugal-golden-visa/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="tr"        href="https://portal.maiprop.co/greece-vs-portugal-golden-visa/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://portal.maiprop.co/greece-vs-portugal-golden-visa/" />
   </url>
   <url>
-    <loc>https://maiprop.co/golden-visa-family-included/</loc>
+    <loc>https://portal.maiprop.co/golden-visa-family-included/</loc>
     <changefreq>monthly</changefreq>
     <priority>0.85</priority>
-    <xhtml:link rel="alternate" hreflang="en"        href="https://maiprop.co/golden-visa-family-included/" />
-    <xhtml:link rel="alternate" hreflang="en-US"     href="https://maiprop.co/golden-visa-family-included/" />
-    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://maiprop.co/golden-visa-family-included/" />
-    <xhtml:link rel="alternate" hreflang="ar"        href="https://maiprop.co/golden-visa-family-included/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://maiprop.co/golden-visa-family-included/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="zh"        href="https://maiprop.co/golden-visa-family-included/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://maiprop.co/golden-visa-family-included/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="ru"        href="https://maiprop.co/golden-visa-family-included/?lang=ru" />
-    <xhtml:link rel="alternate" hreflang="tr"        href="https://maiprop.co/golden-visa-family-included/?lang=tr" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://maiprop.co/golden-visa-family-included/" />
+    <xhtml:link rel="alternate" hreflang="en"        href="https://portal.maiprop.co/golden-visa-family-included/" />
+    <xhtml:link rel="alternate" hreflang="en-US"     href="https://portal.maiprop.co/golden-visa-family-included/" />
+    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://portal.maiprop.co/golden-visa-family-included/" />
+    <xhtml:link rel="alternate" hreflang="ar"        href="https://portal.maiprop.co/golden-visa-family-included/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://portal.maiprop.co/golden-visa-family-included/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="zh"        href="https://portal.maiprop.co/golden-visa-family-included/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://portal.maiprop.co/golden-visa-family-included/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="ru"        href="https://portal.maiprop.co/golden-visa-family-included/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="tr"        href="https://portal.maiprop.co/golden-visa-family-included/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://portal.maiprop.co/golden-visa-family-included/" />
   </url>
   <url>
-    <loc>https://maiprop.co/golden-visa-rental-income-properties/</loc>
+    <loc>https://portal.maiprop.co/golden-visa-rental-income-properties/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.85</priority>
-    <xhtml:link rel="alternate" hreflang="en"        href="https://maiprop.co/golden-visa-rental-income-properties/" />
-    <xhtml:link rel="alternate" hreflang="en-US"     href="https://maiprop.co/golden-visa-rental-income-properties/" />
-    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://maiprop.co/golden-visa-rental-income-properties/" />
-    <xhtml:link rel="alternate" hreflang="ar"        href="https://maiprop.co/golden-visa-rental-income-properties/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://maiprop.co/golden-visa-rental-income-properties/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="zh"        href="https://maiprop.co/golden-visa-rental-income-properties/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://maiprop.co/golden-visa-rental-income-properties/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="ru"        href="https://maiprop.co/golden-visa-rental-income-properties/?lang=ru" />
-    <xhtml:link rel="alternate" hreflang="tr"        href="https://maiprop.co/golden-visa-rental-income-properties/?lang=tr" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://maiprop.co/golden-visa-rental-income-properties/" />
+    <xhtml:link rel="alternate" hreflang="en"        href="https://portal.maiprop.co/golden-visa-rental-income-properties/" />
+    <xhtml:link rel="alternate" hreflang="en-US"     href="https://portal.maiprop.co/golden-visa-rental-income-properties/" />
+    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://portal.maiprop.co/golden-visa-rental-income-properties/" />
+    <xhtml:link rel="alternate" hreflang="ar"        href="https://portal.maiprop.co/golden-visa-rental-income-properties/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://portal.maiprop.co/golden-visa-rental-income-properties/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="zh"        href="https://portal.maiprop.co/golden-visa-rental-income-properties/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://portal.maiprop.co/golden-visa-rental-income-properties/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="ru"        href="https://portal.maiprop.co/golden-visa-rental-income-properties/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="tr"        href="https://portal.maiprop.co/golden-visa-rental-income-properties/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://portal.maiprop.co/golden-visa-rental-income-properties/" />
   </url>
   <url>
-    <loc>https://maiprop.co/golden-visa-tax-benefits/</loc>
+    <loc>https://portal.maiprop.co/golden-visa-tax-benefits/</loc>
     <changefreq>monthly</changefreq>
     <priority>0.85</priority>
-    <xhtml:link rel="alternate" hreflang="en"        href="https://maiprop.co/golden-visa-tax-benefits/" />
-    <xhtml:link rel="alternate" hreflang="en-US"     href="https://maiprop.co/golden-visa-tax-benefits/" />
-    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://maiprop.co/golden-visa-tax-benefits/" />
-    <xhtml:link rel="alternate" hreflang="ar"        href="https://maiprop.co/golden-visa-tax-benefits/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://maiprop.co/golden-visa-tax-benefits/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="zh"        href="https://maiprop.co/golden-visa-tax-benefits/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://maiprop.co/golden-visa-tax-benefits/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="ru"        href="https://maiprop.co/golden-visa-tax-benefits/?lang=ru" />
-    <xhtml:link rel="alternate" hreflang="tr"        href="https://maiprop.co/golden-visa-tax-benefits/?lang=tr" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://maiprop.co/golden-visa-tax-benefits/" />
+    <xhtml:link rel="alternate" hreflang="en"        href="https://portal.maiprop.co/golden-visa-tax-benefits/" />
+    <xhtml:link rel="alternate" hreflang="en-US"     href="https://portal.maiprop.co/golden-visa-tax-benefits/" />
+    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://portal.maiprop.co/golden-visa-tax-benefits/" />
+    <xhtml:link rel="alternate" hreflang="ar"        href="https://portal.maiprop.co/golden-visa-tax-benefits/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://portal.maiprop.co/golden-visa-tax-benefits/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="zh"        href="https://portal.maiprop.co/golden-visa-tax-benefits/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://portal.maiprop.co/golden-visa-tax-benefits/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="ru"        href="https://portal.maiprop.co/golden-visa-tax-benefits/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="tr"        href="https://portal.maiprop.co/golden-visa-tax-benefits/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://portal.maiprop.co/golden-visa-tax-benefits/" />
   </url>
   <url>
-    <loc>https://maiprop.co/golden-visa-for-investors/</loc>
+    <loc>https://portal.maiprop.co/golden-visa-for-investors/</loc>
     <changefreq>monthly</changefreq>
     <priority>0.85</priority>
-    <xhtml:link rel="alternate" hreflang="en"        href="https://maiprop.co/golden-visa-for-investors/" />
-    <xhtml:link rel="alternate" hreflang="en-US"     href="https://maiprop.co/golden-visa-for-investors/" />
-    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://maiprop.co/golden-visa-for-investors/" />
-    <xhtml:link rel="alternate" hreflang="ar"        href="https://maiprop.co/golden-visa-for-investors/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://maiprop.co/golden-visa-for-investors/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="zh"        href="https://maiprop.co/golden-visa-for-investors/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://maiprop.co/golden-visa-for-investors/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="ru"        href="https://maiprop.co/golden-visa-for-investors/?lang=ru" />
-    <xhtml:link rel="alternate" hreflang="tr"        href="https://maiprop.co/golden-visa-for-investors/?lang=tr" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://maiprop.co/golden-visa-for-investors/" />
+    <xhtml:link rel="alternate" hreflang="en"        href="https://portal.maiprop.co/golden-visa-for-investors/" />
+    <xhtml:link rel="alternate" hreflang="en-US"     href="https://portal.maiprop.co/golden-visa-for-investors/" />
+    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://portal.maiprop.co/golden-visa-for-investors/" />
+    <xhtml:link rel="alternate" hreflang="ar"        href="https://portal.maiprop.co/golden-visa-for-investors/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://portal.maiprop.co/golden-visa-for-investors/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="zh"        href="https://portal.maiprop.co/golden-visa-for-investors/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://portal.maiprop.co/golden-visa-for-investors/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="ru"        href="https://portal.maiprop.co/golden-visa-for-investors/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="tr"        href="https://portal.maiprop.co/golden-visa-for-investors/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://portal.maiprop.co/golden-visa-for-investors/" />
   </url>
   <url>
-    <loc>https://maiprop.co/golden-visa-for-high-net-worth/</loc>
+    <loc>https://portal.maiprop.co/golden-visa-for-high-net-worth/</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
-    <xhtml:link rel="alternate" hreflang="en"        href="https://maiprop.co/golden-visa-for-high-net-worth/" />
-    <xhtml:link rel="alternate" hreflang="en-US"     href="https://maiprop.co/golden-visa-for-high-net-worth/" />
-    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://maiprop.co/golden-visa-for-high-net-worth/" />
-    <xhtml:link rel="alternate" hreflang="ar"        href="https://maiprop.co/golden-visa-for-high-net-worth/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://maiprop.co/golden-visa-for-high-net-worth/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="zh"        href="https://maiprop.co/golden-visa-for-high-net-worth/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://maiprop.co/golden-visa-for-high-net-worth/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="ru"        href="https://maiprop.co/golden-visa-for-high-net-worth/?lang=ru" />
-    <xhtml:link rel="alternate" hreflang="tr"        href="https://maiprop.co/golden-visa-for-high-net-worth/?lang=tr" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://maiprop.co/golden-visa-for-high-net-worth/" />
+    <xhtml:link rel="alternate" hreflang="en"        href="https://portal.maiprop.co/golden-visa-for-high-net-worth/" />
+    <xhtml:link rel="alternate" hreflang="en-US"     href="https://portal.maiprop.co/golden-visa-for-high-net-worth/" />
+    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://portal.maiprop.co/golden-visa-for-high-net-worth/" />
+    <xhtml:link rel="alternate" hreflang="ar"        href="https://portal.maiprop.co/golden-visa-for-high-net-worth/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://portal.maiprop.co/golden-visa-for-high-net-worth/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="zh"        href="https://portal.maiprop.co/golden-visa-for-high-net-worth/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://portal.maiprop.co/golden-visa-for-high-net-worth/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="ru"        href="https://portal.maiprop.co/golden-visa-for-high-net-worth/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="tr"        href="https://portal.maiprop.co/golden-visa-for-high-net-worth/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://portal.maiprop.co/golden-visa-for-high-net-worth/" />
   </url>
   <url>
-    <loc>https://maiprop.co/golden-visa-property-compliance/</loc>
+    <loc>https://portal.maiprop.co/golden-visa-property-compliance/</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
-    <xhtml:link rel="alternate" hreflang="en"        href="https://maiprop.co/golden-visa-property-compliance/" />
-    <xhtml:link rel="alternate" hreflang="en-US"     href="https://maiprop.co/golden-visa-property-compliance/" />
-    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://maiprop.co/golden-visa-property-compliance/" />
-    <xhtml:link rel="alternate" hreflang="ar"        href="https://maiprop.co/golden-visa-property-compliance/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://maiprop.co/golden-visa-property-compliance/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="zh"        href="https://maiprop.co/golden-visa-property-compliance/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://maiprop.co/golden-visa-property-compliance/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="ru"        href="https://maiprop.co/golden-visa-property-compliance/?lang=ru" />
-    <xhtml:link rel="alternate" hreflang="tr"        href="https://maiprop.co/golden-visa-property-compliance/?lang=tr" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://maiprop.co/golden-visa-property-compliance/" />
+    <xhtml:link rel="alternate" hreflang="en"        href="https://portal.maiprop.co/golden-visa-property-compliance/" />
+    <xhtml:link rel="alternate" hreflang="en-US"     href="https://portal.maiprop.co/golden-visa-property-compliance/" />
+    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://portal.maiprop.co/golden-visa-property-compliance/" />
+    <xhtml:link rel="alternate" hreflang="ar"        href="https://portal.maiprop.co/golden-visa-property-compliance/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://portal.maiprop.co/golden-visa-property-compliance/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="zh"        href="https://portal.maiprop.co/golden-visa-property-compliance/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://portal.maiprop.co/golden-visa-property-compliance/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="ru"        href="https://portal.maiprop.co/golden-visa-property-compliance/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="tr"        href="https://portal.maiprop.co/golden-visa-property-compliance/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://portal.maiprop.co/golden-visa-property-compliance/" />
   </url>
   <url>
-    <loc>https://maiprop.co/is-golden-visa-worth-it/</loc>
+    <loc>https://portal.maiprop.co/is-golden-visa-worth-it/</loc>
     <changefreq>monthly</changefreq>
     <priority>0.85</priority>
-    <xhtml:link rel="alternate" hreflang="en"        href="https://maiprop.co/is-golden-visa-worth-it/" />
-    <xhtml:link rel="alternate" hreflang="en-US"     href="https://maiprop.co/is-golden-visa-worth-it/" />
-    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://maiprop.co/is-golden-visa-worth-it/" />
-    <xhtml:link rel="alternate" hreflang="ar"        href="https://maiprop.co/is-golden-visa-worth-it/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://maiprop.co/is-golden-visa-worth-it/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="zh"        href="https://maiprop.co/is-golden-visa-worth-it/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://maiprop.co/is-golden-visa-worth-it/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="ru"        href="https://maiprop.co/is-golden-visa-worth-it/?lang=ru" />
-    <xhtml:link rel="alternate" hreflang="tr"        href="https://maiprop.co/is-golden-visa-worth-it/?lang=tr" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://maiprop.co/is-golden-visa-worth-it/" />
+    <xhtml:link rel="alternate" hreflang="en"        href="https://portal.maiprop.co/is-golden-visa-worth-it/" />
+    <xhtml:link rel="alternate" hreflang="en-US"     href="https://portal.maiprop.co/is-golden-visa-worth-it/" />
+    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://portal.maiprop.co/is-golden-visa-worth-it/" />
+    <xhtml:link rel="alternate" hreflang="ar"        href="https://portal.maiprop.co/is-golden-visa-worth-it/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://portal.maiprop.co/is-golden-visa-worth-it/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="zh"        href="https://portal.maiprop.co/is-golden-visa-worth-it/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://portal.maiprop.co/is-golden-visa-worth-it/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="ru"        href="https://portal.maiprop.co/is-golden-visa-worth-it/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="tr"        href="https://portal.maiprop.co/is-golden-visa-worth-it/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://portal.maiprop.co/is-golden-visa-worth-it/" />
   </url>
   <url>
-    <loc>https://maiprop.co/greece-vs-dubai-golden-visa/</loc>
+    <loc>https://portal.maiprop.co/greece-vs-dubai-golden-visa/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.85</priority>
-    <xhtml:link rel="alternate" hreflang="en"        href="https://maiprop.co/greece-vs-dubai-golden-visa/" />
-    <xhtml:link rel="alternate" hreflang="en-US"     href="https://maiprop.co/greece-vs-dubai-golden-visa/" />
-    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://maiprop.co/greece-vs-dubai-golden-visa/" />
-    <xhtml:link rel="alternate" hreflang="ar"        href="https://maiprop.co/greece-vs-dubai-golden-visa/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://maiprop.co/greece-vs-dubai-golden-visa/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="zh"        href="https://maiprop.co/greece-vs-dubai-golden-visa/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://maiprop.co/greece-vs-dubai-golden-visa/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="ru"        href="https://maiprop.co/greece-vs-dubai-golden-visa/?lang=ru" />
-    <xhtml:link rel="alternate" hreflang="tr"        href="https://maiprop.co/greece-vs-dubai-golden-visa/?lang=tr" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://maiprop.co/greece-vs-dubai-golden-visa/" />
+    <xhtml:link rel="alternate" hreflang="en"        href="https://portal.maiprop.co/greece-vs-dubai-golden-visa/" />
+    <xhtml:link rel="alternate" hreflang="en-US"     href="https://portal.maiprop.co/greece-vs-dubai-golden-visa/" />
+    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://portal.maiprop.co/greece-vs-dubai-golden-visa/" />
+    <xhtml:link rel="alternate" hreflang="ar"        href="https://portal.maiprop.co/greece-vs-dubai-golden-visa/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://portal.maiprop.co/greece-vs-dubai-golden-visa/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="zh"        href="https://portal.maiprop.co/greece-vs-dubai-golden-visa/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://portal.maiprop.co/greece-vs-dubai-golden-visa/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="ru"        href="https://portal.maiprop.co/greece-vs-dubai-golden-visa/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="tr"        href="https://portal.maiprop.co/greece-vs-dubai-golden-visa/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://portal.maiprop.co/greece-vs-dubai-golden-visa/" />
   </url>
   <url>
-    <loc>https://maiprop.co/greek-golden-visa-chinese-investors/</loc>
+    <loc>https://portal.maiprop.co/greek-golden-visa-chinese-investors/</loc>
     <changefreq>monthly</changefreq>
     <priority>0.85</priority>
-    <xhtml:link rel="alternate" hreflang="en"        href="https://maiprop.co/greek-golden-visa-chinese-investors/" />
-    <xhtml:link rel="alternate" hreflang="en-US"     href="https://maiprop.co/greek-golden-visa-chinese-investors/" />
-    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://maiprop.co/greek-golden-visa-chinese-investors/" />
-    <xhtml:link rel="alternate" hreflang="zh"        href="https://maiprop.co/greek-golden-visa-chinese-investors/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://maiprop.co/greek-golden-visa-chinese-investors/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="ar"        href="https://maiprop.co/greek-golden-visa-chinese-investors/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://maiprop.co/greek-golden-visa-chinese-investors/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="ru"        href="https://maiprop.co/greek-golden-visa-chinese-investors/?lang=ru" />
-    <xhtml:link rel="alternate" hreflang="tr"        href="https://maiprop.co/greek-golden-visa-chinese-investors/?lang=tr" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://maiprop.co/greek-golden-visa-chinese-investors/" />
+    <xhtml:link rel="alternate" hreflang="en"        href="https://portal.maiprop.co/greek-golden-visa-chinese-investors/" />
+    <xhtml:link rel="alternate" hreflang="en-US"     href="https://portal.maiprop.co/greek-golden-visa-chinese-investors/" />
+    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://portal.maiprop.co/greek-golden-visa-chinese-investors/" />
+    <xhtml:link rel="alternate" hreflang="zh"        href="https://portal.maiprop.co/greek-golden-visa-chinese-investors/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://portal.maiprop.co/greek-golden-visa-chinese-investors/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="ar"        href="https://portal.maiprop.co/greek-golden-visa-chinese-investors/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://portal.maiprop.co/greek-golden-visa-chinese-investors/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="ru"        href="https://portal.maiprop.co/greek-golden-visa-chinese-investors/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="tr"        href="https://portal.maiprop.co/greek-golden-visa-chinese-investors/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://portal.maiprop.co/greek-golden-visa-chinese-investors/" />
   </url>
   <url>
-    <loc>https://maiprop.co/greek-golden-visa-uae-investors/</loc>
+    <loc>https://portal.maiprop.co/greek-golden-visa-uae-investors/</loc>
     <changefreq>monthly</changefreq>
     <priority>0.85</priority>
-    <xhtml:link rel="alternate" hreflang="en"        href="https://maiprop.co/greek-golden-visa-uae-investors/" />
-    <xhtml:link rel="alternate" hreflang="en-US"     href="https://maiprop.co/greek-golden-visa-uae-investors/" />
-    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://maiprop.co/greek-golden-visa-uae-investors/" />
-    <xhtml:link rel="alternate" hreflang="ar"        href="https://maiprop.co/greek-golden-visa-uae-investors/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://maiprop.co/greek-golden-visa-uae-investors/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="zh"        href="https://maiprop.co/greek-golden-visa-uae-investors/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://maiprop.co/greek-golden-visa-uae-investors/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="ru"        href="https://maiprop.co/greek-golden-visa-uae-investors/?lang=ru" />
-    <xhtml:link rel="alternate" hreflang="tr"        href="https://maiprop.co/greek-golden-visa-uae-investors/?lang=tr" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://maiprop.co/greek-golden-visa-uae-investors/" />
+    <xhtml:link rel="alternate" hreflang="en"        href="https://portal.maiprop.co/greek-golden-visa-uae-investors/" />
+    <xhtml:link rel="alternate" hreflang="en-US"     href="https://portal.maiprop.co/greek-golden-visa-uae-investors/" />
+    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://portal.maiprop.co/greek-golden-visa-uae-investors/" />
+    <xhtml:link rel="alternate" hreflang="ar"        href="https://portal.maiprop.co/greek-golden-visa-uae-investors/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://portal.maiprop.co/greek-golden-visa-uae-investors/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="zh"        href="https://portal.maiprop.co/greek-golden-visa-uae-investors/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://portal.maiprop.co/greek-golden-visa-uae-investors/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="ru"        href="https://portal.maiprop.co/greek-golden-visa-uae-investors/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="tr"        href="https://portal.maiprop.co/greek-golden-visa-uae-investors/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://portal.maiprop.co/greek-golden-visa-uae-investors/" />
   </url>
   <url>
-    <loc>https://maiprop.co/greek-golden-visa-russian-investors/</loc>
+    <loc>https://portal.maiprop.co/greek-golden-visa-russian-investors/</loc>
     <changefreq>monthly</changefreq>
     <priority>0.85</priority>
-    <xhtml:link rel="alternate" hreflang="en"        href="https://maiprop.co/greek-golden-visa-russian-investors/" />
-    <xhtml:link rel="alternate" hreflang="en-US"     href="https://maiprop.co/greek-golden-visa-russian-investors/" />
-    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://maiprop.co/greek-golden-visa-russian-investors/" />
-    <xhtml:link rel="alternate" hreflang="ru"        href="https://maiprop.co/greek-golden-visa-russian-investors/?lang=ru" />
-    <xhtml:link rel="alternate" hreflang="ar"        href="https://maiprop.co/greek-golden-visa-russian-investors/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://maiprop.co/greek-golden-visa-russian-investors/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="zh"        href="https://maiprop.co/greek-golden-visa-russian-investors/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://maiprop.co/greek-golden-visa-russian-investors/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="tr"        href="https://maiprop.co/greek-golden-visa-russian-investors/?lang=tr" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://maiprop.co/greek-golden-visa-russian-investors/" />
+    <xhtml:link rel="alternate" hreflang="en"        href="https://portal.maiprop.co/greek-golden-visa-russian-investors/" />
+    <xhtml:link rel="alternate" hreflang="en-US"     href="https://portal.maiprop.co/greek-golden-visa-russian-investors/" />
+    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://portal.maiprop.co/greek-golden-visa-russian-investors/" />
+    <xhtml:link rel="alternate" hreflang="ru"        href="https://portal.maiprop.co/greek-golden-visa-russian-investors/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="ar"        href="https://portal.maiprop.co/greek-golden-visa-russian-investors/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://portal.maiprop.co/greek-golden-visa-russian-investors/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="zh"        href="https://portal.maiprop.co/greek-golden-visa-russian-investors/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://portal.maiprop.co/greek-golden-visa-russian-investors/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="tr"        href="https://portal.maiprop.co/greek-golden-visa-russian-investors/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://portal.maiprop.co/greek-golden-visa-russian-investors/" />
   </url>
   <url>
-    <loc>https://maiprop.co/greek-golden-visa-turkish-investors/</loc>
+    <loc>https://portal.maiprop.co/greek-golden-visa-turkish-investors/</loc>
     <changefreq>monthly</changefreq>
     <priority>0.85</priority>
-    <xhtml:link rel="alternate" hreflang="en"        href="https://maiprop.co/greek-golden-visa-turkish-investors/" />
-    <xhtml:link rel="alternate" hreflang="en-US"     href="https://maiprop.co/greek-golden-visa-turkish-investors/" />
-    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://maiprop.co/greek-golden-visa-turkish-investors/" />
-    <xhtml:link rel="alternate" hreflang="tr"        href="https://maiprop.co/greek-golden-visa-turkish-investors/?lang=tr" />
-    <xhtml:link rel="alternate" hreflang="tr-TR"     href="https://maiprop.co/greek-golden-visa-turkish-investors/?lang=tr" />
-    <xhtml:link rel="alternate" hreflang="ar"        href="https://maiprop.co/greek-golden-visa-turkish-investors/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://maiprop.co/greek-golden-visa-turkish-investors/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="zh"        href="https://maiprop.co/greek-golden-visa-turkish-investors/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="en"        href="https://portal.maiprop.co/greek-golden-visa-turkish-investors/" />
+    <xhtml:link rel="alternate" hreflang="en-US"     href="https://portal.maiprop.co/greek-golden-visa-turkish-investors/" />
+    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://portal.maiprop.co/greek-golden-visa-turkish-investors/" />
+    <xhtml:link rel="alternate" hreflang="tr"        href="https://portal.maiprop.co/greek-golden-visa-turkish-investors/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="tr-TR"     href="https://portal.maiprop.co/greek-golden-visa-turkish-investors/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="ar"        href="https://portal.maiprop.co/greek-golden-visa-turkish-investors/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://portal.maiprop.co/greek-golden-visa-turkish-investors/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="zh"        href="https://portal.maiprop.co/greek-golden-visa-turkish-investors/?lang=zh" />
   </url>
   <url>
-    <loc>https://maiprop.co/golden-visa-by-nationality/</loc>
+    <loc>https://portal.maiprop.co/golden-visa-by-nationality/</loc>
     <changefreq>monthly</changefreq>
     <priority>0.85</priority>
-    <xhtml:link rel="alternate" hreflang="en"        href="https://maiprop.co/golden-visa-by-nationality/" />
-    <xhtml:link rel="alternate" hreflang="en-US"     href="https://maiprop.co/golden-visa-by-nationality/" />
-    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://maiprop.co/golden-visa-by-nationality/" />
-    <xhtml:link rel="alternate" hreflang="zh"        href="https://maiprop.co/golden-visa-by-nationality/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://maiprop.co/golden-visa-by-nationality/?lang=zh" />
-    <xhtml:link rel="alternate" hreflang="ar"        href="https://maiprop.co/golden-visa-by-nationality/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://maiprop.co/golden-visa-by-nationality/?lang=ar" />
-    <xhtml:link rel="alternate" hreflang="ru"        href="https://maiprop.co/golden-visa-by-nationality/?lang=ru" />
-    <xhtml:link rel="alternate" hreflang="tr"        href="https://maiprop.co/golden-visa-by-nationality/?lang=tr" />
-    <xhtml:link rel="alternate" hreflang="tr-TR"     href="https://maiprop.co/golden-visa-by-nationality/?lang=tr" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://maiprop.co/golden-visa-by-nationality/" />
+    <xhtml:link rel="alternate" hreflang="en"        href="https://portal.maiprop.co/golden-visa-by-nationality/" />
+    <xhtml:link rel="alternate" hreflang="en-US"     href="https://portal.maiprop.co/golden-visa-by-nationality/" />
+    <xhtml:link rel="alternate" hreflang="en-GB"     href="https://portal.maiprop.co/golden-visa-by-nationality/" />
+    <xhtml:link rel="alternate" hreflang="zh"        href="https://portal.maiprop.co/golden-visa-by-nationality/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="zh-CN"     href="https://portal.maiprop.co/golden-visa-by-nationality/?lang=zh" />
+    <xhtml:link rel="alternate" hreflang="ar"        href="https://portal.maiprop.co/golden-visa-by-nationality/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="ar-AE"     href="https://portal.maiprop.co/golden-visa-by-nationality/?lang=ar" />
+    <xhtml:link rel="alternate" hreflang="ru"        href="https://portal.maiprop.co/golden-visa-by-nationality/?lang=ru" />
+    <xhtml:link rel="alternate" hreflang="tr"        href="https://portal.maiprop.co/golden-visa-by-nationality/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="tr-TR"     href="https://portal.maiprop.co/golden-visa-by-nationality/?lang=tr" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://portal.maiprop.co/golden-visa-by-nationality/" />
   </url>
 </urlset>
