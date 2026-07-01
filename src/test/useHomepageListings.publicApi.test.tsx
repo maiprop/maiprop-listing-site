@@ -25,7 +25,6 @@ import {
   useHomepageAuctionListings,
   useHomepageFeaturedListings,
   useHomepageOpenHouseListings,
-  useHomepageTypeCounts,
 } from "@/hooks/useHomepageListings";
 import {
   HOMEPAGE_FEATURED_SNAPSHOT_KEY,
@@ -151,12 +150,4 @@ describe("homepage public API fallback behavior", () => {
     expect(useAuctionListingsMock).toHaveBeenCalledWith(6, { enabled: false });
   });
 
-  it("does not fetch type counts before the browse section is enabled", () => {
-    const { result } = renderHookWithQuery(() => useHomepageTypeCounts({ enabled: false }));
-
-    expect(result.current.data).toMatchObject({ apartment: 0, land: 0 });
-    expect(result.current.fetchStatus).toBe("idle");
-    expect(publicApiMock).not.toHaveBeenCalled();
-    expect(fromMock).not.toHaveBeenCalled();
-  });
 });

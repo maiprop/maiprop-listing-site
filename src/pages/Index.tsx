@@ -1,9 +1,8 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import {
-  useHomepageTypeCounts,
   useHomepageFeaturedListings,
   useHomepageAuctionListings,
   useHomepageOpenHouseListings,
@@ -81,7 +80,6 @@ function useDeferredHomepageSection({
 
 export default function Index() {
   const queryClient = useQueryClient();
-  const browseSection = useDeferredHomepageSection({ rootMargin: "650px 0px", idleDelayMs: 1_200 });
   const auctionsSection = useDeferredHomepageSection({ idleDelayMs: 1_800 });
   const openHousesSection = useDeferredHomepageSection({ idleDelayMs: 2_400 });
   const popularLocationsSection = useDeferredHomepageSection({ rootMargin: "800px 0px", idleDelayMs: 3_000 });
@@ -95,9 +93,6 @@ export default function Index() {
       ]);
     },
   });
-
-  const { data: typeCountsRaw } = useHomepageTypeCounts({ enabled: browseSection.enabled });
-  const typeCounts = useMemo(() => typeCountsRaw ?? {}, [typeCountsRaw]);
 
   const {
     data: featuredListings = [],
@@ -162,9 +157,7 @@ export default function Index() {
       <main id="main-content">
         <HeroSection />
         <FeaturedPropertiesSection listings={featuredListings} isLoading={featuredLoading} isError={featuredError} />
-        <div ref={browseSection.ref}>
-          <BrowseByTypeSection typeCounts={typeCounts} />
-        </div>
+        <BrowseByTypeSection />
         <div ref={auctionsSection.ref}>
           <HomepageAuctionsSection listings={auctionListings} isLoading={!auctionsSection.enabled || auctionsLoading} />
         </div>

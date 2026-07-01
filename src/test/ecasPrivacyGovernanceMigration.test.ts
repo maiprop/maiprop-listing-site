@@ -42,6 +42,9 @@ describe("ECAS privacy governance migration", () => {
     expect(sql).toContain("REVOKE CREATE ON SCHEMA public FROM PUBLIC");
     expect(sql).toContain("REVOKE CREATE ON SCHEMA public FROM anon");
     expect(sql).toContain("REVOKE CREATE ON SCHEMA public FROM authenticated");
+    expect(sql).toContain("aclexplode");
+    expect(sql).toContain("acl.grantee = 0");
+    expect(sql).not.toContain("has_schema_privilege('PUBLIC'");
     expect(sql).toContain("public schema CREATE must remain revoked from client roles");
   });
 });

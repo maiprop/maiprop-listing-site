@@ -1110,7 +1110,7 @@ describe("Component smoke tests", () => {
 
   it("BrowseByTypeSection renders without throwing", async () => {
     const { BrowseByTypeSection } = await import("@/components/index/BrowseByTypeSection");
-    expect(() => renderWithProviders(<BrowseByTypeSection typeCounts={{}} />)).not.toThrow();
+    expect(() => renderWithProviders(<BrowseByTypeSection />)).not.toThrow();
   });
 
   it("FeaturedPropertiesSection renders without throwing", async () => {

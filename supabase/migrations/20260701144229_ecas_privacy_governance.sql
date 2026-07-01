@@ -117,7 +117,16 @@ DO $$
 BEGIN
   IF has_schema_privilege('anon', 'public', 'CREATE')
     OR has_schema_privilege('authenticated', 'public', 'CREATE')
-    OR has_schema_privilege('PUBLIC', 'public', 'CREATE') THEN
+    OR EXISTS (
+      SELECT 1
+      FROM pg_namespace AS n
+      CROSS JOIN LATERAL aclexplode(
+        COALESCE(n.nspacl, acldefault('n', n.nspowner))
+      ) AS acl
+      WHERE n.nspname = 'public'
+        AND acl.grantee = 0
+        AND acl.privilege_type = 'CREATE'
+    ) THEN
     RAISE EXCEPTION 'public schema CREATE must remain revoked from client roles';
   END IF;
 END $$;
