@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.12.0](https://github.com/maiprop/maiprop-listing-site/compare/v1.11.8...v1.12.0) (2026-07-01)
+
+
+### Features
+
+* **billing:** complete stripe integration ([0a76cd6](https://github.com/maiprop/maiprop-listing-site/commit/0a76cd6f8c06372f53699fd4db655bbf1969976b))
+
+
+### Bug Fixes
+
+* **edge:** satisfy invoice deno check ([3c33b4f](https://github.com/maiprop/maiprop-listing-site/commit/3c33b4f7aaf58f94453679ac39cdafa43449ec1f))
+* finalize billing promotions and deploy checks ([5f6c69a](https://github.com/maiprop/maiprop-listing-site/commit/5f6c69a61162da90949bffbee850d74e6136c280))
+* finalize stripe billing release wiring ([288c576](https://github.com/maiprop/maiprop-listing-site/commit/288c5768c7863ec8583c3777a19bf24de0c21bf5))
+* **governance:** document billing function boundaries ([89a6d12](https://github.com/maiprop/maiprop-listing-site/commit/89a6d12c9c22704abfdf9b76faa32b1f9c425516))
+* harden main ecas readiness ([bce7062](https://github.com/maiprop/maiprop-listing-site/commit/bce70620b8d859832af918cf88102fe83c734502))
+* **migrations:** remove duplicate reconciliation placeholders ([b076bd0](https://github.com/maiprop/maiprop-listing-site/commit/b076bd06de4965e2da0b5fd572847b6fc6c58492))
+* **migrations:** update reconciliation compatibility test ([877fede](https://github.com/maiprop/maiprop-listing-site/commit/877fede97658e15aaafb7c22a0e00bb6052a72db))
+* restore mobile new-build signup flows ([d766500](https://github.com/maiprop/maiprop-listing-site/commit/d76650004a8638b7c904411aa9ec2a40bd98c5a3))
+* **supabase:** refresh generated types ([f18d25d](https://github.com/maiprop/maiprop-listing-site/commit/f18d25d56b8346eb329113d135975431a543774b))
+* **types:** remove billing type debt ([60bc779](https://github.com/maiprop/maiprop-listing-site/commit/60bc7798b7ce4ec9bfadbc750dfecf80cc93fa6f))
+
+
+### Performance Improvements
+
+* optimize homepage first paint ([163f065](https://github.com/maiprop/maiprop-listing-site/commit/163f06513c3b4d48634eea2e649b2ed6063194e2))
+
 ## [1.11.8](https://github.com/maiprop/maiprop-listing-site/compare/v1.11.7...v1.11.8) (2026-06-29)
 
 
