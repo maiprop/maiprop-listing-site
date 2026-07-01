@@ -1069,7 +1069,7 @@ function buildSql(results) {
   if (productRows.length > 0) {
     lines.push("");
     lines.push("INSERT INTO public.pro_product_ids (product_id) VALUES");
-    lines.push(productRows.map((productId) => `  (${sqlLiteral(productId)})`).join(",\n") + ";");
+    lines.push(productRows.map((productId) => `  (${sqlLiteral(productId)})`).join(",\n") + "\nON CONFLICT (product_id) DO NOTHING;");
     lines.push("");
     lines.push("-- Keep this generic product allow-list for legacy SQL checks.");
     lines.push("-- Newer audience-scoped checks read pricing_configs.metadata.stripe_product_id.");
@@ -1080,12 +1080,13 @@ function buildSql(results) {
   return lines.join("\n");
 }
 
-function buildEnv(results) {
+function buildEnv(results, { live = false } = {}) {
   const resultByKey = new Map(results.map((result) => [result.item.key, result]));
+  const modeLabel = live ? "live" : "test";
   const lines = [
-    "# Generated Stripe test price IDs for Supabase Edge Function secrets.",
+    `# Generated Stripe ${modeLabel} price IDs for Supabase Edge Function secrets.`,
     "# PowerShell:",
-    "# $stripePriceSecrets = Get-Content .stripe.test.env | Where-Object { $_ -and -not $_.StartsWith('#') }",
+    `# $stripePriceSecrets = Get-Content .stripe.${modeLabel}.env | Where-Object { $_ -and -not $_.StartsWith('#') }`,
     "# npx supabase secrets set --project-ref qvvicunqcrwpioqnvzxf $stripePriceSecrets",
     "",
   ];
@@ -1183,7 +1184,7 @@ async function main() {
     });
   }
 
-  const envOutput = buildEnv(results);
+  const envOutput = buildEnv(results, { live: args.live });
   const sqlOutput = buildSql(results);
 
   if (args.writeEnv) {
