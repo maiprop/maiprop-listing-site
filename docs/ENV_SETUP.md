@@ -176,6 +176,7 @@ Dashboard → Project Settings → Edge Functions → Secrets.
 | `STRIPE_SECRET_KEY` | Billing Edge Functions: `stripe-webhook`, `create-checkout`, `create-investor-payment`, `customer-portal`, `check-subscription`, `get-invoices`, `create-stripe-price`, `sync-stripe-pricing`, `apply-data-input-credit`, `delete-account`, `log-role-switch` |
 | `STRIPE_API_KEY` | Local Stripe operator scripts fallback; prefer `STRIPE_SECRET_KEY` so Edge and scripts use one key name. |
 | `STRIPE_WEBHOOK_SECRET` | `stripe-webhook` |
+| `STRIPE_WEBHOOK_EXPECTED_URL` | Optional live migration gate override for the Stripe webhook URL; defaults to the production `stripe-webhook` Edge Function URL. |
 | `STRIPE_CUSTOMER_PORTAL_CONFIGURATION_ID` | Optional Stripe Customer Portal configuration used by `customer-portal` |
 | `STRIPE_TAX_CHECK_INVOICE` | Optional invoice id for `npm run check:stripe-tax-readiness` invoice-level VAT verification. |
 | `STRIPE_TAX_EXPECT_COUNTRY` / `STRIPE_TAX_EXPECT_RATE` | Stripe Tax readiness expectations; defaults are `GR` and `0.24` for Greek VAT. |
