@@ -32,8 +32,8 @@ CREATE POLICY "privacy_export_requests_select_own_or_admin"
   FOR SELECT
   TO authenticated
   USING (
-    user_id = auth.uid()
-    OR public.has_platform_admin(auth.uid())
+    user_id = (SELECT auth.uid())
+    OR public.has_platform_admin((SELECT auth.uid()))
   );
 
 DROP POLICY IF EXISTS "privacy_export_requests_insert_own"
@@ -42,7 +42,7 @@ CREATE POLICY "privacy_export_requests_insert_own"
   ON public.privacy_export_requests
   FOR INSERT
   TO authenticated
-  WITH CHECK (user_id = auth.uid());
+  WITH CHECK (user_id = (SELECT auth.uid()));
 
 DROP POLICY IF EXISTS "privacy_export_requests_update_admin"
   ON public.privacy_export_requests;
@@ -50,8 +50,8 @@ CREATE POLICY "privacy_export_requests_update_admin"
   ON public.privacy_export_requests
   FOR UPDATE
   TO authenticated
-  USING (public.has_platform_admin(auth.uid()))
-  WITH CHECK (public.has_platform_admin(auth.uid()));
+  USING (public.has_platform_admin((SELECT auth.uid())))
+  WITH CHECK (public.has_platform_admin((SELECT auth.uid())));
 
 GRANT SELECT, INSERT ON TABLE public.privacy_export_requests TO authenticated;
 GRANT UPDATE (
@@ -96,7 +96,7 @@ CREATE POLICY "privacy_audit_log_select_admin"
   ON public.privacy_audit_log
   FOR SELECT
   TO authenticated
-  USING (public.has_platform_admin(auth.uid()));
+  USING (public.has_platform_admin((SELECT auth.uid())));
 
 GRANT SELECT ON TABLE public.privacy_audit_log TO authenticated;
 

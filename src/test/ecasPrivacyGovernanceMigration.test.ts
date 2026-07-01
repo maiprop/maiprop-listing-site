@@ -29,11 +29,12 @@ describe("ECAS privacy governance migration", () => {
     expect(sql).toContain("ALTER TABLE public.privacy_export_requests ENABLE ROW LEVEL SECURITY");
     expect(sql).toContain("ALTER TABLE public.privacy_audit_log ENABLE ROW LEVEL SECURITY");
     expect(sql).toContain('CREATE POLICY "privacy_export_requests_select_own_or_admin"');
-    expect(sql).toContain("user_id = auth.uid()");
-    expect(sql).toContain("public.has_platform_admin(auth.uid())");
+    expect(sql).toContain("user_id = (SELECT auth.uid())");
+    expect(sql).toContain("public.has_platform_admin((SELECT auth.uid()))");
     expect(sql).toContain('CREATE POLICY "privacy_export_requests_insert_own"');
     expect(sql).toContain('CREATE POLICY "privacy_audit_log_select_admin"');
     expect(sql).toContain("No INSERT/UPDATE/DELETE policies on privacy_audit_log");
+    expect(sql.replaceAll("(SELECT auth.uid())", "")).not.toContain("auth.uid()");
   });
 
   it("documents explicit public schema CREATE revocation proof", () => {

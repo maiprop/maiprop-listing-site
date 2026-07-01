@@ -15,8 +15,22 @@ describe("BrowseByTypeSection", () => {
     expect(grid).toHaveClass("grid-cols-3");
     const links = within(grid).getAllByRole("link");
     expect(links).toHaveLength(9);
-    expect(grid.querySelectorAll("svg")).toHaveLength(0);
+    expect(grid).toHaveClass("max-w-3xl");
+    expect(grid.querySelectorAll("svg[aria-hidden='true']")).toHaveLength(9);
+    links.forEach((link) => {
+      const icon = link.querySelector(".browse-type-icon");
+      const iconShell = link.querySelector(".browse-type-icon-shell");
+      const label = link.querySelector(".browse-type-label");
+      expect(icon).toBeInTheDocument();
+      expect(icon).toHaveClass("h-4", "w-4");
+      expect(iconShell).toHaveClass("h-7", "w-7");
+      expect(label).toHaveClass("text-[10px]", "sm:text-xs", "whitespace-nowrap");
+      expect(link).toHaveClass("min-h-[54px]", "flex-row", "text-left");
+    });
     expect(new Set(links.map((link) => link.getAttribute("data-accent"))).size).toBeGreaterThanOrEqual(6);
+    expect(within(grid).getByText("New Build")).toBeInTheDocument();
+    expect(within(grid).getByText("Retail")).toBeInTheDocument();
+    expect(within(grid).getByText("Mixed Use")).toBeInTheDocument();
 
     expect(screen.getByRole("link", { name: /Browse apartments/i })).toHaveAttribute("href", "/listings?type=apartment");
     expect(screen.getByRole("link", { name: /Browse houses/i })).toHaveAttribute("href", "/listings?type=house");
