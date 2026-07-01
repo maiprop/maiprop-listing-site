@@ -67,10 +67,30 @@ describe("CI live-safe security workflow", () => {
       "steps.supabase_data_plane_probe.outputs.ready == 'true'",
     );
     expect(ciWorkflow).toContain(
-      "Skipped production-fallback live-safe security tests because the production Supabase REST data plane did not respond",
+      "Skipped production-fallback live-safe security tests because production Supabase fallback preflight did not pass",
     );
     expect(ciWorkflow).toContain(
       "Configure isolated staging to make these tests a hard PR gate independent of production availability",
+    );
+  });
+
+  it("preflights production fallback RLS test credentials before running RLS browser tests", () => {
+    const authProbeIndex = ciWorkflow.indexOf(
+      "Probe production fallback RLS test credentials",
+    );
+    const playwrightStepIndex = ciWorkflow.indexOf(
+      "Run live-safe RLS + conditional onboarding + GDPR security tests",
+    );
+
+    expect(authProbeIndex).toBeGreaterThan(0);
+    expect(playwrightStepIndex).toBeGreaterThan(authProbeIndex);
+    expect(ciWorkflow).toContain("id: production_rls_auth_probe");
+    expect(ciWorkflow).toContain("/auth/v1/token?grant_type=password");
+    expect(ciWorkflow).toContain(
+      "steps.production_rls_auth_probe.outputs.ready == 'true'",
+    );
+    expect(ciWorkflow).toContain(
+      "Refresh RLS_USER_A_EMAIL/RLS_USER_B_EMAIL/RLS_USER_PASSWORD or configure isolated staging",
     );
   });
 });
