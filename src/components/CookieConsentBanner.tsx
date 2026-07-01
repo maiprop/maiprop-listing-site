@@ -274,7 +274,10 @@ export const CookieConsentBanner = () => {
 
   // skipcq: JS-0415 - The banner shell delegates header, preferences, and actions to leaf components.
   return (
-    <div className="fixed bottom-[4.5rem] lg:bottom-4 left-1/2 z-[100] w-[calc(100%-1rem)] sm:w-[calc(100%-2rem)] max-w-4xl animate-cookie-banner-up bg-card border border-border rounded-xl sm:rounded-2xl shadow-elevated overflow-hidden">
+    <div
+      data-testid="cookie-consent-banner"
+      className="fixed bottom-[calc(env(safe-area-inset-bottom)+4rem)] sm:bottom-4 left-2 right-2 sm:left-1/2 sm:right-auto z-[100] sm:w-[calc(100%-2rem)] sm:max-w-4xl sm:-translate-x-1/2 max-h-[38svh] sm:max-h-[80vh] animate-cookie-banner-up bg-card border border-border rounded-xl sm:rounded-2xl shadow-elevated overflow-hidden"
+    >
       <CookieBannerHeader t={t} onDismiss={() => setVisible(false)} />
       {expanded && (
         <CookiePreferencesPanel

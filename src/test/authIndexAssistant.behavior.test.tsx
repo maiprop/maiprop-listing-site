@@ -307,6 +307,39 @@ describe("HeroSection", () => {
     expect(video.querySelectorAll("source")).toHaveLength(2);
   });
 
+  it("defers the desktop market ticker until idle so it does not compete with first listing paint", async () => {
+    vi.useFakeTimers();
+    stubMatchMedia({ desktop: true });
+    Object.defineProperty(window, "requestIdleCallback", {
+      configurable: true,
+      value: (cb: IdleRequestCallback) =>
+        window.setTimeout(() => cb({ didTimeout: false, timeRemaining: () => 10 }), 0),
+    });
+    Object.defineProperty(window, "cancelIdleCallback", { configurable: true, value: window.clearTimeout });
+
+    renderWithRoutes(<HeroSection />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByTestId("market-ticker")).not.toBeInTheDocument();
+
+    await act(async () => {
+      vi.advanceTimersByTime(899);
+      vi.runOnlyPendingTimers();
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId("market-ticker")).not.toBeInTheDocument();
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+      vi.runOnlyPendingTimers();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId("market-ticker")).toBeInTheDocument();
+  });
+
   it("does not attach decorative hero video sources for reduced-motion users", () => {
     vi.useFakeTimers();
     stubMatchMedia({ desktop: true, reducedMotion: true });

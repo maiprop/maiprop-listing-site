@@ -16,6 +16,7 @@ const HERO_VIDEO_WEBM_SRC = "/hero-bg.webm";
 const HERO_VIDEO_MP4_SRC = "/hero-bg.mp4";
 const HERO_VIDEO_START_DELAY_MS = 350;
 const HERO_VIDEO_IDLE_TIMEOUT_MS = 800;
+const HERO_MARKET_TICKER_START_DELAY_MS = 900;
 
 const LISTING_TYPE_MAP: Record<string, string> = {
   Buy: "sale",
@@ -31,6 +32,7 @@ export function HeroSection() {
   const [professionalService, setProfessionalService] = useState("");
   const [showAI, setShowAI] = useState(false);
   const [heroVideoReady, setHeroVideoReady] = useState(false);
+  const [marketTickerReady, setMarketTickerReady] = useState(false);
 
   // Keep the decorative video just behind first paint, not seconds behind it.
   // The poster protects LCP, while the short idle delay prevents the video from
@@ -47,6 +49,20 @@ export function HeroSection() {
     const timer = window.setTimeout(() => {
       idleId = scheduleIdle(() => setHeroVideoReady(true), { timeout: HERO_VIDEO_IDLE_TIMEOUT_MS });
     }, HERO_VIDEO_START_DELAY_MS);
+    return () => {
+      window.clearTimeout(timer);
+      if (idleId !== undefined) cancelIdle(idleId);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!window.matchMedia("(min-width: 1024px)").matches) return;
+    const scheduleIdle = window.requestIdleCallback ?? ((cb: IdleRequestCallback) => window.setTimeout(() => cb({ didTimeout: false, timeRemaining: () => 0 }), HERO_VIDEO_IDLE_TIMEOUT_MS));
+    const cancelIdle = window.cancelIdleCallback ?? window.clearTimeout;
+    let idleId: number | undefined;
+    const timer = window.setTimeout(() => {
+      idleId = scheduleIdle(() => setMarketTickerReady(true), { timeout: HERO_VIDEO_IDLE_TIMEOUT_MS });
+    }, HERO_MARKET_TICKER_START_DELAY_MS);
     return () => {
       window.clearTimeout(timer);
       if (idleId !== undefined) cancelIdle(idleId);
@@ -138,7 +154,7 @@ export function HeroSection() {
     <>
       {showAI && <AISearchModal onFiltersApplied={handleAIFilters} onClose={() => setShowAI(false)} />}
 
-      <section className="relative min-h-[100svh] flex items-center overflow-hidden">
+      <section className="relative min-h-[84svh] sm:min-h-[88svh] flex items-center overflow-hidden">
         {/* Background */}
         <div className="absolute inset-0 z-0 overflow-hidden">
           {/* Video background */}
@@ -315,9 +331,11 @@ export function HeroSection() {
                 style={{ background: "radial-gradient(ellipse, hsl(var(--brand-cyan)), hsl(var(--brand-indigo)), hsl(var(--brand-purple)), transparent 70%)" }}
               />
               <div className="relative">
-                <Suspense fallback={<div className="h-12 bg-muted animate-pulse rounded-lg" />}>
-                  <MarketTicker />
-                </Suspense>
+                {marketTickerReady && (
+                  <Suspense fallback={<div className="h-12 bg-muted animate-pulse rounded-lg" />}>
+                    <MarketTicker />
+                  </Suspense>
+                )}
               </div>
             </div>
           </div>

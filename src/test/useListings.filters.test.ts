@@ -171,15 +171,15 @@ describe("buildListingsQuery — listing-type / status scoping", () => {
     expect(calls("in").find((c) => c.args[0] === "listing_type")).toBeUndefined();
   });
 
-  it("explicit sale and rent catalogue searches include canonical new-build project ads", () => {
+  it("explicit sale catalogue searches include canonical new-build project ads, while rent stays rent-only", () => {
     buildListingsQuery({ listing_type: "sale" });
     expect(calls("in").find((c) => c.args[0] === "listing_type")?.args[1]).toEqual(["sale", "new_build"]);
     expect(calls("eq").some((c) => c.args[0] === "listing_type" && c.args[1] === "sale")).toBe(false);
 
     recorded.length = 0;
     buildListingsQuery({ listing_type: "rent" });
-    expect(calls("in").find((c) => c.args[0] === "listing_type")?.args[1]).toEqual(["rent", "new_build"]);
-    expect(calls("eq").some((c) => c.args[0] === "listing_type" && c.args[1] === "rent")).toBe(false);
+    expect(calls("in").find((c) => c.args[0] === "listing_type")).toBeUndefined();
+    expect(calls("eq").some((c) => c.args[0] === "listing_type" && c.args[1] === "rent")).toBe(true);
   });
 
   it("explicit new_build listing_type searches project ads by type rather than pre-sale flag", () => {

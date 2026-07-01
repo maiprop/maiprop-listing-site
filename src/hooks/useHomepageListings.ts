@@ -12,6 +12,12 @@ import {
   sortByImagePresence,
   type HomepageListing,
 } from "@/lib/homepageListings";
+import {
+  HOMEPAGE_FEATURED_SNAPSHOT_KEY,
+  HOMEPAGE_OPEN_HOUSES_SNAPSHOT_KEY,
+  readHomepageSnapshot,
+  writeHomepageSnapshot,
+} from "@/lib/homepageSnapshotCache";
 
 /**
  * Homepage data hooks.
@@ -22,13 +28,21 @@ import {
  * fallback / sort logic, same staleTime / retry config.
  */
 
-const HOMEPAGE_AUCTION_SOURCE_LIMIT = 60;
+const HOMEPAGE_AUCTION_SOURCE_LIMIT = 6;
 const HOMEPAGE_AUCTION_DISPLAY_LIMIT = 6;
 const HOMEPAGE_PROPERTY_TYPES = ["apartment", "land"] as const;
+const DEFAULT_HOMEPAGE_TYPE_COUNTS = Object.fromEntries(
+  HOMEPAGE_PROPERTY_TYPES.map((propertyType) => [propertyType, 0]),
+) as Record<string, number>;
 const FEATURED_STALE_TIME_MS = 5 * 60 * 1000;
+const HOMEPAGE_SECTION_TIMEOUT_MS = 2_500;
+
+type HomepageQueryOptions = {
+  enabled?: boolean;
+};
 
 /** Counts of active listings grouped by `property_type` for the BrowseByType section. */
-export function useHomepageTypeCounts() {
+export function useHomepageTypeCounts(options: HomepageQueryOptions = {}) {
   return useQuery({
     queryKey: ["homepage-type-counts"],
     staleTime: 10 * 60 * 1000,
@@ -36,36 +50,46 @@ export function useHomepageTypeCounts() {
       const cached = await fetchPublicApi<Record<string, number>>("/api/public/homepage?section=type-counts");
       if (cached) return cached;
 
-      return Object.fromEntries(HOMEPAGE_PROPERTY_TYPES.map((propertyType) => [propertyType, 0]));
+      return DEFAULT_HOMEPAGE_TYPE_COUNTS;
     },
+    placeholderData: DEFAULT_HOMEPAGE_TYPE_COUNTS,
+    enabled: options.enabled ?? true,
   });
 }
 
 /** 4 most recent active sale listings for the FeaturedProperties section. */
-export function useHomepageFeaturedListings() {
+export function useHomepageFeaturedListings(options: HomepageQueryOptions = {}) {
   return useQuery({
     queryKey: ["homepage-featured"],
     queryFn: async () => {
       try {
         const cached = await fetchPublicApi<HomepageListing[]>(
           "/api/public/homepage?section=featured",
-          { throwOnError: true },
+          { throwOnError: true, timeoutMs: HOMEPAGE_SECTION_TIMEOUT_MS },
         );
-        if (cached) return publicHomepageRows(cached, 4);
+        if (cached) {
+          const rows = publicHomepageRows(cached, 4);
+          writeHomepageSnapshot(HOMEPAGE_FEATURED_SNAPSHOT_KEY, rows);
+          return rows;
+        }
         throw new Error("Public homepage featured API returned no data");
       } catch (error) {
         logger.warn("Public homepage featured API failed; falling back to constrained Supabase read:", error);
-        return fetchHomepageFeaturedFallback();
+        const rows = await fetchHomepageFeaturedFallback();
+        writeHomepageSnapshot(HOMEPAGE_FEATURED_SNAPSHOT_KEY, rows);
+        return rows;
       }
     },
+    placeholderData: () => readHomepageSnapshot<HomepageListing[]>(HOMEPAGE_FEATURED_SNAPSHOT_KEY),
+    enabled: options.enabled ?? true,
     staleTime: FEATURED_STALE_TIME_MS,
     retry: 1,
   });
 }
 
-/** Uses the same 60-row auction window as the public /auctions page, then displays the leading homepage slice. */
-export function useHomepageAuctionListings() {
-  const query = useAuctionListings(HOMEPAGE_AUCTION_SOURCE_LIMIT);
+/** Requests only the compact auction preview window needed by the homepage. */
+export function useHomepageAuctionListings(options: HomepageQueryOptions = {}) {
+  const query = useAuctionListings(HOMEPAGE_AUCTION_SOURCE_LIMIT, { enabled: options.enabled ?? true });
   const data = useMemo(
     () => (query.data ?? []).slice(0, HOMEPAGE_AUCTION_DISPLAY_LIMIT) as HomepageListing[],
     [query.data],
@@ -74,22 +98,30 @@ export function useHomepageAuctionListings() {
 }
 
 /** Up to 6 upcoming open-house listings, sorted with image-having ones first. */
-export function useHomepageOpenHouseListings() {
+export function useHomepageOpenHouseListings(options: HomepageQueryOptions = {}) {
   return useQuery({
     queryKey: ["homepage-open-houses"],
     queryFn: async () => {
       try {
         const cached = await fetchPublicApi<HomepageListing[]>(
           "/api/public/homepage?section=open-houses",
-          { throwOnError: true },
+          { throwOnError: true, timeoutMs: HOMEPAGE_SECTION_TIMEOUT_MS },
         );
-        if (cached) return sortByImagePresence(publicHomepageRows(cached));
+        if (cached) {
+          const rows = sortByImagePresence(publicHomepageRows(cached));
+          writeHomepageSnapshot(HOMEPAGE_OPEN_HOUSES_SNAPSHOT_KEY, rows);
+          return rows;
+        }
         throw new Error("Public homepage open houses API returned no data");
       } catch (error) {
         logger.warn("Public homepage open houses API failed; falling back to constrained Supabase read:", error);
-        return fetchHomepageOpenHousesFallback();
+        const rows = await fetchHomepageOpenHousesFallback();
+        writeHomepageSnapshot(HOMEPAGE_OPEN_HOUSES_SNAPSHOT_KEY, rows);
+        return rows;
       }
     },
+    placeholderData: () => readHomepageSnapshot<HomepageListing[]>(HOMEPAGE_OPEN_HOUSES_SNAPSHOT_KEY),
+    enabled: options.enabled ?? true,
     staleTime: 2 * 60 * 1000,
   });
 }

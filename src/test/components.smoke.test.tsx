@@ -484,6 +484,56 @@ describe("Component smoke tests", () => {
     expect(screen.queryByRole("button", { name: /^viewing$/i })).not.toBeInTheDocument();
   });
 
+  it("PropertyOwnerCard hides the call action when the Pro owner has no phone number", async () => {
+    const { default: PropertyOwnerCard } = await import("@/components/property/PropertyOwnerCard");
+
+    renderWithProviders(
+      <PropertyOwnerCard
+        ownerProfile={{ display_name: "MaiProp Admin", verified: true, phone: "" }}
+        ownerParticipantType="agent"
+        isAuction={false}
+        ownerIsPro={true}
+        price={200000}
+        listingType="sale"
+        pricePerSqm={null}
+        viewsCount={0}
+        onContact={noop}
+        isContactPending={false}
+        onRequestViewing={noop}
+        onRequestVideoViewing={noop}
+        canVideoView={false}
+      />,
+    );
+
+    expect(screen.queryByRole("link", { name: /^call$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^call$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^viewing$/i })).toBeInTheDocument();
+  });
+
+  it("PropertyOwnerCard shows a telephone link when the Pro owner has a phone number", async () => {
+    const { default: PropertyOwnerCard } = await import("@/components/property/PropertyOwnerCard");
+
+    renderWithProviders(
+      <PropertyOwnerCard
+        ownerProfile={{ display_name: "MaiProp Admin", verified: true, phone: "+30 690 000 0000" }}
+        ownerParticipantType="agent"
+        isAuction={false}
+        ownerIsPro={true}
+        price={200000}
+        listingType="sale"
+        pricePerSqm={null}
+        viewsCount={0}
+        onContact={noop}
+        isContactPending={false}
+        onRequestViewing={noop}
+        onRequestVideoViewing={noop}
+        canVideoView={false}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: /^call$/i })).toHaveAttribute("href", "tel:+306900000000");
+  });
+
   it("PropertyTitleSection renders without throwing", async () => {
     const { PropertyTitleSection } = await import("@/components/property/PropertyTitleSection");
     expect(() => renderWithProviders(

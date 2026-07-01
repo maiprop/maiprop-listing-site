@@ -14,18 +14,21 @@ const FALLBACK = [
 
 type Location = { name: string; listings: number; trend: string; trendUp: boolean; image: string };
 type LocationStats = Pick<Location, "name" | "listings" | "trend" | "trendUp">;
+type PopularLocationsSectionProps = {
+  enabled?: boolean;
+};
 
 function mergeLocationStats(stats: LocationStats[] | null): Location[] {
   const statsByCity = new Map((stats ?? []).map((city) => [city.name, city]));
   return FALLBACK.map((fallback) => ({ ...fallback, ...statsByCity.get(fallback.name) }));
 }
 
-export function PopularLocationsSection() {
+export function PopularLocationsSection({ enabled = true }: PopularLocationsSectionProps) {
   const { ref, inView } = useInView();
 
   const { data, isError } = useQuery({
     queryKey: ["homepage-popular-locations", "v2"],
-    enabled: inView,
+    enabled: enabled && inView,
     staleTime: 10 * 60 * 1000,
     queryFn: async () => {
       const stats = await fetchPublicApi<LocationStats[]>("/api/public/homepage?section=popular-locations");

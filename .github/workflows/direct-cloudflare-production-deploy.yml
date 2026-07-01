@@ -53,6 +53,11 @@ jobs:
           VITE_PLAUSIBLE_DOMAIN:         ${{ secrets.VITE_PLAUSIBLE_DOMAIN }}
           VITE_APP_URL:                  ${{ secrets.VITE_APP_URL }}
 
+      - name: Generate homepage initial payload
+        run: npm run build:homepage-initial -- --strict
+        env:
+          HOMEPAGE_INITIAL_ORIGIN: ${{ secrets.VITE_APP_URL }}
+
       - name: Package Cloudflare Pages Functions worker
         run: npm run build:cloudflare-pages-worker
 

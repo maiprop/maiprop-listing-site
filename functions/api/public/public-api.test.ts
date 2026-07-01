@@ -556,7 +556,7 @@ describe("public listings endpoint", () => {
     expect(url.searchParams.getAll("order")).toContain("views_count.desc.nullslast");
   });
 
-  it("includes canonical new-build project ads on explicit sale and rent catalogue pages", async () => {
+  it("includes canonical new-build project ads on sale pages, while rent stays rent-only", async () => {
     await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?listing_type=sale"));
     let url = fetchUrls("/rest/v1/listings")[0];
     expect(url.searchParams.get("listing_type")).toBe("in.(sale,new_build)");
@@ -565,8 +565,8 @@ describe("public listings endpoint", () => {
     fetchMock().mockClear();
     await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?listing_type=rent"));
     url = fetchUrls("/rest/v1/listings")[0];
-    expect(url.searchParams.get("listing_type")).toBe("in.(rent,new_build)");
-    expect(url.searchParams.get("select")).toContain("project_units!project_units_project_id_fkey");
+    expect(url.searchParams.get("listing_type")).toBe("eq.rent");
+    expect(url.searchParams.get("select")).not.toContain("project_units!project_units_project_id_fkey");
   });
 
   it("returns canonical new-build listings by listing_type instead of the legacy pre-sale flag", async () => {

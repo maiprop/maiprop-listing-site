@@ -10,6 +10,7 @@ const productionDeployWorkflowPath = resolve(
 const ciWorkflowPath = resolve(process.cwd(), ".github/workflows/ci.yml");
 const packageJsonPath = resolve(process.cwd(), "package.json");
 const pagesWorkerBuildScriptPath = resolve(process.cwd(), "scripts/build-cloudflare-pages-worker.mjs");
+const homepageInitialScriptPath = resolve(process.cwd(), "scripts/inject-homepage-initial.mjs");
 
 describe("Cloudflare Pages function routes", () => {
   it("routes public API and middleware paths through Pages Functions before SPA fallback", () => {
@@ -124,5 +125,33 @@ describe("Cloudflare Pages deploy workflow routing", () => {
     expect(workflow).toContain("CF_ACCESS_CLIENT_ID");
     expect(workflow).toContain("--public-api");
     expect(workflow).not.toContain("--public-api-allow-fail-open");
+  });
+
+  it("injects real homepage initial data after build and before Cloudflare deploy", () => {
+    const productionWorkflow = readFileSync(productionDeployWorkflowPath, "utf8");
+    const ciWorkflow = readFileSync(ciWorkflowPath, "utf8");
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+    const injector = readFileSync(homepageInitialScriptPath, "utf8");
+
+    expect(packageJson.scripts["build:homepage-initial"]).toBe("node scripts/inject-homepage-initial.mjs");
+    expect(injector).toContain("maiprop-homepage-initial");
+    expect(injector).toContain('url.searchParams.set("section", section)');
+    expect(injector).toContain('fetchHomepageSection(origin, "featured"');
+    expect(injector).toContain('fetchHomepageSection(origin, "open-houses"');
+
+    const productionBuildIndex = productionWorkflow.indexOf("Build app with production environment");
+    const productionInjectIndex = productionWorkflow.indexOf("Generate homepage initial payload");
+    const productionPackageIndex = productionWorkflow.indexOf("Package Cloudflare Pages Functions worker");
+    expect(productionInjectIndex).toBeGreaterThan(productionBuildIndex);
+    expect(productionPackageIndex).toBeGreaterThan(productionInjectIndex);
+    expect(productionWorkflow).toContain("npm run build:homepage-initial");
+    expect(productionWorkflow).toContain("HOMEPAGE_INITIAL_ORIGIN: ${{ secrets.VITE_APP_URL }}");
+
+    const previewBuildIndex = ciWorkflow.indexOf("Build app with staging environment");
+    const previewInjectIndex = ciWorkflow.indexOf("Generate homepage initial payload");
+    const previewPackageIndex = ciWorkflow.indexOf("Package Cloudflare Pages Functions worker");
+    expect(previewInjectIndex).toBeGreaterThan(previewBuildIndex);
+    expect(previewPackageIndex).toBeGreaterThan(previewInjectIndex);
+    expect(ciWorkflow).toContain("HOMEPAGE_INITIAL_ORIGIN: https://portal.maiprop.co");
   });
 });

@@ -87,8 +87,10 @@ const mockPublicListingApis = async (
     const url = new URL(route.request().url());
     listingRequests.push(url.toString());
     const listingType = url.searchParams.get("listing_type");
-    const data = listingType === "sale" || listingType === "rent"
-      ? listings.filter((listing) => listing.listing_type === listingType || listing.listing_type === "new_build")
+    const data = listingType === "sale"
+      ? listings.filter((listing) => listing.listing_type === "sale" || listing.listing_type === "new_build")
+      : listingType === "rent"
+      ? listings.filter((listing) => listing.listing_type === "rent")
       : listingType
       ? listings.filter((listing) => listing.listing_type === listingType)
       : listings;
@@ -204,7 +206,7 @@ test.describe("Listings browse", () => {
     })).toBe(true);
   });
 
-  test("sale and rent catalogue pages include new-build project ads", async ({ page }) => {
+  test("sale catalogue includes new-build project ads while rent stays rent-only", async ({ page }) => {
     const sale = makeListing({ id: "sale-card", title: "Sale Card", listing_type: "sale" });
     const rent = makeListing({ id: "rent-card", title: "Rent Card", listing_type: "rent", price: 1800 });
     const newBuild = makeListing({
@@ -223,7 +225,8 @@ test.describe("Listings browse", () => {
 
     await page.goto("/listings?listing_type=rent");
     await page.waitForLoadState("load");
-    await expect(page.getByText("Project Ad Visible In Catalogues").first()).toBeVisible();
+    await expect(page.getByText("Rent Card").first()).toBeVisible();
+    await expect(page.getByText("Project Ad Visible In Catalogues").first()).toHaveCount(0);
 
     const listingTypes = requests
       .map((requestUrl) => new URL(requestUrl).searchParams.get("listing_type"))
