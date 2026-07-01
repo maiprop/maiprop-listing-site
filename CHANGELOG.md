@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.1](https://github.com/maiprop/maiprop-listing-site/compare/v1.12.0...v1.12.1) (2026-07-01)
+
+
+### Bug Fixes
+
+* make stripe catalog metadata sql rerunnable ([e0deeee](https://github.com/maiprop/maiprop-listing-site/commit/e0deeee7d8c628454ef40d2c952651734b793069))
+
 ## [1.12.0](https://github.com/maiprop/maiprop-listing-site/compare/v1.11.8...v1.12.0) (2026-07-01)
 
 
