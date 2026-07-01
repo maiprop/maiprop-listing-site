@@ -9,13 +9,31 @@ import { homepageListingImages, type HomepageListing } from "@/lib/homepageListi
 
 interface Props {
   listings: HomepageListing[];
+  isLoading?: boolean;
 }
 
-export function HomepageOpenHousesSection({ listings }: Props) {
+const LOADING_CARD_KEYS = ["open-house-loading-1", "open-house-loading-2", "open-house-loading-3", "open-house-loading-4"];
+
+const LoadingCard = () => (
+  <div
+    data-testid="open-house-loading-card"
+    className="glass-card rounded-2xl border border-border overflow-hidden animate-pulse"
+  >
+    <div className="bg-muted h-52 w-full" />
+    <div className="p-4 space-y-3">
+      <div className="h-4 bg-muted rounded-md w-3/4" />
+      <div className="h-3 bg-muted rounded-md w-1/2" />
+      <div className="h-5 bg-muted rounded-md w-1/3" />
+    </div>
+  </div>
+);
+
+export function HomepageOpenHousesSection({ listings, isLoading = false }: Props) {
   const { ref, inView } = useInView();
   const { i18n } = useTranslation();
   const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
   const dateLocale = isGreek ? "el-GR" : "en-GB";
+  const showLoadingCards = isLoading && listings.length === 0;
 
   return (
     <section className="py-10 sm:py-16 bg-background">
@@ -84,7 +102,8 @@ export function HomepageOpenHousesSection({ listings }: Props) {
               />
             );
           })}
-          {listings.length === 0 && (
+          {showLoadingCards && LOADING_CARD_KEYS.map((key) => <LoadingCard key={key} />)}
+          {!isLoading && listings.length === 0 && (
             <div className="col-span-full py-12 text-center text-muted-foreground">
               <p className="text-sm font-medium">{isGreek ? "Οι ανοιχτές επισκέψεις έρχονται σύντομα." : "Open houses coming soon — check back shortly."}</p>
               <p className="text-xs mt-1">{isGreek ? "Νέες επισκέψεις προστίθενται τακτικά." : "New open house viewings are added regularly."}</p>

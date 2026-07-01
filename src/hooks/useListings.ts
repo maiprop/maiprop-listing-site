@@ -82,9 +82,8 @@ const LISTING_CARD_SELECT_WITH_IMAGES = `${LISTING_CARD_SELECT}, listing_images(
 /** Paginated listings for grid view — fetches 40 per page, server-side filtering */
 export const PAGE_SIZE = 40;
 
-const SALE_RENT_CATALOG_TYPES_WITH_NEW_BUILD: Partial<Record<Enums<"listing_type">, Enums<"listing_type">[]>> = {
+const CATALOG_TYPES_WITH_NEW_BUILD: Partial<Record<Enums<"listing_type">, Enums<"listing_type">[]>> = {
   sale: ["sale", "new_build"],
-  rent: ["rent", "new_build"],
 };
 
 const LISTING_DETAIL_SELECT = [
@@ -316,7 +315,7 @@ export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize
   if (filters?.city) query = query.ilike("city", `%${filters.city}%`);
   if (filters?.listing_type) {
     const listingType = filters.listing_type as Enums<"listing_type">;
-    const catalogTypes = SALE_RENT_CATALOG_TYPES_WITH_NEW_BUILD[listingType];
+    const catalogTypes = CATALOG_TYPES_WITH_NEW_BUILD[listingType];
     query = catalogTypes ? query.in("listing_type", catalogTypes) : query.eq("listing_type", listingType);
   } else if (!ownerScoped && !filters?.includeAuctions) {
     query = query.in("listing_type", ["sale", "rent", "firesale", "new_build"] as Enums<"listing_type">[]);

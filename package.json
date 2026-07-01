@@ -66,6 +66,7 @@
     "check:deployable-runtimes": "npm run typecheck && npm run typecheck:functions && npm run typecheck:remotion && npm run check:edge-functions",
     "prebuild": "npm run api-docs:copy && npm run typecheck",
     "build": "vite build",
+    "build:homepage-initial": "node scripts/inject-homepage-initial.mjs",
     "build:cloudflare-pages-worker": "node scripts/build-cloudflare-pages-worker.mjs",
     "compress:images": "node scripts/compress-images.mjs",
     "build:dev": "vite build --mode development",

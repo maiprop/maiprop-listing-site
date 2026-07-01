@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 interface OwnerProfile {
   display_name?: string | null;
   avatar_url?: string | null;
+  phone?: string | null;
   verified?: boolean;
 }
 
@@ -34,6 +35,8 @@ export default function PropertyOwnerCard({
   const isGreek = i18n?.language?.toLowerCase().startsWith("el") ?? false;
   const locale = isGreek ? "el-GR" : undefined;
   const showsRentalPricing = isRentalPricing ?? listingType === "rent";
+  const ownerPhone = ownerProfile?.phone?.trim();
+  const ownerPhoneHref = ownerPhone ? `tel:${ownerPhone.replace(/[^\d+]/g, "")}` : null;
   const ownerLabel =
     ownerParticipantType === "agent"
       ? (isGreek ? "Αδειοδοτημένος μεσίτης" : "Licensed real estate agent")
@@ -132,10 +135,14 @@ export default function PropertyOwnerCard({
                 {isContactPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
                 {isGreek ? "Αποστολή μηνύματος" : "Send Message"}
               </Button>
-              <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2">
-                <Button variant="outline" className="h-auto min-h-[44px] whitespace-normal border-border px-3 py-2 text-center text-xs leading-tight gap-1.5">
-                  <Phone className="w-3.5 h-3.5" />{isGreek ? "Κλήση" : "Call"}
-                </Button>
+              <div className={`grid grid-cols-1 gap-2 ${ownerPhoneHref ? "min-[420px]:grid-cols-2" : ""}`}>
+                {ownerPhoneHref && (
+                  <Button asChild variant="outline" className="h-auto min-h-[44px] whitespace-normal border-border px-3 py-2 text-center text-xs leading-tight gap-1.5">
+                    <a href={ownerPhoneHref}>
+                      <Phone className="w-3.5 h-3.5" />{isGreek ? "Κλήση" : "Call"}
+                    </a>
+                  </Button>
+                )}
                 <Button variant="outline" className="h-auto min-h-[44px] whitespace-normal border-border px-3 py-2 text-center text-xs leading-tight gap-1.5" onClick={onRequestViewing}>
                   <Calendar className="w-3.5 h-3.5" />{isGreek ? "Επίσκεψη" : "Viewing"}
                 </Button>

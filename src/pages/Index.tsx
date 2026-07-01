@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
@@ -22,8 +22,69 @@ import { APP_ORIGIN } from "@/lib/config";
 
 const Footer = lazy(() => import("@/components/Footer").then(m => ({ default: m.Footer })));
 
+type DeferredHomepageSectionOptions = {
+  rootMargin?: string;
+  idleDelayMs?: number;
+};
+
+function useDeferredHomepageSection({
+  rootMargin = "900px 0px",
+  idleDelayMs = 1_800,
+}: DeferredHomepageSectionOptions = {}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [enabled, setEnabled] = useState(false);
+
+  useEffect(() => {
+    if (enabled) return;
+
+    let cancelled = false;
+    let idleId: number | undefined;
+    const activate = () => {
+      if (!cancelled) setEnabled(true);
+    };
+    const scheduleIdle = window.requestIdleCallback ?? ((cb: IdleRequestCallback) => window.setTimeout(() => cb({ didTimeout: true, timeRemaining: () => 0 }), 0));
+    const cancelIdle = window.cancelIdleCallback ?? window.clearTimeout;
+    const idleTimer = window.setTimeout(() => {
+      idleId = scheduleIdle(activate, { timeout: 800 });
+    }, idleDelayMs);
+
+    const element = ref.current;
+    if (!element || !("IntersectionObserver" in window)) {
+      return () => {
+        cancelled = true;
+        window.clearTimeout(idleTimer);
+        if (idleId !== undefined) cancelIdle(idleId);
+      };
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          activate();
+          observer.disconnect();
+        }
+      },
+      { rootMargin, threshold: 0.01 },
+    );
+    observer.observe(element);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(idleTimer);
+      if (idleId !== undefined) cancelIdle(idleId);
+      observer.disconnect();
+    };
+  }, [enabled, idleDelayMs, rootMargin]);
+
+  return { ref, enabled };
+}
+
 export default function Index() {
   const queryClient = useQueryClient();
+  const browseSection = useDeferredHomepageSection({ rootMargin: "650px 0px", idleDelayMs: 1_200 });
+  const auctionsSection = useDeferredHomepageSection({ idleDelayMs: 1_800 });
+  const openHousesSection = useDeferredHomepageSection({ idleDelayMs: 2_400 });
+  const popularLocationsSection = useDeferredHomepageSection({ rootMargin: "800px 0px", idleDelayMs: 3_000 });
 
   const { pulling, refreshing, progress } = usePullToRefresh({
     onRefresh: async () => {
@@ -35,7 +96,7 @@ export default function Index() {
     },
   });
 
-  const { data: typeCountsRaw } = useHomepageTypeCounts();
+  const { data: typeCountsRaw } = useHomepageTypeCounts({ enabled: browseSection.enabled });
   const typeCounts = useMemo(() => typeCountsRaw ?? {}, [typeCountsRaw]);
 
   const {
@@ -47,9 +108,12 @@ export default function Index() {
   const {
     data: auctionListings = [],
     isLoading: auctionsLoading,
-  } = useHomepageAuctionListings();
+  } = useHomepageAuctionListings({ enabled: auctionsSection.enabled });
 
-  const { data: openHouseListings = [] } = useHomepageOpenHouseListings();
+  const {
+    data: openHouseListings = [],
+    isLoading: openHousesLoading,
+  } = useHomepageOpenHouseListings({ enabled: openHousesSection.enabled });
 
   return (
     <div className="min-h-screen bg-background pb-bottom-nav lg:pb-0">
@@ -97,12 +161,23 @@ export default function Index() {
 
       <main id="main-content">
         <HeroSection />
-        <BrowseByTypeSection typeCounts={typeCounts} />
         <FeaturedPropertiesSection listings={featuredListings} isLoading={featuredLoading} isError={featuredError} />
-        <HomepageAuctionsSection listings={auctionListings} isLoading={auctionsLoading} />
-        <HomepageOpenHousesSection listings={openHouseListings} />
+        <div ref={browseSection.ref}>
+          <BrowseByTypeSection typeCounts={typeCounts} />
+        </div>
+        <div ref={auctionsSection.ref}>
+          <HomepageAuctionsSection listings={auctionListings} isLoading={!auctionsSection.enabled || auctionsLoading} />
+        </div>
+        <div ref={openHousesSection.ref}>
+          <HomepageOpenHousesSection
+            listings={openHouseListings}
+            isLoading={!openHousesSection.enabled || openHousesLoading}
+          />
+        </div>
         <QuickSaleCTASection />
-        <PopularLocationsSection />
+        <div ref={popularLocationsSection.ref}>
+          <PopularLocationsSection enabled={popularLocationsSection.enabled} />
+        </div>
         <ProfessionalsCTASection />
         <OSSection />
 

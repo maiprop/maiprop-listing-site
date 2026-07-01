@@ -31,9 +31,8 @@ type ProfilePublicRow = {
 };
 
 const LISTING_TYPES = ["sale", "rent", "firesale", "auction", "open_house", "new_build"] as const;
-const SALE_RENT_CATALOG_TYPES_WITH_NEW_BUILD: Partial<Record<(typeof LISTING_TYPES)[number], string>> = {
+const CATALOG_TYPES_WITH_NEW_BUILD: Partial<Record<(typeof LISTING_TYPES)[number], string>> = {
   sale: "in.(sale,new_build)",
-  rent: "in.(rent,new_build)",
 };
 const PROPERTY_TYPES = ["apartment", "house", "villa", "land", "commercial", "office", "warehouse", "hotel"] as const;
 const SORTS = ["featured", "newest", "price-asc", "price-desc", "ai-score", "views"] as const;
@@ -119,7 +118,6 @@ function shouldIncludeProjectUnits(requestUrl: URL): boolean {
   const listingType = safeToken(requestUrl.searchParams.get("listing_type"), LISTING_TYPES);
   return listingType === "new_build" ||
     listingType === "sale" ||
-    listingType === "rent" ||
     requestUrl.searchParams.get("is_pre_sale") === "true";
 }
 
@@ -163,7 +161,7 @@ function buildListingParams(requestUrl: URL): { params: URLSearchParams; page: n
 
   const listingType = safeToken(requestUrl.searchParams.get("listing_type"), LISTING_TYPES);
   if (listingType) {
-    params.set("listing_type", SALE_RENT_CATALOG_TYPES_WITH_NEW_BUILD[listingType] ?? `eq.${listingType}`);
+    params.set("listing_type", CATALOG_TYPES_WITH_NEW_BUILD[listingType] ?? `eq.${listingType}`);
   } else if (requestUrl.searchParams.get("includeAuctions") !== "true") {
     params.set("listing_type", "in.(sale,rent,firesale,new_build)");
   }

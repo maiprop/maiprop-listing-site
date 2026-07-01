@@ -168,6 +168,7 @@ describe("small interaction widgets", () => {
     render(<CookieConsentBanner />);
     act(() => vi.advanceTimersByTime(1300));
     expect(screen.getByText("cookie.title")).toBeInTheDocument();
+    expect(screen.getByTestId("cookie-consent-banner")).toHaveClass("max-h-[38svh]");
 
     fireEvent.click(screen.getByRole("button", { name: /cookie.managePreferences/i }));
     fireEvent.click(screen.getByText("cookie.analytics.title").closest("div")!.parentElement!.querySelector("button")!);

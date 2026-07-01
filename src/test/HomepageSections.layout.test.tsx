@@ -1,15 +1,17 @@
 import React from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { screen } from "@testing-library/react";
 import { renderWithProviders } from "@/test/utils";
 import type { HomepageListing } from "@/lib/homepageListings";
+
+const fetchPublicApiMock = vi.hoisted(() => vi.fn().mockResolvedValue(null));
 
 vi.mock("@/hooks/useInView", () => ({
   useInView: () => ({ ref: vi.fn(), inView: true }),
 }));
 
 vi.mock("@/lib/publicApi", () => ({
-  fetchPublicApi: vi.fn().mockResolvedValue(null),
+  fetchPublicApi: (...args: unknown[]) => fetchPublicApiMock(...args),
 }));
 
 vi.mock("@/components/PropertyCard", () => ({
@@ -31,6 +33,10 @@ const listing = (index: number): HomepageListing => ({
 });
 
 describe("homepage section layout contracts", () => {
+  beforeEach(() => {
+    fetchPublicApiMock.mockClear();
+  });
+
   it("renders the featured property section as a single four-card row", async () => {
     const { FeaturedPropertiesSection } = await import("@/components/index/FeaturedPropertiesSection");
 
@@ -54,6 +60,15 @@ describe("homepage section layout contracts", () => {
     const athensCard = screen.getByRole("link", { name: /Athens/i }).firstElementChild;
     expect(athensCard).toHaveClass("aspect-[4/3]");
     expect(screen.getByAltText("Athens")).toBeInTheDocument();
+  });
+
+  it("does not fetch popular location stats before the homepage gate enables it", async () => {
+    const { PopularLocationsSection } = await import("@/components/index/PopularLocationsSection");
+
+    renderWithProviders(<PopularLocationsSection enabled={false} />);
+
+    expect(screen.getByAltText("Athens")).toBeInTheDocument();
+    expect(fetchPublicApiMock).not.toHaveBeenCalled();
   });
 
   it("uses the tighter professionals band spacing on the homepage", async () => {

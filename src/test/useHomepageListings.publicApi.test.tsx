@@ -5,6 +5,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 
 const fromMock = vi.fn();
 const publicApiMock = vi.fn();
+const useAuctionListingsMock = vi.hoisted(() => vi.fn(() => ({ data: [], isLoading: false, isSuccess: true })));
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
@@ -17,13 +18,20 @@ vi.mock("@/lib/publicApi", () => ({
 }));
 
 vi.mock("@/hooks/useAuctionListings", () => ({
-  useAuctionListings: () => ({ data: [], isLoading: false, isSuccess: true }),
+  useAuctionListings: (...args: unknown[]) => useAuctionListingsMock(...args),
 }));
 
 import {
+  useHomepageAuctionListings,
   useHomepageFeaturedListings,
   useHomepageOpenHouseListings,
+  useHomepageTypeCounts,
 } from "@/hooks/useHomepageListings";
+import {
+  HOMEPAGE_FEATURED_SNAPSHOT_KEY,
+  readHomepageSnapshot,
+  writeHomepageSnapshot,
+} from "@/lib/homepageSnapshotCache";
 
 const wrap = (children: React.ReactNode) => {
   const qc = new QueryClient({
@@ -48,9 +56,57 @@ const makeThenableBuilder = (data: unknown[] = []) => {
 beforeEach(() => {
   fromMock.mockReset();
   publicApiMock.mockReset();
+  useAuctionListingsMock.mockClear();
+  useAuctionListingsMock.mockReturnValue({ data: [], isLoading: false, isSuccess: true });
+  window.localStorage.clear();
+  delete (window as Window & { __MAIPROP_HOMEPAGE_INITIAL__?: unknown }).__MAIPROP_HOMEPAGE_INITIAL__;
 });
 
 describe("homepage public API fallback behavior", () => {
+  it("uses embedded deploy payload for cold first paint when local snapshots are absent", async () => {
+    publicApiMock.mockReturnValue(new Promise(() => undefined));
+    (window as Window & { __MAIPROP_HOMEPAGE_INITIAL__?: unknown }).__MAIPROP_HOMEPAGE_INITIAL__ = {
+      version: 1,
+      generatedAt: "2026-07-01T00:00:00.000Z",
+      featured: [
+        { id: "bootstrap-featured", title: "Bootstrap Spotlight", city: "Athens", price: 250_000, sqm: 72 },
+      ],
+      openHouses: [],
+    };
+
+    const { result } = renderHookWithQuery(() => useHomepageFeaturedListings());
+
+    expect(result.current.data?.[0]).toMatchObject({ id: "bootstrap-featured" });
+    expect(result.current.isFetching).toBe(true);
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it("paints cached Spotlight listings immediately while the public API revalidates", async () => {
+    publicApiMock.mockReturnValue(new Promise(() => undefined));
+    writeHomepageSnapshot(HOMEPAGE_FEATURED_SNAPSHOT_KEY, [
+      { id: "cached-featured", title: "Cached Spotlight", city: "Athens", price: 250_000, sqm: 72 },
+    ]);
+
+    const { result } = renderHookWithQuery(() => useHomepageFeaturedListings());
+
+    expect(result.current.data?.[0]).toMatchObject({ id: "cached-featured" });
+    expect(result.current.isFetching).toBe(true);
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it("stores successful public Spotlight responses for instant repeat paints", async () => {
+    publicApiMock.mockResolvedValue([
+      { id: "api-featured", title: "API Spotlight", city: "Athens", price: 250_000, sqm: 72 },
+    ]);
+
+    const { result } = renderHookWithQuery(() => useHomepageFeaturedListings());
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(readHomepageSnapshot<unknown[]>(HOMEPAGE_FEATURED_SNAPSHOT_KEY)?.[0]).toMatchObject({
+      id: "api-featured",
+    });
+  });
+
   it("falls back to constrained Supabase reads for Spotlight listings when the public API is unavailable", async () => {
     publicApiMock.mockResolvedValue(null);
     fromMock.mockReturnValue(makeThenableBuilder([{ id: "db-featured", title: "DB Spotlight", city: "Athens" }]));
@@ -61,7 +117,7 @@ describe("homepage public API fallback behavior", () => {
     expect(result.current.data?.[0]).toMatchObject({ id: "db-featured" });
     expect(publicApiMock).toHaveBeenCalledWith(
       "/api/public/homepage?section=featured",
-      { throwOnError: true },
+      { throwOnError: true, timeoutMs: 2500 },
     );
     expect(fromMock).toHaveBeenCalledWith("listings");
   });
@@ -76,8 +132,31 @@ describe("homepage public API fallback behavior", () => {
     expect(result.current.data?.[0]).toMatchObject({ id: "db-open-house" });
     expect(publicApiMock).toHaveBeenCalledWith(
       "/api/public/homepage?section=open-houses",
-      { throwOnError: true },
+      { throwOnError: true, timeoutMs: 2500 },
     );
     expect(fromMock).toHaveBeenCalledWith("listings");
+  });
+
+  it("does not fetch open houses before the deferred section is enabled", async () => {
+    const { result } = renderHookWithQuery(() => useHomepageOpenHouseListings({ enabled: false }));
+
+    expect(result.current.fetchStatus).toBe("idle");
+    expect(publicApiMock).not.toHaveBeenCalled();
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it("uses a compact deferred auction request for the homepage preview", () => {
+    renderHookWithQuery(() => useHomepageAuctionListings({ enabled: false }));
+
+    expect(useAuctionListingsMock).toHaveBeenCalledWith(6, { enabled: false });
+  });
+
+  it("does not fetch type counts before the browse section is enabled", () => {
+    const { result } = renderHookWithQuery(() => useHomepageTypeCounts({ enabled: false }));
+
+    expect(result.current.data).toMatchObject({ apartment: 0, land: 0 });
+    expect(result.current.fetchStatus).toBe("idle");
+    expect(publicApiMock).not.toHaveBeenCalled();
+    expect(fromMock).not.toHaveBeenCalled();
   });
 });
