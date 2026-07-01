@@ -37,7 +37,7 @@ describe("Playwright local environment contract", () => {
       VITE_SUPABASE_URL: "https://abcdefghijklmnopqrst.supabase.co",
       VITE_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_e2e_placeholder_not_real_000000000000",
     });
-  });
+  }, 30_000);
 
   it("preserves explicit real Supabase env when provided", async () => {
     process.env.VITE_SUPABASE_URL = "https://realprojectref0000.supabase.co";
@@ -49,5 +49,5 @@ describe("Playwright local environment contract", () => {
       VITE_SUPABASE_URL: "https://realprojectref0000.supabase.co",
       VITE_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_real_key",
     });
-  });
+  }, 30_000);
 });

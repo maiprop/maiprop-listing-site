@@ -40,6 +40,7 @@ vi.mock("@/integrations/supabase/client", () => ({
 }));
 vi.mock("@/lib/publicApi", () => ({
   fetchPublicApi: (...args: unknown[]) => publicApiMock(...args),
+  shouldLogPublicApiFallback: () => true,
 }));
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => useAuthMock() }));
 vi.mock("@/hooks/useSubscription", () => ({ useSubscription: () => useSubscriptionMock() }));

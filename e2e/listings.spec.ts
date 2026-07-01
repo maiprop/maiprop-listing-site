@@ -2,7 +2,7 @@
  * Listings browse flow — search, filter, open detail.
  * Requires no authentication (listings are publicly visible).
  */
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 
 const fixtureImage =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 640 360'%3E%3Crect width='640' height='360' fill='%23ece8df'/%3E%3Cpath d='M90 290h460V120L320 58 90 120z' fill='%238160d8'/%3E%3Crect x='160' y='158' width='320' height='132' fill='%23fffaf2'/%3E%3C/svg%3E";
@@ -139,6 +139,43 @@ const mockPublicListingApis = async (
   return listingRequests;
 };
 
+async function gotoRouteAllowingNavigationAbort(page: Page, path: string): Promise<void> {
+  try {
+    await page.goto(path, { waitUntil: "domcontentloaded" });
+  } catch (error) {
+    const message = String(error);
+    if (!/(NS_BINDING_ABORTED|NS_ERROR_FAILURE|frame was detached)/i.test(message)) {
+      throw error;
+    }
+  }
+}
+
+async function gotoRouteAndWaitForCanonicalUrl(
+  page: Page,
+  path: string,
+  expectedUrl: string,
+): Promise<void> {
+  const expectedSuffix = expectedUrl.replace(/^\*\*/, "");
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const results = await Promise.allSettled([
+      page.waitForURL(expectedUrl, { timeout: 5_000 }),
+      gotoRouteAllowingNavigationAbort(page, path),
+    ]);
+    if (page.url().endsWith(expectedSuffix)) return;
+
+    const rejection = results.find(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
+    lastError = rejection?.reason;
+    await page.waitForTimeout(150);
+  }
+
+  if (lastError instanceof Error) throw lastError;
+  throw new Error(`Expected ${path} to canonicalize to ${expectedUrl}, got ${page.url()}`);
+}
+
 test.describe("Listings browse", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/listings");
@@ -251,13 +288,19 @@ test.describe("Listings browse", () => {
     });
     await mockPublicListingApis(page, [newBuild, staleSale]);
 
-    await page.goto("/property/canonical-new-build");
-    await page.waitForURL("**/new-build/canonical-new-build");
+    await gotoRouteAndWaitForCanonicalUrl(
+      page,
+      "/property/canonical-new-build",
+      "**/new-build/canonical-new-build",
+    );
     await expect(page.getByText("Canonical New Build Detail").first()).toBeVisible();
     await expect(page.getByText("New Build").first()).toBeVisible();
 
-    await page.goto("/new-build/stale-pre-sale-sale");
-    await page.waitForURL("**/property/stale-pre-sale-sale");
+    await gotoRouteAndWaitForCanonicalUrl(
+      page,
+      "/new-build/stale-pre-sale-sale",
+      "**/property/stale-pre-sale-sale",
+    );
     await expect(page.getByText("Legacy Flagged Sale Detail").first()).toBeVisible();
     expect(page.url()).toContain("/property/stale-pre-sale-sale");
   });

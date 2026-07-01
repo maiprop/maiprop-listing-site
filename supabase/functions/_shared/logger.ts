@@ -41,6 +41,42 @@ const LEVEL_RANK: Record<LogLevel, number> = {
   error: 40,
 };
 
+const REDACTED = "[redacted]";
+
+const SENSITIVE_KEY_PATTERN =
+  /(^|_)(authorization|access_token|refresh_token|token|password|secret|api_key|apikey|rawbody|errorbody|requestbody|responsebody|prompt|messages|email)($|_)/i;
+
+function redactSensitiveText(value: string): string {
+  return value
+    .replace(/\bsk_(?:test|live)_[A-Za-z0-9]+/g, REDACTED)
+    .replace(/\bcfat_[A-Za-z0-9_-]+/g, REDACTED)
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, `Bearer ${REDACTED}`)
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, REDACTED);
+}
+
+function sanitizeLogValue(value: unknown, seen: WeakSet<object>): unknown {
+  if (typeof value === "string") return redactSensitiveText(value);
+  if (value == null || typeof value !== "object") return value;
+  if (seen.has(value)) throw new TypeError("cyclic log context");
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeLogValue(item, seen));
+  }
+
+  const output: Record<string, unknown> = {};
+  for (const [key, nestedValue] of Object.entries(value as Record<string, unknown>)) {
+    output[key] = SENSITIVE_KEY_PATTERN.test(key)
+      ? REDACTED
+      : sanitizeLogValue(nestedValue, seen);
+  }
+  return output;
+}
+
+function sanitizeLogContext(context: Record<string, unknown>): Record<string, unknown> {
+  return sanitizeLogValue(context, new WeakSet()) as Record<string, unknown>;
+}
+
 function getEnv(key: string): string | undefined {
   // Deno globals are typed loosely in this shared module to keep it
   // testable under both Deno and Node (vitest). We narrow via structural
@@ -205,18 +241,22 @@ export function createLogger(
 
   function emit(level: LogLevel, msg: string, context?: Record<string, unknown>): void {
     if (LEVEL_RANK[level] < minRank) return;
-    const line = {
-      ts: new Date().toISOString(),
-      level,
-      fn,
-      msg,
-      ...baseContext,
-      ...(context ?? {}),
-    };
+    let sentryContext: Record<string, unknown> | null = null;
     // Always serialise; if it ever throws (cyclic ref) fall back to
     // a plaintext warning so we don't mask the original event.
     let text: string;
     try {
+      sentryContext = {
+        ...sanitizeLogContext(baseContext),
+        ...sanitizeLogContext(context ?? {}),
+      };
+      const line = {
+        ts: new Date().toISOString(),
+        level,
+        fn,
+        msg,
+        ...sentryContext,
+      };
       text = JSON.stringify(line);
     } catch {
       text = JSON.stringify({
@@ -235,8 +275,8 @@ export function createLogger(
 
     // Forward error-level events to Sentry if SENTRY_DSN is configured.
     // Fire-and-forget so logging latency is not affected.
-    if (level === "error") {
-      forwardToSentry(fn, msg, { ...baseContext, ...(context ?? {}) });
+    if (level === "error" && sentryContext) {
+      forwardToSentry(fn, msg, sentryContext);
     }
   }
 

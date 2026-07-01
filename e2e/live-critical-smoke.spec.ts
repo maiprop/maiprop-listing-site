@@ -57,8 +57,16 @@ const hasLiveSupabase =
   SUPABASE_URL.startsWith("https://") &&
   !SUPABASE_URL.includes("abcdefghijklmnop") &&
   ANON_KEY.length > 40;
+const hasExplicitBuyerPassword = Boolean(
+  env(
+    "E2E_BUYER_FREE_PASSWORD",
+    "E2E_BUYER_PASSWORD",
+    "E2E_DEMO_PASSWORD",
+    "E2E_TEST_PASSWORD",
+  ),
+);
 const hasExplicitAdminAccount = Boolean(
-  cleanEnvValue(process.env.E2E_ADMIN_EMAIL ?? dotEnv.E2E_ADMIN_EMAIL),
+  env("E2E_ADMIN_EMAIL") && env("E2E_ADMIN_PASSWORD", "E2E_DEMO_PASSWORD"),
 );
 
 function skipUnlessLiveSupabase() {
@@ -71,7 +79,15 @@ function skipUnlessLiveSupabase() {
 function skipUnlessAdminSmokeConfigured() {
   test.skip(
     !hasExplicitAdminAccount,
-    "Admin smoke requires explicit E2E_ADMIN_EMAIL; do not rely on the public demo admin fallback.",
+    "Admin smoke requires explicit E2E_ADMIN_EMAIL plus E2E_ADMIN_PASSWORD/E2E_DEMO_PASSWORD.",
+  );
+}
+
+function skipUnlessLiveBuyerAuthConfigured() {
+  skipUnlessLiveSupabase();
+  test.skip(
+    !hasExplicitBuyerPassword,
+    "Buyer live auth smoke requires E2E_BUYER_FREE_PASSWORD, E2E_BUYER_PASSWORD, E2E_DEMO_PASSWORD, or E2E_TEST_PASSWORD.",
   );
 }
 
@@ -92,8 +108,12 @@ async function signInViaSupabase(
     },
   );
 
-  expect(res.status(), await res.text()).toBe(200);
-  const body = (await res.json()) as { access_token?: string };
+  const responseText = await res.text();
+  expect(
+    res.status(),
+    `Live Supabase Auth failed for ${email}. Verify seeded E2E buyer credentials before running authenticated live smoke. ${responseText}`,
+  ).toBe(200);
+  const body = JSON.parse(responseText) as { access_token?: string };
   const accessToken = body.access_token;
   expect(accessToken).toBeTruthy();
   return accessToken ?? "";
@@ -170,7 +190,7 @@ test.describe("Live critical smoke checks", () => {
   test("checkout eligibility blocks invite-only investor plans for a regular buyer", async ({
     request,
   }) => {
-    skipUnlessLiveSupabase();
+    skipUnlessLiveBuyerAuthConfigured();
 
     const token = await signInViaSupabase(
       request,
@@ -197,7 +217,7 @@ test.describe("Live critical smoke checks", () => {
   test("non-admin users cannot reach the role approval surface", async ({
     page,
   }) => {
-    skipUnlessLiveSupabase();
+    skipUnlessLiveBuyerAuthConfigured();
 
     const errors: string[] = [];
     page.on("pageerror", (err) => errors.push(err.message));
@@ -237,7 +257,7 @@ test.describe("Live critical smoke checks", () => {
   test("firesale and investor access surfaces render for a regular buyer", async ({
     page,
   }) => {
-    skipUnlessLiveSupabase();
+    skipUnlessLiveBuyerAuthConfigured();
 
     const errors: string[] = [];
     page.on("pageerror", (err) => errors.push(err.message));

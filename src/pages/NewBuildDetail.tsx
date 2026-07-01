@@ -33,7 +33,7 @@ import { UnitShowcase } from "@/components/new-build/UnitShowcase";
 import { RegisterInterestCard } from "@/components/new-build/RegisterInterestCard";
 import { tFallback, tInterpolate } from "@/lib/i18nFallback";
 import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
-import { fetchPublicApi } from "@/lib/publicApi";
+import { fetchPublicApi, shouldLogPublicApiFallback } from "@/lib/publicApi";
 import { logger } from "@/lib/logger";
 import { getListingDetailPath, shouldUseNewBuildRoute } from "@/lib/listingRoutes";
 import { invokeAuthenticatedFunction } from "@/lib/invokeAuthenticatedFunction";
@@ -225,7 +225,9 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
         if (response) return response.data ?? null;
         throw new Error("Public new-build listing API returned no data");
       } catch (apiError) {
-        logger.warn("Public new-build detail API failed; falling back to constrained Supabase read:", apiError);
+        if (shouldLogPublicApiFallback(apiError)) {
+          logger.warn("Public new-build detail API failed; falling back to constrained Supabase read:", apiError);
+        }
         return fetchNewBuildListingFallback(id);
       }
     },

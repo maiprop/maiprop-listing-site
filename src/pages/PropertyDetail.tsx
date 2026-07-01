@@ -272,7 +272,7 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
   const detailGroups = buildDetailGroups(db, price, sqm, pricePerSqm, isLandType);
 
 
-  const ogImage = images[0] ?? `${APP_ORIGIN}/og-default.jpg`;
+  const ogImage = images[0] ?? `${APP_ORIGIN}/og-image.png`;
   const ogDescription = description
     ? description.slice(0, 160)
     : `${propertyType?.replace(/_/g, " ")} in ${city} — ${sqm} m² · €${price.toLocaleString()}`;

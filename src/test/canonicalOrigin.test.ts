@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -18,6 +19,13 @@ const canonicalSourceFiles = [
   "src/pages/PropertyDetail.tsx",
 ] as const;
 
+const publicSeoFiles = [
+  "package.json",
+  "public/robots.txt",
+  "public/sitemap.xml",
+  "public/sitemap-static.xml",
+] as const;
+
 function readRepoFile(path: string): string {
   return readFileSync(resolve(process.cwd(), path), "utf8");
 }
@@ -28,5 +36,14 @@ describe("canonical origin contract", () => {
 
     expect(offenders).toEqual([]);
     expect(readRepoFile("src/lib/config.ts")).toContain(`"${CANONICAL_ORIGIN}"`);
+  });
+
+  it("keeps public SEO files on the live portal host and references an existing OG image", () => {
+    const offenders = publicSeoFiles.filter((path) => readRepoFile(path).includes(LEGACY_ORIGIN));
+    const sourceFilesWithMissingOgImage = canonicalSourceFiles.filter((path) => readRepoFile(path).includes("/og-default.jpg"));
+
+    expect(offenders).toEqual([]);
+    expect(sourceFilesWithMissingOgImage).toEqual([]);
+    expect(existsSync(resolve(process.cwd(), "public/og-image.png"))).toBe(true);
   });
 });

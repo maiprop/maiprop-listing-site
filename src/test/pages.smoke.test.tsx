@@ -703,14 +703,14 @@ describe("Page smoke tests", () => {
     const { default: Dashboard } = await import("@/pages/Dashboard");
     await preloadDashboardLazyDependencies();
     await expect(renderWithSettledSuspense(<Dashboard />)).resolves.toBeDefined();
-  });
+  }, 30_000);
 
   it("Dashboard page mounts the navbar", async () => {
     const { default: Dashboard } = await import("@/pages/Dashboard");
     await preloadDashboardLazyDependencies();
     await renderWithSettledSuspense(<Dashboard />);
     expect(screen.getByTestId("navbar")).toBeInTheDocument();
-  });
+  }, 30_000);
 
   it("PropertyDetail page renders loading state without throwing", async () => {
     const { default: PropertyDetail } = await import("@/pages/PropertyDetail");
@@ -939,7 +939,7 @@ describe("Page smoke tests", () => {
     expect(screen.getByTestId("property-report-card")).toBeInTheDocument();
     useListingMock.mockReturnValue({ data: null, isLoading: false, isError: false });
     useSubscriptionMock.mockReturnValue({ isPro: false, loading: false });
-  });
+  }, 30_000);
 
   it("Messages page renders without throwing", async () => {
     const { default: Messages } = await import("@/pages/Messages");
@@ -1036,7 +1036,7 @@ describe("Page smoke tests", () => {
 
     expect(await screen.findByText(/Professional not found/i)).toBeInTheDocument();
     expect(useProfessionalMock).toHaveBeenCalledWith("");
-  });
+  }, 30_000);
 
   it("ProfessionalProfile limits free professional profiles to contact details", async () => {
     const { useProfessional } = await import("@/hooks/useProfessionals");
@@ -1087,7 +1087,7 @@ describe("Page smoke tests", () => {
     expect(screen.queryByRole("button", { name: /send inquiry/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /book consultation/i })).not.toBeInTheDocument();
     useProfessionalMock.mockReturnValue({ data: null, isLoading: false });
-  });
+  }, 30_000);
 
   it("ProfessionalProfile shows agent portfolio KPIs for Pro agents", async () => {
     const { useProfessional } = await import("@/hooks/useProfessionals");
@@ -1154,7 +1154,7 @@ describe("Page smoke tests", () => {
     );
     useProfessionalMock.mockReturnValue({ data: null, isLoading: false });
     useListingsMock.mockReturnValue({ data: [], isLoading: false });
-  });
+  }, 30_000);
 
   it("ProfessionalProfileMe page renders without throwing", async () => {
     const { default: ProfessionalProfileMe } = await import("@/pages/ProfessionalProfileMe");

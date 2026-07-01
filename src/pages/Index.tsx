@@ -128,7 +128,7 @@ export default function Index() {
         <meta property="og:description" content="Browse verified Greek property listings — apartments, villas, land &amp; commercial. AI-powered search, auction alerts, and instant viewings." />
         <meta property="og:url" content={`${APP_ORIGIN}/`} />
         <meta property="og:type" content="website" />
-        <meta property="og:image" content={`${APP_ORIGIN}/og-default.jpg`} />
+        <meta property="og:image" content={`${APP_ORIGIN}/og-image.png`} />
         <meta name="twitter:card" content="summary_large_image" />
         <script type="application/ld+json">{JSON.stringify({
           "@context": "https://schema.org",

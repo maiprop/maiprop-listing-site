@@ -13,4 +13,4 @@ Allow: /
 User-agent: *
 Allow: /
 
-Sitemap: https://maiprop.co/sitemap.xml
+Sitemap: https://portal.maiprop.co/sitemap.xml

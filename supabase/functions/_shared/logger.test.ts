@@ -213,6 +213,43 @@ Deno.test("sentry: event payload contains expected Sentry-shaped fields", () => 
   assertStrictEquals((evt.extra as Record<string, unknown>).user_id, "u1");
 });
 
+Deno.test("logger redacts sensitive payload fields before stdout and Sentry", () => {
+  const dsn = "https://abc123@o12345.ingest.sentry.io/67890";
+  const stripeSecretLikeValue = "sk_" + "test" + "_1234567890abcdef";
+  const { captured } = withSentryStub(dsn, () => {
+    const { lines } = captureLines(() => {
+      createLogger("ai-search").error("provider failed", {
+        err: `OpenAI rejected key ${stripeSecretLikeValue} and Bearer abc.def.ghi`,
+        authorization: "Bearer secret-token",
+        prompt: "User asks for a valuation of 11 Private Street",
+        messages: [{ role: "user", content: "private prompt" }],
+        nested: {
+          rawBody: "{\"email\":\"buyer@example.com\"}",
+          safe_count: 3,
+        },
+        user_id: "u1",
+      });
+    });
+
+    const stdout = JSON.parse(lines[0].text);
+    assertStrictEquals(stdout.user_id, "u1");
+    assertStrictEquals(stdout.authorization, "[redacted]");
+    assertStrictEquals(stdout.prompt, "[redacted]");
+    assertStrictEquals(stdout.messages, "[redacted]");
+    assertStrictEquals(stdout.nested.rawBody, "[redacted]");
+    assertStrictEquals(stdout.nested.safe_count, 3);
+    assertEquals(String(stdout.err).includes("sk_test_"), false);
+    assertEquals(String(stdout.err).includes("Bearer abc.def.ghi"), false);
+  });
+
+  const evt = captured[0].body as Record<string, unknown>;
+  const extra = evt.extra as Record<string, unknown>;
+  assertStrictEquals(extra.authorization, "[redacted]");
+  assertStrictEquals(extra.prompt, "[redacted]");
+  assertEquals(JSON.stringify(extra).includes("buyer@example.com"), false);
+  assertEquals(JSON.stringify(evt).includes(stripeSecretLikeValue), false);
+});
+
 Deno.test("sentry: no fetch when SENTRY_DSN is unset", () => {
   const { captured } = withSentryStub(undefined, () => {
     captureLines(() => {
