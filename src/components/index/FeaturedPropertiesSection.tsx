@@ -5,6 +5,7 @@ import { PropertyCardSkeleton } from "@/components/PropertyCardSkeleton";
 import { useInView } from "@/hooks/useInView";
 import { homepageListingImages, type HomepageListing } from "@/lib/homepageListings";
 import { getNewBuildCardSummary } from "@/lib/newBuildCardSummary";
+import { calculatePricePerSqm } from "@/lib/priceCalculations";
 
 interface Props {
   listings: HomepageListing[];
@@ -48,7 +49,11 @@ export function FeaturedPropertiesSection({ listings, isLoading, isError }: Prop
                       address: l.address || l.city,
                       city: l.city,
                       price: Number(l.price),
-                      pricePerSqm: l.price_per_sqm ? Number(l.price_per_sqm) : undefined,
+                      pricePerSqm: calculatePricePerSqm({
+                        price: l.price,
+                        sqm: l.sqm,
+                        storedPricePerSqm: l.price_per_sqm,
+                      }) ?? undefined,
                       bedrooms: l.bedrooms ?? undefined,
                       bathrooms: l.bathrooms ?? undefined,
                       sqm: Number(l.sqm),

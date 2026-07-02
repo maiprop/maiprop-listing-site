@@ -345,6 +345,19 @@ describe("useListingForm — handleSubmit", () => {
     expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/greater than zero/));
   });
 
+  it("blocks submission when restored price or area state is not numeric", async () => {
+    const { result } = renderHook(() => useListingForm(), { wrapper: wrap });
+    setBaseForm(result);
+    act(() => result.current.set("sqm", "not-a-number"));
+
+    await act(async () => {
+      await result.current.handleSubmit();
+    });
+
+    expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/greater than zero/));
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
   it("blocks submission when listing_type=open_house and date is missing", async () => {
     const { result } = renderHook(() => useListingForm(), { wrapper: wrap });
     setBaseForm(result);

@@ -17,6 +17,16 @@ const authActivityMigration = readFileSync(
   "utf8",
 ).replace(/\s+/g, " ");
 
+const syntheticActivityFilterMigration = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/20260702040225_exclude_synthetic_admin_activity.sql"),
+  "utf8",
+).replace(/\s+/g, " ");
+
+const syntheticActivitySearchPathMigration = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/20260702112614_pin_synthetic_admin_activity_search_path.sql"),
+  "utf8",
+).replace(/\s+/g, " ");
+
 const authActivityRpcOnlyMigrationName = "20260612070500_harden_auth_activity_rpc_only.sql";
 
 const guardrailsMigration = readFileSync(
@@ -128,5 +138,30 @@ describe("admin user activity analytics migration", () => {
     expect(authActivityMigration).toContain("'app_auth_events_available'");
     expect(authActivityMigration).toContain("'recent_auth_events', recent_auth_events_json.data");
     expect(authActivityMigration).toContain("public admin_user_activity_snapshot must remain SECURITY INVOKER");
+  });
+
+  it("filters synthetic demo and test identities out of admin user activity analytics", () => {
+    expect(syntheticActivityFilterMigration).toContain("CREATE OR REPLACE FUNCTION private.is_synthetic_admin_activity_identity");
+    expect(syntheticActivityFilterMigration).toContain("IMMUTABLE SET search_path = pg_catalog");
+    expect(syntheticActivityFilterMigration).toContain("%@maiprop.demo");
+    expect(syntheticActivityFilterMigration).toContain("%@maiprop.test");
+    expect(syntheticActivityFilterMigration).toContain("%@maiprop-test.co");
+    expect(syntheticActivityFilterMigration).toContain("%@maiprop-e2e.test");
+    expect(syntheticActivityFilterMigration).toContain("stripe-%");
+    expect(syntheticActivityFilterMigration).toContain("devin-%");
+    expect(syntheticActivityFilterMigration).toContain("test_user%");
+    expect(syntheticActivityFilterMigration).toContain("trial professional%");
+    expect(syntheticActivityFilterMigration).toContain("codex live probe%");
+    expect(syntheticActivityFilterMigration).toContain("visible_users AS");
+    expect(syntheticActivityFilterMigration).toContain("NOT private.is_synthetic_admin_activity_identity");
+    expect(syntheticActivityFilterMigration).toContain("JOIN visible_users vu ON vu.id = e.user_id");
+    expect(syntheticActivityFilterMigration).toContain("FROM visible_users u");
+  });
+
+  it("pins synthetic activity helper search_path even after prior staging applies", () => {
+    expect(syntheticActivitySearchPathMigration).toContain("ALTER FUNCTION private.is_synthetic_admin_activity_identity(text, text)");
+    expect(syntheticActivitySearchPathMigration).toContain("SET search_path = pg_catalog");
+    expect(syntheticActivitySearchPathMigration).toContain("search_path=pg_catalog");
+    expect(syntheticActivitySearchPathMigration).toContain("must pin search_path to pg_catalog");
   });
 });

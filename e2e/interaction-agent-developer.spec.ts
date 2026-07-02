@@ -4,19 +4,18 @@
  * Covers:
  *  1. Agent Pro sign-in, dashboard, and listing-creation access (5 tests)
  *  2. Developer Pro sign-in, dashboard, and new-building form access (4 tests)
- *  3. Multi-context tests: agent + buyer, developer + buyer (2 tests)
+ *  3. Multi-context tests: authenticated agent/developer + public buyer browsing (2 tests)
  *
  * Demo credentials (password: Demo2025!):
  *   Agent Pro:     agent.pro@maiprop.demo
  *   Developer Pro: developer.pro@maiprop.demo
- *   Buyer Pro:     buyer.pro@maiprop.demo
- *
  * Tests skip gracefully when credentials are unavailable. Override via env:
  *   E2E_AGENT_EMAIL / E2E_AGENT_PASSWORD
  *   E2E_DEVELOPER_EMAIL / E2E_DEVELOPER_PASSWORD
- *   E2E_BUYER_EMAIL / E2E_BUYER_PASSWORD
  */
 import { test, expect, type Page, type Browser, type BrowserContext } from "@playwright/test";
+import { randomUUID } from "node:crypto";
+import { createClient } from "@supabase/supabase-js";
 import { getBaseURL } from "./helpers/baseURL";
 import { demoAccounts, demoPasswords, seededDemoAccountsEnabled } from "./helpers/demoAccounts";
 
@@ -30,9 +29,10 @@ const AGENT_PASSWORD = demoPasswords.agentPro;
 const DEV_EMAIL = demoAccounts.developerPro;
 const DEV_PASSWORD = demoPasswords.developerPro;
 
-const BUYER_EMAIL = demoAccounts.buyerFree;
-const BUYER_PASSWORD = demoPasswords.buyerFree;
 const hasSeededDemoAccounts = seededDemoAccountsEnabled();
+const googlePlacesEnabled =
+  Boolean(process.env.VITE_GOOGLE_MAPS_API_KEY) &&
+  process.env.VITE_ENABLE_GOOGLE_PLACES_AUTOCOMPLETE === "true";
 
 // ---------------------------------------------------------------------------
 // Sign-in helper
@@ -46,7 +46,20 @@ async function signIn(page: Page, email: string, password: string): Promise<void
     .locator('button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")')
     .first()
     .click();
-  await page.waitForURL(/\/dashboard|\/onboarding/, { timeout: 25_000 });
+  await page.waitForFunction(
+    () => {
+      const path = window.location.pathname;
+      const loginForm = document.querySelector('input[type="password"]');
+      const authenticatedShell = document.querySelector("aside, [role='navigation'], [data-testid*='nav']");
+      return /\/dashboard|\/onboarding/.test(path) || (!loginForm && Boolean(authenticatedShell));
+    },
+    undefined,
+    { timeout: 25_000 },
+  );
+  const passwordStillVisible = await page.locator('input[type="password"]').first().isVisible().catch(() => false);
+  if (passwordStillVisible && /\/login/.test(page.url())) {
+    throw new Error(`Sign-in did not leave the login page for ${email}`);
+  }
 }
 
 function dashboardNavItem(page: Page, text: RegExp) {
@@ -66,6 +79,82 @@ function anyDashboardNavItem(page: Page) {
       ' [data-testid*="nav"] a, [data-testid*="nav"] button, [data-testid*="nav"] [role="button"]',
     )
     .first();
+}
+
+async function mockGooglePlacesScript(page: Page) {
+  let requests = 0;
+  await page.route(/https:\/\/maps\.googleapis\.com\/maps\/api\/js.*/, async (route) => {
+    requests += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/javascript",
+      body: `
+        window.google = {
+          maps: {
+            places: {
+              Autocomplete: function(input, options) {
+                this.input = input;
+                this.options = options;
+                this.addListener = function() { return { remove: function() {} }; };
+                this.getPlace = function() {
+                  return {
+                    formatted_address: "11 Dimarchou Aggelou Metaxa, Glyfada, Greece",
+                    address_components: [
+                      { long_name: "11", short_name: "11", types: ["street_number"] },
+                      { long_name: "Dimarchou Aggelou Metaxa", short_name: "Dimarchou Aggelou Metaxa", types: ["route"] },
+                      { long_name: "Glyfada", short_name: "Glyfada", types: ["locality"] },
+                      { long_name: "South Athens", short_name: "South Athens", types: ["administrative_area_level_2"] },
+                      { long_name: "166 75", short_name: "16675", types: ["postal_code"] }
+                    ],
+                    geometry: { location: { lat: function() { return 37.865; }, lng: function() { return 23.753; } } }
+                  };
+                };
+              }
+            }
+          }
+        };
+      `,
+    });
+  });
+  return () => requests;
+}
+
+async function waitForGooglePlacesRequest(page: Page, getRequests: () => number) {
+  await expect.poll(getRequests, { timeout: 10_000 }).toBeGreaterThan(0);
+  await expect(page.locator('script[src*="maps.googleapis.com/maps/api/js"][data-maiprop-google-places="true"]')).toHaveCount(1);
+}
+
+async function createTemporaryDeveloperProject(): Promise<{ id: string; cleanup: () => Promise<void> } | null> {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceRoleKey) return null;
+
+  const admin = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data: usersData, error: usersError } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  if (usersError) throw usersError;
+  const developerUser = usersData.users.find((user) => user.email?.toLowerCase() === DEV_EMAIL.toLowerCase());
+  if (!developerUser) return null;
+
+  const projectId = randomUUID();
+  const { error: insertError } = await admin.from("projects").insert({
+    id: projectId,
+    owner_id: developerUser.id,
+    name: `E2E Google Places Edit ${Date.now()}`,
+    city: "Athens",
+    address: "Syntagma Square 1",
+    municipality: "Athens",
+    status: "draft",
+  });
+  if (insertError) throw insertError;
+
+  return {
+    id: projectId,
+    cleanup: async () => {
+      await admin.from("projects").delete().eq("id", projectId);
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -177,6 +266,99 @@ test.describe("Developer Pro — sign-in, dashboard, and new-building form", () 
     await expect(content).toBeAttached({ timeout: 10_000 });
   });
 
+  test("developer.pro sees first-step multi-unit option for new-build and renovation creation", async ({ page }) => {
+    await signIn(page, DEV_EMAIL, DEV_PASSWORD);
+    await page.goto("/listings/new-building");
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+
+    await expect(page.getByText(/Multi-unit inventory/i)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: /Add unit/i })).toBeVisible();
+
+    await page.getByRole("button", { name: /^Renovation$/i }).click();
+    await expect(page.getByText(/Multi-unit inventory/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: /Add unit/i })).toBeVisible();
+
+    await page.getByLabel(/Project name/i).fill("E2E Renovation Project");
+    await page.getByLabel(/Construction year/i).fill("1982");
+    await page.getByLabel(/Renovation year/i).fill("2026");
+    await page.getByLabel(/^City/i).fill("Athens");
+    await page.getByRole("button", { name: /Add unit/i }).click();
+
+    await expect(page.getByRole("heading", { name: /Project Inventory/i })).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("developer.pro creation address autosuggest requests Google Places when enabled", async ({ page }) => {
+    test.skip(!googlePlacesEnabled, "Google Places E2E requires VITE_GOOGLE_MAPS_API_KEY and VITE_ENABLE_GOOGLE_PLACES_AUTOCOMPLETE=true");
+    const getGoogleRequests = await mockGooglePlacesScript(page);
+
+    await signIn(page, DEV_EMAIL, DEV_PASSWORD);
+    await page.goto("/listings/new-building");
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+    await page.getByLabel(/^Address$/i).focus();
+
+    await waitForGooglePlacesRequest(page, getGoogleRequests);
+  });
+
+  test("developer.pro project edit address autosuggest requests Google Places when enabled", async ({ page }) => {
+    test.skip(!googlePlacesEnabled, "Google Places E2E requires VITE_GOOGLE_MAPS_API_KEY and VITE_ENABLE_GOOGLE_PLACES_AUTOCOMPLETE=true");
+    const getGoogleRequests = await mockGooglePlacesScript(page);
+    const temporaryProject = await createTemporaryDeveloperProject();
+    if (!temporaryProject) {
+      test.skip(true, "Service role or Developer Pro auth user missing; cannot create temporary edit project");
+      return;
+    }
+
+    try {
+      await signIn(page, DEV_EMAIL, DEV_PASSWORD);
+      await page.goto(`/projects/${temporaryProject.id}`);
+      await page.waitForLoadState("networkidle", { timeout: 15_000 });
+      await page.getByLabel(/^Address$/i).focus();
+
+      await waitForGooglePlacesRequest(page, getGoogleRequests);
+    } finally {
+      await temporaryProject.cleanup();
+    }
+  });
+
+  test("developer.pro can configure a renovation project with multiple units", async ({ page }) => {
+    await signIn(page, DEV_EMAIL, DEV_PASSWORD);
+    await page.goto("/listings/new-building");
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+
+    await page.getByRole("button", { name: /^Renovation$/i }).click();
+    await expect(page.getByLabel(/Construction year/i)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByLabel(/Renovation year/i)).toBeVisible({ timeout: 10_000 });
+
+    await page.getByLabel(/Project name/i).fill("E2E Renovation Project");
+    await page.getByLabel(/Construction year/i).fill("1982");
+    await page.getByLabel(/Renovation year/i).fill("2026");
+    await page.getByLabel(/^City/i).fill("Athens");
+
+    await page.getByRole("button", { name: /Next/i }).click();
+    await expect(page.getByRole("heading", { name: /Project Inventory/i })).toBeVisible({ timeout: 10_000 });
+
+    await page.getByLabel(/Unit ID/i).fill("R1");
+    await page.getByLabel(/Internal sqm/i).fill("58");
+    await page.getByLabel(/Price/i).fill("210000");
+    await page.getByLabel(/Bedrooms/i).fill("1");
+    await page.getByLabel(/Bathrooms/i).fill("1");
+
+    await page.getByRole("button", { name: /Add unit/i }).click();
+    await expect(page.getByRole("button", { name: /Unit 2/i })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: /Remove/i })).toBeVisible();
+
+    await page.getByLabel(/Unit ID/i).fill("R2");
+    await page.getByLabel(/Internal sqm/i).fill("74");
+    await page.getByLabel(/Price/i).fill("275000");
+    await page.getByLabel(/Bedrooms/i).fill("2");
+    await page.getByLabel(/Bathrooms/i).fill("2");
+
+    await page.getByRole("button", { name: /^R1$/i }).click();
+    await expect(page.getByLabel(/Unit ID/i)).toHaveValue("R1");
+    await page.getByRole("button", { name: /^R2$/i }).click();
+    await expect(page.getByLabel(/Unit ID/i)).toHaveValue("R2");
+  });
+
   // 8. Dashboard has any navigation links in sidebar (developer shares the common dashboard nav)
   test("developer.pro dashboard has a sidebar navigation", async ({ page }) => {
     await signIn(page, DEV_EMAIL, DEV_PASSWORD);
@@ -207,7 +389,7 @@ test.describe("Developer Pro — sign-in, dashboard, and new-building form", () 
 test.describe("Cross-user — Agent and Buyer simultaneously", () => {
   test.skip(!hasSeededDemoAccounts, "Seeded demo accounts require real Supabase config");
   // 10. Agent goes to /dashboard while Buyer browses /listings — both render
-  test("agent and buyer sign in simultaneously — buyer sees listings grid", async ({ browser }: { browser: Browser }) => {
+  test("agent session and public buyer browsing render simultaneously", async ({ browser }: { browser: Browser }) => {
     let agentCtx: BrowserContext | null = null;
     let buyerCtx: BrowserContext | null = null;
 
@@ -224,9 +406,9 @@ test.describe("Cross-user — Agent and Buyer simultaneously", () => {
       agentPage.on("pageerror", (err) => agentErrors.push(err.message));
       buyerPage.on("pageerror", (err) => buyerErrors.push(err.message));
 
-      // Sign in sequentially to avoid Supabase auth rate-limiting
+      // Sign in the authenticated user; public buyer browsing should not depend
+      // on seeded buyer credentials.
       await signIn(agentPage, AGENT_EMAIL, AGENT_PASSWORD);
-      await signIn(buyerPage, BUYER_EMAIL, BUYER_PASSWORD);
 
       // Navigate each user to their target page
       await Promise.all([
@@ -265,7 +447,7 @@ test.describe("Cross-user — Agent and Buyer simultaneously", () => {
 test.describe("Cross-user — Developer and Buyer simultaneously", () => {
   test.skip(!hasSeededDemoAccounts, "Seeded demo accounts require real Supabase config");
   // 11. Developer browses /projects or /dashboard while Buyer browses /auctions or /listings
-  test("developer and buyer sign in simultaneously — both pages render without errors", async ({ browser }: { browser: Browser }) => {
+  test("developer session and public buyer browsing render without errors", async ({ browser }: { browser: Browser }) => {
     let devCtx: BrowserContext | null = null;
     let buyerCtx: BrowserContext | null = null;
 
@@ -283,9 +465,9 @@ test.describe("Cross-user — Developer and Buyer simultaneously", () => {
       devPage.on("pageerror",   (err) => devErrors.push(err.message));
       buyerPage.on("pageerror", (err) => buyerErrors.push(err.message));
 
-      // Sign in sequentially to avoid auth rate-limiting
+      // Sign in the authenticated user; public buyer browsing should not depend
+      // on seeded buyer credentials.
       await signIn(devPage, DEV_EMAIL, DEV_PASSWORD);
-      await signIn(buyerPage, BUYER_EMAIL, BUYER_PASSWORD);
 
       // Developer navigates to /projects; buyer navigates to /auctions
       await Promise.all([

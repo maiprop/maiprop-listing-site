@@ -214,6 +214,15 @@ describe("PropertyValuation — happy paths", () => {
     await waitFor(() => expect(screen.getByText(/300\.000/)).toBeInTheDocument());
     expect(toastMock.error).not.toHaveBeenCalled();
   });
+
+  it("does not render non-finite percentage deltas when listing price is unavailable", async () => {
+    invokeMock.mockResolvedValue({ data: validResult, error: null });
+    render(<PropertyValuation {...baseProps} price={0} />);
+    fireEvent.click(screen.getByRole("button", { name: /Run AI Valuation/i }));
+    await waitFor(() => expect(screen.getByText(/Invalid valuation price/i)).toBeInTheDocument());
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(document.body.textContent).not.toMatch(/Infinity|NaN/);
+  });
 });
 
 describe("PropertyValuation — result UI", () => {

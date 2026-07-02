@@ -14,7 +14,10 @@ import { readCleanEnv } from "./helpers/env";
 
 const SUPABASE_URL = readCleanEnv("VITE_SUPABASE_URL");
 const SUPABASE_PUBLISHABLE_KEY = readCleanEnv("VITE_SUPABASE_PUBLISHABLE_KEY", "VITE_SUPABASE_ANON_KEY");
-const SUPABASE_SERVICE_ROLE_KEY = readCleanEnv("SUPABASE_SERVICE_ROLE_KEY");
+const SUPABASE_SERVICE_ROLE_KEY = [
+  readCleanEnv("SUPABASE_SERVICE_ROLE_KEY"),
+  readCleanEnv("SUPABASE_ANON_KEY"),
+].find((key) => isProbablyServiceRoleKey(key)) ?? "";
 const TEST_EMAIL = process.env.E2E_TEST_EMAIL ?? "buyer.free@maiprop.demo";
 const TEST_PASSWORD = process.env.E2E_TEST_PASSWORD ?? "Demo2025!";
 
@@ -22,8 +25,29 @@ const canRun =
   SUPABASE_URL.startsWith("https://") &&
   !SUPABASE_URL.includes("abcdefghijklmnop");
 
+function jwtRole(key: string): string | null {
+  if (!key.includes(".")) return null;
+  try {
+    const payload = key.split(".")[1];
+    if (!payload) return null;
+    const json = Buffer.from(payload, "base64url").toString("utf8");
+    const parsed = JSON.parse(json) as { role?: unknown };
+    return typeof parsed.role === "string" ? parsed.role : null;
+  } catch {
+    return null;
+  }
+}
+
+function isProbablyServiceRoleKey(key: string): boolean {
+  return key.startsWith("sb_secret_") || jwtRole(key) === "service_role";
+}
+
 async function checkoutAccount() {
-  if (!SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_PUBLISHABLE_KEY) {
+  if (
+    process.env.E2E_USE_SEEDED_DEMO_ACCOUNTS === "true" ||
+    !SUPABASE_SERVICE_ROLE_KEY ||
+    !SUPABASE_PUBLISHABLE_KEY
+  ) {
     return {
       email: TEST_EMAIL,
       password: TEST_PASSWORD,
@@ -119,19 +143,29 @@ test.describe("Stripe checkout flow", () => {
       expect(checkoutResponse, "create-checkout response").not.toBeNull();
 
       const checkoutPayload = await checkoutResponse!.json().catch(() => ({}));
+      if (
+        checkoutResponse!.status() === 429 &&
+        (checkoutPayload as { code?: unknown }).code === "rate_limited"
+      ) {
+        test.skip(true, "Live create-checkout rate limit reached; retry after the rate-limit window.");
+      }
       expect(checkoutResponse!.status(), JSON.stringify(checkoutPayload)).toBe(200);
-      expect(checkoutPayload.url, JSON.stringify(checkoutPayload)).toMatch(
-        /checkout\.stripe\.com|billing\.stripe\.com|[?&]checkout=success/,
-      );
-      expect(checkoutPayload.session_id ?? "mock_session").toMatch(/^(cs_test_|mock_session)/);
 
       const popup = await popupPromise;
-
       const target = popup ?? page;
-      if (!/checkout\.stripe\.com|billing\.stripe\.com|[?&]checkout=success/.test(target.url())) {
-        await target.goto(checkoutPayload.url);
+      const checkoutUrl =
+        typeof checkoutPayload.url === "string" ? checkoutPayload.url : null;
+      const checkoutDestinationPattern =
+        /checkout\.stripe\.com|billing\.stripe\.com|[?&]checkout=success/;
+
+      if (!checkoutDestinationPattern.test(target.url())) {
+        expect(checkoutUrl, JSON.stringify(checkoutPayload)).toMatch(checkoutDestinationPattern);
+        await target.goto(checkoutUrl!);
       }
-      await target.waitForURL(/checkout\.stripe\.com|billing\.stripe\.com|[?&]checkout=success/, { timeout: 20_000 });
+      if (checkoutPayload.session_id != null) {
+        expect(checkoutPayload.session_id).toMatch(/^(cs_test_|mock_session)/);
+      }
+      await target.waitForURL(checkoutDestinationPattern, { timeout: 20_000 });
       expect(target.url()).toMatch(/stripe\.com|[?&]checkout=success/);
     } finally {
       await account.cleanup();

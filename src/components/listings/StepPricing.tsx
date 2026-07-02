@@ -6,6 +6,7 @@ import {
 } from "@/components/listings/FormPrimitives";
 import type { ListingFormData, AIPriceSuggestion } from "@/hooks/useListingForm";
 import { tFallback, tInterpolate } from "@/lib/i18nFallback";
+import { calculatePricePerSqm } from "@/lib/priceCalculations";
 
 interface Props {
   form: ListingFormData;
@@ -30,6 +31,7 @@ export function StepPricing({
   const isRentalPricing = lt === "rent" || (lt === "open_house" && form.open_house_transaction_type === "rent");
   const tr = (key: string, fallback: string) => tFallback(t, key, fallback);
   const trv = (key: string, fallback: string, values: Record<string, string | number>) => tInterpolate(t, key, fallback, values);
+  const pricePerSqm = calculatePricePerSqm({ price: form.price, sqm: form.sqm });
 
   return (
     <div className="space-y-4">
@@ -107,9 +109,9 @@ export function StepPricing({
         <FieldLabel required>{isRentalPricing ? tr("createListing.pricing.monthlyRent", "Monthly Rent (€)") : tr("createListing.pricing.askingPrice", "Asking Price (€)")}</FieldLabel>
         <Input type="number" placeholder={isRentalPricing ? "800" : "250000"} value={form.price} onChange={e => set("price", e.target.value)} hasError={!!errors.price} />
         <FieldError msg={errors.price} />
-        {!!form.sqm && !!form.price && (
+        {pricePerSqm != null && (
           <p className="text-xs text-muted-foreground mt-1">
-            €{Math.round(Number(form.price) / Number(form.sqm)).toLocaleString()}/m²
+            €{pricePerSqm.toLocaleString()}/m²
           </p>
         )}
       </div>

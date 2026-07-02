@@ -342,6 +342,92 @@ describe("location address suggestions", () => {
     }));
   });
 
+  it("supports a second Google address selection after the first one is applied", async () => {
+    let placeChanged: (() => void) | undefined;
+    let currentPlace = {
+      formatted_address: "Voukourestiou 14, Athens, Greece",
+      geometry: {
+        location: {
+          lat: () => 37.9779,
+          lng: () => 23.7354,
+        },
+      },
+      address_components: [
+        { long_name: "Voukourestiou", short_name: "Voukourestiou", types: ["route"] },
+        { long_name: "14", short_name: "14", types: ["street_number"] },
+        { long_name: "Athens", short_name: "Athens", types: ["locality"] },
+        { long_name: "Municipality of Athens", short_name: "Athens", types: ["administrative_area_level_2"] },
+        { long_name: "10671", short_name: "10671", types: ["postal_code"] },
+      ],
+    };
+    vi.stubGlobal("google", {
+      maps: {
+        places: {
+          Autocomplete: vi.fn(function () {
+            return {
+              addListener: vi.fn((_event: string, cb: () => void) => {
+                placeChanged = cb;
+              }),
+              getPlace: vi.fn(() => currentPlace),
+            };
+          }),
+        },
+      },
+    });
+
+    function ControlledAddressField() {
+      const [value, setValue] = useState("");
+      return (
+        <>
+          <label htmlFor="repeat-google-project-address">Project address</label>
+          <LocationAutocompleteInput
+            id="repeat-google-project-address"
+            mode="address"
+            value={value}
+            onChange={setValue}
+            inputClassName="border"
+          />
+        </>
+      );
+    }
+
+    render(<ControlledAddressField />);
+    const input = screen.getByLabelText("Project address");
+    fireEvent.focus(input);
+    vi.useRealTimers();
+    await waitFor(() => expect(loadGoogleMapsPlaces).toHaveBeenCalled());
+
+    await act(async () => {
+      placeChanged?.();
+    });
+    expect(input).toHaveValue("14 Voukourestiou");
+
+    currentPlace = {
+      formatted_address: "Ermou 12, Athens, Greece",
+      geometry: {
+        location: {
+          lat: () => 37.975,
+          lng: () => 23.731,
+        },
+      },
+      address_components: [
+        { long_name: "Ermou", short_name: "Ermou", types: ["route"] },
+        { long_name: "12", short_name: "12", types: ["street_number"] },
+        { long_name: "Athens", short_name: "Athens", types: ["locality"] },
+        { long_name: "Municipality of Athens", short_name: "Athens", types: ["administrative_area_level_2"] },
+        { long_name: "10563", short_name: "10563", types: ["postal_code"] },
+      ],
+    };
+
+    fireEvent.change(input, { target: { value: "Ermou 12" } });
+    fireEvent.focus(input);
+    await act(async () => {
+      placeChanged?.();
+    });
+
+    expect(input).toHaveValue("12 Ermou");
+  });
+
   it("uses Google Places city suggestions in shared city fields when Google is available", async () => {
     let placeChanged: (() => void) | undefined;
     vi.stubGlobal("google", {

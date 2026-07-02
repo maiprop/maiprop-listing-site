@@ -2606,6 +2606,80 @@ export type Database = {
         }
         Relationships: []
       }
+      privacy_audit_log: {
+        Row: {
+          actor_id: string | null
+          event_type: string
+          id: number
+          metadata: Json
+          occurred_at: string
+          request_id: string | null
+          target_user_id: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          event_type: string
+          id?: number
+          metadata?: Json
+          occurred_at?: string
+          request_id?: string | null
+          target_user_id?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          event_type?: string
+          id?: number
+          metadata?: Json
+          occurred_at?: string
+          request_id?: string | null
+          target_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "privacy_audit_log_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "privacy_export_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      privacy_export_requests: {
+        Row: {
+          completed_at: string | null
+          error_code: string | null
+          expires_at: string | null
+          export_storage_path: string | null
+          id: string
+          metadata: Json
+          requested_at: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          error_code?: string | null
+          expires_at?: string | null
+          export_storage_path?: string | null
+          id?: string
+          metadata?: Json
+          requested_at?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          error_code?: string | null
+          expires_at?: string | null
+          export_storage_path?: string | null
+          id?: string
+          metadata?: Json
+          requested_at?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       private_owner_ad_alerts: {
         Row: {
           created_at: string
@@ -4745,6 +4819,10 @@ export type Database = {
         Returns: boolean
       }
       has_buy_side_role: { Args: { _user_id: string }; Returns: boolean }
+      has_current_investor_subscription: {
+        Args: { p_user_id: string }
+        Returns: boolean
+      }
       has_platform_admin: { Args: { _user_id?: string }; Returns: boolean }
       has_role:
         | {

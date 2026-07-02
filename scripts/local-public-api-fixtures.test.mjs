@@ -34,6 +34,14 @@ describe("local public API fixtures", () => {
       status: "active",
     });
 
+    await expect(jsonFor(`/api/public/listing?id=${listings.data[0].id}`)).resolves.toMatchObject({
+      data: {
+        id: listings.data[0].id,
+        title: listings.data[0].title,
+        listing_type: "sale",
+        status: "active",
+      },
+    });
     await expect(jsonFor("/api/public/listing?id=missing")).resolves.toEqual({ data: null });
   });
 

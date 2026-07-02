@@ -35,6 +35,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
 import { PropertyHeroSpecsBar } from "@/components/property/PropertyHeroSpecsBar";
 import { buildListingHeroSpecs } from "@/components/property/propertyHeroSpecs";
+import { calculatePricePerSqm } from "@/lib/priceCalculations";
 
 const PropertyMiniMap = lazy(() => import("@/components/PropertyMiniMap"));
 const NeighbourhoodReport = lazy(() => import("@/components/NeighbourhoodReport"));
@@ -202,7 +203,11 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
     : (db.address || db.city) ? getStreetViewProxyUrl({ location: `${db.address ?? ""} ${db.city ?? ""}`.trim() }) : null;
   if (!imgs.length && streetViewFallback) imgs = [streetViewFallback];
 
-  const pricePerSqm = sqm > 0 ? Math.round(price / sqm) : null;
+  const pricePerSqm = calculatePricePerSqm({
+    price,
+    sqm,
+    storedPricePerSqm: db.price_per_sqm,
+  });
   const isRentalOpenHouse = db.open_house_transaction_type === "rent";
   const rentalPriceSuffix = isRentalOpenHouse ? (isGreek ? "/μήνα" : "/mo") : "";
   const isLandType = ["land", "plot"].includes(db.property_type ?? "");
@@ -456,7 +461,7 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                 <div className="font-display text-2xl font-bold text-primary mb-1">
                   €{price.toLocaleString()}{rentalPriceSuffix && <span className="text-sm font-normal text-muted-foreground">{rentalPriceSuffix}</span>}
                 </div>
-                {sqm > 0 && <p className="text-xs text-muted-foreground">€{Math.round(price / sqm).toLocaleString()}/{isGreek ? "τ.μ." : "m²"}</p>}
+                {!!pricePerSqm && <p className="text-xs text-muted-foreground">€{pricePerSqm.toLocaleString()}/{isGreek ? "τ.μ." : "m²"}</p>}
 
                 {/* Registration / offer flow — gate by approval & attendance */}
                 {!isOwner && user && (
