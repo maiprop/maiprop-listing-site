@@ -57,6 +57,16 @@ describe("dbListingToCard — basic field mapping", () => {
     expect(card.sqm).toBe(80);
   });
 
+  it("computes card price per sqm from price and size instead of stale stored values", () => {
+    const card = dbListingToCard(makeDbListing({
+      price: "315000",
+      sqm: "102",
+      price_per_sqm: "3000",
+    }));
+
+    expect(card.pricePerSqm).toBe(3088);
+  });
+
   it("maps views_count to views", () => {
     const card = dbListingToCard(makeDbListing());
     expect(card.views).toBe(42);

@@ -142,6 +142,7 @@ export function createLocalPublicApiResponse(url, method = "GET") {
     const id = url.searchParams.get("id");
     const osTag = url.searchParams.get("osTag");
     if (!id && !osTag) response = json({ error: "Missing listing identifier" }, { status: 400 });
+    else if (id === baseListing.id) response = json({ data: baseListing });
     else if (id === newBuildListing.id) response = json({ data: newBuildListing });
     else if (id === openHouseListing.id) response = json({ data: openHouseListing });
     else if (id === auctionListing.id || osTag) response = json({ data: auctionListing });

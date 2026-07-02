@@ -1,4 +1,5 @@
 import type { LayerProps } from "react-map-gl";
+import { calculatePricePerSqm } from "@/lib/priceCalculations";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -62,9 +63,11 @@ export function buildGeoJSON(listings: MapListing[]) {
       properties: {
         id: l.id,
         price: l.price,
-        price_per_sqm: l._raw?.price_per_sqm
-          ? Number(l._raw.price_per_sqm)
-          : Math.round(l.price / Math.max(l.sqm, 1)),
+        price_per_sqm: calculatePricePerSqm({
+          price: l.price,
+          sqm: l.sqm,
+          storedPricePerSqm: l._raw?.price_per_sqm,
+        }) ?? 0,
         listingType: l.listingType || "sale",
         colour: typeColour(l.listingType),
         label: priceLabel(l.price),

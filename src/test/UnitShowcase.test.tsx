@@ -34,6 +34,18 @@ describe("UnitShowcase", () => {
             price_per_sqm: 714.29,
             vat_included: true,
           },
+          {
+            id: "u3",
+            unit_number: "A3",
+            availability_status: "available",
+            internal_sqm: 102,
+            balcony_sqm: 10,
+            bedrooms: 3,
+            bathrooms: 2,
+            price: 315000,
+            price_per_sqm: 3000,
+            vat_included: true,
+          },
         ]}
       />,
     );
@@ -42,11 +54,12 @@ describe("UnitShowcase", () => {
     expect(screen.getByRole("heading", { name: "Unit 1" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Unit 2" })).toBeInTheDocument();
     expect(screen.getAllByText("Internal").length).toBeGreaterThan(0);
-    expect(screen.getByText("Balcony")).toBeInTheDocument();
+    expect(screen.getAllByText("Balcony").length).toBeGreaterThan(0);
     expect(screen.getAllByText("VAT").length).toBeGreaterThan(0);
     expect(screen.getByText("Not included")).toBeInTheDocument();
-    expect(screen.getByText("Included")).toBeInTheDocument();
+    expect(screen.getAllByText("Included").length).toBeGreaterThan(0);
     expect(screen.getByText(/7\.143/)).toBeInTheDocument();
+    expect(screen.getByText(/3\.088/)).toBeInTheDocument();
     expect(screen.queryByText(/714,29/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Request schedule" }));

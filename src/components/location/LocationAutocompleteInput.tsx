@@ -99,6 +99,7 @@ const buildGoogleSelection = (
   const municipality =
     getGoogleAddressComponent(place, "administrative_area_level_2") ||
     getGoogleAddressComponent(place, "administrative_area_level_3") ||
+    getGoogleAddressComponent(place, "administrative_area_level_1") ||
     city;
   const postalCode = getGoogleAddressComponent(place, "postal_code");
   const { latitude, longitude } = getGoogleCoordinates(place);
@@ -149,11 +150,11 @@ export function LocationAutocompleteInput({
   const inputId = id ?? generatedId;
   const [focused, setFocused] = useState(false);
   const [googlePlacesRequested, setGooglePlacesRequested] = useState(false);
-  const [googleReady, setGoogleReady] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const googleInitializedRef = useRef(false);
+  const googleSelectionAppliedRef = useRef(false);
   const textValue = value ?? "";
   const query = textValue.trim();
   const activeQuery = !disabled && focused ? query : "";
@@ -194,6 +195,7 @@ export function LocationAutocompleteInput({
       autocomplete.addListener("place_changed", () => {
         const selection = buildGoogleSelection(autocomplete.getPlace(), mode);
         if (!selection.value) return;
+        googleSelectionAppliedRef.current = true;
         onChange(selection.value);
         onSuggestionSelect?.(selection);
         clear();
@@ -201,7 +203,6 @@ export function LocationAutocompleteInput({
       });
 
       googleInitializedRef.current = true;
-      setGoogleReady(true);
     };
 
     loadGoogleMapsPlaces()
@@ -209,9 +210,7 @@ export function LocationAutocompleteInput({
         if (cancelled) return;
         initGoogle();
       })
-      .catch(() => {
-        if (!cancelled) setGoogleReady(false);
-      });
+      .catch(() => undefined);
 
     return () => {
       cancelled = true;
@@ -265,8 +264,7 @@ export function LocationAutocompleteInput({
   ), [rawSuggestions]);
 
   const items = mode === "address" ? addressItems : cityItems;
-  const suppressCustomDropdown = googleReady && query.length > 0;
-  const showDropdown = focused && !disabled && !suppressCustomDropdown && (items.length > 0 || loading);
+  const showDropdown = focused && !disabled && (items.length > 0 || loading);
   const listboxId = `${inputId}-listbox`;
 
   const getPos = () => {
@@ -326,11 +324,14 @@ export function LocationAutocompleteInput({
         type="text"
         value={textValue}
         disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
         onFocus={(event) => {
           setFocused(true);
           setGooglePlacesRequested(true);
           onFocus?.(event);
+        }}
+        onChange={(event) => {
+          googleSelectionAppliedRef.current = false;
+          onChange(event.target.value);
         }}
         onKeyDown={(event) => {
           onKeyDown?.(event);
@@ -342,7 +343,12 @@ export function LocationAutocompleteInput({
           if (event.defaultPrevented) return;
           const nextTarget = event.relatedTarget as Node | null;
           if (nextTarget && dropdownRef.current?.contains(nextTarget)) return;
-          if (mode === "address" && !suppressCustomDropdown && items.length > 0) {
+          if (googleSelectionAppliedRef.current) {
+            googleSelectionAppliedRef.current = false;
+            setFocused(false);
+            return;
+          }
+          if (mode === "address" && items.length > 0) {
             selectItem(items[0]);
             return;
           }

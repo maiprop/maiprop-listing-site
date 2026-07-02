@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Building2, ChevronLeft, Loader2, Check, Image, LayoutGrid,
-  FileText, Upload, Home, ChevronRight
+  FileText, Upload, Home, ChevronRight, Plus, Trash2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
@@ -47,6 +47,7 @@ type UploadedImage = { id: string; url: string; file?: File; uploading?: boolean
 
 const WIZARD_STEPS = ["building", "unit", "media", "listing", "photos"] as const;
 type WizardStep = typeof WIZARD_STEPS[number];
+type ProjectKind = "new_build" | "renovation";
 type ProjectDraft = {
   name: string;
   building_permit_number: string;
@@ -64,6 +65,8 @@ type ProjectDraft = {
   delivery_date: string;
   latitude: string | number;
   longitude: string | number;
+  construction_year: string;
+  renovation_year: string;
 };
 type UnitDraft = {
   unit_id: string;
@@ -95,8 +98,9 @@ type ListingDraft = {
 type NewBuildingDraft = {
   version: 1;
   step: WizardStep;
+  projectKind: ProjectKind;
   project: ProjectDraft;
-  unit: UnitDraft;
+  units: UnitDraft[];
   listing: ListingDraft;
   images: Array<Pick<UploadedImage, "id" | "url">>;
   coverImageId: string | null;
@@ -121,6 +125,8 @@ const EMPTY_PROJECT: ProjectDraft = {
   delivery_date: "",
   latitude: "",
   longitude: "",
+  construction_year: "",
+  renovation_year: "",
 };
 
 const EMPTY_UNIT: UnitDraft = {
@@ -168,11 +174,18 @@ function readNewBuildingDraft(userId: string): NewBuildingDraft | null {
     const parsed = JSON.parse(raw) as Partial<NewBuildingDraft>;
     if (parsed.version !== 1) return null;
     if (!parsed.step || !WIZARD_STEPS.includes(parsed.step)) return null;
+    const legacyUnit = (parsed as Partial<NewBuildingDraft> & { unit?: Partial<UnitDraft> }).unit;
+    const rawUnits = Array.isArray(parsed.units)
+      ? parsed.units
+      : legacyUnit
+        ? [legacyUnit]
+        : [];
     return {
       version: 1,
       step: parsed.step,
+      projectKind: parsed.projectKind === "renovation" ? "renovation" : "new_build",
       project: { ...EMPTY_PROJECT, ...(parsed.project ?? {}) },
-      unit: { ...EMPTY_UNIT, ...(parsed.unit ?? {}) },
+      units: rawUnits.length > 0 ? rawUnits.map((unit) => ({ ...EMPTY_UNIT, ...unit })) : [{ ...EMPTY_UNIT }],
       listing: { ...EMPTY_LISTING, ...(parsed.listing ?? {}) },
       images: Array.isArray(parsed.images)
         ? parsed.images.filter((image): image is Pick<UploadedImage, "id" | "url"> =>
@@ -196,10 +209,10 @@ function clearNewBuildingDraft(userId: string) {
   }
 }
 
-function hasDraftContent(project: ProjectDraft, unit: UnitDraft, listing: ListingDraft, images: UploadedImage[]) {
+function hasDraftContent(project: ProjectDraft, units: UnitDraft[], listing: ListingDraft, images: UploadedImage[]) {
   return (
     Object.values(project).some((value) => String(value).trim() !== "") ||
-    Object.entries(unit).some(([key, value]) => key !== "vat_included" && String(value).trim() !== "") ||
+    units.some((unit) => Object.entries(unit).some(([key, value]) => key !== "vat_included" && String(value).trim() !== "")) ||
     Object.values(listing).some((value) => value.trim() !== "") ||
     images.some((image) => !image.uploading && !image.error && !image.file && !image.url.startsWith("blob:"))
   );
@@ -242,10 +255,13 @@ export default function CreateNewBuildingListing() {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Step 1: Project
+  const [projectKind, setProjectKind] = useState<ProjectKind>("new_build");
   const [project, setProject] = useState<ProjectDraft>(() => ({ ...EMPTY_PROJECT }));
 
   // Step 2: Project inventory
-  const [unit, setUnit] = useState<UnitDraft>(() => ({ ...EMPTY_UNIT }));
+  const [units, setUnits] = useState<UnitDraft[]>(() => [{ ...EMPTY_UNIT }]);
+  const [activeUnitIndex, setActiveUnitIndex] = useState(0);
+  const unit = units[activeUnitIndex] ?? units[0] ?? EMPTY_UNIT;
 
   // Step 3: Project media (optional)
   const [projectMedia, setProjectMedia] = useState<Record<ProjectMediaType, File | null>>(() => ({ ...EMPTY_PROJECT_MEDIA }));
@@ -271,8 +287,10 @@ export default function CreateNewBuildingListing() {
     restoredDraftUserRef.current = user.id;
     const draft = readNewBuildingDraft(user.id);
     if (!draft) return;
+    setProjectKind(draft.projectKind);
     setProject(draft.project);
-    setUnit(draft.unit);
+    setUnits(draft.units.length > 0 ? draft.units : [{ ...EMPTY_UNIT }]);
+    setActiveUnitIndex(0);
     setListing(draft.listing);
     setImages(draft.images);
     setCoverImageId(draft.coverImageId);
@@ -281,13 +299,14 @@ export default function CreateNewBuildingListing() {
 
   useEffect(() => {
     if (!user?.id) return;
-    if (!hasDraftContent(project, unit, listing, images)) return;
+    if (!hasDraftContent(project, units, listing, images)) return;
     try {
       const draft: NewBuildingDraft = {
         version: 1,
         step,
+        projectKind,
         project,
-        unit,
+        units,
         listing,
         images: persistableImages(images),
         coverImageId,
@@ -296,14 +315,29 @@ export default function CreateNewBuildingListing() {
     } catch (_err: unknown) {
       /* localStorage can be disabled or full */
     }
-  }, [coverImageId, images, listing, project, step, unit, user?.id]);
+  }, [coverImageId, images, listing, project, projectKind, step, units, user?.id]);
 
   const setProjectLocationField = (key: "address" | "city" | "municipality", value: string) =>
     setProject(p => ({ ...p, [key]: value, latitude: "", longitude: "" }));
   const setProjectField = (key: string, value: string | number) =>
     setProject(p => ({ ...p, [key]: value }));
   const setUnitField = (key: string, value: string | number | boolean) =>
-    setUnit(u => ({ ...u, [key]: value }));
+    setUnits(prev => prev.map((item, index) => index === activeUnitIndex ? { ...item, [key]: value } : item));
+  const addUnit = () => {
+    setUnits(prev => {
+      const next = [...prev, { ...EMPTY_UNIT, unit_id: `Unit ${prev.length + 1}` }];
+      setActiveUnitIndex(next.length - 1);
+      return next;
+    });
+  };
+  const removeActiveUnit = () => {
+    setUnits(prev => {
+      if (prev.length <= 1) return prev;
+      const next = prev.filter((_, index) => index !== activeUnitIndex);
+      setActiveUnitIndex(Math.max(0, Math.min(activeUnitIndex, next.length - 1)));
+      return next;
+    });
+  };
   const applyProjectLocationSelection = (selection: LocationAutocompleteSelection) => {
     setProject(p => ({
       ...p,
@@ -393,16 +427,19 @@ export default function CreateNewBuildingListing() {
 
   const validateStep = (s: WizardStep): boolean => {
     const newErrors: Record<string, string> = {};
+    const hasRequiredUnitFields = (item: UnitDraft) =>
+      Boolean(item.internal_sqm && item.price && item.bedrooms && item.bathrooms);
     if (s === "building") {
       if (!project.name.trim()) newErrors.project_name = tr("newBuildingListing.validation.projectNameRequired", "Project name is required");
-      if (!project.building_permit_number.trim()) newErrors.building_permit = tr("newBuildingListing.validation.permitRequired", "Building permit number is required");
+      if (projectKind === "new_build" && !project.building_permit_number.trim()) newErrors.building_permit = tr("newBuildingListing.validation.permitRequired", "Building permit number is required");
+      if (projectKind === "renovation" && !project.construction_year.trim()) newErrors.construction_year = tr("newBuildingListing.validation.constructionYearRequired", "Construction year is required");
+      if (projectKind === "renovation" && !project.renovation_year.trim()) newErrors.renovation_year = tr("newBuildingListing.validation.renovationYearRequired", "Renovation year is required");
       if (!project.city.trim()) newErrors.project_city = tr("newBuildingListing.validation.cityRequired", "City is required");
     }
     if (s === "unit") {
-      if (!unit.internal_sqm) newErrors.internal_sqm = tr("newBuildingListing.validation.internalSqmRequired", "Internal sqm is required");
-      if (!unit.price) newErrors.price = tr("newBuildingListing.validation.priceRequired", "Price is required");
-      if (!unit.bedrooms) newErrors.bedrooms = tr("newBuildingListing.validation.bedroomsRequired", "Bedrooms are required");
-      if (!unit.bathrooms) newErrors.bathrooms = tr("newBuildingListing.validation.bathroomsRequired", "Bathrooms are required");
+      if (units.some((item) => !hasRequiredUnitFields(item))) {
+        newErrors.unit = tr("newBuildingListing.validation.allUnitsRequired", "Every unit needs size, price, bedrooms, and bathrooms");
+      }
     }
     if (s === "listing") {
       if (!effectiveListingTitle) newErrors.title = tr("newBuildingListing.validation.titleRequired", "Listing title is required");
@@ -424,16 +461,22 @@ export default function CreateNewBuildingListing() {
   const handleNext = () => {
     if (validateStep(step)) goNext();
   };
+  const handleInventorySetup = () => {
+    if (validateStep("building")) goTo("unit");
+  };
 
   const handleBack = () => goPrev();
 
   const handleSubmit = async () => {
     if (!user) return;
-    if (!project.name || !project.building_permit_number || !project.city) {
+    const projectReady = projectKind === "renovation"
+      ? Boolean(project.name && project.construction_year && project.renovation_year && project.city)
+      : Boolean(project.name && project.building_permit_number && project.city);
+    if (!projectReady) {
       toast.error(tr("newBuildingListing.validation.projectFieldsRequired", "Fill in required project fields"));
       return;
     }
-    if (!unit.internal_sqm || !unit.price || !unit.bedrooms || !unit.bathrooms) {
+    if (units.some((item) => !(item.internal_sqm && item.price && item.bedrooms && item.bathrooms))) {
       toast.error(tr("newBuildingListing.validation.unitFieldsRequired", "Fill in required unit fields"));
       return;
     }
@@ -460,9 +503,11 @@ export default function CreateNewBuildingListing() {
     setSubmitting(true);
     try {
       const { listingId } = await submitNewBuildingListing({
+        projectKind,
         userId: user.id,
         project,
         unit,
+        units,
         projectMedia,
         listing,
         finalTitle,
@@ -481,8 +526,10 @@ export default function CreateNewBuildingListing() {
 
   const completionPct = Math.round(
     (100 * STEPS.filter((_, i) => {
-      if (i === 0) return !!(project.name && project.building_permit_number && project.city);
-      if (i === 1) return !!(unit.internal_sqm && unit.price && unit.bedrooms && unit.bathrooms);
+      if (i === 0) return projectKind === "renovation"
+        ? !!(project.name && project.construction_year && project.renovation_year && project.city)
+        : !!(project.name && project.building_permit_number && project.city);
+      if (i === 1) return units.length > 0 && units.every((item) => item.internal_sqm && item.price && item.bedrooms && item.bathrooms);
       if (i === 2) return true;
       if (i === 3) return !!effectiveListingTitle;
       if (i === 4) return images.some(img => !img.uploading && !img.error);
@@ -538,20 +585,67 @@ export default function CreateNewBuildingListing() {
             {step === "building" && (
               <div className="space-y-6">
                 <h2 className="font-display text-xl font-semibold">{tr("newBuildingListing.building.heading", "Building & Project Details")}</h2>
+                <div className="grid grid-cols-2 gap-2 rounded-xl border border-border bg-secondary/40 p-1">
+                  {[
+                    { value: "new_build" as ProjectKind, label: tr("newBuildingListing.projectKind.newBuild", "New build") },
+                    { value: "renovation" as ProjectKind, label: tr("newBuildingListing.projectKind.renovation", "Renovation") },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setProjectKind(option.value)}
+                      className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                        projectKind === option.value
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-foreground">{tr("newBuildingListing.building.multiUnitTitle", "Multi-unit inventory")}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {tr("newBuildingListing.building.multiUnitDescription", "Add all available units while creating the project, then refine them later from the project page.")}
+                      </p>
+                    </div>
+                    <Button type="button" variant="outline" size="sm" onClick={handleInventorySetup} className="gap-2 self-start sm:self-center">
+                      <Plus className="h-4 w-4" /> {tr("newBuildingListing.unit.addUnit", "Add unit")}
+                    </Button>
+                  </div>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="sm:col-span-2">
-                    <label className={LABEL_CLS}>{tr("newBuildingListing.building.projectName", "Project name")} *</label>
-                    <input value={project.name} onChange={e => setProjectField("name", e.target.value)} placeholder={tr("newBuildingListing.building.projectNamePlaceholder", "e.g. Marina Heights")} className={INPUT_CLS} />
+                    <label htmlFor="new-building-project-name" className={LABEL_CLS}>{tr("newBuildingListing.building.projectName", "Project name")} *</label>
+                    <input id="new-building-project-name" value={project.name} onChange={e => setProjectField("name", e.target.value)} placeholder={tr("newBuildingListing.building.projectNamePlaceholder", "e.g. Marina Heights")} className={INPUT_CLS} />
                     {errors.project_name && <p className="text-xs text-destructive mt-1">{errors.project_name}</p>}
                   </div>
                   <div>
-                    <label className={LABEL_CLS}>{tr("newBuildingListing.building.permitNumber", "Building permit number")} *</label>
+                    <label className={LABEL_CLS}>{tr("newBuildingListing.building.permitNumber", "Building permit number")}{projectKind === "new_build" ? " *" : ""}</label>
                     <input value={project.building_permit_number} onChange={e => setProjectField("building_permit_number", e.target.value)} placeholder={tr("newBuildingListing.building.permitPlaceholder", "e.g. 12345/2024")} className={INPUT_CLS} />
                     {errors.building_permit && <p className="text-xs text-destructive mt-1">{errors.building_permit}</p>}
                   </div>
+                  {projectKind === "renovation" && (
+                    <>
+                      <div>
+                        <label htmlFor="new-building-construction-year" className={LABEL_CLS}>{tr("newBuildingListing.building.constructionYear", "Construction year")} *</label>
+                        <input id="new-building-construction-year" type="number" min="1800" max="2200" value={project.construction_year} onChange={e => setProjectField("construction_year", e.target.value)} placeholder="1982" className={INPUT_CLS} />
+                        {errors.construction_year && <p className="text-xs text-destructive mt-1">{errors.construction_year}</p>}
+                      </div>
+                      <div>
+                        <label htmlFor="new-building-renovation-year" className={LABEL_CLS}>{tr("newBuildingListing.building.renovationYear", "Renovation year")} *</label>
+                        <input id="new-building-renovation-year" type="number" min="1800" max="2200" value={project.renovation_year} onChange={e => setProjectField("renovation_year", e.target.value)} placeholder="2026" className={INPUT_CLS} />
+                        {errors.renovation_year && <p className="text-xs text-destructive mt-1">{errors.renovation_year}</p>}
+                      </div>
+                    </>
+                  )}
                   <div>
-                    <label className={LABEL_CLS}>{tr("newBuildingListing.building.city", "City")} *</label>
+                    <label htmlFor="new-building-city" className={LABEL_CLS}>{tr("newBuildingListing.building.city", "City")} *</label>
                     <LocationAutocompleteInput
+                      id="new-building-city"
                       mode="city"
                       value={project.city}
                       onChange={(value) => setProjectLocationField("city", value)}
@@ -567,8 +661,9 @@ export default function CreateNewBuildingListing() {
                   <div><label className={LABEL_CLS}>{tr("newBuildingListing.building.architectGroup", "Architect / group")}</label><input value={project.architect_group} onChange={e => setProjectField("architect_group", e.target.value)} placeholder={tr("newBuildingListing.building.architectPlaceholder", "Architect or group")} className={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>{tr("newBuildingListing.building.constructionCompany", "Construction company")}</label><input value={project.construction_company} onChange={e => setProjectField("construction_company", e.target.value)} placeholder={tr("newBuildingListing.building.constructorPlaceholder", "Constructor")} className={INPUT_CLS} /></div>
                   <div>
-                    <label className={LABEL_CLS}>{tr("newBuildingListing.building.municipality", "Municipality")}</label>
+                    <label htmlFor="new-building-municipality" className={LABEL_CLS}>{tr("newBuildingListing.building.municipality", "Municipality")}</label>
                     <LocationAutocompleteInput
+                      id="new-building-municipality"
                       mode="city"
                       value={project.municipality}
                       onChange={(value) => setProjectLocationField("municipality", value)}
@@ -577,7 +672,18 @@ export default function CreateNewBuildingListing() {
                       inputClassName={INPUT_CLS}
                     />
                   </div>
-                  <div className="sm:col-span-2"><label className={LABEL_CLS}>{tr("newBuildingListing.building.address", "Address")}</label><LocationAutocompleteInput mode="address" value={project.address} onChange={(value) => setProjectLocationField("address", value)} onSuggestionSelect={applyProjectLocationSelection} placeholder={tr("newBuildingListing.building.addressPlaceholder", "Street, number")} inputClassName={INPUT_CLS} /></div>
+                  <div className="sm:col-span-2">
+                    <label htmlFor="new-building-address" className={LABEL_CLS}>{tr("newBuildingListing.building.address", "Address")}</label>
+                    <LocationAutocompleteInput
+                      id="new-building-address"
+                      mode="address"
+                      value={project.address}
+                      onChange={(value) => setProjectLocationField("address", value)}
+                      onSuggestionSelect={applyProjectLocationSelection}
+                      placeholder={tr("newBuildingListing.building.addressPlaceholder", "Street, number")}
+                      inputClassName={INPUT_CLS}
+                    />
+                  </div>
                   <div><label className={LABEL_CLS}>{tr("newBuildingListing.building.latitude", "Latitude")}</label><input type="number" step="any" value={project.latitude} onChange={e => setProjectField("latitude", e.target.value)} placeholder="37.9838" className={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>{tr("newBuildingListing.building.longitude", "Longitude")}</label><input type="number" step="any" value={project.longitude} onChange={e => setProjectField("longitude", e.target.value)} placeholder="23.7275" className={INPUT_CLS} /></div>
                   <div className="sm:col-span-2"><label className={LABEL_CLS}>{tr("newBuildingListing.building.projectDescription", "Project description")}</label><textarea value={project.description} onChange={e => setProjectField("description", e.target.value)} rows={4} placeholder={tr("newBuildingListing.building.descriptionPlaceholder", "Brief description...")} className={INPUT_CLS + " resize-none"} /></div>
@@ -593,17 +699,46 @@ export default function CreateNewBuildingListing() {
             {/* Step 2: Unit */}
             {step === "unit" && (
               <div className="space-y-6">
-                <h2 className="font-display text-xl font-semibold">{tr("newBuildingListing.unit.heading", "Project Inventory")}</h2>
-                <p className="text-sm text-muted-foreground">{tr("newBuildingListing.unit.subtitle", "Add the first available unit, price, and specs for this New Build ad. You can add more units later.")}</p>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h2 className="font-display text-xl font-semibold">{tr("newBuildingListing.unit.heading", "Project Inventory")}</h2>
+                    <p className="text-sm text-muted-foreground">{tr("newBuildingListing.unit.subtitle", "Add the available units, prices, and specs for this project ad.")}</p>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={addUnit} className="gap-2 self-start">
+                    <Plus className="h-4 w-4" /> {tr("newBuildingListing.unit.addUnit", "Add unit")}
+                  </Button>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {units.map((item, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => setActiveUnitIndex(index)}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                        activeUnitIndex === index
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-secondary text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {item.unit_id || item.unit_number || trv("newBuildingListing.unit.unitNumberLabel", "Unit {{number}}", { number: index + 1 })}
+                    </button>
+                  ))}
+                  {units.length > 1 && (
+                    <Button type="button" variant="ghost" size="sm" onClick={removeActiveUnit} className="gap-2 text-destructive hover:text-destructive">
+                      <Trash2 className="h-4 w-4" /> {tr("newBuildingListing.unit.removeUnit", "Remove")}
+                    </Button>
+                  )}
+                </div>
+                {errors.unit && <p className="text-xs text-destructive">{errors.unit}</p>}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <div><label className={LABEL_CLS}>{tr("newBuildingListing.unit.unitId", "Unit ID")}</label><input value={unit.unit_id} onChange={e => setUnitField("unit_id", e.target.value)} placeholder="A101" className={INPUT_CLS} /></div>
+                  <div><label htmlFor="new-building-unit-id" className={LABEL_CLS}>{tr("newBuildingListing.unit.unitId", "Unit ID")}</label><input id="new-building-unit-id" value={unit.unit_id} onChange={e => setUnitField("unit_id", e.target.value)} placeholder="A101" className={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>{tr("newBuildingListing.unit.floor", "Floor")}</label><input type="number" value={unit.floor} onChange={e => setUnitField("floor", e.target.value)} placeholder="1" className={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>{tr("newBuildingListing.unit.unitNumber", "Unit number")}</label><input value={unit.unit_number} onChange={e => setUnitField("unit_number", e.target.value)} placeholder="101" className={INPUT_CLS} /></div>
-                  <div><label className={LABEL_CLS}>{tr("newBuildingListing.unit.internalSqm", "Internal sqm")} *</label><input type="number" step="0.01" value={unit.internal_sqm} onChange={e => setUnitField("internal_sqm", e.target.value)} placeholder="85" className={INPUT_CLS} />{errors.internal_sqm && <p className="text-xs text-destructive">{errors.internal_sqm}</p>}</div>
+                  <div><label htmlFor="new-building-unit-internal-sqm" className={LABEL_CLS}>{tr("newBuildingListing.unit.internalSqm", "Internal sqm")} *</label><input id="new-building-unit-internal-sqm" type="number" step="0.01" value={unit.internal_sqm} onChange={e => setUnitField("internal_sqm", e.target.value)} placeholder="85" className={INPUT_CLS} />{errors.internal_sqm && <p className="text-xs text-destructive">{errors.internal_sqm}</p>}</div>
                   <div><label className={LABEL_CLS}>{tr("newBuildingListing.unit.balconySqm", "Balcony sqm")}</label><input type="number" step="0.01" value={unit.balcony_sqm} onChange={e => setUnitField("balcony_sqm", e.target.value)} placeholder="12" className={INPUT_CLS} /></div>
-                  <div><label className={LABEL_CLS}>{tr("newBuildingListing.unit.price", "Price (€)")} *</label><input type="number" value={unit.price} onChange={e => setUnitField("price", e.target.value)} placeholder="250000" className={INPUT_CLS} />{errors.price && <p className="text-xs text-destructive">{errors.price}</p>}</div>
-                  <div><label className={LABEL_CLS}>{tr("newBuildingListing.unit.bedrooms", "Bedrooms")} *</label><input type="number" value={unit.bedrooms} onChange={e => setUnitField("bedrooms", e.target.value)} placeholder="2" className={INPUT_CLS} />{errors.bedrooms && <p className="text-xs text-destructive">{errors.bedrooms}</p>}</div>
-                  <div><label className={LABEL_CLS}>{tr("newBuildingListing.unit.bathrooms", "Bathrooms")} *</label><input type="number" value={unit.bathrooms} onChange={e => setUnitField("bathrooms", e.target.value)} placeholder="2" className={INPUT_CLS} />{errors.bathrooms && <p className="text-xs text-destructive">{errors.bathrooms}</p>}</div>
+                  <div><label htmlFor="new-building-unit-price" className={LABEL_CLS}>{tr("newBuildingListing.unit.price", "Price (€)")} *</label><input id="new-building-unit-price" type="number" value={unit.price} onChange={e => setUnitField("price", e.target.value)} placeholder="250000" className={INPUT_CLS} />{errors.price && <p className="text-xs text-destructive">{errors.price}</p>}</div>
+                  <div><label htmlFor="new-building-unit-bedrooms" className={LABEL_CLS}>{tr("newBuildingListing.unit.bedrooms", "Bedrooms")} *</label><input id="new-building-unit-bedrooms" type="number" value={unit.bedrooms} onChange={e => setUnitField("bedrooms", e.target.value)} placeholder="2" className={INPUT_CLS} />{errors.bedrooms && <p className="text-xs text-destructive">{errors.bedrooms}</p>}</div>
+                  <div><label htmlFor="new-building-unit-bathrooms" className={LABEL_CLS}>{tr("newBuildingListing.unit.bathrooms", "Bathrooms")} *</label><input id="new-building-unit-bathrooms" type="number" value={unit.bathrooms} onChange={e => setUnitField("bathrooms", e.target.value)} placeholder="2" className={INPUT_CLS} />{errors.bathrooms && <p className="text-xs text-destructive">{errors.bathrooms}</p>}</div>
                   <div><label className={LABEL_CLS}>{tr("newBuildingListing.unit.livingRooms", "Living rooms")}</label><input type="number" value={unit.living_rooms} onChange={e => setUnitField("living_rooms", e.target.value)} placeholder="1" className={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>{tr("newBuildingListing.unit.storageSqm", "Storage sqm")}</label><input type="number" step="0.01" value={unit.storage_sqm} onChange={e => setUnitField("storage_sqm", e.target.value)} placeholder="0" className={INPUT_CLS} /></div>
                   <div><label className={LABEL_CLS}>{tr("newBuildingListing.unit.parkingSqm", "Parking sqm")}</label><input type="number" step="0.01" value={unit.parking_sqm} onChange={e => setUnitField("parking_sqm", e.target.value)} placeholder="0" className={INPUT_CLS} /></div>

@@ -167,6 +167,7 @@ const body = (overrides: Record<string, unknown> = {}) => ({
     availability_status: "available",
     internal_sqm: 100,
     price: 250000,
+    price_per_sqm: 1,
   },
   projectMedia: [{
     project_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
@@ -182,6 +183,7 @@ const body = (overrides: Record<string, unknown> = {}) => ({
     listing_type: "new_build",
     project_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     owner_id: "99999999-9999-4999-8999-999999999999",
+    price_per_sqm: 1,
   },
   additionalImageUrls: ["https://cdn.test/2.jpg"],
   ...overrides,
@@ -217,18 +219,76 @@ Deno.test("create forces ownership from the verified developer and writes every 
   const projectInsert = globalThis.__createNewBuildingScenario.calls.find((call) =>
     call.name === "insert" && (call.args as { table?: string })?.table === "projects"
   );
+  const unitInsert = globalThis.__createNewBuildingScenario.calls.find((call) =>
+    call.name === "insert" && (call.args as { table?: string })?.table === "project_units"
+  );
   const listingInsert = globalThis.__createNewBuildingScenario.calls.find((call) =>
     call.name === "insert" && (call.args as { table?: string })?.table === "listings"
   );
   assertEquals((projectInsert?.args as { payload: Record<string, unknown> }).payload.owner_id, "11111111-1111-4111-8111-111111111111");
+  assertEquals((unitInsert?.args as { payload: Record<string, unknown> }).payload.price_per_sqm, 2500);
   assertEquals((listingInsert?.args as { payload: Record<string, unknown> }).payload.owner_id, "11111111-1111-4111-8111-111111111111");
   assertEquals((listingInsert?.args as { payload: Record<string, unknown> }).payload.listing_type, "new_build");
   assertEquals((listingInsert?.args as { payload: Record<string, unknown> }).payload.is_pre_sale, false);
+  assertEquals((listingInsert?.args as { payload: Record<string, unknown> }).payload.price_per_sqm, 2500);
 
   assert(globalThis.__createNewBuildingScenario.calls.some((call) =>
     call.name === "update" && (call.args as { table?: string })?.table === "project_units"
   ));
   assert(globalThis.__createNewBuildingScenario.calls.some((call) => call.name === "audit"));
+});
+
+Deno.test("create accepts multiple units and preserves renovation project listing metadata", async () => {
+  resetScenario();
+  const res = await handler(authedJson(body({
+    projectKind: "renovation",
+    units: [
+      {
+        project_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        unit_id: "R1",
+        availability_status: "available",
+        internal_sqm: 80,
+        price: 280000,
+        price_per_sqm: 1,
+      },
+      {
+        project_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        unit_id: "R2",
+        availability_status: "available",
+        internal_sqm: 100,
+        price: 360000,
+        price_per_sqm: 1,
+      },
+    ],
+    listing: {
+      ...body().listing,
+      listing_type: "new_build",
+      construction_status: "renovated",
+      year_built: 1982,
+      tags: ["renovation_project", "renovation_year:2026"],
+    },
+  })));
+  const parsed = await res.json();
+
+  assertEquals(res.status, 200);
+  assertEquals(parsed.data.listingId, "33333333-3333-4333-8333-333333333333");
+
+  const unitInserts = globalThis.__createNewBuildingScenario.calls.filter((call) =>
+    call.name === "insert" && (call.args as { table?: string })?.table === "project_units"
+  );
+  const listingInsert = globalThis.__createNewBuildingScenario.calls.find((call) =>
+    call.name === "insert" && (call.args as { table?: string })?.table === "listings"
+  );
+  assertEquals(unitInserts.length, 2);
+  assertEquals((unitInserts[0].args as { payload: Record<string, unknown> }).payload.price_per_sqm, 3500);
+  assertEquals((unitInserts[1].args as { payload: Record<string, unknown> }).payload.price_per_sqm, 3600);
+  assertEquals((listingInsert?.args as { payload: Record<string, unknown> }).payload.listing_type, "new_build");
+  assertEquals((listingInsert?.args as { payload: Record<string, unknown> }).payload.construction_status, "renovated");
+  assertEquals((listingInsert?.args as { payload: Record<string, unknown> }).payload.year_built, 1982);
+  assertEquals((listingInsert?.args as { payload: Record<string, unknown> }).payload.tags, [
+    "renovation_project",
+    "renovation_year:2026",
+  ]);
 });
 
 Deno.test("project scope mismatch is rejected before auth and writes", async () => {

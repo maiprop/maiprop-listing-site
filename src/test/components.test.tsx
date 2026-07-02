@@ -406,6 +406,19 @@ describe("PropertyCard", () => {
     expect(screen.getByText(/-25% off/)).toBeInTheDocument();
   });
 
+  it("does not render a fake auction discount when the original price is unavailable", async () => {
+    const { PropertyCard } = await import("@/components/PropertyCard");
+    renderWithProviders(
+      <PropertyCard
+        property={{
+          ...makeProperty({ listingType: "auction", price: 0 }),
+          auctionStartingBid: 150000,
+        }}
+      />,
+    );
+    expect(screen.queryByText(/-\d+% off/)).not.toBeInTheDocument();
+  });
+
   it("shows 'View Open House' CTA for open_house listings", async () => {
     const { PropertyCard } = await import("@/components/PropertyCard");
     renderWithProviders(<PropertyCard property={makeProperty({ listingType: "open_house" })} />);

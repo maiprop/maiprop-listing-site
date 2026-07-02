@@ -12,6 +12,7 @@ import {
   buildMetaLines,
   getCityFromAddress,
   getFirstError,
+  getQuickSaleNumericFields,
   getRequiredPropertyType,
   getSubmitEstimate,
   ui,
@@ -103,14 +104,15 @@ const insertFiresaleRequest = (
   propertyType: ReturnType<typeof getRequiredPropertyType>,
   metaLines: string[],
 ) => {
+  const numericFields = getQuickSaleNumericFields(form);
   const body = parseMutationInput(firesaleRequestCreateBodySchema, {
     action: "create",
     request: {
       address: form.address.trim(),
       city: form.city.trim() || getCityFromAddress(form.address),
       propertyType,
-      sqm: Number(form.sqm),
-      askingPrice: Number(form.askingPrice),
+      sqm: numericFields.sqm,
+      askingPrice: numericFields.askingPrice,
       contactEmail: form.contactEmail.trim(),
       contactPhone: form.contactPhone.trim() || null,
       notes: metaLines.join("\n") || null,

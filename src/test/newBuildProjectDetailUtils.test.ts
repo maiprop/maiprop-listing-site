@@ -99,6 +99,20 @@ describe("new build project detail helpers", () => {
     });
   });
 
+  it("computes fallback listing valuation price per sqm before using stale stored values", () => {
+    const metrics = buildProjectValuationMetrics([], {
+      price: 315000,
+      sqm: 102,
+      price_per_sqm: 3000,
+    });
+
+    expect(metrics).toEqual({
+      price: 315000,
+      sqm: 102,
+      pricePerSqm: 3088,
+    });
+  });
+
   it("formats project price, layout, and VAT summaries from the unit schedule", () => {
     const units = [
       unit({ id: "u1", price: 275000, bedrooms: 1, bathrooms: 1, vat_included: false }),

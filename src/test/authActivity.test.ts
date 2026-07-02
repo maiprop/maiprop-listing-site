@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { recordUserAuthActivity } from "@/lib/authActivity";
+import { recordUserAuthActivity, shouldLogAuthActivityWarning } from "@/lib/authActivity";
 
 const mocks = vi.hoisted(() => ({
   rpc: vi.fn(),
@@ -45,5 +45,11 @@ describe("recordUserAuthActivity", () => {
     })).resolves.toBeNull();
 
     expect(mocks.warn).toHaveBeenCalledWith("[auth activity] record_user_auth_activity failed", "permission denied");
+  });
+
+  it("keeps transient dev network telemetry failures out of the console noise", () => {
+    expect(shouldLogAuthActivityWarning(new TypeError("Failed to fetch"))).toBe(false);
+    expect(shouldLogAuthActivityWarning(new DOMException("Request aborted", "AbortError"))).toBe(false);
+    expect(shouldLogAuthActivityWarning("permission denied")).toBe(true);
   });
 });

@@ -505,7 +505,7 @@ export const submitFiresaleInterestBodySchema = z.object({
 
 export const newBuildingProjectWriteSchema = z.object({
   name: requiredString("project name", 180),
-  building_permit_number: requiredString("building permit", 120),
+  building_permit_number: optionalString("building permit", 120).optional(),
   city: requiredString("project city", 120),
   owner_id: rowIdSchema("owner id"),
 }).passthrough();

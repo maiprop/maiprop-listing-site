@@ -32,6 +32,7 @@ import {
 import { LocationAutocompleteInput } from "@/components/location/LocationAutocompleteInput";
 import { VirtualizedListingGrid } from "@/components/listings/VirtualizedListingGrid";
 import { cn } from "@/lib/utils";
+import { calculatePricePerSqm } from "@/lib/priceCalculations";
 import type { Database } from "@/integrations/supabase/types";
 
 const OPEN_HOUSES_FALLBACKS: Record<string, string> = {
@@ -360,7 +361,11 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
         address: l.address || l.city,
         city: l.city,
         price: Number(l.price),
-        pricePerSqm: l.price_per_sqm ? Number(l.price_per_sqm) : undefined,
+        pricePerSqm: calculatePricePerSqm({
+          price: l.price,
+          sqm: l.sqm,
+          storedPricePerSqm: l.price_per_sqm,
+        }) ?? undefined,
         bedrooms: l.bedrooms,
         bathrooms: l.bathrooms,
         sqm: Number(l.sqm),

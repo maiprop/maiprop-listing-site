@@ -2,6 +2,7 @@ import type { ChangeEvent } from "react";
 import i18next from "i18next";
 import { isSellerRole } from "@/lib/authUtils";
 import { isValidKaek, normalizeKaek, toFiresalePropertyType } from "@/lib/firesaleValidation";
+import { positiveFiniteNumber } from "@/lib/priceCalculations";
 
 export const propertyTypeOptions = [
   { value: "apartment", label: "🏢 Apartment" },
@@ -215,7 +216,7 @@ const BASE_PRICE_PER_SQM: Record<string, number> = {
 };
 
 export const getLocalEstimate = (form: QuickSaleFormValues): number =>
-  Math.round((BASE_PRICE_PER_SQM[form.propertyType] || 2000) * Number(form.sqm) * 0.92);
+  Math.round((BASE_PRICE_PER_SQM[form.propertyType] || 2000) * (positiveFiniteNumber(form.sqm) ?? 0) * 0.92);
 
 export const validateSubmissionForm = (form: QuickSaleFormValues, photoCount: number): QuickSaleErrors => ({
   ...validateStep1Form(form, photoCount),
@@ -223,7 +224,13 @@ export const validateSubmissionForm = (form: QuickSaleFormValues, photoCount: nu
 });
 
 export const getSubmitEstimate = (aiEstimate: number | null, form: QuickSaleFormValues): number =>
-  aiEstimate ?? Math.round(Number(form.sqm) * 1900 * 0.92);
+  positiveFiniteNumber(aiEstimate) ?? Math.round((positiveFiniteNumber(form.sqm) ?? 0) * 1900 * 0.92);
+
+export const getQuickSaleNumericFields = (form: QuickSaleFormValues) => ({
+  sqm: positiveFiniteNumber(form.sqm) ?? 0,
+  askingPrice: positiveFiniteNumber(form.askingPrice) ?? 0,
+  constructionYear: positiveFiniteNumber(form.constructionYear) ?? undefined,
+});
 
 export const getPhotoGrade = (count: number): number => {
   if (count >= 8) return 9;
