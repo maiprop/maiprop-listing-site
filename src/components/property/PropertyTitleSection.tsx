@@ -4,6 +4,7 @@ import { ENERGY_COLORS } from "@/types";
 import type { ListingWithJoins } from "@/hooks/useListings";
 import { PropertyHeroSpecsBar } from "@/components/property/PropertyHeroSpecsBar";
 import { buildListingHeroSpecs } from "@/components/property/propertyHeroSpecs";
+import { calculatePricePerSqm } from "@/lib/priceCalculations";
 
 interface Props {
   db: ListingWithJoins;
@@ -32,7 +33,11 @@ export function PropertyTitleSection({ db, isAuction }: Props) {
   const propertyType = db.property_type;
   const subtype = db.commercial_subtype;
   const energyClass = db.energy_class;
-  const pricePerSqm = db.price_per_sqm;
+  const pricePerSqm = calculatePricePerSqm({
+    price,
+    sqm: db.sqm,
+    storedPricePerSqm: db.price_per_sqm,
+  });
   const heroSpecs = buildListingHeroSpecs(db);
   const listingLabel = getListingLabel(db);
   const isRentalPricing = isRentalPricingListing(db);

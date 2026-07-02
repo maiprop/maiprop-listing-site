@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { CompareAIReports } from "@/components/CompareAIReports";
 import { ENERGY_CLASS_COLORS } from "@/lib/statusColors";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
+import { calculatePricePerSqm } from "@/lib/priceCalculations";
 
 // Compare drawer renders an arbitrary listing column row at runtime; the
 // formatter receives whatever the (heavily projected) listing record holds.
@@ -60,6 +61,15 @@ function CellValue({ row, listing }: { row: typeof ROWS[0]; listing: Listing }) 
     return val
       ? <Check className="w-4 h-4 text-brand-emerald mx-auto" />
       : <Minus className="w-4 h-4 text-muted-foreground mx-auto" />;
+  }
+
+  if (row.key === "price_per_sqm") {
+    const pricePerSqm = calculatePricePerSqm({
+      price: raw.price,
+      sqm: raw.sqm,
+      storedPricePerSqm: raw.price_per_sqm,
+    });
+    return <span className="text-sm">{pricePerSqm != null ? `€${pricePerSqm.toLocaleString()}/m²` : "—"}</span>;
   }
 
   const display = row.format ? row.format(val) : (val ?? "—");

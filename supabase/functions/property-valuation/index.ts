@@ -8,6 +8,8 @@ import { createLogger } from "../_shared/logger.ts";
 const log = createLogger("property-valuation");
 
 const BUCKET = "property-valuation";
+const NEW_BUILD_OPENAI_MODEL = "gpt-5.4";
+const NEW_BUILD_OPENAI_REASONING_EFFORT = "medium";
 const valuationLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 15, windowMs: 60_000, failClosed: true });
 const OS_VALUATION_TIMEOUT_MS = 25_000;
 
@@ -273,6 +275,11 @@ const isAuctionListing = (value: unknown): boolean =>
 const isRentalListing = (value: unknown): boolean => {
   const listingType = optionalString(value)?.toLowerCase();
   return listingType === "rent" || listingType === "rental";
+};
+
+const isNewBuildListing = (value: unknown): boolean => {
+  const listingType = optionalString(value)?.toLowerCase() ?? "";
+  return listingType === "new_build" || listingType === "new-building" || listingType === "pre_sale" || listingType === "pre-sale";
 };
 
 const isResidentialType = (value: unknown): boolean => {
@@ -564,6 +571,26 @@ const withOsDiagnostics = (
   osValuationStatus: status,
   ...(detail ? { osValuationDetail: detail } : {}),
 });
+
+const buildValuationEvidenceSection = (osData: JsonRecord | null, newBuildAiOnly: boolean): string => {
+  if (newBuildAiOnly) {
+    return `=== NEW-BUILD AI-ONLY COMPARABLE VALUATION ===
+mAI Prop OS structured valuation is intentionally disabled for new-build and pre-sale inventory.
+Use AI reasoning only, anchored to the supplied unit/project metrics, current Greek benchmark bands, and the most similar new-build, off-plan, or recently completed properties by:
+- nearby micro-location first, then same neighbourhood/submarket, then adjacent municipality only if nearby evidence is sparse
+- unit size, floor, layout, penthouse/top-floor status, energy class, parking/storage, pool/shared facilities, balcony/view, and delivery year
+- construction phase, permit certainty, developer/project quality, and VAT/new-build premium
+- asking €/sqm versus comparable new-build/off-plan unit archetypes
+For every supplied property spec and facility, adjust premium or discount explicitly: parking, penthouse/top-floor, pool, elevator, storage, balcony, view, garden, energy class, delivery year, and finish/condition must be reflected in keyFactors when material.
+Do not compare a project-average input against a starting-from price unless the supplied input explicitly represents that starting unit.
+Do not invent exact comparable addresses or transactions; describe comparable archetypes and confidence limits instead.`;
+  }
+
+  return `=== MAIPROP OS STRUCTURED VALUATION DATA ===
+${buildOsPromptContext(osData)}
+
+Use mAI Prop OS data as primary quantitative evidence when available, then enrich it with OpenAI qualitative reasoning. Explain where the OS data, listing price, micro-location, liquidity, legal risk, and qualitative asset traits agree or diverge.`;
+};
 
 // ── Greece 2026 market benchmarks ─────────────────────────────────────────────
 const MARKET_BENCHMARKS = `
@@ -922,7 +949,9 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
       latitude, longitude,
     } = body;
 
-    if (!city || !sqm || !price) {
+    const numericPrice = coerceFiniteNumber(price);
+    const numericSqm = coerceFiniteNumber(sqm);
+    if (!city || numericPrice == null || numericPrice <= 0 || numericSqm == null || numericSqm <= 0) {
       return new Response(
         JSON.stringify({ error: "city, sqm and price are required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -937,8 +966,8 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
       listingId: typeof listingId === "string" ? listingId : null,
       city: String(city),
       address,
-      price: Number(price),
-      sqm: Number(sqm),
+      price: numericPrice,
+      sqm: numericSqm,
       propertyType,
       listingType,
       latitude,
@@ -951,27 +980,31 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
     let osValuationData: JsonRecord | null = null;
     let osValuationStatus = "not_requested";
     let osValuationDetail: string | undefined;
+    const newBuildAiOnly = isNewBuildListing(listingType);
     const hasOsConfig = Boolean(
       (Deno.env.get("MAIPROP_OS_API_URL") ?? Deno.env.get("MAIPROP_OS_URL")) &&
         Deno.env.get("MAIPROP_OS_EMAIL") &&
         Deno.env.get("MAIPROP_OS_PASSWORD")
     );
     const hasOsInputs = buildOsValuationBody(structuredValuationInput) != null;
-    if (!hasOsConfig) osValuationStatus = "missing_config";
+    if (newBuildAiOnly) osValuationStatus = "skipped_new_build_ai_only";
+    else if (!hasOsConfig) osValuationStatus = "missing_config";
     else if (!hasOsInputs) osValuationStatus = "missing_inputs";
     else osValuationStatus = "requested";
 
-    try {
-      osValuationData = await fetchStructuredOsValuation(structuredValuationInput);
-      osValuationStatus = osValuationData ? "ok" : osValuationStatus === "requested" ? "no_prediction" : osValuationStatus;
-    } catch (osError) {
-      osValuationStatus = "error";
-      osValuationDetail = osError instanceof Error ? osError.message.slice(0, 120) : String(osError).slice(0, 120);
-      log.warn("property-valuation: OS structured valuation unavailable; continuing with OpenAI", {
-        listingId: structuredValuationInput.listingId,
-        city,
-        err: osError instanceof Error ? osError.message : String(osError),
-      });
+    if (!newBuildAiOnly) {
+      try {
+        osValuationData = await fetchStructuredOsValuation(structuredValuationInput);
+        osValuationStatus = osValuationData ? "ok" : osValuationStatus === "requested" ? "no_prediction" : osValuationStatus;
+      } catch (osError) {
+        osValuationStatus = "error";
+        osValuationDetail = osError instanceof Error ? osError.message.slice(0, 120) : String(osError).slice(0, 120);
+        log.warn("property-valuation: OS structured valuation unavailable; continuing with OpenAI", {
+          listingId: structuredValuationInput.listingId,
+          city,
+          err: osError instanceof Error ? osError.message : String(osError),
+        });
+      }
     }
     const osValuationFallback = osValuationData
       ? buildOsValuationResult(osValuationData, structuredValuationInput)
@@ -983,8 +1016,8 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
         city: String(city),
         address: optionalString(address),
         region: optionalString(region),
-        price: Number(price),
-        sqm: Number(sqm),
+        price: numericPrice,
+        sqm: numericSqm,
         propertyType: typeof propertyType === "string" ? propertyType : undefined,
         listingType: typeof listingType === "string" ? listingType : undefined,
         reason: "the AI provider is not configured",
@@ -1047,6 +1080,7 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
     const normalizedPropertyType = optionalString(propertyType)?.toLowerCase() ?? "apartment";
     const transactionInstructions = getTransactionInstructions(normalizedListingType);
     const typeInstructions = getTypeInstructions(normalizedPropertyType, normalizedListingType);
+    const promptPricePerSqm = coerceFiniteNumber(pricePerSqm) ?? Math.round(numericPrice / numericSqm);
 
     const prompt = `You are a senior Greek real estate valuation expert (RICS-equivalent) specialising in the 2026 Greek market. Produce a RIGOROUS, EVIDENCE-BASED valuation including a legal/tax overlay layer.
 
@@ -1061,15 +1095,12 @@ Title: ${title || "Property"}
 Location: ${address ? `${address}, ` : ""}${city}${region ? `, ${region}` : ""}, Greece
 Type: ${propertyType || "apartment"} | Transaction: ${listingType || "sale"}
 Size: ${sqm} sqm
-Listed price: €${Number(price).toLocaleString()} (€${pricePerSqm ? Math.round(Number(pricePerSqm)) : Math.round(Number(price) / Number(sqm))}/sqm)
+Listed price: €${numericPrice.toLocaleString()} (€${Math.round(promptPricePerSqm)}/sqm)
 Observed features: ${observedFeatures}
 Legal/planning signals: ${legalSignals}
 ${listingDesc}
 
-=== MAIPROP OS STRUCTURED VALUATION DATA ===
-${buildOsPromptContext(osValuationData)}
-
-Use mAI Prop OS data as primary quantitative evidence when available, then enrich it with OpenAI qualitative reasoning. Explain where the OS data, listing price, micro-location, liquidity, legal risk, and qualitative asset traits agree or diverge.
+${buildValuationEvidenceSection(osValuationData, newBuildAiOnly)}
 
 === TRANSACTION CONTEXT ===
 ${transactionInstructions}
@@ -1141,7 +1172,8 @@ Rules:
       messages: [{ role: "user", content: prompt }],
       temperature: 0.15,
       max_tokens: 4096,
-    });
+      ...(newBuildAiOnly ? { reasoning_effort: NEW_BUILD_OPENAI_REASONING_EFFORT } : {}),
+    }, newBuildAiOnly ? NEW_BUILD_OPENAI_MODEL : undefined);
 
     if (!response.ok) {
       const txt = await response.text();
@@ -1150,8 +1182,8 @@ Rules:
         city: String(city),
         address: optionalString(address),
         region: optionalString(region),
-        price: Number(price),
-        sqm: Number(sqm),
+        price: numericPrice,
+        sqm: numericSqm,
         propertyType: typeof propertyType === "string" ? propertyType : undefined,
         listingType: typeof listingType === "string" ? listingType : undefined,
         reason: `the AI provider returned ${response.status}`,
@@ -1193,8 +1225,8 @@ Rules:
         city: String(city),
         address: optionalString(address),
         region: optionalString(region),
-        price: Number(price),
-        sqm: Number(sqm),
+        price: numericPrice,
+        sqm: numericSqm,
         propertyType: typeof propertyType === "string" ? propertyType : undefined,
         listingType: typeof listingType === "string" ? listingType : undefined,
         reason: "the AI provider returned malformed JSON",
@@ -1211,6 +1243,7 @@ Rules:
     if (!result.taxFriction) result.taxFriction = 30;
     if (!result.transferReadiness) result.transferReadiness = 55;
     if (!result.valuationMode) result.valuationMode = "MODE_1_LISTING_ONLY";
+    if (!result.generatedBy) result.generatedBy = "openai";
     result = withOsDiagnostics(mergeOsEvidence(result, osValuationData, osValuationFallback), osValuationStatus, osValuationDetail);
     result = normalizeValuationResult(result, body as JsonRecord, osValuationData);
 

@@ -37,6 +37,7 @@ import {
 import { uploadListingImage } from "@/lib/buildingListingUploads";
 import { tFallback, tInterpolate } from "@/lib/i18nFallback";
 import { getListingDetailPath } from "@/lib/listingRoutes";
+import { calculatePricePerSqm } from "@/lib/priceCalculations";
 
 const INPUT_CLS = "w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors";
 const LABEL_CLS = "text-xs text-muted-foreground block mb-1.5 font-medium";
@@ -211,7 +212,8 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
   const handleAddUnit = (u: Partial<ProjectUnitInsert>) => {
     if (!id) return;
     const payload = { ...u, project_id: id } as ProjectUnitInsert;
-    if (payload.internal_sqm && payload.price) payload.price_per_sqm = Number(payload.price) / Number(payload.internal_sqm);
+    const pricePerSqm = calculatePricePerSqm({ price: payload.price, sqm: payload.internal_sqm });
+    if (pricePerSqm != null) payload.price_per_sqm = pricePerSqm;
     createUnit.mutate(payload, {
       onSuccess: () => modal.close(),
     });
@@ -219,7 +221,9 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
 
   const handleUpdateUnit = (unitId: string, updates: Partial<ProjectUnitInsert>) => {
     if (!id) return;
-    updateUnit.mutate({ id: unitId, projectId: id, updates }, { onSuccess: () => setEditingUnitId(null) });
+    const pricePerSqm = calculatePricePerSqm({ price: updates.price, sqm: updates.internal_sqm });
+    const normalizedUpdates = pricePerSqm != null ? { ...updates, price_per_sqm: pricePerSqm } : updates;
+    updateUnit.mutate({ id: unitId, projectId: id, updates: normalizedUpdates }, { onSuccess: () => setEditingUnitId(null) });
   };
 
   const handleDeleteUnit = (unitId: string) => {
@@ -374,11 +378,12 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
           {/* 2. Location */}
           <Section title={tr("projects.detail.sections.location", "Location")} icon={MapPin}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="sm:col-span-2"><label className={LABEL_CLS}>{tr("projects.fields.address", "Address")}</label><LocationAutocompleteInput mode="address" value={(currentForm.address as string) || ""} onChange={(value) => updateLocationField("address", value)} onSuggestionSelect={applyProjectLocationSelection} placeholder={tr("projects.fields.addressPlaceholder", "Street, number")} inputClassName={INPUT_CLS} /></div>
-              <div><label className={LABEL_CLS}>{tr("projects.fields.city", "City")}</label><LocationAutocompleteInput mode="city" value={(currentForm.city as string) || ""} onChange={(value) => updateLocationField("city", value)} onSuggestionSelect={(selection) => { if (selection.municipality) updateField("municipality", selection.municipality); }} placeholder={tr("projects.fields.cityPlaceholder", "e.g. Athens")} inputClassName={INPUT_CLS} /></div>
+              <div className="sm:col-span-2"><label htmlFor="project-edit-address" className={LABEL_CLS}>{tr("projects.fields.address", "Address")}</label><LocationAutocompleteInput id="project-edit-address" mode="address" value={(currentForm.address as string) || ""} onChange={(value) => updateLocationField("address", value)} onSuggestionSelect={applyProjectLocationSelection} placeholder={tr("projects.fields.addressPlaceholder", "Street, number")} inputClassName={INPUT_CLS} /></div>
+              <div><label htmlFor="project-edit-city" className={LABEL_CLS}>{tr("projects.fields.city", "City")}</label><LocationAutocompleteInput id="project-edit-city" mode="city" value={(currentForm.city as string) || ""} onChange={(value) => updateLocationField("city", value)} onSuggestionSelect={(selection) => { if (selection.municipality) updateField("municipality", selection.municipality); }} placeholder={tr("projects.fields.cityPlaceholder", "e.g. Athens")} inputClassName={INPUT_CLS} /></div>
               <div>
-                <label className={LABEL_CLS}>{tr("projects.detail.fields.municipality", "Municipality")}</label>
+                <label htmlFor="project-edit-municipality" className={LABEL_CLS}>{tr("projects.detail.fields.municipality", "Municipality")}</label>
                 <LocationAutocompleteInput
+                  id="project-edit-municipality"
                   mode="city"
                   value={(currentForm.municipality as string) || ""}
                   onChange={(value) => updateLocationField("municipality", value)}

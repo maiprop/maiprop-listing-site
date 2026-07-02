@@ -316,13 +316,22 @@ async function getUserCache(): Promise<Map<string, string>> {
 async function getOrCreateUser(acc: AccountDef): Promise<{ id: string; isNew: boolean } | null> {
   const cache = await getUserCache();
   const existingId = cache.get(acc.email);
-  if (existingId) return { id: existingId, isNew: false };
+  const userMetadata = { first_name: acc.firstName, last_name: acc.lastName };
+  if (existingId) {
+    const { error } = await supabase.auth.admin.updateUserById(existingId, {
+      password: PASSWORD,
+      email_confirm: true,
+      user_metadata: userMetadata,
+    });
+    if (error) { console.error(`\n    ✗ update user:`, error.message); return null; }
+    return { id: existingId, isNew: false };
+  }
 
   const { data, error } = await supabase.auth.admin.createUser({
     email: acc.email,
     password: PASSWORD,
     email_confirm: true,
-    user_metadata: { first_name: acc.firstName, last_name: acc.lastName },
+    user_metadata: userMetadata,
   });
   if (error) { console.error(`\n    ✗ create user:`, error.message); return null; }
   cache.set(acc.email, data.user.id);

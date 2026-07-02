@@ -1,5 +1,6 @@
 import type { Database } from "@/integrations/supabase/types";
 import { formatNewBuildPrice as formatPrice } from "@/lib/newBuildConfig";
+import { calculatePricePerSqm } from "@/lib/priceCalculations";
 
 export type NewBuildProjectUnit = Pick<
   Database["public"]["Tables"]["project_units"]["Row"],
@@ -149,13 +150,25 @@ export const buildProjectValuationMetrics = (
   const weightedUnitPricePerSqm = totalUnitPrice > 0 && totalUnitSqm > 0
     ? Math.round(totalUnitPrice / totalUnitSqm)
     : null;
-  const averageUnitPricePerSqm = averageNumber(finiteNumbers(units.map((unit) => unit.price_per_sqm)));
+  const averageUnitPricePerSqm = averageNumber(
+    units
+      .map((unit) => calculatePricePerSqm({
+        price: unit.price,
+        sqm: unit.internal_sqm,
+        storedPricePerSqm: unit.price_per_sqm,
+      }))
+      .filter((value): value is number => value != null),
+  );
 
   const averageUnitSize = averageNumber(unitSizes);
   const averageUnitPrice = averageNumber(unitPrices);
   const listingPrice = getPositiveNumber(listing?.price);
   const listingSqm = getPositiveNumber(listing?.sqm);
-  const listingPricePerSqm = getPositiveNumber(listing?.price_per_sqm);
+  const listingPricePerSqm = calculatePricePerSqm({
+    price: listing?.price,
+    sqm: listing?.sqm,
+    storedPricePerSqm: listing?.price_per_sqm,
+  });
 
   return {
     price: averageUnitPrice != null ? Math.round(averageUnitPrice) : listingPrice ?? 0,

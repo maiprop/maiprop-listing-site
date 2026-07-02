@@ -49,6 +49,7 @@ import { PropertyValuationLockedCard } from "@/components/property/PropertyValua
 import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
 import { shouldUseNewBuildRoute } from "@/lib/listingRoutes";
 import { listingReportSchema, parseMutationInput } from "@/lib/mutationSchemas";
+import { calculatePricePerSqm } from "@/lib/priceCalculations";
 
 const safeExternalUrl = (url: string | null | undefined): string | null =>
   url && /^https?:\/\//i.test(url) ? url : null;
@@ -196,7 +197,11 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
       }
     : null;
   const ownerParticipantType = db.ownerParticipantType ?? null;
-  const pricePerSqm = db.price_per_sqm;
+  const pricePerSqm = calculatePricePerSqm({
+    price,
+    sqm,
+    storedPricePerSqm: db.price_per_sqm,
+  });
   const energyClass = db.energy_class;
   const isLandType = propertyType === "land";
   const isAuction = listingType === "auction";
@@ -633,7 +638,7 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
             city: db.city ?? undefined,
             address: db.address ?? undefined,
             price: db.price ? Number(db.price) : undefined,
-            pricePerSqm: db.price_per_sqm ? Number(db.price_per_sqm) : undefined,
+            pricePerSqm: pricePerSqm ?? undefined,
             sqm: db.sqm ? Number(db.sqm) : undefined,
             bedrooms: db.bedrooms ?? undefined,
             bathrooms: db.bathrooms ?? undefined,

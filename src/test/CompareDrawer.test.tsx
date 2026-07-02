@@ -90,6 +90,7 @@ describe("CompareDrawer", () => {
     fireEvent.click(screen.getByRole("button", { name: /^compare/i }));
     expect(screen.getByText("Property Comparison")).toBeInTheDocument();
     expect(screen.getByText("AI compare stub")).toBeInTheDocument();
+    expect(screen.getByText(/3,125/)).toBeInTheDocument();
     expect(screen.getByText("€250,000")).toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThan(2);
     expect(screen.getByText("autonomous gas")).toBeInTheDocument();

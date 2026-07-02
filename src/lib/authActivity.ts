@@ -24,6 +24,18 @@ type AuthActivitySupabaseClient = {
   rpc: RecordUserAuthActivityRpc;
 };
 
+export function shouldLogAuthActivityWarning(error: unknown): boolean {
+  if (!import.meta.env.DEV) return true;
+  if (error instanceof DOMException && error.name === "AbortError") return false;
+  if (error instanceof TypeError && /failed to fetch|networkerror|load failed/i.test(error.message)) {
+    return false;
+  }
+  if (typeof error === "string" && /failed to fetch|networkerror|load failed/i.test(error)) {
+    return false;
+  }
+  return true;
+}
+
 function currentRoute() {
   if (typeof window === "undefined") return null;
   return `${window.location.pathname}${window.location.search}`;
@@ -46,7 +58,10 @@ export async function recordUserAuthActivity({
   });
 
   if (error) {
-    logger.warn("[auth activity] record_user_auth_activity failed", error.message ?? error);
+    const message = error.message ?? error;
+    if (shouldLogAuthActivityWarning(message)) {
+      logger.warn("[auth activity] record_user_auth_activity failed", message);
+    }
     return null;
   }
 

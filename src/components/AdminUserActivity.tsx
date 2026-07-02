@@ -14,6 +14,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDate, formatDateTime, formatTimeAgo } from "@/lib/format";
+import { isSyntheticAdminActivityIdentity } from "@/lib/isSyntheticAdminActivityIdentity";
 import type { Json } from "@/integrations/supabase/types";
 
 type AdminActivitySummary = {
@@ -203,9 +204,18 @@ export default function AdminUserActivity() {
 
   const summary = data?.summary ?? {};
   const hasAppAuthEvents = Boolean(summary.app_auth_events_available || (data?.recent_auth_events ?? []).length > 0);
+  const visibleUsers = useMemo(() => {
+    return (data?.users ?? []).filter((user) => !isSyntheticAdminActivityIdentity(user.email, user.display_name));
+  }, [data?.users]);
+  const visibleAuthEvents = useMemo(() => {
+    return (data?.recent_auth_events ?? []).filter((event) => !isSyntheticAdminActivityIdentity(event.email, event.display_name));
+  }, [data?.recent_auth_events]);
+  const visibleSearches = useMemo(() => {
+    return (data?.recent_searches ?? []).filter((event) => !isSyntheticAdminActivityIdentity(event.email, event.display_name));
+  }, [data?.recent_searches]);
   const filteredUsers = useMemo(() => {
     const q = userSearch.trim().toLowerCase();
-    const users = data?.users ?? [];
+    const users = visibleUsers;
     if (!q) return users;
     return users.filter((user) => [
       user.email,
@@ -215,12 +225,9 @@ export default function AdminUserActivity() {
       user.role,
       user.last_search_query,
     ].some((value) => value?.toLowerCase().includes(q)));
-  }, [data?.users, userSearch]);
+  }, [userSearch, visibleUsers]);
 
-  const maxDaily = Math.max(
-    1,
-    ...(data?.daily ?? []).map((row) => row.signups + row.logins + row.searches + (row.auth_events ?? 0)),
-  );
+  const maxDaily = Math.max(1, ...(data?.daily ?? []).map((row) => row.signups + row.logins + row.searches + (row.auth_events ?? 0)));
 
   return (
     <div className="space-y-6">
@@ -427,9 +434,9 @@ export default function AdminUserActivity() {
               <p className="text-xs text-muted-foreground">Captured from app sign-in, sign-out, restored-session, and refreshed-token events.</p>
             </div>
             <div className="divide-y divide-border">
-              {(data.recent_auth_events ?? []).length === 0 ? (
+              {visibleAuthEvents.length === 0 ? (
                 <div className="px-4 py-12 text-center text-sm text-muted-foreground">No auth events in this range yet.</div>
-              ) : data.recent_auth_events.map((event) => (
+              ) : visibleAuthEvents.map((event) => (
                 <div key={event.id} className="px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -454,9 +461,9 @@ export default function AdminUserActivity() {
               <p className="text-xs text-muted-foreground">New events are captured from the listings, auctions, and AI search surfaces.</p>
             </div>
             <div className="divide-y divide-border">
-              {(data.recent_searches ?? []).length === 0 ? (
+              {visibleSearches.length === 0 ? (
                 <div className="px-4 py-12 text-center text-sm text-muted-foreground">No search events in this range yet.</div>
-              ) : data.recent_searches.map((event) => (
+              ) : visibleSearches.map((event) => (
                 <div key={event.id} className="px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">

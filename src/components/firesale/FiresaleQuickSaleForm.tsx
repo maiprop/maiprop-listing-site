@@ -20,6 +20,7 @@ import {
   canSubmitQuickSaleRequest,
   getCityFromAddress,
   getLocalEstimate,
+  getQuickSaleNumericFields,
   getRequiredPropertyType,
   syncContactFields,
   validateStep1Form,
@@ -100,20 +101,21 @@ export const FiresaleQuickSaleForm = () => {
     if (!user) { setAiLoading(false); return; }
     setAiLoading(true);
     try {
+      const numericFields = getQuickSaleNumericFields(form);
       const { data, error: fnErr } = await supabase.functions.invoke("property-valuation", {
         body: {
           title: "Quick Sale estimate",
           city: form.city.trim() || getCityFromAddress(form.address),
           address: form.address.trim(),
-          price: Number(form.askingPrice),
-          sqm: Number(form.sqm),
+          price: numericFields.askingPrice,
+          sqm: numericFields.sqm,
           propertyType: getRequiredPropertyType(form.propertyType),
           listingType: "sale",
-          yearBuilt: Number(form.constructionYear),
+          yearBuilt: numericFields.constructionYear,
           condition: form.notes.trim() || undefined,
         },
       });
-      applyRemoteEstimate(data, fnErr, setAiEstimate, Number(form.askingPrice));
+      applyRemoteEstimate(data, fnErr, setAiEstimate, numericFields.askingPrice);
     } catch (e: unknown) {
       showAiEstimateError(e, null);
     } finally {

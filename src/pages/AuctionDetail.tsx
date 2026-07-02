@@ -54,6 +54,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import type { ListingWithJoins } from "@/hooks/useListings";
 import { formatDate, formatPrice } from "@/lib/format";
 import { APP_ORIGIN } from "@/lib/config";
+import { calculatePricePerSqm } from "@/lib/priceCalculations";
 import {
   countdownBadge,
   daysUntil,
@@ -164,6 +165,7 @@ const buildAuctionInsightsListing = (
   fallbackId: string,
 ): ListingWithJoins => {
   const bid = asNumber(auction.auction_starting_bid) ?? asNumber(auction.price) ?? 0;
+  const sqm = asNumber(auction.sqm) ?? 1;
 
   return {
     ...auction,
@@ -174,14 +176,18 @@ const buildAuctionInsightsListing = (
     price: bid,
     auction_starting_bid: bid,
     auction_date: getNullableString(auction.auction_date),
-    sqm: asNumber(auction.sqm) ?? 1,
+    sqm,
     bedrooms: asNumber(auction.bedrooms),
     bathrooms: asNumber(auction.bathrooms),
     floor: firstNumber(auction.floor, auction.propertyFloor, auction.property_floor),
     total_floors: firstNumber(auction.total_floors, auction.totalFloors, auction.numberOfFloors, auction.number_of_floors),
     year_built: asNumber(auction.year_built),
     energy_class: getNullableString(auction.energy_class),
-    price_per_sqm: asNumber(auction.price_per_sqm),
+    price_per_sqm: calculatePricePerSqm({
+      price: bid,
+      sqm,
+      storedPricePerSqm: auction.price_per_sqm,
+    }),
     property_type: getNullableString(auction.property_type),
     listing_type: "auction",
     region: getNullableString(auction.region),

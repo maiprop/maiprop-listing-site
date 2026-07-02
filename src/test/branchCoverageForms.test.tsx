@@ -190,7 +190,9 @@ describe("branch-heavy form and role components", () => {
     expect(screen.getByText("Some services need attention")).toBeInTheDocument();
     expect(screen.getByText(/Supabase:.*Unavailable/i)).toBeInTheDocument();
     fireEvent.change(screen.getByPlaceholderText("e.g. Athens"), { target: { value: "Piraeus" } });
-    fireEvent.change(screen.getByPlaceholderText("e.g. Voukourestiou 14"), { target: { value: "Voukourestiou 14" } });
+    const addressInput = screen.getByPlaceholderText("e.g. Voukourestiou 14");
+    fireEvent.focus(addressInput);
+    fireEvent.change(addressInput, { target: { value: "Voukourestiou 14" } });
     expect(set).toHaveBeenCalledWith("city", "Piraeus");
     expect(set).toHaveBeenCalledWith("address", "Voukourestiou 14");
 
@@ -198,7 +200,7 @@ describe("branch-heavy form and role components", () => {
       await new Promise(resolve => setTimeout(resolve, 450));
     });
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    const suggestion = await screen.findByText(/Voukourestiou 14, Athens/i);
+    const suggestion = await screen.findByRole("option", { name: /Voukourestiou 14, Athens/i });
     fireEvent.click(suggestion);
     expect(set).toHaveBeenCalledWith("address", "14 Voukourestiou");
     expect(set).toHaveBeenCalledWith("city", "Athens");

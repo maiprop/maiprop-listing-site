@@ -1,3 +1,5 @@
+import { ArrowUpRight, Blocks, BriefcaseBusiness, Building2, Hammer, House, Layers3, Map, Store, Warehouse } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useInView } from "@/hooks/useInView";
 
@@ -7,103 +9,61 @@ type BrowseTile = {
   displayLabel?: string;
   browseLabel: string;
   href: string;
-  icon: BrowseTypeIconName;
-  accent: string;
+  icon: LucideIcon;
+  summary: string;
   surfaceClass: string;
-  stripeClass: string;
-  textClass: string;
+  iconShellClass: string;
+  iconClass: string;
 };
 
-type BrowseTypeIconName =
-  | "apartment"
-  | "house"
-  | "land"
-  | "newBuild"
-  | "retail"
-  | "office"
-  | "stores"
-  | "mixedUse"
-  | "commercial";
-
-const BROWSE_TILES: BrowseTile[] = [
+const HOME_TILES: BrowseTile[] = [
   {
     key: "apartment",
     label: "Apartment",
     browseLabel: "apartments",
     href: "/listings?type=apartment",
-    icon: "apartment",
-    accent: "purple",
-    surfaceClass: "border-brand-purple/20 bg-brand-purple/5 hover:border-brand-purple/40 hover:bg-brand-purple/10",
-    stripeClass: "bg-brand-purple",
-    textClass: "text-brand-purple",
+    icon: Building2,
+    summary: "City apartments and everyday demand",
+    surfaceClass: "border-brand-purple/20 bg-[radial-gradient(circle_at_top_left,rgba(123,63,242,0.16),transparent_58%),linear-gradient(180deg,rgba(123,63,242,0.08),rgba(255,255,255,0.98))] hover:border-brand-purple/35",
+    iconShellClass: "border-brand-purple/20 bg-background/85 text-brand-purple shadow-[0_10px_30px_rgba(123,63,242,0.12)]",
+    iconClass: "text-brand-purple",
   },
   {
     key: "house",
     label: "Houses",
     browseLabel: "houses",
     href: "/listings?type=house",
-    icon: "house",
-    accent: "emerald",
-    surfaceClass: "border-brand-emerald/20 bg-brand-emerald/5 hover:border-brand-emerald/40 hover:bg-brand-emerald/10",
-    stripeClass: "bg-brand-emerald",
-    textClass: "text-brand-emerald",
+    icon: House,
+    summary: "Townhouses, detached homes and gardens",
+    surfaceClass: "border-brand-emerald/20 bg-[linear-gradient(180deg,rgba(11,132,92,0.08),rgba(255,255,255,0.98))] hover:border-brand-emerald/35",
+    iconShellClass: "border-brand-emerald/20 bg-background/85 text-brand-emerald",
+    iconClass: "text-brand-emerald",
   },
   {
     key: "land",
     label: "Land",
     browseLabel: "land",
     href: "/listings?type=land",
-    icon: "land",
-    accent: "sky",
-    surfaceClass: "border-brand-sky/25 bg-brand-sky/10 hover:border-brand-sky/45 hover:bg-brand-sky/15",
-    stripeClass: "bg-brand-sky",
-    textClass: "text-brand-cyan-deep",
+    icon: Map,
+    summary: "Fields, plots and development land",
+    surfaceClass: "border-brand-sky/25 bg-[linear-gradient(180deg,rgba(109,235,255,0.14),rgba(255,255,255,0.98))] hover:border-brand-sky/45",
+    iconShellClass: "border-brand-sky/25 bg-background/85 text-brand-cyan-deep",
+    iconClass: "text-brand-cyan-deep",
   },
+];
+
+const PROJECT_TILES: BrowseTile[] = [
   {
     key: "new_build",
     label: "New Buildings",
     displayLabel: "New Build",
     browseLabel: "new buildings",
     href: "/listings?listing_type=new_build",
-    icon: "newBuild",
-    accent: "gold",
-    surfaceClass: "border-brand-gold/20 bg-brand-gold/5 hover:border-brand-gold/40 hover:bg-brand-gold/10",
-    stripeClass: "bg-brand-gold",
-    textClass: "text-brand-gold",
-  },
-  {
-    key: "retail_shop",
-    label: "Retail Shops",
-    displayLabel: "Retail",
-    browseLabel: "retail shops",
-    href: "/listings?type=commercial&subtype=shop",
-    icon: "retail",
-    accent: "indigo",
-    surfaceClass: "border-brand-indigo/20 bg-brand-indigo/5 hover:border-brand-indigo/40 hover:bg-brand-indigo/10",
-    stripeClass: "bg-brand-indigo",
-    textClass: "text-brand-indigo",
-  },
-  {
-    key: "office",
-    label: "Offices",
-    browseLabel: "offices",
-    href: "/listings?type=office",
-    icon: "office",
-    accent: "cyan",
-    surfaceClass: "border-brand-cyan/25 bg-brand-cyan/10 hover:border-brand-cyan/45 hover:bg-brand-cyan/15",
-    stripeClass: "bg-brand-cyan",
-    textClass: "text-brand-cyan-deep",
-  },
-  {
-    key: "stores",
-    label: "Stores",
-    browseLabel: "stores",
-    href: "/listings?type=storage",
-    icon: "stores",
-    accent: "purple-soft",
-    surfaceClass: "border-brand-purple-soft/45 bg-brand-purple-soft/15 hover:border-brand-purple/35 hover:bg-brand-purple-soft/25",
-    stripeClass: "bg-brand-purple-soft",
-    textClass: "text-brand-purple-dark",
+    icon: Hammer,
+    summary: "Off-plan launches, projects and unit releases",
+    surfaceClass: "border-brand-gold/20 bg-[radial-gradient(circle_at_top_right,rgba(255,184,0,0.18),transparent_54%),linear-gradient(180deg,rgba(255,184,0,0.08),rgba(255,255,255,0.98))] hover:border-brand-gold/40",
+    iconShellClass: "border-brand-gold/20 bg-background/85 text-brand-gold shadow-[0_10px_30px_rgba(255,184,0,0.14)]",
+    iconClass: "text-brand-gold",
   },
   {
     key: "mixed_use",
@@ -111,145 +71,217 @@ const BROWSE_TILES: BrowseTile[] = [
     displayLabel: "Mixed Use",
     browseLabel: "mixed-use",
     href: "/listings?type=mixed_use",
-    icon: "mixedUse",
-    accent: "cyan-soft",
-    surfaceClass: "border-brand-cyan-soft/60 bg-brand-cyan-soft/20 hover:border-brand-cyan/40 hover:bg-brand-cyan-soft/30",
-    stripeClass: "bg-brand-cyan-soft",
-    textClass: "text-brand-cyan-deep",
+    icon: Layers3,
+    summary: "Projects mixing living, retail and income floors",
+    surfaceClass: "border-brand-cyan-soft/60 bg-[linear-gradient(180deg,rgba(149,250,245,0.18),rgba(255,255,255,0.98))] hover:border-brand-cyan/35",
+    iconShellClass: "border-brand-cyan-soft/60 bg-background/85 text-brand-cyan-deep",
+    iconClass: "text-brand-cyan-deep",
+  },
+];
+
+const BUSINESS_TILES: BrowseTile[] = [
+  {
+    key: "office",
+    label: "Offices",
+    browseLabel: "offices",
+    href: "/listings?type=office",
+    icon: BriefcaseBusiness,
+    summary: "Studios, headquarters and work hubs",
+    surfaceClass: "border-brand-cyan/25 bg-[linear-gradient(180deg,rgba(63,211,198,0.12),rgba(255,255,255,0.98))] hover:border-brand-cyan/40",
+    iconShellClass: "border-brand-cyan/25 bg-background/85 text-brand-cyan-deep",
+    iconClass: "text-brand-cyan-deep",
+  },
+  {
+    key: "retail_shop",
+    label: "Retail Shops",
+    displayLabel: "Retail",
+    browseLabel: "retail shops",
+    href: "/listings?type=commercial&subtype=shop",
+    icon: Store,
+    summary: "Footfall-driven shops and corner units",
+    surfaceClass: "border-brand-indigo/20 bg-[linear-gradient(180deg,rgba(85,94,255,0.08),rgba(255,255,255,0.98))] hover:border-brand-indigo/35",
+    iconShellClass: "border-brand-indigo/20 bg-background/85 text-brand-indigo",
+    iconClass: "text-brand-indigo",
+  },
+  {
+    key: "stores",
+    label: "Stores",
+    browseLabel: "stores",
+    href: "/listings?type=storage",
+    icon: Warehouse,
+    summary: "Storage units and distribution space",
+    surfaceClass: "border-brand-purple-soft/45 bg-[linear-gradient(180deg,rgba(192,167,255,0.16),rgba(255,255,255,0.98))] hover:border-brand-purple/30",
+    iconShellClass: "border-brand-purple-soft/45 bg-background/85 text-brand-purple-dark",
+    iconClass: "text-brand-purple-dark",
   },
   {
     key: "commercial",
     label: "Commercial",
     browseLabel: "commercial",
     href: "/listings?type=commercial",
-    icon: "commercial",
-    accent: "navy",
-    surfaceClass: "border-brand-navy/15 bg-brand-navy/5 hover:border-brand-navy/30 hover:bg-brand-navy/10",
-    stripeClass: "bg-brand-navy",
-    textClass: "text-brand-navy",
+    icon: Blocks,
+    summary: "Broader income-producing inventory",
+    surfaceClass: "border-brand-navy/15 bg-[linear-gradient(180deg,rgba(12,26,62,0.06),rgba(255,255,255,0.98))] hover:border-brand-navy/30",
+    iconShellClass: "border-brand-navy/15 bg-background/85 text-brand-navy",
+    iconClass: "text-brand-navy",
   },
 ];
 
-function BrowseTypeIcon({ icon }: { icon: BrowseTypeIconName }) {
-  const common = {
-    className: "browse-type-icon h-4 w-4",
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: "1.8",
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-    "aria-hidden": true,
-  };
+type BrowseCardVariant = "hero" | "spotlight" | "compact";
 
-  switch (icon) {
-    case "apartment":
-      return (
-        <svg {...common}>
-          <path d="M7 20V5.5L12 3l5 2.5V20" />
-          <path d="M9.5 8h5M9.5 11h5M9.5 14h5" />
-          <path d="M10 20v-3h4v3M6 20h12" />
-        </svg>
-      );
-    case "house":
-      return (
-        <svg {...common}>
-          <path d="M4 12.5 10 7l4 3.5 2-1.8 4 3.8" />
-          <path d="M6.5 12v7h11v-7" />
-          <path d="M10 19v-4h4v4M4 19h16" />
-        </svg>
-      );
-    case "land":
-      return (
-        <svg {...common}>
-          <path d="M4 17.5 8.5 7l4.5 3 2.5-4 4.5 11.5H4Z" />
-          <path d="M7 15h10M9 12h2.5M14 12h2" />
-        </svg>
-      );
-    case "newBuild":
-      return (
-        <svg {...common}>
-          <path d="M6 20V9h7v11M9 12h1M9 15h1M6 9l7-4h5" />
-          <path d="M18 5v4M16 9h4M14 20h5v-7h-5" />
-        </svg>
-      );
-    case "retail":
-      return (
-        <svg {...common}>
-          <path d="M5 10h14l-1.2-4H6.2L5 10Z" />
-          <path d="M7 10v9h10v-9M9 19v-4h3v4" />
-          <path d="M6 10c1 2 3 2 4 0 1 2 3 2 4 0 1 2 3 2 4 0" />
-        </svg>
-      );
-    case "office":
-      return (
-        <svg {...common}>
-          <path d="M7 20V5l10-2v17" />
-          <path d="M10 8h1M14 7h1M10 11h1M14 10h1M10 14h1M14 13h1" />
-          <path d="M5 20h14M12 20v-3" />
-        </svg>
-      );
-    case "stores":
-      return (
-        <svg {...common}>
-          <path d="M5 8h14v12H5z" />
-          <path d="M7.5 8V5.5h9V8M8 12h8M8 15h8M8 18h8" />
-        </svg>
-      );
-    case "mixedUse":
-      return (
-        <svg {...common}>
-          <path d="M5 20V8l5-3 4 3v12" />
-          <path d="M14 20h5V10h-5M8 11h2M8 14h2M16 13h1M16 16h1" />
-          <path d="M4 20h16" />
-        </svg>
-      );
-    case "commercial":
-      return (
-        <svg {...common}>
-          <path d="M4 20h16M6 20V9l6-4 6 4v11" />
-          <path d="M9 20v-5h6v5M8 11h8M10 8h4" />
-        </svg>
-      );
-  }
+const MOBILE_SHELF_CLASS = "flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [-webkit-mask-image:linear-gradient(to_right,black_calc(100%_-_28px),transparent)] [mask-image:linear-gradient(to_right,black_calc(100%_-_28px),transparent)] sm:grid sm:overflow-visible sm:pb-0 sm:[-webkit-mask-image:none] sm:[mask-image:none] [&::-webkit-scrollbar]:hidden";
+
+function BrowseTypeCard({
+  tile,
+  variant,
+  className = "",
+}: {
+  tile: BrowseTile;
+  variant: BrowseCardVariant;
+  className?: string;
+}) {
+  const Icon = tile.icon;
+
+  const variantClassName =
+    variant === "hero"
+      ? "min-h-[168px] w-[82vw] max-w-[320px] p-4 sm:min-h-[264px] sm:w-auto sm:max-w-none sm:p-5"
+      : variant === "spotlight"
+        ? "min-h-[168px] w-[82vw] max-w-[320px] p-4 sm:min-h-[132px] sm:w-auto sm:max-w-none xl:min-h-[170px]"
+        : "min-h-[156px] w-[82vw] max-w-[320px] p-4 sm:min-h-[132px] sm:w-auto sm:max-w-none";
+
+  const titleClassName =
+    variant === "hero"
+      ? "text-xl sm:text-[1.65rem]"
+      : variant === "spotlight"
+        ? "text-lg sm:text-xl"
+        : "text-base sm:text-lg";
+
+  const summaryClassName = variant === "compact" ? "text-sm leading-relaxed" : "text-sm leading-relaxed sm:text-[15px]";
+  const iconShellSize = variant === "compact" ? "h-10 w-10 rounded-lg" : "h-12 w-12 rounded-lg";
+  const arrowSize = variant === "compact" ? "h-4 w-4" : "h-5 w-5";
+
+  return (
+    <Link
+      key={tile.key}
+      to={tile.href}
+      aria-label={`Browse ${tile.browseLabel}`}
+      data-card-variant={variant}
+      className={`group relative flex h-full flex-none snap-start flex-col overflow-hidden rounded-lg border transition-all duration-200 hover:-translate-y-0.5 hover:shadow-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 sm:flex-auto ${variantClassName} ${tile.surfaceClass} ${className}`}
+    >
+      <span className="absolute inset-x-0 top-0 h-px bg-white/70" />
+      <span className="absolute right-0 top-0 h-24 w-24 rounded-full bg-white/45 blur-2xl transition-opacity group-hover:opacity-80" aria-hidden />
+
+      <div className="relative flex h-full flex-col">
+        <div className="flex items-start justify-between gap-3">
+          <span className={`flex shrink-0 items-center justify-center border ${iconShellSize} ${tile.iconShellClass}`}>
+            <Icon className={`h-5 w-5 ${tile.iconClass}`} aria-hidden />
+          </span>
+        </div>
+
+        <div className={`${variant === "compact" ? "mt-6" : "mt-auto"} space-y-2`}>
+          <div className="flex items-end justify-between gap-3">
+            <div className="space-y-1.5">
+              <p className={`font-display font-semibold leading-tight text-foreground ${titleClassName}`}>
+                {tile.displayLabel ?? tile.label}
+              </p>
+              <p className={`max-w-[24ch] text-muted-foreground ${summaryClassName}`}>
+                {tile.summary}
+              </p>
+            </div>
+            <ArrowUpRight className={`${arrowSize} shrink-0 opacity-55 transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:opacity-100 ${tile.iconClass}`} aria-hidden />
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
 }
 
 export function BrowseByTypeSection() {
   const { ref: browseRef, inView: browseInView } = useInView();
 
   return (
-    <section className="py-8 sm:py-12 bg-secondary">
+    <section className="bg-secondary py-8 sm:py-12">
       <div ref={browseRef} className="container">
-        <div className={`flex items-center justify-between mb-3 sm:mb-4 reveal ${browseInView ? "in-view" : ""}`}>
-          <h2 className="font-display text-xl sm:text-2xl font-bold">Browse by Type</h2>
-          <Link to="/listings" className="text-sm text-primary hover:underline shrink-0">
+        <div className={`mb-5 flex items-center justify-between gap-3 reveal ${browseInView ? "in-view" : ""}`}>
+          <div className="space-y-1.5">
+            <h2 className="font-display text-xl font-bold sm:text-2xl">Browse by Type</h2>
+            <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+              Choose a lane and jump straight into the inventory that matches how people actually shop: living spaces, new-build projects, and business stock.
+            </p>
+          </div>
+          <Link
+            to="/listings"
+            className="shrink-0 rounded-full border border-border bg-card px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:border-primary/30 hover:bg-primary/5"
+          >
             All
           </Link>
         </div>
 
         <div
-          data-testid="browse-by-type-grid"
-          className={`grid grid-cols-3 gap-1 sm:gap-2 max-w-3xl reveal reveal-delay-1 ${browseInView ? "in-view" : ""}`}
+          data-testid="browse-by-type-board"
+          className={`grid grid-cols-1 items-start gap-6 xl:grid-cols-12 reveal reveal-delay-1 ${browseInView ? "in-view" : ""}`}
         >
-          {BROWSE_TILES.map(({ key, label, displayLabel, browseLabel, href, icon, accent, surfaceClass, stripeClass, textClass }) => {
-            return (
-              <Link
-                key={key}
-                to={href}
-                aria-label={`Browse ${browseLabel}`}
-                data-accent={accent}
-                className={`group relative overflow-hidden rounded-xl border bg-card h-[54px] sm:h-[58px] w-full px-1 py-1.5 sm:px-3 flex flex-row items-center justify-start gap-0.5 sm:gap-2 text-left hover:shadow-soft transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${surfaceClass}`}
-              >
-                <span className={`absolute inset-x-0 top-0 h-0.5 opacity-70 transition-opacity group-hover:opacity-100 ${stripeClass}`} />
-                <span className={`browse-type-icon-shell flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-current/20 bg-background/65 ${textClass}`}>
-                  <BrowseTypeIcon icon={icon} />
-                </span>
-                <span className={`browse-type-label min-w-0 whitespace-nowrap font-display text-[10px] sm:text-xs font-semibold leading-tight transition-colors ${textClass}`}>
-                  {displayLabel ?? label}
-                </span>
-              </Link>
-            );
-          })}
+          <section
+            data-testid="browse-by-type-group-homes"
+            className="space-y-4 xl:col-span-5"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-brand-purple/15 pb-3 xl:min-h-[96px]">
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold uppercase text-brand-purple">Living Spaces</p>
+                <p className="text-sm leading-relaxed text-muted-foreground">Apartments, houses and land with strong day-to-day demand.</p>
+              </div>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-brand-purple/15 bg-brand-purple/8 text-brand-purple">
+                <Building2 className="h-5 w-5" aria-hidden />
+              </span>
+            </div>
+
+            <div data-testid="browse-by-type-group-homes-cards" className={`${MOBILE_SHELF_CLASS} sm:grid-cols-2`}>
+              <BrowseTypeCard tile={HOME_TILES[0]} variant="hero" className="sm:row-span-2" />
+              <BrowseTypeCard tile={HOME_TILES[1]} variant="compact" />
+              <BrowseTypeCard tile={HOME_TILES[2]} variant="compact" />
+            </div>
+          </section>
+
+          <section
+            data-testid="browse-by-type-group-projects"
+            className="space-y-4 xl:col-span-3"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-brand-gold/20 pb-3 xl:min-h-[96px]">
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold uppercase text-brand-gold">Projects &amp; Hybrid</p>
+                <p className="text-sm leading-relaxed text-muted-foreground">Project-led inventory for buyers comparing launches, phases and hybrid schemes.</p>
+              </div>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-brand-gold/20 bg-brand-gold/8 text-brand-gold">
+                <Hammer className="h-5 w-5" aria-hidden />
+              </span>
+            </div>
+
+            <div data-testid="browse-by-type-group-projects-cards" className={MOBILE_SHELF_CLASS}>
+              <BrowseTypeCard tile={PROJECT_TILES[0]} variant="spotlight" />
+              <BrowseTypeCard tile={PROJECT_TILES[1]} variant="compact" />
+            </div>
+          </section>
+
+          <section
+            data-testid="browse-by-type-group-commercial"
+            className="space-y-4 xl:col-span-4"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-brand-navy/10 pb-3 xl:min-h-[96px]">
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold uppercase text-brand-navy">Business Space</p>
+                <p className="text-sm leading-relaxed text-muted-foreground">Workspace, retail and logistics inventory across investment-ready formats.</p>
+              </div>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-brand-navy/10 bg-brand-navy/5 text-brand-navy">
+                <BriefcaseBusiness className="h-5 w-5" aria-hidden />
+              </span>
+            </div>
+
+            <div data-testid="browse-by-type-group-commercial-cards" className={`${MOBILE_SHELF_CLASS} sm:grid-cols-2`}>
+              {BUSINESS_TILES.map((tile) => (
+                <BrowseTypeCard key={tile.key} tile={tile} variant="compact" />
+              ))}
+            </div>
+          </section>
         </div>
       </div>
     </section>

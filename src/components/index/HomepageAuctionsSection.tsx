@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { PropertyCard, type Property } from "@/components/PropertyCard";
 import { useInView } from "@/hooks/useInView";
 import { AUCTION_FALLBACK_LOGO_URL, getAuctionStreetViewCandidateUrl } from "@/lib/auctionStreetView";
+import { calculatePricePerSqm } from "@/lib/priceCalculations";
 
 type HomepageAuctionImage = {
   sort_order?: number | null;
@@ -107,7 +108,11 @@ const getAuctionLocation = (listing: HomepageAuctionListing) => ({
 
 const getAuctionPriceFields = (listing: HomepageAuctionListing) => ({
   price: Number(valueOr(listing.price, 0)),
-  pricePerSqm: toOptionalNumber(listing.price_per_sqm),
+  pricePerSqm: calculatePricePerSqm({
+    price: listing.price,
+    sqm: listing.sqm,
+    storedPricePerSqm: listing.price_per_sqm,
+  }) ?? undefined,
   auctionStartingBid: toOptionalNumber(listing.auction_starting_bid),
 });
 

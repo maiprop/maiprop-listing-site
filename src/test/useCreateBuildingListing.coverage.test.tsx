@@ -212,6 +212,66 @@ describe("useCreateBuildingListing coverage", () => {
     });
   });
 
+  it("sends multiple project units and renovation metadata through the Edge boundary", async () => {
+    const { result } = renderHook(() => useCreateBuildingListing());
+
+    await act(async () => {
+      await result.current(makeInput({
+        projectKind: "renovation",
+        project: {
+          ...makeInput().project,
+          construction_year: "1982",
+          renovation_year: "2026",
+          delivery_date: "2026-09-01",
+        },
+        units: [
+          {
+            ...makeInput().unit,
+            unit_id: "R1",
+            unit_number: "1",
+            internal_sqm: "80",
+            price: "280000",
+          },
+          {
+            ...makeInput().unit,
+            unit_id: "R2",
+            unit_number: "2",
+            internal_sqm: "100",
+            price: "360000",
+          },
+        ],
+      } as Partial<CreateBuildingListingInput>));
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("create-new-building-listing", {
+      body: expect.objectContaining({
+        projectKind: "renovation",
+        units: [
+          expect.objectContaining({
+            unit_id: "R1",
+            internal_sqm: 80,
+            price: 280000,
+            price_per_sqm: 3500,
+          }),
+          expect.objectContaining({
+            unit_id: "R2",
+            internal_sqm: 100,
+            price: 360000,
+            price_per_sqm: 3600,
+          }),
+        ],
+        listing: expect.objectContaining({
+          listing_type: "new_build",
+          construction_status: "renovated",
+          year_built: 1982,
+          price: 280000,
+          sqm: 80,
+          tags: expect.arrayContaining(["renovation_project", "renovation_year:2026"]),
+        }),
+      }),
+    });
+  });
+
   it("does not invoke the Edge boundary when project media upload fails", async () => {
     const uploadError = new Error("upload failed");
     uploadProjectMediaMock.mockRejectedValue(uploadError);

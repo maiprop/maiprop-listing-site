@@ -66,7 +66,7 @@ describe("homepage public API fallback behavior", () => {
     publicApiMock.mockReturnValue(new Promise(() => undefined));
     (window as Window & { __MAIPROP_HOMEPAGE_INITIAL__?: unknown }).__MAIPROP_HOMEPAGE_INITIAL__ = {
       version: 1,
-      generatedAt: "2026-07-01T00:00:00.000Z",
+      generatedAt: new Date(Date.now() - 60_000).toISOString(),
       featured: [
         { id: "bootstrap-featured", title: "Bootstrap Spotlight", city: "Athens", price: 250_000, sqm: 72 },
       ],

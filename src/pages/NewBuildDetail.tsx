@@ -39,6 +39,8 @@ import { getListingDetailPath, shouldUseNewBuildRoute } from "@/lib/listingRoute
 import { invokeAuthenticatedFunction } from "@/lib/invokeAuthenticatedFunction";
 import { newBuildLeadSchema, parseMutationInput } from "@/lib/mutationSchemas";
 import { fetchNewBuildListingFallback } from "@/lib/newBuildListingFallback";
+import { buildNewBuildValuationContext } from "@/lib/newBuildValuationContext";
+import { calculatePricePerSqm } from "@/lib/priceCalculations";
 import {
   ACTIVE_UNIT_STATUSES,
   buildProjectValuationMetrics,
@@ -93,6 +95,14 @@ const cleanOptionalText = (value: string | null | undefined) => {
   const trimmed = value?.trim();
   return trimmed || undefined;
 };
+
+const getListingTags = (listing: NewBuildListing | null | undefined): string[] =>
+  Array.isArray(listing?.tags)
+    ? listing.tags.filter((tag): tag is string => typeof tag === "string" && tag.trim().length > 0)
+    : [];
+
+const isRenovationProjectListing = (listing: NewBuildListing | null | undefined): boolean =>
+  getListingTags(listing).includes("renovation_project");
 
 const getInterestPhone = (form: RegisterInterestForm, profile: Profile | null) => {
   return cleanOptionalText(form.phone) ?? cleanOptionalText(profile?.phone) ?? null;
@@ -235,6 +245,8 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
   });
   const canonicalDetailPath = listing ? getListingDetailPath(listing) : null;
   const isCanonicalNewBuild = listing ? shouldUseNewBuildRoute(listing) : false;
+  const isRenovationProject = isRenovationProjectListing(listing);
+  const valuationListingType = isRenovationProject ? "sale" : listing?.listing_type ?? "new_build";
   const project = getListingProject(listing);
   const projectUnits = sortProjectUnits(project?.project_units);
   const projectMedia = sortProjectMedia(project?.project_media);
@@ -248,6 +260,11 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
     .map((unit) => Number(unit.price))
     .filter((price) => Number.isFinite(price) && price > 0);
   const displayPrice = projectUnitPrices.length > 0 ? Math.min(...projectUnitPrices) : Number(listing?.price ?? 0);
+  const displayPricePerSqm = calculatePricePerSqm({
+    price: listing?.price,
+    sqm: listing?.sqm,
+    storedPricePerSqm: listing?.price_per_sqm,
+  });
   const projectValuationMetrics = buildProjectValuationMetrics(projectUnits, listing);
   const isFromPrice = projectUnitPrices.length > 0;
   const activeProjectUnits = projectUnits.filter((unit) => ACTIVE_UNIT_STATUSES.has(unit.availability_status ?? "available"));
@@ -302,6 +319,14 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
       contactDeveloper: !vatSummary,
     },
   ];
+  const { description: valuationDescription, tags: valuationTags } = buildNewBuildValuationContext({
+    listing,
+    project,
+    unitSizeLabel,
+    floorRangeLabel,
+    layoutLabel,
+    vatSummary,
+  });
 
   const handleRegisterInterest = async (form: RegisterInterestForm) => {
     const ownerId = listing?.owner_id;
@@ -348,7 +373,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
         bedrooms: listing.bedrooms,
         bathrooms: listing.bathrooms,
         propertyType: listing.property_type,
-        listingType: listing.listing_type ?? "new_build",
+        listingType: valuationListingType,
         floor: listing.floor,
         yearBuilt: listing.year_built,
         energyClass: listing.energy_class,
@@ -356,7 +381,14 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
         hasParking: listing.has_parking,
         hasPool: listing.has_pool,
         hasElevator: listing.has_elevator,
+        hasGarden: listing.has_garden,
+        hasStorage: listing.has_storage,
+        hasBalcony: listing.has_balcony,
+        hasView: listing.has_view,
+        hasFurnished: listing.has_furnished,
         region: displayRegion,
+        description: valuationDescription || undefined,
+        tags: valuationTags,
         condition: listing.construction_status,
       },
     }).then(({ data }) => { // skipcq: JS-R1005 - AI insight response normalizes several optional metrics together.
@@ -477,9 +509,9 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                         {trv("newBuildDetail.priceRange", "{{range}} range", { range: priceRangeLabel })}
                       </div>
                     )}
-                    {!priceRangeLabel && listing.price_per_sqm != null && (
+                    {!priceRangeLabel && displayPricePerSqm != null && (
                       <div className="text-xs text-muted-foreground mt-0.5">
-                        {trv("newBuildDetail.pricePerSqm", "{{price}} per m²", { price: formatPrice(Number(listing.price_per_sqm)) })}
+                        {trv("newBuildDetail.pricePerSqm", "{{price}} per m²", { price: formatPrice(displayPricePerSqm) })}
                       </div>
                     )}
                   </div>
@@ -748,6 +780,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                     bedrooms={listing.bedrooms}
                     bathrooms={listing.bathrooms}
                     propertyType={listing.property_type}
+                    listingType={valuationListingType}
                     yearBuilt={listing.year_built}
                     energyClass={listing.energy_class}
                     pricePerSqm={projectValuationMetrics.pricePerSqm}
@@ -757,7 +790,13 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                     hasPool={listing.has_pool}
                     hasElevator={listing.has_elevator}
                     hasGarden={listing.has_garden}
+                    hasStorage={listing.has_storage}
+                    hasBalcony={listing.has_balcony}
+                    hasView={listing.has_view}
+                    hasFurnished={listing.has_furnished}
                     region={displayRegion}
+                    description={valuationDescription || undefined}
+                    tags={valuationTags}
                     condition={listing.construction_status}
                     latitude={displayLatitude != null ? Number(displayLatitude) : undefined}
                     longitude={displayLongitude != null ? Number(displayLongitude) : undefined}

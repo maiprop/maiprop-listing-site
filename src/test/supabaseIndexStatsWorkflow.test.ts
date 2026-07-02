@@ -26,6 +26,11 @@ const advisorScript = readFileSync(
   "utf8",
 );
 
+const advisorHttpHelper = readFileSync(
+  "scripts/supabase-advisor-http.mjs",
+  "utf8",
+);
+
 const indexStatsScript = readFileSync(
   "scripts/capture-supabase-index-stats.mjs",
   "utf8",
@@ -91,12 +96,17 @@ describe("Supabase index stats workflow wiring", () => {
 
   it("records transient Supabase advisor timeouts without weakening real advisor debt gates", () => {
     expect(advisorScript).toContain("allowTransientUnavailable");
-    expect(advisorScript).toContain("function isTransientAdvisorFailure");
-    expect(advisorScript).toContain("status === 544");
+    expect(advisorScript).toContain("isTransientAdvisorFailure");
+    expect(advisorScript).toContain("isPerformanceAdvisorInternalSyntaxFailure");
     expect(advisorScript).toContain("transient_advisor_unavailable");
     expect(advisorScript).toContain("throw new Error");
     expect(advisorScript).toContain("failOnError && failingLintCount > 0");
     expect(advisorScript).toContain("assertAdvisorDebtIsActionable(advisorDebt)");
+    expect(advisorHttpHelper).toContain("function isTransientAdvisorFailure");
+    expect(advisorHttpHelper).toContain("status === 544");
+    expect(advisorHttpHelper).toContain("function isPerformanceAdvisorInternalSyntaxFailure");
+    expect(advisorHttpHelper).toContain('category === "performance"');
+    expect(advisorHttpHelper).toContain("ERROR:\\s*42601");
   });
 
   it("records transient Supabase type-generation failures without suppressing stale generated types", () => {

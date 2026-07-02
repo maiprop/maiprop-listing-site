@@ -34,6 +34,7 @@ import {
   listingWriteSchema,
   parseMutationInput,
 } from "@/lib/mutationSchemas";
+import { calculatePricePerSqm, positiveFiniteNumber } from "@/lib/priceCalculations";
 
 // Re-export the types so existing callers (`import { type ListingFormData }
 // from "@/hooks/useListingForm"`) keep working.
@@ -421,7 +422,9 @@ export function useListingForm(options?: UseListingFormOptions) {
       toast.error(tr("createListing.validation.requiredFields", "Please fill in all required fields"));
       return;
     }
-    if (Number(form.price) <= 0 || Number(form.sqm) <= 0) {
+    const priceValue = positiveFiniteNumber(form.price);
+    const sqmValue = positiveFiniteNumber(form.sqm);
+    if (priceValue == null || sqmValue == null) {
       toast.error(tr("createListing.validation.priceAreaPositive", "Price and area must be greater than zero"));
       return;
     }
@@ -469,14 +472,14 @@ export function useListingForm(options?: UseListingFormOptions) {
         property_type: form.property_type,
         listing_type: form.listing_type,
         open_house_transaction_type: lt === "open_house" ? form.open_house_transaction_type : null,
-        price: Number(form.price),
-        sqm: Number(form.sqm),
+        price: priceValue,
+        sqm: sqmValue,
         year_built: form.year_built ? Number(form.year_built) : undefined,
         energy_class: form.energy_class || undefined,
         heating_system: form.heating_system || undefined,
         construction_status: form.construction_status || undefined,
         cover_image_url: coverImagePayload,
-        price_per_sqm: form.price && form.sqm ? Math.round(Number(form.price) / Number(form.sqm)) : undefined,
+        price_per_sqm: calculatePricePerSqm({ price: priceValue, sqm: sqmValue }) ?? undefined,
         ...(isResidential && {
           bedrooms: form.bedrooms ? Number(form.bedrooms) : undefined,
           bathrooms: form.bathrooms ? Number(form.bathrooms) : undefined,
