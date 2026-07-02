@@ -5,6 +5,7 @@ CREATE OR REPLACE FUNCTION private.is_synthetic_admin_activity_identity(
 RETURNS boolean
 LANGUAGE sql
 IMMUTABLE
+SET search_path = pg_catalog
 AS $$
   SELECT
     coalesce(lower(trim(p_email)), '') LIKE '%@maiprop.demo'

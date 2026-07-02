@@ -137,6 +137,7 @@ describe("admin user activity analytics migration", () => {
 
   it("filters synthetic demo and test identities out of admin user activity analytics", () => {
     expect(syntheticActivityFilterMigration).toContain("CREATE OR REPLACE FUNCTION private.is_synthetic_admin_activity_identity");
+    expect(syntheticActivityFilterMigration).toContain("IMMUTABLE SET search_path = pg_catalog");
     expect(syntheticActivityFilterMigration).toContain("%@maiprop.demo");
     expect(syntheticActivityFilterMigration).toContain("%@maiprop.test");
     expect(syntheticActivityFilterMigration).toContain("%@maiprop-test.co");
