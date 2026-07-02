@@ -100,8 +100,15 @@ const clickFirstAuctionDetailLink = async (page: Page): Promise<boolean> => {
     .then(() => true)
     .catch(() => false);
   if (!attached) return false;
+
+  const href = await link.getAttribute("href");
+  if (!href) return false;
+
   await link.scrollIntoViewIfNeeded();
-  await link.click();
+  await Promise.all([
+    page.waitForURL((url) => url.pathname === href, { timeout: 15_000 }),
+    link.click(),
+  ]);
   return true;
 };
 
