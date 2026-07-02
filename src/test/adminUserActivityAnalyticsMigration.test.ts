@@ -22,6 +22,11 @@ const syntheticActivityFilterMigration = readFileSync(
   "utf8",
 ).replace(/\s+/g, " ");
 
+const syntheticActivitySearchPathMigration = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/20260702112614_pin_synthetic_admin_activity_search_path.sql"),
+  "utf8",
+).replace(/\s+/g, " ");
+
 const authActivityRpcOnlyMigrationName = "20260612070500_harden_auth_activity_rpc_only.sql";
 
 const guardrailsMigration = readFileSync(
@@ -151,5 +156,12 @@ describe("admin user activity analytics migration", () => {
     expect(syntheticActivityFilterMigration).toContain("NOT private.is_synthetic_admin_activity_identity");
     expect(syntheticActivityFilterMigration).toContain("JOIN visible_users vu ON vu.id = e.user_id");
     expect(syntheticActivityFilterMigration).toContain("FROM visible_users u");
+  });
+
+  it("pins synthetic activity helper search_path even after prior staging applies", () => {
+    expect(syntheticActivitySearchPathMigration).toContain("ALTER FUNCTION private.is_synthetic_admin_activity_identity(text, text)");
+    expect(syntheticActivitySearchPathMigration).toContain("SET search_path = pg_catalog");
+    expect(syntheticActivitySearchPathMigration).toContain("search_path=pg_catalog");
+    expect(syntheticActivitySearchPathMigration).toContain("must pin search_path to pg_catalog");
   });
 });
