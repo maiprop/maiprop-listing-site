@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.12.2](https://github.com/maiprop/maiprop-listing-site/compare/v1.12.1...v1.12.2) (2026-07-02)
+
+
+### Bug Fixes
+
+* harden ecas ux valuation and deployment checks ([ef5f237](https://github.com/maiprop/maiprop-listing-site/commit/ef5f2375885da799b61b3a962aa4c3156092eccd))
+* harden main ecas evidence and responsiveness ([#453](https://github.com/maiprop/maiprop-listing-site/issues/453)) ([26372c3](https://github.com/maiprop/maiprop-listing-site/commit/26372c3a90b6a1fcb988622bfde8fc202c5483b7))
+* refresh production supabase generated types ([00b3bb2](https://github.com/maiprop/maiprop-listing-site/commit/00b3bb26302de5e81658f59185259333854772e7))
+
 ## [1.12.1](https://github.com/maiprop/maiprop-listing-site/compare/v1.12.0...v1.12.1) (2026-07-01)
 
 
