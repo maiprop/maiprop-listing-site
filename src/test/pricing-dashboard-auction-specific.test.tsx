@@ -538,7 +538,6 @@ describe("Dashboard focused page behavior", () => {
       [/dashNav\.myServices/i, "services-editor"],
       [/dashNav\.booking/i, "booking-calendar"],
       [/dashNav\.leads/i, "contacts-leads"],
-      [/dashNav\.contacts/i, "contacts-contacts"],
       [/dashNav\.projects/i, "projects-tab"],
       [/dashNav\.portfolios/i, "portfolios-tab"],
       [/dashNav\.dataInput/i, "data-input-tab"],

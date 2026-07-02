@@ -207,6 +207,10 @@ const makeFixture = () => {
       "signInWithSSO",
       "SAML metadata is not stored in application tables",
       "database membership remains the authorization source of truth",
+      "listings.organization_id",
+      "projects.organization_id",
+      "listing:*",
+      "project:*",
     ].join("\n"),
   );
   writeFileSync(
@@ -219,6 +223,7 @@ const makeFixture = () => {
       "Subprocessor list",
       "Backup restore drill",
       "SAML/SSO configuration",
+      "Tenant resource ownership",
       "SOC 2 / ISO evidence is external and not claimed by this repository",
     ].join("\n"),
   );
@@ -313,6 +318,14 @@ const makeFixture = () => {
       "CREATE POLICY organization_memberships_manage ON public.organization_memberships WITH CHECK (private.has_org_role());",
       "CREATE POLICY organization_sso_providers_manage ON public.organization_sso_providers WITH CHECK (private.has_org_role());",
       "CREATE POLICY procurement_evidence_manage ON public.procurement_evidence WITH CHECK (private.has_org_role());",
+      "ALTER TABLE public.listings ADD COLUMN IF NOT EXISTS organization_id uuid;",
+      "ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS organization_id uuid;",
+      "CREATE INDEX IF NOT EXISTS idx_listings_organization_id ON public.listings (organization_id);",
+      "CREATE INDEX IF NOT EXISTS idx_projects_organization_id ON public.projects (organization_id);",
+      "WHEN p_permission = ANY(ARRAY['listing:view', 'project:view']) THEN true;",
+      "WHEN p_permission = ANY(ARRAY['listing:manage', 'project:manage']) THEN true;",
+      "CREATE POLICY listings_update ON public.listings WITH CHECK (private.has_org_permission(organization_id, 'listing:manage'));",
+      "CREATE POLICY projects_owner_update ON public.projects WITH CHECK (private.has_org_permission(organization_id, 'project:manage'));",
     ].join("\n"),
   );
   writeFileSync(

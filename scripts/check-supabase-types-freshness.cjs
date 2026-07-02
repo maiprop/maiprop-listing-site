@@ -3,6 +3,9 @@
 const { execFileSync } = require("node:child_process");
 const { appendFileSync, existsSync, readFileSync } = require("node:fs");
 const { join } = require("node:path");
+const { loadLocalEnv } = require("./_load-local-env.cjs");
+
+loadLocalEnv();
 
 const root = process.cwd();
 const strictMode = process.argv.includes("--strict");

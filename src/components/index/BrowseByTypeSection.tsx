@@ -225,10 +225,10 @@ export function BrowseByTypeSection() {
             data-testid="browse-by-type-group-homes"
             className="space-y-4 xl:col-span-5"
           >
-            <div className="flex items-start justify-between gap-4 border-b border-brand-purple/15 pb-3 xl:min-h-[96px]">
+            <div className="flex items-start justify-between gap-4 border-b border-brand-purple/15 pb-3 xl:min-h-[78px]">
               <div className="space-y-1.5">
                 <p className="text-xs font-semibold uppercase text-brand-purple">Living Spaces</p>
-                <p className="text-sm leading-relaxed text-muted-foreground">Apartments, houses and land with strong day-to-day demand.</p>
+                <p className="max-w-[24ch] text-sm leading-relaxed text-muted-foreground">Homes, apartments and land.</p>
               </div>
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-brand-purple/15 bg-brand-purple/8 text-brand-purple">
                 <Building2 className="h-5 w-5" aria-hidden />
@@ -246,10 +246,10 @@ export function BrowseByTypeSection() {
             data-testid="browse-by-type-group-projects"
             className="space-y-4 xl:col-span-3"
           >
-            <div className="flex items-start justify-between gap-4 border-b border-brand-gold/20 pb-3 xl:min-h-[96px]">
+            <div className="flex items-start justify-between gap-4 border-b border-brand-gold/20 pb-3 xl:min-h-[78px]">
               <div className="space-y-1.5">
                 <p className="text-xs font-semibold uppercase text-brand-gold">Projects &amp; Hybrid</p>
-                <p className="text-sm leading-relaxed text-muted-foreground">Project-led inventory for buyers comparing launches, phases and hybrid schemes.</p>
+                <p className="max-w-[24ch] text-sm leading-relaxed text-muted-foreground">New-build and mixed-use stock.</p>
               </div>
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-brand-gold/20 bg-brand-gold/8 text-brand-gold">
                 <Hammer className="h-5 w-5" aria-hidden />
@@ -266,10 +266,10 @@ export function BrowseByTypeSection() {
             data-testid="browse-by-type-group-commercial"
             className="space-y-4 xl:col-span-4"
           >
-            <div className="flex items-start justify-between gap-4 border-b border-brand-navy/10 pb-3 xl:min-h-[96px]">
+            <div className="flex items-start justify-between gap-4 border-b border-brand-navy/10 pb-3 xl:min-h-[78px]">
               <div className="space-y-1.5">
                 <p className="text-xs font-semibold uppercase text-brand-navy">Business Space</p>
-                <p className="text-sm leading-relaxed text-muted-foreground">Workspace, retail and logistics inventory across investment-ready formats.</p>
+                <p className="max-w-[24ch] text-sm leading-relaxed text-muted-foreground">Offices, retail and income assets.</p>
               </div>
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-brand-navy/10 bg-brand-navy/5 text-brand-navy">
                 <BriefcaseBusiness className="h-5 w-5" aria-hidden />

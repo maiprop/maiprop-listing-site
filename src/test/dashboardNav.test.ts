@@ -84,13 +84,13 @@ describe("seller role", () => {
 // ── Agent ─────────────────────────────────────────────────────────────────────
 
 describe("agent role", () => {
-  it("free agent has analytics, saved-searches, leads, contacts locked", () => {
+  it("free agent has analytics, saved-searches, and CRM locked", () => {
     const result = getNavItemsForBioType(null, "agent", false);
     const locked = lockedKeys(result);
     expect(locked).toContain("analytics");
     expect(locked).toContain("saved-searches");
     expect(locked).toContain("leads");
-    expect(locked).toContain("contacts");
+    expect(locked).not.toContain("contacts");
   });
 
   it("pro agent has no locked items", () => {
@@ -109,16 +109,16 @@ describe("agent role", () => {
 // ── Developer ─────────────────────────────────────────────────────────────────
 
 describe("developer role", () => {
-  it("free developer has analytics, saved-searches, viewings, leads, contacts, projects, portfolios locked", () => {
+  it("free developer has analytics, saved-searches, viewings, CRM, projects, and portfolios locked", () => {
     const result = getNavItemsForBioType(null, "developer", false);
     const locked = lockedKeys(result);
     expect(locked).toContain("analytics");
     expect(locked).toContain("saved-searches");
     expect(locked).toContain("viewings");
     expect(locked).toContain("leads");
-    expect(locked).toContain("contacts");
     expect(locked).toContain("projects");
     expect(locked).toContain("portfolios");
+    expect(locked).not.toContain("contacts");
   });
 
   it("pro developer has no locked items", () => {
@@ -137,9 +137,9 @@ describe("professional role", () => {
     expect(locked).toContain("messages");
     expect(locked).toContain("booking");
     expect(locked).toContain("leads");
-    expect(locked).toContain("contacts");
     expect(locked).toContain("analytics");
     expect(locked).toContain("viewings");
+    expect(locked).not.toContain("contacts");
   });
 
   it("pro professional has no locked items", () => {
@@ -173,12 +173,13 @@ describe("investor role", () => {
 // ── Institutional ─────────────────────────────────────────────────────────────
 
 describe("institutional role", () => {
-  it("free institutional has saved-searches, open-houses, contacts locked", () => {
+  it("free institutional has saved-searches, open-houses, and CRM locked", () => {
     const result = getNavItemsForBioType(null, "institutional", false);
     const locked = lockedKeys(result);
     expect(locked).toContain("saved-searches");
     expect(locked).toContain("open-houses");
-    expect(locked).toContain("contacts");
+    expect(locked).toContain("leads");
+    expect(locked).not.toContain("contacts");
   });
 
   it("pro institutional has no locked items", () => {

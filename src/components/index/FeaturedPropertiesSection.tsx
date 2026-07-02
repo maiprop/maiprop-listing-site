@@ -34,6 +34,7 @@ export function FeaturedPropertiesSection({ listings, isLoading, isError }: Prop
             : visibleListings.map((l, index) => {
                 const imgs = homepageListingImages(l);
                 const isProjectNewBuild = l.listing_type === "new_build" && Boolean(l.project_id);
+                const projectName = isProjectNewBuild ? l.project?.name?.trim() : "";
                 const listingType = l.listing_type === "new_build" && !isProjectNewBuild
                   ? "sale"
                   : l.listing_type ?? "sale";
@@ -45,7 +46,7 @@ export function FeaturedPropertiesSection({ listings, isLoading, isError }: Prop
                     deferOffscreenRendering={false}
                     property={{
                       id: l.id,
-                      title: l.title,
+                      title: projectName || l.title,
                       address: l.address || l.city,
                       city: l.city,
                       price: Number(l.price),

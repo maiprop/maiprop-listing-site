@@ -10,6 +10,7 @@ export type NewBuildCardMedia = {
 };
 
 export type NewBuildCardProject = {
+  name?: string | null;
   cover_image_url?: string | null;
   delivery_date?: string | null;
   project_units?: NewBuildCardUnit[] | null;

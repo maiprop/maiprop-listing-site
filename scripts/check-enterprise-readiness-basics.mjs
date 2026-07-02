@@ -304,6 +304,14 @@ export function checkEnterpriseTenantContract(root = process.cwd()) {
       "CREATE POLICY organization_sso_providers_manage",
       "CREATE POLICY procurement_evidence_manage",
       "CREATE POLICY organization_audit_ledger_select",
+      "ALTER TABLE public.listings ADD COLUMN IF NOT EXISTS organization_id uuid",
+      "ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS organization_id uuid",
+      "CREATE INDEX IF NOT EXISTS idx_listings_organization_id",
+      "CREATE INDEX IF NOT EXISTS idx_projects_organization_id",
+      "p_permission = ANY(ARRAY['listing:view', 'project:view'])",
+      "p_permission = ANY(ARRAY['listing:manage', 'project:manage'])",
+      "private.has_org_permission(organization_id, 'listing:manage'",
+      "private.has_org_permission(organization_id, 'project:manage'",
     ])) {
       failures.push(`supabase/migrations must include enterprise tenant contract marker: ${marker}`);
     }
@@ -318,6 +326,10 @@ export function checkEnterpriseTenantContract(root = process.cwd()) {
       "signInWithSSO",
       "SAML metadata is not stored in application tables",
       "database membership remains the authorization source of truth",
+      "listings.organization_id",
+      "projects.organization_id",
+      "listing:*",
+      "project:*",
     ])) {
       failures.push(`docs/governance/ENTERPRISE_TENANCY_AND_SSO.md must mention ${marker}`);
     }
@@ -331,6 +343,7 @@ export function checkEnterpriseTenantContract(root = process.cwd()) {
       "Subprocessor list",
       "Backup restore drill",
       "SAML/SSO configuration",
+      "Tenant resource ownership",
       "SOC 2 / ISO evidence is external and not claimed by this repository",
     ])) {
       failures.push(`docs/governance/PROCUREMENT_EVIDENCE_MATRIX.md must mention ${marker}`);

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Search, Send, Phone, Video, MoreVertical, Paperclip, Loader2, MessageSquare, ArrowLeft, Check, CheckCheck, Link2 } from "lucide-react";
+import { Search, Send, MoreVertical, Paperclip, Loader2, MessageSquare, ArrowLeft, Check, CheckCheck, Link2, Copy, ExternalLink } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { useConversations, useMessages, useSendMessage, useMarkMessagesRead } from "@/hooks/useMessages";
 
@@ -7,12 +7,20 @@ type MsgItem = NonNullable<ReturnType<typeof useMessages>["data"]>[number];
 import { useAuth } from "@/contexts/AuthContext";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { MessageContent } from "@/lib/messageContent";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { SignedAttachment } from "@/components/messages/SignedAttachment";
 import { getOtherProfile, getInitials } from "@/lib/messagesHelpers";
 import { MESSAGE_ATTACHMENT_MIME_TYPES, assertAllowedUpload } from "@/lib/uploadValidation";
+import { getListingDetailPath } from "@/lib/listingRoutes";
 
 export default function Messages() {
   const { user } = useAuth();
@@ -39,15 +47,17 @@ export default function Messages() {
   const activeConv = conversations.find((c) => c.id === activeConvId);
   const otherProfile = getOtherProfile(activeConv, user?.id || "");
 
-  // Open conversation passed from property/detail (e.g. after "Contact")
+  // Open conversation passed from property/detail (e.g. after "Contact") or copied deep link.
   useEffect(() => {
-    const openId = (location.state as { openConversationId?: string } | null)?.openConversationId;
+    const openIdFromState = (location.state as { openConversationId?: string } | null)?.openConversationId;
+    const openIdFromQuery = new URLSearchParams(location.search).get("conversation") ?? undefined;
+    const openId = openIdFromState || openIdFromQuery;
     if (openId && typeof openId === "string") {
       setActiveConvId(openId);
       setMobileView("chat");
-      navigate(location.pathname, { replace: true, state: {} });
+      if (openIdFromState) navigate(location.pathname, { replace: true, state: {} });
     }
-  }, [location.state, location.pathname, navigate]);
+  }, [location.state, location.search, location.pathname, navigate]);
 
   // Auto-select first conversation when none selected
   useEffect(() => {
@@ -169,6 +179,23 @@ export default function Messages() {
   const handleSelectConv = (id: string) => {
     setActiveConvId(id);
     setMobileView("chat");
+  };
+
+  const activeListingPath = activeConv?.listing_id
+    ? getListingDetailPath({
+        id: activeConv.listing_id,
+        listing_type: activeConv.listings?.listing_type ?? "sale",
+        is_pre_sale: activeConv.listings?.is_pre_sale ?? false,
+      })
+    : null;
+
+  const copyUrl = async (path: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(new URL(path, window.location.origin).toString());
+      toast.success(`${label} copied`);
+    } catch {
+      toast.error(`Could not copy ${label.toLowerCase()}`);
+    }
   };
 
   const filteredConvs = conversations.filter((c) => {
@@ -294,22 +321,48 @@ export default function Messages() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-sm">{otherProfile?.display_name || "User"}</div>
-                  {activeConv?.listings && (
-                    <Link to={`/property/${activeConv.listing_id}`} className="text-xs text-primary/70 hover:text-primary truncate block">
+                  {activeConv?.listings && activeListingPath && (
+                    <Link to={activeListingPath} className="text-xs text-primary/70 hover:text-primary truncate block">
                       {activeConv.listings.title} · {activeConv.listings.city}
                     </Link>
                   )}
                 </div>
                 <div className="flex items-center gap-1">
-                  <button disabled className="p-2 rounded-lg text-muted-foreground opacity-50 cursor-not-allowed" title="Coming soon">
-                    <Phone className="w-4 h-4" />
-                  </button>
-                  <button disabled className="hidden sm:block p-2 rounded-lg text-muted-foreground opacity-50 cursor-not-allowed" title="Coming soon">
-                    <Video className="w-4 h-4" />
-                  </button>
-                  <button className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
-                    <MoreVertical className="w-4 h-4" />
-                  </button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                        aria-label="Conversation options"
+                      >
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuItem
+                        disabled={!activeListingPath}
+                        onSelect={() => {
+                          if (activeListingPath) navigate(activeListingPath);
+                        }}
+                      >
+                        <ExternalLink className="mr-2 h-4 w-4" />
+                        View listing
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={!activeListingPath}
+                        onSelect={() => {
+                          if (activeListingPath) void copyUrl(activeListingPath, "Property link");
+                        }}
+                      >
+                        <Copy className="mr-2 h-4 w-4" />
+                        Copy property link
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onSelect={() => void copyUrl(`/messages?conversation=${activeConv.id}`, "Conversation link")}>
+                        <Copy className="mr-2 h-4 w-4" />
+                        Copy conversation link
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
 

@@ -9,6 +9,7 @@ export type OpenHouseTransactionType = "sale" | "rent";
 
 const PROJECT_UNIT_CARD_SELECT = ["id", "availability_status", "internal_sqm"].join(",");
 const LISTING_PROJECT_CARD_SELECT = [
+  "name",
   "delivery_date",
   `project_units!project_units_project_id_fkey(${PROJECT_UNIT_CARD_SELECT})`,
 ].join(",");

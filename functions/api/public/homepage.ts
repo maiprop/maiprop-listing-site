@@ -25,13 +25,6 @@ type ListingRow = Record<string, unknown> & {
   created_at?: string | null;
 };
 
-type PopularLocation = {
-  name: string;
-  listings: number;
-  trend: string;
-  trendUp: boolean;
-};
-
 const SECTIONS = [
   "type-counts",
   "featured",
@@ -41,8 +34,8 @@ const SECTIONS = [
   "price-index",
   "auction-count",
 ] as const;
-const HOMEPAGE_CACHE_VERSION = "open-house-transaction-v1";
-const FEATURED_CACHE_VERSION = "featured-card-v5";
+const HOMEPAGE_CACHE_VERSION = "popular-location-live-v2";
+const FEATURED_CACHE_VERSION = "featured-card-v6";
 const FEATURED_CACHE_SECONDS = 5 * 60;
 const HOMEPAGE_PRODUCER_TIMEOUT_MS = 4_500;
 const COUNTED_PROPERTY_TYPES = ["apartment", "land"] as const;
@@ -54,15 +47,11 @@ const PRICE_INDEX_FALLBACK = [
   { city: "Crete", avg_price_per_sqm: 1890, listing_count: 0, is_live: false, trend_change_pct: null, trend_up: null, trend_is_live: false },
   { city: "Rhodes", avg_price_per_sqm: 2340, listing_count: 0, is_live: false, trend_change_pct: null, trend_up: null, trend_is_live: false },
 ] as const;
-const POPULAR_LOCATION_FALLBACK: PopularLocation[] = [
-  { name: "Athens", listings: 24860, trend: "+1.2%", trendUp: true },
-  { name: "Thessaloniki", listings: 8240, trend: "+0.8%", trendUp: true },
-  { name: "Mykonos", listings: 1820, trend: "+2.3%", trendUp: true },
-  { name: "Santorini", listings: 1240, trend: "+1.9%", trendUp: true },
-];
+const POPULAR_LOCATION_NAMES = ["Athens", "Thessaloniki", "Mykonos", "Santorini"] as const;
 
 const PROJECT_UNIT_CARD_SELECT = ["id", "availability_status", "internal_sqm"].join(",");
 const featuredProjectSelect = [
+  "name",
   "delivery_date",
   `project_units!project_units_project_id_fkey(${PROJECT_UNIT_CARD_SELECT})`,
 ].join(",");
@@ -86,7 +75,7 @@ function dailyCacheBucket(): string {
 }
 
 async function fetchPopularLocations(env: PublicApiEnv) {
-  const cities = POPULAR_LOCATION_FALLBACK.map((city) => city.name);
+  const cities = [...POPULAR_LOCATION_NAMES];
   const countEntries = await Promise.all(
     cities.map(async (city) => {
       const params = new URLSearchParams();
@@ -132,11 +121,12 @@ async function fetchPopularLocations(env: PublicApiEnv) {
     bucket[city].push(price);
   }
 
-  return POPULAR_LOCATION_FALLBACK.map((fallback) => {
-    const prev = prevPrices[fallback.name] ?? [];
-    const curr = currentPrices[fallback.name] ?? [];
-    let trend = fallback.trend;
-    let trendUp = fallback.trendUp;
+  return cities.map((name) => {
+    const prev = prevPrices[name] ?? [];
+    const curr = currentPrices[name] ?? [];
+    let trend: string | null = null;
+    let trendUp: boolean | null = null;
+    let trendIsLive = false;
     if (prev.length >= 2 && curr.length >= 2) {
       const prevAvg = prev.reduce((sum, price) => sum + price, 0) / prev.length;
       const currAvg = curr.reduce((sum, price) => sum + price, 0) / curr.length;
@@ -144,13 +134,15 @@ async function fetchPopularLocations(env: PublicApiEnv) {
         const pct = ((currAvg - prevAvg) / prevAvg) * 100;
         trendUp = pct >= 0;
         trend = `${trendUp ? "+" : "-"}${Math.abs(Math.round(pct * 10) / 10).toFixed(1)}%`;
+        trendIsLive = true;
       }
     }
     return {
-      ...fallback,
-      listings: listingsByCity[fallback.name] ?? fallback.listings,
+      name,
+      listings: listingsByCity[name] ?? 0,
       trend,
       trendUp,
+      trendIsLive,
     };
   });
 }

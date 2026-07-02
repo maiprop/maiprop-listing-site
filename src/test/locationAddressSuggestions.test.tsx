@@ -6,9 +6,15 @@ import { LocationSearchField } from "@/components/listings/LocationSearchField";
 import { LocationAutocompleteInput } from "@/components/location/LocationAutocompleteInput";
 import { loadGoogleMapsPlaces } from "@/lib/googleMapsPlaces";
 
+const configMock = vi.hoisted(() => ({
+  googlePlacesEnabled: false,
+}));
+
 vi.mock("@/lib/config", () => ({
   GOOGLE_MAPS_API_KEY: "maps-key",
-  GOOGLE_PLACES_AUTOCOMPLETE_ENABLED: true,
+  get GOOGLE_PLACES_AUTOCOMPLETE_ENABLED() {
+    return configMock.googlePlacesEnabled;
+  },
 }));
 
 vi.mock("@/lib/googleMapsPlaces", () => ({
@@ -51,6 +57,9 @@ async function typeAddress(label: string) {
 describe("location address suggestions", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    configMock.googlePlacesEnabled = false;
+    vi.mocked(loadGoogleMapsPlaces).mockClear();
+    vi.mocked(loadGoogleMapsPlaces).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -274,6 +283,7 @@ describe("location address suggestions", () => {
   });
 
   it("uses Google Places details in shared address fields when Google is available", async () => {
+    configMock.googlePlacesEnabled = true;
     let placeChanged: (() => void) | undefined;
     vi.stubGlobal("google", {
       maps: {
@@ -343,6 +353,7 @@ describe("location address suggestions", () => {
   });
 
   it("supports a second Google address selection after the first one is applied", async () => {
+    configMock.googlePlacesEnabled = true;
     let placeChanged: (() => void) | undefined;
     let currentPlace = {
       formatted_address: "Voukourestiou 14, Athens, Greece",
@@ -429,6 +440,7 @@ describe("location address suggestions", () => {
   });
 
   it("uses Google Places city suggestions in shared city fields when Google is available", async () => {
+    configMock.googlePlacesEnabled = true;
     let placeChanged: (() => void) | undefined;
     vi.stubGlobal("google", {
       maps: {
@@ -491,5 +503,49 @@ describe("location address suggestions", () => {
       latitude: "37.9838",
       longitude: "23.7275",
     }));
+  });
+
+  it("keeps the fallback address panel available when Google Places has no visible prediction list", async () => {
+    configMock.googlePlacesEnabled = true;
+    const fetchMock = mockAddressFetch();
+    vi.stubGlobal("google", {
+      maps: {
+        places: {
+          Autocomplete: vi.fn(function () {
+            return {
+              addListener: vi.fn(),
+              getPlace: vi.fn(),
+            };
+          }),
+        },
+      },
+    });
+
+    function ControlledAddressField() {
+      const [value, setValue] = useState("");
+      return (
+        <>
+          <label htmlFor="google-primary-address">Project address</label>
+          <LocationAutocompleteInput
+            id="google-primary-address"
+            mode="address"
+            value={value}
+            onChange={setValue}
+            inputClassName="border"
+          />
+        </>
+      );
+    }
+
+    render(<ControlledAddressField />);
+    const input = screen.getByLabelText("Project address");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "Voukourestiou 14" } });
+
+    vi.useRealTimers();
+    expect(await screen.findByRole("listbox")).toBeInTheDocument();
+    expect(screen.getByText("Address Suggestions")).toBeInTheDocument();
+    expect(loadGoogleMapsPlaces).toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(0);
   });
 });

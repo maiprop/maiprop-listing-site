@@ -52,6 +52,11 @@ export function dbListingToCard(
   } = options;
 
   const ownerParticipantType = getOwnerParticipantType(l.profiles ?? null);
+  const project = l.project ?? l.projects ?? null;
+  const newBuildProjectName =
+    l.listing_type === "new_build" && typeof project?.name === "string"
+      ? project.name.trim()
+      : "";
 
   const tags = Array.isArray(l.tags) ? l.tags.filter((tag): tag is string => typeof tag === "string") : [];
   let ownershipStatus: string | undefined;
@@ -87,7 +92,7 @@ export function dbListingToCard(
 
   const result: ListingCard = {
     id: l.id,
-    title: l.title,
+    title: newBuildProjectName || l.title,
     address: l.address || l.city,
     city: l.city,
     price: Number(l.price),

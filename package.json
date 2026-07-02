@@ -40,6 +40,7 @@
     "seed:users": "npx tsx scripts/seed-mock-users.ts",
     "simulate": "npx tsx scripts/simulate-platform-interactions.ts",
     "cleanup:production-fixtures": "node scripts/cleanup-production-fixtures.mjs",
+    "cleanup:professional-fixtures": "node scripts/cleanup-professional-fixtures.mjs",
     "seed:listings": "npx tsx scripts/seed-mock-listings.ts",
     "seed:professionals": "npx tsx scripts/seed-mock-professionals.ts",
     "seed:open-houses": "npx tsx scripts/seed-mock-open-houses.ts",

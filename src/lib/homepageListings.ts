@@ -12,6 +12,7 @@ export type HomepageProjectUnit = {
 };
 
 export type HomepageProjectSummary = {
+  name?: string | null;
   delivery_date?: string | null;
   project_units?: HomepageProjectUnit[] | null;
 };

@@ -18,4 +18,20 @@ describe("generated Supabase types enterprise contract", () => {
       expect(generatedTypes).toContain(`${tableName}: {`);
     });
   });
+
+  it("exposes tenant ownership on first-class listing and project resources", () => {
+    const listingsBlock = generatedTypes.slice(
+      generatedTypes.indexOf("listings: {"),
+      generatedTypes.indexOf("marketing_leads: {"),
+    );
+    const projectsBlock = generatedTypes.slice(
+      generatedTypes.indexOf("projects: {"),
+      generatedTypes.indexOf("properties: {"),
+    );
+
+    expect(listingsBlock).toContain("organization_id: string | null");
+    expect(projectsBlock).toContain("organization_id: string | null");
+    expect(generatedTypes).toContain('foreignKeyName: "listings_organization_id_fkey"');
+    expect(generatedTypes).toContain('foreignKeyName: "projects_organization_id_fkey"');
+  });
 });

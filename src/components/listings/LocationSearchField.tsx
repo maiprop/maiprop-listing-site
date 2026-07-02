@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { Loader2, MapPin, Search, X } from "lucide-react";
-import { GOOGLE_MAPS_API_KEY } from "@/lib/config";
+import { GOOGLE_MAPS_API_KEY, GOOGLE_PLACES_AUTOCOMPLETE_ENABLED } from "@/lib/config";
 import { loadGoogleMapsPlaces } from "@/lib/googleMapsPlaces";
 import { useNominatimAddressSuggestions } from "@/hooks/useNominatimAddressSuggestions";
 import { getPopularLocationSuggestions, mergeLocationSuggestions } from "@/lib/locationSuggestions";
@@ -54,13 +54,15 @@ export function LocationSearchField({
 }: LocationSearchFieldProps) {
   const [focused, setFocused] = useState(false);
   const [googlePlacesRequested, setGooglePlacesRequested] = useState(false);
-  const [googlePlacesUnavailable, setGooglePlacesUnavailable] = useState(!GOOGLE_MAPS_API_KEY);
+  const googlePlacesConfigured = GOOGLE_PLACES_AUTOCOMPLETE_ENABLED && Boolean(GOOGLE_MAPS_API_KEY);
+  const [googlePlacesUnavailable, setGooglePlacesUnavailable] = useState(!googlePlacesConfigured);
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const initializedRef = useRef(false);
   const query = value.trim();
   const popularSuggestions = useMemo(() => getPopularLocationSuggestions(query), [query]);
-  const shouldUseNominatim = Boolean(query) && (googlePlacesUnavailable || popularSuggestions.length === 0);
+  const useGooglePlaces = googlePlacesConfigured && googlePlacesRequested && !googlePlacesUnavailable;
+  const shouldUseNominatim = Boolean(query) && !useGooglePlaces && (googlePlacesUnavailable || !googlePlacesConfigured);
   const { suggestions: nominatimSuggestions, loading, clear } = useNominatimAddressSuggestions(
     shouldUseNominatim ? query : "",
   );
@@ -83,7 +85,11 @@ export function LocationSearchField({
   const initGoogle = useCallback(() => {
     const input = inputRef.current;
     const Autocomplete = (window as GoogleWindow).google?.maps?.places?.Autocomplete;
-    if (!input || !Autocomplete || initializedRef.current) return;
+    if (!input || initializedRef.current) return;
+    if (!Autocomplete) {
+      setGooglePlacesUnavailable(true);
+      return;
+    }
 
     const autocomplete = new Autocomplete(input, {
       types: ["geocode"],
@@ -117,7 +123,7 @@ export function LocationSearchField({
   }, [value]);
 
   useEffect(() => {
-    if (!googlePlacesRequested || !GOOGLE_MAPS_API_KEY) return;
+    if (!googlePlacesRequested || !googlePlacesConfigured) return;
     let cancelled = false;
 
     loadGoogleMapsPlaces()
@@ -130,7 +136,7 @@ export function LocationSearchField({
       });
 
     return () => { cancelled = true; };
-  }, [googlePlacesRequested, initGoogle]);
+  }, [googlePlacesConfigured, googlePlacesRequested, initGoogle]);
 
   const selectSuggestion = (nextValue: string) => {
     onChange(nextValue);
@@ -138,7 +144,7 @@ export function LocationSearchField({
     setFocused(false);
   };
 
-  const showDropdown = focused && (suggestions.length > 0 || loading);
+  const showDropdown = focused && (!useGooglePlaces || !query) && (suggestions.length > 0 || loading);
   const pos = showDropdown ? getPos() : null;
   const dropdown = showDropdown && pos ? (
     <div
@@ -195,7 +201,11 @@ export function LocationSearchField({
           if (event.key === "Enter" && suggestions[0] && !value.trim()) selectSuggestion(suggestions[0]);
         }}
         className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none min-w-0"
-        autoComplete="off"
+        autoComplete="new-password"
+        autoCorrect="off"
+        autoCapitalize="none"
+        spellCheck={false}
+        enterKeyHint="search"
       />
       {value && (
         <button

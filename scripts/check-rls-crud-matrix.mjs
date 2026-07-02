@@ -1,10 +1,13 @@
 #!/usr/bin/env node
+import localEnvLoader from "./_load-local-env.cjs";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import {
   assertRlsCrudMatrix,
   buildRlsCrudMatrix,
 } from "./rls-crud-matrix.mjs";
+
+localEnvLoader.loadLocalEnv();
 
 const args = process.argv.slice(2);
 const accessToken = process.env.SUPABASE_ACCESS_TOKEN;

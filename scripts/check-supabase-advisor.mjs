@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import localEnvLoader from "./_load-local-env.cjs";
 import { appendFile, readFile, writeFile } from "node:fs/promises";
 import {
   assertAdvisorDebtIsActionable,
@@ -14,6 +15,8 @@ import {
   isPerformanceAdvisorInternalSyntaxFailure,
   isTransientAdvisorFailure,
 } from "./supabase-advisor-http.mjs";
+
+localEnvLoader.loadLocalEnv();
 
 const args = process.argv.slice(2);
 

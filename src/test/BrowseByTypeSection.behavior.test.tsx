@@ -42,9 +42,9 @@ describe("BrowseByTypeSection", () => {
     expect(newBuildLink).toHaveAttribute("data-card-variant", "spotlight");
     expect(newBuildLink).toHaveClass("sm:min-h-[132px]");
     expect(mixedUseLink).toHaveClass("sm:min-h-[132px]");
-    expect(within(homesGroup).getByText("Apartments, houses and land with strong day-to-day demand.")).toBeInTheDocument();
-    expect(within(projectsGroup).getByText("Project-led inventory for buyers comparing launches, phases and hybrid schemes.")).toBeInTheDocument();
-    expect(within(commercialGroup).getByText("Workspace, retail and logistics inventory across investment-ready formats.")).toBeInTheDocument();
+    expect(within(homesGroup).getByText("Homes, apartments and land.")).toBeInTheDocument();
+    expect(within(projectsGroup).getByText("New-build and mixed-use stock.")).toBeInTheDocument();
+    expect(within(commercialGroup).getByText("Offices, retail and income assets.")).toBeInTheDocument();
 
     expect(screen.getByRole("link", { name: /Browse apartments/i })).toHaveAttribute("href", "/listings?type=apartment");
     expect(screen.getByRole("link", { name: /Browse houses/i })).toHaveAttribute("href", "/listings?type=house");
