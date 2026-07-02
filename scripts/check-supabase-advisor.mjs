@@ -10,6 +10,10 @@ import {
   buildAdvisorStepSummary,
   computeAdvisorActionability,
 } from "./supabase-advisor-summary.mjs";
+import {
+  isPerformanceAdvisorInternalSyntaxFailure,
+  isTransientAdvisorFailure,
+} from "./supabase-advisor-http.mjs";
 
 const args = process.argv.slice(2);
 
@@ -69,13 +73,6 @@ function advisorErrorDetail(payload, body) {
   return String(body);
 }
 
-function isTransientAdvisorFailure(status, detail) {
-  if (status === 544) return true;
-  return /connection terminated|connection timeout|i\/o timeout|timed out|timeout|econnreset|etimedout/i.test(
-    String(detail),
-  );
-}
-
 function buildTransientAdvisorUnavailableResult(category, status, detail) {
   const statusLabel = status ? `HTTP ${status}` : "network timeout";
   const unavailableReason = `${category} advisor request failed with ${statusLabel}: ${detail}`;
@@ -119,6 +116,9 @@ async function fetchAdvisor(category) {
 
   if (!response.ok) {
     const detail = advisorErrorDetail(payload, body);
+    if (isPerformanceAdvisorInternalSyntaxFailure(response.status, detail, category)) {
+      return buildTransientAdvisorUnavailableResult(category, response.status, detail);
+    }
     if (allowTransientUnavailable && isTransientAdvisorFailure(response.status, detail)) {
       return buildTransientAdvisorUnavailableResult(category, response.status, detail);
     }
