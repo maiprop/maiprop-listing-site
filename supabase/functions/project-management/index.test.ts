@@ -6,6 +6,7 @@ type MockScenario = {
   profileRole?: string | null;
   roleSwitchInProgress?: boolean;
   ownedProject?: boolean;
+  existingUnit?: Record<string, unknown> | null;
   calls: Array<{ name: string; args?: unknown }>;
 };
 
@@ -79,6 +80,20 @@ export function createClient() {
                 data: scenario.ownedProject === false
                   ? null
                   : { id: value, owner_id: "11111111-1111-4111-8111-111111111111" },
+                error: null,
+              };
+            }
+            if (table === "project_units") {
+              return {
+                data: scenario.existingUnit === null
+                  ? null
+                  : scenario.existingUnit ?? {
+                    id: value,
+                    project_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                    price: 250000,
+                    internal_sqm: 100,
+                    price_per_sqm: 2500,
+                  },
                 error: null,
               };
             }
@@ -195,6 +210,7 @@ Deno.test("create_unit forces project scope and strips client-controlled links",
       unit_id: "A1",
       internal_sqm: 50,
       price: 300000,
+      price_per_sqm: 1,
     },
   }));
   const parsed = await res.json();
@@ -208,6 +224,36 @@ Deno.test("create_unit forces project scope and strips client-controlled links",
   const payload = (insert?.args as { payload: Record<string, unknown> }).payload;
   assertEquals(payload.project_id, PROJECT_ID);
   assertEquals(payload.listing_id, undefined);
+  assertEquals(payload.price_per_sqm, 6000);
+});
+
+Deno.test("update_unit recomputes price per sqm from the persisted unit state", async () => {
+  resetScenario({
+    existingUnit: {
+      id: ROW_ID,
+      project_id: PROJECT_ID,
+      price: 300000,
+      internal_sqm: 100,
+      price_per_sqm: 3000,
+    },
+  });
+  const res = await handler(authedJson({
+    action: "update_unit",
+    projectId: PROJECT_ID,
+    id: ROW_ID,
+    updates: {
+      price: 315000,
+      price_per_sqm: 3000,
+    },
+  }));
+
+  assertEquals(res.status, 200);
+  const update = globalThis.__projectManagementScenario.calls.find((call) =>
+    call.name === "update" && (call.args as { table?: string })?.table === "project_units"
+  );
+  const payload = (update?.args as { payload: Record<string, unknown> }).payload;
+  assertEquals(payload.price, 315000);
+  assertEquals(payload.price_per_sqm, 3150);
 });
 
 Deno.test("listing cover updates are scoped to project and verified owner", async () => {

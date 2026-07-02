@@ -179,7 +179,7 @@ describe("AdminUserActivity", () => {
     );
   });
 
-  it("surfaces auth and search activity for maiprop demo mock users", async () => {
+  it("suppresses synthetic demo and Stripe probe accounts from visible activity rows", async () => {
     mocks.rpc.mockResolvedValueOnce({
       data: {
         ...snapshot,
@@ -243,10 +243,12 @@ describe("AdminUserActivity", () => {
 
     renderWithProviders(<AdminUserActivity />);
 
-    expect((await screen.findAllByText("Buyer Free Demo")).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("buyer.free@maiprop.demo")).toBeInTheDocument();
-    expect(screen.getByText("agent.pro@maiprop.demo")).toBeInTheDocument();
-    expect(screen.getAllByText("session restored").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("Athens apartment").length).toBeGreaterThanOrEqual(1);
+    await screen.findByText("User Activity");
+
+    expect(screen.queryByText("Buyer Free Demo")).not.toBeInTheDocument();
+    expect(screen.queryByText("buyer.free@maiprop.demo")).not.toBeInTheDocument();
+    expect(screen.queryByText("agent.pro@maiprop.demo")).not.toBeInTheDocument();
+    expect(screen.queryByText("Athens apartment")).not.toBeInTheDocument();
+    expect(screen.queryByText("session restored")).not.toBeInTheDocument();
   });
 });

@@ -59,6 +59,7 @@ jobs:
           VITE_STRIPE_PRO_PRODUCT_ID:    ${{ secrets.VITE_STRIPE_PRO_PRODUCT_ID }}
           VITE_TURNSTILE_SITE_KEY:       ${{ secrets.VITE_TURNSTILE_SITE_KEY }}
           VITE_GOOGLE_MAPS_API_KEY:      ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+          VITE_ENABLE_GOOGLE_PLACES_AUTOCOMPLETE: "true"
           VITE_PLAUSIBLE_DOMAIN:         ${{ secrets.VITE_PLAUSIBLE_DOMAIN }}
           VITE_APP_URL:                  ${{ secrets.VITE_APP_URL }}
 

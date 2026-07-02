@@ -129,13 +129,33 @@ describe("CreateNewBuildingListing", () => {
     allowed.unmount();
   });
 
+  it("surfaces multi-unit inventory from the first step for new-build and renovation projects", async () => {
+    renderPage();
+
+    expect(screen.getByText(/Multi-unit inventory/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Add unit/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Renovation$/i }));
+    expect(screen.getByText(/Multi-unit inventory/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Add unit/i })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText("e.g. Marina Heights"), { target: { value: "Renovation Heights" } });
+    fireEvent.change(screen.getByPlaceholderText("1982"), { target: { value: "1982" } });
+    fireEvent.change(screen.getByPlaceholderText("2026"), { target: { value: "2026" } });
+    fireEvent.change(screen.getByPlaceholderText("e.g. Athens"), { target: { value: "Athens" } });
+    fireEvent.click(screen.getByRole("button", { name: /Add unit/i }));
+
+    expect(await screen.findByText(/Step 2 of 5/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Project Inventory/i })).toBeInTheDocument();
+  });
+
   it("presents the wizard as one New Build project ad, not a project plus linked listings", async () => {
     renderPage();
 
     expect(screen.getByRole("heading", { name: /Create New Build Ad/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Project/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Inventory/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Ad/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Ad$/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Create a regular listing/i })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Manage New Build Ads/i })).toHaveAttribute("href", "/projects");
 
@@ -143,7 +163,8 @@ describe("CreateNewBuildingListing", () => {
     fireEvent.click(screen.getByRole("button", { name: /Next/i }));
     expect(await screen.findByText(/Step 2 of 5/i)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /Project Inventory/i })).toBeInTheDocument();
-    expect(screen.getByText(/Add the first available unit/i)).toBeInTheDocument();
+    expect(screen.getByText(/Add the available units, prices, and specs/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Add unit/i })).toBeInTheDocument();
     expect(screen.queryByText(/specific unit you are listing/i)).not.toBeInTheDocument();
 
     fillRequiredUnit();
@@ -172,8 +193,8 @@ describe("CreateNewBuildingListing", () => {
     expect(await screen.findByText(/Step 2 of 5/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Next/i }));
-    expect(await screen.findByText("Internal sqm is required")).toBeInTheDocument();
-    expect(toastMock.error).toHaveBeenLastCalledWith("Internal sqm is required");
+    expect(await screen.findByText("Every unit needs size, price, bedrooms, and bathrooms")).toBeInTheDocument();
+    expect(toastMock.error).toHaveBeenLastCalledWith("Every unit needs size, price, bedrooms, and bathrooms");
 
     fillRequiredUnit();
     fireEvent.click(screen.getByRole("button", { name: /Next/i }));

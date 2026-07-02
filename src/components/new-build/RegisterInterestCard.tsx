@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { formatNewBuildPrice } from "@/lib/newBuildConfig";
 import { tFallback, tInterpolate } from "@/lib/i18nFallback";
+import { calculatePricePerSqm } from "@/lib/priceCalculations";
 
 export function RegisterInterestCard({
   listing,
@@ -24,6 +25,11 @@ export function RegisterInterestCard({
   const [form, setForm] = useState({ name: "", phone: "", message: "" });
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const pricePerSqm = calculatePricePerSqm({
+    price: listing.price,
+    sqm: listing.sqm,
+    storedPricePerSqm: listing.price_per_sqm,
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,8 +71,8 @@ export function RegisterInterestCard({
         <div className="mb-4">
           <p className="text-xs text-muted-foreground mb-0.5">{tr("newBuildDetail.interestCard.startingFrom", "Starting from")}</p>
           <p className="font-display text-3xl font-bold text-primary">{formatNewBuildPrice(Number(listing.price))}</p>
-          {listing.price_per_sqm != null && (
-            <p className="text-xs text-muted-foreground mt-1">{trv("newBuildDetail.pricePerSqm", "{{price}} / m²", { price: formatNewBuildPrice(Number(listing.price_per_sqm)) })}</p>
+          {pricePerSqm != null && (
+            <p className="text-xs text-muted-foreground mt-1">{trv("newBuildDetail.pricePerSqm", "{{price}} / m²", { price: formatNewBuildPrice(pricePerSqm) })}</p>
           )}
         </div>
         <div className="rounded-xl border border-border bg-secondary/40 p-4 mb-3">
@@ -87,8 +93,8 @@ export function RegisterInterestCard({
       <div className="bg-gradient-to-br from-primary/10 to-primary/5 border-b border-border px-5 py-4">
         <p className="text-xs text-muted-foreground mb-0.5">{tr("newBuildDetail.interestCard.startingFrom", "Starting from")}</p>
         <p className="font-display text-3xl font-bold text-primary">{formatNewBuildPrice(Number(listing.price))}</p>
-        {listing.price_per_sqm != null && (
-          <p className="text-xs text-muted-foreground mt-1">{trv("newBuildDetail.pricePerSqm", "{{price}} / m²", { price: formatNewBuildPrice(Number(listing.price_per_sqm)) })}</p>
+        {pricePerSqm != null && (
+          <p className="text-xs text-muted-foreground mt-1">{trv("newBuildDetail.pricePerSqm", "{{price}} / m²", { price: formatNewBuildPrice(pricePerSqm) })}</p>
         )}
         {listing.listing_type === "new_build" && (
           <div className="mt-3 rounded-lg bg-primary/10 border border-primary/20 px-3 py-2 text-xs text-primary font-medium">

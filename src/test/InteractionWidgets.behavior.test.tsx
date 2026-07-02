@@ -229,6 +229,15 @@ describe("small interaction widgets", () => {
     expect(screen.getByText(/Indicative only/i)).toBeInTheDocument();
   });
 
+  it("initializes ROI estimates safely when the listing area is unavailable", () => {
+    render(<ROICalculator defaultPrice={300000} defaultSqm={0} />);
+
+    const values = screen.getAllByRole("spinbutton").map((input) => (input as HTMLInputElement).value);
+    expect(values).not.toContain("Infinity");
+    expect(values).not.toContain("NaN");
+    expect(screen.getByText("Cap rate")).toBeInTheDocument();
+  });
+
   it("streams Pro AI responses, preserves group chats, clears, and handles auth plus HTTP failures", async () => {
     getSessionMock.mockResolvedValue({ data: { session: { access_token: "token" } } });
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(streamingResponse([

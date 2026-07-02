@@ -5,6 +5,7 @@ import {
   canSubmitQuickSaleRequest,
   getPhotoGrade,
   getPhotoSelectionText,
+  getQuickSaleNumericFields,
   getRequiredPropertyType,
   getLocalEstimate,
   getSubmitEstimate,
@@ -88,6 +89,8 @@ describe("quick sale form model helpers", () => {
 
     expect(getSubmitEstimate(250000, validForm())).toBe(250000);
     expect(getSubmitEstimate(null, validForm({ sqm: "80" }))).toBe(139840);
+    expect(getSubmitEstimate(Number.NaN, validForm({ sqm: "80" }))).toBe(139840);
+    expect(getSubmitEstimate(null, validForm({ sqm: "0" }))).toBe(0);
     expect(getRequiredPropertyType("commercial_shop")).toBe("commercial");
     expect(() => getRequiredPropertyType("garage")).toThrow("Property type is invalid");
 
@@ -98,5 +101,33 @@ describe("quick sale form model helpers", () => {
     expect(getPhotoSelectionText(1)).toBe("1 photo selected");
     expect(getPhotoSelectionText(2)).toBe("2 photos selected");
     expect(propertyTypeLabel("apartment", "Apartment")).toBe("Apartment");
+  });
+
+  it("does not produce negative or non-finite local estimates from invalid area input", () => {
+    expect(getLocalEstimate(validForm({ sqm: "0" }))).toBe(0);
+    expect(getLocalEstimate(validForm({ sqm: "-50" }))).toBe(0);
+    expect(getLocalEstimate(validForm({ sqm: "not-a-number" }))).toBe(0);
+  });
+
+  it("normalizes quick-sale numeric payload fields before API submission", () => {
+    expect(getQuickSaleNumericFields(validForm({
+      askingPrice: "425000",
+      sqm: "110",
+      constructionYear: "2015",
+    }))).toEqual({
+      askingPrice: 425000,
+      sqm: 110,
+      constructionYear: 2015,
+    });
+
+    expect(getQuickSaleNumericFields(validForm({
+      askingPrice: "NaN",
+      sqm: "-10",
+      constructionYear: "unknown",
+    }))).toEqual({
+      askingPrice: 0,
+      sqm: 0,
+      constructionYear: undefined,
+    });
   });
 });

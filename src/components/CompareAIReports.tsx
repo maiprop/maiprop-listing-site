@@ -11,6 +11,7 @@ import {
   parseMutationInput,
   propertyValuationBodySchema,
 } from "@/lib/mutationSchemas";
+import { calculatePercentDelta, calculatePricePerSqm } from "@/lib/priceCalculations";
 
 // Compare drawer is fed both the formatted card view and the raw listing row
 // from useListings. Both shapes have ~80 columns between them and a tighter
@@ -116,7 +117,7 @@ function NoiseBadge({ level }: { level: "low" | "moderate" | "high" }) {
 // ── Valuation mini card ───────────────────────────────────────────────────────
 function ValuationCell({ data, price }: { data: AIReport; price: number }) {
   const diff = data.estimatedValue - price;
-  const pct = Math.round((diff / price) * 100);
+  const pct = calculatePercentDelta({ value: data.estimatedValue, baseline: price }) ?? 0;
   const cmpCfg = {
     below_market: { label: "Below Mkt", colour: "text-emerald-400" },
     at_market: { label: "At Market", colour: "text-yellow-400" },
@@ -161,6 +162,11 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
       const raw = listing._raw ?? listing;
       try {
         // Valuation
+        const pricePerSqm = calculatePricePerSqm({
+          price: raw.price,
+          sqm: raw.sqm,
+          storedPricePerSqm: raw.price_per_sqm,
+        });
         const valBody = {
           listingId: raw.id,
           title: listing.title,
@@ -177,7 +183,7 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
           floor: raw.floor,
           yearBuilt: raw.year_built,
           energyClass: raw.energy_class,
-          pricePerSqm: raw.price_per_sqm,
+          pricePerSqm: pricePerSqm ?? undefined,
           hasParking: raw.has_parking,
           hasPool: raw.has_pool,
           hasElevator: raw.has_elevator,

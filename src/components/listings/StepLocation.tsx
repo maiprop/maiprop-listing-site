@@ -1,12 +1,9 @@
-import { useState, useRef, useEffect } from "react";
+import type { Ref } from "react";
 import { Info, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { GOOGLE_MAPS_API_KEY, GOOGLE_PLACES_AUTOCOMPLETE_ENABLED } from "@/lib/config";
-import { loadGoogleMapsPlaces } from "@/lib/googleMapsPlaces";
 import { FieldLabel, FieldError, FormInput as Input } from "@/components/listings/FormPrimitives";
 import { LocationAutocompleteInput } from "@/components/location/LocationAutocompleteInput";
-import { useNominatimAddressSuggestions } from "@/hooks/useNominatimAddressSuggestions";
-import { getNominatimAddressLine, getNominatimCity, getNominatimMunicipality, getNominatimPostalCode } from "@/lib/locationSuggestions";
 import type { ListingFormData } from "@/hooks/useListingForm";
 import { tFallback } from "@/lib/i18nFallback";
 
@@ -27,100 +24,13 @@ interface Props {
   stepActive: boolean;
 }
 
-type GooglePlace = {
-  address_components?: Array<{ long_name: string; short_name: string; types: string[] }>;
-  formatted_address?: string;
-  geometry?: {
-    location?: {
-      lat?: () => number;
-      lng?: () => number;
-    };
-  };
-};
-
-export function StepLocation({ form, set, errors, setFieldRef, connections, stepActive }: Props) {
+export function StepLocation({ form, set, errors, setFieldRef, connections, stepActive: _stepActive }: Props) {
   const { t } = useTranslation();
-  const [googlePlacesRequested, setGooglePlacesRequested] = useState(false);
-
-  const addressInputRef = useRef<HTMLInputElement | null>(null);
-  const addressSuggestionsRef = useRef<HTMLDivElement | null>(null);
-  const googleAutocompleteRef = useRef<{ getPlace: () => GooglePlace } | null>(null);
-  const nominatimQuery = [form.address, form.city].filter(Boolean).join(", ");
-  const { rawSuggestions: suggestions, loading: addrLoading, clear: clearAddressSuggestions } =
-    useNominatimAddressSuggestions(nominatimQuery);
-
-  // Google Places autocomplete
-  useEffect(() => {
-    if (!GOOGLE_PLACES_AUTOCOMPLETE_ENABLED || !stepActive || !googlePlacesRequested) return;
-    let cancelled = false;
-
-    type GPlacesAutoComplete = new (input: HTMLInputElement, opts: unknown) => {
-      addListener: (event: string, cb: () => void) => void;
-      getPlace: () => GooglePlace;
-    };
-    type GWindow = { google?: { maps?: { places?: { Autocomplete?: GPlacesAutoComplete } } } };
-
-    const initGoogle = () => {
-      const input = addressInputRef.current;
-      const AutocompleteClass = (window as GWindow).google?.maps?.places?.Autocomplete;
-      if (!input || googleAutocompleteRef.current) return;
-      if (!AutocompleteClass) return;
-      const autocomplete = new AutocompleteClass(input, {
-        types: ["address"], componentRestrictions: { country: "gr" }, fields: ["address_components", "formatted_address", "geometry"],
-      });
-      autocomplete.addListener("place_changed", () => {
-        const place = autocomplete.getPlace();
-        if (!place.address_components) return;
-        const ac = place.address_components;
-        const get = (type: string) => ac.find(c => c.types.includes(type))?.long_name ?? "";
-        const street = get("route");
-        const number = get("street_number");
-        const city = get("locality") || get("administrative_area_level_2") || get("administrative_area_level_1");
-        const state = get("administrative_area_level_1");
-        const postcode = get("postal_code");
-        set("address", [number, street].filter(Boolean).join(" ") || place.formatted_address || form.address);
-        if (city) set("city", city);
-        if (state) set("region", state);
-        if (postcode) set("postal_code", postcode);
-        const latitude = place.geometry?.location?.lat?.();
-        const longitude = place.geometry?.location?.lng?.();
-        if (typeof latitude === "number" && Number.isFinite(latitude)) set("latitude", String(latitude));
-        if (typeof longitude === "number" && Number.isFinite(longitude)) set("longitude", String(longitude));
-      });
-      googleAutocompleteRef.current = autocomplete;
-    };
-
-    loadGoogleMapsPlaces()
-      .then(() => {
-        if (!cancelled) initGoogle();
-      })
-      .catch(() => undefined);
-
-    return () => {
-      cancelled = true;
-      googleAutocompleteRef.current = null;
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stepActive, googlePlacesRequested]);
-
   const allOk = connections.supabaseOk && connections.storageOk && connections.locationOk;
   const tr = (key: string, fallback: string) => tFallback(t, key, fallback);
   const clearCoordinates = () => {
     set("latitude", "");
     set("longitude", "");
-  };
-  const hasSavedCoordinates = Boolean(String(form.latitude ?? "").trim()) && Boolean(String(form.longitude ?? "").trim());
-  const applyAddressSuggestion = (s: (typeof suggestions)[number]) => {
-    set("address", getNominatimAddressLine(s));
-    const city = getNominatimCity(s);
-    const municipality = getNominatimMunicipality(s);
-    const postalCode = getNominatimPostalCode(s);
-    if (city) set("city", city);
-    if (municipality) set("region", municipality);
-    if (postalCode) set("postal_code", postalCode);
-    if (s.lat) set("latitude", s.lat);
-    if (s.lon) set("longitude", s.lon);
-    clearAddressSuggestions();
   };
 
   return (
@@ -162,43 +72,38 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
         <FieldError msg={errors.city} />
       </div>
 
-      <div>
-        <FieldLabel>{tr("createListing.location.streetAddress", "Street Address")} {(GOOGLE_PLACES_AUTOCOMPLETE_ENABLED || GOOGLE_MAPS_API_KEY) ? tr("createListing.location.googleHint", "(start typing for address suggestions)") : ""}</FieldLabel>
-        <input
-          ref={el => { addressInputRef.current = el; setFieldRef("address")(el); }}
-          type="text"
-          placeholder={(GOOGLE_PLACES_AUTOCOMPLETE_ENABLED || GOOGLE_MAPS_API_KEY) ? tr("createListing.location.addressGooglePlaceholder", "e.g. Voukourestiou 14, Athens") : tr("createListing.location.addressPlaceholder", "e.g. Voukourestiou 14")}
+      <div ref={setFieldRef("address") as Ref<HTMLDivElement>}>
+        <FieldLabel>
+          {tr("createListing.location.streetAddress", "Street Address")}{" "}
+          {(GOOGLE_PLACES_AUTOCOMPLETE_ENABLED || GOOGLE_MAPS_API_KEY)
+            ? tr("createListing.location.googleHint", "(start typing for address suggestions)")
+            : ""}
+        </FieldLabel>
+        <LocationAutocompleteInput
+          mode="address"
           value={form.address}
-          onChange={e => {
-            set("address", e.target.value);
+          onChange={(value) => {
+            set("address", value);
             clearCoordinates();
           }}
-          onBlur={event => {
-            const nextTarget = event.relatedTarget as Node | null;
-            if (nextTarget && addressSuggestionsRef.current?.contains(nextTarget)) return;
-            if (hasSavedCoordinates || suggestions.length === 0) return;
-            applyAddressSuggestion(suggestions[0]);
+          onSuggestionSelect={(selection) => {
+            if (selection.addressLine) set("address", selection.addressLine);
+            if (selection.city) set("city", selection.city);
+            if (selection.municipality) set("region", selection.municipality);
+            if (selection.postalCode) set("postal_code", selection.postalCode);
+            if (selection.latitude) set("latitude", selection.latitude);
+            if (selection.longitude) set("longitude", selection.longitude);
           }}
-          onFocus={() => setGooglePlacesRequested(true)}
-          className={`w-full bg-secondary border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors ${errors.address ? "border-destructive ring-1 ring-destructive/30" : "border-border"}`}
+          placeholder={
+            (GOOGLE_PLACES_AUTOCOMPLETE_ENABLED || GOOGLE_MAPS_API_KEY)
+              ? tr("createListing.location.addressGooglePlaceholder", "e.g. Voukourestiou 14, Athens")
+              : tr("createListing.location.addressPlaceholder", "e.g. Voukourestiou 14")
+          }
+          inputClassName={`w-full bg-secondary border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors ${
+            errors.address ? "border-destructive ring-1 ring-destructive/30" : "border-border"
+          }`}
         />
-        {addrLoading && (
-          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-            <Loader2 className="w-3 h-3 animate-spin" /> {tr("createListing.location.searchingAddress", "Searching address...")}
-          </p>
-        )}
-        {!addrLoading && suggestions.length > 0 && (
-          <div ref={addressSuggestionsRef} className="mt-1 bg-background border border-border rounded-xl shadow-md text-sm max-h-40 overflow-auto">
-            {suggestions.map((s, i) => (
-              <button key={i} type="button"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => applyAddressSuggestion(s)}
-                className="w-full text-left px-3 py-2 hover:bg-muted/80 border-b border-border last:border-0 first:rounded-t-xl last:rounded-b-xl">
-                {s.display_name}
-              </button>
-            ))}
-          </div>
-        )}
+        <FieldError msg={errors.address} />
       </div>
 
       <div className="grid grid-cols-2 gap-3">

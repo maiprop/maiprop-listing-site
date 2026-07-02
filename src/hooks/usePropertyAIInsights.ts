@@ -7,6 +7,7 @@ import type { ListingWithJoins } from "@/hooks/useListings";
 import { deriveListingMarketComparison, getPrimaryValuationEstimate } from "@/lib/valuationResult";
 import type { ValuationEstimateSource } from "@/lib/valuationResult";
 import { invokeAuthenticatedFunction } from "@/lib/invokeAuthenticatedFunction";
+import { calculatePricePerSqm } from "@/lib/priceCalculations";
 
 export interface AIInsightsData {
   vsMarket: number | null;
@@ -128,6 +129,11 @@ export function usePropertyAIInsights(
     const snapshot = dbListing;
     const rentalListing = isRentalListing(snapshot);
     const monthlyRent = rentalListing ? toPositiveNumber(snapshot.price) : null;
+    const pricePerSqm = calculatePricePerSqm({
+      price: snapshot.price,
+      sqm: snapshot.sqm,
+      storedPricePerSqm: snapshot.price_per_sqm,
+    });
     setAiInsightsLoaded(true);
 
     try {
@@ -152,7 +158,7 @@ export function usePropertyAIInsights(
           yearBuilt: snapshot.year_built,
           heatingSystem: snapshot.heating_system,
           energyClass: snapshot.energy_class,
-          pricePerSqm: snapshot.price_per_sqm ? Number(snapshot.price_per_sqm) : undefined,
+          pricePerSqm: pricePerSqm ?? undefined,
           hasParking: snapshot.has_parking,
           hasPool: snapshot.has_pool,
           hasElevator: snapshot.has_elevator,

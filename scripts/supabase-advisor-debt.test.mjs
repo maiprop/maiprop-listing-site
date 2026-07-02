@@ -5,6 +5,10 @@ import {
   classifyAdvisorDebt,
   flattenAdvisorLints,
 } from "./supabase-advisor-debt.mjs";
+import {
+  isPerformanceAdvisorInternalSyntaxFailure,
+  isTransientAdvisorFailure,
+} from "./supabase-advisor-http.mjs";
 
 const policy = {
   accepted: [
@@ -26,6 +30,21 @@ const policy = {
 };
 
 describe("supabase advisor debt classification", () => {
+  it("treats Supabase performance advisor parser crashes as unavailable evidence only for performance", () => {
+    const detail = "Failed to run project advisor lints: ERROR: 42601: syntax error at or near storage.buckets";
+
+    expect(isPerformanceAdvisorInternalSyntaxFailure(400, detail, "performance")).toBe(true);
+    expect(isPerformanceAdvisorInternalSyntaxFailure(400, detail, "security")).toBe(false);
+    expect(isPerformanceAdvisorInternalSyntaxFailure(400, "auth failed", "performance")).toBe(false);
+    expect(isTransientAdvisorFailure(400, detail)).toBe(false);
+  });
+
+  it("keeps existing transient Supabase advisor transport handling narrow", () => {
+    expect(isTransientAdvisorFailure(544, "gateway timeout")).toBe(true);
+    expect(isTransientAdvisorFailure(0, "fetch failed (ETIMEDOUT)")).toBe(true);
+    expect(isTransientAdvisorFailure(400, "Failed to run project advisor lints")).toBe(false);
+  });
+
   it("flattens advisor lints with category context", () => {
     const lints = flattenAdvisorLints([
       {

@@ -194,7 +194,9 @@ const listing = {
   has_smart_home: true,
   has_garden: true,
   has_view: true,
+  has_balcony: true,
   has_video_tour: true,
+  tags: ["penthouse", "parking", "pool"],
   cover_image_url: "https://cdn/cover.jpg",
   listing_images: [{ url: "https://cdn/other.jpg", sort_order: 2 }],
   project_id: "project-1",
@@ -473,18 +475,76 @@ describe("NewBuildDetail", () => {
 
     renderPage();
 
-    expect(screen.getByTestId("valuation")).toHaveAttribute("data-price", "550000");
-    expect(screen.getByTestId("valuation")).toHaveAttribute("data-sqm", "75");
-    expect(screen.getByTestId("valuation")).toHaveAttribute("data-price-per-sqm", "7333");
-    expect(screen.getByTestId("valuation")).toHaveAttribute("data-property-type", "apartment");
-    expect(screen.getByTestId("neighbourhood")).toHaveAttribute("data-property-type", "apartment");
-
     await waitFor(() =>
       expect(functionsInvokeMock).toHaveBeenCalledWith("property-valuation", expect.objectContaining({
         body: expect.objectContaining({
           price: 550000,
           sqm: 75,
           pricePerSqm: 7333,
+          hasParking: true,
+          hasPool: true,
+          hasElevator: true,
+          hasGarden: true,
+          hasStorage: true,
+          hasBalcony: true,
+          hasView: true,
+          description: expect.stringContaining("Waterfront homes with shared amenities."),
+          tags: expect.arrayContaining(["penthouse", "parking", "pool", "storage", "garden", "view"]),
+        }),
+      })),
+    );
+
+    expect(screen.getByTestId("valuation")).toHaveAttribute("data-price", "550000");
+    expect(screen.getByTestId("valuation")).toHaveAttribute("data-sqm", "75");
+    expect(screen.getByTestId("valuation")).toHaveAttribute("data-price-per-sqm", "7333");
+    expect(screen.getByTestId("valuation")).toHaveAttribute("data-property-type", "apartment");
+    expect(screen.getByTestId("neighbourhood")).toHaveAttribute("data-property-type", "apartment");
+  });
+
+  it("uses hybrid sale valuation context for renovation projects shown in the project layout", async () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "buyer-1", email: "buyer@example.com" },
+      profile: { display_name: "Buyer One", phone: "555-1" },
+    });
+    useQueryMock.mockReturnValue({
+      data: {
+        ...listing,
+        listing_type: "new_build",
+        construction_status: "renovated",
+        year_built: 1982,
+        tags: ["renovation_project", "renovation_year:2026"],
+        project: {
+          ...listing.project,
+          project_units: [
+            {
+              ...listing.project.project_units[0],
+              id: "unit-1",
+              internal_sqm: 80,
+              price: 280000,
+            },
+            {
+              ...listing.project.project_units[0],
+              id: "unit-2",
+              unit_number: "2",
+              internal_sqm: 100,
+              price: 360000,
+            },
+          ],
+        },
+      },
+      isLoading: false,
+      error: null,
+    });
+
+    renderPage();
+
+    await waitFor(() =>
+      expect(functionsInvokeMock).toHaveBeenCalledWith("property-valuation", expect.objectContaining({
+        body: expect.objectContaining({
+          listingType: "sale",
+          condition: "renovated",
+          yearBuilt: 1982,
+          tags: expect.arrayContaining(["renovation_project", "renovation_year:2026"]),
         }),
       })),
     );

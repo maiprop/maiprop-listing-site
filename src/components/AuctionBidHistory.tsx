@@ -23,6 +23,7 @@ import {
   Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { calculatePricePerSqm } from "@/lib/priceCalculations";
 import { Badge } from "@/components/ui/badge";
 import { useAuctionBidHistory, type SaleRecord } from "@/hooks/useAuctionBidHistory";
 import { cn } from "@/lib/utils";
@@ -57,7 +58,7 @@ function fmtEur(n: number): string {
 
 
 function ppm(sale: SaleRecord): number {
-  return sale.sqm > 0 ? Math.round(sale.sale_price / sale.sqm) : 0;
+  return calculatePricePerSqm({ price: sale.sale_price, sqm: sale.sqm }) ?? 0;
 }
 
 function medianOf(nums: number[]): number {

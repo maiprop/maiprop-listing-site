@@ -4,6 +4,7 @@
 
 import { getOwnerParticipantType } from "./participantConfig";
 import { getNewBuildCardImages, getNewBuildCardSummary } from "./newBuildCardSummary";
+import { calculatePricePerSqm } from "@/lib/priceCalculations";
 import { normalizeOpenHouseTransactionType, type DbListingCardRow } from "@/lib/domainContracts";
 import type { ListingCard } from "@/types";
 
@@ -90,7 +91,11 @@ export function dbListingToCard(
     address: l.address || l.city,
     city: l.city,
     price: Number(l.price),
-    pricePerSqm: l.price_per_sqm ? Number(l.price_per_sqm) : undefined,
+    pricePerSqm: calculatePricePerSqm({
+      price: l.price,
+      sqm: l.sqm,
+      storedPricePerSqm: l.price_per_sqm,
+    }) ?? undefined,
     bedrooms: l.bedrooms ?? undefined,
     bathrooms: l.bathrooms ?? undefined,
     sqm: Number(l.sqm),
