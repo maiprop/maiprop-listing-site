@@ -53,6 +53,37 @@ Deno.test("fake Bearer returns 401 (not 500)", async () => {
   assertEquals([401, 429].includes(res.status), true);
 });
 
+Deno.test("non-finite price or size is rejected before quota reservation or provider calls", async () => {
+  const originalFetch = globalThis.fetch;
+  let quotaCalled = false;
+  let providerCalled = false;
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("/rest/v1/rpc/reserve_ai_quota_for_user")) {
+      quotaCalled = true;
+    }
+    if (url.includes("api.openai.com") || url.includes("generativelanguage.googleapis.com")) {
+      providerCalled = true;
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  try {
+    const res = await handler(req("POST", {
+      city: "Athens",
+      price: "not-a-price",
+      sqm: "80",
+      propertyType: "apartment",
+    }, { authorization: "Bearer test-valid-token" }));
+    const body = await jsonBody(res) as { error?: string };
+    assertEquals(res.status, 400);
+    assertEquals(body.error, "city, sqm and price are required");
+    assertEquals(quotaCalled, false);
+    assertEquals(providerCalled, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 Deno.test("provider usage limit returns fallback valuation instead of an unavailable error", async () => {
   await withQuotaAndProviderMock(okJson({ error: "quota" }, 429), async () => {
     const res = await handler(req("POST", {
@@ -328,6 +359,139 @@ Deno.test("uses OpenAI enriched with structured OS valuation when listing coordi
     assertEquals(body.marketComparison, "at_market");
     assertEquals(body.redFlags?.some((flag) => /no cadastre|outside city|no buildability/i.test(flag)), false);
     assertEquals(/outside|no cadastre|buildability|buildable/i.test(body.legalSummary ?? ""), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (prevOsUrl) Deno.env.set("MAIPROP_OS_API_URL", prevOsUrl);
+    else Deno.env.delete("MAIPROP_OS_API_URL");
+    if (prevOsEmail) Deno.env.set("MAIPROP_OS_EMAIL", prevOsEmail);
+    else Deno.env.delete("MAIPROP_OS_EMAIL");
+    if (prevOsPassword) Deno.env.set("MAIPROP_OS_PASSWORD", prevOsPassword);
+    else Deno.env.delete("MAIPROP_OS_PASSWORD");
+    if (prevOpenAI) Deno.env.set("OPENAI_API_KEY", prevOpenAI);
+    else Deno.env.delete("OPENAI_API_KEY");
+    if (prevGemini) Deno.env.set("GEMINI_API_KEY", prevGemini);
+    else Deno.env.delete("GEMINI_API_KEY");
+  }
+});
+
+Deno.test("new-build valuations skip mAI Prop OS and ask AI for similar-property reasoning", async () => {
+  const originalFetch = globalThis.fetch;
+  const prevOsUrl = Deno.env.get("MAIPROP_OS_API_URL");
+  const prevOsEmail = Deno.env.get("MAIPROP_OS_EMAIL");
+  const prevOsPassword = Deno.env.get("MAIPROP_OS_PASSWORD");
+  const prevOpenAI = Deno.env.get("OPENAI_API_KEY");
+  const prevGemini = Deno.env.get("GEMINI_API_KEY");
+  Deno.env.set("MAIPROP_OS_API_URL", "https://os.test");
+  Deno.env.set("MAIPROP_OS_EMAIL", "os@test.local");
+  Deno.env.set("MAIPROP_OS_PASSWORD", "os-password");
+  Deno.env.set("OPENAI_API_KEY", "openai-test");
+  Deno.env.delete("GEMINI_API_KEY");
+  let providerPrompt = "";
+  let providerModel = "";
+  let providerReasoningEffort = "";
+  let osCalled = false;
+
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("/auth/v1/user")) {
+      return Promise.resolve(okJson({ user: { id: "user-1", email: "user@test.local" } }));
+    }
+    if (url.includes("/rest/v1/rpc/reserve_ai_quota_for_user")) {
+      return Promise.resolve(okJson({ allowed: true, reason: null, used: 1, limit: 5 }));
+    }
+    if (url.startsWith("https://os.test")) {
+      osCalled = true;
+      return Promise.resolve(okJson({ data: { token: "os-token" } }));
+    }
+    if (url.includes("api.openai.com") || url.includes("generativelanguage.googleapis.com")) {
+      const requestBody = JSON.parse(String(init?.body ?? "{}"));
+      providerModel = String(requestBody.model ?? "");
+      providerReasoningEffort = String(requestBody.reasoning_effort ?? "");
+      providerPrompt = String(requestBody.messages?.[0]?.content ?? "");
+      return Promise.resolve(okJson({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              estimatedValue: 310000,
+              rangeLow: 292000,
+              rangeHigh: 333000,
+              executionValue: 276000,
+              pricePerSqmEstimate: 7100,
+              confidence: 72,
+              confidenceLabel: "Medium",
+              liquidityScore: 76,
+              marketComparison: "below_market",
+              marketComparisonPct: -11,
+              pricingPosition: "underpriced",
+              methodUsed: "AI-only new-build similar-property benchmark",
+              valuationMode: "MODE_1_LISTING_ONLY",
+              summary: "New-build estimate based on similar off-plan apartments and unit attributes.",
+              keyFactors: [{ factor: "Similar new-build units", impact: "positive", note: "Comparable unit class" }],
+              legalCleanliness: 68,
+              planningCertainty: 72,
+              taxFriction: 30,
+              transferReadiness: 62,
+              legalSummary: "New-build permit and title review still required.",
+              taxSummary: "Normal transfer friction assumed.",
+              objectiveValueProxy: null,
+              renovationPotential: null,
+              rentalYieldEstimate: 4.1,
+              highestBestUseHint: null,
+              redFlags: [],
+              auctionAdjustedValue: null,
+              listingQualityScore: 72,
+            }),
+          },
+        }],
+      }));
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+
+  try {
+    const res = await handler(req("POST", {
+      listingId: "new-build-1",
+      title: "Glifada new-build selected unit",
+      city: "Glyfada",
+      address: "11 Dimitarchou Aggelou Metaxa",
+      price: 350000,
+      sqm: 48.75,
+      pricePerSqm: 7179,
+      propertyType: "apartment",
+      listingType: "new_build",
+      latitude: 37.8636122,
+      longitude: 23.7503394,
+      floor: 1,
+      yearBuilt: 2026,
+      energyClass: "B+",
+      hasParking: true,
+      hasPool: true,
+      tags: ["penthouse", "parking", "pool"],
+      description: "Penthouse-style new-build unit with private parking, pool access, balcony, premium finishes, and sea-view potential.",
+    }, { authorization: "Bearer test-valid-token" }));
+    const body = await jsonBody(res) as {
+      generatedBy?: string;
+      estimatedValue?: number;
+      osValuationStatus?: string;
+      osDataSources?: string[];
+    };
+
+    assertEquals(res.status, 200);
+    assertEquals(osCalled, false);
+    assertEquals(providerModel, "gpt-5.4");
+    assertEquals(providerReasoningEffort, "medium");
+    assertEquals(providerPrompt.includes("MAIPROP OS STRUCTURED VALUATION DATA"), false);
+    assertEquals(providerPrompt.includes("NEW-BUILD AI-ONLY COMPARABLE VALUATION"), true);
+    assertEquals(providerPrompt.includes("most similar new-build, off-plan, or recently completed properties"), true);
+    assertEquals(providerPrompt.includes("nearby"), true);
+    assertEquals(providerPrompt.includes("parking"), true);
+    assertEquals(providerPrompt.includes("pool"), true);
+    assertEquals(providerPrompt.includes("penthouse"), true);
+    assertEquals(providerPrompt.includes("adjust premium or discount"), true);
+    assertEquals(body.generatedBy, "openai");
+    assertEquals(body.estimatedValue, 310000);
+    assertEquals(body.osValuationStatus, "skipped_new_build_ai_only");
+    assertEquals(body.osDataSources, undefined);
   } finally {
     globalThis.fetch = originalFetch;
     if (prevOsUrl) Deno.env.set("MAIPROP_OS_API_URL", prevOsUrl);

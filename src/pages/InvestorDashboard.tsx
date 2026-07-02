@@ -36,6 +36,7 @@ import { InvestorHeroHeader } from "@/components/investor/InvestorHeroHeader";
 import { InvestorExpiryBanner } from "@/components/investor/InvestorExpiryBanner";
 import { InvestorAccessGate } from "@/components/investor/InvestorAccessGate";
 import { InvestorSidebarAnalytics } from "@/components/investor/InvestorSidebarAnalytics";
+import { calculatePricePerSqm } from "@/lib/priceCalculations";
 
 type Subscription = {
   id: string;
@@ -56,6 +57,7 @@ type LiveDeal = {
   condition: string | null;
   ai_estimate: number;
   asking_price: number;
+  price_per_sqm: number | null;
   discount_pct: number;
   status: string;
   created_at: string;
@@ -261,6 +263,7 @@ export default function InvestorDashboard() {
           condition: d.condition ?? null,
           ai_estimate: aiVal,
           asking_price: askingPrice,
+          price_per_sqm: calculatePricePerSqm({ price: askingPrice, sqm: d.sqm }),
           discount_pct: discountPct,
           status: d.status || "reviewed",
           created_at: d.created_at,
@@ -554,7 +557,7 @@ export default function InvestorDashboard() {
                               <p className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">ROI Est.</p>
                             </div>
                             <div className="text-center">
-                              <p className="font-black text-sm text-primary">{formatPrice(Math.round(deal.asking_price / Math.max(deal.sqm, 1)))}</p>
+                              <p className="font-black text-sm text-primary">{deal.price_per_sqm != null ? formatPrice(deal.price_per_sqm) : "—"}</p>
                               <p className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">Per m2</p>
                             </div>
                             <div className="text-center">

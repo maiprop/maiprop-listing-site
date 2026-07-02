@@ -249,6 +249,45 @@ type ProjectOwnerRow = {
   owner_id: string;
 };
 
+type ProjectUnitPriceRow = {
+  id: string;
+  project_id: string;
+  price: number | null;
+  internal_sqm: number | null;
+  price_per_sqm: number | null;
+};
+
+const positiveFiniteNumber = (value: unknown): number | null => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+function calculatePricePerSqm(
+  price: unknown,
+  sqm: unknown,
+  storedPricePerSqm?: unknown,
+): number | null {
+  const numericPrice = positiveFiniteNumber(price);
+  const numericSqm = positiveFiniteNumber(sqm);
+  if (numericPrice != null && numericSqm != null) return Math.round(numericPrice / numericSqm);
+
+  const stored = positiveFiniteNumber(storedPricePerSqm);
+  return stored != null ? Math.round(stored) : null;
+}
+
+function withComputedUnitPricePerSqm<T extends DbRow>(
+  unit: T,
+  fallback?: Pick<ProjectUnitPriceRow, "price" | "internal_sqm" | "price_per_sqm"> | null,
+): T {
+  const pricePerSqm = calculatePricePerSqm(
+    unit.price ?? fallback?.price,
+    unit.internal_sqm ?? fallback?.internal_sqm,
+    unit.price_per_sqm ?? fallback?.price_per_sqm,
+  );
+  if (pricePerSqm == null) return unit;
+  return { ...unit, price_per_sqm: pricePerSqm };
+}
+
 function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   if (err && typeof err === "object") {
@@ -306,6 +345,24 @@ async function assertLeadUnitScope(
   if (!unit || unit.project_id !== projectId) {
     throw new AuthError("unit_not_in_project", 400);
   }
+}
+
+async function requireOwnedProjectUnit(
+  supabase: SupabaseClient,
+  projectId: string,
+  unitId: string,
+): Promise<ProjectUnitPriceRow> {
+  const { data, error } = await supabase
+    .from("project_units")
+    .select("id, project_id, price, internal_sqm, price_per_sqm")
+    .eq("id", unitId)
+    .maybeSingle();
+  if (error) throw error;
+  const unit = data as ProjectUnitPriceRow | null;
+  if (!unit || unit.project_id !== projectId) {
+    throw new AuthError("unit_not_in_project", 400);
+  }
+  return unit;
 }
 
 async function handleProjectMutation(
@@ -389,7 +446,7 @@ async function handleProjectMutation(
       await requireOwnedProject(supabase, payload.projectId, userId);
       const { data, error } = await supabase
         .from("project_units")
-        .insert({ ...payload.unit, project_id: payload.projectId })
+        .insert(withComputedUnitPricePerSqm({ ...payload.unit, project_id: payload.projectId }))
         .select()
         .single();
       if (error) throw error;
@@ -405,9 +462,11 @@ async function handleProjectMutation(
     }
     case "update_unit": {
       await requireOwnedProject(supabase, payload.projectId, userId);
+      const currentUnit = await requireOwnedProjectUnit(supabase, payload.projectId, payload.id);
+      const unitUpdates = withComputedUnitPricePerSqm(payload.updates, currentUnit);
       const { data, error } = await supabase
         .from("project_units")
-        .update(payload.updates)
+        .update(unitUpdates)
         .eq("id", payload.id)
         .eq("project_id", payload.projectId)
         .select()
@@ -418,7 +477,7 @@ async function handleProjectMutation(
         target_id: payload.id,
         entity: "project.unit",
         action: "UPDATED",
-        new_data: { project_id: payload.projectId, fields: Object.keys(payload.updates) },
+        new_data: { project_id: payload.projectId, fields: Object.keys(unitUpdates) },
         reason: "project_management.update_unit",
       });
       return data;

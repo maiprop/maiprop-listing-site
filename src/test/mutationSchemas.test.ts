@@ -106,12 +106,19 @@ describe("mutation schema parsing", () => {
   });
 
   it("rejects invalid new-build project, unit, and media payloads", () => {
-    expect(() => parseMutationInput(newBuildingProjectWriteSchema, {
+    expect(parseMutationInput(newBuildingProjectWriteSchema, {
       name: "Glyfada GV",
-      building_permit_number: "",
       city: "Athens",
       owner_id: "developer-1",
-    }, "new building project")).toThrow("Invalid building permit");
+    }, "new building project")).toMatchObject({
+      name: "Glyfada GV",
+      city: "Athens",
+    });
+    expect(() => parseMutationInput(newBuildingProjectWriteSchema, {
+      name: "",
+      city: "Athens",
+      owner_id: "developer-1",
+    }, "new building project")).toThrow("Invalid project name");
 
     expect(() => parseMutationInput(projectUnitWriteSchema, {
       project_id: "project-1",

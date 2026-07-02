@@ -10,7 +10,17 @@
  *   listings.spec.ts     — listings search, filter, card navigation
  *   accessibility.spec.ts — skip link focus, #main-content, nav aria, img alt
  */
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+
+const expectMeaningfulBodyText = async (page: Page): Promise<void> => {
+  await expect(page.locator("#root, body").first()).toBeVisible({ timeout: 10_000 });
+  await expect
+    .poll(async () => (await page.locator("body").innerText()).trim().length, {
+      message: "expected public route to render non-trivial body text",
+      timeout: 10_000,
+    })
+    .toBeGreaterThan(10);
+};
 
 // ─── Homepage sections ────────────────────────────────────────────────────────
 
@@ -60,8 +70,7 @@ test.describe("Public — Auctions page", () => {
     await page.goto("/auctions");
     await page.waitForLoadState("networkidle", { timeout: 15_000 });
     // Body must have content — the error-boundary or actual page, not a blank div
-    const bodyText = await page.locator("body").innerText();
-    expect(bodyText.trim().length).toBeGreaterThan(10);
+    await expectMeaningfulBodyText(page);
   });
 });
 
@@ -108,8 +117,7 @@ test.describe("Public — Professionals directory", () => {
     await page.goto("/professionals/non-existent-id-456");
     await page.waitForLoadState("networkidle", { timeout: 15_000 });
     await expect(page.locator("header, main, body, nav").first()).toBeVisible({ timeout: 10_000 });
-    const bodyText = await page.locator("body").innerText();
-    expect(bodyText.trim().length).toBeGreaterThan(10);
+    await expectMeaningfulBodyText(page);
   });
 });
 
@@ -132,8 +140,7 @@ test.describe("Public — Open Houses", () => {
     await page.goto("/open-house/non-existent-id-789");
     await page.waitForLoadState("networkidle", { timeout: 15_000 });
     await expect(page.locator("header, main, body, nav").first()).toBeVisible({ timeout: 10_000 });
-    const bodyText = await page.locator("body").innerText();
-    expect(bodyText.trim().length).toBeGreaterThan(10);
+    await expectMeaningfulBodyText(page);
   });
 });
 
@@ -144,8 +151,7 @@ test.describe("Public — New-build detail", () => {
     await page.goto("/new-build/non-existent-id-abc");
     await page.waitForLoadState("networkidle", { timeout: 15_000 });
     await expect(page.locator("header, main, body, nav").first()).toBeVisible({ timeout: 10_000 });
-    const bodyText = await page.locator("body").innerText();
-    expect(bodyText.trim().length).toBeGreaterThan(10);
+    await expectMeaningfulBodyText(page);
   });
 });
 
@@ -171,8 +177,7 @@ test.describe("Public — Auth pages (sign-up, reset-password)", () => {
     await page.goto("/reset-password");
     await page.waitForLoadState("networkidle", { timeout: 15_000 });
     await expect(page.locator("header, main, body, nav").first()).toBeVisible({ timeout: 10_000 });
-    const bodyText = await page.locator("body").innerText();
-    expect(bodyText.trim().length).toBeGreaterThan(10);
+    await expectMeaningfulBodyText(page);
   });
 
   test("reset-password page renders a password input or info message", async ({ page }) => {

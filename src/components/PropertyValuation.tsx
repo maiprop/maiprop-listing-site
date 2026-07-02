@@ -14,6 +14,7 @@ import { SignInForAI } from "@/components/SignInForAI";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { parseMutationInput, propertyValuationBodySchema } from "@/lib/mutationSchemas";
+import { calculatePercentDelta } from "@/lib/priceCalculations";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -282,7 +283,7 @@ export default function PropertyValuation(props: PropertyValuationProps) {
   const hasDistinctAuctionBidValue = Boolean(hasAuctionAdjustment && result && result.auctionAdjustedValue !== result.estimatedValue);
   const isAuctionValuation = props.listingType === "auction" || Boolean(props.auctionCourt);
   const diff = result ? primaryMarketValue - props.price : 0;
-  const diffPct = result ? Math.round((diff / props.price) * 100) : 0;
+  const diffPct = result ? calculatePercentDelta({ value: primaryMarketValue, baseline: props.price }) ?? 0 : 0;
   const pricing = result ? PRICING_CONFIG[result.pricingPosition as keyof typeof PRICING_CONFIG] : null;
 
   return (

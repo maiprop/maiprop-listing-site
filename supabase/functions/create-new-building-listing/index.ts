@@ -88,7 +88,7 @@ const nonNegativeNumber = (field: string, max: number) =>
 const projectSchema = z.object({
   id: uuidString("project id"),
   name: requiredString("project name", 180),
-  building_permit_number: requiredString("building permit", 120),
+  building_permit_number: optionalString("building permit", 120),
   city: requiredString("project city", 120),
   owner_id: uuidString("owner id").optional(),
 }).passthrough();
@@ -132,8 +132,10 @@ const listingSchema = z.object({
 }).passthrough();
 
 const requestSchema = z.object({
+  projectKind: z.enum(["new_build", "renovation"]).optional().default("new_build"),
   project: projectSchema,
   unit: unitSchema,
+  units: z.array(unitSchema).min(1).max(100).optional(),
   projectMedia: z.array(projectMediaSchema).max(20),
   listing: listingSchema,
   additionalImageUrls: z.array(requiredString("listing image", 2048)).max(250),
@@ -171,6 +173,31 @@ type OwnedRollbackClient = {
   };
 };
 
+type DbRow = Record<string, unknown>;
+
+const positiveFiniteNumber = (value: unknown): number | null => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+function calculatePricePerSqm(
+  price: unknown,
+  sqm: unknown,
+  storedPricePerSqm?: unknown,
+): number | null {
+  const numericPrice = positiveFiniteNumber(price);
+  const numericSqm = positiveFiniteNumber(sqm);
+  if (numericPrice != null && numericSqm != null) return Math.round(numericPrice / numericSqm);
+
+  const stored = positiveFiniteNumber(storedPricePerSqm);
+  return stored != null ? Math.round(stored) : null;
+}
+
+function withComputedPricePerSqm<T extends DbRow>(row: T): T {
+  const pricePerSqm = calculatePricePerSqm(row.price, row.internal_sqm ?? row.sqm, row.price_per_sqm);
+  return pricePerSqm == null ? row : { ...row, price_per_sqm: pricePerSqm };
+}
+
 function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   if (err && typeof err === "object") {
@@ -196,7 +223,13 @@ async function requireDeveloperAccess(supabase: ProfileLookupClient, userId: str
 
 function assertProjectScope(payload: RequestPayload) {
   const projectId = payload.project.id;
+  if (payload.projectKind === "new_build" && !payload.project.building_permit_number) {
+    throw new AuthError("building_permit_required", 400);
+  }
   if (payload.unit.project_id !== projectId || payload.listing.project_id !== projectId) {
+    throw new AuthError("project_scope_mismatch", 400);
+  }
+  if (payload.units?.some((unit) => unit.project_id !== projectId)) {
     throw new AuthError("project_scope_mismatch", 400);
   }
   if (payload.projectMedia.some((media) => media.project_id !== projectId)) {
@@ -257,12 +290,16 @@ Deno.serve(async (req) => {
       .insert({ ...payload.project, owner_id: user.id });
     if (projectError) throw projectError;
 
-    const { data: unit, error: unitError } = await supabase
-      .from("project_units")
-      .insert({ ...payload.unit, project_id: projectId })
-      .select("id")
-      .single();
-    if (unitError) throw unitError;
+    const unitIds: string[] = [];
+    for (const unitPayload of payload.units ?? [payload.unit]) {
+      const { data: unit, error: unitError } = await supabase
+        .from("project_units")
+        .insert(withComputedPricePerSqm({ ...unitPayload, project_id: projectId }))
+        .select("id")
+        .single();
+      if (unitError) throw unitError;
+      if (unit?.id) unitIds.push(unit.id);
+    }
 
     if (payload.projectMedia.length > 0) {
       const { error: mediaError } = await supabase
@@ -273,25 +310,27 @@ Deno.serve(async (req) => {
 
     const { data: listing, error: listingError } = await supabase
       .from("listings")
-      .insert({
+      .insert(withComputedPricePerSqm({
         ...payload.listing,
         owner_id: user.id,
         project_id: projectId,
         listing_type: "new_build",
         is_pre_sale: false,
-      })
+      }))
       .select("id")
       .single();
     if (listingError) throw listingError;
     listingId = listing?.id ?? null;
     if (!listingId) throw new Error("listing_missing_id");
 
-    const { error: unitLinkError } = await supabase
-      .from("project_units")
-      .update({ listing_id: listingId })
-      .eq("id", unit?.id)
-      .eq("project_id", projectId);
-    if (unitLinkError) throw unitLinkError;
+    for (const unitId of unitIds) {
+      const { error: unitLinkError } = await supabase
+        .from("project_units")
+        .update({ listing_id: listingId })
+        .eq("id", unitId)
+        .eq("project_id", projectId);
+      if (unitLinkError) throw unitLinkError;
+    }
 
     if (payload.additionalImageUrls.length > 0) {
       const { error: imageError } = await supabase
@@ -307,7 +346,7 @@ Deno.serve(async (req) => {
     await logAuditEvent({
       actor_id: user.id,
       target_id: listingId,
-      entity: "new_build.listing",
+      entity: payload.projectKind === "renovation" ? "renovation_project.listing" : "new_build.listing",
       action: "CREATED",
       new_data: { project_id: projectId },
       reason: "create_new_building_listing",

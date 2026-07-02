@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import type { ElementType } from "react";
 import { formatNewBuildPrice } from "@/lib/newBuildConfig";
+import { calculatePricePerSqm } from "@/lib/priceCalculations";
 
 type ProjectUnit = {
   id: string;
@@ -70,18 +71,11 @@ const formatOptionalPrice = (value: number | null | undefined) => {
 };
 
 const getUnitPricePerSqm = (unit: ProjectUnit): number | null => {
-  const stored = Number(unit.price_per_sqm);
-  const price = Number(unit.price);
-  const sqm = Number(unit.internal_sqm);
-  const computed = Number.isFinite(price) && price > 0 && Number.isFinite(sqm) && sqm > 0
-    ? price / sqm
-    : null;
-
-  if (!computed) return Number.isFinite(stored) && stored > 0 ? Math.round(stored) : null;
-  if (!Number.isFinite(stored) || stored <= 0) return Math.round(computed);
-
-  const ratio = stored / computed;
-  return Math.round(ratio < 0.5 || ratio > 1.5 ? computed : stored);
+  return calculatePricePerSqm({
+    price: unit.price,
+    sqm: unit.internal_sqm,
+    storedPricePerSqm: unit.price_per_sqm,
+  });
 };
 
 const formatUnitName = (unit: ProjectUnit) => {

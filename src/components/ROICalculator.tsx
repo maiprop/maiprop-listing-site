@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { Calculator, TrendingUp, Percent, DollarSign, BarChart2 } from "lucide-react";
+import { calculateMonthlyRentEstimate } from "@/lib/priceCalculations";
 
 type Props = {
   /** Prefill purchase price from listing (optional) */
@@ -10,12 +11,13 @@ type Props = {
 };
 
 export function ROICalculator({ defaultPrice = 200000, defaultSqm = 80, className = "" }: Props) {
+  const initialMonthlyRent = calculateMonthlyRentEstimate({ price: defaultPrice, sqm: defaultSqm });
   const [purchasePrice, setPurchasePrice] = useState(defaultPrice);
   const [downPaymentPct, setDownPaymentPct] = useState(25);
   const [interestRate, setInterestRate] = useState(4.5);
   const [loanYears, setLoanYears] = useState(25);
-  const [monthlyRent, setMonthlyRent] = useState(Math.round((defaultPrice / defaultSqm) * 8)); // ~€8/sqm/mo heuristic
-  const [monthlyExpenses, setMonthlyExpenses] = useState(Math.round((defaultPrice / defaultSqm) * 8 * 0.25)); // ~25% of rent
+  const [monthlyRent, setMonthlyRent] = useState(initialMonthlyRent); // ~€8/sqm/mo heuristic
+  const [monthlyExpenses, setMonthlyExpenses] = useState(Math.round(initialMonthlyRent * 0.25)); // ~25% of rent
   const [appreciationPct, setAppreciationPct] = useState(3);
 
   const result = useMemo(() => {

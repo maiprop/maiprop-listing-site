@@ -23,6 +23,7 @@ import {
   switchImageToNextFallbackIfEmpty,
 } from "@/lib/imageFallbacks";
 import { getListingDetailPath, shouldUseNewBuildRoute } from "@/lib/listingRoutes";
+import { calculateAuctionDiscountPercent } from "@/lib/priceCalculations";
 
 export interface Property {
   id: string;
@@ -259,8 +260,11 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
     if (hours === 0) return { label: `${mins}m`, urgent: true };
     return { label: `${hours}h ${mins}m`, urgent: hours < 6 };
   })() : null;
-  const discountPct = property.listingType === "auction" && property.auctionStartingBid
-    ? Math.round((1 - property.auctionStartingBid / property.price) * 100)
+  const discountPct = property.listingType === "auction"
+    ? calculateAuctionDiscountPercent({
+      price: property.price,
+      auctionStartingBid: property.auctionStartingBid,
+    })
     : null;
   const isRentalPricing =
     property.listingType === "rent" ||
