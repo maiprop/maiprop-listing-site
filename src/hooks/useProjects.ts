@@ -13,7 +13,7 @@ import {
 } from "@/lib/mutationSchemas";
 
 const PROJECT_SELECT = `
-  id, owner_id, name, description, city, address, municipality, cover_image_url,
+  id, owner_id, organization_id, name, description, city, address, municipality, cover_image_url,
   status, latitude, longitude, building_permit_number, developer_company,
   architect_group, construction_company, area_description, permit_approval_date,
   construction_start_date, structural_completion_date, delivery_date,

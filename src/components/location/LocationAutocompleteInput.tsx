@@ -150,6 +150,7 @@ export function LocationAutocompleteInput({
   const inputId = id ?? generatedId;
   const [focused, setFocused] = useState(false);
   const [googlePlacesRequested, setGooglePlacesRequested] = useState(false);
+  const [googleUnavailable, setGoogleUnavailable] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -157,7 +158,9 @@ export function LocationAutocompleteInput({
   const googleSelectionAppliedRef = useRef(false);
   const textValue = value ?? "";
   const query = textValue.trim();
-  const activeQuery = !disabled && focused ? query : "";
+  const useGooglePlaces = GOOGLE_PLACES_AUTOCOMPLETE_ENABLED && googlePlacesRequested && !googleUnavailable;
+  const useFallbackSuggestions = mode === "address" || !GOOGLE_PLACES_AUTOCOMPLETE_ENABLED || googleUnavailable;
+  const activeQuery = !disabled && focused && useFallbackSuggestions ? query : "";
   const { rawSuggestions, loading, clear } = useNominatimAddressSuggestions(activeQuery);
   const popularSuggestions = useMemo(() => getPopularLocationSuggestions(query), [query]);
 
@@ -178,13 +181,17 @@ export function LocationAutocompleteInput({
   }, [disabled]);
 
   useEffect(() => {
-    if (disabled || !GOOGLE_PLACES_AUTOCOMPLETE_ENABLED || !googlePlacesRequested) return;
+    if (disabled || !GOOGLE_PLACES_AUTOCOMPLETE_ENABLED || !googlePlacesRequested || googleUnavailable) return;
     let cancelled = false;
 
     const initGoogle = () => {
       const input = inputRef.current;
       const Autocomplete = (window as GoogleWindow).google?.maps?.places?.Autocomplete;
-      if (!input || !Autocomplete || googleInitializedRef.current) return;
+      if (!input || googleInitializedRef.current) return;
+      if (!Autocomplete) {
+        setGoogleUnavailable(true);
+        return;
+      }
 
       const autocomplete = new Autocomplete(input, {
         types: mode === "city" ? ["(cities)"] : ["address"],
@@ -210,12 +217,14 @@ export function LocationAutocompleteInput({
         if (cancelled) return;
         initGoogle();
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (!cancelled) setGoogleUnavailable(true);
+      });
 
     return () => {
       cancelled = true;
     };
-  }, [clear, disabled, googlePlacesRequested, mode, onChange, onSuggestionSelect]);
+  }, [clear, disabled, googlePlacesRequested, googleUnavailable, mode, onChange, onSuggestionSelect]);
 
   const cityItems = useMemo<SuggestionItem[]>(() => {
     const nominatimCities = rawSuggestions.map(getNominatimCity).filter(Boolean);
@@ -264,7 +273,7 @@ export function LocationAutocompleteInput({
   ), [rawSuggestions]);
 
   const items = mode === "address" ? addressItems : cityItems;
-  const showDropdown = focused && !disabled && (items.length > 0 || loading);
+  const showDropdown = focused && !disabled && useFallbackSuggestions && (items.length > 0 || loading);
   const listboxId = `${inputId}-listbox`;
 
   const getPos = () => {
@@ -348,7 +357,7 @@ export function LocationAutocompleteInput({
             setFocused(false);
             return;
           }
-          if (mode === "address" && items.length > 0) {
+          if (!useGooglePlaces && mode === "address" && items.length > 0) {
             selectItem(items[0]);
             return;
           }
@@ -358,7 +367,11 @@ export function LocationAutocompleteInput({
         aria-autocomplete="list"
         aria-controls={showDropdown ? listboxId : undefined}
         aria-expanded={showDropdown}
-        autoComplete="off"
+        autoComplete={inputProps.autoComplete ?? "new-password"}
+        autoCorrect={inputProps.autoCorrect ?? "off"}
+        autoCapitalize={inputProps.autoCapitalize ?? "none"}
+        spellCheck={inputProps.spellCheck ?? false}
+        enterKeyHint={inputProps.enterKeyHint ?? (mode === "city" ? "search" : "next")}
         className={inputClassName}
       />
       {dropdown && typeof document !== "undefined" ? ReactDOM.createPortal(dropdown, document.body) : null}

@@ -227,12 +227,55 @@ jobs:
             exit 0
           fi
 
+          if [ "${{ steps.supabase_changes.outputs.db_changes }}" = "true" ]; then
+            set +e
+            node - "$SUPABASE_STAGING_DB_URL" <<'NODE'
+          const [, , dbUrl = ""] = process.argv;
+          try {
+            const host = new URL(dbUrl).hostname;
+            if (host.endsWith(".pooler.supabase.com")) {
+              process.exit(0);
+            }
+            if (/^db\.[a-z0-9]+\.supabase\.co$/.test(host)) {
+              process.exit(2);
+            }
+            process.exit(0);
+          } catch {
+            process.exit(1);
+          }
+          NODE
+            status=$?
+            set -e
+            if [ "$status" -ne 0 ]; then
+              if [ "$status" -eq 2 ]; then
+                echo "::warning::SUPABASE_STAGING_DB_URL uses the direct Supabase DB hostname, which is IPv6-only for GitHub-hosted runners. Skipping isolated staging DB/function deploy; configure the staging pooler connection string to enable it."
+                echo "isolated_staging=false" >> "$GITHUB_OUTPUT"
+                {
+                  echo "### Supabase staging"
+                  echo "Migration files changed, but the staging DB URL uses the direct IPv6-only Supabase hostname."
+                  echo "GitHub-hosted runners cannot reliably reach that host. Configure the staging pooler connection string in SUPABASE_STAGING_DB_URL to enable isolated staging DB/function deploy."
+                  echo "Containerized migration validation remains the hard gate for this PR."
+                } >> "$GITHUB_STEP_SUMMARY"
+                exit 0
+              fi
+
+              echo "::warning::SUPABASE_STAGING_DB_URL is not a valid Postgres URL; skipping isolated staging deploy steps."
+              echo "isolated_staging=false" >> "$GITHUB_OUTPUT"
+              {
+                echo "### Supabase staging"
+                echo "SUPABASE_STAGING_DB_URL is not a valid Postgres URL. Staging and preview deploy steps are skipped."
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+          fi
+
           echo "isolated_staging=true" >> "$GITHUB_OUTPUT"
           echo "Isolated staging Supabase project detected."
         env:
           STAGING_SUPABASE_PROJECT_ID:         ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
           STAGING_SUPABASE_URL:                ${{ secrets.STAGING_SUPABASE_URL }}
           STAGING_SUPABASE_PUBLISHABLE_KEY:    ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_STAGING_DB_URL:             ${{ secrets.SUPABASE_STAGING_DB_URL }}
           PRODUCTION_SUPABASE_PROJECT_ID:      ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
           PRODUCTION_SUPABASE_URL:             ${{ secrets.VITE_SUPABASE_URL }}
           PRODUCTION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
@@ -318,11 +361,29 @@ jobs:
             exit 0
           fi
 
-          projects_json="$(supabase projects list --output json)"
-          resolved_url="$(PROJECTS_JSON="$projects_json" node <<'NODE'
+          projects_json="[]"
+          if ! projects_json="$(supabase projects list --output json 2>/tmp/supabase-projects-list.err)"; then
+            echo "::warning::Could not list Supabase projects to resolve pooler region. Trying the Supabase Management API project endpoint."
+            sed 's/./*/g' /tmp/supabase-projects-list.err || true
+            projects_json="[]"
+          fi
+
+          project_json="{}"
+          if ! project_json="$(curl -fsS --retry 3 --connect-timeout 10 \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            -H "Accept: application/json" \
+            "https://api.supabase.com/v1/projects/$STAGING_SUPABASE_PROJECT_ID" \
+            2>/tmp/supabase-project-get.err)"; then
+            echo "::warning::Could not resolve Supabase project metadata through the Management API."
+            sed 's/./*/g' /tmp/supabase-project-get.err || true
+            project_json="{}"
+          fi
+
+          resolved_url="$(PROJECTS_JSON="$projects_json" PROJECT_JSON="$project_json" node <<'NODE'
           const directUrl = process.env.SUPABASE_STAGING_DB_URL;
           const projectRef = process.env.STAGING_SUPABASE_PROJECT_ID;
           const projects = JSON.parse(process.env.PROJECTS_JSON || "[]");
+          const projectMetadata = JSON.parse(process.env.PROJECT_JSON || "{}");
 
           if (!directUrl) {
             throw new Error("SUPABASE_STAGING_DB_URL is required");
@@ -342,14 +403,18 @@ jobs:
           }
 
           const project = projects.find((candidate) => candidate.ref === projectRef || candidate.id === projectRef);
-          if (!project?.region) {
-            throw new Error(`Could not resolve Supabase region for staging project ${projectRef}`);
+          const region = project?.region || projectMetadata.region;
+          if (!region) {
+            throw new Error(
+              `Could not resolve Supabase region for staging project ${projectRef}. ` +
+              "Configure SUPABASE_STAGING_DB_URL as a Supabase pooler URL or ensure SUPABASE_ACCESS_TOKEN can read project metadata.",
+            );
           }
 
           const pooler = new URL("postgresql://postgres:postgres@example.invalid/postgres");
           pooler.username = `postgres.${projectRef}`;
           pooler.password = decodeURIComponent(current.password);
-          pooler.hostname = `aws-0-${project.region}.pooler.supabase.com`;
+          pooler.hostname = `aws-0-${region}.pooler.supabase.com`;
           pooler.port = "5432";
           pooler.searchParams.set("sslmode", "require");
           process.stdout.write(pooler.toString());

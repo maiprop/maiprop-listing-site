@@ -243,8 +243,10 @@ describe("Dashboard behavior", () => {
       expect(checkoutInvokeMock).toHaveBeenCalledWith("create-checkout", {
         body: {
           plan: "pro",
+          audience: "participant",
           billing_cycle: "monthly",
           trial: true,
+          checkout_type: "subscription_trial",
           success_url: "/dashboard?checkout=trial_started",
           cancel_url: "/dashboard?checkout=cancelled",
         },

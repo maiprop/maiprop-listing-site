@@ -129,9 +129,10 @@ export default function Dashboard() { // skipcq: JS-R1005
   const defaultSection = (sectionNavItems[0]?.key ?? "overview") as NavKey;
   const querySection = searchParams.get("tab") as NavKey | null;
   const requestedSection = (section as NavKey | undefined) || querySection || undefined;
-  const requestedSectionIsAvailable = requestedSection === "settings" || sectionNavItems.some((item) => item.key === requestedSection);
+  const normalizedRequestedSection = requestedSection === "contacts" ? "leads" : requestedSection;
+  const requestedSectionIsAvailable = normalizedRequestedSection === "settings" || sectionNavItems.some((item) => item.key === normalizedRequestedSection);
   const [activeSection, setActiveSection] = useState<NavKey>(
-    requestedSectionIsAvailable && requestedSection ? requestedSection : defaultSection,
+    requestedSectionIsAvailable && normalizedRequestedSection ? normalizedRequestedSection : defaultSection,
   );
 
   // Quick Sale access application status (invitation_requests) for buyers / non-investors
@@ -161,7 +162,7 @@ export default function Dashboard() { // skipcq: JS-R1005
 
   useEffect(() => {
     if (!requestedSection) return;
-    const routeSection = requestedSection;
+    const routeSection = requestedSection === "contacts" ? "leads" : requestedSection;
     if (routeSection === "settings" && activeSection !== "settings") {
       setActiveSection("settings");
       return;
@@ -225,14 +226,19 @@ export default function Dashboard() { // skipcq: JS-R1005
       const { data, error } = await supabase.functions.invoke("create-checkout", {
         body: {
           plan: trialPlanKey,
+          audience: pricingAudience,
           billing_cycle: "monthly",
           trial: true,
+          checkout_type: "subscription_trial",
           success_url: "/dashboard?checkout=trial_started",
           cancel_url: "/dashboard?checkout=cancelled",
         },
       });
       const checkout = data as { url?: string; error?: string; message?: string } | null;
       const checkoutFailure = checkout?.message ?? checkout?.error;
+      if (checkout?.error === "trial_mock_billing_disabled") {
+        throw new Error("Trial checkout requires live Stripe billing. Use Upgrade for paid checkout or configure Stripe trial billing.");
+      }
       if (error) throw new Error(checkoutFailure ?? error.message);
 
       const checkoutUrl = checkout?.url;
@@ -247,7 +253,7 @@ export default function Dashboard() { // skipcq: JS-R1005
     } finally {
       setTrialCheckoutLoading(false);
     }
-  }, [navigate, trialPlanKey, user]);
+  }, [navigate, pricingAudience, trialPlanKey, user]);
 
   const displayName = useMemo(
     () => profile?.display_name || profile?.first_name || user?.email?.split("@")[0] || tr("dashboard.userFallback", "User"),

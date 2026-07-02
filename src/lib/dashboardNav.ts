@@ -69,7 +69,7 @@ export const ALL_NAV_ITEMS: NavItemDef[] = [
   { icon: Calendar,      label: "Open Houses",        key: "open-houses"    },
   { icon: Wrench,        label: "My Services",        key: "services"       },
   { icon: FolderKanban,  label: "Booking Calendar",   key: "booking"        },
-  { icon: Briefcase,     label: "Leads CRM",          key: "leads"          },
+  { icon: Briefcase,     label: "CRM",                key: "leads"          },
   { icon: Users,         label: "Contacts",           key: "contacts"       },
   { icon: Globe2,        label: "Projects",           key: "projects"       },
   { icon: TrendingUp,    label: "Portfolios",         key: "portfolios"     },
@@ -82,12 +82,12 @@ export const ALL_NAV_ITEMS: NavItemDef[] = [
 const NAV_PRO: Record<string, NavKey[]> = {
   buyer:         ["overview", "saved", "saved-searches", "open-houses", "messages", "viewings", "auctions", "billing", "profile", "settings"],
   seller:        ["overview", "listings", "saved", "saved-searches", "messages", "viewings", "open-houses", "billing", "profile", "settings"],
-  agent:         ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "leads", "contacts", "data-input", "billing", "profile", "settings"],
-  developer:     ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "open-houses", "leads", "contacts", "projects", "portfolios", "billing", "profile", "settings"],
-  professional:  ["overview", "services", "booking", "leads", "contacts", "analytics", "messages", "viewings", "billing", "profile", "settings"],
+  agent:         ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "leads", "data-input", "billing", "profile", "settings"],
+  developer:     ["overview", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "open-houses", "leads", "projects", "portfolios", "billing", "profile", "settings"],
+  professional:  ["overview", "services", "booking", "leads", "analytics", "messages", "viewings", "billing", "profile", "settings"],
   investor:      ["overview", "saved", "saved-searches", "open-houses", "messages", "viewings", "auctions", "billing", "profile", "settings"],
-  institutional: ["overview", "saved", "saved-searches", "listings", "messages", "viewings", "auctions", "open-houses", "contacts", "billing", "profile", "settings"],
-  admin:         ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "services", "booking", "leads", "contacts", "projects", "portfolios", "data-input", "billing", "profile", "settings"],
+  institutional: ["overview", "saved", "saved-searches", "listings", "messages", "viewings", "auctions", "open-houses", "leads", "billing", "profile", "settings"],
+  admin:         ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "services", "booking", "leads", "projects", "portfolios", "data-input", "billing", "profile", "settings"],
 };
 
 const NAV_FREE: Record<string, NavKey[]> = {
@@ -98,7 +98,7 @@ const NAV_FREE: Record<string, NavKey[]> = {
   professional:  ["overview", "billing", "profile", "settings"],
   investor:      ["overview", "saved", "messages", "viewings", "auctions", "billing", "profile", "settings"],
   institutional: ["overview", "saved", "listings", "messages", "viewings", "auctions", "billing", "profile", "settings"],
-  admin:         ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "services", "booking", "leads", "contacts", "projects", "portfolios", "data-input", "billing", "profile", "settings"],
+  admin:         ["overview", "deal-flow", "listings", "analytics", "saved", "saved-searches", "messages", "viewings", "auctions", "open-houses", "services", "booking", "leads", "projects", "portfolios", "data-input", "billing", "profile", "settings"],
 };
 
 export function getNavItemsForBioType(

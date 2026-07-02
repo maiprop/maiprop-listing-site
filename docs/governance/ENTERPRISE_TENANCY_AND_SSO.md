@@ -13,6 +13,8 @@ The enterprise tenant foundation is stored in:
 | `organization_domains` | Verified corporate domains and whether SSO is required for that domain. |
 | `organization_sso_providers` | Metadata pointer to the Supabase SSO/SAML provider configuration. |
 | `procurement_evidence` | Per-organization due-diligence evidence status and renewal tracking. |
+| `listings.organization_id` | Optional tenant owner for enterprise listings; `NULL` keeps existing personal listing flows. |
+| `projects.organization_id` | Optional tenant owner for enterprise developer/new-build projects; `NULL` keeps existing developer-owned project flows. |
 
 Authorization must use `organization_memberships`. User-controlled profile fields, `user_metadata`, request bodies, and SSO assertions are not authorization sources.
 
@@ -24,6 +26,7 @@ The migration enables RLS on every enterprise table and restricts browser access
 - `private.has_org_role(org_id, roles, user_id)` for owner/admin/security/billing workflows.
 - `private.has_org_permission(org_id, permission, user_id)` and `private.assert_org_permission(...)` for permission-name based policy and RPC guards.
 - `organization_audit_ledger` plus `private.append_org_audit_event(...)` for append-only tenant audit events.
+- Tenant-owned listings and projects are authorized through `private.has_org_permission(..., 'listing:*' | 'project:*')` while personal rows keep explicit `organization_id IS NULL AND owner_id = auth.uid()` branches. This prevents org rollout from breaking existing individual users.
 
 Owners and admins can manage memberships. Only owners can create or modify owner memberships. Users cannot update their own organization role or status. Deletes are not granted to browser roles; suspension/status changes preserve auditability.
 
@@ -50,6 +53,7 @@ Supabase SSO/SAML availability depends on the Supabase plan and project configur
 | 2026-06-27 | App and source-controlled DB contract | Verified | `npx vitest run src/test/enterpriseSso.test.ts --reporter=dot` passed 3/3 tests; `npm run check:enterprise-readiness-basics` passed. |
 | 2026-06-27 | Supabase production `qvvicunqcrwpioqnvzxf` | Provider not configured | Read-only Supabase SQL returned zero rows for `auth.sso_providers`, `auth.sso_domains`, `organization_sso_providers`, and `organization_domains`. |
 | 2026-06-27 | Supabase staging `xsiehskfgeoqyazcgauv` | Provider not configured | Read-only Supabase SQL returned zero rows for `auth.sso_providers`, `auth.sso_domains`, `organization_sso_providers`, and `organization_domains`. |
+| 2026-07-02 | First-class tenant resource ownership | Source-controlled | `20260702180854_enterprise_tenant_resource_ownership.sql` adds optional tenant ownership for `listings` and `projects`, RLS branches for tenant view/manage, and keeps existing personal flows. |
 
 ECAS status: the repository and database schema are ready for a test IdP, but
 enterprise SSO/SAML cannot be graded as live-ready until a staging IdP/domain is

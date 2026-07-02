@@ -178,6 +178,7 @@ function installSupabaseFetch(): FetchMock {
             title: "Canonical Project Listing",
             listing_type: "new_build",
             is_pre_sale: false,
+            project: { name: "Marina Heights", delivery_date: "2026-10-01", project_units: [] },
           },
         ]);
       }
@@ -560,6 +561,7 @@ describe("public listings endpoint", () => {
     await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?listing_type=sale"));
     let url = fetchUrls("/rest/v1/listings")[0];
     expect(url.searchParams.get("listing_type")).toBe("in.(sale,new_build)");
+    expect(url.searchParams.get("select")).toContain("name,delivery_date");
     expect(url.searchParams.get("select")).toContain("project_units!project_units_project_id_fkey");
 
     fetchMock().mockClear();
@@ -571,10 +573,11 @@ describe("public listings endpoint", () => {
 
   it("returns canonical new-build listings by listing_type instead of the legacy pre-sale flag", async () => {
     const res = await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?listing_type=new_build&limit=1"));
-    const body = await res.json() as { data: Array<{ id: string; listing_type: string; is_pre_sale: boolean }> };
+    const body = await res.json() as { data: Array<{ id: string; listing_type: string; is_pre_sale: boolean; project?: { name?: string } }> };
 
     const url = fetchUrls("/rest/v1/listings")[0];
     expect(url.searchParams.get("listing_type")).toBe("eq.new_build");
+    expect(url.searchParams.get("select")).toContain("name,delivery_date");
     expect(url.searchParams.get("select")).toContain("project_units!project_units_project_id_fkey");
     expect(url.searchParams.has("pre_sale")).toBe(false);
     expect(url.searchParams.has("is_pre_sale")).toBe(false);
@@ -583,6 +586,7 @@ describe("public listings endpoint", () => {
         id: "new-build-1",
         listing_type: "new_build",
         is_pre_sale: false,
+        project: expect.objectContaining({ name: "Marina Heights" }),
       }),
     ]);
   });
@@ -1122,7 +1126,7 @@ describe("public homepage endpoint", () => {
     expect(url.searchParams.get("listing_images.limit")).toBe("3");
     const featuredCacheKey = new URL(cacheApi.put.mock.calls[0][0].url);
     expect(featuredCacheKey.searchParams.get("day")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(featuredCacheKey.searchParams.get("v")).toBe("featured-card-v5");
+    expect(featuredCacheKey.searchParams.get("v")).toBe("featured-card-v6");
     expect(featured.headers.get("Cache-Control")).toBe("public, max-age=300, stale-while-revalidate=300");
     expect(featured.headers.get("CDN-Cache-Control")).toBe("public, max-age=300, stale-while-revalidate=300");
 
@@ -1167,8 +1171,14 @@ describe("public homepage endpoint", () => {
 
   it("builds popular location trends from counts and bounded recent price samples", async () => {
     const res = await homepageRequest(makeCtx("https://portal.maiprop.co/api/public/homepage?section=popular-locations"));
-    const rows = await res.json() as Array<{ name: string; listings: number; trend: string; trendUp: boolean }>;
-    expect(rows[0]).toMatchObject({ name: "Athens", listings: 7, trend: "+13.5%", trendUp: true });
+    const rows = await res.json() as Array<{ name: string; listings: number; trend: string | null; trendUp: boolean | null; trendIsLive: boolean }>;
+    expect(rows[0]).toMatchObject({ name: "Athens", listings: 7, trend: "+13.5%", trendUp: true, trendIsLive: true });
+    expect(rows.find((row) => row.name === "Mykonos")).toMatchObject({
+      listings: 3,
+      trend: null,
+      trendUp: null,
+      trendIsLive: false,
+    });
 
     const listingsSample = fetchUrls("/rest/v1/listings").find((url) => url.searchParams.get("select") === "city,price_per_sqm,created_at");
     expect(listingsSample?.searchParams.get("limit")).toBe("1000");

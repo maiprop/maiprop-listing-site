@@ -95,8 +95,10 @@ describe("dbListingToCard — basic field mapping", () => {
   it("maps new-build project unit summaries for compact project cards", () => {
     const card = dbListingToCard(
       makeDbListing({
+        title: "Legacy listing shell title",
         listing_type: "new_build",
         project: {
+          name: "Glifada, Metaxa 11",
           delivery_date: "2026-10-01",
           project_units: [
             { id: "u1", availability_status: "available", internal_sqm: 39 },
@@ -108,6 +110,7 @@ describe("dbListingToCard — basic field mapping", () => {
       }),
     );
 
+    expect(card.title).toBe("Glifada, Metaxa 11");
     expect(card.newBuildUnitSizeMin).toBe(39);
     expect(card.newBuildUnitSizeMax).toBe(56);
     expect(card.newBuildUnitCount).toBe(4);

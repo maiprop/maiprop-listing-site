@@ -13,6 +13,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen, waitFor, within, cleanup } from "@testing-library/react";
 
+let clipboardWriteText: ReturnType<typeof vi.fn>;
+
 // ── Hoisted mocks ─────────────────────────────────────────────────────────────
 const {
   useConversationsMock,
@@ -120,7 +122,15 @@ const CONV_1 = {
   last_message_at: "2026-04-26T10:00:00Z",
   profile_a: MY_PROFILE,
   profile_b: OTHER_PROFILE,
-  listings: { title: "Cozy Flat", city: "Athens" },
+  listings: {
+    id: "listing-1",
+    title: "Cozy Flat",
+    city: "Athens",
+    cover_image_url: null,
+    listing_type: "new_build",
+    is_pre_sale: false,
+    project_id: "project-1",
+  },
   messages: [{ content: "hi", created_at: "2026-04-26T10:00:00Z", sender_id: "them-id" }],
 };
 
@@ -170,6 +180,11 @@ beforeEach(() => {
   channelMock.on.mockClear();
   channelMock.subscribe.mockClear();
   navigateMock.mockReset();
+  clipboardWriteText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText: clipboardWriteText },
+  });
   useAuthMock.mockReturnValue({ user: ME });
 });
 
@@ -345,6 +360,31 @@ describe("Messages — send + file upload handlers", () => {
 });
 
 describe("Messages — additional render branches", () => {
+  it("opens conversation options, routes to the listing, and copies share links", async () => {
+    useConversationsMock.mockReturnValue({ data: [CONV_1], isLoading: false });
+    useMessagesMock.mockReturnValue({ data: [], isLoading: false });
+
+    render(<Messages />);
+
+    fireEvent.pointerDown(screen.getByLabelText("Conversation options"), { button: 0, ctrlKey: false });
+    fireEvent.click(await screen.findByText("View listing"));
+    expect(navigateMock).toHaveBeenCalledWith("/new-build/listing-1");
+
+    fireEvent.pointerDown(screen.getByLabelText("Conversation options"), { button: 0, ctrlKey: false });
+    fireEvent.click(await screen.findByText("Copy property link"));
+    await waitFor(() => {
+      expect(clipboardWriteText).toHaveBeenCalledWith(expect.stringContaining("/new-build/listing-1"));
+    });
+    expect(toastSuccessMock).toHaveBeenCalledWith("Property link copied");
+
+    fireEvent.pointerDown(screen.getByLabelText("Conversation options"), { button: 0, ctrlKey: false });
+    fireEvent.click(await screen.findByText("Copy conversation link"));
+    await waitFor(() => {
+      expect(clipboardWriteText).toHaveBeenCalledWith(expect.stringContaining("/messages?conversation=conv-1"));
+    });
+    expect(toastSuccessMock).toHaveBeenCalledWith("Conversation link copied");
+  });
+
   it("sends pending attachments alongside the message body", async () => {
     storageUploadMock.mockResolvedValue({ error: null });
     useConversationsMock.mockReturnValue({ data: [CONV_1], isLoading: false });

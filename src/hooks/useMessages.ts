@@ -157,7 +157,7 @@ export function useConversations() {
         .from("conversations")
         .select(`
           *,
-          listings(title, city, cover_image_url),
+          listings(id, title, city, cover_image_url, listing_type, is_pre_sale, project_id),
           messages(content, created_at, sender_id)
         `)
         .or(`participant_a.eq.${user.id},participant_b.eq.${user.id}`)

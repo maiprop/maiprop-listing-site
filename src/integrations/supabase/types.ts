@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -1475,6 +1475,7 @@ export type Database = {
           noise_score: number | null
           open_house_date: string | null
           open_house_transaction_type: string | null
+          organization_id: string | null
           owner_id: string | null
           pets_allowed: boolean | null
           plot_depth: number | null
@@ -1595,6 +1596,7 @@ export type Database = {
           noise_score?: number | null
           open_house_date?: string | null
           open_house_transaction_type?: string | null
+          organization_id?: string | null
           owner_id?: string | null
           pets_allowed?: boolean | null
           plot_depth?: number | null
@@ -1715,6 +1717,7 @@ export type Database = {
           noise_score?: number | null
           open_house_date?: string | null
           open_house_transaction_type?: string | null
+          organization_id?: string | null
           owner_id?: string | null
           pets_allowed?: boolean | null
           plot_depth?: number | null
@@ -1750,6 +1753,13 @@ export type Database = {
           zone_type?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "listings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "listings_project_id_fkey"
             columns: ["project_id"]
@@ -3407,6 +3417,7 @@ export type Database = {
           longitude: number | null
           municipality: string | null
           name: string
+          organization_id: string | null
           owner_id: string
           permit_approval_date: string | null
           status: string
@@ -3432,6 +3443,7 @@ export type Database = {
           longitude?: number | null
           municipality?: string | null
           name: string
+          organization_id?: string | null
           owner_id: string
           permit_approval_date?: string | null
           status?: string
@@ -3457,13 +3469,22 @@ export type Database = {
           longitude?: number | null
           municipality?: string | null
           name?: string
+          organization_id?: string | null
           owner_id?: string
           permit_approval_date?: string | null
           status?: string
           structural_completion_date?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "projects_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       properties: {
         Row: {

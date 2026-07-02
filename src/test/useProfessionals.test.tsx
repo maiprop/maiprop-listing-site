@@ -41,6 +41,7 @@ describe("useProfessionals", () => {
       select: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      is: vi.fn().mockReturnThis(),
       then(resolve: (v: { data: unknown[]; error: null }) => unknown) {
         resolve({ data: [{ id: "p1", display_name: "Alice" }], error: null });
         return this;
@@ -50,6 +51,7 @@ describe("useProfessionals", () => {
     const { result } = renderHookWithQuery(() => useProfessionals("legal"));
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(fromMock).toHaveBeenCalledWith("professionals");
+    expect(query.is).toHaveBeenCalledWith("archived_at", null);
     expect(query.order).toHaveBeenCalledWith("subscription_tier", { ascending: false, nullsFirst: false });
     expect(query.order).toHaveBeenCalledWith("rating", { ascending: false, nullsFirst: false });
     expect(query.eq).toHaveBeenCalledWith("category", "legal");
@@ -61,6 +63,7 @@ describe("useProfessionals", () => {
       select: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      is: vi.fn().mockReturnThis(),
       then(resolve: (v: { data: null; error: unknown }) => unknown) {
         resolve({ data: null, error: new Error("db down") });
         return this;
@@ -93,6 +96,7 @@ describe("useProfessional(id)", () => {
     fromMock.mockReturnValue({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      is: vi.fn().mockReturnThis(),
       single,
     });
     const { result } = renderHookWithQuery(() => useProfessional("p2"));

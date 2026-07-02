@@ -46,12 +46,13 @@ const BOOLEAN_FEATURES = new Set([
   "has_night_power", "has_solar_water",
 ]);
 const PROJECT_UNIT_CARD_SELECT = ["id", "availability_status", "internal_sqm"].join(",");
-const LISTING_PROJECT_CARD_SELECT = "delivery_date";
+const LISTING_PROJECT_CARD_SELECT = "name,delivery_date";
 const LISTING_PROJECT_CARD_SELECT_WITH_UNITS = [
+  "name",
   "delivery_date",
   `project_units!project_units_project_id_fkey(${PROJECT_UNIT_CARD_SELECT})`,
 ].join(",");
-const LISTINGS_CACHE_VERSION = "default-card-v3";
+const LISTINGS_CACHE_VERSION = "default-card-v4";
 const LISTINGS_CACHE_OPTIONS = {
   edgeTtlSeconds: 300,
   browserTtlSeconds: 60,

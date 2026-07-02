@@ -68,6 +68,8 @@ describe("homepage section layout contracts", () => {
     renderWithProviders(<PopularLocationsSection enabled={false} />);
 
     expect(screen.getByAltText("Athens")).toBeInTheDocument();
+    expect(screen.getAllByText("Explore listings")).toHaveLength(4);
+    expect(screen.queryByText("24,860 listings")).not.toBeInTheDocument();
     expect(fetchPublicApiMock).not.toHaveBeenCalled();
   });
 

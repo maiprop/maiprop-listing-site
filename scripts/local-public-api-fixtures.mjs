@@ -81,8 +81,8 @@ const priceIndex = [
 ];
 
 const popularLocations = [
-  { name: "Athens", listings: 1, trend: "+1.2%", trendUp: true },
-  { name: "Thessaloniki", listings: 0, trend: "+0.8%", trendUp: true },
+  { name: "Athens", listings: 1, trend: null, trendUp: null, trendIsLive: false },
+  { name: "Thessaloniki", listings: 0, trend: null, trendUp: null, trendIsLive: false },
 ];
 
 function json(body, init = {}) {

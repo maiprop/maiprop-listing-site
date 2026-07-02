@@ -11,6 +11,7 @@ Enterprise procurement should have a source-controlled map from buyer questions 
 | Terms of service | Available | `src/pages/TermsOfService.tsx` and localized terms content |
 | Architecture overview | Available | `docs/adr/0001-initial-architecture.md` and ECAS audit artifacts |
 | RLS test report | Available | `e2e/rls-security.spec.ts`, Supabase policies, and CI security gate |
+| Tenant resource ownership | Available | `listings.organization_id`, `projects.organization_id`, and `20260702180854_enterprise_tenant_resource_ownership.sql` |
 | Backup restore drill | Tracked | `docs/DR_RUNBOOK.md`, `docs/backups/FREE_TIER_LOGICAL_BACKUPS.md`, `docs/PRODUCTION_CHECKLIST.md` |
 | Incident response | Available | `SECURITY.md`, `docs/DR_RUNBOOK.md`, and `docs/incidents/` templates |
 | SAML/SSO configuration | Ready pending provider enablement | `docs/governance/ENTERPRISE_TENANCY_AND_SSO.md` and `organization_sso_providers` |

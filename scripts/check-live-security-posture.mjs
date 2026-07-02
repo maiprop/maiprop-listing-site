@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import localEnvLoader from "./_load-local-env.cjs";
+
+localEnvLoader.loadLocalEnv();
 
 const accessToken = process.env.SUPABASE_ACCESS_TOKEN;
 const projectRef =
