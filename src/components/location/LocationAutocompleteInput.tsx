@@ -3,27 +3,11 @@ import ReactDOM from "react-dom";
 import { Loader2, MapPin } from "lucide-react";
 import { GOOGLE_PLACES_AUTOCOMPLETE_ENABLED } from "@/lib/config";
 import { loadGoogleMapsPlaces } from "@/lib/googleMapsPlaces";
-import { useNominatimAddressSuggestions, type NominatimAddressSuggestion } from "@/hooks/useNominatimAddressSuggestions";
-import {
-  getNominatimAddressLine,
-  getNominatimCity,
-  getNominatimMunicipality,
-  getNominatimPostalCode,
-  getPopularLocationSuggestions,
-  mergeLocationSuggestions,
-} from "@/lib/locationSuggestions";
+import { useAddressAutocomplete } from "@/hooks/useAddressAutocomplete";
+import { formatAddressPrediction, type AddressPrediction } from "@/lib/location/addressFormat";
 import { cn } from "@/lib/utils";
 
-export interface LocationAutocompleteSelection {
-  value: string;
-  suggestion?: NominatimAddressSuggestion;
-  addressLine?: string;
-  city?: string;
-  municipality?: string;
-  postalCode?: string;
-  latitude?: string;
-  longitude?: string;
-}
+export type LocationAutocompleteSelection = AddressPrediction & { suggestion?: unknown };
 
 type GooglePlace = {
   address_components?: Array<{ long_name: string; short_name: string; types: string[] }>;
@@ -69,7 +53,8 @@ interface LocationAutocompleteInputProps
 
 type SuggestionItem = {
   key: string;
-  label: string;
+  title: string;
+  subtitle: string;
   selection: LocationAutocompleteSelection;
 };
 
@@ -107,7 +92,10 @@ const buildGoogleSelection = (
   if (mode === "city") {
     const value = city || municipality || place.formatted_address || "";
     return {
+      id: `google:city:${value}`,
+      provider: "manual",
       value,
+      title: value,
       city: city || value,
       municipality,
       postalCode,
@@ -121,7 +109,11 @@ const buildGoogleSelection = (
   const addressLine = [number, street].filter(Boolean).join(" ") || place.formatted_address || "";
 
   return {
+    id: `google:address:${addressLine || place.formatted_address || ""}`,
+    provider: "manual",
     value: addressLine,
+    title: addressLine,
+    subtitle: [city, municipality, postalCode].filter(Boolean).join(" - "),
     addressLine,
     city,
     municipality,
@@ -156,13 +148,17 @@ export function LocationAutocompleteInput({
   const inputRef = useRef<HTMLInputElement>(null);
   const googleInitializedRef = useRef(false);
   const googleSelectionAppliedRef = useRef(false);
+  const googlePlacesLoadRef = useRef<Promise<void> | null>(null);
   const textValue = value ?? "";
   const query = textValue.trim();
   const useGooglePlaces = GOOGLE_PLACES_AUTOCOMPLETE_ENABLED && googlePlacesRequested && !googleUnavailable;
-  const useFallbackSuggestions = mode === "address" || !GOOGLE_PLACES_AUTOCOMPLETE_ENABLED || googleUnavailable;
+  const useFallbackSuggestions = true;
   const activeQuery = !disabled && focused && useFallbackSuggestions ? query : "";
-  const { rawSuggestions, loading, clear } = useNominatimAddressSuggestions(activeQuery);
-  const popularSuggestions = useMemo(() => getPopularLocationSuggestions(query), [query]);
+  const { predictions, loading, clear } = useAddressAutocomplete(activeQuery, {
+    mode,
+    enabled: !disabled && focused && useFallbackSuggestions,
+    includePopular: mode === "city",
+  });
 
   useEffect(() => {
     if (!focused) return;
@@ -212,12 +208,16 @@ export function LocationAutocompleteInput({
       googleInitializedRef.current = true;
     };
 
-    loadGoogleMapsPlaces()
+    const placesPromise = googlePlacesLoadRef.current ?? loadGoogleMapsPlaces();
+    googlePlacesLoadRef.current = placesPromise;
+
+    placesPromise
       .then(() => {
         if (cancelled) return;
         initGoogle();
       })
       .catch(() => {
+        googlePlacesLoadRef.current = null;
         if (!cancelled) setGoogleUnavailable(true);
       });
 
@@ -226,53 +226,18 @@ export function LocationAutocompleteInput({
     };
   }, [clear, disabled, googlePlacesRequested, googleUnavailable, mode, onChange, onSuggestionSelect]);
 
-  const cityItems = useMemo<SuggestionItem[]>(() => {
-    const nominatimCities = rawSuggestions.map(getNominatimCity).filter(Boolean);
-    const labels = mergeLocationSuggestions(
-      popularSuggestions,
-      nominatimCities,
-      query && popularSuggestions.length === 0 && nominatimCities.length === 0 ? [query] : [],
-    ).slice(0, 8);
-
-    return labels.map((label) => {
-      const suggestion = rawSuggestions.find((item) => getNominatimCity(item).toLowerCase() === label.toLowerCase());
+  const items = useMemo<SuggestionItem[]>(
+    () => predictions.map((prediction) => {
+      const formatted = formatAddressPrediction(prediction);
       return {
-        key: `city-${label}`,
-        label,
-        selection: {
-          value: label,
-          suggestion,
-          city: label,
-          municipality: suggestion ? getNominatimMunicipality(suggestion) : "",
-          postalCode: suggestion ? getNominatimPostalCode(suggestion) : "",
-          latitude: suggestion?.lat,
-          longitude: suggestion?.lon,
-        },
+        key: prediction.id,
+        title: formatted.title,
+        subtitle: formatted.subtitle,
+        selection: prediction,
       };
-    });
-  }, [popularSuggestions, query, rawSuggestions]);
-
-  const addressItems = useMemo<SuggestionItem[]>(() => (
-    rawSuggestions.map((suggestion, index) => {
-      const addressLine = getNominatimAddressLine(suggestion);
-      return {
-        key: `address-${suggestion.display_name}-${index}`,
-        label: suggestion.display_name,
-        selection: {
-          value: addressLine,
-          suggestion,
-          addressLine,
-          city: getNominatimCity(suggestion),
-          municipality: getNominatimMunicipality(suggestion),
-          postalCode: getNominatimPostalCode(suggestion),
-          latitude: suggestion.lat,
-          longitude: suggestion.lon,
-        },
-      };
-    }).slice(0, 8)
-  ), [rawSuggestions]);
-
-  const items = mode === "address" ? addressItems : cityItems;
+    }),
+    [predictions],
+  );
   const showDropdown = focused && !disabled && useFallbackSuggestions && (items.length > 0 || loading);
   const listboxId = `${inputId}-listbox`;
 
@@ -312,13 +277,20 @@ export function LocationAutocompleteInput({
         <button
           key={item.key}
           type="button"
+          role="option"
+          aria-selected="false"
+          aria-label={item.subtitle ? `${item.title}, ${item.subtitle}` : item.title}
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => selectItem(item)}
           className="flex w-full items-center px-3 py-2.5 text-left hover:bg-secondary transition-colors border-b border-border last:border-0"
-          role="option"
         >
           <MapPin className="w-3.5 h-3.5 text-muted-foreground mr-2.5 shrink-0" />
-          <span className="flex-1 text-sm text-foreground truncate">{item.label}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium text-foreground">{item.title}</span>
+            {item.subtitle && (
+              <span className="mt-0.5 block truncate text-xs text-muted-foreground">{item.subtitle}</span>
+            )}
+          </span>
         </button>
       ))}
     </div>

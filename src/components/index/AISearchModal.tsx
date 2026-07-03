@@ -47,7 +47,7 @@ export function AISearchModal({
       void trackUserSearch({
         surface: "ai_search",
         query: searchQuery,
-        route: data?.listing_type === "auction" ? "/auctions" : "/listings",
+        route: "/listings",
         filters: {
           city: data?.city,
           listing_type: data?.listing_type,
@@ -62,7 +62,7 @@ export function AISearchModal({
         },
         metadata: {
           summary: data?.summary,
-          target: data?.listing_type === "auction" ? "auctions" : "listings",
+          target: "listings",
         },
       });
       onFiltersApplied(data);

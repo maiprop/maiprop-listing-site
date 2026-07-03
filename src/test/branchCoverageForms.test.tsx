@@ -200,7 +200,7 @@ describe("branch-heavy form and role components", () => {
       await new Promise(resolve => setTimeout(resolve, 450));
     });
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    const suggestion = await screen.findByRole("option", { name: /Voukourestiou 14, Athens/i });
+    const suggestion = await screen.findByRole("option", { name: /14 Voukourestiou/i });
     fireEvent.click(suggestion);
     expect(set).toHaveBeenCalledWith("address", "14 Voukourestiou");
     expect(set).toHaveBeenCalledWith("city", "Athens");

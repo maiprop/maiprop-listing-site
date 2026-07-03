@@ -343,7 +343,7 @@ export default function CreateNewBuildingListing() {
       ...p,
       address: selection.addressLine || p.address,
       city: selection.city || p.city,
-      municipality: selection.municipality || p.municipality,
+      municipality: selection.municipality || selection.region || p.municipality,
       latitude: selection.latitude || p.latitude,
       longitude: selection.longitude || p.longitude,
     }));
@@ -650,7 +650,8 @@ export default function CreateNewBuildingListing() {
                       value={project.city}
                       onChange={(value) => setProjectLocationField("city", value)}
                       onSuggestionSelect={(selection) => {
-                        if (selection.municipality) setProjectField("municipality", selection.municipality);
+                        const municipality = selection.municipality || selection.region;
+                        if (municipality) setProjectField("municipality", municipality);
                       }}
                       placeholder={tr("newBuildingListing.building.cityPlaceholder", "e.g. Athens")}
                       inputClassName={INPUT_CLS}
@@ -667,7 +668,7 @@ export default function CreateNewBuildingListing() {
                       mode="city"
                       value={project.municipality}
                       onChange={(value) => setProjectLocationField("municipality", value)}
-                      onSuggestionSelect={(selection) => setProjectField("municipality", selection.municipality || selection.city || selection.value)}
+                      onSuggestionSelect={(selection) => setProjectField("municipality", selection.municipality || selection.region || selection.city || selection.value)}
                       placeholder={tr("newBuildingListing.building.municipalityPlaceholder", "Δήμος")}
                       inputClassName={INPUT_CLS}
                     />

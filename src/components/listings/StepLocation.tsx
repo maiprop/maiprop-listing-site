@@ -89,7 +89,7 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
           onSuggestionSelect={(selection) => {
             if (selection.addressLine) set("address", selection.addressLine);
             if (selection.city) set("city", selection.city);
-            if (selection.municipality) set("region", selection.municipality);
+            if (selection.municipality || selection.region) set("region", selection.municipality || selection.region || "");
             if (selection.postalCode) set("postal_code", selection.postalCode);
             if (selection.latitude) set("latitude", selection.latitude);
             if (selection.longitude) set("longitude", selection.longitude);
@@ -114,7 +114,7 @@ export function StepLocation({ form, set, errors, setFieldRef, connections, step
             placeholder="Attica"
             value={form.region}
             onChange={(value) => set("region", value)}
-            onSuggestionSelect={(selection) => set("region", selection.municipality || selection.city || selection.value)}
+            onSuggestionSelect={(selection) => set("region", selection.municipality || selection.region || selection.city || selection.value)}
             inputClassName="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
           />
         </div>
