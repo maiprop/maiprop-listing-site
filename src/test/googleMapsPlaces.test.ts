@@ -6,6 +6,17 @@ function removeGoogleMapsScripts() {
     .forEach((script) => script.remove());
 }
 
+function markPlacesReady() {
+  (
+    window as typeof window & {
+      google?: unknown;
+      __maipropGoogleMapsPlacesReady?: () => void;
+    }
+  ).google = { maps: { places: {} } };
+  (window as typeof window & { __maipropGoogleMapsPlacesReady?: () => void })
+    .__maipropGoogleMapsPlacesReady?.();
+}
+
 async function loadModule() {
   vi.resetModules();
   return import("@/lib/googleMapsPlaces");
@@ -15,6 +26,8 @@ describe("googleMapsPlaces loader", () => {
   beforeEach(() => {
     removeGoogleMapsScripts();
     delete (window as typeof window & { google?: unknown }).google;
+    delete (window as typeof window & { __maipropGoogleMapsPlacesReady?: unknown })
+      .__maipropGoogleMapsPlacesReady;
   });
 
   it("detects an already-loaded Google Places namespace", async () => {
@@ -50,10 +63,11 @@ describe("googleMapsPlaces loader", () => {
     expect(scripts[0].src).toContain("key=maps-key-1");
     expect(scripts[0].src).toContain("libraries=places");
     expect(scripts[0].src).toContain("loading=async");
+    expect(scripts[0].src).toContain("callback=__maipropGoogleMapsPlacesReady");
     expect(scripts[0].async).toBe(true);
     expect(scripts[0].dataset.maipropGooglePlaces).toBe("true");
 
-    scripts[0].dispatchEvent(new Event("load"));
+    markPlacesReady();
     await expect(firstLoad).resolves.toBeUndefined();
   });
 
@@ -66,8 +80,20 @@ describe("googleMapsPlaces loader", () => {
     const load = loadGoogleMapsPlaces("maps-key-2");
     expect(document.head.querySelectorAll('script[src*="maps.googleapis.com/maps/api/js"]')).toHaveLength(1);
 
+    (window as typeof window & { google?: unknown }).google = { maps: { places: {} } };
     existing.dispatchEvent(new Event("load"));
     await expect(load).resolves.toBeUndefined();
+  });
+
+  it("rejects when the script callback fires without the Places namespace", async () => {
+    const { loadGoogleMapsPlaces } = await loadModule();
+
+    const load = loadGoogleMapsPlaces("maps-key-without-places");
+    (window as typeof window & { google?: unknown }).google = { maps: {} };
+    (window as typeof window & { __maipropGoogleMapsPlacesReady?: () => void })
+      .__maipropGoogleMapsPlacesReady?.();
+
+    await expect(load).rejects.toThrow("Google Places failed to initialize");
   });
 
   it("clears the cached promise after script load failure so callers can retry", async () => {
@@ -89,7 +115,7 @@ describe("googleMapsPlaces loader", () => {
     );
     expect(retryScript?.src).toContain("key=good-key");
 
-    retryScript?.dispatchEvent(new Event("load"));
+    markPlacesReady();
     await expect(retryLoad).resolves.toBeUndefined();
   });
 });

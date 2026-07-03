@@ -145,7 +145,7 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
       ...f,
       address: selection.addressLine || f.address,
       city: selection.city || f.city,
-      municipality: selection.municipality || f.municipality,
+      municipality: selection.municipality || selection.region || f.municipality,
       latitude: Number.isFinite(latitude) ? latitude : f.latitude,
       longitude: Number.isFinite(longitude) ? longitude : f.longitude,
     }));
@@ -379,7 +379,7 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
           <Section title={tr("projects.detail.sections.location", "Location")} icon={MapPin}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2"><label htmlFor="project-edit-address" className={LABEL_CLS}>{tr("projects.fields.address", "Address")}</label><LocationAutocompleteInput id="project-edit-address" mode="address" value={(currentForm.address as string) || ""} onChange={(value) => updateLocationField("address", value)} onSuggestionSelect={applyProjectLocationSelection} placeholder={tr("projects.fields.addressPlaceholder", "Street, number")} inputClassName={INPUT_CLS} /></div>
-              <div><label htmlFor="project-edit-city" className={LABEL_CLS}>{tr("projects.fields.city", "City")}</label><LocationAutocompleteInput id="project-edit-city" mode="city" value={(currentForm.city as string) || ""} onChange={(value) => updateLocationField("city", value)} onSuggestionSelect={(selection) => { if (selection.municipality) updateField("municipality", selection.municipality); }} placeholder={tr("projects.fields.cityPlaceholder", "e.g. Athens")} inputClassName={INPUT_CLS} /></div>
+              <div><label htmlFor="project-edit-city" className={LABEL_CLS}>{tr("projects.fields.city", "City")}</label><LocationAutocompleteInput id="project-edit-city" mode="city" value={(currentForm.city as string) || ""} onChange={(value) => updateLocationField("city", value)} onSuggestionSelect={(selection) => { const municipality = selection.municipality || selection.region; if (municipality) updateField("municipality", municipality); }} placeholder={tr("projects.fields.cityPlaceholder", "e.g. Athens")} inputClassName={INPUT_CLS} /></div>
               <div>
                 <label htmlFor="project-edit-municipality" className={LABEL_CLS}>{tr("projects.detail.fields.municipality", "Municipality")}</label>
                 <LocationAutocompleteInput
@@ -387,7 +387,7 @@ export default function ProjectDetail() { // skipcq: JS-R1005 - Project route co
                   mode="city"
                   value={(currentForm.municipality as string) || ""}
                   onChange={(value) => updateLocationField("municipality", value)}
-                  onSuggestionSelect={(selection) => updateField("municipality", selection.municipality || selection.city || selection.value)}
+                  onSuggestionSelect={(selection) => updateField("municipality", selection.municipality || selection.region || selection.city || selection.value)}
                   placeholder={tr("projects.detail.placeholders.municipality", "Municipality")}
                   inputClassName={INPUT_CLS}
                 />

@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { Loader2, MapPin, Search, X } from "lucide-react";
 import { GOOGLE_MAPS_API_KEY, GOOGLE_PLACES_AUTOCOMPLETE_ENABLED } from "@/lib/config";
 import { loadGoogleMapsPlaces } from "@/lib/googleMapsPlaces";
-import { useNominatimAddressSuggestions } from "@/hooks/useNominatimAddressSuggestions";
-import { getPopularLocationSuggestions, mergeLocationSuggestions } from "@/lib/locationSuggestions";
+import { useAddressAutocomplete } from "@/hooks/useAddressAutocomplete";
+import { formatAddressPrediction, type AddressPrediction } from "@/lib/location/addressFormat";
 
 type GooglePlace = {
   address_components?: Array<{ types: string[]; long_name: string }>;
@@ -55,26 +55,17 @@ export function LocationSearchField({
   const [focused, setFocused] = useState(false);
   const [googlePlacesRequested, setGooglePlacesRequested] = useState(false);
   const googlePlacesConfigured = GOOGLE_PLACES_AUTOCOMPLETE_ENABLED && Boolean(GOOGLE_MAPS_API_KEY);
-  const [googlePlacesUnavailable, setGooglePlacesUnavailable] = useState(!googlePlacesConfigured);
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const initializedRef = useRef(false);
+  const googlePlacesLoadRef = useRef<Promise<void> | null>(null);
   const query = value.trim();
-  const popularSuggestions = useMemo(() => getPopularLocationSuggestions(query), [query]);
-  const useGooglePlaces = googlePlacesConfigured && googlePlacesRequested && !googlePlacesUnavailable;
-  const shouldUseNominatim = Boolean(query) && !useGooglePlaces && (googlePlacesUnavailable || !googlePlacesConfigured);
-  const { suggestions: nominatimSuggestions, loading, clear } = useNominatimAddressSuggestions(
-    shouldUseNominatim ? query : "",
-  );
-
-  const suggestions = useMemo(
-    () => mergeLocationSuggestions(
-      popularSuggestions,
-      shouldUseNominatim ? [query] : [],
-      shouldUseNominatim ? nominatimSuggestions : [],
-    ).slice(0, 8),
-    [nominatimSuggestions, popularSuggestions, query, shouldUseNominatim],
-  );
+  const shouldUsePredictions = focused;
+  const { predictions, loading, clear } = useAddressAutocomplete(query, {
+    mode: "city",
+    enabled: shouldUsePredictions,
+    includePopular: true,
+  });
 
   const getPos = () => {
     if (!wrapRef.current) return { top: 0, left: 0, width: 300 };
@@ -87,7 +78,6 @@ export function LocationSearchField({
     const Autocomplete = (window as GoogleWindow).google?.maps?.places?.Autocomplete;
     if (!input || initializedRef.current) return;
     if (!Autocomplete) {
-      setGooglePlacesUnavailable(true);
       return;
     }
 
@@ -126,29 +116,35 @@ export function LocationSearchField({
     if (!googlePlacesRequested || !googlePlacesConfigured) return;
     let cancelled = false;
 
-    loadGoogleMapsPlaces()
+    const placesPromise = googlePlacesLoadRef.current ?? loadGoogleMapsPlaces();
+    googlePlacesLoadRef.current = placesPromise;
+
+    placesPromise
       .then(() => {
         if (cancelled) return;
         initGoogle();
       })
       .catch(() => {
-        if (!cancelled) setGooglePlacesUnavailable(true);
+        googlePlacesLoadRef.current = null;
       });
 
     return () => { cancelled = true; };
   }, [googlePlacesConfigured, googlePlacesRequested, initGoogle]);
 
-  const selectSuggestion = (nextValue: string) => {
-    onChange(nextValue);
+  const selectSuggestion = (prediction: AddressPrediction) => {
+    onChange(prediction.value);
     clear();
     setFocused(false);
   };
 
-  const showDropdown = focused && (!useGooglePlaces || !query) && (suggestions.length > 0 || loading);
+  const showDropdown = focused && shouldUsePredictions && (predictions.length > 0 || loading);
   const pos = showDropdown ? getPos() : null;
+  const listboxId = "listing-location-dropdown-portal";
   const dropdown = showDropdown && pos ? (
     <div
-      id="listing-location-dropdown-portal"
+      id={listboxId}
+      role="listbox"
+      aria-label={query ? "Location suggestions" : "Location options"}
       style={{ position: "absolute", top: pos.top, left: pos.left, width: pos.width, zIndex: 9999 }}
       className="bg-card border border-border rounded-2xl shadow-elevated overflow-hidden"
     >
@@ -162,18 +158,29 @@ export function LocationSearchField({
           {query ? "Location Suggestions" : "Popular Locations"}
         </span>
       </div>
-      {suggestions.map((suggestion) => (
+      {predictions.map((suggestion) => {
+        const formatted = formatAddressPrediction(suggestion);
+        return (
         <button
-          key={suggestion}
+          key={suggestion.id}
           type="button"
+          role="option"
+          aria-selected="false"
+          aria-label={formatted.subtitle ? `${formatted.title}, ${formatted.subtitle}` : formatted.title}
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => selectSuggestion(suggestion)}
           className="flex w-full items-center px-4 py-2.5 text-left hover:bg-secondary transition-colors"
         >
           <MapPin className="w-3.5 h-3.5 text-muted-foreground mr-3 shrink-0" />
-          <span className="flex-1 text-sm text-foreground truncate">{suggestion}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium text-foreground">{formatted.title}</span>
+            {formatted.subtitle && (
+              <span className="mt-0.5 block truncate text-xs text-muted-foreground">{formatted.subtitle}</span>
+            )}
+          </span>
         </button>
-      ))}
+        );
+      })}
     </div>
   ) : null;
 
@@ -190,6 +197,10 @@ export function LocationSearchField({
         type="text"
         placeholder={placeholder}
         aria-label={ariaLabel}
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={showDropdown}
+        aria-controls={showDropdown ? listboxId : undefined}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onFocus={() => {
@@ -198,7 +209,7 @@ export function LocationSearchField({
         }}
         onKeyDown={(event) => {
           if (event.key === "Escape") setFocused(false);
-          if (event.key === "Enter" && suggestions[0] && !value.trim()) selectSuggestion(suggestions[0]);
+          if (event.key === "Enter" && predictions[0] && !value.trim()) selectSuggestion(predictions[0]);
         }}
         className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none min-w-0"
         autoComplete="new-password"

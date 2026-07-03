@@ -280,6 +280,17 @@ describe("HeroSection", () => {
     );
   });
 
+  it("keeps auction discovery out of the homepage property search selector", () => {
+    stubMatchMedia({ desktop: false });
+
+    renderWithRoutes(<HeroSection />);
+
+    expect(screen.getByRole("button", { name: /Buy/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Rent/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Professionals/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Auctions/i })).not.toBeInTheDocument();
+  });
+
   it("keeps the poster-only hero for first paint, then attaches video sources on desktop idle", async () => {
     vi.useFakeTimers();
     stubMatchMedia({ desktop: true });
@@ -351,7 +362,7 @@ describe("HeroSection", () => {
     expect(video.querySelector("source")).toBeNull();
   });
 
-  it("routes auction AI searches to the auctions result surface", async () => {
+  it("keeps auction AI suggestions out of the homepage omnibox route", async () => {
     stubMatchMedia({ desktop: false });
     authMock.user = { id: "buyer-1" };
     mockSupabase.functions.invoke.mockResolvedValueOnce({
@@ -373,19 +384,22 @@ describe("HeroSection", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /^Search$/i }));
 
-    await waitFor(() => expect(screen.getByText("Auctions destination")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Listings destination")).toBeInTheDocument());
     expect(mockSupabase.functions.invoke).toHaveBeenCalledWith("ai-search", {
       body: { query: "auctions in Athens under 250k" },
     });
     expect(authMock.trackUserSearch).toHaveBeenCalledWith(expect.objectContaining({
       surface: "ai_search",
       query: "auctions in Athens under 250k",
-      route: "/auctions",
+      route: "/listings",
       filters: expect.objectContaining({
         listing_type: "auction",
         city: "Athens",
         price_min: 100000,
         price_max: 250000,
+      }),
+      metadata: expect.objectContaining({
+        target: "listings",
       }),
     }));
   });

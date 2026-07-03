@@ -113,6 +113,10 @@ async function mockGooglePlacesScript(page: Page) {
             }
           }
         };
+        var callbackName = new URL(document.currentScript.src).searchParams.get("callback");
+        if (callbackName && typeof window[callbackName] === "function") {
+          window[callbackName]();
+        }
       `,
     });
   });

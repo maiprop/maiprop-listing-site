@@ -21,7 +21,6 @@ const HERO_MARKET_TICKER_START_DELAY_MS = 900;
 const LISTING_TYPE_MAP: Record<string, string> = {
   Buy: "sale",
   Rent: "rent",
-  Auctions: "auction",
 };
 
 export function HeroSection() {
@@ -84,7 +83,6 @@ export function HeroSection() {
     }
     const lt = LISTING_TYPE_MAP[searchType];
     if (lt === "firesale") { navigate("/firesale"); return; }
-    if (lt === "auction") { navigate("/auctions"); return; }
     if (locationQuery) addRecentSearch(locationQuery);
     const params = new URLSearchParams();
     if (locationQuery) params.set("city", locationQuery);
@@ -119,17 +117,13 @@ export function HeroSection() {
     const city = asString(filters.city);
     if (city) params.set("city", city);
     const listingType = asString(filters.listing_type);
-    const isAuctionSearch = listingType === "auction";
-    if (listingType && !isAuctionSearch) params.set("listing_type", listingType);
+    if (listingType === "sale" || listingType === "rent") params.set("listing_type", listingType);
     const propertyType = asString(filters.property_type);
     if (propertyType) params.set("type", propertyType);
 
     const priceMin = clampInt(filters.price_min, 0, PRICE_MAX);
     const priceMax = clampInt(filters.price_max, 0, PRICE_MAX);
-    if (isAuctionSearch) {
-      if (priceMin != null) params.set("price_min", String(priceMin));
-      if (priceMax != null) params.set("price_max", String(priceMax));
-    } else if (priceMin != null || priceMax != null) {
+    if (priceMin != null || priceMax != null) {
       params.set("price", `${priceMin ?? 0}-${priceMax ?? PRICE_MAX}`);
     }
 
@@ -145,7 +139,7 @@ export function HeroSection() {
       if (features.length) params.set("features", features.join(","));
     }
 
-    navigate(`${isAuctionSearch ? "/auctions" : "/listings"}?${params.toString()}`);
+    navigate(`/listings?${params.toString()}`);
   };
 
   const professionalInputValue = searchType === "Professionals" ? searchQuery : "";
@@ -253,7 +247,6 @@ export function HeroSection() {
                     {[
                       { label: "Buy", emoji: "🏠" },
                       { label: "Rent", emoji: "🔑" },
-                      { label: "Auctions", emoji: "⚖️" },
                       { label: "Professionals", emoji: "👔" },
                     ].map(({ label, emoji }) => (
                       <button

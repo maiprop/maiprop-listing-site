@@ -82,7 +82,8 @@ describe("location address suggestions", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     expect(String(fetchMock.mock.calls[0][0])).toContain("countrycodes=gr");
     expect(String(fetchMock.mock.calls[0][0])).toContain("Voukourestiou%2014");
-    expect(await screen.findByRole("button", { name: ADDRESS_SUGGESTION })).toBeInTheDocument();
+    expect(await screen.findByText("Voukourestiou 14")).toBeInTheDocument();
+    expect(screen.getByText("Athens - Attica")).toBeInTheDocument();
   });
 
   it("keeps the homepage location field isolated from mobile browser autocomplete overlays", () => {
@@ -129,7 +130,7 @@ describe("location address suggestions", () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     expect(String(fetchMock.mock.calls[0][0])).toContain("q=%CE%9A%CE%B1");
-    expect(await screen.findByRole("button", { name: greekSuggestion })).toBeInTheDocument();
+    expect(await screen.findByText(greekSuggestion.split(",")[0])).toBeInTheDocument();
   });
 
   it("shows address suggestions in the listings location filter when the user types a street address", async () => {
@@ -154,7 +155,8 @@ describe("location address suggestions", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     expect(String(fetchMock.mock.calls[0][0])).toContain("countrycodes=gr");
     expect(String(fetchMock.mock.calls[0][0])).toContain("Voukourestiou%2014");
-    expect(await screen.findByRole("button", { name: ADDRESS_SUGGESTION })).toBeInTheDocument();
+    expect(await screen.findByText("Voukourestiou 14")).toBeInTheDocument();
+    expect(screen.getByText("Athens - Attica")).toBeInTheDocument();
   });
 
   it("shows popular city options in shared location input fields", () => {
@@ -221,7 +223,12 @@ describe("location address suggestions", () => {
     });
     vi.useRealTimers();
 
-    fireEvent.click(await screen.findByRole("option", { name: ADDRESS_SUGGESTION }));
+    const option = await screen.findByRole("option", { name: /14 Voukourestiou/i });
+    expect(option).toHaveTextContent("14 Voukourestiou");
+    expect(option).toHaveTextContent("Athens - Municipality of Athens - 10671");
+    expect(screen.queryByText(ADDRESS_SUGGESTION)).not.toBeInTheDocument();
+
+    fireEvent.click(option);
 
     expect(screen.getByLabelText("Project address")).toHaveValue("14 Voukourestiou");
     expect(onSuggestionSelect).toHaveBeenCalledWith(expect.objectContaining({
@@ -269,7 +276,8 @@ describe("location address suggestions", () => {
     });
     vi.useRealTimers();
 
-    await screen.findByRole("option", { name: ADDRESS_SUGGESTION });
+    const option = await screen.findByRole("option", { name: /14 Voukourestiou/i });
+    expect(option).toHaveTextContent("Athens - Municipality of Athens - 10671");
     fireEvent.blur(input);
 
     expect(input).toHaveValue("14 Voukourestiou");

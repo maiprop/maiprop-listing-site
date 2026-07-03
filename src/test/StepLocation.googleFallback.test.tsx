@@ -71,7 +71,7 @@ describe("StepLocation Google Places fallback", () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain("countrycodes=gr");
     expect(String(fetchMock.mock.calls[0][0])).toContain("Voukourestiou");
 
-    const suggestionButton = await screen.findByRole("option", { name: /Voukourestiou 14, Athens/i });
+    const suggestionButton = await screen.findByRole("option", { name: /14 Voukourestiou/i });
     fireEvent.mouseDown(suggestionButton);
     fireEvent.click(suggestionButton);
     expect(set).toHaveBeenCalledWith("address", "14 Voukourestiou");
@@ -268,7 +268,7 @@ describe("StepLocation Google Places fallback", () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     await waitFor(() => expect(loadGoogleMapsPlaces).toHaveBeenCalled());
-    expect(await screen.findByRole("option", { name: /Voukourestiou 14, Athens/i })).toBeInTheDocument();
+    expect(await screen.findByRole("option", { name: /14 Voukourestiou/i })).toBeInTheDocument();
   });
 
   it("auto-applies the first address suggestion on blur when typed text has no saved coordinates", async () => {
@@ -305,7 +305,7 @@ describe("StepLocation Google Places fallback", () => {
 
     const addressInput = screen.getByPlaceholderText("e.g. Voukourestiou 14, Athens");
     fireEvent.focus(addressInput);
-    await screen.findByText(/Voukourestiou 14, Athens/i);
+    await screen.findByText("14 Voukourestiou");
 
     fireEvent.blur(addressInput);
 
