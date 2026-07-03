@@ -16,6 +16,7 @@ import {
   STRIPE_SAAS_BUSINESS_TAX_CODE,
   stripeMetadata,
 } from "../_shared/stripeClient.ts";
+import { stripeRuntimeModeFromLivemode } from "../_shared/billingState.ts";
 import { parseJsonBody, SchemaValidationError, z } from "../_shared/schema.ts";
 import { resolveCheckoutOrigin } from "../create-checkout/origins.ts";
 import { sanitizeRedirectPath } from "../create-checkout/redirects.ts";
@@ -343,6 +344,8 @@ Deno.serve(async (req) => {
       .update({
         stripe_customer_id: customerId,
         stripe_session_id: session.id,
+        runtime_mode: stripeRuntimeModeFromLivemode(Boolean(session.livemode)),
+        livemode: Boolean(session.livemode),
         updated_at: new Date().toISOString(),
       })
       .eq("id", (pendingSubscription as { id: string }).id)

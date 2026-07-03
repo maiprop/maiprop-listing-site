@@ -23,7 +23,9 @@ const advisorPolicy = JSON.parse(
 
 const appliedFutureMigrations = JSON.parse(
   readFileSync("scripts/applied-future-migrations.json", "utf8"),
-) as string[];
+) as Array<{ version: string }>;
+
+const appliedFutureMigrationVersions = appliedFutureMigrations.map((entry) => entry.version);
 
 describe("billing advisor follow-up migration", () => {
   it("uses a permissive deny policy so stripe_webhook_events has explicit browser denial", () => {
@@ -44,23 +46,18 @@ describe("billing advisor follow-up migration", () => {
     expect(migration).toContain("duplicate billing_subscriptions Stripe subscription index still exists");
   });
 
-  it("classifies the current investor subscription helper advisor with ownership", () => {
+  it("does not keep the current investor subscription helper as accepted advisor debt", () => {
     const entry = advisorPolicy.review.find(
       (item) => item.match?.cache_key_contains === "public_has_current_investor_subscription",
     );
 
-    expect(entry).toBeTruthy();
-    expect(entry?.match?.name).toBe("authenticated_security_definer_function_executable");
-    expect(entry?.owner).toBeTruthy();
-    expect(entry?.reason).toContain("expired paid investor");
-    expect(entry?.next_action).toContain("RLS regression tests");
-    expect(entry?.review_cadence).toBeTruthy();
+    expect(entry).toBeUndefined();
   });
 
   it("keeps the follow-up ordered after the current billing/advisor chain", () => {
-    expect(appliedFutureMigrations).toContain("20260707172000");
+    expect(appliedFutureMigrationVersions).toContain("20260707172000");
     expect(
-      appliedFutureMigrations.indexOf("20260707172000"),
-    ).toBeGreaterThan(appliedFutureMigrations.indexOf("20260707171000"));
+      appliedFutureMigrationVersions.indexOf("20260707172000"),
+    ).toBeGreaterThan(appliedFutureMigrationVersions.indexOf("20260707171000"));
   });
 });

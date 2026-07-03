@@ -29,13 +29,91 @@ describe("ECAS live evidence rollup", () => {
     );
 
     expect(result.ok).toBe(false);
-    expect(result.failures).toEqual(["cloudflare live evidence is unconfigured"]);
+    expect(result.failures).toEqual([
+      "sentry live evidence missing production query proof: environment=production, timeRange=24h, querySucceeded=true",
+      "cloudflare live evidence is unconfigured",
+      "github live evidence missing required branch protection proof: branch=main, requiredPullRequestReviews, requiredStatusChecks, allowsForcePushes=false, allowsDeletions=false",
+    ]);
+  });
+
+  it("fails strict mode when captured evidence lacks provider-specific proof fields", () => {
+    const result = evaluateEcasLiveEvidence(
+      [
+        {
+          provider: "github",
+          status: "captured",
+          branch: "main",
+          branchProtection: { requiredPullRequestReviews: true },
+        },
+        {
+          provider: "cloudflare",
+          status: "captured",
+          pagesProject: { name: "maiprop-listing-site", latestDeployment: { environment: "preview" } },
+        },
+        {
+          provider: "sentry",
+          status: "captured",
+          environment: "staging",
+          timeRange: "24h",
+          querySucceeded: false,
+        },
+      ],
+      { strict: true },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.failures).toEqual([
+      "sentry live evidence missing production query proof: environment=production, querySucceeded=true",
+      "cloudflare live evidence missing production deployment proof: latestProductionDeployment.status=success, latestProductionDeployment.commitHash",
+      "github live evidence missing required branch protection proof: requiredStatusChecks, allowsForcePushes=false, allowsDeletions=false",
+    ]);
+  });
+
+  it("passes strict mode with complete provider-specific proof fields", () => {
+    const result = evaluateEcasLiveEvidence(
+      [
+        {
+          provider: "github",
+          status: "captured",
+          branch: "main",
+          branchProtection: {
+            requiredPullRequestReviews: true,
+            requiredStatusChecks: true,
+            allowsForcePushes: false,
+            allowsDeletions: false,
+          },
+        },
+        {
+          provider: "cloudflare",
+          status: "captured",
+          pagesProject: {
+            name: "maiprop-listing-site",
+            latestProductionDeployment: {
+              status: "success",
+              commitHash: "66326673d2eea057f16584795655572974f97f99",
+            },
+          },
+        },
+        {
+          provider: "sentry",
+          status: "captured",
+          environment: "production",
+          timeRange: "24h",
+          querySucceeded: true,
+        },
+      ],
+      { strict: true },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.failures).toEqual([]);
   });
 
   it("requires all expected provider evidence documents", () => {
     const result = evaluateEcasLiveEvidence([{ provider: "sentry", status: "captured" }], { strict: true });
 
     expect(result.failures).toEqual([
+      "sentry live evidence missing production query proof: environment=production, timeRange=24h, querySucceeded=true",
       "cloudflare live evidence is missing",
       "github live evidence is missing",
     ]);

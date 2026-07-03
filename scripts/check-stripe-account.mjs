@@ -5,6 +5,8 @@
  * MaiProp Stripe account before catalog syncs, tax checks, or deploy cutovers.
  */
 
+import { formatStripeKeyEvidence, getStripeSecretKey, stripeKeyMetadata } from "./stripe-readiness-env.mjs";
+
 const STRIPE_API_BASE = "https://api.stripe.com";
 const STRIPE_API_VERSION = process.env.STRIPE_API_VERSION ?? "2026-06-24.dahlia";
 const LIVE_ACCOUNT_ID = process.env.STRIPE_LIVE_ACCOUNT_ID ?? "";
@@ -47,16 +49,11 @@ if (help) {
 }
 
 function getStripeKey() {
-  const key = process.env.STRIPE_SECRET_KEY ?? process.env.STRIPE_API_KEY ?? "";
-  if (!key) throw new Error("STRIPE_SECRET_KEY is required.");
-  if (!/^sk_(test|live)_/.test(key)) {
-    throw new Error("STRIPE_SECRET_KEY must be a Stripe secret key.");
-  }
-  return key;
+  return getStripeSecretKey(process.env);
 }
 
 function runtimeModeFromKey(key) {
-  return key.startsWith("sk_live_") ? "live" : "test";
+  return stripeKeyMetadata(key).mode;
 }
 
 function expectedAccountIdForMode(mode) {
@@ -111,6 +108,7 @@ async function main() {
   if (showJson) {
     console.log(JSON.stringify(report, null, 2));
   } else {
+    console.log(formatStripeKeyEvidence(key));
     console.log(`Stripe account check (${mode})`);
     console.log(`- actual:   ${report.account_id} (${report.display_name ?? report.business_profile_name ?? "unnamed"})`);
     console.log(`- expected: ${report.expected_account_id}`);

@@ -464,6 +464,9 @@ export default function Dashboard() { // skipcq: JS-R1005
                       <p className="text-xs text-muted-foreground mt-1">
                         {tr("dashboard.trial.subtitle", "Unlock analytics, CRM, priority ads, and Pro workflow tools before choosing a paid plan.")}
                       </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {tr("dashboard.trial.terms", "Card required. After 7 days, Stripe bills the selected Pro plan unless you cancel before the trial ends.")}
+                      </p>
                     </div>
                   </div>
                   <Button
@@ -592,6 +595,9 @@ export default function Dashboard() { // skipcq: JS-R1005
                           <h3 className="font-bold">{tr("dashboard.overview.developerPro.title", "Developer tools require Pro")}</h3>
                           <p className="text-sm text-muted-foreground mt-1 mb-3">
                             {tr("dashboard.overview.developerPro.subtitle", "Unlimited listings, project showcases, project ad management, Spotlight and Priority Rank are all part of the Developer Pro plan.")}
+                          </p>
+                          <p className="text-xs text-muted-foreground mb-3">
+                            {tr("dashboard.overview.developerPro.trialTerms", "Card required. After 7 days, Stripe bills Developer Pro unless you cancel before the trial ends.")}
                           </p>
                           <div className="flex gap-2">
                             <Button

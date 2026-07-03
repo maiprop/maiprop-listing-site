@@ -8,6 +8,7 @@ import { isSubscriptionAudienceAllowed } from "@/lib/subscriptionUtils";
 import { hasCurrentQuickSaleSubscription } from "@/lib/quickSaleEntitlements";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { getClientStripeRuntimeMode } from "@/lib/billingRuntime";
 
 const getProfileSubscriptionFields = (
   profile: ReturnType<typeof useAuth>["profile"],
@@ -38,17 +39,18 @@ const isInvestorParticipant = (
 };
 
 const useInvestorProStatus = (userId: string | undefined, enabled: boolean) => {
+  const runtimeMode = getClientStripeRuntimeMode();
   return useQuery({
-    queryKey: ["investor-sub-pro", userId],
+    queryKey: ["investor-sub-pro", userId, runtimeMode],
     queryFn: async () => {
       if (!userId) return null;
-      const { data } = await supabase
+      let query = supabase
         .from("investor_subscriptions")
         .select("status, expires_at")
         .eq("user_id", userId)
-        .in("status", ["active", "trial"])
-        .limit(1)
-        .maybeSingle();
+        .in("status", ["active", "trial"]);
+      if (runtimeMode) query = query.eq("runtime_mode", runtimeMode);
+      const { data } = await query.limit(1).maybeSingle();
       return data as unknown as { status: string; expires_at: string | null } | null;
     },
     enabled: Boolean(userId) && enabled,

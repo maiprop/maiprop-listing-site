@@ -22,12 +22,19 @@ export type Database = {
           created_at: string
           credits_consumed: number
           credits_granted: number
+          credits_refunded: number
           id: string
+          last_refund_id: string | null
+          livemode: boolean
           metadata: Json
           module: string
           quantity: number
+          refund_status: string
+          refunded_at: string | null
+          runtime_mode: string
           status: string
           stripe_customer_id: string | null
+          stripe_payment_intent_id: string | null
           stripe_session_id: string
           stripe_subscription_id: string | null
           unit: string
@@ -41,12 +48,19 @@ export type Database = {
           created_at?: string
           credits_consumed?: number
           credits_granted?: number
+          credits_refunded?: number
           id?: string
+          last_refund_id?: string | null
+          livemode?: boolean
           metadata?: Json
           module: string
           quantity?: number
+          refund_status?: string
+          refunded_at?: string | null
+          runtime_mode?: string
           status?: string
           stripe_customer_id?: string | null
+          stripe_payment_intent_id?: string | null
           stripe_session_id: string
           stripe_subscription_id?: string | null
           unit: string
@@ -60,12 +74,19 @@ export type Database = {
           created_at?: string
           credits_consumed?: number
           credits_granted?: number
+          credits_refunded?: number
           id?: string
+          last_refund_id?: string | null
+          livemode?: boolean
           metadata?: Json
           module?: string
           quantity?: number
+          refund_status?: string
+          refunded_at?: string | null
+          runtime_mode?: string
           status?: string
           stripe_customer_id?: string | null
+          stripe_payment_intent_id?: string | null
           stripe_session_id?: string
           stripe_subscription_id?: string | null
           unit?: string
@@ -1116,6 +1137,8 @@ export type Database = {
           created_at: string
           expires_at: string | null
           id: string
+          livemode: boolean
+          runtime_mode: string
           started_at: string
           status: string
           stripe_customer_id: string | null
@@ -1129,6 +1152,8 @@ export type Database = {
           created_at?: string
           expires_at?: string | null
           id?: string
+          livemode?: boolean
+          runtime_mode?: string
           started_at?: string
           status?: string
           stripe_customer_id?: string | null
@@ -1142,6 +1167,8 @@ export type Database = {
           created_at?: string
           expires_at?: string | null
           id?: string
+          livemode?: boolean
+          runtime_mode?: string
           started_at?: string
           status?: string
           stripe_customer_id?: string | null
@@ -3762,9 +3789,11 @@ export type Database = {
         Row: {
           claimed_at: string
           id: string
+          livemode: boolean
           metadata: Json
           plan_key: string
           pricing_audience: string
+          runtime_mode: string
           status: string
           stripe_checkout_session_id: string | null
           stripe_customer_id: string | null
@@ -3776,9 +3805,11 @@ export type Database = {
         Insert: {
           claimed_at?: string
           id?: string
+          livemode?: boolean
           metadata?: Json
           plan_key: string
           pricing_audience: string
+          runtime_mode?: string
           status?: string
           stripe_checkout_session_id?: string | null
           stripe_customer_id?: string | null
@@ -3790,9 +3821,11 @@ export type Database = {
         Update: {
           claimed_at?: string
           id?: string
+          livemode?: boolean
           metadata?: Json
           plan_key?: string
           pricing_audience?: string
+          runtime_mode?: string
           status?: string
           stripe_checkout_session_id?: string | null
           stripe_customer_id?: string | null

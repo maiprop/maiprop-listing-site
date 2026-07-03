@@ -8,6 +8,8 @@
  * catalog prices/products used by checkout have tax behavior and tax codes.
  */
 
+import { formatStripeKeyEvidence, getStripeSecretKey, stripeKeyMetadata } from "./stripe-readiness-env.mjs";
+
 const STRIPE_API_BASE = "https://api.stripe.com";
 const STRIPE_API_VERSION = process.env.STRIPE_API_VERSION ?? "2026-06-24.dahlia";
 const EXPECTED_COUNTRY = (process.env.STRIPE_TAX_EXPECT_COUNTRY ?? "GR").toUpperCase();
@@ -76,14 +78,7 @@ if (help) {
 }
 
 function getStripeKey() {
-  const key = process.env.STRIPE_SECRET_KEY ?? process.env.STRIPE_API_KEY ?? "";
-  if (!key) {
-    throw new Error("STRIPE_SECRET_KEY is required for Stripe Tax readiness checks.");
-  }
-  if (!/^sk_(test|live)_/.test(key)) {
-    throw new Error("STRIPE_SECRET_KEY must be a Stripe secret key.");
-  }
-  return key;
+  return getStripeSecretKey(process.env);
 }
 
 function encodeForm(values) {
@@ -228,7 +223,7 @@ function printHuman(report) {
 
 async function main() {
   const secret = getStripeKey();
-  const mode = secret.startsWith("sk_live_") ? "live" : "test";
+  const mode = stripeKeyMetadata(secret).mode;
   const issues = [];
   const warnings = [];
 
@@ -324,7 +319,10 @@ async function main() {
   };
 
   if (showJson) console.log(JSON.stringify(report, null, 2));
-  else printHuman(report);
+  else {
+    console.log(formatStripeKeyEvidence(secret));
+    printHuman(report);
+  }
 
   if (!report.ok) process.exit(1);
 }

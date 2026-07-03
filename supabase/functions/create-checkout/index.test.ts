@@ -229,7 +229,11 @@ Deno.test("subscription trial checkout is reserved before Stripe session creatio
 
   assertEquals(source.includes("normalizeTrialCheckoutRequest"), true);
   assertEquals(source.includes("trial_period_days: PRO_TRIAL_DAYS"), true);
-  assertEquals(source.includes('checkout_type: "subscription_trial"'), true);
+  assertEquals(
+    source.includes('checkout_type: wantsTrial ? "subscription_trial" : "subscription"'),
+    true,
+  );
+  assertEquals(source.includes("...(wantsTrial ? trialMetadata : {})"), true);
   assertEquals(source.includes('payment_method_collection: "always"'), true);
   assertEquals(source.includes('missing_payment_method: "cancel"'), true);
   assertEquals(source.includes("subscription_trial_claims"), true);
@@ -311,6 +315,28 @@ Deno.test("checkout responses expose normalized session metadata", async () => {
   assertEquals(source.includes("session_id: null"), true);
 });
 
+Deno.test("paid subscription checkout stamps checkout_type metadata on Stripe objects", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./index.ts", import.meta.url),
+  );
+  const subscriptionCreateStart = source.indexOf(
+    "session = await stripe.checkout.sessions.create",
+  );
+  const idempotencyStart = source.indexOf(
+    'idempotencyKey: await buildIdempotencyKey("checkout-v2"',
+    subscriptionCreateStart,
+  );
+  const checkoutCreateArgs = source.slice(
+    subscriptionCreateStart,
+    idempotencyStart,
+  );
+
+  const checkoutTypeStamps = checkoutCreateArgs.match(
+    /checkout_type:\s*wantsTrial\s*\?\s*"subscription_trial"\s*:\s*"subscription"/g,
+  )?.length ?? 0;
+  assertEquals(checkoutTypeStamps, 2);
+});
+
 Deno.test("add-on checkout propagates optional target metadata", async () => {
   const source = await Deno.readTextFile(
     new URL("./index.ts", import.meta.url),
@@ -347,6 +373,24 @@ Deno.test("add-on checkout validates and propagates requested quantity", async (
     true,
   );
   assertEquals(addonBranch.includes('"checkout-addon-v2"'), true);
+});
+
+Deno.test("add-on checkout stamps payment intent metadata for refund reconciliation", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./index.ts", import.meta.url),
+  );
+  const addonBranchStart = source.indexOf("if (addonKey) {");
+  const planBranchStart = source.indexOf(
+    "const plan = normalizePlanKey",
+    addonBranchStart,
+  );
+  const addonBranch = source.slice(addonBranchStart, planBranchStart);
+
+  assertEquals(addonBranch.includes("payment_intent_data"), true);
+  assertEquals(addonBranch.includes("metadata: addonMetadata"), true);
+  assertEquals(addonBranch.includes("user_id: user.id"), true);
+  assertEquals(addonBranch.includes('checkout_type: "addon"'), true);
+  assertEquals(addonBranch.includes("addon_key: checkoutAddon.addonKey"), true);
 });
 
 Deno.test("checkout sessions restrict v1 payment methods to cards", async () => {

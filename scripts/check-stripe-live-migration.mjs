@@ -11,6 +11,8 @@
 
 import { existsSync, readFileSync } from "node:fs";
 
+import { formatStripeKeyEvidence, getStripeSecretKey } from "./stripe-readiness-env.mjs";
+
 function loadEnvFile(path) {
   if (!existsSync(path)) return;
   const contents = readFileSync(path, "utf8");
@@ -42,6 +44,11 @@ const EXPECTED_WEBHOOK_URL = process.env.STRIPE_WEBHOOK_EXPECTED_URL ??
 
 const REQUIRED_WEBHOOK_EVENTS = [
   "checkout.session.completed",
+  "checkout.session.expired",
+  "charge.refunded",
+  "refund.created",
+  "refund.updated",
+  "credit_note.created",
   "customer.subscription.created",
   "customer.subscription.updated",
   "customer.subscription.paused",
@@ -114,8 +121,7 @@ function encodeForm(values) {
 }
 
 function getStripeKey() {
-  const key = process.env.STRIPE_SECRET_KEY ?? process.env.STRIPE_API_KEY ?? "";
-  if (!key) throw new Error("STRIPE_SECRET_KEY is required.");
+  const key = getStripeSecretKey(process.env);
   if (!key.startsWith("sk_live_")) {
     throw new Error("Refusing to run live migration gate without an sk_live_ Stripe key.");
   }
@@ -259,6 +265,7 @@ function endpointCoversEvents(endpoint) {
 async function main() {
   const issues = [];
   const warnings = [];
+  const stripeKey = getStripeKey();
 
   const account = await stripeRequest("/v1/account");
   if (account.id !== EXPECTED_ACCOUNT_ID) {
@@ -389,6 +396,7 @@ async function main() {
   if (process.argv.includes("--json")) {
     console.log(JSON.stringify(report, null, 2));
   } else {
+    console.log(formatStripeKeyEvidence(stripeKey));
     console.log(`Stripe live migration gate (${STRIPE_API_VERSION})`);
     console.log(`Account: ${report.account.id} (${report.account.display_name ?? "unnamed"})`);
     console.log(`Products checked: ${report.checked.live_products_seen}/${report.checked.catalog_products}`);

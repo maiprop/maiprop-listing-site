@@ -36,6 +36,8 @@ describe("GitHub admin posture capture", () => {
               require_code_owner_reviews: true,
             },
             required_status_checks: { contexts: ["Build / Lint / Test"] },
+            allow_force_pushes: { enabled: false },
+            allow_deletions: { enabled: false },
             enforce_admins: { enabled: true },
             restrictions: null,
           });
@@ -57,6 +59,10 @@ describe("GitHub admin posture capture", () => {
     expect(JSON.stringify(evidence)).not.toContain("gh_secret");
     expect(evidence.status).toBe("captured");
     expect(evidence.branchProtection.requiredApprovingReviewCount).toBe(1);
+    expect(evidence.branchProtection.requiredPullRequestReviews).toBe(true);
+    expect(evidence.branchProtection.requiredStatusChecks).toBe(true);
+    expect(evidence.branchProtection.allowsForcePushes).toBe(false);
+    expect(evidence.branchProtection.allowsDeletions).toBe(false);
     expect(evidence.productionEnvironment.hasRequiredReviewers).toBe(true);
     expect(evidence.actionsPermissions.allowedActions).toBe("selected");
   });

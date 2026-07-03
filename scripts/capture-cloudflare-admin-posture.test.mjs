@@ -43,6 +43,8 @@ describe("Cloudflare admin posture capture", () => {
                 id: "deployment-id",
                 environment: "production",
                 aliases: ["portal.maiprop.co"],
+                latest_stage: { status: "success" },
+                deployment_trigger: { metadata: { commit_hash: "66326673d2eea057f16584795655572974f97f99" } },
               },
             },
           }),
@@ -57,6 +59,10 @@ describe("Cloudflare admin posture capture", () => {
     expect(evidence.status).toBe("captured");
     expect(evidence.pagesProject.productionBranch).toBe("main");
     expect(evidence.pagesProject.domains).toEqual(["portal.maiprop.co"]);
+    expect(evidence.pagesProject.latestProductionDeployment).toEqual({
+      status: "success",
+      commitHash: "66326673d2eea057f16584795655572974f97f99",
+    });
   });
 
   it("accepts CF_PROJECT as the legacy project env alias", () => {

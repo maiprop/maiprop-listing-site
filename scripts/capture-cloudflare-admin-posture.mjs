@@ -27,6 +27,20 @@ const normalizePagesProject = (project) => ({
         aliases: Array.isArray(project.latest_deployment.aliases) ? project.latest_deployment.aliases : [],
       }
     : null,
+  latestProductionDeployment:
+    project?.latest_deployment?.environment === "production"
+      ? {
+          status:
+            project.latest_deployment?.latest_stage?.status ??
+            project.latest_deployment?.latest_stage?.name ??
+            project.latest_deployment?.stages?.at?.(-1)?.status ??
+            null,
+          commitHash:
+            project.latest_deployment?.deployment_trigger?.metadata?.commit_hash ??
+            project.latest_deployment?.source?.config?.commit_hash ??
+            null,
+        }
+      : null,
 });
 
 export async function buildCloudflarePostureEvidence({

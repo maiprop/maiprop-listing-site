@@ -54,6 +54,7 @@ export async function buildSentryEvidence({
       missingEnv,
       environment,
       timeRange,
+      querySucceeded: false,
       issueCount: 0,
       issues: [],
     };
@@ -79,6 +80,7 @@ export async function buildSentryEvidence({
       queriedAt,
       environment,
       timeRange,
+      querySucceeded: false,
       httpStatus: response.status,
       issueCount: 0,
       issues: [],
@@ -92,6 +94,7 @@ export async function buildSentryEvidence({
     queriedAt,
     environment,
     timeRange,
+    querySucceeded: true,
     issueCount: issues.length,
     issues,
   };

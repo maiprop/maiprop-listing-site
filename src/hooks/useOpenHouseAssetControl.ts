@@ -50,6 +50,12 @@ import {
   rowUpdateMutationSchema,
   scopedRowIdsMutationSchema,
 } from "@/lib/mutationSchemas";
+import {
+  revealSubmittedOpenHouseOffers,
+  updateOpenHouseOfferRow,
+  updateOpenHouseRegistrationRow,
+  upsertOpenHouseSettingsRow,
+} from "@/services/openHouseAssetService";
 
 const OPEN_HOUSE_DOC_MIME_TYPES = new Set<string>([
   "application/pdf",
@@ -129,16 +135,7 @@ export function useUpsertOpenHouseSettings() {
         { id: listingId, updates: { ...settings, updated_at: new Date().toISOString() } },
         "open house settings",
       );
-      const { data, error } = await supabase
-        .from("open_house_settings")
-        .upsert(
-          { listing_id: payload.id, ...payload.updates },
-          { onConflict: "listing_id" }
-      )
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      return upsertOpenHouseSettingsRow(payload.id, payload.updates as OpenHouseSettingsUpdate);
     },
     onSuccess: (_, v) => {
       qc.invalidateQueries({ queryKey: ["open_house_settings", v.listingId] });
@@ -333,14 +330,7 @@ export function useUpdateOpenHouseRegistration() {
         { id, updates },
         "open house registration update",
       );
-      const { data, error } = await supabase
-        .from("open_house_registrations")
-        .update(payload.updates as OHRegUpdate)
-        .eq("id", payload.id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      return updateOpenHouseRegistrationRow(payload.id, payload.updates as OHRegUpdate);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["open_house_registrations"] });
@@ -483,14 +473,7 @@ export function useUpdateOpenHouseOffer() {
         { id, updates },
         "open house offer update",
       );
-      const { data, error } = await supabase
-        .from("open_house_offers")
-        .update(payload.updates as ReturnType<typeof buildOfferStatusUpdate>)
-        .eq("id", payload.id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      return updateOpenHouseOfferRow(payload.id, payload.updates as ReturnType<typeof buildOfferStatusUpdate>);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["open_house_offers"] });
@@ -593,12 +576,7 @@ export function useRevealAllOffers() {
         { scopeId: _listingId, ids: offerIds },
         "open house offer reveal",
       );
-      const { error } = await supabase
-        .from("open_house_offers")
-        .update({ status: "revealed", revealed_at: new Date().toISOString() })
-        .in("id", payload.ids)
-        .eq("status", "submitted");
-      if (error) throw error;
+      await revealSubmittedOpenHouseOffers(payload.ids);
     },
     onSuccess: (_, v) => {
       qc.invalidateQueries({ queryKey: ["open_house_offers", v.listingId] });

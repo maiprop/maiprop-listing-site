@@ -58,6 +58,9 @@ describe("Sentry live evidence capture", () => {
     expect(requests).toHaveLength(1);
     expect(requests[0].authorization).toBe("Bearer sntrys_very_secret");
     expect(evidence.status).toBe("captured");
+    expect(evidence.querySucceeded).toBe(true);
+    expect(evidence.environment).toBe("production");
+    expect(evidence.timeRange).toBe("24h");
     expect(evidence.issueCount).toBe(1);
     expect(evidence.issues[0].title).toBe("Crash for user [redacted-email] from [redacted-ip]");
     expect(evidence.issues[0].tags.url).toBe("https://portal.maiprop.co/account?email=[redacted-email]");

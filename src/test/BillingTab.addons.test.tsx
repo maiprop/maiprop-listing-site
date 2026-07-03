@@ -256,6 +256,73 @@ describe("BillingTab add-on checkout", () => {
     expect(screen.getByText(/2026/)).toBeInTheDocument();
   });
 
+  it("labels annual subscriptions safely and surfaces no-expiry refunded credit state", async () => {
+    mocks.supabase?.from.mockImplementation((table: string) => {
+      const addonRows = [
+        {
+          id: "addon-refunded",
+          addon_key: "property_report_single",
+          status: "refunded",
+          credits_granted: 1,
+          credits_consumed: 1,
+          credits_refunded: 1,
+          refund_status: "refunded",
+          created_at: "2026-07-01T10:00:00.000Z",
+        },
+      ];
+      const query = {
+        select: vi.fn(() => query),
+        eq: vi.fn(() => query),
+        in: vi.fn(() => query),
+        order: vi.fn(() => Promise.resolve({ data: addonRows, error: null })),
+        gte: vi.fn(() => Promise.resolve({ data: [], error: null })),
+        then: (
+          resolve: (value: { data: unknown[]; error: null }) => unknown,
+          _reject?: (reason?: unknown) => unknown,
+        ) => resolve({ data: table === "addon_purchases" ? addonRows : [], error: null }),
+      };
+      return query;
+    });
+    mocks.supabase?.functions.invoke.mockImplementation((fn: string) => {
+      if (fn === "get-invoices") {
+        return Promise.resolve({
+          data: {
+            invoices: [],
+            billing_configured: true,
+            customer_found: true,
+            portal_eligible: true,
+            subscription: {
+              id: "sub_annual",
+              status: "active",
+              current_period_end: "2027-07-07T06:04:38.000Z",
+              cancel_at_period_end: false,
+              plan_name: "Pro Plan",
+              amount: 29000,
+              currency: "eur",
+              interval: "year",
+              plan_key: "pro",
+            },
+          },
+          error: null,
+        });
+      }
+      if (fn === "ai-quota-status") {
+        return Promise.resolve({ data: { quotas: {} }, error: null });
+      }
+      return Promise.resolve({ data: null, error: null });
+    });
+
+    renderWithProviders(<BillingTab />);
+
+    expect(await screen.findByText("Subscription price")).toBeInTheDocument();
+    expect(screen.queryByText("Monthly price")).not.toBeInTheDocument();
+    expect(screen.getByText("/year")).toBeInTheDocument();
+    expect(await screen.findByText("Add-on credits")).toBeInTheDocument();
+    expect(screen.getByText("No expiry")).toBeInTheDocument();
+    expect(screen.getByText(/Refund adjustment/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 credit owed/i)).toBeInTheDocument();
+  });
+
   it("shows unified AI/report consumption and wires usage add-ons to Stripe", async () => {
     renderWithProviders(<BillingTab />);
 
