@@ -4709,6 +4709,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      current_billing_runtime_mode: { Args: never; Returns: string }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
@@ -4723,6 +4724,10 @@ export type Database = {
       }
       expire_featured_listings: { Args: never; Returns: undefined }
       expire_past_auctions: { Args: never; Returns: number }
+      get_addon_credit_balance: {
+        Args: { p_bucket: string; p_user_id: string }
+        Returns: number
+      }
       get_agent_data_input_status: {
         Args: { p_user_id?: string }
         Returns: {
@@ -4873,10 +4878,9 @@ export type Database = {
         Returns: boolean
       }
       has_buy_side_role: { Args: { _user_id: string }; Returns: boolean }
-      has_current_investor_subscription: {
-        Args: { p_user_id: string }
-        Returns: boolean
-      }
+      has_current_investor_subscription:
+        | { Args: never; Returns: boolean }
+        | { Args: { p_user_id: string }; Returns: boolean }
       has_platform_admin: { Args: { _user_id?: string }; Returns: boolean }
       has_role:
         | {
