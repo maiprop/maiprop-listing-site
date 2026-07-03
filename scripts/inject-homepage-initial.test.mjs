@@ -95,6 +95,49 @@ describe("homepage initial payload injection", () => {
     expect(JSON.stringify(payload).length).toBeLessThan(16_000);
   });
 
+  it("falls back to public listings when featured homepage rows are transiently empty", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      const href = String(url);
+      if (href.includes("section=featured") || href.includes("section=open-houses")) {
+        return new Response(JSON.stringify([]), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (href.includes("/api/public/listings")) {
+        return new Response(JSON.stringify({
+          data: [
+            {
+              id: "fallback-1",
+              title: "Fallback Listing",
+              city: "Athens",
+              address: "2 Main St",
+              price: 310000,
+              sqm: 80,
+              owner_id: "must-not-ship",
+            },
+          ],
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response("not found", { status: 404 });
+    });
+
+    const payload = await buildHomepageInitialPayload({
+      origin: "https://portal.maiprop.co",
+      now: new Date("2026-07-01T10:00:00.000Z"),
+    });
+
+    expect(payload.featured).toMatchObject([
+      {
+        id: "fallback-1",
+        title: "Fallback Listing",
+        city: "Athens",
+        address: "2 Main St",
+        price: 310000,
+        sqm: 80,
+      },
+    ]);
+    expect(JSON.stringify(payload)).not.toContain("owner_id");
+    expect(globalThis.fetch.mock.calls.some(([url]) => String(url).includes("/api/public/listings"))).toBe(true);
+  });
+
   it("injects the payload into dist index.html without executable inline JavaScript", async () => {
     const distDir = createTempDist(`
       <html><body>
