@@ -312,28 +312,28 @@
       "rationale": "Message writes are participant-scoped and validated before persistence."
     },
     {
-      "file": "src/hooks/useOpenHouseAssetControl.ts",
+      "file": "src/services/openHouseAssetService.ts",
       "table": "open_house_settings",
       "operations": ["upsert"],
       "boundary": "rls-scoped-browser",
       "owner": "data-access",
-      "rationale": "Open-house asset settings are listing-owner scoped and do not grant tenant or billing privileges."
+      "rationale": "Open-house asset setting writes are centralized in the data-access service and remain listing-owner scoped by RLS."
     },
     {
-      "file": "src/hooks/useOpenHouseAssetControl.ts",
+      "file": "src/services/openHouseAssetService.ts",
       "table": "open_house_registrations",
       "operations": ["update"],
       "boundary": "rls-scoped-browser",
       "owner": "data-access",
-      "rationale": "Open-house registration review writes are listing-owner scoped."
+      "rationale": "Open-house registration review writes are centralized in the data-access service and remain listing-owner scoped by RLS."
     },
     {
-      "file": "src/hooks/useOpenHouseAssetControl.ts",
+      "file": "src/services/openHouseAssetService.ts",
       "table": "open_house_offers",
       "operations": ["update"],
       "boundary": "rls-scoped-browser",
       "owner": "data-access",
-      "rationale": "Open-house offer workflow writes are listing-owner scoped."
+      "rationale": "Open-house offer workflow writes are centralized in the data-access service and remain listing-owner scoped by RLS."
     },
     {
       "file": "src/hooks/usePortfolios.ts",

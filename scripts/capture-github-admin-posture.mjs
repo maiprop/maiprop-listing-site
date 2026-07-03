@@ -26,8 +26,14 @@ const githubRequest = async ({ env, fetchImpl, path }) => {
 
 const normalizeBranchProtection = (body) => ({
   requiredApprovingReviewCount: body?.required_pull_request_reviews?.required_approving_review_count ?? 0,
+  requiredPullRequestReviews: Boolean(body?.required_pull_request_reviews),
   requireCodeOwnerReviews: body?.required_pull_request_reviews?.require_code_owner_reviews === true,
-  requiredStatusChecks: body?.required_status_checks?.contexts ?? [],
+  requiredStatusChecks: Array.isArray(body?.required_status_checks?.contexts)
+    ? body.required_status_checks.contexts.length > 0
+    : Boolean(body?.required_status_checks),
+  requiredStatusCheckContexts: body?.required_status_checks?.contexts ?? [],
+  allowsForcePushes: body?.allow_force_pushes?.enabled === true,
+  allowsDeletions: body?.allow_deletions?.enabled === true,
   enforceAdmins: body?.enforce_admins?.enabled === true,
   hasRestrictions: Boolean(body?.restrictions),
 });

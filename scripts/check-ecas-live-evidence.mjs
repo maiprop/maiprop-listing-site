@@ -5,6 +5,47 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const DEFAULT_DIR = "artifacts/compliance/live-evidence";
 const REQUIRED_PROVIDERS = ["sentry", "cloudflare", "github"];
 
+const validateGithubEvidence = (item) => {
+  const missing = [];
+  const branchProtection = item.branchProtection ?? {};
+  if (item.branch !== "main") missing.push("branch=main");
+  if (branchProtection.requiredPullRequestReviews !== true) missing.push("requiredPullRequestReviews");
+  if (branchProtection.requiredStatusChecks !== true) missing.push("requiredStatusChecks");
+  if (branchProtection.allowsForcePushes !== false) missing.push("allowsForcePushes=false");
+  if (branchProtection.allowsDeletions !== false) missing.push("allowsDeletions=false");
+  return missing.length > 0
+    ? [`github live evidence missing required branch protection proof: ${missing.join(", ")}`]
+    : [];
+};
+
+const validateCloudflareEvidence = (item) => {
+  const missing = [];
+  const deployment = item.pagesProject?.latestProductionDeployment ?? item.latestProductionDeployment ?? {};
+  if ((item.pagesProject?.name ?? item.project) !== "maiprop-listing-site") missing.push("project=maiprop-listing-site");
+  if (deployment.status !== "success") missing.push("latestProductionDeployment.status=success");
+  if (!deployment.commitHash) missing.push("latestProductionDeployment.commitHash");
+  return missing.length > 0
+    ? [`cloudflare live evidence missing production deployment proof: ${missing.join(", ")}`]
+    : [];
+};
+
+const validateSentryEvidence = (item) => {
+  const missing = [];
+  if (item.environment !== "production") missing.push("environment=production");
+  if (item.timeRange !== "24h") missing.push("timeRange=24h");
+  if (item.querySucceeded !== true) missing.push("querySucceeded=true");
+  return missing.length > 0
+    ? [`sentry live evidence missing production query proof: ${missing.join(", ")}`]
+    : [];
+};
+
+const validateCapturedEvidence = (item) => {
+  if (item.provider === "github") return validateGithubEvidence(item);
+  if (item.provider === "cloudflare") return validateCloudflareEvidence(item);
+  if (item.provider === "sentry") return validateSentryEvidence(item);
+  return [];
+};
+
 export function evaluateEcasLiveEvidence(evidenceItems, { strict = false } = {}) {
   const failures = [];
   const warnings = [];
@@ -23,6 +64,13 @@ export function evaluateEcasLiveEvidence(evidenceItems, { strict = false } = {})
       const message = `${provider} live evidence is ${item.status}`;
       if (strict) failures.push(message);
       else warnings.push(message);
+      continue;
+    }
+
+    const proofFailures = validateCapturedEvidence(item);
+    if (proofFailures.length > 0) {
+      if (strict) failures.push(...proofFailures);
+      else warnings.push(...proofFailures);
     }
   }
 

@@ -23,6 +23,7 @@ import {
 import {
   beginStripeWebhookEvent,
   finishStripeWebhookEvent,
+  stripeRuntimeModeFromLivemode,
   upsertBillingCustomer,
   upsertBillingSubscription,
 } from "../_shared/billingState.ts";
@@ -227,6 +228,35 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case "checkout.session.expired": {
+        const session = event.data.object as Stripe.Checkout.Session;
+        if (await expireAbandonedTrialCheckoutSession(supabase, session)) {
+          log.info("checkout.session.expired released trial reservation", {
+            session_id: session.id,
+          });
+        }
+        break;
+      }
+
+      case "charge.refunded": {
+        const charge = event.data.object as Stripe.Charge;
+        await syncAddonRefund(supabase, stripe, charge);
+        break;
+      }
+
+      case "refund.created":
+      case "refund.updated": {
+        const refund = event.data.object as Stripe.Refund;
+        await syncAddonRefund(supabase, stripe, refund);
+        break;
+      }
+
+      case "credit_note.created": {
+        const creditNote = event.data.object as Stripe.CreditNote;
+        await syncAddonCreditNoteRefund(supabase, creditNote);
+        break;
+      }
+
       case "invoice.payment_succeeded": {
         // Fires on every successful recurring charge. Re-sync to handle plan upgrades
         // where the subscription object may already be updated before this fires.
@@ -396,6 +426,285 @@ export function addonCreditsGranted(
   return units * quantity;
 }
 
+type AddonRefundInput = {
+  refundId: string;
+  chargeId: string | null;
+  paymentIntentId: string | null;
+  totalAmount: number | null;
+  refundedAmount: number | null;
+  livemode: boolean;
+  metadata: Stripe.Metadata | Record<string, string>;
+  status?: string | null;
+};
+
+export function addonRefundCreditsForAmount(
+  creditsGranted: number,
+  totalAmount: number | null | undefined,
+  refundedAmount: number | null | undefined,
+): number {
+  if (creditsGranted <= 0) return 0;
+  if (!totalAmount || totalAmount <= 0 || !refundedAmount || refundedAmount <= 0) {
+    return 0;
+  }
+  return Math.min(
+    creditsGranted,
+    Math.ceil((creditsGranted * refundedAmount) / totalAmount),
+  );
+}
+
+function addonRefundStatus(
+  creditsRefunded: number,
+  creditsGranted: number,
+  stripeStatus?: string | null,
+): "none" | "partial_refund" | "refunded" | "failed" {
+  if (stripeStatus === "failed") return "failed";
+  if (creditsRefunded <= 0) return "none";
+  if (creditsRefunded >= creditsGranted) return "refunded";
+  return "partial_refund";
+}
+
+function objectId(
+  value:
+    | string
+    | { id?: string | null }
+    | null
+    | undefined,
+): string | null {
+  if (typeof value === "string") return value;
+  return value?.id ?? null;
+}
+
+async function retrieveRefundCharge(
+  stripe: Stripe,
+  refund: Stripe.Refund,
+): Promise<Stripe.Charge | null> {
+  const embedded = typeof refund.charge === "object" && refund.charge
+    ? refund.charge as Stripe.Charge
+    : null;
+  if (embedded?.id && embedded.amount != null) return embedded;
+  const chargeId = objectId(refund.charge as string | Stripe.Charge | null);
+  return chargeId ? await stripe.charges.retrieve(chargeId) : null;
+}
+
+async function retrievePaymentIntentMetadata(
+  stripe: Stripe,
+  paymentIntentId: string | null,
+): Promise<Stripe.Metadata> {
+  if (!paymentIntentId) return {};
+  const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+  return paymentIntent.metadata ?? {};
+}
+
+async function addonRefundInputFromCharge(
+  stripe: Stripe,
+  charge: Stripe.Charge,
+): Promise<AddonRefundInput> {
+  const paymentIntentId = objectId(
+    charge.payment_intent as string | Stripe.PaymentIntent | null,
+  );
+  const paymentIntentMetadata = await retrievePaymentIntentMetadata(
+    stripe,
+    paymentIntentId,
+  );
+  return {
+    refundId: typeof charge.refunds?.data?.at(-1)?.id === "string"
+      ? charge.refunds.data.at(-1)!.id
+      : `charge_refunded:${charge.id}:${charge.amount_refunded ?? 0}`,
+    chargeId: charge.id,
+    paymentIntentId,
+    totalAmount: Number(charge.amount ?? 0),
+    refundedAmount: Number(charge.amount_refunded ?? 0),
+    livemode: Boolean(charge.livemode),
+    metadata: { ...paymentIntentMetadata, ...(charge.metadata ?? {}) },
+    status: charge.amount_refunded && charge.amount_refunded > 0
+      ? "succeeded"
+      : null,
+  };
+}
+
+async function addonRefundInputFromRefund(
+  stripe: Stripe,
+  refund: Stripe.Refund,
+): Promise<AddonRefundInput> {
+  const charge = await retrieveRefundCharge(stripe, refund);
+  const paymentIntentId = objectId(
+    (refund as Stripe.Refund & {
+      payment_intent?: string | Stripe.PaymentIntent | null;
+    }).payment_intent ??
+      (charge?.payment_intent as string | Stripe.PaymentIntent | null),
+  );
+  const paymentIntentMetadata = await retrievePaymentIntentMetadata(
+    stripe,
+    paymentIntentId,
+  );
+  return {
+    refundId: refund.id,
+    chargeId: objectId(refund.charge as string | Stripe.Charge | null) ??
+      charge?.id ?? null,
+    paymentIntentId,
+    totalAmount: charge?.amount ? Number(charge.amount) : null,
+    refundedAmount: charge?.amount_refunded
+      ? Number(charge.amount_refunded)
+      : Number(refund.amount ?? 0),
+    livemode: Boolean((refund as Stripe.Refund & { livemode?: boolean }).livemode),
+    metadata: { ...paymentIntentMetadata, ...(refund.metadata ?? {}) },
+    status: refund.status ?? null,
+  };
+}
+
+async function findAddonPurchaseForRefund(
+  supabase: SupabaseAdminClient,
+  input: AddonRefundInput,
+): Promise<Record<string, unknown> | null> {
+  const select = [
+    "id",
+    "user_id",
+    "addon_key",
+    "checkout_mode",
+    "status",
+    "credits_granted",
+    "credits_consumed",
+    "credits_refunded",
+    "stripe_payment_intent_id",
+    "metadata",
+  ].join(",");
+
+  if (input.paymentIntentId) {
+    const { data, error } = await supabase
+      .from("addon_purchases")
+      .select(select)
+      .eq("stripe_payment_intent_id", input.paymentIntentId)
+      .maybeSingle();
+    if (error) throw error;
+    if (data) return data;
+  }
+
+  const sessionId = input.metadata?.stripe_session_id ??
+    input.metadata?.checkout_session_id;
+  if (sessionId) {
+    const { data, error } = await supabase
+      .from("addon_purchases")
+      .select(select)
+      .eq("stripe_session_id", sessionId)
+      .maybeSingle();
+    if (error) throw error;
+    if (data) return data;
+  }
+
+  const userId = input.metadata?.user_id;
+  const addonKey = input.metadata?.addon_key;
+  if (!userId || !addonKey) return null;
+
+  const { data, error } = await supabase
+    .from("addon_purchases")
+    .select(select)
+    .eq("user_id", userId)
+    .eq("addon_key", addonKey)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data ?? null;
+}
+
+async function applyAddonRefund(
+  supabase: SupabaseAdminClient,
+  input: AddonRefundInput,
+): Promise<boolean> {
+  if (input.metadata?.checkout_type !== "addon" && !input.paymentIntentId) {
+    return false;
+  }
+
+  const purchase = await findAddonPurchaseForRefund(supabase, input);
+  if (!purchase?.id) {
+    log.warn("refund did not match an add-on purchase", {
+      refund_id: input.refundId,
+      charge_id: input.chargeId,
+      payment_intent_id: input.paymentIntentId,
+      addon_key: input.metadata?.addon_key ?? null,
+    });
+    return false;
+  }
+
+  const creditsGranted = Number(purchase.credits_granted ?? 0);
+  const creditsRefunded = input.status === "failed"
+    ? Number(purchase.credits_refunded ?? 0)
+    : addonRefundCreditsForAmount(
+      creditsGranted,
+      input.totalAmount,
+      input.refundedAmount,
+    );
+  const refundStatus = addonRefundStatus(
+    creditsRefunded,
+    creditsGranted,
+    input.status,
+  );
+  const patch: Record<string, unknown> = {
+    credits_refunded: creditsRefunded,
+    refund_status: refundStatus,
+    last_refund_id: input.refundId,
+    refunded_at: new Date().toISOString(),
+    runtime_mode: stripeRuntimeModeFromLivemode(input.livemode),
+    livemode: Boolean(input.livemode),
+    updated_at: new Date().toISOString(),
+  };
+  if (input.paymentIntentId && !purchase.stripe_payment_intent_id) {
+    patch.stripe_payment_intent_id = input.paymentIntentId;
+  }
+  if (refundStatus === "refunded") {
+    patch.status = "refunded";
+  }
+
+  const { error } = await supabase
+    .from("addon_purchases")
+    .update(patch)
+    .eq("id", purchase.id);
+  if (error) throw error;
+  log.info("synced add-on refund", {
+    refund_id: input.refundId,
+    purchase_id: purchase.id,
+    credits_refunded: creditsRefunded,
+    refund_status: refundStatus,
+  });
+  return true;
+}
+
+// skipcq: JS-0067 - Top-level helper is used by the webhook switch.
+async function syncAddonRefund(
+  supabase: SupabaseAdminClient,
+  stripe: Stripe,
+  object: Stripe.Charge | Stripe.Refund,
+): Promise<boolean> {
+  const input = object.object === "charge"
+    ? await addonRefundInputFromCharge(stripe, object as Stripe.Charge)
+    : await addonRefundInputFromRefund(stripe, object as Stripe.Refund);
+  return await applyAddonRefund(supabase, input);
+}
+
+async function syncAddonCreditNoteRefund(
+  supabase: SupabaseAdminClient,
+  creditNote: Stripe.CreditNote,
+): Promise<boolean> {
+  const metadata = creditNote.metadata ?? {};
+  if (metadata.checkout_type !== "addon") return false;
+  const amount = Math.abs(
+    Number(
+      (creditNote as Stripe.CreditNote & { amount?: number | null }).amount ??
+        creditNote.total ?? 0,
+    ),
+  );
+  return await applyAddonRefund(supabase, {
+    refundId: creditNote.id,
+    chargeId: null,
+    paymentIntentId: metadata.payment_intent_id ?? null,
+    totalAmount: Number(metadata.amount_total ?? metadata.total_amount ?? amount),
+    refundedAmount: amount,
+    livemode: Boolean(creditNote.livemode),
+    metadata,
+    status: "succeeded",
+  });
+}
+
 async function addonCheckoutProfileExists(
   supabase: SupabaseAdminClient,
   userId: string,
@@ -436,6 +745,9 @@ async function fulfillAddonCheckoutSession(
   }
   const checkoutMode = normalizeAddonCheckoutMode(session.mode);
   const quantity = normalizePositiveQuantity(metadata.quantity);
+  const stripePaymentIntentId = objectId(
+    session.payment_intent as string | Stripe.PaymentIntent | null,
+  );
 
   const { error } = await supabase
     .from("addon_purchases")
@@ -455,8 +767,16 @@ async function fulfillAddonCheckoutSession(
       stripe_customer_id: typeof session.customer === "string"
         ? session.customer
         : null,
+      stripe_payment_intent_id: stripePaymentIntentId,
       credits_granted: addonCreditsGranted(addonKey, quantity),
-      metadata,
+      runtime_mode: stripeRuntimeModeFromLivemode(Boolean(session.livemode)),
+      livemode: Boolean(session.livemode),
+      metadata: {
+        ...metadata,
+        ...(stripePaymentIntentId
+          ? { payment_intent_id: stripePaymentIntentId }
+          : {}),
+      },
     }, { onConflict: "stripe_session_id" });
 
   if (error) throw error;
@@ -494,6 +814,8 @@ async function activateInvestorPaymentSession(
         ? session.customer
         : null,
       stripe_session_id: session.id,
+      runtime_mode: stripeRuntimeModeFromLivemode(Boolean(session.livemode)),
+      livemode: Boolean(session.livemode),
     })
     .eq("user_id", userId)
     .eq("tier", tier)
@@ -551,13 +873,30 @@ async function updateSubscriptionTrialClaim(
   userId: string,
   payload: Record<string, unknown>,
 ): Promise<void> {
-  const { error } = await supabase
+  let query = supabase
     .from("subscription_trial_claims")
     .update({
       ...payload,
       updated_at: new Date().toISOString(),
     })
     .eq("user_id", userId);
+  if (payload.stripe_checkout_session_id) {
+    query = query.eq(
+      "stripe_checkout_session_id",
+      payload.stripe_checkout_session_id,
+    );
+  } else if (payload.stripe_subscription_id) {
+    query = query.eq("stripe_subscription_id", payload.stripe_subscription_id);
+  } else {
+    query = query.in("status", [
+      "checkout_started",
+      "checkout_created",
+      "trialing",
+      "active",
+      "past_due",
+    ]);
+  }
+  const { error } = await query;
   if (error) throw error;
 }
 
@@ -589,11 +928,38 @@ async function syncSubscriptionTrialClaim(
     stripe_customer_id: typeof session.customer === "string"
       ? session.customer
       : null,
+    runtime_mode: stripeRuntimeModeFromLivemode(Boolean(session.livemode)),
+    livemode: Boolean(session.livemode),
     metadata: {
       ...sessionMetadata,
       ...subscriptionMetadata,
     },
   });
+}
+
+// skipcq: JS-0067 - Top-level helper is used by the webhook switch.
+async function expireAbandonedTrialCheckoutSession(
+  supabase: SupabaseAdminClient,
+  session: Stripe.Checkout.Session,
+): Promise<boolean> {
+  const metadata = session.metadata ?? {};
+  if (!isSubscriptionTrialMetadata(metadata)) return false;
+  const { error } = await supabase
+    .from("subscription_trial_claims")
+    .update({
+      status: "expired",
+      runtime_mode: stripeRuntimeModeFromLivemode(Boolean(session.livemode)),
+      livemode: Boolean(session.livemode),
+      updated_at: new Date().toISOString(),
+      metadata: {
+        ...metadata,
+        checkout_expired_at: new Date().toISOString(),
+      },
+    })
+    .eq("stripe_checkout_session_id", session.id)
+    .in("status", ["checkout_started", "checkout_created"]);
+  if (error) throw error;
+  return true;
 }
 
 // skipcq: JS-0067 - Top-level helper is used by subscription lifecycle events.
@@ -613,6 +979,8 @@ async function syncSubscriptionTrialStatus(
     status: mapSubscriptionTrialStatus(sub.status),
     stripe_subscription_id: sub.id,
     stripe_customer_id: typeof sub.customer === "string" ? sub.customer : null,
+    runtime_mode: stripeRuntimeModeFromLivemode(Boolean(sub.livemode)),
+    livemode: Boolean(sub.livemode),
     metadata,
   });
 }

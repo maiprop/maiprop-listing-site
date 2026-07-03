@@ -45,16 +45,6 @@
     },
     {
       "match": {
-        "name": "authenticated_security_definer_function_executable",
-        "cache_key_contains": "public_has_current_investor_subscription"
-      },
-      "owner": "investor-access/security",
-      "reason": "Quick Sale RLS policies call this current-subscription predicate so expired paid investor and institutional access fails at the database boundary.",
-      "next_action": "Replace with inline RLS predicates or a non-definer design only after RLS regression tests prove equivalent behavior for private investor and institutional access.",
-      "review_cadence": "monthly"
-    },
-    {
-      "match": {
         "name": "auth_rls_initplan",
         "cache_key_contains": "realtime_messages_video_room_channel"
       },

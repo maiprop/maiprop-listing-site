@@ -201,6 +201,38 @@ describe("loadAppliedFutureVersions", () => {
   test("loads the immutable applied-future allowlist", () => {
     expect(loadAppliedFutureVersions()).toContain("20260704000000");
   });
+
+  test("rejects bare string allowlist entries without production evidence", () => {
+    const dir = mkdtempSync(join(tmpdir(), "migr-lint-"));
+    try {
+      const file = join(dir, "applied-future-migrations.json");
+      writeFileSync(file, JSON.stringify(["20260704000000"]));
+
+      expect(() => loadAppliedFutureVersions(file)).toThrow(/evidence object/i);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("loads evidence-backed applied-future migration versions", () => {
+    const dir = mkdtempSync(join(tmpdir(), "migr-lint-"));
+    try {
+      const file = join(dir, "applied-future-migrations.json");
+      writeFileSync(file, JSON.stringify([
+        {
+          version: "20260704000000",
+          name: "example",
+          productionApplied: true,
+          verifiedAt: "2026-07-03",
+          reason: "Historical production-applied migration; source filename cannot be rewritten safely.",
+        },
+      ]));
+
+      expect(loadAppliedFutureVersions(file)).toEqual(["20260704000000"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("lintAppliedFutureSources", () => {

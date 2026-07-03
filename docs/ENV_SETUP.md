@@ -107,6 +107,8 @@ See [`STAGING_SETUP.md`](./STAGING_SETUP.md) for the full walkthrough. Variables
 | `VITE_PLAUSIBLE_DOMAIN` | optional | GDPR analytics |
 | `VITE_MAPBOX_TOKEN` | optional | Needed for map UIs |
 | `VITE_STRIPE_PRO_PRODUCT_ID` | required for billing | Production product |
+| `VITE_STRIPE_PUBLISHABLE_KEY` | required for live Stripe browser mode detection | Publishable key only, `pk_live_...` in production and `pk_test_...` in sandbox/staging. Never use secret keys in Cloudflare Pages. |
+| `VITE_STRIPE_RUNTIME_MODE` / `VITE_BILLING_MODE` | optional billing runtime guard | Set to `live` in production and `test` in sandbox/staging when publishable-key inference is not sufficient. |
 | `VITE_STRIPE_PRICE_*` | required for billing | Production prices |
 | `VITE_TURNSTILE_SITE_KEY` | optional | Cloudflare Turnstile |
 | `VITE_GOOGLE_MAPS_API_KEY` | optional | See browser-key restrictions below |
@@ -164,6 +166,7 @@ Dashboard → Project Settings → Edge Functions → Secrets.
 | `STRIPE_ENVIRONMENT` / `STRIPE_RUN_MODE` | Legacy aliases accepted by the Stripe runtime guard; prefer `STRIPE_RUNTIME_MODE` in new environments. |
 | `STRIPE_LIVE_MODE=true` | Required together with `STRIPE_RUNTIME_MODE=live` before any `sk_live_...` key is accepted by Edge billing functions. |
 | `STRIPE_TEST_ACCOUNT_ID` | Expected Stripe sandbox account id. For MaiProp: `acct_1TnuLbGfkWWBWEyh` (`mAI prop sandbox`). |
+| `STRIPE_SANDBOX_ACCOUNT_ID` | Alias for the expected Stripe sandbox account id used by catalog parity checks. Prefer `STRIPE_TEST_ACCOUNT_ID` for shared Edge conventions. |
 | `STRIPE_LIVE_ACCOUNT_ID` | Expected Stripe live account id. For MaiProp: `acct_1TnuLTGfOEgBOxtl` (`mAI prop`). |
 | `STRIPE_EXPECTED_ACCOUNT_ID` | Environment-specific guard used by `npm run check:stripe-account`; set to the sandbox account in test/staging and live account in production. |
 | `STRIPE_API_VERSION` | Optional Stripe catalog setup override; defaults to `2026-06-24.dahlia` and should match the shared Edge Stripe client. |
@@ -174,6 +177,8 @@ Dashboard → Project Settings → Edge Functions → Secrets.
 | `STRIPE_COMPANY_VAT_ID` / `COMPANY_VAT_ID` | Optional seller VAT ID written to Stripe invoice metadata and PDFs when no Stripe account tax ID object is configured. Prefer `STRIPE_COMPANY_VAT_ID`; `COMPANY_VAT_ID` is a legacy fallback. |
 | `STRIPE_ACCOUNT_TAX_ID` | Optional Stripe Tax ID object (`txi_...`) used for invoice issuer tax identity when the Stripe account already has the VAT ID configured. |
 | `STRIPE_SECRET_KEY` | Billing Edge Functions: `stripe-webhook`, `create-checkout`, `create-investor-payment`, `customer-portal`, `check-subscription`, `get-invoices`, `create-stripe-price`, `sync-stripe-pricing`, `apply-data-input-credit`, `delete-account`, `log-role-switch` |
+| `STRIPE_SANDBOX_SECRET_KEY` / `STRIPE_TEST_SECRET_KEY` / `STRIPE_SECRET_KEY_TEST` | Test-mode Stripe secret aliases accepted by sandbox/live catalog parity checks. Values must be `sk_test_...`. |
+| `STRIPE_LIVE_SECRET_KEY` / `STRIPE_SECRET_KEY_LIVE` | Live-mode Stripe secret aliases accepted by live migration and catalog parity checks. Values must be `sk_live_...`. |
 | `STRIPE_API_KEY` | Local Stripe operator scripts fallback; prefer `STRIPE_SECRET_KEY` so Edge and scripts use one key name. |
 | `STRIPE_WEBHOOK_SECRET` | `stripe-webhook` |
 | `STRIPE_WEBHOOK_EXPECTED_URL` | Optional live migration gate override for the Stripe webhook URL; defaults to the production `stripe-webhook` Edge Function URL. |

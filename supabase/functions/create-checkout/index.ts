@@ -137,6 +137,16 @@ type SupabaseBillingLookupClient = {
   from(table: "billing_subscriptions"): {
     select(columns: string): {
       eq(column: string, value: string): {
+        eq(column: string, value: string): {
+          in(column: string, values: string[]): {
+            order(
+              column: string,
+              options: { ascending: boolean },
+            ): {
+              limit(count: number): PromiseLike<BillingSubscriptionLookupResult>;
+            };
+          };
+        };
         in(column: string, values: string[]): {
           order(
             column: string,
@@ -181,6 +191,7 @@ const hasProvisionedSameAudienceSubscription = async (
     .from("billing_subscriptions")
     .select("status, audience, current_period_end")
     .eq("user_id", userId)
+    .eq("runtime_mode", getStripeRuntimeMode())
     .in("status", PROVISIONED_SUBSCRIPTION_STATUSES)
     .order("updated_at", { ascending: false })
     .limit(10);
@@ -276,11 +287,13 @@ const reserveSubscriptionTrialClaim = async (
       user_id: userId,
       plan_key: checkoutPlan.planKey,
       pricing_audience: checkoutPlan.audience,
-      stripe_customer_id: customerId,
-      status: "checkout_started",
-      trial_days: PRO_TRIAL_DAYS,
-      metadata: buildTrialMetadata(),
-    })
+        stripe_customer_id: customerId,
+        status: "checkout_started",
+        trial_days: PRO_TRIAL_DAYS,
+        runtime_mode: getStripeRuntimeMode(),
+        livemode: getStripeRuntimeMode() === "live",
+        metadata: buildTrialMetadata(),
+      })
     .select("id")
     .single();
 
@@ -315,6 +328,8 @@ const markSubscriptionTrialCheckoutCreated = async (
       stripe_subscription_id: typeof session.subscription === "string"
         ? session.subscription
         : null,
+      runtime_mode: session.livemode ? "live" : "test",
+      livemode: Boolean(session.livemode),
       updated_at: new Date().toISOString(),
     })
     .eq("id", claimId);
@@ -524,6 +539,13 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
           metadata: addonMetadata,
           ...(checkoutAddon.checkoutMode === "payment"
             ? buildPaymentModeInvoiceCreationParams(addonMetadata)
+            : {}),
+          ...(checkoutAddon.checkoutMode === "payment"
+            ? {
+              payment_intent_data: {
+                metadata: addonMetadata,
+              },
+            }
             : {}),
           ...(checkoutAddon.checkoutMode === "subscription"
             ? {
@@ -785,14 +807,13 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
             : {}),
           metadata: {
             user_id: user.id,
+            checkout_type: wantsTrial ? "subscription_trial" : "subscription",
             plan,
             plan_key: checkoutPlan.planKey,
             audience: checkoutPlan.audience,
             role: checkoutPlan.role,
             billing_cycle: checkoutPlan.billingCycle,
-            ...(wantsTrial
-              ? { checkout_type: "subscription_trial", ...trialMetadata }
-              : {}),
+            ...(wantsTrial ? trialMetadata : {}),
           },
           // Propagate plan to the subscription object itself so the webhook can
           // identify professional_* plans and update professionals.subscription_tier.
@@ -811,6 +832,7 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
               : {}),
             metadata: {
               user_id: user.id,
+              checkout_type: wantsTrial ? "subscription_trial" : "subscription",
               plan,
               plan_key: checkoutPlan.planKey,
               audience: checkoutPlan.audience,
@@ -819,9 +841,7 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
               ...(checkoutPlan.productId
                 ? { product_id: checkoutPlan.productId }
                 : {}),
-              ...(wantsTrial
-                ? { checkout_type: "subscription_trial", ...trialMetadata }
-                : {}),
+              ...(wantsTrial ? trialMetadata : {}),
             },
           },
         },

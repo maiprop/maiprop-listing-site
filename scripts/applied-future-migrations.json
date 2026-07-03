@@ -1,96 +1,660 @@
 [
-  "20260517120000",
-  "20260518000000",
-  "20260522000000",
-  "20260522100000",
-  "20260523000000",
-  "20260523100000",
-  "20260524000000",
-  "20260525000000",
-  "20260526000000",
-  "20260527000000",
-  "20260528000000",
-  "20260529000000",
-  "20260529100000",
-  "20260530000000",
-  "20260601120000",
-  "20260602120000",
-  "20260603120000",
-  "20260604120000",
-  "20260605120000",
-  "20260606120000",
-  "20260607120000",
-  "20260607120001",
-  "20260608120000",
-  "20260612000001",
-  "20260612000002",
-  "20260613000001",
-  "20260614000000",
-  "20260615000000",
-  "20260616000000",
-  "20260617000000",
-  "20260618000000",
-  "20260619000000",
-  "20260620000000",
-  "20260621000000",
-  "20260622000000",
-  "20260622010000",
-  "20260623120000",
-  "20260623130000",
-  "20260623140000",
-  "20260623150000",
-  "20260623160000",
-  "20260627000000",
-  "20260627200000",
-  "20260628000000",
-  "20260628010000",
-  "20260628100000",
-  "20260629000000",
-  "20260630000000",
-  "20260703000000",
-  "20260703120000",
-  "20260703130000",
-  "20260704000000",
-  "20260705000000",
-  "20260706000000",
-  "20260706120000",
-  "20260707000000",
-  "20260707010000",
-  "20260707020000",
-  "20260707030000",
-  "20260707040000",
-  "20260707050000",
-  "20260707060000",
-  "20260707070000",
-  "20260707080000",
-  "20260707090000",
-  "20260707100000",
-  "20260707110000",
-  "20260707120000",
-  "20260707130000",
-  "20260707140000",
-  "20260707143000",
-  "20260707150000",
-  "20260707151000",
-  "20260707152000",
-  "20260707153000",
-  "20260707154000",
-  "20260707155000",
-  "20260707156000",
-  "20260707157000",
-  "20260707158000",
-  "20260707159000",
-  "20260707160000",
-  "20260707161000",
-  "20260707162000",
-  "20260707163000",
-  "20260707164000",
-  "20260707165000",
-  "20260707166000",
-  "20260707167000",
-  "20260707168000",
-  "20260707169000",
-  "20260707170000",
-  "20260707171000",
-  "20260707172000"
+  {
+    "version": "20260517120000",
+    "name": "plan_limits_usage_tables",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260518000000",
+    "name": "quick_sale_eligible_buyers_only",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260522000000",
+    "name": "performance_optimizations",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260522100000",
+    "name": "participant_type_column",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260523000000",
+    "name": "notifications_table",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260523100000",
+    "name": "open_house_screening",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260524000000",
+    "name": "gating_and_type_fixes",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260525000000",
+    "name": "seed_bypass_listing_trigger",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260526000000",
+    "name": "seed_bypass_viewing_trigger",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260527000000",
+    "name": "seed_bypass_saved_search_trigger",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260528000000",
+    "name": "seed_bypass_auction_alert_trigger",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260529000000",
+    "name": "firesale_interest_queue",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260529100000",
+    "name": "featured_ads_expiry",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260530000000",
+    "name": "cron_saved_search_alerts",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260601120000",
+    "name": "rls_pro_product_ids",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260602120000",
+    "name": "listing_neighbourhood_scores",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260603120000",
+    "name": "security_linter_search_path_and_policies",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260604120000",
+    "name": "performance_rls_initplan_and_dedup",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260605120000",
+    "name": "professional_reviews",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260606120000",
+    "name": "contact_submissions",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260607120000",
+    "name": "block_investor_institutional_self_assign",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260607120001",
+    "name": "role_switch_history",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260608120000",
+    "name": "rename_roles_buyer_seller",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260612000001",
+    "name": "enable_featured_cron",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260612000002",
+    "name": "listing_plan_limits",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260613000001",
+    "name": "firesale_requests_ownership_guard",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260614000000",
+    "name": "schema_alignment",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260615000000",
+    "name": "fix_stale_enum_refs_and_admin_checks",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260616000000",
+    "name": "fix_messages_read_and_cleanup",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260617000000",
+    "name": "fix_schema_gaps",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260618000000",
+    "name": "final_security_cleanup",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260619000000",
+    "name": "audit_security_fixes",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260620000000",
+    "name": "cron_secret_auth",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260621000000",
+    "name": "audit_findings_fix",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260622000000",
+    "name": "onboarding_role_explicit",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260622010000",
+    "name": "onboarding_completion_rpc",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260623120000",
+    "name": "rate_limit_counters",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260623130000",
+    "name": "authoritative_role",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260623140000",
+    "name": "onboarding_rpc_only_role",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260623150000",
+    "name": "plan_limit_enforcement",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260623160000",
+    "name": "ai_usage_tracking",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260627000000",
+    "name": "audit_remediations",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260627200000",
+    "name": "critical_security_fixes",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260628000000",
+    "name": "fix_profiles_rls_recursion",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260628010000",
+    "name": "add_listing_and_favorites_indexes",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260628100000",
+    "name": "medium_audit_fixes",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260629000000",
+    "name": "rls_null_guards_all_admin_policies",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260630000000",
+    "name": "advisor_safe_wins",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260703000000",
+    "name": "agent_data_inputs",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260703120000",
+    "name": "agent_data_inputs",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260703130000",
+    "name": "closing_date_check_to_trigger",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260704000000",
+    "name": "extend_property_types",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260705000000",
+    "name": "strict_release_advisor_fixes",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260706000000",
+    "name": "projects_archive_aware_select",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260706120000",
+    "name": "restore_storage_grants_drift",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707000000",
+    "name": "fix_linked_lint_failures",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707010000",
+    "name": "fix_linked_lint_failures_apply",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707020000",
+    "name": "serialize_agent_data_input_quota",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707030000",
+    "name": "restore_public_agent_developer_onboarding",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707040000",
+    "name": "ai_reports_signed_in_quota",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707050000",
+    "name": "reserve_ai_quota",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707060000",
+    "name": "explicit_data_api_grants",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707070000",
+    "name": "audience_scoped_pro_entitlements",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707080000",
+    "name": "harden_participant_type_entitlement_audience",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707090000",
+    "name": "guard_record_listing_view_public_visibility",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707100000",
+    "name": "require_auth_for_professional_requests",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707110000",
+    "name": "drop_legacy_anon_consultation_policy",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707120000",
+    "name": "set_core_ai_pro_quota_50",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707130000",
+    "name": "fix_cron_and_open_house_notify_wiring",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707140000",
+    "name": "harden_supabase_advisor_security",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707143000",
+    "name": "consolidate_public_media_rls",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707150000",
+    "name": "reduce_advisor_policy_noise",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707151000",
+    "name": "reduce_remaining_low_risk_policy_noise",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707152000",
+    "name": "consolidate_open_house_advisor_policies",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707153000",
+    "name": "consolidate_firesale_advisor_policies",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707154000",
+    "name": "guard_viewing_status_transitions",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707155000",
+    "name": "isolate_firesale_proof_documents",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707156000",
+    "name": "lock_listing_quota_checks",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707157000",
+    "name": "addon_purchase_and_investor_payment_ledger",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707158000",
+    "name": "resolve_hardening_advisor_unknowns",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707159000",
+    "name": "fix_staging_advisor_drift",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707160000",
+    "name": "fix_realtime_video_room_auth_uid_policy",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707161000",
+    "name": "fix_investor_feed_select_policy",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707162000",
+    "name": "add_admin_user_activity_analytics",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707163000",
+    "name": "lock_user_search_events_anon_privileges",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707164000",
+    "name": "add_user_auth_activity_events",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707165000",
+    "name": "harden_user_search_telemetry_guards",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707166000",
+    "name": "audit_critical_remediations",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707167000",
+    "name": "developer_only_new_builds",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707168000",
+    "name": "cleanup_stale_advisor_indexes",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707169000",
+    "name": "project_unit_price_edge_rpc",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707170000",
+    "name": "align_agent_data_input_stripe_credit_columns",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707171000",
+    "name": "allow_owner_auth_trigger_signup",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  },
+  {
+    "version": "20260707172000",
+    "name": "fix_billing_advisor_followup",
+    "productionApplied": true,
+    "verifiedAt": "2026-07-03",
+    "reason": "Historical production-applied migration verified during ECAS audit; source filename cannot be rewritten safely without corrupting migration history."
+  }
 ]

@@ -140,7 +140,35 @@ describe("useUsageAddons", () => {
     expect(mocks.from).toHaveBeenCalledWith("addon_purchases");
     expect(credits.eqUser).toHaveBeenCalledWith("user_id", "u1");
     expect(credits.inAddon).toHaveBeenCalledWith("addon_key", ["property_report_single"]);
-    expect(credits.inStatus).toHaveBeenCalledWith("status", ["paid", "active"]);
+    expect(credits.inStatus).toHaveBeenCalledWith("status", ["paid", "active", "refunded"]);
+  });
+
+  it("subtracts refunded add-on credits and preserves negative debt", async () => {
+    const credits = selectAddonCredits([
+      { credits_granted: 1, credits_consumed: 1, credits_refunded: 1 },
+      { credits_granted: 3, credits_consumed: 0, credits_refunded: 0 },
+    ]);
+    mocks.from.mockReturnValueOnce(credits);
+
+    const result = renderHook(() => usePropertyReportAddonCredits(), {
+      wrapper: makeWrapper(),
+    });
+
+    await waitFor(() => expect(result.result.current.data).toBe(2));
+    expect(credits.select).toHaveBeenCalledWith("credits_granted, credits_consumed, credits_refunded");
+  });
+
+  it("does not let negative refunded debt reduce included report allowance in UI reads", async () => {
+    const credits = selectAddonCredits([
+      { credits_granted: 1, credits_consumed: 1, credits_refunded: 1 },
+    ]);
+    mocks.from.mockReturnValueOnce(credits);
+
+    const result = renderHook(() => usePropertyReportAddonCredits(), {
+      wrapper: makeWrapper(),
+    });
+
+    await waitFor(() => expect(result.result.current.data).toBe(0));
   });
 
   it("rejects direct browser usage writes because usage is recorded by server workflows", async () => {

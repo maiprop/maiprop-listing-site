@@ -237,6 +237,7 @@ describe("Dashboard behavior", () => {
   it("starts a one-time 7-day Pro trial from the dashboard CTA", async () => {
     renderWithProviders(<Dashboard />);
 
+    expect(screen.getByText(/Card required\. After 7 days/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /start 7-day pro trial/i }));
 
     await waitFor(() =>

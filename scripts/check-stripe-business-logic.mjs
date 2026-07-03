@@ -10,6 +10,8 @@
 
 import { existsSync, readFileSync } from "node:fs";
 
+import { formatStripeKeyEvidence, getStripeSecretKey, stripeKeyMetadata } from "./stripe-readiness-env.mjs";
+
 const STRIPE_API_BASE = "https://api.stripe.com";
 const STRIPE_API_VERSION = process.env.STRIPE_API_VERSION ?? "2026-06-24.dahlia";
 const DEFAULT_TEST_ACCOUNT_ID = "acct_1TnuLbGfkWWBWEyh";
@@ -455,11 +457,7 @@ function assertOk(condition, message, issues) {
 }
 
 function getStripeKey() {
-  const key = process.env.STRIPE_SECRET_KEY ?? process.env.STRIPE_API_KEY ?? "";
-  if (!key) throw new Error("STRIPE_SECRET_KEY is required.");
-  if (!/^sk_(test|live)_/.test(key)) {
-    throw new Error("STRIPE_SECRET_KEY must be a Stripe secret key.");
-  }
+  const key = getStripeSecretKey(process.env);
   if (key.startsWith("sk_live_") && !allowLive) {
     throw new Error("Refusing to run against live Stripe. Pass --allow-live only for an intentional live audit.");
   }
@@ -467,7 +465,7 @@ function getStripeKey() {
 }
 
 function runtimeModeFromKey(key) {
-  return key.startsWith("sk_live_") ? "live" : "test";
+  return stripeKeyMetadata(key).mode;
 }
 
 function expectedAccountForMode(mode) {
@@ -832,7 +830,10 @@ async function main() {
   };
 
   if (showJson) console.log(JSON.stringify(report, null, 2));
-  else printHuman(report);
+  else {
+    console.log(formatStripeKeyEvidence(stripeKey));
+    printHuman(report);
+  }
 
   if (!report.ok) process.exit(1);
 }

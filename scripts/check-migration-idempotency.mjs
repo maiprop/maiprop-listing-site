@@ -271,10 +271,29 @@ export function lintMigrationChronology(
 export function loadAppliedFutureVersions(file = APPLIED_FUTURE_MIGRATIONS_FILE) {
   if (!existsSync(file)) return [];
   const parsed = JSON.parse(readFileSync(file, "utf8"));
-  if (!Array.isArray(parsed) || parsed.some((value) => typeof value !== "string")) {
-    throw new Error(`${file} must be a JSON array of migration timestamp strings`);
+  if (!Array.isArray(parsed)) {
+    throw new Error(`${file} must be a JSON array of applied future migration evidence objects`);
   }
-  return parsed;
+  return parsed.map((entry, index) => {
+    if (
+      typeof entry !== "object" ||
+      entry == null ||
+      typeof entry.version !== "string" ||
+      !/^\d{14}$/.test(entry.version) ||
+      typeof entry.name !== "string" ||
+      entry.name.trim() === "" ||
+      entry.productionApplied !== true ||
+      typeof entry.verifiedAt !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(entry.verifiedAt) ||
+      typeof entry.reason !== "string" ||
+      entry.reason.trim().length < 20
+    ) {
+      throw new Error(
+        `${file} entry ${index + 1} must be an evidence object with version, name, productionApplied:true, verifiedAt, and reason`,
+      );
+    }
+    return entry.version;
+  });
 }
 
 /**

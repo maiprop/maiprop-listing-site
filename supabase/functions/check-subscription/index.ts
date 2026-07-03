@@ -13,7 +13,7 @@ import {
   resolveSubscriptionEntitlement,
 } from "../_shared/entitlements.ts";
 import { hasProvisionedSubscriptionAccess } from "../_shared/subscriptionStatus.ts";
-import { createStripeClient } from "../_shared/stripeClient.ts";
+import { createStripeClient, getStripeRuntimeMode } from "../_shared/stripeClient.ts";
 
 const log = createLogger("check-subscription");
 const checkSubLimiter = makeRateLimiter({
@@ -134,6 +134,7 @@ export async function getDatabaseFallback( // skipcq: JS-R1005 - Fallback subscr
 ): Promise<FallbackSubscriptionState> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const client = supabaseClient as { from: any };
+  const runtimeMode = getStripeRuntimeMode();
   const [profileResult, investorResult, billingResult] = await Promise.all([
     client.from("profiles")
       .select("role, participant_type, subscription_product_id")
@@ -142,10 +143,12 @@ export async function getDatabaseFallback( // skipcq: JS-R1005 - Fallback subscr
     client.from("investor_subscriptions")
       .select("status, expires_at")
       .eq("user_id", userId)
+      .eq("runtime_mode", runtimeMode)
       .in("status", ["active", "trial"]),
     client.from("billing_subscriptions")
       .select("status, stripe_product_id, current_period_end, trial_end, plan_key, audience, billing_cycle")
       .eq("user_id", userId)
+      .eq("runtime_mode", runtimeMode)
       .in("status", ["active", "trialing", "past_due"])
       .order("updated_at", { ascending: false })
       .limit(5),

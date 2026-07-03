@@ -246,6 +246,49 @@ Deno.test("add-on fulfillment only grants explicitly supported self-serve credit
   assertEquals(threw, true);
 });
 
+Deno.test("webhook handles add-on refunds and checkout expiration idempotently", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./index.ts", import.meta.url),
+  );
+
+  assertEquals(source.includes('case "charge.refunded"'), true);
+  assertEquals(source.includes('case "refund.created"'), true);
+  assertEquals(source.includes('case "refund.updated"'), true);
+  assertEquals(source.includes('case "credit_note.created"'), true);
+  assertEquals(source.includes('case "checkout.session.expired"'), true);
+  assertEquals(source.includes("syncAddonRefund"), true);
+  assertEquals(source.includes("expireAbandonedTrialCheckoutSession"), true);
+  assertEquals(source.includes("credits_refunded"), true);
+  assertEquals(source.includes("refund_status"), true);
+  assertEquals(source.includes("last_refund_id"), true);
+  assertEquals(source.includes("Math.min("), true);
+});
+
+Deno.test("add-on, investor, and trial webhook writes persist Stripe runtime mode", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./index.ts", import.meta.url),
+  );
+  const addonStart = source.indexOf(
+    "async function fulfillAddonCheckoutSession",
+  );
+  const investorStart = source.indexOf(
+    "async function activateInvestorPaymentSession",
+  );
+  const trialStart = source.indexOf(
+    "async function syncSubscriptionTrialClaim",
+  );
+  const addonBlock = source.slice(addonStart, investorStart);
+  const investorBlock = source.slice(investorStart, trialStart);
+  const trialBlock = source.slice(trialStart);
+
+  assertEquals(addonBlock.includes("livemode: Boolean(session.livemode)"), true);
+  assertEquals(addonBlock.includes("runtime_mode: stripeRuntimeModeFromLivemode"), true);
+  assertEquals(investorBlock.includes("livemode: Boolean(session.livemode)"), true);
+  assertEquals(investorBlock.includes("runtime_mode: stripeRuntimeModeFromLivemode"), true);
+  assertEquals(trialBlock.includes("livemode: Boolean(session.livemode)"), true);
+  assertEquals(trialBlock.includes("runtime_mode: stripeRuntimeModeFromLivemode"), true);
+});
+
 Deno.test("agent data-input discount rollback clears legacy and Stripe credit markers", async () => {
   const source = await Deno.readTextFile(
     new URL("./index.ts", import.meta.url),

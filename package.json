@@ -58,6 +58,7 @@
     "stripe:setup-catalog": "node scripts/setup-stripe-catalog.mjs",
     "check:stripe-account": "node scripts/check-stripe-account.mjs",
     "check:stripe-business-logic": "node scripts/check-stripe-business-logic.mjs",
+    "check:stripe-catalog-parity": "node scripts/check-stripe-catalog-parity.mjs",
     "check:stripe-tax-readiness": "node scripts/check-stripe-tax-readiness.mjs",
     "check:stripe-live-migration": "node scripts/check-stripe-live-migration.mjs",
     "check:production-deploy": "node scripts/check-production-deploy.mjs",

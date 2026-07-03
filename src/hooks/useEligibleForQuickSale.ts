@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { resolveQuickSaleEligibility } from "@/lib/quickSaleEntitlements";
+import { getClientStripeRuntimeMode } from "@/lib/billingRuntime";
 
 type InvestorSubscriptionGate = {
   status: string;
@@ -15,18 +16,19 @@ type InvestorSubscriptionGate = {
 
 export function useEligibleForQuickSale() {
   const { user, profile } = useAuth();
+  const runtimeMode = getClientStripeRuntimeMode();
 
   const { data: subscription, isLoading } = useQuery({
-    queryKey: ["quick-sale-eligibility", user?.id],
+    queryKey: ["quick-sale-eligibility", user?.id, runtimeMode],
     queryFn: async () => {
       if (!user?.id) return null;
-      const { data } = await supabase
+      let query = supabase
         .from("investor_subscriptions")
         .select("status, expires_at")
         .eq("user_id", user.id)
-        .in("status", ["active", "trial"])
-        .limit(1)
-        .maybeSingle();
+        .in("status", ["active", "trial"]);
+      if (runtimeMode) query = query.eq("runtime_mode", runtimeMode);
+      const { data } = await query.limit(1).maybeSingle();
       return (data as unknown) as InvestorSubscriptionGate | null;
     },
     enabled: !!user?.id,

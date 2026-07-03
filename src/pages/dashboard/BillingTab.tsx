@@ -23,6 +23,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 import { getPlanForParticipant } from "@/lib/rolePlanMap";
 import { buildBillingContactHref } from "@/lib/billingContact";
+import { getClientStripeRuntimeMode } from "@/lib/billingRuntime";
 import { BillingUsagePanel } from "@/components/dashboard/BillingUsagePanel";
 import { formatDate } from "@/lib/format";
 import { AddonCard } from "./billing/AddonCard";
@@ -42,6 +43,17 @@ type PortalAction =
   | "subscription_cancel"
   | "subscription_update"
   | "resume_subscription";
+
+type AddonCreditLedgerRow = {
+  id: string;
+  addon_key: string;
+  status: string;
+  credits_granted: number;
+  credits_consumed: number;
+  credits_refunded?: number | null;
+  refund_status?: string | null;
+  created_at?: string | null;
+};
 
 const showAddonCheckoutError = (e: unknown) => {
   toast.error(
@@ -68,6 +80,49 @@ const useBillingInfo = () => {
   });
 };
 
+const addonLabel = (addonKey: string | null | undefined) => {
+  switch (addonKey) {
+    case "valuation_single":
+    case "valuation_bundle":
+      return "AI valuations";
+    case "property_report_single":
+      return "Property reports";
+    case "neighbourhood_report_single":
+    case "neighbourhood_report_bundle":
+      return "Neighbourhood reports";
+    default:
+      return addonKey ? addonKey.split("_").join(" ") : "Add-on credits";
+  }
+};
+
+const creditWord = (count: number) => Math.abs(count) === 1 ? "credit" : "credits";
+
+const netAddonCredits = (row: AddonCreditLedgerRow) =>
+  Number(row.credits_granted ?? 0) -
+  Number(row.credits_consumed ?? 0) -
+  Number(row.credits_refunded ?? 0);
+
+const useAddonCreditLedger = (userId: string | undefined) => {
+  const runtimeMode = getClientStripeRuntimeMode();
+  return useQuery<AddonCreditLedgerRow[]>({
+    queryKey: ["addon_purchases", "credit-ledger", userId, runtimeMode],
+    enabled: Boolean(userId),
+    queryFn: async () => {
+      if (!userId) return [];
+      let query = supabase
+        .from("addon_purchases")
+        .select("id, addon_key, status, credits_granted, credits_consumed, credits_refunded, refund_status, created_at")
+        .eq("user_id", userId)
+        .in("status", ["paid", "active", "refunded"]);
+      if (runtimeMode) query = query.eq("runtime_mode", runtimeMode);
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data ?? []) as AddonCreditLedgerRow[];
+    },
+    staleTime: 60_000,
+  });
+};
+
 export default function BillingTab() { // skipcq: JS-0067
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -83,6 +138,7 @@ export default function BillingTab() { // skipcq: JS-0067
   } = useSubscription();
   const { profile, user } = useAuth();
   const { data, isLoading, refetch, isRefetching, error } = useBillingInfo();
+  const { data: addonCreditRows = [] } = useAddonCreditLedger(user?.id);
   const [portalLoading, setPortalLoading] = useState(false);
   const [addonLoadingKey, setAddonLoadingKey] = useState<string | null>(null);
   const [subscriptionCheckoutLoading, setSubscriptionCheckoutLoading] =
@@ -215,6 +271,11 @@ export default function BillingTab() { // skipcq: JS-0067
     showsManualManagement || data?.customer_found === false
       ? "This access is not currently backed by a Stripe invoice history in maiProp."
       : "No invoices yet. They'll appear here after your first payment.";
+  const visibleAddonCredits = addonCreditRows.filter((row) =>
+    typeof row.addon_key === "string" &&
+    row.addon_key.length > 0 &&
+    (Number(row.credits_granted ?? 0) > 0 || Number(row.credits_refunded ?? 0) > 0)
+  );
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -312,7 +373,7 @@ export default function BillingTab() { // skipcq: JS-0067
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <div className="bg-secondary rounded-xl p-3">
               <p className="text-xs text-muted-foreground mb-0.5">
-                Monthly price
+                Subscription price
               </p>
               <p className="font-semibold">
                 {sub.amount != null
@@ -504,6 +565,63 @@ export default function BillingTab() { // skipcq: JS-0067
         onPurchaseAddon={(addonKey) => void purchaseAddonKey(addonKey)}
         onUpgrade={() => void startSubscriptionCheckout()}
       />
+
+      {visibleAddonCredits.length > 0 && (
+        <div className="glass-card rounded-2xl border border-border p-5 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">
+                Add-on credits
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Paid add-on credits do not expire. Refunds reduce the available balance.
+              </p>
+            </div>
+            <span className="rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground">
+              No expiry
+            </span>
+          </div>
+          <div className="divide-y divide-border">
+            {visibleAddonCredits.map((row) => {
+              const net = netAddonCredits(row);
+              const owed = Math.max(-net, 0);
+              const refunded = Number(row.credits_refunded ?? 0);
+              return (
+                <div
+                  key={row.id}
+                  className="flex items-center justify-between gap-3 py-3 text-sm"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium text-foreground">{addonLabel(row.addon_key)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {refunded > 0
+                        ? `Refund adjustment · ${refunded} ${creditWord(refunded)} refunded`
+                        : `${Number(row.credits_granted ?? 0)} ${creditWord(Number(row.credits_granted ?? 0))} purchased`}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    {owed > 0 ? (
+                      <>
+                        <p className="font-semibold text-destructive">
+                          {owed} {creditWord(owed)} owed
+                        </p>
+                        <p className="text-xs text-muted-foreground">Future top-ups offset this first</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-semibold text-foreground">
+                          {Math.max(net, 0)} {creditWord(net)} available
+                        </p>
+                        <p className="text-xs text-muted-foreground capitalize">{row.status}</p>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Invoices */}
       <div className="glass-card rounded-2xl border border-border p-5 space-y-4">

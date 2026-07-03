@@ -10,6 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { toast } from "sonner";
 import { parseMutationInput, rowIdSchema } from "@/lib/mutationSchemas";
+import { getClientStripeRuntimeMode } from "@/lib/billingRuntime";
 
 const VALUATION_INCLUDED = 5;
 const VALUATION_EXTRA_COST = 39; // euros, valuation_single
@@ -91,18 +92,23 @@ export function usePropertyReportAddonCredits() {
     enabled: !!user,
     queryFn: async () => {
       if (!user) return 0;
-      const { data, error } = await supabase
+      const runtimeMode = getClientStripeRuntimeMode();
+      let query = supabase
         .from("addon_purchases")
-        .select("credits_granted, credits_consumed")
+        .select("credits_granted, credits_consumed, credits_refunded")
         .eq("user_id", user.id)
         .in("addon_key", [...PROPERTY_REPORT_CREDIT_ADDONS])
-        .in("status", ["paid", "active"]);
+        .in("status", ["paid", "active", "refunded"]);
+      if (runtimeMode) query = query.eq("runtime_mode", runtimeMode);
+      const { data, error } = await query;
       if (error) throw error;
-      return (data ?? []).reduce((sum, row) => {
+      const balance = (data ?? []).reduce((sum, row) => {
         const granted = Number(row.credits_granted ?? 0);
         const consumed = Number(row.credits_consumed ?? 0);
-        return sum + Math.max(granted - consumed, 0);
+        const refunded = Number(row.credits_refunded ?? 0);
+        return sum + granted - consumed - refunded;
       }, 0);
+      return Math.max(balance, 0);
     },
   });
 }
