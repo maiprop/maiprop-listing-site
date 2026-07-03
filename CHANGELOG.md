@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.4](https://github.com/maiprop/maiprop-listing-site/compare/v1.12.3...v1.12.4) (2026-07-03)
+
+
+### Bug Fixes
+
+* harden homepage initial payload fallback ([0852fca](https://github.com/maiprop/maiprop-listing-site/commit/0852fcada0339b8d59cdc5681ab3e37cfc5584af))
+
 ## [1.12.3](https://github.com/maiprop/maiprop-listing-site/compare/v1.12.2...v1.12.3) (2026-07-03)
 
 
