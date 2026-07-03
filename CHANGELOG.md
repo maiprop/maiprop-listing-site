@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.12.3](https://github.com/maiprop/maiprop-listing-site/compare/v1.12.2...v1.12.3) (2026-07-03)
+
+
+### Bug Fixes
+
+* harden ecas ui and supabase release wiring ([d9d88e0](https://github.com/maiprop/maiprop-listing-site/commit/d9d88e05868999cb4e54f485de758141547aa98a))
+* normalize Supabase types and project policy drift ([c106700](https://github.com/maiprop/maiprop-listing-site/commit/c10670090edba4259a295434b323c744459a1323))
+
 ## [1.12.2](https://github.com/maiprop/maiprop-listing-site/compare/v1.12.1...v1.12.2) (2026-07-02)
 
 
