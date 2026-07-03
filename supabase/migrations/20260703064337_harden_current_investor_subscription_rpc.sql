@@ -90,7 +90,12 @@ AS $$
       ),
       FALSE
     )
-    OR public.has_audience_scoped_pro_entitlement(p_user_id)
+    OR EXISTS (
+      SELECT 1
+      FROM public.profiles p
+      WHERE p.user_id = p_user_id
+        AND p.subscription_product_id IS NOT NULL
+    )
     OR private.has_investor_subscription_for_user(p_user_id)
 $$;
 
