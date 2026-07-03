@@ -188,15 +188,35 @@ async function fetchHomepageSection(origin, section, limit, fetchImpl) {
   }
 }
 
+async function fetchFeaturedListingsFallback(origin, limit, fetchImpl) {
+  const url = new URL("/api/public/listings", origin);
+  url.searchParams.set("page", "1");
+  url.searchParams.set("pageSize", String(limit));
+  try {
+    const json = await fetchJsonWithTimeout(url, fetchImpl);
+    return publicRowsFromResponse(json)
+      .map(sanitizeHomepageRow)
+      .filter(Boolean)
+      .slice(0, limit);
+  } catch (error) {
+    console.warn(`[homepage-initial] Could not fetch featured fallback listings: ${error.message}`);
+    return [];
+  }
+}
+
 export async function buildHomepageInitialPayload({
   origin = DEFAULT_ORIGIN,
   now = new Date(),
   fetchImpl = globalThis.fetch,
 } = {}) {
-  const [featured, openHouses] = await Promise.all([
+  let [featured, openHouses] = await Promise.all([
     fetchHomepageSection(origin, "featured", MAX_FEATURED_ROWS, fetchImpl),
     fetchHomepageSection(origin, "open-houses", MAX_OPEN_HOUSE_ROWS, fetchImpl),
   ]);
+
+  if (featured.length === 0) {
+    featured = await fetchFeaturedListingsFallback(origin, MAX_FEATURED_ROWS, fetchImpl);
+  }
 
   return {
     version: HOMEPAGE_INITIAL_VERSION,
