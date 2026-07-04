@@ -162,7 +162,8 @@ export function LocationInput({
         <div className="relative flex-1 min-w-0 overflow-hidden">
           <input
             ref={inputRef}
-            type="text"
+            type="search"
+            name="maiprop-home-location-search"
             placeholder="City, area, or neighbourhood..."
             value={value}
             onChange={(e) => onChange(e.target.value)}
@@ -177,11 +178,15 @@ export function LocationInput({
             aria-expanded={showDropdown}
             aria-controls={showDropdown ? listboxId : undefined}
             className="block w-full min-w-0 truncate bg-transparent text-sm font-medium leading-5 text-foreground placeholder:text-muted-foreground outline-none"
-            autoComplete="new-password"
+            autoComplete="off"
             autoCorrect="off"
             autoCapitalize="none"
             spellCheck={false}
             enterKeyHint="search"
+            data-lpignore="true"
+            data-1p-ignore="true"
+            data-bwignore="true"
+            data-form-type="other"
           />
         </div>
         {value && (

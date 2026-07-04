@@ -5,6 +5,7 @@ let googleMapsPlacesPromise: Promise<void> | null = null;
 type GoogleMapsPlacesWindow = typeof window & {
   google?: { maps?: { importLibrary?: (library: "places") => Promise<unknown>; places?: unknown } };
   __maipropGoogleMapsPlacesReady?: () => void;
+  gm_authFailure?: () => void;
 };
 
 export function hasGooglePlaces(): boolean {
@@ -22,6 +23,11 @@ export function loadGoogleMapsPlaces(apiKey = GOOGLE_MAPS_API_KEY): Promise<void
 
   googleMapsPlacesPromise = new Promise((resolve, reject) => {
     let settled = false;
+    const previousAuthFailure = (window as GoogleMapsPlacesWindow).gm_authFailure;
+    const authFailureHandler = () => {
+      previousAuthFailure?.();
+      rejectLoad(new Error("Google Maps authentication failed"));
+    };
 
     const rejectLoad = (error: Error) => {
       if (settled) return;
@@ -29,6 +35,13 @@ export function loadGoogleMapsPlaces(apiKey = GOOGLE_MAPS_API_KEY): Promise<void
       if (timeoutId) window.clearTimeout(timeoutId);
       googleMapsPlacesPromise = null;
       delete (window as GoogleMapsPlacesWindow).__maipropGoogleMapsPlacesReady;
+      if ((window as GoogleMapsPlacesWindow).gm_authFailure === authFailureHandler) {
+        if (previousAuthFailure) {
+          (window as GoogleMapsPlacesWindow).gm_authFailure = previousAuthFailure;
+        } else {
+          delete (window as GoogleMapsPlacesWindow).gm_authFailure;
+        }
+      }
       reject(error);
     };
 
@@ -46,6 +59,13 @@ export function loadGoogleMapsPlaces(apiKey = GOOGLE_MAPS_API_KEY): Promise<void
         settled = true;
         if (timeoutId) window.clearTimeout(timeoutId);
         delete (window as GoogleMapsPlacesWindow).__maipropGoogleMapsPlacesReady;
+        if ((window as GoogleMapsPlacesWindow).gm_authFailure === authFailureHandler) {
+          if (previousAuthFailure) {
+            (window as GoogleMapsPlacesWindow).gm_authFailure = previousAuthFailure;
+          } else {
+            delete (window as GoogleMapsPlacesWindow).gm_authFailure;
+          }
+        }
         resolve();
       } catch (error) {
         rejectLoad(error instanceof Error ? error : new Error("Google Places failed to initialize"));
@@ -66,6 +86,7 @@ export function loadGoogleMapsPlaces(apiKey = GOOGLE_MAPS_API_KEY): Promise<void
     (window as GoogleMapsPlacesWindow).__maipropGoogleMapsPlacesReady = () => {
       void resolveWhenPlacesReady();
     };
+    (window as GoogleMapsPlacesWindow).gm_authFailure = authFailureHandler;
 
     const script = document.createElement("script");
     const params = new URLSearchParams({

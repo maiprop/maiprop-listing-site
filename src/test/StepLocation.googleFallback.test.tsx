@@ -82,31 +82,13 @@ describe("StepLocation Google Places fallback", () => {
     expect(set).toHaveBeenCalledWith("longitude", "23.7354");
   });
 
-  it("saves Google Places geometry when a Google address is selected", async () => {
-    let placeChanged: (() => void) | undefined;
-    const getPlace = vi.fn().mockReturnValue({
-      formatted_address: "Voukourestiou 14, Athens, Greece",
-      geometry: {
-        location: {
-          lat: () => 37.9779,
-          lng: () => 23.7354,
-        },
-      },
-      address_components: [
-        { long_name: "Voukourestiou", short_name: "Voukourestiou", types: ["route"] },
-        { long_name: "14", short_name: "14", types: ["street_number"] },
-        { long_name: "Athens", short_name: "Athens", types: ["locality"] },
-        { long_name: "Attica", short_name: "Attica", types: ["administrative_area_level_1"] },
-        { long_name: "10674", short_name: "10674", types: ["postal_code"] },
-      ],
-    });
-    vi.mocked(loadGoogleMapsPlaces).mockResolvedValue(undefined);
-    const AutocompleteMock = vi.fn(function () {
+  it("keeps the address input editable instead of mounting legacy Google Places", async () => {
+    const AutocompleteMock = vi.fn((input: HTMLInputElement) => {
+      input.disabled = true;
+      input.placeholder = "Oops! Something went wrong.";
       return {
-        addListener: vi.fn((_event: string, cb: () => void) => {
-          placeChanged = cb;
-        }),
-        getPlace,
+        addListener: vi.fn(),
+        getPlace: vi.fn(),
       };
     });
     vi.stubGlobal("google", {
@@ -116,6 +98,23 @@ describe("StepLocation Google Places fallback", () => {
         },
       },
     });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([
+        {
+          display_name: "Voukourestiou 14, Athens, Attica, Greece",
+          lat: "37.9779",
+          lon: "23.7354",
+          address: {
+            road: "Voukourestiou",
+            house_number: "14",
+            city: "Athens",
+            state: "Attica",
+            postcode: "10674",
+          },
+        },
+      ])),
+    );
+    vi.stubGlobal("fetch", fetchMock);
     const set = vi.fn();
 
     render(
@@ -129,10 +128,16 @@ describe("StepLocation Google Places fallback", () => {
       />,
     );
 
-    fireEvent.focus(screen.getByPlaceholderText("e.g. Voukourestiou 14, Athens"));
-    await waitFor(() => expect(loadGoogleMapsPlaces).toHaveBeenCalled());
-    placeChanged?.();
+    const input = screen.getByPlaceholderText("e.g. Voukourestiou 14, Athens");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "Voukourestiou 14" } });
 
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(loadGoogleMapsPlaces).toHaveBeenCalled();
+    expect(AutocompleteMock).not.toHaveBeenCalled();
+    expect(input).not.toBeDisabled();
+    const suggestionButton = await screen.findByRole("option", { name: /14 Voukourestiou/i });
+    fireEvent.click(suggestionButton);
     expect(set).toHaveBeenCalledWith("address", "14 Voukourestiou");
     expect(set).toHaveBeenCalledWith("city", "Athens");
     expect(set).toHaveBeenCalledWith("region", "Attica");
@@ -141,48 +146,16 @@ describe("StepLocation Google Places fallback", () => {
     expect(set).toHaveBeenCalledWith("longitude", "23.7354");
   });
 
-  it("does not let the Nominatim blur fallback overwrite a Google address selection", async () => {
-    let placeChanged: (() => void) | undefined;
-    vi.mocked(loadGoogleMapsPlaces).mockResolvedValue(undefined);
-    const AutocompleteMock = vi.fn(function () {
-      return {
-        addListener: vi.fn((_event: string, cb: () => void) => {
-          placeChanged = cb;
-        }),
-        getPlace: vi.fn().mockReturnValue({
-          formatted_address: "Ermou 12, Athens, Greece",
-          geometry: {
-            location: {
-              lat: () => 37.975,
-              lng: () => 23.731,
-            },
-          },
-          address_components: [
-            { long_name: "Ermou", short_name: "Ermou", types: ["route"] },
-            { long_name: "12", short_name: "12", types: ["street_number"] },
-            { long_name: "Athens", short_name: "Athens", types: ["locality"] },
-            { long_name: "Attica", short_name: "Attica", types: ["administrative_area_level_1"] },
-            { long_name: "10563", short_name: "10563", types: ["postal_code"] },
-          ],
-        }),
-      };
-    });
-    vi.stubGlobal("google", {
-      maps: {
-        places: {
-          Autocomplete: AutocompleteMock,
-        },
-      },
-    });
+  it("does not let the blur fallback overwrite a selected controlled address", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify([
         {
-          display_name: "Ermou 10, Athens, Attica, Greece",
-          lat: "37.9741",
-          lon: "23.7301",
+          display_name: "Ermou 12, Athens, Attica, Greece",
+          lat: "37.975",
+          lon: "23.731",
           address: {
             road: "Ermou",
-            house_number: "10",
+            house_number: "12",
             city: "Athens",
             state: "Attica",
             postcode: "10563",
@@ -213,17 +186,15 @@ describe("StepLocation Google Places fallback", () => {
     fireEvent.change(addressInput, { target: { value: "Ermou 12" } });
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    await waitFor(() => expect(loadGoogleMapsPlaces).toHaveBeenCalled());
-
-    placeChanged?.();
+    const suggestionButton = await screen.findByRole("option", { name: /12 Ermou/i });
+    fireEvent.click(suggestionButton);
     fireEvent.blur(addressInput);
 
     await waitFor(() => expect(addressInput).toHaveValue("12 Ermou"));
-    expect(addressInput).not.toHaveValue("10 Ermou");
+    expect(addressInput).not.toHaveValue("Ermou 12");
   });
 
-  it("keeps address suggestions visible when Google Places loads but gives no prediction list", async () => {
-    vi.mocked(loadGoogleMapsPlaces).mockResolvedValue(undefined);
+  it("keeps address suggestions visible without giving Google Places control of the input", async () => {
     const AutocompleteMock = vi.fn(function () {
       return {
         addListener: vi.fn(),
@@ -267,12 +238,12 @@ describe("StepLocation Google Places fallback", () => {
     fireEvent.focus(screen.getByPlaceholderText("e.g. Voukourestiou 14, Athens"));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    await waitFor(() => expect(loadGoogleMapsPlaces).toHaveBeenCalled());
+    expect(loadGoogleMapsPlaces).toHaveBeenCalled();
+    expect(AutocompleteMock).not.toHaveBeenCalled();
     expect(await screen.findByRole("option", { name: /14 Voukourestiou/i })).toBeInTheDocument();
   });
 
   it("auto-applies the first address suggestion on blur when typed text has no saved coordinates", async () => {
-    vi.mocked(loadGoogleMapsPlaces).mockRejectedValue(new Error("Google Maps failed to load"));
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify([
         {

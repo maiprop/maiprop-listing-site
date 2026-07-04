@@ -9,8 +9,10 @@ import {
   type AddressPrediction,
 } from "@/lib/location/addressFormat";
 import type { NominatimAddressSuggestion } from "@/hooks/useNominatimAddressSuggestions";
+import { fetchGooglePlacePredictions } from "@/lib/location/googlePlacePredictions";
 
 const AUTOCOMPLETE_DEBOUNCE_MS = 300;
+const GOOGLE_PROVIDER_BUDGET_MS = 1200;
 const MIN_QUERY_LEN = 2;
 const LIMIT = 6;
 
@@ -35,6 +37,11 @@ const mapboxTypesForMode = (mode: AddressAutocompleteMode) =>
   mode === "address"
     ? "address,street,postcode,place,locality,neighborhood"
     : "place,locality,neighborhood";
+
+const looksLikeStreetAddress = (query: string) =>
+  /\d/.test(query) ||
+  /\b(street|st|avenue|ave|road|rd|square|sq|od[oó]s|leof|leoforos|plateia)\b/i.test(query) ||
+  /(?:οδός|λεωφόρος|λεωφ\.|πλατεία|πλ\.)/i.test(query);
 
 async function fetchMapboxPredictions(query: string, mode: AddressAutocompleteMode, signal: AbortSignal) {
   const token = getMapboxAddressToken();
@@ -76,6 +83,15 @@ async function fetchNominatimPredictions(query: string, signal: AbortSignal) {
     .filter((prediction) => prediction.value);
 }
 
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
+  return await Promise.race([
+    promise,
+    new Promise<T>((resolve) => {
+      window.setTimeout(() => resolve(fallback), timeoutMs);
+    }),
+  ]);
+}
+
 export function useAddressAutocomplete(
   query: string,
   {
@@ -109,11 +125,27 @@ export function useAddressAutocomplete(
     setLoading(true);
     const timeout = window.setTimeout(async () => {
       try {
-        const mapboxPredictions = await fetchMapboxPredictions(normalizedQuery, mode, controller.signal);
-        const predictions =
-          mapboxPredictions && mapboxPredictions.length > 0
-            ? mapboxPredictions
-            : await fetchNominatimPredictions(normalizedQuery, controller.signal);
+        const effectiveMode =
+          mode === "city" && looksLikeStreetAddress(normalizedQuery) ? "address" : mode;
+        const shouldCrossCheckAddress = effectiveMode === "address" && looksLikeStreetAddress(normalizedQuery);
+        const googlePromise = fetchGooglePlacePredictions(normalizedQuery, effectiveMode, controller.signal)
+          .catch(() => []);
+        const fallbackPromise = (async () => {
+          const mapboxPredictions = await fetchMapboxPredictions(normalizedQuery, effectiveMode, controller.signal);
+          const nominatimPredictions =
+            shouldCrossCheckAddress || !mapboxPredictions || mapboxPredictions.length === 0
+              ? await fetchNominatimPredictions(normalizedQuery, controller.signal)
+              : [];
+          return shouldCrossCheckAddress
+            ? mergeAddressPredictions(nominatimPredictions, mapboxPredictions ?? [])
+            : (mapboxPredictions && mapboxPredictions.length > 0 ? mapboxPredictions : nominatimPredictions);
+        })().catch(() => []);
+        const googlePredictions = await withTimeout(googlePromise, GOOGLE_PROVIDER_BUDGET_MS, []);
+        if (googlePredictions.length > 0) {
+          setRemotePredictions(googlePredictions.slice(0, LIMIT));
+          return;
+        }
+        const predictions = await fallbackPromise;
         setRemotePredictions(predictions.slice(0, LIMIT));
       } catch (_error) {
         setRemotePredictions([]);
@@ -130,11 +162,11 @@ export function useAddressAutocomplete(
 
   const predictions = useMemo(() => {
     const manualPrediction =
-      normalizedQuery && popularPredictions.length === 0 && remotePredictions.length === 0
+      normalizedQuery.length >= MIN_QUERY_LEN && !loading && popularPredictions.length === 0 && remotePredictions.length === 0
         ? [mapTextLocationToAddressPrediction(normalizedQuery, "manual")]
         : [];
     return mergeAddressPredictions(popularPredictions, remotePredictions, manualPrediction).slice(0, LIMIT);
-  }, [normalizedQuery, popularPredictions, remotePredictions]);
+  }, [loading, normalizedQuery, popularPredictions, remotePredictions]);
 
   return {
     predictions,

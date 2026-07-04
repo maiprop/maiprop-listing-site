@@ -1,41 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { Loader2, MapPin, Search, X } from "lucide-react";
-import { GOOGLE_MAPS_API_KEY, GOOGLE_PLACES_AUTOCOMPLETE_ENABLED } from "@/lib/config";
-import { loadGoogleMapsPlaces } from "@/lib/googleMapsPlaces";
 import { useAddressAutocomplete } from "@/hooks/useAddressAutocomplete";
 import { formatAddressPrediction, type AddressPrediction } from "@/lib/location/addressFormat";
-
-type GooglePlace = {
-  address_components?: Array<{ types: string[]; long_name: string }>;
-  formatted_address?: string;
-};
-
-type GoogleWindow = typeof window & {
-  google?: {
-    maps?: {
-      places?: {
-        Autocomplete: new (el: HTMLInputElement, opts: object) => {
-          addListener(eventName: string, handler: () => void): void;
-          getPlace(): GooglePlace;
-        };
-      };
-    };
-  };
-};
-
-const getSearchValueFromGooglePlace = (place: GooglePlace) => {
-  const components = place.address_components ?? [];
-  const get = (type: string) => components.find((item) => item.types.includes(type))?.long_name ?? "";
-  const city =
-    get("locality") ||
-    get("postal_town") ||
-    get("administrative_area_level_3") ||
-    get("administrative_area_level_2") ||
-    get("administrative_area_level_1");
-  const street = [get("street_number"), get("route")].filter(Boolean).join(" ");
-  return city || street || place.formatted_address || "";
-};
 
 interface LocationSearchFieldProps {
   value: string;
@@ -53,13 +20,11 @@ export function LocationSearchField({
   compact = false,
 }: LocationSearchFieldProps) {
   const [focused, setFocused] = useState(false);
-  const [googlePlacesRequested, setGooglePlacesRequested] = useState(false);
-  const googlePlacesConfigured = GOOGLE_PLACES_AUTOCOMPLETE_ENABLED && Boolean(GOOGLE_MAPS_API_KEY);
+  const [draftValue, setDraftValue] = useState(value);
+  const selectedDraftRef = useRef<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const initializedRef = useRef(false);
-  const googlePlacesLoadRef = useRef<Promise<void> | null>(null);
-  const query = value.trim();
+  const query = draftValue.trim();
   const shouldUsePredictions = focused;
   const { predictions, loading, clear } = useAddressAutocomplete(query, {
     mode: "city",
@@ -72,30 +37,6 @@ export function LocationSearchField({
     const r = wrapRef.current.getBoundingClientRect();
     return { top: r.bottom + window.scrollY + 4, left: r.left + window.scrollX, width: r.width };
   };
-
-  const initGoogle = useCallback(() => {
-    const input = inputRef.current;
-    const Autocomplete = (window as GoogleWindow).google?.maps?.places?.Autocomplete;
-    if (!input || initializedRef.current) return;
-    if (!Autocomplete) {
-      return;
-    }
-
-    const autocomplete = new Autocomplete(input, {
-      types: ["geocode"],
-      componentRestrictions: { country: "gr" },
-      fields: ["address_components", "formatted_address"],
-    });
-    autocomplete.addListener("place_changed", () => {
-      const nextValue = getSearchValueFromGooglePlace(autocomplete.getPlace()).trim();
-      if (nextValue) {
-        onChange(nextValue);
-        setFocused(false);
-        clear();
-      }
-    });
-    initializedRef.current = true;
-  }, [clear, onChange]);
 
   useEffect(() => {
     const handler = (event: MouseEvent) => {
@@ -110,28 +51,18 @@ export function LocationSearchField({
 
   useEffect(() => {
     if (document.activeElement === inputRef.current) setFocused(true);
-  }, [value]);
+  }, [draftValue]);
 
   useEffect(() => {
-    if (!googlePlacesRequested || !googlePlacesConfigured) return;
-    let cancelled = false;
-
-    const placesPromise = googlePlacesLoadRef.current ?? loadGoogleMapsPlaces();
-    googlePlacesLoadRef.current = placesPromise;
-
-    placesPromise
-      .then(() => {
-        if (cancelled) return;
-        initGoogle();
-      })
-      .catch(() => {
-        googlePlacesLoadRef.current = null;
-      });
-
-    return () => { cancelled = true; };
-  }, [googlePlacesConfigured, googlePlacesRequested, initGoogle]);
+    if (focused) return;
+    if (selectedDraftRef.current && value !== selectedDraftRef.current) return;
+    selectedDraftRef.current = null;
+    setDraftValue(value);
+  }, [focused, value]);
 
   const selectSuggestion = (prediction: AddressPrediction) => {
+    selectedDraftRef.current = prediction.value;
+    setDraftValue(prediction.value);
     onChange(prediction.value);
     clear();
     setFocused(false);
@@ -194,34 +125,44 @@ export function LocationSearchField({
       <Search className={`${compact ? "w-3.5 h-3.5" : "w-4 h-4"} text-muted-foreground shrink-0`} />
       <input
         ref={inputRef}
-        type="text"
+        type="search"
+        name="maiprop-listing-location-search"
         placeholder={placeholder}
         aria-label={ariaLabel}
         role="combobox"
         aria-autocomplete="list"
         aria-expanded={showDropdown}
         aria-controls={showDropdown ? listboxId : undefined}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
+        value={draftValue}
+        onChange={(event) => {
+          setDraftValue(event.target.value);
+          onChange(event.target.value);
+        }}
         onFocus={() => {
           setFocused(true);
-          setGooglePlacesRequested(true);
         }}
         onKeyDown={(event) => {
           if (event.key === "Escape") setFocused(false);
-          if (event.key === "Enter" && predictions[0] && !value.trim()) selectSuggestion(predictions[0]);
+          if (event.key === "Enter" && predictions[0] && !draftValue.trim()) selectSuggestion(predictions[0]);
         }}
         className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none min-w-0"
-        autoComplete="new-password"
+        autoComplete="off"
         autoCorrect="off"
         autoCapitalize="none"
         spellCheck={false}
         enterKeyHint="search"
+        data-lpignore="true"
+        data-1p-ignore="true"
+        data-bwignore="true"
+        data-form-type="other"
       />
-      {value && (
+      {draftValue && (
         <button
           type="button"
-          onClick={() => onChange("")}
+          onClick={() => {
+            setDraftValue("");
+            onChange("");
+          }}
           className={compact ? "min-h-8 min-w-8 inline-flex items-center justify-center rounded-lg" : ""}
           aria-label="Clear location"
         >

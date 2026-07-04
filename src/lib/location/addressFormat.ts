@@ -24,7 +24,7 @@ type AddressParts = {
   country?: string;
 };
 
-export type AddressProvider = "popular" | "mapbox" | "nominatim" | "manual";
+export type AddressProvider = "popular" | "google" | "mapbox" | "nominatim" | "manual";
 
 export interface AddressPrediction {
   id: string;
@@ -42,6 +42,7 @@ export interface AddressPrediction {
   latitude?: string;
   longitude?: string;
   source?: unknown;
+  resolveDetails?: () => Promise<AddressPrediction>;
 }
 
 export type NominatimLike = {

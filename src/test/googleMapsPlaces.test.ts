@@ -28,6 +28,7 @@ describe("googleMapsPlaces loader", () => {
     delete (window as typeof window & { google?: unknown }).google;
     delete (window as typeof window & { __maipropGoogleMapsPlacesReady?: unknown })
       .__maipropGoogleMapsPlacesReady;
+    delete (window as typeof window & { gm_authFailure?: unknown }).gm_authFailure;
   });
 
   it("detects an already-loaded Google Places namespace", async () => {
@@ -94,6 +95,16 @@ describe("googleMapsPlaces loader", () => {
       .__maipropGoogleMapsPlacesReady?.();
 
     await expect(load).rejects.toThrow("Google Places failed to initialize");
+  });
+
+  it("rejects when Google reports an auth or API activation failure", async () => {
+    const { loadGoogleMapsPlaces } = await loadModule();
+
+    const load = loadGoogleMapsPlaces("maps-key-not-activated");
+    (window as typeof window & { gm_authFailure?: () => void }).gm_authFailure?.();
+
+    await expect(load).rejects.toThrow("Google Maps authentication failed");
+    expect((window as typeof window & { gm_authFailure?: unknown }).gm_authFailure).toBeUndefined();
   });
 
   it("clears the cached promise after script load failure so callers can retry", async () => {

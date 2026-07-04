@@ -11,6 +11,7 @@ export const POPULAR_GREEK_LOCATIONS = [
   "Corfu",
   "Mykonos",
   "Santorini",
+  "Kallithea",
   "Kalamata",
   "Ioannina",
   "Nafplio",
@@ -21,7 +22,39 @@ export const POPULAR_GREEK_LOCATIONS = [
   "Kolonaki",
 ];
 
-const normalize = (value: string) => value.trim().toLocaleLowerCase("en-US");
+const GREEK_TO_LATIN: Record<string, string> = {
+  α: "a",
+  β: "v",
+  γ: "g",
+  δ: "d",
+  ε: "e",
+  ζ: "z",
+  η: "i",
+  θ: "th",
+  ι: "i",
+  κ: "k",
+  λ: "l",
+  μ: "m",
+  ν: "n",
+  ξ: "x",
+  ο: "o",
+  π: "p",
+  ρ: "r",
+  σ: "s",
+  ς: "s",
+  τ: "t",
+  υ: "y",
+  φ: "f",
+  χ: "ch",
+  ψ: "ps",
+  ω: "o",
+};
+
+const latinizeGreek = (value: string) =>
+  Array.from(value).map((char) => GREEK_TO_LATIN[char] ?? char).join("");
+
+const normalize = (value: string) =>
+  latinizeGreek(value.trim().toLocaleLowerCase("el-GR").normalize("NFD").replace(/[\u0300-\u036f]/g, ""));
 
 export function getPopularLocationSuggestions(query: string, limit = 8): string[] {
   const q = normalize(query);
