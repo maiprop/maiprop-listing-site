@@ -112,6 +112,32 @@ const clickFirstAuctionDetailLink = async (page: Page): Promise<boolean> => {
   return true;
 };
 
+const waitForAuctionDetailContent = async (page: Page): Promise<void> => {
+  const main = page.locator("#main-content");
+  await expect(main).toBeVisible({ timeout: 30_000 });
+
+  await expect
+    .poll(
+      async () => {
+        const visibleSignals = await Promise.all([
+          main.locator("h1, h2, [role='heading']").first().isVisible().catch(() => false),
+          main
+            .getByText(/Auction Details|First Offer Price|Property Details|No bids/i)
+            .first()
+            .isVisible()
+            .catch(() => false),
+          main.locator("[class*='price'], [class*='bid']").first().isVisible().catch(() => false),
+        ]);
+        return visibleSignals.some(Boolean);
+      },
+      {
+        message: "auction detail content becomes visible",
+        timeout: 30_000,
+      },
+    )
+    .toBe(true);
+};
+
 // ─── PUBLIC — auction browsing ────────────────────────────────────────────────
 
 test.describe("Public auction browsing", () => {
@@ -200,25 +226,7 @@ test.describe("Public auction browsing", () => {
 
     await page.waitForLoadState("load", { timeout: 15_000 });
 
-    // Accept any of: price/bid info, a property heading, or a "No bids" message
-    const hasPriceOrBid = await page
-      .locator("[class*='price'], [class*='bid']")
-      .first()
-      .isVisible({ timeout: 8_000 })
-      .catch(() => false);
-
-    const hasHeading = await page
-      .locator("h1, h2")
-      .first()
-      .isVisible({ timeout: 5_000 })
-      .catch(() => false);
-
-    const hasNoBids = await page
-      .locator("text=No bids")
-      .isVisible({ timeout: 5_000 })
-      .catch(() => false);
-
-    expect(hasPriceOrBid || hasHeading || hasNoBids).toBe(true);
+    await waitForAuctionDetailContent(page);
   });
 });
 
