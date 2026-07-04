@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, type InputHTMLAttributes }
 import ReactDOM from "react-dom";
 import { Loader2, MapPin } from "lucide-react";
 import { useAddressAutocomplete } from "@/hooks/useAddressAutocomplete";
+import { GooglePlacesAttribution } from "@/components/location/GooglePlacesAttribution";
 import { formatAddressPrediction, type AddressPrediction } from "@/lib/location/addressFormat";
 import { cn } from "@/lib/utils";
 
@@ -83,6 +84,7 @@ export function LocationAutocompleteInput({
     [predictions],
   );
   const showDropdown = focused && !disabled && (items.length > 0 || loading);
+  const hasGoogleSuggestions = items.some((item) => item.selection.provider === "google");
   const listboxId = `${inputId}-listbox`;
 
   const getPos = () => {
@@ -142,6 +144,7 @@ export function LocationAutocompleteInput({
           </span>
         </button>
       ))}
+      {hasGoogleSuggestions && <GooglePlacesAttribution />}
     </div>
   ) : null;
 

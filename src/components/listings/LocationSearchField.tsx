@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { Loader2, MapPin, Search, X } from "lucide-react";
 import { useAddressAutocomplete } from "@/hooks/useAddressAutocomplete";
+import { GooglePlacesAttribution } from "@/components/location/GooglePlacesAttribution";
 import { formatAddressPrediction, type AddressPrediction } from "@/lib/location/addressFormat";
 
 interface LocationSearchFieldProps {
@@ -60,15 +61,20 @@ export function LocationSearchField({
     setDraftValue(value);
   }, [focused, value]);
 
-  const selectSuggestion = (prediction: AddressPrediction) => {
-    selectedDraftRef.current = prediction.value;
-    setDraftValue(prediction.value);
-    onChange(prediction.value);
+  const selectSuggestion = async (prediction: AddressPrediction) => {
+    const selection = prediction.resolveDetails
+      ? await prediction.resolveDetails().catch(() => prediction)
+      : prediction;
+    const filterValue = selection.city || selection.municipality || selection.region || selection.value;
+    selectedDraftRef.current = filterValue;
+    setDraftValue(filterValue);
+    onChange(filterValue);
     clear();
     setFocused(false);
   };
 
   const showDropdown = focused && shouldUsePredictions && (predictions.length > 0 || loading);
+  const hasGoogleSuggestions = predictions.some((suggestion) => suggestion.provider === "google");
   const pos = showDropdown ? getPos() : null;
   const listboxId = "listing-location-dropdown-portal";
   const dropdown = showDropdown && pos ? (
@@ -99,7 +105,9 @@ export function LocationSearchField({
           aria-selected="false"
           aria-label={formatted.subtitle ? `${formatted.title}, ${formatted.subtitle}` : formatted.title}
           onMouseDown={(event) => event.preventDefault()}
-          onClick={() => selectSuggestion(suggestion)}
+          onClick={() => {
+            void selectSuggestion(suggestion);
+          }}
           className="flex w-full items-center px-4 py-2.5 text-left hover:bg-secondary transition-colors"
         >
           <MapPin className="w-3.5 h-3.5 text-muted-foreground mr-3 shrink-0" />
@@ -112,6 +120,7 @@ export function LocationSearchField({
         </button>
         );
       })}
+      {hasGoogleSuggestions && <GooglePlacesAttribution />}
     </div>
   ) : null;
 
@@ -143,7 +152,9 @@ export function LocationSearchField({
         }}
         onKeyDown={(event) => {
           if (event.key === "Escape") setFocused(false);
-          if (event.key === "Enter" && predictions[0] && !draftValue.trim()) selectSuggestion(predictions[0]);
+          if (event.key === "Enter" && predictions[0] && !draftValue.trim()) {
+            void selectSuggestion(predictions[0]);
+          }
         }}
         className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none min-w-0"
         autoComplete="off"
