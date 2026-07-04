@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.12.5](https://github.com/maiprop/maiprop-listing-site/compare/v1.12.4...v1.12.5) (2026-07-04)
+
+
+### Bug Fixes
+
+* harden address autocomplete experience ([#470](https://github.com/maiprop/maiprop-listing-site/issues/470)) ([134b4bb](https://github.com/maiprop/maiprop-listing-site/commit/134b4bb1f24b4393ddfb58b375a9e1e26c74f43d))
+* harden ecas billing and deployment evidence ([ff90ab5](https://github.com/maiprop/maiprop-listing-site/commit/ff90ab5703495777e41607f2086b1544b13838bf))
+* stabilize address autocomplete ([dde33e1](https://github.com/maiprop/maiprop-listing-site/commit/dde33e114ebaf27088cbec5a9771f69f42e96c44))
+* stabilize auction detail e2e wait ([586d0b1](https://github.com/maiprop/maiprop-listing-site/commit/586d0b1a027d00ce9385a7a5ebd87024591a2f4a))
+* sync live supabase generated types ([1a2ba16](https://github.com/maiprop/maiprop-listing-site/commit/1a2ba167381e07ea898332e155251a735414a282))
+
 ## [1.12.4](https://github.com/maiprop/maiprop-listing-site/compare/v1.12.3...v1.12.4) (2026-07-03)
 
 
