@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import ReactDOM from "react-dom";
 import { MapPin, Clock, Loader2, X } from "lucide-react";
 import { useAddressAutocomplete } from "@/hooks/useAddressAutocomplete";
+import { GooglePlacesAttribution } from "@/components/location/GooglePlacesAttribution";
 import { getRecentSearches, removeRecentSearch } from "@/lib/recentSearches";
 import { formatAddressPrediction, type AddressPrediction } from "@/lib/location/addressFormat";
 
@@ -63,13 +64,17 @@ export function LocationInput({
     onSearch(location);
   };
 
-  const choosePrediction = (prediction: AddressPrediction) => {
-    chooseLocation(prediction.value);
+  const choosePrediction = async (prediction: AddressPrediction) => {
+    const selection = prediction.resolveDetails
+      ? await prediction.resolveDetails().catch(() => prediction)
+      : prediction;
+    chooseLocation(selection.city || selection.municipality || selection.region || selection.value);
   };
 
   const showRecents = focused && recents.length > 0 && !query;
   const showLocationSuggestions = focused && (!showRecents || Boolean(query)) && (locationSuggestions.length > 0 || suggestionsLoading);
   const showDropdown = showRecents || showLocationSuggestions;
+  const hasGoogleSuggestions = locationSuggestions.some((suggestion) => suggestion.provider === "google");
   const pos = showDropdown ? getPos() : null;
   const listboxId = "location-dropdown-portal";
 
@@ -137,7 +142,9 @@ export function LocationInput({
                 aria-selected="false"
                 aria-label={formatted.subtitle ? `${formatted.title}, ${formatted.subtitle}` : formatted.title}
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => choosePrediction(suggestion)}
+                onClick={() => {
+                  void choosePrediction(suggestion);
+                }}
                 className="flex w-full items-center px-4 py-2.5 text-left hover:bg-secondary transition-colors"
               >
                 <MapPin className="w-3.5 h-3.5 text-muted-foreground mr-3 shrink-0" />
@@ -150,6 +157,7 @@ export function LocationInput({
               </button>
               );
             })}
+            {hasGoogleSuggestions && <GooglePlacesAttribution />}
           </>
         )}
       </div>
@@ -162,7 +170,8 @@ export function LocationInput({
         <div className="relative flex-1 min-w-0 overflow-hidden">
           <input
             ref={inputRef}
-            type="text"
+            type="search"
+            name="maiprop-home-location-search"
             placeholder="City, area, or neighbourhood..."
             value={value}
             onChange={(e) => onChange(e.target.value)}
@@ -177,11 +186,15 @@ export function LocationInput({
             aria-expanded={showDropdown}
             aria-controls={showDropdown ? listboxId : undefined}
             className="block w-full min-w-0 truncate bg-transparent text-sm font-medium leading-5 text-foreground placeholder:text-muted-foreground outline-none"
-            autoComplete="new-password"
+            autoComplete="off"
             autoCorrect="off"
             autoCapitalize="none"
             spellCheck={false}
             enterKeyHint="search"
+            data-lpignore="true"
+            data-1p-ignore="true"
+            data-bwignore="true"
+            data-form-type="other"
           />
         </div>
         {value && (

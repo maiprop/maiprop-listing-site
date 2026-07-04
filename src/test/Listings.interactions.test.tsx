@@ -298,34 +298,43 @@ describe("Listings page interactions", () => {
   });
 
   it("loads Google Places for listing search only after focus and applies the selected location", async () => {
-    let placeChanged: (() => void) | undefined;
-    class AutocompleteMock {
-      addListener(_eventName: string, handler: () => void) {
-        placeChanged = handler;
-      }
-      getPlace() {
-        return {
-          address_components: [
-            { types: ["administrative_area_level_2"], long_name: "Heraklion" },
-          ],
-          formatted_address: "Heraklion, Crete",
-        };
-      }
-    }
+    const fetchAutocompleteSuggestions = vi.fn().mockResolvedValue({
+      suggestions: [
+        {
+          placePrediction: {
+            placeId: "google-heraklion",
+            text: { toString: () => "Heraklion, Crete, Greece" },
+            mainText: { toString: () => "Heraklion" },
+            secondaryText: { toString: () => "Crete, Greece" },
+          },
+        },
+      ],
+    });
+    const AutocompleteMock = vi.fn();
     (window as typeof window & { google: unknown }).google = {
-      maps: { places: { Autocomplete: AutocompleteMock } },
+      maps: {
+        importLibrary: vi.fn().mockResolvedValue({
+          AutocompleteSessionToken: class AutocompleteSessionToken {},
+          AutocompleteSuggestion: { fetchAutocompleteSuggestions },
+        }),
+        places: { Autocomplete: AutocompleteMock },
+      },
     };
 
     const { default: Listings } = await import("@/pages/Listings");
     renderWithProviders(<Listings />);
 
+    const input = screen.getByLabelText("Search by city");
     expect(loadGoogleMapsPlaces).not.toHaveBeenCalled();
-    fireEvent.focus(screen.getByLabelText("Search by city"));
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "Heraklion" } });
     await waitFor(() => expect(loadGoogleMapsPlaces).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(placeChanged).toBeTypeOf("function"));
+    await waitFor(() => expect(fetchAutocompleteSuggestions).toHaveBeenCalled());
 
-    act(() => placeChanged?.());
+    const heraklionOptions = await screen.findAllByRole("option", { name: /Heraklion/i });
+    fireEvent.click(heraklionOptions[0]);
     expect(setParam).toHaveBeenCalledWith("city", "Heraklion");
+    expect(AutocompleteMock).not.toHaveBeenCalled();
   });
 
   it("records submitted listing searches for admin activity analytics", async () => {

@@ -804,11 +804,16 @@ describe("LocationInput", () => {
     const input = screen.getByLabelText("Location search");
     expect(input).toHaveAttribute("role", "combobox");
     expect(input).toHaveAttribute("aria-expanded", "false");
-    expect(input).toHaveAttribute("autocomplete", "new-password");
+    expect(input).toHaveAttribute("type", "search");
+    expect(input).toHaveAttribute("autocomplete", "off");
     expect(input).toHaveAttribute("autocorrect", "off");
     expect(input).toHaveAttribute("autocapitalize", "none");
     expect(input).toHaveAttribute("spellcheck", "false");
     expect(input).toHaveAttribute("enterkeyhint", "search");
+    expect(input).toHaveAttribute("data-lpignore", "true");
+    expect(input).toHaveAttribute("data-1p-ignore", "true");
+    expect(input).toHaveAttribute("data-bwignore", "true");
+    expect(input).toHaveAttribute("data-form-type", "other");
 
     fireEvent.click(screen.getByRole("button", { name: "Clear location" }));
     expect(onChange).toHaveBeenCalledWith("");

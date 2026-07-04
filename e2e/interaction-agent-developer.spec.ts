@@ -30,9 +30,6 @@ const DEV_EMAIL = demoAccounts.developerPro;
 const DEV_PASSWORD = demoPasswords.developerPro;
 
 const hasSeededDemoAccounts = seededDemoAccountsEnabled();
-const googlePlacesEnabled =
-  Boolean(process.env.VITE_GOOGLE_MAPS_API_KEY) &&
-  process.env.VITE_ENABLE_GOOGLE_PLACES_AUTOCOMPLETE === "true";
 
 // ---------------------------------------------------------------------------
 // Sign-in helper
@@ -81,51 +78,35 @@ function anyDashboardNavItem(page: Page) {
     .first();
 }
 
-async function mockGooglePlacesScript(page: Page) {
-  let requests = 0;
-  await page.route(/https:\/\/maps\.googleapis\.com\/maps\/api\/js.*/, async (route) => {
-    requests += 1;
+async function mockExactAddressProvider(page: Page) {
+  const payload = [{
+    display_name: "11 Dimarchou Aggelou Metaxa, Glyfada, South Athens, Attica, Greece",
+    lat: "37.865",
+    lon: "23.753",
+    address: {
+      house_number: "11",
+      road: "Dimarchou Aggelou Metaxa",
+      city: "Glyfada",
+      municipality: "South Athens",
+      state: "Attica",
+      postcode: "16675",
+      country: "Greece",
+    },
+  }];
+  await page.route(/https:\/\/nominatim\.openstreetmap\.org\/search.*/, async (route) => {
     await route.fulfill({
       status: 200,
-      contentType: "application/javascript",
-      body: `
-        window.google = {
-          maps: {
-            places: {
-              Autocomplete: function(input, options) {
-                this.input = input;
-                this.options = options;
-                this.addListener = function() { return { remove: function() {} }; };
-                this.getPlace = function() {
-                  return {
-                    formatted_address: "11 Dimarchou Aggelou Metaxa, Glyfada, Greece",
-                    address_components: [
-                      { long_name: "11", short_name: "11", types: ["street_number"] },
-                      { long_name: "Dimarchou Aggelou Metaxa", short_name: "Dimarchou Aggelou Metaxa", types: ["route"] },
-                      { long_name: "Glyfada", short_name: "Glyfada", types: ["locality"] },
-                      { long_name: "South Athens", short_name: "South Athens", types: ["administrative_area_level_2"] },
-                      { long_name: "166 75", short_name: "16675", types: ["postal_code"] }
-                    ],
-                    geometry: { location: { lat: function() { return 37.865; }, lng: function() { return 23.753; } } }
-                  };
-                };
-              }
-            }
-          }
-        };
-        var callbackName = new URL(document.currentScript.src).searchParams.get("callback");
-        if (callbackName && typeof window[callbackName] === "function") {
-          window[callbackName]();
-        }
-      `,
+      contentType: "application/json",
+      body: JSON.stringify(payload),
     });
   });
-  return () => requests;
-}
-
-async function waitForGooglePlacesRequest(page: Page, getRequests: () => number) {
-  await expect.poll(getRequests, { timeout: 10_000 }).toBeGreaterThan(0);
-  await expect(page.locator('script[src*="maps.googleapis.com/maps/api/js"][data-maiprop-google-places="true"]')).toHaveCount(1);
+  await page.route(/https:\/\/api\.mapbox\.com\/geocoding\/v5\/mapbox\.places\/.*/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ features: [] }),
+    });
+  });
 }
 
 async function createTemporaryDeveloperProject(): Promise<{ id: string; cleanup: () => Promise<void> } | null> {
@@ -291,21 +272,24 @@ test.describe("Developer Pro — sign-in, dashboard, and new-building form", () 
     await expect(page.getByRole("heading", { name: /Project Inventory/i })).toBeVisible({ timeout: 10_000 });
   });
 
-  test("developer.pro creation address autosuggest requests Google Places when enabled", async ({ page }) => {
-    test.skip(!googlePlacesEnabled, "Google Places E2E requires VITE_GOOGLE_MAPS_API_KEY and VITE_ENABLE_GOOGLE_PLACES_AUTOCOMPLETE=true");
-    const getGoogleRequests = await mockGooglePlacesScript(page);
+  test("developer.pro creation address autosuggest supports a full street address", async ({ page }) => {
+    await mockExactAddressProvider(page);
 
     await signIn(page, DEV_EMAIL, DEV_PASSWORD);
     await page.goto("/listings/new-building");
     await page.waitForLoadState("networkidle", { timeout: 15_000 });
-    await page.getByLabel(/^Address$/i).focus();
+    const addressInput = page.getByLabel(/^Address$/i);
+    await addressInput.fill("11 Dimarchou Aggelou Metaxa Glyfada");
 
-    await waitForGooglePlacesRequest(page, getGoogleRequests);
+    await expect(addressInput).not.toBeDisabled();
+    await expect(addressInput).not.toHaveAttribute("placeholder", /Oops/i);
+    await page.getByRole("option", { name: /11 Dimarchou Aggelou Metaxa/i }).click();
+    await expect(addressInput).toHaveValue("11 Dimarchou Aggelou Metaxa");
+    await expect(page.getByLabel(/^City/i)).toHaveValue(/Glyfada/i);
   });
 
-  test("developer.pro project edit address autosuggest requests Google Places when enabled", async ({ page }) => {
-    test.skip(!googlePlacesEnabled, "Google Places E2E requires VITE_GOOGLE_MAPS_API_KEY and VITE_ENABLE_GOOGLE_PLACES_AUTOCOMPLETE=true");
-    const getGoogleRequests = await mockGooglePlacesScript(page);
+  test("developer.pro project edit address autosuggest supports a full street address", async ({ page }) => {
+    await mockExactAddressProvider(page);
     const temporaryProject = await createTemporaryDeveloperProject();
     if (!temporaryProject) {
       test.skip(true, "Service role or Developer Pro auth user missing; cannot create temporary edit project");
@@ -316,9 +300,14 @@ test.describe("Developer Pro — sign-in, dashboard, and new-building form", () 
       await signIn(page, DEV_EMAIL, DEV_PASSWORD);
       await page.goto(`/projects/${temporaryProject.id}`);
       await page.waitForLoadState("networkidle", { timeout: 15_000 });
-      await page.getByLabel(/^Address$/i).focus();
+      const addressInput = page.getByLabel(/^Address$/i);
+      await addressInput.fill("11 Dimarchou Aggelou Metaxa Glyfada");
 
-      await waitForGooglePlacesRequest(page, getGoogleRequests);
+      await expect(addressInput).not.toBeDisabled();
+      await expect(addressInput).not.toHaveAttribute("placeholder", /Oops/i);
+      await page.getByRole("option", { name: /11 Dimarchou Aggelou Metaxa/i }).click();
+      await expect(addressInput).toHaveValue("11 Dimarchou Aggelou Metaxa");
+      await expect(page.getByLabel(/^City/i)).toHaveValue(/Glyfada/i);
     } finally {
       await temporaryProject.cleanup();
     }
