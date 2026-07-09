@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.6](https://github.com/maiprop/maiprop-listing-site/compare/v1.12.5...v1.12.6) (2026-07-09)
+
+
+### Bug Fixes
+
+* harden address autocomplete and stripe runtime ([68db888](https://github.com/maiprop/maiprop-listing-site/commit/68db8881e7fa545bd904286abc55a7a4352055c2))
+
 ## [1.12.5](https://github.com/maiprop/maiprop-listing-site/compare/v1.12.4...v1.12.5) (2026-07-04)
 
 
