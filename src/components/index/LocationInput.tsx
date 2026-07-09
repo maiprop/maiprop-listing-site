@@ -7,6 +7,15 @@ import { getRecentSearches, removeRecentSearch } from "@/lib/recentSearches";
 import { formatAddressPrediction, type AddressPrediction } from "@/lib/location/addressFormat";
 import { getListingLocationSearchValue } from "@/lib/location/locationSearchSemantics";
 
+export type HomeLocationSelection = {
+  value: string;
+  latitude?: string;
+  longitude?: string;
+  radiusM?: number;
+  provider?: AddressPrediction["provider"];
+  placeId?: string;
+};
+
 export function LocationInput({
   value,
   onChange,
@@ -14,12 +23,13 @@ export function LocationInput({
 }: {
   value: string;
   onChange: (v: string) => void;
-  onSearch: (value?: string) => void;
+  onSearch: (value?: string, selection?: HomeLocationSelection) => void;
 }) {
   const [focused, setFocused] = useState(false);
   const [recents, setRecents] = useState<string[]>([]);
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const pendingEnterRef = useRef(false);
   const query = value.trim();
   const { predictions, loading: suggestionsLoading, clear: clearSuggestions } = useAddressAutocomplete(query, {
     mode: "city",
@@ -58,21 +68,34 @@ export function LocationInput({
     if (document.activeElement === inputRef.current) setFocused(true);
   }, [value]);
 
-  const chooseLocation = (location: string) => {
+  const chooseLocation = useCallback((location: string, selection?: HomeLocationSelection) => {
     onChange(location);
     clearSuggestions();
     setFocused(false);
-    onSearch(location);
-  };
+    onSearch(location, selection);
+  }, [clearSuggestions, onChange, onSearch]);
 
-  const choosePrediction = async (prediction: AddressPrediction) => {
+  const choosePrediction = useCallback(async (prediction: AddressPrediction) => {
     const selection = prediction.resolveDetails
       ? await prediction.resolveDetails().catch(() => prediction)
       : prediction;
     const location = getListingLocationSearchValue(selection);
     if (!location) return;
-    chooseLocation(location);
-  };
+    chooseLocation(location, {
+      value: location,
+      latitude: selection.latitude,
+      longitude: selection.longitude,
+      radiusM: selection.latitude && selection.longitude ? 750 : undefined,
+      provider: selection.provider,
+      placeId: selection.placeId,
+    });
+  }, [chooseLocation]);
+
+  const commitManualLocation = useCallback(() => {
+    const committedValue = value.trim();
+    setFocused(false);
+    onSearch(committedValue || undefined);
+  }, [onSearch, value]);
 
   const showRecents = focused && recents.length > 0 && !query;
   const showLocationSuggestions = focused && (!showRecents || Boolean(query)) && (locationSuggestions.length > 0 || suggestionsLoading);
@@ -80,6 +103,16 @@ export function LocationInput({
   const hasGoogleSuggestions = locationSuggestions.some((suggestion) => suggestion.provider === "google");
   const pos = showDropdown ? getPos() : null;
   const listboxId = "location-dropdown-portal";
+
+  useEffect(() => {
+    if (!pendingEnterRef.current || suggestionsLoading) return;
+    pendingEnterRef.current = false;
+    if (locationSuggestions[0]) {
+      void choosePrediction(locationSuggestions[0]);
+      return;
+    }
+    commitManualLocation();
+  }, [choosePrediction, commitManualLocation, locationSuggestions, suggestionsLoading]);
 
   const dropdown =
     showDropdown && pos ? (
@@ -180,7 +213,16 @@ export function LocationInput({
             onChange={(e) => onChange(e.target.value)}
             onFocus={() => { refresh(); setFocused(true); }}
             onKeyDown={(e) => {
-              if (e.key === "Enter") { setFocused(false); onSearch(value); }
+              if (e.key === "Enter") {
+                e.preventDefault();
+                if (suggestionsLoading) {
+                  pendingEnterRef.current = true;
+                } else if (locationSuggestions[0]) {
+                  void choosePrediction(locationSuggestions[0]);
+                } else {
+                  commitManualLocation();
+                }
+              }
               if (e.key === "Escape") setFocused(false);
             }}
             aria-label="Location search"

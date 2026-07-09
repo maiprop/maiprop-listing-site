@@ -463,7 +463,10 @@ export default function Messages() {
                   {activeConv?.listing_id && (
                     <button
                       type="button"
-                      onClick={() => setInput((prev) => (prev ? `${prev} /property/${activeConv.listing_id}` : `/property/${activeConv.listing_id}`))}
+                      onClick={() => {
+                        const path = activeListingPath ?? `/property/${activeConv.listing_id}`;
+                        setInput((prev) => (prev ? `${prev} ${path}` : path));
+                      }}
                       className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
                       title="Share property link"
                       aria-label="Share property link"

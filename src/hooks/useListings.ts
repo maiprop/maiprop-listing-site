@@ -83,6 +83,9 @@ const LISTING_CARD_SELECT = [
 const LISTING_CARD_SELECT_WITH_IMAGES = `${LISTING_CARD_SELECT}, listing_images(url, sort_order)`;
 /** Paginated listings for grid view — fetches 40 per page, server-side filtering */
 export const PAGE_SIZE = 40;
+const DEFAULT_LOCATION_RADIUS_M = 750;
+const MAX_LOCATION_RADIUS_M = 5_000;
+const METERS_PER_LATITUDE_DEGREE = 111_320;
 
 const CATALOG_TYPES_WITH_NEW_BUILD: Partial<Record<Enums<"listing_type">, Enums<"listing_type">[]>> = {
   sale: ["sale", "new_build"],
@@ -234,6 +237,9 @@ export type ListingWithJoins = Database["public"]["Tables"]["listings"]["Row"] &
 
 export type ListingsFilters = {
   city?: string;
+  location_lat?: number;
+  location_lng?: number;
+  location_radius_m?: number;
   listing_type?: string;
   property_type?: string;
   status?: string;
@@ -267,6 +273,41 @@ export type ListingsFilters = {
 type ListingsQueryScope = {
   publicScope?: boolean;
 };
+
+type LocationBounds = {
+  minLat: number;
+  maxLat: number;
+  minLng: number;
+  maxLng: number;
+};
+
+function finiteCoordinate(value: unknown, min: number, max: number): number | null {
+  if (value === undefined || value === null || value === "") return null;
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed) || parsed < min || parsed > max) return null;
+  return parsed;
+}
+
+function listingLocationBounds(filters?: ListingsFilters): LocationBounds | null {
+  const lat = finiteCoordinate(filters?.location_lat, -90, 90);
+  const lng = finiteCoordinate(filters?.location_lng, -180, 180);
+  if (lat == null || lng == null) return null;
+
+  const requestedRadius = Number(filters?.location_radius_m ?? DEFAULT_LOCATION_RADIUS_M);
+  const radiusM = Number.isFinite(requestedRadius)
+    ? Math.min(Math.max(requestedRadius, 50), MAX_LOCATION_RADIUS_M)
+    : DEFAULT_LOCATION_RADIUS_M;
+  const latDelta = radiusM / METERS_PER_LATITUDE_DEGREE;
+  const lngScale = Math.max(0.2, Math.cos((lat * Math.PI) / 180));
+  const lngDelta = radiusM / (METERS_PER_LATITUDE_DEGREE * lngScale);
+
+  return {
+    minLat: Number((lat - latDelta).toFixed(7)),
+    maxLat: Number((lat + latDelta).toFixed(7)),
+    minLng: Number((lng - lngDelta).toFixed(7)),
+    maxLng: Number((lng + lngDelta).toFixed(7)),
+  };
+}
 
 /**
  * Builds the Supabase query used by `useListings` / `useListingsPaginated`.
@@ -314,7 +355,14 @@ export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize
 
   query = query.range(from, from + pageSize - 1);
 
-  if (filters?.city) {
+  const locationBounds = listingLocationBounds(filters);
+  if (locationBounds) {
+    query = query
+      .gte("latitude", locationBounds.minLat)
+      .lte("latitude", locationBounds.maxLat)
+      .gte("longitude", locationBounds.minLng)
+      .lte("longitude", locationBounds.maxLng);
+  } else if (filters?.city) {
     for (const locationToken of getListingLocationSearchTokens(filters.city)) {
       query = query.ilike("location_search_text", `%${locationToken}%`);
     }
@@ -407,6 +455,9 @@ function publicListingsPath(filters: ListingsFilters | undefined, page: number, 
   };
 
   append("city");
+  append("location_lat");
+  append("location_lng");
+  append("location_radius_m");
   append("listing_type");
   append("property_type");
   append("includeAuctions");

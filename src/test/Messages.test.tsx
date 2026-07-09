@@ -312,12 +312,12 @@ describe("Messages — send + file upload handlers", () => {
     expect(inputBox.value).toBe("");
   });
 
-  it("shares the property link when the share-link button is clicked", () => {
+  it("shares the active listing detail route when the share-link button is clicked", () => {
     render(<Messages />);
     const linkBtn = screen.getByLabelText("Share property link");
     const inputBox = screen.getByPlaceholderText("Type a message...") as HTMLInputElement;
     fireEvent.click(linkBtn);
-    expect(inputBox.value).toContain("/property/listing-1");
+    expect(inputBox.value).toContain("/new-build/listing-1");
   });
 
   it("rejects file uploads above the 10 MB limit and surfaces a toast", async () => {

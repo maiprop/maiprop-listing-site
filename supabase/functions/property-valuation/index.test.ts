@@ -116,6 +116,50 @@ Deno.test("provider server errors return fallback valuation instead of failing t
   });
 });
 
+Deno.test("provider transport failures return fallback valuation instead of a 500", async () => {
+  const originalFetch = globalThis.fetch;
+  const prevOpenAI = Deno.env.get("OPENAI_API_KEY");
+  const prevGemini = Deno.env.get("GEMINI_API_KEY");
+  Deno.env.delete("OPENAI_API_KEY");
+  Deno.env.set("GEMINI_API_KEY", "gemini-test");
+
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("/auth/v1/user")) {
+      return Promise.resolve(okJson({ user: { id: "user-1", email: "user@test.local" } }));
+    }
+    if (url.includes("/rest/v1/rpc/reserve_ai_quota_for_user")) {
+      return Promise.resolve(okJson({ allowed: true, reason: null, used: 1, limit: 5 }));
+    }
+    if (url.includes("generativelanguage.googleapis.com")) {
+      return Promise.reject(new TypeError("network down"));
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+
+  try {
+    const res = await handler(req("POST", {
+      city: "Glyfada",
+      address: "11 Dimitarchou Aggelou Metaxa",
+      price: 275000,
+      sqm: 39,
+      propertyType: "apartment",
+      listingType: "new_build",
+    }, { authorization: "Bearer test-valid-token" }));
+    const body = await jsonBody(res) as { error?: string; generatedBy?: string; estimatedValue?: number };
+    assertEquals(res.status, 200);
+    assertEquals(typeof body.error, "undefined");
+    assertEquals(body.generatedBy, "fallback");
+    assertEquals(body.estimatedValue, 243360);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (prevOpenAI) Deno.env.set("OPENAI_API_KEY", prevOpenAI);
+    else Deno.env.delete("OPENAI_API_KEY");
+    if (prevGemini) Deno.env.set("GEMINI_API_KEY", prevGemini);
+    else Deno.env.delete("GEMINI_API_KEY");
+  }
+});
+
 Deno.test("fallback valuation uses location benchmarks instead of copying the listed price", async () => {
   await withQuotaAndProviderMock(new Response("upstream unavailable", { status: 503 }), async () => {
     const res = await handler(req("POST", {

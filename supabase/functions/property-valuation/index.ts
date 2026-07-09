@@ -1168,12 +1168,30 @@ Rules:
 - Range width: ±6-10% urban apartment strong data; ±15-25% villa/land; ±20-40% island/hotel/plot
 - liquidityScore: 80-100 = standard urban apartment; 60-80 = suburban/commercial; 40-60 = villa/vacation; 20-40 = island/land/industrial; 0-20 = hotel/special`;
 
-    const response = await openAIChatCompletion({
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.15,
-      max_tokens: 4096,
-      ...(newBuildAiOnly ? { reasoning_effort: NEW_BUILD_OPENAI_REASONING_EFFORT } : {}),
-    }, newBuildAiOnly ? NEW_BUILD_OPENAI_MODEL : undefined);
+    let response: Response;
+    try {
+      response = await openAIChatCompletion({
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.15,
+        max_tokens: 4096,
+        ...(newBuildAiOnly ? { reasoning_effort: NEW_BUILD_OPENAI_REASONING_EFFORT } : {}),
+      }, newBuildAiOnly ? NEW_BUILD_OPENAI_MODEL : undefined);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      log.error("AI gateway transport error", { detail });
+      const fallback = normalizeValuationResult(withOsDiagnostics(osValuationFallback ?? fallbackValuation({
+        city: String(city),
+        address: optionalString(address),
+        region: optionalString(region),
+        price: numericPrice,
+        sqm: numericSqm,
+        propertyType: typeof propertyType === "string" ? propertyType : undefined,
+        listingType: typeof listingType === "string" ? listingType : undefined,
+        reason: "the AI provider request failed",
+      }), osValuationStatus, osValuationDetail), body as JsonRecord, osValuationData);
+      await recordAiCall(quotaUserId, BUCKET);
+      return new Response(JSON.stringify(fallback), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     if (!response.ok) {
       const txt = await response.text();

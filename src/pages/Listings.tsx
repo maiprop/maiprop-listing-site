@@ -23,7 +23,7 @@ import { PropertyTypeButton } from "@/components/listings/PropertyTypeButton";
 import { MapGate } from "@/components/listings/MapGate";
 import { ListingCompareButton } from "@/components/listings/ListingCompareButton";
 import { VirtualizedListingGrid } from "@/components/listings/VirtualizedListingGrid";
-import { LocationSearchField } from "@/components/listings/LocationSearchField";
+import { LocationSearchField, type ListingLocationSelection } from "@/components/listings/LocationSearchField";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   DesktopActiveFilterChips,
@@ -130,7 +130,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
     selectedHeating, selectedConstruction, preSaleOnly,
     hasVideoViewing, hasVirtualTour, hasMessaging, minAiScore, minWalkability,
     activeFilterCount, currentFilters,
-    setParam, setParams, toggleMulti, clearAllFilters, applyAIFilters,
+    setParam, setParams, toggleMulti, clearAllFilters, applyAIFilters, getParam,
   } = useListingsFilters();
 
   // AI-powered smart filters — fetch once per type/subtype combo, cached in memory
@@ -142,9 +142,36 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
   const [priceMin, priceMax] = selectedPrice
     ? selectedPrice.split("-").map(Number)
     : [undefined, undefined];
+  const locationLat = Number(getParam("location_lat"));
+  const locationLng = Number(getParam("location_lng"));
+  const locationRadiusM = Number(getParam("location_radius_m"));
+
+  const setLocationFilter = useCallback((nextValue: string, selection?: ListingLocationSelection) => {
+    const pairs: Array<[string, string]> = [["city", nextValue]];
+    const selectedLatitude = selection?.latitude;
+    const selectedLongitude = selection?.longitude;
+    if (
+      selectedLatitude != null &&
+      selectedLongitude != null &&
+      Number.isFinite(Number(selectedLatitude)) &&
+      Number.isFinite(Number(selectedLongitude))
+    ) {
+      pairs.push(["location_lat", selectedLatitude]);
+      pairs.push(["location_lng", selectedLongitude]);
+      pairs.push(["location_radius_m", String(selection?.radiusM ?? 750)]);
+    } else {
+      pairs.push(["location_lat", ""]);
+      pairs.push(["location_lng", ""]);
+      pairs.push(["location_radius_m", ""]);
+    }
+    setParams(pairs);
+  }, [setParams]);
 
   const filters = useMemo<ListingsFilters>(() => ({ // skipcq: JS-R1005 - Listings route maps many independent URL filters into one query payload.
     city: searchQuery || undefined,
+    location_lat: Number.isFinite(locationLat) ? locationLat : undefined,
+    location_lng: Number.isFinite(locationLng) ? locationLng : undefined,
+    location_radius_m: Number.isFinite(locationRadiusM) ? locationRadiusM : undefined,
     listing_type: preSaleOnly ? "new_build" : (selectedListingType || undefined),
     property_type: selectedType || undefined,
     price_min: priceMin || undefined,
@@ -166,7 +193,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
     features: selectedFeatures.length > 0 ? selectedFeatures : undefined,
     sort: (selectedSort as ListingsFilters["sort"]) || undefined,
   }), [
-    searchQuery, preSaleOnly, selectedListingType, selectedType,
+    searchQuery, locationLat, locationLng, locationRadiusM, preSaleOnly, selectedListingType, selectedType,
     priceMin, priceMax, bedsRange, bathsRange, floorRange, yearRange,
     minSqm, maxSqm, selectedEnergyClasses, selectedHeating, selectedConstruction,
     selectedSubtype, selectedFeatures, selectedSort,
@@ -404,7 +431,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                 <div className="col-span-2">
                   <LocationSearchField
                     value={searchQuery}
-                    onChange={(nextValue) => setParam("city", nextValue)}
+                    onChange={setLocationFilter}
                     placeholder={isGreek ? "Πόλη…" : "City…"}
                     ariaLabel={isGreek ? "Αναζήτηση ανά πόλη" : "Search by city"}
                     compact
@@ -527,7 +554,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
               {/* Search */}
               <LocationSearchField
                 value={searchQuery}
-                onChange={(nextValue) => setParam("city", nextValue)}
+                onChange={setLocationFilter}
                 placeholder={isGreek ? "Πόλη, περιοχή, διεύθυνση..." : "City, area, address..."}
                 ariaLabel={isGreek ? "Αναζήτηση ανά πόλη ή περιοχή" : "Search by city or area"}
               />

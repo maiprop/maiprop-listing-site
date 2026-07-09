@@ -9,6 +9,7 @@ const { filterState, setParam, setParams, clearAllFilters, toggleMulti, pipeline
   const setParams = vi.fn();
   const clearAllFilters = vi.fn();
   const toggleMulti = vi.fn();
+  const getParam = vi.fn((_key: string, fallback = "") => fallback);
   const loadGoogleMapsPlaces = vi.fn().mockResolvedValue(undefined);
   const trackUserSearch = vi.fn().mockResolvedValue(undefined);
   const filterState = {
@@ -38,6 +39,7 @@ const { filterState, setParam, setParams, clearAllFilters, toggleMulti, pipeline
     currentFilters: {},
     setParam,
     setParams,
+    getParam,
     toggleMulti,
     clearAllFilters,
     applyAIFilters: vi.fn(),
@@ -263,10 +265,20 @@ describe("Listings page interactions", () => {
     fireEvent.focus(cityInput);
     expect(screen.getByText("Popular Locations")).toBeInTheDocument();
     fireEvent.click(screen.getByText("Athens"));
-    expect(setParam).toHaveBeenCalledWith("city", "Athens");
+    expect(setParams).toHaveBeenCalledWith([
+      ["city", "Athens"],
+      ["location_lat", ""],
+      ["location_lng", ""],
+      ["location_radius_m", ""],
+    ]);
 
     fireEvent.change(cityInput, { target: { value: "Athens" } });
-    expect(setParam).toHaveBeenCalledWith("city", "Athens");
+    expect(setParams).toHaveBeenLastCalledWith([
+      ["city", "Athens"],
+      ["location_lat", ""],
+      ["location_lng", ""],
+      ["location_radius_m", ""],
+    ]);
 
     fireEvent.click(screen.getAllByRole("button", { name: "Grid view" })[0]);
     expect(screen.getAllByRole("button", { name: "Grid view" })[0]).toHaveAttribute("aria-pressed", "true");
@@ -333,7 +345,12 @@ describe("Listings page interactions", () => {
 
     const heraklionOptions = await screen.findAllByRole("option", { name: /Heraklion/i });
     fireEvent.click(heraklionOptions[0]);
-    expect(setParam).toHaveBeenCalledWith("city", "Heraklion");
+    expect(setParams).toHaveBeenCalledWith([
+      ["city", "Heraklion"],
+      ["location_lat", ""],
+      ["location_lng", ""],
+      ["location_radius_m", ""],
+    ]);
     expect(AutocompleteMock).not.toHaveBeenCalled();
   });
 

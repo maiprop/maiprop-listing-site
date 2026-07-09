@@ -24,9 +24,25 @@ describe("location search semantics", () => {
     expect(normalizeGreekLocationText("Αγιοι Αναργυροι, Αττικης")).toBe("αγιοι αναργυροι αττικησ");
   });
 
+  it("expands Greek and Greeklish location tokens to the same indexed search surface", () => {
+    expect(getListingLocationSearchTokens("Αγιοι Αναργυροι, Αττικης")).toEqual(
+      expect.arrayContaining(["αγιοι", "αναργυροι", "agioi", "anargiroi", "anargyroi"]),
+    );
+    expect(getListingLocationSearchTokens("Agioi Anargyroi, Attica")).toEqual(
+      expect.arrayContaining(["agioi", "agion", "anargyroi", "anargiroi", "anargiron"]),
+    );
+    expect(getListingLocationSearchTokens("Καλύμνου 27")).toEqual(
+      expect.arrayContaining(["καλυμνου", "kalimnou", "kalymnou", "27"]),
+    );
+    expect(getListingLocationSearchTokens("Kalimnou 27")).toEqual(
+      expect.arrayContaining(["kalimnou", "27"]),
+    );
+  });
+
   it("removes broad region tokens from listing location search queries", () => {
     expect(normalizeListingLocationSearchQuery("Αγιοι Αναργυροι, Αττικης")).toBe("αγιοι αναργυροι");
-    expect(getListingLocationSearchTokens("Αγιοι Αναργυροι, Αττικης")).toEqual(["αγιοι", "αναργυροι"]);
+    expect(getListingLocationSearchTokens("Αγιοι Αναργυροι, Αττικης")).not.toContain("αττικησ");
+    expect(getListingLocationSearchTokens("Agioi Anargyroi, Attikis")).not.toContain("attikis");
     expect(normalizeListingLocationSearchQuery("Περιφέρεια Αττικής")).toBe("");
   });
 
@@ -93,6 +109,18 @@ describe("location search semantics", () => {
         subtitle: "Περιφέρεια Δυτικής Μακεδονίας",
       }),
     ], "Αγιοι Αναργυροι, Αττικης");
+
+    expect(results).toHaveLength(1);
+    expect(results[0].title).toBe("Άγιοι Ανάργυροι Αττικής");
+  });
+
+  it("keeps Greek suggestions when the user types the location in Latin characters", () => {
+    const results = filterAddressPredictionsForQuery([
+      prediction({
+        title: "Άγιοι Ανάργυροι Αττικής",
+        subtitle: "Δήμος Αγίων Αναργύρων - Καματερού - Περιφέρεια Αττικής",
+      }),
+    ], "Agioi Anargyroi, Attica");
 
     expect(results).toHaveLength(1);
     expect(results[0].title).toBe("Άγιοι Ανάργυροι Αττικής");

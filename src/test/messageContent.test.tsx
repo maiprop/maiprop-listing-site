@@ -26,16 +26,49 @@ describe("parseMessageContent", () => {
       { type: "text", value: "See " },
       {
         type: "link",
+        route: "property",
         id: PROPERTY_ID,
         match: `/property/${PROPERTY_ID}`,
       },
       { type: "text", value: " and " },
       {
         type: "link",
+        route: "property",
         id: OTHER_PROPERTY_ID,
         match: `property/${OTHER_PROPERTY_ID}`,
       },
       { type: "text", value: " today." },
+    ]);
+  });
+
+  it("turns every listing detail route into a link part", () => {
+    expect(
+      parseMessageContent(
+        `Review /new-build/${PROPERTY_ID}, /auction/${OTHER_PROPERTY_ID}, and open-house/${PROPERTY_ID}.`,
+      ),
+    ).toEqual([
+      { type: "text", value: "Review " },
+      {
+        type: "link",
+        route: "new-build",
+        id: PROPERTY_ID,
+        match: `/new-build/${PROPERTY_ID}`,
+      },
+      { type: "text", value: ", " },
+      {
+        type: "link",
+        route: "auction",
+        id: OTHER_PROPERTY_ID,
+        match: `/auction/${OTHER_PROPERTY_ID}`,
+      },
+      { type: "text", value: ", and " },
+      {
+        type: "link",
+        route: "open-house",
+        id: PROPERTY_ID,
+        match: `open-house/${PROPERTY_ID}`,
+      },
+      { type: "text", value: "." },
     ]);
   });
 
@@ -52,5 +85,12 @@ describe("MessageContent", () => {
 
     const link = screen.getByRole("link", { name: `/property/${PROPERTY_ID}` });
     expect(link).toHaveAttribute("href", `/property/${PROPERTY_ID}`);
+  });
+
+  it("renders new-build links to the route embedded in the message", () => {
+    renderWithProviders(<MessageContent content={`Please review /new-build/${PROPERTY_ID}`} />);
+
+    const link = screen.getByRole("link", { name: `/new-build/${PROPERTY_ID}` });
+    expect(link).toHaveAttribute("href", `/new-build/${PROPERTY_ID}`);
   });
 });

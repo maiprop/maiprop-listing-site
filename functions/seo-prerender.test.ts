@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { onRequestGet as auctionsRequest } from "./auctions";
+import { onRequestGet as auctionDetailRequest } from "./auction/[id]";
 import { onRequestGet as listingsRequest } from "./listings";
+import { onRequestGet as newBuildDetailRequest } from "./new-build/[id]";
+import { onRequestGet as openHouseDetailRequest } from "./open-house/[id]";
 import { onRequestGet as propertyRequest } from "./property/[id]";
 
 const realFetch = globalThis.fetch;
@@ -164,6 +167,40 @@ describe("SEO Pages Functions", () => {
     );
     const newBuildRes = await propertyRequest(makeCtx("https://portal.maiprop.co/property/listing-1", { id: "listing-1" }));
     expect(await newBuildRes.text()).toContain("https://portal.maiprop.co/new-build/listing-1");
+  });
+
+  it("injects listing cover photos into route-specific social previews", async () => {
+    fetchMock().mockResolvedValueOnce(
+      new Response(JSON.stringify([{ ...listing, listing_type: "new_build" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const newBuildRes = await newBuildDetailRequest(makeCtx("https://portal.maiprop.co/new-build/listing-1", { id: "listing-1" }));
+    const newBuildHtml = await newBuildRes.text();
+    expect(newBuildHtml).toContain('property="og:image" content="https://images.example/penthouse.jpg"');
+    expect(newBuildHtml).toContain('name="twitter:image" content="https://images.example/penthouse.jpg"');
+    expect(newBuildHtml).toContain("https://portal.maiprop.co/new-build/listing-1");
+
+    fetchMock().mockResolvedValueOnce(
+      new Response(JSON.stringify([{ ...listing, listing_type: "auction" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const auctionHtml = await (await auctionDetailRequest(makeCtx("https://portal.maiprop.co/auction/listing-1", { id: "listing-1" }))).text();
+    expect(auctionHtml).toContain('property="og:image" content="https://images.example/penthouse.jpg"');
+    expect(auctionHtml).toContain("https://portal.maiprop.co/auction/listing-1");
+
+    fetchMock().mockResolvedValueOnce(
+      new Response(JSON.stringify([{ ...listing, listing_type: "open_house" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const openHouseHtml = await (await openHouseDetailRequest(makeCtx("https://portal.maiprop.co/open-house/listing-1", { id: "listing-1" }))).text();
+    expect(openHouseHtml).toContain('property="og:image" content="https://images.example/penthouse.jpg"');
+    expect(openHouseHtml).toContain("https://portal.maiprop.co/open-house/listing-1");
   });
 
   it("keeps renovated sale listings on the property canonical URL", async () => {

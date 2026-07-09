@@ -255,10 +255,28 @@ describe("buildListingsQuery — categorical / feature filters", () => {
   it("applies location text via normalized .ilike() with surrounding wildcards", () => {
     buildListingsQuery({ city: "Άγιοι Αναργυροι, Αττικης" });
     const ilikes = calls("ilike");
-    expect(ilikes.map((call) => call.args)).toEqual([
+    expect(ilikes.map((call) => call.args)).toEqual(expect.arrayContaining([
       ["location_search_text", "%αγιοι%"],
       ["location_search_text", "%αναργυροι%"],
-    ]);
+      ["location_search_text", "%agioi%"],
+      ["location_search_text", "%anargiroi%"],
+      ["location_search_text", "%anargyroi%"],
+    ]));
+  });
+
+  it("uses bounded latitude/longitude filters for selected address suggestions instead of exact text-only city filtering", () => {
+    buildListingsQuery({
+      city: "27 Kalimnou",
+      location_lat: 38.0301,
+      location_lng: 23.7241,
+      location_radius_m: 750,
+    });
+
+    expect(calls("ilike")).toHaveLength(0);
+    expect(calls("gte").some((c) => c.args[0] === "latitude" && typeof c.args[1] === "number" && c.args[1] < 38.0301)).toBe(true);
+    expect(calls("lte").some((c) => c.args[0] === "latitude" && typeof c.args[1] === "number" && c.args[1] > 38.0301)).toBe(true);
+    expect(calls("gte").some((c) => c.args[0] === "longitude" && typeof c.args[1] === "number" && c.args[1] < 23.7241)).toBe(true);
+    expect(calls("lte").some((c) => c.args[0] === "longitude" && typeof c.args[1] === "number" && c.args[1] > 23.7241)).toBe(true);
   });
 
   it("applies property_type / heating / construction_status via .eq()", () => {

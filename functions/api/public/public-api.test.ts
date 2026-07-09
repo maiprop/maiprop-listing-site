@@ -527,10 +527,13 @@ describe("public listings endpoint", () => {
     expect(listingsUrl.searchParams.get("limit")).toBe("200");
     expect(listingsUrl.searchParams.get("offset")).toBe("200");
     expect(listingsUrl.searchParams.get("city")).toBeNull();
-    expect(listingsUrl.searchParams.getAll("location_search_text")).toEqual([
+    expect(listingsUrl.searchParams.getAll("location_search_text")).toEqual(expect.arrayContaining([
       "ilike.*αγιοι*",
       "ilike.*αναργυροι*",
-    ]);
+      "ilike.*agioi*",
+      "ilike.*anargiroi*",
+      "ilike.*anargyroi*",
+    ]));
     expect(listingsUrl.searchParams.get("listing_type")).toBe("in.(sale,new_build)");
     expect(listingsUrl.searchParams.get("select")).toContain("project_units!project_units_project_id_fkey");
     expect(listingsUrl.searchParams.get("is_off_market")).toBe("eq.false");
@@ -543,6 +546,19 @@ describe("public listings endpoint", () => {
     expect(profilesUrl.searchParams.get("user_id")).toBe("in.(owner-1,owner-2)");
     expect(cacheApi.put).toHaveBeenCalledTimes(2);
     expect(cacheApi.put.mock.calls.some(([request]) => request.url.includes("__maiprop_stale=1"))).toBe(true);
+  });
+
+  it("uses a coordinate bounding box for selected address suggestions", async () => {
+    await listingsRequest(makeCtx(
+      "https://portal.maiprop.co/api/public/listings?listing_type=sale&city=Kalimnou%2027&location_lat=38.0301&location_lng=23.7241&location_radius_m=750",
+    ));
+
+    const listingsUrl = fetchUrls("/rest/v1/listings")[0];
+    expect(listingsUrl.searchParams.getAll("location_search_text")).toEqual([]);
+    expect(Number(listingsUrl.searchParams.getAll("latitude").find((value) => value.startsWith("gte."))?.replace("gte.", ""))).toBeLessThan(38.0301);
+    expect(Number(listingsUrl.searchParams.getAll("latitude").find((value) => value.startsWith("lte."))?.replace("lte.", ""))).toBeGreaterThan(38.0301);
+    expect(Number(listingsUrl.searchParams.getAll("longitude").find((value) => value.startsWith("gte."))?.replace("gte.", ""))).toBeLessThan(23.7241);
+    expect(Number(listingsUrl.searchParams.getAll("longitude").find((value) => value.startsWith("lte."))?.replace("lte.", ""))).toBeGreaterThan(23.7241);
   });
 
   it("uses the default public catalogue scope unless auctions are explicitly included", async () => {

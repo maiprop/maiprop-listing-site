@@ -174,11 +174,109 @@ type OwnedRollbackClient = {
 };
 
 type DbRow = Record<string, unknown>;
+type Coordinates = { latitude: number; longitude: number };
 
 const positiveFiniteNumber = (value: unknown): number | null => {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 };
+
+const finiteCoordinate = (value: unknown, min: number, max: number): number | null => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= min && parsed <= max ? parsed : null;
+};
+
+function getCompleteCoordinates(...rows: DbRow[]): Coordinates | null {
+  for (const row of rows) {
+    const latitude = finiteCoordinate(row.latitude, -90, 90);
+    const longitude = finiteCoordinate(row.longitude, -180, 180);
+    if (latitude != null && longitude != null) return { latitude, longitude };
+  }
+  return null;
+}
+
+const cleanPart = (value: unknown) =>
+  typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+
+function buildGeocodeAddress(project: DbRow, listing: DbRow): string {
+  const parts = [
+    cleanPart(project.address) || cleanPart(listing.address),
+    cleanPart(project.city) || cleanPart(listing.city),
+    cleanPart(project.municipality),
+    cleanPart(project.region) || cleanPart(listing.region),
+    cleanPart(project.postal_code) || cleanPart(listing.postal_code),
+    "Greece",
+  ];
+  return [...new Set(parts.filter(Boolean))].join(", ");
+}
+
+async function fetchGoogleCoordinates(address: string): Promise<Coordinates | null> {
+  const apiKey = Deno.env.get("GOOGLE_MAPS_API_KEY") || Deno.env.get("VITE_GOOGLE_MAPS_API_KEY");
+  if (!apiKey) return null;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 2_500);
+  try {
+    const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
+    url.searchParams.set("address", address);
+    url.searchParams.set("region", "gr");
+    url.searchParams.set("key", apiKey);
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) return null;
+    const payload = await response.json().catch(() => null) as {
+      status?: string;
+      results?: Array<{ geometry?: { location?: { lat?: unknown; lng?: unknown } } }>;
+    } | null;
+    if (payload?.status !== "OK") return null;
+    const location = payload.results?.[0]?.geometry?.location;
+    const latitude = finiteCoordinate(location?.lat, -90, 90);
+    const longitude = finiteCoordinate(location?.lng, -180, 180);
+    return latitude != null && longitude != null ? { latitude, longitude } : null;
+  } catch (_error) {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function fetchNominatimCoordinates(address: string): Promise<Coordinates | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 2_500);
+  try {
+    const url = new URL("https://nominatim.openstreetmap.org/search");
+    url.searchParams.set("format", "jsonv2");
+    url.searchParams.set("addressdetails", "1");
+    url.searchParams.set("limit", "1");
+    url.searchParams.set("countrycodes", "gr");
+    url.searchParams.set("q", address);
+    const response = await fetch(url, {
+      headers: {
+        "Accept-Language": "el,en",
+        "User-Agent": "maiprop-edge-geocode/1.0",
+      },
+      signal: controller.signal,
+    });
+    if (!response.ok) return null;
+    const payload = await response.json().catch(() => null) as Array<{ lat?: unknown; lon?: unknown }> | null;
+    const first = Array.isArray(payload) ? payload[0] : null;
+    const latitude = finiteCoordinate(first?.lat, -90, 90);
+    const longitude = finiteCoordinate(first?.lon, -180, 180);
+    return latitude != null && longitude != null ? { latitude, longitude } : null;
+  } catch (_error) {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function geocodeProjectCoordinates(project: DbRow, listing: DbRow): Promise<Coordinates | null> {
+  const existing = getCompleteCoordinates(project, listing);
+  if (existing) return existing;
+
+  const address = buildGeocodeAddress(project, listing);
+  if (!address || address === "Greece") return null;
+
+  return await fetchGoogleCoordinates(address) ?? await fetchNominatimCoordinates(address);
+}
 
 function calculatePricePerSqm(
   price: unknown,
@@ -285,9 +383,17 @@ Deno.serve(async (req) => {
     projectId = payload.project.id;
     await requireDeveloperAccess(supabase, user.id);
 
+    const resolvedCoordinates = await geocodeProjectCoordinates(payload.project, payload.listing);
+    const projectRow = resolvedCoordinates
+      ? { ...payload.project, ...resolvedCoordinates, owner_id: user.id }
+      : { ...payload.project, owner_id: user.id };
+    const listingRow = resolvedCoordinates
+      ? { ...payload.listing, ...resolvedCoordinates }
+      : payload.listing;
+
     const { error: projectError } = await supabase
       .from("projects")
-      .insert({ ...payload.project, owner_id: user.id });
+      .insert(projectRow);
     if (projectError) throw projectError;
 
     const unitIds: string[] = [];
@@ -311,7 +417,7 @@ Deno.serve(async (req) => {
     const { data: listing, error: listingError } = await supabase
       .from("listings")
       .insert(withComputedPricePerSqm({
-        ...payload.listing,
+        ...listingRow,
         owner_id: user.id,
         project_id: projectId,
         listing_type: "new_build",
