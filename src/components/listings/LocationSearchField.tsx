@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { Loader2, MapPin, Search, X } from "lucide-react";
 import { useAddressAutocomplete } from "@/hooks/useAddressAutocomplete";
@@ -6,9 +6,18 @@ import { GooglePlacesAttribution } from "@/components/location/GooglePlacesAttri
 import { formatAddressPrediction, type AddressPrediction } from "@/lib/location/addressFormat";
 import { getListingLocationSearchValue } from "@/lib/location/locationSearchSemantics";
 
+export type ListingLocationSelection = {
+  value: string;
+  latitude?: string;
+  longitude?: string;
+  radiusM?: number;
+  provider?: AddressPrediction["provider"];
+  placeId?: string;
+};
+
 interface LocationSearchFieldProps {
   value: string;
-  onChange: (value: string) => void;
+  onChange: (value: string, selection?: ListingLocationSelection) => void;
   placeholder: string;
   ariaLabel: string;
   compact?: boolean;
@@ -24,6 +33,7 @@ export function LocationSearchField({
   const [focused, setFocused] = useState(false);
   const [draftValue, setDraftValue] = useState(value);
   const selectedDraftRef = useRef<string | null>(null);
+  const pendingEnterRef = useRef(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const query = draftValue.trim();
@@ -62,7 +72,17 @@ export function LocationSearchField({
     setDraftValue(value);
   }, [focused, value]);
 
-  const selectSuggestion = async (prediction: AddressPrediction) => {
+  const commitManualSearch = useCallback(() => {
+    const committedValue = draftValue.trim();
+    if (!committedValue) return;
+    selectedDraftRef.current = committedValue;
+    setDraftValue(committedValue);
+    onChange(committedValue);
+    clear();
+    setFocused(false);
+  }, [clear, draftValue, onChange]);
+
+  const selectSuggestion = useCallback(async (prediction: AddressPrediction) => {
     const selection = prediction.resolveDetails
       ? await prediction.resolveDetails().catch(() => prediction)
       : prediction;
@@ -70,10 +90,27 @@ export function LocationSearchField({
     if (!filterValue) return;
     selectedDraftRef.current = filterValue;
     setDraftValue(filterValue);
-    onChange(filterValue);
+    onChange(filterValue, {
+      value: filterValue,
+      latitude: selection.latitude,
+      longitude: selection.longitude,
+      radiusM: selection.latitude && selection.longitude ? 750 : undefined,
+      provider: selection.provider,
+      placeId: selection.placeId,
+    });
     clear();
     setFocused(false);
-  };
+  }, [clear, onChange]);
+
+  useEffect(() => {
+    if (!pendingEnterRef.current || loading) return;
+    pendingEnterRef.current = false;
+    if (predictions[0]) {
+      void selectSuggestion(predictions[0]);
+      return;
+    }
+    commitManualSearch();
+  }, [commitManualSearch, loading, predictions, selectSuggestion]);
 
   const showDropdown = focused && shouldUsePredictions && (predictions.length > 0 || loading);
   const hasGoogleSuggestions = predictions.some((suggestion) => suggestion.provider === "google");
@@ -156,18 +193,15 @@ export function LocationSearchField({
           if (event.key === "Escape") setFocused(false);
           if (event.key !== "Enter") return;
           event.preventDefault();
-          const committedValue = draftValue.trim();
-          if (committedValue) {
-            selectedDraftRef.current = committedValue;
-            setDraftValue(committedValue);
-            onChange(committedValue);
-            clear();
-            setFocused(false);
+          if (loading) {
+            pendingEnterRef.current = true;
             return;
           }
           if (predictions[0]) {
             void selectSuggestion(predictions[0]);
+            return;
           }
+          commitManualSearch();
         }}
         className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none min-w-0"
         autoComplete="off"

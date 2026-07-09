@@ -60,6 +60,9 @@ const LISTINGS_CACHE_OPTIONS = {
   producerTimeoutMs: 5_000,
 };
 const LISTINGS_SUPABASE_TIMEOUT_MS = 4_500;
+const DEFAULT_LOCATION_RADIUS_M = 750;
+const MAX_LOCATION_RADIUS_M = 5_000;
+const METERS_PER_LATITUDE_DEGREE = 111_320;
 
 const LISTING_SELECT_BASE = [
   "id",
@@ -139,8 +142,37 @@ function normalizeLocationText(value: string): string {
     .trim();
 }
 
+const GREEK_CHAR_RE = /[\u0370-\u03ff]/;
+
+function unique(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function transliterateGreekToGreeklish(value: string, upsilon: "i" | "y" = "i"): string {
+  const normalized = normalizeLocationText(value).replace(/ου/g, "ou");
+  const multi = normalized
+    .replace(/θ/g, "th")
+    .replace(/χ/g, "ch")
+    .replace(/ψ/g, "ps");
+  const source = "αβγδεζηικλμνξοπρστυφω";
+  const target = upsilon === "i" ? "avgdeziiklmnxoprstifo" : "avgdeziiklmnxoprstyfo";
+  return multi
+    .split("")
+    .map((char) => {
+      const index = source.indexOf(char);
+      return index >= 0 ? target[index] : char;
+    })
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeLatinGreeklish(value: string): string {
+  return value.toLocaleLowerCase("en-US").replace(/y/g, "i").replace(/\s+/g, " ").trim();
+}
+
 function normalizeListingLocationSearchQuery(value: string): string {
-  const stopWords = new Set(["περιφερεια", "αττικη", "αττικησ", "ελλαδα", "greece", "attica"]);
+  const stopWords = new Set(["περιφερεια", "αττικη", "αττικησ", "ελλαδα", "greece", "attica", "attikis", "perifereia", "ellada"]);
   return normalizeLocationText(value)
     .split(" ")
     .filter((token) => token && !stopWords.has(token))
@@ -149,7 +181,54 @@ function normalizeListingLocationSearchQuery(value: string): string {
 }
 
 function listingLocationSearchTokens(value: string): string[] {
-  return [...new Set(normalizeListingLocationSearchQuery(value).split(" ").filter(Boolean))].slice(0, 6);
+  const stopWords = new Set(["περιφερεια", "αττικη", "αττικησ", "ελλαδα", "greece", "attica", "attikis", "perifereia", "ellada"]);
+  const expandToken = (token: string) => {
+    if (!token || stopWords.has(token)) return [];
+    const expanded = [token];
+    if (GREEK_CHAR_RE.test(token)) {
+      expanded.push(transliterateGreekToGreeklish(token, "i"));
+      expanded.push(transliterateGreekToGreeklish(token, "y"));
+    } else {
+      expanded.push(normalizeLatinGreeklish(token));
+    }
+    return unique(expanded).filter((item) => !stopWords.has(item));
+  };
+  return unique(normalizeListingLocationSearchQuery(value).split(" ").filter(Boolean).flatMap(expandToken)).slice(0, 12);
+}
+
+type LocationBounds = {
+  minLat: number;
+  maxLat: number;
+  minLng: number;
+  maxLng: number;
+};
+
+function finiteCoordinate(value: string | null, min: number, max: number): number | null {
+  if (value == null || value.trim() === "") return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < min || parsed > max) return null;
+  return parsed;
+}
+
+function listingLocationBounds(requestUrl: URL): LocationBounds | null {
+  const lat = finiteCoordinate(requestUrl.searchParams.get("location_lat"), -90, 90);
+  const lng = finiteCoordinate(requestUrl.searchParams.get("location_lng"), -180, 180);
+  if (lat == null || lng == null) return null;
+
+  const requestedRadius = Number(requestUrl.searchParams.get("location_radius_m") ?? DEFAULT_LOCATION_RADIUS_M);
+  const radiusM = Number.isFinite(requestedRadius)
+    ? Math.min(Math.max(requestedRadius, 50), MAX_LOCATION_RADIUS_M)
+    : DEFAULT_LOCATION_RADIUS_M;
+  const latDelta = radiusM / METERS_PER_LATITUDE_DEGREE;
+  const lngScale = Math.max(0.2, Math.cos((lat * Math.PI) / 180));
+  const lngDelta = radiusM / (METERS_PER_LATITUDE_DEGREE * lngScale);
+
+  return {
+    minLat: Number((lat - latDelta).toFixed(7)),
+    maxLat: Number((lat + latDelta).toFixed(7)),
+    minLng: Number((lng - lngDelta).toFixed(7)),
+    maxLng: Number((lng + lngDelta).toFixed(7)),
+  };
 }
 
 function buildListingParams(requestUrl: URL): { params: URLSearchParams; page: number; pageSize: number } {
@@ -193,9 +272,17 @@ function buildListingParams(requestUrl: URL): { params: URLSearchParams; page: n
     params.set("listing_type", "in.(sale,rent,firesale,new_build)");
   }
 
-  const locationQuery = safeText(requestUrl.searchParams.get("city"));
-  for (const locationToken of locationQuery ? listingLocationSearchTokens(locationQuery) : []) {
-    params.append("location_search_text", `ilike.*${locationToken}*`);
+  const locationBounds = listingLocationBounds(requestUrl);
+  if (locationBounds) {
+    params.append("latitude", `gte.${locationBounds.minLat}`);
+    params.append("latitude", `lte.${locationBounds.maxLat}`);
+    params.append("longitude", `gte.${locationBounds.minLng}`);
+    params.append("longitude", `lte.${locationBounds.maxLng}`);
+  } else {
+    const locationQuery = safeText(requestUrl.searchParams.get("city"));
+    for (const locationToken of locationQuery ? listingLocationSearchTokens(locationQuery) : []) {
+      params.append("location_search_text", `ilike.*${locationToken}*`);
+    }
   }
   appendIfPresent(params, "property_type", safeToken(requestUrl.searchParams.get("property_type"), PROPERTY_TYPES)?.replace(/^(.+)$/, "eq.$1") ?? null);
 

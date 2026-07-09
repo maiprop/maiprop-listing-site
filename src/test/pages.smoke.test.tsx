@@ -137,6 +137,7 @@ vi.mock("@/hooks/useListingsFilters", () => ({
     minAiScore: 0, minWalkability: 0,
     activeFilterCount: 0,
     currentFilters: {},
+    getParam: vi.fn((_key: string, fallback = "") => fallback),
     setParam: vi.fn(), setParams: vi.fn(), toggleMulti: vi.fn(),
     clearAllFilters: vi.fn(), applyAIFilters: vi.fn(),
   }),
@@ -1390,6 +1391,7 @@ describe("Page smoke tests", () => {
         min_ai_score: "80",
         min_walkability: "70",
       },
+      getParam: vi.fn((_key: string, fallback = "") => fallback),
       setParam: vi.fn(),
       setParams: vi.fn(),
       toggleMulti: vi.fn(),
@@ -1533,6 +1535,7 @@ describe("Page smoke tests", () => {
       minAiScore: 0, minWalkability: 0,
       activeFilterCount: 0,
       currentFilters: {},
+      getParam: vi.fn((_key: string, fallback = "") => fallback),
       setParam: vi.fn(), setParams: vi.fn(), toggleMulti: vi.fn(),
       clearAllFilters: vi.fn(), applyAIFilters: vi.fn(),
     });

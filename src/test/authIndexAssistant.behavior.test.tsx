@@ -755,7 +755,10 @@ describe("LocationInput", () => {
 
     fireEvent.click(screen.getByText("Thessaloniki"));
     expect(onChange).toHaveBeenCalledWith("Thessaloniki");
-    expect(onSearch).toHaveBeenCalledWith("Thessaloniki");
+    expect(onSearch).toHaveBeenCalledWith("Thessaloniki", expect.objectContaining({
+      provider: "popular",
+      value: "Thessaloniki",
+    }));
   });
 
   it("shows recent searches, selects one, removes one, and searches on Enter", () => {
@@ -769,7 +772,7 @@ describe("LocationInput", () => {
 
     fireEvent.click(screen.getByText("Athens"));
     expect(onChange).toHaveBeenCalledWith("Athens");
-    expect(onSearch).toHaveBeenCalledWith("Athens");
+    expect(onSearch).toHaveBeenCalledWith("Athens", undefined);
     expect(onSearch).toHaveBeenCalledTimes(1);
 
     fireEvent.focus(screen.getByLabelText("Location search"));

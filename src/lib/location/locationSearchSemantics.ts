@@ -8,7 +8,83 @@ const LISTING_LOCATION_STOP_WORDS = new Set([
   "ελλαδα",
   "greece",
   "attica",
+  "attikis",
+  "perifereia",
+  "ellada",
 ]);
+
+const GREEK_CHAR_RE = /[\u0370-\u03ff]/;
+
+const unique = (values: string[]) => [...new Set(values.filter(Boolean))];
+
+const LOCATION_TOKEN_ALIASES: Record<string, string[]> = {
+  agioi: ["agion", "agios"],
+  agion: ["agioi", "agios"],
+  agios: ["agioi", "agion"],
+  anargiroi: ["anargiron", "anargyroi", "anargyron"],
+  anargiron: ["anargiroi", "anargyroi", "anargyron"],
+  anargyroi: ["anargiroi", "anargiron", "anargyron"],
+  anargyron: ["anargiroi", "anargiron", "anargyroi"],
+  kalimnou: ["kalymnou"],
+  kalymnou: ["kalimnou"],
+};
+
+function transliterateGreekToGreeklish(value: string, upsilon: "i" | "y" = "i"): string {
+  const normalized = normalizeGreekLocationText(value).replace(/ου/g, "ou");
+  const multi = normalized
+    .replace(/θ/g, "th")
+    .replace(/χ/g, "ch")
+    .replace(/ψ/g, "ps");
+  const source = "αβγδεζηικλμνξοπρστυφω";
+  const target = upsilon === "i" ? "avgdeziiklmnxoprstifo" : "avgdeziiklmnxoprstyfo";
+  return multi
+    .split("")
+    .map((char) => {
+      const index = source.indexOf(char);
+      return index >= 0 ? target[index] : char;
+    })
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeLatinGreeklish(value: string): string {
+  return value
+    .toLocaleLowerCase("en-US")
+    .replace(/y/g, "i")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function expandLocationSearchToken(token: string): string[] {
+  if (!token || LISTING_LOCATION_STOP_WORDS.has(token)) return [];
+  const expanded = [token];
+  if (GREEK_CHAR_RE.test(token)) {
+    const greeklishI = transliterateGreekToGreeklish(token, "i");
+    const greeklishY = transliterateGreekToGreeklish(token, "y");
+    expanded.push(greeklishI);
+    expanded.push(greeklishY);
+    expanded.push(...(LOCATION_TOKEN_ALIASES[greeklishI] ?? []));
+    expanded.push(...(LOCATION_TOKEN_ALIASES[greeklishY] ?? []));
+  } else {
+    const latin = normalizeLatinGreeklish(token);
+    expanded.push(latin);
+    expanded.push(...(LOCATION_TOKEN_ALIASES[latin] ?? []));
+  }
+  return unique(expanded).filter((item) => !LISTING_LOCATION_STOP_WORDS.has(item));
+}
+
+function normalizeLocationSearchableText(value: string): string {
+  const normalized = normalizeGreekLocationText(value);
+  const tokens = normalized.split(" ").filter(Boolean);
+  return unique([
+    normalized,
+    transliterateGreekToGreeklish(normalized, "i"),
+    transliterateGreekToGreeklish(normalized, "y"),
+    normalizeLatinGreeklish(normalized),
+    ...tokens.flatMap(expandLocationSearchToken),
+  ]).join(" ");
+}
 
 export function normalizeGreekLocationText(value: string): string {
   return value
@@ -32,7 +108,12 @@ export function normalizeListingLocationSearchQuery(value: string): string {
 }
 
 export function getListingLocationSearchTokens(value: string): string[] {
-  return [...new Set(normalizeListingLocationSearchQuery(value).split(" ").filter(Boolean))].slice(0, 6);
+  return unique(
+    normalizeListingLocationSearchQuery(value)
+      .split(" ")
+      .filter(Boolean)
+      .flatMap(expandLocationSearchToken),
+  ).slice(0, 12);
 }
 
 function locationContextTokens(value: string): string[] {
@@ -126,7 +207,7 @@ export function filterAddressPredictionsForQuery(
   const contextTokens = locationContextTokens(query);
   return filterAddressPredictionsForSelection(predictions).filter((prediction) => {
     if (contextTokens.length === 0) return true;
-    const searchable = normalizeGreekLocationText([
+    const searchable = normalizeLocationSearchableText([
       prediction.title,
       prediction.value,
       prediction.subtitle,

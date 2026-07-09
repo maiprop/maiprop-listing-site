@@ -6,7 +6,7 @@ import { addRecentSearch } from "@/lib/recentSearches";
 import { getProfessionalSearchSuggestions } from "@/lib/professionalServiceCatalog";
 import { PropertyTypeDropdown } from "@/components/index/PropertyTypeDropdown";
 import { AISearchModal } from "@/components/index/AISearchModal";
-import { LocationInput } from "@/components/index/LocationInput";
+import { LocationInput, type HomeLocationSelection } from "@/components/index/LocationInput";
 import { ServiceInput } from "@/components/index/ServiceInput";
 
 const MarketTicker = lazy(() => import("@/components/MarketTicker").then(m => ({ default: m.MarketTicker })));
@@ -68,7 +68,7 @@ export function HeroSection() {
     };
   }, []);
 
-  const handleSearch = (locationOverride?: string) => {
+  const handleSearch = (locationOverride?: string, locationSelection?: HomeLocationSelection) => {
     const locationQuery = (locationOverride ?? searchQuery).trim();
     if (searchType === "Professionals") {
       const q = (professionalService || searchQuery).trim().toLowerCase();
@@ -86,6 +86,11 @@ export function HeroSection() {
     if (locationQuery) addRecentSearch(locationQuery);
     const params = new URLSearchParams();
     if (locationQuery) params.set("city", locationQuery);
+    if (locationSelection?.latitude && locationSelection.longitude) {
+      params.set("location_lat", locationSelection.latitude);
+      params.set("location_lng", locationSelection.longitude);
+      params.set("location_radius_m", String(locationSelection.radiusM ?? 750));
+    }
     if (selectedPropertyType) params.set("type", selectedPropertyType);
     if (lt) params.set("listing_type", lt);
     navigate(`/listings?${params.toString()}`);

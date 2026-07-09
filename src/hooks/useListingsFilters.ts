@@ -158,6 +158,10 @@ export function useListingsFilters(): ListingsFilterState & ListingsFilterAction
       // Preserve city (user typed it in the search bar, not a filter)
       const city = prev.get("city");
       if (city) next.set("city", city);
+      for (const key of ["location_lat", "location_lng", "location_radius_m"]) {
+        const value = prev.get(key);
+        if (value) next.set(key, value);
+      }
       return next;
     }, { replace: true });
   }, [setSearchParams]);

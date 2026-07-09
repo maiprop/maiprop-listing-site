@@ -391,7 +391,11 @@ describe("location address suggestions", () => {
     await waitFor(() => expect(input).toHaveValue("14 Voukourestiou"));
   });
 
-  it("commits the typed listings location query on Enter instead of replacing it with a suggestion", async () => {
+  it("uses the first provider suggestion when a listings user presses Enter after typing an address", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([STRUCTURED_ADDRESS_SUGGESTION])),
+    );
+    vi.stubGlobal("fetch", fetchMock);
     const onChange = vi.fn();
 
     render(
@@ -405,11 +409,23 @@ describe("location address suggestions", () => {
 
     const input = screen.getByLabelText("Search by city or area");
     fireEvent.focus(input);
-    fireEvent.change(input, { target: { value: "Imittou 6 Agioi Anargyroi" } });
+    fireEvent.change(input, { target: { value: "Voukourestiou 14" } });
+
+    await act(async () => {
+      vi.advanceTimersByTime(450);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    vi.useRealTimers();
+
     fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
 
-    expect(input).toHaveValue("Imittou 6 Agioi Anargyroi");
-    expect(onChange).toHaveBeenLastCalledWith("Imittou 6 Agioi Anargyroi");
+    await waitFor(() => expect(input).toHaveValue("14 Voukourestiou"));
+    expect(onChange).toHaveBeenLastCalledWith("14 Voukourestiou", expect.objectContaining({
+      latitude: "37.9779",
+      longitude: "23.7354",
+      radiusM: 750,
+    }));
   });
 
   it("shows popular city options in shared location input fields", () => {
@@ -684,9 +700,9 @@ describe("location address suggestions", () => {
       return (
         <LocationSearchField
           value={value}
-          onChange={(next) => {
+          onChange={(next, selection) => {
             setValue(next);
-            onFilterChange(next);
+            onFilterChange(next, selection);
           }}
           placeholder="City, area, address..."
           ariaLabel="Search by city or area"
@@ -717,7 +733,12 @@ describe("location address suggestions", () => {
     fireEvent.click(await screen.findByRole("option", { name: /Voukourestiou 14/i }));
 
     await waitFor(() => expect(fetchFields).toHaveBeenCalled());
-    await waitFor(() => expect(onFilterChange).toHaveBeenLastCalledWith("14 Voukourestiou"));
+    await waitFor(() => expect(onFilterChange).toHaveBeenLastCalledWith("14 Voukourestiou", expect.objectContaining({
+      latitude: "37.9779",
+      longitude: "23.7354",
+      radiusM: 750,
+      provider: "google",
+    })));
     expect(input).toHaveValue("14 Voukourestiou");
   });
 
@@ -756,7 +777,12 @@ describe("location address suggestions", () => {
     fireEvent.click(await screen.findByRole("option", { name: /Voukourestiou 14/i }));
 
     await waitFor(() => expect(fetchFields).toHaveBeenCalled());
-    await waitFor(() => expect(onSearch).toHaveBeenLastCalledWith("14 Voukourestiou"));
+    await waitFor(() => expect(onSearch).toHaveBeenLastCalledWith("14 Voukourestiou", expect.objectContaining({
+      latitude: "37.9779",
+      longitude: "23.7354",
+      radiusM: 750,
+      provider: "google",
+    })));
     expect(input).toHaveValue("14 Voukourestiou");
   });
 
@@ -819,9 +845,9 @@ describe("location address suggestions", () => {
       return (
         <LocationSearchField
           value={value}
-          onChange={(next) => {
+          onChange={(next, selection) => {
             setValue(next);
-            onFilterChange(next);
+            onFilterChange(next, selection);
           }}
           placeholder="City, area, address..."
           ariaLabel="Search by city or area"
@@ -846,7 +872,12 @@ describe("location address suggestions", () => {
 
     fireEvent.click(screen.getByRole("option", { name: /Δήμος Αγίων Αναργύρων/i }));
 
-    await waitFor(() => expect(onFilterChange).toHaveBeenLastCalledWith("Άγιοι Ανάργυροι"));
+    await waitFor(() => expect(onFilterChange).toHaveBeenLastCalledWith("Άγιοι Ανάργυροι", expect.objectContaining({
+      latitude: "38.0301",
+      longitude: "23.7241",
+      radiusM: 750,
+      provider: "nominatim",
+    })));
     expect(input).toHaveValue("Άγιοι Ανάργυροι");
   });
 
@@ -877,8 +908,47 @@ describe("location address suggestions", () => {
 
     fireEvent.click(await screen.findByRole("option", { name: /Δήμος Αγίων Αναργύρων/i }));
 
-    await waitFor(() => expect(onSearch).toHaveBeenLastCalledWith("Άγιοι Ανάργυροι"));
+    await waitFor(() => expect(onSearch).toHaveBeenLastCalledWith("Άγιοι Ανάργυροι", expect.objectContaining({
+      latitude: "38.0301",
+      longitude: "23.7241",
+      radiusM: 750,
+      provider: "nominatim",
+    })));
     expect(input).toHaveValue("Άγιοι Ανάργυροι");
+  });
+
+  it("uses the first provider suggestion when a homepage user presses Enter after typing an address", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([STRUCTURED_ADDRESS_SUGGESTION])),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const onSearch = vi.fn();
+
+    function ControlledLocationInput() {
+      const [value, setValue] = useState("");
+      return <LocationInput value={value} onChange={setValue} onSearch={onSearch} />;
+    }
+
+    render(<ControlledLocationInput />);
+    const input = screen.getByLabelText("Location search");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "Voukourestiou 14" } });
+
+    await act(async () => {
+      vi.advanceTimersByTime(450);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    vi.useRealTimers();
+
+    fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
+
+    await waitFor(() => expect(input).toHaveValue("14 Voukourestiou"));
+    expect(onSearch).toHaveBeenLastCalledWith("14 Voukourestiou", expect.objectContaining({
+      latitude: "37.9779",
+      longitude: "23.7354",
+      radiusM: 750,
+    }));
   });
 
   it("supports a second controlled address selection after the first one is applied", async () => {

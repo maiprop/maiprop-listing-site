@@ -238,6 +238,99 @@ Deno.test("create forces ownership from the verified developer and writes every 
   assert(globalThis.__createNewBuildingScenario.calls.some((call) => call.name === "audit"));
 });
 
+Deno.test("create geocodes missing project coordinates before writing project and listing rows", async () => {
+  resetScenario();
+  const originalFetch = globalThis.fetch;
+  Deno.env.set("GOOGLE_MAPS_API_KEY", "test-google-key");
+  globalThis.fetch = ((input: string | URL | Request) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    assertEquals(url.hostname, "maps.googleapis.com");
+    assert(url.searchParams.get("address")?.includes("Imittou 6"));
+    assertEquals(url.searchParams.get("region"), "gr");
+    assertEquals(url.searchParams.get("key"), "test-google-key");
+    return Promise.resolve(new Response(JSON.stringify({
+      status: "OK",
+      results: [{ geometry: { location: { lat: 38.0301, lng: 23.7241 } } }],
+    })));
+  }) as typeof fetch;
+
+  try {
+    const res = await handler(authedJson(body({
+      project: {
+        ...body().project,
+        address: "Imittou 6",
+        city: "Agioi Anargyroi",
+        municipality: "Dimos Agion Anargyron - Kamaterou",
+      },
+      listing: {
+        ...body().listing,
+        address: "Imittou 6",
+        city: "Agioi Anargyroi",
+      },
+    })));
+    assertEquals(res.status, 200);
+  } finally {
+    globalThis.fetch = originalFetch;
+    Deno.env.delete("GOOGLE_MAPS_API_KEY");
+  }
+
+  const projectInsert = globalThis.__createNewBuildingScenario.calls.find((call) =>
+    call.name === "insert" && (call.args as { table?: string })?.table === "projects"
+  );
+  const listingInsert = globalThis.__createNewBuildingScenario.calls.find((call) =>
+    call.name === "insert" && (call.args as { table?: string })?.table === "listings"
+  );
+  assertEquals((projectInsert?.args as { payload: Record<string, unknown> }).payload.latitude, 38.0301);
+  assertEquals((projectInsert?.args as { payload: Record<string, unknown> }).payload.longitude, 23.7241);
+  assertEquals((listingInsert?.args as { payload: Record<string, unknown> }).payload.latitude, 38.0301);
+  assertEquals((listingInsert?.args as { payload: Record<string, unknown> }).payload.longitude, 23.7241);
+});
+
+Deno.test("create falls back to Nominatim geocoding when a server Google key is unavailable", async () => {
+  resetScenario();
+  const originalFetch = globalThis.fetch;
+  const oldGoogleKey = Deno.env.get("GOOGLE_MAPS_API_KEY");
+  const oldViteGoogleKey = Deno.env.get("VITE_GOOGLE_MAPS_API_KEY");
+  Deno.env.delete("GOOGLE_MAPS_API_KEY");
+  Deno.env.delete("VITE_GOOGLE_MAPS_API_KEY");
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    assertEquals(url.hostname, "nominatim.openstreetmap.org");
+    assertEquals(url.searchParams.get("countrycodes"), "gr");
+    assertEquals((init?.headers as Record<string, string>)?.["User-Agent"], "maiprop-edge-geocode/1.0");
+    return Promise.resolve(new Response(JSON.stringify([{
+      lat: "38.0421087",
+      lon: "23.7333126",
+    }])));
+  }) as typeof fetch;
+
+  try {
+    const res = await handler(authedJson(body({
+      project: {
+        ...body().project,
+        address: "Imittou 6",
+        city: "Agioi Anargyroi",
+      },
+      listing: {
+        ...body().listing,
+        address: "Imittou 6",
+        city: "Agioi Anargyroi",
+      },
+    })));
+    assertEquals(res.status, 200);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (oldGoogleKey) Deno.env.set("GOOGLE_MAPS_API_KEY", oldGoogleKey);
+    if (oldViteGoogleKey) Deno.env.set("VITE_GOOGLE_MAPS_API_KEY", oldViteGoogleKey);
+  }
+
+  const listingInsert = globalThis.__createNewBuildingScenario.calls.find((call) =>
+    call.name === "insert" && (call.args as { table?: string })?.table === "listings"
+  );
+  assertEquals((listingInsert?.args as { payload: Record<string, unknown> }).payload.latitude, 38.0421087);
+  assertEquals((listingInsert?.args as { payload: Record<string, unknown> }).payload.longitude, 23.7333126);
+});
+
 Deno.test("create accepts multiple units and preserves renovation project listing metadata", async () => {
   resetScenario();
   const res = await handler(authedJson(body({
