@@ -4725,6 +4725,10 @@ export type Database = {
         Args: { payload: Json; queue_name: string }
         Returns: number
       }
+      expand_location_search_aliases: {
+        Args: { input: string }
+        Returns: string
+      }
       expire_featured_listings: { Args: never; Returns: undefined }
       expire_past_auctions: { Args: never; Returns: number }
       get_addon_credit_balance: {
