@@ -31,6 +31,9 @@ export interface AddressPrediction {
   provider: AddressProvider;
   value: string;
   title: string;
+  placeId?: string;
+  googleTypes?: string[];
+  isBroadAdministrativeArea?: boolean;
   subtitle?: string;
   fullAddress?: string;
   addressLine?: string;

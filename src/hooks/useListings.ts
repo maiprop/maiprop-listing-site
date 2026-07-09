@@ -14,6 +14,7 @@ import {
   listingWriteSchema,
   parseMutationInput,
 } from "@/lib/mutationSchemas";
+import { getListingLocationSearchTokens } from "@/lib/location/locationSearchSemantics";
 
 /**
  * Minimal shape we need from a listings row to enrich it with profiles. The
@@ -313,7 +314,11 @@ export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize
 
   query = query.range(from, from + pageSize - 1);
 
-  if (filters?.city) query = query.ilike("city", `%${filters.city}%`);
+  if (filters?.city) {
+    for (const locationToken of getListingLocationSearchTokens(filters.city)) {
+      query = query.ilike("location_search_text", `%${locationToken}%`);
+    }
+  }
   if (filters?.listing_type) {
     const listingType = filters.listing_type as Enums<"listing_type">;
     const catalogTypes = CATALOG_TYPES_WITH_NEW_BUILD[listingType];

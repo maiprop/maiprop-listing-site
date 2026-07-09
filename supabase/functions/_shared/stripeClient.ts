@@ -127,8 +127,8 @@ export const CHECKOUT_TAX_COLLECTION_PARAMS = {
     address: "auto",
     name: "auto",
   },
-  tax_id_collection: { enabled: true },
-} satisfies Partial<Stripe.Checkout.SessionCreateParams>;
+  tax_id_collection: { enabled: true, required: "if_supported" },
+} as const;
 
 export function getStripeCompanyVatId(): string | null {
   const value = (

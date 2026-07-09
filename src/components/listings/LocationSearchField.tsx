@@ -4,6 +4,7 @@ import { Loader2, MapPin, Search, X } from "lucide-react";
 import { useAddressAutocomplete } from "@/hooks/useAddressAutocomplete";
 import { GooglePlacesAttribution } from "@/components/location/GooglePlacesAttribution";
 import { formatAddressPrediction, type AddressPrediction } from "@/lib/location/addressFormat";
+import { getListingLocationSearchValue } from "@/lib/location/locationSearchSemantics";
 
 interface LocationSearchFieldProps {
   value: string;
@@ -65,7 +66,8 @@ export function LocationSearchField({
     const selection = prediction.resolveDetails
       ? await prediction.resolveDetails().catch(() => prediction)
       : prediction;
-    const filterValue = selection.city || selection.municipality || selection.region || selection.value;
+    const filterValue = getListingLocationSearchValue(selection);
+    if (!filterValue) return;
     selectedDraftRef.current = filterValue;
     setDraftValue(filterValue);
     onChange(filterValue);
@@ -152,7 +154,18 @@ export function LocationSearchField({
         }}
         onKeyDown={(event) => {
           if (event.key === "Escape") setFocused(false);
-          if (event.key === "Enter" && predictions[0] && !draftValue.trim()) {
+          if (event.key !== "Enter") return;
+          event.preventDefault();
+          const committedValue = draftValue.trim();
+          if (committedValue) {
+            selectedDraftRef.current = committedValue;
+            setDraftValue(committedValue);
+            onChange(committedValue);
+            clear();
+            setFocused(false);
+            return;
+          }
+          if (predictions[0]) {
             void selectSuggestion(predictions[0]);
           }
         }}

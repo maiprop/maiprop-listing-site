@@ -10,7 +10,11 @@ const runtimeScopeMigration = readFileSync(
   resolve(process.cwd(), "supabase/migrations/20260703073514_scope_addon_credit_runtime.sql"),
   "utf8",
 );
-const migration = `${completionMigration}\n${runtimeScopeMigration}`;
+const runtimeConsistencyMigration = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/20260709093750_enforce_stripe_runtime_livemode_consistency.sql"),
+  "utf8",
+);
+const migration = `${completionMigration}\n${runtimeScopeMigration}\n${runtimeConsistencyMigration}`;
 
 describe("Stripe billing completion migration", () => {
   it("adds refund and runtime fields to add-on purchases", () => {
@@ -52,6 +56,18 @@ describe("Stripe billing completion migration", () => {
     expect(migration).toContain("status IN ('active', 'trial', 'pending_payment') THEN 'live'");
     expect(migration).toContain("UPDATE public.subscription_trial_claims");
     expect(migration).toContain("stripe_checkout_session_id LIKE 'cs_test_%'");
+  });
+
+  it("prevents live and test Checkout sessions from drifting into the wrong billing runtime", () => {
+    expect(runtimeConsistencyMigration).toContain("addon_purchases_stripe_session_runtime_consistent");
+    expect(runtimeConsistencyMigration).toContain("stripe_session_id LIKE 'cs_live_%'");
+    expect(runtimeConsistencyMigration).toContain("runtime_mode = 'live'");
+    expect(runtimeConsistencyMigration).toContain("livemode IS TRUE");
+    expect(runtimeConsistencyMigration).toContain("stripe_session_id LIKE 'cs_test_%'");
+    expect(runtimeConsistencyMigration).toContain("runtime_mode = 'test'");
+    expect(runtimeConsistencyMigration).toContain("livemode IS FALSE");
+    expect(runtimeConsistencyMigration).toContain("UPDATE public.addon_purchases");
+    expect(runtimeConsistencyMigration).toContain("stripe_payment_intent_id = 'pi_3TpWcOGfOEgBOxtl0rbH7ZjF'");
   });
 
   it("replaces hard trial uniqueness with partial retry-safe indexes", () => {

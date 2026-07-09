@@ -77,6 +77,87 @@ function mockGoogleAutocomplete() {
   return { AutocompleteMock, fetchAutocompleteSuggestions, fetchFields, importLibrary };
 }
 
+function mockGoogleBroadAtticaAutocomplete() {
+  const fetchFields = vi.fn().mockResolvedValue(undefined);
+  const fetchAutocompleteSuggestions = vi.fn().mockResolvedValue({
+    suggestions: [
+      {
+        placePrediction: {
+          placeId: "google-attica-region",
+          types: ["administrative_area_level_1", "political"],
+          text: { toString: () => "Περιφέρεια Αττικής, Ελλάδα" },
+          mainText: { toString: () => "Περιφέρεια Αττικής" },
+          secondaryText: { toString: () => "Ελλάδα" },
+          toPlace: () => ({
+            fetchFields,
+            formattedAddress: "Περιφέρεια Αττικής, Ελλάδα",
+            addressComponents: [
+              { longText: "Περιφέρεια Αττικής", types: ["administrative_area_level_1", "political"] },
+              { longText: "Ελλάδα", types: ["country", "political"] },
+            ],
+            types: ["administrative_area_level_1", "political"],
+          }),
+        },
+      },
+    ],
+  });
+  const importLibrary = vi.fn().mockResolvedValue({
+    AutocompleteSessionToken: class AutocompleteSessionToken {},
+    AutocompleteSuggestion: { fetchAutocompleteSuggestions },
+  });
+  vi.stubGlobal("google", {
+    maps: {
+      importLibrary,
+      places: { Autocomplete: vi.fn() },
+    },
+  });
+  return { fetchAutocompleteSuggestions, fetchFields };
+}
+
+function mockGoogleLegacyAutocompleteFallback() {
+  const fetchAutocompleteSuggestions = vi.fn().mockRejectedValue(new Error("new-places-rpc-403"));
+  const getPlacePredictions = vi.fn((_request, callback) => callback([
+    {
+      place_id: "legacy-voukourestiou-14",
+      description: "Voukourestiou 14, Athens, Greece",
+      structured_formatting: {
+        main_text: "Voukourestiou 14",
+        secondary_text: "Athens, Greece",
+      },
+      types: ["street_address", "geocode"],
+    },
+  ], "OK"));
+  const importLibrary = vi.fn().mockResolvedValue({
+    AutocompleteSessionToken: class AutocompleteSessionToken {},
+    AutocompleteSuggestion: { fetchAutocompleteSuggestions },
+  });
+  vi.stubGlobal("google", {
+    maps: {
+      importLibrary,
+      places: {
+        Autocomplete: vi.fn(),
+        AutocompleteService: vi.fn(function AutocompleteService() {
+          return { getPlacePredictions };
+        }),
+        PlacesServiceStatus: { OK: "OK", ZERO_RESULTS: "ZERO_RESULTS" },
+      },
+    },
+  });
+  return { fetchAutocompleteSuggestions, getPlacePredictions };
+}
+
+const AGIOI_ANARGYROI_SUGGESTION = {
+  display_name: "Άγιοι Ανάργυροι, Δήμος Αγίων Αναργύρων - Καματερού, Περιφέρεια Αττικής, Ελλάδα",
+  lat: "38.0301",
+  lon: "23.7241",
+  address: {
+    suburb: "Άγιοι Ανάργυροι",
+    municipality: "Δήμος Αγίων Αναργύρων - Καματερού",
+    state: "Περιφέρεια Αττικής",
+    country: "Ελλάδα",
+  },
+};
+
 function mockAddressFetch() {
   const fetchMock = vi.fn().mockResolvedValue(
     new Response(JSON.stringify([{ display_name: ADDRESS_SUGGESTION }])),
@@ -275,7 +356,7 @@ describe("location address suggestions", () => {
     expect(onChange).toHaveBeenLastCalledWith("Ermou 12 Athens");
   });
 
-  it("uses a selected listings address suggestion's locality for the city filter", async () => {
+  it("uses a selected listings address suggestion's address line for the location filter", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify([STRUCTURED_ADDRESS_SUGGESTION])),
     );
@@ -307,7 +388,28 @@ describe("location address suggestions", () => {
 
     fireEvent.click(await screen.findByRole("option", { name: /14 Voukourestiou/i }));
 
-    await waitFor(() => expect(input).toHaveValue("Athens"));
+    await waitFor(() => expect(input).toHaveValue("14 Voukourestiou"));
+  });
+
+  it("commits the typed listings location query on Enter instead of replacing it with a suggestion", async () => {
+    const onChange = vi.fn();
+
+    render(
+      <LocationSearchField
+        value=""
+        onChange={onChange}
+        placeholder="City, area, address..."
+        ariaLabel="Search by city or area"
+      />,
+    );
+
+    const input = screen.getByLabelText("Search by city or area");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "Imittou 6 Agioi Anargyroi" } });
+    fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
+
+    expect(input).toHaveValue("Imittou 6 Agioi Anargyroi");
+    expect(onChange).toHaveBeenLastCalledWith("Imittou 6 Agioi Anargyroi");
   });
 
   it("shows popular city options in shared location input fields", () => {
@@ -570,7 +672,7 @@ describe("location address suggestions", () => {
     }));
   });
 
-  it("uses a Google prediction's resolved city for listing location filters", async () => {
+  it("uses a Google prediction's resolved address line for listing location filters", async () => {
     configMock.googlePlacesEnabled = true;
     const { AutocompleteMock, fetchAutocompleteSuggestions, fetchFields } = mockGoogleAutocomplete();
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify([])));
@@ -615,11 +717,11 @@ describe("location address suggestions", () => {
     fireEvent.click(await screen.findByRole("option", { name: /Voukourestiou 14/i }));
 
     await waitFor(() => expect(fetchFields).toHaveBeenCalled());
-    await waitFor(() => expect(onFilterChange).toHaveBeenLastCalledWith("Athens"));
-    expect(input).toHaveValue("Athens");
+    await waitFor(() => expect(onFilterChange).toHaveBeenLastCalledWith("14 Voukourestiou"));
+    expect(input).toHaveValue("14 Voukourestiou");
   });
 
-  it("uses a Google prediction's resolved city for homepage searches", async () => {
+  it("uses a Google prediction's resolved address line for homepage searches", async () => {
     configMock.googlePlacesEnabled = true;
     const { AutocompleteMock, fetchAutocompleteSuggestions, fetchFields } = mockGoogleAutocomplete();
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify([])));
@@ -654,8 +756,129 @@ describe("location address suggestions", () => {
     fireEvent.click(await screen.findByRole("option", { name: /Voukourestiou 14/i }));
 
     await waitFor(() => expect(fetchFields).toHaveBeenCalled());
-    await waitFor(() => expect(onSearch).toHaveBeenLastCalledWith("Athens"));
-    expect(input).toHaveValue("Athens");
+    await waitFor(() => expect(onSearch).toHaveBeenLastCalledWith("14 Voukourestiou"));
+    expect(input).toHaveValue("14 Voukourestiou");
+  });
+
+  it("uses legacy Google autocomplete before the new Places RPC when available", async () => {
+    configMock.googlePlacesEnabled = true;
+    const { fetchAutocompleteSuggestions, getPlacePredictions } = mockGoogleLegacyAutocompleteFallback();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify([]))));
+
+    function ControlledAddressField() {
+      const [value, setValue] = useState("");
+      return (
+        <>
+          <label htmlFor="legacy-google-address">Project address</label>
+          <LocationAutocompleteInput
+            id="legacy-google-address"
+            mode="address"
+            value={value}
+            onChange={setValue}
+            inputClassName="border"
+          />
+        </>
+      );
+    }
+
+    render(<ControlledAddressField />);
+    const input = screen.getByLabelText("Project address");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "Voukourestiou 14" } });
+
+    await act(async () => {
+      vi.advanceTimersByTime(450);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    vi.useRealTimers();
+
+    expect(fetchAutocompleteSuggestions).not.toHaveBeenCalled();
+    expect(getPlacePredictions).toHaveBeenCalledWith(expect.objectContaining({
+      input: "Voukourestiou 14",
+      componentRestrictions: { country: "gr" },
+    }), expect.any(Function));
+    expect(screen.getByText("Powered by")).toBeInTheDocument();
+    expect(screen.getByText("Google")).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole("option", { name: /Voukourestiou 14/i }));
+    expect(input).toHaveValue("Voukourestiou 14");
+  });
+
+  it("does not let a broad Google Attica prediction override a specific listings municipality fallback", async () => {
+    configMock.googlePlacesEnabled = true;
+    mockGoogleBroadAtticaAutocomplete();
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([AGIOI_ANARGYROI_SUGGESTION])),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const onFilterChange = vi.fn();
+
+    function ControlledLocationSearchField() {
+      const [value, setValue] = useState("");
+      return (
+        <LocationSearchField
+          value={value}
+          onChange={(next) => {
+            setValue(next);
+            onFilterChange(next);
+          }}
+          placeholder="City, area, address..."
+          ariaLabel="Search by city or area"
+        />
+      );
+    }
+
+    render(<ControlledLocationSearchField />);
+    const input = screen.getByLabelText("Search by city or area");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "Αγιοι Αναργυροι, Αττικης" } });
+
+    await act(async () => {
+      vi.advanceTimersByTime(450);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    vi.useRealTimers();
+
+    expect(await screen.findByRole("option", { name: /Δήμος Αγίων Αναργύρων/i })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /^Περιφέρεια Αττικής/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("option", { name: /Δήμος Αγίων Αναργύρων/i }));
+
+    await waitFor(() => expect(onFilterChange).toHaveBeenLastCalledWith("Άγιοι Ανάργυροι"));
+    expect(input).toHaveValue("Άγιοι Ανάργυροι");
+  });
+
+  it("uses the same specific municipality semantics in the homepage location search", async () => {
+    configMock.googlePlacesEnabled = true;
+    mockGoogleBroadAtticaAutocomplete();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([AGIOI_ANARGYROI_SUGGESTION])),
+    ));
+    const onSearch = vi.fn();
+
+    function ControlledLocationInput() {
+      const [value, setValue] = useState("");
+      return <LocationInput value={value} onChange={setValue} onSearch={onSearch} />;
+    }
+
+    render(<ControlledLocationInput />);
+    const input = screen.getByLabelText("Location search");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "Αγιοι Αναργυροι, Αττικης" } });
+
+    await act(async () => {
+      vi.advanceTimersByTime(450);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    vi.useRealTimers();
+
+    fireEvent.click(await screen.findByRole("option", { name: /Δήμος Αγίων Αναργύρων/i }));
+
+    await waitFor(() => expect(onSearch).toHaveBeenLastCalledWith("Άγιοι Ανάργυροι"));
+    expect(input).toHaveValue("Άγιοι Ανάργυροι");
   });
 
   it("supports a second controlled address selection after the first one is applied", async () => {

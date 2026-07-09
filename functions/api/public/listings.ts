@@ -126,6 +126,32 @@ function appendIfPresent(params: URLSearchParams, name: string, value: string | 
   if (value) params.set(name, value);
 }
 
+function normalizeLocationText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("el-GR")
+    .replace(/ς/g, "σ")
+    .replace(/[’'`´]/g, "")
+    .replace(/[–—-]/g, " ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeListingLocationSearchQuery(value: string): string {
+  const stopWords = new Set(["περιφερεια", "αττικη", "αττικησ", "ελλαδα", "greece", "attica"]);
+  return normalizeLocationText(value)
+    .split(" ")
+    .filter((token) => token && !stopWords.has(token))
+    .join(" ")
+    .trim();
+}
+
+function listingLocationSearchTokens(value: string): string[] {
+  return [...new Set(normalizeListingLocationSearchQuery(value).split(" ").filter(Boolean))].slice(0, 6);
+}
+
 function buildListingParams(requestUrl: URL): { params: URLSearchParams; page: number; pageSize: number } {
   const params = new URLSearchParams();
   const page = safeInt(requestUrl.searchParams.get("page"), 1, 1, 500);
@@ -167,7 +193,10 @@ function buildListingParams(requestUrl: URL): { params: URLSearchParams; page: n
     params.set("listing_type", "in.(sale,rent,firesale,new_build)");
   }
 
-  appendIfPresent(params, "city", safeText(requestUrl.searchParams.get("city"))?.replace(/^(.+)$/, "ilike.*$1*") ?? null);
+  const locationQuery = safeText(requestUrl.searchParams.get("city"));
+  for (const locationToken of locationQuery ? listingLocationSearchTokens(locationQuery) : []) {
+    params.append("location_search_text", `ilike.*${locationToken}*`);
+  }
   appendIfPresent(params, "property_type", safeToken(requestUrl.searchParams.get("property_type"), PROPERTY_TYPES)?.replace(/^(.+)$/, "eq.$1") ?? null);
 
   for (const [source, target, op] of [

@@ -60,6 +60,7 @@ Deno.test("Stripe Checkout tax helper requires VAT-ready customer details", () =
   });
   assertEquals(CHECKOUT_TAX_COLLECTION_PARAMS.tax_id_collection, {
     enabled: true,
+    required: "if_supported",
   });
   assertEquals(
     CHECKOUT_TAX_COLLECTION_PARAMS.billing_address_collection,

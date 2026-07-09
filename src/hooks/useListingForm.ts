@@ -27,6 +27,7 @@ import type {
 import { tFallback, tInterpolate } from "@/lib/i18nFallback";
 import { assertAllowedUpload } from "@/lib/uploadValidation";
 import { getListingDetailPath } from "@/lib/listingRoutes";
+import { geocodeAddressText, hasCompleteCoordinates } from "@/lib/location/geocodeAddress";
 import {
   listingImageDeleteSchema,
   listingImageRowsSchema,
@@ -450,6 +451,25 @@ export function useListingForm(options?: UseListingFormOptions) {
     try {
       const coverImageUrl = coverImg?.url;
       const coverImagePayload = coverImageUrl ?? (isEditMode ? null : undefined);
+      let resolvedLatitude = form.latitude;
+      let resolvedLongitude = form.longitude;
+      if (!hasCompleteCoordinates(resolvedLatitude, resolvedLongitude)) {
+        const geocoded = await geocodeAddressText({
+          address: form.address,
+          city: form.city,
+          region: form.region,
+          postalCode: form.postal_code,
+        });
+        if (geocoded) {
+          resolvedLatitude = geocoded.latitude;
+          resolvedLongitude = geocoded.longitude;
+          setForm((current) => ({
+            ...current,
+            latitude: geocoded.latitude,
+            longitude: geocoded.longitude,
+          }));
+        }
+      }
 
       const nextStatus = asDraft
         ? "draft"
@@ -465,8 +485,8 @@ export function useListingForm(options?: UseListingFormOptions) {
         address: form.address || undefined,
         region: form.region || undefined,
         postal_code: form.postal_code || undefined,
-        latitude: toOptionalNumber(form.latitude),
-        longitude: toOptionalNumber(form.longitude),
+        latitude: toOptionalNumber(resolvedLatitude),
+        longitude: toOptionalNumber(resolvedLongitude),
         cadastre_number: form.cadastre_number || undefined,
         enfia_zone: form.enfia_zone || undefined,
         property_type: form.property_type,

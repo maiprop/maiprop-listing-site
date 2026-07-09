@@ -5,6 +5,7 @@ import { useAddressAutocomplete } from "@/hooks/useAddressAutocomplete";
 import { GooglePlacesAttribution } from "@/components/location/GooglePlacesAttribution";
 import { getRecentSearches, removeRecentSearch } from "@/lib/recentSearches";
 import { formatAddressPrediction, type AddressPrediction } from "@/lib/location/addressFormat";
+import { getListingLocationSearchValue } from "@/lib/location/locationSearchSemantics";
 
 export function LocationInput({
   value,
@@ -68,7 +69,9 @@ export function LocationInput({
     const selection = prediction.resolveDetails
       ? await prediction.resolveDetails().catch(() => prediction)
       : prediction;
-    chooseLocation(selection.city || selection.municipality || selection.region || selection.value);
+    const location = getListingLocationSearchValue(selection);
+    if (!location) return;
+    chooseLocation(location);
   };
 
   const showRecents = focused && recents.length > 0 && !query;

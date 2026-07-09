@@ -252,10 +252,13 @@ describe("buildListingsQuery — numeric range filters", () => {
 });
 
 describe("buildListingsQuery — categorical / feature filters", () => {
-  it("applies city via .ilike() with surrounding wildcards", () => {
-    buildListingsQuery({ city: "Athens" });
-    const ilike = calls("ilike")[0];
-    expect(ilike.args).toEqual(["city", "%Athens%"]);
+  it("applies location text via normalized .ilike() with surrounding wildcards", () => {
+    buildListingsQuery({ city: "Άγιοι Αναργυροι, Αττικης" });
+    const ilikes = calls("ilike");
+    expect(ilikes.map((call) => call.args)).toEqual([
+      ["location_search_text", "%αγιοι%"],
+      ["location_search_text", "%αναργυροι%"],
+    ]);
   });
 
   it("applies property_type / heating / construction_status via .eq()", () => {
