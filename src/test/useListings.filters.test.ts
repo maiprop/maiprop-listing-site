@@ -20,7 +20,7 @@ const { recorded, supabaseMock } = vi.hoisted(() => {
   // Each chainable method records the call and returns the same proxy so the
   // chain in the SUT (`.from().select().order().eq().range().eq()...`) works.
   const builder: Record<string, unknown> = {};
-  const methods = ["select", "order", "limit", "range", "eq", "ilike", "in", "gte", "lte"] as const;
+  const methods = ["select", "order", "limit", "range", "eq", "ilike", "or", "in", "gte", "lte"] as const;
   for (const m of methods) {
     builder[m] = vi.fn((...args: unknown[]) => {
       recorded.push({ method: m, args });
@@ -254,14 +254,14 @@ describe("buildListingsQuery — numeric range filters", () => {
 describe("buildListingsQuery — categorical / feature filters", () => {
   it("applies location text via normalized .ilike() with surrounding wildcards", () => {
     buildListingsQuery({ city: "Άγιοι Αναργυροι, Αττικης" });
-    const ilikes = calls("ilike");
-    expect(ilikes.map((call) => call.args)).toEqual(expect.arrayContaining([
-      ["location_search_text", "%αγιοι%"],
-      ["location_search_text", "%αναργυροι%"],
-      ["location_search_text", "%agioi%"],
-      ["location_search_text", "%anargiroi%"],
-      ["location_search_text", "%anargyroi%"],
+    const ors = calls("or").map((call) => String(call.args[0]));
+    expect(ors).toEqual(expect.arrayContaining([
+      expect.stringContaining("location_search_text.ilike.%αγιοι%"),
+      expect.stringContaining("location_search_text.ilike.%αναργυροι%"),
     ]));
+    expect(ors.join("\n")).toContain("location_search_text.ilike.%agioi%");
+    expect(ors.join("\n")).toContain("location_search_text.ilike.%anargiroi%");
+    expect(ors.join("\n")).toContain("location_search_text.ilike.%anargyroi%");
   });
 
   it("uses bounded latitude/longitude filters for selected address suggestions instead of exact text-only city filtering", () => {

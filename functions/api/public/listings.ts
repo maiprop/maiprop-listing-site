@@ -143,6 +143,17 @@ function normalizeLocationText(value: string): string {
 }
 
 const GREEK_CHAR_RE = /[\u0370-\u03ff]/;
+const LOCATION_TOKEN_ALIASES: Record<string, string[]> = {
+  agioi: ["agion", "agios"],
+  agion: ["agioi", "agios"],
+  agios: ["agioi", "agion"],
+  anargiroi: ["anargiron", "anargyroi", "anargyron"],
+  anargiron: ["anargiroi", "anargyroi", "anargyron"],
+  anargyroi: ["anargiroi", "anargiron", "anargyron"],
+  anargyron: ["anargiroi", "anargiron", "anargyroi"],
+  kalimnou: ["kalymnou"],
+  kalymnou: ["kalimnou"],
+};
 
 function unique(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))];
@@ -180,20 +191,29 @@ function normalizeListingLocationSearchQuery(value: string): string {
     .trim();
 }
 
-function listingLocationSearchTokens(value: string): string[] {
+function listingLocationSearchTokenGroups(value: string): string[][] {
   const stopWords = new Set(["περιφερεια", "αττικη", "αττικησ", "ελλαδα", "greece", "attica", "attikis", "perifereia", "ellada"]);
   const expandToken = (token: string) => {
     if (!token || stopWords.has(token)) return [];
     const expanded = [token];
     if (GREEK_CHAR_RE.test(token)) {
-      expanded.push(transliterateGreekToGreeklish(token, "i"));
-      expanded.push(transliterateGreekToGreeklish(token, "y"));
+      const greeklishI = transliterateGreekToGreeklish(token, "i");
+      const greeklishY = transliterateGreekToGreeklish(token, "y");
+      expanded.push(greeklishI);
+      expanded.push(greeklishY);
+      expanded.push(...(LOCATION_TOKEN_ALIASES[greeklishI] ?? []));
+      expanded.push(...(LOCATION_TOKEN_ALIASES[greeklishY] ?? []));
     } else {
-      expanded.push(normalizeLatinGreeklish(token));
+      const latin = normalizeLatinGreeklish(token);
+      expanded.push(latin);
+      expanded.push(...(LOCATION_TOKEN_ALIASES[latin] ?? []));
     }
     return unique(expanded).filter((item) => !stopWords.has(item));
   };
-  return unique(normalizeListingLocationSearchQuery(value).split(" ").filter(Boolean).flatMap(expandToken)).slice(0, 12);
+  return unique(normalizeListingLocationSearchQuery(value).split(" ").filter(Boolean))
+    .map((token) => expandToken(token).slice(0, 6))
+    .filter((group) => group.length > 0)
+    .slice(0, 6);
 }
 
 type LocationBounds = {
@@ -280,8 +300,15 @@ function buildListingParams(requestUrl: URL): { params: URLSearchParams; page: n
     params.append("longitude", `lte.${locationBounds.maxLng}`);
   } else {
     const locationQuery = safeText(requestUrl.searchParams.get("city"));
-    for (const locationToken of locationQuery ? listingLocationSearchTokens(locationQuery) : []) {
-      params.append("location_search_text", `ilike.*${locationToken}*`);
+    for (const locationGroup of locationQuery ? listingLocationSearchTokenGroups(locationQuery) : []) {
+      if (locationGroup.length === 1) {
+        params.append("location_search_text", `ilike.*${locationGroup[0]}*`);
+      } else {
+        params.append(
+          "or",
+          `(${locationGroup.map((locationToken) => `location_search_text.ilike.*${locationToken}*`).join(",")})`,
+        );
+      }
     }
   }
   appendIfPresent(params, "property_type", safeToken(requestUrl.searchParams.get("property_type"), PROPERTY_TYPES)?.replace(/^(.+)$/, "eq.$1") ?? null);

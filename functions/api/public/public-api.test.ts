@@ -527,13 +527,14 @@ describe("public listings endpoint", () => {
     expect(listingsUrl.searchParams.get("limit")).toBe("200");
     expect(listingsUrl.searchParams.get("offset")).toBe("200");
     expect(listingsUrl.searchParams.get("city")).toBeNull();
-    expect(listingsUrl.searchParams.getAll("location_search_text")).toEqual(expect.arrayContaining([
-      "ilike.*αγιοι*",
-      "ilike.*αναργυροι*",
-      "ilike.*agioi*",
-      "ilike.*anargiroi*",
-      "ilike.*anargyroi*",
+    const locationOrFilters = listingsUrl.searchParams.getAll("or");
+    expect(locationOrFilters).toEqual(expect.arrayContaining([
+      expect.stringContaining("location_search_text.ilike.*αγιοι*"),
+      expect.stringContaining("location_search_text.ilike.*αναργυροι*"),
     ]));
+    expect(locationOrFilters.join("\n")).toContain("location_search_text.ilike.*agioi*");
+    expect(locationOrFilters.join("\n")).toContain("location_search_text.ilike.*anargiroi*");
+    expect(locationOrFilters.join("\n")).toContain("location_search_text.ilike.*anargyroi*");
     expect(listingsUrl.searchParams.get("listing_type")).toBe("in.(sale,new_build)");
     expect(listingsUrl.searchParams.get("select")).toContain("project_units!project_units_project_id_fkey");
     expect(listingsUrl.searchParams.get("is_off_market")).toBe("eq.false");
@@ -559,6 +560,22 @@ describe("public listings endpoint", () => {
     expect(Number(listingsUrl.searchParams.getAll("latitude").find((value) => value.startsWith("lte."))?.replace("lte.", ""))).toBeGreaterThan(38.0301);
     expect(Number(listingsUrl.searchParams.getAll("longitude").find((value) => value.startsWith("gte."))?.replace("gte.", ""))).toBeLessThan(23.7241);
     expect(Number(listingsUrl.searchParams.getAll("longitude").find((value) => value.startsWith("lte."))?.replace("lte.", ""))).toBeGreaterThan(23.7241);
+  });
+
+  it("ORs Greek short-locality synonyms so Latin-stored listings can match selected Google suggestions", async () => {
+    await listingsRequest(makeCtx(
+      "https://portal.maiprop.co/api/public/listings?listing_type=sale&city=%CE%86%CE%B3%CE%B9%CE%BF%CE%B9%20%CE%91%CE%BD%CE%AC%CF%81%CE%B3%CF%85%CF%81%CE%BF%CE%B9",
+    ));
+
+    const listingsUrl = fetchUrls("/rest/v1/listings")[0];
+    expect(listingsUrl.searchParams.getAll("location_search_text")).toEqual([]);
+    const locationOrFilters = listingsUrl.searchParams.getAll("or");
+    expect(locationOrFilters).toEqual(expect.arrayContaining([
+      expect.stringContaining("location_search_text.ilike.*αγιοι*"),
+      expect.stringContaining("location_search_text.ilike.*αναργυροι*"),
+    ]));
+    expect(locationOrFilters.join("\n")).toContain("location_search_text.ilike.*agioi*");
+    expect(locationOrFilters.join("\n")).toContain("location_search_text.ilike.*anargiroi*");
   });
 
   it("uses the default public catalogue scope unless auctions are explicitly included", async () => {
