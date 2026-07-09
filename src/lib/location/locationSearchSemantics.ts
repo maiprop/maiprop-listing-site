@@ -108,12 +108,15 @@ export function normalizeListingLocationSearchQuery(value: string): string {
 }
 
 export function getListingLocationSearchTokens(value: string): string[] {
+  return unique(getListingLocationSearchTokenGroups(value).flat()).slice(0, 12);
+}
+
+export function getListingLocationSearchTokenGroups(value: string): string[][] {
   return unique(
     normalizeListingLocationSearchQuery(value)
       .split(" ")
       .filter(Boolean)
-      .flatMap(expandLocationSearchToken),
-  ).slice(0, 12);
+  ).map((token) => expandLocationSearchToken(token).slice(0, 6)).filter((group) => group.length > 0).slice(0, 6);
 }
 
 function locationContextTokens(value: string): string[] {

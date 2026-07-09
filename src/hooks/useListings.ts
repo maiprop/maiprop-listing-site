@@ -14,7 +14,7 @@ import {
   listingWriteSchema,
   parseMutationInput,
 } from "@/lib/mutationSchemas";
-import { getListingLocationSearchTokens } from "@/lib/location/locationSearchSemantics";
+import { getListingLocationSearchTokenGroups } from "@/lib/location/locationSearchSemantics";
 
 /**
  * Minimal shape we need from a listings row to enrich it with profiles. The
@@ -363,8 +363,14 @@ export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize
       .gte("longitude", locationBounds.minLng)
       .lte("longitude", locationBounds.maxLng);
   } else if (filters?.city) {
-    for (const locationToken of getListingLocationSearchTokens(filters.city)) {
-      query = query.ilike("location_search_text", `%${locationToken}%`);
+    for (const locationGroup of getListingLocationSearchTokenGroups(filters.city)) {
+      if (locationGroup.length === 1) {
+        query = query.ilike("location_search_text", `%${locationGroup[0]}%`);
+      } else {
+        query = query.or(
+          locationGroup.map((locationToken) => `location_search_text.ilike.%${locationToken}%`).join(","),
+        );
+      }
     }
   }
   if (filters?.listing_type) {
