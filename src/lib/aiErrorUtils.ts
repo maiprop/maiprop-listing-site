@@ -22,6 +22,7 @@ export const isAiMonthlyLimitError = (err: unknown, data?: { error?: string } | 
     msg.includes("monthly_limit_reached") ||
     msg.includes("monthly ai usage limit reached") ||
     msg.includes("monthly usage limit reached") ||
+    msg.includes("reset on the 1st") ||
     msg.includes("resets on the 1st")
   );
 };

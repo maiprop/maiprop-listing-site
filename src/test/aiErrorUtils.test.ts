@@ -38,6 +38,7 @@ describe("isAiUsageLimitError", () => {
   it("recognizes monthly feature quota limits separately", () => {
     expect(isAiMonthlyLimitError(null, { error: "monthly_limit_reached" })).toBe(true);
     expect(isAiMonthlyLimitError(null, { error: "Monthly AI usage limit reached. Resets on the 1st of next month." })).toBe(true);
+    expect(isAiMonthlyLimitError(null, { error: AI_MONTHLY_LIMIT_MESSAGE })).toBe(true);
     expect(isAiUsageLimitError(null, { error: "monthly_limit_reached" })).toBe(true);
   });
 

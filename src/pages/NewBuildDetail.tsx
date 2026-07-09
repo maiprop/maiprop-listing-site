@@ -11,7 +11,7 @@ import {
   ArrowLeft, Building2, MapPin, Calendar, Home,
   Zap, Eye, Thermometer, Check,
   ChevronDown, ChevronUp, Shield, Flame, Wifi, Car, TreePine, Phone,
-  Loader2, Maximize2, FileImage,
+  Loader2, Maximize2, FileImage, ArrowUpRight,
 } from "lucide-react";
 import { useAuth, type Profile } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -34,7 +34,7 @@ import { RegisterInterestCard } from "@/components/new-build/RegisterInterestCar
 import { ProjectOverview } from "@/components/new-build/ProjectOverview";
 import { tFallback, tInterpolate } from "@/lib/i18nFallback";
 import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
-import { getAiErrorMessage } from "@/lib/aiErrorUtils";
+import { getAiErrorMessage, isAiMonthlyLimitError } from "@/lib/aiErrorUtils";
 import { fetchPublicApi, shouldLogPublicApiFallback } from "@/lib/publicApi";
 import { logger } from "@/lib/logger";
 import { getListingDetailPath, shouldUseNewBuildRoute } from "@/lib/listingRoutes";
@@ -168,6 +168,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
   } | null>(null);
   const [aiInsightsLoading, setAiInsightsLoading] = useState(false);
   const [aiInsightsError, setAiInsightsError] = useState<string | null>(null);
+  const [aiInsightsQuotaReached, setAiInsightsQuotaReached] = useState(false);
 
   const { data: listing, isLoading, error } = useQuery({
     queryKey: ["new-build-listing", id],
@@ -307,6 +308,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
     if (!displayCity || projectValuationMetrics.price <= 0 || projectValuationMetrics.sqm <= 0) return;
     setAiInsightsLoading(true);
     setAiInsightsError(null);
+    setAiInsightsQuotaReached(false);
     invokeAuthenticatedFunction<AIInsightsResponse>("property-valuation", {
       body: {
         listingId: listing.id,
@@ -348,11 +350,14 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
           confidenceLabel: data.confidenceLabel ?? "Medium",
         });
         setAiInsightsError(null);
+        setAiInsightsQuotaReached(false);
       } else {
         setAiInsightsError(getAiErrorMessage(error, data, tr("newBuildDetail.ai.unavailable", "Market analysis unavailable")));
+        setAiInsightsQuotaReached(isAiMonthlyLimitError(error, data));
       }
     }).catch((err: unknown) => {
       setAiInsightsError(getAiErrorMessage(err, null, tr("newBuildDetail.ai.unavailable", "Market analysis unavailable")));
+      setAiInsightsQuotaReached(isAiMonthlyLimitError(err, null));
     }).finally(() => setAiInsightsLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listing?.id, user, isCanonicalNewBuild]);
@@ -562,9 +567,26 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                     );
                   })()}
                   {user && !aiInsightsLoading && !aiInsightsData && (
-                    <p className="text-xs text-muted-foreground text-center py-4">
-                      {aiInsightsError ?? tr("newBuildDetail.ai.unavailable", "Market analysis unavailable")}
-                    </p>
+                    <div className="flex flex-col items-center gap-3 py-4 text-center">
+                      <p className="max-w-md text-xs text-muted-foreground">
+                        {aiInsightsError ?? tr("newBuildDetail.ai.unavailable", "Market analysis unavailable")}
+                      </p>
+                      {aiInsightsQuotaReached && (
+                        <div className="flex flex-wrap justify-center gap-2">
+                          <Button asChild size="sm" className="h-8 gap-1.5 px-3 text-xs">
+                            <Link to="/pricing">
+                              {tr("common.upgrade", "Upgrade")}
+                              <ArrowUpRight className="h-3.5 w-3.5" />
+                            </Link>
+                          </Button>
+                          <Button asChild size="sm" variant="outline" className="h-8 gap-1.5 px-3 text-xs">
+                            <Link to="/dashboard?tab=billing&addon=valuation_single">
+                              {tr("billing.addons.buyAddon", "Buy add-on")}
+                            </Link>
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   )}
                   {!user && (
                     <p className="text-xs text-muted-foreground text-center py-4">

@@ -516,6 +516,11 @@ describe("NewBuildDetail", () => {
     expect(
       await screen.findByText(/You have reached this month's AI allowance/i),
     ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Upgrade/i })).toHaveAttribute("href", "/pricing");
+    expect(screen.getByRole("link", { name: /Buy add-on/i })).toHaveAttribute(
+      "href",
+      "/dashboard?tab=billing&addon=valuation_single",
+    );
     expect(screen.queryByText("Market analysis unavailable")).not.toBeInTheDocument();
   });
 
