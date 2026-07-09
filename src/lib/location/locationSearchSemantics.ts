@@ -176,10 +176,13 @@ export function isBroadAdministrativePrediction(prediction: AddressPrediction): 
 export function getListingLocationSearchValue(prediction: AddressPrediction): string {
   if (isBroadAdministrativePrediction(prediction)) return "";
 
+  const hasCoordinates = Boolean(prediction.latitude?.trim() && prediction.longitude?.trim());
+  const locality = prediction.city?.trim() || prediction.municipality?.trim();
+  if (!hasCoordinates && prediction.addressLine?.trim() && locality) return locality;
+
   return (
     prediction.addressLine?.trim() ||
-    prediction.city?.trim() ||
-    prediction.municipality?.trim() ||
+    locality ||
     prediction.title?.trim() ||
     prediction.value?.trim() ||
     ""
