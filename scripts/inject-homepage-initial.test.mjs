@@ -138,6 +138,49 @@ describe("homepage initial payload injection", () => {
     expect(globalThis.fetch.mock.calls.some(([url]) => String(url).includes("/api/public/listings"))).toBe(true);
   });
 
+  it("retries transient homepage prefetch failures before using the fallback", async () => {
+    let featuredCalls = 0;
+    const fetchImpl = vi.fn(async (url) => {
+      const href = String(url);
+      if (href.includes("section=featured")) {
+        featuredCalls += 1;
+        if (featuredCalls === 1) {
+          throw new Error("transient abort");
+        }
+        return new Response(JSON.stringify([
+          {
+            id: "featured-after-retry",
+            title: "Retry Listing",
+            city: "Athens",
+            address: "3 Main St",
+          },
+        ]), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (href.includes("section=open-houses")) {
+        return new Response(JSON.stringify([]), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response(JSON.stringify([]), { status: 200, headers: { "content-type": "application/json" } });
+    });
+
+    const payload = await buildHomepageInitialPayload({
+      origin: "https://portal.maiprop.co",
+      now: new Date("2026-07-01T10:00:00.000Z"),
+      fetchImpl,
+      fetchOptions: { attempts: 2, timeoutMs: 1_000 },
+    });
+
+    expect(featuredCalls).toBe(2);
+    expect(payload.featured).toMatchObject([
+      {
+        id: "featured-after-retry",
+        title: "Retry Listing",
+        city: "Athens",
+        address: "3 Main St",
+      },
+    ]);
+    expect(fetchImpl.mock.calls.some(([url]) => String(url).includes("/api/public/listings"))).toBe(false);
+  });
+
   it("injects the payload into dist index.html without executable inline JavaScript", async () => {
     const distDir = createTempDist(`
       <html><body>

@@ -6,7 +6,8 @@ const HOMEPAGE_INITIAL_SCRIPT_ID = "maiprop-homepage-initial";
 const HOMEPAGE_INITIAL_VERSION = 1;
 const DEFAULT_ORIGIN = "https://portal.maiprop.co";
 const DEFAULT_DIST_DIR = "dist";
-const FETCH_TIMEOUT_MS = 3_500;
+const DEFAULT_FETCH_TIMEOUT_MS = 10_000;
+const DEFAULT_FETCH_ATTEMPTS = 2;
 const MAX_FEATURED_ROWS = 4;
 const MAX_OPEN_HOUSE_ROWS = 4;
 const MAX_IMAGES_PER_ROW = 2;
@@ -157,9 +158,23 @@ export function sanitizeHomepageRow(row) {
   return cleaned;
 }
 
-async function fetchJsonWithTimeout(url, fetchImpl = globalThis.fetch) {
+function fetchTimeoutMs(env = process.env) {
+  const raw = Number(env.HOMEPAGE_INITIAL_FETCH_TIMEOUT_MS);
+  return Number.isFinite(raw) && raw >= 1_000 ? raw : DEFAULT_FETCH_TIMEOUT_MS;
+}
+
+function fetchAttempts(env = process.env) {
+  const raw = Number(env.HOMEPAGE_INITIAL_FETCH_ATTEMPTS);
+  return Number.isFinite(raw) && raw >= 1 ? Math.min(Math.floor(raw), 4) : DEFAULT_FETCH_ATTEMPTS;
+}
+
+function sleep(ms) {
+  return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
+}
+
+async function fetchJsonOnceWithTimeout(url, fetchImpl, timeoutMs) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetchImpl(url, {
       headers: { Accept: "application/json" },
@@ -173,11 +188,29 @@ async function fetchJsonWithTimeout(url, fetchImpl = globalThis.fetch) {
   }
 }
 
-async function fetchHomepageSection(origin, section, limit, fetchImpl) {
+async function fetchJsonWithTimeout(url, fetchImpl = globalThis.fetch, {
+  attempts = fetchAttempts(),
+  timeoutMs = fetchTimeoutMs(),
+} = {}) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await fetchJsonOnceWithTimeout(url, fetchImpl, timeoutMs);
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts) {
+        await sleep(250 * attempt);
+      }
+    }
+  }
+  throw lastError;
+}
+
+async function fetchHomepageSection(origin, section, limit, fetchImpl, fetchOptions) {
   const url = new URL("/api/public/homepage", origin);
   url.searchParams.set("section", section);
   try {
-    const json = await fetchJsonWithTimeout(url, fetchImpl);
+    const json = await fetchJsonWithTimeout(url, fetchImpl, fetchOptions);
     return publicRowsFromResponse(json)
       .map(sanitizeHomepageRow)
       .filter(Boolean)
@@ -188,12 +221,12 @@ async function fetchHomepageSection(origin, section, limit, fetchImpl) {
   }
 }
 
-async function fetchFeaturedListingsFallback(origin, limit, fetchImpl) {
+async function fetchFeaturedListingsFallback(origin, limit, fetchImpl, fetchOptions) {
   const url = new URL("/api/public/listings", origin);
   url.searchParams.set("page", "1");
   url.searchParams.set("pageSize", String(limit));
   try {
-    const json = await fetchJsonWithTimeout(url, fetchImpl);
+    const json = await fetchJsonWithTimeout(url, fetchImpl, fetchOptions);
     return publicRowsFromResponse(json)
       .map(sanitizeHomepageRow)
       .filter(Boolean)
@@ -208,14 +241,15 @@ export async function buildHomepageInitialPayload({
   origin = DEFAULT_ORIGIN,
   now = new Date(),
   fetchImpl = globalThis.fetch,
+  fetchOptions,
 } = {}) {
   let [featured, openHouses] = await Promise.all([
-    fetchHomepageSection(origin, "featured", MAX_FEATURED_ROWS, fetchImpl),
-    fetchHomepageSection(origin, "open-houses", MAX_OPEN_HOUSE_ROWS, fetchImpl),
+    fetchHomepageSection(origin, "featured", MAX_FEATURED_ROWS, fetchImpl, fetchOptions),
+    fetchHomepageSection(origin, "open-houses", MAX_OPEN_HOUSE_ROWS, fetchImpl, fetchOptions),
   ]);
 
   if (featured.length === 0) {
-    featured = await fetchFeaturedListingsFallback(origin, MAX_FEATURED_ROWS, fetchImpl);
+    featured = await fetchFeaturedListingsFallback(origin, MAX_FEATURED_ROWS, fetchImpl, fetchOptions);
   }
 
   return {
