@@ -2,11 +2,11 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const migration = readFileSync(
-  "supabase/migrations/20260709071439_add_listing_location_search_text.sql",
+  "supabase/migrations/20260709072309_add_listing_location_search_text.sql",
   "utf8",
 );
 const correctiveMigration = readFileSync(
-  "supabase/migrations/20260709072600_fix_listing_location_search_text_normalizer.sql",
+  "supabase/migrations/20260709072653_fix_listing_location_search_text_normalizer.sql",
   "utf8",
 );
 

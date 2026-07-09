@@ -11,7 +11,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 
-import { formatStripeKeyEvidence, getStripeSecretKey } from "./stripe-readiness-env.mjs";
+import { formatStripeKeyEvidence, getStripeReadOnlyKey } from "./stripe-readiness-env.mjs";
 
 function loadEnvFile(path) {
   if (!existsSync(path)) return;
@@ -121,9 +121,9 @@ function encodeForm(values) {
 }
 
 function getStripeKey() {
-  const key = getStripeSecretKey(process.env);
-  if (!key.startsWith("sk_live_")) {
-    throw new Error("Refusing to run live migration gate without an sk_live_ Stripe key.");
+  const key = getStripeReadOnlyKey(process.env);
+  if (!/^(sk|rk)_live_/.test(key)) {
+    throw new Error("Refusing to run live migration gate without an sk_live_ or rk_live_ Stripe key.");
   }
   return key;
 }
