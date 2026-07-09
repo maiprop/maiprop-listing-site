@@ -13,6 +13,14 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useNominatimAddressSuggestions, type NominatimAddressSuggestion } from "@/hooks/useNominatimAddressSuggestions";
 import { useFiresalePhotoUploader } from "@/hooks/useFiresalePhotoUploader";
 import { getNominatimCity } from "@/lib/locationSuggestions";
+import {
+  mapNominatimSuggestionToAddressPrediction,
+  type AddressPrediction,
+} from "@/lib/location/addressFormat";
+import {
+  filterAddressPredictionsForQuery,
+  getAddressInputDisplayValue,
+} from "@/lib/location/locationSearchSemantics";
 import { QuickSaleSubmittedView } from "@/components/firesale/QuickSaleSubmittedView";
 import { QuickSaleFormView } from "./QuickSaleFormView";
 import {
@@ -86,11 +94,20 @@ export const FiresaleQuickSaleForm = () => {
     clear: clearAddressSuggestions,
   } = useNominatimAddressSuggestions(form.address);
 
+  const filteredAddressSuggestions = addressSuggestions.filter((suggestion) => {
+    const prediction = mapNominatimSuggestionToAddressPrediction(suggestion);
+    return filterAddressPredictionsForQuery([prediction], form.address).length > 0;
+  });
+
+  const predictionForSuggestion = (suggestion: NominatimAddressSuggestion): AddressPrediction =>
+    mapNominatimSuggestionToAddressPrediction(suggestion);
+
   const handleAddressSuggestionSelect = (suggestion: NominatimAddressSuggestion) => {
+    const prediction = predictionForSuggestion(suggestion);
     setForm((prev) => ({
       ...prev,
-      address: suggestion.display_name,
-      city: getNominatimCity(suggestion) || prev.city,
+      address: getAddressInputDisplayValue(prediction) || suggestion.display_name,
+      city: prediction.city || getNominatimCity(suggestion) || prev.city,
     }));
   };
 
@@ -184,7 +201,7 @@ export const FiresaleQuickSaleForm = () => {
       form={form}
       errors={errors}
       addressLoading={addressLoading}
-      addressSuggestions={addressSuggestions}
+      addressSuggestions={filteredAddressSuggestions}
       photoPreviews={photoPreviews}
       fileInputRef={fileInputRef}
       aiLoading={aiLoading}

@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
-const { fromMock, storageMock, useAuthMock, navigateMock, toastMock, useDraftMock, useAIMock } =
+const { fromMock, storageMock, useAuthMock, navigateMock, toastMock, useDraftMock, useAIMock, geocodeAddressTextMock } =
   vi.hoisted(() => ({
     fromMock: vi.fn(),
     storageMock: { upload: vi.fn(), getPublicUrl: vi.fn() },
@@ -20,6 +20,7 @@ const { fromMock, storageMock, useAuthMock, navigateMock, toastMock, useDraftMoc
     toastMock: { success: vi.fn(), error: vi.fn() },
     useDraftMock: vi.fn(),
     useAIMock: vi.fn(),
+    geocodeAddressTextMock: vi.fn(),
   }));
 
 vi.mock("@/integrations/supabase/client", () => ({
@@ -41,6 +42,13 @@ vi.mock("react-router-dom", async () => {
 vi.mock("sonner", () => ({ toast: toastMock }));
 vi.mock("@/hooks/useListingDraft", () => ({ useListingDraft: () => useDraftMock() }));
 vi.mock("@/hooks/useListingAI", () => ({ useListingAI: () => useAIMock() }));
+vi.mock("@/lib/location/geocodeAddress", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/location/geocodeAddress")>("@/lib/location/geocodeAddress");
+  return {
+    ...actual,
+    geocodeAddressText: (...args: unknown[]) => geocodeAddressTextMock(...args),
+  };
+});
 vi.mock("@/lib/compressImage", () => ({
   compressListingImage: vi.fn(async (f: File) =>
     new File([f], f.name.replace(/\.[^.]+$/, ".webp"), { type: "image/webp" }),
@@ -81,6 +89,8 @@ beforeEach(() => {
     handleAiDescription: vi.fn(),
     handleAiPrice: vi.fn(),
   });
+  geocodeAddressTextMock.mockReset();
+  geocodeAddressTextMock.mockResolvedValue(null);
   // crypto.randomUUID is supported in jsdom but stub for determinism.
   let counter = 0;
   vi.stubGlobal("crypto", {
@@ -421,6 +431,40 @@ describe("useListingForm — handleSubmit", () => {
       address: "14 Voukourestiou",
       latitude: 37.9779,
       longitude: 23.7354,
+    }));
+  });
+
+  it("geocodes a manually typed address before inserting when coordinates are missing", async () => {
+    geocodeAddressTextMock.mockResolvedValue({ latitude: "38.0202", longitude: "23.7126" });
+    const insertMock = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { id: "L-geocoded" }, error: null }),
+      }),
+    });
+    fromMock.mockReturnValueOnce({ insert: insertMock });
+    const { result } = renderHook(() => useListingForm(), { wrapper: wrap });
+    setBaseForm(result);
+    act(() => {
+      result.current.set("address", "Υμηττού 6");
+      result.current.set("city", "Άγιοι Ανάργυροι Αττικής");
+      result.current.set("region", "Αττική");
+    });
+
+    await act(async () => {
+      await result.current.handleSubmit();
+    });
+
+    expect(geocodeAddressTextMock).toHaveBeenCalledWith({
+      address: "Υμηττού 6",
+      city: "Άγιοι Ανάργυροι Αττικής",
+      region: "Αττική",
+      postalCode: "",
+    });
+    expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({
+      address: "Υμηττού 6",
+      city: "Άγιοι Ανάργυροι Αττικής",
+      latitude: 38.0202,
+      longitude: 23.7126,
     }));
   });
 

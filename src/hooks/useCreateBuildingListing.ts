@@ -20,6 +20,7 @@ import {
   projectUnitWriteSchema,
 } from "@/lib/mutationSchemas";
 import { calculatePricePerSqm } from "@/lib/priceCalculations";
+import { geocodeAddressText, hasCompleteCoordinates } from "@/lib/location/geocodeAddress";
 
 export interface CreateBuildingListingProjectInput {
   name: string;
@@ -171,6 +172,19 @@ export function useCreateBuildingListing() {
       const { userId, project, unit, projectMedia, listing, finalTitle, coverImageUrl, additionalImageUrls } = args;
       const projectKind = args.projectKind ?? "new_build";
       const projectId = crypto.randomUUID();
+      let projectLatitude = project.latitude;
+      let projectLongitude = project.longitude;
+      if (!hasCompleteCoordinates(projectLatitude, projectLongitude)) {
+        const geocoded = await geocodeAddressText({
+          address: project.address,
+          city: project.city,
+          municipality: project.municipality,
+        });
+        if (geocoded) {
+          projectLatitude = geocoded.latitude;
+          projectLongitude = geocoded.longitude;
+        }
+      }
 
       const projectPayload = parseMutationInput(
         newBuildingProjectWriteSchema,
@@ -186,8 +200,8 @@ export function useCreateBuildingListing() {
           city: project.city.trim(),
           municipality: project.municipality || undefined,
           area_description: project.area_description || undefined,
-          latitude: toOptionalNumber(project.latitude),
-          longitude: toOptionalNumber(project.longitude),
+          latitude: toOptionalNumber(projectLatitude),
+          longitude: toOptionalNumber(projectLongitude),
           permit_approval_date: project.permit_approval_date || undefined,
           construction_start_date: project.construction_start_date || undefined,
           structural_completion_date: project.structural_completion_date || undefined,
@@ -228,8 +242,8 @@ export function useCreateBuildingListing() {
           description: listing.description || undefined,
           city: project.city.trim(),
           address: project.address || undefined,
-          latitude: toOptionalNumber(project.latitude),
-          longitude: toOptionalNumber(project.longitude),
+          latitude: toOptionalNumber(projectLatitude),
+          longitude: toOptionalNumber(projectLongitude),
           property_type: "apartment" as const,
           listing_type: "new_build" as const,
           price,

@@ -8,9 +8,11 @@ import {
 const {
   invokeMock,
   uploadProjectMediaMock,
+  geocodeAddressTextMock,
 } = vi.hoisted(() => ({
   invokeMock: vi.fn(),
   uploadProjectMediaMock: vi.fn(),
+  geocodeAddressTextMock: vi.fn(),
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
@@ -24,6 +26,14 @@ vi.mock("@/integrations/supabase/client", () => ({
 vi.mock("@/lib/buildingListingUploads", () => ({
   uploadProjectMedia: (...args: unknown[]) => uploadProjectMediaMock(...args),
 }));
+
+vi.mock("@/lib/location/geocodeAddress", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/location/geocodeAddress")>("@/lib/location/geocodeAddress");
+  return {
+    ...actual,
+    geocodeAddressText: (...args: unknown[]) => geocodeAddressTextMock(...args),
+  };
+});
 
 const makeInput = (overrides: Partial<CreateBuildingListingInput> = {}): CreateBuildingListingInput => ({
   userId: "11111111-1111-4111-8111-111111111111",
@@ -92,6 +102,8 @@ describe("useCreateBuildingListing coverage", () => {
       randomUUID: vi.fn(() => "22222222-2222-4222-8222-222222222222"),
     });
     uploadProjectMediaMock.mockResolvedValue("https://cdn.test/project-media/render.jpg");
+    geocodeAddressTextMock.mockReset();
+    geocodeAddressTextMock.mockResolvedValue(null);
     invokeMock.mockResolvedValue({
       data: { data: { listingId: "33333333-3333-4333-8333-333333333333" }, error: null },
       error: null,
@@ -207,6 +219,42 @@ describe("useCreateBuildingListing coverage", () => {
           listing_type: "new_build",
           construction_status: "under_construction",
           year_built: 2026,
+        }),
+      }),
+    });
+  });
+
+  it("geocodes the project address before sending project and listing payloads when coordinates are missing", async () => {
+    geocodeAddressTextMock.mockResolvedValue({ latitude: "38.0202", longitude: "23.7126" });
+    const { result } = renderHook(() => useCreateBuildingListing());
+
+    await act(async () => {
+      await result.current(makeInput({
+        project: {
+          ...makeInput().project,
+          address: "Υμηττού 6",
+          city: "Άγιοι Ανάργυροι Αττικής",
+          municipality: "Δήμος Αγίων Αναργύρων – Καματερού",
+          latitude: "",
+          longitude: "",
+        },
+      }));
+    });
+
+    expect(geocodeAddressTextMock).toHaveBeenCalledWith({
+      address: "Υμηττού 6",
+      city: "Άγιοι Ανάργυροι Αττικής",
+      municipality: "Δήμος Αγίων Αναργύρων – Καματερού",
+    });
+    expect(invokeMock).toHaveBeenCalledWith("create-new-building-listing", {
+      body: expect.objectContaining({
+        project: expect.objectContaining({
+          latitude: 38.0202,
+          longitude: 23.7126,
+        }),
+        listing: expect.objectContaining({
+          latitude: 38.0202,
+          longitude: 23.7126,
         }),
       }),
     });

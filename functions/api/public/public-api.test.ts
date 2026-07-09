@@ -512,7 +512,7 @@ describe("public listings endpoint", () => {
   it("clamps page size, keeps listing images capped, attaches public owner profiles, and caches the response", async () => {
     const res = await listingsRequest(
       makeCtx(
-        "https://portal.maiprop.co/api/public/listings?page=2&pageSize=999&city=*Athens%25&listing_type=sale&features=has_pool,has_alarm,unsafe&energy_class=A,BAD&A%5B%5D=ignored",
+        "https://portal.maiprop.co/api/public/listings?page=2&pageSize=999&city=Άγιοι%20Αναργυροι%2C%20Αττικης&listing_type=sale&features=has_pool,has_alarm,unsafe&energy_class=A,BAD&A%5B%5D=ignored",
       ),
     );
     const body = await res.json() as { data: Array<{ profiles: unknown }>; hasMore: boolean; page: number; pageSize: number };
@@ -526,7 +526,11 @@ describe("public listings endpoint", () => {
     const listingsUrl = fetchUrls("/rest/v1/listings")[0];
     expect(listingsUrl.searchParams.get("limit")).toBe("200");
     expect(listingsUrl.searchParams.get("offset")).toBe("200");
-    expect(listingsUrl.searchParams.get("city")).toBe("ilike.*Athens*");
+    expect(listingsUrl.searchParams.get("city")).toBeNull();
+    expect(listingsUrl.searchParams.getAll("location_search_text")).toEqual([
+      "ilike.*αγιοι*",
+      "ilike.*αναργυροι*",
+    ]);
     expect(listingsUrl.searchParams.get("listing_type")).toBe("in.(sale,new_build)");
     expect(listingsUrl.searchParams.get("select")).toContain("project_units!project_units_project_id_fkey");
     expect(listingsUrl.searchParams.get("is_off_market")).toBe("eq.false");

@@ -4,6 +4,11 @@ import { Loader2, MapPin } from "lucide-react";
 import { useAddressAutocomplete } from "@/hooks/useAddressAutocomplete";
 import { GooglePlacesAttribution } from "@/components/location/GooglePlacesAttribution";
 import { formatAddressPrediction, type AddressPrediction } from "@/lib/location/addressFormat";
+import {
+  getAddressInputDisplayValue,
+  getListingLocationSearchValue,
+  isBroadAdministrativePrediction,
+} from "@/lib/location/locationSearchSemantics";
 import { cn } from "@/lib/utils";
 
 export type LocationAutocompleteSelection = AddressPrediction & { suggestion?: unknown };
@@ -97,7 +102,12 @@ export function LocationAutocompleteInput({
     const selection = item.selection.resolveDetails
       ? await item.selection.resolveDetails().catch(() => item.selection)
       : item.selection;
-    onChange(selection.value);
+    if (isBroadAdministrativePrediction(selection)) return;
+    const nextValue = mode === "address"
+      ? getAddressInputDisplayValue(selection)
+      : getListingLocationSearchValue(selection) || selection.city || selection.value;
+    if (!nextValue) return;
+    onChange(nextValue);
     onSuggestionSelect?.(selection);
     clear();
     setFocused(false);
