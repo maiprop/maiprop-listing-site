@@ -22,6 +22,9 @@ describe("Cloudflare Pages function routes", () => {
       "/sitemap-dynamic.xml",
       "/listings",
       "/auctions",
+      "/auction/*",
+      "/new-build/*",
+      "/open-house/*",
       "/property/*",
       "/__unlock",
     ]);
