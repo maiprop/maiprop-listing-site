@@ -1,22 +1,27 @@
 /* eslint-disable react-refresh/only-export-components */
 import { Link } from "react-router-dom";
 
-const PROPERTY_LINK_REGEX = /(\/property\/([a-f0-9-]{36})|property\/([a-f0-9-]{36}))/gi;
+const LISTING_LINK_REGEX = /(\/?(property|new-build|auction|open-house)\/([a-f0-9-]{36}))/gi;
 
-type Part = { type: "text"; value: string } | { type: "link"; id: string; match: string };
+type ListingRoute = "property" | "new-build" | "auction" | "open-house";
+
+type Part =
+  | { type: "text"; value: string }
+  | { type: "link"; route: ListingRoute; id: string; match: string };
 
 export function parseMessageContent(content: string): Part[] {
   if (!content || typeof content !== "string") return [];
   const parts: Part[] = [];
   let lastIndex = 0;
   let m: RegExpExecArray | null;
-  const re = new RegExp(PROPERTY_LINK_REGEX.source, "gi");
+  const re = new RegExp(LISTING_LINK_REGEX.source, "gi");
   while ((m = re.exec(content)) !== null) {
     if (m.index > lastIndex) {
       parts.push({ type: "text", value: content.slice(lastIndex, m.index) });
     }
-    const id = (m[2] || m[3]) ?? "";
-    parts.push({ type: "link", id, match: m[0] });
+    const route = m[2] as ListingRoute;
+    const id = m[3] ?? "";
+    parts.push({ type: "link", route, id, match: m[0] });
     lastIndex = m.index + m[0].length;
   }
   if (lastIndex < content.length) {
@@ -35,7 +40,7 @@ export function MessageContent({ content, className }: { content: string; classN
         ) : (
           <Link
             key={i}
-            to={`/property/${p.id}`}
+            to={`/${p.route}/${p.id}`}
             className="text-primary underline hover:text-primary/80"
           >
             {p.match}

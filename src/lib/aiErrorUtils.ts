@@ -14,7 +14,7 @@ const rawErrorMessage = (err: unknown): string | null => {
 };
 
 const errorMessage = (err: unknown, data?: { error?: string } | null): string =>
-  String(rawErrorMessage(err) ?? data?.error ?? "").toLowerCase();
+  [rawErrorMessage(err), data?.error].filter(Boolean).join(" ").toLowerCase();
 
 export const isAiMonthlyLimitError = (err: unknown, data?: { error?: string } | null): boolean => {
   const msg = errorMessage(err, data);
@@ -50,4 +50,4 @@ export const getAiErrorMessage = (
   err: unknown,
   data?: { error?: string } | null,
   fallback = "AI analysis failed. Please try again."
-): string => firstMessage([friendlyLimitMessage(err, data), rawErrorMessage(err), data?.error], fallback);
+): string => firstMessage([friendlyLimitMessage(err, data), data?.error, rawErrorMessage(err)], fallback);

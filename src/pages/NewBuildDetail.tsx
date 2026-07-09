@@ -34,6 +34,7 @@ import { RegisterInterestCard } from "@/components/new-build/RegisterInterestCar
 import { ProjectOverview } from "@/components/new-build/ProjectOverview";
 import { tFallback, tInterpolate } from "@/lib/i18nFallback";
 import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
+import { getAiErrorMessage } from "@/lib/aiErrorUtils";
 import { fetchPublicApi, shouldLogPublicApiFallback } from "@/lib/publicApi";
 import { logger } from "@/lib/logger";
 import { getListingDetailPath, shouldUseNewBuildRoute } from "@/lib/listingRoutes";
@@ -166,6 +167,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
     marketComparison: string; confidenceLabel: string;
   } | null>(null);
   const [aiInsightsLoading, setAiInsightsLoading] = useState(false);
+  const [aiInsightsError, setAiInsightsError] = useState<string | null>(null);
 
   const { data: listing, isLoading, error } = useQuery({
     queryKey: ["new-build-listing", id],
@@ -304,6 +306,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
     if (!listing || !user || !isCanonicalNewBuild) return;
     if (!displayCity || projectValuationMetrics.price <= 0 || projectValuationMetrics.sqm <= 0) return;
     setAiInsightsLoading(true);
+    setAiInsightsError(null);
     invokeAuthenticatedFunction<AIInsightsResponse>("property-valuation", {
       body: {
         listingId: listing.id,
@@ -335,7 +338,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
         tags: valuationTags,
         condition: listing.construction_status,
       },
-    }).then(({ data }) => { // skipcq: JS-R1005 - AI insight response normalizes several optional metrics together.
+    }).then(({ data, error }) => { // skipcq: JS-R1005 - AI insight response normalizes several optional metrics together.
       if (data && !data.error) {
         setAiInsightsData({
           vsMarket: data.marketComparisonPct ?? 0,
@@ -344,7 +347,12 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
           marketComparison: data.marketComparison ?? "at_market",
           confidenceLabel: data.confidenceLabel ?? "Medium",
         });
+        setAiInsightsError(null);
+      } else {
+        setAiInsightsError(getAiErrorMessage(error, data, tr("newBuildDetail.ai.unavailable", "Market analysis unavailable")));
       }
+    }).catch((err: unknown) => {
+      setAiInsightsError(getAiErrorMessage(err, null, tr("newBuildDetail.ai.unavailable", "Market analysis unavailable")));
     }).finally(() => setAiInsightsLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listing?.id, user, isCanonicalNewBuild]);
@@ -554,7 +562,9 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
                     );
                   })()}
                   {user && !aiInsightsLoading && !aiInsightsData && (
-                    <p className="text-xs text-muted-foreground text-center py-4">{tr("newBuildDetail.ai.unavailable", "Market analysis unavailable")}</p>
+                    <p className="text-xs text-muted-foreground text-center py-4">
+                      {aiInsightsError ?? tr("newBuildDetail.ai.unavailable", "Market analysis unavailable")}
+                    </p>
                   )}
                   {!user && (
                     <p className="text-xs text-muted-foreground text-center py-4">

@@ -501,6 +501,24 @@ describe("NewBuildDetail", () => {
     expect(screen.getByTestId("neighbourhood")).toHaveAttribute("data-property-type", "apartment");
   });
 
+  it("shows the quota error instead of generic unavailable text when new-build AI insights are exhausted", async () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "buyer-1", email: "kostisrenios@gmail.com" },
+      profile: { display_name: "Buyer One" },
+    });
+    functionsInvokeMock.mockResolvedValue({
+      data: { error: "monthly_limit_reached" },
+      error: new Error("Edge Function returned a non-2xx status code"),
+    });
+
+    renderPage();
+
+    expect(
+      await screen.findByText(/You have reached this month's AI allowance/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Market analysis unavailable")).not.toBeInTheDocument();
+  });
+
   it("uses hybrid sale valuation context for renovation projects shown in the project layout", async () => {
     useAuthMock.mockReturnValue({
       user: { id: "buyer-1", email: "buyer@example.com" },

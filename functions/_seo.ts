@@ -433,6 +433,40 @@ export async function fetchActiveListingById(env: SeoEnv, id: string): Promise<S
   return rows[0] ?? null;
 }
 
+export async function renderListingDetailSeo(ctx: {
+  request: Request;
+  env: SeoEnv;
+  params: { id?: string | string[] };
+  next?: (input?: Request | string, init?: RequestInit) => Promise<Response>;
+}): Promise<Response> {
+  const index = await fetchIndexHtml(ctx);
+  const html = await index.text();
+  const rawId = ctx.params.id;
+  const id = Array.isArray(rawId) ? rawId[0] : rawId;
+  const listing = await fetchActiveListingById(ctx.env, id ?? "");
+
+  if (!listing) {
+    return new Response(html, {
+      status: index.status,
+      headers: index.headers,
+    });
+  }
+
+  const canonicalUrl = `${CANONICAL_ORIGIN}${listingDetailPath(listing)}`;
+  const enriched = injectSeoHead(html, {
+    title: `${listing.title} - mAI prop`,
+    description: listingDescription(listing),
+    canonicalUrl,
+    imageUrl: listing.cover_image_url,
+    jsonLd: propertyJsonLd(listing, canonicalUrl),
+  });
+
+  const headers = new Headers(index.headers);
+  headers.set("Content-Type", "text/html; charset=utf-8");
+  headers.set("Cache-Control", "public, max-age=300, s-maxage=300");
+  return new Response(enriched, { status: index.status, headers });
+}
+
 async function fetchSupabaseListings(runtime: SupabaseRuntime, url: URL): Promise<SeoListing[]> {
   // nosemgrep: javascript.lang.security.audit.detect-non-literal-fetch.detect-non-literal-fetch -- The origin is built only from a validated Supabase project ref; request values are encoded as query params.
   let res: Response;

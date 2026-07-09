@@ -81,8 +81,24 @@ describe("getAiErrorMessage", () => {
 
   it("returns data.error when err has no message and data has error", () => {
     expect(getAiErrorMessage(null, { error: "Something broke" })).toBe("Something broke");
-    // When err has its own (truthy) message, that wins over data.error.
-    expect(getAiErrorMessage(new Error("Err msg"), { error: "Backend down" })).toBe("Err msg");
+    // Function payloads are more specific than generic transport wrappers.
+    expect(getAiErrorMessage(new Error("Err msg"), { error: "Backend down" })).toBe("Backend down");
+  });
+
+  it("prefers server-provided function errors over generic Supabase non-2xx wrappers", () => {
+    expect(
+      getAiErrorMessage(
+        new Error("Edge Function returned a non-2xx status code"),
+        { error: "Monthly AI usage limit reached. Resets on the 1st of next month." },
+      ),
+    ).toBe(AI_MONTHLY_LIMIT_MESSAGE);
+
+    expect(
+      getAiErrorMessage(
+        new Error("Edge Function returned a non-2xx status code"),
+        { error: "city, sqm and price are required" },
+      ),
+    ).toBe("city, sqm and price are required");
   });
 
   it("returns fallback when err is null and data has no error", () => {
