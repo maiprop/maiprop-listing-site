@@ -181,6 +181,9 @@ async function fetchJsonOnceWithTimeout(url, fetchImpl, timeoutMs) {
       signal: controller.signal,
     });
     const contentType = response.headers.get("content-type") ?? "";
+    if (response.status === 429 || response.status >= 500) {
+      throw new Error(`Transient HTTP ${response.status} from ${url}`);
+    }
     if (!response.ok || !contentType.includes("application/json")) return null;
     return response.json();
   } finally {
