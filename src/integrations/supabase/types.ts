@@ -1496,6 +1496,7 @@ export type Database = {
           levels: number | null
           listing_type: Database["public"]["Enums"]["listing_type"]
           living_rooms: number | null
+          location_search_text: string | null
           longitude: number | null
           min_rental_months: number | null
           monthly_expenses: number | null
@@ -1617,6 +1618,7 @@ export type Database = {
           levels?: number | null
           listing_type?: Database["public"]["Enums"]["listing_type"]
           living_rooms?: number | null
+          location_search_text?: string | null
           longitude?: number | null
           min_rental_months?: number | null
           monthly_expenses?: number | null
@@ -1738,6 +1740,7 @@ export type Database = {
           levels?: number | null
           listing_type?: Database["public"]["Enums"]["listing_type"]
           living_rooms?: number | null
+          location_search_text?: string | null
           longitude?: number | null
           min_rental_months?: number | null
           monthly_expenses?: number | null
@@ -4913,6 +4916,7 @@ export type Database = {
         }
         Returns: number
       }
+      normalize_location_text: { Args: { input: string }; Returns: string }
       profile_pricing_audience: {
         Args: {
           p_participant_type?: string
