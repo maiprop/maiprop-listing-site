@@ -92,10 +92,24 @@ describe("location search semantics", () => {
       city: "Άγιοι Ανάργυροι",
       municipality: "Δήμος Αγίων Αναργύρων - Καματερού",
       region: "Περιφέρεια Αττικής",
+      latitude: "38.0421087",
+      longitude: "23.7333126",
     });
 
     expect(getAddressInputDisplayValue(selected)).toBe("Υμηττού 6");
     expect(getListingLocationSearchValue(selected)).toBe("Υμηττού 6");
+  });
+
+  it("falls back to locality for street suggestions without coordinates", () => {
+    const selected = prediction({
+      addressLine: "Kalimnou 27",
+      city: "Agioi Anargiroi",
+      municipality: "Agioi Anargiroi - Kamatero",
+      region: "Attica",
+    });
+
+    expect(getAddressInputDisplayValue(selected)).toBe("Kalimnou 27");
+    expect(getListingLocationSearchValue(selected)).toBe("Agioi Anargiroi");
   });
 
   it("keeps Attica-scoped suggestions from leaking same-name places in other regions", () => {

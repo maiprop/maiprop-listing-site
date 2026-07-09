@@ -146,6 +146,38 @@ function mockGoogleLegacyAutocompleteFallback() {
   return { fetchAutocompleteSuggestions, getPlacePredictions };
 }
 
+function mockGoogleLegacyKalimnouAutocompleteFallback() {
+  const fetchAutocompleteSuggestions = vi.fn().mockRejectedValue(new Error("new-places-rpc-403"));
+  const getPlacePredictions = vi.fn((_request, callback) => callback([
+    {
+      place_id: "legacy-kalimnou-27-agioi-anargiroi",
+      description: "Kalimnou 27, Agioi Anargiroi, Greece",
+      structured_formatting: {
+        main_text: "Kalimnou 27",
+        secondary_text: "Agioi Anargiroi, Greece",
+      },
+      types: ["street_address", "geocode"],
+    },
+  ], "OK"));
+  const importLibrary = vi.fn().mockResolvedValue({
+    AutocompleteSessionToken: class AutocompleteSessionToken {},
+    AutocompleteSuggestion: { fetchAutocompleteSuggestions },
+  });
+  vi.stubGlobal("google", {
+    maps: {
+      importLibrary,
+      places: {
+        Autocomplete: vi.fn(),
+        AutocompleteService: vi.fn(function AutocompleteService() {
+          return { getPlacePredictions };
+        }),
+        PlacesServiceStatus: { OK: "OK", ZERO_RESULTS: "ZERO_RESULTS" },
+      },
+    },
+  });
+  return { fetchAutocompleteSuggestions, getPlacePredictions };
+}
+
 const AGIOI_ANARGYROI_SUGGESTION = {
   display_name: "Άγιοι Ανάργυροι, Δήμος Αγίων Αναργύρων - Καματερού, Περιφέρεια Αττικής, Ελλάδα",
   lat: "38.0301",
@@ -829,6 +861,55 @@ describe("location address suggestions", () => {
 
     fireEvent.click(await screen.findByRole("option", { name: /Voukourestiou 14/i }));
     expect(input).toHaveValue("Voukourestiou 14");
+  });
+
+  it("falls back to the municipality when a listings Google address prediction has no coordinates", async () => {
+    configMock.googlePlacesEnabled = true;
+    const { getPlacePredictions } = mockGoogleLegacyKalimnouAutocompleteFallback();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify([]))));
+    const onFilterChange = vi.fn();
+
+    function ControlledLocationSearchField() {
+      const [value, setValue] = useState("");
+      return (
+        <LocationSearchField
+          value={value}
+          onChange={(next, selection) => {
+            setValue(next);
+            onFilterChange(next, selection);
+          }}
+          placeholder="City, area, address..."
+          ariaLabel="Search by city or area"
+        />
+      );
+    }
+
+    render(<ControlledLocationSearchField />);
+    const input = screen.getByLabelText("Search by city or area");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "Kalimnou 27 Agioi Anargiroi" } });
+
+    await act(async () => {
+      vi.advanceTimersByTime(450);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    vi.useRealTimers();
+
+    expect(getPlacePredictions).toHaveBeenCalledWith(expect.objectContaining({
+      input: "Kalimnou 27 Agioi Anargiroi",
+      types: ["address"],
+    }), expect.any(Function));
+
+    fireEvent.click(await screen.findByRole("option", { name: /Kalimnou 27/i }));
+
+    await waitFor(() => expect(onFilterChange).toHaveBeenLastCalledWith("Agioi Anargiroi", expect.objectContaining({
+      provider: "google",
+      latitude: undefined,
+      longitude: undefined,
+      radiusM: undefined,
+    })));
+    expect(input).toHaveValue("Agioi Anargiroi");
   });
 
   it("does not let a broad Google Attica prediction override a specific listings municipality fallback", async () => {

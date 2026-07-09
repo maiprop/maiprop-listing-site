@@ -103,6 +103,30 @@ const componentText = (components: GooglePlaceComponent[] | undefined, type: str
 const compact = (...values: Array<string | null | undefined>) =>
   values.map((value) => value?.trim()).filter((value): value is string => Boolean(value));
 
+const inferLocalityFromSubtitle = (subtitle: string) => {
+  const ignored = new Set([
+    "greece",
+    "ellada",
+    "attica",
+    "attikis",
+    "perifereia attikis",
+    "περιφερεια αττικης",
+    "αττικη",
+    "αττικης",
+    "ελλαδα",
+  ]);
+  return subtitle
+    .split(",")
+    .map((part) => part.trim())
+    .find((part) => {
+      const normalized = part
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLocaleLowerCase("el-GR");
+      return part && !ignored.has(normalized);
+    }) ?? "";
+};
+
 const buildDetailedPrediction = (
   prediction: GooglePlacePrediction,
   place: GooglePlace,
@@ -177,6 +201,7 @@ function buildBasicGooglePrediction(
   const title = textToString(prediction.mainText) || prediction.structured_formatting?.main_text || text;
   const subtitle = textToString(prediction.secondaryText) || prediction.structured_formatting?.secondary_text || "";
   const googleTypes = prediction.types ?? [];
+  const inferredLocality = mode === "address" ? inferLocalityFromSubtitle(subtitle) : "";
   const broadTypeHint =
     googleTypes.includes("administrative_area_level_1") ||
     googleTypes.includes("country");
@@ -190,7 +215,7 @@ function buildBasicGooglePrediction(
     title,
     subtitle,
     addressLine: mode === "address" ? title : undefined,
-    city: mode === "city" && !broadTypeHint ? title : undefined,
+    city: mode === "city" && !broadTypeHint ? title : inferredLocality || undefined,
     fullAddress: text,
     source: prediction,
     resolveDetails: () => resolveGoogleDetails(prediction, mode),
