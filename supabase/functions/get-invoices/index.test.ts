@@ -74,13 +74,9 @@ Deno.test("live Stripe subscription display falls back to item period fields", a
 Deno.test("invoice response exposes Stripe receipt and payment evidence when available", async () => {
   const source = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
   assertStringIncludes(source, "listCustomerInvoices");
-  assertStringIncludes(source, "expanded invoice list failed, retrying without receipt expansion");
-  assertStringIncludes(source, "data.payments.data.payment.payment_intent");
-  assertStringIncludes(source, "data.payments.data.payment.charge");
   assertStringIncludes(source, "extractInvoiceReceipt");
   assertStringIncludes(source, "resolveInvoiceReceipt");
   assertStringIncludes(source, "stripe.invoices.retrieve");
-  assertStringIncludes(source, "expanded invoice retrieve failed");
   assertStringIncludes(source, "stripe.paymentIntents.retrieve");
   assertStringIncludes(source, "stripe.charges.retrieve");
   assertStringIncludes(source, "payment_intent_id");
@@ -91,6 +87,10 @@ Deno.test("invoice response exposes Stripe receipt and payment evidence when ava
 Deno.test("subscription lookup does not request too-deep Stripe expansions", async () => {
   const source = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
   assertEquals(source.includes("data.items.data.price.product"), false);
+  assertEquals(source.includes("data.payments.data.payment.payment_intent"), false);
+  assertEquals(source.includes("data.payments.data.payment.charge"), false);
+  assertEquals(source.includes("payments.data.payment.payment_intent"), false);
+  assertEquals(source.includes("payments.data.payment.charge"), false);
 });
 
 restore();
