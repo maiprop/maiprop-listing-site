@@ -2,7 +2,7 @@
   "name": "maiprop-listing-site",
   "description": "MaiProp — Greek real estate listing, auction, and investment platform (Vite + React 18 + Supabase).",
   "private": true,
-  "version": "1.12.7",
+  "version": "1.12.8",
   "license": "UNLICENSED",
   "homepage": "https://portal.maiprop.co",
   "repository": {

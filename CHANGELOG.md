@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.12.8](https://github.com/maiprop/maiprop-listing-site/compare/v1.12.7...v1.12.8) (2026-07-10)
+
+
+### Bug Fixes
+
+* avoid deep Stripe invoice expansions ([#491](https://github.com/maiprop/maiprop-listing-site/issues/491)) ([ee3cec8](https://github.com/maiprop/maiprop-listing-site/commit/ee3cec8b0a40407fb7977e0f63efb857eec62ebb))
+* fallback address suggestions to locality ([#486](https://github.com/maiprop/maiprop-listing-site/issues/486)) ([4c4f838](https://github.com/maiprop/maiprop-listing-site/commit/4c4f838151f9604720869cde254ee7a30d1846ab))
+* group location search synonym filters ([#488](https://github.com/maiprop/maiprop-listing-site/issues/488)) ([56a9c00](https://github.com/maiprop/maiprop-listing-site/commit/56a9c00f4afaf1152e9c6e19d3ebd5005682b56e))
+* ignore missing listing location coordinates ([3089b98](https://github.com/maiprop/maiprop-listing-site/commit/3089b9800e9a9b9ecf83b68d625a10d7b1c117b4))
+* retry homepage initial fallback fetches ([#489](https://github.com/maiprop/maiprop-listing-site/issues/489)) ([cb48311](https://github.com/maiprop/maiprop-listing-site/commit/cb48311f451fd118e6762d7cce2970b44ab08d28))
+* route listing detail previews through pages functions ([#485](https://github.com/maiprop/maiprop-listing-site/issues/485)) ([f140579](https://github.com/maiprop/maiprop-listing-site/commit/f140579871ccdb69f6a4bd9e63cac8c6ec6e3b9d))
+* skip staging DB advisors for function-only changes ([#492](https://github.com/maiprop/maiprop-listing-site/issues/492)) ([a938397](https://github.com/maiprop/maiprop-listing-site/commit/a938397fd03eb1aa8f6f21f9ef0d3a58e43fc8a7))
+
 ## [1.12.7](https://github.com/maiprop/maiprop-listing-site/compare/v1.12.6...v1.12.7) (2026-07-09)
 
 
