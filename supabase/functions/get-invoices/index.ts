@@ -310,12 +310,7 @@ async function resolveInvoiceReceipt(
 
   if (!receipt.payment_intent_id && !receipt.charge_id && inv.id) {
     try {
-      const expandedInvoice = await stripe.invoices.retrieve(inv.id, {
-        expand: [
-          "payments.data.payment.payment_intent",
-          "payments.data.payment.charge",
-        ],
-      });
+      const expandedInvoice = await stripe.invoices.retrieve(inv.id);
       receipt = extractInvoiceReceipt(
         expandedInvoice as StripeInvoiceWithTaxDetails,
       );
@@ -461,27 +456,10 @@ async function resolveCustomer(stripe: Stripe, userId: string) {
 }
 
 async function listCustomerInvoices(stripe: Stripe, customerId: string) {
-  try {
-    return await stripe.invoices.list({
-      customer: customerId,
-      limit: 12,
-      expand: [
-        "data.payments.data.payment.payment_intent",
-        "data.payments.data.payment.charge",
-      ],
-    });
-  } catch (expandedInvoiceError: unknown) {
-    log.warn("expanded invoice list failed, retrying without receipt expansion", {
-      customerId,
-      message: expandedInvoiceError instanceof Error
-        ? expandedInvoiceError.message
-        : String(expandedInvoiceError),
-    });
-    return await stripe.invoices.list({
-      customer: customerId,
-      limit: 12,
-    });
-  }
+  return await stripe.invoices.list({
+    customer: customerId,
+    limit: 12,
+  });
 }
 
 Deno.serve(async (req) => {
