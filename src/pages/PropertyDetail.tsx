@@ -71,8 +71,12 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
   });
   const { mutate: trackViewMutate } = useTrackListingView();
   const ownerId = (dbListing as ListingWithJoins | null)?.owner_id;
-  const { data: ownerProStatus = false } = useOwnerProStatus(dbListing?.id, ownerId);
-  const ownerIsPro = ownerProStatus || Boolean((dbListing as ListingWithJoins | null)?.ownerIsPro);
+  const embeddedOwnerIsPro = Boolean((dbListing as ListingWithJoins | null)?.ownerIsPro);
+  const { data: ownerProStatus = false } = useOwnerProStatus(dbListing?.id, ownerId, {
+    enabled: !embeddedOwnerIsPro,
+    initialData: embeddedOwnerIsPro ? true : undefined,
+  });
+  const ownerIsPro = embeddedOwnerIsPro || ownerProStatus;
   // Video viewing: free for buyers, Pro required for all other roles
   const isBuyer = getParticipantTypeFromProfile(profile) === "buyer";
   const canVideoView = isPro || isBuyer;

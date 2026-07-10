@@ -187,6 +187,7 @@ describe("BillingTab add-on checkout", () => {
           success_url: "/dashboard/billing?checkout=success",
           cancel_url: "/dashboard/billing?checkout=cancelled",
         },
+        timeout: 20_000,
       });
     });
 
@@ -216,6 +217,7 @@ describe("BillingTab add-on checkout", () => {
           success_url: "/dashboard/billing?checkout=success",
           cancel_url: "/dashboard/billing?checkout=cancelled",
         },
+        timeout: 20_000,
       });
     });
   });
@@ -362,6 +364,7 @@ describe("BillingTab add-on checkout", () => {
           success_url: "/dashboard/billing?checkout=success",
           cancel_url: "/dashboard/billing?checkout=cancelled",
         },
+        timeout: 20_000,
       });
     });
   });
@@ -392,6 +395,7 @@ describe("BillingTab add-on checkout", () => {
           success_url: "/dashboard/billing?checkout=success",
           cancel_url: "/dashboard/billing?checkout=cancelled",
         },
+        timeout: 20_000,
       });
     });
   });
@@ -567,6 +571,7 @@ describe("BillingTab add-on checkout", () => {
           action: "payment_method_update",
           subscription_id: "sub_past_due",
         },
+        timeout: 20_000,
       });
     });
   });

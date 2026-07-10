@@ -55,6 +55,8 @@ type AddonCreditLedgerRow = {
   created_at?: string | null;
 };
 
+const BILLING_FUNCTION_TIMEOUT_MS = 20_000;
+
 const showAddonCheckoutError = (e: unknown) => {
   toast.error(
     (e instanceof Error ? e.message : null) ?? "Could not start add-on checkout",
@@ -71,8 +73,11 @@ const getInvoiceTaxIdLabel = (
 const useBillingInfo = () => {
   return useQuery<BillingInfo>({
     queryKey: ["billing-info"],
-    queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("get-invoices");
+    queryFn: async ({ signal }) => {
+      const { data, error } = await supabase.functions.invoke("get-invoices", {
+        signal,
+        timeout: BILLING_FUNCTION_TIMEOUT_MS,
+      });
       if (error) throw error;
       return data as BillingInfo;
     },
@@ -188,6 +193,7 @@ export default function BillingTab() { // skipcq: JS-0067
     try {
       const { data: pData, error } =
         await supabase.functions.invoke("customer-portal", {
+          timeout: BILLING_FUNCTION_TIMEOUT_MS,
           body: {
             action,
             ...(data.subscription?.id

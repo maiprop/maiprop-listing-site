@@ -38,6 +38,7 @@ describe("billing checkout actions", () => {
         success_url: "/dashboard/billing?checkout=success",
         cancel_url: "/dashboard/billing?checkout=cancelled",
       },
+      timeout: 20_000,
     });
   });
 
@@ -58,6 +59,7 @@ describe("billing checkout actions", () => {
         success_url: "/dashboard/billing?checkout=success",
         cancel_url: "/dashboard/billing?checkout=cancelled",
       },
+      timeout: 20_000,
     });
   });
 
@@ -82,6 +84,7 @@ describe("billing checkout actions", () => {
         success_url: "/dashboard/billing?checkout=success",
         cancel_url: "/dashboard/billing?checkout=cancelled",
       },
+      timeout: 20_000,
     });
   });
 
@@ -108,6 +111,7 @@ describe("billing checkout actions", () => {
         success_url: "/property/listing_123?checkout=success&addon=property_report_single&target_id=listing_123",
         cancel_url: "/property/listing_123?checkout=cancelled&addon=property_report_single&target_id=listing_123",
       },
+      timeout: 20_000,
     });
   });
 
@@ -128,6 +132,7 @@ describe("billing checkout actions", () => {
         success_url: "/dashboard/billing?checkout=success",
         cancel_url: "/dashboard/billing?checkout=cancelled",
       },
+      timeout: 20_000,
     });
   });
 

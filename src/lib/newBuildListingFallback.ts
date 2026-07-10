@@ -92,14 +92,17 @@ const NEW_BUILD_LISTING_SELECT = [
   "listing_images(url,sort_order)",
 ].join(",");
 
-export async function fetchNewBuildListingFallback(listingId: string): Promise<NewBuildListing | null> {
-  const { data, error } = await supabase
+export async function fetchNewBuildListingFallback(
+  listingId: string,
+  signal?: AbortSignal,
+): Promise<NewBuildListing | null> {
+  const query = supabase
     .from("listings")
     .select(NEW_BUILD_LISTING_SELECT)
     .eq("id", listingId)
     .eq("status", "active")
-    .eq("is_off_market", false)
-    .maybeSingle();
+    .eq("is_off_market", false);
+  const { data, error } = await (signal ? query.abortSignal(signal) : query).maybeSingle();
 
   if (error) throw error;
   return (data ?? null) as NewBuildListing | null;

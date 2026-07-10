@@ -26,6 +26,7 @@ export interface AIInsightsQuota {
 }
 
 const AI_INSIGHTS_BUCKET = "property-valuation";
+const AI_INSIGHTS_FUNCTION_TIMEOUT_MS = 45_000;
 
 type PropertyInsightsResponse = ValuationEstimateSource & {
   error?: string;
@@ -138,6 +139,7 @@ export function usePropertyAIInsights(
 
     try {
       const { data, error: fnErr } = await invokeAuthenticatedFunction<PropertyInsightsResponse>("property-valuation", {
+        timeout: AI_INSIGHTS_FUNCTION_TIMEOUT_MS,
         body: {
           listingId: snapshot.id,
           title: snapshot.title,

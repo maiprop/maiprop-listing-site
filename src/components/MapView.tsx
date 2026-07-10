@@ -24,10 +24,33 @@ export interface MapViewProps {
   height?: string;
   itemLabelSingular?: string;
   itemLabelPlural?: string;
+  mapComponentsLoader?: MapComponentsLoader;
 }
 
 const VISIBLE_RECALC_THROTTLE_MS = 120;
 const HEATMAP_SAMPLE_LIMIT = 1500;
+
+type MapComponentsBundle = {
+  Map: unknown;
+  Source: unknown;
+  Layer: unknown;
+  Popup: unknown;
+  NavigationControl: unknown;
+};
+
+export type MapComponentsLoader = () => Promise<MapComponentsBundle>;
+
+async function loadDefaultMapComponents(): Promise<MapComponentsBundle> {
+  const mapModule = await import("react-map-gl");
+  await import("mapbox-gl/dist/mapbox-gl.css");
+  return {
+    Map: mapModule.Map,
+    Source: mapModule.Source,
+    Layer: mapModule.Layer,
+    Popup: mapModule.Popup,
+    NavigationControl: mapModule.NavigationControl,
+  };
+}
 
 // skipcq: JS-0067 - Pure map helper is intentionally module-scoped.
 function sampleListingsForHeatmap(listings: MapListing[], limit = HEATMAP_SAMPLE_LIMIT) {
@@ -54,6 +77,7 @@ export function MapView({
   height,
   itemLabelSingular = "property",
   itemLabelPlural = "properties",
+  mapComponentsLoader = loadDefaultMapComponents,
 }: MapViewProps) { // skipcq: JS-R1005 - MapView keeps Mapbox load state, drawing, heatmap, and visibility callbacks together.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [MapComponents, setMapComponents] = useState<any>(null);
@@ -62,20 +86,18 @@ export function MapView({
 
   // Lazy load mapbox-gl
   useEffect(() => {
+    if (!MAPBOX_TOKEN) {
+      setMapComponents(null);
+      return;
+    }
+    let cancelled = false;
     const loadMap = async () => {
-      const mapModule = await import('react-map-gl');
-      setMapComponents({
-        Map: mapModule.Map,
-        Source: mapModule.Source,
-        Layer: mapModule.Layer,
-        Popup: mapModule.Popup,
-        NavigationControl: mapModule.NavigationControl
-      });
-      // Dynamically import CSS
-      await import('mapbox-gl/dist/mapbox-gl.css');
+      const components = await mapComponentsLoader();
+      if (!cancelled) setMapComponents(components);
     };
     loadMap();
-  }, []);
+    return () => { cancelled = true; };
+  }, [mapComponentsLoader]);
 
   // Popup
   const [popupInfo, setPopupInfo] = useState<{ listing: MapListing; lng: number; lat: number } | null>(null);

@@ -251,6 +251,7 @@ describe("Dashboard behavior", () => {
           success_url: "/dashboard?checkout=trial_started",
           cancel_url: "/dashboard?checkout=cancelled",
         },
+        timeout: 20_000,
       })
     );
     await waitFor(() => expect(window.location.href).toBe("https://stripe.example/trial"));

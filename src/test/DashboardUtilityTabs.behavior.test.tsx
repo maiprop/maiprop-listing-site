@@ -154,7 +154,10 @@ describe("dashboard utility tabs", () => {
     await waitFor(() => expect(window.location.href).toBe("https://stripe.example/portal"));
 
     fireEvent.click(screen.getByRole("button", { name: /Refresh/i }));
-    expect(mocks.invoke).toHaveBeenCalledWith("get-invoices");
+    expect(mocks.invoke).toHaveBeenCalledWith("get-invoices", {
+      signal: expect.any(AbortSignal),
+      timeout: 20_000,
+    });
 
     fireEvent.click(screen.getAllByRole("button", { name: /Buy add-on/i })[0]);
     await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("create-checkout", expect.objectContaining({

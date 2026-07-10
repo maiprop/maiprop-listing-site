@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { fetchPublicApi } from "@/lib/publicApi";
+import { fetchPublicApi, isPublicApiAbort } from "@/lib/publicApi";
 import { logger } from "@/lib/logger";
 import {
   fetchHomepageFeaturedFallback,
@@ -39,13 +39,13 @@ type HomepageQueryOptions = {
 
 /** 4 most recent active sale listings for the FeaturedProperties section. */
 export function useHomepageFeaturedListings(options: HomepageQueryOptions = {}) {
-  return useQuery({
+  return useQuery<HomepageListing[]>({
     queryKey: ["homepage-featured"],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       try {
         const cached = await fetchPublicApi<HomepageListing[]>(
           "/api/public/homepage?section=featured",
-          { throwOnError: true, timeoutMs: HOMEPAGE_SECTION_TIMEOUT_MS },
+          { throwOnError: true, timeoutMs: HOMEPAGE_SECTION_TIMEOUT_MS, signal },
         );
         if (cached) {
           const rows = publicHomepageRows(cached, 4);
@@ -54,8 +54,9 @@ export function useHomepageFeaturedListings(options: HomepageQueryOptions = {}) 
         }
         throw new Error("Public homepage featured API returned no data");
       } catch (error) {
+        if (isPublicApiAbort(error)) throw error;
         logger.warn("Public homepage featured API failed; falling back to constrained Supabase read:", error);
-        const rows = await fetchHomepageFeaturedFallback();
+        const rows = await fetchHomepageFeaturedFallback(signal);
         writeHomepageSnapshot(HOMEPAGE_FEATURED_SNAPSHOT_KEY, rows);
         return rows;
       }
@@ -79,13 +80,13 @@ export function useHomepageAuctionListings(options: HomepageQueryOptions = {}) {
 
 /** Up to 6 upcoming open-house listings, sorted with image-having ones first. */
 export function useHomepageOpenHouseListings(options: HomepageQueryOptions = {}) {
-  return useQuery({
+  return useQuery<HomepageListing[]>({
     queryKey: ["homepage-open-houses"],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       try {
         const cached = await fetchPublicApi<HomepageListing[]>(
           "/api/public/homepage?section=open-houses",
-          { throwOnError: true, timeoutMs: HOMEPAGE_SECTION_TIMEOUT_MS },
+          { throwOnError: true, timeoutMs: HOMEPAGE_SECTION_TIMEOUT_MS, signal },
         );
         if (cached) {
           const rows = sortByImagePresence(publicHomepageRows(cached));
@@ -94,8 +95,9 @@ export function useHomepageOpenHouseListings(options: HomepageQueryOptions = {})
         }
         throw new Error("Public homepage open houses API returned no data");
       } catch (error) {
+        if (isPublicApiAbort(error)) throw error;
         logger.warn("Public homepage open houses API failed; falling back to constrained Supabase read:", error);
-        const rows = await fetchHomepageOpenHousesFallback();
+        const rows = await fetchHomepageOpenHousesFallback(signal);
         writeHomepageSnapshot(HOMEPAGE_OPEN_HOUSES_SNAPSHOT_KEY, rows);
         return rows;
       }

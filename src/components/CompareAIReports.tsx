@@ -21,6 +21,9 @@ import { calculatePercentDelta, calculatePricePerSqm } from "@/lib/priceCalculat
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Listing = Record<string, any>;
 
+const AI_REPORT_TIMEOUT_MS = 45_000;
+const PROPERTY_POIS_TIMEOUT_MS = 20_000;
+
 interface AIReport {
   estimatedValue: number;
   rangeLow: number;
@@ -201,9 +204,13 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
 
         // Neighbourhood data (reuse neighbourhood-report edge fn, extract scores)
         const [valRes, nbRes] = await Promise.allSettled([
-          supabase.functions.invoke("property-valuation", { body: valuationBody }),
+          supabase.functions.invoke("property-valuation", {
+            body: valuationBody,
+            timeout: AI_REPORT_TIMEOUT_MS,
+          }),
           supabase.functions.invoke("neighbourhood-report", {
             body: neighbourhoodBody,
+            timeout: AI_REPORT_TIMEOUT_MS,
           }),
         ]);
 
@@ -246,6 +253,7 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
         if (raw.latitude && raw.longitude) {
           const poisRes = await supabase.functions.invoke("property-pois", {
             body: { latitude: raw.latitude, longitude: raw.longitude, city: raw.city },
+            timeout: PROPERTY_POIS_TIMEOUT_MS,
           });
           const poisFail = poisRes.error?.message ?? poisRes.data?.error;
           if (poisFail && !reportError) reportError = getAiErrorMessage(null, { error: poisFail }, "AI analysis failed");

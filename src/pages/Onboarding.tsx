@@ -50,6 +50,8 @@ type ProfessionalOnboardingSetupBody =
   | { action: "video"; professionalId: string; videoLink: string | null; calendarNotes: string | null };
 
 // skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
+const ONBOARDING_CHECKOUT_TIMEOUT_MS = 20_000;
+
 export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a multi-step account setup workflow in one route shell.
   const navigate = useNavigate();
   const { user, profile, refreshProfile, loading: authLoading } = useAuth();
@@ -677,6 +679,7 @@ export default function Onboarding() { // skipcq: JS-R1005 - Onboarding keeps a 
   const handleUpgradeToPro = async () => { // skipcq: JS-R1005 - Checkout launcher keeps edge-function response and toast fallback together.
     try {
       const { data, error } = await supabase.functions.invoke("create-checkout", {
+        timeout: ONBOARDING_CHECKOUT_TIMEOUT_MS,
         body: { plan: "professional_basic", billing_cycle: "monthly", success_url: "/dashboard?pro=success", cancel_url: "/pricing" },
       });
       if (error || !data?.url) throw new Error(error?.message ?? data?.error ?? "Checkout failed");

@@ -343,6 +343,7 @@ describe("Onboarding page handlers", () => {
           success_url: "/dashboard?pro=success",
           cancel_url: "/pricing",
         },
+        timeout: 20_000,
       }),
     );
     expect(window.location.hash).toBe("#stripe-checkout");

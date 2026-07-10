@@ -12,6 +12,7 @@ vi.mock("@/hooks/useInView", () => ({
 
 vi.mock("@/lib/publicApi", () => ({
   fetchPublicApi: (...args: unknown[]) => fetchPublicApiMock(...args),
+  isPublicApiAbort: () => false,
 }));
 
 vi.mock("@/components/PropertyCard", () => ({

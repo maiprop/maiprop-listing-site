@@ -140,6 +140,17 @@ describe("useListing detail loading and owner Pro status", () => {
     expect(result.current.data).toBe(true);
   });
 
+  it("does not call owner-pro-status when the listing payload already proves Pro status", async () => {
+    const { result } = renderHook(
+      () => useOwnerProStatus(TEST_LISTING_ID, TEST_OWNER_ID, { enabled: false, initialData: true }),
+      { wrapper },
+    );
+
+    expect(result.current.data).toBe(true);
+    expect(result.current.fetchStatus).toBe("idle");
+    expect(supabase.functions.invoke).not.toHaveBeenCalled();
+  });
+
   it("returns null when the listing does not exist", async () => {
     vi.mocked(supabase.from).mockImplementation((table: string) => {
       if (table === "listings") {

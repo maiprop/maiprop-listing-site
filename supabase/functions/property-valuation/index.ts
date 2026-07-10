@@ -12,6 +12,15 @@ const NEW_BUILD_OPENAI_MODEL = "gpt-5.4";
 const NEW_BUILD_OPENAI_REASONING_EFFORT = "medium";
 const valuationLimiter = makeRateLimiter({ bucket: BUCKET, maxRequests: 15, windowMs: 60_000, failClosed: true });
 const OS_VALUATION_TIMEOUT_MS = 25_000;
+const OS_AUTH_TOKEN_CACHE_TTL_MS = 10 * 60_000;
+
+type CachedOsAuthToken = {
+  cacheKey: string;
+  token: string;
+  expiresAt: number;
+};
+
+let cachedOsAuthToken: CachedOsAuthToken | null = null;
 
 const OS_PROPERTY_CATEGORY: Record<string, string> = {
   apartment: "RESIDENCE",
@@ -160,6 +169,37 @@ const fetchOsAuthToken = async (baseUrl: string, email: string, password: string
   return token;
 };
 
+const osAuthCacheKey = (baseUrl: string, email: string): string => `${baseUrl}\n${email}`;
+
+const getCachedOsAuthToken = (baseUrl: string, email: string): string | null => {
+  const cacheKey = osAuthCacheKey(baseUrl, email);
+  if (!cachedOsAuthToken || cachedOsAuthToken.cacheKey !== cacheKey) return null;
+  if (cachedOsAuthToken.expiresAt <= Date.now()) {
+    cachedOsAuthToken = null;
+    return null;
+  }
+  return cachedOsAuthToken.token;
+};
+
+const invalidateCachedOsAuthToken = (baseUrl: string, email: string): void => {
+  if (cachedOsAuthToken?.cacheKey === osAuthCacheKey(baseUrl, email)) {
+    cachedOsAuthToken = null;
+  }
+};
+
+const fetchCachedOsAuthToken = async (baseUrl: string, email: string, password: string): Promise<string> => {
+  const cached = getCachedOsAuthToken(baseUrl, email);
+  if (cached) return cached;
+
+  const token = await fetchOsAuthToken(baseUrl, email, password);
+  cachedOsAuthToken = {
+    cacheKey: osAuthCacheKey(baseUrl, email),
+    token,
+    expiresAt: Date.now() + OS_AUTH_TOKEN_CACHE_TTL_MS,
+  };
+  return token;
+};
+
 const buildOsValuationBody = (input: StructuredValuationInput): JsonRecord | null => {
   const latitude = coerceFiniteNumber(input.latitude);
   const longitude = coerceFiniteNumber(input.longitude);
@@ -189,18 +229,13 @@ const unwrapOsData = (payload: JsonRecord | null): JsonRecord | null => {
   return payload;
 };
 
-const fetchStructuredOsValuation = async (input: StructuredValuationInput): Promise<JsonRecord | null> => {
-  const baseUrl = (Deno.env.get("MAIPROP_OS_API_URL") ?? Deno.env.get("MAIPROP_OS_URL"))?.replace(/\/+$/, "");
-  const email = Deno.env.get("MAIPROP_OS_EMAIL");
-  const password = Deno.env.get("MAIPROP_OS_PASSWORD");
-  const requestBody = buildOsValuationBody(input);
-
-  if (!baseUrl || !email || !password || !requestBody) return null;
-
-  const token = await fetchOsAuthToken(baseUrl, email, password);
-  let response: Response;
+const fetchOsValuationResponse = async (
+  baseUrl: string,
+  token: string,
+  requestBody: JsonRecord,
+): Promise<Response> => {
   try {
-    response = await fetchWithTimeout(`${baseUrl}/api/v1/property/valuation`, {
+    return await fetchWithTimeout(`${baseUrl}/api/v1/property/valuation`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -214,6 +249,23 @@ const fetchStructuredOsValuation = async (input: StructuredValuationInput): Prom
       throw new Error(`OS valuation timed out after ${OS_VALUATION_TIMEOUT_MS}ms`);
     }
     throw error;
+  }
+};
+
+const fetchStructuredOsValuation = async (input: StructuredValuationInput): Promise<JsonRecord | null> => {
+  const baseUrl = (Deno.env.get("MAIPROP_OS_API_URL") ?? Deno.env.get("MAIPROP_OS_URL"))?.replace(/\/+$/, "");
+  const email = Deno.env.get("MAIPROP_OS_EMAIL");
+  const password = Deno.env.get("MAIPROP_OS_PASSWORD");
+  const requestBody = buildOsValuationBody(input);
+
+  if (!baseUrl || !email || !password || !requestBody) return null;
+
+  let token = await fetchCachedOsAuthToken(baseUrl, email, password);
+  let response = await fetchOsValuationResponse(baseUrl, token, requestBody);
+  if (response.status === 401 || response.status === 403) {
+    invalidateCachedOsAuthToken(baseUrl, email);
+    token = await fetchCachedOsAuthToken(baseUrl, email, password);
+    response = await fetchOsValuationResponse(baseUrl, token, requestBody);
   }
 
   const payload = await readJsonSafely(response);
