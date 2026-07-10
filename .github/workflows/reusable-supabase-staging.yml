@@ -357,7 +357,7 @@ jobs:
 
           if [ -z "$SUPABASE_STAGING_DB_URL" ]; then
             echo "SUPABASE_STAGING_EFFECTIVE_DB_URL=" >> "$GITHUB_ENV"
-            echo "No staging database URL is configured; function-only Supabase prep will use empty index stats."
+            echo "No staging database URL is configured; function-only Supabase prep will skip DB-backed index stats and advisor checks."
             exit 0
           fi
 
@@ -465,20 +465,14 @@ jobs:
         run: supabase db push --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" --yes --include-all
 
       - name: Capture staging Supabase index stats
-        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
-        run: |
-          set -euo pipefail
-          extra_args=()
-          if [ "${{ steps.supabase_changes.outputs.db_changes }}" != "true" ]; then
-            extra_args+=(--allow-empty-when-unconfigured)
-          fi
-          npm run capture:supabase-index-stats -- --out supabase-index-stats.json "${extra_args[@]}"
+        if: steps.supabase_changes.outputs.db_changes == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        run: npm run capture:supabase-index-stats -- --out supabase-index-stats.json
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF:  ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
 
       - name: Check staging Supabase advisors
-        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        if: steps.supabase_changes.outputs.db_changes == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: npm run check:supabase-advisor -- --fail-on-error --fail-on-unknown --index-stats supabase-index-stats.json --out supabase-advisor-staging-summary.json
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
