@@ -6,6 +6,17 @@ import { GooglePlacesAttribution } from "@/components/location/GooglePlacesAttri
 import { formatAddressPrediction, type AddressPrediction } from "@/lib/location/addressFormat";
 import { getListingLocationSearchValue } from "@/lib/location/locationSearchSemantics";
 
+const TYPED_LOCATION_COMMIT_DELAY_MS = 600;
+const PENDING_ENTER_PROVIDER_GRACE_MS = 700;
+const HAS_STREET_NUMBER_RE = /\d/;
+const LOCATION_WORD_RE = /\p{L}+/gu;
+
+function shouldPreferProviderForTypedLocation(value: string): boolean {
+  if (!HAS_STREET_NUMBER_RE.test(value)) return false;
+  const locationWords = value.match(LOCATION_WORD_RE) ?? [];
+  return value.includes(",") || locationWords.length >= 3;
+}
+
 export type ListingLocationSelection = {
   value: string;
   latitude?: string;
@@ -34,6 +45,8 @@ export function LocationSearchField({
   const [draftValue, setDraftValue] = useState(value);
   const selectedDraftRef = useRef<string | null>(null);
   const pendingEnterRef = useRef(false);
+  const pendingEnterTimerRef = useRef<number | undefined>();
+  const commitTimerRef = useRef<number | undefined>();
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const query = draftValue.trim();
@@ -51,17 +64,6 @@ export function LocationSearchField({
   };
 
   useEffect(() => {
-    const handler = (event: MouseEvent) => {
-      const portal = document.getElementById("listing-location-dropdown-portal");
-      if (wrapRef.current?.contains(event.target as Node)) return;
-      if (portal?.contains(event.target as Node)) return;
-      setFocused(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  useEffect(() => {
     if (document.activeElement === inputRef.current) setFocused(true);
   }, [draftValue]);
 
@@ -72,17 +74,24 @@ export function LocationSearchField({
     setDraftValue(value);
   }, [focused, value]);
 
-  const commitManualSearch = useCallback(() => {
-    const committedValue = draftValue.trim();
-    if (!committedValue) return;
-    selectedDraftRef.current = committedValue;
-    setDraftValue(committedValue);
-    onChange(committedValue);
-    clear();
-    setFocused(false);
-  }, [clear, draftValue, onChange]);
+  const cancelPendingCommit = useCallback(() => {
+    if (commitTimerRef.current !== undefined) {
+      window.clearTimeout(commitTimerRef.current);
+      commitTimerRef.current = undefined;
+    }
+  }, []);
+
+  const cancelPendingEnter = useCallback(() => {
+    pendingEnterRef.current = false;
+    if (pendingEnterTimerRef.current !== undefined) {
+      window.clearTimeout(pendingEnterTimerRef.current);
+      pendingEnterTimerRef.current = undefined;
+    }
+  }, []);
 
   const selectSuggestion = useCallback(async (prediction: AddressPrediction) => {
+    cancelPendingCommit();
+    cancelPendingEnter();
     const selection = prediction.resolveDetails
       ? await prediction.resolveDetails().catch(() => prediction)
       : prediction;
@@ -100,17 +109,78 @@ export function LocationSearchField({
     });
     clear();
     setFocused(false);
-  }, [clear, onChange]);
+  }, [cancelPendingCommit, cancelPendingEnter, clear, onChange]);
+
+  const commitManualSearch = useCallback((options: { close?: boolean; preferSuggestion?: boolean } = {}) => {
+    const committedValue = draftValue.trim();
+    cancelPendingCommit();
+    if (!committedValue) return;
+    if (options.close) cancelPendingEnter();
+
+    const preferSuggestion = options.preferSuggestion ?? shouldPreferProviderForTypedLocation(committedValue);
+    if (preferSuggestion && !loading && predictions[0]) {
+      void selectSuggestion(predictions[0]);
+      return;
+    }
+
+    selectedDraftRef.current = committedValue;
+    setDraftValue(committedValue);
+    onChange(committedValue);
+    if (options.close) {
+      clear();
+      setFocused(false);
+    }
+  }, [cancelPendingCommit, cancelPendingEnter, clear, draftValue, loading, onChange, predictions, selectSuggestion]);
+
+  useEffect(() => {
+    const handler = (event: MouseEvent) => {
+      const portal = document.getElementById("listing-location-dropdown-portal");
+      if (wrapRef.current?.contains(event.target as Node)) return;
+      if (portal?.contains(event.target as Node)) return;
+      if (draftValue.trim() && draftValue.trim() !== value.trim()) {
+        commitManualSearch({ close: true });
+      } else {
+        setFocused(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [commitManualSearch, draftValue, value]);
+
+  useEffect(() => {
+    return () => {
+      cancelPendingCommit();
+      cancelPendingEnter();
+    };
+  }, [cancelPendingCommit, cancelPendingEnter]);
+
+  useEffect(() => {
+    if (!focused) return undefined;
+    const committedValue = draftValue.trim();
+    if (!committedValue || committedValue === value.trim() || selectedDraftRef.current === committedValue) {
+      return undefined;
+    }
+    if (loading) return undefined;
+
+    commitTimerRef.current = window.setTimeout(() => {
+      commitManualSearch({
+        close: false,
+        preferSuggestion: shouldPreferProviderForTypedLocation(committedValue),
+      });
+    }, TYPED_LOCATION_COMMIT_DELAY_MS);
+
+    return () => cancelPendingCommit();
+  }, [cancelPendingCommit, commitManualSearch, draftValue, focused, loading, value]);
 
   useEffect(() => {
     if (!pendingEnterRef.current || loading) return;
-    pendingEnterRef.current = false;
+    cancelPendingEnter();
     if (predictions[0]) {
       void selectSuggestion(predictions[0]);
       return;
     }
-    commitManualSearch();
-  }, [commitManualSearch, loading, predictions, selectSuggestion]);
+    commitManualSearch({ close: true });
+  }, [cancelPendingEnter, commitManualSearch, loading, predictions, selectSuggestion]);
 
   const showDropdown = focused && shouldUsePredictions && (predictions.length > 0 || loading);
   const hasGoogleSuggestions = predictions.some((suggestion) => suggestion.provider === "google");
@@ -183,8 +253,14 @@ export function LocationSearchField({
         aria-controls={showDropdown ? listboxId : undefined}
         value={draftValue}
         onChange={(event) => {
-          setDraftValue(event.target.value);
-          onChange(event.target.value);
+          const nextValue = event.target.value;
+          cancelPendingCommit();
+          selectedDraftRef.current = null;
+          setDraftValue(nextValue);
+          if (!nextValue.trim()) {
+            onChange("");
+            clear();
+          }
         }}
         onFocus={() => {
           setFocused(true);
@@ -195,13 +271,22 @@ export function LocationSearchField({
           event.preventDefault();
           if (loading) {
             pendingEnterRef.current = true;
+            if (pendingEnterTimerRef.current !== undefined) {
+              window.clearTimeout(pendingEnterTimerRef.current);
+            }
+            pendingEnterTimerRef.current = window.setTimeout(() => {
+              if (!pendingEnterRef.current) return;
+              pendingEnterRef.current = false;
+              pendingEnterTimerRef.current = undefined;
+              commitManualSearch({ close: true, preferSuggestion: false });
+            }, PENDING_ENTER_PROVIDER_GRACE_MS);
             return;
           }
           if (predictions[0]) {
             void selectSuggestion(predictions[0]);
             return;
           }
-          commitManualSearch();
+          commitManualSearch({ close: true });
         }}
         className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none min-w-0"
         autoComplete="off"
@@ -218,8 +303,10 @@ export function LocationSearchField({
         <button
           type="button"
           onClick={() => {
+            cancelPendingCommit();
             setDraftValue("");
             onChange("");
+            clear();
           }}
           className={compact ? "min-h-8 min-w-8 inline-flex items-center justify-center rounded-lg" : ""}
           aria-label="Clear location"

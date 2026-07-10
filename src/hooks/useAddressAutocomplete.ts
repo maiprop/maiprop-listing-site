@@ -16,9 +16,10 @@ import {
 } from "@/lib/location/locationSearchSemantics";
 
 const AUTOCOMPLETE_DEBOUNCE_MS = 300;
-const GOOGLE_PROVIDER_BUDGET_MS = 1200;
+const GOOGLE_PROVIDER_BUDGET_MS = 800;
 const MIN_QUERY_LEN = 2;
 const LIMIT = 6;
+const PREDICTION_CACHE_LIMIT = 80;
 
 type AddressAutocompleteMode = "city" | "address";
 
@@ -31,6 +32,36 @@ type UseAddressAutocompleteOptions = {
 type MapboxResponse = {
   features?: unknown[];
 };
+
+const predictionCache = new Map<string, AddressPrediction[]>();
+
+function predictionCacheKey(query: string, mode: AddressAutocompleteMode): string {
+  return `${mode}:${normalizeGreekLocationText(query)}`;
+}
+
+function predictionCacheEnabled(): boolean {
+  return import.meta.env.MODE !== "test";
+}
+
+function readPredictionCache(key: string): AddressPrediction[] | null {
+  if (!predictionCacheEnabled()) return null;
+  const cached = predictionCache.get(key);
+  if (!cached) return null;
+  predictionCache.delete(key);
+  predictionCache.set(key, cached);
+  return cached;
+}
+
+function writePredictionCache(key: string, predictions: AddressPrediction[]): void {
+  if (!predictionCacheEnabled() || predictions.length === 0) return;
+  if (predictions.some((prediction) => prediction.provider === "google")) return;
+  predictionCache.set(key, predictions);
+  while (predictionCache.size > PREDICTION_CACHE_LIMIT) {
+    const oldestKey = predictionCache.keys().next().value;
+    if (!oldestKey) break;
+    predictionCache.delete(oldestKey);
+  }
+}
 
 const getMapboxAddressToken = () => {
   if (import.meta.env.MODE === "test") return "";
@@ -158,6 +189,14 @@ export function useAddressAutocomplete(
       try {
         const effectiveMode =
           mode === "city" && looksLikeStreetAddress(normalizedQuery) ? "address" : mode;
+        const cacheKey = predictionCacheKey(normalizedQuery, effectiveMode);
+        const cachedPredictions = readPredictionCache(cacheKey);
+        if (cachedPredictions) {
+          if (requestSeqRef.current === requestSeq && !controller.signal.aborted) {
+            setRemotePredictions(cachedPredictions.slice(0, LIMIT));
+          }
+          return;
+        }
         const shouldCrossCheckAddress = effectiveMode === "address" && looksLikeStreetAddress(normalizedQuery);
         const shouldCrossCheckCity =
           mode === "city" &&
@@ -189,8 +228,10 @@ export function useAddressAutocomplete(
           shouldCrossCheckAddress || shouldCrossCheckCity
             ? mergeAddressPredictions(fallbackPredictions, googlePredictions)
             : (fallbackPredictions.length > 0 ? fallbackPredictions : googlePredictions);
+        const rankedPredictions = rankPredictionsForQuery(predictions, normalizedQuery).slice(0, LIMIT);
+        writePredictionCache(cacheKey, rankedPredictions);
         if (requestSeqRef.current === requestSeq && !controller.signal.aborted) {
-          setRemotePredictions(rankPredictionsForQuery(predictions, normalizedQuery).slice(0, LIMIT));
+          setRemotePredictions(rankedPredictions);
         }
       } catch (_error) {
         if (requestSeqRef.current === requestSeq && !controller.signal.aborted) {
