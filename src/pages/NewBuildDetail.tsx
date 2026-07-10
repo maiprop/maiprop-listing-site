@@ -92,6 +92,8 @@ type AIInsightsResponse = ValuationEstimateSource & {
   confidenceLabel?: string;
 };
 
+const AI_TIMEOUT_MS = 45_000;
+
 const cleanOptionalText = (value: string | null | undefined) => {
   const trimmed = value?.trim();
   return trimmed || undefined;
@@ -134,8 +136,8 @@ const insertNewBuildLead = async ({
 };
 
 // ── Main page ─────────────────────────────────────────────────────────────────
-// skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
-export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detail coordinates listing data, lead capture, media, and analytics affordances.
+// skipcq: JS-0067 - React route component is intentionally module-scoped.
+export default function NewBuildDetail() { // skipcq: JS-R1005
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -172,12 +174,12 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
 
   const { data: listing, isLoading, error } = useQuery({
     queryKey: ["new-build-listing", id],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!id) return null;
       try {
         const response = await fetchPublicApi<PublicListingResponse>(
           `/api/public/listing?id=${encodeURIComponent(id)}`,
-          { throwOnError: true },
+          { throwOnError: true, signal },
         );
         if (response) return response.data ?? null;
         throw new Error("Public new-build listing API returned no data");
@@ -185,7 +187,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
         if (shouldLogPublicApiFallback(apiError)) {
           logger.warn("Public new-build detail API failed; falling back to constrained Supabase read:", apiError);
         }
-        return fetchNewBuildListingFallback(id);
+        return fetchNewBuildListingFallback(id, signal);
       }
     },
     enabled: !!id,
@@ -310,6 +312,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005 - New-build detai
     setAiInsightsError(null);
     setAiInsightsQuotaReached(false);
     invokeAuthenticatedFunction<AIInsightsResponse>("property-valuation", {
+      timeout: AI_TIMEOUT_MS,
       body: {
         listingId: listing.id,
         title: displayTitle,

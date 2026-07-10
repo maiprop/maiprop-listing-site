@@ -7,7 +7,7 @@ import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 import { logger } from "@/lib/logger";
 import { getOwnerParticipantType } from "@/lib/participantConfig";
 import { CATALOG_STATIC_QUERY_STALE_TIME, USER_SCOPED_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
-import { fetchPublicApi } from "@/lib/publicApi";
+import { fetchPublicApi, isPublicApiAbort } from "@/lib/publicApi";
 import {
   listingIdSchema,
   listingUpdateMutationSchema,
@@ -274,6 +274,15 @@ type ListingsQueryScope = {
   publicScope?: boolean;
 };
 
+type AbortableQuery<T> = T & { abortSignal?: (signal: AbortSignal) => T };
+
+const withAbortSignal = <T>(query: T, signal?: AbortSignal): T => {
+  const abortable = query as AbortableQuery<T>;
+  return signal && typeof abortable.abortSignal === "function"
+    ? abortable.abortSignal(signal)
+    : query;
+};
+
 type LocationBounds = {
   minLat: number;
   maxLat: number;
@@ -501,9 +510,13 @@ const fetchListingsPageFromSupabase = async (
   page = 1,
   pageSize = PAGE_SIZE,
   options: UseListingsOptions = {},
+  signal?: AbortSignal,
 ) => { // skipcq: JS-R1005 - Page fetch keeps listing rows and owner profile enrichment together.
   const from = (page - 1) * pageSize;
-  const { data, error } = await buildListingsQuery(filters, from, pageSize, { publicScope: options.publicScope });
+  const { data, error } = await withAbortSignal(
+    buildListingsQuery(filters, from, pageSize, { publicScope: options.publicScope }),
+    signal,
+  );
 
   if (error) throw error;
   const rows = data ?? [];
@@ -515,10 +528,10 @@ const fetchListingsPageFromSupabase = async (
   ];
   let profileMap = new Map<string, { user_id: string; display_name: string | null; avatar_url: string | null }>();
   if (ownerIds.length > 0) {
-    const { data: ownerProfiles = [] } = await supabase
+    const { data: ownerProfiles = [] } = await withAbortSignal(supabase
       .from("profiles_public")
       .select("user_id, display_name, avatar_url")
-      .in("user_id", ownerIds);
+      .in("user_id", ownerIds), signal);
     profileMap = new Map((ownerProfiles ?? []).map((p) => [p.user_id, p]));
   }
 
@@ -531,22 +544,29 @@ const fetchListingsPageFromSupabase = async (
   return { data: enriched, hasMore: rows.length === pageSize };
 };
 
-const fetchListingsPage = async (filters?: ListingsFilters, page = 1, pageSize = PAGE_SIZE, options: UseListingsOptions = {}) => { // skipcq: JS-R1005 - Page fetch keeps listing rows and owner profile enrichment together.
+const fetchListingsPage = async (
+  filters?: ListingsFilters,
+  page = 1,
+  pageSize = PAGE_SIZE,
+  options: UseListingsOptions = {},
+  signal?: AbortSignal,
+) => { // skipcq: JS-R1005 - Page fetch keeps listing rows and owner profile enrichment together.
   if (shouldUsePublicListingsApi(filters)) {
     try {
       const cached = await fetchPublicApi<PublicListingsResponse>(
         publicListingsPath(filters, page, pageSize),
-        { throwOnError: true },
+        { throwOnError: true, signal },
       );
       if (!cached) throw new Error("Public listings API returned no data");
       return cached;
     } catch (error) {
+      if (isPublicApiAbort(error)) throw error;
       logger.warn("Public listings API failed; falling back to constrained Supabase listing read:", error);
-      return fetchListingsPageFromSupabase(filters, page, pageSize, { ...options, publicScope: true });
+      return fetchListingsPageFromSupabase(filters, page, pageSize, { ...options, publicScope: true }, signal);
     }
   }
 
-  return fetchListingsPageFromSupabase(filters, page, pageSize, options);
+  return fetchListingsPageFromSupabase(filters, page, pageSize, options, signal);
 };
 
 export const useListingsPaginated = (
@@ -555,7 +575,7 @@ export const useListingsPaginated = (
 ) => {
   return useInfiniteQuery({
     queryKey: ["listings-paginated", filters, { publicScope: Boolean(options?.publicScope) }],
-    queryFn: ({ pageParam = 1 }) => fetchListingsPage(filters, pageParam, PAGE_SIZE, options),
+    queryFn: ({ pageParam = 1, signal }) => fetchListingsPage(filters, pageParam, PAGE_SIZE, options, signal),
     getNextPageParam: (lastPage, allPages) =>
       lastPage.hasMore ? allPages.length + 1 : undefined,
     initialPageParam: 1,
@@ -575,24 +595,25 @@ export const useListings = (
     queryKey: ["listings", filters, { publicScope: Boolean(options?.publicScope) }],
     enabled: options?.enabled ?? true,
     staleTime: filters?.owner_id && !options?.publicScope ? USER_SCOPED_QUERY_STALE_TIME : CATALOG_STATIC_QUERY_STALE_TIME,
-    queryFn: async () => { // skipcq: JS-R1005 - Owner profile enrichment keeps the map fetch result self-contained.
+    queryFn: async ({ signal }) => { // skipcq: JS-R1005 - Owner profile enrichment keeps the map fetch result self-contained.
       const limit = filters?.limit ?? MAP_FETCH_LIMIT;
       if (shouldUsePublicListingsApi(filters)) {
         try {
           const cached = await fetchPublicApi<PublicListingsResponse>(
             publicListingsPath(filters, 1, limit),
-            { throwOnError: true },
+            { throwOnError: true, signal },
           );
           if (!cached) throw new Error("Public listings API returned no data");
           return cached.data;
         } catch (error) {
+          if (isPublicApiAbort(error)) throw error;
           logger.warn("Public listings API failed; falling back to constrained Supabase listing read:", error);
-          const fallback = await fetchListingsPageFromSupabase(filters, 1, limit, { ...options, publicScope: true });
+          const fallback = await fetchListingsPageFromSupabase(filters, 1, limit, { ...options, publicScope: true }, signal);
           return fallback.data as ListingWithJoins[];
         }
       }
 
-      const fallback = await fetchListingsPageFromSupabase(filters, 1, limit, options);
+      const fallback = await fetchListingsPageFromSupabase(filters, 1, limit, options, signal);
       return fallback.data as ListingWithJoins[];
     },
   });
@@ -621,15 +642,18 @@ const EMPTY_OWNER_CONTEXT: ListingOwnerContext = {
   ownerParticipantType: null,
 };
 
-const fetchListingOwnerContext = async (ownerId: string | null): Promise<ListingOwnerContext> => { // skipcq: JS-R1005 - Owner context fetch handles nullable owner ids and fallback profile state.
+const fetchListingOwnerContext = async (
+  ownerId: string | null,
+  signal?: AbortSignal,
+): Promise<ListingOwnerContext> => { // skipcq: JS-R1005 - Owner context fetch handles nullable owner ids and fallback profile state.
   if (!ownerId) return EMPTY_OWNER_CONTEXT;
 
   try {
-    const { data: profilePublic } = await supabase
+    const { data: profilePublic } = await withAbortSignal(supabase
       .from("profiles_public")
       .select("user_id, display_name, avatar_url, role")
       .eq("user_id", ownerId)
-      .maybeSingle();
+      .maybeSingle(), signal);
     const profiles = profilePublic ?? null;
     return {
       profiles,
@@ -644,68 +668,83 @@ type PublicListingResponse = {
   data: (Database["public"]["Tables"]["listings"]["Row"] & Partial<ListingWithJoins>) | null;
 };
 
-const fetchPublicListingFromSupabase = async (id: string): Promise<ListingWithJoins | null> => {
-  const { data, error } = await supabase
+const fetchPublicListingFromSupabase = async (id: string, signal?: AbortSignal): Promise<ListingWithJoins | null> => {
+  const { data, error } = await withAbortSignal(supabase
     .from("listings")
     .select(LISTING_DETAIL_SELECT)
     .eq("id", id)
     .eq("status", "active")
     .eq("is_off_market", false)
     .order("sort_order", { referencedTable: "listing_images", ascending: true })
-    .maybeSingle();
+    .maybeSingle(), signal);
 
   if (error) throw error;
   if (!data) return null;
 
   const row = data as unknown as Database["public"]["Tables"]["listings"]["Row"] & Partial<ListingWithJoins>;
-  const { profiles, ownerParticipantType } = await fetchListingOwnerContext(row.owner_id);
+  const { profiles, ownerParticipantType } = await fetchListingOwnerContext(row.owner_id, signal);
   return normalizeListingWithJoins({ ...row, profiles, ownerParticipantType });
 };
 
-const fetchListingById = async (id: string, options: { publicScope?: boolean } = {}): Promise<ListingWithJoins | null> => {
+const fetchListingById = async (
+  id: string,
+  options: { publicScope?: boolean } = {},
+  signal?: AbortSignal,
+): Promise<ListingWithJoins | null> => {
   if (options.publicScope) {
     try {
       const response = await fetchPublicApi<PublicListingResponse>(
         `/api/public/listing?id=${encodeURIComponent(id)}`,
-        { throwOnError: true },
+        { throwOnError: true, signal },
       );
       return response?.data ? normalizeListingWithJoins(response.data) : null;
     } catch (error) {
+      if (isPublicApiAbort(error)) throw error;
       logger.warn("Public listing API failed; falling back to constrained Supabase detail read:", error);
-      return fetchPublicListingFromSupabase(id);
+      return fetchPublicListingFromSupabase(id, signal);
     }
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await withAbortSignal(supabase
     .from("listings")
     .select(`
       *,
       listing_images(url, sort_order)
     `)
     .eq("id", id)
-    .maybeSingle();
+    .maybeSingle(), signal);
 
   // PGRST116 (no rows) now handled by maybeSingle() — only real errors thrown
   if (error) throw error;
   if (!data) return null;
 
-  const { profiles, ownerParticipantType } = await fetchListingOwnerContext(data.owner_id);
+  const { profiles, ownerParticipantType } = await fetchListingOwnerContext(data.owner_id, signal);
   return normalizeListingWithJoins({ ...data, profiles, ownerParticipantType });
 };
 
 export const useListing = (id: string, options: UseListingOptions = {}) => {
   return useQuery({
     queryKey: ["listing", id, { publicScope: Boolean(options.publicScope) }],
-    queryFn: () => fetchListingById(id, { publicScope: options.publicScope }),
+    queryFn: ({ signal }) => fetchListingById(id, { publicScope: options.publicScope }, signal),
     enabled: Boolean(id),
     placeholderData: options.initialData ? normalizeListingWithJoins(options.initialData) : undefined,
     staleTime: CATALOG_STATIC_QUERY_STALE_TIME,
   });
 };
 
-export const useOwnerProStatus = (listingId?: string, ownerId?: string | null) => {
+type UseOwnerProStatusOptions = {
+  enabled?: boolean;
+  initialData?: boolean;
+};
+
+export const useOwnerProStatus = (
+  listingId?: string,
+  ownerId?: string | null,
+  options: UseOwnerProStatusOptions = {},
+) => {
   const hasListingId = Boolean(listingId);
   const hasOwnerId = Boolean(ownerId);
+  const enabled = (options.enabled ?? true) && hasListingId && hasOwnerId;
 
   return useQuery({
     queryKey: ["owner-pro-status", listingId, ownerId],
@@ -717,7 +756,8 @@ export const useOwnerProStatus = (listingId?: string, ownerId?: string | null) =
       if (error) throw error;
       return (data as { isPro?: boolean } | null)?.isPro === true;
     },
-    enabled: hasListingId && hasOwnerId,
+    enabled,
+    initialData: options.initialData,
     staleTime: USER_SCOPED_QUERY_STALE_TIME,
   });
 };

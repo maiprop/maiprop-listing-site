@@ -351,6 +351,7 @@ describe("Pricing focused page behavior", () => {
     await waitFor(() =>
       expect(mocks.invokeMock).toHaveBeenCalledWith("create-checkout", {
         body: { plan: "agent_basic", billing_cycle: "annual" },
+        timeout: 20_000,
       }),
     );
   });
@@ -394,7 +395,7 @@ describe("Pricing focused page behavior", () => {
     expect(await screen.findByText("Your Plan")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Manage Subscription/i }));
 
-    await waitFor(() => expect(mocks.invokeMock).toHaveBeenCalledWith("customer-portal", {}));
+    await waitFor(() => expect(mocks.invokeMock).toHaveBeenCalledWith("customer-portal", { timeout: 20_000 }));
     expect(window.open).toHaveBeenCalledWith("https://stripe.example/portal", "_blank");
   });
 
@@ -412,7 +413,7 @@ describe("Pricing focused page behavior", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /Manage Subscription/i }));
 
-    expect(mocks.invokeMock).not.toHaveBeenCalledWith("customer-portal", {});
+    expect(mocks.invokeMock).not.toHaveBeenCalledWith("customer-portal", expect.anything());
     expect(mocks.toast.info).toHaveBeenCalledWith("This plan is managed outside Stripe billing.");
   });
 });

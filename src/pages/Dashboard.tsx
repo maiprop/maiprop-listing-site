@@ -93,6 +93,8 @@ const TabFallback = () => {
 };
 
 // ── Main Dashboard ────────────────────────────────────────────────────────────
+const DASHBOARD_CHECKOUT_TIMEOUT_MS = 20_000;
+
 export default function Dashboard() { // skipcq: JS-R1005
   const { section } = useParams();
   const [searchParams] = useSearchParams();
@@ -224,6 +226,7 @@ export default function Dashboard() { // skipcq: JS-R1005
     setTrialCheckoutLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("create-checkout", {
+        timeout: DASHBOARD_CHECKOUT_TIMEOUT_MS,
         body: {
           plan: trialPlanKey,
           audience: pricingAudience,

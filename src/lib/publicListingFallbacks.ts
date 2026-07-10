@@ -67,7 +67,16 @@ const withImageOrder = <T extends {
     .order("sort_order", { referencedTable: "listing_images", ascending: true })
     .limit(3, { referencedTable: "listing_images" });
 
-export async function fetchHomepageFeaturedFallback(): Promise<HomepageListing[]> {
+type AbortableQuery<T> = T & { abortSignal?: (signal: AbortSignal) => T };
+
+const withAbortSignal = <T>(query: T, signal?: AbortSignal): T => {
+  const abortable = query as AbortableQuery<T>;
+  return signal && typeof abortable.abortSignal === "function"
+    ? abortable.abortSignal(signal)
+    : query;
+};
+
+export async function fetchHomepageFeaturedFallback(signal?: AbortSignal): Promise<HomepageListing[]> {
   const query = withImageOrder(
     supabase
       .from("listings")
@@ -79,12 +88,12 @@ export async function fetchHomepageFeaturedFallback(): Promise<HomepageListing[]
       .limit(12),
   );
 
-  const { data, error } = await query;
+  const { data, error } = await withAbortSignal(query, signal);
   if (error) throw error;
   return publicHomepageRows((data ?? []) as unknown as HomepageListing[], 4);
 }
 
-export async function fetchHomepageOpenHousesFallback(): Promise<HomepageListing[]> {
+export async function fetchHomepageOpenHousesFallback(signal?: AbortSignal): Promise<HomepageListing[]> {
   const query = withImageOrder(
     supabase
       .from("listings")
@@ -97,7 +106,7 @@ export async function fetchHomepageOpenHousesFallback(): Promise<HomepageListing
       .limit(12),
   );
 
-  const { data, error } = await query;
+  const { data, error } = await withAbortSignal(query, signal);
   if (error) throw error;
   return sortByImagePresence(publicHomepageRows((data ?? []) as unknown as HomepageListing[], 6));
 }
@@ -106,10 +115,12 @@ export async function fetchOpenHousesFallback({
   showPast,
   transactionType,
   limit,
+  signal,
 }: {
   showPast: boolean;
   transactionType?: OpenHouseTransactionType | null;
   limit: number;
+  signal?: AbortSignal;
 }): Promise<HomepageListing[]> {
   const now = new Date().toISOString();
   let query = withImageOrder(
@@ -127,12 +138,12 @@ export async function fetchOpenHousesFallback({
     ? query.lt("open_house_date", now).order("open_house_date", { ascending: false })
     : query.gte("open_house_date", now).order("open_house_date", { ascending: true });
 
-  const { data, error } = await query;
+  const { data, error } = await withAbortSignal(query, signal);
   if (error) throw error;
   return sortByImagePresence((data ?? []) as unknown as HomepageListing[]);
 }
 
-export async function fetchAuctionsFallback<T = HomepageListing>(limit: number): Promise<T[]> {
+export async function fetchAuctionsFallback<T = HomepageListing>(limit: number, signal?: AbortSignal): Promise<T[]> {
   const today = new Date().toISOString().slice(0, 10);
   const query = withImageOrder(
     supabase
@@ -148,7 +159,7 @@ export async function fetchAuctionsFallback<T = HomepageListing>(limit: number):
       .limit(limit),
   );
 
-  const { data, error } = await query;
+  const { data, error } = await withAbortSignal(query, signal);
   if (error) throw error;
   return (data ?? []) as T[];
 }

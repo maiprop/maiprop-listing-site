@@ -17,7 +17,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getStreetViewProxyUrl } from "@/lib/config";
 import { MAIPROP_LOGO_FALLBACK_URL } from "@/lib/imageFallbacks";
 import { CATALOG_STATIC_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
-import { fetchPublicApi } from "@/lib/publicApi";
+import { fetchPublicApi, isPublicApiAbort } from "@/lib/publicApi";
 import { logger } from "@/lib/logger";
 import { fetchOpenHousesFallback } from "@/lib/publicListingFallbacks";
 import { ENERGY_CLASSES, FEATURES_RESIDENTIAL } from "@/lib/filterConfig";
@@ -273,21 +273,23 @@ export default function OpenHouses() { // skipcq: JS-R1005 - Open houses coordin
 
   const { data: listings = [], isLoading, isError, refetch } = useQuery({
     queryKey: ["open-houses", showPast, transactionFilter],
-    queryFn: async () => { // skipcq: JS-R1005 - Query keeps time filtering, production cleanup, and media-first sorting together.
+    queryFn: async ({ signal }) => { // skipcq: JS-R1005 - Query keeps time filtering, production cleanup, and media-first sorting together.
       try {
         const transactionParam = transactionFilter ? `&transactionType=${transactionFilter}` : "";
         const cached = await fetchPublicApi<OpenHouseListingRow[]>(
           `/api/public/open-houses?showPast=${showPast ? "1" : "0"}&limit=200${transactionParam}`,
-          { throwOnError: true },
+          { throwOnError: true, signal },
         );
         if (cached) return normalizeOpenHouseRows(cached);
         throw new Error("Public open houses API returned no data");
       } catch (error) {
+        if (isPublicApiAbort(error)) throw error;
         logger.warn("Public open houses API failed; falling back to constrained Supabase read:", error);
         const fallback = await fetchOpenHousesFallback({
           showPast,
           transactionType: transactionFilter || null,
           limit: 200,
+          signal,
         });
         return normalizeOpenHouseRows(fallback as OpenHouseListingRow[]);
       }

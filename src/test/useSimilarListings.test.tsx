@@ -13,6 +13,7 @@ const fromMock = vi.fn();
 
 vi.mock("@/lib/publicApi", () => ({
   fetchPublicApi: (...args: unknown[]) => publicApiMock(...args),
+  isPublicApiAbort: () => false,
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
@@ -86,7 +87,7 @@ describe("useSimilarListings", () => {
     expect(url.searchParams.get("listingType")).toBe("sale");
     expect(url.searchParams.get("price")).toBe("320000");
     expect(url.searchParams.get("limit")).toBe("2");
-    expect(options).toEqual({ throwOnError: true });
+    expect(options).toEqual(expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }));
   });
 
   it("returns [] when the public API has no similar rows", async () => {

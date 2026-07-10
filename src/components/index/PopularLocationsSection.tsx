@@ -37,8 +37,8 @@ export function PopularLocationsSection({ enabled = true }: PopularLocationsSect
     queryKey: ["homepage-popular-locations", "v3"],
     enabled: enabled && inView,
     staleTime: 10 * 60 * 1000,
-    queryFn: async () => {
-      const stats = await fetchPublicApi<LocationStats[]>("/api/public/homepage?section=popular-locations");
+    queryFn: async ({ signal }) => {
+      const stats = await fetchPublicApi<LocationStats[]>("/api/public/homepage?section=popular-locations", { signal });
       return mergeLocationStats(stats);
     },
   });

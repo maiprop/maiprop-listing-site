@@ -6,6 +6,7 @@ export const SUBSCRIPTION_CHECKOUT_SUCCESS_URL =
   "/dashboard/billing?checkout=success";
 export const SUBSCRIPTION_CHECKOUT_CANCEL_URL =
   "/dashboard/billing?checkout=cancelled";
+const CHECKOUT_FUNCTION_TIMEOUT_MS = 20_000;
 
 export type SubscriptionBillingCycle = "monthly" | "annual";
 
@@ -28,6 +29,7 @@ export const createAddonCheckoutUrl = async (
   target: AddonCheckoutTarget = {},
 ): Promise<string> => {
   const { data: checkout, error } = await supabase.functions.invoke("create-checkout", {
+    timeout: CHECKOUT_FUNCTION_TIMEOUT_MS,
     body: {
       addon_key: addonKey,
       ...(target.quantity != null ? { quantity: target.quantity } : {}),
@@ -52,6 +54,7 @@ export const createSubscriptionCheckoutUrl = async (
   const { data: checkout, error } = await supabase.functions.invoke(
     "create-checkout",
     {
+      timeout: CHECKOUT_FUNCTION_TIMEOUT_MS,
       body: {
         plan: planKey,
         billing_cycle: target.billingCycle ?? "monthly",

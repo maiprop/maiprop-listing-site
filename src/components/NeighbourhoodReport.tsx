@@ -65,6 +65,8 @@ export interface NeighbourhoodReportProps {
   isPro?: boolean;
 }
 
+const NEIGHBOURHOOD_REPORT_TIMEOUT_MS = 45_000;
+
 // ── Micro-components ───────────────────────────────────────────────────────────
 
 const ScoreBar = React.forwardRef<HTMLDivElement, { score: number; max?: number; colour: string }>(
@@ -224,6 +226,7 @@ export default function NeighbourhoodReport({ city, address, region, municipalit
       const currentQuota = await refreshQuota();
       if (currentQuota && !currentQuota.allowed) return;
       const { data: result, error: fnErr } = await invokeAuthenticatedFunction<NeighbourhoodData & { error?: string }>("neighbourhood-report", {
+        timeout: NEIGHBOURHOOD_REPORT_TIMEOUT_MS,
         body: { city, address, region, municipality, propertyType, lat, lng, listingId },
       });
       if (fnErr) throw fnErr;

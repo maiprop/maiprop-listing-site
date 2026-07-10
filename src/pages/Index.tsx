@@ -16,10 +16,10 @@ import { HomepageOpenHousesSection } from "@/components/index/HomepageOpenHouses
 import { QuickSaleCTASection } from "@/components/index/QuickSaleCTASection";
 import { PopularLocationsSection } from "@/components/index/PopularLocationsSection";
 import { ProfessionalsCTASection } from "@/components/index/ProfessionalsCTASection";
-import { OSSection } from "@/components/index/OSSection";
 import { APP_ORIGIN } from "@/lib/config";
 
 const Footer = lazy(() => import("@/components/Footer").then(m => ({ default: m.Footer })));
+const OSSection = lazy(() => import("@/components/index/OSSection").then(m => ({ default: m.OSSection })));
 
 type DeferredHomepageSectionOptions = {
   rootMargin?: string;
@@ -83,6 +83,7 @@ export default function Index() {
   const auctionsSection = useDeferredHomepageSection({ idleDelayMs: 1_800 });
   const openHousesSection = useDeferredHomepageSection({ idleDelayMs: 2_400 });
   const popularLocationsSection = useDeferredHomepageSection({ rootMargin: "800px 0px", idleDelayMs: 3_000 });
+  const osSection = useDeferredHomepageSection({ rootMargin: "600px 0px", idleDelayMs: 5_000 });
 
   const { pulling, refreshing, progress } = usePullToRefresh({
     onRefresh: async () => {
@@ -172,7 +173,13 @@ export default function Index() {
           <PopularLocationsSection enabled={popularLocationsSection.enabled} />
         </div>
         <ProfessionalsCTASection />
-        <OSSection />
+        <div ref={osSection.ref}>
+          {osSection.enabled && (
+            <Suspense fallback={null}>
+              <OSSection />
+            </Suspense>
+          )}
+        </div>
 
         <Suspense fallback={null}>
           <Footer />

@@ -21,6 +21,7 @@ vi.mock("@/integrations/supabase/client", () => ({
 
 vi.mock("@/lib/publicApi", () => ({
   fetchPublicApi: (...args: unknown[]) => publicApiMock(...args),
+  isPublicApiAbort: () => false,
 }));
 
 import {
@@ -99,7 +100,10 @@ describe("useAuctionListings", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(result.current.data?.[0]).toMatchObject({ id: "api-a1" });
-    expect(publicApiMock).toHaveBeenCalledWith("/api/public/auctions?limit=60", { throwOnError: true });
+    expect(publicApiMock).toHaveBeenCalledWith(
+      "/api/public/auctions?limit=60",
+      expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
+    );
     expect(fromMock).not.toHaveBeenCalled();
     expect(invokeMock).not.toHaveBeenCalled();
   });
@@ -113,7 +117,10 @@ describe("useAuctionListings", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(result.current.data).toHaveLength(600);
-    expect(publicApiMock).toHaveBeenCalledWith("/api/public/auctions?limit=600", { throwOnError: true });
+    expect(publicApiMock).toHaveBeenCalledWith(
+      "/api/public/auctions?limit=600",
+      expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
+    );
     expect(fromMock).not.toHaveBeenCalled();
   });
 
@@ -184,7 +191,7 @@ describe("fetchAuctionListingById", () => {
 
     expect(publicApiMock).toHaveBeenCalledWith(
       "/api/public/listing?id=11111111-1111-4111-8111-111111111111",
-      { throwOnError: true },
+      { throwOnError: true, signal: undefined },
     );
     expect(fromMock).not.toHaveBeenCalled();
   });
@@ -198,7 +205,7 @@ describe("fetchAuctionListingById", () => {
 
     await expect(fetchAuctionListingById("os-123")).resolves.toMatchObject({ id: "os-db-row" });
 
-    expect(publicApiMock).toHaveBeenCalledWith("/api/public/listing?osTag=os-123", { throwOnError: true });
+    expect(publicApiMock).toHaveBeenCalledWith("/api/public/listing?osTag=os-123", { throwOnError: true, signal: undefined });
     expect(fromMock).not.toHaveBeenCalled();
   });
 });

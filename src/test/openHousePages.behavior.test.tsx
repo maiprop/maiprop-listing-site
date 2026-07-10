@@ -194,6 +194,7 @@ vi.mock("@/lib/config", async () => {
 });
 vi.mock("@/lib/publicApi", () => ({
   fetchPublicApi: (...args: unknown[]) => mocks.publicApi(...args),
+  isPublicApiAbort: () => false,
 }));
 vi.mock("sonner", () => ({
   toast: {
@@ -335,7 +336,7 @@ describe("OpenHouses page behavior", () => {
     expect(screen.getByText("Voula House")).toBeInTheDocument();
     expect(mocks.publicApi).toHaveBeenCalledWith(
       "/api/public/open-houses?showPast=0&limit=200",
-      { throwOnError: true },
+      expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
     );
     expect(mocks.from).not.toHaveBeenCalled();
 
@@ -368,7 +369,7 @@ describe("OpenHouses page behavior", () => {
     expect(screen.queryByText("Sale Open House")).not.toBeInTheDocument();
     expect(mocks.publicApi).toHaveBeenCalledWith(
       "/api/public/open-houses?showPast=0&limit=200&transactionType=rent",
-      { throwOnError: true },
+      expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
     );
 
     mocks.publicApi.mockClear().mockResolvedValue([
@@ -379,7 +380,7 @@ describe("OpenHouses page behavior", () => {
     await waitFor(() =>
       expect(mocks.publicApi).toHaveBeenCalledWith(
         "/api/public/open-houses?showPast=0&limit=200&transactionType=sale",
-        { throwOnError: true },
+        expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
       ),
     );
     expect(await screen.findByText("Sale Open House")).toBeInTheDocument();
@@ -470,7 +471,7 @@ describe("OpenHouses page behavior", () => {
     expect(await screen.findByText("Direct DB Open House")).toBeInTheDocument();
     expect(mocks.publicApi).toHaveBeenCalledWith(
       "/api/public/open-houses?showPast=0&limit=200",
-      { throwOnError: true },
+      expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
     );
     expect(mocks.from).toHaveBeenCalledWith("listings");
 
@@ -481,7 +482,7 @@ describe("OpenHouses page behavior", () => {
     await waitFor(() =>
       expect(mocks.publicApi).toHaveBeenCalledWith(
         "/api/public/open-houses?showPast=1&limit=200",
-        { throwOnError: true },
+        expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
       )
     );
     expect(mocks.from).not.toHaveBeenCalled();

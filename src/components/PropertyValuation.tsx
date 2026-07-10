@@ -185,6 +185,8 @@ type RawValuationResult = Partial<ValuationResult> & {
   auction_adjusted_value?: unknown;
 };
 
+const PROPERTY_VALUATION_TIMEOUT_MS = 45_000;
+
 function normalizeValuationResult(data: RawValuationResult, fallbackPrice: number): ValuationResult {
   const primaryEstimate = getPrimaryValuationEstimate(data, fallbackPrice);
   const estimatedValue = toFiniteNumber(data.estimatedValue ?? data.estimated_value, primaryEstimate);
@@ -262,7 +264,10 @@ export default function PropertyValuation(props: PropertyValuationProps) {
     setErrorMessage(null);
     try {
       const body = parseMutationInput(propertyValuationBodySchema, props, "property valuation");
-      const { data, error } = await invokeAuthenticatedFunction<RawValuationResult & { error?: string }>("property-valuation", { body });
+      const { data, error } = await invokeAuthenticatedFunction<RawValuationResult & { error?: string }>("property-valuation", {
+        body,
+        timeout: PROPERTY_VALUATION_TIMEOUT_MS,
+      });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       if (!getRemoteValuationEstimate(data)) throw new Error(ui(isGreek, "Valuation returned no result", "Η εκτίμηση δεν επέστρεψε αποτέλεσμα"));

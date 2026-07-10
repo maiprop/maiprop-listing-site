@@ -14,6 +14,7 @@ vi.mock("@/integrations/supabase/client", () => ({
 
 vi.mock("@/lib/publicApi", () => ({
   fetchPublicApi: (...args: unknown[]) => publicApiMock(...args),
+  isPublicApiAbort: () => false,
 }));
 
 vi.mock("@/contexts/AuthContext", () => ({
@@ -65,7 +66,7 @@ describe("public listings API fallback behavior", () => {
 
     expect(publicApiMock).toHaveBeenCalledWith(
       expect.stringContaining("/api/public/listings?"),
-      { throwOnError: true },
+      expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
     );
     expect(fromMock).toHaveBeenCalledWith("listings");
     expect(result.current.data).toEqual([
@@ -82,7 +83,7 @@ describe("public listings API fallback behavior", () => {
 
     expect(publicApiMock).toHaveBeenCalledWith(
       expect.stringContaining("/api/public/listings?"),
-      { throwOnError: true },
+      expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
     );
     expect(publicApiMock.mock.calls[0][0]).toContain("pageSize=40");
     expect(fromMock).toHaveBeenCalledWith("listings");
@@ -129,7 +130,7 @@ describe("public listings API fallback behavior", () => {
 
     expect(publicApiMock).toHaveBeenCalledWith(
       "/api/public/listing?id=listing-1",
-      { throwOnError: true },
+      expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
     );
     expect(fromMock).toHaveBeenCalledWith("listings");
     expect(listingBuilder.eq).toHaveBeenCalledWith("id", "listing-1");

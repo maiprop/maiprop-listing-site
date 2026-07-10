@@ -418,6 +418,124 @@ Deno.test("uses OpenAI enriched with structured OS valuation when listing coordi
   }
 });
 
+Deno.test("reuses the structured OS auth token across warm valuation requests", async () => {
+  const originalFetch = globalThis.fetch;
+  const prevOsUrl = Deno.env.get("MAIPROP_OS_API_URL");
+  const prevOsEmail = Deno.env.get("MAIPROP_OS_EMAIL");
+  const prevOsPassword = Deno.env.get("MAIPROP_OS_PASSWORD");
+  const prevOpenAI = Deno.env.get("OPENAI_API_KEY");
+  const prevGemini = Deno.env.get("GEMINI_API_KEY");
+  Deno.env.set("MAIPROP_OS_API_URL", "https://os-cache.test");
+  Deno.env.set("MAIPROP_OS_EMAIL", "os-cache@test.local");
+  Deno.env.set("MAIPROP_OS_PASSWORD", "os-password");
+  Deno.env.set("OPENAI_API_KEY", "openai-test");
+  Deno.env.delete("GEMINI_API_KEY");
+
+  let authCalls = 0;
+  let valuationCalls = 0;
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("/auth/v1/user")) {
+      return Promise.resolve(okJson({ user: { id: "user-1", email: "user@test.local" } }));
+    }
+    if (url.includes("/rest/v1/rpc/reserve_ai_quota_for_user")) {
+      return Promise.resolve(okJson({ allowed: true, reason: null, used: 1, limit: 5 }));
+    }
+    if (url === "https://os-cache.test/auth/login") {
+      authCalls += 1;
+      return Promise.resolve(okJson({ data: { token: "os-cache-token" } }));
+    }
+    if (url === "https://os-cache.test/api/v1/property/valuation") {
+      valuationCalls += 1;
+      assertEquals((init?.headers as Record<string, string>)?.Authorization, "Bearer os-cache-token");
+      return Promise.resolve(okJson({
+        data: {
+          propertyPredictedPrice: 300000 + valuationCalls,
+          saleValuationOverviews: [{ radius: 1, similarListings: [{ id: `comp-${valuationCalls}` }] }],
+          rentalValuationOverviews: [],
+        },
+      }));
+    }
+    if (url.includes("api.openai.com") || url.includes("generativelanguage.googleapis.com")) {
+      return Promise.resolve(okJson({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              estimatedValue: 300000 + valuationCalls,
+              rangeLow: 280000,
+              rangeHigh: 320000,
+              executionValue: 270000,
+              pricePerSqmEstimate: 3000,
+              confidence: 75,
+              confidenceLabel: "High",
+              liquidityScore: 70,
+              marketComparison: "at_market",
+              marketComparisonPct: 0,
+              pricingPosition: "fair",
+              methodUsed: "OpenAI enriched valuation with mAI Prop OS data",
+              valuationMode: "MODE_2_PUBLIC_ENRICHED",
+              summary: "OS-backed warm request.",
+              keyFactors: [],
+              legalCleanliness: 70,
+              planningCertainty: 72,
+              taxFriction: 25,
+              transferReadiness: 68,
+              legalSummary: "Standard transfer assumptions.",
+              taxSummary: "Normal transfer friction assumed.",
+              objectiveValueProxy: null,
+              renovationPotential: null,
+              rentalYieldEstimate: 4,
+              highestBestUseHint: null,
+              redFlags: [],
+              auctionAdjustedValue: null,
+              listingQualityScore: 75,
+            }),
+          },
+        }],
+      }));
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+
+  try {
+    for (const listingId of ["warm-1", "warm-2"]) {
+      const res = await handler(req("POST", {
+        listingId,
+        title: "Warm OS listing",
+        city: "Athens",
+        address: "Warm 1",
+        price: 300000,
+        sqm: 100,
+        propertyType: "apartment",
+        listingType: "sale",
+        latitude: 37.981,
+        longitude: 23.735,
+      }, {
+        authorization: "Bearer test-valid-token",
+        "x-forwarded-for": "2.2.2.2",
+      }));
+      const body = await jsonBody(res) as { generatedBy?: string };
+      assertEquals(res.status, 200);
+      assertEquals(body.generatedBy, "openai_maiprop_os");
+    }
+
+    assertEquals(authCalls, 1);
+    assertEquals(valuationCalls, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (prevOsUrl) Deno.env.set("MAIPROP_OS_API_URL", prevOsUrl);
+    else Deno.env.delete("MAIPROP_OS_API_URL");
+    if (prevOsEmail) Deno.env.set("MAIPROP_OS_EMAIL", prevOsEmail);
+    else Deno.env.delete("MAIPROP_OS_EMAIL");
+    if (prevOsPassword) Deno.env.set("MAIPROP_OS_PASSWORD", prevOsPassword);
+    else Deno.env.delete("MAIPROP_OS_PASSWORD");
+    if (prevOpenAI) Deno.env.set("OPENAI_API_KEY", prevOpenAI);
+    else Deno.env.delete("OPENAI_API_KEY");
+    if (prevGemini) Deno.env.set("GEMINI_API_KEY", prevGemini);
+    else Deno.env.delete("GEMINI_API_KEY");
+  }
+});
+
 Deno.test("new-build valuations skip mAI Prop OS and ask AI for similar-property reasoning", async () => {
   const originalFetch = globalThis.fetch;
   const prevOsUrl = Deno.env.get("MAIPROP_OS_API_URL");

@@ -23,8 +23,8 @@ const FALLBACK: PriceIndexItem[] = [
 export function usePriceIndex() {
   return useQuery({
     queryKey: ["price-index"],
-    queryFn: async () => {
-      return await fetchPublicApi<PriceIndexItem[]>("/api/public/homepage?section=price-index") ?? FALLBACK;
+    queryFn: async ({ signal }) => {
+      return await fetchPublicApi<PriceIndexItem[]>("/api/public/homepage?section=price-index", { signal }) ?? FALLBACK;
     },
     staleTime: 5 * 60 * 1000, // 5 min cache
     refetchOnWindowFocus: false,

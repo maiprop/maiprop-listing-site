@@ -156,6 +156,7 @@ describe("PropertyReportCard", () => {
           success_url: "/property/listing-1?checkout=success&addon=property_report_single&target_id=listing-1",
           cancel_url: "/property/listing-1?checkout=cancelled&addon=property_report_single&target_id=listing-1",
         },
+        timeout: 20_000,
       })
     );
     expect(screen.queryByRole("button", { name: /load report/i })).not.toBeInTheDocument();

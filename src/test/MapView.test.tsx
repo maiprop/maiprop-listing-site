@@ -48,46 +48,52 @@ interface LayerMockProps {
   source?: string;
 }
 
-vi.mock("react-map-gl", async () => {
-  const React = await vi.importActual<typeof import("react")>("react");
-  const Map = React.forwardRef<{ getMap: () => null }, MapMockProps>(function MockMap(
-    { children, onClick, onMouseMove, ...rest },
-    ref,
-  ) {
-    React.useImperativeHandle(ref, () => ({ getMap: () => null }), []);
-    handlerHolder.onClick = onClick;
-    handlerHolder.onMouseMove = onMouseMove;
-    return (
-      <div data-testid="map-mock" data-token={String(rest.mapboxAccessToken ?? "")}>{children}</div>
-    );
-  });
-  const Source = React.forwardRef<HTMLDivElement, SourceMockProps>(function MockSource({ children, id, data }, ref) {
-    return (
-      <div
-        ref={ref}
-        data-testid="map-source"
-        data-source-id={id ?? ""}
-        data-feature-count={String(data?.features?.length ?? "")}
-      >
-        {children}
-      </div>
-    );
-  });
-  const Layer = React.forwardRef<HTMLDivElement, LayerMockProps>(function MockLayer({ id, source }, ref) {
-    return <div ref={ref} data-testid="map-layer" data-layer-id={id ?? ""} data-layer-source={source ?? ""} />;
-  });
-  const Popup = React.forwardRef<HTMLDivElement, ChildrenMockProps>(function MockPopup({ children }, ref) {
-    return <div ref={ref} data-testid="map-popup">{children}</div>;
-  });
-  const NavigationControl = React.forwardRef<HTMLDivElement>(function MockNavigationControl(_props, ref) {
-    return <div ref={ref} data-testid="map-nav" />;
-  });
-
-  return { __esModule: true, Map, Source, Layer, Popup, NavigationControl };
+const MockMap = React.forwardRef<{ getMap: () => null }, MapMockProps>(function MockMap(
+  { children, onClick, onMouseMove, ...rest },
+  ref,
+) {
+  React.useImperativeHandle(ref, () => ({ getMap: () => null }), []);
+  handlerHolder.onClick = onClick;
+  handlerHolder.onMouseMove = onMouseMove;
+  return (
+    <div data-testid="map-mock" data-token={String(rest.mapboxAccessToken ?? "")}>{children}</div>
+  );
 });
-vi.mock("mapbox-gl/dist/mapbox-gl.css", () => ({}));
+const MockSource = React.forwardRef<HTMLDivElement, SourceMockProps>(function MockSource({ children, id, data }, ref) {
+  return (
+    <div
+      ref={ref}
+      data-testid="map-source"
+      data-source-id={id ?? ""}
+      data-feature-count={String(data?.features?.length ?? "")}
+    >
+      {children}
+    </div>
+  );
+});
+const MockLayer = React.forwardRef<HTMLDivElement, LayerMockProps>(function MockLayer({ id, source }, ref) {
+  return <div ref={ref} data-testid="map-layer" data-layer-id={id ?? ""} data-layer-source={source ?? ""} />;
+});
+const MockPopup = React.forwardRef<HTMLDivElement, ChildrenMockProps>(function MockPopup({ children }, ref) {
+  return <div ref={ref} data-testid="map-popup">{children}</div>;
+});
+const MockNavigationControl = React.forwardRef<HTMLDivElement>(function MockNavigationControl(_props, ref) {
+  return <div ref={ref} data-testid="map-nav" />;
+});
 
 import { MapView } from "@/components/MapView";
+
+const mapComponentsLoader = async () => ({
+  Map: MockMap,
+  Source: MockSource,
+  Layer: MockLayer,
+  Popup: MockPopup,
+  NavigationControl: MockNavigationControl,
+});
+
+function TestMapView(props: Omit<React.ComponentProps<typeof MapView>, "mapComponentsLoader">) {
+  return <MapView mapComponentsLoader={mapComponentsLoader} {...props} />;
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -123,13 +129,13 @@ function sourceFeatureCount(id: string) {
 
 describe("MapView", () => {
   it("renders nothing meaningful before the lazy import resolves, then renders the Map", async () => {
-    render(<MapView listings={baseListings} />);
+    render(<TestMapView listings={baseListings} />);
     await waitFor(() => expect(screen.getByTestId("map-mock")).toBeInTheDocument());
     expect(screen.getByTestId("map-mock")).toHaveAttribute("data-token", "pk.test.token");
   });
 
   it("renders the cluster source + layers once mounted", async () => {
-    render(<MapView listings={baseListings} />);
+    render(<TestMapView listings={baseListings} />);
     // The map renders multiple sources (cluster + draw + heatmap), so use
     // getAllByTestId and assert at least one is present.
     await waitFor(() => expect(screen.getAllByTestId("map-source").length).toBeGreaterThan(0));
@@ -137,7 +143,7 @@ describe("MapView", () => {
   });
 
   it("toggles draw mode on Draw button click", async () => {
-    render(<MapView listings={baseListings} />);
+    render(<TestMapView listings={baseListings} />);
     await waitFor(() => screen.getByTestId("map-mock"));
     const drawBtn = screen.getByRole("button", { name: /Draw|Polygon|Lasso/i });
     fireEvent.click(drawBtn);
@@ -148,7 +154,7 @@ describe("MapView", () => {
   });
 
   it("toggles the heatmap overlay", async () => {
-    render(<MapView listings={baseListings} />);
+    render(<TestMapView listings={baseListings} />);
     await waitFor(() => screen.getByTestId("map-mock"));
     const heatmapBtn = screen.queryByRole("button", { name: /Heatmap/i });
     if (heatmapBtn) {
@@ -158,14 +164,14 @@ describe("MapView", () => {
   });
 
   it("supports a custom height prop", async () => {
-    const { container } = render(<MapView listings={baseListings} height="600px" />);
+    const { container } = render(<TestMapView listings={baseListings} height="600px" />);
     await waitFor(() => screen.getByTestId("map-mock"));
     expect(container.querySelector('[style*="600px"]')).toBeTruthy();
   });
 
   it("calls onVisibleListingsChange when provided (no-throw smoke)", async () => {
     const cb = vi.fn();
-    render(<MapView listings={baseListings} onVisibleListingsChange={cb} />);
+    render(<TestMapView listings={baseListings} onVisibleListingsChange={cb} />);
     await waitFor(() => screen.getByTestId("map-mock"));
     // The callback fires from the map's onMoveEnd which we don't trigger
     // here; we only assert the prop is wired without throwing.
@@ -173,14 +179,14 @@ describe("MapView", () => {
   });
 
   it("renders an empty layout when given no listings", async () => {
-    render(<MapView listings={[]} />);
+    render(<TestMapView listings={[]} />);
     await waitFor(() => screen.getByTestId("map-mock"));
     expect(screen.getAllByTestId("map-source").length).toBeGreaterThan(0);
   });
 
   it("falls back to a placeholder when MAPBOX_TOKEN is empty", async () => {
     configMock.mapboxToken = "";
-    render(<MapView listings={baseListings} />);
+    render(<TestMapView listings={baseListings} />);
     expect(screen.getByText(/VITE_MAPBOX_TOKEN/i)).toBeInTheDocument();
   });
 
@@ -201,14 +207,14 @@ describe("MapView", () => {
         sqm: 50, image_url: null, latitude: 0, longitude: 0,
       },
     ];
-    render(<MapView listings={mixed} />);
+    render(<TestMapView listings={mixed} />);
     await waitFor(() => screen.getByTestId("map-mock"));
     // No-throw / no crash — the bad-coord rows are silently dropped.
     expect(screen.getAllByTestId("map-source").length).toBeGreaterThan(0);
   });
 
   it("invokes the Map's onClick with no-op when no draw mode and no cluster/pin under cursor", async () => {
-    render(<MapView listings={baseListings} />);
+    render(<TestMapView listings={baseListings} />);
     await waitFor(() => screen.getByTestId("map-mock"));
     // The Map's onClick uses mapRef.current.getMap() which is null in jsdom,
     // so the click should early-return without throwing.
@@ -218,7 +224,7 @@ describe("MapView", () => {
   });
 
   it("hover updates the inline draw geometry without throwing", async () => {
-    render(<MapView listings={baseListings} />);
+    render(<TestMapView listings={baseListings} />);
     await waitFor(() => screen.getByTestId("map-mock"));
     expect(() => {
       handlerHolder.onMouseMove?.({ lngLat: { lng: 23.7, lat: 38.0 } });
@@ -226,7 +232,7 @@ describe("MapView", () => {
   });
 
   it("toggles heatmap on/off via the toolbar button (and shows the legend)", async () => {
-    render(<MapView listings={baseListings} />);
+    render(<TestMapView listings={baseListings} />);
     await waitFor(() => screen.getByTestId("map-mock"));
     const heatmapBtn = screen.getByRole("button", { name: /Toggle price heatmap/i });
     fireEvent.click(heatmapBtn);
@@ -236,7 +242,7 @@ describe("MapView", () => {
   });
 
   it("enters draw mode, accumulates points via onClick, and the hint reflects each step", async () => {
-    render(<MapView listings={baseListings} />);
+    render(<TestMapView listings={baseListings} />);
     await waitFor(() => screen.getByTestId("map-mock"));
     fireEvent.click(screen.getByRole("button", { name: /Draw area filter/i }));
     expect(screen.getByText(/Click map to start drawing/i)).toBeInTheDocument();
@@ -261,7 +267,7 @@ describe("MapView", () => {
   it("Finish closes the polygon and emits onPolygonFilter with the matching listing ids", async () => {
     const onPolygonFilter = vi.fn();
     render(
-      <MapView
+      <TestMapView
         listings={[
           // Inside the (very wide) polygon below.
           { ...baseListings[0], id: "inside" },
@@ -298,7 +304,7 @@ describe("MapView", () => {
 
   it("draw area locally filters visible map pins and active heatmap data in every MapView caller", async () => {
     render(
-      <MapView
+      <TestMapView
         listings={[
           { ...baseListings[0], id: "inside" },
           {
@@ -335,13 +341,13 @@ describe("MapView", () => {
   });
 
   it("shows the empty-state overlay when no listings have valid coords", async () => {
-    render(<MapView listings={[]} />);
+    render(<TestMapView listings={[]} />);
     await waitFor(() => screen.getByTestId("map-mock"));
     expect(screen.getByText(/No listings with location data/i)).toBeInTheDocument();
   });
 
   it("Cancel-while-drawing resets to the no-draw toolbar state", async () => {
-    render(<MapView listings={baseListings} />);
+    render(<TestMapView listings={baseListings} />);
     await waitFor(() => screen.getByTestId("map-mock"));
     fireEvent.click(screen.getByRole("button", { name: /Draw area filter/i }));
     fireEvent.click(screen.getByRole("button", { name: /Cancel drawing/i }));

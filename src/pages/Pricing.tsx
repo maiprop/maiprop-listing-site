@@ -396,6 +396,8 @@ const PLANS: Record<AudienceId, PlanDef> = {
 };
 
 // ── Main component ─────────────────────────────────────────────────────────────
+const STRIPE_FUNCTION_TIMEOUT_MS = 20_000;
+
 export default function Pricing() {
   const { user, profile, profileLoading } = useAuth();
   const { isPro, loading: subLoading, refreshSubscription, hasStripeBilling } = useSubscription();
@@ -453,6 +455,7 @@ export default function Pricing() {
     try {
       const planKey = PLAN_KEYS[activeTab];
       const { data, error } = await supabase.functions.invoke("create-checkout", {
+        timeout: STRIPE_FUNCTION_TIMEOUT_MS,
         body: { plan: planKey, billing_cycle: billingCycle },
       });
       if (error || !data?.url) throw new Error(data?.error ?? error?.message ?? tr("Checkout failed"));
@@ -472,7 +475,9 @@ export default function Pricing() {
     }
     setPortalLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("customer-portal", {});
+      const { data, error } = await supabase.functions.invoke("customer-portal", {
+        timeout: STRIPE_FUNCTION_TIMEOUT_MS,
+      });
       if (error || !data?.url) throw new Error(error?.message || tr("Failed to open billing portal"));
       window.open(data.url, "_blank");
     } catch (e: unknown) {

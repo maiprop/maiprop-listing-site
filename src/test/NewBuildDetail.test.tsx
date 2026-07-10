@@ -40,6 +40,7 @@ vi.mock("@/integrations/supabase/client", () => ({
 }));
 vi.mock("@/lib/publicApi", () => ({
   fetchPublicApi: (...args: unknown[]) => publicApiMock(...args),
+  isPublicApiAbort: () => false,
   shouldLogPublicApiFallback: () => true,
 }));
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => useAuthMock() }));
@@ -312,12 +313,14 @@ describe("NewBuildDetail", () => {
     });
 
     renderPage();
-    const queryOptions = useQueryMock.mock.calls[0][0] as { queryFn: () => Promise<typeof listing & { profiles?: unknown }> };
-    const result = await queryOptions.queryFn();
+    const queryOptions = useQueryMock.mock.calls[0][0] as {
+      queryFn: (ctx: { signal: AbortSignal }) => Promise<typeof listing & { profiles?: unknown }>;
+    };
+    const result = await queryOptions.queryFn({ signal: new AbortController().signal });
 
     expect(publicApiMock).toHaveBeenCalledWith(
       "/api/public/listing?id=listing-1",
-      { throwOnError: true },
+      expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
     );
     expect(fromMock).not.toHaveBeenCalledWith("listings");
     expect(fromMock).not.toHaveBeenCalledWith("profiles_public");

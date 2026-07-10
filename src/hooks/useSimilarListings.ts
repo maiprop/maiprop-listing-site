@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchPublicApi } from "@/lib/publicApi";
+import { fetchPublicApi, isPublicApiAbort } from "@/lib/publicApi";
 import { supabase } from "@/integrations/supabase/client";
 import type { Enums } from "@/integrations/supabase/types";
 import { logger } from "@/lib/logger";
@@ -78,6 +78,15 @@ export function dedupeSimilarListings<T extends SimilarListingRow>(
 const SIMILAR_LISTINGS_SELECT =
   "id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,property_type,listing_type,open_house_transaction_type,open_house_date,auction_date,auction_starting_bid,cover_image_url,owner_id,tags,has_video_tour,has_virtual_tour,is_featured,priority_placement,is_pre_sale,construction_status,walkability_score,safety_score,noise_score,listing_images(url,sort_order)";
 
+type AbortableQuery<T> = T & { abortSignal?: (signal: AbortSignal) => T };
+
+const withAbortSignal = <T>(query: T, signal?: AbortSignal): T => {
+  const abortable = query as AbortableQuery<T>;
+  return signal && typeof abortable.abortSignal === "function"
+    ? abortable.abortSignal(signal)
+    : query;
+};
+
 async function fetchSimilarListingsFallback({
   excludeId,
   city,
@@ -85,6 +94,7 @@ async function fetchSimilarListingsFallback({
   listingType,
   price,
   limit,
+  signal,
 }: {
   excludeId?: string;
   city?: string;
@@ -92,6 +102,7 @@ async function fetchSimilarListingsFallback({
   listingType?: string;
   price?: number;
   limit: number;
+  signal?: AbortSignal;
 }): Promise<SimilarListingRow[]> {
   let query = supabase
     .from("listings")
@@ -110,17 +121,17 @@ async function fetchSimilarListingsFallback({
   if (propertyType) query = query.eq("property_type", propertyType as Enums<"property_type">);
   if (listingType) query = query.eq("listing_type", listingType as Enums<"listing_type">);
 
-  const { data, error } = await query;
+  const { data, error } = await withAbortSignal(query, signal);
   if (error) throw error;
 
   const rows = (data ?? []) as SimilarListingRow[];
   const ownerIds = [...new Set(rows.map((row) => row.owner_id).filter((id): id is string => typeof id === "string"))];
   let profileMap = new Map<string, Record<string, unknown>>();
   if (ownerIds.length > 0) {
-    const { data: profiles = [] } = await supabase
+    const { data: profiles = [] } = await withAbortSignal(supabase
       .from("profiles_public")
       .select("user_id, display_name, avatar_url, role")
-      .in("user_id", ownerIds);
+      .in("user_id", ownerIds), signal);
     profileMap = new Map((profiles ?? []).map((profile) => [profile.user_id, profile as Record<string, unknown>]));
   }
 
@@ -150,7 +161,7 @@ export function useSimilarListings(params: {
 
   return useQuery({
     queryKey: ["similar-listings", excludeId, city, propertyType, listingType, price],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!city && !propertyType) return [];
 
       const params = new URLSearchParams();
@@ -164,13 +175,14 @@ export function useSimilarListings(params: {
       try {
         const response = await fetchPublicApi<SimilarListingsResponse>(
           `/api/public/similar-listings?${params.toString()}`,
-          { throwOnError: true },
+          { throwOnError: true, signal },
         );
         if (!response) throw new Error("Public similar listings API returned no data");
         return dedupeSimilarListings(response.data);
       } catch (error) {
+        if (isPublicApiAbort(error)) throw error;
         logger.warn("Public similar listings API failed; falling back to constrained Supabase read:", error);
-        return fetchSimilarListingsFallback({ excludeId, city, propertyType, listingType, price, limit });
+        return fetchSimilarListingsFallback({ excludeId, city, propertyType, listingType, price, limit, signal });
       }
     },
     enabled: !!(city || propertyType),

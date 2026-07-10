@@ -116,8 +116,8 @@ export function MarketTicker() {
 
   const { data: auctionCount } = useQuery({
     queryKey: ["auction-count-today"],
-    queryFn: async () => {
-      return (await fetchPublicApi<number>("/api/public/homepage?section=auction-count")) ?? 47;
+    queryFn: async ({ signal }) => {
+      return (await fetchPublicApi<number>("/api/public/homepage?section=auction-count", { signal })) ?? 47;
     },
     staleTime: 5 * 60 * 1000,
   });

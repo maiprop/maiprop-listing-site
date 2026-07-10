@@ -157,6 +157,33 @@ async function waitForRouteShell(page: Page): Promise<void> {
     .waitFor({ state: "attached", timeout: 15_000 });
 }
 
+async function gotoRouteAndWaitForPath(page: Page, path: string): Promise<void> {
+  const expected = new URL(path, "http://localhost");
+  const matchesExpectedPath = (url: URL) => (
+    url.pathname === expected.pathname && url.search === expected.search
+  );
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const results = await Promise.allSettled([
+      page.waitForURL(matchesExpectedPath, { timeout: 5_000 }),
+      gotoRouteAllowingNavigationAbort(page, path),
+    ]);
+
+    if (matchesExpectedPath(new URL(page.url()))) return;
+
+    const rejection = results.find(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
+    lastError = rejection?.reason;
+    await page.waitForTimeout(150);
+  }
+
+  throw new Error(
+    `Timed out navigating to ${path}; current URL is ${page.url()}${lastError ? `; last error: ${String(lastError)}` : ""}`,
+  );
+}
+
 async function gotoRouteAndWaitForCanonicalUrl(
   page: Page,
   path: string,
@@ -185,7 +212,7 @@ async function gotoRouteAndWaitForCanonicalUrl(
 
 test.describe("Listings browse", () => {
   test.beforeEach(async ({ page }) => {
-    await gotoRouteAllowingNavigationAbort(page, "/listings");
+    await gotoRouteAndWaitForPath(page, "/listings");
     // networkidle is unreliable on /listings — Mapbox tile fetches keep the
     // network busy past the 30s default timeout. Wait for `load` (initial
     // resources finished) plus the React-rendered <main> landmark so the
@@ -235,7 +262,7 @@ test.describe("Listings browse", () => {
     });
     const requests = await mockPublicListingApis(page, [newBuild]);
 
-    await gotoRouteAllowingNavigationAbort(page, "/listings?listing_type=new_build");
+    await gotoRouteAndWaitForPath(page, "/listings?listing_type=new_build");
     await waitForRouteShell(page);
 
     await expect(page.getByText("Canonical Project Home").first()).toBeVisible();
@@ -258,12 +285,12 @@ test.describe("Listings browse", () => {
     });
     const requests = await mockPublicListingApis(page, [sale, rent, newBuild]);
 
-    await gotoRouteAllowingNavigationAbort(page, "/listings?listing_type=sale");
+    await gotoRouteAndWaitForPath(page, "/listings?listing_type=sale");
     await waitForRouteShell(page);
     await expect(page.getByText("Project Ad Visible In Catalogues").first()).toBeVisible();
     await expect(page.locator('[data-testid="property-card"] a[href="/new-build/new-build-sale-rent-card"]').first()).toBeVisible();
 
-    await gotoRouteAllowingNavigationAbort(page, "/listings?listing_type=rent");
+    await gotoRouteAndWaitForPath(page, "/listings?listing_type=rent");
     await waitForRouteShell(page);
     await expect(page.getByText("Rent Card").first()).toBeVisible();
     await expect(page.getByText("Project Ad Visible In Catalogues").first()).toHaveCount(0);
@@ -376,8 +403,11 @@ test.describe("Listings browse", () => {
     });
     await mockPublicListingApis(page, [newBuild]);
 
-    await gotoRouteAllowingNavigationAbort(page, "/new-build/merged-new-build");
-    await waitForRouteShell(page);
+    await gotoRouteAndWaitForCanonicalUrl(
+      page,
+      "/new-build/merged-new-build",
+      "**/new-build/merged-new-build",
+    );
 
     await expect(page.getByRole("heading", { name: "Marina Heights" }).first()).toBeVisible();
     await expect(page.getByText("Aegean Residences", { exact: true })).toHaveCount(0);

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Database } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchPublicApi } from "@/lib/publicApi";
+import { fetchPublicApi, isPublicApiAbort } from "@/lib/publicApi";
 import { logger } from "@/lib/logger";
 import { fetchAuctionsFallback } from "@/lib/publicListingFallbacks";
 
@@ -101,13 +101,14 @@ export const randomizeAuctionPresentation = (
 const fetchAuctionByIdFromPublicApi = async (
   id: string,
   today: string,
+  signal?: AbortSignal,
 ): Promise<AuctionListingRow | null> => {
   const query = UUID_RE.test(id)
     ? `id=${encodeURIComponent(id)}`
     : `osTag=${encodeURIComponent(id)}`;
   const response = await fetchPublicApi<PublicAuctionDetailResponse>(
     `/api/public/listing?${query}`,
-    { throwOnError: true },
+    { throwOnError: true, signal },
   );
   const row = response?.data ?? null;
   if (!row || row.listing_type !== "auction") return null;
@@ -118,6 +119,7 @@ const fetchAuctionByIdFromPublicApi = async (
 const fetchAuctionByIdFromSupabase = async (
   id: string,
   today: string,
+  signal?: AbortSignal,
 ): Promise<AuctionListingRow | null> => {
   const auctionId = id.trim();
   let query = supabase
@@ -139,40 +141,42 @@ const fetchAuctionByIdFromSupabase = async (
     ? query.eq("id", auctionId)
     : query.contains("tags", [`os_auction:${auctionId}`]);
 
-  const { data, error } = await query.maybeSingle();
+  const { data, error } = await (signal ? query.abortSignal(signal) : query).maybeSingle();
   if (error) throw error;
   return (data ?? null) as AuctionListingRow | null;
 };
 
-export const fetchAuctionListingById = async (id: string): Promise<AuctionListingRow | null> => {
+export const fetchAuctionListingById = async (id: string, signal?: AbortSignal): Promise<AuctionListingRow | null> => {
   const auctionId = id.trim();
   if (!auctionId) return null;
 
   const today = getTodayDate();
   try {
-    return await fetchAuctionByIdFromPublicApi(auctionId, today);
+    return await fetchAuctionByIdFromPublicApi(auctionId, today, signal);
   } catch (error) {
+    if (isPublicApiAbort(error)) throw error;
     logger.warn("Public auction detail API failed; falling back to constrained Supabase read:", error);
-    return fetchAuctionByIdFromSupabase(auctionId, today);
+    return fetchAuctionByIdFromSupabase(auctionId, today, signal);
   }
 };
 
-const fetchPublicAuctionListings = async (maxRows: number): Promise<AuctionListingRow[]> => {
+const fetchPublicAuctionListings = async (maxRows: number, signal?: AbortSignal): Promise<AuctionListingRow[]> => {
   const response = await fetchPublicApi<PublicAuctionsResponse | AuctionListingRow[]>(
     `/api/public/auctions?limit=${maxRows}`,
-    { throwOnError: true },
+    { throwOnError: true, signal },
   );
   if (!response) throw new Error("Public auctions API returned no data");
   const rows = Array.isArray(response) ? response : response.data;
   return Array.isArray(rows) ? rows.slice(0, maxRows) : [];
 };
 
-const fetchAuctionListings = async (maxRows: number): Promise<AuctionListingRow[]> => {
+const fetchAuctionListings = async (maxRows: number, signal?: AbortSignal): Promise<AuctionListingRow[]> => {
   try {
-    return await fetchPublicAuctionListings(maxRows);
+    return await fetchPublicAuctionListings(maxRows, signal);
   } catch (error) {
+    if (isPublicApiAbort(error)) throw error;
     logger.warn("Public auctions API failed; falling back to constrained Supabase read:", error);
-    return randomizeAuctionPresentation(await fetchAuctionsFallback<AuctionListingRow>(maxRows));
+    return randomizeAuctionPresentation(await fetchAuctionsFallback<AuctionListingRow>(maxRows, signal));
   }
 };
 
@@ -189,9 +193,11 @@ const getTimeoutRejection = (
 
 const withAuctionTimeout = async (
   request: Promise<AuctionListingRow[]>,
+  signal?: AbortSignal,
 ): Promise<AuctionListingRow[]> => {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
+    if (signal?.aborted) return [];
     return await Promise.race([
       request,
       getTimeoutRejection((timer) => {
@@ -203,8 +209,8 @@ const withAuctionTimeout = async (
   }
 };
 
-const getAuctionQuery = (maxRows: number): Promise<AuctionListingRow[]> => {
-  return withAuctionTimeout(fetchAuctionListings(maxRows));
+const getAuctionQuery = (maxRows: number, signal?: AbortSignal): Promise<AuctionListingRow[]> => {
+  return withAuctionTimeout(fetchAuctionListings(maxRows, signal), signal);
 };
 
 export type UseAuctionListingsOptions = {
@@ -215,7 +221,7 @@ export const useAuctionListings = (maxRows?: number, options: UseAuctionListings
   const fetchLimit = normalizeAuctionFetchLimit(maxRows);
   return useQuery({
     queryKey: ["auction-listings", fetchLimit],
-    queryFn: () => getAuctionQuery(fetchLimit),
+    queryFn: ({ signal }) => getAuctionQuery(fetchLimit, signal),
     enabled: options.enabled ?? true,
     staleTime: AUCTION_QUERY_STALE_TIME,
     gcTime: AUCTION_QUERY_GC_TIME,
