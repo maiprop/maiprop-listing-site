@@ -149,7 +149,7 @@ describe("Supabase index stats workflow wiring", () => {
       /- name: Check staging database migration secret\s+if: steps\.supabase_changes\.outputs\.db_changes == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'[\s\S]*SUPABASE_STAGING_DB_URL is required when Supabase migrations change\./,
     );
     expect(supabaseStagingWorkflow).toMatch(
-      /- name: Resolve staging database URL\s+if: steps\.supabase_changes\.outputs\.deploy == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'[\s\S]*if \[ -z "\$SUPABASE_STAGING_DB_URL" \]; then[\s\S]*SUPABASE_STAGING_EFFECTIVE_DB_URL=[\s\S]*function-only Supabase prep will use empty index stats\.[\s\S]*exit 0/,
+      /- name: Resolve staging database URL\s+if: steps\.supabase_changes\.outputs\.deploy == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'[\s\S]*if \[ -z "\$SUPABASE_STAGING_DB_URL" \]; then[\s\S]*SUPABASE_STAGING_EFFECTIVE_DB_URL=[\s\S]*function-only Supabase prep will skip DB-backed index stats and advisor checks\.[\s\S]*exit 0/,
     );
     expect(supabaseStagingWorkflow).toContain("https://api.supabase.com/v1/projects/$STAGING_SUPABASE_PROJECT_ID");
     expect(supabaseStagingWorkflow).toContain("PROJECT_JSON=\"$project_json\"");
@@ -160,7 +160,10 @@ describe("Supabase index stats workflow wiring", () => {
     expect(supabaseStagingWorkflow).toContain("direct Supabase DB hostname, which is IPv6-only");
     expect(supabaseStagingWorkflow).toContain("Containerized migration validation remains the hard gate");
     expect(supabaseStagingWorkflow).toMatch(
-      /- name: Capture staging Supabase index stats\s+if: steps\.supabase_changes\.outputs\.deploy == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'\s+run: \|\s+set -euo pipefail\s+extra_args=\(\)\s+if \[ "\$\{\{ steps\.supabase_changes\.outputs\.db_changes \}\}" != "true" \]; then\s+extra_args\+=\(--allow-empty-when-unconfigured\)\s+fi\s+npm run capture:supabase-index-stats -- --out supabase-index-stats\.json "\$\{extra_args\[@\]\}"/,
+      /- name: Capture staging Supabase index stats\s+if: steps\.supabase_changes\.outputs\.db_changes == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'\s+run: npm run capture:supabase-index-stats -- --out supabase-index-stats\.json/,
+    );
+    expect(supabaseStagingWorkflow).toMatch(
+      /- name: Check staging Supabase advisors\s+if: steps\.supabase_changes\.outputs\.db_changes == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'/,
     );
     expect(supabaseStagingWorkflow).toMatch(
       /- name: Check staging Supabase generated types\s+if: steps\.supabase_changes\.outputs\.db_changes == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'/,
