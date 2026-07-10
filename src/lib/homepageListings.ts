@@ -11,10 +11,26 @@ export type HomepageProjectUnit = {
   internal_sqm?: number | string | null;
 };
 
+export type HomepageProjectMedia = {
+  url?: string | null;
+  media_type?: string | null;
+  sort_order?: number | string | null;
+};
+
 export type HomepageProjectSummary = {
   name?: string | null;
+  cover_image_url?: string | null;
   delivery_date?: string | null;
   project_units?: HomepageProjectUnit[] | null;
+  project_media?: HomepageProjectMedia[] | null;
+};
+
+export type HomepageListingProfile = {
+  user_id?: string | null;
+  display_name?: string | null;
+  avatar_url?: string | null;
+  verified?: boolean | null;
+  role?: string | null;
 };
 
 export type HasHomepageImages = {
@@ -24,6 +40,7 @@ export type HasHomepageImages = {
 
 export type HomepageListing = HasHomepageImages & {
   id: string;
+  owner_id?: string | null;
   title: string;
   address?: string | null;
   city: string;
@@ -46,8 +63,13 @@ export type HomepageListing = HasHomepageImages & {
   ai_score?: number | null;
   views_count?: number | null;
   tags?: string[] | null;
+  has_video_tour?: boolean | null;
+  has_virtual_tour?: boolean | null;
+  is_featured?: boolean | null;
+  priority_placement?: number | string | null;
   is_pre_sale?: boolean | null;
   construction_status?: string | null;
+  profiles?: HomepageListingProfile | null;
   project?: HomepageProjectSummary | null;
   projects?: HomepageProjectSummary | null;
   latitude?: number | string | null;

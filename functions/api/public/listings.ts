@@ -52,7 +52,7 @@ const LISTING_PROJECT_CARD_SELECT_WITH_UNITS = [
   "delivery_date",
   `project_units!project_units_project_id_fkey(${PROJECT_UNIT_CARD_SELECT})`,
 ].join(",");
-const LISTINGS_CACHE_VERSION = "default-card-v4";
+const LISTINGS_CACHE_VERSION = "default-card-v5-offset-nonblocking";
 const LISTINGS_CACHE_OPTIONS = {
   edgeTtlSeconds: 300,
   browserTtlSeconds: 60,
@@ -251,7 +251,7 @@ function listingLocationBounds(requestUrl: URL): LocationBounds | null {
   };
 }
 
-function buildListingParams(requestUrl: URL): { params: URLSearchParams; page: number; pageSize: number } {
+function buildListingParams(requestUrl: URL): { params: URLSearchParams; page: number; pageSize: number; offset: number } {
   const params = new URLSearchParams();
   const page = safeInt(requestUrl.searchParams.get("page"), 1, 1, 500);
   const pageSize = safeInt(
@@ -260,12 +260,12 @@ function buildListingParams(requestUrl: URL): { params: URLSearchParams; page: n
     1,
     200,
   );
-  const from = (page - 1) * pageSize;
+  const offset = safeInt(requestUrl.searchParams.get("offset"), (page - 1) * pageSize, 0, 100_000);
   const sort = safeToken(requestUrl.searchParams.get("sort"), SORTS) ?? "featured";
 
   params.set("select", listingSelect(shouldIncludeProjectUnits(requestUrl)));
   params.set("status", "eq.active");
-  params.set("offset", String(from));
+  params.set("offset", String(offset));
   params.set("limit", String(pageSize));
   params.set("listing_images.order", "sort_order.asc");
   params.set("listing_images.limit", "3");
@@ -357,7 +357,7 @@ function buildListingParams(requestUrl: URL): { params: URLSearchParams; page: n
     .filter((feature) => BOOLEAN_FEATURES.has(feature));
   for (const feature of new Set(features)) params.set(feature, "eq.true");
 
-  return { params, page, pageSize };
+  return { params, page, pageSize, offset };
 }
 
 async function fetchOwnerProfiles(env: PublicApiEnv, ownerIds: string[]): Promise<Map<string, ProfilePublicRow>> {
@@ -374,13 +374,15 @@ async function fetchOwnerProfiles(env: PublicApiEnv, ownerIds: string[]): Promis
 async function publicListings(ctx: PublicApiCtx, requestUrl: URL): Promise<Response> {
   if (!getSupabaseRuntime(ctx.env)) return missingRuntime();
 
-  const { params, page, pageSize } = buildListingParams(requestUrl);
+  const { params, page, pageSize, offset } = buildListingParams(requestUrl);
   params.set("page", String(page));
   params.set("pageSize", String(pageSize));
+  params.set("offsetKey", String(offset));
   params.set("v", LISTINGS_CACHE_VERSION);
   const cacheKey = normalizedCacheUrl(requestUrl, "listings", params);
   params.delete("page");
   params.delete("pageSize");
+  params.delete("offsetKey");
   params.delete("v");
 
   return cachedJson(ctx, cacheKey, async () => {
@@ -402,6 +404,7 @@ async function publicListings(ctx: PublicApiCtx, requestUrl: URL): Promise<Respo
         hasMore: rows.length === pageSize,
         page,
         pageSize,
+        offset,
       });
     } catch (error) {
       if (isSupabaseTransientError(error)) return upstreamUnavailable();

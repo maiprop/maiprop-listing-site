@@ -12,6 +12,7 @@ const SUPABASE_FETCH_TIMEOUT_MS = 2500;
 const SUPABASE_TRANSIENT_STATUS_RETRIES = 2;
 const SUPABASE_TRANSIENT_RETRY_DELAY_MS = 50;
 const TRANSIENT_UPSTREAM_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504, 520, 522, 524, 544]);
+const INFLIGHT_CACHE_MISS_TTL_MS = 10_000;
 const SECURITY_HEADERS = {
   "X-Frame-Options": "DENY",
   "X-Content-Type-Options": "nosniff",
@@ -232,7 +233,7 @@ async function matchStaleFallback(cacheApi: Cache, cacheKey: URL): Promise<Respo
   return new Response(stale.body, { status: stale.status, headers });
 }
 
-async function putFreshAndStale(
+function putFreshAndStale(
   ctx: PublicApiCtx,
   cacheApi: Cache,
   cacheRequest: Request,
@@ -255,12 +256,21 @@ async function putFreshAndStale(
     cacheApi.put(cacheRequest, outbound.clone()),
     cacheApi.put(staleRequest, staleResponse),
   ]);
-  const guardedPut = putPromise.catch((error) => {
+  const guardedPut: Promise<void> = putPromise.then(() => undefined).catch((error) => {
     const message = error instanceof Error ? error.message : String(error);
     console.warn(`[public-api] cache seed failed for ${cacheRequest.url}: ${message}`);
   });
   ctx.waitUntil?.(guardedPut);
-  await guardedPut;
+  return guardedPut;
+}
+
+function trackInflightCacheMiss(cacheId: string, promise: Promise<Response>): void {
+  inflightCacheMisses.set(cacheId, promise);
+  setTimeout(() => {
+    if (inflightCacheMisses.get(cacheId) === promise) inflightCacheMisses.delete(cacheId);
+  }, INFLIGHT_CACHE_MISS_TTL_MS);
+
+  void promise.catch(() => undefined);
 }
 
 function scheduleBackgroundRefresh(ctx: PublicApiCtx, cacheId: string, refresh: Promise<Response>): void {
@@ -285,6 +295,7 @@ export async function cachedJson(
   const cacheApi = typeof caches !== "undefined" ? caches.default : null;
   const cacheRequest = new Request(cacheKey.toString(), { method: "GET" });
   const staleRequest = new Request(staleCacheUrl(cacheKey).toString(), { method: "GET" });
+  const cacheSeedState: { promise: Promise<void> | null } = { promise: null };
   if (cacheApi) {
     const hit = await cacheApi.match(cacheRequest);
     if (hit) {
@@ -308,7 +319,7 @@ export async function cachedJson(
     const outbound = new Response(body, { status: response.status, headers });
 
     if (cacheApi && response.ok) {
-      await putFreshAndStale(ctx, cacheApi, cacheRequest, staleRequest, outbound, cache);
+      cacheSeedState.promise = putFreshAndStale(ctx, cacheApi, cacheRequest, staleRequest, outbound, cache);
     }
     return outbound;
   };
@@ -322,7 +333,7 @@ export async function cachedJson(
     let refresh = inflightCacheMisses.get(cacheId);
     if (!refresh) {
       refresh = produceAndCache();
-      inflightCacheMisses.set(cacheId, refresh);
+      trackInflightCacheMiss(cacheId, refresh);
       scheduleBackgroundRefresh(ctx, cacheId, refresh);
     } else {
       scheduleBackgroundRefresh(ctx, cacheId, refresh);
@@ -338,12 +349,22 @@ export async function cachedJson(
   }
 
   const pending = produceAndCache();
-  inflightCacheMisses.set(cacheId, pending);
+  trackInflightCacheMiss(cacheId, pending);
   try {
     const response = await pending;
     return response.clone();
   } finally {
-    inflightCacheMisses.delete(cacheId);
+    const clearInflight = () => {
+      if (inflightCacheMisses.get(cacheId) === pending) inflightCacheMisses.delete(cacheId);
+    };
+    const cacheSeed = cacheSeedState.promise;
+    if (cacheSeed) {
+      const clearAfterSeed = cacheSeed.finally(clearInflight);
+      ctx.waitUntil?.(clearAfterSeed);
+      void clearAfterSeed.catch(() => undefined);
+    } else {
+      clearInflight();
+    }
   }
 }
 

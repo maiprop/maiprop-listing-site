@@ -12,6 +12,32 @@ import {
   mergeHeaders,
 } from "./check-production-deploy-site-lock.mjs";
 
+function publicListingsPayloadFromUrl(href, rows = []) {
+  const url = new URL(href);
+  const pageSize = Number(url.searchParams.get("pageSize") ?? url.searchParams.get("limit") ?? "1");
+  const offset = Number(url.searchParams.get("offset") ?? "0");
+  return {
+    data: rows,
+    hasMore: false,
+    page: Number(url.searchParams.get("page") ?? "1"),
+    pageSize,
+    offset,
+  };
+}
+
+function featuredHomepagePayload() {
+  return [{
+    id: "featured-1",
+    owner_id: "owner-1",
+    title: "Clean featured listing",
+    profiles: { display_name: "Owner One" },
+    has_video_tour: false,
+    has_virtual_tour: true,
+    is_featured: true,
+    priority_placement: 1,
+  }];
+}
+
 describe("production deploy site-lock smoke helpers", () => {
   it("prefers the dedicated smoke-check passcode secret over the runtime site-lock secret", () => {
     expect(getSiteLockPassword({
@@ -116,13 +142,31 @@ describe("production deploy public API fixture guard", () => {
       calls.push(href);
 
       if (href.endsWith("/api/public/listings?limit=1")) {
-        return Response.json({ data: [{ id: "listing-1", title: "Clean listing" }] });
+        return Response.json(publicListingsPayloadFromUrl(href, [{ id: "listing-1", title: "Clean listing" }]));
       }
       if (href.endsWith("/api/public/listings?listing_type=new_build&limit=1")) {
-        return Response.json({ data: [{ id: "new-build-1", title: "Clean new build" }] });
+        return Response.json(publicListingsPayloadFromUrl(href, [{ id: "new-build-1", title: "Clean new build" }]));
+      }
+      if (href.includes("/api/public/listings?")) {
+        return Response.json(publicListingsPayloadFromUrl(href));
       }
       if (href.endsWith("/api/public/auctions?limit=60")) {
-        return Response.json([{ id: "auction-1", title: "Clean auction" }]);
+        return Response.json({ data: [{ id: "auction-1", title: "Clean auction" }] });
+      }
+      if (href.includes("/api/public/homepage?section=type-counts")) {
+        return Response.json({ apartment: 1, land: 1 });
+      }
+      if (href.includes("/api/public/homepage?section=auction-count")) {
+        return Response.json(1);
+      }
+      if (href.includes("/api/public/homepage?section=featured")) {
+        return Response.json(featuredHomepagePayload());
+      }
+      if (href.includes("/api/public/homepage?")) {
+        return Response.json([]);
+      }
+      if (href.includes("/api/public/open-houses?")) {
+        return Response.json([]);
       }
       if (href.endsWith("/api/public/listing?id=listing-1")) {
         return Response.json({ data: { id: "listing-1", title: "Clean listing detail" } });
@@ -217,9 +261,23 @@ describe("production deploy public API fixture guard", () => {
             text: JSON.stringify({ error: "Supabase upstream unavailable" }),
           };
         }
+        const parsed = new URL(url);
+        const href = parsed.pathname + parsed.search;
+        const payload = href.includes("/api/public/listings?")
+          ? publicListingsPayloadFromUrl(url)
+          : href.includes("section=type-counts")
+            ? { apartment: 1, land: 1 }
+            : href.includes("section=auction-count")
+              ? 1
+              : href.includes("/api/public/auctions?")
+                ? { data: [] }
+                : href.includes("section=featured")
+                  ? featuredHomepagePayload()
+                  : [];
+        const text = JSON.stringify(payload);
         return {
-          res: Response.json([]),
-          text: "[]",
+          res: new Response(text, { headers: { "Content-Type": "application/json" } }),
+          text,
         };
       },
     })).resolves.toBeUndefined();

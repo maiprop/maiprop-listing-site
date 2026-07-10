@@ -81,8 +81,9 @@ const LISTING_CARD_SELECT = [
 ].join(",");
 
 const LISTING_CARD_SELECT_WITH_IMAGES = `${LISTING_CARD_SELECT}, listing_images(url, sort_order)`;
-/** Paginated listings for grid view — fetches 40 per page, server-side filtering */
+/** Paginated listings for grid view — loads the first visible cards fast, then fills the 40-card window. */
 export const PAGE_SIZE = 40;
+export const INITIAL_GRID_PAGE_SIZE = 12;
 const DEFAULT_LOCATION_RADIUS_M = 750;
 const MAX_LOCATION_RADIUS_M = 5_000;
 const METERS_PER_LATITUDE_DEGREE = 111_320;
@@ -447,7 +448,36 @@ type PublicListingsResponse = {
   hasMore: boolean;
   page: number;
   pageSize: number;
+  offset?: number;
 };
+
+type ListingsPageParam = {
+  page: number;
+  pageSize: number;
+  offset?: number;
+};
+
+const INITIAL_LISTINGS_PAGE_PARAM: ListingsPageParam = {
+  page: 1,
+  pageSize: INITIAL_GRID_PAGE_SIZE,
+  offset: 0,
+};
+
+function normalizeListingsPageParam(pageParam: unknown): ListingsPageParam {
+  if (typeof pageParam === "number" && Number.isFinite(pageParam)) {
+    return { page: Math.max(1, Math.floor(pageParam)), pageSize: PAGE_SIZE };
+  }
+  if (pageParam && typeof pageParam === "object") {
+    const param = pageParam as Partial<ListingsPageParam>;
+    const page = Number.isFinite(Number(param.page)) ? Math.max(1, Math.floor(Number(param.page))) : 1;
+    const pageSize = Number.isFinite(Number(param.pageSize))
+      ? Math.max(1, Math.min(PAGE_SIZE, Math.floor(Number(param.pageSize))))
+      : PAGE_SIZE;
+    const offset = Number.isFinite(Number(param.offset)) ? Math.max(0, Math.floor(Number(param.offset))) : undefined;
+    return { page, pageSize, offset };
+  }
+  return INITIAL_LISTINGS_PAGE_PARAM;
+}
 
 function shouldUsePublicListingsApi(filters?: ListingsFilters): boolean {
   if (filters?.owner_id) return false;
@@ -455,10 +485,11 @@ function shouldUsePublicListingsApi(filters?: ListingsFilters): boolean {
   return true;
 }
 
-function publicListingsPath(filters: ListingsFilters | undefined, page: number, pageSize: number): string {
+function publicListingsPath(filters: ListingsFilters | undefined, page: number, pageSize: number, offset?: number): string {
   const params = new URLSearchParams();
   params.set("page", String(page));
   params.set("pageSize", String(pageSize));
+  if (offset != null) params.set("offset", String(offset));
 
   const append = (key: keyof ListingsFilters, value = filters?.[key]) => {
     if (value === undefined || value === null || value === "") return;
@@ -511,8 +542,9 @@ const fetchListingsPageFromSupabase = async (
   pageSize = PAGE_SIZE,
   options: UseListingsOptions = {},
   signal?: AbortSignal,
+  offset?: number,
 ) => { // skipcq: JS-R1005 - Page fetch keeps listing rows and owner profile enrichment together.
-  const from = (page - 1) * pageSize;
+  const from = offset ?? (page - 1) * pageSize;
   const { data, error } = await withAbortSignal(
     buildListingsQuery(filters, from, pageSize, { publicScope: options.publicScope }),
     signal,
@@ -541,7 +573,7 @@ const fetchListingsPageFromSupabase = async (
   }));
 
   // ORDER BY is applied server-side in buildListingsQuery; no client sort needed.
-  return { data: enriched, hasMore: rows.length === pageSize };
+  return { data: enriched, hasMore: rows.length === pageSize, page, pageSize, offset: from };
 };
 
 const fetchListingsPage = async (
@@ -550,11 +582,12 @@ const fetchListingsPage = async (
   pageSize = PAGE_SIZE,
   options: UseListingsOptions = {},
   signal?: AbortSignal,
+  offset?: number,
 ) => { // skipcq: JS-R1005 - Page fetch keeps listing rows and owner profile enrichment together.
   if (shouldUsePublicListingsApi(filters)) {
     try {
       const cached = await fetchPublicApi<PublicListingsResponse>(
-        publicListingsPath(filters, page, pageSize),
+        publicListingsPath(filters, page, pageSize, offset),
         { throwOnError: true, signal },
       );
       if (!cached) throw new Error("Public listings API returned no data");
@@ -562,11 +595,11 @@ const fetchListingsPage = async (
     } catch (error) {
       if (isPublicApiAbort(error)) throw error;
       logger.warn("Public listings API failed; falling back to constrained Supabase listing read:", error);
-      return fetchListingsPageFromSupabase(filters, page, pageSize, { ...options, publicScope: true }, signal);
+      return fetchListingsPageFromSupabase(filters, page, pageSize, { ...options, publicScope: true }, signal, offset);
     }
   }
 
-  return fetchListingsPageFromSupabase(filters, page, pageSize, options, signal);
+  return fetchListingsPageFromSupabase(filters, page, pageSize, options, signal, offset);
 };
 
 export const useListingsPaginated = (
@@ -575,10 +608,28 @@ export const useListingsPaginated = (
 ) => {
   return useInfiniteQuery({
     queryKey: ["listings-paginated", filters, { publicScope: Boolean(options?.publicScope) }],
-    queryFn: ({ pageParam = 1, signal }) => fetchListingsPage(filters, pageParam, PAGE_SIZE, options, signal),
-    getNextPageParam: (lastPage, allPages) =>
-      lastPage.hasMore ? allPages.length + 1 : undefined,
-    initialPageParam: 1,
+    queryFn: ({ pageParam = INITIAL_LISTINGS_PAGE_PARAM, signal }) => {
+      const { page, pageSize, offset } = normalizeListingsPageParam(pageParam);
+      return fetchListingsPage(filters, page, pageSize, options, signal, offset);
+    },
+    getNextPageParam: (lastPage, allPages): ListingsPageParam | undefined => {
+      if (!lastPage.hasMore) return undefined;
+      const loadedRows = allPages.reduce((sum, page) => sum + page.data.length, 0);
+      const lastOffset = Number.isFinite(Number(lastPage.offset))
+        ? Math.max(0, Math.floor(Number(lastPage.offset)))
+        : Math.max(0, loadedRows - lastPage.data.length);
+      const lastPageSize = Number.isFinite(Number(lastPage.pageSize))
+        ? Math.max(1, Math.floor(Number(lastPage.pageSize)))
+        : Math.max(1, lastPage.data.length || PAGE_SIZE);
+      const nextOffset = lastOffset + lastPageSize;
+      const nextPageSize = nextOffset < PAGE_SIZE ? PAGE_SIZE - nextOffset : PAGE_SIZE;
+      return {
+        page: Math.floor(nextOffset / PAGE_SIZE) + 1,
+        pageSize: nextPageSize,
+        offset: nextOffset,
+      };
+    },
+    initialPageParam: INITIAL_LISTINGS_PAGE_PARAM,
     enabled: options?.enabled ?? true,
     staleTime: filters?.owner_id && !options?.publicScope ? USER_SCOPED_QUERY_STALE_TIME : CATALOG_STATIC_QUERY_STALE_TIME,
   });

@@ -62,6 +62,7 @@
     "check:stripe-tax-readiness": "node scripts/check-stripe-tax-readiness.mjs",
     "check:stripe-live-migration": "node scripts/check-stripe-live-migration.mjs",
     "check:production-deploy": "node scripts/check-production-deploy.mjs",
+    "diagnose:public-listings-latency": "node scripts/diagnose-public-listings-latency.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "typecheck:functions": "tsc --noEmit -p functions/tsconfig.json",
     "typecheck:remotion": "tsc --noEmit -p remotion-video/tsconfig.json",

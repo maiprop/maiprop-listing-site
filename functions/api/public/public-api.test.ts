@@ -370,7 +370,7 @@ describe("public API cache helpers", () => {
     expect(cacheApi.put.mock.calls.some(([request]) => request.url.includes("__maiprop_stale=1"))).toBe(true);
   });
 
-  it("does not return successful public API misses before fresh and stale cache entries are committed", async () => {
+  it("returns successful public API misses before fresh and stale cache entries are committed", async () => {
     let releasePut!: () => void;
     const putGate = new Promise<void>((resolve) => {
       releasePut = resolve;
@@ -387,12 +387,18 @@ describe("public API cache helpers", () => {
       new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 20)),
     ]);
 
-    expect(returnedBeforeCacheCommit).toBe(false);
-    releasePut();
-
+    expect(returnedBeforeCacheCommit).toBe(true);
     const response = await pending;
     expect(response.status).toBe(200);
     expect(cacheApi.put).toHaveBeenCalledTimes(2);
+    expect([...cacheStore.keys()].some((key) => key.includes("__maiprop_stale=1"))).toBe(false);
+
+    const coalesced = await openHousesRequest(makeCtx("https://portal.maiprop.co/api/public/open-houses?limit=2"));
+    expect(coalesced.headers.get("X-Maiprop-Cache")).toBe("COALESCED");
+    expect(fetchUrls("/rest/v1/listings")).toHaveLength(1);
+
+    releasePut();
+    await Promise.resolve();
     expect([...cacheStore.keys()].some((key) => key.includes("__maiprop_stale=1"))).toBe(true);
   });
 
@@ -515,11 +521,12 @@ describe("public listings endpoint", () => {
         "https://portal.maiprop.co/api/public/listings?page=2&pageSize=999&city=Άγιοι%20Αναργυροι%2C%20Αττικης&listing_type=sale&features=has_pool,has_alarm,unsafe&energy_class=A,BAD&A%5B%5D=ignored",
       ),
     );
-    const body = await res.json() as { data: Array<{ profiles: unknown }>; hasMore: boolean; page: number; pageSize: number };
+    const body = await res.json() as { data: Array<{ profiles: unknown }>; hasMore: boolean; page: number; pageSize: number; offset: number };
 
     expect(res.headers.get("X-Maiprop-Cache")).toBe("MISS");
     expect(body.page).toBe(2);
     expect(body.pageSize).toBe(200);
+    expect(body.offset).toBe(200);
     expect(body.hasMore).toBe(false);
     expect(body.data[0].profiles).toMatchObject({ display_name: "Maria Agent" });
 
@@ -547,6 +554,16 @@ describe("public listings endpoint", () => {
     expect(profilesUrl.searchParams.get("user_id")).toBe("in.(owner-1,owner-2)");
     expect(cacheApi.put).toHaveBeenCalledTimes(2);
     expect(cacheApi.put.mock.calls.some(([request]) => request.url.includes("__maiprop_stale=1"))).toBe(true);
+  });
+
+  it("honors explicit offset for split first-paint catalogue fetches", async () => {
+    const res = await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?listing_type=sale&page=1&pageSize=28&offset=12"));
+    const body = await res.json() as { page: number; pageSize: number; offset: number };
+
+    expect(body).toMatchObject({ page: 1, pageSize: 28, offset: 12 });
+    const listingsUrl = fetchUrls("/rest/v1/listings")[0];
+    expect(listingsUrl.searchParams.get("limit")).toBe("28");
+    expect(listingsUrl.searchParams.get("offset")).toBe("12");
   });
 
   it("uses a coordinate bounding box for selected address suggestions", async () => {
@@ -1150,20 +1167,29 @@ describe("public homepage endpoint", () => {
 
   it("fetches lightweight featured and open-house homepage sections", async () => {
     const featured = await homepageRequest(makeCtx("https://portal.maiprop.co/api/public/homepage?section=featured"));
-    const featuredRows = await featured.json() as Array<{ id: string }>;
+    const featuredRows = await featured.json() as Array<{ id: string; profiles?: { display_name?: string | null }; is_featured?: boolean; has_video_tour?: boolean; has_virtual_tour?: boolean }>;
     expect(featuredRows.map((row) => row.id)).toEqual(["listing-1", "listing-2", "listing-3", "listing-4"]);
+    expect(featuredRows[0]?.profiles?.display_name).toBe("Maria Agent");
     let url = fetchUrls("/rest/v1/listings")[0];
     expect(url.searchParams.get("limit")).toBe("12");
     expect(url.searchParams.get("listing_type")).toBe("in.(sale,new_build)");
     expect(url.searchParams.get("is_off_market")).toBe("eq.false");
+    expect(url.searchParams.get("select")).toContain("owner_id");
+    expect(url.searchParams.get("select")).toContain("has_video_tour");
+    expect(url.searchParams.get("select")).toContain("has_virtual_tour");
+    expect(url.searchParams.get("select")).toContain("is_featured");
+    expect(url.searchParams.get("select")).toContain("priority_placement");
     expect(url.searchParams.get("select")).toContain("project_id");
     expect(url.searchParams.get("select")).toContain("project:projects!listings_project_id_fkey");
     expect(url.searchParams.get("select")).toContain("delivery_date");
     expect(url.searchParams.get("select")).toContain("project_units!project_units_project_id_fkey(id,availability_status,internal_sqm)");
     expect(url.searchParams.get("listing_images.limit")).toBe("3");
+    const profileUrl = fetchUrls("/rest/v1/profiles_public")[0];
+    expect(profileUrl.searchParams.get("select")).toBe("user_id,display_name,avatar_url,role");
+    expect(profileUrl.searchParams.get("user_id")).toBe("in.(owner-1,owner-2)");
     const featuredCacheKey = new URL(cacheApi.put.mock.calls[0][0].url);
     expect(featuredCacheKey.searchParams.get("day")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(featuredCacheKey.searchParams.get("v")).toBe("featured-card-v6");
+    expect(featuredCacheKey.searchParams.get("v")).toBe("featured-card-v7-profile-flags");
     expect(featured.headers.get("Cache-Control")).toBe("public, max-age=300, stale-while-revalidate=300");
     expect(featured.headers.get("CDN-Cache-Control")).toBe("public, max-age=300, stale-while-revalidate=300");
 
