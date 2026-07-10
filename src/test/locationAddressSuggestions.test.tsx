@@ -368,7 +368,8 @@ describe("location address suggestions", () => {
     expect(screen.getByLabelText("Search by city or area")).not.toBeDisabled();
   });
 
-  it("keeps typed full addresses visible while listings URL filters reconcile", () => {
+  it("keeps typed full addresses visible without firing listing queries on every keystroke", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify([]))));
     const onChange = vi.fn();
 
     render(
@@ -385,6 +386,17 @@ describe("location address suggestions", () => {
     fireEvent.change(input, { target: { value: "Ermou 12 Athens" } });
 
     expect(input).toHaveValue("Ermou 12 Athens");
+    expect(onChange).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(450);
+    });
+    expect(onChange).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(700);
+    });
+
     expect(onChange).toHaveBeenLastCalledWith("Ermou 12 Athens");
   });
 
@@ -458,6 +470,33 @@ describe("location address suggestions", () => {
       longitude: "23.7354",
       radiusM: 750,
     }));
+  });
+
+  it("does not leave Enter blocked when address providers are still loading", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise(() => undefined)));
+    const onChange = vi.fn();
+
+    render(
+      <LocationSearchField
+        value=""
+        onChange={onChange}
+        placeholder="City, area, address..."
+        ariaLabel="Search by city or area"
+      />,
+    );
+
+    const input = screen.getByLabelText("Search by city or area");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "Agioi Anargyroi" } });
+    fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
+
+    expect(onChange).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(750);
+    });
+
+    expect(onChange).toHaveBeenLastCalledWith("Agioi Anargyroi");
   });
 
   it("shows popular city options in shared location input fields", () => {
@@ -910,6 +949,51 @@ describe("location address suggestions", () => {
       radiusM: undefined,
     })));
     expect(input).toHaveValue("Agioi Anargiroi");
+  });
+
+  it("auto-resolves typed street searches only when the user includes locality context", async () => {
+    configMock.googlePlacesEnabled = true;
+    mockGoogleLegacyKalimnouAutocompleteFallback();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify([]))));
+    const onFilterChange = vi.fn();
+
+    function ControlledLocationSearchField() {
+      const [value, setValue] = useState("");
+      return (
+        <LocationSearchField
+          value={value}
+          onChange={(next, selection) => {
+            setValue(next);
+            onFilterChange(next, selection);
+          }}
+          placeholder="City, area, address..."
+          ariaLabel="Search by city or area"
+        />
+      );
+    }
+
+    render(<ControlledLocationSearchField />);
+    const input = screen.getByLabelText("Search by city or area");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "Kalimnou 27 Agioi Anargiroi" } });
+
+    await act(async () => {
+      vi.advanceTimersByTime(450);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(700);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onFilterChange).toHaveBeenLastCalledWith("Agioi Anargiroi", expect.objectContaining({
+      provider: "google",
+      latitude: undefined,
+      longitude: undefined,
+    }));
   });
 
   it("does not let a broad Google Attica prediction override a specific listings municipality fallback", async () => {
