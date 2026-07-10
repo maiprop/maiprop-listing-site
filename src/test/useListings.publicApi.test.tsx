@@ -1,7 +1,7 @@
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 
 const fromMock = vi.fn();
 const publicApiMock = vi.fn();
@@ -85,11 +85,45 @@ describe("public listings API fallback behavior", () => {
       expect.stringContaining("/api/public/listings?"),
       expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
     );
-    expect(publicApiMock.mock.calls[0][0]).toContain("pageSize=40");
+    expect(publicApiMock.mock.calls[0][0]).toContain("pageSize=12");
     expect(fromMock).toHaveBeenCalledWith("listings");
     expect(result.current.data?.pages[0]?.data).toEqual([
       expect.objectContaining({ id: "db-listing", profiles: null }),
     ]);
+  });
+
+  it("loads the first grid paint in 12 rows and fills the 40-row window with a 28-row follow-up", async () => {
+    publicApiMock
+      .mockResolvedValueOnce({
+        data: Array.from({ length: 12 }, (_, index) => ({ id: `listing-${index + 1}` })),
+        hasMore: true,
+        page: 1,
+        pageSize: 12,
+        offset: 0,
+      })
+      .mockResolvedValueOnce({
+        data: Array.from({ length: 28 }, (_, index) => ({ id: `listing-${index + 13}` })),
+        hasMore: true,
+        page: 1,
+        pageSize: 28,
+        offset: 12,
+      });
+
+    const { result } = renderHookWithQuery(() => useListingsPaginated({ listing_type: "sale" }));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(publicApiMock.mock.calls[0][0]).toContain("pageSize=12");
+    expect(publicApiMock.mock.calls[0][0]).toContain("offset=0");
+
+    let nextFetchLength = 0;
+    await act(async () => {
+      const nextResult = await result.current.fetchNextPage();
+      nextFetchLength = nextResult.data?.pages.flatMap((page) => page.data).length ?? 0;
+    });
+
+    expect(publicApiMock.mock.calls[1][0]).toContain("pageSize=28");
+    expect(publicApiMock.mock.calls[1][0]).toContain("offset=12");
+    expect(nextFetchLength).toBe(40);
   });
 
   it("preserves direct Supabase reads for owner-scoped listing data", async () => {

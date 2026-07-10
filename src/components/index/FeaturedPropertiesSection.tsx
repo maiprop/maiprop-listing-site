@@ -3,9 +3,8 @@ import { Button } from "@/components/ui/button";
 import { PropertyCard } from "@/components/PropertyCard";
 import { PropertyCardSkeleton } from "@/components/PropertyCardSkeleton";
 import { useInView } from "@/hooks/useInView";
-import { homepageListingImages, type HomepageListing } from "@/lib/homepageListings";
-import { getNewBuildCardSummary } from "@/lib/newBuildCardSummary";
-import { calculatePricePerSqm } from "@/lib/priceCalculations";
+import type { HomepageListing } from "@/lib/homepageListings";
+import { homepageListingToCard } from "@/lib/homepageListingToCard";
 
 interface Props {
   listings: HomepageListing[];
@@ -32,46 +31,12 @@ export function FeaturedPropertiesSection({ listings, isLoading, isError }: Prop
             : isError
             ? <p className="col-span-4 py-8 text-center text-sm text-muted-foreground">Could not load Spotlight listings.</p>
             : visibleListings.map((l, index) => {
-                const imgs = homepageListingImages(l);
-                const isProjectNewBuild = l.listing_type === "new_build" && Boolean(l.project_id);
-                const projectName = isProjectNewBuild ? l.project?.name?.trim() : "";
-                const listingType = l.listing_type === "new_build" && !isProjectNewBuild
-                  ? "sale"
-                  : l.listing_type ?? "sale";
-                const newBuildSummary = getNewBuildCardSummary(l);
                 return (
                   <PropertyCard
                     key={l.id}
                     imagePriority={index < 4}
                     deferOffscreenRendering={false}
-                    property={{
-                      id: l.id,
-                      title: projectName || l.title,
-                      address: l.address || l.city,
-                      city: l.city,
-                      price: Number(l.price),
-                      pricePerSqm: calculatePricePerSqm({
-                        price: l.price,
-                        sqm: l.sqm,
-                        storedPricePerSqm: l.price_per_sqm,
-                      }) ?? undefined,
-                      bedrooms: l.bedrooms ?? undefined,
-                      bathrooms: l.bathrooms ?? undefined,
-                      sqm: Number(l.sqm),
-                      floor: l.floor ?? undefined,
-                      totalFloors: l.total_floors ?? undefined,
-                      yearBuilt: l.year_built ?? undefined,
-                      energyClass: l.energy_class ?? undefined,
-                      images: imgs,
-                      type: l.property_type ?? "apartment",
-                      listingType,
-                      aiScore: l.ai_score ?? undefined,
-                      views: l.views_count ?? undefined,
-                      tags: l.tags || [],
-                      isPreSale: isProjectNewBuild,
-                      constructionStatus: l.construction_status ?? undefined,
-                      ...newBuildSummary,
-                    }}
+                    property={homepageListingToCard(l)}
                   />
                 );
               })}

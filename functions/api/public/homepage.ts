@@ -17,12 +17,20 @@ import { publicAuctions } from "./auctions";
 import { publicListingRows } from "./_fixture-content";
 
 type ListingRow = Record<string, unknown> & {
+  owner_id?: string | null;
   property_type?: string | null;
   cover_image_url?: string | null;
   listing_images?: Array<{ url: string; sort_order: number }>;
   city?: string | null;
   price_per_sqm?: number | string | null;
   created_at?: string | null;
+};
+
+type ProfilePublicRow = {
+  user_id: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  role?: string | null;
 };
 
 const SECTIONS = [
@@ -35,7 +43,7 @@ const SECTIONS = [
   "auction-count",
 ] as const;
 const HOMEPAGE_CACHE_VERSION = "popular-location-live-v2";
-const FEATURED_CACHE_VERSION = "featured-card-v6";
+const FEATURED_CACHE_VERSION = "featured-card-v7-profile-flags";
 const FEATURED_CACHE_SECONDS = 5 * 60;
 const HOMEPAGE_PRODUCER_TIMEOUT_MS = 4_500;
 const COUNTED_PROPERTY_TYPES = ["apartment", "land"] as const;
@@ -57,7 +65,7 @@ const featuredProjectSelect = [
 ].join(",");
 
 const featuredSelect =
-  `id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,project_id,ai_score,views_count,tags,project:projects!listings_project_id_fkey(${featuredProjectSelect}),listing_images(url,sort_order)`;
+  `id,owner_id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,project_id,ai_score,views_count,tags,has_video_tour,has_virtual_tour,is_featured,priority_placement,is_pre_sale,construction_status,project:projects!listings_project_id_fkey(${featuredProjectSelect}),listing_images(url,sort_order)`;
 
 const openHouseSelect =
   "id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,open_house_transaction_type,ai_score,views_count,tags,open_house_date,latitude,longitude,listing_images(url,sort_order)";
@@ -205,6 +213,17 @@ async function fetchPriceIndex(env: PublicApiEnv) {
   });
 }
 
+async function fetchOwnerProfiles(env: PublicApiEnv, ownerIds: string[]): Promise<Map<string, ProfilePublicRow>> {
+  const uniqueOwnerIds = [...new Set(ownerIds)].filter(Boolean);
+  if (!uniqueOwnerIds.length) return new Map();
+
+  const params = new URLSearchParams();
+  params.set("select", "user_id,display_name,avatar_url,role");
+  params.set("user_id", `in.(${uniqueOwnerIds.join(",")})`);
+  const rows = await supabaseJson<ProfilePublicRow>(env, "/rest/v1/profiles_public", params);
+  return new Map(rows.map((profile) => [profile.user_id, profile]));
+}
+
 async function fetchSection(env: PublicApiEnv, section: (typeof SECTIONS)[number]): Promise<unknown> {
   if (section === "type-counts") {
     const counts = await Promise.all(
@@ -235,7 +254,13 @@ async function fetchSection(env: PublicApiEnv, section: (typeof SECTIONS)[number
     params.set("listing_images.order", "sort_order.asc");
     params.set("listing_images.limit", "3");
     params.set("limit", "12");
-    return publicListingRows(await supabaseJson<ListingRow>(env, "/rest/v1/listings", params, { failOnTransient: true }), 4);
+    const rows = publicListingRows(await supabaseJson<ListingRow>(env, "/rest/v1/listings", params, { failOnTransient: true }), 4);
+    const ownerIds = rows.map((row) => row.owner_id).filter((id): id is string => typeof id === "string");
+    const profiles = await fetchOwnerProfiles(env, ownerIds);
+    return rows.map((row) => ({
+      ...row,
+      profiles: row.owner_id ? profiles.get(row.owner_id) ?? null : null,
+    }));
   }
 
   if (section === "auction-count") {

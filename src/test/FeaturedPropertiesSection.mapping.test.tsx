@@ -22,12 +22,22 @@ vi.mock("@/components/PropertyCard", () => ({
     newBuildUnitCount?: number;
     newBuildAvailableUnitCount?: number;
     newBuildDeliveryYear?: number;
+    isFeatured?: boolean;
+    hasVideo?: boolean;
+    hasVirtualTour?: boolean;
+    views?: number;
+    agent?: { name: string };
   } }) => (
     <article
       data-testid="featured-property"
       data-listing-type={property.listingType}
       data-is-pre-sale={String(Boolean(property.isPreSale))}
+      data-is-featured={String(Boolean(property.isFeatured))}
+      data-has-video={String(Boolean(property.hasVideo))}
+      data-has-virtual-tour={String(Boolean(property.hasVirtualTour))}
       data-image={property.images[0] ?? ""}
+      data-views={property.views ?? ""}
+      data-agent={property.agent?.name ?? ""}
       data-unit-size-min={property.newBuildUnitSizeMin ?? ""}
       data-unit-size-max={property.newBuildUnitSizeMax ?? ""}
       data-unit-count={property.newBuildUnitCount ?? ""}
@@ -58,6 +68,16 @@ describe("FeaturedPropertiesSection mapping", () => {
               property_type: "apartment",
               listing_type: "new_build",
               project_id: null,
+              is_featured: true,
+              has_video_tour: true,
+              has_virtual_tour: true,
+              views_count: 110,
+              profiles: {
+                user_id: "owner-1",
+                display_name: "K R",
+                avatar_url: null,
+                role: "agent",
+              },
               cover_image_url: "https://cdn.test/glifada-cover.webp",
               listing_images: [{ url: "https://cdn.test/glifada-gallery.webp", sort_order: 1 }],
             },
@@ -69,6 +89,11 @@ describe("FeaturedPropertiesSection mapping", () => {
     const card = screen.getByTestId("featured-property");
     expect(card).toHaveAttribute("data-listing-type", "sale");
     expect(card).toHaveAttribute("data-is-pre-sale", "false");
+    expect(card).toHaveAttribute("data-is-featured", "true");
+    expect(card).toHaveAttribute("data-has-video", "true");
+    expect(card).toHaveAttribute("data-has-virtual-tour", "true");
+    expect(card).toHaveAttribute("data-views", "110");
+    expect(card).toHaveAttribute("data-agent", "K R");
     expect(card).toHaveAttribute("data-image", "https://cdn.test/glifada-cover.webp");
   });
 

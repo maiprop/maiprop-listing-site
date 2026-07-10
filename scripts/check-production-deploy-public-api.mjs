@@ -7,6 +7,11 @@ const SUPABASE_TRANSIENT_RETRY_DELAY_MS = 250;
 
 const publicApiPaths = [
   "/api/public/listings?limit=1",
+  "/api/public/listings?listing_type=sale&page=1&pageSize=12",
+  "/api/public/listings?listing_type=sale&page=1&pageSize=28&offset=12",
+  "/api/public/listings?listing_type=sale&page=1&limit=40",
+  "/api/public/listings?listing_type=rent&page=1&pageSize=12",
+  "/api/public/listings?listing_type=rent&page=1&limit=40",
   "/api/public/listings?listing_type=new_build&limit=1",
   "/api/public/homepage?section=featured",
   "/api/public/open-houses?limit=1",
@@ -17,6 +22,14 @@ const publicApiPaths = [
   "/api/public/homepage?section=popular-locations",
   "/api/public/homepage?section=auction-count",
 ];
+
+const publicApiBudgets = new Map([
+  ["/api/public/listings?listing_type=sale&page=1&pageSize=12", { maxMs: 1_800, maxBytes: 180_000 }],
+  ["/api/public/listings?listing_type=sale&page=1&pageSize=28&offset=12", { maxMs: 2_500, maxBytes: 320_000 }],
+  ["/api/public/listings?listing_type=sale&page=1&limit=40", { maxMs: 4_000, maxBytes: 450_000 }],
+  ["/api/public/listings?listing_type=rent&page=1&pageSize=12", { maxMs: 1_800, maxBytes: 180_000 }],
+  ["/api/public/listings?listing_type=rent&page=1&limit=40", { maxMs: 4_000, maxBytes: 450_000 }],
+]);
 
 const listingDetailSourcePaths = new Set([
   "/api/public/listings?limit=1",
@@ -75,13 +88,77 @@ function extractPublicListingIds(body) {
     .filter((id) => typeof id === "string" && id.trim().length > 0);
 }
 
+function hasOwn(value, key) {
+  return Boolean(value && typeof value === "object" && Object.prototype.hasOwnProperty.call(value, key));
+}
+
+function validatePublicApiShape(path, body, assertOk) {
+  if (path.startsWith("/api/public/listings")) {
+    const url = new URL(path, "https://probe.local");
+    const expectedPageSize = Number(url.searchParams.get("pageSize") ?? url.searchParams.get("limit"));
+    const expectedOffset = Number(url.searchParams.get("offset"));
+    assertOk(
+      body && typeof body === "object" && Array.isArray(body.data),
+      `${path} returned an invalid listings payload; expected { data: [] }`,
+    );
+    assertOk(
+      typeof body.hasMore === "boolean" || body.hasMore === undefined,
+      `${path} returned an invalid listings hasMore flag`,
+    );
+    if (Number.isFinite(expectedPageSize)) {
+      assertOk(
+        body.pageSize === expectedPageSize,
+        `${path} returned pageSize ${body.pageSize} instead of ${expectedPageSize}`,
+      );
+    }
+    if (Number.isFinite(expectedOffset)) {
+      assertOk(
+        body.offset === expectedOffset,
+        `${path} returned offset ${body.offset} instead of ${expectedOffset}`,
+      );
+    }
+    return;
+  }
+
+  if (path.startsWith("/api/public/auctions") || path.startsWith("/api/public/open-houses")) {
+    assertOk(Array.isArray(body), `${path} returned an invalid list payload; expected an array`);
+    return;
+  }
+
+  if (path.includes("section=featured")) {
+    assertOk(Array.isArray(body), `${path} returned an invalid homepage featured payload; expected an array`);
+    assertOk(body.length > 0, `${path} returned no Spotlight listings`);
+    const row = body[0];
+    for (const key of ["owner_id", "profiles", "has_video_tour", "has_virtual_tour", "is_featured", "priority_placement"]) {
+      assertOk(hasOwn(row, key), `${path} returned Spotlight row without ${key}`);
+    }
+    return;
+  }
+
+  if (path.includes("section=open-houses") || path.includes("section=popular-locations") || path.includes("section=price-index")) {
+    assertOk(Array.isArray(body), `${path} returned an invalid homepage list payload; expected an array`);
+    return;
+  }
+
+  if (path.includes("section=type-counts")) {
+    assertOk(body && typeof body === "object" && !Array.isArray(body), `${path} returned an invalid type-count payload`);
+    return;
+  }
+
+  if (path.includes("section=auction-count")) {
+    assertOk(typeof body === "number", `${path} returned an invalid auction-count payload`);
+  }
+}
+
 async function validateJsonApiPath(baseUrl, path, { assertOk, fetchText }) {
   const apiUrl = new URL(path, baseUrl).toString();
   for (let attempt = 0; ; attempt += 1) {
+    const startedAt = performance.now();
     const { res, text } = await fetchText(apiUrl, {
       headers: { accept: "application/json" },
       allowHttpError: true,
     });
+    const elapsedMs = performance.now() - startedAt;
     const contentType = res.headers.get("content-type") ?? "";
     const htmlFallback =
       /text\/html/i.test(contentType) &&
@@ -122,6 +199,20 @@ async function validateJsonApiPath(baseUrl, path, { assertOk, fetchText }) {
       !(body && typeof body === "object" && "error" in body),
       `${apiUrl} returned API error: ${JSON.stringify(body).slice(0, 240)}`,
     );
+    validatePublicApiShape(path, body, assertOk);
+
+    const budget = publicApiBudgets.get(path);
+    if (budget) {
+      const responseBytes = new TextEncoder().encode(text).byteLength;
+      assertOk(
+        elapsedMs <= budget.maxMs,
+        `${apiUrl} exceeded API latency budget: ${Math.round(elapsedMs)}ms > ${budget.maxMs}ms`,
+      );
+      assertOk(
+        responseBytes <= budget.maxBytes,
+        `${apiUrl} exceeded response size budget: ${responseBytes} bytes > ${budget.maxBytes} bytes`,
+      );
+    }
 
     const fixtureMarker = findPublicApiFixtureMarker(body);
     assertOk(
