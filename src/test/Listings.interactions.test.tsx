@@ -4,7 +4,7 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import { renderWithProviders } from "@/test/utils";
 import type { ListingCardWithRaw } from "@/lib/listingsCardUtils";
 
-const { filterState, setParam, setParams, clearAllFilters, toggleMulti, pipelineState, authState, isMobileState, loadGoogleMapsPlaces, trackUserSearch } = vi.hoisted(() => {
+const { filterState, setParam, setParams, clearAllFilters, toggleMulti, pipelineState, pipelineCalls, authState, isMobileState, loadGoogleMapsPlaces, trackUserSearch } = vi.hoisted(() => {
   const setParam = vi.fn();
   const setParams = vi.fn();
   const clearAllFilters = vi.fn();
@@ -53,9 +53,10 @@ const { filterState, setParam, setParams, clearAllFilters, toggleMulti, pipeline
     isFetchingNextPage: false,
     sentinelRef: { current: null },
   };
+  const pipelineCalls: unknown[] = [];
   const authState = { user: null as null | { id: string } };
   const isMobileState = { value: false };
-  return { filterState, setParam, setParams, clearAllFilters, toggleMulti, pipelineState, authState, isMobileState, loadGoogleMapsPlaces, trackUserSearch };
+  return { filterState, setParam, setParams, clearAllFilters, toggleMulti, pipelineState, pipelineCalls, authState, isMobileState, loadGoogleMapsPlaces, trackUserSearch };
 });
 
 vi.mock("@/lib/config", () => ({
@@ -75,7 +76,10 @@ vi.mock("@/hooks/useListingsFilters", () => ({
 }));
 
 vi.mock("@/hooks/useListingsPipeline", () => ({
-  useListingsPipeline: () => pipelineState,
+  useListingsPipeline: (args: unknown) => {
+    pipelineCalls.push(args);
+    return pipelineState;
+  },
 }));
 
 vi.mock("@/hooks/useTrackUserSearch", () => ({
@@ -247,6 +251,7 @@ describe("Listings page interactions", () => {
     pipelineState.isError = false;
     pipelineState.hasNextPage = false;
     pipelineState.isFetchingNextPage = false;
+    pipelineCalls.length = 0;
     isMobileState.value = false;
     trackUserSearch.mockReset();
     trackUserSearch.mockResolvedValue(undefined);
@@ -352,6 +357,28 @@ describe("Listings page interactions", () => {
       ["location_radius_m", ""],
     ]);
     expect(AutocompleteMock).not.toHaveBeenCalled();
+  });
+
+  it("does not turn missing coordinate params into a zero-radius search", async () => {
+    Object.assign(filterState, {
+      searchQuery: "Άγιοι Ανάργυροι",
+      selectedListingType: "sale",
+    });
+    filterState.getParam.mockImplementation((_key: string, fallback = "") => fallback);
+
+    const { default: Listings } = await import("@/pages/Listings");
+    renderWithProviders(<Listings />);
+
+    const latestCall = pipelineCalls.at(-1) as { filters?: Record<string, unknown> };
+    expect(latestCall.filters).toEqual(expect.objectContaining({
+      city: "Άγιοι Ανάργυροι",
+      listing_type: "sale",
+    }));
+    expect(latestCall.filters).toEqual(expect.objectContaining({
+      location_lat: undefined,
+      location_lng: undefined,
+      location_radius_m: undefined,
+    }));
   });
 
   it("records submitted listing searches for admin activity analytics", async () => {

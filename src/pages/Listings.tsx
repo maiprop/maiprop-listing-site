@@ -98,6 +98,12 @@ const ListingsResultSummary = (props: Parameters<typeof getListingsResultLabel>[
   </span>
 );
 
+function parseOptionalNumberParam(value: string): number | undefined {
+  if (!value.trim()) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 // skipcq: JS-0067 - React route component is intentionally module-scoped for React Router.
 export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings coordinates filters, map state, comparison, and virtualization in one route shell.
   const { t, i18n } = useTranslation();
@@ -142,9 +148,9 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
   const [priceMin, priceMax] = selectedPrice
     ? selectedPrice.split("-").map(Number)
     : [undefined, undefined];
-  const locationLat = Number(getParam("location_lat"));
-  const locationLng = Number(getParam("location_lng"));
-  const locationRadiusM = Number(getParam("location_radius_m"));
+  const locationLat = parseOptionalNumberParam(getParam("location_lat"));
+  const locationLng = parseOptionalNumberParam(getParam("location_lng"));
+  const locationRadiusM = parseOptionalNumberParam(getParam("location_radius_m"));
 
   const setLocationFilter = useCallback((nextValue: string, selection?: ListingLocationSelection) => {
     const pairs: Array<[string, string]> = [["city", nextValue]];
@@ -169,9 +175,9 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
 
   const filters = useMemo<ListingsFilters>(() => ({ // skipcq: JS-R1005 - Listings route maps many independent URL filters into one query payload.
     city: searchQuery || undefined,
-    location_lat: Number.isFinite(locationLat) ? locationLat : undefined,
-    location_lng: Number.isFinite(locationLng) ? locationLng : undefined,
-    location_radius_m: Number.isFinite(locationRadiusM) ? locationRadiusM : undefined,
+    location_lat: locationLat,
+    location_lng: locationLng,
+    location_radius_m: locationRadiusM,
     listing_type: preSaleOnly ? "new_build" : (selectedListingType || undefined),
     property_type: selectedType || undefined,
     price_min: priceMin || undefined,
