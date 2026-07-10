@@ -151,7 +151,7 @@ describe("production deploy public API fixture guard", () => {
         return Response.json(publicListingsPayloadFromUrl(href));
       }
       if (href.endsWith("/api/public/auctions?limit=60")) {
-        return Response.json([{ id: "auction-1", title: "Clean auction" }]);
+        return Response.json({ data: [{ id: "auction-1", title: "Clean auction" }] });
       }
       if (href.includes("/api/public/homepage?section=type-counts")) {
         return Response.json({ apartment: 1, land: 1 });
@@ -269,9 +269,11 @@ describe("production deploy public API fixture guard", () => {
             ? { apartment: 1, land: 1 }
             : href.includes("section=auction-count")
               ? 1
-              : href.includes("section=featured")
-                ? featuredHomepagePayload()
-              : [];
+              : href.includes("/api/public/auctions?")
+                ? { data: [] }
+                : href.includes("section=featured")
+                  ? featuredHomepagePayload()
+                  : [];
         const text = JSON.stringify(payload);
         return {
           res: new Response(text, { headers: { "Content-Type": "application/json" } }),

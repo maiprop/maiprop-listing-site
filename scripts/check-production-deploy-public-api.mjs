@@ -120,7 +120,15 @@ function validatePublicApiShape(path, body, assertOk) {
     return;
   }
 
-  if (path.startsWith("/api/public/auctions") || path.startsWith("/api/public/open-houses")) {
+  if (path.startsWith("/api/public/auctions")) {
+    assertOk(
+      body && typeof body === "object" && Array.isArray(body.data),
+      `${path} returned an invalid auctions payload; expected { data: [] }`,
+    );
+    return;
+  }
+
+  if (path.startsWith("/api/public/open-houses")) {
     assertOk(Array.isArray(body), `${path} returned an invalid list payload; expected an array`);
     return;
   }
