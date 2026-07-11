@@ -74,4 +74,25 @@ describe("Cloudflare admin posture capture", () => {
       }),
     ).toEqual([]);
   });
+
+  it("fails closed when Cloudflare returns an incomplete Pages project record", async () => {
+    const evidence = await buildCloudflarePostureEvidence({
+      env: {
+        CLOUDFLARE_API_TOKEN: "cf_secret",
+        CLOUDFLARE_ACCOUNT_ID: "account_123",
+        CLOUDFLARE_PAGES_PROJECT: "maiprop-listing-site",
+      },
+      fetchImpl: async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, result: { name: "maiprop-listing-site" } }),
+      }),
+    });
+
+    expect(evidence).toMatchObject({
+      provider: "cloudflare",
+      status: "failed",
+      errors: ["Pages project record is missing a project id or production branch"],
+    });
+  });
 });

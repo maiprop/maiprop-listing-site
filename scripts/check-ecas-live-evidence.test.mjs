@@ -30,7 +30,7 @@ describe("ECAS live evidence rollup", () => {
 
     expect(result.ok).toBe(false);
     expect(result.failures).toEqual([
-      "sentry live evidence missing production query proof: environment=production, timeRange=24h, querySucceeded=true",
+      "sentry live evidence missing production query proof: environment=production, timeRange=24h, querySucceeded=true, issueCount matches issues",
       "cloudflare live evidence is unconfigured",
       "github live evidence missing required branch protection proof: branch=main, requiredPullRequestReviews, requiredStatusChecks, allowsForcePushes=false, allowsDeletions=false",
     ]);
@@ -63,8 +63,8 @@ describe("ECAS live evidence rollup", () => {
 
     expect(result.ok).toBe(false);
     expect(result.failures).toEqual([
-      "sentry live evidence missing production query proof: environment=production, querySucceeded=true",
-      "cloudflare live evidence missing production deployment proof: latestProductionDeployment.status=success, latestProductionDeployment.commitHash",
+      "sentry live evidence missing production query proof: environment=production, querySucceeded=true, issueCount matches issues",
+      "cloudflare live evidence missing production deployment proof: pagesProject.idPresent=true, pagesProject.productionBranch=main, pagesProject.domains, latestProductionDeployment.status=success, latestProductionDeployment.commitHash",
       "github live evidence missing required branch protection proof: requiredStatusChecks, allowsForcePushes=false, allowsDeletions=false",
     ]);
   });
@@ -87,7 +87,10 @@ describe("ECAS live evidence rollup", () => {
           provider: "cloudflare",
           status: "captured",
           pagesProject: {
+            idPresent: true,
             name: "maiprop-listing-site",
+            productionBranch: "main",
+            domains: ["portal.maiprop.co"],
             latestProductionDeployment: {
               status: "success",
               commitHash: "66326673d2eea057f16584795655572974f97f99",
@@ -100,6 +103,8 @@ describe("ECAS live evidence rollup", () => {
           environment: "production",
           timeRange: "24h",
           querySucceeded: true,
+          issueCount: 0,
+          issues: [],
         },
       ],
       { strict: true },
@@ -109,11 +114,61 @@ describe("ECAS live evidence rollup", () => {
     expect(result.failures).toEqual([]);
   });
 
+  it("accepts explicitly recorded GitHub plan limits only with passing compensating controls", () => {
+    const result = evaluateEcasLiveEvidence(
+      [
+        {
+          provider: "github",
+          status: "plan_limited",
+          branch: "main",
+          branchProtection: {
+            status: "plan_limited",
+            httpStatus: 403,
+            message: "Upgrade to GitHub Pro or make this repository public to enable this feature.",
+          },
+          compensatingControls: [
+            { id: "source-controlled-branch-policy", status: "passed" },
+            { id: "required-ci-governance-gate", status: "passed" },
+          ],
+        },
+        {
+          provider: "cloudflare",
+          status: "captured",
+          pagesProject: {
+            idPresent: true,
+            name: "maiprop-listing-site",
+            productionBranch: "main",
+            domains: ["portal.maiprop.co"],
+            latestProductionDeployment: {
+              status: "success",
+              commitHash: "66326673d2eea057f16584795655572974f97f99",
+            },
+          },
+        },
+        {
+          provider: "sentry",
+          status: "captured",
+          queriedAt: "2026-07-11T12:00:00.000Z",
+          environment: "production",
+          timeRange: "24h",
+          querySucceeded: true,
+          issueCount: 0,
+          issues: [],
+          issueCount: 0,
+          issues: [],
+        },
+      ],
+      { strict: true },
+    );
+
+    expect(result.ok).toBe(true);
+  });
+
   it("requires all expected provider evidence documents", () => {
     const result = evaluateEcasLiveEvidence([{ provider: "sentry", status: "captured" }], { strict: true });
 
     expect(result.failures).toEqual([
-      "sentry live evidence missing production query proof: environment=production, timeRange=24h, querySucceeded=true",
+      "sentry live evidence missing production query proof: environment=production, timeRange=24h, querySucceeded=true, issueCount matches issues",
       "cloudflare live evidence is missing",
       "github live evidence is missing",
     ]);

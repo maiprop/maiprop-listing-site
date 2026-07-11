@@ -1,5 +1,5 @@
 import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const REQUIRED_ENV = ["SENTRY_AUTH_TOKEN", "SENTRY_ORG", "SENTRY_PROJECT"];
@@ -87,7 +87,22 @@ export async function buildSentryEvidence({
     };
   }
 
-  const issues = (await response.json()).slice(0, limit).map(normalizeIssue);
+  const payload = await response.json();
+  if (!Array.isArray(payload)) {
+    return {
+      provider: "sentry",
+      status: "failed",
+      queriedAt,
+      environment,
+      timeRange,
+      querySucceeded: false,
+      issueCount: 0,
+      issues: [],
+      errors: ["Sentry issues response was not an array"],
+    };
+  }
+
+  const issues = payload.slice(0, limit).map(normalizeIssue);
   return {
     provider: "sentry",
     status: "captured",
@@ -118,7 +133,7 @@ const writeJson = (path, value) => {
 const main = async () => {
   const args = parseArgs(process.argv.slice(2));
   const evidence = await buildSentryEvidence();
-  writeJson(join(process.cwd(), args.out), evidence);
+  writeJson(resolve(process.cwd(), args.out), evidence);
 
   if (args.strict && evidence.status !== "captured") {
     process.stderr.write(`Sentry live evidence is ${evidence.status}\n`);

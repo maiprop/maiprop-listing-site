@@ -49,6 +49,7 @@ jobs:
         run: |
           mkdir -p compliance-evidence
           npm run check:standards-readiness | tee compliance-evidence/standards-readiness.txt
+          npm run check:github-governance | tee compliance-evidence/github-governance.txt
 
       - name: Capture GitHub governance evidence
         run: |
@@ -86,28 +87,24 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p compliance-evidence
-          if [ -n "${SUPABASE_ACCESS_TOKEN}" ] && [ -n "${SUPABASE_PROJECT_REF}" ]; then
-            npm run check:live-security-posture -- --allow-transient-unavailable > compliance-evidence/supabase-live-security.txt
-          else
-            echo "unverifiable: SUPABASE_ACCESS_TOKEN or SUPABASE_PROJECT_REF is not configured" > compliance-evidence/supabase-live-security.txt
-          fi
+          npm run check:live-security-posture > compliance-evidence/supabase-live-security.txt
 
       - name: Capture Sentry live telemetry status
         run: |
           set -euo pipefail
           mkdir -p compliance-evidence
-          npm run capture:sentry-live-evidence -- --out compliance-evidence/sentry-live-evidence.json
+          npm run capture:sentry-live-evidence -- --strict --out compliance-evidence/sentry-live-evidence.json
 
       - name: Capture Cloudflare admin posture
         run: |
           set -euo pipefail
           mkdir -p compliance-evidence
-          npm run capture:cloudflare-admin-posture -- --out compliance-evidence/cloudflare-admin-posture.json
+          npm run capture:cloudflare-admin-posture -- --strict --out compliance-evidence/cloudflare-admin-posture.json
 
       - name: Check ECAS live evidence rollup
         run: |
           set -euo pipefail
-          npm run check:ecas-live-evidence -- --dir compliance-evidence
+          npm run check:ecas-live-evidence -- --strict --dir compliance-evidence
 
       - name: Upload standards evidence
         if: always()

@@ -18,9 +18,34 @@ const validateGithubEvidence = (item) => {
     : [];
 };
 
+const validatePlanLimitedGithubEvidence = (item) => {
+  const missing = [];
+  const branchProtection = item.branchProtection ?? {};
+  if (item.branch !== "main") missing.push("branch=main");
+  if (branchProtection.status !== "plan_limited") missing.push("branchProtection.status=plan_limited");
+  if (branchProtection.httpStatus !== 403) missing.push("branchProtection.httpStatus=403");
+  if (typeof branchProtection.message !== "string" || branchProtection.message.trim().length === 0) {
+    missing.push("branchProtection.message");
+  }
+
+  const controls = new Map((item.compensatingControls ?? []).map((control) => [control?.id, control]));
+  for (const id of ["source-controlled-branch-policy", "required-ci-governance-gate"]) {
+    if (controls.get(id)?.status !== "passed") missing.push(`compensatingControls.${id}=passed`);
+  }
+
+  return missing.length > 0
+    ? [`github plan-limited evidence is missing required compensating proof: ${missing.join(", ")}`]
+    : [];
+};
+
 const validateCloudflareEvidence = (item) => {
   const missing = [];
   const deployment = item.pagesProject?.latestProductionDeployment ?? item.latestProductionDeployment ?? {};
+  if (item.pagesProject?.idPresent !== true) missing.push("pagesProject.idPresent=true");
+  if (item.pagesProject?.productionBranch !== "main") missing.push("pagesProject.productionBranch=main");
+  if (!Array.isArray(item.pagesProject?.domains) || item.pagesProject.domains.length === 0) {
+    missing.push("pagesProject.domains");
+  }
   if ((item.pagesProject?.name ?? item.project) !== "maiprop-listing-site") missing.push("project=maiprop-listing-site");
   if (deployment.status !== "success") missing.push("latestProductionDeployment.status=success");
   if (!deployment.commitHash) missing.push("latestProductionDeployment.commitHash");
@@ -34,6 +59,8 @@ const validateSentryEvidence = (item) => {
   if (item.environment !== "production") missing.push("environment=production");
   if (item.timeRange !== "24h") missing.push("timeRange=24h");
   if (item.querySucceeded !== true) missing.push("querySucceeded=true");
+  if (!Array.isArray(item.issues) || item.issueCount !== item.issues.length) missing.push("issueCount matches issues");
+  if (item.queriedAt !== undefined && Number.isNaN(Date.parse(item.queriedAt))) missing.push("queriedAt ISO timestamp");
   return missing.length > 0
     ? [`sentry live evidence missing production query proof: ${missing.join(", ")}`]
     : [];
@@ -57,6 +84,15 @@ export function evaluateEcasLiveEvidence(evidenceItems, { strict = false } = {})
       const message = `${provider} live evidence is missing`;
       if (strict) failures.push(message);
       else warnings.push(message);
+      continue;
+    }
+
+    if (provider === "github" && item.status === "plan_limited") {
+      const proofFailures = validatePlanLimitedGithubEvidence(item);
+      if (proofFailures.length > 0) {
+        if (strict) failures.push(...proofFailures);
+        else warnings.push(...proofFailures);
+      }
       continue;
     }
 

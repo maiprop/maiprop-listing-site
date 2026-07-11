@@ -67,7 +67,7 @@ describe("GitHub admin posture capture", () => {
     expect(evidence.actionsPermissions.allowedActions).toBe("selected");
   });
 
-  it("classifies unavailable branch protection as blocked instead of fabricated success", async () => {
+  it("records GitHub plan-limited branch protection evidence and compensating controls", async () => {
     const evidence = await buildGithubAdminPostureEvidence({
       env: {
         GITHUB_TOKEN: "gh_secret",
@@ -83,8 +83,16 @@ describe("GitHub admin posture capture", () => {
       now: () => new Date("2026-06-22T12:00:00.000Z"),
     });
 
-    expect(evidence.status).toBe("blocked");
-    expect(evidence.blockers[0]).toContain("GitHub branch protection endpoint returned 403");
+    expect(evidence.status).toBe("plan_limited");
+    expect(evidence.branchProtection).toMatchObject({
+      status: "plan_limited",
+      httpStatus: 403,
+      message: "Upgrade to GitHub Pro or make this repository public to enable this feature.",
+    });
+    expect(evidence.compensatingControls.map((control) => control.id)).toEqual([
+      "source-controlled-branch-policy",
+      "required-ci-governance-gate",
+    ]);
   });
 
   it("validates exact required environment names", () => {
