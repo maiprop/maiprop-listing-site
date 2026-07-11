@@ -235,7 +235,10 @@ export function useAddressAutocomplete(
         ? [mapTextLocationToAddressPrediction(normalizedQuery, "manual")]
         : [];
     return rankAddressPredictionsForQuery(
-      mergeAddressPredictions(popularPredictions, remotePredictions, manualPrediction),
+      filterAddressPredictionsForQuery(
+        mergeAddressPredictions(popularPredictions, remotePredictions, manualPrediction),
+        normalizedQuery,
+      ),
       normalizedQuery,
     ).slice(0, LIMIT);
   }, [loading, normalizedQuery, popularPredictions, remotePredictions]);
