@@ -303,9 +303,12 @@ export function getListingLocationRadiusM(prediction: AddressPrediction): number
   if (!prediction.latitude?.trim() || !prediction.longitude?.trim()) return undefined;
 
   const googleTypes = prediction.googleTypes ?? [];
-  const hasStreetAddress =
-    Boolean(prediction.addressLine?.trim()) ||
-    googleTypes.some((type) => ["street_address", "premise", "subpremise", "route"].includes(type));
+  const addressLine = prediction.addressLine?.trim() ?? "";
+  const hasHouseNumber = /\d/.test(addressLine);
+  const hasExactStreetAddress =
+    hasHouseNumber ||
+    googleTypes.some((type) => ["street_address", "premise", "subpremise"].includes(type));
+  const hasStreetAddress = hasExactStreetAddress && Boolean(addressLine || prediction.fullAddress?.trim());
   if (hasStreetAddress) return 750;
 
   const hasLocality =

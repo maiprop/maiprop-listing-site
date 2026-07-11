@@ -1072,7 +1072,7 @@ describe("location address suggestions", () => {
     await waitFor(() => expect(onFilterChange).toHaveBeenLastCalledWith("Άγιοι Ανάργυροι", expect.objectContaining({
       latitude: "38.0301",
       longitude: "23.7241",
-      radiusM: 750,
+      radiusM: 5000,
       provider: "nominatim",
     })));
     expect(input).toHaveValue("Άγιοι Ανάργυροι");
