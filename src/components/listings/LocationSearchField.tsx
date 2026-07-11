@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { Loader2, MapPin, Search, X } from "lucide-react";
 import { useAddressAutocomplete } from "@/hooks/useAddressAutocomplete";
@@ -7,6 +7,7 @@ import { formatAddressPrediction, type AddressPrediction } from "@/lib/location/
 import {
   getListingLocationRadiusM,
   getListingLocationSearchValue,
+  rankAddressPredictionsForQuery,
 } from "@/lib/location/locationSearchSemantics";
 
 const TYPED_LOCATION_COMMIT_DELAY_MS = 600;
@@ -60,6 +61,10 @@ export function LocationSearchField({
     enabled: shouldUsePredictions,
     includePopular: true,
   });
+  const rankedPredictions = useMemo(
+    () => rankAddressPredictionsForQuery(predictions, query),
+    [predictions, query],
+  );
 
   const getPos = () => {
     if (!wrapRef.current) return { top: 0, left: 0, width: 300 };
@@ -122,8 +127,8 @@ export function LocationSearchField({
     if (options.close) cancelPendingEnter();
 
     const preferSuggestion = options.preferSuggestion ?? shouldPreferProviderForTypedLocation(committedValue);
-    if (preferSuggestion && !loading && predictions[0] && predictions[0].provider !== "manual") {
-      void selectSuggestion(predictions[0]);
+    if (preferSuggestion && !loading && rankedPredictions[0] && rankedPredictions[0].provider !== "manual") {
+      void selectSuggestion(rankedPredictions[0]);
       return;
     }
 
@@ -134,7 +139,7 @@ export function LocationSearchField({
       clear();
       setFocused(false);
     }
-  }, [cancelPendingCommit, cancelPendingEnter, clear, draftValue, loading, onChange, predictions, selectSuggestion]);
+  }, [cancelPendingCommit, cancelPendingEnter, clear, draftValue, loading, onChange, rankedPredictions, selectSuggestion]);
 
   useEffect(() => {
     const handler = (event: MouseEvent) => {
@@ -188,15 +193,15 @@ export function LocationSearchField({
   useEffect(() => {
     if (!pendingEnterRef.current || loading) return;
     cancelPendingEnter();
-    if (predictions[0]) {
-      void selectSuggestion(predictions[0]);
+    if (rankedPredictions[0]) {
+      void selectSuggestion(rankedPredictions[0]);
       return;
     }
     commitManualSearch({ close: true });
-  }, [cancelPendingEnter, commitManualSearch, loading, predictions, selectSuggestion]);
+  }, [cancelPendingEnter, commitManualSearch, loading, rankedPredictions, selectSuggestion]);
 
-  const showDropdown = focused && shouldUsePredictions && (predictions.length > 0 || loading);
-  const hasGoogleSuggestions = predictions.some((suggestion) => suggestion.provider === "google");
+  const showDropdown = focused && shouldUsePredictions && (rankedPredictions.length > 0 || loading);
+  const hasGoogleSuggestions = rankedPredictions.some((suggestion) => suggestion.provider === "google");
   const pos = showDropdown ? getPos() : null;
   const listboxId = "listing-location-dropdown-portal";
   const dropdown = showDropdown && pos ? (
@@ -217,7 +222,7 @@ export function LocationSearchField({
           {query ? "Location Suggestions" : "Popular Locations"}
         </span>
       </div>
-      {predictions.map((suggestion) => {
+      {rankedPredictions.map((suggestion) => {
         const formatted = formatAddressPrediction(suggestion);
         return (
         <button
