@@ -24,6 +24,15 @@ describe("Cloudflare Pages security headers", () => {
     expect(cspLine).toContain("https://www.google.com");
   });
 
+  it("allows Google Places autocomplete RPC calls from custom address dropdowns", () => {
+    const cspLine = headers
+      .split(/\r?\n/)
+      .find((line) => line.includes("Content-Security-Policy"));
+
+    expect(cspLine).toContain("connect-src");
+    expect(cspLine).toContain("https://places.googleapis.com");
+  });
+
   it("keeps render-blocking Google font requests out of the public shell", () => {
     expect(indexHtml).not.toContain("fonts.googleapis.com");
     expect(indexHtml).not.toContain("fonts.gstatic.com");
