@@ -311,6 +311,16 @@ Deno.test("live Stripe subscription checks fall back to item period fields", asy
   assertStringIncludes(source, "rootPeriodEnd ?? itemPeriodEnd ?? null");
 });
 
+Deno.test("database fallback scopes durable subscriptions to the active Stripe runtime and livemode", async () => {
+  const source = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+  const lookupStart = source.indexOf('client.from("billing_subscriptions")');
+  const lookupEnd = source.indexOf(".in(\"status\"", lookupStart);
+  const lookup = source.slice(lookupStart, lookupEnd);
+
+  assertStringIncludes(lookup, '.eq("runtime_mode", runtimeMode)');
+  assertStringIncludes(lookup, '.eq("livemode", runtimeMode === "live")');
+});
+
 Deno.test("database fallback rejects stale trial rows after the period expires", async () => {
   const state = await getDatabaseFallback(
     mockSupabase({

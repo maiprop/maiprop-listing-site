@@ -412,6 +412,38 @@ Deno.test("checkout sessions restrict v1 payment methods to cards", async () => 
   );
 });
 
+Deno.test("Checkout persists the runtime-scoped Stripe customer before session creation", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./index.ts", import.meta.url),
+  );
+  const addonStart = source.indexOf("if (addonKey) {");
+  const planStart = source.indexOf("const plan = normalizePlanKey", addonStart);
+  const addonBranch = source.slice(addonStart, planStart);
+  const subscriptionBranch = source.slice(planStart);
+
+  assertEquals(source.includes("upsertBillingCustomer"), true);
+  assertEquals(
+    addonBranch.indexOf("await upsertBillingCustomer") >
+      addonBranch.indexOf("getOrCreateOwnedStripeCustomer"),
+    true,
+  );
+  assertEquals(
+    addonBranch.indexOf("await upsertBillingCustomer") <
+      addonBranch.indexOf("stripe.checkout.sessions.create"),
+    true,
+  );
+  assertEquals(
+    subscriptionBranch.indexOf("await upsertBillingCustomer") >
+      subscriptionBranch.indexOf("getOrCreateOwnedStripeCustomer"),
+    true,
+  );
+  assertEquals(
+    subscriptionBranch.indexOf("await upsertBillingCustomer") <
+      subscriptionBranch.indexOf("stripe.checkout.sessions.create"),
+    true,
+  );
+});
+
 Deno.test("checkout sessions enable Stripe Tax and payment-mode invoice creation", async () => {
   const source = await Deno.readTextFile(
     new URL("./index.ts", import.meta.url),

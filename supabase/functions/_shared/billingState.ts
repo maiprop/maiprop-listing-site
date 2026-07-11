@@ -214,7 +214,7 @@ export async function upsertBillingCustomer(
   const { error } = await supabase
     .from("billing_customers")
     .upsert(buildBillingCustomerRow(input), {
-      onConflict: "stripe_customer_id",
+      onConflict: "user_id,runtime_mode",
     });
   if (error) throw error;
 }

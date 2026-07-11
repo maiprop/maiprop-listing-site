@@ -127,17 +127,6 @@ export const getStripePriceEnvKeys = (
   );
 };
 
-const getFirstConfiguredEnvPrice = (
-  planKey: string,
-  billingCycle: BillingCycle,
-): string | null => {
-  for (const key of getStripePriceEnvKeys(planKey, billingCycle)) {
-    const value = Deno.env.get(key);
-    if (value) return value;
-  }
-  return null;
-};
-
 const firstConfiguredValue = (
   values: Array<string | undefined>,
 ): string | undefined => {
@@ -238,15 +227,6 @@ const buildCheckoutPlan = (
     : null;
 };
 
-const getDefaultStripePrice = (
-  planKey: string,
-  billingCycle: BillingCycle,
-): string | null => {
-  return planKey === "pro" && billingCycle === "monthly"
-    ? Deno.env.get("STRIPE_PRICE_DEFAULT") ?? null
-    : null;
-};
-
 const buildDbCheckoutPlan = ( // skipcq: JS-R1005 - Mirrors Stripe DB fallback precedence and audience checks in one small resolver.
   row: PricingConfigRow | null,
   planKey: string,
@@ -268,19 +248,7 @@ const buildDbCheckoutPlan = ( // skipcq: JS-R1005 - Mirrors Stripe DB fallback p
     : null;
 };
 
-const buildFallbackCheckoutPlan = (
-  planKey: string,
-  billingCycle: BillingCycle,
-): CheckoutPlan | null => {
-  const envPrice = getFirstConfiguredEnvPrice(planKey, billingCycle);
-  return buildCheckoutPlan(
-    envPrice ?? getDefaultStripePrice(planKey, billingCycle),
-    planKey,
-    billingCycle,
-  );
-};
-
-/** Plan keys: active DB pricing_configs.metadata.stripe_price_id, then env STRIPE_PRICE_<UPPERCASE_KEY>. */
+/** Plan prices are authorized only by active pricing_configs rows. */
 export const getCheckoutPlan = async (
   supabase: unknown,
   planKey: string,
@@ -290,8 +258,7 @@ export const getCheckoutPlan = async (
   if (!entitlement) return null;
 
   const row = await queryActivePricingConfig(supabase, planKey);
-  return buildDbCheckoutPlan(row, planKey, billingCycle, entitlement) ??
-    buildFallbackCheckoutPlan(planKey, billingCycle);
+  return buildDbCheckoutPlan(row, planKey, billingCycle, entitlement);
 };
 
 const getAddonStripePriceId = (
