@@ -13,6 +13,7 @@ import { fetchGooglePlacePredictions } from "@/lib/location/googlePlacePredictio
 import {
   filterAddressPredictionsForQuery,
   normalizeGreekLocationText,
+  rankAddressPredictionsForQuery,
 } from "@/lib/location/locationSearchSemantics";
 
 const AUTOCOMPLETE_DEBOUNCE_MS = 300;
@@ -77,28 +78,6 @@ const looksLikeStreetAddress = (query: string) =>
   /\d/.test(query) ||
   /\b(street|st|avenue|ave|road|rd|square|sq|od[oó]s|leof|leoforos|plateia)\b/i.test(query) ||
   /(?:οδός|λεωφόρος|λεωφ\.|πλατεία|πλ\.)/i.test(query);
-
-const rankPredictionsForQuery = (predictions: AddressPrediction[], query: string): AddressPrediction[] => {
-  const numbers = query.match(/\d+/g) ?? [];
-  if (numbers.length === 0) return predictions;
-
-  const score = (prediction: AddressPrediction) => {
-    const visibleAddressText = normalizeGreekLocationText([
-      prediction.addressLine,
-      prediction.title,
-      prediction.value,
-    ].filter(Boolean).join(" "));
-    const fullAddressText = normalizeGreekLocationText(prediction.fullAddress ?? "");
-    if (numbers.some((number) => visibleAddressText.includes(number))) return 0;
-    if (numbers.some((number) => fullAddressText.includes(number))) return 1;
-    return 2;
-  };
-
-  return predictions
-    .map((prediction, index) => ({ prediction, index, score: score(prediction) }))
-    .sort((left, right) => left.score - right.score || left.index - right.index)
-    .map((item) => item.prediction);
-};
 
 const hasNonAsciiText = (value: string) => Array.from(value).some((char) => char.charCodeAt(0) > 127);
 
@@ -228,7 +207,7 @@ export function useAddressAutocomplete(
           shouldCrossCheckAddress || shouldCrossCheckCity
             ? mergeAddressPredictions(fallbackPredictions, googlePredictions)
             : (fallbackPredictions.length > 0 ? fallbackPredictions : googlePredictions);
-        const rankedPredictions = rankPredictionsForQuery(predictions, normalizedQuery).slice(0, LIMIT);
+        const rankedPredictions = rankAddressPredictionsForQuery(predictions, normalizedQuery).slice(0, LIMIT);
         writePredictionCache(cacheKey, rankedPredictions);
         if (requestSeqRef.current === requestSeq && !controller.signal.aborted) {
           setRemotePredictions(rankedPredictions);
@@ -255,7 +234,7 @@ export function useAddressAutocomplete(
       normalizedQuery.length >= MIN_QUERY_LEN && !loading && popularPredictions.length === 0 && remotePredictions.length === 0
         ? [mapTextLocationToAddressPrediction(normalizedQuery, "manual")]
         : [];
-    return rankPredictionsForQuery(
+    return rankAddressPredictionsForQuery(
       mergeAddressPredictions(popularPredictions, remotePredictions, manualPrediction),
       normalizedQuery,
     ).slice(0, LIMIT);

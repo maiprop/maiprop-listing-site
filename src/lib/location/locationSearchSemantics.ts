@@ -225,3 +225,98 @@ export function filterAddressPredictionsForQuery(
     return contextTokens.some((token) => searchable.includes(token));
   });
 }
+
+function predictionSearchSurface(prediction: AddressPrediction): string {
+  return normalizeLocationSearchableText([
+    prediction.title,
+    prediction.value,
+    prediction.subtitle,
+    prediction.addressLine,
+    prediction.fullAddress,
+    prediction.city,
+    prediction.municipality,
+    prediction.region,
+    prediction.postalCode,
+  ].filter(Boolean).join(" "));
+}
+
+function addressNumberScore(prediction: AddressPrediction, numbers: string[]): number {
+  if (numbers.length === 0) return 0;
+  const visibleAddressText = normalizeGreekLocationText([
+    prediction.addressLine,
+    prediction.title,
+    prediction.value,
+  ].filter(Boolean).join(" "));
+  const fullAddressText = normalizeGreekLocationText(prediction.fullAddress ?? "");
+  if (numbers.every((number) => visibleAddressText.includes(number))) return 0;
+  if (numbers.every((number) => fullAddressText.includes(number))) return 1;
+  return 2;
+}
+
+function queryContextScore(prediction: AddressPrediction, query: string): number {
+  const searchable = predictionSearchSurface(prediction);
+  return getListingLocationSearchTokenGroups(query)
+    .filter((group) => !group.every((token) => /^\d+$/.test(token)))
+    .reduce((score, group) => score + (group.some((token) => searchable.includes(token)) ? 1 : 0), 0);
+}
+
+function predictionSpecificity(prediction: AddressPrediction): number {
+  const googleTypes = prediction.googleTypes ?? [];
+  if (prediction.addressLine || googleTypes.some((type) => ["street_address", "premise", "subpremise"].includes(type))) {
+    return 3;
+  }
+  if (googleTypes.includes("route")) return 2;
+  if (prediction.city || prediction.municipality || googleTypes.some((type) => [
+    "locality",
+    "postal_town",
+    "administrative_area_level_2",
+    "administrative_area_level_3",
+  ].includes(type))) {
+    return 1;
+  }
+  return 0;
+}
+
+export function rankAddressPredictionsForQuery(
+  predictions: AddressPrediction[],
+  query: string,
+): AddressPrediction[] {
+  const numbers = query.match(/\d+/g) ?? [];
+  return predictions
+    .map((prediction, index) => ({
+      prediction,
+      index,
+      numberScore: addressNumberScore(prediction, numbers),
+      contextScore: queryContextScore(prediction, query),
+      specificity: predictionSpecificity(prediction),
+    }))
+    .sort((left, right) =>
+      left.numberScore - right.numberScore ||
+      right.contextScore - left.contextScore ||
+      right.specificity - left.specificity ||
+      left.index - right.index)
+    .map((item) => item.prediction);
+}
+
+export function getListingLocationRadiusM(prediction: AddressPrediction): number | undefined {
+  if (isBroadAdministrativePrediction(prediction)) return undefined;
+  if (!prediction.latitude?.trim() || !prediction.longitude?.trim()) return undefined;
+
+  const googleTypes = prediction.googleTypes ?? [];
+  const hasStreetAddress =
+    Boolean(prediction.addressLine?.trim()) ||
+    googleTypes.some((type) => ["street_address", "premise", "subpremise", "route"].includes(type));
+  if (hasStreetAddress) return 750;
+
+  const hasLocality =
+    Boolean(prediction.city?.trim() || prediction.municipality?.trim()) ||
+    googleTypes.some((type) => [
+      "locality",
+      "postal_town",
+      "administrative_area_level_2",
+      "administrative_area_level_3",
+    ].includes(type));
+  if (hasLocality) return 5000;
+
+  return 1500;
+}

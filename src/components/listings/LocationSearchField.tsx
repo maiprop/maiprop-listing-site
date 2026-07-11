@@ -4,7 +4,10 @@ import { Loader2, MapPin, Search, X } from "lucide-react";
 import { useAddressAutocomplete } from "@/hooks/useAddressAutocomplete";
 import { GooglePlacesAttribution } from "@/components/location/GooglePlacesAttribution";
 import { formatAddressPrediction, type AddressPrediction } from "@/lib/location/addressFormat";
-import { getListingLocationSearchValue } from "@/lib/location/locationSearchSemantics";
+import {
+  getListingLocationRadiusM,
+  getListingLocationSearchValue,
+} from "@/lib/location/locationSearchSemantics";
 
 const TYPED_LOCATION_COMMIT_DELAY_MS = 600;
 const PENDING_ENTER_PROVIDER_GRACE_MS = 700;
@@ -104,7 +107,7 @@ export function LocationSearchField({
       value: filterValue,
       latitude: selection.latitude,
       longitude: selection.longitude,
-      radiusM: selection.latitude && selection.longitude ? 750 : undefined,
+      radiusM: getListingLocationRadiusM(selection),
       provider: selection.provider,
       placeId: selection.placeId,
     });
