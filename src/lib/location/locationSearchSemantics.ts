@@ -311,15 +311,5 @@ export function getListingLocationRadiusM(prediction: AddressPrediction): number
   const hasStreetAddress = hasExactStreetAddress && Boolean(addressLine || prediction.fullAddress?.trim());
   if (hasStreetAddress) return 750;
 
-  const hasLocality =
-    Boolean(prediction.city?.trim() || prediction.municipality?.trim()) ||
-    googleTypes.some((type) => [
-      "locality",
-      "postal_town",
-      "administrative_area_level_2",
-      "administrative_area_level_3",
-    ].includes(type));
-  if (hasLocality) return 5000;
-
-  return 1500;
+  return 5000;
 }
