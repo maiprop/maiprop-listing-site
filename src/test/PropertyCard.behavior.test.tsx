@@ -124,6 +124,17 @@ describe("PropertyCard behavior", () => {
     });
   });
 
+  it("uses a link, rather than a nested button, for the open-house detail CTA", async () => {
+    const { PropertyCard } = await import("@/components/PropertyCard");
+    renderWithProviders(
+      <PropertyCard property={baseProperty({ listingType: "open_house" })} />,
+    );
+
+    const detailLink = screen.getByText("propertyCard.actions.viewOpenHouse").closest('a[href="/open-house/p1"]');
+    expect(detailLink).toBeTruthy();
+    expect(detailLink?.querySelector("button")).toBeNull();
+  });
+
   it("reports signed-in listings and uses the firesale entity type", async () => {
     authMock.mockReturnValue({ user: { id: "reporter-1" }, profile: null, loading: false });
     const { PropertyCard } = await import("@/components/PropertyCard");

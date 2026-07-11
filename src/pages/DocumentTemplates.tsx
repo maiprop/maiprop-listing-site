@@ -79,7 +79,7 @@ export default function DocumentTemplates() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar forceScrolled />
-      <div className="pt-16">
+      <main id="main-content" className="pt-16">
         {/* Hero header */}
         <section className="py-12 border-b border-border bg-muted/30">
           <div className="container max-w-5xl">
@@ -201,7 +201,7 @@ export default function DocumentTemplates() {
             <strong className="text-foreground">Disclaimer:</strong> These templates are provided for informational purposes only and do not constitute legal advice. Greek property law is complex and jurisdiction-specific. Always engage a licensed Greek lawyer (δικηγόρος) and notary (συμβολαιογράφος) before signing any property transaction documents. maiProp accepts no liability for use of these templates without professional legal review.
           </div>
         </div>
-      </div>
+      </main>
 
       {/* Preview modal */}
       {previewTemplate && (

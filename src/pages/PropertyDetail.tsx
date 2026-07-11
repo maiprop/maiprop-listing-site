@@ -46,6 +46,7 @@ import { PropertyTitleSection } from "@/components/property/PropertyTitleSection
 import { PropertyDetailsAndEnergy } from "@/components/property/PropertyDetailsAndEnergy";
 import { PropertyDescriptionSection } from "@/components/property/PropertyDescriptionSection";
 import { PropertyValuationLockedCard } from "@/components/property/PropertyValuationLockedCard";
+import { DeferredDetailPanel } from "@/components/DeferredDetailPanel";
 import { usePropertyAIInsights } from "@/hooks/usePropertyAIInsights";
 import { shouldUseNewBuildRoute } from "@/lib/listingRoutes";
 import { listingReportSchema, parseMutationInput } from "@/lib/mutationSchemas";
@@ -158,9 +159,9 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
-        <div className="flex items-center justify-center pt-32">
+        <main id="main-content" className="flex items-center justify-center pt-32">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        </div>
+        </main>
       </div>);
 
   }
@@ -169,12 +170,12 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
-        <div className="container pt-32 text-center">
+        <main id="main-content" className="container pt-32 text-center">
           <p className="text-muted-foreground">
             {isError ? t("property.errorLoad") : t("property.notAvailable")}
           </p>
           <Button className="mt-4" onClick={() => navigate("/listings")}>{t("property.backToListings")}</Button>
-        </div>
+        </main>
         <Footer />
       </div>);
 
@@ -410,7 +411,10 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
 
               {/* ── Website Link (distinctive section) ── */}
               {/* ── Mini map ── */}
-              <div className="rounded-2xl overflow-hidden">
+              <DeferredDetailPanel
+                className="rounded-2xl overflow-hidden"
+                placeholder={<div aria-hidden="true" className="h-96 rounded-2xl bg-muted" />}
+              >
                 <Suspense fallback={<div className="h-96 bg-muted animate-pulse rounded-2xl" />}>
                   <PropertyMiniMap
                     latitude={db?.latitude}
@@ -420,21 +424,23 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
                     title={title}
                     onWalkScoreChange={setWalkScore} />
                 </Suspense>
-              </div>
+              </DeferredDetailPanel>
 
               {/* ── Neighbourhood Report — sign-in only ── */}
-              <Suspense fallback={<div className="h-64 bg-muted animate-pulse rounded-lg" />}>
-                <NeighbourhoodReport
-                  city={city}
-                  address={address}
-                  region={db?.region}
-                  municipality={db?.region}
-                  propertyType={propertyType}
-                  lat={db?.latitude ? Number(db.latitude) : undefined}
-                  lng={db?.longitude ? Number(db.longitude) : undefined}
-                  listingId={id ?? undefined}
-                  isPro={isPro} />
-              </Suspense>
+              <DeferredDetailPanel placeholder={<div aria-hidden="true" className="h-64 rounded-lg bg-muted" />}>
+                <Suspense fallback={<div className="h-64 bg-muted animate-pulse rounded-lg" />}>
+                  <NeighbourhoodReport
+                    city={city}
+                    address={address}
+                    region={db?.region}
+                    municipality={db?.region}
+                    propertyType={propertyType}
+                    lat={db?.latitude ? Number(db.latitude) : undefined}
+                    lng={db?.longitude ? Number(db.longitude) : undefined}
+                    listingId={id ?? undefined}
+                    isPro={isPro} />
+                </Suspense>
+              </DeferredDetailPanel>
 
             </div>
 

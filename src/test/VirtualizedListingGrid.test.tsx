@@ -2,6 +2,7 @@ import { act, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { vi } from "vitest";
 import { VirtualizedListingGrid } from "@/components/listings/VirtualizedListingGrid";
+import { getAutoListingGridColumns } from "@/lib/virtualizedGrid";
 import { renderWithProviders } from "@/test/utils";
 
 type ListingGridTestItem = {
@@ -31,6 +32,11 @@ const mockElementClientWidth = (width: number) => {
 };
 
 describe("VirtualizedListingGrid", () => {
+  it("keeps listing cards single-column until 480px", () => {
+    expect(getAutoListingGridColumns(479)).toBe(1);
+    expect(getAutoListingGridColumns(480)).toBe(2);
+  });
+
   it("renders nothing for an empty item set", () => {
     renderWithProviders(
       <VirtualizedListingGrid<ListingGridTestItem>

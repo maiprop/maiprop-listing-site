@@ -726,7 +726,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
             );
           })() : viewMode === "grid" ? (
             isLoading ? (
-              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 min-[700px]:grid-cols-3 min-[960px]:grid-cols-4 min-[1180px]:grid-cols-5 min-[1536px]:grid-cols-6 gap-3 sm:gap-4">
+              <div className="grid grid-cols-1 min-[480px]:grid-cols-2 min-[700px]:grid-cols-3 min-[960px]:grid-cols-4 min-[1180px]:grid-cols-5 min-[1536px]:grid-cols-6 gap-3 sm:gap-4">
                 {GRID_LOADING_SKELETON_KEYS.map((key) => <PropertyCardSkeleton key={key} />)}
               </div>
             ) : isError ? (
@@ -757,7 +757,7 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                 {filtered.length > 0 && (
                   <VirtualizedListingGrid
                     items={filtered}
-                    className="grid grid-cols-1 min-[420px]:grid-cols-2 min-[700px]:grid-cols-3 min-[960px]:grid-cols-4 min-[1180px]:grid-cols-5 min-[1536px]:grid-cols-6 gap-3 sm:gap-4"
+                    className="grid grid-cols-1 min-[480px]:grid-cols-2 min-[700px]:grid-cols-3 min-[960px]:grid-cols-4 min-[1180px]:grid-cols-5 min-[1536px]:grid-cols-6 gap-3 sm:gap-4"
                     gap={16}
                     estimateItemHeight={GRID_ESTIMATED_ROW_HEIGHT}
                     renderItem={renderListingCard}
@@ -772,12 +772,12 @@ export default function Listings() { // skipcq: JS-R1005, JS-W1044 - Listings co
                  * skeletons so the user sees progress while the sentinel
                  * keeps fetching pages. */}
                 {filtered.length === 0 && hasNextPage && (
-                  <div className="grid grid-cols-1 min-[420px]:grid-cols-2 min-[700px]:grid-cols-3 min-[960px]:grid-cols-4 min-[1180px]:grid-cols-5 min-[1536px]:grid-cols-6 gap-3 sm:gap-4">
+                  <div className="grid grid-cols-1 min-[480px]:grid-cols-2 min-[700px]:grid-cols-3 min-[960px]:grid-cols-4 min-[1180px]:grid-cols-5 min-[1536px]:grid-cols-6 gap-3 sm:gap-4">
                     {SEARCHING_SKELETON_KEYS.map((key) => <PropertyCardSkeleton key={key} />)}
                   </div>
                 )}
                 {isFetchingNextPage && filtered.length > 0 && (
-                  <div className="grid grid-cols-1 min-[420px]:grid-cols-2 min-[700px]:grid-cols-3 min-[960px]:grid-cols-4 min-[1180px]:grid-cols-5 min-[1536px]:grid-cols-6 gap-3 sm:gap-4 mt-3 sm:mt-4">
+                  <div className="grid grid-cols-1 min-[480px]:grid-cols-2 min-[700px]:grid-cols-3 min-[960px]:grid-cols-4 min-[1180px]:grid-cols-5 min-[1536px]:grid-cols-6 gap-3 sm:gap-4 mt-3 sm:mt-4">
                     {MORE_LOADING_SKELETON_KEYS.map((key) => <PropertyCardSkeleton key={key} />)}
                   </div>
                 )}

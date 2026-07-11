@@ -28,7 +28,7 @@ export function PageLayout({ children, className, noFooter = false }: PageLayout
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
-      <main className={`flex-1${className ? ` ${className}` : ""}`}>
+      <main id="main-content" className={`flex-1${className ? ` ${className}` : ""}`}>
         {children}
       </main>
       {!noFooter && <Footer />}
