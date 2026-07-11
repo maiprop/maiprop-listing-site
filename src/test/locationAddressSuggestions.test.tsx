@@ -400,6 +400,38 @@ describe("location address suggestions", () => {
     expect(onChange).toHaveBeenLastCalledWith("Ermou 12 Athens");
   });
 
+  it("commits typed listings addresses even when suggestion providers stay pending", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise(() => undefined)));
+    const onChange = vi.fn();
+
+    render(
+      <LocationSearchField
+        value=""
+        onChange={onChange}
+        placeholder="City, area, address..."
+        ariaLabel="Search by city or area"
+      />,
+    );
+
+    const input = screen.getByLabelText("Search by city or area");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "Kalimnou 27" } });
+
+    expect(input).toHaveValue("Kalimnou 27");
+    expect(onChange).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(450);
+    });
+    expect(onChange).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1400);
+    });
+
+    expect(onChange).toHaveBeenLastCalledWith("Kalimnou 27");
+  });
+
   it("uses a selected listings address suggestion's address line for the location filter", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify([STRUCTURED_ADDRESS_SUGGESTION])),

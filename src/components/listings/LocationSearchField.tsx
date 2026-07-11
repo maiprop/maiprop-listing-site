@@ -8,6 +8,7 @@ import { getListingLocationSearchValue } from "@/lib/location/locationSearchSema
 
 const TYPED_LOCATION_COMMIT_DELAY_MS = 600;
 const PENDING_ENTER_PROVIDER_GRACE_MS = 700;
+const PASSIVE_PROVIDER_GRACE_MS = TYPED_LOCATION_COMMIT_DELAY_MS + PENDING_ENTER_PROVIDER_GRACE_MS;
 const HAS_STREET_NUMBER_RE = /\d/;
 const LOCATION_WORD_RE = /\p{L}+/gu;
 
@@ -160,7 +161,16 @@ export function LocationSearchField({
     if (!committedValue || committedValue === value.trim() || selectedDraftRef.current === committedValue) {
       return undefined;
     }
-    if (loading) return undefined;
+    if (loading) {
+      commitTimerRef.current = window.setTimeout(() => {
+        commitManualSearch({
+          close: false,
+          preferSuggestion: false,
+        });
+      }, PASSIVE_PROVIDER_GRACE_MS);
+
+      return () => cancelPendingCommit();
+    }
 
     commitTimerRef.current = window.setTimeout(() => {
       commitManualSearch({
