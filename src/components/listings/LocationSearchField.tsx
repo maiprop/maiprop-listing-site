@@ -5,6 +5,7 @@ import { useAddressAutocomplete } from "@/hooks/useAddressAutocomplete";
 import { GooglePlacesAttribution } from "@/components/location/GooglePlacesAttribution";
 import { formatAddressPrediction, type AddressPrediction } from "@/lib/location/addressFormat";
 import {
+  filterAddressPredictionsForQuery,
   getListingLocationRadiusM,
   getListingLocationSearchValue,
   rankAddressPredictionsForQuery,
@@ -62,7 +63,7 @@ export function LocationSearchField({
     includePopular: true,
   });
   const rankedPredictions = useMemo(
-    () => rankAddressPredictionsForQuery(predictions, query),
+    () => rankAddressPredictionsForQuery(filterAddressPredictionsForQuery(predictions, query), query),
     [predictions, query],
   );
 
@@ -300,8 +301,8 @@ export function LocationSearchField({
             }, PENDING_ENTER_PROVIDER_GRACE_MS);
             return;
           }
-          if (predictions[0]) {
-            void selectSuggestion(predictions[0]);
+          if (rankedPredictions[0]) {
+            void selectSuggestion(rankedPredictions[0]);
             return;
           }
           commitManualSearch({ close: true });
