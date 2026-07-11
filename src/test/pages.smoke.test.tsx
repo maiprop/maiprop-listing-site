@@ -9,6 +9,7 @@ import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import React, { Suspense } from "react";
 import { Route, Routes } from "react-router-dom";
 import { renderWithProviders } from "@/test/utils";
+import NotFound from "@/pages/NotFound";
 
 vi.setConfig({ testTimeout: 15000 });
 
@@ -750,7 +751,6 @@ describe("Page smoke tests", () => {
   // ── Static / simple pages ───────────────────────────────────────────────────
 
   it("NotFound page renders without throwing", async () => {
-    const { default: NotFound } = await import("@/pages/NotFound");
     expect(() => renderWithProviders(<NotFound />)).not.toThrow();
   });
 

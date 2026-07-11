@@ -170,9 +170,11 @@ describe("public listings API fallback behavior", () => {
     expect(listingBuilder.eq).toHaveBeenCalledWith("id", "listing-1");
     expect(listingBuilder.eq).toHaveBeenCalledWith("status", "active");
     expect(listingBuilder.eq).toHaveBeenCalledWith("is_off_market", false);
+    expect(profileBuilder.select).toHaveBeenCalledWith("user_id, display_name, avatar_url");
     expect(result.current.data).toMatchObject({
       id: "listing-1",
       profiles: { display_name: "Fallback Owner" },
+      ownerParticipantType: null,
     });
   });
 });

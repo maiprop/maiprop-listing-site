@@ -130,7 +130,7 @@ async function fetchSimilarListingsFallback({
   if (ownerIds.length > 0) {
     const { data: profiles = [] } = await withAbortSignal(supabase
       .from("profiles_public")
-      .select("user_id, display_name, avatar_url, role")
+      .select("user_id, display_name, avatar_url")
       .in("user_id", ownerIds), signal);
     profileMap = new Map((profiles ?? []).map((profile) => [profile.user_id, profile as Record<string, unknown>]));
   }

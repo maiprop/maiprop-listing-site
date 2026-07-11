@@ -682,7 +682,9 @@ const normalizeListingWithJoins = (listing: Database["public"]["Tables"]["listin
     listing_images: listing.listing_images ?? [],
     profiles,
     ownerIsPro: listing.ownerIsPro ?? false,
-    ownerParticipantType: listing.ownerParticipantType ?? getOwnerParticipantType(profiles),
+    ownerParticipantType: listing.ownerParticipantType !== undefined
+      ? listing.ownerParticipantType
+      : getOwnerParticipantType(profiles),
   } as ListingWithJoins;
 };
 
@@ -696,19 +698,29 @@ const EMPTY_OWNER_CONTEXT: ListingOwnerContext = {
 const fetchListingOwnerContext = async (
   ownerId: string | null,
   signal?: AbortSignal,
+  includeRole = true,
 ): Promise<ListingOwnerContext> => { // skipcq: JS-R1005 - Owner context fetch handles nullable owner ids and fallback profile state.
   if (!ownerId) return EMPTY_OWNER_CONTEXT;
 
   try {
-    const { data: profilePublic } = await withAbortSignal(supabase
-      .from("profiles_public")
-      .select("user_id, display_name, avatar_url, role")
-      .eq("user_id", ownerId)
-      .maybeSingle(), signal);
-    const profiles = profilePublic ?? null;
+    const query = includeRole
+      ? supabase
+          .from("profiles_public")
+          .select("user_id, display_name, avatar_url, role")
+          .eq("user_id", ownerId)
+          .maybeSingle()
+      : supabase
+          .from("profiles_public")
+          .select("user_id, display_name, avatar_url")
+          .eq("user_id", ownerId)
+          .maybeSingle();
+    const { data: profilePublic } = await withAbortSignal(query, signal);
+    const profiles = (profilePublic ?? null) as ListingWithJoins["profiles"];
     return {
       profiles,
-      ownerParticipantType: profiles ? getOwnerParticipantType(profiles as { role?: string; bio?: string | null }) : null,
+      ownerParticipantType: includeRole && profiles
+        ? getOwnerParticipantType(profiles as { role?: string; bio?: string | null })
+        : null,
     };
   } catch (_err: unknown) {
     return EMPTY_OWNER_CONTEXT;
@@ -733,7 +745,7 @@ const fetchPublicListingFromSupabase = async (id: string, signal?: AbortSignal):
   if (!data) return null;
 
   const row = data as unknown as Database["public"]["Tables"]["listings"]["Row"] & Partial<ListingWithJoins>;
-  const { profiles, ownerParticipantType } = await fetchListingOwnerContext(row.owner_id, signal);
+  const { profiles, ownerParticipantType } = await fetchListingOwnerContext(row.owner_id, signal, false);
   return normalizeListingWithJoins({ ...row, profiles, ownerParticipantType });
 };
 
