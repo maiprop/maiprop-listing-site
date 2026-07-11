@@ -90,14 +90,14 @@ export type CriticalDeletionStage =
 export type DeletionJobStage = "requested" | CriticalDeletionStage | "completed";
 
 export type AccountDeletionOperations = {
-  beginAttempt: (userId: string) => Promise<void>;
-  persistStage: (userId: string, stage: CriticalDeletionStage) => Promise<void>;
+  beginAttempt: (userId: string) => Promise<string>;
+  persistStage: (userId: string, attemptId: string, stage: CriticalDeletionStage) => Promise<void>;
   markFailed: (
     userId: string,
+    attemptId: string,
     stage: CriticalDeletionStage,
     errorCode: string,
   ) => Promise<void>;
-  markCompleted: (userId: string) => Promise<void>;
   notifyAffectedParties: (userId: string) => Promise<void>;
   deleteOwnedListings: (userId: string) => Promise<void>;
   cancelSubscriptions: (userId: string) => Promise<void>;
@@ -141,11 +141,12 @@ const CRITICAL_STAGES: ReadonlyArray<{
 async function recordDeletionFailure(
   operations: AccountDeletionOperations,
   userId: string,
+  attemptId: string,
   stage: CriticalDeletionStage,
   errorCode: string,
 ): Promise<void> {
   try {
-    await operations.markFailed(userId, stage, errorCode);
+    await operations.markFailed(userId, attemptId, stage, errorCode);
   } catch (ledgerError: unknown) {
     operations.onLedgerError?.("mark_failed", ledgerError);
   }
@@ -155,10 +156,15 @@ export async function runAccountDeletion(
   userId: string,
   operations: AccountDeletionOperations,
 ): Promise<void> {
+  let attemptId: string;
   try {
-    await operations.beginAttempt(userId);
+    attemptId = await operations.beginAttempt(userId);
   } catch (error: unknown) {
-    throw new AccountDeletionFailure("requested", "job_initialization_failed", error);
+    const message = error instanceof Error ? error.message : String(error);
+    const errorCode = message.includes("account_deletion_already_in_progress")
+      ? "account_deletion_already_in_progress"
+      : "job_initialization_failed";
+    throw new AccountDeletionFailure("requested", errorCode, error);
   }
 
   try {
@@ -169,11 +175,12 @@ export async function runAccountDeletion(
 
   for (const { stage, errorCode, operation } of CRITICAL_STAGES) {
     try {
-      await operations.persistStage(userId, stage);
+      await operations.persistStage(userId, attemptId, stage);
     } catch (error: unknown) {
       await recordDeletionFailure(
         operations,
         userId,
+        attemptId,
         stage,
         "job_stage_persistence_failed",
       );
@@ -183,42 +190,27 @@ export async function runAccountDeletion(
     try {
       await operations[operation](userId);
     } catch (error: unknown) {
-      await recordDeletionFailure(operations, userId, stage, errorCode);
+      await recordDeletionFailure(operations, userId, attemptId, stage, errorCode);
       throw new AccountDeletionFailure(stage, errorCode, error);
     }
   }
-
-  let completionError: unknown;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      await operations.markCompleted(userId);
-      return;
-    } catch (error: unknown) {
-      completionError = error;
-    }
-  }
-
-  await recordDeletionFailure(
-    operations,
-    userId,
-    "auth",
-    "job_completion_failed",
-  );
-  throw new AccountDeletionFailure("auth", "job_completion_failed", completionError);
 }
 
 export function deletionFailureResponse(
   stage: DeletionJobStage,
-  _errorCode: string,
+  errorCode: string,
   corsHeaders: Record<string, string>,
 ): Response {
+  const alreadyRunning = errorCode === "account_deletion_already_in_progress";
   return new Response(JSON.stringify({
-    error: "account_deletion_incomplete",
-    message: "Account deletion was not completed. Retry the request while signed in.",
+    error: alreadyRunning ? "account_deletion_already_in_progress" : "account_deletion_incomplete",
+    message: alreadyRunning
+      ? "Account deletion is already in progress."
+      : "Account deletion was not completed. Retry the request while signed in.",
     stage,
-    retryable: true,
+    retryable: !alreadyRunning,
   }), {
-    status: 500,
+    status: alreadyRunning ? 409 : 500,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
@@ -384,77 +376,54 @@ type JobLedgerClient = {
   rpc: (
     functionName: string,
     params: Record<string, unknown>,
-  ) => PromiseLike<{ error: DbError }>;
-  from: (table: string) => {
-    update: (values: Record<string, unknown>) => {
-      eq: (column: string, value: unknown) => PromiseLike<{ error: DbError }>;
-    };
-  };
+  ) => PromiseLike<{ data?: unknown; error: DbError }>;
 };
 
 async function beginDeletionAttempt(
   supabase: JobLedgerClient,
   userId: string,
-): Promise<void> {
-  const { error } = await supabase.rpc("begin_account_deletion_job", {
+): Promise<string> {
+  const { data, error } = await supabase.rpc("begin_account_deletion_job", {
     p_user_id: userId,
   });
   if (error) {
-    throw new Error(`job_initialization_failed: ${error.message ?? error.code ?? "unknown"}`);
+    throw new Error(error.message ?? error.code ?? "job_initialization_failed");
   }
-}
-
-async function updateDeletionJob(
-  supabase: JobLedgerClient,
-  userId: string,
-  values: Record<string, unknown>,
-): Promise<void> {
-  const { error } = await supabase
-    .from("account_deletion_jobs")
-    .update(values)
-    .eq("user_id", userId);
-  if (error) {
-    throw new Error(`job_persistence_failed: ${error.message ?? error.code ?? "unknown"}`);
-  }
+  if (typeof data !== "string" || !data) throw new Error("job_initialization_failed: missing attempt id");
+  return data;
 }
 
 async function persistDeletionStage(
   supabase: JobLedgerClient,
   userId: string,
+  attemptId: string,
   stage: CriticalDeletionStage,
 ): Promise<void> {
-  await updateDeletionJob(supabase, userId, {
-    stage,
-    status: "in_progress",
-    last_error: null,
-    completed_at: null,
+  const { error } = await supabase.rpc("set_account_deletion_job_stage", {
+    p_user_id: userId,
+    p_attempt_id: attemptId,
+    p_stage: stage,
+    p_status: "in_progress",
+    p_last_error: null,
   });
+  if (error) throw new Error(`job_persistence_failed: ${error.message ?? error.code ?? "unknown"}`);
 }
 
 async function markDeletionFailed(
   supabase: JobLedgerClient,
   userId: string,
+  attemptId: string,
   stage: CriticalDeletionStage,
   errorCode: string,
 ): Promise<void> {
-  await updateDeletionJob(supabase, userId, {
-    stage,
-    status: "failed",
-    last_error: errorCode,
-    completed_at: null,
+  const { error } = await supabase.rpc("set_account_deletion_job_stage", {
+    p_user_id: userId,
+    p_attempt_id: attemptId,
+    p_stage: stage,
+    p_status: "failed",
+    p_last_error: errorCode,
   });
-}
-
-async function markDeletionCompleted(
-  supabase: JobLedgerClient,
-  userId: string,
-): Promise<void> {
-  await updateDeletionJob(supabase, userId, {
-    stage: "completed",
-    status: "completed",
-    last_error: null,
-    completed_at: new Date().toISOString(),
-  });
+  if (error) throw new Error(`job_persistence_failed: ${error.message ?? error.code ?? "unknown"}`);
 }
 
 export async function removeOwnedStorage(
@@ -542,10 +511,9 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - Account deletion coordinates c
 
     await runAccountDeletion(user.id, {
       beginAttempt: (userId) => beginDeletionAttempt(jobLedger, userId),
-      persistStage: (userId, stage) => persistDeletionStage(jobLedger, userId, stage),
-      markFailed: (userId, stage, errorCode) =>
-        markDeletionFailed(jobLedger, userId, stage, errorCode),
-      markCompleted: (userId) => markDeletionCompleted(jobLedger, userId),
+      persistStage: (userId, attemptId, stage) => persistDeletionStage(jobLedger, userId, attemptId, stage),
+      markFailed: (userId, attemptId, stage, errorCode) =>
+        markDeletionFailed(jobLedger, userId, attemptId, stage, errorCode),
       notifyAffectedParties: (userId) =>
         notifyAccountDeletionAffectedParties(
           supabase as unknown as DeletionNotificationClient,

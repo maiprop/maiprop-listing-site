@@ -49,19 +49,17 @@ function makeDeletionOperations(failures: Partial<Record<DeletionStage, number>>
     operations: {
       beginAttempt: () => {
         calls.push("begin");
-        return Promise.resolve();
+        return Promise.resolve("attempt-1");
       },
-      persistStage: (_userId: string, stage: DeletionStage) => {
+      persistStage: (_userId: string, attemptId: string, stage: DeletionStage) => {
+        assertEquals(attemptId, "attempt-1");
         calls.push(`stage:${stage}`);
         return Promise.resolve();
       },
-      markFailed: (_userId: string, stage: string, errorCode: string) => {
+      markFailed: (_userId: string, attemptId: string, stage: string, errorCode: string) => {
+        assertEquals(attemptId, "attempt-1");
         calls.push(`failed:${stage}`);
         failedJobs.push({ stage, errorCode });
-        return Promise.resolve();
-      },
-      markCompleted: () => {
-        calls.push("completed");
         return Promise.resolve();
       },
       notifyAffectedParties: () => {
@@ -198,11 +196,10 @@ Deno.test("successful deletion persists every stage before work and completes af
     "run:firesale_photos",
     "stage:auth",
     "run:auth",
-    "completed",
   ]);
 });
 
-Deno.test("a failed attempt can retry from the beginning without repeating Auth deletion", async () => {
+Deno.test("a failed attempt can retry from the beginning and rerun critical cleanup safely", async () => {
   const fixture = makeDeletionOperations({ storage: 1 });
 
   await assertRejects(
@@ -215,7 +212,6 @@ Deno.test("a failed attempt can retry from the beginning without repeating Auth 
   assertEquals(fixture.calls.filter((call) => call === "run:subscriptions").length, 2);
   assertEquals(fixture.calls.filter((call) => call === "run:storage").length, 2);
   assertEquals(fixture.calls.filter((call) => call === "run:auth").length, 1);
-  assertEquals(fixture.calls.filter((call) => call === "completed").length, 1);
 });
 
 Deno.test("critical deletion failures return a useful retryable non-2xx response", async () => {
@@ -231,6 +227,22 @@ Deno.test("critical deletion failures return a useful retryable non-2xx response
     message: "Account deletion was not completed. Retry the request while signed in.",
     stage: "storage",
     retryable: true,
+  });
+});
+
+Deno.test("concurrent deletion attempts return a non-retryable conflict", async () => {
+  const response = deletionFailureResponse(
+    "requested",
+    "account_deletion_already_in_progress",
+    { "Access-Control-Allow-Origin": "https://maiprop.co" },
+  );
+
+  assertEquals(response.status, 409);
+  assertEquals(await response.json(), {
+    error: "account_deletion_already_in_progress",
+    message: "Account deletion is already in progress.",
+    stage: "requested",
+    retryable: false,
   });
 });
 

@@ -306,9 +306,11 @@ describe("critical business invariants", () => {
     expect(sql).not.toMatch(/REFERENCES\s+(?:auth\.users|public\.profiles)/i);
     expect(sql).toContain("stage text NOT NULL");
     expect(sql).toContain("status text NOT NULL");
+    expect(sql).toContain("attempt_id uuid NOT NULL");
     expect(sql).toContain("attempts integer NOT NULL");
     expect(sql).toContain("last_error text");
     expect(sql).toContain("requested_at timestamptz NOT NULL");
+    expect(sql).toContain("leased_until timestamptz NOT NULL");
     expect(sql).toContain("completed_at timestamptz");
     expect(sql).toContain("ALTER TABLE public.account_deletion_jobs ENABLE ROW LEVEL SECURITY");
     expect(sql).toContain("GRANT SELECT ON public.account_deletion_jobs TO authenticated");
@@ -319,12 +321,23 @@ describe("critical business invariants", () => {
     expect(sql).toContain("TO authenticated");
     expect(sql).toContain("(SELECT auth.uid()) = user_id");
     expect(sql).toContain("attempts = public.account_deletion_jobs.attempts + 1");
+    expect(sql).toContain("WHERE public.account_deletion_jobs.status <> 'in_progress'");
+    expect(sql).toContain("OR public.account_deletion_jobs.leased_until < now()");
     expect(sql).toContain(
       "REVOKE ALL ON FUNCTION public.begin_account_deletion_job(uuid) FROM PUBLIC, anon, authenticated",
     );
     expect(sql).toContain(
       "GRANT EXECUTE ON FUNCTION public.begin_account_deletion_job(uuid) TO service_role",
     );
+    expect(sql).toContain("CREATE OR REPLACE FUNCTION public.set_account_deletion_job_stage");
+    expect(sql).toContain("AND attempt_id = p_attempt_id");
+    expect(sql).toContain("CREATE OR REPLACE FUNCTION public.complete_account_deletion_from_auth_delete()");
+    expect(sql).toContain("AFTER DELETE ON auth.users");
+    expect(sql).toContain("CREATE OR REPLACE FUNCTION public.is_account_deletion_active(p_user_id uuid)");
+    expect(sql).toContain("DROP TRIGGER IF EXISTS trg_guard_deleted_account_listing_write ON public.listings");
+    expect(sql).toContain("DROP TRIGGER IF EXISTS trg_guard_deleted_account_storage_write ON storage.objects");
+    expect(sql).toContain("CREATE OR REPLACE FUNCTION public.get_account_deletion_storage_objects(p_user_id uuid)");
+    expect(sql).toContain("GRANT EXECUTE ON FUNCTION public.get_account_deletion_storage_objects(uuid)");
     expect(sql).not.toContain("account_deletion_jobs_update");
     expect(sql).not.toContain("account_deletion_jobs_delete");
   });
