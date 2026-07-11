@@ -89,7 +89,7 @@ describe("ECAS no-upgrade hardening migration", () => {
     );
 
     expect(normalized).toContain("CREATE OR REPLACE FUNCTION public.guard_viewing_status_transitions()");
-    expect(normalized).toContain("v_actor IS NULL OR private.has_platform_admin(v_actor)");
+    expect(normalized).toContain("IF v_actor IS NULL THEN RETURN NEW");
     expect(normalized).toContain("NEW.owner_id IS DISTINCT FROM OLD.owner_id");
     expect(normalized).toContain("NEW.requester_id IS DISTINCT FROM OLD.requester_id");
     expect(normalized).toContain("NEW.listing_id IS DISTINCT FROM OLD.listing_id");
@@ -107,6 +107,7 @@ describe("ECAS no-upgrade hardening migration", () => {
     expect(normalized).toContain("NEW.scheduled_at IS DISTINCT FROM OLD.scheduled_at");
     expect(normalized).toContain("NEW.viewing_type IS DISTINCT FROM OLD.viewing_type");
     expect(normalized).toContain("NEW.video_link IS DISTINCT FROM OLD.video_link");
+    expect(normalized).not.toContain("IF v_actor IS NULL OR private.has_platform_admin(v_actor) THEN RETURN NEW");
 
     expect(insertPolicy).toContain("FOR INSERT TO authenticated");
     expect(insertPolicy).toContain("WITH CHECK (");
@@ -173,7 +174,8 @@ describe("ECAS no-upgrade hardening migration", () => {
       "organization SSO enforcement guard",
     );
 
-    expect(organizationGuard).toContain("v_actor IS NULL OR private.has_platform_admin(v_actor)");
+    expect(organizationGuard).toContain("IF v_actor IS NULL THEN");
+    expect(organizationGuard).not.toContain("private.has_platform_admin(v_actor)");
     expect(organizationGuard).toContain("TG_OP = 'INSERT'");
     expect(organizationGuard).toContain("NEW.plan <> 'free'");
     expect(organizationGuard).toContain("NEW.procurement_status <> 'not_started'");
@@ -187,7 +189,8 @@ describe("ECAS no-upgrade hardening migration", () => {
     );
     expect(organizationGuard).not.toMatch(/NEW\.(?:name|slug|settings)\b/);
 
-    expect(ssoGuard).toContain("v_actor IS NULL OR private.has_platform_admin(v_actor)");
+    expect(ssoGuard).toContain("IF v_actor IS NULL THEN");
+    expect(ssoGuard).not.toContain("private.has_platform_admin(v_actor)");
     expect(ssoGuard).toContain("TG_OP = 'INSERT' AND NEW.sso_required");
     expect(ssoGuard).toContain("NEW.sso_required IS DISTINCT FROM OLD.sso_required");
     expect(normalized).toContain(
@@ -222,6 +225,13 @@ describe("ECAS no-upgrade hardening migration", () => {
     expect(normalized).not.toMatch(
       /GRANT SELECT ON (?:TABLE )?public\.profiles_public TO anon\b/i,
     );
+    expect(normalized).toContain("CREATE OR REPLACE FUNCTION public.get_public_profile_summaries(p_user_ids uuid[])");
+    expect(normalized).toContain("RETURNS TABLE ( user_id uuid, display_name text, avatar_url text, owner_participant_type text )");
+    expect(normalized).toContain("SECURITY DEFINER");
+    expect(normalized).toContain("WHEN profile.is_platform_admin OR profile.role::text IN ('agent', 'developer', 'admin') THEN 'agent'");
+    expect(normalized).toContain("WHEN profile.role::text = 'seller' THEN 'seller'");
+    expect(normalized).toContain("GRANT EXECUTE ON FUNCTION public.get_public_profile_summaries(uuid[]) TO anon, authenticated, service_role");
+    expect(normalized).toContain("coarse agent/seller listing-owner classification without exposing account roles");
   });
 
   it("does not alter MaiProp profile roles, pricing, or entitlement behavior", () => {

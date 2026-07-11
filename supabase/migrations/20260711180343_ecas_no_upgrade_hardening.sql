@@ -180,7 +180,7 @@ AS $$
 DECLARE
   v_actor uuid := (SELECT auth.uid());
 BEGIN
-  IF v_actor IS NULL OR private.has_platform_admin(v_actor) THEN
+  IF v_actor IS NULL THEN
     RETURN NEW;
   END IF;
 
@@ -360,7 +360,7 @@ AS $$
 DECLARE
   v_actor uuid := (SELECT auth.uid());
 BEGIN
-  IF v_actor IS NULL OR private.has_platform_admin(v_actor) THEN
+  IF v_actor IS NULL THEN
     RETURN NEW;
   END IF;
 
@@ -403,7 +403,7 @@ AS $$
 DECLARE
   v_actor uuid := (SELECT auth.uid());
 BEGIN
-  IF v_actor IS NULL OR private.has_platform_admin(v_actor) THEN
+  IF v_actor IS NULL THEN
     RETURN NEW;
   END IF;
 
@@ -440,6 +440,41 @@ GRANT SELECT (user_id, display_name, avatar_url)
   TO anon;
 GRANT SELECT ON TABLE public.profiles_public
   TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.get_public_profile_summaries(p_user_ids uuid[])
+RETURNS TABLE (
+  user_id uuid,
+  display_name text,
+  avatar_url text,
+  owner_participant_type text
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+  SELECT
+    profile.user_id,
+    profile.display_name,
+    profile.avatar_url,
+    CASE
+      WHEN profile.is_platform_admin
+        OR profile.role::text IN ('agent', 'developer', 'admin')
+        THEN 'agent'
+      WHEN profile.role::text = 'seller' THEN 'seller'
+      ELSE NULL
+    END AS owner_participant_type
+  FROM public.profiles AS profile
+  WHERE profile.user_id = ANY(COALESCE(p_user_ids, ARRAY[]::uuid[]));
+$function$;
+
+REVOKE ALL ON FUNCTION public.get_public_profile_summaries(uuid[])
+  FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.get_public_profile_summaries(uuid[])
+  TO anon, authenticated, service_role;
+
+COMMENT ON FUNCTION public.get_public_profile_summaries(uuid[]) IS
+  'Returns public profile display fields plus coarse agent/seller listing-owner classification without exposing account roles.';
 
 -- Fail the migration if any browser-facing privilege or policy invariant drifts.
 

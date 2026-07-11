@@ -421,6 +421,59 @@ export async function supabaseJson<T>(
   }
 }
 
+export async function supabaseRpcJson<T>(
+  env: PublicApiEnv,
+  functionName: string,
+  body: Record<string, unknown>,
+  options: SupabaseFetchOptions = {},
+): Promise<T[]> {
+  const runtime = getSupabaseRuntime(env);
+  if (!runtime) throw new Error("missing-runtime");
+
+  const path = `/rest/v1/rpc/${functionName}`;
+  const url = new URL(path, runtime.url);
+  const retryLimit = transientStatusRetryLimit(options);
+
+  for (let attempt = 0; ; attempt += 1) {
+    let res: Response;
+    try {
+      res = await fetchWithTimeout(url, {
+        method: "POST",
+        headers: {
+          apikey: runtime.key,
+          Authorization: `Bearer ${runtime.key}`,
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      }, supabaseFetchTimeoutMs(options));
+    } catch (error) {
+      if (options.failOnTransient) {
+        throw new SupabaseTransientError("Supabase RPC timed out", path);
+      }
+      warnTransientFetchFailure("RPC", path, error);
+      return [];
+    }
+
+    if (!res.ok) {
+      if (TRANSIENT_UPSTREAM_STATUSES.has(res.status)) {
+        if (attempt < retryLimit) {
+          await sleepMs(transientRetryDelayMs(options));
+          continue;
+        }
+        if (options.failOnTransient) {
+          throw new SupabaseTransientError(`Supabase RPC failed with ${res.status}`, path, res.status);
+        }
+        console.warn(`[public-api] Supabase ${path} transiently unavailable with ${res.status}`);
+        return [];
+      }
+      throw new Error(`Supabase RPC failed with ${res.status}`);
+    }
+
+    return (await res.json()) as T[];
+  }
+}
+
 export async function supabaseCount(
   env: PublicApiEnv,
   path: string,

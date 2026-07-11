@@ -15,6 +15,7 @@ import {
 import { getSupabaseRuntime } from "../../_seo";
 import { publicAuctions } from "./auctions";
 import { publicListingRows } from "./_fixture-content";
+import { fetchPublicProfileSummaries, publicProfileDisplay } from "./_publicProfiles";
 
 type ListingRow = Record<string, unknown> & {
   owner_id?: string | null;
@@ -24,13 +25,6 @@ type ListingRow = Record<string, unknown> & {
   city?: string | null;
   price_per_sqm?: number | string | null;
   created_at?: string | null;
-};
-
-type ProfilePublicRow = {
-  user_id: string;
-  display_name: string | null;
-  avatar_url: string | null;
-  role?: string | null;
 };
 
 const SECTIONS = [
@@ -213,17 +207,6 @@ async function fetchPriceIndex(env: PublicApiEnv) {
   });
 }
 
-async function fetchOwnerProfiles(env: PublicApiEnv, ownerIds: string[]): Promise<Map<string, ProfilePublicRow>> {
-  const uniqueOwnerIds = [...new Set(ownerIds)].filter(Boolean);
-  if (!uniqueOwnerIds.length) return new Map();
-
-  const params = new URLSearchParams();
-  params.set("select", "user_id,display_name,avatar_url,role");
-  params.set("user_id", `in.(${uniqueOwnerIds.join(",")})`);
-  const rows = await supabaseJson<ProfilePublicRow>(env, "/rest/v1/profiles_public", params);
-  return new Map(rows.map((profile) => [profile.user_id, profile]));
-}
-
 async function fetchSection(env: PublicApiEnv, section: (typeof SECTIONS)[number]): Promise<unknown> {
   if (section === "type-counts") {
     const counts = await Promise.all(
@@ -256,10 +239,11 @@ async function fetchSection(env: PublicApiEnv, section: (typeof SECTIONS)[number
     params.set("limit", "12");
     const rows = publicListingRows(await supabaseJson<ListingRow>(env, "/rest/v1/listings", params, { failOnTransient: true }), 4);
     const ownerIds = rows.map((row) => row.owner_id).filter((id): id is string => typeof id === "string");
-    const profiles = await fetchOwnerProfiles(env, ownerIds);
+    const profiles = await fetchPublicProfileSummaries(env, ownerIds);
     return rows.map((row) => ({
       ...row,
-      profiles: row.owner_id ? profiles.get(row.owner_id) ?? null : null,
+      profiles: publicProfileDisplay(row.owner_id ? profiles.get(row.owner_id) : null),
+      ownerParticipantType: row.owner_id ? profiles.get(row.owner_id)?.owner_participant_type ?? null : null,
     }));
   }
 
