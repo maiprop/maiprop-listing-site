@@ -15,7 +15,7 @@ const LOCATION_WORD_RE = /\p{L}+/gu;
 function shouldPreferProviderForTypedLocation(value: string): boolean {
   if (!HAS_STREET_NUMBER_RE.test(value)) return false;
   const locationWords = value.match(LOCATION_WORD_RE) ?? [];
-  return value.includes(",") || locationWords.length >= 3;
+  return locationWords.length >= 1;
 }
 
 export type ListingLocationSelection = {
@@ -119,7 +119,7 @@ export function LocationSearchField({
     if (options.close) cancelPendingEnter();
 
     const preferSuggestion = options.preferSuggestion ?? shouldPreferProviderForTypedLocation(committedValue);
-    if (preferSuggestion && !loading && predictions[0]) {
+    if (preferSuggestion && !loading && predictions[0] && predictions[0].provider !== "manual") {
       void selectSuggestion(predictions[0]);
       return;
     }

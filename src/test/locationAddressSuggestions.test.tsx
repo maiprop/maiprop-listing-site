@@ -983,7 +983,7 @@ describe("location address suggestions", () => {
     expect(input).toHaveValue("Agioi Anargiroi");
   });
 
-  it("auto-resolves typed street searches only when the user includes locality context", async () => {
+  it("auto-resolves typed street-number searches through the first provider suggestion", async () => {
     configMock.googlePlacesEnabled = true;
     mockGoogleLegacyKalimnouAutocompleteFallback();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify([]))));
@@ -1007,7 +1007,7 @@ describe("location address suggestions", () => {
     render(<ControlledLocationSearchField />);
     const input = screen.getByLabelText("Search by city or area");
     fireEvent.focus(input);
-    fireEvent.change(input, { target: { value: "Kalimnou 27 Agioi Anargiroi" } });
+    fireEvent.change(input, { target: { value: "Kalimnou 27" } });
 
     await act(async () => {
       vi.advanceTimersByTime(450);
