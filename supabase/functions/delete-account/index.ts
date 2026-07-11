@@ -32,7 +32,6 @@
  *   professionals, and every other table with a FK to auth.users.
  */
 
-import Stripe from "npm:stripe@22.3.0";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { verifyBearerToken, AuthError } from "../_shared/auth.ts";
@@ -81,7 +80,434 @@ export type DeletionNotification = {
   link?: string;
 };
 
-Deno.serve(async (req) => { // skipcq: JS-R1005 - Account deletion coordinates auth, storage cleanup, DB removal, and error reporting in order.
+export type CriticalDeletionStage =
+  | "listings"
+  | "subscriptions"
+  | "storage"
+  | "firesale_photos"
+  | "auth";
+
+export type DeletionJobStage = "requested" | CriticalDeletionStage | "completed";
+
+export type AccountDeletionOperations = {
+  beginAttempt: (userId: string) => Promise<void>;
+  persistStage: (userId: string, stage: CriticalDeletionStage) => Promise<void>;
+  markFailed: (
+    userId: string,
+    stage: CriticalDeletionStage,
+    errorCode: string,
+  ) => Promise<void>;
+  markCompleted: (userId: string) => Promise<void>;
+  notifyAffectedParties: (userId: string) => Promise<void>;
+  deleteOwnedListings: (userId: string) => Promise<void>;
+  cancelSubscriptions: (userId: string) => Promise<void>;
+  removeOwnedStorage: (userId: string) => Promise<void>;
+  removeFiresalePhotos: (userId: string) => Promise<void>;
+  deleteAuthUser: (userId: string) => Promise<void>;
+  onBestEffortError?: (scope: string, error: unknown) => void;
+  onLedgerError?: (scope: string, error: unknown) => void;
+};
+
+export class AccountDeletionFailure extends Error {
+  constructor(
+    public readonly stage: DeletionJobStage,
+    public readonly errorCode: string,
+    public readonly originalError: unknown,
+  ) {
+    super(errorCode);
+    this.name = "AccountDeletionFailure";
+  }
+}
+
+const CRITICAL_STAGES: ReadonlyArray<{
+  stage: CriticalDeletionStage;
+  errorCode: string;
+  operation: keyof Pick<
+    AccountDeletionOperations,
+    | "deleteOwnedListings"
+    | "cancelSubscriptions"
+    | "removeOwnedStorage"
+    | "removeFiresalePhotos"
+    | "deleteAuthUser"
+  >;
+}> = [
+  { stage: "listings", errorCode: "listings_cleanup_failed", operation: "deleteOwnedListings" },
+  { stage: "subscriptions", errorCode: "subscriptions_cleanup_failed", operation: "cancelSubscriptions" },
+  { stage: "storage", errorCode: "storage_cleanup_failed", operation: "removeOwnedStorage" },
+  { stage: "firesale_photos", errorCode: "firesale_photos_cleanup_failed", operation: "removeFiresalePhotos" },
+  { stage: "auth", errorCode: "auth_deletion_failed", operation: "deleteAuthUser" },
+];
+
+async function recordDeletionFailure(
+  operations: AccountDeletionOperations,
+  userId: string,
+  stage: CriticalDeletionStage,
+  errorCode: string,
+): Promise<void> {
+  try {
+    await operations.markFailed(userId, stage, errorCode);
+  } catch (ledgerError: unknown) {
+    operations.onLedgerError?.("mark_failed", ledgerError);
+  }
+}
+
+export async function runAccountDeletion(
+  userId: string,
+  operations: AccountDeletionOperations,
+): Promise<void> {
+  try {
+    await operations.beginAttempt(userId);
+  } catch (error: unknown) {
+    throw new AccountDeletionFailure("requested", "job_initialization_failed", error);
+  }
+
+  try {
+    await operations.notifyAffectedParties(userId);
+  } catch (error: unknown) {
+    operations.onBestEffortError?.("notifications", error);
+  }
+
+  for (const { stage, errorCode, operation } of CRITICAL_STAGES) {
+    try {
+      await operations.persistStage(userId, stage);
+    } catch (error: unknown) {
+      await recordDeletionFailure(
+        operations,
+        userId,
+        stage,
+        "job_stage_persistence_failed",
+      );
+      throw new AccountDeletionFailure(stage, "job_stage_persistence_failed", error);
+    }
+
+    try {
+      await operations[operation](userId);
+    } catch (error: unknown) {
+      await recordDeletionFailure(operations, userId, stage, errorCode);
+      throw new AccountDeletionFailure(stage, errorCode, error);
+    }
+  }
+
+  let completionError: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await operations.markCompleted(userId);
+      return;
+    } catch (error: unknown) {
+      completionError = error;
+    }
+  }
+
+  await recordDeletionFailure(
+    operations,
+    userId,
+    "auth",
+    "job_completion_failed",
+  );
+  throw new AccountDeletionFailure("auth", "job_completion_failed", completionError);
+}
+
+export function deletionFailureResponse(
+  stage: DeletionJobStage,
+  _errorCode: string,
+  corsHeaders: Record<string, string>,
+): Response {
+  return new Response(JSON.stringify({
+    error: "account_deletion_incomplete",
+    message: "Account deletion was not completed. Retry the request while signed in.",
+    stage,
+    retryable: true,
+  }), {
+    status: 500,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+type MutationClient = {
+  from: (table: string) => {
+    delete: () => {
+      eq: (column: string, value: unknown) => PromiseLike<{ error: DbError }>;
+    };
+  };
+};
+
+export async function deleteOwnedListings(
+  supabase: MutationClient,
+  userId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("listings")
+    .delete()
+    .eq("owner_id", userId);
+  if (error) {
+    throw new Error(`listings_cleanup_failed: ${error.message ?? error.code ?? "unknown"}`);
+  }
+}
+
+type StripeSubscriptionPage = {
+  data: Array<{ id: string }>;
+  has_more?: boolean;
+};
+
+type StripeCleanupClient = {
+  customers: {
+    search: (params: {
+      query: string;
+      limit: number;
+      page?: string;
+    }) => PromiseLike<{
+      data: Array<{ id: string }>;
+      has_more?: boolean;
+      next_page?: string | null;
+    }>;
+  };
+  subscriptions: {
+    list: (params: {
+      customer: string;
+      status: "active" | "trialing";
+      limit: number;
+      starting_after?: string;
+    }) => PromiseLike<StripeSubscriptionPage>;
+    cancel: (subscriptionId: string) => PromiseLike<unknown>;
+  };
+};
+
+async function listSubscriptionsByStatus(
+  stripe: StripeCleanupClient,
+  customerId: string,
+  status: "active" | "trialing",
+): Promise<string[]> {
+  const subscriptionIds: string[] = [];
+  let startingAfter: string | undefined;
+  let hasMore = true;
+
+  while (hasMore) {
+    const page = await stripe.subscriptions.list({
+      customer: customerId,
+      status,
+      limit: 100,
+      ...(startingAfter ? { starting_after: startingAfter } : {}),
+    });
+    subscriptionIds.push(...page.data.map((subscription) => subscription.id));
+
+    hasMore = page.has_more === true;
+    if (!hasMore) continue;
+    const lastId = page.data.at(-1)?.id;
+    if (!lastId) throw new Error("subscription_list_pagination_failed");
+    startingAfter = lastId;
+  }
+
+  return subscriptionIds;
+}
+
+export async function cancelActiveAndTrialingSubscriptions(
+  stripe: StripeCleanupClient,
+  customerIds: string[],
+): Promise<void> {
+  const subscriptionIds = new Set<string>();
+  for (const customerId of customerIds) {
+    for (const status of ["active", "trialing"] as const) {
+      const ids = await listSubscriptionsByStatus(stripe, customerId, status);
+      for (const id of ids) subscriptionIds.add(id);
+    }
+  }
+
+  const cancellations = await Promise.allSettled(
+    [...subscriptionIds].map((subscriptionId) =>
+      Promise.resolve(stripe.subscriptions.cancel(subscriptionId))
+    ),
+  );
+  const failureCount = cancellations.filter((result) => result.status === "rejected").length;
+  if (failureCount > 0) {
+    throw new Error(`subscription_cancellation_failed: ${failureCount}`);
+  }
+}
+
+type BillingCustomerClient = {
+  from: (table: string) => {
+    select: (columns: string) => {
+      eq: (
+        column: string,
+        value: unknown,
+      ) => PromiseLike<QueryResult<{ stripe_customer_id: string | null }>>;
+    };
+  };
+};
+
+async function findStripeCustomerIds(
+  supabase: BillingCustomerClient,
+  stripe: StripeCleanupClient,
+  userId: string,
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("billing_customers")
+    .select("stripe_customer_id")
+    .eq("user_id", userId);
+  if (error) {
+    throw new Error(`billing_customer_lookup_failed: ${error.message ?? error.code ?? "unknown"}`);
+  }
+
+  const customerIds = new Set(
+    (data ?? [])
+      .map((row) => row.stripe_customer_id)
+      .filter((customerId): customerId is string => Boolean(customerId)),
+  );
+
+  let page: string | undefined;
+  let hasMore = true;
+  while (hasMore) {
+    const search = await stripe.customers.search({
+      query: `metadata['user_id']:'${userId}'`,
+      limit: 100,
+      ...(page ? { page } : {}),
+    });
+    for (const customer of search.data) customerIds.add(customer.id);
+    hasMore = search.has_more === true;
+    if (!hasMore) continue;
+    if (!search.next_page) throw new Error("stripe_customer_search_pagination_failed");
+    page = search.next_page;
+  }
+
+  return [...customerIds];
+}
+
+async function cancelUserSubscriptions(
+  supabase: BillingCustomerClient,
+  stripe: StripeCleanupClient,
+  userId: string,
+): Promise<void> {
+  const customerIds = await findStripeCustomerIds(supabase, stripe, userId);
+  await cancelActiveAndTrialingSubscriptions(stripe, customerIds);
+}
+
+type JobLedgerClient = {
+  rpc: (
+    functionName: string,
+    params: Record<string, unknown>,
+  ) => PromiseLike<{ error: DbError }>;
+  from: (table: string) => {
+    update: (values: Record<string, unknown>) => {
+      eq: (column: string, value: unknown) => PromiseLike<{ error: DbError }>;
+    };
+  };
+};
+
+async function beginDeletionAttempt(
+  supabase: JobLedgerClient,
+  userId: string,
+): Promise<void> {
+  const { error } = await supabase.rpc("begin_account_deletion_job", {
+    p_user_id: userId,
+  });
+  if (error) {
+    throw new Error(`job_initialization_failed: ${error.message ?? error.code ?? "unknown"}`);
+  }
+}
+
+async function updateDeletionJob(
+  supabase: JobLedgerClient,
+  userId: string,
+  values: Record<string, unknown>,
+): Promise<void> {
+  const { error } = await supabase
+    .from("account_deletion_jobs")
+    .update(values)
+    .eq("user_id", userId);
+  if (error) {
+    throw new Error(`job_persistence_failed: ${error.message ?? error.code ?? "unknown"}`);
+  }
+}
+
+async function persistDeletionStage(
+  supabase: JobLedgerClient,
+  userId: string,
+  stage: CriticalDeletionStage,
+): Promise<void> {
+  await updateDeletionJob(supabase, userId, {
+    stage,
+    status: "in_progress",
+    last_error: null,
+    completed_at: null,
+  });
+}
+
+async function markDeletionFailed(
+  supabase: JobLedgerClient,
+  userId: string,
+  stage: CriticalDeletionStage,
+  errorCode: string,
+): Promise<void> {
+  await updateDeletionJob(supabase, userId, {
+    stage,
+    status: "failed",
+    last_error: errorCode,
+    completed_at: null,
+  });
+}
+
+async function markDeletionCompleted(
+  supabase: JobLedgerClient,
+  userId: string,
+): Promise<void> {
+  await updateDeletionJob(supabase, userId, {
+    stage: "completed",
+    status: "completed",
+    last_error: null,
+    completed_at: new Date().toISOString(),
+  });
+}
+
+export async function removeOwnedStorage(
+  supabase: StorageSubset,
+  userId: string,
+): Promise<void> {
+  for (const bucket of USER_FOLDER_BUCKETS) {
+    await removeFolderRecursive(supabase, bucket, userId);
+  }
+}
+
+type FiresaleCleanupClient = StorageSubset & {
+  from: (table: string) => {
+    select: (columns: string) => {
+      eq: (column: string, value: unknown) => PromiseLike<QueryResult<{ id: string }>>;
+    };
+  };
+};
+
+export async function removeOwnedFiresalePhotos(
+  supabase: FiresaleCleanupClient,
+  userId: string,
+): Promise<void> {
+  const { data: requests, error } = await supabase
+    .from("firesale_requests")
+    .select("id")
+    .eq("user_id", userId);
+  if (error) {
+    throw new Error(`firesale_request_lookup_failed: ${error.message ?? error.code ?? "unknown"}`);
+  }
+
+  for (const request of requests ?? []) {
+    await removeFolderRecursive(supabase, "firesale-photos", request.id);
+  }
+}
+
+type AuthDeletionClient = {
+  auth: {
+    admin: {
+      deleteUser: (userId: string) => PromiseLike<{ error: DbError }>;
+    };
+  };
+};
+
+async function deleteAuthUser(
+  supabase: AuthDeletionClient,
+  userId: string,
+): Promise<void> {
+  const { error } = await supabase.auth.admin.deleteUser(userId);
+  if (error) throw new Error(`auth_deletion_failed: ${error.message ?? error.code ?? "unknown"}`);
+}
+
+Deno.serve(async (req) => { // skipcq: JS-R1005 - Account deletion coordinates critical external cleanup in a strict order.
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
@@ -110,120 +536,70 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - Account deletion coordinates a
 
   try {
     const user = await verifyBearerToken(req, supabase);
+    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+    let stripe: StripeCleanupClient | null = null;
+    const jobLedger = supabase as unknown as JobLedgerClient;
 
-    await notifyAccountDeletionAffectedParties(
-      supabase as unknown as DeletionNotificationClient,
-      user.id,
-    ).catch((notifyErr: unknown) => {
-      log.warn("account deletion notification prep failed", {
-        user_id: user.id,
-        err: notifyErr instanceof Error ? notifyErr.message : String(notifyErr),
-      });
+    await runAccountDeletion(user.id, {
+      beginAttempt: (userId) => beginDeletionAttempt(jobLedger, userId),
+      persistStage: (userId, stage) => persistDeletionStage(jobLedger, userId, stage),
+      markFailed: (userId, stage, errorCode) =>
+        markDeletionFailed(jobLedger, userId, stage, errorCode),
+      markCompleted: (userId) => markDeletionCompleted(jobLedger, userId),
+      notifyAffectedParties: (userId) =>
+        notifyAccountDeletionAffectedParties(
+          supabase as unknown as DeletionNotificationClient,
+          userId,
+        ),
+      deleteOwnedListings: (userId) =>
+        deleteOwnedListings(supabase as unknown as MutationClient, userId),
+      cancelSubscriptions: async (userId) => {
+        if (!stripeKey) throw new Error("stripe_configuration_missing");
+        stripe ??= createStripeClient(stripeKey) as unknown as StripeCleanupClient;
+        await cancelUserSubscriptions(
+          supabase as unknown as BillingCustomerClient,
+          stripe,
+          userId,
+        );
+      },
+      removeOwnedStorage: (userId) =>
+        removeOwnedStorage(supabase as unknown as StorageSubset, userId),
+      removeFiresalePhotos: (userId) =>
+        removeOwnedFiresalePhotos(supabase as unknown as FiresaleCleanupClient, userId),
+      deleteAuthUser: (userId) =>
+        deleteAuthUser(supabase as unknown as AuthDeletionClient, userId),
+      onBestEffortError: (_scope, error) => {
+        log.warn("account deletion notification prep failed", {
+          user_id: user.id,
+          err: error instanceof Error ? error.message : String(error),
+        });
+      },
+      onLedgerError: (scope, error) => {
+        log.error("account deletion ledger write failed", {
+          user_id: user.id,
+          scope,
+          err: error instanceof Error ? error.message : String(error),
+        });
+      },
     });
 
-    // 1) HARD DELETE listings BEFORE the auth row is removed. The FK was dropped
-    //    in 20260309120114, so this must run explicitly. Cascades clean up
-    //    listing_images, favorites, viewings, open_house_*, etc.
-    const { error: listingsErr } = await supabase
-      .from("listings")
-      .delete()
-      .eq("owner_id", user.id);
-    if (listingsErr) {
-      log.warn("listings cleanup failed", { user_id: user.id, err: listingsErr.message });
-    }
-
-    // 2) Cancel active/trialing Stripe subscriptions so the user is not billed
-    //    after deletion. Best-effort: a Stripe outage must not block account deletion.
-    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-    if (stripeKey) {
-      try {
-        const stripe = createStripeClient(stripeKey);
-        let customerId: string | null = null;
-        try {
-          const search = await stripe.customers.search({
-            query: `metadata['user_id']:'${user.id}'`,
-            limit: 1,
-          });
-          if (search.data[0]) customerId = search.data[0].id;
-        } catch (_searchErr) {
-          // Search API may not be enabled — fall through to email lookup.
-        }
-        if (!customerId) {
-          const { data: billingCustomers, error: billingCustomerError } = await supabase
-            .from("billing_customers")
-            .select("stripe_customer_id")
-            .eq("user_id", user.id)
-            .order("updated_at", { ascending: false })
-            .limit(1);
-          if (billingCustomerError) throw billingCustomerError;
-          customerId = (billingCustomers as Array<{ stripe_customer_id?: string | null }> | null)
-            ?.[0]?.stripe_customer_id ?? null;
-        }
-        if (customerId) {
-          const active = await stripe.subscriptions.list({ customer: customerId, status: "active", limit: 100 });
-          await Promise.all(active.data.map((s: Stripe.Subscription) =>
-            stripe.subscriptions.cancel(s.id).catch(() => undefined),
-          ));
-          const trialing = await stripe.subscriptions.list({ customer: customerId, status: "trialing", limit: 100 });
-          await Promise.all(trialing.data.map((s: Stripe.Subscription) =>
-            stripe.subscriptions.cancel(s.id).catch(() => undefined),
-          ));
-        }
-      } catch (stripeErr) {
-        log.warn("stripe cleanup failed", {
-          user_id: user.id,
-          err: stripeErr instanceof Error ? stripeErr.message : String(stripeErr),
-        });
-      }
-    }
-
-    // 3a) Buckets where the path starts with `${user.id}/` — list recursively.
-    //     project-media nests `${user.id}/${projectId}/`, listing-images and
-    //     avatars are flat; the recursive walker handles both.
-    for (const bucket of USER_FOLDER_BUCKETS) {
-      try {
-        await removeFolderRecursive(supabase, bucket, user.id);
-      } catch (storageErr) {
-        log.warn("storage cleanup failed", {
-          user_id: user.id,
-          bucket,
-          err: storageErr instanceof Error ? storageErr.message : String(storageErr),
-        });
-      }
-    }
-
-    // 3b) firesale-photos: paths are `${firesaleRequestId}/<file>`; user.id is
-    //     not in the path. Look up every firesale_request the user owns, then
-    //     wipe each request's folder.
-    try {
-      const { data: requests } = await supabase
-        .from("firesale_requests")
-        .select("id")
-        .eq("user_id", user.id);
-      for (const r of (requests ?? []) as Array<{ id: string }>) {
-        await removeFolderRecursive(supabase, "firesale-photos", r.id);
-      }
-    } catch (firesaleErr) {
-      log.warn("firesale-photos cleanup failed", {
-        user_id: user.id,
-        err: firesaleErr instanceof Error ? firesaleErr.message : String(firesaleErr),
-      });
-    }
-
-    // (message-attachments cleanup is handled by the USER_FOLDER_BUCKETS loop
-    //  above now that paths are ${user.id}/${convId}/<file>.)
-
-    // 4) Delete from auth.users — cascades the remaining FK-bound rows.
-    const { error } = await supabase.auth.admin.deleteUser(user.id);
-    if (error) throw error;
-
     log.info("user deleted", { user_id: user.id });
-
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err: unknown) {
+    if (err instanceof AccountDeletionFailure) {
+      log.error("critical account deletion stage failed", {
+        stage: err.stage,
+        error_code: err.errorCode,
+        err: err.originalError instanceof Error
+          ? err.originalError.message
+          : String(err.originalError),
+      });
+      return deletionFailureResponse(err.stage, err.errorCode, corsHeaders);
+    }
+
     const status = err instanceof AuthError ? err.status : 500;
     const message = err instanceof Error ? err.message : "Unknown error";
     log.error("delete-account error", { err: message });
@@ -429,12 +805,31 @@ type StorageSubset = {
     from: (bucket: string) => {
       list: (
         prefix: string,
-        options?: { limit?: number },
+        options?: { limit?: number; offset?: number },
       ) => Promise<{ data: Array<{ id: string | null; name: string }> | null; error: unknown }>;
-      remove: (paths: string[]) => Promise<unknown>;
+      remove: (
+        paths: string[],
+      ) => Promise<{ data?: unknown; error: unknown }>;
     };
   };
 };
+
+function storageErrorDetails(error: unknown): { code: string; message: string } {
+  if (!error || typeof error !== "object") {
+    return { code: "", message: String(error) };
+  }
+  const value = error as { code?: unknown; message?: unknown };
+  return {
+    code: typeof value.code === "string" ? value.code : "",
+    message: typeof value.message === "string" ? value.message : String(error),
+  };
+}
+
+function isMissingBucketError(error: unknown): boolean {
+  const { code, message } = storageErrorDetails(error);
+  return code === "NoSuchBucket" ||
+    /(?:specified )?bucket (?:does not exist|not found)/i.test(message);
+}
 
 export async function removeFolderRecursive( // skipcq: JS-R1005 - Recursive storage cleanup handles pagination, nested prefixes, and partial deletion errors.
   supabase: StorageSubset,
@@ -442,17 +837,42 @@ export async function removeFolderRecursive( // skipcq: JS-R1005 - Recursive sto
   prefix: string,
   depth = 0,
 ): Promise<void> {
-  if (depth > 4) return; // bucket layouts in this app go at most 2 levels deep
-  const { data: entries, error } = await supabase.storage.from(bucket).list(prefix, { limit: 1000 });
-  if (error || !entries || entries.length === 0) return;
+  if (depth > 16) throw new Error(`storage_depth_limit_exceeded: ${bucket}`);
+
+  type Entry = { id: string | null; name: string };
+  const list: Entry[] = [];
+  const pageSize = 1000;
+  let offset = 0;
+  while (true) {
+    const { data: entries, error } = await supabase.storage
+      .from(bucket)
+      .list(prefix, { limit: pageSize, offset });
+    if (error) {
+      if (isMissingBucketError(error)) return;
+      const { code, message } = storageErrorDetails(error);
+      throw new Error(`storage_list_failed: ${bucket}: ${code || message || "unknown"}`);
+    }
+
+    const page = entries ?? [];
+    list.push(...page);
+    if (page.length < pageSize) break;
+    offset += page.length;
+  }
+
+  if (list.length === 0) return;
 
   // Files have a non-null id; folders return id=null.
-  type Entry = { id: string | null; name: string };
-  const list: Entry[] = entries as Entry[];
   const files = list.filter((e: Entry) => e.id !== null).map((e: Entry) => `${prefix}/${e.name}`);
-  if (files.length > 0) {
-    await supabase.storage.from(bucket).remove(files);
+  for (let index = 0; index < files.length; index += pageSize) {
+    const { error } = await supabase.storage
+      .from(bucket)
+      .remove(files.slice(index, index + pageSize));
+    if (error) {
+      const { code, message } = storageErrorDetails(error);
+      throw new Error(`storage_remove_failed: ${bucket}: ${code || message || "unknown"}`);
+    }
   }
+
   const folders = list.filter((e: Entry) => e.id === null);
   for (const f of folders) {
     await removeFolderRecursive(supabase, bucket, `${prefix}/${f.name}`, depth + 1);
