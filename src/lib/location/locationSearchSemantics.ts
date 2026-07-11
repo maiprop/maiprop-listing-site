@@ -211,8 +211,10 @@ export function filterAddressPredictionsForQuery(
   query: string,
 ): AddressPrediction[] {
   const contextTokens = locationContextTokens(query);
+  const queryTokenGroups = getListingLocationSearchTokenGroups(query)
+    .filter((group) => !group.every((token) => /^\d+$/.test(token)));
+  const requiresAddressContextMatch = /\d/.test(query) && queryTokenGroups.length >= 3;
   return filterAddressPredictionsForSelection(predictions).filter((prediction) => {
-    if (contextTokens.length === 0) return true;
     const searchable = normalizeLocationSearchableText([
       prediction.title,
       prediction.value,
@@ -222,7 +224,12 @@ export function filterAddressPredictionsForQuery(
       prediction.municipality,
       prediction.region,
     ].filter(Boolean).join(" "));
-    return contextTokens.some((token) => searchable.includes(token));
+    if (contextTokens.length > 0 && !contextTokens.some((token) => searchable.includes(token))) {
+      return false;
+    }
+    if (!requiresAddressContextMatch) return true;
+    const matchedGroups = queryTokenGroups.filter((group) => group.some((token) => searchable.includes(token))).length;
+    return matchedGroups >= 2;
   });
 }
 
