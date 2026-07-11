@@ -71,7 +71,7 @@ const getMapboxAddressToken = () => {
 
 const mapboxTypesForMode = (mode: AddressAutocompleteMode) =>
   mode === "address"
-    ? "address,street,postcode,place,locality,neighborhood"
+    ? "address,postcode,place,locality,neighborhood"
     : "place,locality,neighborhood";
 
 const looksLikeStreetAddress = (query: string) =>
