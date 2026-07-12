@@ -81,7 +81,7 @@
     "test:coverage": "node scripts/run-vitest-coverage.mjs",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "test:perf": "npm run build && playwright test e2e/performance-gates.spec.ts e2e/query-budget-gates.spec.ts --project=chromium",
+    "test:perf": "node scripts/run-performance-tests.mjs",
     "test:e2e:live-smoke": "playwright test e2e/live-critical-smoke.spec.ts --project=chromium",
     "test:e2e:live-role-tier-matrix": "playwright test e2e/live-role-tier-matrix.spec.ts --project=chromium --workers=2",
     "test:e2e:live-ai-quota": "playwright test e2e/live-ai-quota.spec.ts --project=chromium",

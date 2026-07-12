@@ -6,6 +6,7 @@ async function loadPlaywrightConfig() {
   vi.resetModules();
   const module = await import("../../playwright.config");
   return module.default as {
+    use?: { baseURL?: string };
     webServer?: {
       command?: string;
       env?: Record<string, string | undefined>;
@@ -22,6 +23,7 @@ describe("Playwright local environment contract", () => {
     delete process.env.VITE_SUPABASE_PROJECT_URL;
     delete process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
     delete process.env.VITE_SUPABASE_ANON_KEY;
+    delete process.env.MAIPROP_RUNNING_PERF_GATE;
     process.env.npm_lifecycle_event = "test:e2e";
   });
 
@@ -49,5 +51,14 @@ describe("Playwright local environment contract", () => {
       VITE_SUPABASE_URL: "https://realprojectref0000.supabase.co",
       VITE_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_real_key",
     });
+  }, 30_000);
+
+  it("uses the production preview server when the explicit performance flag is set", async () => {
+    process.env.MAIPROP_RUNNING_PERF_GATE = "1";
+
+    const config = await loadPlaywrightConfig();
+
+    expect(config.use?.baseURL).toBe("http://localhost:4173");
+    expect(config.webServer?.command).toBe("npm run preview");
   }, 30_000);
 });
