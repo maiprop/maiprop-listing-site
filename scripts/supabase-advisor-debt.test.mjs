@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { resolve } from "node:path";
 import {
   assertAdvisorDebtIsActionable,
   buildUnusedIndexReview,
   classifyAdvisorDebt,
   flattenAdvisorLints,
+  loadAdvisorDebtPolicy,
 } from "./supabase-advisor-debt.mjs";
 import {
   isPerformanceAdvisorInternalSyntaxFailure,
@@ -30,6 +32,38 @@ const policy = {
 };
 
 describe("supabase advisor debt classification", () => {
+  it("classifies the constrained public profile summary RPC for both browser roles", async () => {
+    const repositoryPolicy = await loadAdvisorDebtPolicy(
+      resolve(process.cwd(), "scripts/supabase-advisor-debt-policy.json"),
+    );
+    const debt = classifyAdvisorDebt(
+      {
+        results: [
+          {
+            category: "security",
+            lints: [
+              {
+                name: "anon_security_definer_function_executable",
+                level: "WARN",
+                cache_key: "anon_security_definer_function_executable_public_get_public_profile_summaries_p_user_ids uuid[]",
+              },
+              {
+                name: "authenticated_security_definer_function_executable",
+                level: "WARN",
+                cache_key: "authenticated_security_definer_function_executable_public_get_public_profile_summaries_p_user_ids uuid[]",
+              },
+            ],
+          },
+        ],
+      },
+      repositoryPolicy,
+    );
+
+    expect(debt.unknown_count).toBe(0);
+    expect(debt.review_count).toBe(2);
+    expect(() => assertAdvisorDebtIsActionable(debt)).not.toThrow();
+  });
+
   it("treats Supabase performance advisor parser crashes as unavailable evidence only for performance", () => {
     const detail = "Failed to run project advisor lints: ERROR: 42601: syntax error at or near storage.buckets";
 
