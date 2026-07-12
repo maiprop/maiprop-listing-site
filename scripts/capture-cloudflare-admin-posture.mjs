@@ -1,5 +1,5 @@
 import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const DEFAULT_OUT = "artifacts/compliance/live-evidence/cloudflare-admin-posture.json";
@@ -43,6 +43,13 @@ const normalizePagesProject = (project) => ({
       : null,
 });
 
+const validatePagesProject = (project) => {
+  const errors = [];
+  if (!project?.id) errors.push("Pages project record is missing a project id or production branch");
+  else if (!project?.production_branch) errors.push("Pages project record is missing a project id or production branch");
+  return errors;
+};
+
 export async function buildCloudflarePostureEvidence({
   env = process.env,
   fetchImpl = globalThis.fetch,
@@ -80,6 +87,16 @@ export async function buildCloudflarePostureEvidence({
     };
   }
 
+  const errors = validatePagesProject(body.result);
+  if (errors.length > 0) {
+    return {
+      provider: "cloudflare",
+      status: "failed",
+      queriedAt,
+      errors,
+    };
+  }
+
   return {
     provider: "cloudflare",
     status: "captured",
@@ -106,7 +123,7 @@ const writeJson = (path, value) => {
 const main = async () => {
   const args = parseArgs(process.argv.slice(2));
   const evidence = await buildCloudflarePostureEvidence();
-  writeJson(join(process.cwd(), args.out), evidence);
+  writeJson(resolve(process.cwd(), args.out), evidence);
 
   if (args.strict && evidence.status !== "captured") {
     process.stderr.write(`Cloudflare admin posture is ${evidence.status}\n`);

@@ -302,10 +302,8 @@ export default function PropertyMiniMap({
     );
     observer.observe(el);
 
-    const fallback = window.setTimeout(() => setShouldLoadMap(true), 2500);
     return () => {
       observer.disconnect();
-      window.clearTimeout(fallback);
     };
   }, [lat, lng, shouldLoadMap]);
 

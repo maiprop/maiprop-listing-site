@@ -16,6 +16,7 @@ import {
   createStripeClient,
   getStripeRuntimeMode,
 } from "../_shared/stripeClient.ts";
+import { upsertBillingCustomer } from "../_shared/billingState.ts";
 import {
   isStripeMockMode,
   withMockBillingParams,
@@ -135,27 +136,20 @@ type BillingSubscriptionLookupResult = {
 
 type SupabaseBillingLookupClient = {
   from(table: "billing_subscriptions"): {
-    select(columns: string): {
-      eq(column: string, value: string): {
-        eq(column: string, value: string): {
-          in(column: string, values: string[]): {
-            order(
-              column: string,
-              options: { ascending: boolean },
-            ): {
-              limit(count: number): PromiseLike<BillingSubscriptionLookupResult>;
-            };
-          };
-        };
-        in(column: string, values: string[]): {
-          order(
-            column: string,
-            options: { ascending: boolean },
-          ): {
-            limit(count: number): PromiseLike<BillingSubscriptionLookupResult>;
-          };
-        };
-      };
+    select(columns: string): SupabaseBillingLookupQuery;
+  };
+};
+
+type BillingCustomerUpsertClient = Parameters<typeof upsertBillingCustomer>[0];
+
+type SupabaseBillingLookupQuery = {
+  eq(column: string, value: string | boolean): SupabaseBillingLookupQuery;
+  in(column: string, values: string[]): {
+    order(
+      column: string,
+      options: { ascending: boolean },
+    ): {
+      limit(count: number): PromiseLike<BillingSubscriptionLookupResult>;
     };
   };
 };
@@ -192,6 +186,7 @@ const hasProvisionedSameAudienceSubscription = async (
     .select("status, audience, current_period_end")
     .eq("user_id", userId)
     .eq("runtime_mode", getStripeRuntimeMode())
+    .eq("livemode", getStripeRuntimeMode() === "live")
     .in("status", PROVISIONED_SUBSCRIPTION_STATUSES)
     .order("updated_at", { ascending: false })
     .limit(10);
@@ -498,6 +493,16 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
         user,
         logStep,
       );
+      await upsertBillingCustomer(
+        supabaseClient as unknown as BillingCustomerUpsertClient,
+        {
+          userId: user.id,
+          stripeCustomerId: customerId,
+          email: user.email,
+          livemode: getStripeRuntimeMode() === "live",
+          metadata: { user_id: user.id },
+        },
+      );
       const success = `${origin}${
         sanitizeRedirectPath(body.success_url) ??
           "/dashboard/billing?checkout=success"
@@ -773,6 +778,16 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
       stripe,
       user,
       logStep,
+    );
+    await upsertBillingCustomer(
+      supabaseClient as unknown as BillingCustomerUpsertClient,
+      {
+        userId: user.id,
+        stripeCustomerId: customerId,
+        email: user.email,
+        livemode: getStripeRuntimeMode() === "live",
+        metadata: { user_id: user.id },
+      },
     );
     const success = `${origin}${successPath ?? "/pricing?checkout=success"}`;
     const cancel = `${origin}${cancelPath ?? "/pricing?checkout=cancelled"}`;

@@ -71,6 +71,24 @@ describe("Sentry live evidence capture", () => {
     expect(validateSentryEnv({ SENTRY_AUTH_TOKEN: "x" })).toEqual(["SENTRY_ORG", "SENTRY_PROJECT"]);
   });
 
+  it("fails closed when Sentry returns a non-array issue payload", async () => {
+    const evidence = await buildSentryEvidence({
+      env: { SENTRY_AUTH_TOKEN: "token", SENTRY_ORG: "maiprop", SENTRY_PROJECT: "portal" },
+      fetchImpl: async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ detail: "unexpected response" }),
+      }),
+    });
+
+    expect(evidence).toMatchObject({
+      provider: "sentry",
+      status: "failed",
+      querySucceeded: false,
+      errors: ["Sentry issues response was not an array"],
+    });
+  });
+
   it("redacts standalone text", () => {
     expect(redactSentryText("ip 198.51.100.44 and email user@example.com")).toBe(
       "ip [redacted-ip] and email [redacted-email]",

@@ -300,7 +300,9 @@ describe("dashboard utility tabs", () => {
     mocks.getSession.mockResolvedValueOnce({ data: { session: null } });
     fireEvent.click(screen.getByRole("button", { name: /Delete account/i }));
     fireEvent.click(screen.getByRole("button", { name: /Yes, delete my account/i }));
-    await waitFor(() => expect(mocks.toast.error).toHaveBeenCalledWith("Could not delete account. Please contact support."));
+    await waitFor(() => expect(mocks.toast.error).toHaveBeenCalledWith(
+      "Deletion was not completed. Your account is still active. Please try again.",
+    ));
   });
 
   it("exercises signup validation, password visibility, confirmation view, OAuth, and error variants", async () => {

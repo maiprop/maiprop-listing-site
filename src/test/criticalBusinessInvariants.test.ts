@@ -1,8 +1,15 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+const findMigrationContaining = (needle: string) => {
+  const directory = resolve(process.cwd(), "supabase/migrations");
+  return readdirSync(directory)
+    .filter((name) => name.endsWith(".sql"))
+    .map((name) => ({ name, source: readFileSync(resolve(directory, name), "utf8") }))
+    .find(({ source }) => source.includes(needle));
+};
 const readCheckoutSource = () =>
   [
     "supabase/functions/create-checkout/index.ts",
@@ -285,5 +292,53 @@ describe("critical business invariants", () => {
     expect(gdprE2E).toContain("same email should be reusable after deletion");
     expect(gdprE2E).toContain("recreated auth user should be a fresh account");
     expect(gdprE2E).toContain("waitForURL(/\\/dashboard|\\/onboarding/");
+  });
+
+  it("keeps account deletion jobs durable, minimal, and browser read-only", () => {
+    const migration = findMigrationContaining(
+      "CREATE TABLE IF NOT EXISTS public.account_deletion_jobs",
+    );
+
+    expect(migration, "account_deletion_jobs migration must exist").toBeDefined();
+    const sql = migration?.source ?? "";
+
+    expect(sql).toMatch(/user_id uuid (?:NOT NULL )?PRIMARY KEY/i);
+    expect(sql).not.toMatch(/REFERENCES\s+(?:auth\.users|public\.profiles)/i);
+    expect(sql).toContain("stage text NOT NULL");
+    expect(sql).toContain("status text NOT NULL");
+    expect(sql).toContain("attempt_id uuid NOT NULL");
+    expect(sql).toContain("attempts integer NOT NULL");
+    expect(sql).toContain("last_error text");
+    expect(sql).toContain("requested_at timestamptz NOT NULL");
+    expect(sql).toContain("leased_until timestamptz NOT NULL");
+    expect(sql).toContain("completed_at timestamptz");
+    expect(sql).toContain("ALTER TABLE public.account_deletion_jobs ENABLE ROW LEVEL SECURITY");
+    expect(sql).toContain("GRANT SELECT ON public.account_deletion_jobs TO authenticated");
+    expect(sql).toContain(
+      "GRANT SELECT, INSERT, UPDATE, DELETE ON public.account_deletion_jobs TO service_role",
+    );
+    expect(sql).toContain("FOR SELECT");
+    expect(sql).toContain("TO authenticated");
+    expect(sql).toContain("(SELECT auth.uid()) = user_id");
+    expect(sql).toContain("attempts = public.account_deletion_jobs.attempts + 1");
+    expect(sql).toContain("WHERE public.account_deletion_jobs.status <> 'in_progress'");
+    expect(sql).toContain("OR public.account_deletion_jobs.leased_until < now()");
+    expect(sql).toContain(
+      "REVOKE ALL ON FUNCTION public.begin_account_deletion_job(uuid) FROM PUBLIC, anon, authenticated",
+    );
+    expect(sql).toContain(
+      "GRANT EXECUTE ON FUNCTION public.begin_account_deletion_job(uuid) TO service_role",
+    );
+    expect(sql).toContain("CREATE OR REPLACE FUNCTION public.set_account_deletion_job_stage");
+    expect(sql).toContain("AND attempt_id = p_attempt_id");
+    expect(sql).toContain("CREATE OR REPLACE FUNCTION public.complete_account_deletion_from_auth_delete()");
+    expect(sql).toContain("AFTER DELETE ON auth.users");
+    expect(sql).toContain("CREATE OR REPLACE FUNCTION public.is_account_deletion_active(p_user_id uuid)");
+    expect(sql).toContain("DROP TRIGGER IF EXISTS trg_guard_deleted_account_listing_write ON public.listings");
+    expect(sql).toContain("DROP TRIGGER IF EXISTS trg_guard_deleted_account_storage_write ON storage.objects");
+    expect(sql).toContain("CREATE OR REPLACE FUNCTION public.get_account_deletion_storage_objects(p_user_id uuid)");
+    expect(sql).toContain("GRANT EXECUTE ON FUNCTION public.get_account_deletion_storage_objects(uuid)");
+    expect(sql).not.toContain("account_deletion_jobs_update");
+    expect(sql).not.toContain("account_deletion_jobs_delete");
   });
 });

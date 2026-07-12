@@ -11,7 +11,10 @@ import {
   isStripeMockMode,
   withMockBillingParams,
 } from "../_shared/stripeMode.ts";
-import { createStripeClient } from "../_shared/stripeClient.ts";
+import {
+  createStripeClient,
+  getStripeRuntimeMode,
+} from "../_shared/stripeClient.ts";
 import {
   buildPortalSessionParams,
   parsePortalActionRequest,
@@ -61,22 +64,24 @@ async function resolveCustomer(
   }
 
   try {
-    const { data, error } = await (supabase.from("billing_customers") as {
-      select: (columns: string) => {
-        eq: (column: string, value: string) => {
-          order: (
-            column: string,
-            opts: { ascending: boolean },
-          ) => {
-            limit: (count: number) => PromiseLike<{
-              data?: Array<{ stripe_customer_id?: string | null }> | null;
-              error?: { message?: string } | null;
-            }>;
-          };
-        };
+    type BillingCustomerLookup = {
+      eq: (column: string, value: string | boolean) => BillingCustomerLookup;
+      order: (
+        column: string,
+        opts: { ascending: boolean },
+      ) => {
+        limit: (count: number) => PromiseLike<{
+          data?: Array<{ stripe_customer_id?: string | null }> | null;
+          error?: { message?: string } | null;
+        }>;
       };
+    };
+    const { data, error } = await (supabase.from("billing_customers") as {
+      select: (columns: string) => BillingCustomerLookup;
     }).select("stripe_customer_id")
       .eq("user_id", user.id)
+      .eq("runtime_mode", getStripeRuntimeMode())
+      .eq("livemode", getStripeRuntimeMode() === "live")
       .order("updated_at", { ascending: false })
       .limit(1);
     if (error) throw new Error(error.message ?? "billing customer lookup failed");

@@ -16,18 +16,12 @@ import {
 } from "./_cache";
 import { getSupabaseRuntime } from "../../_seo";
 import { publicListingRows } from "./_fixture-content";
+import { fetchPublicProfileSummaries, publicProfileDisplay } from "./_publicProfiles";
 
 type ListingRow = {
   id: string;
   owner_id?: string | null;
   [key: string]: unknown;
-};
-
-type ProfilePublicRow = {
-  user_id: string;
-  display_name: string | null;
-  avatar_url: string | null;
-  role?: string | null;
 };
 
 const LISTING_TYPES = ["sale", "rent", "firesale", "auction", "open_house", "new_build"] as const;
@@ -360,17 +354,6 @@ function buildListingParams(requestUrl: URL): { params: URLSearchParams; page: n
   return { params, page, pageSize, offset };
 }
 
-async function fetchOwnerProfiles(env: PublicApiEnv, ownerIds: string[]): Promise<Map<string, ProfilePublicRow>> {
-  const uniqueOwnerIds = [...new Set(ownerIds)].filter(Boolean);
-  if (!uniqueOwnerIds.length) return new Map();
-
-  const params = new URLSearchParams();
-  params.set("select", "user_id,display_name,avatar_url,role");
-  params.set("user_id", `in.(${uniqueOwnerIds.join(",")})`);
-  const rows = await supabaseJson<ProfilePublicRow>(env, "/rest/v1/profiles_public", params);
-  return new Map(rows.map((profile) => [profile.user_id, profile]));
-}
-
 async function publicListings(ctx: PublicApiCtx, requestUrl: URL): Promise<Response> {
   if (!getSupabaseRuntime(ctx.env)) return missingRuntime();
 
@@ -393,10 +376,11 @@ async function publicListings(ctx: PublicApiCtx, requestUrl: URL): Promise<Respo
       });
       const cleanRows = publicListingRows(rows);
       const ownerIds = cleanRows.map((row) => row.owner_id).filter((id): id is string => typeof id === "string");
-      const profiles = await fetchOwnerProfiles(ctx.env, ownerIds);
+      const profiles = await fetchPublicProfileSummaries(ctx.env, ownerIds);
       const data = cleanRows.map((row) => ({
         ...row,
-        profiles: row.owner_id ? profiles.get(row.owner_id) ?? null : null,
+        profiles: publicProfileDisplay(row.owner_id ? profiles.get(row.owner_id) : null),
+        ownerParticipantType: row.owner_id ? profiles.get(row.owner_id)?.owner_participant_type ?? null : null,
       }));
 
       return jsonResponse({

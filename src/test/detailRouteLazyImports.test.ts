@@ -5,6 +5,14 @@ import { describe, expect, it } from "vitest";
 const readSource = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 
 describe("detail route responsiveness contracts", () => {
+  it("does not mount property-detail map and report chunks before their panel enters the viewport", () => {
+    const source = readSource("src/pages/PropertyDetail.tsx");
+
+    expect(source).toContain('import { DeferredDetailPanel } from "@/components/DeferredDetailPanel"');
+    expect(source).toMatch(/<DeferredDetailPanel[\s\S]*?<PropertyMiniMap/);
+    expect(source).toMatch(/<DeferredDetailPanel[\s\S]*?<NeighbourhoodReport/);
+  });
+
   it("keeps new-build map, report, and valuation modules out of the initial route chunk", () => {
     const source = readSource("src/pages/NewBuildDetail.tsx");
 

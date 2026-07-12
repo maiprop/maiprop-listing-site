@@ -150,7 +150,7 @@ export function SettingsSection({
       await supabase.auth.signOut();
       navigate("/");
     } catch (err: unknown) {
-      toast.error("Could not delete account. Please contact support.");
+      toast.error("Deletion was not completed. Your account is still active. Please try again.");
       logger.error("delete-account", err instanceof Error ? err : new Error(String(err)));
     } finally {
       setDeleting(false);

@@ -581,19 +581,15 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
           {/* Action row: detail CTA for special inventory + Share + Report */}
           <div className={`flex min-w-0 shrink-0 items-center gap-2 ${hasPrimaryDetailAction ? "flex-1" : "ml-auto"}`}>
             {property.listingType === "open_house" && (
-              <Link to={detailPath} state={detailState} className="min-w-0 flex-1">
-                <button className="flex h-9 md:h-8 w-full items-center justify-center gap-1.5 truncate rounded-xl bg-gradient-primary px-2.5 text-[11px] font-semibold text-primary-foreground transition-all hover:opacity-90 hover:shadow-md active:scale-[0.98]">
-                  <Calendar className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">{t("propertyCard.actions.viewOpenHouse")}</span>
-                </button>
+              <Link to={detailPath} state={detailState} className="flex h-9 md:h-8 min-w-0 flex-1 items-center justify-center gap-1.5 truncate rounded-xl bg-gradient-primary px-2.5 text-[11px] font-semibold text-primary-foreground transition-all hover:opacity-90 hover:shadow-md active:scale-[0.98]">
+                <Calendar className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">{t("propertyCard.actions.viewOpenHouse")}</span>
               </Link>
             )}
             {property.listingType === "auction" && (
-              <Link to={detailPath} state={detailState} className="min-w-0 flex-1">
-                <button className="flex h-9 md:h-8 w-full items-center justify-center gap-1.5 truncate rounded-xl bg-brand-auction px-2.5 text-[11px] font-semibold text-white transition-all hover:bg-brand-purple-dark hover:shadow-md active:scale-[0.98]">
-                  <Gavel className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                  <span className="truncate">{t("propertyCard.actions.viewAuction")}</span>
-                </button>
+              <Link to={detailPath} state={detailState} className="flex h-9 md:h-8 min-w-0 flex-1 items-center justify-center gap-1.5 truncate rounded-xl bg-brand-auction px-2.5 text-[11px] font-semibold text-white transition-all hover:bg-brand-purple-dark hover:shadow-md active:scale-[0.98]">
+                <Gavel className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">{t("propertyCard.actions.viewAuction")}</span>
               </Link>
             )}
             {footerAccessory}

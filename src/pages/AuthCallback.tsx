@@ -91,12 +91,12 @@ const AuthCallback = () => {
   }, [errorRedirect, loading, navigate, needsOnboarding, params, profileLoading, user?.id]);
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
+    <main id="main-content" className="min-h-screen bg-background flex items-center justify-center">
       <div className="flex flex-col items-center gap-3 text-muted-foreground">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
         <span className="text-sm">Finishing sign-in...</span>
       </div>
-    </div>
+    </main>
   );
 };
 

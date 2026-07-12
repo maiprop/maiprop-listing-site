@@ -77,3 +77,41 @@ Deno.test("getCheckoutPlan refuses DB price IDs for the wrong pricing audience",
     else Deno.env.set("STRIPE_PRICE_DEVELOPER_MONTHLY", previous);
   }
 });
+
+Deno.test("getCheckoutPlan fails closed when the active plan config is missing", async () => {
+  const previous = Deno.env.get("STRIPE_PRICE_PRO_MONTHLY");
+  try {
+    Deno.env.set("STRIPE_PRICE_PRO_MONTHLY", "price_env_fallback");
+    const plan = await getCheckoutPlan(
+      pricingClient(null),
+      "pro",
+      "monthly",
+    );
+    assertEquals(plan, null);
+  } finally {
+    if (previous === undefined) Deno.env.delete("STRIPE_PRICE_PRO_MONTHLY");
+    else Deno.env.set("STRIPE_PRICE_PRO_MONTHLY", previous);
+  }
+});
+
+Deno.test("getCheckoutPlan fails closed when an active plan lacks the requested price", async () => {
+  const previous = Deno.env.get("STRIPE_PRICE_PRO_ANNUAL");
+  try {
+    Deno.env.set("STRIPE_PRICE_PRO_ANNUAL", "price_env_fallback");
+    const plan = await getCheckoutPlan(
+      pricingClient({
+        key: "pro",
+        audience: "participant",
+        module: "user_subscription",
+        unit: "monthly",
+        metadata: { stripe_price_id_monthly: "price_month" },
+      }),
+      "pro",
+      "annual",
+    );
+    assertEquals(plan, null);
+  } finally {
+    if (previous === undefined) Deno.env.delete("STRIPE_PRICE_PRO_ANNUAL");
+    else Deno.env.set("STRIPE_PRICE_PRO_ANNUAL", previous);
+  }
+});

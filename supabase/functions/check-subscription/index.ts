@@ -149,6 +149,7 @@ export async function getDatabaseFallback( // skipcq: JS-R1005 - Fallback subscr
       .select("status, stripe_product_id, current_period_end, trial_end, plan_key, audience, billing_cycle")
       .eq("user_id", userId)
       .eq("runtime_mode", runtimeMode)
+      .eq("livemode", runtimeMode === "live")
       .in("status", ["active", "trialing", "past_due"])
       .order("updated_at", { ascending: false })
       .limit(5),

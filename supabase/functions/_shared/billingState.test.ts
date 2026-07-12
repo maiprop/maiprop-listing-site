@@ -6,6 +6,7 @@ import {
   isDuplicateWebhookInsertError,
   isStaleProcessingWebhookEvent,
   stripeRuntimeModeFromLivemode,
+  upsertBillingCustomer,
 } from "./billingState.ts";
 
 Deno.test("billing customer rows are test-mode by default for test Stripe objects", () => {
@@ -114,6 +115,29 @@ Deno.test("billing state helpers recognize runtime mode and duplicate event erro
   assertEquals(isDuplicateWebhookInsertError({ code: "23505" }), true);
   assertEquals(isDuplicateWebhookInsertError({ code: "PGRST116" }), false);
   assertEquals(isDuplicateWebhookInsertError(null), false);
+});
+
+Deno.test("billing customer writes conflict on the user and Stripe runtime", async () => {
+  let receivedOptions: Record<string, unknown> | undefined;
+  const supabase = {
+    from(table: string) {
+      assertEquals(table, "billing_customers");
+      return {
+        upsert(_payload: Record<string, unknown>, options?: Record<string, unknown>) {
+          receivedOptions = options;
+          return Promise.resolve({ error: null });
+        },
+      };
+    },
+  };
+
+  await upsertBillingCustomer(supabase as never, {
+    userId: "user-1",
+    stripeCustomerId: "cus_live",
+    livemode: true,
+  });
+
+  assertEquals(receivedOptions, { onConflict: "user_id,runtime_mode" });
 });
 
 Deno.test("failed duplicate webhook events are marked processing for retry", async () => {

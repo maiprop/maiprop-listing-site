@@ -142,7 +142,7 @@ export default function Signup() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
-      <div className="flex-1 flex items-center justify-center pt-16 px-4 py-10">
+      <main id="main-content" className="flex-1 flex items-center justify-center pt-16 px-4 py-10">
         <div className="w-full max-w-md">
           <div className="glass-card rounded-2xl p-8 border border-border">
 
@@ -289,7 +289,7 @@ export default function Signup() {
             )}
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

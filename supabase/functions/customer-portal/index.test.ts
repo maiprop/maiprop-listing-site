@@ -35,4 +35,14 @@ Deno.test("portal return URL uses the allowlisted Checkout origin resolver", asy
   assertStringIncludes(source, "const origin = resolveCheckoutOrigin(req.headers.get(\"origin\"))");
 });
 
+Deno.test("durable customer fallback is restricted to the active Stripe runtime", async () => {
+  const source = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+  const lookupStart = source.indexOf('supabase.from("billing_customers")');
+  const lookupEnd = source.indexOf("const customerId", lookupStart);
+  const lookup = source.slice(lookupStart, lookupEnd);
+
+  assertEquals(lookup.includes('.eq("runtime_mode", getStripeRuntimeMode())'), true);
+  assertEquals(lookup.includes('.eq("livemode", getStripeRuntimeMode() === "live")'), true);
+});
+
 restore();

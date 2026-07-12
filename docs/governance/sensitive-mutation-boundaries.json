@@ -72,7 +72,7 @@
       "rationale": "Lead rows are owner-scoped and validated before mutation."
     },
     {
-      "file": "src/hooks/useListings.ts",
+      "file": "src/hooks/useListingMutations.ts",
       "table": "listings",
       "operations": ["insert", "update", "delete"],
       "boundary": "rls-scoped-browser",

@@ -15,6 +15,10 @@ const LANDMARK_ROUTES = [
   "/privacy-policy",
   "/terms-of-service",
   "/cookie-policy",
+  "/signup",
+  "/ai-assistant",
+  "/document-templates",
+  "/professionals/not-a-valid-profile-id",
   "/missing-route-for-a11y-check",
 ];
 

@@ -88,6 +88,11 @@ function initFor(pathname: string): RequestInit {
   return call?.[1] as RequestInit;
 }
 
+function jsonBodyFor(pathname: string): unknown {
+  const body = initFor(pathname)?.body;
+  return body ? JSON.parse(String(body)) : null;
+}
+
 function jsonRows(rows: unknown[], init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(rows), {
     status: init.status ?? 200,
@@ -112,10 +117,10 @@ function installSupabaseFetch(): FetchMock {
       });
     }
 
-    if (url.pathname === "/rest/v1/profiles_public") {
+    if (url.pathname === "/rest/v1/rpc/get_public_profile_summaries") {
       return jsonRows([
-        { user_id: "owner-1", display_name: "Maria Agent", avatar_url: "https://img.example/maria.png", role: "agent" },
-        { user_id: "owner-2", display_name: "Nikos Owner", avatar_url: null, role: "seller" },
+        { user_id: "owner-1", display_name: "Maria Agent", avatar_url: "https://img.example/maria.png", owner_participant_type: "agent" },
+        { user_id: "owner-2", display_name: "Nikos Owner", avatar_url: null, owner_participant_type: "seller" },
       ]);
     }
 
@@ -521,7 +526,7 @@ describe("public listings endpoint", () => {
         "https://portal.maiprop.co/api/public/listings?page=2&pageSize=999&city=Άγιοι%20Αναργυροι%2C%20Αττικης&listing_type=sale&features=has_pool,has_alarm,unsafe&energy_class=A,BAD&A%5B%5D=ignored",
       ),
     );
-    const body = await res.json() as { data: Array<{ profiles: unknown }>; hasMore: boolean; page: number; pageSize: number; offset: number };
+    const body = await res.json() as { data: Array<{ profiles: unknown; ownerParticipantType: string | null }>; hasMore: boolean; page: number; pageSize: number; offset: number };
 
     expect(res.headers.get("X-Maiprop-Cache")).toBe("MISS");
     expect(body.page).toBe(2);
@@ -529,6 +534,8 @@ describe("public listings endpoint", () => {
     expect(body.offset).toBe(200);
     expect(body.hasMore).toBe(false);
     expect(body.data[0].profiles).toMatchObject({ display_name: "Maria Agent" });
+    expect(body.data[0].profiles).not.toHaveProperty("owner_participant_type");
+    expect(body.data[0].ownerParticipantType).toBe("agent");
 
     const listingsUrl = fetchUrls("/rest/v1/listings")[0];
     expect(listingsUrl.searchParams.get("limit")).toBe("200");
@@ -550,8 +557,8 @@ describe("public listings endpoint", () => {
     expect(listingsUrl.searchParams.get("has_alarm")).toBe("eq.true");
     expect(listingsUrl.searchParams.has("unsafe")).toBe(false);
 
-    const profilesUrl = fetchUrls("/rest/v1/profiles_public")[0];
-    expect(profilesUrl.searchParams.get("user_id")).toBe("in.(owner-1,owner-2)");
+    expect(initFor("/rest/v1/rpc/get_public_profile_summaries").method).toBe("POST");
+    expect(jsonBodyFor("/rest/v1/rpc/get_public_profile_summaries")).toEqual({ p_user_ids: ["owner-1", "owner-2"] });
     expect(cacheApi.put).toHaveBeenCalledTimes(2);
     expect(cacheApi.put.mock.calls.some(([request]) => request.url.includes("__maiprop_stale=1"))).toBe(true);
   });
@@ -677,9 +684,9 @@ describe("public listings endpoint", () => {
           { id: "listing-clean", owner_id: "owner-clean", title: "Athens flat" },
         ]);
       }
-      if (url.pathname === "/rest/v1/profiles_public") {
+      if (url.pathname === "/rest/v1/rpc/get_public_profile_summaries") {
         return jsonRows([
-          { user_id: "owner-clean", display_name: "Maria Agent", avatar_url: null, role: "agent" },
+          { user_id: "owner-clean", display_name: "Maria Agent", avatar_url: null, owner_participant_type: "agent" },
         ]);
       }
       return jsonRows([]);
@@ -691,7 +698,7 @@ describe("public listings endpoint", () => {
 
     expect(body.data.map((row) => row.id)).toEqual(["listing-clean"]);
     expect(body.data[0].profiles).toMatchObject({ display_name: "Maria Agent" });
-    expect(fetchUrls("/rest/v1/profiles_public")[0].searchParams.get("user_id")).toBe("in.(owner-clean)");
+    expect(jsonBodyFor("/rest/v1/rpc/get_public_profile_summaries")).toEqual({ p_user_ids: ["owner-clean"] });
   });
 
   it("rejects non-GET requests and missing runtime bindings", async () => {
@@ -738,7 +745,8 @@ describe("public listing detail endpoint", () => {
     expect(listingsUrl.searchParams.get("status")).toBe("eq.active");
     expect(listingsUrl.searchParams.get("is_off_market")).toBe("eq.false");
     expect(listingsUrl.searchParams.get("listing_images.order")).toBe("sort_order.asc");
-    expect(fetchUrls("/rest/v1/profiles_public")[0].searchParams.get("select")).toBe("user_id,display_name,avatar_url,role");
+    expect(initFor("/rest/v1/rpc/get_public_profile_summaries").method).toBe("POST");
+    expect(jsonBodyFor("/rest/v1/rpc/get_public_profile_summaries")).toEqual({ p_user_ids: ["owner-1"] });
     expect(cacheApi.put.mock.calls[0][0].url).toContain("v=open-house-transaction-v1");
   });
 
@@ -785,8 +793,8 @@ describe("public listing detail endpoint", () => {
           },
         ]);
       }
-      if (url.pathname === "/rest/v1/profiles_public") {
-        return jsonRows([{ user_id: "owner-1", display_name: "Mai Developer", avatar_url: null, role: "developer" }]);
+      if (url.pathname === "/rest/v1/rpc/get_public_profile_summaries") {
+        return jsonRows([{ user_id: "owner-1", display_name: "Mai Developer", avatar_url: null, owner_participant_type: "agent" }]);
       }
       return jsonRows([]);
     }) as unknown as FetchMock;
@@ -833,7 +841,7 @@ describe("public listing detail endpoint", () => {
       if (url.pathname === "/rest/v1/listings") {
         return jsonRows([{ id: "listing-1", owner_id: "owner-1", title: "Athens flat" }]);
       }
-      if (url.pathname === "/rest/v1/profiles_public") {
+      if (url.pathname === "/rest/v1/rpc/get_public_profile_summaries") {
         return new Response("bad column", { status: 400 });
       }
       return jsonRows([]);
@@ -933,10 +941,10 @@ describe("public similar listings endpoint", () => {
           },
         ]);
       }
-      if (url.pathname === "/rest/v1/profiles_public") {
+      if (url.pathname === "/rest/v1/rpc/get_public_profile_summaries") {
         return jsonRows([
-          { user_id: "owner-1", display_name: "Maria Agent", avatar_url: null, role: "agent" },
-          { user_id: "owner-2", display_name: "Nikos Owner", avatar_url: null, role: "seller" },
+          { user_id: "owner-1", display_name: "Maria Agent", avatar_url: null, owner_participant_type: "agent" },
+          { user_id: "owner-2", display_name: "Nikos Owner", avatar_url: null, owner_participant_type: "seller" },
         ]);
       }
       return jsonRows([]);
@@ -1184,9 +1192,8 @@ describe("public homepage endpoint", () => {
     expect(url.searchParams.get("select")).toContain("delivery_date");
     expect(url.searchParams.get("select")).toContain("project_units!project_units_project_id_fkey(id,availability_status,internal_sqm)");
     expect(url.searchParams.get("listing_images.limit")).toBe("3");
-    const profileUrl = fetchUrls("/rest/v1/profiles_public")[0];
-    expect(profileUrl.searchParams.get("select")).toBe("user_id,display_name,avatar_url,role");
-    expect(profileUrl.searchParams.get("user_id")).toBe("in.(owner-1,owner-2)");
+    expect(initFor("/rest/v1/rpc/get_public_profile_summaries").method).toBe("POST");
+    expect(jsonBodyFor("/rest/v1/rpc/get_public_profile_summaries")).toEqual({ p_user_ids: ["owner-1", "owner-2"] });
     const featuredCacheKey = new URL(cacheApi.put.mock.calls[0][0].url);
     expect(featuredCacheKey.searchParams.get("day")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(featuredCacheKey.searchParams.get("v")).toBe("featured-card-v7-profile-flags");

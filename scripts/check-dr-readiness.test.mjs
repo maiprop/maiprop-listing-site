@@ -1,9 +1,11 @@
+import { createHash } from "node:crypto";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   checkDisasterRecoveryReadiness,
+  checkChecksumVerifiedRestoreEvidence,
   checkFreeTierBackupRunbook,
   checkProductionChecklistRecoveryEvidence,
   checkRestoreDrillLog,
@@ -131,6 +133,41 @@ describe("disaster recovery readiness check", () => {
     );
 
     expect(hasSuccessfulRestoreDrill(root)).toBe(true);
-    expect(checkDisasterRecoveryReadiness(root, { requireSuccessfulRestore: true }).ok).toBe(true);
+    const result = checkDisasterRecoveryReadiness(root, { requireSuccessfulRestore: true });
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("checksum-verified restore evidence");
+  });
+
+  it("accepts restore proof only when the referenced backup artifact checksum matches", () => {
+    const root = makeFixture();
+    const backupDir = join(root, "backup");
+    const evidenceDir = join(root, "artifacts", "compliance", "dora");
+    mkdirSync(backupDir, { recursive: true });
+    mkdirSync(evidenceDir, { recursive: true });
+    const artifactPath = join(backupDir, "drill.sql.enc");
+    const artifact = "checksum-backed backup";
+    const checksum = createHash("sha256").update(artifact).digest("hex");
+    writeFileSync(artifactPath, artifact);
+    writeFileSync(
+      join(evidenceDir, "restore-drill-evidence.json"),
+      `${JSON.stringify({
+        schemaVersion: "maiprop.restore-drill-evidence.v1",
+        status: "verified",
+        backup: { artifactPath, artifactSha256: checksum, artifactBytes: Buffer.byteLength(artifact) },
+        restore: {
+          completedAt: "2026-07-11T12:00:00.000Z",
+          target: "disposable-local-postgres",
+          rowCounts: { profiles: 1, listings: 2, projects: 3, subscriptions: 4, open_house_registrations: 5 },
+          releaseSha: "66326673d2eea057f16584795655572974f97f99",
+          cleanupConfirmed: true,
+        },
+      })}\n`,
+    );
+
+    expect(checkChecksumVerifiedRestoreEvidence(root).ok).toBe(true);
+
+    writeFileSync(artifactPath, "modified backup");
+    expect(checkChecksumVerifiedRestoreEvidence(root).failures.join("\n")).toContain("checksum does not match");
   });
 });

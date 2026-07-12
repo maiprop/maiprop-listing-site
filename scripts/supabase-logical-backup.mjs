@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-import { createCipheriv, randomBytes, scryptSync } from "node:crypto";
-import { createReadStream, createWriteStream, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { createCipheriv, createHash, randomBytes, scryptSync } from "node:crypto";
+import { createReadStream, createWriteStream, existsSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
-import { pipeline } from "node:stream/promises";
+import { finished, pipeline } from "node:stream/promises";
 import { spawnSync } from "node:child_process";
 
 const args = new Set(process.argv.slice(2));
@@ -54,7 +54,11 @@ const encryptFile = async (source, destination) => {
   await pipeline(createReadStream(source), cipher, out, { end: false });
   out.write(Buffer.from(`\n${cipher.getAuthTag().toString("hex")}\n`));
   out.end();
+  await finished(out);
 };
+
+const sha256File = async (path) =>
+  createHash("sha256").update(await import("node:fs").then((fs) => fs.readFileSync(path))).digest("hex");
 
 if (!useLinked && !dbUrl) {
   throw new Error("Set SUPABASE_DB_URL or DATABASE_URL, or pass --linked for a linked Supabase project.");
@@ -97,11 +101,15 @@ try {
     } else {
       await encryptFile(combinedPath, encryptedPath);
     }
+    const backupPath = keepPlaintext ? plaintextPath : encryptedPath;
     writeFileSync(
       manifestPath,
       `${JSON.stringify({
+        schema_version: "maiprop.logical-backup-manifest.v1",
         created_at: new Date().toISOString(),
-        backup_file: keepPlaintext ? basename(plaintextPath) : basename(encryptedPath),
+        backup_file: basename(backupPath),
+        artifact_sha256: await sha256File(backupPath),
+        artifact_bytes: statSync(backupPath).size,
         encrypted: !keepPlaintext,
         source: useLinked ? "linked Supabase project" : "SUPABASE_DB_URL",
         includes: ["schema", "data"],

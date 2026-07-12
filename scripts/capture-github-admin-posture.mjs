@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { checkBranchProtectionEvidence, checkGithubGovernance } from "./check-github-governance.mjs";
 
 const DEFAULT_OUT = "artifacts/compliance/live-evidence/github-admin-posture.json";
 
@@ -50,10 +51,22 @@ const normalizeProductionEnvironment = (body) => ({
     : false,
 });
 
+const summarizeCheck = (id, description, check) => ({
+  id,
+  description,
+  status: check.ok ? "passed" : "failed",
+  failures: check.failures,
+});
+
+const planLimitedBranchProtection = (response, body) =>
+  response.status === 403 &&
+  /upgrade to github pro|make this repository public|plan/i.test(String(body?.message ?? ""));
+
 export async function buildGithubAdminPostureEvidence({
   env = process.env,
   fetchImpl = globalThis.fetch,
   now = () => new Date(),
+  root = process.cwd(),
 } = {}) {
   const queriedAt = now().toISOString();
   const missingEnv = validateGithubEnv(env);
@@ -77,6 +90,31 @@ export async function buildGithubAdminPostureEvidence({
   });
 
   if (!branchProtectionResult.response.ok) {
+    if (planLimitedBranchProtection(branchProtectionResult.response, branchProtectionResult.body)) {
+      return {
+        provider: "github",
+        status: "plan_limited",
+        queriedAt,
+        branch,
+        branchProtection: {
+          status: "plan_limited",
+          httpStatus: branchProtectionResult.response.status,
+          message: String(branchProtectionResult.body?.message ?? "GitHub branch protection is unavailable"),
+        },
+        compensatingControls: [
+          summarizeCheck(
+            "source-controlled-branch-policy",
+            "Expected main-branch policy is versioned and checked against the repository documentation.",
+            checkBranchProtectionEvidence(root),
+          ),
+          summarizeCheck(
+            "required-ci-governance-gate",
+            "Repository governance contracts and SHA-pinned workflow policy pass in CI.",
+            checkGithubGovernance(root),
+          ),
+        ],
+      };
+    }
     blockers.push(
       `GitHub branch protection endpoint returned ${branchProtectionResult.response.status}: ${
         branchProtectionResult.body?.message ?? "unavailable"
@@ -146,7 +184,7 @@ const writeJson = (path, value) => {
 const main = async () => {
   const args = parseArgs(process.argv.slice(2));
   const evidence = await buildGithubAdminPostureEvidence();
-  writeJson(join(process.cwd(), args.out), evidence);
+  writeJson(resolve(process.cwd(), args.out), evidence);
 
   if (args.strict && evidence.status !== "captured") {
     process.stderr.write(`GitHub admin posture is ${evidence.status}\n`);

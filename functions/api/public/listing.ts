@@ -13,18 +13,12 @@ import {
 } from "./_cache";
 import { getSupabaseRuntime } from "../../_seo";
 import { publicListingRows } from "./_fixture-content";
+import { fetchPublicProfileSummaries, publicProfileDisplay } from "./_publicProfiles";
 
 type ListingRow = {
   id: string;
   owner_id?: string | null;
   [key: string]: unknown;
-};
-
-type ProfilePublicRow = {
-  user_id: string;
-  display_name: string | null;
-  avatar_url: string | null;
-  role?: string | null;
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -213,16 +207,11 @@ function invalidListingRequest(): Response {
   );
 }
 
-async function fetchOwnerProfile(env: PublicApiEnv, ownerId: string | null | undefined): Promise<ProfilePublicRow | null> {
+async function fetchOwnerProfile(env: PublicApiEnv, ownerId: string | null | undefined) {
   if (!ownerId) return null;
 
-  const params = new URLSearchParams();
-  params.set("select", "user_id,display_name,avatar_url,role");
-  params.set("user_id", `eq.${ownerId}`);
-  params.set("limit", "1");
   try {
-    const rows = await supabaseJson<ProfilePublicRow>(env, "/rest/v1/profiles_public", params);
-    return rows[0] ?? null;
+    return (await fetchPublicProfileSummaries(env, [ownerId])).get(ownerId) ?? null;
   } catch (error) {
     console.warn("[public-api] Public owner profile lookup failed; returning listing without profile", error);
     return null;
@@ -276,7 +265,8 @@ async function publicListing(ctx: PublicApiCtx, requestUrl: URL): Promise<Respon
         data: row
           ? {
             ...row,
-            profiles: profile,
+            profiles: publicProfileDisplay(profile),
+            ownerParticipantType: profile?.owner_participant_type ?? null,
           }
           : null,
       });

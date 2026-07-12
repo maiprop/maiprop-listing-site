@@ -208,18 +208,18 @@ export default function ProfessionalProfile() { // skipcq: JS-R1005 - Route shel
   };
 
   if (isLoading) return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
+    <main id="main-content" className="min-h-screen bg-background flex items-center justify-center">
       <Loader2 className="w-8 h-8 animate-spin text-primary" />
-    </div>
+    </main>
   );
 
   if (!hasValidProfessionalId || !pro) return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <div className="pt-24 flex flex-col items-center justify-center gap-4">
+      <main id="main-content" className="pt-24 flex flex-col items-center justify-center gap-4">
         <p className="text-muted-foreground">Professional not found.</p>
         <Link to="/professionals" className="text-primary hover:underline text-sm">← Back to Directory</Link>
-      </div>
+      </main>
     </div>
   );
 
@@ -235,7 +235,7 @@ export default function ProfessionalProfile() { // skipcq: JS-R1005 - Route shel
           onNavigate={(cat) => navigate(`/professionals?category=${cat}`)}
         />
       )}
-      <div className="pt-16">
+      <main id="main-content" className="pt-16">
 
         {/* ── Hero ── */}
         <div className="bg-card border-b border-border">
@@ -581,7 +581,7 @@ export default function ProfessionalProfile() { // skipcq: JS-R1005 - Route shel
             </div>
           </div>
         </div>
-      </div>
+      </main>
       <Footer />
 
       {/* ── Modals ── */}

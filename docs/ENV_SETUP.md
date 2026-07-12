@@ -188,6 +188,7 @@ Dashboard → Project Settings → Edge Functions → Secrets.
 | `STRIPE_TAX_READINESS_STRICT` | Set to `true` to make Stripe Tax readiness warnings fail the check. |
 | `STRIPE_PRICE_*` | Optional server-side Checkout price fallbacks. Prefer Admin Pricing sync because it stores monthly and annual price IDs distinctly in `pricing_configs.metadata`. |
 | `STRIPE_PRICE_PARTICIPANT_MONTHLY` / `STRIPE_PRICE_PARTICIPANT_ANNUAL` | Optional fallback for `pro` participant Checkout when DB metadata is unavailable |
+| `STRIPE_PRICE_PRO_MONTHLY` / `STRIPE_PRICE_PRO_ANNUAL` | Legacy aliases for the participant Checkout fallback; prefer the `STRIPE_PRICE_PARTICIPANT_*` names for new configuration |
 | `STRIPE_PRICE_AGENT_MONTHLY` / `STRIPE_PRICE_AGENT_ANNUAL` | Optional fallback for `agent_basic` Checkout when DB metadata is unavailable |
 | `STRIPE_PRICE_DEVELOPER_MONTHLY` / `STRIPE_PRICE_DEVELOPER_ANNUAL` | Optional fallback for `developer_pro` Checkout when DB metadata is unavailable |
 | `STRIPE_PRICE_PROFESSIONAL_MONTHLY` / `STRIPE_PRICE_PROFESSIONAL_ANNUAL` | Optional fallback for `professional_basic` Checkout when DB metadata is unavailable |
