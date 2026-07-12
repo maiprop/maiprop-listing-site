@@ -25,6 +25,26 @@
     },
     {
       "match": {
+        "name": "anon_security_definer_function_executable",
+        "cache_key_contains": "public_get_public_profile_summaries"
+      },
+      "owner": "listings/security",
+      "reason": "Public listing cards require display name, avatar, and a coarse agent/seller label. The stable RPC accepts only user IDs and returns only those explicitly public fields without exposing account roles, billing state, or tenant membership.",
+      "next_action": "Keep RPC output and execute grants covered by public API and RLS tests; replace it with an equally narrow public projection if Supabase adds a safer native role-aware view pattern.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": {
+        "name": "authenticated_security_definer_function_executable",
+        "cache_key_contains": "public_get_public_profile_summaries"
+      },
+      "owner": "listings/security",
+      "reason": "Authenticated listing cards consume the same constrained public profile projection as anonymous cards. The RPC does not return plan, pricing, billing, organization, or authoritative role data.",
+      "next_action": "Keep RPC output and execute grants covered by public API and RLS tests; remove browser execution if card enrichment moves behind a service boundary.",
+      "review_cadence": "monthly"
+    },
+    {
+      "match": {
         "name": "authenticated_security_definer_function_executable",
         "cache_key_contains": "public_get_open_house_capacity"
       },
