@@ -1,20 +1,19 @@
-﻿import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
+﻿import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { Database, Enums, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
+import type { Database, Enums } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "sonner";
-import { getPlanLimitErrorMessage } from "@/lib/planLimitErrors";
 import { logger } from "@/lib/logger";
 import { getOwnerParticipantType } from "@/lib/participantConfig";
 import { CATALOG_STATIC_QUERY_STALE_TIME, USER_SCOPED_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 import { fetchPublicApi, isPublicApiAbort } from "@/lib/publicApi";
-import {
-  listingIdSchema,
-  listingUpdateMutationSchema,
-  listingWriteSchema,
-  parseMutationInput,
-} from "@/lib/mutationSchemas";
 import { getListingLocationSearchTokenGroups } from "@/lib/location/locationSearchSemantics";
+
+export {
+  useCreateListing,
+  useDeleteListing,
+  useTrackListingView,
+  useUpdateListing,
+} from "@/hooks/useListingMutations";
 
 /**
  * Minimal shape we need from a listings row to enrich it with profiles. The
@@ -822,120 +821,6 @@ export const useOwnerProStatus = (
     enabled,
     initialData: options.initialData,
     staleTime: USER_SCOPED_QUERY_STALE_TIME,
-  });
-};
-
-/**
- * Tracks a listing view — call from the detail page component, not inside a queryFn.
- * Deduplicates within the same browser session so refetches don't double-count.
- * Uses an Edge Function wrapper so public page views do not require browser
- * execute grants on SECURITY DEFINER database functions.
- */
-export const useTrackListingView = () => {
-  return useMutation({
-    mutationFn: async (listingId: string) => {
-      const parsedListingId = parseMutationInput(listingIdSchema, listingId, "listing id");
-      const viewTtlMs = 6 * 60 * 60 * 1000;
-      const storageKey = `maiprop_viewed_${parsedListingId}`;
-      const now = Date.now();
-      const lastTracked = Number(localStorage.getItem(storageKey) ?? sessionStorage.getItem(storageKey) ?? "0");
-      if (Number.isFinite(lastTracked) && now - lastTracked < viewTtlMs) return;
-
-      localStorage.setItem(storageKey, String(now));
-      sessionStorage.setItem(storageKey, String(now));
-
-      const sampleRate = Number(import.meta.env.VITE_VIEW_TRACKING_SAMPLE_RATE ?? "1");
-      if (Number.isFinite(sampleRate) && sampleRate >= 0 && sampleRate < 1 && Math.random() > sampleRate) return;
-
-      await supabase.functions.invoke("record-listing-view", {
-        body: { listingId: parsedListingId },
-      }).catch((e: unknown) => logger.warn("View tracking failed:", e));
-    },
-  });
-};
-
-export const useCreateListing = () => {
-  const queryClient = useQueryClient();
-  const { user } = useAuth();
-
-  return useMutation({
-    mutationFn: async (listing: {
-      title: string; city: string; price: number; sqm: number;
-      property_type: string; listing_type: string; description?: string;
-      address?: string; bedrooms?: number; bathrooms?: number;
-      cover_image_url?: string; tags?: string[];
-      latitude?: number; longitude?: number;
-      auction_date?: string; auction_starting_bid?: number;
-    }) => {
-      if (!user) throw new Error("Must be logged in");
-      const payload = parseMutationInput(listingWriteSchema, {
-        ...listing,
-        owner_id: user.id,
-        status: "active" as Enums<"listing_status">,
-        listing_type: listing.listing_type as TablesInsert<"listings">["listing_type"],
-        property_type: listing.property_type as TablesInsert<"listings">["property_type"],
-      }, "listing") as TablesInsert<"listings">;
-      const { data, error } = await supabase.from("listings").insert(payload)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["listings"] });
-      queryClient.invalidateQueries({ queryKey: ["listings-paginated"] });
-      toast.success("Listing published successfully!");
-    },
-    onError: (err: Error) => {
-      const msg = getPlanLimitErrorMessage(err);
-      toast.error(msg ?? err.message);
-    },
-  });
-};
-
-export const useUpdateListing = () => {
-  const queryClient = useQueryClient();
-  const { user } = useAuth();
-  return useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: TablesUpdate<"listings"> }) => {
-      if (!user) throw new Error("Must be logged in");
-      const payload = parseMutationInput(listingUpdateMutationSchema, { id, updates }, "listing update");
-      const { data, error } = await supabase
-        .from("listings")
-        .update(payload.updates as TablesUpdate<"listings">)
-        .eq("id", payload.id)
-        .eq("owner_id", user.id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (_, { id }) => {
-      queryClient.invalidateQueries({ queryKey: ["listings"] });
-      queryClient.invalidateQueries({ queryKey: ["listings-paginated"] });
-      queryClient.invalidateQueries({ queryKey: ["listing", id] });
-      toast.success("Listing updated!");
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
-};
-
-export const useDeleteListing = () => {
-  const queryClient = useQueryClient();
-  const { user } = useAuth();
-  return useMutation({
-    mutationFn: async (id: string) => {
-      if (!user) throw new Error("Must be logged in");
-      const listingId = parseMutationInput(listingIdSchema, id, "listing id");
-      const { error } = await supabase.from("listings").delete().eq("id", listingId).eq("owner_id", user.id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["listings"] });
-      queryClient.invalidateQueries({ queryKey: ["listings-paginated"] });
-      toast.success("Listing deleted.");
-    },
-    onError: (err: Error) => toast.error(err.message),
   });
 };
 
