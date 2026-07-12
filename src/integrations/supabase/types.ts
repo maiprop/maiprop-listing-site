@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_deletion_jobs: {
+        Row: {
+          attempt_id: string
+          attempts: number
+          completed_at: string | null
+          last_error: string | null
+          leased_until: string
+          requested_at: string
+          stage: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          attempt_id?: string
+          attempts?: number
+          completed_at?: string | null
+          last_error?: string | null
+          leased_until?: string
+          requested_at?: string
+          stage?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          attempt_id?: string
+          attempts?: number
+          completed_at?: string | null
+          last_error?: string | null
+          leased_until?: string
+          requested_at?: string
+          stage?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       addon_purchases: {
         Row: {
           addon_key: string
@@ -102,6 +138,42 @@ export type Database = {
             referencedColumns: ["user_id"]
           },
         ]
+      }
+      admin_audit_log: {
+        Row: {
+          action: string
+          actor_id: string | null
+          entity: string
+          id: number
+          new_data: Json | null
+          occurred_at: string
+          old_data: Json | null
+          reason: string | null
+          target_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          entity: string
+          id?: number
+          new_data?: Json | null
+          occurred_at?: string
+          old_data?: Json | null
+          reason?: string | null
+          target_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          entity?: string
+          id?: number
+          new_data?: Json | null
+          occurred_at?: string
+          old_data?: Json | null
+          reason?: string | null
+          target_id?: string | null
+        }
+        Relationships: []
       }
       agent_data_input_bans: {
         Row: {
@@ -4543,6 +4615,10 @@ export type Database = {
             Args: { _user_id: string }
             Returns: Database["public"]["Enums"]["user_role"]
           }
+      begin_account_deletion_job: {
+        Args: { p_user_id: string }
+        Returns: string
+      }
       begin_role_switch: { Args: never; Returns: undefined }
       begin_role_switch_for_user: {
         Args: { _user_id: string }
@@ -4731,6 +4807,13 @@ export type Database = {
       }
       expire_featured_listings: { Args: never; Returns: undefined }
       expire_past_auctions: { Args: never; Returns: number }
+      get_account_deletion_storage_objects: {
+        Args: { p_user_id: string }
+        Returns: {
+          bucket_id: string
+          name: string
+        }[]
+      }
       get_addon_credit_balance: {
         Args: { p_bucket: string; p_user_id: string }
         Returns: number
@@ -4853,6 +4936,15 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_public_profile_summaries: {
+        Args: { p_user_ids: string[] }
+        Returns: {
+          avatar_url: string
+          display_name: string
+          owner_participant_type: string
+          user_id: string
+        }[]
+      }
       get_report_monthly_base_limit: {
         Args: { p_user_id: string }
         Returns: number
@@ -4910,6 +5002,10 @@ export type Database = {
         Returns: undefined
       }
       invoke_send_saved_search_alerts_cron: { Args: never; Returns: undefined }
+      is_account_deletion_active: {
+        Args: { p_user_id: string }
+        Returns: boolean
+      }
       is_pro: { Args: { p_user_id: string }; Returns: boolean }
       move_to_dlq: {
         Args: {
@@ -4989,6 +5085,16 @@ export type Database = {
       }
       seed_grant_role: {
         Args: { target_role: string; user_ids: string[] }
+        Returns: undefined
+      }
+      set_account_deletion_job_stage: {
+        Args: {
+          p_attempt_id: string
+          p_last_error?: string
+          p_stage: string
+          p_status: string
+          p_user_id: string
+        }
         Returns: undefined
       }
       submit_agent_data_input:
