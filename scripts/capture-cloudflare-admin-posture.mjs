@@ -12,7 +12,9 @@ export const validateCloudflareEnv = (env = process.env) => {
   if (!env.CLOUDFLARE_API_TOKEN) missing.push("CLOUDFLARE_API_TOKEN");
   if (!env.CLOUDFLARE_ACCOUNT_ID) missing.push("CLOUDFLARE_ACCOUNT_ID");
   if (!cloudflareProjectName(env)) missing.push("CLOUDFLARE_PAGES_PROJECT");
-  if (env.CLOUDFLARE_DNS_MODE && !env.CLOUDFLARE_ZONE_ID) missing.push("CLOUDFLARE_ZONE_ID");
+  if (env.CLOUDFLARE_DNS_MODE && !env.CLOUDFLARE_ZONE_ID && !env.CLOUDFLARE_ZONE_NAME) {
+    missing.push("CLOUDFLARE_ZONE_ID or CLOUDFLARE_ZONE_NAME");
+  }
   return missing;
 };
 
@@ -143,7 +145,9 @@ export async function buildCloudflarePostureEvidence({
 
   let dnsPosture;
   if (dnsMode) {
-    const zoneUrl = `${apiBase}/zones/${env.CLOUDFLARE_ZONE_ID}`;
+    const zoneUrl = env.CLOUDFLARE_ZONE_ID
+      ? `${apiBase}/zones/${env.CLOUDFLARE_ZONE_ID}`
+      : `${apiBase}/zones?name=${encodeURIComponent(env.CLOUDFLARE_ZONE_NAME)}&account.id=${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID)}&match=all`;
     const zoneResult = await cloudflareRequest({
       url: zoneUrl,
       token: env.CLOUDFLARE_API_TOKEN,
@@ -158,7 +162,20 @@ export async function buildCloudflarePostureEvidence({
         errors: zoneResult.body?.errors ?? [],
       };
     }
-    dnsPosture = normalizeDnsPosture(zoneResult.body.result ?? {}, dnsMode);
+    const zone = env.CLOUDFLARE_ZONE_ID
+      ? zoneResult.body.result
+      : Array.isArray(zoneResult.body.result) && zoneResult.body.result.length === 1
+        ? zoneResult.body.result[0]
+        : null;
+    if (!zone) {
+      return {
+        provider: "cloudflare",
+        status: "failed",
+        queriedAt,
+        errors: [`Expected exactly one Cloudflare zone named ${env.CLOUDFLARE_ZONE_NAME}`],
+      };
+    }
+    dnsPosture = normalizeDnsPosture(zone, dnsMode);
     if (dnsMode === "cloudflare-authoritative" && !dnsPosture.authoritativeAtCloudflare) {
       return {
         provider: "cloudflare",

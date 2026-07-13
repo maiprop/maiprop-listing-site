@@ -24,4 +24,9 @@ describe("standards evidence workflow", () => {
     expect(step("Check ECAS live evidence rollup", "Upload standards evidence")).toContain("if: always()");
     expect(step("Upload standards evidence", null)).toContain("if: always()");
   });
+
+  it("captures the accepted registrar-authoritative DNS posture", () => {
+    expect(workflow).toContain("CLOUDFLARE_DNS_MODE: registrar");
+    expect(workflow).toContain("CLOUDFLARE_ZONE_NAME: maiprop.co");
+  });
 });

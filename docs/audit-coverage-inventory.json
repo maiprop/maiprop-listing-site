@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-13T17:28:00.736Z",
+  "generated_at": "2026-07-13T17:44:22.433Z",
   "totals": {
     "source_files": 645,
     "source_lines": 129910,
@@ -8,9 +8,9 @@
     "supabase_functions": 65,
     "likely_tested_source_files": 581,
     "coverage_available": true,
-    "coverage_lines_pct": 90.71,
+    "coverage_lines_pct": 90.7,
     "coverage_functions_pct": 86.6,
-    "coverage_branches_pct": 80.15,
+    "coverage_branches_pct": 80.17,
     "zero_covered_runtime_files": 0
   },
   "by_root": {
