@@ -132,7 +132,7 @@ describe("Supabase index stats workflow wiring", () => {
     expect(liveSecurityScript).toContain("fail(\"posture check failed\", failures)");
   });
 
-  it("lets function-only staging deploys skip DB-backed index stats without weakening migration gates", () => {
+  it("keeps staging migration gates active while resolving direct database URLs through the pooler", () => {
     expect(supabaseStagingWorkflow).toMatch(
       /if grep -Eq '\^supabase\/migrations\/' <<< "\$changed_files"; then\s+echo "db_changes=true" >> "\$GITHUB_OUTPUT"[\s\S]*?else\s+echo "db_changes=false" >> "\$GITHUB_OUTPUT"/,
     );
@@ -157,8 +157,14 @@ describe("Supabase index stats workflow wiring", () => {
     expect(supabaseStagingWorkflow).toContain(
       "Configure SUPABASE_STAGING_DB_URL as a Supabase pooler URL",
     );
-    expect(supabaseStagingWorkflow).toContain("direct Supabase DB hostname, which is IPv6-only");
-    expect(supabaseStagingWorkflow).toContain("Containerized migration validation remains the hard gate");
+    expect(supabaseStagingWorkflow).toContain("if (current.hostname.endsWith(\".pooler.supabase.com\"))");
+    expect(supabaseStagingWorkflow).toContain("pooler.hostname = `aws-0-${region}.pooler.supabase.com`");
+    expect(supabaseStagingWorkflow).not.toContain(
+      "direct Supabase DB hostname, which is IPv6-only",
+    );
+    expect(supabaseStagingWorkflow).not.toContain(
+      "Containerized migration validation remains the hard gate for this PR",
+    );
     expect(supabaseStagingWorkflow).toMatch(
       /- name: Capture staging Supabase index stats\s+if: steps\.supabase_changes\.outputs\.db_changes == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'\s+run: npm run capture:supabase-index-stats -- --out supabase-index-stats\.json/,
     );

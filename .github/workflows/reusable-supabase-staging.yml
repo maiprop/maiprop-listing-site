@@ -227,48 +227,6 @@ jobs:
             exit 0
           fi
 
-          if [ "${{ steps.supabase_changes.outputs.db_changes }}" = "true" ]; then
-            set +e
-            node - "$SUPABASE_STAGING_DB_URL" <<'NODE'
-          const [, , dbUrl = ""] = process.argv;
-          try {
-            const host = new URL(dbUrl).hostname;
-            if (host.endsWith(".pooler.supabase.com")) {
-              process.exit(0);
-            }
-            if (/^db\.[a-z0-9]+\.supabase\.co$/.test(host)) {
-              process.exit(2);
-            }
-            process.exit(0);
-          } catch {
-            process.exit(1);
-          }
-          NODE
-            status=$?
-            set -e
-            if [ "$status" -ne 0 ]; then
-              if [ "$status" -eq 2 ]; then
-                echo "::warning::SUPABASE_STAGING_DB_URL uses the direct Supabase DB hostname, which is IPv6-only for GitHub-hosted runners. Skipping isolated staging DB/function deploy; configure the staging pooler connection string to enable it."
-                echo "isolated_staging=false" >> "$GITHUB_OUTPUT"
-                {
-                  echo "### Supabase staging"
-                  echo "Migration files changed, but the staging DB URL uses the direct IPv6-only Supabase hostname."
-                  echo "GitHub-hosted runners cannot reliably reach that host. Configure the staging pooler connection string in SUPABASE_STAGING_DB_URL to enable isolated staging DB/function deploy."
-                  echo "Containerized migration validation remains the hard gate for this PR."
-                } >> "$GITHUB_STEP_SUMMARY"
-                exit 0
-              fi
-
-              echo "::warning::SUPABASE_STAGING_DB_URL is not a valid Postgres URL; skipping isolated staging deploy steps."
-              echo "isolated_staging=false" >> "$GITHUB_OUTPUT"
-              {
-                echo "### Supabase staging"
-                echo "SUPABASE_STAGING_DB_URL is not a valid Postgres URL. Staging and preview deploy steps are skipped."
-              } >> "$GITHUB_STEP_SUMMARY"
-              exit 0
-            fi
-          fi
-
           echo "isolated_staging=true" >> "$GITHUB_OUTPUT"
           echo "Isolated staging Supabase project detected."
         env:
