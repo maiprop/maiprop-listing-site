@@ -1110,3 +1110,68 @@ jobs:
           PRODUCTION_DEPLOY_CHECK_ATTEMPTS:     12
           PRODUCTION_DEPLOY_CHECK_DELAY_MS:     10000
         run: npm run check:production-deploy -- "${{ steps.deploy_pages_preview.outputs['deployment-url'] }}" --public-api
+
+  release-status:
+    name: Publish Release PR CI Status
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: >
+      always() &&
+      github.event_name == 'workflow_dispatch' &&
+      startsWith(github.ref, 'refs/heads/release-please--')
+    needs:
+      - quality
+      - release-safety
+      - e2e
+      - e2e-security-staging
+      - migrations-validate
+      - lighthouse
+      - deploy-supabase-staging
+    permissions:
+      contents: read
+      statuses: write
+    steps:
+      - name: Publish final release status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          RELEASE_SAFETY_RESULT: ${{ needs['release-safety'].result }}
+          E2E_RESULT: ${{ needs.e2e.result }}
+          E2E_SECURITY_RESULT: ${{ needs['e2e-security-staging'].result }}
+          MIGRATIONS_RESULT: ${{ needs['migrations-validate'].result }}
+          LIGHTHOUSE_RESULT: ${{ needs.lighthouse.result }}
+          STAGING_SUPABASE_RESULT: ${{ needs['deploy-supabase-staging'].result }}
+        run: |
+          set -euo pipefail
+          target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          results=(
+            "$QUALITY_RESULT"
+            "$RELEASE_SAFETY_RESULT"
+            "$E2E_RESULT"
+            "$E2E_SECURITY_RESULT"
+            "$MIGRATIONS_RESULT"
+            "$LIGHTHOUSE_RESULT"
+            "$STAGING_SUPABASE_RESULT"
+          )
+          state=success
+          for result in "${results[@]}"; do
+            if [[ "$result" != "success" ]]; then
+              state=failure
+              break
+            fi
+          done
+
+          if [[ "$state" == "success" ]]; then
+            description="Release PR CI passed"
+          else
+            description="Release PR CI failed"
+          fi
+
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state="$state" \
+            -f context="release-please/ci" \
+            -f description="$description" \
+            -f target_url="$target_url" >/dev/null
+
+          [[ "$state" == "success" ]]

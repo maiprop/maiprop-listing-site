@@ -153,6 +153,74 @@ describe("Cloudflare admin posture capture", () => {
     );
   });
 
+  it("discovers registrar DNS posture by account and zone name when no zone id is configured", async () => {
+    const calls = [];
+    const evidence = await buildCloudflarePostureEvidence({
+      env: {
+        CLOUDFLARE_API_TOKEN: "cf_secret",
+        CLOUDFLARE_ACCOUNT_ID: "account_123",
+        CLOUDFLARE_PAGES_PROJECT: "maiprop-listing-site",
+        CLOUDFLARE_DNS_MODE: "registrar",
+        CLOUDFLARE_ZONE_NAME: "maiprop.co",
+      },
+      fetchImpl: async (url) => {
+        calls.push(String(url));
+        if (String(url).includes("/zones?")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              success: true,
+              result: [
+                {
+                  id: "zone_123",
+                  name: "maiprop.co",
+                  status: "initializing",
+                  name_servers: ["carlane.ns.cloudflare.com", "derek.ns.cloudflare.com"],
+                  original_name_servers: ["dns1.registrar-servers.com", "dns2.registrar-servers.com"],
+                },
+              ],
+            }),
+          };
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            success: true,
+            result: {
+              id: "project-id",
+              name: "maiprop-listing-site",
+              production_branch: "main",
+              domains: ["portal.maiprop.co"],
+            },
+          }),
+        };
+      },
+    });
+
+    expect(validateCloudflareEnv({
+      CLOUDFLARE_API_TOKEN: "cf_secret",
+      CLOUDFLARE_ACCOUNT_ID: "account_123",
+      CLOUDFLARE_PAGES_PROJECT: "maiprop-listing-site",
+      CLOUDFLARE_DNS_MODE: "registrar",
+      CLOUDFLARE_ZONE_NAME: "maiprop.co",
+    })).toEqual([]);
+    expect(calls).toContain(
+      "https://api.cloudflare.com/client/v4/zones?name=maiprop.co&account.id=account_123&match=all",
+    );
+    expect(evidence).toMatchObject({
+      status: "captured",
+      dnsPosture: {
+        mode: "registrar",
+        zoneName: "maiprop.co",
+        zoneStatus: "initializing",
+        authoritativeAtCloudflare: false,
+        zoneSecurityControlsClaimed: false,
+      },
+    });
+  });
+
   it("fails closed when authoritative Cloudflare DNS is requested but the zone is inactive", async () => {
     const evidence = await buildCloudflarePostureEvidence({
       env: {
