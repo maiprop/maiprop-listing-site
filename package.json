@@ -231,7 +231,7 @@
     "i18next-scanner": "^4.6.0",
     "js-yaml": "4.2.0",
     "jsdom": "^29.1.1",
-    "postcss": "^8.5.15",
+    "postcss": "^8.5.19",
     "remotion": "^4.0.482",
     "rollup-plugin-visualizer": "^6.0.11",
     "sharp": "^0.34.5",
