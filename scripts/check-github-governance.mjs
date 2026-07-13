@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import yaml from "js-yaml";
 
 const result = (failures) => ({ ok: failures.length === 0, failures });
 
@@ -17,6 +18,38 @@ const readJson = (root, relativePath) => {
 };
 
 const normalize = (text) => text.replace(/\r\n/g, "\n");
+
+const readWorkflow = (root, relativePath) => {
+  const text = readText(root, relativePath);
+  if (text === null) return { text: null, workflow: null };
+  try {
+    return { text, workflow: yaml.load(text) };
+  } catch {
+    return { text, workflow: null };
+  }
+};
+
+const workflowJobs = (workflow) => {
+  return workflow && typeof workflow === "object" && workflow.jobs && typeof workflow.jobs === "object"
+    ? Object.entries(workflow.jobs)
+    : [];
+};
+
+const findWorkflowStep = (workflow, predicate) => {
+  for (const [jobName, job] of workflowJobs(workflow)) {
+    if (!job || typeof job !== "object" || !Array.isArray(job.steps)) continue;
+    for (const step of job.steps) {
+      if (step && typeof step === "object" && predicate(step)) return { jobName, job, step };
+    }
+  }
+  return null;
+};
+
+const effectiveJobPermissions = (workflow, job) => {
+  if (job?.permissions && typeof job.permissions === "object") return job.permissions;
+  if (workflow?.permissions && typeof workflow.permissions === "object") return workflow.permissions;
+  return {};
+};
 
 const hasCodeownersPattern = (codeowners, pattern) => {
   return normalize(codeowners)
@@ -199,29 +232,103 @@ export function checkGithubActionsPolicy(root = process.cwd()) {
 }
 
 export function checkReleasePrCiDispatch(root = process.cwd()) {
-  const releaseWorkflow = readText(root, ".github/workflows/release.yml");
+  const { text: releaseWorkflow, workflow } = readWorkflow(root, ".github/workflows/release.yml");
   if (releaseWorkflow === null) return result([".github/workflows/release.yml is missing"]);
+  if (!workflow || typeof workflow !== "object") return result([".github/workflows/release.yml must be valid YAML"]);
 
   const failures = [];
-  if (!/^\s*actions:\s*write\s*$/m.test(releaseWorkflow)) {
-    failures.push("release workflow must grant actions: write for workflow_dispatch");
-  }
-  if (!/^\s*statuses:\s*write\s*$/m.test(releaseWorkflow)) {
-    failures.push("release workflow must grant statuses: write for the release PR commit status");
-  }
-  if (!releaseWorkflow.includes("gh workflow run ci.yml")) {
-    failures.push("release workflow must use workflow_dispatch to run ci.yml for the Release Please branch");
-  }
-  if (!releaseWorkflow.includes("--ref \"$RELEASE_BRANCH\"")) {
-    failures.push("release workflow must dispatch CI against the Release Please branch ref");
-  }
-  if (!releaseWorkflow.includes("gh run watch \"$run_id\" --exit-status")) {
-    failures.push("release workflow must wait for the dispatched CI run");
-  }
-  if (!releaseWorkflow.includes('context="release-please/ci"')) {
-    failures.push("release workflow must publish a release PR commit status");
+  const dispatch = findWorkflowStep(
+    workflow,
+    (step) => typeof step.run === "string" && /^\s*gh workflow run ci\.yml\b/m.test(step.run),
+  );
+  if (!dispatch) {
+    return result(["release workflow must use workflow_dispatch to run ci.yml for the Release Please branch"]);
   }
 
+  const permissions = effectiveJobPermissions(workflow, dispatch.job);
+  if (permissions.actions !== "write") {
+    failures.push("release workflow must grant actions: write for workflow_dispatch");
+  }
+  if (permissions.statuses !== "write") {
+    failures.push("release workflow must grant statuses: write for the release PR commit status");
+  }
+  if (permissions.contents !== "read") {
+    failures.push("release CI verification job must use contents: read");
+  }
+
+  const releaseAction = findWorkflowStep(
+    workflow,
+    (step) => typeof step.uses === "string" && step.uses.startsWith("googleapis/release-please-action@"),
+  );
+  if (releaseAction) {
+    const releasePermissions = effectiveJobPermissions(workflow, releaseAction.job);
+    if (releasePermissions.actions === "write" || releasePermissions.statuses === "write") {
+      failures.push("Release Please action job must not receive actions/statuses write permissions");
+    }
+  }
+
+  const timeoutMinutes = Number(dispatch.job["timeout-minutes"]);
+  if (!Number.isFinite(timeoutMinutes) || timeoutMinutes < 15 || timeoutMinutes > 45) {
+    failures.push("release CI verification job must have a bounded 15-45 minute timeout");
+  }
+
+  const run = dispatch.step.run;
+  const dispatchIndex = run.indexOf("gh workflow run ci.yml");
+  const baselineIndex = run.indexOf("existing_run_ids=$(gh run list");
+  if (!run.includes("release_sha=$(gh api") || !run.includes("--jq '.commit.sha'")) {
+    failures.push("release workflow must resolve the current Release Please branch SHA");
+  }
+  if (!run.includes("--ref \"$RELEASE_BRANCH\"")) {
+    failures.push("release workflow must dispatch CI against the Release Please branch ref");
+  }
+  if (baselineIndex === -1 || baselineIndex > dispatchIndex || !run.includes('grep -Fxq "$candidate_id" <<< "$existing_run_ids"')) {
+    failures.push("release workflow must select a newly dispatched CI run, not reuse an older exact-SHA run");
+  }
+  if (!run.includes("--event workflow_dispatch") || !/\.headSha\s*==\s*\\?"\$release_sha\\?"/.test(run)) {
+    failures.push("release workflow must match the dispatched CI event and exact release SHA");
+  }
+
+  const discoveryMatch = run.match(/for _ in \$\(seq 1 (\d+)\);[\s\S]*?sleep (\d+)/);
+  const discoverySeconds = discoveryMatch ? Number(discoveryMatch[1]) * Number(discoveryMatch[2]) : 0;
+  if (discoverySeconds < 120 || discoverySeconds > 600) {
+    failures.push("release workflow must use a bounded 2-10 minute run-discovery window");
+  }
+
+  const watchMatch = run.match(/timeout (\d+)m gh run watch \"\$run_id\" --exit-status/);
+  const watchMinutes = watchMatch ? Number(watchMatch[1]) : 0;
+  if (watchMinutes < 10 || watchMinutes > 35) {
+    failures.push("release workflow must wait for the dispatched CI run with a bounded 10-35 minute timeout");
+  }
+  if (!run.includes('context="release-please/ci"')) {
+    failures.push("release workflow must publish a release PR commit status");
+  }
+  if (!run.includes("post_status success") || !run.includes("post_status failure") || !run.includes("trap cleanup EXIT")) {
+    failures.push("release workflow must publish success and failure status outcomes");
+  }
+
+  return result(failures);
+}
+
+export function checkReleasePrLighthouseDispatch(root = process.cwd()) {
+  const { text, workflow } = readWorkflow(root, ".github/workflows/ci.yml");
+  if (text === null) return result([".github/workflows/ci.yml is missing"]);
+  if (!workflow || typeof workflow !== "object") return result([".github/workflows/ci.yml must be valid YAML"]);
+
+  const lighthouse = workflow.jobs?.lighthouse;
+  if (!lighthouse || typeof lighthouse !== "object") return result(["CI must define a Lighthouse job"]);
+
+  const failures = [];
+  const condition = typeof lighthouse.if === "string" ? lighthouse.if : "";
+  if (
+    !condition.includes("github.event_name == 'workflow_dispatch'") ||
+    !condition.includes("startsWith(github.ref, 'refs/heads/release-please--')")
+  ) {
+    failures.push("Lighthouse must run for workflow-dispatched Release Please branches");
+  }
+  const needs = Array.isArray(lighthouse.needs) ? lighthouse.needs : [lighthouse.needs].filter(Boolean);
+  if (!needs.includes("quality") || !needs.includes("release-safety")) {
+    failures.push("Release Please Lighthouse must depend on quality and release-safety gates");
+  }
   return result(failures);
 }
 
@@ -231,6 +338,7 @@ export function checkGithubGovernance(root = process.cwd()) {
     checkBranchProtectionEvidence(root),
     checkGithubActionsPolicy(root),
     checkReleasePrCiDispatch(root),
+    checkReleasePrLighthouseDispatch(root),
   ];
   return result(checks.flatMap((check) => check.failures));
 }

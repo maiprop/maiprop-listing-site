@@ -5,11 +5,7 @@ on:
     branches: [main]
 
 permissions:
-  actions: write
-  contents: write
-  issues: write
-  pull-requests: write
-  statuses: write
+  contents: read
 
 concurrency:
   group: release-please-main
@@ -18,6 +14,10 @@ concurrency:
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
     steps:
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
@@ -26,9 +26,18 @@ jobs:
           # Creates a release PR that bumps version + updates changelog
           # When merged, creates a GitHub Release with tag
 
-      # PRs created with GITHUB_TOKEN do not recursively start pull_request
-      # workflows. Dispatch CI explicitly so the release commit gets the same
-      # build and test contract as a human-authored PR.
+  # PRs created with GITHUB_TOKEN do not recursively start pull_request
+  # workflows. Use a separate least-privilege job to dispatch and verify the
+  # exact release commit without extending those permissions to Release Please.
+  verify-release-pr:
+    needs: release-please
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      actions: write
+      contents: read
+      statuses: write
+    steps:
       - name: Dispatch and verify CI for the release PR
         env:
           GH_TOKEN: ${{ github.token }}
@@ -64,23 +73,33 @@ jobs:
           trap cleanup EXIT
 
           post_status pending "Release PR CI is running" "$workflow_url"
+          existing_run_ids=$(gh run list \
+            --workflow ci.yml \
+            --branch "$RELEASE_BRANCH" \
+            --event workflow_dispatch \
+            --limit 100 \
+            --json databaseId \
+            --jq '.[].databaseId')
           gh workflow run ci.yml --ref "$RELEASE_BRANCH"
 
           run_id=""
           run_url="$workflow_url"
-          for _ in $(seq 1 30); do
-            run_data=$(gh run list \
+          for _ in $(seq 1 120); do
+            while IFS=$'\t' read -r candidate_id candidate_url; do
+              if [[ -n "$candidate_id" ]] && ! grep -Fxq "$candidate_id" <<< "$existing_run_ids"; then
+                run_id="$candidate_id"
+                run_url="$candidate_url"
+                break
+              fi
+            done < <(gh run list \
               --workflow ci.yml \
               --branch "$RELEASE_BRANCH" \
               --event workflow_dispatch \
-              --limit 20 \
+              --limit 100 \
               --json databaseId,headSha,url \
               --jq ".[] | select(.headSha == \"$release_sha\") | [.databaseId, .url] | @tsv" \
-              | head -n 1)
-            if [[ -n "$run_data" ]]; then
-              read -r run_id run_url <<< "$run_data"
-              break
-            fi
+            )
+            [[ -n "$run_id" ]] && break
             sleep 2
           done
 
@@ -89,7 +108,7 @@ jobs:
             exit 1
           fi
 
-          if gh run watch "$run_id" --exit-status; then
+          if timeout 30m gh run watch "$run_id" --exit-status; then
             post_status success "Release PR CI passed" "$run_url"
             status_state="success"
           else

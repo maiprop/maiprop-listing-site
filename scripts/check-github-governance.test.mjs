@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -7,6 +7,7 @@ import {
   checkBranchProtectionEvidence,
   checkCodeownersCoverage,
   checkGithubGovernance,
+  checkReleasePrLighthouseDispatch,
   checkReleasePrCiDispatch,
 } from "./check-github-governance.mjs";
 
@@ -74,6 +75,16 @@ const makeFixture = () => {
     [
       "name: CI",
       "jobs:",
+      "  quality:",
+      "    steps: []",
+      "  release-safety:",
+      "    steps: []",
+      "  lighthouse:",
+      "    if: >",
+      "      github.event_name == 'workflow_dispatch' &&",
+      "      startsWith(github.ref, 'refs/heads/release-please--')",
+      "    needs: [quality, release-safety]",
+      "    steps: []",
       "  test:",
       "    steps:",
       "      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd",
@@ -86,18 +97,36 @@ const makeFixture = () => {
     join(root, ".github", "workflows", "release.yml"),
     [
       "name: Release Please",
-      "permissions:",
-      "  actions: write",
-      "  statuses: write",
       "jobs:",
       "  release-please:",
+      "    permissions:",
+      "      contents: write",
+      "      issues: write",
+      "      pull-requests: write",
       "    steps:",
       "      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7",
+      "  verify-release-pr:",
+      "    timeout-minutes: 40",
+      "    permissions:",
+      "      actions: write",
+      "      contents: read",
+      "      statuses: write",
+      "    steps:",
       "      - name: Dispatch and verify CI for the release PR",
       "        run: |",
+      "          release_sha=$(gh api \"repos/${GITHUB_REPOSITORY}/branches/${RELEASE_BRANCH}\" --jq '.commit.sha')",
+      "          existing_run_ids=$(gh run list --workflow ci.yml --branch \"$RELEASE_BRANCH\" --event workflow_dispatch --limit 100 --json databaseId --jq '.[].databaseId')",
       "          gh workflow run ci.yml --ref \"$RELEASE_BRANCH\"",
-      "          gh run watch \"$run_id\" --exit-status",
+      "          candidates=$(gh run list --workflow ci.yml --branch \"$RELEASE_BRANCH\" --event workflow_dispatch --json databaseId,headSha,url --jq \".[] | select(.headSha == \\\"$release_sha\\\") | [.databaseId, .url] | @tsv\")",
+      "          while IFS=$'\\t' read -r candidate_id candidate_url; do",
+      "            if ! grep -Fxq \"$candidate_id\" <<< \"$existing_run_ids\"; then run_id=\"$candidate_id\"; fi",
+      "          done <<< \"$candidates\"",
+      "          for _ in $(seq 1 120); do sleep 2; done",
+      "          timeout 30m gh run watch \"$run_id\" --exit-status",
       "          context=\"release-please/ci\"",
+      "          trap cleanup EXIT",
+      "          post_status success \"Release PR CI passed\" \"$run_url\"",
+      "          post_status failure \"Release PR CI failed\" \"$run_url\"",
     ].join("\n"),
   );
   writeFileSync(
@@ -125,8 +154,8 @@ describe("GitHub governance check", () => {
   it("accepts complete CODEOWNERS and enterprise main-branch evidence", () => {
     const result = checkGithubGovernance(makeFixture());
 
-    expect(result.ok).toBe(true);
     expect(result.failures).toEqual([]);
+    expect(result.ok).toBe(true);
   });
 
   it("fails when CODEOWNERS misses a critical blast-radius path", () => {
@@ -232,7 +261,56 @@ describe("GitHub governance check", () => {
 
     expect(result.ok).toBe(false);
     expect(result.failures.join("\n")).toContain("workflow_dispatch");
-    expect(result.failures.join("\n")).toContain("wait for the dispatched CI run");
-    expect(result.failures.join("\n")).toContain("commit status");
+  });
+
+  it("rejects release verification that can reuse an older exact-SHA run", () => {
+    const root = makeFixture();
+    const path = join(root, ".github", "workflows", "release.yml");
+    const workflow = readFileSync(path, "utf8")
+      .replace("existing_run_ids=$(gh run list", "ignored_run_ids=$(gh run list")
+      .replace('grep -Fxq "$candidate_id" <<< "$existing_run_ids"', "true");
+    writeFileSync(path, workflow);
+
+    const result = checkReleasePrCiDispatch(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("newly dispatched CI run");
+  });
+
+  it("does not accept release commands that only appear in comments", () => {
+    const root = makeFixture();
+    const path = join(root, ".github", "workflows", "release.yml");
+    writeFileSync(
+      path,
+      [
+        "name: Release Please",
+        "jobs:",
+        "  release-please:",
+        "    steps:",
+        "      - run: echo release",
+        "# actions: write",
+        "# statuses: write",
+        "# gh workflow run ci.yml --ref \"$RELEASE_BRANCH\"",
+        "# timeout 30m gh run watch \"$run_id\" --exit-status",
+        "# context=\"release-please/ci\"",
+      ].join("\n"),
+    );
+
+    const result = checkReleasePrCiDispatch(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("workflow_dispatch");
+  });
+
+  it("requires Lighthouse for workflow-dispatched Release Please branches", () => {
+    const root = makeFixture();
+    expect(checkReleasePrLighthouseDispatch(root).ok).toBe(true);
+
+    const path = join(root, ".github", "workflows", "ci.yml");
+    writeFileSync(path, readFileSync(path, "utf8").replace("refs/heads/release-please--", "refs/heads/manual-release--"));
+
+    const result = checkReleasePrLighthouseDispatch(root);
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("Release Please branches");
   });
 });
