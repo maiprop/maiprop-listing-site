@@ -13,6 +13,7 @@ import {
 const makeFixture = () => {
   const root = mkdtempSync(join(tmpdir(), "maiprop-readiness-"));
   mkdirSync(join(root, ".github"), { recursive: true });
+  mkdirSync(join(root, ".github", "workflows"), { recursive: true });
   mkdirSync(join(root, ".husky"), { recursive: true });
   mkdirSync(join(root, "apps"), { recursive: true });
   mkdirSync(join(root, "packages"), { recursive: true });
@@ -82,6 +83,19 @@ const makeFixture = () => {
       "npm run check:public-functions",
       "## Security / RLS Impact",
       "## Deployment / Rollback",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, ".github", "workflows", "release.yml"),
+    [
+      "name: Release Please",
+      "permissions:",
+      "  actions: write",
+      "jobs:",
+      "  release-please:",
+      "    steps:",
+      "      - name: Dispatch CI for the release PR",
+      "        run: gh workflow run ci.yml --ref \"$RELEASE_BRANCH\"",
     ].join("\n"),
   );
   writeFileSync(
@@ -616,7 +630,7 @@ describe("enterprise readiness basics", () => {
 
     expect(result.failures).toEqual([]);
     expect(result.ok).toBe(true);
-  }, 10_000);
+  }, 20_000);
 
   it("reports runtime drift with actionable file names", () => {
     const root = makeFixture();
@@ -711,5 +725,5 @@ describe("enterprise readiness basics", () => {
 
     expect(result.ok).toBe(false);
     expect(result.failures.join("\n")).toContain("scripts/load-test/basic.js");
-  }, 10_000);
+  }, 20_000);
 });

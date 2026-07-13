@@ -158,6 +158,81 @@ describe("useListingForm — initialisation + simple setters", () => {
     expect(result.current.errors.city).toMatch(/required/i);
     expect(result.current.errors.price).toMatch(/required/i);
   });
+
+  it("refuses to toggle unknown or non-boolean fields", () => {
+    const { result } = renderHook(() => useListingForm(), { wrapper: wrap });
+    const originalTitle = result.current.form.title;
+    const originalKeys = Object.keys(result.current.form);
+
+    act(() => {
+      result.current.toggle("title");
+      result.current.toggle("attacker_controlled_key");
+    });
+
+    expect(result.current.form.title).toBe(originalTitle);
+    expect(Object.keys(result.current.form)).toEqual(originalKeys);
+    expect("attacker_controlled_key" in result.current.form).toBe(false);
+  });
+
+  it("hydrates rental open-house edits, optional fields, booleans, and a deduplicated sorted gallery", () => {
+    const initialListing = {
+      id: "L-open-house",
+      owner_id: "u-1",
+      title: null,
+      description: null,
+      city: "Athens",
+      address: null,
+      region: null,
+      postal_code: null,
+      latitude: 37.98,
+      longitude: 23.72,
+      price: 1500,
+      sqm: 100,
+      listing_type: "open_house",
+      open_house_transaction_type: "rent",
+      open_house_date: "2027-03-04T18:45:00+00:00",
+      property_type: "office",
+      priority_placement: null,
+      cover_image_url: "https://cdn.test/cover.jpg",
+      listing_images: [
+        { url: "", sort_order: 1 },
+        { url: "https://cdn.test/second.jpg", sort_order: 2 },
+        { url: "https://cdn.test/first.jpg", sort_order: 1 },
+        { url: "https://cdn.test/cover.jpg", sort_order: 0 },
+      ],
+      tags: ["manual-tag"],
+      has_elevator: 1,
+      has_pool: 0,
+      profiles: null,
+      ownerIsPro: false,
+      ownerParticipantType: "developer",
+    } as never;
+
+    const { result } = renderHook(() => useListingForm({
+      mode: "edit",
+      listingId: "L-open-house",
+      initialListing,
+    }), { wrapper: wrap });
+
+    expect(result.current.form).toEqual(expect.objectContaining({
+      listing_type: "open_house",
+      open_house_transaction_type: "rent",
+      open_house_date: "2027-03-04T18:45",
+      title: "",
+      latitude: "37.98",
+      longitude: "23.72",
+      priority_placement: 0,
+      is_exclusive: false,
+      has_elevator: true,
+      has_pool: false,
+    }));
+    expect(result.current.images.map((image) => image.url)).toEqual([
+      "https://cdn.test/cover.jpg",
+      "https://cdn.test/first.jpg",
+      "https://cdn.test/second.jpg",
+    ]);
+    expect(result.current.coverImageId).toBe("existing-cover");
+  });
 });
 
 describe("useListingForm — validateStep", () => {
@@ -675,6 +750,108 @@ describe("useListingForm — handleSubmit", () => {
       pets_allowed: true,
     }));
     expect(navigateMock).toHaveBeenCalledWith("/open-house/L-oh-rent");
+  });
+
+  it.each([
+    {
+      name: "commercial",
+      configure: (result: ReturnType<typeof renderHook<ReturnType<typeof useListingForm>, void>>["result"]) => {
+        result.current.set("property_type", "commercial");
+        result.current.set("commercial_subtype", "warehouse");
+        result.current.set("plot_surface", "700");
+        result.current.set("floor_height", "5.5");
+        result.current.set("floor", "1");
+        result.current.set("total_floors", "2");
+        result.current.set("wc_count", "3");
+      },
+      expected: {
+        property_type: "commercial",
+        commercial_subtype: "warehouse",
+        plot_surface: 700,
+        floor_height: 5.5,
+        floor: 1,
+        total_floors: 2,
+        wc_count: 3,
+      },
+    },
+    {
+      name: "land",
+      configure: (result: ReturnType<typeof renderHook<ReturnType<typeof useListingForm>, void>>["result"]) => {
+        result.current.set("property_type", "land");
+        result.current.set("coverage_ratio", "0.4");
+        result.current.set("building_allowance", "0.8");
+        result.current.set("facade_length", "20");
+        result.current.set("plot_depth", "40");
+        result.current.set("slope", "flat");
+        result.current.set("zone_type", "residential");
+        result.current.set("road_type", "asphalt");
+        result.current.set("land_use", "housing");
+        result.current.set("distance_from_sea", "350");
+        result.current.set("distance_from_city", "5");
+      },
+      expected: {
+        property_type: "land",
+        coverage_ratio: 0.4,
+        building_allowance: 0.8,
+        facade_length: 20,
+        plot_depth: 40,
+        slope: "flat",
+        zone_type: "residential",
+        road_type: "asphalt",
+        land_use: "housing",
+        distance_from_sea: 350,
+        distance_from_city: 5,
+      },
+    },
+  ])("constructs the $name-specific database payload without leaking unrelated fields", async ({ configure, expected }) => {
+    const insertMock = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { id: `L-${expected.property_type}` }, error: null }),
+      }),
+    });
+    fromMock.mockReturnValueOnce({ insert: insertMock });
+    const { result } = renderHook(() => useListingForm(), { wrapper: wrap });
+    setBaseForm(result);
+    act(() => configure(result));
+
+    await act(async () => {
+      await result.current.handleSubmit();
+    });
+
+    expect(insertMock).toHaveBeenCalledWith(expect.objectContaining(expected));
+    if (expected.property_type === "land") {
+      expect(insertMock).toHaveBeenCalledWith(expect.not.objectContaining({ bedrooms: expect.anything() }));
+    } else {
+      expect(insertMock).toHaveBeenCalledWith(expect.not.objectContaining({ coverage_ratio: expect.anything() }));
+    }
+  });
+
+  it("constructs auction pricing and schedule fields and routes to the auction detail", async () => {
+    const insertMock = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { id: "L-auction" }, error: null }),
+      }),
+    });
+    fromMock.mockReturnValueOnce({ insert: insertMock });
+    const { result } = renderHook(() => useListingForm(), { wrapper: wrap });
+    setBaseForm(result);
+    act(() => {
+      result.current.set("listing_type", "auction");
+      result.current.set("auction_starting_bid", "210000");
+      result.current.set("auction_date", "2027-06-01T10:30");
+      result.current.set("auction_court", "Athens Court");
+    });
+
+    await act(async () => {
+      await result.current.handleSubmit();
+    });
+
+    expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({
+      auction_starting_bid: 210000,
+      auction_date: "2027-06-01T10:30",
+      auction_court: "Athens Court",
+    }));
+    expect(navigateMock).toHaveBeenCalledWith("/auction/L-auction");
   });
 
   it("toasts the error message when supabase insert throws", async () => {

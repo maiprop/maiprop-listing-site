@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import BillingTab from "@/pages/dashboard/BillingTab";
 import { createTestQueryClient, renderWithProviders } from "@/test/utils";
 import { toast } from "sonner";
+import { useLocation } from "react-router-dom";
 
 const mocks = vi.hoisted(() => ({
   supabase: null as ReturnType<typeof import("@/test/utils").makeMockSupabase> | null,
@@ -48,6 +49,11 @@ vi.mock("sonner", () => ({
     success: vi.fn(),
   },
 }));
+
+const LocationProbe = () => {
+  const location = useLocation();
+  return <output data-testid="location-probe">{location.pathname}{location.search}</output>;
+};
 
 describe("BillingTab add-on checkout", () => {
   beforeEach(() => {
@@ -574,5 +580,275 @@ describe("BillingTab add-on checkout", () => {
         timeout: 20_000,
       });
     });
+  });
+
+  it("uses annual role pricing for a Free subscription checkout", async () => {
+    Object.assign(mocks.subscription, {
+      isPro: false,
+      hasStripeBilling: false,
+      accessSource: null,
+    });
+
+    renderWithProviders(<BillingTab />);
+    fireEvent.click(await screen.findByRole("button", { name: /290.*yr/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Get Pro Plan/i }));
+
+    await waitFor(() => {
+      expect(mocks.supabase?.functions.invoke).toHaveBeenCalledWith("create-checkout", {
+        body: {
+          plan: "pro",
+          billing_cycle: "annual",
+          success_url: "/dashboard/billing?checkout=success",
+          cancel_url: "/dashboard/billing?checkout=cancelled",
+        },
+        timeout: 20_000,
+      });
+    });
+  });
+
+  it.each([
+    ["investor", "/investor-dashboard"],
+    ["institutional", "/contact"],
+  ] as const)("routes the %s invite-only upgrade without creating a public checkout", async (role, route) => {
+    authState.profile.role = role;
+    authState.profile.participant_type = role;
+    Object.assign(mocks.subscription, {
+      isPro: false,
+      hasStripeBilling: false,
+      accessSource: null,
+    });
+
+    renderWithProviders(
+      <>
+        <BillingTab />
+        <LocationProbe />
+      </>,
+    );
+    fireEvent.click((await screen.findAllByRole("button", { name: /^Upgrade$/i }))[0]);
+
+    expect(screen.getByTestId("location-probe")).toHaveTextContent(route);
+    expect(mocks.supabase?.functions.invoke).not.toHaveBeenCalledWith(
+      "create-checkout",
+      expect.anything(),
+    );
+    expect(screen.getByText("Invitation-only access")).toBeInTheDocument();
+  });
+
+  it("resumes a scheduled cancellation without redirecting to the portal", async () => {
+    const getInvoices = vi.fn().mockResolvedValue({
+      data: {
+        invoices: [],
+        billing_configured: true,
+        customer_found: true,
+        portal_eligible: true,
+        subscription: {
+          id: "sub_resume",
+          status: "active",
+          current_period_end: "2026-08-01T00:00:00.000Z",
+          cancel_at_period_end: true,
+          plan_name: "Pro Plan",
+          amount: 29,
+          currency: "EUR",
+          interval: "month",
+        },
+      },
+      error: null,
+    });
+    mocks.supabase?.functions.invoke.mockImplementation((fn: string) => {
+      if (fn === "get-invoices") return getInvoices();
+      if (fn === "customer-portal") return Promise.resolve({ data: { resumed: true }, error: null });
+      if (fn === "ai-quota-status") return Promise.resolve({ data: { quotas: {} }, error: null });
+      return Promise.resolve({ data: null, error: null });
+    });
+
+    renderWithProviders(<BillingTab />);
+    fireEvent.click(await screen.findByRole("button", { name: /Resume plan/i }));
+
+    await waitFor(() => {
+      expect(mocks.supabase?.functions.invoke).toHaveBeenCalledWith("customer-portal", {
+        body: { action: "resume_subscription", subscription_id: "sub_resume" },
+        timeout: 20_000,
+      });
+      expect(toast.success).toHaveBeenCalledWith("Your subscription renewal has been resumed.");
+    });
+    expect(mocks.supabase?.functions.invoke).not.toHaveBeenCalledWith(
+      "customer-portal",
+      expect.objectContaining({ body: expect.objectContaining({ action: "manage" }) }),
+    );
+  });
+
+  it("blocks a subscription action while the Stripe subscription id is unavailable", async () => {
+    mocks.supabase?.functions.invoke.mockImplementation((fn: string) => {
+      if (fn === "get-invoices") {
+        return Promise.resolve({
+          data: {
+            invoices: [],
+            billing_configured: true,
+            customer_found: true,
+            portal_eligible: true,
+            subscription: null,
+          },
+          error: null,
+        });
+      }
+      if (fn === "ai-quota-status") return Promise.resolve({ data: { quotas: {} }, error: null });
+      return Promise.resolve({ data: null, error: null });
+    });
+
+    renderWithProviders(<BillingTab />);
+    await screen.findByText(/No invoices yet/i);
+    fireEvent.click(await screen.findByRole("button", { name: /Change plan/i }));
+
+    expect(toast.info).toHaveBeenCalledWith("Subscription details are still loading.");
+    expect(mocks.supabase?.functions.invoke).not.toHaveBeenCalledWith(
+      "customer-portal",
+      expect.anything(),
+    );
+  });
+
+  it("surfaces portal and subscription checkout failures without leaving billing", async () => {
+    mocks.supabase?.functions.invoke.mockImplementation((fn: string) => {
+      if (fn === "get-invoices") {
+        return Promise.resolve({
+          data: {
+            invoices: [],
+            billing_configured: true,
+            customer_found: true,
+            portal_eligible: true,
+            subscription: {
+              id: "sub_error",
+              status: "active",
+              current_period_end: null,
+              cancel_at_period_end: false,
+              plan_name: "Pro Plan",
+              amount: null,
+              currency: "EUR",
+              interval: "month",
+            },
+          },
+          error: null,
+        });
+      }
+      if (fn === "customer-portal") {
+        return Promise.resolve({ data: { error: "Portal session failed" }, error: null });
+      }
+      if (fn === "ai-quota-status") return Promise.resolve({ data: { quotas: {} }, error: null });
+      return Promise.resolve({ data: null, error: null });
+    });
+
+    const { unmount } = renderWithProviders(<BillingTab />);
+    await screen.findByText(/No invoices yet/i);
+    const currentPlanCard = (await screen.findByText("Current plan")).closest(".glass-card");
+    expect(currentPlanCard).not.toBeNull();
+    fireEvent.click(within(currentPlanCard as HTMLElement).getByRole("button", { name: /Manage billing/i }));
+    await waitFor(() => {
+      expect(mocks.supabase?.functions.invoke).toHaveBeenCalledWith("customer-portal", {
+        body: { action: "manage", subscription_id: "sub_error" },
+        timeout: 20_000,
+      });
+    });
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Portal session failed"));
+    unmount();
+
+    vi.clearAllMocks();
+    Object.assign(mocks.subscription, {
+      isPro: false,
+      hasStripeBilling: false,
+      accessSource: null,
+    });
+    mocks.supabase?.functions.invoke.mockImplementation((fn: string) => {
+      if (fn === "get-invoices") {
+        return Promise.resolve({
+          data: { invoices: [], customer_found: false, portal_eligible: false, subscription: null },
+          error: null,
+        });
+      }
+      if (fn === "create-checkout") {
+        return Promise.resolve({ data: { error: "Plan checkout unavailable" }, error: null });
+      }
+      if (fn === "ai-quota-status") return Promise.resolve({ data: { quotas: {} }, error: null });
+      return Promise.resolve({ data: null, error: null });
+    });
+    renderWithProviders(<BillingTab />);
+    fireEvent.click((await screen.findAllByRole("button", { name: /^Upgrade$/i }))[0]);
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Plan checkout unavailable"));
+  });
+
+  it("shows the live-fetch warning while preserving the profile access state", async () => {
+    mocks.supabase?.functions.invoke.mockImplementation((fn: string) => {
+      if (fn === "get-invoices") {
+        return Promise.resolve({ data: null, error: { message: "Stripe timed out" } });
+      }
+      if (fn === "ai-quota-status") return Promise.resolve({ data: { quotas: {} }, error: null });
+      return Promise.resolve({ data: null, error: null });
+    });
+
+    renderWithProviders(<BillingTab />);
+
+    expect(await screen.findByText(/Live billing details could not be fully refreshed/i)).toBeInTheDocument();
+    expect(screen.getByText(/Pro access active/i)).toBeInTheDocument();
+  });
+
+  it("labels every paid credit type and renders invoice fallback details safely", async () => {
+    const addonRows = [
+      { id: "a-1", addon_key: "valuation_single", status: "paid", credits_granted: 1, credits_consumed: 0, credits_refunded: 0 },
+      { id: "a-2", addon_key: "valuation_bundle", status: "active", credits_granted: 5, credits_consumed: 1, credits_refunded: 0 },
+      { id: "a-3", addon_key: "neighbourhood_report_single", status: "paid", credits_granted: 1, credits_consumed: 0, credits_refunded: 0 },
+      { id: "a-4", addon_key: "neighbourhood_report_bundle", status: "paid", credits_granted: 3, credits_consumed: 1, credits_refunded: 0 },
+      { id: "a-5", addon_key: "custom_credit_pack", status: "paid", credits_granted: 2, credits_consumed: 0, credits_refunded: 0 },
+      { id: "a-6", addon_key: "", status: "paid", credits_granted: 5, credits_consumed: 0, credits_refunded: 0 },
+    ];
+    mocks.supabase?.from.mockImplementation((table: string) => {
+      const query = {
+        select: vi.fn(() => query),
+        eq: vi.fn(() => query),
+        in: vi.fn(() => query),
+        gte: vi.fn(() => Promise.resolve({ data: [], error: null })),
+        then: (resolve: (value: { data: unknown[]; error: null }) => unknown) =>
+          resolve({ data: table === "addon_purchases" ? addonRows : [], error: null }),
+      };
+      return query;
+    });
+    mocks.supabase?.functions.invoke.mockImplementation((fn: string) => {
+      if (fn === "get-invoices") {
+        return Promise.resolve({
+          data: {
+            invoices: [{
+              id: "in_123456789",
+              number: null,
+              status: "open",
+              amount_paid: 0,
+              tax_amount: 0,
+              currency: "EUR",
+              created: "2026-07-01T00:00:00.000Z",
+              period_start: "2026-07-01T00:00:00.000Z",
+              period_end: "2026-08-01T00:00:00.000Z",
+              description: "Pro renewal",
+              hosted_invoice_url: null,
+              invoice_pdf: null,
+              receipt_url: null,
+              customer_tax_ids: [{ id: "empty", type: "eu_vat", value: "" }],
+            }],
+            billing_configured: true,
+            customer_found: true,
+            portal_eligible: true,
+            subscription: null,
+          },
+          error: null,
+        });
+      }
+      if (fn === "ai-quota-status") return Promise.resolve({ data: { quotas: {} }, error: null });
+      return Promise.resolve({ data: null, error: null });
+    });
+
+    renderWithProviders(<BillingTab />);
+
+    await screen.findByText("custom credit pack");
+    expect(screen.getAllByText("AI valuations").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("Neighbourhood reports").length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText("Add-on credits")?.closest("div")?.textContent).not.toContain("5 credits available");
+    expect(screen.getByText("23456789")).toBeInTheDocument();
+    expect(screen.getByText(/Pro renewal/)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /View|PDF|Receipt/i })).not.toBeInTheDocument();
   });
 });

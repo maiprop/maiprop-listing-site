@@ -14,7 +14,7 @@ const coverageTmpPath = join(coverageRunPath, ".tmp");
 const thresholds = {
   lines: 86,
   functions: 81,
-  branches: 71,
+  branches: 80,
   statements: 81.9,
 };
 

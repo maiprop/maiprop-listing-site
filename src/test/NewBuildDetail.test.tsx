@@ -153,6 +153,9 @@ vi.mock("@/components/new-build/RegisterInterestCard", () => ({
       <button type="button" onClick={() => onContact({ name: "Form Name", phone: "555", message: "Send plans" })}>
         submit interest
       </button>
+      <button type="button" onClick={() => onContact({ name: " ", phone: " ", message: " " })}>
+        submit blank interest
+      </button>
     </div>
   ),
 }));
@@ -613,5 +616,117 @@ describe("NewBuildDetail", () => {
     fireEvent.click(screen.getByRole("button", { name: "Ask developer" }));
 
     await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith("Could not start conversation"));
+  });
+
+  it("renders listing-level fallbacks when a project has no unit inventory or developer profile", () => {
+    useQueryMock.mockReturnValue({
+      data: {
+        ...listing,
+        project: null,
+        profiles: null,
+        owner_id: null,
+        title: "Standalone New Building",
+        address: null,
+        region: null,
+        latitude: null,
+        longitude: null,
+        price: 200000,
+        price_per_sqm: 4000,
+        sqm: 50,
+        bedrooms: null,
+        bathrooms: null,
+        total_floors: null,
+        year_built: null,
+        energy_class: "Z",
+        construction_status: null,
+        description: null,
+        tags: null,
+        cover_image_url: null,
+        listing_images: [],
+        has_elevator: false,
+        has_ac: false,
+        has_solar_water: false,
+        has_storage: false,
+        has_security: false,
+        has_fireplace: false,
+        has_underfloor_heating: false,
+        has_smart_home: false,
+        has_parking: false,
+        has_garden: false,
+        has_pool: false,
+        has_view: false,
+        has_video_tour: false,
+        has_virtual_tour: false,
+      },
+      isLoading: false,
+      error: null,
+    });
+
+    renderPage();
+
+    expect(screen.getAllByRole("heading", { name: "Standalone New Building" }).length).toBeGreaterThan(0);
+    expect(screen.getByText("Price guide")).toBeInTheDocument();
+    expect(screen.getAllByText("On request").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("TBA").length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText("Features & Amenities")).not.toBeInTheDocument();
+    expect(screen.queryByText("Project Description")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Call developer/i })).not.toBeInTheDocument();
+    expect(screen.getByText("Z")).toBeInTheDocument();
+    expect(screen.getByTestId("valuation")).toHaveAttribute("data-price", "200000");
+    expect(screen.getByTestId("valuation")).toHaveAttribute("data-sqm", "50");
+  });
+
+  it("uses profile identity and phone fallbacks for a blank signed-in interest form", async () => {
+    const insertMock = vi.fn().mockResolvedValue({ error: null });
+    useAuthMock.mockReturnValue({
+      user: { id: "buyer-2", email: "buyer2@example.com" },
+      profile: { display_name: " ", first_name: "Dimitra", phone: " 6900000000 " },
+    });
+    fromMock.mockReturnValue({ insert: insertMock });
+
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: "submit blank interest" }));
+
+    await waitFor(() => expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({
+      new_building_id: "listing-1",
+      user_id: "buyer-2",
+      email: "buyer2@example.com",
+      full_name: "Dimitra",
+      phone: "6900000000",
+      notes: "",
+      investment_budget: 0,
+    })));
+    expect(startConversationMock).toHaveBeenCalledWith({ other_user_id: "owner-1", listing_id: "listing-1" });
+  });
+
+  it("uses conservative AI defaults when optional valuation commentary is absent", async () => {
+    useAuthMock.mockReturnValue({ user: { id: "buyer-1" }, profile: { display_name: "Buyer" } });
+    functionsInvokeMock.mockResolvedValue({ data: { estimatedValue: 430000 }, error: null });
+
+    renderPage();
+
+    expect(await screen.findByText("AI Estimate")).toBeInTheDocument();
+    expect(screen.getByText(/430\.000/)).toBeInTheDocument();
+    expect(screen.getByText("Confidence: Medium")).toBeInTheDocument();
+  });
+
+  it("supports native sharing and exposes the developer phone only when supplied", async () => {
+    const share = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { share });
+    renderPage();
+
+    fireEvent.click(screen.getByRole("button", { name: "share" }));
+    await waitFor(() => expect(share).toHaveBeenCalledWith(expect.objectContaining({ title: "Aegean Residences" })));
+    expect(screen.getByRole("link", { name: /Call developer/i })).toHaveAttribute("href", "tel:phone-redacted");
+  });
+
+  it("shows the provider error branch when AI valuation rejects", async () => {
+    useAuthMock.mockReturnValue({ user: { id: "buyer-1" }, profile: null });
+    functionsInvokeMock.mockRejectedValue(new Error("provider timeout"));
+
+    renderPage();
+
+    expect(await screen.findByText("provider timeout")).toBeInTheDocument();
+    expect(screen.queryByText("AI Estimate")).not.toBeInTheDocument();
   });
 });

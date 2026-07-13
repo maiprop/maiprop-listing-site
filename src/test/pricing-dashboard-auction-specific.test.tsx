@@ -416,6 +416,142 @@ describe("Pricing focused page behavior", () => {
     expect(mocks.invokeMock).not.toHaveBeenCalledWith("customer-portal", expect.anything());
     expect(mocks.toast.info).toHaveBeenCalledWith("This plan is managed outside Stripe billing.");
   });
+
+  it("sends anonymous plan selection to signup without calling Stripe", async () => {
+    const { default: Pricing } = await import("@/pages/Pricing");
+
+    renderWithProviders(<Pricing />, { initialPath: "/pricing?audience=participant" });
+    fireEvent.click(await screen.findByRole("button", { name: /^Get Started$/i }));
+
+    expect(mocks.navigateMock).toHaveBeenCalledWith("/signup");
+    expect(mocks.invokeMock).not.toHaveBeenCalledWith("create-checkout", expect.anything());
+  });
+
+  it.each([
+    ["investor", "Apply for Access", "/investor-dashboard"],
+    ["institutional", "Talk to Sales", "/contact"],
+  ] as const)("routes %s invite-only pricing to its approval flow", async (audience, cta, route) => {
+    mocks.useAuthMock.mockReturnValue({
+      user: { id: `u-${audience}`, email: `${audience}@example.com` },
+      profile: { role: audience, participant_type: audience },
+      loading: false,
+      profileLoading: false,
+    });
+    const { default: Pricing } = await import("@/pages/Pricing");
+
+    renderWithProviders(<Pricing />, { initialPath: `/pricing?audience=${audience}` });
+    fireEvent.click(await screen.findByRole("button", { name: new RegExp(cta, "i") }));
+
+    expect(mocks.navigateMock).toHaveBeenCalledWith(route);
+    expect(mocks.invokeMock).not.toHaveBeenCalledWith("create-checkout", expect.anything());
+  });
+
+  it("surfaces the server checkout reason and never redirects without a URL", async () => {
+    mocks.useAuthMock.mockReturnValue({
+      user: { id: "u-buyer", email: "buyer@example.com" },
+      profile: { role: "buyer", participant_type: "buyer" },
+      loading: false,
+      profileLoading: false,
+    });
+    mocks.invokeMock.mockResolvedValue({
+      data: { error: "Stripe price is not configured for this plan." },
+      error: null,
+    });
+    const { default: Pricing } = await import("@/pages/Pricing");
+
+    renderWithProviders(<Pricing />, { initialPath: "/pricing?audience=participant" });
+    fireEvent.click(await screen.findByRole("button", { name: /Get Pro Plan/i }));
+
+    await waitFor(() => {
+      expect(mocks.toast.error).toHaveBeenCalledWith("Stripe price is not configured for this plan.");
+    });
+    expect(window.location.href).toBe("http://localhost/");
+  });
+
+  it("uses a safe fallback for non-Error checkout failures", async () => {
+    mocks.useAuthMock.mockReturnValue({
+      user: { id: "u-agent", email: "agent@example.com" },
+      profile: { role: "agent", participant_type: "agent" },
+      loading: false,
+      profileLoading: false,
+    });
+    mocks.invokeMock.mockRejectedValue("network aborted");
+    const { default: Pricing } = await import("@/pages/Pricing");
+
+    renderWithProviders(<Pricing />, { initialPath: "/pricing?audience=agent" });
+    fireEvent.click(await screen.findByRole("button", { name: /Get Agent Pro/i }));
+
+    await waitFor(() => expect(mocks.toast.error).toHaveBeenCalledWith("Could not start checkout"));
+  });
+
+  it("surfaces portal failures without opening an invalid destination", async () => {
+    mocks.useAuthMock.mockReturnValue({
+      user: { id: "u-pro", email: "pro@example.com" },
+      profile: { role: "professional", participant_type: "professional" },
+      loading: false,
+      profileLoading: false,
+    });
+    mocks.useSubscriptionMock.mockReturnValue({
+      isPro: true,
+      loading: false,
+      hasStripeBilling: true,
+      refreshSubscription: vi.fn(),
+    });
+    mocks.invokeMock.mockResolvedValue({ data: null, error: { message: "Portal unavailable" } });
+    const { default: Pricing } = await import("@/pages/Pricing");
+
+    renderWithProviders(<Pricing />, { initialPath: "/pricing?audience=professional" });
+    fireEvent.click(await screen.findByRole("button", { name: /Manage Subscription/i }));
+
+    await waitFor(() => expect(mocks.toast.error).toHaveBeenCalledWith("Portal unavailable"));
+    expect(window.open).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["/pricing?checkout=success&billing_mode=mock", "info", /Mock checkout completed/i],
+    ["/pricing?checkout=success", "success", /Payment successful/i],
+    ["/pricing?checkout=cancelled", "info", /Checkout cancelled/i],
+  ] as const)("handles the Stripe return state for %s", async (initialPath, toastKind, message) => {
+    const refreshSubscription = vi.fn();
+    mocks.useSubscriptionMock.mockReturnValue({
+      isPro: false,
+      loading: false,
+      hasStripeBilling: false,
+      refreshSubscription,
+    });
+    const { default: Pricing } = await import("@/pages/Pricing");
+
+    renderWithProviders(<Pricing />, { initialPath });
+
+    await waitFor(() => expect(mocks.toast[toastKind]).toHaveBeenCalledWith(expect.stringMatching(message)));
+    if (initialPath.includes("success")) {
+      expect(refreshSubscription).toHaveBeenCalledTimes(1);
+    } else {
+      expect(refreshSubscription).not.toHaveBeenCalled();
+    }
+  });
+
+  it("shows the active invite-only investor entitlement as a dashboard action", async () => {
+    mocks.useAuthMock.mockReturnValue({
+      user: { id: "u-investor", email: "investor@example.com" },
+      profile: { role: "investor", participant_type: "investor" },
+      loading: false,
+      profileLoading: false,
+    });
+    mocks.useSubscriptionMock.mockReturnValue({
+      isPro: true,
+      loading: false,
+      hasStripeBilling: false,
+      refreshSubscription: vi.fn(),
+    });
+    const { default: Pricing } = await import("@/pages/Pricing");
+
+    renderWithProviders(<Pricing />, { initialPath: "/pricing?audience=investor" });
+    fireEvent.click(await screen.findByRole("button", { name: /Go to Investor Dashboard/i }));
+
+    expect(mocks.navigateMock).toHaveBeenCalledWith("/investor-dashboard");
+    expect(screen.getByText("Invitation only")).toBeInTheDocument();
+  });
 });
 
 describe("Dashboard focused page behavior", () => {

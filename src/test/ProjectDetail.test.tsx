@@ -65,6 +65,57 @@ vi.mock("@/integrations/supabase/client", () => ({
   },
 }));
 vi.mock("sonner", () => ({ toast: toastMock }));
+vi.mock("@/components/location/LocationAutocompleteInput", () => ({
+  LocationAutocompleteInput: ({
+    id,
+    value,
+    onChange,
+    onSuggestionSelect,
+    placeholder,
+  }: {
+    id: string;
+    value: string;
+    onChange: (value: string) => void;
+    onSuggestionSelect: (selection: Record<string, string>) => void;
+    placeholder: string;
+  }) => (
+    <div>
+      <input id={id} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
+      <button
+        type="button"
+        aria-label={`select-${id}`}
+        onClick={() => onSuggestionSelect({
+          value: "11 Metaxa, Glyfada",
+          addressLine: "Metaxa 11",
+          city: "Glyfada",
+          municipality: "Glyfada",
+          region: "Attica",
+          latitude: "37.88",
+          longitude: "23.75",
+        })}
+      >
+        select location
+      </button>
+      {id === "project-edit-address" && (
+        <button
+          type="button"
+          aria-label="select-project-edit-address-invalid"
+          onClick={() => onSuggestionSelect({
+            value: "Unresolved place",
+            addressLine: "Unresolved place",
+            city: "",
+            municipality: "",
+            region: "",
+            latitude: "not-a-number",
+            longitude: "",
+          })}
+        >
+          select invalid location
+        </button>
+      )}
+    </div>
+  ),
+}));
 vi.mock("@/hooks/useProjects", () => ({
   useProject: (...args: unknown[]) => useProjectMock(...args),
   useUpdateProject: () => ({ mutate: updateProjectMock }),
@@ -466,5 +517,116 @@ describe("ProjectDetail", () => {
       },
       expect.any(Object),
     );
+  });
+
+  it("hydrates nullable project fields, exposes honest empty states, and collapses sections", () => {
+    useProjectMock.mockReturnValue({
+      data: {
+        id: "project-1",
+        name: null,
+        description: null,
+        building_permit_number: null,
+        developer_company: null,
+        architect_group: null,
+        construction_company: null,
+        address: null,
+        city: null,
+        municipality: null,
+        latitude: null,
+        longitude: null,
+        area_description: null,
+        permit_approval_date: null,
+        construction_start_date: null,
+        structural_completion_date: null,
+        delivery_date: null,
+        status: null,
+      },
+      isLoading: false,
+    });
+    useProjectUnitsMock.mockReturnValue({ data: [] });
+    useProjectMediaMock.mockReturnValue({ data: [] });
+    useProjectLeadsMock.mockReturnValue({ data: [] });
+    useProjectViewsMock.mockReturnValue({ data: undefined });
+
+    renderPage();
+
+    expect(screen.getByRole("heading", { name: "Project" })).toBeInTheDocument();
+    expect(screen.getByText("No leads yet.")).toBeInTheDocument();
+    expect(screen.getByText("No public ad has been published for this project yet.")).toBeInTheDocument();
+    expect(screen.getAllByText("0").length).toBeGreaterThanOrEqual(4);
+
+    fireEvent.click(screen.getByRole("button", { name: /Dashboard/i }));
+    expect(screen.queryByText("Sales tracking and project analytics.")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Dashboard/i }));
+    expect(screen.getByText("Sales tracking and project analytics.")).toBeInTheDocument();
+  });
+
+  it("applies a precise address selection and retains coordinates for an unresolved selection", async () => {
+    updateProjectMock.mockImplementation((_payload, options) => options.onSettled());
+    renderPage();
+
+    fireEvent.click(screen.getByRole("button", { name: "select-project-edit-address" }));
+    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+
+    await waitFor(() => expect(updateProjectMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        updates: expect.objectContaining({
+          address: "Metaxa 11",
+          city: "Glyfada",
+          municipality: "Glyfada",
+          latitude: 37.88,
+          longitude: 23.75,
+        }),
+      }),
+      expect.any(Object),
+    ));
+
+    fireEvent.click(screen.getByRole("button", { name: "select-project-edit-address-invalid" }));
+    await waitFor(() => expect(screen.getByDisplayValue("Unresolved place")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+    await waitFor(() => expect(updateProjectMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        updates: expect.objectContaining({
+          address: "Unresolved place",
+          latitude: 37.88,
+          longitude: 23.75,
+        }),
+      }),
+      expect.any(Object),
+    ));
+  });
+
+  it("handles PDF media uploads and surfaces storage failures", async () => {
+    renderPage();
+    const pdfInput = document.querySelector('input[accept=".pdf"]') as HTMLInputElement;
+    fireEvent.change(pdfInput, {
+      target: { files: [new File(["pdf"], "brochure.pdf", { type: "application/pdf" })] },
+    });
+
+    await waitFor(() => expect(addMediaMock).toHaveBeenCalledWith({
+      project_id: "project-1",
+      media_type: "brochure_pdf",
+      url: "https://cdn/uploaded.jpg",
+    }));
+
+    uploadMock.mockResolvedValueOnce({ error: new Error("storage unavailable") });
+    const imageInput = document.querySelector('input[accept="image/*,video/*"]') as HTMLInputElement;
+    fireEvent.change(imageInput, {
+      target: { files: [new File(["image"], "render.jpg", { type: "image/jpeg" })] },
+    });
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith("storage unavailable"));
+  });
+
+  it("reports the number of units changed after a successful bulk price update", async () => {
+    bulkUpdateMock.mockImplementation((_payload, options) => options.onSuccess({ updatedCount: 1 }));
+    renderPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /bulk price update/i }));
+    fireEvent.change(screen.getByPlaceholderText(/5 for \+5/i), { target: { value: "2.5" } });
+    fireEvent.click(screen.getByRole("button", { name: /apply to available/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /^apply$/i }));
+
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Updated 1 unit(s)"));
   });
 });

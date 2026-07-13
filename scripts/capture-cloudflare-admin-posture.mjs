@@ -12,8 +12,11 @@ export const validateCloudflareEnv = (env = process.env) => {
   if (!env.CLOUDFLARE_API_TOKEN) missing.push("CLOUDFLARE_API_TOKEN");
   if (!env.CLOUDFLARE_ACCOUNT_ID) missing.push("CLOUDFLARE_ACCOUNT_ID");
   if (!cloudflareProjectName(env)) missing.push("CLOUDFLARE_PAGES_PROJECT");
+  if (env.CLOUDFLARE_DNS_MODE && !env.CLOUDFLARE_ZONE_ID) missing.push("CLOUDFLARE_ZONE_ID");
   return missing;
 };
+
+const allowedDnsModes = new Set(["registrar", "cloudflare-authoritative"]);
 
 const normalizePagesProject = (project) => ({
   idPresent: Boolean(project?.id),
@@ -50,6 +53,38 @@ const validatePagesProject = (project) => {
   return errors;
 };
 
+const normalizeDnsPosture = (zone, mode) => {
+  const authoritativeAtCloudflare = mode === "cloudflare-authoritative" && zone?.status === "active";
+  return {
+    mode,
+    zoneIdPresent: Boolean(zone?.id),
+    zoneName: zone?.name ?? null,
+    zoneStatus: zone?.status ?? null,
+    authoritativeAtCloudflare,
+    zoneSecurityControlsClaimed: authoritativeAtCloudflare,
+    cloudflareNameServers: Array.isArray(zone?.name_servers) ? zone.name_servers : [],
+    originalNameServers: Array.isArray(zone?.original_name_servers) ? zone.original_name_servers : [],
+    limitations:
+      mode === "registrar"
+        ? [
+            "Cloudflare zone-level WAF, Bot, and DNS controls are not effective while registrar DNS remains authoritative",
+            "Cloudflare Pages HTTPS and deployment controls remain available for portal.maiprop.co",
+          ]
+        : [],
+  };
+};
+
+const cloudflareRequest = async ({ url, token, fetchImpl }) => {
+  const response = await fetchImpl(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    },
+  });
+  const body = await response.json();
+  return { response, body };
+};
+
 export async function buildCloudflarePostureEvidence({
   env = process.env,
   fetchImpl = globalThis.fetch,
@@ -66,16 +101,24 @@ export async function buildCloudflarePostureEvidence({
     };
   }
 
+  const dnsMode = env.CLOUDFLARE_DNS_MODE || null;
+  if (dnsMode && !allowedDnsModes.has(dnsMode)) {
+    return {
+      provider: "cloudflare",
+      status: "failed",
+      queriedAt,
+      errors: [`Unsupported CLOUDFLARE_DNS_MODE: ${dnsMode}`],
+    };
+  }
+
   const apiBase = env.CF_API_BASE || "https://api.cloudflare.com/client/v4";
   const projectName = cloudflareProjectName(env);
   const url = `${apiBase}/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/pages/projects/${projectName}`;
-  const response = await fetchImpl(url, {
-    headers: {
-      Authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}`,
-      Accept: "application/json",
-    },
+  const { response, body } = await cloudflareRequest({
+    url,
+    token: env.CLOUDFLARE_API_TOKEN,
+    fetchImpl,
   });
-  const body = await response.json();
 
   if (!response.ok || body?.success === false) {
     return {
@@ -97,11 +140,43 @@ export async function buildCloudflarePostureEvidence({
     };
   }
 
+
+  let dnsPosture;
+  if (dnsMode) {
+    const zoneUrl = `${apiBase}/zones/${env.CLOUDFLARE_ZONE_ID}`;
+    const zoneResult = await cloudflareRequest({
+      url: zoneUrl,
+      token: env.CLOUDFLARE_API_TOKEN,
+      fetchImpl,
+    });
+    if (!zoneResult.response.ok || zoneResult.body?.success === false) {
+      return {
+        provider: "cloudflare",
+        status: "failed",
+        queriedAt,
+        httpStatus: zoneResult.response.status,
+        errors: zoneResult.body?.errors ?? [],
+      };
+    }
+    dnsPosture = normalizeDnsPosture(zoneResult.body.result ?? {}, dnsMode);
+    if (dnsMode === "cloudflare-authoritative" && !dnsPosture.authoritativeAtCloudflare) {
+      return {
+        provider: "cloudflare",
+        status: "failed",
+        queriedAt,
+        errors: ["Cloudflare authoritative DNS requires an active zone"],
+        pagesProject: normalizePagesProject(body.result ?? {}),
+        dnsPosture,
+      };
+    }
+  }
+
   return {
     provider: "cloudflare",
     status: "captured",
     queriedAt,
     pagesProject: normalizePagesProject(body.result ?? {}),
+    ...(dnsPosture ? { dnsPosture } : {}),
   };
 }
 

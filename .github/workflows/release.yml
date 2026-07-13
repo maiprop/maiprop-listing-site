@@ -5,9 +5,11 @@ on:
     branches: [main]
 
 permissions:
+  actions: write
   contents: write
   issues: write
   pull-requests: write
+  statuses: write
 
 concurrency:
   group: release-please-main
@@ -23,3 +25,75 @@ jobs:
           # Generates CHANGELOG.md from Conventional Commits
           # Creates a release PR that bumps version + updates changelog
           # When merged, creates a GitHub Release with tag
+
+      # PRs created with GITHUB_TOKEN do not recursively start pull_request
+      # workflows. Dispatch CI explicitly so the release commit gets the same
+      # build and test contract as a human-authored PR.
+      - name: Dispatch and verify CI for the release PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_BRANCH: release-please--branches--main--components--maiprop-listing-site
+        run: |
+          set -euo pipefail
+          if ! gh api "repos/${GITHUB_REPOSITORY}/branches/${RELEASE_BRANCH}" >/dev/null 2>&1; then
+            exit 0
+          fi
+
+          release_sha=$(gh api "repos/${GITHUB_REPOSITORY}/branches/${RELEASE_BRANCH}" --jq '.commit.sha')
+          status_api="repos/${GITHUB_REPOSITORY}/statuses/${release_sha}"
+          workflow_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          status_state="pending"
+
+          post_status() {
+            local state="$1"
+            local description="$2"
+            local target_url="$3"
+            gh api --method POST "$status_api" \
+              -f state="$state" \
+              -f context="release-please/ci" \
+              -f description="$description" \
+              -f target_url="$target_url" >/dev/null
+          }
+
+          cleanup() {
+            local exit_code=$?
+            if [[ $exit_code -ne 0 && "$status_state" == "pending" ]]; then
+              post_status failure "Release PR CI did not complete" "$workflow_url" || true
+            fi
+          }
+          trap cleanup EXIT
+
+          post_status pending "Release PR CI is running" "$workflow_url"
+          gh workflow run ci.yml --ref "$RELEASE_BRANCH"
+
+          run_id=""
+          run_url="$workflow_url"
+          for _ in $(seq 1 30); do
+            run_data=$(gh run list \
+              --workflow ci.yml \
+              --branch "$RELEASE_BRANCH" \
+              --event workflow_dispatch \
+              --limit 20 \
+              --json databaseId,headSha,url \
+              --jq ".[] | select(.headSha == \"$release_sha\") | [.databaseId, .url] | @tsv" \
+              | head -n 1)
+            if [[ -n "$run_data" ]]; then
+              read -r run_id run_url <<< "$run_data"
+              break
+            fi
+            sleep 2
+          done
+
+          if [[ -z "$run_id" ]]; then
+            echo "No CI run found for release SHA $release_sha" >&2
+            exit 1
+          fi
+
+          if gh run watch "$run_id" --exit-status; then
+            post_status success "Release PR CI passed" "$run_url"
+            status_state="success"
+          else
+            post_status failure "Release PR CI failed" "$run_url"
+            status_state="failure"
+            exit 1
+          fi

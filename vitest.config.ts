@@ -51,14 +51,13 @@ export default defineConfig({
       ],
       // Baseline thresholds are floors, not targets.
       //
-      // Measured locally on 2026-06-02 after adding hotspot tests for AI
-      // search, firesale admin components, Google Maps Places loading,
-      // image galleries, pro services, listing draft, and building listing
-      // flows.
-      //   lines      86.08%   threshold 86
-      //   statements 81.99%   threshold 81.9
-      //   functions  81.08%   threshold 81
-      //   branches   71.25%   threshold 71
+      // Measured locally on 2026-07-13 after expanding business-branch
+      // coverage across pricing, dashboards, listings, open houses,
+      // onboarding, professional CRM, maps, and contact visibility.
+      //   lines      90.71%   threshold 86
+      //   statements 87.53%   threshold 81.9
+      //   functions  86.60%   threshold 81
+      //   branches   80.16%   threshold 80
       //
       // Whenever a PR
       // adds meaningful coverage to a P0 page (Pricing, Dashboard,
@@ -68,7 +67,7 @@ export default defineConfig({
       thresholds: {
         lines: 86,
         functions: 81,
-        branches: 71,
+        branches: 80,
         statements: 81.9,
       },
     },

@@ -12,9 +12,9 @@ Enterprise procurement should have a source-controlled map from buyer questions 
 | Architecture overview | Available | `docs/adr/0001-initial-architecture.md` and ECAS audit artifacts |
 | RLS test report | Available | `e2e/rls-security.spec.ts`, Supabase policies, and CI security gate |
 | Tenant resource ownership | Available | `listings.organization_id`, `projects.organization_id`, and `20260702180854_enterprise_tenant_resource_ownership.sql` |
-| Backup restore drill | Tracked | `docs/DR_RUNBOOK.md`, `docs/backups/FREE_TIER_LOGICAL_BACKUPS.md`, `docs/PRODUCTION_CHECKLIST.md` |
+| Backup restore drill | App-schema replay and hosted-layer synthetic proof available; managed whole-project restore pending | `docs/compliance/dora/RESTORE_DRILL_LOG.md`, `docs/operations/restore-drill-evidence.md`, `scripts/check-dr-readiness.mjs`, and the restricted v2 evidence packet |
 | Incident response | Available | `SECURITY.md`, `docs/DR_RUNBOOK.md`, and `docs/incidents/` templates |
-| SAML/SSO configuration | Ready pending provider enablement | `docs/governance/ENTERPRISE_TENANCY_AND_SSO.md` and `organization_sso_providers` |
+| SAML/SSO configuration | Staging provider metadata registered; enablement blocked by current Supabase plan | `docs/governance/ENTERPRISE_TENANCY_AND_SSO.md` and Supabase staging provider evidence |
 | Vendor risk | In progress | SBOM, license check, dependency audit, Cloudflare/Supabase/Sentry processor evidence |
 | SOC 2 / ISO evidence is external and not claimed by this repository | Not available | Future certification or vendor attestation package |
 

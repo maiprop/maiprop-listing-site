@@ -487,9 +487,105 @@ describe("OpenHouses page behavior", () => {
     );
     expect(mocks.from).not.toHaveBeenCalled();
   });
+
+  it("applies the complete buyer discovery filter set without dropping boundary matches", async () => {
+    mocks.publicApi.mockResolvedValue([
+      createListing({
+        id: "oh-boundary",
+        title: "Boundary Match",
+        price: 400000,
+        sqm: 100,
+        bedrooms: 3,
+        energy_class: "A",
+        year_built: 2015,
+        has_parking: true,
+        cover_image_url: "https://images.example/boundary.jpg",
+      }),
+      createListing({ id: "oh-low-price", title: "Below Budget", price: 199999, sqm: 100, bedrooms: 3, energy_class: "A", year_built: 2015, has_parking: true }),
+      createListing({ id: "oh-high-price", title: "Above Budget", price: 600001, sqm: 100, bedrooms: 3, energy_class: "A", year_built: 2015, has_parking: true }),
+      createListing({ id: "oh-small", title: "Too Small", price: 400000, sqm: 79, bedrooms: 3, energy_class: "A", year_built: 2015, has_parking: true }),
+      createListing({ id: "oh-large", title: "Too Large", price: 400000, sqm: 121, bedrooms: 3, energy_class: "A", year_built: 2015, has_parking: true }),
+      createListing({ id: "oh-few-beds", title: "Too Few Bedrooms", price: 400000, sqm: 100, bedrooms: 2, energy_class: "A", year_built: 2015, has_parking: true }),
+      createListing({ id: "oh-no-beds", title: "Bedrooms Undisclosed", price: 400000, sqm: 100, bedrooms: null, energy_class: "A", year_built: 2015, has_parking: true }),
+      createListing({ id: "oh-energy", title: "Wrong Energy Class", price: 400000, sqm: 100, bedrooms: 3, energy_class: "B", year_built: 2015, has_parking: true }),
+      createListing({ id: "oh-year-missing", title: "Year Undisclosed", price: 400000, sqm: 100, bedrooms: 3, energy_class: "A", year_built: null, has_parking: true }),
+      createListing({ id: "oh-year-old", title: "Built Too Early", price: 400000, sqm: 100, bedrooms: 3, energy_class: "A", year_built: 2009, has_parking: true }),
+      createListing({ id: "oh-year-new", title: "Built Too Late", price: 400000, sqm: 100, bedrooms: 3, energy_class: "A", year_built: 2021, has_parking: true }),
+      createListing({ id: "oh-no-parking", title: "No Parking", price: 400000, sqm: 100, bedrooms: 3, energy_class: "A", year_built: 2015, has_parking: false }),
+    ]);
+
+    await renderOpenHouses();
+    expect(await screen.findByText("Boundary Match")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /toggle filters/i }));
+    fireEvent.change(screen.getByLabelText(/price.*minimum/i), { target: { value: "200000" } });
+    fireEvent.change(screen.getByLabelText(/price.*maximum/i), { target: { value: "600000" } });
+    fireEvent.change(screen.getByLabelText(/size.*minimum/i), { target: { value: "80" } });
+    fireEvent.change(screen.getByLabelText(/size.*maximum/i), { target: { value: "120" } });
+    fireEvent.click(screen.getByRole("button", { name: "3+" }));
+    fireEvent.click(screen.getByRole("button", { name: "A" }));
+    fireEvent.change(screen.getByLabelText(/construction year/i), { target: { value: "2010-2020" } });
+    fireEvent.click(screen.getByRole("button", { name: /parking/i }));
+
+    expect(screen.getByText("Boundary Match")).toBeInTheDocument();
+    for (const excludedTitle of [
+      "Below Budget",
+      "Above Budget",
+      "Too Small",
+      "Too Large",
+      "Too Few Bedrooms",
+      "Bedrooms Undisclosed",
+      "Wrong Energy Class",
+      "Year Undisclosed",
+      "Built Too Early",
+      "Built Too Late",
+      "No Parking",
+    ]) {
+      expect(screen.queryByText(excludedTitle)).not.toBeInTheDocument();
+    }
+
+    fireEvent.click(screen.getByRole("button", { name: /parking/i }));
+    expect(await screen.findByText("No Parking")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /clear all filters/i }));
+    expect(await screen.findByText("Below Budget")).toBeInTheDocument();
+    expect(screen.getByTestId("open-house-grid")).toHaveAttribute("data-total-count", "12");
+  }, 15_000);
+
+  it("keeps loading and dual-source failure states actionable", async () => {
+    let settlePublicRequest: ((value: unknown) => void) | undefined;
+    mocks.publicApi.mockImplementationOnce(() => new Promise((resolve) => {
+      settlePublicRequest = resolve;
+    }));
+
+    const pending = await renderOpenHouses();
+    expect(await screen.findByLabelText(/loading open houses/i)).toHaveAttribute("aria-busy", "true");
+    pending.unmount();
+    settlePublicRequest?.([]);
+
+    mocks.publicApi.mockRejectedValue(new Error("public catalog unavailable"));
+    makeListingsQuery([], new Error("fallback catalog unavailable"));
+    await renderOpenHouses("/open-houses?failure=1");
+
+    expect(await screen.findByRole("heading", { name: /could not load open houses/i })).toBeInTheDocument();
+    expect(screen.getByText(/please try again/i)).toBeInTheDocument();
+    const callsBeforeRetry = mocks.publicApi.mock.calls.length;
+    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+    await waitFor(() => expect(mocks.publicApi.mock.calls.length).toBeGreaterThan(callsBeforeRetry));
+  });
 });
 
 describe("OpenHouseDetail page behavior", () => {
+  it("renders an accessible loading shell while the listing is pending", async () => {
+    mocks.listingLoading = true;
+
+    await renderOpenHouseDetail();
+
+    const main = document.querySelector("#main-content");
+    expect(main).toBeTruthy();
+    expect(main?.querySelector(".animate-spin")).toBeTruthy();
+    expect(mocks.trackView.mutate).not.toHaveBeenCalled();
+  });
+
   it("renders the not-found shell immediately for malformed open-house ids", async () => {
     mocks.listing = createListing();
 
@@ -533,6 +629,48 @@ describe("OpenHouseDetail page behavior", () => {
     expect(await screen.findByTestId("property-valuation")).toBeInTheDocument();
   });
 
+  it("enforces authentication for favorites and preserves saved-state toggling", async () => {
+    mocks.listing = createListing({ cover_image_url: "https://images.example/open-house.jpg" });
+    const guest = await renderOpenHouseDetail();
+
+    fireEvent.click(await screen.findByRole("button", { name: /save property/i }));
+    expect(mocks.toastError).toHaveBeenCalledWith("Sign in to save properties");
+    expect(mocks.toggleFavorite.mutate).not.toHaveBeenCalled();
+
+    guest.unmount();
+    mocks.authUser = { id: "buyer-1" };
+    mocks.favorites = [{ listing_id: TEST_OPEN_HOUSE_ID }];
+    await renderOpenHouseDetail(`/open-house/${TEST_OPEN_HOUSE_ID}?saved=1`);
+
+    fireEvent.click(await screen.findByRole("button", { name: /remove from saved/i }));
+    expect(mocks.toggleFavorite.mutate).toHaveBeenCalledWith({
+      listing_id: TEST_OPEN_HOUSE_ID,
+      isFavorited: true,
+    });
+  });
+
+  it("keeps cover and sorted gallery media navigable and copies a share link", async () => {
+    mocks.listing = createListing({
+      cover_image_url: "https://images.example/cover.jpg",
+      listing_images: [
+        { url: "https://images.example/third.jpg", sort_order: 2 },
+        { url: "https://images.example/second.jpg", sort_order: 1 },
+      ],
+    });
+    await renderOpenHouseDetail();
+
+    const hero = await screen.findByRole("img", { name: /athens loft open house/i });
+    expect(hero).toHaveAttribute("src", "https://images.example/cover.jpg");
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    expect(hero).toHaveAttribute("src", "https://images.example/second.jpg");
+    fireEvent.click(screen.getByRole("button", { name: /previous/i }));
+    expect(hero).toHaveAttribute("src", "https://images.example/cover.jpg");
+
+    fireEvent.click(screen.getByRole("button", { name: /share/i }));
+    await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith(window.location.href));
+    expect(mocks.toastSuccess).toHaveBeenCalledWith("Link copied");
+  });
+
   it("gates a pending registrant from contact and offers while passing blocked reason to the offer dialog", async () => {
     mocks.authUser = { id: "buyer-1" };
     mocks.listing = createListing();
@@ -546,6 +684,64 @@ describe("OpenHouseDetail page behavior", () => {
     expect(screen.getByRole("button", { name: /submit offer/i })).toBeDisabled();
     expect(screen.getByTestId("registration-dialog")).toHaveAttribute("data-asset-control", "true");
     expect(screen.getByTestId("offer-dialog")).toHaveTextContent("Awaiting approval");
+  });
+
+  it("keeps offers locked after approval until attendance is recorded", async () => {
+    mocks.authUser = { id: "buyer-1" };
+    mocks.listing = createListing({ open_house_date: "2026-01-10T10:00:00.000Z" });
+    mocks.registrations = [{ id: "reg-1", requester_id: "buyer-1", status: "approved" }];
+
+    await renderOpenHouseDetail();
+
+    expect(await screen.findByText(/registration approved/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /submit offer/i })).toBeDisabled();
+    expect(screen.getByTestId("offer-dialog")).toHaveTextContent("Attend the open house to unlock offer submission");
+    expect(screen.getByRole("button", { name: /^contact$/i })).toBeEnabled();
+  });
+
+  it("requires verified proof of funds for an attended buyer when configured", async () => {
+    mocks.authUser = { id: "buyer-1" };
+    mocks.listing = createListing({ open_house_date: "2026-01-10T10:00:00.000Z" });
+    mocks.openHouseSettings = { listing_id: TEST_OPEN_HOUSE_ID, require_proof_of_funds: true };
+    mocks.registrations = [{
+      id: "reg-1",
+      requester_id: "buyer-1",
+      status: "attended",
+      pof_verified_status: "pending",
+    }];
+
+    await renderOpenHouseDetail();
+
+    expect(await screen.findAllByText(/proof of funds must be verified/i)).toHaveLength(2);
+    expect(screen.getByRole("button", { name: /submit offer/i })).toBeDisabled();
+    expect(screen.getByTestId("offer-dialog")).toHaveTextContent(
+      "Proof of funds must be verified before you can submit an offer",
+    );
+  });
+
+  it("shows an existing sealed offer and reopens its detail flow", async () => {
+    mocks.authUser = { id: "buyer-1" };
+    mocks.listing = createListing({ open_house_date: "2026-01-10T10:00:00.000Z" });
+    mocks.registrations = [{
+      id: "reg-1",
+      requester_id: "buyer-1",
+      status: "attended",
+      pof_verified_status: "verified",
+    }];
+    mocks.offers = [{
+      id: "offer-1",
+      bidder_id: "buyer-1",
+      status: "submitted",
+      amount: 430000,
+    }];
+
+    await renderOpenHouseDetail();
+
+    const offer = await screen.findByRole("button", { name: /offer submitted.*sealed/i });
+    expect(screen.queryByRole("button", { name: /^registration/i })).not.toBeInTheDocument();
+    fireEvent.click(offer);
+    expect(screen.getByTestId("offer-dialog")).toHaveAttribute("data-open", "true");
+    expect(screen.getByTestId("offer-dialog")).toHaveAttribute("data-can-submit", "true");
   });
 
   it("passes sale or rental open-house context into the registration dialog", async () => {
@@ -575,6 +771,20 @@ describe("OpenHouseDetail page behavior", () => {
     expect(screen.getByTestId("registration-dialog")).toHaveAttribute("data-open", "false");
   });
 
+  it("closes registration for paused future events without treating the date as elapsed", async () => {
+    mocks.authUser = { id: "buyer-1" };
+    mocks.listing = createListing({
+      open_house_date: "2030-01-10T10:00:00.000Z",
+      status: "paused",
+    });
+
+    await renderOpenHouseDetail();
+
+    expect(await screen.findByText(/registration closed/i)).toBeInTheDocument();
+    expect(screen.getByTestId("offer-dialog")).toHaveTextContent(/pre-register and get approved first/i);
+    expect(screen.getByRole("button", { name: /submit offer/i })).toBeDisabled();
+  });
+
   it("opens offer flow and starts contact for an attended buyer after the event has passed", async () => {
     mocks.authUser = { id: "buyer-1" };
     mocks.listing = createListing({ open_house_date: "2026-01-10T10:00:00.000Z" });
@@ -595,6 +805,36 @@ describe("OpenHouseDetail page behavior", () => {
       });
     });
     expect(await screen.findByText("Messages route")).toBeInTheDocument();
+  });
+
+  it("maps contact plan-limit failures to an actionable upgrade message", async () => {
+    mocks.authUser = { id: "buyer-1" };
+    mocks.listing = createListing({ open_house_date: "2026-01-10T10:00:00.000Z" });
+    mocks.registrations = [{ id: "reg-1", requester_id: "buyer-1", status: "approved" }];
+    mocks.startConversation.mutateAsync.mockRejectedValueOnce(new Error("contact_limit_reached"));
+
+    await renderOpenHouseDetail();
+    fireEvent.click(await screen.findByRole("button", { name: /^contact$/i }));
+
+    await waitFor(() =>
+      expect(mocks.toastError).toHaveBeenCalledWith(expect.stringMatching(/contact limit.*upgrade/i)),
+    );
+  });
+
+  it("renders operational location scores across safe, moderate, and quiet branches", async () => {
+    mocks.listing = createListing({
+      walkability_score: 82,
+      safety_score: 55,
+      noise_score: 2,
+      latitude: 37.98,
+      longitude: 23.73,
+    });
+
+    await renderOpenHouseDetail();
+
+    expect(await screen.findByText("Very Walkable")).toBeInTheDocument();
+    expect(screen.getByText("Moderate")).toBeInTheDocument();
+    expect(screen.getByText("Quiet")).toBeInTheDocument();
   });
 
   it("lets an owner edit, pause, and delete an open house", async () => {
@@ -630,11 +870,172 @@ describe("OpenHouseDetail page behavior", () => {
     expect(mocks.deleteListing.mutate).toHaveBeenCalledWith(TEST_OPEN_HOUSE_ID, expect.any(Object));
   });
 
+  it("lets an owner reactivate a paused listing and cancel destructive confirmation", async () => {
+    mocks.authUser = { id: "owner-1" };
+    mocks.listing = createListing({ status: "paused" });
+
+    await renderOpenHouseDetail();
+
+    fireEvent.click(await screen.findByRole("button", { name: /activate/i }));
+    expect(mocks.updateListing.mutate).toHaveBeenCalledWith({
+      id: TEST_OPEN_HOUSE_ID,
+      updates: { status: "active" },
+    });
+    expect(mocks.toastSuccess).toHaveBeenCalledWith("Listing activated");
+
+    fireEvent.click(screen.getByRole("button", { name: /delete/i }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: /delete open house listing/i })).getByRole("button", { name: /cancel/i }));
+    expect(mocks.deleteListing.mutate).not.toHaveBeenCalled();
+  });
+
+  it("keeps owner date editing open and reports update failure", async () => {
+    mocks.authUser = { id: "owner-1" };
+    mocks.listing = createListing();
+    mocks.updateListing.mutateAsync.mockRejectedValueOnce(new Error("date update failed"));
+
+    await renderOpenHouseDetail();
+    fireEvent.click(await screen.findByRole("button", { name: /edit date/i }));
+    fireEvent.change(screen.getByDisplayValue("2026-06-01T10:00"), {
+      target: { value: "2026-06-03T12:00" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith("Could not update date"));
+    expect(screen.getByDisplayValue("2026-06-03T12:00")).toBeInTheDocument();
+  });
+
   it("redirects non-open-house listings to the standard property detail route", async () => {
     mocks.listing = createListing({ listing_type: "sale" });
 
     await renderOpenHouseDetail();
 
     expect(await screen.findByText("Property redirect target")).toBeInTheDocument();
+  });
+
+  it("keeps localized guest actions and malformed-listing recovery safe", async () => {
+    globalThis.__MAIPROP_TEST_I18N_LANGUAGE__ = "el";
+    mocks.listing = createListing({
+      address: null,
+      city: null,
+      region: null,
+      price: null,
+      sqm: null,
+      price_per_sqm: null,
+      property_type: "plot",
+      open_house_date: null,
+      cover_image_url: null,
+      listing_images: [],
+      latitude: null,
+      longitude: null,
+      safety_score: 20,
+      noise_score: 8,
+      views_count: null,
+    });
+    const share = vi.fn().mockRejectedValue(new Error("share cancelled"));
+    Object.assign(navigator, { share });
+
+    const localized = await renderOpenHouseDetail();
+    expect(await screen.findByRole("heading", { name: "Athens Loft Open House" })).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "Athens Loft Open House" })).not.toBeInTheDocument();
+
+    const favoriteButton = document.querySelector("button .lucide-heart")?.closest("button");
+    const shareButton = document.querySelector("button .lucide-share2")?.closest("button");
+    expect(favoriteButton).toBeTruthy();
+    expect(shareButton).toBeTruthy();
+    fireEvent.click(favoriteButton as HTMLButtonElement);
+    fireEvent.click(shareButton as HTMLButtonElement);
+    expect(mocks.toastError).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(share).toHaveBeenCalledWith(expect.objectContaining({ title: "Athens Loft Open House" })));
+
+    localized.unmount();
+    await renderOpenHouseDetail("/open-house/not-a-valid-id");
+    const notFoundHeading = await screen.findByRole("heading");
+    expect(notFoundHeading).not.toHaveTextContent("Listing not found");
+    expect(screen.queryByText(/this open house listing does not exist/i)).not.toBeInTheDocument();
+  });
+
+  it("explains localized POF and future-event eligibility to an attended buyer", async () => {
+    globalThis.__MAIPROP_TEST_I18N_LANGUAGE__ = "el";
+    mocks.authUser = { id: "buyer-1" };
+    mocks.listing = createListing({
+      open_house_date: "2030-01-10T10:00:00.000Z",
+      safety_score: 85,
+      noise_score: 5,
+    });
+    mocks.openHouseSettings = { listing_id: TEST_OPEN_HOUSE_ID, require_proof_of_funds: true };
+    mocks.registrations = [{
+      id: "reg-1",
+      requester_id: "buyer-1",
+      status: "attended",
+      pof_verified_status: "pending",
+    }];
+    mocks.offers = [{
+      id: "offer-1",
+      bidder_id: "buyer-1",
+      status: "accepted",
+      amount: 435500,
+    }];
+    mocks.startConversation.mutateAsync.mockRejectedValueOnce(new Error("conversation unavailable"));
+
+    await renderOpenHouseDetail();
+
+    expect(await screen.findByTestId("offer-dialog")).not.toHaveTextContent("Proof of funds must be verified before you can submit an offer");
+    expect(screen.queryByText("Safe area")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /435[,.]500/ })).toBeInTheDocument();
+
+    const contactButton = document.querySelector("button .lucide-message-circle")?.closest("button");
+    expect(contactButton).toBeTruthy();
+    fireEvent.click(contactButton as HTMLButtonElement);
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledTimes(1));
+    expect(String(mocks.toastError.mock.calls[0]?.[0])).not.toBe("Could not start conversation");
+  });
+
+  it("supports localized owner and admin-equivalent management of a rental event", async () => {
+    globalThis.__MAIPROP_TEST_I18N_LANGUAGE__ = "el";
+    mocks.authUser = { id: "admin-1" };
+    mocks.isPro = true;
+    mocks.listing = createListing({
+      owner_id: "admin-1",
+      status: "paused",
+      open_house_transaction_type: "rent",
+      price: 1250,
+      price_per_sqm: null,
+      cover_image_url: null,
+      listing_images: [
+        { url: "https://images.example/rental-second.jpg", sort_order: 2 },
+        { url: "https://images.example/rental-first.jpg", sort_order: null },
+      ],
+      safety_score: 85,
+      noise_score: 5,
+    });
+
+    await renderOpenHouseDetail();
+    expect(await screen.findByTestId("asset-control-panel")).toHaveTextContent(`${TEST_OPEN_HOUSE_ID}:true:1250`);
+    expect(screen.getByTestId("registration-dialog")).toHaveAttribute("data-transaction-type", "rent");
+    expect(screen.getByTestId("property-valuation")).toBeInTheDocument();
+
+    const activateButton = document.querySelector("button .lucide-play")?.closest("button");
+    expect(activateButton).toBeTruthy();
+    fireEvent.click(activateButton as HTMLButtonElement);
+    expect(mocks.updateListing.mutate).toHaveBeenCalledWith({
+      id: TEST_OPEN_HOUSE_ID,
+      updates: { status: "active" },
+    });
+
+    const editDateButton = document.querySelector("button .lucide-calendar")?.closest("button");
+    expect(editDateButton).toBeTruthy();
+    fireEvent.click(editDateButton as HTMLButtonElement);
+    const dateInput = screen.getByDisplayValue("2026-06-01T10:00");
+    fireEvent.change(dateInput, { target: { value: "2030-06-02T12:30" } });
+    const dateActions = dateInput.parentElement?.querySelectorAll("button");
+    fireEvent.click(dateActions?.[0] as HTMLButtonElement);
+    await waitFor(() => expect(mocks.updateListing.mutateAsync).toHaveBeenCalled());
+
+    const deleteButton = document.querySelector("button .lucide-trash2")?.closest("button");
+    fireEvent.click(deleteButton as HTMLButtonElement);
+    fireEvent.click(within(screen.getByRole("dialog")).getAllByRole("button")[0]);
+    const deleteOptions = mocks.deleteListing.mutate.mock.calls[0]?.[1] as { onSuccess?: () => void };
+    deleteOptions.onSuccess?.();
+    expect(mocks.toastSuccess).toHaveBeenCalled();
   });
 });

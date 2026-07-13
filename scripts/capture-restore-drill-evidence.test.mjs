@@ -41,6 +41,22 @@ const makeFixture = () => {
       cleanup_confirmed: true,
       source_backup_sha256: sha256(artifact),
       source_manifest_sha256: sha256(readFileSync(manifestPath)),
+      auth_restore: {
+        users_restored: 1,
+        identities_restored: 1,
+        login_verified: true,
+        deprovision_verified: true,
+      },
+      storage_restore: {
+        buckets_restored: 1,
+        objects_restored: 1,
+        object_checksum_verified: true,
+      },
+      configuration_restore: {
+        snapshot_sha256: sha256("redacted configuration snapshot"),
+        auth_config_verified: true,
+        storage_config_verified: true,
+      },
     })}\n`,
   );
   return { artifactPath, manifestPath, restoreResultPath };
@@ -56,10 +72,16 @@ describe("restore drill evidence capture", () => {
     });
 
     expect(evidence).toMatchObject({
-      schemaVersion: "maiprop.restore-drill-evidence.v1",
+      schemaVersion: "maiprop.restore-drill-evidence.v2",
       status: "verified",
       backup: { artifactPath: fixture.artifactPath, artifactBytes: 32 },
-      restore: { target: "disposable-local-postgres", cleanupConfirmed: true },
+      restore: {
+        target: "disposable-local-postgres",
+        cleanupConfirmed: true,
+        auth: { usersRestored: 1, identitiesRestored: 1, loginVerified: true, deprovisionVerified: true },
+        storage: { bucketsRestored: 1, objectsRestored: 1, objectChecksumVerified: true },
+        configuration: { authConfigVerified: true, storageConfigVerified: true },
+      },
     });
   });
 
@@ -84,5 +106,21 @@ describe("restore drill evidence capture", () => {
         restoreResultPath: fixture.restoreResultPath,
       }),
     ).toThrow("source_backup_sha256 does not match");
+  });
+
+  it("requires full Auth, Storage, and configuration restore results", () => {
+    const fixture = makeFixture();
+    const result = JSON.parse(readFileSync(fixture.restoreResultPath, "utf8"));
+    delete result.auth_restore;
+    delete result.storage_restore;
+    delete result.configuration_restore;
+    writeFileSync(fixture.restoreResultPath, `${JSON.stringify(result)}\n`);
+
+    expect(() =>
+      buildRestoreDrillEvidence({
+        backupManifestPath: fixture.manifestPath,
+        restoreResultPath: fixture.restoreResultPath,
+      }),
+    ).toThrow("auth_restore");
   });
 });

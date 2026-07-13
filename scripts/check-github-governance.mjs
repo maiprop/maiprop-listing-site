@@ -198,11 +198,39 @@ export function checkGithubActionsPolicy(root = process.cwd()) {
   return result(failures);
 }
 
+export function checkReleasePrCiDispatch(root = process.cwd()) {
+  const releaseWorkflow = readText(root, ".github/workflows/release.yml");
+  if (releaseWorkflow === null) return result([".github/workflows/release.yml is missing"]);
+
+  const failures = [];
+  if (!/^\s*actions:\s*write\s*$/m.test(releaseWorkflow)) {
+    failures.push("release workflow must grant actions: write for workflow_dispatch");
+  }
+  if (!/^\s*statuses:\s*write\s*$/m.test(releaseWorkflow)) {
+    failures.push("release workflow must grant statuses: write for the release PR commit status");
+  }
+  if (!releaseWorkflow.includes("gh workflow run ci.yml")) {
+    failures.push("release workflow must use workflow_dispatch to run ci.yml for the Release Please branch");
+  }
+  if (!releaseWorkflow.includes("--ref \"$RELEASE_BRANCH\"")) {
+    failures.push("release workflow must dispatch CI against the Release Please branch ref");
+  }
+  if (!releaseWorkflow.includes("gh run watch \"$run_id\" --exit-status")) {
+    failures.push("release workflow must wait for the dispatched CI run");
+  }
+  if (!releaseWorkflow.includes('context="release-please/ci"')) {
+    failures.push("release workflow must publish a release PR commit status");
+  }
+
+  return result(failures);
+}
+
 export function checkGithubGovernance(root = process.cwd()) {
   const checks = [
     checkCodeownersCoverage(root),
     checkBranchProtectionEvidence(root),
     checkGithubActionsPolicy(root),
+    checkReleasePrCiDispatch(root),
   ];
   return result(checks.flatMap((check) => check.failures));
 }

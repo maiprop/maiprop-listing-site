@@ -208,6 +208,67 @@ beforeEach(() => {
 });
 
 describe("Onboarding page handlers", () => {
+  it.each([
+    ["developer", "developer", /submit developer/i],
+    ["professional", "professional", /category next/i],
+  ])("auto-advances aligned %s profiles without reselecting their user type", async (role, participantType, expectedControl) => {
+    useAuthMock.mockReturnValue(authState({
+      profile: { role, participant_type: participantType },
+    }));
+
+    renderOnboarding();
+
+    expect(await screen.findByRole("button", { name: expectedControl })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /buyer role/i })).not.toBeInTheDocument();
+  });
+
+  it("restores a valid developer draft and rejects drafts owned by another user", async () => {
+    localStorage.setItem("onboarding_draft", JSON.stringify({
+      userId: "u-1",
+      step: "developer-setup",
+      selectedId: "developer",
+    }));
+
+    const first = renderOnboarding();
+    expect(await screen.findByRole("button", { name: /submit developer/i })).toBeInTheDocument();
+    first.unmount();
+
+    localStorage.setItem("onboarding_draft", JSON.stringify({
+      userId: "someone-else",
+      step: "developer-setup",
+      selectedId: "developer",
+    }));
+    renderOnboarding();
+
+    expect(await screen.findByRole("button", { name: /buyer role/i })).toBeInTheDocument();
+  });
+
+  it("restores signup intent for developer accounts and removes invalid stored account types", async () => {
+    sessionStorage.setItem("signup_participant_type", "developer");
+    const developer = renderOnboarding();
+
+    expect(await screen.findByRole("button", { name: /submit developer/i })).toBeInTheDocument();
+    expect(sessionStorage.getItem("signup_participant_type")).toBeNull();
+    developer.unmount();
+
+    localStorage.clear();
+    sessionStorage.setItem("signup_participant_type", "not-a-real-type");
+    renderOnboarding();
+    expect(await screen.findByRole("button", { name: /buyer role/i })).toBeInTheDocument();
+    expect(sessionStorage.getItem("signup_participant_type")).toBeNull();
+  });
+
+  it("does not start account selection while authentication is still resolving", () => {
+    useAuthMock.mockReturnValue(authState({ user: null, loading: true }));
+    renderOnboarding();
+
+    fireEvent.click(screen.getByRole("button", { name: /buyer role/i }));
+
+    expect(sessionStorage.getItem("signup_participant_type")).toBeNull();
+    expect(navigateMock).not.toHaveBeenCalled();
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
   it("saves a simple buyer role and reaches the done screen", async () => {
     renderOnboarding();
 
@@ -254,6 +315,48 @@ describe("Onboarding page handlers", () => {
         city: "Athens",
       }),
     });
+  });
+
+  it("maps role-save Edge Function codes to actionable account setup errors", async () => {
+    invokeMock.mockResolvedValueOnce({
+      data: null,
+      error: {
+        message: "request failed",
+        context: new Response(JSON.stringify({ error: "developer_city_required" }), {
+          status: 400,
+          headers: { "content-type": "application/json" },
+        }),
+      },
+    });
+    renderOnboarding();
+
+    fireEvent.click(screen.getByRole("button", { name: /buyer role/i }));
+
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith(
+      "Please enter your city to complete the developer account setup.",
+    ));
+    expect(screen.queryByText("done-screen")).not.toBeInTheDocument();
+    expect(trackMock).toHaveBeenCalledWith("onboarding_error", expect.objectContaining({
+      error_code: "developer_city_required",
+    }));
+  });
+
+  it("keeps professional verification incomplete when the server omits its professional id", async () => {
+    invokeMock.mockResolvedValue({ data: {}, error: null });
+    renderOnboarding();
+
+    fireEvent.click(screen.getByRole("button", { name: /professional role/i }));
+    fireEvent.click(screen.getByRole("button", { name: /architect/i }));
+    fireEvent.click(screen.getByRole("button", { name: /category next/i }));
+    fireEvent.change(screen.getByLabelText("business"), { target: { value: "Pro Studio" } });
+    fireEvent.change(screen.getByLabelText("tax"), { target: { value: "123456789" } });
+    fireEvent.change(screen.getByLabelText("phone"), { target: { value: "+306900000000" } });
+    fireEvent.click(screen.getByRole("button", { name: /verify pro/i }));
+
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith(
+      "Could not save professional profile. Please try again.",
+    ));
+    expect(screen.getByRole("button", { name: /verify pro/i })).toBeInTheDocument();
   });
 
   it("covers professional category validation, back, verify, services, availability, and video skip branches", async () => {
@@ -349,6 +452,34 @@ describe("Onboarding page handlers", () => {
     expect(window.location.hash).toBe("#stripe-checkout");
   });
 
+  it("does not leave professional services when persistence fails", async () => {
+    invokeMock.mockImplementation((functionName: string, options?: { body?: Record<string, unknown> }) => {
+      if (functionName === "complete-onboarding-role" && options?.body?.role === "professional") {
+        return Promise.resolve({ data: { professionalId: "pro-1" }, error: null });
+      }
+      if (functionName === "save-professional-onboarding") {
+        return Promise.resolve({ data: null, error: new Error("write failed") });
+      }
+      return Promise.resolve({ data: {}, error: null });
+    });
+    renderOnboarding();
+
+    fireEvent.click(screen.getByRole("button", { name: /professional role/i }));
+    fireEvent.click(screen.getByRole("button", { name: /architect/i }));
+    fireEvent.click(screen.getByRole("button", { name: /category next/i }));
+    fireEvent.change(screen.getByLabelText("business"), { target: { value: "Pro Studio" } });
+    fireEvent.change(screen.getByLabelText("tax"), { target: { value: "123456789" } });
+    fireEvent.change(screen.getByLabelText("phone"), { target: { value: "+306900000000" } });
+    fireEvent.click(screen.getByRole("button", { name: /verify pro/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /select service/i }));
+    fireEvent.click(screen.getByRole("button", { name: /save services/i }));
+
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith(
+      "Could not save services. Please try again.",
+    ));
+    expect(screen.getByRole("button", { name: /save services/i })).toBeInTheDocument();
+  });
+
   it("keeps role-switch confirmation cancellable before proceeding", async () => {
     sessionStorage.setItem("role_switch_ctx", JSON.stringify({ fromType: "agent", hadActiveSub: true }));
     renderOnboarding();
@@ -388,5 +519,26 @@ describe("Onboarding page handlers", () => {
         cancel_subscription: true,
       }),
     });
+  });
+
+  it.each([
+    [{ data: null, error: new Error("stripe unavailable") }, "returned error"],
+    [{ data: { stripe_error: "cancel failed" }, error: null }, "returned Stripe failure"],
+  ])("blocks paid role switches when subscription cancellation %s", async (response) => {
+    sessionStorage.setItem("role_switch_ctx", JSON.stringify({ fromType: "buyer", hadActiveSub: true }));
+    invokeMock.mockImplementation((functionName: string) => {
+      if (functionName === "log-role-switch") return Promise.resolve(response);
+      return Promise.resolve({ data: {}, error: null });
+    });
+    renderOnboarding();
+
+    fireEvent.click(screen.getByRole("button", { name: /agent role/i }));
+    fireEvent.click(screen.getByRole("button", { name: /confirm switch/i }));
+
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith(
+      "We couldn't update your active Stripe subscription. Please manage it from Billing before completing this switch.",
+    ));
+    expect(screen.queryByText("done-screen")).not.toBeInTheDocument();
+    expect(screen.getByTestId("role-switch-modal")).toBeInTheDocument();
   });
 });

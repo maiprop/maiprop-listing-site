@@ -7,6 +7,7 @@ import {
   checkBranchProtectionEvidence,
   checkCodeownersCoverage,
   checkGithubGovernance,
+  checkReleasePrCiDispatch,
 } from "./check-github-governance.mjs";
 
 const makeFixture = () => {
@@ -60,6 +61,7 @@ const makeFixture = () => {
         "actions/setup-node",
         "actions/upload-artifact",
         "denoland/setup-deno",
+        "googleapis/release-please-action",
       ],
       recommendedLiveRepositoryPolicy: {
         allowed_actions: "selected",
@@ -78,6 +80,24 @@ const makeFixture = () => {
       "      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282",
       "  local:",
       "    uses: ./.github/workflows/reusable-release-safety.yml",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, ".github", "workflows", "release.yml"),
+    [
+      "name: Release Please",
+      "permissions:",
+      "  actions: write",
+      "  statuses: write",
+      "jobs:",
+      "  release-please:",
+      "    steps:",
+      "      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7",
+      "      - name: Dispatch and verify CI for the release PR",
+      "        run: |",
+      "          gh workflow run ci.yml --ref \"$RELEASE_BRANCH\"",
+      "          gh run watch \"$run_id\" --exit-status",
+      "          context=\"release-please/ci\"",
     ].join("\n"),
   );
   writeFileSync(
@@ -191,5 +211,28 @@ describe("GitHub governance check", () => {
     expect(result.ok).toBe(false);
     expect(result.failures.join("\n")).toContain("must be pinned by commit SHA");
     expect(result.failures.join("\n")).toContain("unapproved action repository");
+  });
+
+  it("requires Release Please to dispatch CI for its bot-created release branch", () => {
+    const root = makeFixture();
+    writeFileSync(
+      join(root, ".github", "workflows", "release.yml"),
+      [
+        "name: Release Please",
+        "permissions:",
+        "  pull-requests: write",
+        "jobs:",
+        "  release-please:",
+        "    steps:",
+        "      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7",
+      ].join("\n"),
+    );
+
+    const result = checkReleasePrCiDispatch(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("workflow_dispatch");
+    expect(result.failures.join("\n")).toContain("wait for the dispatched CI run");
+    expect(result.failures.join("\n")).toContain("commit status");
   });
 });

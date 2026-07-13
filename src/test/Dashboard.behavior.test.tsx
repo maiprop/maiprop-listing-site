@@ -21,6 +21,9 @@ const {
   signOutMock,
   updateProfileMock,
   refreshProfileMock,
+  invitationStatusState,
+  toastSuccessMock,
+  toastErrorMock,
 } = vi.hoisted(() => ({
   authState: {
     loading: false,
@@ -43,6 +46,9 @@ const {
   signOutMock: vi.fn().mockResolvedValue(undefined),
   updateProfileMock: vi.fn(),
   refreshProfileMock: vi.fn(),
+  invitationStatusState: { status: null as string | null },
+  toastSuccessMock: vi.fn(),
+  toastErrorMock: vi.fn(),
 }));
 
 vi.mock("@/contexts/AuthContext", () => ({
@@ -78,12 +84,17 @@ vi.mock("@/integrations/supabase/client", () => ({
     functions: {
       invoke: checkoutInvokeMock,
     },
-    from: () => ({
+    from: (table: string) => ({
       select: function () { return this; },
       eq: function () { return this; },
       order: function () { return this; },
       limit: function () { return this; },
-      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      maybeSingle: vi.fn().mockImplementation(() => Promise.resolve({
+        data: table === "invitation_requests" && invitationStatusState.status
+          ? { status: invitationStatusState.status }
+          : null,
+        error: null,
+      })),
     }),
   },
 }));
@@ -140,7 +151,7 @@ vi.mock("@/components/dashboard/DashboardSidebar", () => ({
   ),
 }));
 vi.mock("@/components/dashboard/DashboardMobileNav", () => ({ DashboardMobileNav: () => <div data-testid="mobile-nav" /> }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock("sonner", () => ({ toast: { success: toastSuccessMock, error: toastErrorMock } }));
 
 beforeEach(() => {
   Object.defineProperty(window, "location", { writable: true, value: { href: "http://localhost/dashboard" } });
@@ -161,6 +172,7 @@ beforeEach(() => {
   professionalState.data = null;
   servicesState.data = [];
   leadsState.data = [];
+  invitationStatusState.status = null;
   checkoutInvokeMock.mockResolvedValue({ data: { url: "https://stripe.example/trial" }, error: null });
   vi.clearAllMocks();
 });
@@ -338,5 +350,127 @@ describe("Dashboard behavior", () => {
     expect(screen.getByText("Switching Account Type")).toBeInTheDocument();
     expect(screen.getByText("Settings Switching Account Type")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Analytics" })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["pending", /application for Quick Sale deal access is under review/i, null],
+    ["approved", /Quick Sale application is approved/i, "Complete investor payment"],
+    ["rejected", /application was not approved/i, null],
+  ] as const)("renders the %s Quick Sale review state without opening the wrong action", async (status, copy, action) => {
+    invitationStatusState.status = status;
+
+    renderWithProviders(<Dashboard />);
+
+    expect(await screen.findByText(copy)).toBeInTheDocument();
+    if (action) {
+      expect(screen.getByRole("link", { name: action })).toHaveAttribute("href", "/investor-dashboard");
+    } else {
+      expect(screen.queryByRole("link", { name: /Complete investor payment/i })).not.toBeInTheDocument();
+    }
+  });
+
+  it("explains when mock trial billing is disabled and does not redirect", async () => {
+    checkoutInvokeMock.mockResolvedValue({
+      data: { error: "trial_mock_billing_disabled" },
+      error: null,
+    });
+
+    renderWithProviders(<Dashboard />);
+    fireEvent.click(screen.getByRole("button", { name: /start 7-day pro trial/i }));
+
+    await waitFor(() => {
+      expect(toastErrorMock).toHaveBeenCalledWith(expect.stringMatching(/requires live Stripe billing/i));
+    });
+    expect(window.location.href).toBe("http://localhost/dashboard");
+  });
+
+  it("uses the Edge Function message when trial checkout returns no URL", async () => {
+    checkoutInvokeMock.mockResolvedValue({
+      data: { message: "This account already used its trial." },
+      error: { message: "non-2xx" },
+    });
+
+    renderWithProviders(<Dashboard />);
+    fireEvent.click(screen.getByRole("button", { name: /start 7-day pro trial/i }));
+
+    await waitFor(() => {
+      expect(toastErrorMock).toHaveBeenCalledWith("This account already used its trial.");
+    });
+    expect(window.location.href).toBe("http://localhost/dashboard");
+  });
+
+  it("refreshes entitlement after the trial return status", async () => {
+    const refreshSubscription = vi.fn();
+    subscriptionState.refreshSubscription = refreshSubscription;
+
+    renderWithProviders(<Dashboard />, { initialPath: "/dashboard?checkout=trial_started" });
+
+    await waitFor(() => {
+      expect(toastSuccessMock).toHaveBeenCalledWith("Your 7-day Pro trial is being activated.");
+      expect(refreshSubscription).toHaveBeenCalled();
+    });
+  });
+
+  it("renders professional service and lead state and opens the unified CRM", async () => {
+    authState.profile = { id: "p-pro", role: "professional", participant_type: "professional", first_name: "Nora" };
+    professionalState.data = { id: "professional-1" };
+    servicesState.data = [{ id: "service-1" }];
+    leadsState.data = [
+      { id: "lead-1", status: "pending" },
+      { id: "lead-2", status: "closed" },
+    ];
+
+    renderWithProviders(<Dashboard />);
+
+    expect(screen.getByText("1 service(s) configured.")).toBeInTheDocument();
+    expect(screen.getByText("1 new")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: /View Leads/i })[0]);
+    expect(await screen.findByText("CRM leads")).toBeInTheDocument();
+  });
+
+  it("keeps developer accounts on project workflows without a generic trial banner", () => {
+    authState.profile = { id: "p-dev", role: "developer", participant_type: "developer", first_name: "Dora" };
+    listingsState.data = [{ id: "project-listing", status: "active", title: "Athens launch", views_count: 4 }];
+
+    renderWithProviders(<Dashboard />);
+
+    expect(screen.getByText(/Manage your project listings and showcases/i)).toBeInTheDocument();
+    expect(screen.queryByTestId("dashboard-trial-cta")).not.toBeInTheDocument();
+    expect(screen.getByText("Profile completion")).toBeInTheDocument();
+  });
+
+  it("renders admin controls without consumer plan or trial promotion", () => {
+    authState.profile = { id: "p-admin", role: "admin", first_name: "Admin" };
+
+    renderWithProviders(<Dashboard />);
+
+    expect(screen.getByText("Admin Dashboard")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Open Admin/i })).toHaveAttribute("href", "/admin");
+    expect(screen.getByTestId("dashboard-plan-card")).toBeInTheDocument();
+    expect(screen.queryByTestId("dashboard-trial-cta")).not.toBeInTheDocument();
+  });
+
+  it("promotes an eligible buyer to the investor overview without changing their stored role", () => {
+    quickSaleState.eligible = true;
+    favoritesState.data = [{ id: "saved-deal" }];
+    auctionAlertsState.data = [{ id: "alert-1", active: true }];
+
+    renderWithProviders(<Dashboard />);
+
+    expect(screen.getByText("Investor")).toBeInTheDocument();
+    expect(screen.getByText(/investment pipeline and deal opportunities/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Open Dashboard/i })).toHaveAttribute("href", "/investor-dashboard");
+    expect(screen.getByText(/1 saved - tap to view/i)).toBeInTheDocument();
+    expect(screen.queryByText("Quick Sale Access")).not.toBeInTheDocument();
+  });
+
+  it("falls back to the authenticated email prefix when profile names are empty", () => {
+    authState.profile = { id: "p-blank", role: "buyer", participant_type: "buyer" };
+    authState.user = { id: "u-mail", email: "billing-owner@example.com" };
+
+    renderWithProviders(<Dashboard />);
+
+    expect(screen.getAllByText("billing-owner").length).toBeGreaterThan(0);
+    expect(screen.getByText(/Good morning, billing-owner/i)).toBeInTheDocument();
   });
 });
