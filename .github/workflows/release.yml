@@ -41,6 +41,7 @@ jobs:
       - name: Dispatch and verify CI for the release PR
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           RELEASE_BRANCH: release-please--branches--main--components--maiprop-listing-site
         run: |
           set -euo pipefail

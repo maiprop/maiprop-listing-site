@@ -122,6 +122,8 @@ const makeFixture = () => {
       "      statuses: write",
       "    steps:",
       "      - name: Dispatch CI for the release PR",
+      "        env:",
+      "          GH_REPO: ${{ github.repository }}",
       "        run: |",
       "          release_sha=$(gh api \"repos/${GITHUB_REPOSITORY}/branches/${RELEASE_BRANCH}\" --jq '.commit.sha')",
       "          existing_run_ids=$(gh run list --workflow ci.yml --branch \"$RELEASE_BRANCH\" --event workflow_dispatch --limit 100 --json databaseId --jq '.[].databaseId')",
