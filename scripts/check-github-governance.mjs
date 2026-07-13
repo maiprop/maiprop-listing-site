@@ -235,6 +235,9 @@ export function checkReleasePrCiDispatch(root = process.cwd()) {
   const { text: releaseWorkflow, workflow } = readWorkflow(root, ".github/workflows/release.yml");
   if (releaseWorkflow === null) return result([".github/workflows/release.yml is missing"]);
   if (!workflow || typeof workflow !== "object") return result([".github/workflows/release.yml must be valid YAML"]);
+  const { text: ciText, workflow: ciWorkflow } = readWorkflow(root, ".github/workflows/ci.yml");
+  if (ciText === null) return result([".github/workflows/ci.yml is missing"]);
+  if (!ciWorkflow || typeof ciWorkflow !== "object") return result([".github/workflows/ci.yml must be valid YAML"]);
 
   const failures = [];
   const dispatch = findWorkflowStep(
@@ -268,8 +271,8 @@ export function checkReleasePrCiDispatch(root = process.cwd()) {
   }
 
   const timeoutMinutes = Number(dispatch.job["timeout-minutes"]);
-  if (!Number.isFinite(timeoutMinutes) || timeoutMinutes < 15 || timeoutMinutes > 45) {
-    failures.push("release CI verification job must have a bounded 15-45 minute timeout");
+  if (!Number.isFinite(timeoutMinutes) || timeoutMinutes < 1 || timeoutMinutes > 10) {
+    failures.push("release CI dispatch job must have a bounded 1-10 minute timeout");
   }
 
   const run = dispatch.step.run;
@@ -277,36 +280,77 @@ export function checkReleasePrCiDispatch(root = process.cwd()) {
     failures.push("release workflow must provide explicit GitHub repository context to gh commands");
   }
   const dispatchIndex = run.indexOf("gh workflow run ci.yml");
-  const baselineIndex = run.indexOf("existing_run_ids=$(gh run list");
+  const existingRunIndex = run.indexOf("existing_run=$(gh run list");
   if (!run.includes("release_sha=$(gh api") || !run.includes("--jq '.commit.sha'")) {
     failures.push("release workflow must resolve the current Release Please branch SHA");
   }
   if (!run.includes("--ref \"$RELEASE_BRANCH\"")) {
     failures.push("release workflow must dispatch CI against the Release Please branch ref");
   }
-  if (baselineIndex === -1 || baselineIndex > dispatchIndex || !run.includes('grep -Fxq "$candidate_id" <<< "$existing_run_ids"')) {
-    failures.push("release workflow must select a newly dispatched CI run, not reuse an older exact-SHA run");
+  if (existingRunIndex === -1 || existingRunIndex > dispatchIndex) {
+    failures.push("release workflow must inspect an existing exact-head CI run before dispatching another one");
   }
   if (!run.includes("--event workflow_dispatch") || !/\.headSha\s*==\s*\\?"\$release_sha\\?"/.test(run)) {
-    failures.push("release workflow must match the dispatched CI event and exact release SHA");
+    failures.push("release workflow must match workflow_dispatch runs to the exact release SHA");
+  }
+  if (/\bgh run watch\b/.test(run)) {
+    failures.push("release workflow must not consume a runner while waiting synchronously for exact-head CI");
+  }
+  if (
+    !run.includes('context="release-please/ci"') ||
+    (!run.includes("state=pending") && !run.includes("post_status pending"))
+  ) {
+    failures.push("release workflow must publish a pending release PR commit status before dispatch");
   }
 
-  const discoveryMatch = run.match(/for _ in \$\(seq 1 (\d+)\);[\s\S]*?sleep (\d+)/);
-  const discoverySeconds = discoveryMatch ? Number(discoveryMatch[1]) * Number(discoveryMatch[2]) : 0;
-  if (discoverySeconds < 120 || discoverySeconds > 600) {
-    failures.push("release workflow must use a bounded 2-10 minute run-discovery window");
+  const releaseStatus = ciWorkflow.jobs?.["release-status"];
+  if (!releaseStatus || typeof releaseStatus !== "object") {
+    failures.push("CI must publish the final release status asynchronously");
+    return result(failures);
   }
 
-  const watchMatch = run.match(/timeout (\d+)m gh run watch \"\$run_id\" --exit-status/);
-  const watchMinutes = watchMatch ? Number(watchMatch[1]) : 0;
-  if (watchMinutes < 10 || watchMinutes > 35) {
-    failures.push("release workflow must wait for the dispatched CI run with a bounded 10-35 minute timeout");
+  const releaseStatusCondition = typeof releaseStatus.if === "string" ? releaseStatus.if : "";
+  if (
+    !releaseStatusCondition.includes("always()") ||
+    !releaseStatusCondition.includes("workflow_dispatch") ||
+    !releaseStatusCondition.includes("refs/heads/release-please--")
+  ) {
+    failures.push("final release status job must run after all exact-head release CI outcomes");
   }
-  if (!run.includes('context="release-please/ci"')) {
-    failures.push("release workflow must publish a release PR commit status");
+
+  const requiredNeeds = [
+    "quality",
+    "release-safety",
+    "e2e",
+    "e2e-security-staging",
+    "migrations-validate",
+    "lighthouse",
+    "deploy-supabase-staging",
+  ];
+  const needs = Array.isArray(releaseStatus.needs)
+    ? releaseStatus.needs
+    : typeof releaseStatus.needs === "string"
+      ? [releaseStatus.needs]
+      : [];
+  for (const required of requiredNeeds) {
+    if (!needs.includes(required)) failures.push(`final release status job must depend on ${required}`);
   }
-  if (!run.includes("post_status success") || !run.includes("post_status failure") || !run.includes("trap cleanup EXIT")) {
-    failures.push("release workflow must publish success and failure status outcomes");
+
+  const finalPermissions = effectiveJobPermissions(ciWorkflow, releaseStatus);
+  if (finalPermissions.statuses !== "write" || finalPermissions.contents !== "read") {
+    failures.push("final release status job must use contents: read and statuses: write");
+  }
+
+  const finalStatusStep = (releaseStatus.steps ?? []).find(
+    (step) =>
+      typeof step?.run === "string" &&
+      step.run.includes("statuses/${GITHUB_SHA}") &&
+      step.run.includes('context="release-please/ci"'),
+  );
+  if (!finalStatusStep) {
+    failures.push("CI must publish the final release status for the exact release SHA");
+  } else if (!finalStatusStep.run.includes("state=success") || !finalStatusStep.run.includes("state=failure")) {
+    failures.push("final release status job must publish both success and failure outcomes");
   }
 
   return result(failures);

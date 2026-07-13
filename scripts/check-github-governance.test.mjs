@@ -79,12 +79,40 @@ const makeFixture = () => {
       "    steps: []",
       "  release-safety:",
       "    steps: []",
+      "  e2e:",
+      "    steps: []",
+      "  e2e-security-staging:",
+      "    steps: []",
+      "  migrations-validate:",
+      "    steps: []",
+      "  deploy-supabase-staging:",
+      "    steps: []",
       "  lighthouse:",
       "    if: >",
       "      github.event_name == 'workflow_dispatch' &&",
       "      startsWith(github.ref, 'refs/heads/release-please--')",
       "    needs: [quality, release-safety]",
       "    steps: []",
+      "  release-status:",
+      "    if: >",
+      "      always() &&",
+      "      github.event_name == 'workflow_dispatch' &&",
+      "      startsWith(github.ref, 'refs/heads/release-please--')",
+      "    needs: [quality, release-safety, e2e, e2e-security-staging, migrations-validate, lighthouse, deploy-supabase-staging]",
+      "    permissions:",
+      "      contents: read",
+      "      statuses: write",
+      "    steps:",
+      "      - name: Publish release CI status",
+      "        env:",
+      "          GH_REPO: ${{ github.repository }}",
+      "          QUALITY_RESULT: ${{ needs.quality.result }}",
+      "        run: |",
+      "          context=\"release-please/ci\"",
+      "          target_url=\"https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"",
+      "          state=success",
+      "          state=failure",
+      "          gh api --method POST \"repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}\" -f context=\"$context\" -f state=\"$state\" -f target_url=\"$target_url\"",
       "  test:",
       "    steps:",
       "      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd",
@@ -106,29 +134,22 @@ const makeFixture = () => {
       "    steps:",
       "      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7",
       "  verify-release-pr:",
-      "    timeout-minutes: 40",
+      "    timeout-minutes: 5",
       "    permissions:",
       "      actions: write",
       "      contents: read",
       "      statuses: write",
       "    steps:",
-      "      - name: Dispatch and verify CI for the release PR",
+      "      - name: Dispatch CI for the release PR",
       "        env:",
       "          GH_REPO: ${{ github.repository }}",
       "        run: |",
       "          release_sha=$(gh api \"repos/${GITHUB_REPOSITORY}/branches/${RELEASE_BRANCH}\" --jq '.commit.sha')",
-      "          existing_run_ids=$(gh run list --workflow ci.yml --branch \"$RELEASE_BRANCH\" --event workflow_dispatch --limit 100 --json databaseId --jq '.[].databaseId')",
+      "          status_api=\"repos/${GITHUB_REPOSITORY}/statuses/${release_sha}\"",
+      "          gh api --method POST \"$status_api\" -f state=pending -f context=\"release-please/ci\"",
+      "          existing_run=$(gh run list --workflow ci.yml --branch \"$RELEASE_BRANCH\" --event workflow_dispatch --limit 100 --json databaseId,headSha,status,conclusion --jq \"map(select(.headSha == \\\"$release_sha\\\")) | first // empty\")",
+      "          if [[ -n \"$existing_run\" ]]; then exit 0; fi",
       "          gh workflow run ci.yml --ref \"$RELEASE_BRANCH\"",
-      "          candidates=$(gh run list --workflow ci.yml --branch \"$RELEASE_BRANCH\" --event workflow_dispatch --json databaseId,headSha,url --jq \".[] | select(.headSha == \\\"$release_sha\\\") | [.databaseId, .url] | @tsv\")",
-      "          while IFS=$'\\t' read -r candidate_id candidate_url; do",
-      "            if ! grep -Fxq \"$candidate_id\" <<< \"$existing_run_ids\"; then run_id=\"$candidate_id\"; fi",
-      "          done <<< \"$candidates\"",
-      "          for _ in $(seq 1 120); do sleep 2; done",
-      "          timeout 30m gh run watch \"$run_id\" --exit-status",
-      "          context=\"release-please/ci\"",
-      "          trap cleanup EXIT",
-      "          post_status success \"Release PR CI passed\" \"$run_url\"",
-      "          post_status failure \"Release PR CI failed\" \"$run_url\"",
     ].join("\n"),
   );
   writeFileSync(
@@ -283,15 +304,13 @@ describe("GitHub governance check", () => {
   it("rejects release verification that can reuse an older exact-SHA run", () => {
     const root = makeFixture();
     const path = join(root, ".github", "workflows", "release.yml");
-    const workflow = readFileSync(path, "utf8")
-      .replace("existing_run_ids=$(gh run list", "ignored_run_ids=$(gh run list")
-      .replace('grep -Fxq "$candidate_id" <<< "$existing_run_ids"', "true");
+    const workflow = readFileSync(path, "utf8").replace(".headSha == \\\"$release_sha\\\"", ".headSha != \\\"$release_sha\\\"");
     writeFileSync(path, workflow);
 
     const result = checkReleasePrCiDispatch(root);
 
     expect(result.ok).toBe(false);
-    expect(result.failures.join("\n")).toContain("newly dispatched CI run");
+    expect(result.failures.join("\n")).toContain("exact release SHA");
   });
 
   it("does not accept release commands that only appear in comments", () => {
@@ -308,7 +327,6 @@ describe("GitHub governance check", () => {
         "# actions: write",
         "# statuses: write",
         "# gh workflow run ci.yml --ref \"$RELEASE_BRANCH\"",
-        "# timeout 30m gh run watch \"$run_id\" --exit-status",
         "# context=\"release-please/ci\"",
       ].join("\n"),
     );
@@ -317,6 +335,18 @@ describe("GitHub governance check", () => {
 
     expect(result.ok).toBe(false);
     expect(result.failures.join("\n")).toContain("workflow_dispatch");
+  });
+
+  it("requires exact-head CI to publish the final release status asynchronously", () => {
+    const root = makeFixture();
+    const path = join(root, ".github", "workflows", "ci.yml");
+    const workflow = readFileSync(path, "utf8").replace("  release-status:", "  ignored-release-status:");
+    writeFileSync(path, workflow);
+
+    const result = checkReleasePrCiDispatch(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("final release status");
   });
 
   it("requires Lighthouse for workflow-dispatched Release Please branches", () => {
