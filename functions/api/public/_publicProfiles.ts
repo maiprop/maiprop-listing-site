@@ -19,12 +19,17 @@ export async function fetchPublicProfileSummaries(
   const uniqueOwnerIds = [...new Set(ownerIds.filter((id): id is string => Boolean(id)))];
   if (uniqueOwnerIds.length === 0) return new Map();
 
-  const rows = await supabaseRpcJson<PublicProfileSummary>(
-    env,
-    "get_public_profile_summaries",
-    { p_user_ids: uniqueOwnerIds },
-  );
-  return new Map(rows.map((profile) => [profile.user_id, profile]));
+  try {
+    const rows = await supabaseRpcJson<PublicProfileSummary>(
+      env,
+      "get_public_profile_summaries",
+      { p_user_ids: uniqueOwnerIds },
+    );
+    return new Map(rows.map((profile) => [profile.user_id, profile]));
+  } catch (error) {
+    console.warn("[public-api] Optional public profile enrichment failed", error);
+    return new Map();
+  }
 }
 
 export function publicProfileDisplay(
