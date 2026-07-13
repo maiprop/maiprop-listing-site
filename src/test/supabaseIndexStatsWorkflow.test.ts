@@ -139,17 +139,15 @@ describe("Supabase index stats workflow wiring", () => {
     expect(supabaseStagingWorkflow).toMatch(
       /if grep -Eq '\^\(supabase\/\|deno\\\.\(json\|lock\)\$\)' <<< "\$changed_files"; then\s+echo "deploy=true" >> "\$GITHUB_OUTPUT"/,
     );
+    expect(supabaseStagingWorkflow).toContain('if [ -z "$SUPABASE_STAGING_DB_URL" ]; then');
     expect(supabaseStagingWorkflow).toContain(
-      "if [ \"${{ steps.supabase_changes.outputs.db_changes }}\" = \"true\" ] && [ -z \"$SUPABASE_STAGING_DB_URL\" ]; then",
-    );
-    expect(supabaseStagingWorkflow).toContain(
-      "SUPABASE_STAGING_DB_URL is required when Supabase migrations change",
+      "SUPABASE_STAGING_DB_URL is required for isolated staging schema verification",
     );
     expect(supabaseStagingWorkflow).toMatch(
-      /- name: Check staging database migration secret\s+if: steps\.supabase_changes\.outputs\.db_changes == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'[\s\S]*SUPABASE_STAGING_DB_URL is required when Supabase migrations change\./,
+      /- name: Check staging database migration secret\s+if: steps\.supabase_changes\.outputs\.eligible == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'[\s\S]*SUPABASE_STAGING_DB_URL is required for isolated staging schema verification\./,
     );
     expect(supabaseStagingWorkflow).toMatch(
-      /- name: Resolve staging database URL\s+if: steps\.supabase_changes\.outputs\.deploy == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'[\s\S]*if \[ -z "\$SUPABASE_STAGING_DB_URL" \]; then[\s\S]*SUPABASE_STAGING_EFFECTIVE_DB_URL=[\s\S]*function-only Supabase prep will skip DB-backed index stats and advisor checks\.[\s\S]*exit 0/,
+      /- name: Resolve staging database URL\s+if: steps\.supabase_changes\.outputs\.eligible == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'[\s\S]*if \[ -z "\$SUPABASE_STAGING_DB_URL" \]; then[\s\S]*SUPABASE_STAGING_EFFECTIVE_DB_URL=[\s\S]*isolated staging schema verification cannot continue\.[\s\S]*exit 1/,
     );
     expect(supabaseStagingWorkflow).toContain("https://api.supabase.com/v1/projects/$STAGING_SUPABASE_PROJECT_ID");
     expect(supabaseStagingWorkflow).toContain("PROJECT_JSON=\"$project_json\"");
@@ -166,14 +164,39 @@ describe("Supabase index stats workflow wiring", () => {
       "Containerized migration validation remains the hard gate for this PR",
     );
     expect(supabaseStagingWorkflow).toMatch(
-      /- name: Capture staging Supabase index stats\s+if: steps\.supabase_changes\.outputs\.db_changes == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'\s+run: npm run capture:supabase-index-stats -- --out supabase-index-stats\.json/,
+      /- name: Capture staging Supabase index stats\s+if: steps\.supabase_changes\.outputs\.eligible == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'\s+run: npm run capture:supabase-index-stats -- --out supabase-index-stats\.json/,
     );
     expect(supabaseStagingWorkflow).toMatch(
-      /- name: Check staging Supabase advisors\s+if: steps\.supabase_changes\.outputs\.db_changes == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'/,
+      /- name: Check staging Supabase advisors\s+if: steps\.supabase_changes\.outputs\.eligible == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'/,
     );
     expect(supabaseStagingWorkflow).toMatch(
-      /- name: Check staging Supabase generated types\s+if: steps\.supabase_changes\.outputs\.db_changes == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'/,
+      /- name: Check staging Supabase generated types\s+if: steps\.supabase_changes\.outputs\.eligible == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'/,
     );
+    expect(supabaseStagingWorkflow).toMatch(
+      /PR is not eligible for isolated Supabase staging prep\."\s+echo "eligible=false" >> "\$GITHUB_OUTPUT"\s+exit 0/,
+    );
+    expect(supabaseStagingWorkflow).toContain('echo "eligible=true" >> "$GITHUB_OUTPUT"');
+  });
+
+  it("reconciles every isolated staging runtime even when the pull request has no Supabase file diff", () => {
+    const paritySteps = [
+      "Validate isolated staging secrets",
+      "Install Supabase CLI",
+      "Repair legacy staging migration aliases",
+      "Repair staging add-on credit migration drift",
+      "Dry-run staging database migrations",
+      "Apply database migrations to staging",
+      "Check staging Supabase security posture",
+      "Deploy edge functions to staging",
+      "Capture staging live function drift inventory",
+    ];
+
+    for (const stepName of paritySteps) {
+      const escapedStepName = stepName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      expect(supabaseStagingWorkflow).toMatch(
+        new RegExp(`- name: ${escapedStepName}\\s+if: steps\\.supabase_changes\\.outputs\\.eligible == 'true' && steps\\.supabase_target\\.outputs\\.isolated_staging == 'true'`),
+      );
+    }
   });
 
   it("repairs known staging-only migration aliases before staging dry-run validation", () => {

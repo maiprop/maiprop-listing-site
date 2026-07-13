@@ -23,8 +23,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # Keep deployments out of arbitrary PRs. If an isolated staging Supabase
-    # project exists, it receives mainline/manual DB and function updates after
-    # quality gates pass. Production-only setups use this as a no-op ordering
+    # project exists, it is reconciled to the repository DB and function state
+    # after quality gates pass. Production-only setups use this as a no-op ordering
     # point and keep production Supabase changes in protected manual flows.
     outputs:
       deploy: ${{ steps.supabase_changes.outputs.deploy }}
@@ -42,6 +42,7 @@ jobs:
           set -euo pipefail
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "eligible=true" >> "$GITHUB_OUTPUT"
             echo "deploy=true" >> "$GITHUB_OUTPUT"
             echo "db_changes=true" >> "$GITHUB_OUTPUT"
             echo "Manual run: Supabase prep enabled."
@@ -56,8 +57,11 @@ jobs:
               echo "deploy=false" >> "$GITHUB_OUTPUT"
               echo "db_changes=false" >> "$GITHUB_OUTPUT"
               echo "PR is not eligible for isolated Supabase staging prep."
+              echo "eligible=false" >> "$GITHUB_OUTPUT"
               exit 0
             fi
+
+            echo "eligible=true" >> "$GITHUB_OUTPUT"
 
             base="${{ github.event.pull_request.base.sha }}"
             if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
@@ -92,11 +96,14 @@ jobs:
           fi
 
           if [ "${{ github.event_name }}" != "push" ] || [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
             echo "deploy=false" >> "$GITHUB_OUTPUT"
             echo "db_changes=false" >> "$GITHUB_OUTPUT"
             echo "Not a mainline push: Supabase prep skipped."
             exit 0
           fi
+
+          echo "eligible=true" >> "$GITHUB_OUTPUT"
 
           base="${{ github.event.before }}"
           if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
@@ -129,7 +136,7 @@ jobs:
             echo "Supabase changes detected."
           else
             echo "deploy=false" >> "$GITHUB_OUTPUT"
-            echo "No Supabase DB/function changes detected: Supabase prep skipped."
+            echo "No Supabase DB/function diff detected; isolated staging parity remains enabled."
           fi
 
       - name: Resolve Supabase staging target
@@ -239,15 +246,15 @@ jobs:
           PRODUCTION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
 
       - name: Skip Supabase prep
-        if: steps.supabase_changes.outputs.deploy != 'true'
-        run: echo "Supabase prep not required for this event or file set."
+        if: steps.supabase_changes.outputs.eligible != 'true'
+        run: echo "This event is not eligible for isolated Supabase staging reconciliation."
 
       - name: Skip Supabase deploy without isolated staging
-        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging != 'true'
-        run: echo "Supabase changes were detected, but no isolated staging project is configured. Production Supabase changes remain manual."
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging != 'true'
+        run: echo "No isolated staging project is configured. Production Supabase changes remain manual."
 
       - name: Validate isolated staging secrets
-        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: |
           required=(
             "STAGING_SUPABASE_PROJECT_ID"
@@ -265,8 +272,8 @@ jobs:
           if [ "$missing" -ne 0 ]; then
             exit 1
           fi
-          if [ "${{ steps.supabase_changes.outputs.db_changes }}" = "true" ] && [ -z "$SUPABASE_STAGING_DB_URL" ]; then
-            echo "::error::SUPABASE_STAGING_DB_URL is required when Supabase migrations change; staging cannot be verified against stale schema."
+          if [ -z "$SUPABASE_STAGING_DB_URL" ]; then
+            echo "::error::SUPABASE_STAGING_DB_URL is required for isolated staging schema verification."
             exit 1
           fi
         env:
@@ -277,31 +284,31 @@ jobs:
           SUPABASE_ACCESS_TOKEN:            ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         with:
           node-version-file: .node-version
           cache: npm
 
       - name: Check runtime
-        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: npm run check:runtime
 
       - name: Install dependencies
-        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: npm ci --prefer-offline --no-audit
 
       - name: Install Supabase CLI
-        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: |
           npm install -g supabase@2.104.0
           supabase --version
 
       - name: Check staging database migration secret
-        if: steps.supabase_changes.outputs.db_changes == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         id: staging_db
         run: |
           if [ -z "$SUPABASE_STAGING_DB_URL" ]; then
-            echo "::error::SUPABASE_STAGING_DB_URL is required when Supabase migrations change."
+            echo "::error::SUPABASE_STAGING_DB_URL is required for isolated staging schema verification."
             exit 1
           fi
           echo "available=true" >> "$GITHUB_OUTPUT"
@@ -309,14 +316,14 @@ jobs:
           SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
 
       - name: Resolve staging database URL
-        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: |
           set -euo pipefail
 
           if [ -z "$SUPABASE_STAGING_DB_URL" ]; then
             echo "SUPABASE_STAGING_EFFECTIVE_DB_URL=" >> "$GITHUB_ENV"
-            echo "No staging database URL is configured; function-only Supabase prep will skip DB-backed index stats and advisor checks."
-            exit 0
+            echo "::error::No staging database URL is configured; isolated staging schema verification cannot continue."
+            exit 1
           fi
 
           projects_json="[]"
@@ -387,7 +394,7 @@ jobs:
           STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
 
       - name: Repair legacy staging migration aliases
-        if: steps.supabase_changes.outputs.db_changes == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: |
           set -euo pipefail
 
@@ -415,7 +422,7 @@ jobs:
           supabase migration repair "${versions_to_revert[@]}" --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" --status reverted --yes
 
       - name: Repair staging add-on credit migration drift
-        if: steps.supabase_changes.outputs.db_changes == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: |
           set -euo pipefail
 
@@ -459,29 +466,29 @@ jobs:
           supabase migration repair "20260628193711" --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" --status reverted --yes
 
       - name: Dry-run staging database migrations
-        if: steps.supabase_changes.outputs.db_changes == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: supabase db push --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" --dry-run --include-all
 
       - name: Apply database migrations to staging
-        if: steps.supabase_changes.outputs.db_changes == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: supabase db push --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" --yes --include-all
 
       - name: Capture staging Supabase index stats
-        if: steps.supabase_changes.outputs.db_changes == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: npm run capture:supabase-index-stats -- --out supabase-index-stats.json
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF:  ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
 
       - name: Check staging Supabase advisors
-        if: steps.supabase_changes.outputs.db_changes == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: npm run check:supabase-advisor -- --fail-on-error --fail-on-unknown --index-stats supabase-index-stats.json --out supabase-advisor-staging-summary.json
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF:  ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
 
       - name: Check staging Supabase generated types
-        if: steps.supabase_changes.outputs.db_changes == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: |
           if ! npm run check:supabase-types -- -- --strict; then
             echo "::warning title=Staging Supabase type drift::Staging generated types differ from the committed production types. Migration replay, staging apply, advisors, and security posture remain hard gates."
@@ -498,14 +505,14 @@ jobs:
           SUPABASE_PROJECT_REF:  ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
 
       - name: Check staging Supabase security posture
-        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: npm run check:live-security-posture
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF:  ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
 
       - name: Deploy edge functions to staging
-        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: |
           supabase functions deploy \
             --project-ref "$STAGING_SUPABASE_PROJECT_ID"
@@ -514,14 +521,14 @@ jobs:
           STAGING_SUPABASE_PROJECT_ID:   ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
 
       - name: Capture staging live function drift inventory
-        if: steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: npm run check:release-safety -- --live-functions --out release-safety-staging-live-functions.json
         env:
           SUPABASE_ACCESS_TOKEN:                 ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           RELEASE_SAFETY_SUPABASE_PROJECT_REF:   ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
 
       - name: Upload staging live drift inventory
-        if: always() && steps.supabase_changes.outputs.deploy == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        if: always() && steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-safety-staging-live-functions
