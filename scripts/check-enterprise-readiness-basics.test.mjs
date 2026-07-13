@@ -91,11 +91,15 @@ const makeFixture = () => {
       "name: Release Please",
       "permissions:",
       "  actions: write",
+      "  statuses: write",
       "jobs:",
       "  release-please:",
       "    steps:",
       "      - name: Dispatch CI for the release PR",
-      "        run: gh workflow run ci.yml --ref \"$RELEASE_BRANCH\"",
+      "        run: |",
+      "          gh workflow run ci.yml --ref \"$RELEASE_BRANCH\"",
+      "          gh run watch \"$run_id\" --exit-status",
+      "          context=\"release-please/ci\"",
     ].join("\n"),
   );
   writeFileSync(
