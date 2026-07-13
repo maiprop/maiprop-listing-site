@@ -84,24 +84,28 @@ jobs:
           npm run capture:github-admin-posture -- --out compliance-evidence/github-admin-posture.json
 
       - name: Capture Supabase live security evidence
+        continue-on-error: true
         run: |
           set -euo pipefail
           mkdir -p compliance-evidence
           npm run check:live-security-posture > compliance-evidence/supabase-live-security.txt
 
       - name: Capture Sentry live telemetry status
+        continue-on-error: true
         run: |
           set -euo pipefail
           mkdir -p compliance-evidence
           npm run capture:sentry-live-evidence -- --strict --out compliance-evidence/sentry-live-evidence.json
 
       - name: Capture Cloudflare admin posture
+        continue-on-error: true
         run: |
           set -euo pipefail
           mkdir -p compliance-evidence
           npm run capture:cloudflare-admin-posture -- --strict --out compliance-evidence/cloudflare-admin-posture.json
 
       - name: Check ECAS live evidence rollup
+        if: always()
         run: |
           set -euo pipefail
           npm run check:ecas-live-evidence -- --strict --dir compliance-evidence
