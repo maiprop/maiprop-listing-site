@@ -273,6 +273,9 @@ export function checkReleasePrCiDispatch(root = process.cwd()) {
   }
 
   const run = dispatch.step.run;
+  if (dispatch.step.env?.GH_REPO !== "${{ github.repository }}") {
+    failures.push("release workflow must provide explicit GitHub repository context to gh commands");
+  }
   const dispatchIndex = run.indexOf("gh workflow run ci.yml");
   const baselineIndex = run.indexOf("existing_run_ids=$(gh run list");
   if (!run.includes("release_sha=$(gh api") || !run.includes("--jq '.commit.sha'")) {

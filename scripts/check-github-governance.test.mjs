@@ -113,6 +113,8 @@ const makeFixture = () => {
       "      statuses: write",
       "    steps:",
       "      - name: Dispatch and verify CI for the release PR",
+      "        env:",
+      "          GH_REPO: ${{ github.repository }}",
       "        run: |",
       "          release_sha=$(gh api \"repos/${GITHUB_REPOSITORY}/branches/${RELEASE_BRANCH}\" --jq '.commit.sha')",
       "          existing_run_ids=$(gh run list --workflow ci.yml --branch \"$RELEASE_BRANCH\" --event workflow_dispatch --limit 100 --json databaseId --jq '.[].databaseId')",
@@ -261,6 +263,21 @@ describe("GitHub governance check", () => {
 
     expect(result.ok).toBe(false);
     expect(result.failures.join("\n")).toContain("workflow_dispatch");
+  });
+
+  it("requires explicit repository context for release verification commands", () => {
+    const root = makeFixture();
+    const path = join(root, ".github", "workflows", "release.yml");
+    const workflow = readFileSync(path, "utf8").replace(
+      ["        env:", "          GH_REPO: ${{ github.repository }}"].join("\n") + "\n",
+      "",
+    );
+    writeFileSync(path, workflow);
+
+    const result = checkReleasePrCiDispatch(root);
+
+    expect(result.ok).toBe(false);
+    expect(result.failures.join("\n")).toContain("explicit GitHub repository context");
   });
 
   it("rejects release verification that can reuse an older exact-SHA run", () => {
