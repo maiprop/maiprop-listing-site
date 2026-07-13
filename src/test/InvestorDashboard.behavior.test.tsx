@@ -7,17 +7,23 @@ type DealRow = {
   id: string;
   address: string;
   city: string;
-  property_type: string;
-  sqm: number;
-  asking_price: number;
-  ai_estimate?: number;
-  status: string;
+  property_type: string | null;
+  sqm: number | null;
+  bedrooms?: number | null;
+  condition?: string | null;
+  asking_price: number | null;
+  ai_estimate?: number | null;
+  status: string | null;
   created_at: string;
+  days_on_market?: number | null;
 };
 
 let feedRows: DealRow[] = [];
 let feedError: Error | null = null;
+let reservationLogicOverride: boolean | null = null;
 const expressInterestMock = vi.fn().mockResolvedValue({});
+let expressInterestPending = false;
+let authUser: { id: string; email: string } | null = { id: "user-1", email: "investor.private@maiprop.demo" };
 let authProfile: Record<string, unknown> = { id: "profile-1", role: "admin", participant_type: "investor" };
 let queriedTables: string[] = [];
 let subscriptionRow: Record<string, unknown> | null = {
@@ -71,7 +77,7 @@ vi.mock("@/contexts/AuthContext", () => ({
   profileRoleSwitchInProgress: (profile: { role_switch_in_progress_at?: string | null } | null) =>
     Boolean(profile?.role_switch_in_progress_at),
   useAuth: () => ({
-    user: { id: "user-1", email: "investor.private@maiprop.demo" },
+    user: authUser,
     profile: authProfile,
   }),
 }));
@@ -80,8 +86,10 @@ vi.mock("@/hooks/useFiresaleInterest", async () => {
   const actual = await vi.importActual<typeof import("@/hooks/useFiresaleInterest")>("@/hooks/useFiresaleInterest");
   return {
     ...actual,
+    isActiveReservation: (entry: Parameters<typeof actual.isActiveReservation>[0]) =>
+      reservationLogicOverride ?? actual.isActiveReservation(entry),
     useMyFiresaleInterests: () => ({ data: myInterestsMap, isLoading: false }),
-    useExpressInterest: () => ({ mutateAsync: expressInterestMock, isPending: false }),
+    useExpressInterest: () => ({ mutateAsync: expressInterestMock, isPending: expressInterestPending }),
   };
 });
 
@@ -179,7 +187,10 @@ describe("InvestorDashboard behavior", () => {
   beforeEach(() => {
     feedRows = defaultRows;
     feedError = null;
+    reservationLogicOverride = null;
+    authUser = { id: "user-1", email: "investor.private@maiprop.demo" };
     authProfile = { id: "profile-1", role: "admin", participant_type: "investor" };
+    expressInterestPending = false;
     subscriptionRow = {
       id: "sub-1",
       user_id: "user-1",
@@ -363,5 +374,216 @@ describe("InvestorDashboard behavior", () => {
     fireEvent.keyDown(dialog, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog", { name: /express interest/i })).not.toBeInTheDocument());
     await waitFor(() => expect(opener).toHaveFocus());
+  });
+
+  it("uses the admin feed while preserving conservative pricing and urgency arithmetic", async () => {
+    feedRows = [
+      {
+        id: "deep-discount",
+        address: "Deep Discount 1",
+        city: "Athens",
+        property_type: "apartment",
+        sqm: 100,
+        bedrooms: 2,
+        condition: "renovated",
+        asking_price: 100_000,
+        ai_estimate: 200_000,
+        status: "reviewed",
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: "stale-no-ai",
+        address: "Published Only 2",
+        city: "Athens",
+        property_type: null,
+        sqm: null,
+        bedrooms: null,
+        condition: null,
+        asking_price: null,
+        ai_estimate: null,
+        status: null,
+        created_at: "2020-01-01T00:00:00Z",
+        days_on_market: 90,
+      },
+      {
+        id: "near-market",
+        address: "Near Market 3",
+        city: "Piraeus",
+        property_type: "office",
+        sqm: 50,
+        asking_price: 100_000,
+        ai_estimate: 102_000,
+        status: "reviewed",
+        created_at: "2026-01-01T00:00:00Z",
+      },
+      {
+        id: "below-market",
+        address: "Below Market 4",
+        city: "Glyfada",
+        property_type: "villa",
+        sqm: 200,
+        asking_price: 100_000,
+        ai_estimate: 110_000,
+        status: "reviewed",
+        created_at: "2026-01-01T00:00:00Z",
+      },
+      {
+        id: "negative-spread",
+        address: "Over Market 5",
+        city: "Glyfada",
+        property_type: "land",
+        sqm: 500,
+        asking_price: 120_000,
+        ai_estimate: 100_000,
+        status: "reviewed",
+        created_at: "2026-01-01T00:00:00Z",
+      },
+    ];
+
+    renderWithProviders(<InvestorDashboard />);
+
+    await screen.findByText("Deep Discount 1");
+    expect(queriedTables).toContain("firesale_requests");
+    expect(queriedTables).not.toContain("firesale_requests_investor_feed");
+    expect(screen.getByText("Significantly below market")).toBeInTheDocument();
+    expect(screen.getByText("Published quick-sale opportunity")).toBeInTheDocument();
+    expect(screen.getAllByText("Near market price")).toHaveLength(2);
+    expect(screen.getByText("Below market value")).toBeInTheDocument();
+    expect(screen.getAllByText("0%").length).toBeGreaterThan(0);
+    expect(screen.getByText("renovated condition")).toBeInTheDocument();
+    expect(screen.getAllByText("apartment", { selector: "span" }).length).toBeGreaterThan(0);
+  });
+
+  it("allows only active or trial investor roles into the paid investor feed", async () => {
+    authProfile = { id: "profile-1", role: "investor", participant_type: "investor" };
+    subscriptionRow = { ...subscriptionRow!, status: "trial" };
+    const trialView = renderWithProviders(<InvestorDashboard />);
+    await screen.findByText("Kolonaki 12");
+    expect(queriedTables).toContain("firesale_requests_investor_feed");
+
+    trialView.unmount();
+    queriedTables = [];
+    subscriptionRow = { ...subscriptionRow!, status: "cancelled" };
+    const cancelledView = renderWithProviders(<InvestorDashboard />);
+    await screen.findByTestId("investor-dashboard");
+    await waitFor(() => expect(queriedTables).toContain("investor_subscriptions"));
+    expect(queriedTables).not.toContain("firesale_requests_investor_feed");
+
+    cancelledView.unmount();
+    queriedTables = [];
+    subscriptionRow = { ...subscriptionRow!, status: "active" };
+    authProfile = {
+      id: "profile-1",
+      role: "institutional",
+      participant_type: "institutional",
+      role_switch_in_progress_at: "2026-07-13T00:00:00Z",
+    };
+    renderWithProviders(<InvestorDashboard />);
+    await screen.findByTestId("investor-dashboard");
+    await waitFor(() => expect(queriedTables).toContain("investor_subscriptions"));
+    expect(queriedTables).not.toContain("firesale_requests_investor_feed");
+  });
+
+  it("normalizes invitation statuses and does not query user-owned records while signed out", async () => {
+    authUser = null;
+    authProfile = { id: "profile-1", role: "buyer", participant_type: "buyer" };
+    subscriptionRow = null;
+    invitationRow = { status: "unexpected" };
+
+    renderWithProviders(<InvestorDashboard />);
+
+    await screen.findByTestId("investor-dashboard");
+    expect(screen.getAllByRole("button", { name: /Request invitation/i })).toHaveLength(1);
+    expect(screen.queryByText("Invitation required")).not.toBeInTheDocument();
+    expect(queriedTables).not.toContain("investor_subscriptions");
+    expect(queriedTables).not.toContain("invitation_requests");
+    expect(screen.queryByRole("dialog", { name: /Invitation request/i })).not.toBeInTheDocument();
+  });
+
+  it("renders every investor queue state with the correct proof and re-entry semantics", async () => {
+    reservationLogicOverride = false;
+    feedRows = Array.from({ length: 7 }, (_, index) => ({
+      id: `state-${index}`,
+      address: `State Deal ${index}`,
+      city: "Athens",
+      property_type: "apartment",
+      sqm: 80,
+      asking_price: 100_000,
+      ai_estimate: 120_000,
+      status: "reviewed",
+      created_at: "2026-01-01T00:00:00Z",
+    }));
+    myInterestsMap = new Map([
+      ["state-0", { deal_id: "state-0", status: "engaged", proof_of_funds_url: null }],
+      ["state-1", { deal_id: "state-1", status: "won", proof_of_funds_url: null }],
+      ["state-2", { deal_id: "state-2", status: "prioritized", proof_of_funds_url: "proof.pdf" }],
+      ["state-3", { deal_id: "state-3", status: "passed", proof_of_funds_url: null }],
+      ["state-4", { deal_id: "state-4", status: "expired", proof_of_funds_url: null }],
+      ["state-5", { deal_id: "state-5", status: "queued", proof_of_funds_url: "proof.pdf" }],
+      ["state-6", { deal_id: "state-6", status: "queued", proof_of_funds_url: null }],
+    ]);
+
+    renderWithProviders(<InvestorDashboard />);
+
+    expect(await screen.findAllByText("In negotiation")).toHaveLength(2);
+    expect(screen.getAllByText("Closed with you")).toHaveLength(2);
+    expect(screen.getAllByText("Priority queue")).toHaveLength(2);
+    expect(screen.getAllByText("Passed for now")).toHaveLength(1);
+    expect(screen.getAllByText("Hold expired")).toHaveLength(1);
+    expect(screen.getAllByText(/Interest registered/).length).toBeGreaterThanOrEqual(4);
+    expect(screen.getAllByText("POF")).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: /Rejoin Queue/i })).toHaveLength(2);
+  });
+
+  it("disables duplicate interest submission while the mutation is pending", async () => {
+    expressInterestPending = true;
+    renderWithProviders(<InvestorDashboard />);
+
+    fireEvent.click((await screen.findAllByRole("button", { name: /Express Interest/i }))[0]);
+    expect(await screen.findByRole("button", { name: /Register Interest/i })).toBeDisabled();
+  });
+
+  it("distinguishes pending and approved invitation review states", async () => {
+    authProfile = { id: "profile-1", role: "buyer", participant_type: "buyer" };
+    subscriptionRow = null;
+    invitationRow = { status: "pending" };
+    const pending = renderWithProviders(<InvestorDashboard />);
+    expect(await screen.findByText("Pending")).toBeInTheDocument();
+    expect(screen.getByText(/Review in progress/i)).toBeInTheDocument();
+
+    pending.unmount();
+    invitationRow = { status: "approved" };
+    renderWithProviders(<InvestorDashboard />);
+    expect(await screen.findByText("Invitation required")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Request invitation/i })).toHaveLength(2);
+  });
+
+  it("formats reservation holds without a deadline, after expiry, in minutes, and in hours", async () => {
+    reservationLogicOverride = true;
+    feedRows = Array.from({ length: 4 }, (_, index) => ({
+      id: `hold-${index}`,
+      address: `Hold Deal ${index}`,
+      city: "Athens",
+      property_type: "apartment",
+      sqm: 80,
+      asking_price: 100_000,
+      ai_estimate: 120_000,
+      status: "reviewed",
+      created_at: "2026-01-01T00:00:00Z",
+    }));
+    myInterestsMap = new Map([
+      ["hold-0", { deal_id: "hold-0", status: "reserved", reservation_expires_at: null }],
+      ["hold-1", { deal_id: "hold-1", status: "reserved", reservation_expires_at: new Date(Date.now() - 1_000).toISOString() }],
+      ["hold-2", { deal_id: "hold-2", status: "reserved", reservation_expires_at: new Date(Date.now() + 30 * 60_000).toISOString() }],
+      ["hold-3", { deal_id: "hold-3", status: "reserved", reservation_expires_at: new Date(Date.now() + 135 * 60_000).toISOString() }],
+    ]);
+
+    renderWithProviders(<InvestorDashboard />);
+
+    const badges = await screen.findAllByText(/Reserved for you/);
+    expect(badges.some((badge) => badge.textContent === "Reserved for you")).toBe(true);
+    expect(badges.some((badge) => badge.textContent?.includes("Expired"))).toBe(true);
+    expect(badges.some((badge) => badge.textContent?.includes("m left"))).toBe(true);
+    expect(badges.some((badge) => badge.textContent?.includes("h") && badge.textContent?.includes("m left"))).toBe(true);
   });
 });

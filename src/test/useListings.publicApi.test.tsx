@@ -5,6 +5,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 
 const fromMock = vi.fn();
 const publicApiMock = vi.fn();
+const publicAbortMock = vi.fn(() => false);
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
@@ -14,7 +15,7 @@ vi.mock("@/integrations/supabase/client", () => ({
 
 vi.mock("@/lib/publicApi", () => ({
   fetchPublicApi: (...args: unknown[]) => publicApiMock(...args),
-  isPublicApiAbort: () => false,
+  isPublicApiAbort: (...args: unknown[]) => publicAbortMock(...args),
 }));
 
 vi.mock("@/contexts/AuthContext", () => ({
@@ -34,12 +35,13 @@ const renderHookWithQuery = <T,>(hook: () => T) => {
   return renderHook(hook, { wrapper: ({ children }) => wrap(children) });
 };
 
-const makeThenableBuilder = (data: unknown[] = []) => {
+const makeThenableBuilder = (data: unknown[] | null = [], error: unknown = null) => {
   const b: Record<string, unknown> = {};
-  const chain = ["select", "order", "limit", "range", "ilike", "eq", "in", "gte", "lte"];
+  const chain = ["select", "order", "limit", "range", "ilike", "or", "eq", "in", "gte", "lte"];
   for (const method of chain) b[method] = vi.fn().mockReturnValue(b);
+  b.abortSignal = vi.fn().mockReturnValue(b);
   b.then = (resolve: (value: unknown) => unknown, reject: (reason?: unknown) => unknown) =>
-    Promise.resolve({ data, error: null }).then(resolve, reject);
+    Promise.resolve({ data, error }).then(resolve, reject);
   return b;
 };
 
@@ -54,9 +56,39 @@ const makeMaybeSingleBuilder = (data: unknown) => {
 beforeEach(() => {
   fromMock.mockReset();
   publicApiMock.mockReset();
+  publicAbortMock.mockReset();
+  publicAbortMock.mockReturnValue(false);
 });
 
 describe("public listings API fallback behavior", () => {
+  it("returns successful public map data without touching Supabase", async () => {
+    publicApiMock.mockResolvedValue({
+      data: [{ id: "api-listing", owner_id: null, listing_images: [] }],
+      hasMore: false,
+      page: 1,
+      pageSize: 200,
+      offset: 0,
+    });
+
+    const { result } = renderHookWithQuery(() => useListings({ listing_type: "rent" }));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data).toEqual([expect.objectContaining({ id: "api-listing" })]);
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it("does not hide public API aborts behind a slower database fallback", async () => {
+    const aborted = new DOMException("aborted", "AbortError");
+    publicApiMock.mockRejectedValue(aborted);
+    publicAbortMock.mockReturnValue(true);
+
+    const { result } = renderHookWithQuery(() => useListings({ listing_type: "sale" }));
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    expect(result.current.error).toBe(aborted);
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
   it("falls back to constrained Supabase rows when the public grid read is unavailable", async () => {
     publicApiMock.mockRejectedValue(new Error("Public API returned 503"));
     fromMock.mockReturnValue(makeThenableBuilder([{ id: "db-listing", owner_id: null, listing_images: [] }]));
@@ -72,6 +104,42 @@ describe("public listings API fallback behavior", () => {
     expect(result.current.data).toEqual([
       expect.objectContaining({ id: "db-listing", profiles: null }),
     ]);
+  });
+
+  it("enriches fallback rows with one public owner lookup and handles ownerless rows", async () => {
+    publicApiMock.mockResolvedValue(null);
+    const listingBuilder = makeThenableBuilder([
+      { id: "owned-1", owner_id: "owner-1", listing_images: [] },
+      { id: "owned-2", owner_id: "owner-1", listing_images: [] },
+      { id: "ownerless", owner_id: null, listing_images: [] },
+    ]);
+    const profileBuilder = makeThenableBuilder([
+      { user_id: "owner-1", display_name: "Owner One", avatar_url: "avatar.jpg" },
+    ]);
+    fromMock.mockImplementation((table: string) => {
+      if (table === "listings") return listingBuilder;
+      if (table === "profiles_public") return profileBuilder;
+      throw new Error(`unexpected table: ${table}`);
+    });
+
+    const { result } = renderHookWithQuery(() => useListings({ listing_type: "sale", limit: 3 }));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(profileBuilder.in).toHaveBeenCalledWith("user_id", ["owner-1"]);
+    expect(result.current.data).toEqual([
+      expect.objectContaining({ id: "owned-1", profiles: expect.objectContaining({ display_name: "Owner One" }) }),
+      expect.objectContaining({ id: "owned-2", profiles: expect.objectContaining({ display_name: "Owner One" }) }),
+      expect.objectContaining({ id: "ownerless", profiles: null }),
+    ]);
+  });
+
+  it("surfaces constrained database errors instead of returning a misleading empty catalogue", async () => {
+    publicApiMock.mockRejectedValue(new Error("gateway unavailable"));
+    fromMock.mockReturnValue(makeThenableBuilder(null, new Error("database unavailable")));
+
+    const { result } = renderHookWithQuery(() => useListings({ listing_type: "sale" }));
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error).toEqual(expect.objectContaining({ message: "database unavailable" }));
   });
 
   it("falls back to constrained Supabase pages when the public paginated read is unavailable", async () => {
@@ -135,6 +203,56 @@ describe("public listings API fallback behavior", () => {
 
     expect(publicApiMock).not.toHaveBeenCalled();
     expect(fromMock).toHaveBeenCalledWith("listings");
+  });
+
+  it("uses direct Supabase reads for non-active status queries", async () => {
+    publicApiMock.mockResolvedValue(null);
+    fromMock.mockReturnValue(makeThenableBuilder([]));
+
+    const { result } = renderHookWithQuery(() => useListings({ status: "draft" }));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(publicApiMock).not.toHaveBeenCalled();
+    expect(fromMock).toHaveBeenCalledWith("listings");
+  });
+
+  it("normalizes successful public detail responses and accepts a clean not-found response", async () => {
+    publicApiMock.mockResolvedValueOnce({
+      data: {
+        id: "listing-api",
+        owner_id: null,
+        profiles: null,
+        listing_images: undefined,
+        ownerIsPro: undefined,
+        ownerParticipantType: undefined,
+      },
+    });
+    const found = renderHookWithQuery(() => useListing("listing-api", { publicScope: true }));
+    await waitFor(() => expect(found.result.current.isSuccess).toBe(true));
+    expect(found.result.current.data).toEqual(expect.objectContaining({
+      id: "listing-api",
+      listing_images: [],
+      ownerIsPro: false,
+      ownerParticipantType: null,
+    }));
+    expect(fromMock).not.toHaveBeenCalled();
+    found.unmount();
+
+    publicApiMock.mockResolvedValueOnce({ data: null });
+    const missing = renderHookWithQuery(() => useListing("missing", { publicScope: true }));
+    await waitFor(() => expect(missing.result.current.isSuccess).toBe(true));
+    expect(missing.result.current.data).toBeNull();
+  });
+
+  it("rethrows aborted detail reads without querying the fallback", async () => {
+    const aborted = new DOMException("aborted", "AbortError");
+    publicApiMock.mockRejectedValue(aborted);
+    publicAbortMock.mockReturnValue(true);
+
+    const { result } = renderHookWithQuery(() => useListing("listing-1", { publicScope: true }));
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error).toBe(aborted);
+    expect(fromMock).not.toHaveBeenCalled();
   });
 
   it("falls back to the constrained public Supabase detail query when same-origin public detail is unavailable", async () => {

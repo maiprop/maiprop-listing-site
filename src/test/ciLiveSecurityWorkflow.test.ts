@@ -8,6 +8,13 @@ const ciWorkflow = readFileSync(
 );
 
 describe("CI live-safe security workflow", () => {
+  it("runs Lighthouse for explicitly dispatched Release Please validation", () => {
+    expect(ciWorkflow).toContain("github.event_name == 'workflow_dispatch'");
+    expect(ciWorkflow).toContain(
+      "startsWith(github.ref, 'refs/heads/release-please--')",
+    );
+  });
+
   it("uses isolated staging only when a matching staging service-role key exists", () => {
     expect(ciWorkflow).toContain("E2E_SECURITY_USE_ISOLATED_STAGING");
     expect(ciWorkflow).toContain("secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY != ''");

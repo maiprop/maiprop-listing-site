@@ -54,11 +54,20 @@ Supabase SSO/SAML availability depends on the Supabase plan and project configur
 | 2026-06-27 | Supabase production `qvvicunqcrwpioqnvzxf` | Provider not configured | Read-only Supabase SQL returned zero rows for `auth.sso_providers`, `auth.sso_domains`, `organization_sso_providers`, and `organization_domains`. |
 | 2026-06-27 | Supabase staging `xsiehskfgeoqyazcgauv` | Provider not configured | Read-only Supabase SQL returned zero rows for `auth.sso_providers`, `auth.sso_domains`, `organization_sso_providers`, and `organization_domains`. |
 | 2026-07-02 | First-class tenant resource ownership | Source-controlled | `20260702180854_enterprise_tenant_resource_ownership.sql` adds optional tenant ownership for `listings` and `projects`, RLS branches for tenant view/manage, and keeps existing personal flows. |
+| 2026-07-13 | Supabase staging `xsiehskfgeoqyazcgauv` test IdP | Provider metadata registered; login blocked by plan; provider removed | A disposable SAMLTest IdP was registered against the staging ACS and entity ID. `signInWithSSO` returned `saml_provider_disabled`; the Management API then rejected `saml_enabled=true` with `SAML 2.0 support can only be enabled on Pro Plans and up.` The synthetic provider was removed after the test and `supabase sso list` returned no providers. No production provider or user was changed. |
 
-ECAS status: the repository and database schema are ready for a test IdP, but
-enterprise SSO/SAML cannot be graded as live-ready until a staging IdP/domain is
-configured and a successful `signInWithSSO` browser flow is recorded. Do not
-mark SSO procurement evidence as complete from source code alone.
+ECAS status: the repository, database schema, and a disposable staging IdP are
+ready, but the staging Supabase project cannot enable SAML on its current plan.
+Enterprise SSO/SAML cannot be graded as live-ready until the provider is enabled
+and a successful `signInWithSSO` browser login, tenant membership assignment,
+session revocation, and deprovisioning flow are recorded. Do not mark SSO
+procurement evidence as complete from source code or provider metadata alone.
+
+The synthetic provider uses the non-production domain `maiprop.test`. It must
+never be copied to production. Before any production SSO rollout, keep a tested
+non-SSO platform owner as break-glass access, default SSO members to the least
+privileged organization role, and bind the Supabase provider UUID to exactly one
+organization after the first staging login succeeds.
 
 ## Procurement Evidence
 

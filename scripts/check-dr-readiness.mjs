@@ -43,8 +43,8 @@ export function checkChecksumVerifiedRestoreEvidence(
   const evidence = readJson(root, relativePath, failures);
   if (!evidence) return result(failures);
 
-  if (evidence.schemaVersion !== "maiprop.restore-drill-evidence.v1") {
-    failures.push("restore evidence must use schemaVersion maiprop.restore-drill-evidence.v1");
+  if (evidence.schemaVersion !== "maiprop.restore-drill-evidence.v2") {
+    failures.push("restore evidence must use schemaVersion maiprop.restore-drill-evidence.v2");
   }
   if (evidence.status !== "verified") failures.push("restore evidence must have status=verified");
 
@@ -84,6 +84,36 @@ export function checkChecksumVerifiedRestoreEvidence(
     if (!Number.isInteger(restore.rowCounts?.[table]) || restore.rowCounts[table] < 0) {
       failures.push(`restore evidence must include an integer row count for ${table}`);
     }
+  }
+
+  const auth = restore.auth ?? {};
+  if (!Number.isInteger(auth.usersRestored) || auth.usersRestored < 1) {
+    failures.push("restore evidence must verify restored Auth users and identities");
+  }
+  if (!Number.isInteger(auth.identitiesRestored) || auth.identitiesRestored < 1) {
+    failures.push("restore evidence must verify restored Auth users and identities");
+  }
+  if (auth.loginVerified !== true || auth.deprovisionVerified !== true) {
+    failures.push("restore evidence must verify Auth login and deprovisioning");
+  }
+
+  const storage = restore.storage ?? {};
+  if (!Number.isInteger(storage.bucketsRestored) || storage.bucketsRestored < 1) {
+    failures.push("restore evidence must verify restored Storage buckets and objects");
+  }
+  if (!Number.isInteger(storage.objectsRestored) || storage.objectsRestored < 1) {
+    failures.push("restore evidence must verify restored Storage buckets and objects");
+  }
+  if (storage.objectChecksumVerified !== true) {
+    failures.push("restore evidence must verify Storage object checksum");
+  }
+
+  const configuration = restore.configuration ?? {};
+  if (!/^[a-f0-9]{64}$/i.test(String(configuration.snapshotSha256 ?? ""))) {
+    failures.push("restore evidence must include a configuration snapshot checksum");
+  }
+  if (configuration.authConfigVerified !== true || configuration.storageConfigVerified !== true) {
+    failures.push("restore evidence must verify Auth and Storage configuration snapshot");
   }
 
   return result(failures);

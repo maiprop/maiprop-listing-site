@@ -160,6 +160,18 @@ describe("Auctions page coverage", () => {
     }));
   });
 
+  it("normalizes invalid or blank numeric URL ranges without leaking NaN into auction pricing filters", () => {
+    mocks.search = "price_min=-1&price_max=not-a-price&sqm_min=&sqm_max=";
+
+    renderWithProviders(<Auctions />);
+
+    expect(mocks.pipeline).toHaveBeenCalledWith(expect.objectContaining({
+      selectedCity: "All Cities",
+      filterBidRange: "0-999999999",
+      filterSqmRange: "0-999999999",
+    }));
+  });
+
   it("records submitted auction filters for admin search activity analytics", async () => {
     vi.useFakeTimers();
     mocks.search = "city=Agrinio&type=commercial&price_min=100000&price_max=200000&sqm_min=80&sqm_max=120";
@@ -190,6 +202,20 @@ describe("Auctions page coverage", () => {
     }));
   });
 
+  it("does not record an empty All Cities search", async () => {
+    vi.useFakeTimers();
+    mocks.search = "";
+    setPipeline({ activeFilterCount: 0 });
+
+    renderWithProviders(<Auctions />);
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+      await Promise.resolve();
+    });
+
+    expect(mocks.trackUserSearch).not.toHaveBeenCalled();
+  });
+
   it("covers loading skeletons, alert modal close, filters, view toggles, map polygon, pagination, and favorites", async () => {
     const normalPipeline = setPipeline();
     mocks.pipeline
@@ -217,6 +243,7 @@ describe("Auctions page coverage", () => {
     }
     fireEvent.click(screen.getAllByRole("button", { name: /^Map/i }).at(-1)!);
     fireEvent.click(await screen.findByRole("button", { name: /draw polygon/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /clear area/i }));
     fireEvent.click(screen.getAllByRole("button", { name: /^List/i }).at(-1)!);
 
     const favoriteButton = screen.getAllByRole("button").find((button) => button.textContent === "favorite auction-1");
@@ -239,5 +266,84 @@ describe("Auctions page coverage", () => {
     expect(clearButton).toBeTruthy();
     fireEvent.click(clearButton!);
     await waitFor(() => expect(screen.getByText(/No auctions match your filters/i)).toBeInTheDocument());
+  });
+
+  it("renders the API error state without presenting stale auction cards", () => {
+    setPipeline({ error: new Error("upstream unavailable"), visibleFiltered: [], paginated: [] });
+
+    renderWithProviders(<Auctions />);
+
+    expect(screen.getByText("Failed to load auctions. Please try again.")).toBeInTheDocument();
+    expect(screen.queryByText("Athens Auction")).not.toBeInTheDocument();
+  });
+
+  it("distinguishes no map matches from auctions that lack coordinates", async () => {
+    setPipeline({ visibleFiltered: [], paginated: [], mapListings: [], mappableCount: 0, polygonFilteredCount: 0 });
+    const first = renderWithProviders(<Auctions />);
+    fireEvent.click(screen.getAllByRole("button", { name: /^Map/i }).at(-1)!);
+    expect(await screen.findByText("No auctions match the current filters.")).toBeInTheDocument();
+    first.unmount();
+
+    setPipeline({
+      visibleFiltered: [auction],
+      paginated: [auction],
+      mapListings: [],
+      mappableCount: 0,
+      polygonFilteredCount: 1,
+    });
+    renderWithProviders(<Auctions />);
+    fireEvent.click(screen.getAllByRole("button", { name: /^Map/i }).at(-1)!);
+    expect(await screen.findByText("1 auction(s) found but none have coordinates.")).toBeInTheDocument();
+  });
+
+  it("keeps the free and Pro auction result caps explicit while OS users remain uncapped", () => {
+    setPipeline({ isPro: false, isMaiPropOsUser: false, totalRaw: 20 });
+    const free = renderWithProviders(<Auctions />);
+    expect(screen.getByText("See 300% more results with Pro")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Upgrade to Pro" })).toHaveAttribute("href", "/pricing");
+    free.unmount();
+
+    setPipeline({ isPro: true, isMaiPropOsUser: false, totalRaw: 100 });
+    const pro = renderWithProviders(<Auctions />);
+    expect(screen.getByText(/Showing 20 of 100 auctions/)).toBeInTheDocument();
+    expect(screen.queryByText("See 300% more results with Pro")).not.toBeInTheDocument();
+    pro.unmount();
+
+    setPipeline({ isPro: true, isMaiPropOsUser: true, totalRaw: 100 });
+    renderWithProviders(<Auctions />);
+    expect(screen.queryByText(/Showing 20 of 100 auctions/)).not.toBeInTheDocument();
+    expect(screen.queryByText("See 300% more results with Pro")).not.toBeInTheDocument();
+  });
+
+  it("supports mobile filter selection, deselection, and the clear-all control", async () => {
+    setPipeline({ activeFilterCount: 3 });
+    renderWithProviders(<Auctions />);
+
+    fireEvent.click(screen.getAllByRole("button", { name: /^Filters/i })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Apartment" }));
+    fireEvent.click(screen.getByRole("button", { name: "Under €20k" }));
+    fireEvent.click(screen.getByRole("button", { name: "Under €20k" }));
+    fireEvent.click(screen.getByRole("button", { name: "Post-2020" }));
+    fireEvent.click(screen.getByRole("button", { name: "Post-2020" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear all filters" }));
+
+    await waitFor(() => {
+      expect(mocks.pipeline).toHaveBeenCalledWith(expect.objectContaining({ filterType: "apartment" }));
+      expect(mocks.pipeline).toHaveBeenCalledWith(expect.objectContaining({ filterBidRange: "0-20000" }));
+      expect(mocks.pipeline).toHaveBeenCalledWith(expect.objectContaining({ filterYearRange: "2020-2100" }));
+    });
+  });
+
+  it("removes the active type chip and supports the desktop filter toggle", async () => {
+    setPipeline({ activeFilterCount: 1 });
+    renderWithProviders(<Auctions />);
+
+    fireEvent.click(screen.getByRole("button", { name: /^apartment$/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /^Filters/i }).at(-1)!);
+
+    await waitFor(() => {
+      expect(mocks.pipeline).toHaveBeenCalledWith(expect.objectContaining({ filterType: "" }));
+      expect(screen.getByTestId("auction-filters")).toBeInTheDocument();
+    });
   });
 });

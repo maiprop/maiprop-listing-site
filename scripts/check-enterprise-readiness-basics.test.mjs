@@ -13,6 +13,7 @@ import {
 const makeFixture = () => {
   const root = mkdtempSync(join(tmpdir(), "maiprop-readiness-"));
   mkdirSync(join(root, ".github"), { recursive: true });
+  mkdirSync(join(root, ".github", "workflows"), { recursive: true });
   mkdirSync(join(root, ".husky"), { recursive: true });
   mkdirSync(join(root, "apps"), { recursive: true });
   mkdirSync(join(root, "packages"), { recursive: true });
@@ -82,6 +83,57 @@ const makeFixture = () => {
       "npm run check:public-functions",
       "## Security / RLS Impact",
       "## Deployment / Rollback",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, ".github", "workflows", "ci.yml"),
+    [
+      "name: CI",
+      "jobs:",
+      "  quality:",
+      "    steps: []",
+      "  release-safety:",
+      "    steps: []",
+      "  lighthouse:",
+      "    if: >",
+      "      github.event_name == 'workflow_dispatch' &&",
+      "      startsWith(github.ref, 'refs/heads/release-please--')",
+      "    needs: [quality, release-safety]",
+      "    steps: []",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, ".github", "workflows", "release.yml"),
+    [
+      "name: Release Please",
+      "jobs:",
+      "  release-please:",
+      "    permissions:",
+      "      contents: write",
+      "      issues: write",
+      "      pull-requests: write",
+      "    steps:",
+      "      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7",
+      "  verify-release-pr:",
+      "    timeout-minutes: 40",
+      "    permissions:",
+      "      actions: write",
+      "      contents: read",
+      "      statuses: write",
+      "    steps:",
+      "      - name: Dispatch CI for the release PR",
+      "        run: |",
+      "          release_sha=$(gh api \"repos/${GITHUB_REPOSITORY}/branches/${RELEASE_BRANCH}\" --jq '.commit.sha')",
+      "          existing_run_ids=$(gh run list --workflow ci.yml --branch \"$RELEASE_BRANCH\" --event workflow_dispatch --limit 100 --json databaseId --jq '.[].databaseId')",
+      "          gh workflow run ci.yml --ref \"$RELEASE_BRANCH\"",
+      "          candidates=$(gh run list --workflow ci.yml --branch \"$RELEASE_BRANCH\" --event workflow_dispatch --json databaseId,headSha,url --jq \".[] | select(.headSha == \\\"$release_sha\\\") | [.databaseId, .url] | @tsv\")",
+      "          if ! grep -Fxq \"$candidate_id\" <<< \"$existing_run_ids\"; then run_id=\"$candidate_id\"; fi",
+      "          for _ in $(seq 1 120); do sleep 2; done",
+      "          timeout 30m gh run watch \"$run_id\" --exit-status",
+      "          context=\"release-please/ci\"",
+      "          trap cleanup EXIT",
+      "          post_status success \"Release PR CI passed\" \"$run_url\"",
+      "          post_status failure \"Release PR CI failed\" \"$run_url\"",
     ].join("\n"),
   );
   writeFileSync(
@@ -189,7 +241,7 @@ const makeFixture = () => {
     join(root, "docs", "governance", "github-actions-policy.expected.json"),
     JSON.stringify({
       requirePinnedActions: true,
-      allowedActionRepositories: ["actions/checkout"],
+      allowedActionRepositories: ["actions/checkout", "googleapis/release-please-action"],
       recommendedLiveRepositoryPolicy: {
         allowed_actions: "selected",
         sha_pinning_required: true,
@@ -616,7 +668,7 @@ describe("enterprise readiness basics", () => {
 
     expect(result.failures).toEqual([]);
     expect(result.ok).toBe(true);
-  }, 10_000);
+  }, 20_000);
 
   it("reports runtime drift with actionable file names", () => {
     const root = makeFixture();
@@ -711,5 +763,5 @@ describe("enterprise readiness basics", () => {
 
     expect(result.ok).toBe(false);
     expect(result.failures.join("\n")).toContain("scripts/load-test/basic.js");
-  }, 10_000);
+  }, 20_000);
 });

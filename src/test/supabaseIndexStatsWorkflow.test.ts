@@ -132,24 +132,22 @@ describe("Supabase index stats workflow wiring", () => {
     expect(liveSecurityScript).toContain("fail(\"posture check failed\", failures)");
   });
 
-  it("lets function-only staging deploys skip DB-backed index stats without weakening migration gates", () => {
+  it("keeps staging migration gates active while resolving direct database URLs through the pooler", () => {
     expect(supabaseStagingWorkflow).toMatch(
       /if grep -Eq '\^supabase\/migrations\/' <<< "\$changed_files"; then\s+echo "db_changes=true" >> "\$GITHUB_OUTPUT"[\s\S]*?else\s+echo "db_changes=false" >> "\$GITHUB_OUTPUT"/,
     );
     expect(supabaseStagingWorkflow).toMatch(
       /if grep -Eq '\^\(supabase\/\|deno\\\.\(json\|lock\)\$\)' <<< "\$changed_files"; then\s+echo "deploy=true" >> "\$GITHUB_OUTPUT"/,
     );
+    expect(supabaseStagingWorkflow).toContain('if [ -z "$SUPABASE_STAGING_DB_URL" ]; then');
     expect(supabaseStagingWorkflow).toContain(
-      "if [ \"${{ steps.supabase_changes.outputs.db_changes }}\" = \"true\" ] && [ -z \"$SUPABASE_STAGING_DB_URL\" ]; then",
-    );
-    expect(supabaseStagingWorkflow).toContain(
-      "SUPABASE_STAGING_DB_URL is required when Supabase migrations change",
+      "SUPABASE_STAGING_DB_URL is required for isolated staging schema verification",
     );
     expect(supabaseStagingWorkflow).toMatch(
-      /- name: Check staging database migration secret\s+if: steps\.supabase_changes\.outputs\.db_changes == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'[\s\S]*SUPABASE_STAGING_DB_URL is required when Supabase migrations change\./,
+      /- name: Check staging database migration secret\s+if: steps\.supabase_changes\.outputs\.eligible == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'[\s\S]*SUPABASE_STAGING_DB_URL is required for isolated staging schema verification\./,
     );
     expect(supabaseStagingWorkflow).toMatch(
-      /- name: Resolve staging database URL\s+if: steps\.supabase_changes\.outputs\.deploy == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'[\s\S]*if \[ -z "\$SUPABASE_STAGING_DB_URL" \]; then[\s\S]*SUPABASE_STAGING_EFFECTIVE_DB_URL=[\s\S]*function-only Supabase prep will skip DB-backed index stats and advisor checks\.[\s\S]*exit 0/,
+      /- name: Resolve staging database URL\s+if: steps\.supabase_changes\.outputs\.eligible == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'[\s\S]*if \[ -z "\$SUPABASE_STAGING_DB_URL" \]; then[\s\S]*SUPABASE_STAGING_EFFECTIVE_DB_URL=[\s\S]*isolated staging schema verification cannot continue\.[\s\S]*exit 1/,
     );
     expect(supabaseStagingWorkflow).toContain("https://api.supabase.com/v1/projects/$STAGING_SUPABASE_PROJECT_ID");
     expect(supabaseStagingWorkflow).toContain("PROJECT_JSON=\"$project_json\"");
@@ -157,17 +155,48 @@ describe("Supabase index stats workflow wiring", () => {
     expect(supabaseStagingWorkflow).toContain(
       "Configure SUPABASE_STAGING_DB_URL as a Supabase pooler URL",
     );
-    expect(supabaseStagingWorkflow).toContain("direct Supabase DB hostname, which is IPv6-only");
-    expect(supabaseStagingWorkflow).toContain("Containerized migration validation remains the hard gate");
-    expect(supabaseStagingWorkflow).toMatch(
-      /- name: Capture staging Supabase index stats\s+if: steps\.supabase_changes\.outputs\.db_changes == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'\s+run: npm run capture:supabase-index-stats -- --out supabase-index-stats\.json/,
+    expect(supabaseStagingWorkflow).toContain("if (current.hostname.endsWith(\".pooler.supabase.com\"))");
+    expect(supabaseStagingWorkflow).toContain("pooler.hostname = `aws-0-${region}.pooler.supabase.com`");
+    expect(supabaseStagingWorkflow).not.toContain(
+      "direct Supabase DB hostname, which is IPv6-only",
+    );
+    expect(supabaseStagingWorkflow).not.toContain(
+      "Containerized migration validation remains the hard gate for this PR",
     );
     expect(supabaseStagingWorkflow).toMatch(
-      /- name: Check staging Supabase advisors\s+if: steps\.supabase_changes\.outputs\.db_changes == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'/,
+      /- name: Capture staging Supabase index stats\s+if: steps\.supabase_changes\.outputs\.eligible == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'\s+run: npm run capture:supabase-index-stats -- --out supabase-index-stats\.json/,
     );
     expect(supabaseStagingWorkflow).toMatch(
-      /- name: Check staging Supabase generated types\s+if: steps\.supabase_changes\.outputs\.db_changes == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'/,
+      /- name: Check staging Supabase advisors\s+if: steps\.supabase_changes\.outputs\.eligible == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'/,
     );
+    expect(supabaseStagingWorkflow).toMatch(
+      /- name: Check staging Supabase generated types\s+if: steps\.supabase_changes\.outputs\.eligible == 'true' && steps\.supabase_target\.outputs\.isolated_staging == 'true'/,
+    );
+    expect(supabaseStagingWorkflow).toMatch(
+      /PR is not eligible for isolated Supabase staging prep\."\s+echo "eligible=false" >> "\$GITHUB_OUTPUT"\s+exit 0/,
+    );
+    expect(supabaseStagingWorkflow).toContain('echo "eligible=true" >> "$GITHUB_OUTPUT"');
+  });
+
+  it("reconciles every isolated staging runtime even when the pull request has no Supabase file diff", () => {
+    const paritySteps = [
+      "Validate isolated staging secrets",
+      "Install Supabase CLI",
+      "Repair legacy staging migration aliases",
+      "Repair staging add-on credit migration drift",
+      "Dry-run staging database migrations",
+      "Apply database migrations to staging",
+      "Check staging Supabase security posture",
+      "Deploy edge functions to staging",
+      "Capture staging live function drift inventory",
+    ];
+
+    for (const stepName of paritySteps) {
+      const escapedStepName = stepName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      expect(supabaseStagingWorkflow).toMatch(
+        new RegExp(`- name: ${escapedStepName}\\s+if: steps\\.supabase_changes\\.outputs\\.eligible == 'true' && steps\\.supabase_target\\.outputs\\.isolated_staging == 'true'`),
+      );
+    }
   });
 
   it("repairs known staging-only migration aliases before staging dry-run validation", () => {
@@ -185,6 +214,23 @@ describe("Supabase index stats workflow wiring", () => {
     expect(supabaseStagingWorkflow).toContain("supabase migration list --db-url \"$SUPABASE_STAGING_EFFECTIVE_DB_URL\"");
     expect(supabaseStagingWorkflow).toContain(
       "supabase migration repair \"${versions_to_revert[@]}\" --db-url \"$SUPABASE_STAGING_EFFECTIVE_DB_URL\" --status reverted --yes",
+    );
+  });
+
+  it("repairs an applied add-on credit migration when staging is missing its canonical columns", () => {
+    const repairStep = supabaseStagingWorkflow.indexOf("- name: Repair staging add-on credit migration drift");
+    const dryRunStep = supabaseStagingWorkflow.indexOf("- name: Dry-run staging database migrations");
+
+    expect(repairStep).toBeGreaterThan(-1);
+    expect(dryRunStep).toBeGreaterThan(-1);
+    expect(repairStep).toBeLessThan(dryRunStep);
+    expect(supabaseStagingWorkflow).toContain("information_schema.columns");
+    expect(supabaseStagingWorkflow).toContain("credits_granted");
+    expect(supabaseStagingWorkflow).toContain("credits_consumed");
+    expect(supabaseStagingWorkflow).toContain("supabase_migrations.schema_migrations");
+    expect(supabaseStagingWorkflow).toContain("version = '20260628193711'");
+    expect(supabaseStagingWorkflow).toContain(
+      'supabase migration repair "20260628193711" --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" --status reverted --yes',
     );
   });
 });

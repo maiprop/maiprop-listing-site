@@ -152,7 +152,7 @@ describe("disaster recovery readiness check", () => {
     writeFileSync(
       join(evidenceDir, "restore-drill-evidence.json"),
       `${JSON.stringify({
-        schemaVersion: "maiprop.restore-drill-evidence.v1",
+        schemaVersion: "maiprop.restore-drill-evidence.v2",
         status: "verified",
         backup: { artifactPath, artifactSha256: checksum, artifactBytes: Buffer.byteLength(artifact) },
         restore: {
@@ -161,6 +161,22 @@ describe("disaster recovery readiness check", () => {
           rowCounts: { profiles: 1, listings: 2, projects: 3, subscriptions: 4, open_house_registrations: 5 },
           releaseSha: "66326673d2eea057f16584795655572974f97f99",
           cleanupConfirmed: true,
+          auth: {
+            usersRestored: 1,
+            identitiesRestored: 1,
+            loginVerified: true,
+            deprovisionVerified: true,
+          },
+          storage: {
+            bucketsRestored: 1,
+            objectsRestored: 1,
+            objectChecksumVerified: true,
+          },
+          configuration: {
+            snapshotSha256: checksum,
+            authConfigVerified: true,
+            storageConfigVerified: true,
+          },
         },
       })}\n`,
     );
@@ -169,5 +185,37 @@ describe("disaster recovery readiness check", () => {
 
     writeFileSync(artifactPath, "modified backup");
     expect(checkChecksumVerifiedRestoreEvidence(root).failures.join("\n")).toContain("checksum does not match");
+  });
+
+  it("rejects database-only evidence that omits Auth, Storage, or configuration restore proof", () => {
+    const root = makeFixture();
+    const backupDir = join(root, "backup");
+    const evidenceDir = join(root, "artifacts", "compliance", "dora");
+    mkdirSync(backupDir, { recursive: true });
+    mkdirSync(evidenceDir, { recursive: true });
+    const artifactPath = join(backupDir, "drill.sql.enc");
+    const artifact = "database-only backup";
+    const checksum = createHash("sha256").update(artifact).digest("hex");
+    writeFileSync(artifactPath, artifact);
+    writeFileSync(
+      join(evidenceDir, "restore-drill-evidence.json"),
+      `${JSON.stringify({
+        schemaVersion: "maiprop.restore-drill-evidence.v2",
+        status: "verified",
+        backup: { artifactPath, artifactSha256: checksum, artifactBytes: Buffer.byteLength(artifact) },
+        restore: {
+          completedAt: "2026-07-13T08:00:00.000Z",
+          target: "staging",
+          rowCounts: { profiles: 1, listings: 2, projects: 3, subscriptions: 4, open_house_registrations: 5 },
+          releaseSha: "66326673d2eea057f16584795655572974f97f99",
+          cleanupConfirmed: true,
+        },
+      })}\n`,
+    );
+
+    const failures = checkChecksumVerifiedRestoreEvidence(root).failures.join("\n");
+    expect(failures).toContain("Auth users and identities");
+    expect(failures).toContain("Storage buckets and objects");
+    expect(failures).toContain("configuration snapshot");
   });
 });

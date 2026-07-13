@@ -32,6 +32,40 @@ vi.mock("@/lib/buildingListingUploads", () => ({ uploadListingImage: (...args: u
 vi.mock("sonner", () => ({ toast: toastMock }));
 vi.mock("@/components/Navbar", () => ({ Navbar: () => <nav data-testid="navbar" /> }));
 vi.mock("@/components/Footer", () => ({ Footer: () => <footer data-testid="footer" /> }));
+vi.mock("@/components/location/LocationAutocompleteInput", () => ({
+  LocationAutocompleteInput: ({
+    id,
+    value,
+    onChange,
+    onSuggestionSelect,
+    placeholder,
+  }: {
+    id: string;
+    value: string;
+    onChange: (value: string) => void;
+    onSuggestionSelect: (selection: Record<string, string>) => void;
+    placeholder: string;
+  }) => (
+    <div>
+      <input id={id} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
+      <button
+        type="button"
+        aria-label={`select ${id}`}
+        onClick={() => onSuggestionSelect({
+          value: "Kalimnou 27, Agioi Anargyroi",
+          addressLine: "Kalimnou 27",
+          city: "Agioi Anargyroi",
+          municipality: "Agioi Anargyroi-Kamatero",
+          region: "Attica",
+          latitude: "38.0301",
+          longitude: "23.7192",
+        })}
+      >
+        select suggestion
+      </button>
+    </div>
+  ),
+}));
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
   return { ...actual, useNavigate: () => navigateMock };
@@ -57,6 +91,20 @@ const fillRequiredUnit = () => {
   const bedroomAndBathroomInputs = screen.getAllByPlaceholderText("2");
   fireEvent.change(bedroomAndBathroomInputs[0], { target: { value: "2" } });
   fireEvent.change(bedroomAndBathroomInputs[1], { target: { value: "1" } });
+};
+
+const seedDraft = (overrides: Record<string, unknown>) => {
+  localStorage.setItem("maiprop:new-building-listing-draft:v1:u-1", JSON.stringify({
+    version: 1,
+    step: "building",
+    projectKind: "new_build",
+    project: {},
+    units: [],
+    listing: {},
+    images: [],
+    coverImageId: null,
+    ...overrides,
+  }));
 };
 
 beforeEach(() => {
@@ -100,6 +148,22 @@ describe("CreateNewBuildingListing", () => {
 
     expect(screen.getByText(/Listing Limit Reached/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Upgrade Plan/i })).toHaveAttribute("href", "/pricing");
+  });
+
+  it("allows platform admins and unlimited Developer Pro plans to use the project wizard", () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "admin-1" },
+      profile: { role: "admin", participant_type: "admin" },
+    });
+    useSubMock.mockReturnValue({ hasDeveloperPro: true });
+    useMyListingsMock.mockReturnValue({ data: Array.from({ length: 20 }, (_, index) => ({ id: index, status: "active" })) });
+    getPlanLimitsMock.mockReturnValue({ listings: null });
+
+    renderPage();
+
+    expect(screen.getByText(/Step 1 of 5/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Listing Limit Reached/i)).not.toBeInTheDocument();
+    expect(navigateMock).not.toHaveBeenCalledWith("/dashboard/settings", expect.anything());
   });
 
   it("does not count inactive listings against the developer active-listing cap", () => {
@@ -147,6 +211,50 @@ describe("CreateNewBuildingListing", () => {
 
     expect(await screen.findByText(/Step 2 of 5/i)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /Project Inventory/i })).toBeInTheDocument();
+  });
+
+  it("requires both construction and renovation years for renovation projects", async () => {
+    renderPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Renovation$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+
+    expect(await screen.findByText("Project name is required")).toBeInTheDocument();
+    expect(screen.getByText("Construction year is required")).toBeInTheDocument();
+    expect(screen.getByText("Renovation year is required")).toBeInTheDocument();
+    expect(screen.getByText("City is required")).toBeInTheDocument();
+    expect(screen.queryByText("Building permit number is required")).not.toBeInTheDocument();
+  });
+
+  it("applies structured address selections with city, municipality, and coordinates", async () => {
+    renderPage();
+
+    fillRequiredProject();
+    fireEvent.click(screen.getByRole("button", { name: /select new-building-address/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 2 of 5/i);
+    fillRequiredUnit();
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 3 of 5/i);
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 4 of 5/i);
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 5 of 5/i);
+    fireEvent.change(document.querySelector("#nb-photo-input") as HTMLInputElement, {
+      target: { files: [new File(["photo"], "cover.jpg", { type: "image/jpeg" })] },
+    });
+    await screen.findByRole("button", { name: /Cover/i });
+    fireEvent.click(screen.getByRole("button", { name: /Publish New Build Ad/i }));
+
+    await waitFor(() => expect(submitMock).toHaveBeenCalledWith(expect.objectContaining({
+      project: expect.objectContaining({
+        address: "Kalimnou 27",
+        city: "Agioi Anargyroi",
+        municipality: "Agioi Anargyroi-Kamatero",
+        latitude: "38.0301",
+        longitude: "23.7192",
+      }),
+    })));
   });
 
   it("presents the wizard as one New Build project ad, not a project plus linked listings", async () => {
@@ -240,6 +348,75 @@ describe("CreateNewBuildingListing", () => {
     expect(screen.getByDisplayValue("Marina Heights")).toBeInTheDocument();
     expect(screen.getByDisplayValue("12345/2024")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Athens")).toBeInTheDocument();
+  });
+
+  it("restores legacy single-unit drafts while filtering transient blob images", async () => {
+    seedDraft({
+      step: "unit",
+      project: { name: "Legacy Heights", building_permit_number: "P-1", city: "Athens" },
+      units: undefined,
+      unit: { internal_sqm: "74", price: "240000", bedrooms: "2", bathrooms: "1" },
+      images: [
+        { id: "saved", url: "https://cdn.test/saved.jpg" },
+        { id: "transient", url: "blob:temporary" },
+        { id: 42, url: "https://cdn.test/invalid.jpg" },
+      ],
+      coverImageId: "saved",
+    });
+
+    renderPage();
+
+    expect(await screen.findByText(/Step 2 of 5/i)).toBeInTheDocument();
+    expect(screen.getByDisplayValue("74")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("240000")).toBeInTheDocument();
+    await waitFor(() => {
+      const persisted = JSON.parse(localStorage.getItem("maiprop:new-building-listing-draft:v1:u-1") ?? "{}");
+      expect(persisted.images).toEqual([{ id: "saved", url: "https://cdn.test/saved.jpg" }]);
+    });
+  });
+
+  it.each([
+    "not-json",
+    JSON.stringify({ version: 2, step: "unit" }),
+    JSON.stringify({ version: 1, step: "unknown" }),
+  ])("ignores corrupt or incompatible drafts: %s", async (rawDraft) => {
+    localStorage.setItem("maiprop:new-building-listing-draft:v1:u-1", rawDraft);
+
+    renderPage();
+
+    expect(await screen.findByText(/Step 1 of 5/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Step 2 of 5/i)).not.toBeInTheDocument();
+  });
+
+  it("requires a restored photo to have an explicit valid cover before publish", async () => {
+    seedDraft({
+      step: "photos",
+      project: { name: "Cover Heights", building_permit_number: "P-2", city: "Athens" },
+      units: [{ internal_sqm: "80", price: "250000", bedrooms: "2", bathrooms: "1" }],
+      images: [{ id: "saved", url: "https://cdn.test/saved.jpg" }],
+      coverImageId: null,
+    });
+
+    renderPage();
+    expect(await screen.findByText(/Step 5 of 5/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Publish New Build Ad/i }));
+
+    expect(toastMock.error).toHaveBeenCalledWith("Set a cover photo");
+    expect(submitMock).not.toHaveBeenCalled();
+  });
+
+  it("adds and removes inventory units without allowing the last unit to be deleted", async () => {
+    renderPage();
+    fillRequiredProject();
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 2 of 5/i);
+
+    fireEvent.click(screen.getByRole("button", { name: /Add unit/i }));
+    expect(screen.getByRole("button", { name: /Unit 2/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Remove/i }));
+
+    expect(screen.queryByRole("button", { name: /Unit 2/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Remove/i })).not.toBeInTheDocument();
   });
 
   it("uploads a photo, uses it as cover, submits, and navigates to the created listing", async () => {
@@ -349,6 +526,41 @@ describe("CreateNewBuildingListing", () => {
 
     await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith("Failed to publish New Build ad. Please try again."));
     expect(navigateMock).not.toHaveBeenCalledWith("/new-build/listing-1");
+  });
+
+  it("keeps a failed photo visible for correction and uses the first successful upload as cover", async () => {
+    Object.defineProperty(globalThis, "crypto", {
+      writable: true,
+      value: {
+        ...(globalThis.crypto ?? {}),
+        randomUUID: vi.fn().mockReturnValueOnce("bad-id").mockReturnValueOnce("good-id"),
+      },
+    });
+    uploadListingImageMock
+      .mockRejectedValueOnce("provider unavailable")
+      .mockResolvedValueOnce({ id: "img-ok", url: "https://cdn.test/ok.jpg" });
+    renderPage();
+
+    fillRequiredProject();
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 2 of 5/i);
+    fillRequiredUnit();
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 3 of 5/i);
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 4 of 5/i);
+    fireEvent.click(screen.getByRole("button", { name: /Next/i }));
+    await screen.findByText(/Step 5 of 5/i);
+
+    const failed = new File(["bad"], "bad.jpg", { type: "image/jpeg" });
+    const good = new File(["good"], "good.jpg", { type: "image/jpeg" });
+    fireEvent.change(document.querySelector("#nb-photo-input") as HTMLInputElement, {
+      target: { files: [failed, good] },
+    });
+
+    expect(await screen.findByText("Upload failed")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Cover/i })).toBeInTheDocument();
+    expect(toastMock.error).toHaveBeenCalledWith(expect.stringContaining("bad.jpg"));
   });
 
   it("exercises every wizard field, previous-step navigation, media upload, drag/drop, and cover selection", async () => {

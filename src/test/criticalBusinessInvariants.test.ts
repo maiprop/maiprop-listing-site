@@ -1,15 +1,8 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
-const findMigrationContaining = (needle: string) => {
-  const directory = resolve(process.cwd(), "supabase/migrations");
-  return readdirSync(directory)
-    .filter((name) => name.endsWith(".sql"))
-    .map((name) => ({ name, source: readFileSync(resolve(directory, name), "utf8") }))
-    .find(({ source }) => source.includes(needle));
-};
 const readCheckoutSource = () =>
   [
     "supabase/functions/create-checkout/index.ts",
@@ -295,12 +288,7 @@ describe("critical business invariants", () => {
   });
 
   it("keeps account deletion jobs durable, minimal, and browser read-only", () => {
-    const migration = findMigrationContaining(
-      "CREATE TABLE IF NOT EXISTS public.account_deletion_jobs",
-    );
-
-    expect(migration, "account_deletion_jobs migration must exist").toBeDefined();
-    const sql = migration?.source ?? "";
+    const sql = read("supabase/migrations/20260711181306_account_deletion_jobs.sql");
 
     expect(sql).toMatch(/user_id uuid (?:NOT NULL )?PRIMARY KEY/i);
     expect(sql).not.toMatch(/REFERENCES\s+(?:auth\.users|public\.profiles)/i);

@@ -563,6 +563,36 @@ describe("public listings endpoint", () => {
     expect(cacheApi.put.mock.calls.some(([request]) => request.url.includes("__maiprop_stale=1"))).toBe(true);
   });
 
+  it("keeps the catalogue available when optional public profile enrichment is unavailable", async () => {
+    const mock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/rest/v1/listings") {
+        return jsonRows([{ id: "listing-1", owner_id: "owner-1", title: "Athens flat" }]);
+      }
+      if (url.pathname === "/rest/v1/rpc/get_public_profile_summaries") {
+        return new Response("missing function", { status: 404 });
+      }
+      return jsonRows([]);
+    }) as unknown as FetchMock;
+    globalThis.fetch = mock as unknown as typeof fetch;
+
+    const res = await listingsRequest(
+      makeCtx("https://portal.maiprop.co/api/public/listings?listing_type=sale&limit=1"),
+    );
+    const body = await res.json() as {
+      data: Array<{ id: string; profiles: unknown; ownerParticipantType: unknown }>;
+    };
+
+    expect(res.status).toBe(200);
+    expect(body.data).toEqual([
+      expect.objectContaining({
+        id: "listing-1",
+        profiles: null,
+        ownerParticipantType: null,
+      }),
+    ]);
+  });
+
   it("honors explicit offset for split first-paint catalogue fetches", async () => {
     const res = await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?listing_type=sale&page=1&pageSize=28&offset=12"));
     const body = await res.json() as { page: number; pageSize: number; offset: number };

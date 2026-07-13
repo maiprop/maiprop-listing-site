@@ -34,6 +34,55 @@ const requireRowCounts = (rowCounts) => {
   return normalized;
 };
 
+const requirePositiveInteger = (value, name) => {
+  if (!Number.isInteger(value) || value < 1) throw new Error(`${name} must be a positive integer.`);
+  return value;
+};
+
+const requireTrue = (value, name) => {
+  if (value !== true) throw new Error(`${name} must be true.`);
+  return true;
+};
+
+const requireSha256 = (value, name) => {
+  if (!/^[a-f0-9]{64}$/i.test(String(value ?? ""))) throw new Error(`${name} must be a SHA-256 checksum.`);
+  return value;
+};
+
+const requireAuthRestore = (value) => {
+  if (!value || typeof value !== "object") throw new Error("restore result must include auth_restore.");
+  return {
+    usersRestored: requirePositiveInteger(value.users_restored, "auth_restore.users_restored"),
+    identitiesRestored: requirePositiveInteger(value.identities_restored, "auth_restore.identities_restored"),
+    loginVerified: requireTrue(value.login_verified, "auth_restore.login_verified"),
+    deprovisionVerified: requireTrue(value.deprovision_verified, "auth_restore.deprovision_verified"),
+  };
+};
+
+const requireStorageRestore = (value) => {
+  if (!value || typeof value !== "object") throw new Error("restore result must include storage_restore.");
+  return {
+    bucketsRestored: requirePositiveInteger(value.buckets_restored, "storage_restore.buckets_restored"),
+    objectsRestored: requirePositiveInteger(value.objects_restored, "storage_restore.objects_restored"),
+    objectChecksumVerified: requireTrue(
+      value.object_checksum_verified,
+      "storage_restore.object_checksum_verified",
+    ),
+  };
+};
+
+const requireConfigurationRestore = (value) => {
+  if (!value || typeof value !== "object") throw new Error("restore result must include configuration_restore.");
+  return {
+    snapshotSha256: requireSha256(value.snapshot_sha256, "configuration_restore.snapshot_sha256"),
+    authConfigVerified: requireTrue(value.auth_config_verified, "configuration_restore.auth_config_verified"),
+    storageConfigVerified: requireTrue(
+      value.storage_config_verified,
+      "configuration_restore.storage_config_verified",
+    ),
+  };
+};
+
 export function buildRestoreDrillEvidence({ backupManifestPath, restoreResultPath, now = () => new Date() }) {
   const manifestPath = resolve(backupManifestPath);
   const restorePath = resolve(restoreResultPath);
@@ -74,7 +123,7 @@ export function buildRestoreDrillEvidence({ backupManifestPath, restoreResultPat
   }
 
   return {
-    schemaVersion: "maiprop.restore-drill-evidence.v1",
+    schemaVersion: "maiprop.restore-drill-evidence.v2",
     status: "verified",
     verifiedAt: now().toISOString(),
     backup: {
@@ -90,6 +139,9 @@ export function buildRestoreDrillEvidence({ backupManifestPath, restoreResultPat
       rowCounts: requireRowCounts(restoreResult.row_counts),
       releaseSha: restoreResult.release_sha,
       cleanupConfirmed: true,
+      auth: requireAuthRestore(restoreResult.auth_restore),
+      storage: requireStorageRestore(restoreResult.storage_restore),
+      configuration: requireConfigurationRestore(restoreResult.configuration_restore),
     },
   };
 }
