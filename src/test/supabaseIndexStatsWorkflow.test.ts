@@ -193,4 +193,21 @@ describe("Supabase index stats workflow wiring", () => {
       "supabase migration repair \"${versions_to_revert[@]}\" --db-url \"$SUPABASE_STAGING_EFFECTIVE_DB_URL\" --status reverted --yes",
     );
   });
+
+  it("repairs an applied add-on credit migration when staging is missing its canonical columns", () => {
+    const repairStep = supabaseStagingWorkflow.indexOf("- name: Repair staging add-on credit migration drift");
+    const dryRunStep = supabaseStagingWorkflow.indexOf("- name: Dry-run staging database migrations");
+
+    expect(repairStep).toBeGreaterThan(-1);
+    expect(dryRunStep).toBeGreaterThan(-1);
+    expect(repairStep).toBeLessThan(dryRunStep);
+    expect(supabaseStagingWorkflow).toContain("information_schema.columns");
+    expect(supabaseStagingWorkflow).toContain("credits_granted");
+    expect(supabaseStagingWorkflow).toContain("credits_consumed");
+    expect(supabaseStagingWorkflow).toContain("supabase_migrations.schema_migrations");
+    expect(supabaseStagingWorkflow).toContain("version = '20260628193711'");
+    expect(supabaseStagingWorkflow).toContain(
+      'supabase migration repair "20260628193711" --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" --status reverted --yes',
+    );
+  });
 });

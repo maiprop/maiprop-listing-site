@@ -414,6 +414,50 @@ jobs:
           echo "Repairing staging-only legacy migration aliases: ${versions_to_revert[*]}"
           supabase migration repair "${versions_to_revert[@]}" --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" --status reverted --yes
 
+      - name: Repair staging add-on credit migration drift
+        if: steps.supabase_changes.outputs.db_changes == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
+        run: |
+          set -euo pipefail
+
+          if ! command -v psql >/dev/null 2>&1; then
+            echo "::error::The GitHub runner must provide psql for staging schema-drift verification."
+            exit 1
+          fi
+
+          credit_column_count="$(psql "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --tuples-only \
+            --no-align \
+            --command "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'addon_purchases' AND column_name IN ('credits_granted', 'credits_consumed');")"
+          credit_column_count="$(tr -d '[:space:]' <<< "$credit_column_count")"
+
+          if [ "$credit_column_count" = "2" ]; then
+            echo "Staging add-on credit columns match the canonical migration."
+            exit 0
+          fi
+
+          canonical_history_count="$(psql "$SUPABASE_STAGING_EFFECTIVE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --tuples-only \
+            --no-align \
+            --command "SELECT count(*) FROM supabase_migrations.schema_migrations WHERE version = '20260628193711';")"
+          canonical_history_count="$(tr -d '[:space:]' <<< "$canonical_history_count")"
+
+          if [ "$canonical_history_count" = "0" ]; then
+            echo "The canonical add-on credit migration is pending; the normal migration push will apply it."
+            exit 0
+          fi
+
+          if [ "$canonical_history_count" != "1" ]; then
+            echo "::error::Unexpected history count for migration 20260628193711: $canonical_history_count"
+            exit 1
+          fi
+
+          echo "Repairing staging history for canonical add-on credit migration 20260628193711."
+          supabase migration repair "20260628193711" --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" --status reverted --yes
+
       - name: Dry-run staging database migrations
         if: steps.supabase_changes.outputs.db_changes == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: supabase db push --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" --dry-run --include-all
