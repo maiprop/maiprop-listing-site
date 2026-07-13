@@ -62,6 +62,16 @@ describe("CompareDrawer", () => {
     expect(screen.queryByRole("button", { name: /^compare/i })).not.toBeInTheDocument();
   });
 
+  it("keeps the compare controls above the floating AI assistant", () => {
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <CompareDrawer listings={[listing("one")]} onRemove={onRemove} onClear={onClear} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("compare-drawer")).toHaveClass("z-[55]");
+  });
+
   it("opens the comparison table, formats values, removes rows, and closes through the view link", () => {
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>

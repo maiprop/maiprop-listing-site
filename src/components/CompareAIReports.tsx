@@ -44,6 +44,7 @@ interface PropertyAIData {
   walkScore: number | null;
   neighbourhood: NeighbourhoodData | null;
   loading: boolean;
+  walkScoreLoading: boolean;
   error: string | null;
 }
 
@@ -158,7 +159,16 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
     if (!user) return;
     setTriggered(true);
     const init: Record<string, PropertyAIData> = {};
-    listings.forEach(l => { init[l.id] = { valuation: null, walkScore: null, neighbourhood: null, loading: true, error: null }; });
+    listings.forEach(l => {
+      init[l.id] = {
+        valuation: null,
+        walkScore: null,
+        neighbourhood: null,
+        loading: true,
+        walkScoreLoading: true,
+        error: null,
+      };
+    });
     setReports(init);
 
     await Promise.all(listings.map(async (listing) => {
@@ -248,15 +258,27 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
           neighbourhood = { safetyScore, noiseLevel };
         }
 
-        // Walk score — use POI endpoint if coords available, else estimate
+        const hasCoordinates = raw.latitude != null && raw.longitude != null;
+        setReports(prev => ({
+          ...prev,
+          [listing.id]: {
+            valuation,
+            walkScore: null,
+            neighbourhood,
+            loading: false,
+            walkScoreLoading: hasCoordinates,
+            error: reportError,
+          },
+        }));
+
+        // POI enrichment is secondary. It must not delay completed valuation
+        // and neighbourhood results.
         let walkScore: number | null = null;
-        if (raw.latitude && raw.longitude) {
+        if (hasCoordinates) {
           const poisRes = await supabase.functions.invoke("property-pois", {
             body: { latitude: raw.latitude, longitude: raw.longitude, city: raw.city },
             timeout: PROPERTY_POIS_TIMEOUT_MS,
           });
-          const poisFail = poisRes.error?.message ?? poisRes.data?.error;
-          if (poisFail && !reportError) reportError = getAiErrorMessage(null, { error: poisFail }, "AI analysis failed");
           if (!poisRes.error && poisRes.data?.pois) {
             const pois = poisRes.data.pois as Array<{
               distanceKm?: number;
@@ -274,12 +296,28 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
 
         setReports(prev => ({
           ...prev,
-          [listing.id]: { valuation, walkScore, neighbourhood, loading: false, error: reportError ?? null },
+          [listing.id]: {
+            ...(prev[listing.id] ?? {
+              valuation,
+              neighbourhood,
+              loading: false,
+              error: reportError,
+            }),
+            walkScore,
+            walkScoreLoading: false,
+          },
         }));
       } catch (e: unknown) {
         setReports(prev => ({
           ...prev,
-          [listing.id]: { valuation: null, walkScore: null, neighbourhood: null, loading: false, error: getAiErrorMessage(e, null, "AI analysis failed") },
+          [listing.id]: {
+            valuation: null,
+            walkScore: null,
+            neighbourhood: null,
+            loading: false,
+            walkScoreLoading: false,
+            error: getAiErrorMessage(e, null, "AI analysis failed"),
+          },
         }));
       }
     }));
@@ -346,7 +384,7 @@ export function CompareAIReports({ listings }: { listings: Listing[] }) {
           const r = reports[l.id];
           return (
             <td key={l.id} className="px-4 py-3 text-center">
-              {!r || r.loading
+              {!r || r.loading || r.walkScoreLoading
                 ? <Loader2 className="w-4 h-4 animate-spin text-primary mx-auto" />
                 : r.walkScore != null
                 ? <div className="flex justify-center"><WalkBadge score={r.walkScore} /></div>
