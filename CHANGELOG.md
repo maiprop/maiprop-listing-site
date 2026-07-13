@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.12.9](https://github.com/maiprop/maiprop-listing-site/compare/v1.12.8...v1.12.9) (2026-07-13)
+
+
+### Bug Fixes
+
+* bound listings location passive search fallback ([#497](https://github.com/maiprop/maiprop-listing-site/issues/497)) ([090eb37](https://github.com/maiprop/maiprop-listing-site/commit/090eb379b870a6b7a2c45bd258d1a599ce8e789a))
+* broaden locality address search radius ([cb83aa9](https://github.com/maiprop/maiprop-listing-site/commit/cb83aa9f39527516eb93785b92eaa722c6f3e9c0))
+* commit ranked location suggestions ([089f38a](https://github.com/maiprop/maiprop-listing-site/commit/089f38a37f8892c819594bd7a05387889ed8f418))
+* complete free ECAS B-grade hardening ([#506](https://github.com/maiprop/maiprop-listing-site/issues/506)) ([4097fee](https://github.com/maiprop/maiprop-listing-site/commit/4097fee723668fecb3b2f7426dab5f9df7786e21))
+* filter address fallbacks by typed context ([94a8d72](https://github.com/maiprop/maiprop-listing-site/commit/94a8d72c917d176cd8cc51f4157b1b3ae1db99e2))
+* provide release CI repository context ([#510](https://github.com/maiprop/maiprop-listing-site/issues/510)) ([32ba413](https://github.com/maiprop/maiprop-listing-site/commit/32ba41386c3657fe28bbc18b9b098251ec5109cf))
+* rank listing address suggestions by location context ([7d4abb4](https://github.com/maiprop/maiprop-listing-site/commit/7d4abb494a18804c3ed94e70872a1adbc2515b8e))
+* rank visible listing address suggestions ([d998214](https://github.com/maiprop/maiprop-listing-site/commit/d99821417b03a072803248fb1f929beb1e8fabba))
+* resolve street-number location suggestions ([#498](https://github.com/maiprop/maiprop-listing-site/issues/498)) ([aae8309](https://github.com/maiprop/maiprop-listing-site/commit/aae8309834df6206099a53d1694e1026957b4c37))
+* restore public project API access ([#507](https://github.com/maiprop/maiprop-listing-site/issues/507)) ([178365b](https://github.com/maiprop/maiprop-listing-site/commit/178365b9cd869b7f7d86aecefb08ddb4eacf5b04))
+* stabilize compare valuation workflow ([#511](https://github.com/maiprop/maiprop-listing-site/issues/511)) ([1629a24](https://github.com/maiprop/maiprop-listing-site/commit/1629a247ed6fda9ea45e0edec0659ec39eb78292))
+* synchronize production Supabase types ([#508](https://github.com/maiprop/maiprop-listing-site/issues/508)) ([a8154b6](https://github.com/maiprop/maiprop-listing-site/commit/a8154b69e89806fbde062b6a12442b5d54dc5ea8))
+* use valid Mapbox geocoding address types ([19fa0b1](https://github.com/maiprop/maiprop-listing-site/commit/19fa0b13a552cd3a7bbb1362d9ac80b47a6bcc71))
+* widen coordinate-backed location search ([4f1c597](https://github.com/maiprop/maiprop-listing-site/commit/4f1c59722ee57ecaf0cdff4a7cca21567137483f))
+
+
+### Performance Improvements
+
+* improve public listings first paint ([7e70062](https://github.com/maiprop/maiprop-listing-site/commit/7e7006230ca3ddc97eb9dd9051671fc15bfffb06))
+* optimize public data loading and valuation ([dfcaf5a](https://github.com/maiprop/maiprop-listing-site/commit/dfcaf5a4b7fe9613530d6c063382333881322a60))
+* reduce listing search request churn ([d0e95bf](https://github.com/maiprop/maiprop-listing-site/commit/d0e95bfb6ee1d62e4e6887e1b7ae5bb732094a3c))
+
 ## [1.12.8](https://github.com/maiprop/maiprop-listing-site/compare/v1.12.7...v1.12.8) (2026-07-10)
 
 
