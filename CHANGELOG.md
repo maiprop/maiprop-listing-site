@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.10](https://github.com/maiprop/maiprop-listing-site/compare/v1.12.9...v1.12.10) (2026-07-13)
+
+
+### Bug Fixes
+
+* publish release checks asynchronously ([#512](https://github.com/maiprop/maiprop-listing-site/issues/512)) ([a0b19ac](https://github.com/maiprop/maiprop-listing-site/commit/a0b19acfad116c4a150aa5b3f0b8cb13724ede3c))
+
 ## [1.12.9](https://github.com/maiprop/maiprop-listing-site/compare/v1.12.8...v1.12.9) (2026-07-13)
 
 
