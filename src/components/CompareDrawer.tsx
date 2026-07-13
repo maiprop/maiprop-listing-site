@@ -89,7 +89,7 @@ export function CompareDrawer({
 
   return (
     <div
-      className="fixed left-0 right-0 z-[45] shadow-elevated"
+      className="fixed left-0 right-0 z-[55] shadow-elevated"
       data-testid="compare-drawer"
       style={{ bottom: "calc(var(--bottom-nav-h, 56px) + env(safe-area-inset-bottom, 0px))" }}
     >

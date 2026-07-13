@@ -5,7 +5,7 @@
  * neighbourhood-report, property-pois) and the auth + walk score libs.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 const { useAuthMock, invokeMock, computeWalkScoreMock, getAiErrMock } = vi.hoisted(() => ({
   useAuthMock: vi.fn(),
@@ -142,6 +142,45 @@ describe("CompareAIReports — Run AI Analysis happy path", () => {
     }));
     expect(invokeMock).toHaveBeenCalledWith("neighbourhood-report", expect.any(Object));
     expect(invokeMock).toHaveBeenCalledWith("property-pois", expect.any(Object));
+  });
+
+  it("renders valuation before a slower POI enrichment finishes", async () => {
+    let resolvePois: ((value: { data: { pois: never[] }; error: null }) => void) | undefined;
+    const poisPromise = new Promise<{ data: { pois: never[] }; error: null }>((resolve) => {
+      resolvePois = resolve;
+    });
+    invokeMock.mockImplementation((name: string) => {
+      if (name === "property-valuation") {
+        return Promise.resolve({
+          data: {
+            estimatedValue: 240_000,
+            auctionAdjustedValue: 300_000,
+            rangeLow: 270_000,
+            rangeHigh: 330_000,
+            confidence: 0.8,
+            marketComparison: "above_market",
+            marketComparisonPct: 20,
+            rentalYieldEstimate: 4.5,
+          },
+          error: null,
+        });
+      }
+      if (name === "neighbourhood-report") {
+        return Promise.resolve({ data: { safety_score: 88, noise_level: "low" }, error: null });
+      }
+      if (name === "property-pois") return poisPromise;
+      throw new Error("unexpected " + name);
+    });
+
+    render(wrap(<CompareAIReports listings={[baseListing()]} />));
+    fireEvent.click(screen.getByRole("button", { name: /Run AI Analysis/i }));
+
+    await waitFor(() => expect(screen.getByText(/300,000/)).toBeInTheDocument());
+    expect(screen.getByText(/Above Mkt/i)).toBeInTheDocument();
+    await act(async () => {
+      resolvePois?.({ data: { pois: [] }, error: null });
+      await poisPromise;
+    });
   });
 
   it("supports primitive safetyScore + noise strings (legacy edge fn shape)", async () => {
