@@ -92,18 +92,54 @@ SELECT ok(
 );
 
 SELECT ok(
-  to_regclass('public.idx_listing_promotion_addon_purchase_id') IS NOT NULL,
-  'promotion allocation add-on foreign key is indexed'
+  COALESCE((
+    SELECT array_agg(attribute.attname::text ORDER BY key.ordinality) =
+      ARRAY['addon_purchase_id']::text[]
+    FROM pg_index AS index
+    CROSS JOIN LATERAL unnest(index.indkey::smallint[])
+      WITH ORDINALITY AS key(attnum, ordinality)
+    JOIN pg_attribute AS attribute
+      ON attribute.attrelid = index.indrelid
+      AND attribute.attnum = key.attnum
+    WHERE index.indexrelid =
+      to_regclass('public.idx_listing_promotion_addon_purchase_id')
+      AND key.ordinality <= index.indnkeyatts
+  ), false),
+  'promotion allocation add-on foreign key has its exact covering index'
 );
 
 SELECT ok(
-  to_regclass('public.idx_listing_promotion_billing_subscription_id') IS NOT NULL,
-  'promotion allocation subscription foreign key is indexed'
+  COALESCE((
+    SELECT array_agg(attribute.attname::text ORDER BY key.ordinality) =
+      ARRAY['billing_subscription_id']::text[]
+    FROM pg_index AS index
+    CROSS JOIN LATERAL unnest(index.indkey::smallint[])
+      WITH ORDINALITY AS key(attnum, ordinality)
+    JOIN pg_attribute AS attribute
+      ON attribute.attrelid = index.indrelid
+      AND attribute.attnum = key.attnum
+    WHERE index.indexrelid =
+      to_regclass('public.idx_listing_promotion_billing_subscription_id')
+      AND key.ordinality <= index.indnkeyatts
+  ), false),
+  'promotion allocation subscription foreign key has its exact covering index'
 );
 
 SELECT ok(
-  to_regclass('public.idx_listing_promotion_created_by') IS NOT NULL,
-  'promotion allocation creator foreign key is indexed'
+  COALESCE((
+    SELECT array_agg(attribute.attname::text ORDER BY key.ordinality) =
+      ARRAY['created_by']::text[]
+    FROM pg_index AS index
+    CROSS JOIN LATERAL unnest(index.indkey::smallint[])
+      WITH ORDINALITY AS key(attnum, ordinality)
+    JOIN pg_attribute AS attribute
+      ON attribute.attrelid = index.indrelid
+      AND attribute.attnum = key.attnum
+    WHERE index.indexrelid =
+      to_regclass('public.idx_listing_promotion_created_by')
+      AND key.ordinality <= index.indnkeyatts
+  ), false),
+  'promotion allocation creator foreign key has its exact covering index'
 );
 
 SELECT ok(
