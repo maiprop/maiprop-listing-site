@@ -503,7 +503,7 @@ function getInitialListingsPlaceholder(filters?: ListingsFilters) {
   const listingType = getDefaultCatalogueType(filters);
   if (!listingType) return undefined;
   const page = readInitialListingsPage<ListingWithJoins>(listingType);
-  if (!page) return undefined;
+  if (!page || page.data.length === 0) return undefined;
   return {
     pages: [page],
     pageParams: [INITIAL_LISTINGS_PAGE_PARAM],

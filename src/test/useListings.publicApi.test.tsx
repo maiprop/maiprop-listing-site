@@ -237,7 +237,7 @@ describe("public listings API fallback behavior", () => {
     ]);
   });
 
-  it("finishes the first rent paint immediately when the embedded catalogue is valid but empty", () => {
+  it("keeps loading when the embedded catalogue is empty until the live query resolves", () => {
     publicApiMock.mockReturnValue(new Promise(() => undefined));
     initialListingsPageMock.mockReturnValue({
       data: [],
@@ -249,9 +249,9 @@ describe("public listings API fallback behavior", () => {
 
     const { result } = renderHookWithQuery(() => useListingsPaginated({ listing_type: "rent" }));
 
-    expect(result.current.isLoading).toBe(false);
-    expect(result.current.isPlaceholderData).toBe(true);
-    expect(result.current.data?.pages[0]?.data).toEqual([]);
+    expect(result.current.isLoading).toBe(true);
+    expect(result.current.isPlaceholderData).toBe(false);
+    expect(result.current.data).toBeUndefined();
     expect(publicApiMock).toHaveBeenCalledTimes(1);
   });
 

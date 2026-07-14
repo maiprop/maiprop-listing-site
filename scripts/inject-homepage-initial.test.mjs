@@ -249,6 +249,41 @@ describe("homepage initial payload injection", () => {
     });
   });
 
+  it("does not republish stale edge-cache catalogue rows as a fresh deployment snapshot", async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      const parsed = new URL(String(url));
+      if (parsed.pathname === "/api/public/homepage") {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({
+        data: [{ id: "withdrawn-1", title: "Withdrawn listing", city: "Athens" }],
+        hasMore: false,
+      }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+          "x-maiprop-cache": "STALE",
+          warning: '110 - "Response is stale due to transient upstream failure"',
+        },
+      });
+    });
+
+    const payload = await buildHomepageInitialPayload({
+      origin: "https://portal.maiprop.co",
+      now: new Date("2026-07-01T10:00:00.000Z"),
+      fetchImpl,
+      fetchOptions: { attempts: 1, timeoutMs: 1_000 },
+    });
+
+    expect(payload.saleListings).toBeUndefined();
+    expect(payload.rentListings).toBeUndefined();
+    expect(JSON.stringify(payload)).not.toContain("withdrawn-1");
+  });
+
   it("falls back to public listings when featured homepage rows are transiently empty", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
       const href = String(url);
