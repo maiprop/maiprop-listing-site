@@ -542,6 +542,139 @@ describe("public API cache helpers", () => {
 });
 
 describe("public listings endpoint", () => {
+  it("reads active Priority and organic streams in parallel without ranking Spotlight or using default offsets", async () => {
+    const listingUrls: URL[] = [];
+    let listingReadsInFlight = 0;
+    let maxListingReadsInFlight = 0;
+    const mock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/rest/v1/listings") {
+        listingUrls.push(url);
+        listingReadsInFlight += 1;
+        maxListingReadsInFlight = Math.max(maxListingReadsInFlight, listingReadsInFlight);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        listingReadsInFlight -= 1;
+
+        if (url.searchParams.get("priority_placement") === "gt.0") {
+          return jsonRows([
+            { id: "priority-1", created_at: "2026-07-14T12:00:03.000Z", priority_placement: 1 },
+          ]);
+        }
+        return jsonRows([
+          { id: "organic-new", created_at: "2026-07-14T12:00:02.000Z", is_featured: false, priority_placement: 0 },
+          { id: "organic-spotlight", created_at: "2026-07-14T12:00:01.000Z", is_featured: true, priority_placement: 0 },
+        ]);
+      }
+      return jsonRows([]);
+    }) as unknown as FetchMock;
+    globalThis.fetch = mock as unknown as typeof fetch;
+
+    const res = await listingsRequest(
+      makeCtx("https://portal.maiprop.co/api/public/listings?pageSize=4"),
+    );
+    const body = await res.json() as { data: Array<{ id: string }>; nextCursor: string | null };
+
+    expect(maxListingReadsInFlight).toBe(2);
+    expect(listingUrls).toHaveLength(2);
+    const priorityUrl = listingUrls.find((url) => url.searchParams.get("priority_placement") === "gt.0");
+    const organicUrl = listingUrls.find((url) => url !== priorityUrl);
+    expect(priorityUrl?.searchParams.get("priority_until")).toMatch(/^gt\./);
+    expect(organicUrl?.searchParams.getAll("or").join("\n")).toContain("priority_placement.lte.0");
+    expect(organicUrl?.searchParams.getAll("or").join("\n")).toContain("priority_until.lte.");
+
+    for (const url of listingUrls) {
+      expect(url.searchParams.has("offset")).toBe(false);
+      expect(url.searchParams.has("is_featured")).toBe(false);
+      expect(url.searchParams.getAll("order")).toEqual(["created_at.desc", "id.desc"]);
+    }
+    expect(body.data.map((row) => row.id)).toEqual([
+      "priority-1",
+      "organic-new",
+      "organic-spotlight",
+    ]);
+    expect(body.nextCursor).toBeNull();
+  });
+
+  it("returns a keyset cursor with no duplicates or skips across stable consecutive pages", async () => {
+    const priorityRows = Array.from({ length: 6 }, (_, index) => ({
+      id: `priority-${index + 1}`,
+      created_at: new Date(Date.UTC(2026, 6, 14, 12, 0, 20 - index)).toISOString(),
+      priority_placement: 1,
+    }));
+    const organicRows = Array.from({ length: 6 }, (_, index) => ({
+      id: `organic-${index + 1}`,
+      created_at: new Date(Date.UTC(2026, 6, 14, 12, 0, 10 - index)).toISOString(),
+      priority_placement: 0,
+    }));
+    const listingUrls: URL[] = [];
+    const mock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname !== "/rest/v1/listings") return jsonRows([]);
+      listingUrls.push(url);
+
+      const isPriority = url.searchParams.get("priority_placement") === "gt.0";
+      const source = isPriority ? priorityRows : organicRows;
+      const keyset = url.searchParams.getAll("or").find((value) => value.includes("created_at.lt."));
+      const anchorIndex = keyset
+        ? source.findIndex((row) => keyset.includes(`id.lt.${row.id}`))
+        : -1;
+      const start = anchorIndex >= 0 ? anchorIndex + 1 : 0;
+      const limit = Number(url.searchParams.get("limit") ?? source.length);
+      return jsonRows(source.slice(start, start + limit));
+    }) as unknown as FetchMock;
+    globalThis.fetch = mock as unknown as typeof fetch;
+
+    const first = await listingsRequest(
+      makeCtx("https://portal.maiprop.co/api/public/listings?pageSize=4"),
+    );
+    const firstBody = await first.json() as {
+      data: Array<{ id: string }>;
+      hasMore: boolean;
+      nextCursor: string | null;
+    };
+
+    expect(firstBody.data.map((row) => row.id)).toEqual([
+      "priority-1",
+      "priority-2",
+      "priority-3",
+      "organic-1",
+    ]);
+    expect(firstBody.hasMore).toBe(true);
+    expect(firstBody.nextCursor).toEqual(expect.any(String));
+
+    const second = await listingsRequest(
+      makeCtx(`https://portal.maiprop.co/api/public/listings?pageSize=4&cursor=${encodeURIComponent(firstBody.nextCursor ?? "")}`),
+    );
+    const secondBody = await second.json() as { data: Array<{ id: string }>; nextCursor: string | null };
+    const combinedIds = [...firstBody.data, ...secondBody.data].map((row) => row.id);
+
+    expect(secondBody.data.map((row) => row.id)).toEqual([
+      "organic-2",
+      "organic-3",
+      "organic-4",
+      "organic-5",
+    ]);
+    expect(combinedIds).toEqual([
+      "priority-1",
+      "priority-2",
+      "priority-3",
+      "organic-1",
+      "organic-2",
+      "organic-3",
+      "organic-4",
+      "organic-5",
+    ]);
+    expect(new Set(combinedIds)).toHaveLength(combinedIds.length);
+
+    const secondPageUrls = listingUrls.slice(2);
+    expect(secondPageUrls).toHaveLength(2);
+    expect(secondPageUrls.every((url) => !url.searchParams.has("offset"))).toBe(true);
+    expect(secondPageUrls.find((url) => url.searchParams.get("priority_placement") === "gt.0")
+      ?.searchParams.getAll("or").join("\n")).toContain("id.lt.priority-3");
+    expect(secondPageUrls.find((url) => url.searchParams.get("priority_placement") !== "gt.0")
+      ?.searchParams.getAll("or").join("\n")).toContain("id.lt.organic-1");
+  });
+
   it("clamps page size, keeps listing images capped, attaches public owner profiles, and caches the response", async () => {
     const res = await listingsRequest(
       makeCtx(
@@ -559,9 +692,11 @@ describe("public listings endpoint", () => {
     expect(body.data[0].profiles).not.toHaveProperty("owner_participant_type");
     expect(body.data[0].ownerParticipantType).toBe("agent");
 
-    const listingsUrl = fetchUrls("/rest/v1/listings")[0];
-    expect(listingsUrl.searchParams.get("limit")).toBe("200");
-    expect(listingsUrl.searchParams.get("offset")).toBe("200");
+    const listingUrls = fetchUrls("/rest/v1/listings");
+    expect(listingUrls).toHaveLength(2);
+    expect(listingUrls.every((url) => url.searchParams.get("limit") === "201")).toBe(true);
+    expect(listingUrls.map((url) => url.searchParams.get("offset")).sort()).toEqual(["149", "51"]);
+    const listingsUrl = listingUrls[0];
     expect(listingsUrl.searchParams.get("city")).toBeNull();
     const locationOrFilters = listingsUrl.searchParams.getAll("or");
     expect(locationOrFilters).toEqual(expect.arrayContaining([
@@ -620,9 +755,10 @@ describe("public listings endpoint", () => {
     const body = await res.json() as { page: number; pageSize: number; offset: number };
 
     expect(body).toMatchObject({ page: 1, pageSize: 28, offset: 12 });
-    const listingsUrl = fetchUrls("/rest/v1/listings")[0];
-    expect(listingsUrl.searchParams.get("limit")).toBe("28");
-    expect(listingsUrl.searchParams.get("offset")).toBe("12");
+    const listingUrls = fetchUrls("/rest/v1/listings");
+    expect(listingUrls).toHaveLength(2);
+    expect(listingUrls.every((url) => url.searchParams.get("limit") === "29")).toBe(true);
+    expect(listingUrls.map((url) => url.searchParams.get("offset")).sort()).toEqual(["3", "9"]);
   });
 
   it("uses a coordinate bounding box for selected address suggestions", async () => {
@@ -765,10 +901,7 @@ describe("public listings endpoint", () => {
   });
 
   it("returns 503 instead of an empty successful catalogue when the listings upstream is transiently unavailable", async () => {
-    fetchMock()
-      .mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }))
-      .mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }))
-      .mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }));
+    fetchMock().mockResolvedValue(new Response("cloudflare timeout", { status: 522 }));
 
     const res = await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?limit=3"));
 

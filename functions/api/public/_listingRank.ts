@@ -1,0 +1,324 @@
+const CATALOGUE_BLOCK_SIZE = 12;
+const PRIORITY_SLOTS_PER_BLOCK = 3;
+export const MAX_CATALOGUE_STREAM_OFFSET = 100_000;
+
+const CATALOGUE_SORT_NAMES = [
+  "featured",
+  "newest",
+  "price-asc",
+  "price-desc",
+  "ai-score",
+  "views",
+] as const;
+
+export type CatalogueSortName = (typeof CATALOGUE_SORT_NAMES)[number];
+
+export type CatalogueSort = {
+  name: CatalogueSortName;
+  field: "created_at" | "price" | "ai_score" | "views_count";
+  order: string;
+  keysetOperator: "gt" | "lt";
+  usesOffset: boolean;
+};
+
+export type CatalogueStreamAnchor = {
+  id: string;
+  value: string | number | null;
+  offset: number;
+};
+
+export type CatalogueCursor = {
+  v: 1;
+  sort: CatalogueSortName;
+  slot: number;
+  priorityOffset: number;
+  organicOffset: number;
+  priority?: CatalogueStreamAnchor;
+  organic?: CatalogueStreamAnchor;
+};
+
+type CatalogueRow = {
+  id: string;
+  [key: string]: unknown;
+};
+
+export type CatalogueInterleaveResult<T extends CatalogueRow> = {
+  data: T[];
+  consumedPriority: number;
+  consumedOrganic: number;
+  nextSlot: number;
+  lastPriority?: T;
+  lastOrganic?: T;
+};
+
+const SORTS: Record<CatalogueSortName, CatalogueSort> = {
+  featured: {
+    name: "featured",
+    field: "created_at",
+    order: "created_at.desc",
+    keysetOperator: "lt",
+    usesOffset: false,
+  },
+  newest: {
+    name: "newest",
+    field: "created_at",
+    order: "created_at.desc",
+    keysetOperator: "lt",
+    usesOffset: false,
+  },
+  "price-asc": {
+    name: "price-asc",
+    field: "price",
+    order: "price.asc",
+    keysetOperator: "gt",
+    usesOffset: false,
+  },
+  "price-desc": {
+    name: "price-desc",
+    field: "price",
+    order: "price.desc",
+    keysetOperator: "lt",
+    usesOffset: false,
+  },
+  "ai-score": {
+    name: "ai-score",
+    field: "ai_score",
+    order: "ai_score.desc.nullslast",
+    keysetOperator: "lt",
+    usesOffset: true,
+  },
+  views: {
+    name: "views",
+    field: "views_count",
+    order: "views_count.desc.nullslast",
+    keysetOperator: "lt",
+    usesOffset: false,
+  },
+};
+
+export function resolveCatalogueSort(value: unknown): CatalogueSort {
+  return typeof value === "string" && CATALOGUE_SORT_NAMES.includes(value as CatalogueSortName)
+    ? SORTS[value as CatalogueSortName]
+    : SORTS.featured;
+}
+
+function normalizedSlot(slot: number): number {
+  if (!Number.isFinite(slot)) return 0;
+  const integer = Math.trunc(slot);
+  return ((integer % CATALOGUE_BLOCK_SIZE) + CATALOGUE_BLOCK_SIZE) % CATALOGUE_BLOCK_SIZE;
+}
+
+export function interleaveCatalogueStreams<T extends CatalogueRow>(
+  priorityRows: readonly T[],
+  organicRows: readonly T[],
+  limit: number,
+  startSlot: number,
+): CatalogueInterleaveResult<T> {
+  const data: T[] = [];
+  const seen = new Set<string>();
+  const boundedLimit = Math.max(0, Math.trunc(limit));
+  let priorityIndex = 0;
+  let organicIndex = 0;
+  let lastPriority: T | undefined;
+  let lastOrganic: T | undefined;
+
+  const takePriority = (): T | undefined => {
+    while (priorityIndex < priorityRows.length) {
+      const row = priorityRows[priorityIndex++];
+      lastPriority = row;
+      if (!seen.has(row.id)) return row;
+    }
+    return undefined;
+  };
+  const takeOrganic = (): T | undefined => {
+    while (organicIndex < organicRows.length) {
+      const row = organicRows[organicIndex++];
+      lastOrganic = row;
+      if (!seen.has(row.id)) return row;
+    }
+    return undefined;
+  };
+
+  while (
+    data.length < boundedLimit &&
+    (priorityIndex < priorityRows.length || organicIndex < organicRows.length)
+  ) {
+    const slot = (normalizedSlot(startSlot) + data.length) % CATALOGUE_BLOCK_SIZE;
+    const prioritySlot = slot < PRIORITY_SLOTS_PER_BLOCK;
+    const row = prioritySlot
+      ? takePriority() ?? takeOrganic()
+      : takeOrganic() ?? takePriority();
+    if (!row) break;
+    seen.add(row.id);
+    data.push(row);
+  }
+
+  return {
+    data,
+    consumedPriority: priorityIndex,
+    consumedOrganic: organicIndex,
+    nextSlot: (normalizedSlot(startSlot) + data.length) % CATALOGUE_BLOCK_SIZE,
+    lastPriority,
+    lastOrganic,
+  };
+}
+
+function safeStreamOffset(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(MAX_CATALOGUE_STREAM_OFFSET, Math.max(0, Math.trunc(value)));
+}
+
+export function catalogueStreamOffsetsForOutputOffset(outputOffset: number): {
+  slot: number;
+  priorityOffset: number;
+  organicOffset: number;
+} {
+  const offset = safeStreamOffset(outputOffset);
+  const completeBlocks = Math.floor(offset / CATALOGUE_BLOCK_SIZE);
+  const remainingSlots = offset % CATALOGUE_BLOCK_SIZE;
+  const priorityOffset = completeBlocks * PRIORITY_SLOTS_PER_BLOCK +
+    Math.min(remainingSlots, PRIORITY_SLOTS_PER_BLOCK);
+  return {
+    slot: remainingSlots,
+    priorityOffset,
+    organicOffset: offset - priorityOffset,
+  };
+}
+
+function validCursorId(value: unknown): value is string {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value);
+}
+
+function validSortValue(value: unknown, sort: CatalogueSort): value is string | number | null {
+  if (sort.usesOffset) return value === null || (typeof value === "number" && Number.isFinite(value));
+  if (sort.field === "created_at") {
+    return typeof value === "string" &&
+      value.length <= 64 &&
+      !/[(),]/.test(value) &&
+      Number.isFinite(Date.parse(value));
+  }
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function validAnchor(value: unknown, sort: CatalogueSort, streamOffset: number): value is CatalogueStreamAnchor {
+  if (!value || typeof value !== "object") return false;
+  const anchor = value as Partial<CatalogueStreamAnchor>;
+  return validCursorId(anchor.id) &&
+    validSortValue(anchor.value, sort) &&
+    Number.isInteger(anchor.offset) &&
+    Number(anchor.offset) >= 0 &&
+    Number(anchor.offset) <= streamOffset;
+}
+
+function decodeBase64Url(value: string): string {
+  const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padding = "=".repeat((4 - (base64.length % 4)) % 4);
+  return atob(`${base64}${padding}`);
+}
+
+function encodeBase64Url(value: string): string {
+  return btoa(value).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+export function decodeCatalogueCursor(encoded: string | null | undefined, sort: CatalogueSort): CatalogueCursor | null {
+  if (!encoded || encoded.length > 2_048 || !encoded.startsWith("v1.")) return null;
+  try {
+    const parsed = JSON.parse(decodeBase64Url(encoded.slice(3))) as Partial<CatalogueCursor>;
+    if (
+      parsed.v !== 1 ||
+      parsed.sort !== sort.name ||
+      !Number.isInteger(parsed.slot) ||
+      Number(parsed.slot) < 0 ||
+      Number(parsed.slot) >= CATALOGUE_BLOCK_SIZE ||
+      !Number.isInteger(parsed.priorityOffset) ||
+      Number(parsed.priorityOffset) < 0 ||
+      Number(parsed.priorityOffset) > MAX_CATALOGUE_STREAM_OFFSET ||
+      !Number.isInteger(parsed.organicOffset) ||
+      Number(parsed.organicOffset) < 0 ||
+      Number(parsed.organicOffset) > MAX_CATALOGUE_STREAM_OFFSET
+    ) {
+      return null;
+    }
+
+    const cursor = parsed as CatalogueCursor;
+    if (cursor.priority && !validAnchor(cursor.priority, sort, cursor.priorityOffset)) return null;
+    if (cursor.organic && !validAnchor(cursor.organic, sort, cursor.organicOffset)) return null;
+    return cursor;
+  } catch {
+    return null;
+  }
+}
+
+function rowAnchor<T extends CatalogueRow>(
+  row: T | undefined,
+  sort: CatalogueSort,
+  offset: number,
+): CatalogueStreamAnchor | undefined {
+  if (!row || !validCursorId(row.id)) return undefined;
+  const value = row[sort.field];
+  if (!validSortValue(value, sort)) return undefined;
+  return { id: row.id, value, offset };
+}
+
+export function buildNextCatalogueCursor<T extends CatalogueRow>(
+  previous: CatalogueCursor | null,
+  sort: CatalogueSort,
+  page: CatalogueInterleaveResult<T>,
+): string {
+  const base = previous?.sort === sort.name
+    ? previous
+    : {
+        v: 1 as const,
+        sort: sort.name,
+        slot: 0,
+        priorityOffset: 0,
+        organicOffset: 0,
+      };
+  const priorityOffset = safeStreamOffset(base.priorityOffset + page.consumedPriority);
+  const organicOffset = safeStreamOffset(base.organicOffset + page.consumedOrganic);
+  const cursor: CatalogueCursor = {
+    v: 1,
+    sort: sort.name,
+    slot: page.nextSlot,
+    priorityOffset,
+    organicOffset,
+    priority: rowAnchor(page.lastPriority, sort, priorityOffset) ?? base.priority,
+    organic: rowAnchor(page.lastOrganic, sort, organicOffset) ?? base.organic,
+  };
+  const payload = encodeBase64Url(JSON.stringify(cursor));
+  return `v1.${payload}`;
+}
+
+export function canAdvanceCatalogueCursor<T extends CatalogueRow>(
+  previous: CatalogueCursor | null,
+  sort: CatalogueSort,
+  page: CatalogueInterleaveResult<T>,
+): boolean {
+  if (!sort.usesOffset) return true;
+  const priorityOffset = (previous?.priorityOffset ?? 0) + page.consumedPriority;
+  const organicOffset = (previous?.organicOffset ?? 0) + page.consumedOrganic;
+  return priorityOffset <= MAX_CATALOGUE_STREAM_OFFSET &&
+    organicOffset <= MAX_CATALOGUE_STREAM_OFFSET;
+}
+
+export function applyCatalogueStreamCursor(
+  params: URLSearchParams,
+  sort: CatalogueSort,
+  anchor?: CatalogueStreamAnchor | null,
+): void {
+  params.append("order", sort.order);
+  params.append("order", "id.desc");
+
+  if (!anchor) return;
+  if (sort.usesOffset) {
+    if (anchor.offset > 0) params.set("offset", String(safeStreamOffset(anchor.offset)));
+    return;
+  }
+  if (!validAnchor(anchor, sort, MAX_CATALOGUE_STREAM_OFFSET)) return;
+
+  const value = String(anchor.value);
+  params.append(
+    "or",
+    `(${sort.field}.${sort.keysetOperator}.${value},and(${sort.field}.eq.${value},id.lt.${anchor.id}))`,
+  );
+}
