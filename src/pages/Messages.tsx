@@ -27,6 +27,10 @@ export default function Messages() {
   const location = useLocation();
   const navigate = useNavigate();
   const { data: conversations = [], isLoading: convsLoading } = useConversations();
+  const openIdFromState = (location.state as { openConversationId?: unknown } | null)?.openConversationId;
+  const searchParams = new URLSearchParams(location.search);
+  const openIdFromQuery = searchParams.get("conversation") ?? searchParams.get("conv") ?? undefined;
+  const requestedConversationId = typeof openIdFromState === "string" ? openIdFromState : openIdFromQuery;
   const [activeConvId, setActiveConvId] = useState<string>("");
   const [input, setInput] = useState("");
   const [search, setSearch] = useState("");
@@ -49,22 +53,19 @@ export default function Messages() {
 
   // Open conversation passed from property/detail (e.g. after "Contact") or copied deep link.
   useEffect(() => {
-    const openIdFromState = (location.state as { openConversationId?: string } | null)?.openConversationId;
-    const openIdFromQuery = new URLSearchParams(location.search).get("conversation") ?? undefined;
-    const openId = openIdFromState || openIdFromQuery;
-    if (openId && typeof openId === "string") {
-      setActiveConvId(openId);
+    if (requestedConversationId) {
+      setActiveConvId(requestedConversationId);
       setMobileView("chat");
-      if (openIdFromState) navigate(location.pathname, { replace: true, state: {} });
+      if (typeof openIdFromState === "string") navigate(location.pathname, { replace: true, state: {} });
     }
-  }, [location.state, location.search, location.pathname, navigate]);
+  }, [requestedConversationId, openIdFromState, location.pathname, navigate]);
 
   // Auto-select first conversation when none selected
   useEffect(() => {
-    if (conversations.length > 0 && !activeConvId) {
+    if (conversations.length > 0 && !activeConvId && !requestedConversationId) {
       setActiveConvId(conversations[0].id);
     }
-  }, [conversations, activeConvId]);
+  }, [conversations, activeConvId, requestedConversationId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
