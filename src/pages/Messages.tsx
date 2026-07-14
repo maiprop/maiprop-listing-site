@@ -23,7 +23,7 @@ import { MESSAGE_ATTACHMENT_MIME_TYPES, assertAllowedUpload } from "@/lib/upload
 import { getListingDetailPath } from "@/lib/listingRoutes";
 
 export default function Messages() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const { data: conversations = [], isLoading: convsLoading } = useConversations();
@@ -85,9 +85,13 @@ export default function Messages() {
       supabase.removeChannel(typingChannelRef.current);
       typingChannelRef.current = null;
     }
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
     setOtherIsTyping(false);
 
-    if (!activeConvId || !user) return;
+    if (!activeConvId || !user || !session?.access_token) return;
 
     // Private realtime channel — gated by the realtime.messages SELECT policy
     // added in 20260627000000_audit_remediations.sql which enforces conversation
@@ -96,26 +100,43 @@ export default function Messages() {
     const channel = supabase.channel(`typing:${activeConvId}`, {
       config: { presence: { key: user.id }, private: true },
     });
-
-    channel
-      .on("presence", { event: "sync" }, () => {
-        const state = channel.presenceState<{ typing: boolean }>();
-        const othersTyping = Object.entries(state).some(
-          ([presenceKey, presences]) =>
-            presenceKey !== user.id &&
-            (presences as { typing?: boolean }[]).some((p) => p.typing)
-        );
-        setOtherIsTyping(othersTyping);
-      })
-      .subscribe();
+    let cancelled = false;
 
     typingChannelRef.current = channel;
+    const subscribeToTyping = async () => {
+      try {
+        await supabase.realtime.setAuth(session.access_token);
+        if (cancelled) return;
+        channel
+          .on("presence", { event: "sync" }, () => {
+            const state = channel.presenceState<{ typing: boolean }>();
+            const othersTyping = Object.entries(state).some(
+              ([presenceKey, presences]) =>
+                presenceKey !== user.id &&
+                (presences as { typing?: boolean }[]).some((p) => p.typing)
+            );
+            setOtherIsTyping(othersTyping);
+          })
+          .subscribe();
+      } catch {
+        if (!cancelled && typingChannelRef.current === channel) {
+          supabase.removeChannel(channel);
+          typingChannelRef.current = null;
+        }
+      }
+    };
+    void subscribeToTyping();
 
     return () => {
+      cancelled = true;
       supabase.removeChannel(channel);
-      typingChannelRef.current = null;
+      if (typingChannelRef.current === channel) typingChannelRef.current = null;
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
     };
-  }, [activeConvId, user]);
+  }, [activeConvId, session?.access_token, user]);
 
   const broadcastTyping = () => {
     if (!typingChannelRef.current || !user) return;

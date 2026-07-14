@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
     track: vi.fn(),
     presenceState: vi.fn(),
   },
+  createChannel: vi.fn(),
+  setRealtimeAuth: vi.fn(),
   removeChannel: vi.fn(),
   storageUpload: vi.fn(),
   assertAllowedUpload: vi.fn(),
@@ -35,7 +37,8 @@ vi.mock("@/hooks/useMessages", () => ({
 }));
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
-    channel: vi.fn(() => mocks.channel),
+    channel: (...args: unknown[]) => mocks.createChannel(...args),
+    realtime: { setAuth: (...args: unknown[]) => mocks.setRealtimeAuth(...args) },
     removeChannel: mocks.removeChannel,
     storage: { from: vi.fn(() => ({ upload: mocks.storageUpload })) },
   },
@@ -59,6 +62,10 @@ vi.mock("@/components/messages/SignedAttachment", () => ({
 import Messages from "@/pages/Messages";
 
 const me = { id: "me-id" };
+const authenticatedUser = {
+  user: me,
+  session: { access_token: "typing-access-token" },
+};
 const conversation = (overrides: Record<string, unknown> = {}) => ({
   id: "conversation-1",
   participant_a: "me-id",
@@ -91,7 +98,7 @@ const fileInput = () => document.querySelector('input[type="file"]') as HTMLInpu
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.useAuth.mockReturnValue({ user: me });
+  mocks.useAuth.mockReturnValue(authenticatedUser);
   mocks.useConversations.mockReturnValue({ data: [conversation()], isLoading: false });
   mocks.useMessages.mockReturnValue({ data: [], isLoading: false });
   mocks.sendMessage.isPending = false;
@@ -100,6 +107,8 @@ beforeEach(() => {
   mocks.channel.subscribe.mockReturnValue(mocks.channel);
   mocks.channel.track.mockResolvedValue({});
   mocks.channel.presenceState.mockReturnValue({});
+  mocks.createChannel.mockReturnValue(mocks.channel);
+  mocks.setRealtimeAuth.mockResolvedValue(undefined);
   mocks.storageUpload.mockResolvedValue({ error: null });
   mocks.getListingDetailPath.mockReturnValue("/property/listing-1");
   Object.defineProperty(navigator, "clipboard", {
@@ -139,7 +148,7 @@ describe("Messages business branches", () => {
     queryView.unmount();
 
     vi.clearAllMocks();
-    mocks.useAuth.mockReturnValue({ user: me });
+    mocks.useAuth.mockReturnValue(authenticatedUser);
     mocks.useConversations.mockReturnValue({ data: [conversation()], isLoading: false });
     mocks.useMessages.mockReturnValue({ data: [], isLoading: false });
     mocks.channel.on.mockReturnValue(mocks.channel);
@@ -167,6 +176,14 @@ describe("Messages business branches", () => {
   it("publishes typing state, identifies another participant, and clears stale typing timers", async () => {
     renderMessages();
     await waitFor(() => expect(mocks.channel.on).toHaveBeenCalledWith("presence", { event: "sync" }, expect.any(Function)));
+
+    expect(mocks.createChannel).toHaveBeenCalledWith("typing:conversation-1", {
+      config: { presence: { key: "me-id" }, private: true },
+    });
+    expect(mocks.setRealtimeAuth).toHaveBeenCalledWith("typing-access-token");
+    expect(mocks.setRealtimeAuth.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.channel.subscribe.mock.invocationCallOrder[0],
+    );
 
     const input = screen.getByPlaceholderText("Type a message...");
     fireEvent.change(input, { target: { value: "H" } });

@@ -40,9 +40,50 @@ import {
 
 const wrapper = () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return wrapperWithClient(client);
+};
+
+const wrapperWithClient = (client: QueryClient) => {
   return ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
+};
+
+const createQueryClient = () => new QueryClient({
+  defaultOptions: {
+    queries: { retry: false },
+    mutations: { retry: false },
+  },
+});
+
+const deferred = <T,>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+};
+
+const existingMessage = {
+  id: "m-existing",
+  conversation_id: "c-1",
+  sender_id: "u-2",
+  content: "Earlier",
+  created_at: "2026-07-14T08:00:00.000Z",
+  status: "sent",
+  message_attachments: [],
+  profiles: null,
+};
+
+const serverMessage = {
+  id: "m-server",
+  conversation_id: "c-1",
+  sender_id: "u-1",
+  receiver_id: null,
+  content: "Optimistic hello",
+  created_at: "2026-07-14T09:00:00.000Z",
+  read_at: null,
+  status: "sent",
 };
 
 const buildChannel = () => {
@@ -161,9 +202,161 @@ describe("useMessages", () => {
     const row = (result.current.data as { profiles: { display_name: string } | null }[])[0];
     expect(row.profiles?.display_name).toBe("Bob");
   });
+
+  it("invalidates the recipient cache when a message arrives through realtime", async () => {
+    const client = createQueryClient();
+    const invalidateQueries = vi.spyOn(client, "invalidateQueries");
+    fromMock.mockReturnValue({
+      select: () => ({
+        eq: () => ({ order: vi.fn().mockResolvedValue({ data: [], error: null }) }),
+      }),
+    });
+
+    const { result } = renderHook(() => useMessages("c-1"), {
+      wrapper: wrapperWithClient(client),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    const insertSubscription = onMock.mock.calls.find(
+      ([kind, filter]) => kind === "postgres_changes" && filter?.event === "INSERT",
+    );
+    expect(insertSubscription).toBeDefined();
+
+    act(() => {
+      (insertSubscription?.[2] as () => void)();
+    });
+
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["messages", "c-1"] });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["conversations"] });
+  });
 });
 
 describe("useSendMessage", () => {
+  it("adds the sender message to the cache before the insert resolves", async () => {
+    const client = createQueryClient();
+    const insertResult = deferred<{ data: typeof serverMessage; error: null }>();
+    const single = vi.fn().mockReturnValue(insertResult.promise);
+    const insertMessage = vi.fn().mockReturnValue({ select: () => ({ single }) });
+    const updateConversation = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    });
+    fromMock.mockImplementation((table: string) => {
+      if (table === "messages") return { insert: insertMessage };
+      if (table === "conversations") return { update: updateConversation };
+      throw new Error("unexpected " + table);
+    });
+    client.setQueryData(["messages", "c-1"], [existingMessage]);
+
+    const { result } = renderHook(() => useSendMessage(), {
+      wrapper: wrapperWithClient(client),
+    });
+    let mutation!: Promise<typeof serverMessage>;
+    act(() => {
+      mutation = result.current.mutateAsync({
+        conversation_id: "c-1",
+        content: "Optimistic hello",
+      });
+    });
+
+    await waitFor(() => {
+      const cached = client.getQueryData<Array<{ id: string; content: string }>>(["messages", "c-1"]);
+      expect(cached).toHaveLength(2);
+      expect(cached?.[1]).toMatchObject({
+        id: expect.stringMatching(/^optimistic:/),
+        conversation_id: "c-1",
+        sender_id: "u-1",
+        content: "Optimistic hello",
+        status: "sent",
+      });
+    });
+
+    insertResult.resolve({ data: serverMessage, error: null });
+    await act(async () => {
+      await mutation;
+    });
+  });
+
+  it("reconciles an optimistic message with realtime and mutation results without duplicates", async () => {
+    const client = createQueryClient();
+    const insertResult = deferred<{ data: typeof serverMessage; error: null }>();
+    fromMock.mockImplementation((table: string) => {
+      if (table === "messages") {
+        return {
+          insert: vi.fn().mockReturnValue({
+            select: () => ({ single: vi.fn().mockReturnValue(insertResult.promise) }),
+          }),
+        };
+      }
+      if (table === "conversations") {
+        return { update: () => ({ eq: vi.fn().mockResolvedValue({ error: null }) }) };
+      }
+      throw new Error("unexpected " + table);
+    });
+    client.setQueryData(["messages", "c-1"], [existingMessage]);
+
+    const { result } = renderHook(() => useSendMessage(), {
+      wrapper: wrapperWithClient(client),
+    });
+    let mutation!: Promise<typeof serverMessage>;
+    act(() => {
+      mutation = result.current.mutateAsync({
+        conversation_id: "c-1",
+        content: "Optimistic hello",
+      });
+    });
+    await waitFor(() => {
+      const cached = client.getQueryData<Array<{ id: string }>>(["messages", "c-1"]);
+      expect(cached?.some((message) => message.id.startsWith("optimistic:"))).toBe(true);
+    });
+
+    client.setQueryData<Array<Record<string, unknown>>>(["messages", "c-1"], (cached = []) => [
+      ...cached,
+      { ...serverMessage, message_attachments: [], profiles: null },
+    ]);
+    insertResult.resolve({ data: serverMessage, error: null });
+    await act(async () => {
+      await mutation;
+    });
+
+    const reconciled = client.getQueryData<Array<{ id: string }>>(["messages", "c-1"]);
+    expect(reconciled?.filter((message) => message.id === "m-server")).toHaveLength(1);
+    expect(reconciled?.some((message) => message.id.startsWith("optimistic:"))).toBe(false);
+  });
+
+  it("restores the previous cache when the message insert fails", async () => {
+    const client = createQueryClient();
+    const insertResult = deferred<{ data: null; error: Error }>();
+    fromMock.mockReturnValue({
+      insert: vi.fn().mockReturnValue({
+        select: () => ({ single: vi.fn().mockReturnValue(insertResult.promise) }),
+      }),
+    });
+    client.setQueryData(["messages", "c-1"], [existingMessage]);
+
+    const { result } = renderHook(() => useSendMessage(), {
+      wrapper: wrapperWithClient(client),
+    });
+    let mutation!: Promise<unknown>;
+    act(() => {
+      mutation = result.current.mutateAsync({
+        conversation_id: "c-1",
+        content: "Will fail",
+      });
+    });
+    await waitFor(() => {
+      const cached = client.getQueryData<Array<{ id: string }>>(["messages", "c-1"]);
+      expect(cached?.some((message) => message.id.startsWith("optimistic:"))).toBe(true);
+    });
+
+    insertResult.resolve({ data: null, error: new Error("insert denied") });
+    await act(async () => {
+      await mutation.catch(() => undefined);
+    });
+
+    expect(client.getQueryData(["messages", "c-1"])).toEqual([existingMessage]);
+    expect(toastMock.error).toHaveBeenCalledWith("insert denied");
+  });
+
   it("inserts message + attachments + bumps last_message_at", async () => {
     const single = vi.fn().mockResolvedValue({ data: { id: "m-new" }, error: null });
     const select = vi.fn().mockReturnValue({ single });
@@ -201,12 +394,17 @@ describe("useSendMessage", () => {
 
   it("rejects + toasts when no user", async () => {
     useAuthMock.mockReturnValue({ user: null });
-    const { result } = renderHook(() => useSendMessage(), { wrapper: wrapper() });
+    const client = createQueryClient();
+    const setQueryData = vi.spyOn(client, "setQueryData");
+    const { result } = renderHook(() => useSendMessage(), {
+      wrapper: wrapperWithClient(client),
+    });
     await act(async () => {
       await result.current
         .mutateAsync({ conversation_id: "c", content: "x" })
         .catch(() => {});
     });
+    expect(setQueryData).not.toHaveBeenCalled();
     expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/logged in/i));
   });
 
