@@ -143,6 +143,7 @@ describe("homepage initial payload injection", () => {
             ? [{ id: "sale-1", title: "Sale Home", city: "Athens", owner_id: "private" }]
             : [{ id: "rent-1", title: "Rental Home", city: "Piraeus", owner_id: "private" }],
           hasMore: listingType === "sale",
+          nextCursor: listingType === "sale" ? "v1.sale-cursor" : null,
           page: 1,
           pageSize: 12,
           offset: 0,
@@ -175,6 +176,7 @@ describe("homepage initial payload injection", () => {
     expect(payload.saleListings).toEqual({
       data: [{ id: "sale-1", title: "Sale Home", city: "Athens" }],
       hasMore: true,
+      nextCursor: "v1.sale-cursor",
       page: 1,
       pageSize: 12,
       offset: 0,

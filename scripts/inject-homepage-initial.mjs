@@ -277,7 +277,7 @@ async function fetchFeaturedListingsFallback(origin, limit, fetchImpl, fetchOpti
 
 function sanitizeListingsPage(value) {
   if (!isRecord(value) || !Array.isArray(value.data)) return undefined;
-  return {
+  const page = {
     data: value.data
       .map(sanitizeHomepageRow)
       .filter(Boolean)
@@ -287,6 +287,10 @@ function sanitizeListingsPage(value) {
     pageSize: INITIAL_CATALOGUE_ROWS,
     offset: 0,
   };
+  if (typeof value.nextCursor === "string" && value.nextCursor.length > 0) {
+    page.nextCursor = value.nextCursor;
+  }
+  return page;
 }
 
 function parseDeployedHomepagePayload(html) {

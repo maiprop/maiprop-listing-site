@@ -334,27 +334,15 @@ export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize
     .order("sort_order", { referencedTable: "listing_images", ascending: true })
     .limit(LISTING_CARD_IMAGE_LIMIT, { referencedTable: "listing_images" });
 
-  // Promoted listings (is_featured OR priority_placement > 0) always lead, then
-  // ties broken by the user-selected sort. The client (Listings.tsx) applies
-  // the same promoted-first rule for all non-featured sorts; the server must
-  // match so that paginated infinite scroll does not produce list jumps when
-  // a later page contains a promoted row that the client then re-sorts to the
-  // top of the already-rendered list.
-  //
-  // For the explicit "featured" sort the client groups by is_featured first,
-  // then priority. For every other sort the client groups by priority first
-  // (treating any priority_placement > 0 row as promoted, regardless of
-  // is_featured), then user-key. The server must mirror that exact precedence
-  // — so the leading ORDER BY column flips between the two sort families.
+  // Priority is the paid ranking product. Spotlight affects only visual card
+  // treatment and the dedicated homepage showcase, never catalogue order.
   if (sort === "featured") {
     query = query
-      .order("is_featured", { ascending: false })
       .order("priority_placement", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false });
   } else {
     query = query
-      .order("priority_placement", { ascending: false, nullsFirst: false })
-      .order("is_featured", { ascending: false });
+      .order("priority_placement", { ascending: false, nullsFirst: false });
     if (sort === "price-asc") query = query.order("price", { ascending: true });
     else if (sort === "price-desc") query = query.order("price", { ascending: false });
     else if (sort === "newest") query = query.order("created_at", { ascending: false });
@@ -444,8 +432,9 @@ export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize
 };
 
 type PublicListingsResponse = {
-  data: ListingWithJoins[];
+  data: (Database["public"]["Tables"]["listings"]["Row"] & Partial<ListingWithJoins>)[];
   hasMore: boolean;
+  nextCursor?: string | null;
   page: number;
   pageSize: number;
   offset?: number;
@@ -454,13 +443,17 @@ type PublicListingsResponse = {
 type ListingsPageParam = {
   page: number;
   pageSize: number;
+  cursor?: string;
   offset?: number;
+};
+
+type ListingsPageResponse = Omit<PublicListingsResponse, "data"> & {
+  data: ListingWithJoins[];
 };
 
 const INITIAL_LISTINGS_PAGE_PARAM: ListingsPageParam = {
   page: 1,
   pageSize: INITIAL_GRID_PAGE_SIZE,
-  offset: 0,
 };
 
 function normalizeListingsPageParam(pageParam: unknown): ListingsPageParam {
@@ -474,7 +467,10 @@ function normalizeListingsPageParam(pageParam: unknown): ListingsPageParam {
       ? Math.max(1, Math.min(PAGE_SIZE, Math.floor(Number(param.pageSize))))
       : PAGE_SIZE;
     const offset = Number.isFinite(Number(param.offset)) ? Math.max(0, Math.floor(Number(param.offset))) : undefined;
-    return { page, pageSize, offset };
+    const cursor = typeof param.cursor === "string" && param.cursor.length <= 2_048
+      ? param.cursor
+      : undefined;
+    return { page, pageSize, cursor, offset };
   }
   return INITIAL_LISTINGS_PAGE_PARAM;
 }
@@ -505,16 +501,23 @@ function getInitialListingsPlaceholder(filters?: ListingsFilters) {
   const page = readInitialListingsPage<ListingWithJoins>(listingType);
   if (!page || page.data.length === 0) return undefined;
   return {
-    pages: [page],
+    pages: [{ ...page, data: page.data.map(normalizeListingWithJoins) } satisfies ListingsPageResponse],
     pageParams: [INITIAL_LISTINGS_PAGE_PARAM],
   };
 }
 
-function publicListingsPath(filters: ListingsFilters | undefined, page: number, pageSize: number, offset?: number): string {
+function publicListingsPath(
+  filters: ListingsFilters | undefined,
+  page: number,
+  pageSize: number,
+  cursor?: string,
+  offset?: number,
+): string {
   const params = new URLSearchParams();
   params.set("page", String(page));
   params.set("pageSize", String(pageSize));
-  if (offset != null) params.set("offset", String(offset));
+  if (cursor) params.set("cursor", cursor);
+  else if (offset != null && offset > 0) params.set("offset", String(offset));
 
   const append = (key: keyof ListingsFilters, value = filters?.[key]) => {
     if (value === undefined || value === null || value === "") return;
@@ -568,7 +571,7 @@ const fetchListingsPageFromSupabase = async (
   options: UseListingsOptions = {},
   signal?: AbortSignal,
   offset?: number,
-) => { // skipcq: JS-R1005 - Page fetch keeps listing rows and owner profile enrichment together.
+): Promise<ListingsPageResponse> => { // skipcq: JS-R1005 - Page fetch keeps listing rows and owner profile enrichment together.
   const from = offset ?? (page - 1) * pageSize;
   const { data, error } = await withAbortSignal(
     buildListingsQuery(filters, from, pageSize, { publicScope: options.publicScope }),
@@ -592,13 +595,20 @@ const fetchListingsPageFromSupabase = async (
     profileMap = new Map((ownerProfiles ?? []).map((p) => [p.user_id, p]));
   }
 
-  const enriched = typedRows.map((r) => ({
+  const enriched = typedRows.map((r) => normalizeListingWithJoins({
     ...r,
     profiles: r.owner_id ? profileMap.get(r.owner_id) ?? null : null,
   }));
 
   // ORDER BY is applied server-side in buildListingsQuery; no client sort needed.
-  return { data: enriched, hasMore: rows.length === pageSize, page, pageSize, offset: from };
+  return {
+    data: enriched,
+    hasMore: rows.length === pageSize,
+    nextCursor: null,
+    page,
+    pageSize,
+    offset: from,
+  };
 };
 
 const fetchListingsPage = async (
@@ -608,15 +618,16 @@ const fetchListingsPage = async (
   options: UseListingsOptions = {},
   signal?: AbortSignal,
   offset?: number,
-) => { // skipcq: JS-R1005 - Page fetch keeps listing rows and owner profile enrichment together.
+  cursor?: string,
+): Promise<ListingsPageResponse> => { // skipcq: JS-R1005 - Page fetch keeps listing rows and owner profile enrichment together.
   if (shouldUsePublicListingsApi(filters)) {
     try {
       const cached = await fetchPublicApi<PublicListingsResponse>(
-        publicListingsPath(filters, page, pageSize, offset),
+        publicListingsPath(filters, page, pageSize, cursor, offset),
         { throwOnError: true, signal },
       );
       if (!cached) throw new Error("Public listings API returned no data");
-      return cached;
+      return { ...cached, data: cached.data.map(normalizeListingWithJoins) };
     } catch (error) {
       if (isPublicApiAbort(error)) throw error;
       logger.warn("Public listings API failed; falling back to constrained Supabase listing read:", error);
@@ -635,8 +646,8 @@ export const useListingsPaginated = (
   return useInfiniteQuery({
     queryKey: ["listings-paginated", filters, { publicScope: Boolean(options?.publicScope) }],
     queryFn: ({ pageParam = INITIAL_LISTINGS_PAGE_PARAM, signal }) => {
-      const { page, pageSize, offset } = normalizeListingsPageParam(pageParam);
-      return fetchListingsPage(filters, page, pageSize, options, signal, offset);
+      const { page, pageSize, cursor, offset } = normalizeListingsPageParam(pageParam);
+      return fetchListingsPage(filters, page, pageSize, options, signal, offset, cursor);
     },
     getNextPageParam: (lastPage, allPages): ListingsPageParam | undefined => {
       if (!lastPage.hasMore) return undefined;
@@ -652,6 +663,9 @@ export const useListingsPaginated = (
       return {
         page: Math.floor(nextOffset / PAGE_SIZE) + 1,
         pageSize: nextPageSize,
+        ...(typeof lastPage.nextCursor === "string" && lastPage.nextCursor
+          ? { cursor: lastPage.nextCursor }
+          : {}),
         offset: nextOffset,
       };
     },
@@ -682,7 +696,7 @@ export const useListings = (
             { throwOnError: true, signal },
           );
           if (!cached) throw new Error("Public listings API returned no data");
-          return cached.data;
+          return cached.data.map(normalizeListingWithJoins);
         } catch (error) {
           if (isPublicApiAbort(error)) throw error;
           logger.warn("Public listings API failed; falling back to constrained Supabase listing read:", error);
@@ -702,7 +716,7 @@ type UseListingOptions = {
   publicScope?: boolean;
 };
 
-const normalizeListingWithJoins = (listing: Database["public"]["Tables"]["listings"]["Row"] & Partial<ListingWithJoins>): ListingWithJoins => {
+function normalizeListingWithJoins(listing: Database["public"]["Tables"]["listings"]["Row"] & Partial<ListingWithJoins>): ListingWithJoins {
   const profiles = listing.profiles ?? null;
   return {
     ...listing,
@@ -713,7 +727,7 @@ const normalizeListingWithJoins = (listing: Database["public"]["Tables"]["listin
       ? listing.ownerParticipantType
       : getOwnerParticipantType(profiles),
   } as ListingWithJoins;
-};
+}
 
 type ListingOwnerContext = Pick<ListingWithJoins, "profiles" | "ownerParticipantType">;
 

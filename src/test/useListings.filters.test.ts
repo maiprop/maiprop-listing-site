@@ -80,72 +80,60 @@ describe("buildListingsQuery — sort variants", () => {
     )).toBe(true);
   });
 
-  it("default ('featured') applies the 3-key composite ordering with is_featured first", () => {
+  it("default ranking uses Priority only; Spotlight remains a visual showcase", () => {
     buildListingsQuery();
     const orderArgs = parentOrderArgs();
     expect(orderArgs).toEqual([
-      ["is_featured", { ascending: false }],
       ["priority_placement", { ascending: false, nullsFirst: false }],
       ["created_at", { ascending: false }],
     ]);
   });
 
   /**
-   * For every non-featured sort the server must mirror the client's
-   * promoted-first rule, where promoted = is_featured OR priority_placement > 0.
-   * The leading ORDER BY column is therefore priority_placement DESC (so any
-   * priority>0 row leads regardless of is_featured), then is_featured DESC as
-   * the tiebreaker for the priority=0 bucket (so featured-no-priority listings
-   * still beat plain non-promoted ones), then the user-selected key. Without
-   * this prefix, paginated infinite scroll causes promoted rows from later
-   * pages to re-sort to the top of the already-rendered list.
+   * Priority is the paid ranking product. Spotlight is intentionally excluded
+   * from catalogue ordering and only affects card treatment/showcase sections.
    */
-  it("'price-asc' leads with priority then is_featured, then price ascending", () => {
+  it("'price-asc' leads with priority, then price ascending", () => {
     buildListingsQuery({ sort: "price-asc" });
     const orderArgs = parentOrderArgs();
     expect(orderArgs).toEqual([
       ["priority_placement", { ascending: false, nullsFirst: false }],
-      ["is_featured", { ascending: false }],
       ["price", { ascending: true }],
     ]);
   });
 
-  it("'price-desc' leads with priority then is_featured, then price descending", () => {
+  it("'price-desc' leads with priority, then price descending", () => {
     buildListingsQuery({ sort: "price-desc" });
     const orderArgs = parentOrderArgs();
     expect(orderArgs).toEqual([
       ["priority_placement", { ascending: false, nullsFirst: false }],
-      ["is_featured", { ascending: false }],
       ["price", { ascending: false }],
     ]);
   });
 
-  it("'newest' leads with priority then is_featured, then created_at descending", () => {
+  it("'newest' leads with priority, then created_at descending", () => {
     buildListingsQuery({ sort: "newest" });
     const orderArgs = parentOrderArgs();
     expect(orderArgs).toEqual([
       ["priority_placement", { ascending: false, nullsFirst: false }],
-      ["is_featured", { ascending: false }],
       ["created_at", { ascending: false }],
     ]);
   });
 
-  it("'ai-score' leads with priority then is_featured, then ai_score with nullsFirst:false", () => {
+  it("'ai-score' leads with priority, then ai_score with nullsFirst:false", () => {
     buildListingsQuery({ sort: "ai-score" });
     const orderArgs = parentOrderArgs();
     expect(orderArgs).toEqual([
       ["priority_placement", { ascending: false, nullsFirst: false }],
-      ["is_featured", { ascending: false }],
       ["ai_score", { ascending: false, nullsFirst: false }],
     ]);
   });
 
-  it("'views' leads with priority then is_featured, then views_count with nullsFirst:false", () => {
+  it("'views' leads with priority, then views_count with nullsFirst:false", () => {
     buildListingsQuery({ sort: "views" });
     const orderArgs = parentOrderArgs();
     expect(orderArgs).toEqual([
       ["priority_placement", { ascending: false, nullsFirst: false }],
-      ["is_featured", { ascending: false }],
       ["views_count", { ascending: false, nullsFirst: false }],
     ]);
   });

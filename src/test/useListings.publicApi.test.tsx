@@ -172,6 +172,7 @@ describe("public listings API fallback behavior", () => {
       .mockResolvedValueOnce({
         data: Array.from({ length: 12 }, (_, index) => ({ id: `listing-${index + 1}` })),
         hasMore: true,
+        nextCursor: "v1.first-cursor",
         page: 1,
         pageSize: 12,
         offset: 0,
@@ -179,6 +180,7 @@ describe("public listings API fallback behavior", () => {
       .mockResolvedValueOnce({
         data: Array.from({ length: 28 }, (_, index) => ({ id: `listing-${index + 13}` })),
         hasMore: true,
+        nextCursor: "v1.second-cursor",
         page: 1,
         pageSize: 28,
         offset: 12,
@@ -188,7 +190,8 @@ describe("public listings API fallback behavior", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(publicApiMock.mock.calls[0][0]).toContain("pageSize=12");
-    expect(publicApiMock.mock.calls[0][0]).toContain("offset=0");
+    expect(publicApiMock.mock.calls[0][0]).not.toContain("offset=");
+    expect(publicApiMock.mock.calls[0][0]).not.toContain("cursor=");
 
     let nextFetchLength = 0;
     await act(async () => {
@@ -197,7 +200,8 @@ describe("public listings API fallback behavior", () => {
     });
 
     expect(publicApiMock.mock.calls[1][0]).toContain("pageSize=28");
-    expect(publicApiMock.mock.calls[1][0]).toContain("offset=12");
+    expect(publicApiMock.mock.calls[1][0]).toContain("cursor=v1.first-cursor");
+    expect(publicApiMock.mock.calls[1][0]).not.toContain("offset=");
     expect(nextFetchLength).toBe(40);
   });
 

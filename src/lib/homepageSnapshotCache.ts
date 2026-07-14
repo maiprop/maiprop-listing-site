@@ -24,6 +24,7 @@ type HomepageInitialPayload = {
 export type InitialListingsPage<T> = {
   data: T[];
   hasMore: boolean;
+  nextCursor?: string | null;
   page: 1;
   pageSize: 12;
   offset: 0;
