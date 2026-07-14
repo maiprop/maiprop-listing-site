@@ -47,6 +47,21 @@ describe("live operational smoke workflow", () => {
     expect(liveAiQuotaSpec).not.toContain("AI insight requests remaining this month");
   });
 
+  it("keeps live role navigation aligned with the consolidated CRM destination", () => {
+    expect(liveRoleTierMatrixSpec).toContain(
+      "expectedNav: [/Analytics/i, /Data Input/i, /CRM/i]",
+    );
+    expect(liveRoleTierMatrixSpec).toContain(
+      "expectedNav: [/Projects/i, /Portfolios/i, /Analytics/i, /CRM/i]",
+    );
+    expect(liveRoleTierMatrixSpec).not.toContain(
+      "expectedNav: [/Analytics/i, /Data Input/i, /Leads/i, /Contacts/i]",
+    );
+    expect(liveRoleTierMatrixSpec).not.toContain(
+      "expectedNav: [/Projects/i, /Portfolios/i, /Analytics/i, /Contacts/i]",
+    );
+  });
+
   it("repairs seeded live accounts before login-dependent smoke tests", () => {
     const serviceRoleIndex = workflow.indexOf("Validate Supabase service role key");
     const repairIndex = workflow.indexOf("Repair live demo role matrix");
