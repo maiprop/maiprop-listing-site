@@ -492,6 +492,43 @@ describe("homepage initial payload injection", () => {
     expect(JSON.stringify(payload)).not.toContain("private_note");
   });
 
+  it("does not resurrect prior open houses when the live endpoint validly returns no rows", async () => {
+    const previousPayload = {
+      version: 1,
+      generatedAt: "2026-06-30T10:00:00.000Z",
+      featured: [{ id: "previous-featured", title: "Previous home", city: "Athens" }],
+      openHouses: [{ id: "expired-open-house", title: "Expired event", city: "Athens" }],
+    };
+    const fetchImpl = vi.fn(async (url) => {
+      const parsed = new URL(String(url));
+      if (parsed.pathname === "/") {
+        return new Response(
+          `<script id="maiprop-homepage-initial" type="application/json">${JSON.stringify(previousPayload)}</script>`,
+          { status: 200, headers: { "content-type": "text/html" } },
+        );
+      }
+      if (parsed.pathname === "/api/public/homepage") {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ data: [], hasMore: false }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+
+    const payload = await buildHomepageInitialPayload({
+      origin: "https://portal.maiprop.co",
+      fetchImpl,
+      fetchOptions: { attempts: 1, timeoutMs: 1_000 },
+    });
+
+    expect(payload.openHouses).toEqual([]);
+    expect(JSON.stringify(payload)).not.toContain("expired-open-house");
+  });
+
   it("injects the payload into dist index.html without executable inline JavaScript", async () => {
     const distDir = createTempDist(`
       <html><body>

@@ -255,7 +255,7 @@ async function fetchHomepageSection(origin, section, limit, fetchImpl, fetchOpti
       .slice(0, limit);
   } catch (error) {
     console.warn(`[homepage-initial] Could not fetch ${section}: ${error.message}`);
-    return [];
+    return undefined;
   }
 }
 
@@ -380,20 +380,15 @@ export async function buildHomepageInitialPayload({
 
   // Build-time latency is not user-facing. Fetch sequentially to avoid a cold
   // deploy creating a burst of expensive catalogue requests against production.
-  let featured = await fetchHomepageSection(origin, "featured", MAX_FEATURED_ROWS, fetchImpl, fetchOptions);
+  const freshFeatured = await fetchHomepageSection(origin, "featured", MAX_FEATURED_ROWS, fetchImpl, fetchOptions);
   const freshOpenHouses = await fetchHomepageSection(origin, "open-houses", MAX_OPEN_HOUSE_ROWS, fetchImpl, fetchOptions);
   const freshSaleListings = await fetchInitialListingsPage(origin, "sale", fetchImpl, fetchOptions);
   const freshRentListings = await fetchInitialListingsPage(origin, "rent", fetchImpl, fetchOptions);
 
-  const openHouses = freshOpenHouses.length > 0
-    ? freshOpenHouses
-    : deployedPayload?.openHouses ?? [];
+  let featured = freshFeatured ?? deployedPayload?.featured ?? [];
+  const openHouses = freshOpenHouses ?? deployedPayload?.openHouses ?? [];
   const saleListings = freshSaleListings ?? deployedPayload?.saleListings;
   const rentListings = freshRentListings ?? deployedPayload?.rentListings;
-
-  if (featured.length === 0 && deployedPayload?.featured.length) {
-    featured = deployedPayload.featured;
-  }
 
   if (featured.length === 0) {
     featured = await fetchFeaturedListingsFallback(origin, MAX_FEATURED_ROWS, fetchImpl, fetchOptions);
