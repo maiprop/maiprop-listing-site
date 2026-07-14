@@ -75,6 +75,45 @@ export const PLAN_PRICE_ENV_ALIASES: Record<
 
 export const SELF_SERVE_ADDON_MODULES = new Set([
   "valuation_reports",
+  "adhoc_charges",
+]);
+
+export const PROMOTION_ADDON_CATALOG = {
+  featured_listing: {
+    amountMinor: 3_900,
+    currency: "eur",
+    module: "adhoc_charges",
+    unit: "per_listing",
+    creditsPerUnit: 1,
+    entitlementDays: 30,
+  },
+  priority_placement: {
+    amountMinor: 5_900,
+    currency: "eur",
+    module: "adhoc_charges",
+    unit: "per_listing",
+    creditsPerUnit: 1,
+    entitlementDays: 30,
+  },
+  featured_priority_bundle: {
+    amountMinor: 7_900,
+    currency: "eur",
+    module: "adhoc_charges",
+    unit: "per_listing",
+    creditsPerUnit: 1,
+    entitlementDays: 30,
+  },
+} as const;
+
+export const PROMOTION_ADDON_KEYS = new Set(
+  Object.keys(PROMOTION_ADDON_CATALOG),
+);
+
+export const PROMOTION_ADDON_PURCHASER_ROLES = new Set([
+  "seller",
+  "agent",
+  "developer",
+  "admin",
 ]);
 
 export const SELF_SERVE_ADDON_CREDITS: Record<string, number> = {
@@ -83,6 +122,9 @@ export const SELF_SERVE_ADDON_CREDITS: Record<string, number> = {
   property_report_single: 1,
   neighbourhood_report_single: 1,
   neighbourhood_report_bundle: 3,
+  featured_listing: 1,
+  priority_placement: 1,
+  featured_priority_bundle: 1,
 };
 
 export const SELF_SERVE_ADDON_KEYS = new Set(

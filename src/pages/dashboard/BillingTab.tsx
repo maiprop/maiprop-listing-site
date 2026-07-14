@@ -95,6 +95,12 @@ const addonLabel = (addonKey: string | null | undefined) => {
     case "neighbourhood_report_single":
     case "neighbourhood_report_bundle":
       return "Neighbourhood reports";
+    case "featured_listing":
+      return "Featured listings";
+    case "priority_placement":
+      return "Priority placements";
+    case "featured_priority_bundle":
+      return "Featured+Priority";
     default:
       return addonKey ? addonKey.split("_").join(" ") : "Add-on credits";
   }

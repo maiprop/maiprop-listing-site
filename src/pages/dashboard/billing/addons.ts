@@ -78,21 +78,21 @@ export const ADDONS_BY_ROLE: Record<string, AddonSection[]> = {
       accent: "amber",
       items: [
         {
-          name: "Spotlight Listing",
+          name: "Featured Listing",
           price: "€39",
           unit: "/ 30 days",
           desc: "Badge + featured sections. Visual promotion only.",
           icon: Crown,
         },
         {
-          name: "Priority Rank",
+          name: "Priority Placement",
           price: "€59",
           unit: "/ 30 days",
           desc: "Higher position in search results. Ranking boost only.",
           icon: Star,
         },
         {
-          name: "Maximum Exposure",
+          name: "Featured+Priority",
           price: "€79",
           unit: "/ 30 days",
           desc: "Badge, featured sections, and higher ranking.",
@@ -135,21 +135,21 @@ export const ADDONS_BY_ROLE: Record<string, AddonSection[]> = {
       accent: "amber",
       items: [
         {
-          name: "Spotlight Listing",
+          name: "Featured Listing",
           price: "€39",
           unit: "/ 30 days",
           desc: "Badge + featured sections. Visual promotion only.",
           icon: Crown,
         },
         {
-          name: "Priority Rank",
+          name: "Priority Placement",
           price: "€59",
           unit: "/ 30 days",
           desc: "Higher position in search results. Ranking boost only.",
           icon: Star,
         },
         {
-          name: "Maximum Exposure",
+          name: "Featured+Priority",
           price: "€79",
           unit: "/ 30 days",
           desc: "Badge, featured sections, and higher ranking.",
@@ -235,18 +235,26 @@ export const ADDONS_BY_ROLE: Record<string, AddonSection[]> = {
       accent: "amber",
       items: [
         {
-          name: "Spotlight New Building",
+          name: "Featured Listing",
           price: "€39",
           unit: "/ 30 days",
           desc: "Badge + New Buildings showcase. Visual promotion only.",
           icon: Crown,
         },
         {
-          name: "Priority Rank",
+          name: "Priority Placement",
           price: "€59",
           unit: "/ 30 days",
           desc: "Higher position in search results. Ranking boost only.",
           icon: Star,
+        },
+        {
+          name: "Featured+Priority",
+          price: "€79",
+          unit: "/ 30 days",
+          desc: "Badge, featured sections, and higher ranking.",
+          icon: Zap,
+          badge: "Best value",
         },
         {
           name: "Extra Project Listing",
@@ -425,6 +433,10 @@ const ADDON_KEY_BY_NAME: Record<string, string> = {
   "AI Property Valuation": "valuation_single",
   "Property Report": "property_report_single",
   "Neighbourhood Report": "neighbourhood_report_single",
+  "Featured Listing": "featured_listing",
+  "Priority Placement": "priority_placement",
+  "Featured+Priority": "featured_priority_bundle",
+  "Featured + Priority": "featured_priority_bundle",
   "Spotlight Listing": "featured_listing",
   "Spotlight New Building": "featured_listing",
   "Priority Rank": "priority_placement",
@@ -454,6 +466,9 @@ const SELF_SERVE_ADDON_KEYS = new Set([
   "property_report_single",
   "neighbourhood_report_single",
   "neighbourhood_report_bundle",
+  "featured_listing",
+  "priority_placement",
+  "featured_priority_bundle",
 ]);
 
 export const resolveAddonKey = (item: Pick<AddonItem, "name" | "manual">): string | null => {

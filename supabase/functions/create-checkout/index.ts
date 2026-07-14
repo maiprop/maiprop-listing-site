@@ -10,9 +10,9 @@ import {
   tooManyRequestsResponse,
 } from "../_shared/rateLimit.ts";
 import {
-  CHECKOUT_TAX_COLLECTION_PARAMS,
   buildIdempotencyKey,
   buildPaymentModeInvoiceCreationParams,
+  CHECKOUT_TAX_COLLECTION_PARAMS,
   createStripeClient,
   getStripeRuntimeMode,
 } from "../_shared/stripeClient.ts";
@@ -23,9 +23,11 @@ import {
 } from "../_shared/stripeMode.ts";
 import { resolveCheckoutOrigin } from "./origins.ts";
 import {
+  assertStripePriceMatchesCheckoutAddon,
   getCheckoutAddon,
   getCheckoutPlan,
   getCheckoutProfile,
+  getCurrentBillingRuntimeMode,
   getPlanEntitlement,
   getStripePriceEnvKey,
   getStripePriceEnvKeys,
@@ -192,9 +194,7 @@ const hasProvisionedSameAudienceSubscription = async (
     .limit(10);
   if (error) {
     throw new Error(
-      `billing subscription lookup failed: ${
-        String(error.message ?? error)
-      }`,
+      `billing subscription lookup failed: ${String(error.message ?? error)}`,
     );
   }
 
@@ -282,13 +282,13 @@ const reserveSubscriptionTrialClaim = async (
       user_id: userId,
       plan_key: checkoutPlan.planKey,
       pricing_audience: checkoutPlan.audience,
-        stripe_customer_id: customerId,
-        status: "checkout_started",
-        trial_days: PRO_TRIAL_DAYS,
-        runtime_mode: getStripeRuntimeMode(),
-        livemode: getStripeRuntimeMode() === "live",
-        metadata: buildTrialMetadata(),
-      })
+      stripe_customer_id: customerId,
+      status: "checkout_started",
+      trial_days: PRO_TRIAL_DAYS,
+      runtime_mode: getStripeRuntimeMode(),
+      livemode: getStripeRuntimeMode() === "live",
+      metadata: buildTrialMetadata(),
+    })
     .select("id")
     .single();
 
@@ -388,6 +388,17 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
     const body = req.method === "POST" && req.body
       ? await req.json().catch(() => ({}))
       : {};
+    const stripeRuntimeMode = getStripeRuntimeMode();
+    const billingRuntimeMode = await getCurrentBillingRuntimeMode(
+      supabaseClient,
+    );
+    if (billingRuntimeMode !== stripeRuntimeMode) {
+      return jsonCheckoutError(
+        corsHeaders,
+        503,
+        "Billing runtime configuration mismatch",
+      );
+    }
     const wantsTrial = normalizeTrialCheckoutRequest(
       body.trial ?? body.start_trial ?? body.startTrial,
     );
@@ -428,6 +439,7 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
       }
       if (
         !isCheckoutAddonAudienceAllowed(
+          checkoutAddon.addonKey,
           checkoutAddon.audience,
           checkoutAddon.module,
           profile,
@@ -488,6 +500,12 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
       }
 
       const stripe = createStripeClient();
+      const stripePrice = await stripe.prices.retrieve(checkoutAddon.priceId);
+      assertStripePriceMatchesCheckoutAddon(
+        checkoutAddon,
+        stripePrice,
+        stripeRuntimeMode,
+      );
       const customerId = await getOrCreateOwnedStripeCustomer(
         stripe,
         user,
@@ -519,6 +537,7 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
         module: checkoutAddon.module,
         unit: checkoutAddon.unit,
         quantity: String(checkoutQuantity),
+        runtime_mode: stripeRuntimeMode,
         ...(checkoutTarget.targetType
           ? { target_type: checkoutTarget.targetType }
           : {}),
@@ -533,6 +552,7 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
         {
           ...CHECKOUT_TAX_COLLECTION_PARAMS,
           customer: customerId,
+          client_reference_id: user.id,
           line_items: [{
             price: checkoutAddon.priceId,
             quantity: checkoutQuantity,

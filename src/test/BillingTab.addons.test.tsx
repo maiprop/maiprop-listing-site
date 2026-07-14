@@ -170,26 +170,25 @@ describe("BillingTab add-on checkout", () => {
     });
   });
 
-  it("shows seller-relevant add-ons and starts Stripe checkout only for fulfilled report add-ons", async () => {
+  it("shows seller-relevant add-ons and makes delivered promotions self-serve", async () => {
     renderWithProviders(<BillingTab />);
 
-    const spotlightCard = (await screen.findByText("Spotlight Listing")).closest("div");
-    expect(spotlightCard).not.toBeNull();
-    expect(within(spotlightCard as HTMLElement).getByText("Badge + featured sections. Visual promotion only."))
+    const featuredCard = (await screen.findByText("Featured Listing")).closest("div");
+    expect(featuredCard).not.toBeNull();
+    expect(within(featuredCard as HTMLElement).getByText("Badge + featured sections. Visual promotion only."))
       .toBeInTheDocument();
-    expect(within(spotlightCard as HTMLElement).getByRole("link", { name: /Contact team/i }))
-      .toHaveAttribute("href", expect.stringContaining("mailto:support@maiprop.co"));
-    expect(screen.getByText("Priority Rank")).toBeInTheDocument();
-    expect(screen.getByText("Maximum Exposure")).toBeInTheDocument();
-
-    const propertyReportCard = (await screen.findByText("Property Report")).closest("div");
-    expect(propertyReportCard).not.toBeNull();
-    fireEvent.click(within(propertyReportCard as HTMLElement).getByRole("button", { name: /Buy add-on/i }));
+    fireEvent.click(
+      within(featuredCard as HTMLElement).getByRole("button", {
+        name: /Buy add-on/i,
+      }),
+    );
+    expect(screen.getByText("Priority Placement")).toBeInTheDocument();
+    expect(screen.getByText("Featured+Priority")).toBeInTheDocument();
 
     await waitFor(() => {
       expect(mocks.supabase?.functions.invoke).toHaveBeenCalledWith("create-checkout", {
         body: {
-          addon_key: "property_report_single",
+          addon_key: "featured_listing",
           success_url: "/dashboard/billing?checkout=success",
           cancel_url: "/dashboard/billing?checkout=cancelled",
         },
@@ -429,6 +428,37 @@ describe("BillingTab add-on checkout", () => {
         body: expect.objectContaining({ addon_key: "market_intelligence" }),
       }),
     );
+  });
+
+  it("lets developers buy the Featured and Priority promotion bundle", async () => {
+    authState.profile.role = "developer";
+    authState.profile.participant_type = "developer";
+
+    renderWithProviders(<BillingTab />);
+
+    const bundleCard = (await screen.findByText("Featured+Priority")).closest("div");
+    expect(bundleCard).not.toBeNull();
+    expect(within(bundleCard as HTMLElement).getByText("€79")).toBeInTheDocument();
+    expect(within(bundleCard as HTMLElement).getByText("/ 30 days")).toBeInTheDocument();
+    fireEvent.click(
+      within(bundleCard as HTMLElement).getByRole("button", {
+        name: /Buy add-on/i,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(mocks.supabase?.functions.invoke).toHaveBeenCalledWith(
+        "create-checkout",
+        {
+          body: {
+            addon_key: "featured_priority_bundle",
+            success_url: "/dashboard/billing?checkout=success",
+            cancel_url: "/dashboard/billing?checkout=cancelled",
+          },
+          timeout: 20_000,
+        },
+      );
+    });
   });
 
   it("makes agency add-on contact buttons functional without starting checkout", async () => {
@@ -797,6 +827,9 @@ describe("BillingTab add-on checkout", () => {
       { id: "a-4", addon_key: "neighbourhood_report_bundle", status: "paid", credits_granted: 3, credits_consumed: 1, credits_refunded: 0 },
       { id: "a-5", addon_key: "custom_credit_pack", status: "paid", credits_granted: 2, credits_consumed: 0, credits_refunded: 0 },
       { id: "a-6", addon_key: "", status: "paid", credits_granted: 5, credits_consumed: 0, credits_refunded: 0 },
+      { id: "a-7", addon_key: "featured_listing", status: "paid", credits_granted: 1, credits_consumed: 0, credits_refunded: 0 },
+      { id: "a-8", addon_key: "priority_placement", status: "paid", credits_granted: 1, credits_consumed: 0, credits_refunded: 0 },
+      { id: "a-9", addon_key: "featured_priority_bundle", status: "paid", credits_granted: 1, credits_consumed: 0, credits_refunded: 0 },
     ];
     mocks.supabase?.from.mockImplementation((table: string) => {
       const query = {
@@ -846,6 +879,9 @@ describe("BillingTab add-on checkout", () => {
     await screen.findByText("custom credit pack");
     expect(screen.getAllByText("AI valuations").length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText("Neighbourhood reports").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("Featured listings")).toBeInTheDocument();
+    expect(screen.getByText("Priority placements")).toBeInTheDocument();
+    expect(screen.getAllByText("Featured+Priority").length).toBeGreaterThanOrEqual(2);
     expect(screen.queryByText("Add-on credits")?.closest("div")?.textContent).not.toContain("5 credits available");
     expect(screen.getByText("23456789")).toBeInTheDocument();
     expect(screen.getByText(/Pro renewal/)).toBeInTheDocument();

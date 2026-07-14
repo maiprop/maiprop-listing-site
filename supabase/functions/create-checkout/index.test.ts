@@ -136,7 +136,7 @@ Deno.test("checkout audience gate blocks cross-role public plan purchases", () =
 
 Deno.test("self-serve add-on modules are explicitly allowlisted", () => {
   assertEquals(isSupportedCheckoutAddonModule("valuation_reports"), true);
-  assertEquals(isSupportedCheckoutAddonModule("adhoc_charges"), false);
+  assertEquals(isSupportedCheckoutAddonModule("adhoc_charges"), true);
   assertEquals(isSupportedCheckoutAddonModule("os_data_products"), false);
   assertEquals(isSupportedCheckoutAddonModule("user_subscription"), false);
   assertEquals(isSupportedCheckoutAddonModule("investor_subscription"), false);
@@ -147,48 +147,119 @@ Deno.test("self-serve add-on keys are explicitly fulfilled by webhook credits", 
   assertEquals(isSupportedCheckoutAddonKey("valuation_single"), true);
   assertEquals(isSupportedCheckoutAddonKey("valuation_bundle"), true);
   assertEquals(isSupportedCheckoutAddonKey("property_report_single"), true);
-  assertEquals(isSupportedCheckoutAddonKey("neighbourhood_report_single"), true);
-  assertEquals(isSupportedCheckoutAddonKey("neighbourhood_report_bundle"), true);
+  assertEquals(
+    isSupportedCheckoutAddonKey("neighbourhood_report_single"),
+    true,
+  );
+  assertEquals(
+    isSupportedCheckoutAddonKey("neighbourhood_report_bundle"),
+    true,
+  );
+  assertEquals(isSupportedCheckoutAddonKey("featured_listing"), true);
+  assertEquals(isSupportedCheckoutAddonKey("priority_placement"), true);
+  assertEquals(isSupportedCheckoutAddonKey("featured_priority_bundle"), true);
+  assertEquals(isSupportedCheckoutAddonKey("extra_listing"), false);
   assertEquals(isSupportedCheckoutAddonKey("market_intelligence"), false);
   assertEquals(isSupportedCheckoutAddonKey("new_unmapped_report"), false);
   assertEquals(isSupportedCheckoutAddonKey(null), false);
 });
 
-Deno.test("add-on audience gate allows delivered AI/report add-ons but blocks non-fulfilled charges", () => {
+Deno.test("add-on audience gate allows delivered reports without opening unrelated charges", () => {
+  const audienceAllowed = isCheckoutAddonAudienceAllowed as unknown as (
+    addonKey: string,
+    addonAudience: string,
+    addonModule: string,
+    profile: Record<string, unknown> | null,
+  ) => boolean;
   assertEquals(
-    isCheckoutAddonAudienceAllowed("participant", "valuation_reports", {
+    audienceAllowed("valuation_single", "participant", "valuation_reports", {
       role: "agent",
     }),
     true,
   );
   assertEquals(
-    isCheckoutAddonAudienceAllowed("participant", "adhoc_charges", {
+    audienceAllowed("extra_listing", "participant", "adhoc_charges", {
       role: "professional",
     }),
     false,
   );
   assertEquals(
-    isCheckoutAddonAudienceAllowed("agent", "adhoc_charges", { role: "agent" }),
-    false,
-  );
-  assertEquals(
-    isCheckoutAddonAudienceAllowed("professional", "adhoc_charges", {
+    audienceAllowed("agent_extra_seat", "agent", "adhoc_charges", {
       role: "agent",
     }),
     false,
   );
   assertEquals(
-    isCheckoutAddonAudienceAllowed("participant", "os_data_products", {
+    audienceAllowed("valuation_single", "participant", "os_data_products", {
       role: "buyer",
     }),
     false,
   );
   assertEquals(
-    isCheckoutAddonAudienceAllowed("participant", "os_data_products", {
+    audienceAllowed("valuation_single", "participant", "os_data_products", {
       role: "developer",
     }),
     false,
   );
+});
+
+Deno.test("promotion add-on audience gate allows sellers, agents, developers, and admins only", () => {
+  const audienceAllowed = isCheckoutAddonAudienceAllowed as unknown as (
+    addonKey: string,
+    addonAudience: string,
+    addonModule: string,
+    profile: Record<string, unknown> | null,
+  ) => boolean;
+  const promotionKeys = [
+    "featured_listing",
+    "priority_placement",
+    "featured_priority_bundle",
+  ];
+
+  for (const addonKey of promotionKeys) {
+    for (const role of ["seller", "agent", "developer", "admin"]) {
+      assertEquals(
+        audienceAllowed(addonKey, "participant", "adhoc_charges", {
+          role,
+          participant_type: role,
+          subscription_product_id: null,
+        }),
+        true,
+      );
+    }
+    assertEquals(
+      audienceAllowed(addonKey, "participant", "adhoc_charges", {
+        role: "buyer",
+      }),
+      false,
+    );
+    assertEquals(
+      audienceAllowed(addonKey, "participant", "adhoc_charges", {
+        role: "professional",
+      }),
+      false,
+    );
+    assertEquals(
+      audienceAllowed(addonKey, "participant", "adhoc_charges", {
+        role: "investor",
+      }),
+      false,
+    );
+    assertEquals(
+      audienceAllowed(addonKey, "participant", "adhoc_charges", {
+        role: "buyer",
+        participant_type: "developer",
+      }),
+      false,
+    );
+    assertEquals(
+      audienceAllowed(addonKey, "participant", "adhoc_charges", {
+        role: null,
+        participant_type: "developer",
+      }),
+      false,
+    );
+  }
 });
 
 Deno.test("mock add-on checkout is gated by add-on availability and audience", async () => {
@@ -213,6 +284,26 @@ Deno.test("mock add-on checkout is gated by add-on availability and audience", a
   assertEquals(mockIndex > audienceIndex, true);
 });
 
+Deno.test("real checkout fails closed when Edge and database Stripe runtimes differ", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./index.ts", import.meta.url),
+  );
+  const bodyIndex = source.indexOf("const body =");
+  const addonBranchIndex = source.indexOf("if (addonKey) {", bodyIndex);
+  const runtimeCheckIndex = source.indexOf(
+    "getCurrentBillingRuntimeMode",
+    bodyIndex,
+  );
+
+  assertEquals(runtimeCheckIndex > bodyIndex, true);
+  assertEquals(runtimeCheckIndex < addonBranchIndex, true);
+  assertEquals(
+    source.includes("billingRuntimeMode !== stripeRuntimeMode"),
+    true,
+  );
+  assertEquals(source.includes("Billing runtime configuration mismatch"), true);
+});
+
 Deno.test("subscription trial checkout is reserved before Stripe session creation", async () => {
   const source = await Deno.readTextFile(
     new URL("./index.ts", import.meta.url),
@@ -230,7 +321,9 @@ Deno.test("subscription trial checkout is reserved before Stripe session creatio
   assertEquals(source.includes("normalizeTrialCheckoutRequest"), true);
   assertEquals(source.includes("trial_period_days: PRO_TRIAL_DAYS"), true);
   assertEquals(
-    source.includes('checkout_type: wantsTrial ? "subscription_trial" : "subscription"'),
+    source.includes(
+      'checkout_type: wantsTrial ? "subscription_trial" : "subscription"',
+    ),
     true,
   );
   assertEquals(source.includes("...(wantsTrial ? trialMetadata : {})"), true);
@@ -250,12 +343,18 @@ Deno.test("subscription trial checkout requires a card before trial activation",
     source.indexOf("const checkoutPlan = await getCheckoutPlan"),
   );
 
-  assertEquals(subscriptionBranch.includes('payment_method_types: ["card"]'), true);
+  assertEquals(
+    subscriptionBranch.includes('payment_method_types: ["card"]'),
+    true,
+  );
   assertEquals(
     subscriptionBranch.includes('payment_method_collection: "always" as const'),
     true,
   );
-  assertEquals(subscriptionBranch.includes("trial_period_days: PRO_TRIAL_DAYS"), true);
+  assertEquals(
+    subscriptionBranch.includes("trial_period_days: PRO_TRIAL_DAYS"),
+    true,
+  );
   assertEquals(
     subscriptionBranch.includes('missing_payment_method: "cancel" as const'),
     true,
@@ -271,9 +370,11 @@ Deno.test("subscription checkout blocks duplicate active subscriptions for the s
     new URL("./index.ts", import.meta.url),
   );
   assertEquals(source.includes("hasProvisionedSameAudienceSubscription"), true);
-  assertEquals(source.includes(".from(\"billing_subscriptions\")"), true);
+  assertEquals(source.includes('.from("billing_subscriptions")'), true);
   assertEquals(
-    source.includes("An active subscription already exists for this account type"),
+    source.includes(
+      "An active subscription already exists for this account type",
+    ),
     true,
   );
 });
@@ -391,6 +492,38 @@ Deno.test("add-on checkout stamps payment intent metadata for refund reconciliat
   assertEquals(addonBranch.includes("user_id: user.id"), true);
   assertEquals(addonBranch.includes('checkout_type: "addon"'), true);
   assertEquals(addonBranch.includes("addon_key: checkoutAddon.addonKey"), true);
+});
+
+Deno.test("add-on checkout validates the server price and never accepts client pricing", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./index.ts", import.meta.url),
+  );
+  const addonBranchStart = source.indexOf("if (addonKey) {");
+  const planBranchStart = source.indexOf(
+    "const plan = normalizePlanKey",
+    addonBranchStart,
+  );
+  const addonBranch = source.slice(addonBranchStart, planBranchStart);
+  const priceLookup = addonBranch.indexOf(
+    "stripe.prices.retrieve(checkoutAddon.priceId)",
+  );
+  const sessionCreate = addonBranch.indexOf(
+    "stripe.checkout.sessions.create",
+  );
+
+  assertEquals(priceLookup > 0, true);
+  assertEquals(sessionCreate > priceLookup, true);
+  assertEquals(
+    addonBranch.includes("assertStripePriceMatchesCheckoutAddon"),
+    true,
+  );
+  assertEquals(addonBranch.includes("price: checkoutAddon.priceId"), true);
+  assertEquals(addonBranch.includes("client_reference_id: user.id"), true);
+  assertEquals(addonBranch.includes("body.priceId"), false);
+  assertEquals(addonBranch.includes("body.price_id"), false);
+  assertEquals(addonBranch.includes("body.amount"), false);
+  assertEquals(addonBranch.includes("body.product"), false);
+  assertEquals(addonBranch.includes("runtime_mode: stripeRuntimeMode"), true);
 });
 
 Deno.test("checkout sessions restrict v1 payment methods to cards", async () => {
