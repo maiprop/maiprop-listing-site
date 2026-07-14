@@ -41,11 +41,11 @@ BEGIN
     RETURN 0;
   END IF;
 
-  IF public.has_platform_admin(p_user_id) THEN
+  IF private.authoritative_role(p_user_id) = 'admin'::public.user_role THEN
     RETURN 999;
   END IF;
 
-  v_role := public.authoritative_role(p_user_id);
+  v_role := private.authoritative_role(p_user_id);
 
   SELECT EXISTS (
     SELECT 1
@@ -324,7 +324,8 @@ BEGIN
           allocation.source_type = 'admin'
           AND allocation.created_by IS NOT NULL
           AND allocation.created_by <> allocation.owner_id
-          AND public.has_platform_admin(allocation.created_by)
+          AND private.authoritative_role(allocation.created_by) =
+            'admin'::public.user_role
         )
       )
     ORDER BY allocation.created_at, allocation.id
@@ -354,7 +355,8 @@ BEGIN
       AND upper(audit.action) = 'ENABLE'
       AND audit.actor_id IS NOT NULL
       AND audit.actor_id <> v_candidate.owner_id
-      AND public.has_platform_admin(audit.actor_id)
+      AND private.authoritative_role(audit.actor_id) =
+        'admin'::public.user_role
       AND audit.new_data @> jsonb_build_object(
         'promotion_type', v_candidate.promotion_type,
         'enabled', true

@@ -259,22 +259,6 @@ async function fetchHomepageSection(origin, section, limit, fetchImpl, fetchOpti
   }
 }
 
-async function fetchFeaturedListingsFallback(origin, limit, fetchImpl, fetchOptions) {
-  const url = new URL("/api/public/listings", origin);
-  url.searchParams.set("page", "1");
-  url.searchParams.set("pageSize", String(limit));
-  try {
-    const json = await fetchJsonWithTimeout(url, fetchImpl, fetchOptions);
-    return publicRowsFromResponse(json)
-      .map(sanitizeHomepageRow)
-      .filter(Boolean)
-      .slice(0, limit);
-  } catch (error) {
-    console.warn(`[homepage-initial] Could not fetch featured fallback listings: ${error.message}`);
-    return [];
-  }
-}
-
 function sanitizeListingsPage(value) {
   if (!isRecord(value) || !Array.isArray(value.data)) return undefined;
   const page = {
@@ -389,14 +373,10 @@ export async function buildHomepageInitialPayload({
   const freshSaleListings = await fetchInitialListingsPage(origin, "sale", fetchImpl, fetchOptions);
   const freshRentListings = await fetchInitialListingsPage(origin, "rent", fetchImpl, fetchOptions);
 
-  let featured = freshFeatured ?? deployedPayload?.featured ?? [];
+  const featured = freshFeatured ?? deployedPayload?.featured ?? [];
   const openHouses = freshOpenHouses ?? deployedPayload?.openHouses ?? [];
   const saleListings = freshSaleListings ?? deployedPayload?.saleListings;
   const rentListings = freshRentListings ?? deployedPayload?.rentListings;
-
-  if (featured.length === 0) {
-    featured = await fetchFeaturedListingsFallback(origin, MAX_FEATURED_ROWS, fetchImpl, fetchOptions);
-  }
 
   return {
     version: HOMEPAGE_INITIAL_VERSION,

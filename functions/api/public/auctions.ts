@@ -27,8 +27,7 @@ type AuctionRow = Record<string, unknown> & {
 };
 
 const PUBLIC_AUCTION_LIMIT_MAX = 600;
-const PUBLIC_AUCTION_CANDIDATE_LIMIT_MAX = 600;
-const AUCTION_CACHE_VERSION = "national-sample-promotions-v7";
+const AUCTION_CACHE_VERSION = "national-sample-promotions-v8";
 const UNKNOWN_LOCATION_KEY = "__unknown_location__";
 const AUCTION_SELECT =
   "id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,ai_score,views_count,tags,auction_date,auction_starting_bid,latitude,longitude,auction_court,website_url,region,is_featured,featured_until,priority_placement,priority_until,construction_status,listing_images(url,sort_order)";
@@ -53,9 +52,20 @@ function sortAuctionRows(rows: AuctionRow[]): AuctionRow[] {
   return [...rows].sort(compareAuctionRows);
 }
 
-function getCachedCandidateLimit(limit: number): number {
-  if (limit <= 12) return limit;
-  return PUBLIC_AUCTION_CANDIDATE_LIMIT_MAX;
+type AuctionCandidateLimits = {
+  priority: number;
+  organic: number;
+};
+
+function getAuctionCandidateLimits(limit: number): AuctionCandidateLimits {
+  const boundedLimit = Math.min(PUBLIC_AUCTION_LIMIT_MAX, Math.max(1, Math.trunc(limit)));
+  const priority = Math.min(boundedLimit, Math.ceil(boundedLimit / 4) + 2);
+  const diversityFloor = Math.min(48, boundedLimit * 8);
+  const organic = Math.min(
+    PUBLIC_AUCTION_LIMIT_MAX,
+    Math.max(boundedLimit, boundedLimit * 3, diversityFloor),
+  );
+  return { priority, organic };
 }
 
 function getAuctionLocationKey(row: AuctionRow): string {
@@ -149,8 +159,7 @@ async function fetchDbAuctionStream(
       `(priority_placement.lte.0,priority_placement.is.null,priority_until.lte.${now},priority_until.is.null)`,
     );
   }
-  params.append("order", "auction_date.asc.nullslast");
-  params.append("order", "id.asc");
+  params.set("order", "auction_date.asc.nullslast,id.asc");
   params.set("limit", String(limit));
   params.set("listing_images.order", "sort_order.asc");
   params.set("listing_images.limit", "3");
@@ -160,26 +169,53 @@ async function fetchDbAuctionStream(
 
 async function fetchDbAuctionStreams(
   env: PublicApiEnv,
-  limit: number,
+  limits: AuctionCandidateLimits,
   now: string,
   poolTag?: string,
 ): Promise<AuctionStreams> {
   const [priorityRows, organicRows] = await Promise.all([
-    fetchDbAuctionStream(env, limit, "priority", now, poolTag),
-    fetchDbAuctionStream(env, limit, "organic", now, poolTag),
+    fetchDbAuctionStream(env, limits.priority, "priority", now, poolTag),
+    fetchDbAuctionStream(env, limits.organic, "organic", now, poolTag),
   ]);
   return { priorityRows, organicRows };
 }
 
+async function fetchRankedAuctionPool(
+  env: PublicApiEnv,
+  limits: AuctionCandidateLimits,
+  requestedLimit: number,
+  now: string,
+  nowMs: number,
+  poolTag?: string,
+): Promise<AuctionStreams> {
+  const streams = await fetchDbAuctionStreams(env, limits, now, poolTag);
+  const ranked = rankAuctionRows(streams.priorityRows, streams.organicRows, requestedLimit, nowMs);
+  if (
+    ranked.length < requestedLimit &&
+    streams.priorityRows.length === limits.priority &&
+    limits.priority < requestedLimit
+  ) {
+    streams.priorityRows = await fetchDbAuctionStream(env, requestedLimit, "priority", now, poolTag);
+  }
+  return streams;
+}
+
 export async function fetchPublicAuctionRows(env: PublicApiEnv, limit: number): Promise<AuctionRow[]> {
-  const candidateLimit = getCachedCandidateLimit(limit);
+  const candidateLimits = getAuctionCandidateLimits(limit);
   const nowMs = Date.now();
   const now = new Date(nowMs).toISOString();
-  const cachedStreams = await fetchDbAuctionStreams(env, candidateLimit, now, todayAuctionPoolTag());
+  const cachedStreams = await fetchRankedAuctionPool(
+    env,
+    candidateLimits,
+    limit,
+    now,
+    nowMs,
+    todayAuctionPoolTag(),
+  );
   const hasCachedRows = cachedStreams.priorityRows.length > 0 || cachedStreams.organicRows.length > 0;
   const streams = hasCachedRows
     ? cachedStreams
-    : await fetchDbAuctionStreams(env, candidateLimit, now);
+    : await fetchRankedAuctionPool(env, candidateLimits, limit, now, nowMs);
   return rankAuctionRows(streams.priorityRows, streams.organicRows, limit, nowMs);
 }
 
@@ -202,9 +238,10 @@ export async function publicAuctions(ctx: PublicApiCtx, requestUrl: URL): Promis
       throw error;
     }
   }, {
-    edgeTtlSeconds: 3_600,
-    browserTtlSeconds: 300,
-    staleSeconds: 21_600,
+    edgeTtlSeconds: 60,
+    browserTtlSeconds: 30,
+    staleSeconds: 60,
+    staleFallbackSeconds: 60,
   });
 }
 

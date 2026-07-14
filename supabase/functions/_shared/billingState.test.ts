@@ -3,6 +3,7 @@ import {
   beginStripeWebhookEvent,
   buildBillingCustomerRow,
   buildBillingSubscriptionRow,
+  finishStripeWebhookEvent,
   isDuplicateWebhookInsertError,
   isStaleProcessingWebhookEvent,
   stripeRuntimeModeFromLivemode,
@@ -289,9 +290,16 @@ Deno.test("failed duplicate webhook events are marked processing for retry", asy
     livemode: false,
   });
 
-  assertEquals(result, "started");
+  assertEquals(result.state, "started");
+  if (result.state !== "started") throw new Error("expected started claim");
+  assertEquals(typeof result.claimToken, "string");
+  assertEquals(result.claimToken.length > 20, true);
   assertEquals(updates[0].status, "processing");
   assertEquals(updates[0].error, null);
+  assertEquals(
+    (updates[0].metadata as Record<string, unknown>).processing_claim_token,
+    result.claimToken,
+  );
 });
 
 Deno.test("processed duplicate webhook events stay duplicate", async () => {
@@ -329,7 +337,7 @@ Deno.test("processed duplicate webhook events stay duplicate", async () => {
     livemode: false,
   });
 
-  assertEquals(result, "duplicate");
+  assertEquals(result, { state: "duplicate" });
   assertEquals(updates.length, 0);
 });
 
@@ -371,7 +379,7 @@ Deno.test("fresh processing duplicate webhook events request retry instead of ac
     livemode: false,
   });
 
-  assertEquals(result, "in_progress");
+  assertEquals(result, { state: "in_progress" });
   assertEquals(updates.length, 0);
 });
 
@@ -395,7 +403,9 @@ Deno.test("stale processing webhook events can be reclaimed", async () => {
 
 Deno.test("stale processing webhook reclaim is guarded by the updated_at lease", async () => {
   const filters: Array<[string, string, unknown]> = [];
+  const updates: Array<Record<string, unknown>> = [];
   const staleStartedAt = new Date(Date.now() - 11 * 60 * 1000).toISOString();
+  const expiredClaimToken = crypto.randomUUID();
   const supabase = {
     from(table: string) {
       assertEquals(table, "stripe_webhook_events");
@@ -415,12 +425,16 @@ Deno.test("stale processing webhook reclaim is guarded by the updated_at lease",
             data: {
               status: "processing",
               updated_at: staleStartedAt,
-              metadata: { processing_started_at: staleStartedAt },
+              metadata: {
+                processing_started_at: staleStartedAt,
+                processing_claim_token: expiredClaimToken,
+              },
             },
             error: null,
           });
         },
-        update() {
+        update(payload: Record<string, unknown>) {
+          updates.push(payload);
           return {
             eq(column: string, value: unknown) {
               filters.push(["eq", column, value]);
@@ -451,9 +465,102 @@ Deno.test("stale processing webhook reclaim is guarded by the updated_at lease",
     livemode: false,
   });
 
-  assertEquals(result, "started");
+  assertEquals(result.state, "started");
+  if (result.state !== "started") throw new Error("expected reclaimed claim");
+  assertEquals(typeof result.claimToken, "string");
+  assertEquals(result.claimToken.length > 20, true);
+  assertEquals(result.claimToken === expiredClaimToken, false);
+  assertEquals(
+    (updates[0].metadata as Record<string, unknown>).processing_claim_token,
+    result.claimToken,
+  );
   assertEquals(
     filters.some(([op, column]) => op === "lt" && column === "updated_at"),
+    true,
+  );
+});
+
+Deno.test("stale webhook workers cannot finish a replacement claim", async () => {
+  const replacementToken = crypto.randomUUID();
+  const filters: Array<[string, unknown]> = [];
+  const row = {
+    event_id: "evt_reclaimed",
+    status: "processing",
+    metadata: { processing_claim_token: replacementToken },
+  };
+  const updatePayloads: Array<Record<string, unknown>> = [];
+
+  const supabase = {
+    from(table: string) {
+      assertEquals(table, "stripe_webhook_events");
+      return {
+        update(payload: Record<string, unknown>) {
+          updatePayloads.push(payload);
+          return {
+            eq(column: string, value: unknown) {
+              filters.push([column, value]);
+              return this;
+            },
+            select() {
+              return this;
+            },
+            maybeSingle() {
+              const matches = filters.every(([column, value]) => {
+                if (column === "event_id") return row.event_id === value;
+                if (column === "status") return row.status === value;
+                if (column === "metadata->>processing_claim_token") {
+                  return row.metadata.processing_claim_token === value;
+                }
+                return false;
+              });
+              return Promise.resolve({
+                data: matches ? { event_id: row.event_id } : null,
+                error: null,
+              });
+            },
+          };
+        },
+      };
+    },
+  };
+
+  const staleFinished = await finishStripeWebhookEvent(
+    supabase as never,
+    row.event_id,
+    "claim-from-expired-worker",
+    "processed",
+  );
+
+  assertEquals(staleFinished, false);
+  assertEquals(updatePayloads[0]?.status, "processed");
+  assertEquals(
+    filters.some(([column, value]) =>
+      column === "metadata->>processing_claim_token" &&
+      value === replacementToken
+    ),
+    false,
+  );
+
+  filters.length = 0;
+  const replacementFinished = await finishStripeWebhookEvent(
+    supabase as never,
+    row.event_id,
+    replacementToken,
+    "processed",
+  );
+
+  assertEquals(replacementFinished, true);
+  assertEquals(
+    filters.some(([column, value]) =>
+      column === "status" && value === "processing"
+    ),
+    true,
+  );
+  assertEquals(
+    filters.some(([column, value]) =>
+      column === "metadata->>processing_claim_token" &&
+      value === replacementToken
+    ),
     true,
   );
 });

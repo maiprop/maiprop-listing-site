@@ -4,6 +4,19 @@ export const STRIPE_API_VERSION = "2026-06-24.dahlia" as const;
 
 export type StripeRuntimeMode = "test" | "live";
 
+type StripeAccountIdentityClient = {
+  accounts: {
+    retrieve(id: string | null): Promise<{ id?: string | null }>;
+  };
+};
+
+export type StripeAccountIdentityOptions = {
+  expectedAccountId?: string | null;
+  eventAccount?: string | null;
+  timeoutMs?: number;
+  cacheTtlMs?: number;
+};
+
 export const STRIPE_SAAS_PERSONAL_TAX_CODE = "txcd_10103000";
 export const STRIPE_SAAS_BUSINESS_TAX_CODE = "txcd_10103001";
 export const STRIPE_AI_PERSONAL_TAX_CODE = "txcd_10105001";
@@ -77,6 +90,143 @@ export type StripeMetadataInput = {
 
 const normalizeFlag = (value: string | undefined): string =>
   (value ?? "").trim().toLowerCase();
+
+const STRIPE_ACCOUNT_ID_PATTERN = /^acct_[A-Za-z0-9]+$/;
+const STRIPE_ACCOUNT_VERIFICATION_TIMEOUT_MS = 3_000;
+const STRIPE_ACCOUNT_VERIFICATION_CACHE_TTL_MS = 5 * 60 * 1000;
+const stripeAccountVerificationCache = new WeakMap<
+  object,
+  { accountId: string; expiresAt: number }
+>();
+const stripeAccountVerificationRequests = new WeakMap<
+  object,
+  Promise<string>
+>();
+
+const normalizeStripeAccountId = (
+  value: string | null | undefined,
+  source: string,
+): string => {
+  const accountId = (value ?? "").trim();
+  if (!accountId) throw new Error(`${source} is not set.`);
+  if (!STRIPE_ACCOUNT_ID_PATTERN.test(accountId)) {
+    throw new Error(`${source} must be a valid Stripe account ID.`);
+  }
+  return accountId;
+};
+
+export function getStripeExpectedAccountId(
+  value: string | null | undefined = Deno.env.get("STRIPE_EXPECTED_ACCOUNT_ID"),
+): string {
+  return normalizeStripeAccountId(value, "STRIPE_EXPECTED_ACCOUNT_ID");
+}
+
+export function assertStripeEventAccountMatchesExpected(
+  eventAccount: string | null | undefined,
+  expectedAccountId: string = getStripeExpectedAccountId(),
+): void {
+  const expected = getStripeExpectedAccountId(expectedAccountId);
+  if (eventAccount === null || eventAccount === undefined) return;
+  const actual = normalizeStripeAccountId(eventAccount, "Stripe event account");
+  if (actual !== expected) {
+    throw new Error(
+      `Stripe event account ${actual} does not match expected account ${expected}.`,
+    );
+  }
+}
+
+const stripeAccountRequest = (
+  stripe: StripeAccountIdentityClient,
+): Promise<string> => {
+  const cacheKey = stripe as object;
+  const existing = stripeAccountVerificationRequests.get(cacheKey);
+  if (existing) return existing;
+
+  const request = stripe.accounts.retrieve(null).then((account) =>
+    normalizeStripeAccountId(account.id, "Stripe authenticated account")
+  );
+  stripeAccountVerificationRequests.set(cacheKey, request);
+  void request.finally(() => {
+    if (stripeAccountVerificationRequests.get(cacheKey) === request) {
+      stripeAccountVerificationRequests.delete(cacheKey);
+    }
+  }).catch(() => undefined);
+  return request;
+};
+
+const withStripeAccountDeadline = async <T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<T> => {
+  let timeoutId: number | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new Error("Stripe account verification timed out.")),
+      timeoutMs,
+    );
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
+};
+
+export async function verifyStripeAccountIdentity(
+  stripe: StripeAccountIdentityClient,
+  options: StripeAccountIdentityOptions = {},
+): Promise<string> {
+  const expectedAccountId = getStripeExpectedAccountId(
+    options.expectedAccountId ?? Deno.env.get("STRIPE_EXPECTED_ACCOUNT_ID"),
+  );
+  assertStripeEventAccountMatchesExpected(
+    options.eventAccount,
+    expectedAccountId,
+  );
+
+  const cacheKey = stripe as object;
+  const now = Date.now();
+  const cacheTtlMs = Math.max(
+    0,
+    options.cacheTtlMs ?? STRIPE_ACCOUNT_VERIFICATION_CACHE_TTL_MS,
+  );
+  const cached = stripeAccountVerificationCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    if (cached.accountId !== expectedAccountId) {
+      throw new Error(
+        `Stripe authenticated account ${cached.accountId} does not match expected account ${expectedAccountId}.`,
+      );
+    }
+    return cached.accountId;
+  }
+
+  const timeoutMs = Math.max(
+    1,
+    options.timeoutMs ?? STRIPE_ACCOUNT_VERIFICATION_TIMEOUT_MS,
+  );
+  const request = stripeAccountRequest(stripe);
+  let accountId: string;
+  try {
+    accountId = await withStripeAccountDeadline(request, timeoutMs);
+  } catch (error) {
+    if (stripeAccountVerificationRequests.get(cacheKey) === request) {
+      stripeAccountVerificationRequests.delete(cacheKey);
+    }
+    throw error;
+  }
+  if (accountId !== expectedAccountId) {
+    throw new Error(
+      `Stripe authenticated account ${accountId} does not match expected account ${expectedAccountId}.`,
+    );
+  }
+  if (cacheTtlMs > 0) {
+    stripeAccountVerificationCache.set(cacheKey, {
+      accountId,
+      expiresAt: now + cacheTtlMs,
+    });
+  }
+  return accountId;
+}
 
 export function getStripeRuntimeMode(): StripeRuntimeMode {
   const explicit = normalizeFlag(

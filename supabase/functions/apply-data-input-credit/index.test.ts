@@ -22,6 +22,7 @@ const { handler, restore } = await captureHandler(
   "./index.ts",
   {
     RATE_LIMIT_FORCE_MEMORY: "true",
+    STRIPE_RUNTIME_MODE: "test",
   },
 );
 
@@ -71,7 +72,9 @@ function json(data: unknown, status = 200): Response {
 
 function installFetchMock(scenario: MockScenario) {
   const originalFetch = globalThis.fetch;
-  const balanceTransactions: Array<{ amount: string | null; url: string; idempotencyKey: string | null }> = [];
+  const balanceTransactions: Array<
+    { amount: string | null; url: string; idempotencyKey: string | null }
+  > = [];
   const patches: unknown[] = [];
 
   globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -282,7 +285,9 @@ Deno.test("credit amount is capped to remaining monthly allowance", async () => 
     assertEquals(body.amount_cents, 25);
     assertEquals(mock.balanceTransactions.map((tx) => tx.amount), ["-25"]);
     assertEquals(
-      mock.balanceTransactions[0].idempotencyKey?.startsWith("maiprop-data-input-credit-"),
+      mock.balanceTransactions[0].idempotencyKey?.startsWith(
+        "maiprop-data-input-credit-",
+      ),
       true,
     );
     const appliedAt = mock.patches[0] && typeof mock.patches[0] === "object"
@@ -357,11 +362,15 @@ Deno.test("lost concurrent update reverses orphan Stripe credit", async () => {
       "50",
     ]);
     assertEquals(
-      mock.balanceTransactions[0].idempotencyKey?.startsWith("maiprop-data-input-credit-"),
+      mock.balanceTransactions[0].idempotencyKey?.startsWith(
+        "maiprop-data-input-credit-",
+      ),
       true,
     );
     assertEquals(
-      mock.balanceTransactions[1].idempotencyKey?.startsWith("maiprop-data-input-credit-reversal-"),
+      mock.balanceTransactions[1].idempotencyKey?.startsWith(
+        "maiprop-data-input-credit-reversal-",
+      ),
       true,
     );
   } finally {

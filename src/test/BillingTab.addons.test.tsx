@@ -186,17 +186,17 @@ describe("BillingTab add-on checkout", () => {
   it("shows seller-relevant add-ons and makes delivered promotions self-serve", async () => {
     renderWithProviders(<BillingTab />);
 
-    const featuredCard = (await screen.findByText("Featured Listing")).closest("div");
+    const featuredCard = (await screen.findByText("Spotlight")).closest("div");
     expect(featuredCard).not.toBeNull();
     expect(within(featuredCard as HTMLElement).getByText("Badge + featured sections. Visual promotion only."))
       .toBeInTheDocument();
     fireEvent.click(
       within(featuredCard as HTMLElement).getByRole("button", {
-        name: /Buy Featured Listing add-on/i,
+        name: /Buy Spotlight add-on/i,
       }),
     );
-    expect(screen.getByText("Priority Placement")).toBeInTheDocument();
-    expect(screen.getByText("Featured+Priority")).toBeInTheDocument();
+    expect(screen.getByText("Priority Rank")).toBeInTheDocument();
+    expect(screen.getByText("Spotlight + Priority Rank")).toBeInTheDocument();
 
     await waitFor(() => {
       expect(mocks.supabase?.functions.invoke).toHaveBeenCalledWith("create-checkout", {
@@ -467,19 +467,19 @@ describe("BillingTab add-on checkout", () => {
     });
   });
 
-  it("lets developers buy the Featured and Priority promotion bundle", async () => {
+  it("lets developers buy the Spotlight and Priority promotion bundle", async () => {
     authState.profile.role = "developer";
     authState.profile.participant_type = "developer";
 
     renderWithProviders(<BillingTab />);
 
-    const bundleCard = (await screen.findByText("Featured+Priority")).closest("div");
+    const bundleCard = (await screen.findByText("Spotlight + Priority Rank")).closest("div");
     expect(bundleCard).not.toBeNull();
     expect(within(bundleCard as HTMLElement).getByText("€79")).toBeInTheDocument();
     expect(within(bundleCard as HTMLElement).getByText("/ 30 days")).toBeInTheDocument();
     fireEvent.click(
       within(bundleCard as HTMLElement).getByRole("button", {
-        name: /Buy Featured\+Priority add-on/i,
+        name: /Buy Spotlight \+ Priority Rank add-on/i,
       }),
     );
 
@@ -928,9 +928,9 @@ describe("BillingTab add-on checkout", () => {
     await screen.findByText("custom credit pack");
     expect(screen.getAllByText("AI valuations").length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText("Neighbourhood reports").length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText("Featured listings")).toBeInTheDocument();
-    expect(screen.getByText("Priority placements")).toBeInTheDocument();
-    expect(screen.getAllByText("Featured+Priority").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("Spotlight").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("Priority Rank").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("Spotlight + Priority Rank").length).toBeGreaterThanOrEqual(2);
     expect(screen.queryByText("Add-on credits")?.closest("div")?.textContent).not.toContain("5 credits available");
     expect(screen.getByText("23456789")).toBeInTheDocument();
     expect(screen.getByText(/Pro renewal/)).toBeInTheDocument();

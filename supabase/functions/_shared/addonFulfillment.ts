@@ -149,6 +149,14 @@ export async function reconcileAddonCheckoutSession(
   const checkoutMode = normalizeAddonCheckoutMode(session.mode);
   const quantity = normalizePositiveQuantity(metadata.quantity);
   const stripePaymentIntentId = objectId(session.payment_intent);
+  const stripeAmountTotal = Number.isInteger(session.amount_total) &&
+      Number(session.amount_total) > 0
+    ? Number(session.amount_total)
+    : null;
+  const stripeCurrency = typeof session.currency === "string" &&
+      /^[a-z]{3}$/i.test(session.currency)
+    ? session.currency.toLowerCase()
+    : null;
   const { error } = await supabase.from("addon_purchases").upsert({
     user_id: userId,
     addon_key: addonKey,
@@ -162,6 +170,9 @@ export async function reconcileAddonCheckoutSession(
     stripe_subscription_id: objectId(session.subscription),
     stripe_customer_id: stripeCustomerId,
     stripe_payment_intent_id: stripePaymentIntentId,
+    stripe_invoice_id: objectId(session.invoice),
+    stripe_amount_total: stripeAmountTotal,
+    stripe_currency: stripeCurrency,
     credits_granted: addonCreditsGranted(addonKey, quantity),
     runtime_mode: runtimeMode,
     livemode,

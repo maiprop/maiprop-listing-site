@@ -9,6 +9,7 @@ import {
   safeInt,
   safeText,
   safeToken,
+  supabaseCount,
   supabaseJson,
   upstreamUnavailable,
   type PublicApiCtx,
@@ -20,7 +21,7 @@ import {
   applyCatalogueStreamCursor,
   buildNextCatalogueCursor,
   canAdvanceCatalogueCursor,
-  catalogueStreamOffsetsForOutputOffset,
+  catalogueStreamOffsetsForAvailableRows,
   decodeCatalogueCursor,
   interleaveCatalogueStreams,
   resolveCatalogueSort,
@@ -61,14 +62,16 @@ const LISTING_PROJECT_CARD_SELECT_WITH_UNITS = [
   "delivery_date",
   `project_units!project_units_project_id_fkey(${PROJECT_UNIT_CARD_SELECT})`,
 ].join(",");
-const LISTINGS_CACHE_VERSION = "catalogue-stream-cursor-promotions-v2";
+const LISTINGS_CACHE_VERSION = "catalogue-stream-cursor-promotions-v3";
 const LISTINGS_CACHE_OPTIONS = {
-  edgeTtlSeconds: 300,
-  browserTtlSeconds: 60,
-  staleSeconds: 900,
+  edgeTtlSeconds: 60,
+  browserTtlSeconds: 30,
+  staleSeconds: 60,
+  staleFallbackSeconds: 60,
   producerTimeoutMs: 5_000,
 };
 const LISTINGS_SUPABASE_TIMEOUT_MS = 4_500;
+const LEGACY_STREAM_PROBE_MAX = 2_000;
 const DEFAULT_LOCATION_RADIUS_M = 750;
 const MAX_LOCATION_RADIUS_M = 5_000;
 const METERS_PER_LATITUDE_DEGREE = 111_320;
@@ -374,21 +377,6 @@ function invalidCursorResponse(): Response {
   );
 }
 
-function catalogueCursorForLegacyOffset(
-  sort: CatalogueSort,
-  offset: number,
-): CatalogueCursor | null {
-  if (offset <= 0) return null;
-  const streamOffsets = catalogueStreamOffsetsForOutputOffset(offset);
-  return {
-    v: 1,
-    sort: sort.name,
-    slot: streamOffsets.slot,
-    priorityOffset: streamOffsets.priorityOffset,
-    organicOffset: streamOffsets.organicOffset,
-  };
-}
-
 function buildCatalogueStreamParams(
   baseParams: URLSearchParams,
   sort: CatalogueSort,
@@ -418,6 +406,83 @@ function buildCatalogueStreamParams(
   return params;
 }
 
+function lightweightLegacyStreamParams(
+  baseParams: URLSearchParams,
+  sort: CatalogueSort,
+  stream: "priority" | "organic",
+  now: string,
+  limit: number,
+): URLSearchParams {
+  const params = buildCatalogueStreamParams(baseParams, sort, null, stream, now, limit, false);
+  params.set("select", "id");
+  params.delete("listing_images.order");
+  params.delete("listing_images.limit");
+  return params;
+}
+
+async function catalogueCursorForLegacyOffset(
+  env: PublicApiEnv,
+  baseParams: URLSearchParams,
+  sort: CatalogueSort,
+  offset: number,
+  now: string,
+): Promise<CatalogueCursor | null> {
+  if (offset <= 0) return null;
+
+  let availablePriorityRows: number;
+  let availableOrganicRows: number;
+  if (offset <= LEGACY_STREAM_PROBE_MAX) {
+    const [priorityRows, organicRows] = await Promise.all([
+      supabaseJson<{ id: string }>(
+        env,
+        "/rest/v1/listings",
+        lightweightLegacyStreamParams(baseParams, sort, "priority", now, offset),
+        { failOnTransient: true, timeoutMs: LISTINGS_SUPABASE_TIMEOUT_MS },
+      ),
+      supabaseJson<{ id: string }>(
+        env,
+        "/rest/v1/listings",
+        lightweightLegacyStreamParams(baseParams, sort, "organic", now, offset),
+        { failOnTransient: true, timeoutMs: LISTINGS_SUPABASE_TIMEOUT_MS },
+      ),
+    ]);
+    availablePriorityRows = priorityRows.length;
+    availableOrganicRows = organicRows.length;
+  } else {
+    const countParams = (stream: "priority" | "organic") => {
+      const params = lightweightLegacyStreamParams(baseParams, sort, stream, now, 1);
+      params.delete("limit");
+      params.delete("order");
+      return params;
+    };
+    [availablePriorityRows, availableOrganicRows] = await Promise.all([
+      supabaseCount(env, "/rest/v1/listings", countParams("priority"), {
+        failOnTransient: true,
+        countStrategy: "exact",
+        timeoutMs: LISTINGS_SUPABASE_TIMEOUT_MS,
+      }),
+      supabaseCount(env, "/rest/v1/listings", countParams("organic"), {
+        failOnTransient: true,
+        countStrategy: "exact",
+        timeoutMs: LISTINGS_SUPABASE_TIMEOUT_MS,
+      }),
+    ]);
+  }
+
+  const streamOffsets = catalogueStreamOffsetsForAvailableRows(
+    offset,
+    availablePriorityRows,
+    availableOrganicRows,
+  );
+  return {
+    v: 1,
+    sort: sort.name,
+    slot: streamOffsets.slot,
+    priorityOffset: streamOffsets.priorityOffset,
+    organicOffset: streamOffsets.organicOffset,
+  };
+}
+
 async function publicListings(ctx: PublicApiCtx, requestUrl: URL): Promise<Response> {
   if (!getSupabaseRuntime(ctx.env)) return missingRuntime();
 
@@ -426,7 +491,6 @@ async function publicListings(ctx: PublicApiCtx, requestUrl: URL): Promise<Respo
   const decodedCursor = decodeCatalogueCursor(encodedCursor, sort);
   if (encodedCursor && !decodedCursor) return invalidCursorResponse();
 
-  const cursor = decodedCursor ?? catalogueCursorForLegacyOffset(sort, legacyOutputOffset);
   const outputOffset = decodedCursor
     ? decodedCursor.priorityOffset + decodedCursor.organicOffset
     : legacyOutputOffset;
@@ -444,6 +508,13 @@ async function publicListings(ctx: PublicApiCtx, requestUrl: URL): Promise<Respo
       const now = new Date().toISOString();
       const streamLimit = pageSize + 1;
       const legacyOffset = !decodedCursor && legacyOutputOffset > 0;
+      const cursor = decodedCursor ?? await catalogueCursorForLegacyOffset(
+        ctx.env,
+        params,
+        sort,
+        legacyOutputOffset,
+        now,
+      );
       const priorityParams = buildCatalogueStreamParams(
         params,
         sort,

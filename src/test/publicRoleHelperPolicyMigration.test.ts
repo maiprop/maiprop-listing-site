@@ -29,6 +29,14 @@ const internalHelperGrantReassertionMigration = readFileSync(
   "utf8",
 );
 
+const scopedRoleReassertionMigration = readFileSync(
+  resolve(
+    process.cwd(),
+    "supabase/migrations/20260714170523_reassert_scoped_authoritative_role.sql",
+  ),
+  "utf8",
+);
+
 describe("public role helper policy rewrite", () => {
   it("rewrites remaining policies to private helpers before revoking public helper execution", () => {
     expect(migration).toContain("private.has_platform_admin(");
@@ -98,6 +106,59 @@ describe("public role helper policy rewrite", () => {
     );
     expect(internalHelperGrantReassertionMigration).toContain(
       "internal security helper remains browser-executable",
+    );
+  });
+
+  it("keeps clean restores aligned with the caller-scoped live role lookup", () => {
+    expect(scopedRoleReassertionMigration).toContain("_user_id = caller.uid");
+    expect(scopedRoleReassertionMigration).toContain("caller.jwt_role = 'service_role'");
+    expect(scopedRoleReassertionMigration).toContain(
+      "admin_profile.role = 'admin'::public.user_role",
+    );
+    expect(scopedRoleReassertionMigration).toContain(
+      "REVOKE ALL ON FUNCTION public.authoritative_role(uuid) FROM PUBLIC, anon, authenticated",
+    );
+    expect(scopedRoleReassertionMigration).toContain(
+      "GRANT EXECUTE ON FUNCTION public.authoritative_role(uuid) TO service_role",
+    );
+    expect(scopedRoleReassertionMigration).toContain(
+      "private.authoritative_role() = 'seller'::public.user_role",
+    );
+    expect(scopedRoleReassertionMigration).not.toContain(
+      "public.authoritative_role((SELECT auth.uid())) = 'seller'::public.user_role",
+    );
+    expect(scopedRoleReassertionMigration).toContain(
+      "public.get_open_house_capacity(uuid)",
+    );
+    expect(scopedRoleReassertionMigration).toContain(
+      "public.submit_agent_data_input(date,text,text,text,numeric,text,text,text,text,text,text,text)",
+    );
+    expect(scopedRoleReassertionMigration).toContain(
+      "REVOKE ALL ON FUNCTION %s FROM PUBLIC, anon, authenticated",
+    );
+  });
+
+  it("separates caller-scoped RLS checks from server-only arbitrary-user resolution", () => {
+    expect(scopedRoleReassertionMigration).toMatch(
+      /REVOKE ALL ON FUNCTION private\.authoritative_role\(uuid\)\s+FROM PUBLIC, anon, authenticated/,
+    );
+    expect(scopedRoleReassertionMigration).toMatch(
+      /GRANT EXECUTE ON FUNCTION private\.authoritative_role\(uuid\)\s+TO service_role/,
+    );
+    expect(scopedRoleReassertionMigration).toMatch(
+      /GRANT EXECUTE ON FUNCTION private\.authoritative_role\(\)\s+TO authenticated, service_role/,
+    );
+    expect(scopedRoleReassertionMigration).toContain(
+      "CREATE OR REPLACE FUNCTION private.get_listing_promotion_plan_allowance",
+    );
+    expect(scopedRoleReassertionMigration).toContain(
+      "v_role := private.authoritative_role(p_user_id)",
+    );
+    expect(scopedRoleReassertionMigration).toMatch(
+      /private\.authoritative_role\(allocation\.created_by\)\s*=\s*'admin'::public\.user_role/,
+    );
+    expect(scopedRoleReassertionMigration).toMatch(
+      /private\.authoritative_role\(audit\.actor_id\)\s*=\s*'admin'::public\.user_role/,
     );
   });
 });

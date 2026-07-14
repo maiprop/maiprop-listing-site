@@ -1,5 +1,6 @@
 import {
   assertEquals,
+  assertRejects,
   assertThrows,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
@@ -11,6 +12,7 @@ import {
   CHECKOUT_TAX_COLLECTION_PARAMS,
   ensureSubscriptionCompanyInvoiceSettings,
   getStripeCompanyVatId,
+  getStripeExpectedAccountId,
   getStripeRuntimeMode,
   resolveStripeSoftwareTaxCode,
   STRIPE_AI_BUSINESS_TAX_CODE,
@@ -21,6 +23,7 @@ import {
   STRIPE_SAAS_BUSINESS_TAX_CODE,
   STRIPE_SAAS_PERSONAL_TAX_CODE,
   stripeMetadata,
+  verifyStripeAccountIdentity,
 } from "./stripeClient.ts";
 
 function withEnv(
@@ -311,6 +314,116 @@ Deno.test("Stripe runtime mode requires explicit live opt-in for live keys", () 
       "STRIPE_LIVE_MODE=true",
     );
   });
+});
+
+Deno.test("Stripe expected account configuration is required and normalized", () => {
+  withEnv({ STRIPE_EXPECTED_ACCOUNT_ID: undefined }, () => {
+    assertThrows(
+      () => getStripeExpectedAccountId(),
+      Error,
+      "STRIPE_EXPECTED_ACCOUNT_ID is not set",
+    );
+  });
+  withEnv({ STRIPE_EXPECTED_ACCOUNT_ID: "  acct_expected123  " }, () => {
+    assertEquals(getStripeExpectedAccountId(), "acct_expected123");
+  });
+  withEnv({ STRIPE_EXPECTED_ACCOUNT_ID: "not-an-account" }, () => {
+    assertThrows(
+      () => getStripeExpectedAccountId(),
+      Error,
+      "valid Stripe account ID",
+    );
+  });
+});
+
+Deno.test("Stripe account verification rejects a mismatched webhook event account", async () => {
+  let retrieveCalls = 0;
+  const stripe = {
+    accounts: {
+      retrieve() {
+        retrieveCalls += 1;
+        return Promise.resolve({ id: "acct_expected123" });
+      },
+    },
+  };
+
+  await assertRejects(
+    () =>
+      verifyStripeAccountIdentity(stripe as never, {
+        expectedAccountId: " acct_expected123 ",
+        eventAccount: "acct_other456",
+        cacheTtlMs: 0,
+      }),
+    Error,
+    "event account",
+  );
+  assertEquals(retrieveCalls, 0);
+});
+
+Deno.test("Stripe account verification rejects a client authenticated to another account", async () => {
+  const stripe = {
+    accounts: {
+      retrieve() {
+        return Promise.resolve({ id: "acct_other456" });
+      },
+    },
+  };
+
+  await assertRejects(
+    () =>
+      verifyStripeAccountIdentity(stripe as never, {
+        expectedAccountId: "acct_expected123",
+        cacheTtlMs: 0,
+      }),
+    Error,
+    "authenticated account",
+  );
+});
+
+Deno.test("Stripe account verification is bounded and caches successful checks", async () => {
+  let retrieveCalls = 0;
+  const stripe = {
+    accounts: {
+      retrieve() {
+        retrieveCalls += 1;
+        return Promise.resolve({ id: "acct_cache123" });
+      },
+    },
+  };
+
+  await verifyStripeAccountIdentity(stripe as never, {
+    expectedAccountId: "acct_cache123",
+    cacheTtlMs: 60_000,
+    timeoutMs: 100,
+  });
+  await verifyStripeAccountIdentity(stripe as never, {
+    expectedAccountId: "acct_cache123",
+    cacheTtlMs: 60_000,
+    timeoutMs: 100,
+  });
+
+  assertEquals(retrieveCalls, 1);
+});
+
+Deno.test("Stripe account verification fails within its request deadline", async () => {
+  const stripe = {
+    accounts: {
+      retrieve() {
+        return new Promise<{ id: string }>(() => undefined);
+      },
+    },
+  };
+
+  await assertRejects(
+    () =>
+      verifyStripeAccountIdentity(stripe as never, {
+        expectedAccountId: "acct_timeout123",
+        cacheTtlMs: 0,
+        timeoutMs: 5,
+      }),
+    Error,
+    "timed out",
+  );
 });
 
 Deno.test("Stripe helper builds stable idempotency keys and metadata", async () => {

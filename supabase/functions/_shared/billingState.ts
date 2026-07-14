@@ -77,6 +77,11 @@ type StripeWebhookEventClaimRow = {
   event_id?: string | null;
 };
 
+export type StripeWebhookEventBeginResult =
+  | { state: "started"; claimToken: string }
+  | { state: "duplicate" }
+  | { state: "in_progress" };
+
 export type BillingCustomerRow = {
   user_id: string;
   stripe_customer_id: string;
@@ -276,9 +281,10 @@ export async function beginStripeWebhookEvent(
     api_version?: string | null;
     livemode?: boolean | null;
   },
-): Promise<"started" | "duplicate" | "in_progress"> {
+): Promise<StripeWebhookEventBeginResult> {
   const livemode = Boolean(event.livemode);
   const processingStartedAt = new Date().toISOString();
+  const claimToken = crypto.randomUUID();
   const { error } = await supabase.from("stripe_webhook_events").insert({
     event_id: event.id,
     event_type: event.type,
@@ -286,9 +292,12 @@ export async function beginStripeWebhookEvent(
     runtime_mode: stripeRuntimeModeFromLivemode(livemode),
     livemode,
     status: "processing",
-    metadata: { processing_started_at: processingStartedAt },
+    metadata: {
+      processing_started_at: processingStartedAt,
+      processing_claim_token: claimToken,
+    },
   });
-  if (!error) return "started";
+  if (!error) return { state: "started", claimToken };
   if (isDuplicateWebhookInsertError(error)) {
     const { data, error: lookupError } = await supabase
       .from("stripe_webhook_events")
@@ -298,18 +307,21 @@ export async function beginStripeWebhookEvent(
     if (lookupError) throw lookupError;
     const row = data ?? null;
     if (row?.status === "processing" && !isStaleProcessingWebhookEvent(row)) {
-      return "in_progress";
+      return { state: "in_progress" };
     }
     const rowStatus = row?.status ?? null;
     if (rowStatus === "failed" || isStaleProcessingWebhookEvent(row)) {
-      if (!rowStatus) return "duplicate";
+      if (!rowStatus) return { state: "duplicate" };
       const claimBase = supabase
         .from("stripe_webhook_events")
         .update({
           status: "processing",
           error: null,
           processed_at: null,
-          metadata: { processing_started_at: processingStartedAt },
+          metadata: {
+            processing_started_at: processingStartedAt,
+            processing_claim_token: claimToken,
+          },
         })
         .eq("event_id", event.id)
         .eq("status", rowStatus);
@@ -323,9 +335,11 @@ export async function beginStripeWebhookEvent(
         .select<StripeWebhookEventClaimRow>("event_id")
         .maybeSingle();
       if (claim.error) throw claim.error;
-      return claim.data?.event_id ? "started" : "duplicate";
+      return claim.data?.event_id
+        ? { state: "started", claimToken }
+        : { state: "duplicate" };
     }
-    return "duplicate";
+    return { state: "duplicate" };
   }
   throw error;
 }
@@ -333,16 +347,28 @@ export async function beginStripeWebhookEvent(
 export async function finishStripeWebhookEvent(
   supabase: SupabaseAdminClient,
   eventId: string,
+  claimToken: string,
   status: "processed" | "failed" | "skipped",
   errorMessage: string | null = null,
-): Promise<void> {
-  const { error } = await supabase
+): Promise<boolean> {
+  const normalizedClaimToken = claimToken.trim();
+  if (!normalizedClaimToken) {
+    throw new Error(
+      "Stripe webhook claim token is required to finish an event.",
+    );
+  }
+  const { data, error } = await supabase
     .from("stripe_webhook_events")
     .update({
       status,
       error: errorMessage,
       processed_at: new Date().toISOString(),
     })
-    .eq("event_id", eventId);
+    .eq("event_id", eventId)
+    .eq("status", "processing")
+    .eq("metadata->>processing_claim_token", normalizedClaimToken)
+    .select<StripeWebhookEventClaimRow>("event_id")
+    .maybeSingle();
   if (error) throw error;
+  return data?.event_id === eventId;
 }

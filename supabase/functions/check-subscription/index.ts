@@ -25,6 +25,7 @@ import {
   type AddonCheckoutFulfillmentResult,
   reconcileAddonCheckoutSession,
 } from "../_shared/addonFulfillment.ts";
+import { parseJsonBody, SchemaValidationError, z } from "../_shared/schema.ts";
 
 const log = createLogger("check-subscription");
 const checkSubLimiter = makeRateLimiter({
@@ -32,6 +33,29 @@ const checkSubLimiter = makeRateLimiter({
   maxRequests: 30,
   windowMs: 60_000,
 });
+
+const subscriptionCheckRequestSchema = z.object({
+  checkout_session_id: z.string().trim().min(1).max(255).optional(),
+});
+
+export type SubscriptionCheckRequest = z.infer<
+  typeof subscriptionCheckRequestSchema
+>;
+
+// Normal entitlement refreshes intentionally send no body. Explicit checkout
+// reconciliation sends one strictly validated session identifier.
+export async function parseSubscriptionCheckRequest(
+  req: Request,
+): Promise<SubscriptionCheckRequest> {
+  const rawBody = await req.text();
+  const normalizedBody = rawBody.trim().length > 0 ? rawBody : "{}";
+  const normalizedRequest = new Request(req.url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: normalizedBody,
+  });
+  return parseJsonBody(normalizedRequest, subscriptionCheckRequestSchema);
+}
 
 export type FallbackSubscriptionState = {
   subscribed: boolean;
@@ -616,10 +640,7 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
 
     try {
       const user = await verifyBearerToken(req, supabaseClient);
-      const parsedBody = await req.json().catch(() => ({})) as unknown;
-      const body = parsedBody && typeof parsedBody === "object"
-        ? parsedBody as { checkout_session_id?: unknown }
-        : {};
+      const body = await parseSubscriptionCheckRequest(req);
       const result = await resolveSubscriptionCheck(
         supabaseClient,
         user.id,
@@ -631,6 +652,19 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
         status: result.httpStatus,
       });
     } catch (error: unknown) {
+      if (error instanceof SchemaValidationError) {
+        return new Response(
+          JSON.stringify({
+            error: error.message,
+            code: error.code,
+            issues: error.issues,
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 400,
+          },
+        );
+      }
       if (!(error instanceof AuthError)) {
         log.error("unexpected subscription check failure", {
           message: getErrorMessage(error),

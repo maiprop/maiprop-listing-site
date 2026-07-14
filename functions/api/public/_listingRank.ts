@@ -185,6 +185,42 @@ export function catalogueStreamOffsetsForOutputOffset(outputOffset: number): {
   };
 }
 
+export function catalogueStreamOffsetsForAvailableRows(
+  outputOffset: number,
+  availablePriorityRows: number,
+  availableOrganicRows: number,
+): {
+  slot: number;
+  priorityOffset: number;
+  organicOffset: number;
+} {
+  const offset = safeStreamOffset(outputOffset);
+  const planned = catalogueStreamOffsetsForOutputOffset(offset);
+  const priorityAvailable = safeStreamOffset(availablePriorityRows);
+  const organicAvailable = safeStreamOffset(availableOrganicRows);
+  const priorityWasShort = priorityAvailable < planned.priorityOffset;
+  const organicWasShort = organicAvailable < planned.organicOffset;
+  let priorityOffset = Math.min(planned.priorityOffset, priorityAvailable);
+  let organicOffset = Math.min(planned.organicOffset, organicAvailable);
+  let remaining = offset - priorityOffset - organicOffset;
+
+  if (priorityWasShort && remaining > 0) {
+    const organicFallback = Math.min(remaining, organicAvailable - organicOffset);
+    organicOffset += organicFallback;
+    remaining -= organicFallback;
+  }
+  if (organicWasShort && remaining > 0) {
+    const priorityFallback = Math.min(remaining, priorityAvailable - priorityOffset);
+    priorityOffset += priorityFallback;
+  }
+
+  return {
+    slot: (priorityOffset + organicOffset) % CATALOGUE_BLOCK_SIZE,
+    priorityOffset,
+    organicOffset,
+  };
+}
+
 function validCursorId(value: unknown): value is string {
   return typeof value === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value);
 }
@@ -306,8 +342,7 @@ export function applyCatalogueStreamCursor(
   sort: CatalogueSort,
   anchor?: CatalogueStreamAnchor | null,
 ): void {
-  params.append("order", sort.order);
-  params.append("order", "id.desc");
+  params.set("order", `${sort.order},id.desc`);
 
   if (!anchor) return;
   if (sort.usesOffset) {

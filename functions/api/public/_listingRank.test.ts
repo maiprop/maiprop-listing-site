@@ -4,6 +4,7 @@ import {
   applyCatalogueStreamCursor,
   buildNextCatalogueCursor,
   canAdvanceCatalogueCursor,
+  catalogueStreamOffsetsForAvailableRows,
   decodeCatalogueCursor,
   interleaveCatalogueStreams,
   MAX_CATALOGUE_STREAM_OFFSET,
@@ -37,6 +38,51 @@ describe("public catalogue paid-slot ranking", () => {
     expect(new Set(result.data.map((row) => row.id))).toHaveLength(12);
     expect(result.consumedPriority).toBe(1);
     expect(result.consumedOrganic).toBe(11);
+  });
+
+  it("resolves legacy output offsets from the rows actually available in each stream", () => {
+    expect(catalogueStreamOffsetsForAvailableRows(12, 1, 20)).toEqual({
+      slot: 0,
+      priorityOffset: 1,
+      organicOffset: 11,
+    });
+    expect(catalogueStreamOffsetsForAvailableRows(12, 20, 4)).toEqual({
+      slot: 0,
+      priorityOffset: 8,
+      organicOffset: 4,
+    });
+  });
+
+  it("stops legacy stream offsets at the actual catalogue end", () => {
+    expect(catalogueStreamOffsetsForAvailableRows(12, 2, 5)).toEqual({
+      slot: 7,
+      priorityOffset: 2,
+      organicOffset: 5,
+    });
+  });
+
+  it("matches actual interleaving consumption across sparse stream combinations", () => {
+    for (let outputOffset = 0; outputOffset <= 24; outputOffset += 1) {
+      for (let priorityCount = 0; priorityCount <= 12; priorityCount += 1) {
+        for (let organicCount = 0; organicCount <= 12; organicCount += 1) {
+          const actual = interleaveCatalogueStreams(
+            rows("priority", priorityCount),
+            rows("organic", organicCount),
+            outputOffset,
+            0,
+          );
+          expect(catalogueStreamOffsetsForAvailableRows(
+            outputOffset,
+            priorityCount,
+            organicCount,
+          )).toEqual({
+            slot: actual.nextSlot,
+            priorityOffset: actual.consumedPriority,
+            organicOffset: actual.consumedOrganic,
+          });
+        }
+      }
+    }
   });
 
   it("uses Priority rows to fill otherwise empty organic slots", () => {
@@ -79,8 +125,7 @@ describe("public catalogue paid-slot ranking", () => {
     });
 
     expect(params.getAll("order")).toEqual([
-      "created_at.desc",
-      "id.desc",
+      "created_at.desc,id.desc",
     ]);
     expect(params.get("or")).toContain("created_at.lt.2026-07-14T12:00:00.000Z");
     expect(params.get("or")).toContain("id.lt.9bcb2bd9-10c6-4ac7-9142-c5fc14256658");
@@ -98,7 +143,7 @@ describe("public catalogue paid-slot ranking", () => {
     const params = new URLSearchParams();
     applyCatalogueStreamCursor(params, sort, { id: "row-9", value, offset: 80 });
 
-    expect(params.getAll("order")).toEqual([primaryOrder, "id.desc"]);
+    expect(params.getAll("order")).toEqual([`${primaryOrder},id.desc`]);
     expect(params.get("or")).toContain(keysetClause);
     expect(params.get("or")).toContain("id.lt.row-9");
     expect(params.has("offset")).toBe(false);
@@ -110,8 +155,7 @@ describe("public catalogue paid-slot ranking", () => {
     applyCatalogueStreamCursor(params, sort, { id: "row-1", value: null, offset: 40 });
 
     expect(params.getAll("order")).toEqual([
-      "ai_score.desc.nullslast",
-      "id.desc",
+      "ai_score.desc.nullslast,id.desc",
     ]);
     expect(params.get("offset")).toBe("40");
   });

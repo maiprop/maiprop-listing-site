@@ -8,18 +8,58 @@ import {
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { authedReq, captureHandler, req } from "../_shared/testUtils.ts";
 
-const originalStripeRuntimeMode = Deno.env.get("STRIPE_RUNTIME_MODE");
-Deno.env.set("STRIPE_RUNTIME_MODE", "test");
-
 const { handler, restore } = await captureHandler(
   import.meta.url,
   "./index.ts",
+  { STRIPE_RUNTIME_MODE: "test" },
 );
 const {
   getDatabaseFallback,
+  parseSubscriptionCheckRequest,
   resolveSubscriptionCheck,
   resolveSubscriptionResponse,
 } = await import("./index.ts");
+
+Deno.test("subscription request parsing accepts an empty normal check", async () => {
+  const parsed = await parseSubscriptionCheckRequest(
+    new Request("https://example.test", {
+      method: "POST",
+    }),
+  );
+
+  assertEquals(parsed, {});
+});
+
+Deno.test("subscription request parsing accepts and trims an explicit checkout session", async () => {
+  const parsed = await parseSubscriptionCheckRequest(
+    new Request("https://example.test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        checkout_session_id: "  cs_test_exact_session  ",
+      }),
+    }),
+  );
+
+  assertEquals(parsed, { checkout_session_id: "cs_test_exact_session" });
+});
+
+Deno.test("subscription request parsing rejects unknown or malformed fields", async () => {
+  await assertRejects(
+    () =>
+      parseSubscriptionCheckRequest(
+        new Request("https://example.test", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            checkout_session_id: 123,
+            user_id: "other-user",
+          }),
+        }),
+      ),
+    Error,
+  );
+});
 
 Deno.test("OPTIONS preflight returns 200", async () => {
   const res = await handler(req("OPTIONS"));
@@ -1378,8 +1418,3 @@ Deno.test("subscription response rejects cross-role product fallback when pricin
 });
 
 restore();
-if (originalStripeRuntimeMode === undefined) {
-  Deno.env.delete("STRIPE_RUNTIME_MODE");
-} else {
-  Deno.env.set("STRIPE_RUNTIME_MODE", originalStripeRuntimeMode);
-}

@@ -69,7 +69,11 @@ export type Database = {
           refunded_at: string | null
           runtime_mode: string
           status: string
+          stripe_amount_total: number | null
+          stripe_charge_id: string | null
+          stripe_currency: string | null
           stripe_customer_id: string | null
+          stripe_invoice_id: string | null
           stripe_payment_intent_id: string | null
           stripe_session_id: string
           stripe_subscription_id: string | null
@@ -95,7 +99,11 @@ export type Database = {
           refunded_at?: string | null
           runtime_mode?: string
           status?: string
+          stripe_amount_total?: number | null
+          stripe_charge_id?: string | null
+          stripe_currency?: string | null
           stripe_customer_id?: string | null
+          stripe_invoice_id?: string | null
           stripe_payment_intent_id?: string | null
           stripe_session_id: string
           stripe_subscription_id?: string | null
@@ -121,7 +129,11 @@ export type Database = {
           refunded_at?: string | null
           runtime_mode?: string
           status?: string
+          stripe_amount_total?: number | null
+          stripe_charge_id?: string | null
+          stripe_currency?: string | null
           stripe_customer_id?: string | null
+          stripe_invoice_id?: string | null
           stripe_payment_intent_id?: string | null
           stripe_session_id?: string
           stripe_subscription_id?: string | null
@@ -5047,6 +5059,19 @@ export type Database = {
           msg_id: number
           read_ct: number
         }[]
+      }
+      reconcile_addon_refund_event: {
+        Args: {
+          p_livemode: boolean
+          p_metadata?: Json
+          p_purchase_id: string
+          p_refunded_amount: number
+          p_runtime_mode: string
+          p_status: string
+          p_stripe_refund_id: string
+          p_total_amount: number
+        }
+        Returns: Json
       }
       record_ai_call: { Args: { p_bucket: string }; Returns: Json }
       record_listing_view: {

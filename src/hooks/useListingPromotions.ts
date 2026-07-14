@@ -3,8 +3,20 @@ import { z } from "zod";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
+import { parseMutationInput } from "@/lib/mutationSchemas";
 
 export type ListingPromotionType = "spotlight" | "priority" | "bundle";
+
+const listingPromotionTypeSchema = z.enum(["spotlight", "priority", "bundle"]);
+const listingPromotionIdSchema = z.string().uuid("Invalid listing promotion");
+const activateListingPromotionSchema = z.object({
+  listingId: listingPromotionIdSchema,
+  promotionType: listingPromotionTypeSchema,
+}).strict();
+const deactivateListingPromotionSchema = z.object({
+  listingId: listingPromotionIdSchema,
+  promotionType: listingPromotionTypeSchema.exclude(["bundle"]),
+}).strict();
 
 const creditBalanceSchema = z.object({
   included: z.number().int().nonnegative(),
@@ -66,10 +78,15 @@ export function useActivateListingPromotion() {
       listingId: string;
       promotionType: ListingPromotionType;
     }) => {
+      const payload = parseMutationInput(
+        activateListingPromotionSchema,
+        { listingId, promotionType },
+        "listing promotion",
+      );
       const { data, error } = await supabase.rpc("activate_listing_promotion", {
-        p_listing_id: listingId,
-        p_promotion_type: promotionType,
-        p_request_key: createRequestKey(listingId, promotionType),
+        p_listing_id: payload.listingId,
+        p_promotion_type: payload.promotionType,
+        p_request_key: createRequestKey(payload.listingId, payload.promotionType),
       });
       if (error) throw error;
       return data;
@@ -95,9 +112,14 @@ export function useDeactivateListingPromotion() {
       listingId: string;
       promotionType: Exclude<ListingPromotionType, "bundle">;
     }) => {
+      const payload = parseMutationInput(
+        deactivateListingPromotionSchema,
+        { listingId, promotionType },
+        "listing promotion removal",
+      );
       const { data, error } = await supabase.rpc("deactivate_listing_promotion", {
-        p_listing_id: listingId,
-        p_promotion_type: promotionType,
+        p_listing_id: payload.listingId,
+        p_promotion_type: payload.promotionType,
       });
       if (error) throw error;
       return data;

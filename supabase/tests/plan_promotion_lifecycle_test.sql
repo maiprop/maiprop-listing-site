@@ -1,6 +1,6 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(11);
+SELECT plan(12);
 
 SELECT ok(
   EXISTS (
@@ -209,6 +209,15 @@ SELECT is(
   ),
   'active',
   'past_due payment recovery preserves provisioned plan access'
+);
+
+SELECT is(
+  private.get_listing_promotion_plan_allowance(
+    'd1000000-0000-4000-8000-000000000001',
+    'spotlight'
+  ),
+  0,
+  'past_due payment recovery does not advertise a new promotion credit'
 );
 
 SELECT is(

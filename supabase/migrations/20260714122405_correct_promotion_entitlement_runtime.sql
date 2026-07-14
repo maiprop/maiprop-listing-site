@@ -82,6 +82,13 @@ BEGIN
     RAISE EXCEPTION 'invalid_promotion_request_key' USING ERRCODE = '22023';
   END IF;
 
+  -- Every mutation that can project promotion state locks the canonical
+  -- listing before taking row locks. This keeps activation, expiry, and
+  -- Stripe refund reconciliation on one deadlock-safe lock order.
+  PERFORM pg_advisory_xact_lock(
+    hashtextextended('listing_promotion:' || p_listing_id::text, 0)
+  );
+
   SELECT listing.owner_id, listing.project_id, project.owner_id
   INTO v_owner_id, v_project_id, v_project_owner_id
   FROM public.listings AS listing
@@ -103,9 +110,6 @@ BEGIN
     RAISE EXCEPTION 'listing_promotion_forbidden' USING ERRCODE = '42501';
   END IF;
 
-  PERFORM pg_advisory_xact_lock(
-    hashtextextended('listing_promotion:' || p_listing_id::text, 0)
-  );
   PERFORM pg_advisory_xact_lock(
     hashtextextended(
       'listing_promotion_request:' || v_owner_id::text || ':' || p_request_key,

@@ -96,11 +96,11 @@ const addonLabel = (addonKey: string | null | undefined) => {
     case "neighbourhood_report_bundle":
       return "Neighbourhood reports";
     case "featured_listing":
-      return "Featured listings";
+      return "Spotlight";
     case "priority_placement":
-      return "Priority placements";
+      return "Priority Rank";
     case "featured_priority_bundle":
-      return "Featured+Priority";
+      return "Spotlight + Priority Rank";
     default:
       return addonKey ? addonKey.split("_").join(" ") : "Add-on credits";
   }

@@ -286,7 +286,7 @@ describe("homepage initial payload injection", () => {
     expect(JSON.stringify(payload)).not.toContain("withdrawn-1");
   });
 
-  it("falls back to public listings when featured homepage rows are transiently empty", async () => {
+  it("keeps Spotlight empty while still bootstrapping organic catalogue rows", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
       const href = String(url);
       if (href.includes("section=featured") || href.includes("section=open-houses")) {
@@ -315,22 +315,20 @@ describe("homepage initial payload injection", () => {
       now: new Date("2026-07-01T10:00:00.000Z"),
     });
 
-    expect(payload.featured).toMatchObject([
+    expect(payload.featured).toEqual([]);
+    expect(payload.saleListings?.data).toMatchObject([
       {
         id: "fallback-1",
         title: "Fallback Listing",
         city: "Athens",
-        address: "2 Main St",
-        price: 310000,
-        sqm: 80,
       },
     ]);
     expect(JSON.stringify(payload)).not.toContain("owner_id");
     expect(globalThis.fetch.mock.calls.some(([url]) => String(url).includes("/api/public/listings"))).toBe(true);
   });
 
-  it("retries transient HTTP failures before declaring the public-listings fallback empty", async () => {
-    let fallbackCalls = 0;
+  it("never relabels organic catalogue rows as Spotlight when no paid placement exists", async () => {
+    let genericCatalogueCalls = 0;
     const fetchImpl = vi.fn(async (url) => {
       const href = String(url);
       if (href.includes("section=featured") || href.includes("section=open-houses")) {
@@ -347,23 +345,11 @@ describe("homepage initial payload injection", () => {
             offset: 0,
           }), { status: 200, headers: { "content-type": "application/json" } });
         }
-        fallbackCalls += 1;
-        if (fallbackCalls === 1) {
-          return new Response(JSON.stringify({ error: "upstream unavailable" }), {
-            status: 503,
-            headers: { "content-type": "application/json" },
-          });
-        }
-        return new Response(JSON.stringify({
-          data: [
-            {
-              id: "fallback-after-retry",
-              title: "Fallback After Retry",
-              city: "Athens",
-              address: "4 Main St",
-            },
-          ],
-        }), { status: 200, headers: { "content-type": "application/json" } });
+        genericCatalogueCalls += 1;
+        return new Response(JSON.stringify({ data: [{ id: "organic-row" }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
       }
       return new Response("not found", { status: 404 });
     });
@@ -375,15 +361,8 @@ describe("homepage initial payload injection", () => {
       fetchOptions: { attempts: 2, timeoutMs: 1_000 },
     });
 
-    expect(fallbackCalls).toBe(2);
-    expect(payload.featured).toMatchObject([
-      {
-        id: "fallback-after-retry",
-        title: "Fallback After Retry",
-        city: "Athens",
-        address: "4 Main St",
-      },
-    ]);
+    expect(genericCatalogueCalls).toBe(0);
+    expect(payload.featured).toEqual([]);
   });
 
   it("retries transient homepage prefetch failures before using the fallback", async () => {

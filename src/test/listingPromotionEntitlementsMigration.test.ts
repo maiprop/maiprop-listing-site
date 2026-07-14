@@ -34,6 +34,32 @@ const correctionMigration = readFileSync(
   "utf8",
 );
 
+const integrityMigration = readFileSync(
+  resolve(
+    process.cwd(),
+    "supabase/migrations/20260714144321_enforce_promotion_and_ownership_integrity.sql",
+  ),
+  "utf8",
+);
+
+const refundMigration = readFileSync(
+  resolve(
+    process.cwd(),
+    "supabase/migrations/20260714153937_reconcile_addon_refund_events.sql",
+  ),
+  "utf8",
+);
+
+const lockOrderMigrationName = readdirSync(
+  resolve(process.cwd(), "supabase/migrations"),
+).find((name) => /^\d{14}_reassert_promotion_lock_order\.sql$/.test(name));
+const lockOrderMigration = lockOrderMigrationName
+  ? readFileSync(
+    resolve(process.cwd(), "supabase/migrations", lockOrderMigrationName),
+    "utf8",
+  )
+  : "";
+
 const migrationDirectory = resolve(process.cwd(), "supabase/migrations");
 const remediationMigrationName = readdirSync(migrationDirectory).find((name) =>
   /^\d{14}_remediate_promotion_entitlements\.sql$/.test(name)
@@ -183,6 +209,69 @@ describe("listing promotion entitlement migration", () => {
     expect(correctionMigration).toContain("listing_promotion_request:");
     expect(correctionMigration).toContain("v_cycle_start::text");
     expect(correctionMigration).toContain("pg_advisory_xact_lock");
+  });
+
+  it("uses one listing-first lock order for activation, expiry, and refund reconciliation", () => {
+    const activation = sqlSection(
+      correctionMigration,
+      "CREATE OR REPLACE FUNCTION private.activate_listing_promotion",
+      "CREATE OR REPLACE FUNCTION private.revoke_refunded_listing_promotions",
+    );
+    const refund = sqlSection(
+      refundMigration,
+      "CREATE OR REPLACE FUNCTION public.reconcile_addon_refund_event",
+      "REVOKE ALL ON FUNCTION public.reconcile_addon_refund_event",
+    );
+    const expiry = sqlSection(
+      integrityMigration,
+      "CREATE OR REPLACE FUNCTION public.expire_listing_promotions",
+      "REVOKE ALL ON FUNCTION public.expire_listing_promotions",
+    );
+
+    expect(activation.indexOf("'listing_promotion:'")).toBeLessThan(
+      activation.indexOf("FOR UPDATE OF listing"),
+    );
+    expect(refund.indexOf("'listing_promotion:'")).toBeLessThan(
+      refund.indexOf("FOR UPDATE;"),
+    );
+    expect(expiry.indexOf("'listing_promotion:'")).toBeLessThan(
+      expiry.indexOf("UPDATE public.listing_promotion_allocations"),
+    );
+  });
+
+  it("reasserts the corrected lock order in a forward-only deployment migration", () => {
+    expect(lockOrderMigrationName).toMatch(
+      /^20260714\d{6}_reassert_promotion_lock_order\.sql$/,
+    );
+    expect(lockOrderMigration).toContain(
+      "CREATE OR REPLACE FUNCTION private.activate_listing_promotion",
+    );
+    expect(lockOrderMigration).toContain(
+      "CREATE OR REPLACE FUNCTION private.reconcile_plan_promotion_allocations",
+    );
+    expect(lockOrderMigration).toContain(
+      "CREATE OR REPLACE FUNCTION public.expire_listing_promotions",
+    );
+    expect(lockOrderMigration).toContain(
+      "CREATE OR REPLACE FUNCTION public.reconcile_addon_refund_event",
+    );
+
+    const activation = sqlSection(
+      lockOrderMigration,
+      "CREATE OR REPLACE FUNCTION private.activate_listing_promotion",
+      "CREATE OR REPLACE FUNCTION private.reconcile_plan_promotion_allocations",
+    );
+    const refund = sqlSection(
+      lockOrderMigration,
+      "CREATE OR REPLACE FUNCTION public.reconcile_addon_refund_event",
+      "REVOKE ALL ON FUNCTION public.reconcile_addon_refund_event",
+    );
+    expect(activation.indexOf("'listing_promotion:'")).toBeLessThan(
+      activation.indexOf("FOR UPDATE OF listing"),
+    );
+    expect(refund.indexOf("'listing_promotion:'")).toBeLessThan(
+      refund.indexOf("FOR UPDATE;"),
+    );
   });
 
   it("binds idempotency keys to the listing and requested operation", () => {

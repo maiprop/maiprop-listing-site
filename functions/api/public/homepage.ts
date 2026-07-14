@@ -42,8 +42,8 @@ const SECTIONS = [
   "auction-count",
 ] as const;
 const HOMEPAGE_CACHE_VERSION = "popular-location-live-v2";
-const FEATURED_CACHE_VERSION = "active-spotlight-v2";
-const FEATURED_CACHE_SECONDS = 5 * 60;
+const FEATURED_CACHE_VERSION = "active-spotlight-v3";
+const FEATURED_CACHE_SECONDS = 60;
 const HOMEPAGE_PRODUCER_TIMEOUT_MS = 4_500;
 const COUNTED_PROPERTY_TYPES = ["apartment", "land"] as const;
 const PRICE_INDEX_FALLBACK = [
@@ -303,7 +303,7 @@ async function publicHomepage(ctx: PublicApiCtx, requestUrl: URL): Promise<Respo
   }
   if (section === "auctions") {
     const auctionUrl = new URL("/api/public/auctions", requestUrl.origin);
-    auctionUrl.searchParams.set("limit", "60");
+    auctionUrl.searchParams.set("limit", "6");
     return publicAuctions(ctx, auctionUrl);
   }
 
@@ -318,6 +318,7 @@ async function publicHomepage(ctx: PublicApiCtx, requestUrl: URL): Promise<Respo
         edgeTtlSeconds: FEATURED_CACHE_SECONDS,
         browserTtlSeconds: FEATURED_CACHE_SECONDS,
         staleSeconds: FEATURED_CACHE_SECONDS,
+        staleFallbackSeconds: FEATURED_CACHE_SECONDS,
         producerTimeoutMs: HOMEPAGE_PRODUCER_TIMEOUT_MS,
       }
     : {

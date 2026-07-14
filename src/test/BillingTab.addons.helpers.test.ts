@@ -27,6 +27,15 @@ describe("billing add-on helpers", () => {
     expect(resolveAddonKey({ name: "Featured+Priority" })).toBe(
       "featured_priority_bundle",
     );
+    expect(resolveAddonKey({ name: "Spotlight" })).toBe(
+      "featured_listing",
+    );
+    expect(resolveAddonKey({ name: "Priority Rank" })).toBe(
+      "priority_placement",
+    );
+    expect(resolveAddonKey({ name: "Spotlight + Priority Rank" })).toBe(
+      "featured_priority_bundle",
+    );
     expect(resolveAddonKey({ name: "Extra Agent Seat" })).toBeNull();
     expect(resolveAddonKey({ name: "Market Intelligence", manual: true })).toBeNull();
     expect(resolveAddonKey({ name: "Custom onboarding" })).toBeNull();
@@ -51,7 +60,7 @@ describe("billing add-on helpers", () => {
     const secondRead = getAddonSectionsForParticipant("seller");
 
     expect(secondRead[0].category).toBe("Listing Promotions");
-    expect(secondRead[0].items[0].name).toBe("Featured Listing");
+    expect(secondRead[0].items[0].name).toBe("Spotlight");
   });
 
   it("exposes the same fixed-price promotion catalog to sellers, agents, and developers", () => {
@@ -66,9 +75,9 @@ describe("billing add-on helpers", () => {
       });
 
       expect(purchasable).toEqual([
-        { name: "Featured Listing", key: "featured_listing", price: "€39", unit: "/ 30 days" },
-        { name: "Priority Placement", key: "priority_placement", price: "€59", unit: "/ 30 days" },
-        { name: "Featured+Priority", key: "featured_priority_bundle", price: "€79", unit: "/ 30 days" },
+        { name: "Spotlight", key: "featured_listing", price: "€39", unit: "/ 30 days" },
+        { name: "Priority Rank", key: "priority_placement", price: "€59", unit: "/ 30 days" },
+        { name: "Spotlight + Priority Rank", key: "featured_priority_bundle", price: "€79", unit: "/ 30 days" },
       ]);
     }
   });

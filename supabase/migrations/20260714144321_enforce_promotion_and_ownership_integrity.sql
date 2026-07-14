@@ -180,6 +180,25 @@ AS $$
 DECLARE
   v_reconciled integer := 0;
 BEGIN
+  PERFORM pg_advisory_xact_lock(
+    hashtextextended('listing_promotion:' || candidate.listing_id::text, 0)
+  )
+  FROM (
+    SELECT DISTINCT allocation.listing_id
+    FROM public.listing_promotion_allocations AS allocation
+    JOIN public.billing_subscriptions AS subscription
+      ON subscription.id = allocation.billing_subscription_id
+    WHERE allocation.source_type = 'plan'
+      AND allocation.status = 'active'
+      AND (p_subscription_id IS NULL OR subscription.id = p_subscription_id)
+      AND (
+        subscription.current_period_end IS NULL
+        OR subscription.current_period_end <= statement_timestamp()
+        OR subscription.status NOT IN ('active', 'trialing', 'past_due')
+      )
+    ORDER BY allocation.listing_id
+  ) AS candidate;
+
   UPDATE public.listing_promotion_allocations AS allocation
   SET
     status = 'revoked',
@@ -245,6 +264,17 @@ DECLARE
   v_count integer;
 BEGIN
   PERFORM private.reconcile_plan_promotion_allocations(NULL);
+
+  PERFORM pg_advisory_xact_lock(
+    hashtextextended('listing_promotion:' || candidate.listing_id::text, 0)
+  )
+  FROM (
+    SELECT DISTINCT allocation.listing_id
+    FROM public.listing_promotion_allocations AS allocation
+    WHERE allocation.status = 'active'
+      AND allocation.ends_at <= statement_timestamp()
+    ORDER BY allocation.listing_id
+  ) AS candidate;
 
   UPDATE public.listing_promotion_allocations
   SET status = 'expired', updated_at = statement_timestamp()

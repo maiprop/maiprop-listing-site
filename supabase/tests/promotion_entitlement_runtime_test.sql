@@ -596,6 +596,11 @@ WHERE id = '40000000-0000-4000-8000-000000000003';
 
 SET LOCAL session_replication_role = origin;
 
+-- Private allowance helpers are service-owned. Mirror the Edge Function/RPC
+-- execution context so the scoped authoritative role lookup can resolve the
+-- fixture users without weakening its cross-user protections.
+SELECT set_config('request.jwt.claim.role', 'service_role', true);
+
 SELECT is(
   private.get_listing_promotion_plan_allowance(
     '10000000-0000-4000-8000-000000000003',
