@@ -7,6 +7,7 @@ import { getOwnerParticipantType } from "@/lib/participantConfig";
 import { CATALOG_STATIC_QUERY_STALE_TIME, USER_SCOPED_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 import { fetchPublicApi, isPublicApiAbort } from "@/lib/publicApi";
 import { getListingLocationSearchTokenGroups } from "@/lib/location/locationSearchSemantics";
+import { readInitialListingsPage } from "@/lib/homepageSnapshotCache";
 
 export {
   useCreateListing,
@@ -484,6 +485,31 @@ function shouldUsePublicListingsApi(filters?: ListingsFilters): boolean {
   return true;
 }
 
+function getDefaultCatalogueType(filters?: ListingsFilters): "sale" | "rent" | undefined {
+  if (filters?.listing_type !== "sale" && filters?.listing_type !== "rent") return undefined;
+
+  for (const [key, value] of Object.entries(filters)) {
+    if (value === undefined || value === null || value === "") continue;
+    if (Array.isArray(value) && value.length === 0) continue;
+    if (key === "listing_type") continue;
+    if (key === "sort" && value === "relevant") continue;
+    return undefined;
+  }
+
+  return filters.listing_type;
+}
+
+function getInitialListingsPlaceholder(filters?: ListingsFilters) {
+  const listingType = getDefaultCatalogueType(filters);
+  if (!listingType) return undefined;
+  const page = readInitialListingsPage<ListingWithJoins>(listingType);
+  if (!page) return undefined;
+  return {
+    pages: [page],
+    pageParams: [INITIAL_LISTINGS_PAGE_PARAM],
+  };
+}
+
 function publicListingsPath(filters: ListingsFilters | undefined, page: number, pageSize: number, offset?: number): string {
   const params = new URLSearchParams();
   params.set("page", String(page));
@@ -605,6 +631,7 @@ export const useListingsPaginated = (
   filters?: ListingsFilters,
   options?: UseListingsOptions,
 ) => {
+  const placeholderData = getInitialListingsPlaceholder(filters);
   return useInfiniteQuery({
     queryKey: ["listings-paginated", filters, { publicScope: Boolean(options?.publicScope) }],
     queryFn: ({ pageParam = INITIAL_LISTINGS_PAGE_PARAM, signal }) => {
@@ -629,6 +656,7 @@ export const useListingsPaginated = (
       };
     },
     initialPageParam: INITIAL_LISTINGS_PAGE_PARAM,
+    placeholderData,
     enabled: options?.enabled ?? true,
     staleTime: filters?.owner_id && !options?.publicScope ? USER_SCOPED_QUERY_STALE_TIME : CATALOG_STATIC_QUERY_STALE_TIME,
   });

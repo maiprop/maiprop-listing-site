@@ -8,6 +8,7 @@ const DEFAULT_EDGE_TTL_SECONDS = 120;
 const DEFAULT_BROWSER_TTL_SECONDS = 30;
 const DEFAULT_STALE_SECONDS = 300;
 const DEFAULT_STALE_FALLBACK_SECONDS = 30 * 60;
+const DEFAULT_CACHE_READ_TIMEOUT_MS = 100;
 const SUPABASE_FETCH_TIMEOUT_MS = 2500;
 const SUPABASE_TRANSIENT_STATUS_RETRIES = 2;
 const SUPABASE_TRANSIENT_RETRY_DELAY_MS = 50;
@@ -40,6 +41,7 @@ type CacheOptions = {
   staleSeconds?: number;
   staleFallbackSeconds?: number;
   producerTimeoutMs?: number;
+  cacheReadTimeoutMs?: number;
 };
 
 type SupabaseFetchOptions = {
@@ -118,6 +120,41 @@ function cacheProducerTimeoutMs(cache: CacheOptions): number | null {
   const timeout = cache.producerTimeoutMs;
   if (typeof timeout !== "number" || !Number.isFinite(timeout) || timeout <= 0) return null;
   return Math.max(100, Math.min(10_000, Math.floor(timeout)));
+}
+
+function cacheReadTimeoutMs(cache: CacheOptions): number {
+  const requested = cache.cacheReadTimeoutMs;
+  if (typeof requested !== "number" || !Number.isFinite(requested)) return DEFAULT_CACHE_READ_TIMEOUT_MS;
+  return Math.max(5, Math.min(1_000, Math.floor(requested)));
+}
+
+async function matchCacheWithinBudget(
+  cacheApi: Cache,
+  request: Request,
+  cache: CacheOptions,
+): Promise<Response | undefined> {
+  const timeoutMs = cacheReadTimeoutMs(cache);
+  const matchPromise = Promise.resolve()
+    .then(() => cacheApi.match(request))
+    .catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[public-api] cache read failed for ${request.url}: ${message}`);
+      return undefined;
+    });
+
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<undefined>((resolve) => {
+    timeoutId = setTimeout(() => {
+      console.warn(`[public-api] cache read exceeded ${timeoutMs}ms for ${request.url}`);
+      resolve(undefined);
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([matchPromise, timeoutPromise]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 }
 
 async function producerWithTimeout(producer: () => Promise<Response>, cache: CacheOptions): Promise<Response> {
@@ -223,8 +260,12 @@ function staleFallbackCacheSeconds(cache: CacheOptions): number {
   return Math.max(DEFAULT_STALE_FALLBACK_SECONDS, edgeTtl + stale);
 }
 
-async function matchStaleFallback(cacheApi: Cache, cacheKey: URL): Promise<Response | null> {
-  const stale = await cacheApi.match(new Request(staleCacheUrl(cacheKey).toString(), { method: "GET" }));
+async function matchStaleFallback(cacheApi: Cache, cacheKey: URL, cache: CacheOptions): Promise<Response | null> {
+  const stale = await matchCacheWithinBudget(
+    cacheApi,
+    new Request(staleCacheUrl(cacheKey).toString(), { method: "GET" }),
+    cache,
+  );
   if (!stale) return null;
   const headers = new Headers(stale.headers);
   headers.set("X-Maiprop-Cache", "STALE");
@@ -297,7 +338,7 @@ export async function cachedJson(
   const staleRequest = new Request(staleCacheUrl(cacheKey).toString(), { method: "GET" });
   const cacheSeedState: { promise: Promise<void> | null } = { promise: null };
   if (cacheApi) {
-    const hit = await cacheApi.match(cacheRequest);
+    const hit = await matchCacheWithinBudget(cacheApi, cacheRequest, cache);
     if (hit) {
       return cacheHeaderResponse(hit, "HIT");
     }
@@ -307,7 +348,7 @@ export async function cachedJson(
   const produceAndCache = async (): Promise<Response> => {
     const response = await producerWithTimeout(producer, cache);
     if (cacheApi && TRANSIENT_UPSTREAM_STATUSES.has(response.status)) {
-      const stale = await matchStaleFallback(cacheApi, cacheKey);
+      const stale = await matchStaleFallback(cacheApi, cacheKey, cache);
       if (stale) return stale;
     }
 
@@ -328,7 +369,7 @@ export async function cachedJson(
     return produceAndCache();
   }
 
-  const stale = await matchStaleFallback(cacheApi, cacheKey);
+  const stale = await matchStaleFallback(cacheApi, cacheKey, cache);
   if (stale) {
     let refresh = inflightCacheMisses.get(cacheId);
     if (!refresh) {

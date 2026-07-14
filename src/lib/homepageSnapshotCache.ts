@@ -17,6 +17,16 @@ type HomepageInitialPayload = {
   generatedAt: string;
   featured?: unknown[];
   openHouses?: unknown[];
+  saleListings?: InitialListingsPage<unknown>;
+  rentListings?: InitialListingsPage<unknown>;
+};
+
+export type InitialListingsPage<T> = {
+  data: T[];
+  hasMore: boolean;
+  page: 1;
+  pageSize: 12;
+  offset: 0;
 };
 
 declare global {
@@ -46,19 +56,37 @@ function readEmbeddedHomepagePayload(): HomepageInitialPayload | undefined {
   }
 }
 
-function readHomepageBootstrapSnapshot<T>(key: string): T | undefined {
+function readFreshBootstrapPayload(): HomepageInitialPayload | undefined {
   if (typeof window === "undefined") return undefined;
-  const section = getBootstrapSection(key);
-  if (!section) return undefined;
-
   const payload = window.__MAIPROP_HOMEPAGE_INITIAL__ ?? readEmbeddedHomepagePayload();
   if (!payload || payload.version !== HOMEPAGE_SNAPSHOT_VERSION) return undefined;
 
   const generatedAt = Date.parse(payload.generatedAt);
   if (!Number.isFinite(generatedAt) || Date.now() - generatedAt > BOOTSTRAP_MAX_AGE_MS) return undefined;
+  return payload;
+}
+
+function readHomepageBootstrapSnapshot<T>(key: string): T | undefined {
+  const section = getBootstrapSection(key);
+  if (!section) return undefined;
+
+  const payload = readFreshBootstrapPayload();
+  if (!payload) return undefined;
 
   const rows = payload[section];
   return Array.isArray(rows) ? rows as T : undefined;
+}
+
+export function readInitialListingsPage<T>(listingType: "sale" | "rent"): InitialListingsPage<T> | undefined {
+  const payload = readFreshBootstrapPayload();
+  if (!payload) return undefined;
+
+  const page = listingType === "sale" ? payload.saleListings : payload.rentListings;
+  if (!page || !Array.isArray(page.data)) return undefined;
+  if (page.page !== 1 || page.pageSize !== 12 || page.offset !== 0 || typeof page.hasMore !== "boolean") {
+    return undefined;
+  }
+  return page as InitialListingsPage<T>;
 }
 
 export function readHomepageSnapshot<T>(key: string, maxAgeMs = DEFAULT_MAX_AGE_MS): T | undefined {

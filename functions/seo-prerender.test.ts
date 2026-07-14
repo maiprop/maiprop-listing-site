@@ -342,6 +342,25 @@ describe("SEO Pages Functions", () => {
     expect(cacheApi?.put).toHaveBeenCalledTimes(1);
   });
 
+  it("serves the /listings app shell when edge cache and SEO reads stall", async () => {
+    installCache();
+    cacheApi?.match.mockImplementation(() => new Promise(() => undefined));
+    globalThis.fetch = vi.fn((): Promise<Response> => new Promise<Response>(() => undefined));
+
+    const started = Date.now();
+    const response = await Promise.race([
+      listingsRequest(makeCtx("https://portal.maiprop.co/listings?listing_type=sale")),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 1_000)),
+    ]);
+
+    expect(response).not.toBeNull();
+    expect(Date.now() - started).toBeLessThan(1_000);
+    expect(response?.status).toBe(200);
+    expect(response?.headers.get("X-Maiprop-Cache")).toBe("MISS");
+    expect(response?.headers.get("Server-Timing")).toContain('seo;desc="TIMEOUT"');
+    expect(await response?.text()).toContain('<div id="root"></div>');
+  });
+
   it("honors explicit /listings listing_type and includeAuctions query intent", async () => {
     await listingsRequest(makeCtx("https://portal.maiprop.co/listings?listing_type=rent"));
     expect(firstSupabaseRequestUrl().searchParams.get("listing_type")).toBe("eq.rent");
