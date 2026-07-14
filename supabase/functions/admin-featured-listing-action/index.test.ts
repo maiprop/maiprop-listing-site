@@ -6,7 +6,7 @@ type MockScenario = {
   user?: { id: string; email?: string | null };
   profile?: { role?: string | null; is_platform_admin?: boolean | null } | null;
   profileError?: string;
-  updateError?: string;
+  rpcError?: string;
   calls: Array<{ name: string; args?: unknown }>;
 };
 
@@ -18,7 +18,9 @@ declare global {
 const functionSource = await Deno.readTextFile(
   new URL("./index.ts", import.meta.url),
 );
-const tempDir = await Deno.makeTempDir({ prefix: "admin-featured-listing-action-test-" });
+const tempDir = await Deno.makeTempDir({
+  prefix: "admin-featured-listing-action-test-",
+});
 const mockClientPath = `${tempDir}/mockSupabase.ts`;
 const transformedPath = `${tempDir}/index.ts`;
 
@@ -44,6 +46,13 @@ export function createClient() {
         };
       },
     },
+    rpc: async (name: string, args: Record<string, unknown>) => {
+      scenario.calls.push({ name: "rpc", args: { name, args } });
+      if (scenario.rpcError) {
+        return { data: null, error: { message: scenario.rpcError } };
+      }
+      return { data: null, error: null };
+    },
     from: (table: string) => {
       scenario.calls.push({ name: "from", args: { table } });
       if (table === "profiles") {
@@ -65,22 +74,6 @@ export function createClient() {
                     };
                   },
                 };
-              },
-            };
-          },
-        };
-      }
-      if (table === "listings") {
-        return {
-          update: (values: Record<string, unknown>) => {
-            scenario.calls.push({ name: "listingUpdate", args: { values } });
-            return {
-              eq: async (column: string, value: string) => {
-                scenario.calls.push({ name: "listingEq", args: { column, value } });
-                if (scenario.updateError) {
-                  return { data: null, error: { message: scenario.updateError } };
-                }
-                return { data: null, error: null };
               },
             };
           },
@@ -148,7 +141,9 @@ Deno.test("anonymous Spotlight listing updates are rejected before DB writes", a
   assertEquals(body.error, "No authorization header");
   assertEquals(body.code, "unauthorized");
   assertEquals(
-    globalThis.__adminFeaturedListingScenario.calls.some((call) => call.name === "listingUpdate"),
+    globalThis.__adminFeaturedListingScenario.calls.some((call) =>
+      call.name === "listingUpdate"
+    ),
     false,
   );
 });
@@ -166,7 +161,9 @@ Deno.test("non-admin callers are forbidden before Spotlight listing updates", as
   assertEquals(body.error, "Platform admin only");
   assertEquals(body.code, "forbidden");
   assertEquals(
-    globalThis.__adminFeaturedListingScenario.calls.some((call) => call.name === "listingUpdate"),
+    globalThis.__adminFeaturedListingScenario.calls.some((call) =>
+      call.name === "listingUpdate"
+    ),
     false,
   );
 });
@@ -184,12 +181,14 @@ Deno.test("platform-admin flag without admin role is not enough for Spotlight li
   assertEquals(body.error, "Platform admin only");
   assertEquals(body.code, "forbidden");
   assertEquals(
-    globalThis.__adminFeaturedListingScenario.calls.some((call) => call.name === "listingUpdate"),
+    globalThis.__adminFeaturedListingScenario.calls.some((call) =>
+      call.name === "listingUpdate"
+    ),
     false,
   );
 });
 
-Deno.test("admin callers update only allowed Spotlight listing fields", async () => {
+Deno.test("admin callers route Spotlight and Priority updates through the ledger RPC", async () => {
   const id = validListingId();
   resetScenario({ profile: { role: "admin", is_platform_admin: false } });
 
@@ -206,23 +205,80 @@ Deno.test("admin callers update only allowed Spotlight listing fields", async ()
   assertEquals(res.status, 200);
   assertEquals(body, { ok: true });
   assertEquals(
-    globalThis.__adminFeaturedListingScenario.calls.some((call) =>
-      call.name === "listingUpdate" &&
-      JSON.stringify(call.args) === JSON.stringify({
-        values: {
-          is_featured: true,
-          priority_placement: 7,
-          featured_until: "2026-07-31T00:00:00.000Z",
+    globalThis.__adminFeaturedListingScenario.calls.filter((call) =>
+      call.name === "rpc"
+    ),
+    [
+      {
+        name: "rpc",
+        args: {
+          name: "admin_set_listing_promotion",
+          args: {
+            p_listing_id: id,
+            p_promotion_type: "spotlight",
+            p_enabled: true,
+            p_ends_at: "2026-07-31T00:00:00.000Z",
+            p_actor_id: "admin-user",
+          },
         },
-      })
-    ),
-    true,
+      },
+      {
+        name: "rpc",
+        args: {
+          name: "admin_set_listing_promotion",
+          args: {
+            p_listing_id: id,
+            p_promotion_type: "priority",
+            p_enabled: true,
+            p_ends_at: null,
+            p_actor_id: "admin-user",
+          },
+        },
+      },
+    ],
   );
+});
+
+Deno.test("admin callers can revoke Spotlight through the ledger RPC", async () => {
+  const id = validListingId();
+  resetScenario({ profile: { role: "admin" } });
+
+  const res = await handler(authedJson({
+    id,
+    updates: { is_featured: false },
+  }));
+
+  assertEquals(res.status, 200);
   assertEquals(
-    globalThis.__adminFeaturedListingScenario.calls.some((call) =>
-      call.name === "listingEq" &&
-      JSON.stringify(call.args) === JSON.stringify({ column: "id", value: id })
+    globalThis.__adminFeaturedListingScenario.calls.find((call) =>
+      call.name === "rpc"
     ),
-    true,
+    {
+      name: "rpc",
+      args: {
+        name: "admin_set_listing_promotion",
+        args: {
+          p_listing_id: id,
+          p_promotion_type: "spotlight",
+          p_enabled: false,
+          p_ends_at: null,
+          p_actor_id: "admin-user",
+        },
+      },
+    },
   );
+});
+
+Deno.test("ledger RPC errors preserve the existing API status mapping", async () => {
+  resetScenario({ profile: { role: "admin" }, rpcError: "listing_not_found" });
+
+  const res = await handler(authedJson({
+    id: validListingId(),
+    updates: { priority_placement: 5 },
+  }));
+  const body = await res.json();
+
+  assertEquals(res.status, 404);
+  assertEquals(body.error, "listing_not_found");
+  assertEquals(body.code, "not_found");
 });

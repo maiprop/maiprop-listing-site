@@ -874,8 +874,9 @@ AS $$
   END
 $$;
 
--- Preserve existing administrator-managed promotions as explicit 30-day admin
--- grants. Any non-admin orphaned projection is removed by the sync pass below.
+-- Preserve existing administrator-managed promotions and every other currently
+-- valid legacy projection as explicit admin grants, regardless of the listing
+-- owner's role. The sync pass below clears excluded stale projections.
 INSERT INTO public.listing_promotion_allocations (
   listing_id,
   owner_id,
@@ -892,12 +893,12 @@ SELECT
   'spotlight',
   'admin',
   'legacy-admin-spotlight:' || l.id::text,
-  now(),
+  LEAST(now(), COALESCE(l.featured_until - interval '30 days', now())),
   COALESCE(l.featured_until, now() + interval '30 days'),
   l.owner_id
 FROM public.listings l
 WHERE l.is_featured = true
-  AND public.has_platform_admin(l.owner_id)
+  AND (l.featured_until IS NULL OR l.featured_until > now())
 ON CONFLICT DO NOTHING;
 
 INSERT INTO public.listing_promotion_allocations (
@@ -916,12 +917,16 @@ SELECT
   'priority',
   'admin',
   'legacy-admin-priority:' || l.id::text,
-  now(),
+  LEAST(now(), COALESCE(
+      COALESCE(l.priority_until, l.featured_until) - interval '30 days',
+      now()
+    )),
   COALESCE(l.priority_until, l.featured_until, now() + interval '30 days'),
   l.owner_id
 FROM public.listings l
 WHERE l.priority_placement > 0
-  AND public.has_platform_admin(l.owner_id)
+  AND (COALESCE(l.priority_until, l.featured_until) IS NULL
+    OR COALESCE(l.priority_until, l.featured_until) > now())
 ON CONFLICT DO NOTHING;
 
 DO $$

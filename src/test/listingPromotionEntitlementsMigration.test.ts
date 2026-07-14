@@ -26,6 +26,22 @@ const rpcBoundaryMigration = readFileSync(
   "utf8",
 );
 
+const correctionMigration = readFileSync(
+  resolve(
+    process.cwd(),
+    "supabase/migrations/20260714122405_correct_promotion_entitlement_runtime.sql",
+  ),
+  "utf8",
+);
+
+function sqlSection(sql: string, start: string, end: string): string {
+  const startIndex = sql.indexOf(start);
+  const endIndex = sql.indexOf(end, startIndex + start.length);
+  expect(startIndex, `missing SQL section start: ${start}`).toBeGreaterThanOrEqual(0);
+  expect(endIndex, `missing SQL section end: ${end}`).toBeGreaterThan(startIndex);
+  return sql.slice(startIndex, endIndex);
+}
+
 describe("listing promotion entitlement migration", () => {
   it("uses a private fail-closed Stripe runtime configuration", () => {
     expect(runtimeMigration).toContain(
@@ -113,6 +129,26 @@ describe("listing promotion entitlement migration", () => {
     expect(migration).not.toContain("NEW.refund_status = 'full'");
   });
 
+  it("backfills every valid legacy projection without depending on owner role", () => {
+    const backfill = sqlSection(
+      migration,
+      "-- Preserve existing administrator-managed promotions",
+      "DO $$\nDECLARE",
+    );
+
+    expect(backfill).not.toContain("public.has_platform_admin(l.owner_id)");
+    expect(backfill).toContain(
+      "AND (l.featured_until IS NULL OR l.featured_until > now())",
+    );
+    expect(backfill).toContain(
+      "AND (COALESCE(l.priority_until, l.featured_until) IS NULL",
+    );
+    expect(backfill).toContain(
+      "OR COALESCE(l.priority_until, l.featured_until) > now())",
+    );
+    expect(backfill).toContain("LEAST(now(),");
+  });
+
   it("keeps public promotion RPCs invoker-safe while privileged writes stay private", () => {
     expect(rpcBoundaryMigration).toMatch(
       /ALTER FUNCTION public\.activate_listing_promotion\(uuid, text, text\)\s+SET SCHEMA private/,
@@ -132,6 +168,126 @@ describe("listing promotion entitlement migration", () => {
     );
     expect(rpcBoundaryMigration).toMatch(
       /GRANT EXECUTE ON FUNCTION private\.activate_listing_promotion\(uuid, text, text\)\s+TO authenticated, service_role/,
+    );
+  });
+
+  it("serializes allowance and request-key decisions across different listings", () => {
+    expect(correctionMigration).toContain("listing_promotion_plan:");
+    expect(correctionMigration).toContain("listing_promotion_request:");
+    expect(correctionMigration).toContain("v_cycle_start::text");
+    expect(correctionMigration).toContain("pg_advisory_xact_lock");
+  });
+
+  it("binds idempotency keys to the listing and requested operation", () => {
+    expect(correctionMigration).toContain("promotion_request_key_conflict");
+    expect(correctionMigration).toContain("v_expected_allocation_count");
+    expect(correctionMigration).toContain("bool_and(listing_id = p_listing_id)");
+    expect(correctionMigration).toContain(
+      "count(*) FILTER (WHERE promotion_type = 'spotlight')",
+    );
+    expect(correctionMigration).toContain(
+      "count(*) FILTER (WHERE promotion_type = 'priority')",
+    );
+  });
+
+  it("expires elapsed active rows synchronously before renewal inserts", () => {
+    const activation = sqlSection(
+      correctionMigration,
+      "CREATE OR REPLACE FUNCTION private.activate_listing_promotion",
+      "CREATE OR REPLACE FUNCTION private.revoke_refunded_listing_promotions",
+    );
+    const expiryUpdate = activation.indexOf("SET status = 'expired'");
+    const firstInsert = activation.indexOf(
+      "INSERT INTO public.listing_promotion_allocations",
+    );
+
+    expect(expiryUpdate).toBeGreaterThanOrEqual(0);
+    expect(firstInsert).toBeGreaterThan(expiryUpdate);
+    expect(activation).toContain("AND ends_at <= now()");
+  });
+
+  it("enforces one canonical listing per new-build project without unit allocations", () => {
+    expect(correctionMigration).toContain(
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_listings_one_per_project",
+    );
+    expect(correctionMigration).toContain(
+      "ON public.listings (project_id)\n  WHERE project_id IS NOT NULL",
+    );
+    expect(correctionMigration).toContain(
+      "Canonical new-build promotion target",
+    );
+    expect(correctionMigration).not.toContain("REFERENCES public.project_units");
+    expect(correctionMigration).not.toContain("INSERT INTO public.project_units");
+  });
+
+  it("reconciles partial and full promotion refunds by consumed request", () => {
+    expect(correctionMigration).toContain("GROUP BY request_key");
+    expect(correctionMigration).toContain("count(DISTINCT request_key)");
+    expect(correctionMigration).toContain("v_credits_to_revoke");
+    expect(correctionMigration).toContain("revoke_reason = 'stripe_refund'");
+    expect(correctionMigration).toContain(
+      "credits_consumed = GREATEST(credits_consumed - v_revoked_credit_count, 0)",
+    );
+    expect(correctionMigration).toContain(
+      "GREATEST(NEW.credits_refunded, OLD.credits_refunded)",
+    );
+  });
+
+  it("backfills and constrains runtime_mode against livemode on consumed ledgers", () => {
+    expect(correctionMigration).toContain(
+      "billing_subscriptions_runtime_livemode_consistent",
+    );
+    expect(correctionMigration).toContain(
+      "addon_purchases_runtime_livemode_consistent",
+    );
+    expect(correctionMigration).toContain(
+      "runtime_mode = CASE WHEN livemode THEN 'live' ELSE 'test' END",
+    );
+    expect(correctionMigration).toContain(
+      "CHECK ((runtime_mode = 'live') = livemode) NOT VALID",
+    );
+    expect(correctionMigration).toContain("VALIDATE CONSTRAINT");
+  });
+
+  it("records only the subscription that satisfies the allowance predicates", () => {
+    const activation = sqlSection(
+      correctionMigration,
+      "CREATE OR REPLACE FUNCTION private.activate_listing_promotion",
+      "CREATE OR REPLACE FUNCTION private.revoke_refunded_listing_promotions",
+    );
+
+    expect(activation).toContain(
+      "(v_role::text = 'seller' AND bs.plan_key = 'pro')",
+    );
+    expect(activation).toContain(
+      "(v_role::text = 'agent' AND bs.plan_key = 'agent_basic')",
+    );
+    expect(activation).toContain(
+      "(v_role::text = 'developer' AND bs.plan_key = 'developer_pro')",
+    );
+    expect(activation).toContain(
+      "p.subscription_product_id IS NULL\n      OR bs.stripe_product_id = p.subscription_product_id",
+    );
+  });
+
+  it("keeps the admin RPC as an invoker wrapper over a private implementation", () => {
+    expect(correctionMigration).toMatch(
+      /CREATE OR REPLACE FUNCTION private\.admin_set_listing_promotion[\s\S]*?SECURITY DEFINER/,
+    );
+    expect(correctionMigration).toMatch(
+      /CREATE OR REPLACE FUNCTION public\.admin_set_listing_promotion[\s\S]*?SECURITY INVOKER/,
+    );
+    expect(correctionMigration).toMatch(
+      /REVOKE ALL ON FUNCTION private\.admin_set_listing_promotion[\s\S]*?FROM PUBLIC, anon, authenticated/,
+    );
+    expect(correctionMigration).toMatch(
+      /GRANT EXECUTE ON FUNCTION private\.admin_set_listing_promotion[\s\S]*?TO service_role/,
+    );
+  });
+
+  it("keeps private projection sync explicitly callable by service operations", () => {
+    expect(correctionMigration).toMatch(
+      /GRANT EXECUTE ON FUNCTION private\.sync_listing_promotion_projection\(uuid\)\s+TO service_role/,
     );
   });
 });
