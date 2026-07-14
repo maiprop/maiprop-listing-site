@@ -6,6 +6,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 const fromMock = vi.fn();
 const publicApiMock = vi.fn();
 const publicAbortMock = vi.fn(() => false);
+const initialListingsPageMock = vi.fn();
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
@@ -16,6 +17,10 @@ vi.mock("@/integrations/supabase/client", () => ({
 vi.mock("@/lib/publicApi", () => ({
   fetchPublicApi: (...args: unknown[]) => publicApiMock(...args),
   isPublicApiAbort: (...args: unknown[]) => publicAbortMock(...args),
+}));
+
+vi.mock("@/lib/homepageSnapshotCache", () => ({
+  readInitialListingsPage: (...args: unknown[]) => initialListingsPageMock(...args),
 }));
 
 vi.mock("@/contexts/AuthContext", () => ({
@@ -58,6 +63,8 @@ beforeEach(() => {
   publicApiMock.mockReset();
   publicAbortMock.mockReset();
   publicAbortMock.mockReturnValue(false);
+  initialListingsPageMock.mockReset();
+  initialListingsPageMock.mockReturnValue(undefined);
 });
 
 describe("public listings API fallback behavior", () => {
@@ -192,6 +199,89 @@ describe("public listings API fallback behavior", () => {
     expect(publicApiMock.mock.calls[1][0]).toContain("pageSize=28");
     expect(publicApiMock.mock.calls[1][0]).toContain("offset=12");
     expect(nextFetchLength).toBe(40);
+  });
+
+  it("paints an unfiltered sale snapshot immediately while refreshing it from the public API", async () => {
+    let resolveApi: ((value: unknown) => void) | undefined;
+    publicApiMock.mockReturnValue(new Promise((resolve) => {
+      resolveApi = resolve;
+    }));
+    initialListingsPageMock.mockReturnValue({
+      data: [{ id: "snapshot-sale", owner_id: null, listing_images: [] }],
+      hasMore: false,
+      page: 1,
+      pageSize: 12,
+      offset: 0,
+    });
+
+    const { result } = renderHookWithQuery(() => useListingsPaginated({ listing_type: "sale" }));
+
+    expect(result.current.data?.pages[0]?.data).toEqual([
+      expect.objectContaining({ id: "snapshot-sale" }),
+    ]);
+    expect(result.current.isPlaceholderData).toBe(true);
+    expect(publicApiMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveApi?.({
+        data: [{ id: "live-sale", owner_id: null, listing_images: [] }],
+        hasMore: false,
+        page: 1,
+        pageSize: 12,
+        offset: 0,
+      });
+    });
+    await waitFor(() => expect(result.current.isPlaceholderData).toBe(false));
+    expect(result.current.data?.pages[0]?.data).toEqual([
+      expect.objectContaining({ id: "live-sale" }),
+    ]);
+  });
+
+  it("keeps loading when the embedded catalogue is empty until the live query resolves", () => {
+    publicApiMock.mockReturnValue(new Promise(() => undefined));
+    initialListingsPageMock.mockReturnValue({
+      data: [],
+      hasMore: false,
+      page: 1,
+      pageSize: 12,
+      offset: 0,
+    });
+
+    const { result } = renderHookWithQuery(() => useListingsPaginated({ listing_type: "rent" }));
+
+    expect(result.current.isLoading).toBe(true);
+    expect(result.current.isPlaceholderData).toBe(false);
+    expect(result.current.data).toBeUndefined();
+    expect(publicApiMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("never applies the default catalogue snapshot to a filtered search", async () => {
+    initialListingsPageMock.mockReturnValue({
+      data: [{ id: "wrong-city", owner_id: null, listing_images: [] }],
+      hasMore: false,
+      page: 1,
+      pageSize: 12,
+      offset: 0,
+    });
+    publicApiMock.mockResolvedValue({
+      data: [{ id: "athens-only", owner_id: null, listing_images: [] }],
+      hasMore: false,
+      page: 1,
+      pageSize: 12,
+      offset: 0,
+    });
+
+    const { result } = renderHookWithQuery(() => useListingsPaginated({
+      listing_type: "sale",
+      city: "Athens",
+    }));
+
+    expect(result.current.data).toBeUndefined();
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(initialListingsPageMock).not.toHaveBeenCalled();
+    expect(result.current.data?.pages[0]?.data).toEqual([
+      expect.objectContaining({ id: "athens-only" }),
+    ]);
   });
 
   it("preserves direct Supabase reads for owner-scoped listing data", async () => {

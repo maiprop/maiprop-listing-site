@@ -12,10 +12,12 @@ type EdgeCache = {
   put(request: Request, response: Response): Promise<void>;
 };
 
-const LISTINGS_HTML_CACHE_VERSION = "listings-html-v1";
+const LISTINGS_HTML_CACHE_VERSION = "listings-html-v2-bounded-upstream";
 const LISTINGS_HTML_BROWSER_TTL_SECONDS = 60;
 const LISTINGS_HTML_EDGE_TTL_SECONDS = 300;
 const LISTINGS_HTML_STALE_SECONDS = 600;
+const LISTINGS_HTML_CACHE_READ_BUDGET_MS = 100;
+const LISTINGS_HTML_SEO_BUDGET_MS = 350;
 const CACHE_KEY_SEARCH_PARAMS = ["city", "includeAuctions", "listing_type", "price_min", "type"] as const;
 
 function nowMs(): number {
@@ -81,6 +83,58 @@ function withCacheHitHeaders(cached: Response, serverTiming: string): Response {
   });
 }
 
+async function matchEdgeCacheWithinBudget(
+  cache: EdgeCache,
+  request: Request,
+): Promise<{ response?: Response; timedOut: boolean }> {
+  const matchPromise = Promise.resolve()
+    .then(() => cache.match(request))
+    .then((response) => ({ response, timedOut: false }))
+    .catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[listings] Edge HTML cache read failed: ${message}`);
+      return { response: undefined, timedOut: false };
+    });
+
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<{ response?: Response; timedOut: boolean }>((resolve) => {
+    timeoutId = setTimeout(
+      () => resolve({ response: undefined, timedOut: true }),
+      LISTINGS_HTML_CACHE_READ_BUDGET_MS,
+    );
+  });
+
+  try {
+    return await Promise.race([matchPromise, timeoutPromise]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
+async function withinSeoBudget<T>(
+  timings: string[],
+  work: Promise<T>,
+  fallback: T,
+): Promise<T> {
+  const started = nowMs();
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<{ value: T; timedOut: boolean }>((resolve) => {
+    timeoutId = setTimeout(
+      () => resolve({ value: fallback, timedOut: true }),
+      LISTINGS_HTML_SEO_BUDGET_MS,
+    );
+  });
+  const workPromise = work.then((value) => ({ value, timedOut: false }));
+
+  try {
+    const result = await Promise.race([workPromise, timeoutPromise]);
+    timings.push(timingMetric("seo", nowMs() - started, result.timedOut ? "TIMEOUT" : undefined));
+    return result.value;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
 export const onRequestGet: PagesFunction<SeoEnv> = async (ctx) => {
   const started = nowMs();
   const timings: string[] = [];
@@ -90,10 +144,11 @@ export const onRequestGet: PagesFunction<SeoEnv> = async (ctx) => {
 
   if (cache) {
     const cacheStarted = nowMs();
-    const cached = await cache.match(cacheRequest);
-    const cacheTiming = timingMetric("cache", nowMs() - cacheStarted, cached ? "HIT" : "MISS");
-    if (cached) {
-      return withCacheHitHeaders(cached, [cacheTiming, timingMetric("total", nowMs() - started)].join(", "));
+    const cacheResult = await matchEdgeCacheWithinBudget(cache, cacheRequest);
+    const cacheState = cacheResult.timedOut ? "TIMEOUT" : cacheResult.response ? "HIT" : "MISS";
+    const cacheTiming = timingMetric("cache", nowMs() - cacheStarted, cacheState);
+    if (cacheResult.response) {
+      return withCacheHitHeaders(cacheResult.response, [cacheTiming, timingMetric("total", nowMs() - started)].join(", "));
     }
     timings.push(cacheTiming);
   } else {
@@ -101,11 +156,12 @@ export const onRequestGet: PagesFunction<SeoEnv> = async (ctx) => {
   }
 
   const indexPromise = timed(timings, "index", () => fetchIndexHtml(ctx));
-  const listingsPromise = timed(timings, "seo", () => fetchListingPage(ctx.env, requestUrl)).catch((error) => {
+  const listingsWork = fetchListingPage(ctx.env, requestUrl).catch((error) => {
     const message = error instanceof Error ? error.message : String(error);
     console.warn(`[listings] SEO listing fetch failed: ${message}`);
     return [];
   });
+  const listingsPromise = withinSeoBudget(timings, listingsWork, []);
 
   const index = await indexPromise;
   if (!index.ok) return index;

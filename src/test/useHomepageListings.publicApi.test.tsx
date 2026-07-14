@@ -29,6 +29,7 @@ import {
 } from "@/hooks/useHomepageListings";
 import {
   HOMEPAGE_FEATURED_SNAPSHOT_KEY,
+  readInitialListingsPage,
   readHomepageSnapshot,
   writeHomepageSnapshot,
 } from "@/lib/homepageSnapshotCache";
@@ -63,6 +64,31 @@ beforeEach(() => {
 });
 
 describe("homepage public API fallback behavior", () => {
+  it("reads a fresh sale catalogue page from the embedded deployment payload", () => {
+    (window as Window & { __MAIPROP_HOMEPAGE_INITIAL__?: unknown }).__MAIPROP_HOMEPAGE_INITIAL__ = {
+      version: 1,
+      generatedAt: new Date(Date.now() - 60_000).toISOString(),
+      featured: [],
+      openHouses: [],
+      saleListings: {
+        data: [{ id: "embedded-sale" }],
+        hasMore: true,
+        page: 1,
+        pageSize: 12,
+        offset: 0,
+      },
+    };
+
+    expect(readInitialListingsPage<{ id: string }>("sale")).toEqual({
+      data: [{ id: "embedded-sale" }],
+      hasMore: true,
+      page: 1,
+      pageSize: 12,
+      offset: 0,
+    });
+    expect(readInitialListingsPage("rent")).toBeUndefined();
+  });
+
   it("uses embedded deploy payload for cold first paint when local snapshots are absent", async () => {
     publicApiMock.mockReturnValue(new Promise(() => undefined));
     (window as Window & { __MAIPROP_HOMEPAGE_INITIAL__?: unknown }).__MAIPROP_HOMEPAGE_INITIAL__ = {

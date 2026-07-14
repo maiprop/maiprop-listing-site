@@ -34,21 +34,48 @@ describe("live operational smoke workflow", () => {
   });
 
   it("asserts the current non-consuming live quota UI contract", () => {
-    expect(liveAiQuotaSpec).toContain("expectedTierStatus");
-    expect(liveAiQuotaSpec).toContain("AI Nearby Places requests");
-    expect(liveAiQuotaSpec).toContain("Neighbourhood Report requests");
-    expect(liveAiQuotaSpec).toContain("Free:\\s*5\\/month\\.\\s*Pro:\\s*50\\/month\\.");
+    expect(liveAiQuotaSpec).toContain("minimumLimit");
+    expect(liveAiQuotaSpec).toContain("quotaSnapshot");
+    expect(liveAiQuotaSpec).toContain('"property-valuation"');
+    expect(liveAiQuotaSpec).toContain('"neighbourhood-report"');
+    expect(liveAiQuotaSpec).toContain('"property-pois"');
+    expect(liveAiQuotaSpec).toContain("ai-quota-status");
+    expect(liveAiQuotaSpec).toContain("AI request allowance will be checked before loading");
+    expect(liveAiQuotaSpec).toContain("expect(after).toEqual(before)");
+    expect(liveAiQuotaSpec).not.toContain("AI Nearby Places requests");
+    expect(liveAiQuotaSpec).not.toContain("Neighbourhood Report requests");
     expect(liveAiQuotaSpec).not.toContain("AI insight requests remaining this month");
   });
 
-  it("repairs seeded live role data before running the role matrix", () => {
+  it("keeps live role navigation aligned with the consolidated CRM destination", () => {
+    expect(liveRoleTierMatrixSpec).toContain(
+      "expectedNav: [/Analytics/i, /Data Input/i, /CRM/i]",
+    );
+    expect(liveRoleTierMatrixSpec).toContain(
+      "expectedNav: [/Projects/i, /Portfolios/i, /Analytics/i, /CRM/i]",
+    );
+    expect(liveRoleTierMatrixSpec).not.toContain(
+      "expectedNav: [/Analytics/i, /Data Input/i, /Leads/i, /Contacts/i]",
+    );
+    expect(liveRoleTierMatrixSpec).not.toContain(
+      "expectedNav: [/Projects/i, /Portfolios/i, /Analytics/i, /Contacts/i]",
+    );
+  });
+
+  it("repairs seeded live accounts before login-dependent smoke tests", () => {
+    const serviceRoleIndex = workflow.indexOf("Validate Supabase service role key");
     const repairIndex = workflow.indexOf("Repair live demo role matrix");
+    const aiSmokeIndex = workflow.indexOf("Run non-consuming AI quota smoke");
     const authPreflightIndex = workflow.indexOf("Validate live demo account sign-in");
     const matrixIndex = workflow.indexOf("Run role and tier matrix smoke");
 
+    expect(serviceRoleIndex).toBeGreaterThan(-1);
     expect(repairIndex).toBeGreaterThan(-1);
+    expect(aiSmokeIndex).toBeGreaterThan(-1);
     expect(authPreflightIndex).toBeGreaterThan(-1);
     expect(matrixIndex).toBeGreaterThan(-1);
+    expect(serviceRoleIndex).toBeLessThan(repairIndex);
+    expect(repairIndex).toBeLessThan(aiSmokeIndex);
     expect(repairIndex).toBeLessThan(authPreflightIndex);
     expect(authPreflightIndex).toBeLessThan(matrixIndex);
     expect(repairIndex).toBeLessThan(matrixIndex);

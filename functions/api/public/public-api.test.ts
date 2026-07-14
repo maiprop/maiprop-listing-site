@@ -460,6 +460,28 @@ describe("public API cache helpers", () => {
     }
   });
 
+  it("bypasses a stalled edge-cache read instead of blocking the producer", async () => {
+    cacheApi.match.mockImplementation(() => new Promise(() => undefined));
+
+    const pending = cachedJson(
+      makeCtx("https://portal.maiprop.co/api/public/open-houses?cache-read-timeout=1"),
+      new URL("https://portal.maiprop.co/api/public/open-houses?cache-read-timeout=1"),
+      async () => jsonResponse({ ok: true }),
+      { cacheReadTimeoutMs: 5, producerTimeoutMs: 100 },
+    );
+
+    const result = await Promise.race([
+      pending.then(async (res) => ({
+        status: res.status,
+        cache: res.headers.get("X-Maiprop-Cache"),
+        body: await res.json(),
+      })),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 150)),
+    ]);
+
+    expect(result).toEqual({ status: 200, cache: "MISS", body: { ok: true } });
+  });
+
   it("serves stale public cache instead of 503 when Supabase is transiently unavailable", async () => {
     const first = await openHousesRequest(makeCtx("https://portal.maiprop.co/api/public/open-houses?limit=2"));
     expect(first.headers.get("X-Maiprop-Cache")).toBe("MISS");
@@ -1226,7 +1248,7 @@ describe("public homepage endpoint", () => {
     expect(jsonBodyFor("/rest/v1/rpc/get_public_profile_summaries")).toEqual({ p_user_ids: ["owner-1", "owner-2"] });
     const featuredCacheKey = new URL(cacheApi.put.mock.calls[0][0].url);
     expect(featuredCacheKey.searchParams.get("day")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(featuredCacheKey.searchParams.get("v")).toBe("featured-card-v7-profile-flags");
+    expect(featuredCacheKey.searchParams.get("v")).toBe("featured-card-v8-bounded-cache");
     expect(featured.headers.get("Cache-Control")).toBe("public, max-age=300, stale-while-revalidate=300");
     expect(featured.headers.get("CDN-Cache-Control")).toBe("public, max-age=300, stale-while-revalidate=300");
 

@@ -10,11 +10,13 @@ const DEFAULT_FETCH_TIMEOUT_MS = 10_000;
 const DEFAULT_FETCH_ATTEMPTS = 2;
 const MAX_FEATURED_ROWS = 4;
 const MAX_OPEN_HOUSE_ROWS = 4;
+const INITIAL_CATALOGUE_ROWS = 12;
 const MAX_IMAGES_PER_ROW = 2;
-const MAX_PAYLOAD_BYTES = 16_000;
+const MAX_PAYLOAD_BYTES = 64_000;
 
 const CARD_FIELDS = [
   "id",
+  "created_at",
   "title",
   "address",
   "city",
@@ -37,12 +39,25 @@ const CARD_FIELDS = [
   "ai_score",
   "views_count",
   "tags",
+  "has_video_tour",
+  "has_virtual_tour",
+  "is_featured",
+  "priority_placement",
   "is_pre_sale",
   "construction_status",
+  "walkability_score",
+  "safety_score",
+  "noise_score",
   "latitude",
   "longitude",
   "region",
   "cover_image_url",
+  "has_parking",
+  "has_pool",
+  "has_elevator",
+  "has_garden",
+  "has_smart_home",
+  "ownerParticipantType",
 ];
 
 function safeJsonForHtml(value) {
@@ -123,11 +138,23 @@ function cleanProjectUnits(value) {
 function cleanProjectSummary(value) {
   if (!isRecord(value)) return undefined;
   const project = {};
+  const name = cleanScalar(value.name);
   const deliveryDate = cleanScalar(value.delivery_date);
   const projectUnits = cleanProjectUnits(value.project_units);
+  if (name !== undefined) project.name = name;
   if (deliveryDate !== undefined) project.delivery_date = deliveryDate;
   if (projectUnits !== undefined) project.project_units = projectUnits;
   return Object.keys(project).length ? project : undefined;
+}
+
+function cleanPublicProfile(value) {
+  if (!isRecord(value)) return undefined;
+  const profile = {};
+  for (const key of ["user_id", "display_name", "avatar_url"]) {
+    const scalar = cleanScalar(value[key]);
+    if (scalar !== undefined) profile[key] = scalar;
+  }
+  return Object.keys(profile).length ? profile : undefined;
 }
 
 export function sanitizeHomepageRow(row) {
@@ -155,6 +182,9 @@ export function sanitizeHomepageRow(row) {
   const project = cleanProjectSummary(row.project ?? row.projects);
   if (project !== undefined) cleaned.project = project;
 
+  const profile = cleanPublicProfile(row.profiles);
+  if (profile !== undefined) cleaned.profiles = profile;
+
   return cleaned;
 }
 
@@ -181,8 +211,13 @@ async function fetchJsonOnceWithTimeout(url, fetchImpl, timeoutMs) {
       signal: controller.signal,
     });
     const contentType = response.headers.get("content-type") ?? "";
+    const cacheState = response.headers.get("x-maiprop-cache")?.toUpperCase() ?? "";
+    const warning = response.headers.get("warning") ?? "";
     if (response.status === 429 || response.status >= 500) {
       throw new Error(`Transient HTTP ${response.status} from ${url}`);
+    }
+    if (cacheState.startsWith("STALE") || /(?:^|\s)110(?:\s|-)/.test(warning)) {
+      throw new Error(`Stale cache response from ${url}`);
     }
     if (!response.ok || !contentType.includes("application/json")) return null;
     return response.json();
@@ -240,15 +275,65 @@ async function fetchFeaturedListingsFallback(origin, limit, fetchImpl, fetchOpti
   }
 }
 
+function sanitizeListingsPage(value) {
+  if (!isRecord(value) || !Array.isArray(value.data)) return undefined;
+  return {
+    data: value.data
+      .map(sanitizeHomepageRow)
+      .filter(Boolean)
+      .slice(0, INITIAL_CATALOGUE_ROWS),
+    hasMore: value.hasMore === true || value.data.length > INITIAL_CATALOGUE_ROWS,
+    page: 1,
+    pageSize: INITIAL_CATALOGUE_ROWS,
+    offset: 0,
+  };
+}
+
+async function fetchInitialListingsPage(origin, listingType, fetchImpl, fetchOptions) {
+  const catalogueFetchOptions = {
+    attempts: 1,
+    timeoutMs: Math.min(fetchOptions?.timeoutMs ?? fetchTimeoutMs(), 5_000),
+  };
+  const canonicalUrl = new URL("/api/public/listings", origin);
+  canonicalUrl.searchParams.set("page", "1");
+  canonicalUrl.searchParams.set("pageSize", String(INITIAL_CATALOGUE_ROWS));
+  canonicalUrl.searchParams.set("offset", "0");
+  canonicalUrl.searchParams.set("listing_type", listingType);
+  canonicalUrl.searchParams.set("sort", "relevant");
+
+  try {
+    const json = await fetchJsonWithTimeout(canonicalUrl, fetchImpl, catalogueFetchOptions);
+    return sanitizeListingsPage(json);
+  } catch (canonicalError) {
+    const compatibilityUrl = new URL("/api/public/listings", origin);
+    compatibilityUrl.searchParams.set("page", "1");
+    compatibilityUrl.searchParams.set("limit", "40");
+    compatibilityUrl.searchParams.set("listing_type", listingType);
+    compatibilityUrl.searchParams.set("sort", "relevant");
+
+    try {
+      const json = await fetchJsonWithTimeout(compatibilityUrl, fetchImpl, catalogueFetchOptions);
+      return sanitizeListingsPage(json);
+    } catch (compatibilityError) {
+      console.warn(
+        `[homepage-initial] Could not fetch ${listingType} catalogue bootstrap: ${canonicalError.message}; compatibility fallback: ${compatibilityError.message}`,
+      );
+      return undefined;
+    }
+  }
+}
+
 export async function buildHomepageInitialPayload({
   origin = DEFAULT_ORIGIN,
   now = new Date(),
   fetchImpl = globalThis.fetch,
   fetchOptions,
 } = {}) {
-  let [featured, openHouses] = await Promise.all([
+  let [featured, openHouses, saleListings, rentListings] = await Promise.all([
     fetchHomepageSection(origin, "featured", MAX_FEATURED_ROWS, fetchImpl, fetchOptions),
     fetchHomepageSection(origin, "open-houses", MAX_OPEN_HOUSE_ROWS, fetchImpl, fetchOptions),
+    fetchInitialListingsPage(origin, "sale", fetchImpl, fetchOptions),
+    fetchInitialListingsPage(origin, "rent", fetchImpl, fetchOptions),
   ]);
 
   if (featured.length === 0) {
@@ -260,6 +345,8 @@ export async function buildHomepageInitialPayload({
     generatedAt: now.toISOString(),
     featured,
     openHouses,
+    saleListings,
+    rentListings,
   };
 }
 
@@ -305,7 +392,7 @@ async function main() {
   }
   const result = await injectHomepageInitialPayload({ payload });
   console.log(
-    `[homepage-initial] Injected ${payload.featured.length} featured and ${payload.openHouses.length} open-house rows into ${result.indexPath} (${result.payloadBytes} bytes).`,
+    `[homepage-initial] Injected ${payload.featured.length} featured, ${payload.openHouses.length} open-house, ${payload.saleListings?.data.length ?? 0} sale, and ${payload.rentListings?.data.length ?? 0} rent rows into ${result.indexPath} (${result.payloadBytes} bytes).`,
   );
 }
 

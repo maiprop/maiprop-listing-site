@@ -150,7 +150,7 @@ const accountCases: AccountCase[] = [
       "/dashboard?tab=billing",
     ],
     gatedModules: ["/admin", "/projects", "/listings/new-building"],
-    expectedNav: [/Analytics/i, /Data Input/i, /Leads/i, /Contacts/i],
+    expectedNav: [/Analytics/i, /Data Input/i, /CRM/i],
   },
   {
     label: "developer pro",
@@ -170,7 +170,7 @@ const accountCases: AccountCase[] = [
       "/dashboard?tab=billing",
     ],
     gatedModules: ["/admin", "/investor-dashboard"],
-    expectedNav: [/Projects/i, /Portfolios/i, /Analytics/i, /Contacts/i],
+    expectedNav: [/Projects/i, /Portfolios/i, /Analytics/i, /CRM/i],
   },
   {
     label: "investor private",

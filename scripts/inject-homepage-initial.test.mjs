@@ -36,6 +36,20 @@ describe("homepage initial payload injection", () => {
             address: "1 Main St",
             price: 250000,
             sqm: 72,
+            is_featured: true,
+            priority_placement: 2,
+            has_pool: true,
+            ownerParticipantType: "agent",
+            profiles: {
+              user_id: "public-owner-1",
+              display_name: "Public Agent",
+              avatar_url: "https://images.example/agent.jpg",
+              private_phone: "+30 000",
+            },
+            project: {
+              name: "Public Project Name",
+              delivery_date: "2027-03-01",
+            },
             owner_id: "must-not-ship",
             description: "too large",
             private_note: "nope",
@@ -77,6 +91,19 @@ describe("homepage initial payload injection", () => {
           address: "1 Main St",
           price: 250000,
           sqm: 72,
+          is_featured: true,
+          priority_placement: 2,
+          has_pool: true,
+          ownerParticipantType: "agent",
+          profiles: {
+            user_id: "public-owner-1",
+            display_name: "Public Agent",
+            avatar_url: "https://images.example/agent.jpg",
+          },
+          project: {
+            name: "Public Project Name",
+            delivery_date: "2027-03-01",
+          },
           listing_images: [{ url: "https://images.example/1.jpg", sort_order: 0 }],
         },
       ],
@@ -92,7 +119,169 @@ describe("homepage initial payload injection", () => {
     });
     expect(JSON.stringify(payload)).not.toContain("owner_id");
     expect(JSON.stringify(payload)).not.toContain("private_note");
+    expect(JSON.stringify(payload)).not.toContain("private_phone");
     expect(JSON.stringify(payload).length).toBeLessThan(16_000);
+  });
+
+  it("prefetches the exact default sale and rent first pages for instant catalogue paint", async () => {
+    const requestedUrls = [];
+    const fetchImpl = vi.fn(async (url) => {
+      const parsed = new URL(String(url));
+      requestedUrls.push(parsed);
+
+      if (parsed.pathname === "/api/public/homepage") {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
+      if (parsed.pathname === "/api/public/listings") {
+        const listingType = parsed.searchParams.get("listing_type");
+        return new Response(JSON.stringify({
+          data: listingType === "sale"
+            ? [{ id: "sale-1", title: "Sale Home", city: "Athens", owner_id: "private" }]
+            : [{ id: "rent-1", title: "Rental Home", city: "Piraeus", owner_id: "private" }],
+          hasMore: listingType === "sale",
+          page: 1,
+          pageSize: 12,
+          offset: 0,
+        }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
+      return new Response("not found", { status: 404 });
+    });
+
+    const payload = await buildHomepageInitialPayload({
+      origin: "https://portal.maiprop.co",
+      now: new Date("2026-07-01T10:00:00.000Z"),
+      fetchImpl,
+      fetchOptions: { attempts: 1, timeoutMs: 1_000 },
+    });
+
+    const catalogueRequests = requestedUrls.filter((url) =>
+      url.pathname === "/api/public/listings" && url.searchParams.has("listing_type"));
+    expect(catalogueRequests).toHaveLength(2);
+    for (const url of catalogueRequests) {
+      expect(url.searchParams.get("page")).toBe("1");
+      expect(url.searchParams.get("pageSize")).toBe("12");
+      expect(url.searchParams.get("offset")).toBe("0");
+      expect(url.searchParams.get("sort")).toBe("relevant");
+    }
+    expect(catalogueRequests.map((url) => url.searchParams.get("listing_type")).sort()).toEqual(["rent", "sale"]);
+    expect(payload.saleListings).toEqual({
+      data: [{ id: "sale-1", title: "Sale Home", city: "Athens" }],
+      hasMore: true,
+      page: 1,
+      pageSize: 12,
+      offset: 0,
+    });
+    expect(payload.rentListings).toEqual({
+      data: [{ id: "rent-1", title: "Rental Home", city: "Piraeus" }],
+      hasMore: false,
+      page: 1,
+      pageSize: 12,
+      offset: 0,
+    });
+    expect(JSON.stringify(payload)).not.toContain("owner_id");
+  });
+
+  it("uses the compatible catalogue contract when the canonical first-page key is unavailable", async () => {
+    const fallbackRequests = [];
+    const fetchImpl = vi.fn(async (url) => {
+      const parsed = new URL(String(url));
+      if (parsed.pathname === "/api/public/homepage") {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
+      if (parsed.pathname === "/api/public/listings" && parsed.searchParams.has("listing_type")) {
+        if (parsed.searchParams.has("pageSize")) {
+          return new Response(JSON.stringify({ error: "cache path unavailable" }), {
+            status: 503,
+            headers: { "content-type": "application/json" },
+          });
+        }
+
+        fallbackRequests.push(parsed);
+        const listingType = parsed.searchParams.get("listing_type");
+        const data = listingType === "sale"
+          ? Array.from({ length: 13 }, (_, index) => ({
+            id: `sale-${index + 1}`,
+            title: `Sale ${index + 1}`,
+            city: "Athens",
+          }))
+          : [];
+        return new Response(JSON.stringify({ data, hasMore: false }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+
+    const payload = await buildHomepageInitialPayload({
+      origin: "https://portal.maiprop.co",
+      now: new Date("2026-07-01T10:00:00.000Z"),
+      fetchImpl,
+      fetchOptions: { attempts: 1, timeoutMs: 1_000 },
+    });
+
+    expect(fallbackRequests).toHaveLength(2);
+    expect(fallbackRequests.every((url) => url.searchParams.get("limit") === "40")).toBe(true);
+    expect(payload.saleListings?.data).toHaveLength(12);
+    expect(payload.saleListings?.hasMore).toBe(true);
+    expect(payload.rentListings).toEqual({
+      data: [],
+      hasMore: false,
+      page: 1,
+      pageSize: 12,
+      offset: 0,
+    });
+  });
+
+  it("does not republish stale edge-cache catalogue rows as a fresh deployment snapshot", async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      const parsed = new URL(String(url));
+      if (parsed.pathname === "/api/public/homepage") {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({
+        data: [{ id: "withdrawn-1", title: "Withdrawn listing", city: "Athens" }],
+        hasMore: false,
+      }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+          "x-maiprop-cache": "STALE",
+          warning: '110 - "Response is stale due to transient upstream failure"',
+        },
+      });
+    });
+
+    const payload = await buildHomepageInitialPayload({
+      origin: "https://portal.maiprop.co",
+      now: new Date("2026-07-01T10:00:00.000Z"),
+      fetchImpl,
+      fetchOptions: { attempts: 1, timeoutMs: 1_000 },
+    });
+
+    expect(payload.saleListings).toBeUndefined();
+    expect(payload.rentListings).toBeUndefined();
+    expect(JSON.stringify(payload)).not.toContain("withdrawn-1");
   });
 
   it("falls back to public listings when featured homepage rows are transiently empty", async () => {
@@ -146,6 +335,16 @@ describe("homepage initial payload injection", () => {
         return new Response(JSON.stringify([]), { status: 200, headers: { "content-type": "application/json" } });
       }
       if (href.includes("/api/public/listings")) {
+        const parsed = new URL(href);
+        if (parsed.searchParams.has("listing_type")) {
+          return new Response(JSON.stringify({
+            data: [],
+            hasMore: false,
+            page: 1,
+            pageSize: 12,
+            offset: 0,
+          }), { status: 200, headers: { "content-type": "application/json" } });
+        }
         fallbackCalls += 1;
         if (fallbackCalls === 1) {
           return new Response(JSON.stringify({ error: "upstream unavailable" }), {
@@ -225,7 +424,10 @@ describe("homepage initial payload injection", () => {
         address: "3 Main St",
       },
     ]);
-    expect(fetchImpl.mock.calls.some(([url]) => String(url).includes("/api/public/listings"))).toBe(false);
+    expect(fetchImpl.mock.calls.some(([url]) => {
+      const parsed = new URL(String(url));
+      return parsed.pathname === "/api/public/listings" && !parsed.searchParams.has("listing_type");
+    })).toBe(false);
   });
 
   it("injects the payload into dist index.html without executable inline JavaScript", async () => {
