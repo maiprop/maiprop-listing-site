@@ -129,10 +129,23 @@ function installSupabaseFetch(): FetchMock {
       const select = url.searchParams.get("select") ?? "";
 
       if (listingType === "eq.auction") {
-        return jsonRows([
-          { id: "db-2", is_featured: false, priority_placement: 5, auction_date: "2026-06-03" },
-          { id: "db-1", is_featured: true, priority_placement: 1, auction_date: "2026-06-01" },
-        ]);
+        if (url.searchParams.get("priority_placement") === "gt.0") {
+          return jsonRows([{
+            id: "db-2",
+            is_featured: false,
+            priority_placement: 1,
+            priority_until: "2099-01-01T00:00:00.000Z",
+            auction_date: "2026-06-03",
+          }]);
+        }
+        return jsonRows([{
+          id: "db-1",
+          is_featured: true,
+          featured_until: "2099-01-01T00:00:00.000Z",
+          priority_placement: 0,
+          priority_until: null,
+          auction_date: "2026-06-01",
+        }]);
       }
 
       if (select === "city,price_per_sqm,created_at") {
@@ -1076,8 +1089,128 @@ describe("public similar listings endpoint", () => {
     expect(listingsUrl.searchParams.get("listing_type")).toBe("eq.sale");
     expect(listingsUrl.searchParams.get("limit")).toBe("48");
     expect(listingsUrl.searchParams.get("listing_images.limit")).toBe("3");
+    expect(listingsUrl.searchParams.get("select")).toContain("featured_until");
+    expect(listingsUrl.searchParams.get("select")).toContain("priority_until");
+    expect(listingsUrl.searchParams.getAll("order")).toEqual(["created_at.desc", "id.asc"]);
     expect(cacheApi.put.mock.calls[0][0].url).toContain("responseLimit=1");
-    expect(cacheApi.put.mock.calls[0][0].url).toContain("v=similar-v1");
+    expect(cacheApi.put.mock.calls[0][0].url).toContain("v=similar-promotions-v2");
+  });
+
+  it("keeps price relevance ahead of Priority and uses active Priority only for exact relevance ties", async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname !== "/rest/v1/listings") return jsonRows([]);
+      return jsonRows([
+        {
+          id: "priority-far",
+          price: 500_000,
+          created_at: "2026-07-14T12:00:04.000Z",
+          priority_placement: 1,
+          priority_until: "2099-01-01T00:00:00.000Z",
+        },
+        {
+          id: "organic-near",
+          price: 305_000,
+          created_at: "2026-07-14T12:00:03.000Z",
+          priority_placement: 0,
+        },
+        {
+          id: "organic-tie",
+          price: 290_000,
+          created_at: "2026-07-14T12:00:02.000Z",
+          priority_placement: 0,
+        },
+        {
+          id: "priority-tie",
+          price: 310_000,
+          created_at: "2026-07-14T12:00:01.000Z",
+          priority_placement: 1,
+          priority_until: "2099-01-01T00:00:00.000Z",
+        },
+      ]);
+    }) as unknown as typeof fetch;
+
+    const res = await similarListingsRequest(
+      makeCtx("https://portal.maiprop.co/api/public/similar-listings?city=Athens&price=300000&limit=4"),
+    );
+    const body = await res.json() as { data: Array<{ id: string }> };
+
+    expect(body.data.map((row) => row.id)).toEqual([
+      "organic-near",
+      "priority-tie",
+      "organic-tie",
+      "priority-far",
+    ]);
+  });
+
+  it("does not let Spotlight affect similarity order and only exposes active visual state", async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname !== "/rest/v1/listings") return jsonRows([]);
+      return jsonRows([
+        {
+          id: "spotlight-older",
+          price: 300_000,
+          created_at: "2026-07-14T12:00:01.000Z",
+          is_featured: true,
+          featured_until: "2099-01-01T00:00:00.000Z",
+        },
+        {
+          id: "organic-newer",
+          price: 300_000,
+          created_at: "2026-07-14T12:00:02.000Z",
+          is_featured: false,
+        },
+      ]);
+    }) as unknown as typeof fetch;
+
+    const res = await similarListingsRequest(
+      makeCtx("https://portal.maiprop.co/api/public/similar-listings?city=Athens&price=300000&limit=2"),
+    );
+    const body = await res.json() as {
+      data: Array<{ id: string; is_featured: boolean }>;
+    };
+
+    expect(body.data.map((row) => row.id)).toEqual(["organic-newer", "spotlight-older"]);
+    expect(body.data.find((row) => row.id === "spotlight-older")?.is_featured).toBe(true);
+  });
+
+  it("treats expired Priority and Spotlight flags as organic response state", async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname !== "/rest/v1/listings") return jsonRows([]);
+      return jsonRows([
+        {
+          id: "expired-flags",
+          price: 300_000,
+          created_at: "2026-07-14T12:00:01.000Z",
+          is_featured: true,
+          featured_until: "2000-01-01T00:00:00.000Z",
+          priority_placement: 1,
+          priority_until: "2000-01-01T00:00:00.000Z",
+        },
+        {
+          id: "organic-newer",
+          price: 300_000,
+          created_at: "2026-07-14T12:00:02.000Z",
+          is_featured: false,
+          priority_placement: 0,
+        },
+      ]);
+    }) as unknown as typeof fetch;
+
+    const res = await similarListingsRequest(
+      makeCtx("https://portal.maiprop.co/api/public/similar-listings?city=Athens&price=300000&limit=2"),
+    );
+    const body = await res.json() as {
+      data: Array<{ id: string; is_featured: boolean; priority_placement: number }>;
+    };
+
+    expect(body.data.map((row) => row.id)).toEqual(["organic-newer", "expired-flags"]);
+    expect(body.data.find((row) => row.id === "expired-flags")).toMatchObject({
+      is_featured: false,
+      priority_placement: 0,
+    });
   });
 
   it("deduplicates cloned OS auction rows before slicing related deals", async () => {
@@ -1226,8 +1359,123 @@ describe("public auctions endpoint", () => {
     expect(fetchUrls("/functions/v1/fetch-os-auctions")).toHaveLength(0);
   });
 
+  it("keeps Spotlight visual-only when ordering auctions", async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname !== "/rest/v1/listings") return jsonRows([]);
+      if (url.searchParams.get("priority_placement") === "gt.0") return jsonRows([]);
+      return jsonRows([
+        {
+          id: "spotlight-later",
+          city: "Athens",
+          auction_date: "2026-08-02",
+          is_featured: true,
+          featured_until: "2099-01-01T00:00:00.000Z",
+          priority_placement: 0,
+        },
+        {
+          id: "organic-sooner",
+          city: "Athens",
+          auction_date: "2026-08-01",
+          is_featured: false,
+          priority_placement: 0,
+        },
+      ]);
+    }) as unknown as typeof fetch;
+
+    const rows = await fetchPublicAuctionRows(env, 2);
+
+    expect(rows.map((row) => row.id)).toEqual(["organic-sooner", "spotlight-later"]);
+    expect(rows.find((row) => row.id === "spotlight-later")?.is_featured).toBe(true);
+  });
+
+  it("treats expired auction promotion flags as organic response state", async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname !== "/rest/v1/listings") return jsonRows([]);
+      if (url.searchParams.get("priority_placement") === "gt.0") return jsonRows([]);
+      return jsonRows([
+        {
+          id: "expired-flags",
+          city: "Athens",
+          auction_date: "2026-08-02",
+          is_featured: true,
+          featured_until: "2000-01-01T00:00:00.000Z",
+          priority_placement: 1,
+          priority_until: "2000-01-01T00:00:00.000Z",
+        },
+        {
+          id: "organic-sooner",
+          city: "Athens",
+          auction_date: "2026-08-01",
+          is_featured: false,
+          priority_placement: 0,
+        },
+      ]);
+    }) as unknown as typeof fetch;
+
+    const rows = await fetchPublicAuctionRows(env, 2);
+
+    expect(rows.map((row) => row.id)).toEqual(["organic-sooner", "expired-flags"]);
+    expect(rows.find((row) => row.id === "expired-flags")).toMatchObject({
+      is_featured: false,
+      priority_placement: 0,
+    });
+  });
+
+  it("limits active Priority auctions to three per 12 while preserving stream order", async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname !== "/rest/v1/listings") return jsonRows([]);
+      const priority = url.searchParams.get("priority_placement") === "gt.0";
+      const prefix = priority ? "priority" : "organic";
+      const count = priority ? 5 : 12;
+      return jsonRows(Array.from({ length: count }, (_, index) => ({
+        id: `${prefix}-${String(count - index).padStart(2, "0")}`,
+        city: "Athens",
+        auction_date: "2026-08-01",
+        is_featured: index % 2 === 0,
+        featured_until: "2099-01-01T00:00:00.000Z",
+        priority_placement: priority ? 1 : 0,
+        priority_until: priority ? "2099-01-01T00:00:00.000Z" : null,
+      })));
+    }) as unknown as typeof fetch;
+
+    const rows = await fetchPublicAuctionRows(env, 12);
+
+    expect(rows.map((row) => row.id)).toEqual([
+      "priority-01",
+      "priority-02",
+      "priority-03",
+      "organic-01",
+      "organic-02",
+      "organic-03",
+      "organic-04",
+      "organic-05",
+      "organic-06",
+      "organic-07",
+      "organic-08",
+      "organic-09",
+    ]);
+    expect(rows.filter((row) => Number(row.priority_placement) > 0)).toHaveLength(3);
+
+    const listingUrls = fetchUrls("/rest/v1/listings");
+    const priorityUrl = listingUrls.find((url) => url.searchParams.get("priority_placement") === "gt.0");
+    const organicUrl = listingUrls.find((url) => url.searchParams.get("priority_placement") !== "gt.0");
+    expect(priorityUrl?.searchParams.get("priority_until")).toMatch(/^gt\./);
+    expect(organicUrl?.searchParams.getAll("or").join("\n")).toContain("priority_until.lte.");
+    expect(priorityUrl?.searchParams.getAll("order")).toEqual([
+      "auction_date.asc.nullslast",
+      "id.asc",
+    ]);
+    expect(organicUrl?.searchParams.getAll("order")).toEqual([
+      "auction_date.asc.nullslast",
+      "id.asc",
+    ]);
+  });
+
   it("samples a wider cached DB window and diversifies organic auctions by municipality", async () => {
-    fetchMock().mockResolvedValueOnce(jsonRows([
+    const rowsByMunicipality = [
       ...Array.from({ length: 30 }, (_, i) => ({
         id: `agrinio-${String(i).padStart(2, "0")}`,
         city: "Agrinio",
@@ -1249,7 +1497,14 @@ describe("public auctions endpoint", () => {
         priority_placement: 0,
         auction_date: "2026-06-01",
       })),
-    ]));
+    ];
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname !== "/rest/v1/listings") return jsonRows([]);
+      return url.searchParams.get("priority_placement") === "gt.0"
+        ? jsonRows([])
+        : jsonRows(rowsByMunicipality);
+    }) as unknown as typeof fetch;
 
     const rows = await fetchPublicAuctionRows(env, 60);
     expect(rows).toHaveLength(60);
@@ -1267,15 +1522,20 @@ describe("public auctions endpoint", () => {
   });
 
   it("keeps public auction reads local even when the cached DB window is municipality-clustered", async () => {
-    fetchMock().mockResolvedValueOnce(jsonRows(
-      Array.from({ length: 48 }, (_, i) => ({
+    const clusteredRows = Array.from({ length: 48 }, (_, i) => ({
         id: `cached-agrinio-${i}`,
         city: "Agrinio",
         is_featured: false,
         priority_placement: 0,
         auction_date: "2026-06-01",
-      })),
-    ));
+      }));
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname !== "/rest/v1/listings") return jsonRows([]);
+      return url.searchParams.get("priority_placement") === "gt.0"
+        ? jsonRows([])
+        : jsonRows(clusteredRows);
+    }) as unknown as typeof fetch;
     const rows = await fetchPublicAuctionRows(env, 60);
     expect(rows).toHaveLength(48);
     expect(rows.every((row) => row.city === "Agrinio")).toBe(true);
@@ -1285,24 +1545,36 @@ describe("public auctions endpoint", () => {
   });
 
   it("falls back to source auctions when the daily cached DB window is empty", async () => {
-    fetchMock().mockResolvedValueOnce(jsonRows([]));
+    fetchMock()
+      .mockResolvedValueOnce(jsonRows([]))
+      .mockResolvedValueOnce(jsonRows([]));
 
     const rows = await fetchPublicAuctionRows(env, 2);
     expect(rows).toHaveLength(2);
 
     const dbCalls = fetchUrls("/rest/v1/listings");
-    expect(dbCalls).toHaveLength(2);
+    expect(dbCalls).toHaveLength(4);
     expect(dbCalls[0].searchParams.get("tags")).toMatch(/^cs\.\{source:maiprop-os,auction_pool:\d{4}-\d{2}-\d{2}\}$/);
-    expect(dbCalls[1].searchParams.get("tags")).toBe("cs.{source:maiprop-os}");
+    expect(dbCalls[1].searchParams.get("tags")).toMatch(/^cs\.\{source:maiprop-os,auction_pool:\d{4}-\d{2}-\d{2}\}$/);
+    expect(dbCalls[2].searchParams.get("tags")).toBe("cs.{source:maiprop-os}");
+    expect(dbCalls[3].searchParams.get("tags")).toBe("cs.{source:maiprop-os}");
     expect(fetchUrls("/functions/v1/fetch-os-auctions")).toHaveLength(0);
   });
 
   it("returns an empty list when both local DB auction windows are empty", async () => {
-    fetchMock().mockResolvedValueOnce(jsonRows([])).mockResolvedValueOnce(jsonRows([]));
+    fetchMock()
+      .mockResolvedValueOnce(jsonRows([]))
+      .mockResolvedValueOnce(jsonRows([]))
+      .mockResolvedValueOnce(jsonRows([]))
+      .mockResolvedValueOnce(jsonRows([]));
     await expect(fetchPublicAuctionRows(env, 1)).resolves.toEqual([]);
 
     fetchMock().mockClear();
-    fetchMock().mockResolvedValueOnce(jsonRows([])).mockResolvedValueOnce(jsonRows([]));
+    fetchMock()
+      .mockResolvedValueOnce(jsonRows([]))
+      .mockResolvedValueOnce(jsonRows([]))
+      .mockResolvedValueOnce(jsonRows([]))
+      .mockResolvedValueOnce(jsonRows([]));
     await expect(fetchPublicAuctionRows(env, 2)).resolves.toEqual([]);
   });
 
@@ -1315,6 +1587,8 @@ describe("public auctions endpoint", () => {
     expect(dbUrl.searchParams.get("tags")).toMatch(/^cs\.\{source:maiprop-os,auction_pool:\d{4}-\d{2}-\d{2}\}$/);
     expect(dbUrl.searchParams.get("listing_images.limit")).toBe("3");
     expect(dbUrl.searchParams.get("limit")).toBe("1");
+    expect(dbUrl.searchParams.get("select")).toContain("featured_until");
+    expect(dbUrl.searchParams.get("select")).toContain("priority_until");
   });
 
   it("clamps public auction requests and caches by day", async () => {
@@ -1327,14 +1601,11 @@ describe("public auctions endpoint", () => {
     const cacheKey = new URL(cacheApi.put.mock.calls[0][0].url);
     expect(cacheKey.searchParams.get("limit")).toBe("600");
     expect(cacheKey.searchParams.has("day")).toBe(true);
-    expect(cacheKey.searchParams.get("v")).toBe("national-sample-v6");
+    expect(cacheKey.searchParams.get("v")).toBe("national-sample-promotions-v7");
   });
 
   it("returns 503 instead of falling back to empty auctions on transient upstream failure", async () => {
-    fetchMock()
-      .mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }))
-      .mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }))
-      .mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }));
+    fetchMock().mockResolvedValue(new Response("cloudflare timeout", { status: 522 }));
 
     const res = await auctionsRequest(makeCtx("https://portal.maiprop.co/api/public/auctions?limit=12"));
 

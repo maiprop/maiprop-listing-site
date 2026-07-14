@@ -12,11 +12,15 @@ import {
   type PublicApiEnv,
 } from "./_cache";
 import { getSupabaseRuntime } from "../../_seo";
+import { interleaveCatalogueStreams } from "./_listingRank";
+import { normalizePublicPromotionState } from "./_promotionState";
 
 type AuctionRow = Record<string, unknown> & {
   id: string;
   is_featured?: boolean | null;
+  featured_until?: string | null;
   priority_placement?: number | null;
+  priority_until?: string | null;
   auction_date?: string | null;
   city?: string | null;
   region?: string | null;
@@ -24,10 +28,10 @@ type AuctionRow = Record<string, unknown> & {
 
 const PUBLIC_AUCTION_LIMIT_MAX = 600;
 const PUBLIC_AUCTION_CANDIDATE_LIMIT_MAX = 600;
-const AUCTION_CACHE_VERSION = "national-sample-v6";
+const AUCTION_CACHE_VERSION = "national-sample-promotions-v7";
 const UNKNOWN_LOCATION_KEY = "__unknown_location__";
 const AUCTION_SELECT =
-  "id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,ai_score,views_count,tags,auction_date,auction_starting_bid,latitude,longitude,auction_court,website_url,region,is_featured,priority_placement,construction_status,listing_images(url,sort_order)";
+  "id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,ai_score,views_count,tags,auction_date,auction_starting_bid,latitude,longitude,auction_court,website_url,region,is_featured,featured_until,priority_placement,priority_until,construction_status,listing_images(url,sort_order)";
 
 function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
@@ -38,10 +42,6 @@ function todayAuctionPoolTag(): string {
 }
 
 function compareAuctionRows(a: AuctionRow, b: AuctionRow): number {
-  const priorityDelta = Number(b.priority_placement ?? 0) - Number(a.priority_placement ?? 0);
-  if (priorityDelta !== 0) return priorityDelta;
-  const featuredDelta = (b.is_featured ? 1 : 0) - (a.is_featured ? 1 : 0);
-  if (featuredDelta !== 0) return featuredDelta;
   const aDate = typeof a.auction_date === "string" ? a.auction_date : "9999-12-31";
   const bDate = typeof b.auction_date === "string" ? b.auction_date : "9999-12-31";
   const dateDelta = aDate.localeCompare(bDate);
@@ -97,14 +97,42 @@ function roundRobinAuctionRowsByLocation(rows: AuctionRow[]): AuctionRow[] {
   return rowsByLocation;
 }
 
-function diversifyAuctionRows(rows: AuctionRow[], limit: number): AuctionRow[] {
-  const sortedRows = sortAuctionRows(rows);
-  const promotedRows = sortedRows.filter((row) => Boolean(row.is_featured) || Number(row.priority_placement ?? 0) > 0);
-  const organicRows = sortedRows.filter((row) => !promotedRows.includes(row));
-  return [...promotedRows, ...roundRobinAuctionRowsByLocation(organicRows)].slice(0, limit);
+function rankAuctionRows(
+  priorityRows: AuctionRow[],
+  organicRows: AuctionRow[],
+  limit: number,
+  nowMs: number,
+): AuctionRow[] {
+  const seen = new Set<string>();
+  const normalizedRows = [...priorityRows, ...organicRows]
+    .filter((row) => {
+      if (seen.has(row.id)) return false;
+      seen.add(row.id);
+      return true;
+    })
+    .map((row) => normalizePublicPromotionState(row, nowMs));
+  const activePriorityRows = sortAuctionRows(
+    normalizedRows.filter((row) => row.priority_placement > 0),
+  );
+  const activeOrganicRows = roundRobinAuctionRowsByLocation(
+    normalizedRows.filter((row) => row.priority_placement === 0),
+  );
+
+  return interleaveCatalogueStreams(activePriorityRows, activeOrganicRows, limit, 0).data;
 }
 
-async function fetchDbAuctions(env: PublicApiEnv, limit: number, poolTag?: string): Promise<AuctionRow[]> {
+type AuctionStreams = {
+  priorityRows: AuctionRow[];
+  organicRows: AuctionRow[];
+};
+
+async function fetchDbAuctionStream(
+  env: PublicApiEnv,
+  limit: number,
+  stream: "priority" | "organic",
+  now: string,
+  poolTag?: string,
+): Promise<AuctionRow[]> {
   const params = new URLSearchParams();
   params.set("select", AUCTION_SELECT);
   params.set("status", "eq.active");
@@ -112,9 +140,17 @@ async function fetchDbAuctions(env: PublicApiEnv, limit: number, poolTag?: strin
   params.set("is_off_market", "eq.false");
   params.set("tags", poolTag ? `cs.{source:maiprop-os,${poolTag}}` : "cs.{source:maiprop-os}");
   params.set("or", `(auction_date.gte.${todayIsoDate()},auction_date.is.null)`);
-  params.append("order", "is_featured.desc");
-  params.append("order", "priority_placement.desc.nullslast");
+  if (stream === "priority") {
+    params.set("priority_placement", "gt.0");
+    params.set("priority_until", `gt.${now}`);
+  } else {
+    params.append(
+      "or",
+      `(priority_placement.lte.0,priority_placement.is.null,priority_until.lte.${now},priority_until.is.null)`,
+    );
+  }
   params.append("order", "auction_date.asc.nullslast");
+  params.append("order", "id.asc");
   params.set("limit", String(limit));
   params.set("listing_images.order", "sort_order.asc");
   params.set("listing_images.limit", "3");
@@ -122,19 +158,29 @@ async function fetchDbAuctions(env: PublicApiEnv, limit: number, poolTag?: strin
   return supabaseJson<AuctionRow>(env, "/rest/v1/listings", params, { failOnTransient: true });
 }
 
-async function fetchCachedDbAuctions(env: PublicApiEnv, limit: number): Promise<AuctionRow[]> {
-  return fetchDbAuctions(env, limit, todayAuctionPoolTag());
-}
-
-async function fetchFallbackDbAuctions(env: PublicApiEnv, limit: number): Promise<AuctionRow[]> {
-  return fetchDbAuctions(env, limit);
+async function fetchDbAuctionStreams(
+  env: PublicApiEnv,
+  limit: number,
+  now: string,
+  poolTag?: string,
+): Promise<AuctionStreams> {
+  const [priorityRows, organicRows] = await Promise.all([
+    fetchDbAuctionStream(env, limit, "priority", now, poolTag),
+    fetchDbAuctionStream(env, limit, "organic", now, poolTag),
+  ]);
+  return { priorityRows, organicRows };
 }
 
 export async function fetchPublicAuctionRows(env: PublicApiEnv, limit: number): Promise<AuctionRow[]> {
   const candidateLimit = getCachedCandidateLimit(limit);
-  const cachedRows = await fetchCachedDbAuctions(env, candidateLimit);
-  const rows = cachedRows.length > 0 ? cachedRows : await fetchFallbackDbAuctions(env, candidateLimit);
-  return rows.length > 0 ? diversifyAuctionRows(rows, limit) : [];
+  const nowMs = Date.now();
+  const now = new Date(nowMs).toISOString();
+  const cachedStreams = await fetchDbAuctionStreams(env, candidateLimit, now, todayAuctionPoolTag());
+  const hasCachedRows = cachedStreams.priorityRows.length > 0 || cachedStreams.organicRows.length > 0;
+  const streams = hasCachedRows
+    ? cachedStreams
+    : await fetchDbAuctionStreams(env, candidateLimit, now);
+  return rankAuctionRows(streams.priorityRows, streams.organicRows, limit, nowMs);
 }
 
 export async function publicAuctions(ctx: PublicApiCtx, requestUrl: URL): Promise<Response> {

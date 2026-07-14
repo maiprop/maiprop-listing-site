@@ -16,11 +16,13 @@ import {
 } from "./_cache";
 import { getSupabaseRuntime } from "../../_seo";
 import { publicListingRows } from "./_fixture-content";
+import { hasActivePriority, normalizePublicPromotionState } from "./_promotionState";
 import { fetchPublicProfileSummaries, publicProfileDisplay } from "./_publicProfiles";
 
 type ListingRow = {
   id: string;
   owner_id?: string | null;
+  created_at?: string | null;
   price?: number | string | null;
   listing_type?: string | null;
   title?: string | null;
@@ -30,6 +32,10 @@ type ListingRow = {
   sqm?: number | string | null;
   auction_date?: string | null;
   auction_starting_bid?: number | string | null;
+  is_featured?: boolean | null;
+  featured_until?: string | null;
+  priority_placement?: number | null;
+  priority_until?: string | null;
   tags?: unknown;
   [key: string]: unknown;
 };
@@ -39,9 +45,9 @@ const LISTING_TYPES = ["sale", "rent", "firesale", "auction", "open_house", "new
 const PROPERTY_TYPES = ["apartment", "house", "villa", "land", "commercial", "office", "warehouse", "hotel"] as const;
 const SIMILAR_LISTINGS_CANDIDATE_LIMIT = 48;
 const SIMILAR_LISTINGS_LIMIT_MAX = 24;
-const SIMILAR_LISTINGS_CACHE_VERSION = "similar-v1";
+const SIMILAR_LISTINGS_CACHE_VERSION = "similar-promotions-v2";
 const SIMILAR_LISTINGS_SELECT =
-  "id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,property_type,listing_type,open_house_transaction_type,open_house_date,auction_date,auction_starting_bid,cover_image_url,owner_id,tags,has_video_tour,has_virtual_tour,is_featured,priority_placement,is_pre_sale,construction_status,walkability_score,safety_score,noise_score,listing_images(url,sort_order)";
+  "id,created_at,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,property_type,listing_type,open_house_transaction_type,open_house_date,auction_date,auction_starting_bid,cover_image_url,owner_id,tags,has_video_tour,has_virtual_tour,is_featured,featured_until,priority_placement,priority_until,is_pre_sale,construction_status,walkability_score,safety_score,noise_score,listing_images(url,sort_order)";
 
 function buildSimilarParams(requestUrl: URL): {
   params: URLSearchParams;
@@ -65,9 +71,8 @@ function buildSimilarParams(requestUrl: URL): {
   params.set("limit", String(SIMILAR_LISTINGS_CANDIDATE_LIMIT));
   params.set("listing_images.order", "sort_order.asc");
   params.set("listing_images.limit", "3");
-  params.append("order", "priority_placement.desc.nullslast");
-  params.append("order", "is_featured.desc");
   params.append("order", "created_at.desc");
+  params.append("order", "id.asc");
 
   if (UUID_RE.test(excludeId)) params.set("id", `neq.${excludeId}`);
   if (city) params.set("city", `ilike.*${city}*`);
@@ -77,12 +82,25 @@ function buildSimilarParams(requestUrl: URL): {
   return { params, limit, price };
 }
 
-function sortByPriceProximity(rows: ListingRow[], price: number | null): ListingRow[] {
-  if (price == null || price <= 0) return rows;
+function sortBySimilarity(rows: ListingRow[], price: number | null, nowMs: number): ListingRow[] {
   return [...rows].sort((a, b) => {
-    const aPrice = Math.abs(Number(a.price ?? 0) - price);
-    const bPrice = Math.abs(Number(b.price ?? 0) - price);
-    return aPrice - bPrice;
+    if (price != null && price > 0) {
+      const aPrice = Math.abs(Number(a.price ?? 0) - price);
+      const bPrice = Math.abs(Number(b.price ?? 0) - price);
+      const relevanceDelta = aPrice - bPrice;
+      if (relevanceDelta !== 0) return relevanceDelta;
+    }
+
+    // The capped similarity set keeps relevance first; Priority only resolves exact relevance ties.
+    const priorityDelta = Number(hasActivePriority(b, nowMs)) - Number(hasActivePriority(a, nowMs));
+    if (priorityDelta !== 0) return priorityDelta;
+
+    const aCreatedAt = typeof a.created_at === "string" ? Date.parse(a.created_at) : 0;
+    const bCreatedAt = typeof b.created_at === "string" ? Date.parse(b.created_at) : 0;
+    const createdAtDelta = (Number.isFinite(bCreatedAt) ? bCreatedAt : 0) -
+      (Number.isFinite(aCreatedAt) ? aCreatedAt : 0);
+    if (createdAtDelta !== 0) return createdAtDelta;
+    return String(a.id).localeCompare(String(b.id));
   });
 }
 
@@ -146,9 +164,10 @@ async function publicSimilarListings(ctx: PublicApiCtx, requestUrl: URL): Promis
 
   return cachedJson(ctx, cacheKey, async () => {
     try {
+      const nowMs = Date.now();
       const rows = publicListingRows(
         await supabaseJson<ListingRow>(ctx.env, "/rest/v1/listings", built.params, { failOnTransient: true }),
-      );
+      ).map((row) => normalizePublicPromotionState(row, nowMs));
       const ownerIds = rows.map((row) => row.owner_id).filter((id): id is string => typeof id === "string");
       const profiles = await fetchPublicProfileSummaries(ctx.env, ownerIds);
       const withProfiles = rows.map((row) => ({
@@ -158,7 +177,7 @@ async function publicSimilarListings(ctx: PublicApiCtx, requestUrl: URL): Promis
       }));
 
       return jsonResponse({
-        data: dedupeSimilarRows(sortByPriceProximity(withProfiles, built.price)).slice(0, built.limit),
+        data: dedupeSimilarRows(sortBySimilarity(withProfiles, built.price, nowMs)).slice(0, built.limit),
       });
     } catch (error) {
       if (isSupabaseTransientError(error)) return upstreamUnavailable();
