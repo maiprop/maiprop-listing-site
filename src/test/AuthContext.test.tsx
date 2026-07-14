@@ -460,6 +460,36 @@ describe("AuthProvider auth API methods", () => {
     expect(result.current.subscription.source).toBe("investor");
   });
 
+  it("reconciles the exact session during an onboarding success restore", async () => {
+    supabaseMock.auth.getSession.mockResolvedValue({
+      data: { session: { user: { id: "u-onboarding-checkout" } } },
+    });
+    supabaseMock.functions.invoke.mockResolvedValue({
+      data: {
+        subscribed: true,
+        product_id: "prod_professional",
+        subscription_end: null,
+        source: "stripe",
+        sync_status: "synced",
+      },
+      error: null,
+    });
+    window.history.replaceState(
+      {},
+      "",
+      "/dashboard?pro=success&session_id=cs_test_onboarding_checkout",
+    );
+
+    renderHook(() => useAuth(), { wrapper: wrap });
+
+    await waitFor(() => {
+      expect(supabaseMock.functions.invoke).toHaveBeenCalledWith(
+        "check-subscription",
+        { body: { checkout_session_id: "cs_test_onboarding_checkout" } },
+      );
+    });
+  });
+
   it("queues exact-session reconciliation behind an in-flight login check", async () => {
     supabaseMock.auth.getSession.mockResolvedValue({
       data: { session: { user: { id: "u-checkout-race" } } },

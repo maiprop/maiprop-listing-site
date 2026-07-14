@@ -313,7 +313,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           logger.warn("Profile fetch failed during session restore:", err);
           setProfileLoading(false);
         });
-        checkSubscription(sess).catch((err: unknown) => {
+        checkSubscription(
+          sess,
+          checkoutSessionIdForReconciliation(),
+        ).catch((err: unknown) => {
           logger.warn(
             "[AuthContext] subscription restore failed:",
             err instanceof Error ? err.message : err,
