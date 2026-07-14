@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -33,6 +33,14 @@ const correctionMigration = readFileSync(
   ),
   "utf8",
 );
+
+const migrationDirectory = resolve(process.cwd(), "supabase/migrations");
+const remediationMigrationName = readdirSync(migrationDirectory).find((name) =>
+  /^\d{14}_remediate_promotion_entitlements\.sql$/.test(name)
+);
+const remediationMigration = remediationMigrationName
+  ? readFileSync(resolve(migrationDirectory, remediationMigrationName), "utf8")
+  : "";
 
 function sqlSection(sql: string, start: string, end: string): string {
   const startIndex = sql.indexOf(start);
@@ -249,39 +257,87 @@ describe("listing promotion entitlement migration", () => {
     expect(correctionMigration).toContain("VALIDATE CONSTRAINT");
   });
 
-  it("records only the subscription that satisfies the allowance predicates", () => {
-    const activation = sqlSection(
-      correctionMigration,
-      "CREATE OR REPLACE FUNCTION private.activate_listing_promotion",
-      "CREATE OR REPLACE FUNCTION private.revoke_refunded_listing_promotions",
+  it("records only an exactly matched profile subscription product", () => {
+    expect(remediationMigrationName).toMatch(
+      /^20260714\d{6}_remediate_promotion_entitlements\.sql$/,
     );
-
-    expect(activation).toContain(
+    expect(Number(remediationMigrationName?.slice(0, 14))).toBeGreaterThan(
+      20260714130310,
+    );
+    expect(remediationMigration).toContain(
       "(v_role::text = 'seller' AND bs.plan_key = 'pro')",
     );
-    expect(activation).toContain(
+    expect(remediationMigration).toContain(
       "(v_role::text = 'agent' AND bs.plan_key = 'agent_basic')",
     );
-    expect(activation).toContain(
+    expect(remediationMigration).toContain(
       "(v_role::text = 'developer' AND bs.plan_key = 'developer_pro')",
     );
-    expect(activation).toContain(
-      "p.subscription_product_id IS NULL\n      OR bs.stripe_product_id = p.subscription_product_id",
+    expect(remediationMigration).toContain(
+      "p.subscription_product_id IS NOT NULL",
+    );
+    expect(remediationMigration).toContain(
+      "bs.stripe_product_id = p.subscription_product_id",
+    );
+    expect(remediationMigration).not.toContain(
+      "p.subscription_product_id IS NULL\n      OR",
     );
   });
 
-  it("keeps the admin RPC as an invoker wrapper over a private implementation", () => {
-    expect(correctionMigration).toMatch(
-      /CREATE OR REPLACE FUNCTION private\.admin_set_listing_promotion[\s\S]*?SECURITY DEFINER/,
+  it("replaces singular admin writes with one atomic dual-product RPC", () => {
+    expect(remediationMigration).toMatch(
+      /CREATE OR REPLACE FUNCTION private\.admin_set_listing_promotions[\s\S]*?SECURITY DEFINER/,
     );
-    expect(correctionMigration).toMatch(
-      /CREATE OR REPLACE FUNCTION public\.admin_set_listing_promotion[\s\S]*?SECURITY INVOKER/,
+    expect(remediationMigration).toMatch(
+      /CREATE OR REPLACE FUNCTION public\.admin_set_listing_promotions[\s\S]*?SECURITY INVOKER/,
     );
-    expect(correctionMigration).toMatch(
-      /REVOKE ALL ON FUNCTION private\.admin_set_listing_promotion[\s\S]*?FROM PUBLIC, anon, authenticated/,
+    expect(remediationMigration).toContain("p_spotlight_enabled boolean");
+    expect(remediationMigration).toContain("p_priority_enabled boolean");
+    expect(remediationMigration).toContain(
+      "DROP FUNCTION IF EXISTS public.admin_set_listing_promotion",
     );
-    expect(correctionMigration).toMatch(
-      /GRANT EXECUTE ON FUNCTION private\.admin_set_listing_promotion[\s\S]*?TO service_role/,
+    expect(remediationMigration).toContain("source_type = 'admin'");
+    expect(remediationMigration).toContain("billing_subscription_id = NULL");
+    expect(remediationMigration).toContain("addon_purchase_id = NULL");
+    expect(remediationMigration).toContain("plan_cycle_start = NULL");
+    expect(remediationMigration).toContain("revoked_at = NULL");
+    expect(remediationMigration).toContain("revoke_reason = NULL");
+  });
+
+  it("repairs legacy Priority independently from Spotlight expiry", () => {
+    const repair = sqlSection(
+      remediationMigration,
+      "CREATE OR REPLACE FUNCTION private.repair_legacy_priority_promotions",
+      "SELECT private.repair_legacy_priority_promotions",
+    );
+
+    expect(repair).toContain("interval '30 days'");
+    expect(repair).toContain("source_type = 'admin'");
+    expect(repair).toContain("promotion_type = 'priority'");
+    expect(repair).not.toContain("featured_until");
+    expect(remediationMigration).toMatch(
+      /SELECT private\.repair_legacy_priority_promotions\(\s*transaction_timestamp\(\)\s*\)/,
+    );
+  });
+
+  it("uses boolean Priority and query-aligned promotion indexes", () => {
+    expect(remediationMigration).toContain(
+      "CHECK (priority_placement IN (0, 1))",
+    );
+    expect(remediationMigration).toContain(
+      "ON public.listings (priority_placement DESC, created_at DESC, id DESC)",
+    );
+    expect(remediationMigration).toContain(
+      "WHERE status = 'active' AND is_off_market = false AND is_featured = true",
+    );
+    expect(remediationMigration).toContain(
+      "idx_listing_promotion_addon_purchase_id",
+    );
+    expect(remediationMigration).toContain(
+      "idx_listing_promotion_billing_subscription_id",
+    );
+    expect(remediationMigration).toContain(
+      "idx_listing_promotion_created_by",
     );
   });
 

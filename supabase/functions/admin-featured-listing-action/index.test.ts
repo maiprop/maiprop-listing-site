@@ -153,7 +153,7 @@ Deno.test("non-admin callers are forbidden before Spotlight listing updates", as
 
   const res = await handler(authedJson({
     id: validListingId(),
-    updates: { priority_placement: 5 },
+    updates: { priority_placement: 1 },
   }));
   const body = await res.json();
 
@@ -173,7 +173,7 @@ Deno.test("platform-admin flag without admin role is not enough for Spotlight li
 
   const res = await handler(authedJson({
     id: validListingId(),
-    updates: { priority_placement: 5 },
+    updates: { priority_placement: 1 },
   }));
   const body = await res.json();
 
@@ -188,7 +188,7 @@ Deno.test("platform-admin flag without admin role is not enough for Spotlight li
   );
 });
 
-Deno.test("admin callers route Spotlight and Priority updates through the ledger RPC", async () => {
+Deno.test("admin callers atomically update Spotlight and Priority in one ledger RPC", async () => {
   const id = validListingId();
   resetScenario({ profile: { role: "admin", is_platform_admin: false } });
 
@@ -196,7 +196,7 @@ Deno.test("admin callers route Spotlight and Priority updates through the ledger
     id,
     updates: {
       is_featured: true,
-      priority_placement: 7,
+      priority_placement: 1,
       featured_until: "2026-07-31T00:00:00.000Z",
     },
   }));
@@ -208,34 +208,19 @@ Deno.test("admin callers route Spotlight and Priority updates through the ledger
     globalThis.__adminFeaturedListingScenario.calls.filter((call) =>
       call.name === "rpc"
     ),
-    [
-      {
-        name: "rpc",
+    [{
+      name: "rpc",
+      args: {
+        name: "admin_set_listing_promotions",
         args: {
-          name: "admin_set_listing_promotion",
-          args: {
-            p_listing_id: id,
-            p_promotion_type: "spotlight",
-            p_enabled: true,
-            p_ends_at: "2026-07-31T00:00:00.000Z",
-            p_actor_id: "admin-user",
-          },
+          p_listing_id: id,
+          p_spotlight_enabled: true,
+          p_spotlight_ends_at: "2026-07-31T00:00:00.000Z",
+          p_priority_enabled: true,
+          p_actor_id: "admin-user",
         },
       },
-      {
-        name: "rpc",
-        args: {
-          name: "admin_set_listing_promotion",
-          args: {
-            p_listing_id: id,
-            p_promotion_type: "priority",
-            p_enabled: true,
-            p_ends_at: null,
-            p_actor_id: "admin-user",
-          },
-        },
-      },
-    ],
+    }],
   );
 });
 
@@ -256,16 +241,66 @@ Deno.test("admin callers can revoke Spotlight through the ledger RPC", async () 
     {
       name: "rpc",
       args: {
-        name: "admin_set_listing_promotion",
+        name: "admin_set_listing_promotions",
         args: {
           p_listing_id: id,
-          p_promotion_type: "spotlight",
-          p_enabled: false,
-          p_ends_at: null,
+          p_spotlight_enabled: false,
+          p_spotlight_ends_at: null,
+          p_priority_enabled: null,
           p_actor_id: "admin-user",
         },
       },
     },
+  );
+});
+
+Deno.test("admin callers can remove Priority with the boolean projection value", async () => {
+  const id = validListingId();
+  resetScenario({ profile: { role: "admin" } });
+
+  const res = await handler(authedJson({
+    id,
+    updates: { priority_placement: 0 },
+  }));
+
+  assertEquals(res.status, 200);
+  assertEquals(
+    globalThis.__adminFeaturedListingScenario.calls.filter((call) =>
+      call.name === "rpc"
+    ),
+    [{
+      name: "rpc",
+      args: {
+        name: "admin_set_listing_promotions",
+        args: {
+          p_listing_id: id,
+          p_spotlight_enabled: null,
+          p_spotlight_ends_at: null,
+          p_priority_enabled: false,
+          p_actor_id: "admin-user",
+        },
+      },
+    }],
+  );
+});
+
+Deno.test("Priority rejects rank values outside the paid product boolean", async () => {
+  resetScenario({ profile: { role: "admin" } });
+
+  for (const priority_placement of [-1, 2, 10]) {
+    const res = await handler(authedJson({
+      id: validListingId(),
+      updates: { priority_placement },
+    }));
+
+    assertEquals(res.status, 400);
+  }
+
+  assertEquals(
+    globalThis.__adminFeaturedListingScenario.calls.some((call) =>
+      call.name === "rpc"
+    ),
+    false,
   );
 });
 
@@ -274,7 +309,7 @@ Deno.test("ledger RPC errors preserve the existing API status mapping", async ()
 
   const res = await handler(authedJson({
     id: validListingId(),
-    updates: { priority_placement: 5 },
+    updates: { priority_placement: 1 },
   }));
   const body = await res.json();
 

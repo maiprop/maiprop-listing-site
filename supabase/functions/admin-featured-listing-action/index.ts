@@ -33,7 +33,7 @@ const UUID_RE =
 
 const featuredListingUpdatesSchema = z.object({
   is_featured: z.boolean().optional(),
-  priority_placement: z.number().int().min(1).max(10).optional(),
+  priority_placement: z.number().int().min(0).max(1).optional(),
   featured_until: z.union([
     z.null(),
     z.string().refine(
@@ -131,49 +131,31 @@ Deno.serve(async (req) => {
       return jsonErrorResponse(req, "Platform admin only", 403);
     }
 
-    const promotionChanges: Array<{
-      type: "spotlight" | "priority";
-      enabled: boolean;
-      endsAt: string | null;
-    }> = [];
-
-    if (
+    const hasSpotlightUpdate =
       Object.prototype.hasOwnProperty.call(action.updates, "is_featured") ||
-      Object.prototype.hasOwnProperty.call(action.updates, "featured_until")
-    ) {
-      promotionChanges.push({
-        type: "spotlight",
-        enabled: action.updates.is_featured ?? true,
-        endsAt: action.updates.featured_until ?? null,
-      });
-    }
+      Object.prototype.hasOwnProperty.call(action.updates, "featured_until");
+    const spotlightEnabled = hasSpotlightUpdate
+      ? action.updates.is_featured ?? true
+      : null;
+    const priorityEnabled = action.updates.priority_placement === undefined
+      ? null
+      : action.updates.priority_placement === 1;
 
-    if (action.updates.priority_placement !== undefined) {
-      promotionChanges.push({
-        type: "priority",
-        enabled: action.updates.priority_placement > 0,
-        endsAt: null,
-      });
-    }
+    const { error } = await supabase.rpc("admin_set_listing_promotions", {
+      p_listing_id: action.id,
+      p_spotlight_enabled: spotlightEnabled,
+      p_spotlight_ends_at: action.updates.featured_until ?? null,
+      p_priority_enabled: priorityEnabled,
+      p_actor_id: caller.id,
+    });
 
-    for (const change of promotionChanges) {
-      const { error } = await supabase.rpc("admin_set_listing_promotion", {
-        p_listing_id: action.id,
-        p_promotion_type: change.type,
-        p_enabled: change.enabled,
-        p_ends_at: change.endsAt,
-        p_actor_id: caller.id,
+    if (error) {
+      const message = errorMessage(error);
+      log.warn("spotlight listing update rejected", {
+        listingId: action.id,
+        err: message,
       });
-
-      if (error) {
-        const message = errorMessage(error);
-        log.warn("spotlight listing update rejected", {
-          listingId: action.id,
-          promotionType: change.type,
-          err: message,
-        });
-        return jsonErrorResponse(req, message, databaseStatus(message));
-      }
+      return jsonErrorResponse(req, message, databaseStatus(message));
     }
 
     log.info("spotlight listing update completed", {
