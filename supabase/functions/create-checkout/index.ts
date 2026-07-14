@@ -41,7 +41,7 @@ import {
   normalizeExplicitCheckoutKey,
   normalizePlanKey,
 } from "./pricing.ts";
-import { sanitizeRedirectPath } from "./redirects.ts";
+import { sanitizeRedirectPath, withCheckoutSessionId } from "./redirects.ts";
 import { getOrCreateOwnedStripeCustomer } from "./stripeCustomers.ts";
 import {
   buildTrialMetadata,
@@ -69,6 +69,7 @@ export {
   normalizePlanKey,
   resolveCheckoutOrigin,
   sanitizeRedirectPath,
+  withCheckoutSessionId,
 };
 
 const log = createLogger("create-checkout");
@@ -809,7 +810,9 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
         metadata: { user_id: user.id },
       },
     );
-    const success = `${origin}${successPath ?? "/pricing?checkout=success"}`;
+    const success = `${origin}${
+      withCheckoutSessionId(successPath ?? "/pricing?checkout=success")
+    }`;
     const cancel = `${origin}${cancelPath ?? "/pricing?checkout=cancelled"}`;
     const trialMetadata = wantsTrial ? buildTrialMetadata() : {};
     let trialClaimId: string | null = null;
