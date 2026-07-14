@@ -289,6 +289,53 @@ function sanitizeListingsPage(value) {
   };
 }
 
+function parseDeployedHomepagePayload(html) {
+  if (typeof html !== "string" || !html) return undefined;
+  const scriptMatch = html.match(
+    new RegExp(
+      `<script\\b[^>]*\\bid=["']${HOMEPAGE_INITIAL_SCRIPT_ID}["'][^>]*>([\\s\\S]*?)<\\/script>`,
+      "i",
+    ),
+  );
+  if (!scriptMatch?.[1]) return undefined;
+
+  try {
+    const value = JSON.parse(scriptMatch[1]);
+    if (!isRecord(value)) return undefined;
+    return {
+      featured: Array.isArray(value.featured)
+        ? value.featured.map(sanitizeHomepageRow).filter(Boolean).slice(0, MAX_FEATURED_ROWS)
+        : [],
+      openHouses: Array.isArray(value.openHouses)
+        ? value.openHouses.map(sanitizeHomepageRow).filter(Boolean).slice(0, MAX_OPEN_HOUSE_ROWS)
+        : [],
+      saleListings: sanitizeListingsPage(value.saleListings),
+      rentListings: sanitizeListingsPage(value.rentListings),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+async function fetchDeployedHomepagePayload(origin, fetchImpl, fetchOptions) {
+  const controller = new AbortController();
+  const timeoutMs = Math.min(fetchOptions?.timeoutMs ?? fetchTimeoutMs(), 3_000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetchImpl(new URL("/", origin), {
+      headers: { Accept: "text/html" },
+      signal: controller.signal,
+    });
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!response.ok || !contentType.includes("text/html")) return undefined;
+    return parseDeployedHomepagePayload(await response.text());
+  } catch {
+    return undefined;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function fetchInitialListingsPage(origin, listingType, fetchImpl, fetchOptions) {
   const catalogueFetchOptions = {
     attempts: 1,
@@ -329,12 +376,24 @@ export async function buildHomepageInitialPayload({
   fetchImpl = globalThis.fetch,
   fetchOptions,
 } = {}) {
-  let [featured, openHouses, saleListings, rentListings] = await Promise.all([
-    fetchHomepageSection(origin, "featured", MAX_FEATURED_ROWS, fetchImpl, fetchOptions),
-    fetchHomepageSection(origin, "open-houses", MAX_OPEN_HOUSE_ROWS, fetchImpl, fetchOptions),
-    fetchInitialListingsPage(origin, "sale", fetchImpl, fetchOptions),
-    fetchInitialListingsPage(origin, "rent", fetchImpl, fetchOptions),
-  ]);
+  const deployedPayload = await fetchDeployedHomepagePayload(origin, fetchImpl, fetchOptions);
+
+  // Build-time latency is not user-facing. Fetch sequentially to avoid a cold
+  // deploy creating a burst of expensive catalogue requests against production.
+  let featured = await fetchHomepageSection(origin, "featured", MAX_FEATURED_ROWS, fetchImpl, fetchOptions);
+  const freshOpenHouses = await fetchHomepageSection(origin, "open-houses", MAX_OPEN_HOUSE_ROWS, fetchImpl, fetchOptions);
+  const freshSaleListings = await fetchInitialListingsPage(origin, "sale", fetchImpl, fetchOptions);
+  const freshRentListings = await fetchInitialListingsPage(origin, "rent", fetchImpl, fetchOptions);
+
+  const openHouses = freshOpenHouses.length > 0
+    ? freshOpenHouses
+    : deployedPayload?.openHouses ?? [];
+  const saleListings = freshSaleListings ?? deployedPayload?.saleListings;
+  const rentListings = freshRentListings ?? deployedPayload?.rentListings;
+
+  if (featured.length === 0 && deployedPayload?.featured.length) {
+    featured = deployedPayload.featured;
+  }
 
   if (featured.length === 0) {
     featured = await fetchFeaturedListingsFallback(origin, MAX_FEATURED_ROWS, fetchImpl, fetchOptions);
