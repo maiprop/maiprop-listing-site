@@ -46,11 +46,13 @@ CREATE OR REPLACE FUNCTION private.activate_listing_promotion(
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, pg_temp
+SET search_path = ''
 AS $$
 DECLARE
   v_user_id uuid := (SELECT auth.uid());
   v_owner_id uuid;
+  v_project_id uuid;
+  v_project_owner_id uuid;
   v_role public.user_role;
   v_subscription_id uuid;
   v_cycle_start date := date_trunc('month', now() AT TIME ZONE 'UTC')::date;
@@ -80,16 +82,22 @@ BEGIN
     RAISE EXCEPTION 'invalid_promotion_request_key' USING ERRCODE = '22023';
   END IF;
 
-  SELECT owner_id
-  INTO v_owner_id
-  FROM public.listings
-  WHERE id = p_listing_id
-    AND status = 'active'
-    AND is_off_market = false
-  FOR UPDATE;
+  SELECT listing.owner_id, listing.project_id, project.owner_id
+  INTO v_owner_id, v_project_id, v_project_owner_id
+  FROM public.listings AS listing
+  LEFT JOIN public.projects AS project ON project.id = listing.project_id
+  WHERE listing.id = p_listing_id
+    AND listing.status = 'active'
+    AND listing.is_off_market = false
+  FOR UPDATE OF listing;
 
   IF v_owner_id IS NULL THEN
     RAISE EXCEPTION 'listing_not_available' USING ERRCODE = 'P0002';
+  END IF;
+  IF v_project_id IS NOT NULL
+     AND v_project_owner_id IS DISTINCT FROM v_owner_id THEN
+    RAISE EXCEPTION 'listing_project_owner_mismatch'
+      USING ERRCODE = '23514';
   END IF;
   IF v_owner_id <> v_user_id AND NOT public.has_platform_admin(v_user_id) THEN
     RAISE EXCEPTION 'listing_promotion_forbidden' USING ERRCODE = '42501';

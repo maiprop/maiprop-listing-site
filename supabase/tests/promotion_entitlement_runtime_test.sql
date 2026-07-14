@@ -149,6 +149,7 @@ INSERT INTO public.billing_subscriptions (
   stripe_customer_id,
   stripe_subscription_id,
   stripe_product_id,
+  stripe_price_id,
   plan_key,
   audience,
   status,
@@ -164,6 +165,7 @@ VALUES
     'cus_seller_pro',
     'sub_seller_pro',
     'prod_seller_pro',
+    'price_seller_pro',
     'pro',
     'participant',
     'active',
@@ -178,6 +180,7 @@ VALUES
     'cus_agent_pro',
     'sub_agent_pro',
     'prod_agent_pro',
+    'price_agent_pro',
     'agent_basic',
     'agent',
     'active',
@@ -192,6 +195,7 @@ VALUES
     'cus_developer_pro',
     'sub_developer_pro',
     'prod_developer_pro',
+    'price_developer_pro',
     'developer_pro',
     'developer',
     'active',
@@ -206,6 +210,7 @@ VALUES
     'cus_seller_trial',
     'sub_seller_trial',
     'prod_seller_trial',
+    'price_seller_trial',
     'pro',
     'participant',
     'trialing',
@@ -220,6 +225,7 @@ VALUES
     'cus_legacy_null_product',
     'sub_legacy_null_product',
     'prod_unbound_seller_pro',
+    'price_unbound_seller_pro',
     'pro',
     'participant',
     'active',
@@ -702,7 +708,7 @@ SELECT lives_ok(
       '2099-01-01T00:00:00Z'::timestamptz
     )
   $$,
-  'legacy Priority repair accepts an explicit deterministic grant anchor'
+  'legacy Priority compatibility repair quarantines unsupported state'
 );
 
 SELECT is(
@@ -711,13 +717,10 @@ SELECT is(
     FROM public.listing_promotion_allocations
     WHERE listing_id = '30000000-0000-4000-8000-000000000010'
       AND promotion_type = 'priority'
-      AND source_type = 'admin'
       AND status = 'active'
-      AND starts_at = '2099-01-01T00:00:00Z'::timestamptz
-      AND ends_at = '2099-01-31T00:00:00Z'::timestamptz
   ),
-  1,
-  'legacy Priority receives its own explicit 30-day admin allocation'
+  0,
+  'legacy Priority receives no allocation without trusted evidence'
 );
 
 SELECT is(
@@ -726,13 +729,13 @@ SELECT is(
       is_featured,
       featured_until IS NULL,
       priority_placement,
-      priority_until = '2099-01-31T00:00:00Z'::timestamptz
+      priority_until IS NULL
     )::text
     FROM public.listings
     WHERE id = '30000000-0000-4000-8000-000000000010'
   ),
-  '(f,t,1,t)',
-  'legacy Priority projection does not inherit the unrelated expired Spotlight date'
+  '(f,t,0,t)',
+  'unsupported legacy Priority and unrelated Spotlight projections are cleared'
 );
 
 INSERT INTO public.listing_promotion_allocations (

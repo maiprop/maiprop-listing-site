@@ -17,6 +17,28 @@
 ALTER TABLE public.listings
   ADD COLUMN IF NOT EXISTS priority_until timestamptz;
 
+CREATE TABLE IF NOT EXISTS private.legacy_listing_promotion_quarantine (
+  listing_id uuid NOT NULL,
+  owner_id uuid NOT NULL,
+  promotion_type text NOT NULL
+    CHECK (promotion_type IN ('spotlight', 'priority')),
+  observed_until timestamptz,
+  first_observed_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
+  last_observed_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
+  resolution text NOT NULL DEFAULT 'pending'
+    CHECK (resolution IN ('pending', 'migrated', 'cleared')),
+  evidence_type text
+    CHECK (evidence_type IS NULL OR evidence_type IN ('plan', 'addon', 'admin')),
+  evidence_reference text,
+  resolved_at timestamptz,
+  PRIMARY KEY (listing_id, promotion_type)
+);
+
+REVOKE ALL ON TABLE private.legacy_listing_promotion_quarantine
+  FROM PUBLIC, anon, authenticated, service_role;
+GRANT SELECT ON TABLE private.legacy_listing_promotion_quarantine
+  TO service_role;
+
 COMMENT ON COLUMN public.listings.is_featured IS
   'Server-managed Spotlight projection. Do not write from browser clients.';
 COMMENT ON COLUMN public.listings.featured_until IS
@@ -874,60 +896,61 @@ AS $$
   END
 $$;
 
--- Preserve existing administrator-managed promotions and every other currently
--- valid legacy projection as explicit admin grants, regardless of the listing
--- owner's role. The sync pass below clears excluded stale projections.
-INSERT INTO public.listing_promotion_allocations (
+-- Legacy paid columns are untrusted projections. Preserve them for forensic
+-- remediation, but never manufacture an administrator grant from a flag.
+INSERT INTO private.legacy_listing_promotion_quarantine (
   listing_id,
   owner_id,
   promotion_type,
-  source_type,
-  request_key,
-  starts_at,
-  ends_at,
-  created_by
+  observed_until
 )
 SELECT
   l.id,
   l.owner_id,
   'spotlight',
-  'admin',
-  'legacy-admin-spotlight:' || l.id::text,
-  LEAST(now(), COALESCE(l.featured_until - interval '30 days', now())),
-  COALESCE(l.featured_until, now() + interval '30 days'),
-  l.owner_id
+  l.featured_until
 FROM public.listings l
 WHERE l.is_featured = true
   AND (l.featured_until IS NULL OR l.featured_until > now())
-ON CONFLICT DO NOTHING;
+ON CONFLICT (listing_id, promotion_type) DO UPDATE
+SET
+  owner_id = EXCLUDED.owner_id,
+  observed_until = GREATEST(
+    private.legacy_listing_promotion_quarantine.observed_until,
+    EXCLUDED.observed_until
+  ),
+  last_observed_at = transaction_timestamp(),
+  resolution = 'pending',
+  evidence_type = NULL,
+  evidence_reference = NULL,
+  resolved_at = NULL;
 
-INSERT INTO public.listing_promotion_allocations (
+INSERT INTO private.legacy_listing_promotion_quarantine (
   listing_id,
   owner_id,
   promotion_type,
-  source_type,
-  request_key,
-  starts_at,
-  ends_at,
-  created_by
+  observed_until
 )
 SELECT
   l.id,
   l.owner_id,
   'priority',
-  'admin',
-  'legacy-admin-priority:' || l.id::text,
-  LEAST(now(), COALESCE(
-      COALESCE(l.priority_until, l.featured_until) - interval '30 days',
-      now()
-    )),
-  COALESCE(l.priority_until, l.featured_until, now() + interval '30 days'),
-  l.owner_id
+  l.priority_until
 FROM public.listings l
 WHERE l.priority_placement > 0
-  AND (COALESCE(l.priority_until, l.featured_until) IS NULL
-    OR COALESCE(l.priority_until, l.featured_until) > now())
-ON CONFLICT DO NOTHING;
+  AND (l.priority_until IS NULL OR l.priority_until > now())
+ON CONFLICT (listing_id, promotion_type) DO UPDATE
+SET
+  owner_id = EXCLUDED.owner_id,
+  observed_until = GREATEST(
+    private.legacy_listing_promotion_quarantine.observed_until,
+    EXCLUDED.observed_until
+  ),
+  last_observed_at = transaction_timestamp(),
+  resolution = 'pending',
+  evidence_type = NULL,
+  evidence_reference = NULL,
+  resolved_at = NULL;
 
 DO $$
 DECLARE
