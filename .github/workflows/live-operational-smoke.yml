@@ -223,13 +223,13 @@ jobs:
         if: steps.smoke.outputs.enabled == 'true'
         run: npx playwright install --with-deps chromium
 
-      - name: Run non-consuming AI quota smoke
-        if: steps.smoke.outputs.enabled == 'true' && steps.public_api.outputs.public_api_ready == 'true'
-        run: npm run test:e2e:live-ai-quota
-
       - name: Repair live demo role matrix
         if: steps.smoke.outputs.enabled == 'true' && steps.service_role.outputs.repair_enabled == 'true'
         run: npx playwright test e2e/live-supervisor-agent-network.spec.ts --project=chromium -g "supervisor repairs the full mock matrix"
+
+      - name: Run non-consuming AI quota smoke
+        if: steps.smoke.outputs.enabled == 'true' && steps.public_api.outputs.public_api_ready == 'true'
+        run: npm run test:e2e:live-ai-quota
 
       - name: Validate live demo account sign-in
         if: steps.smoke.outputs.enabled == 'true' && steps.service_role.outputs.repair_enabled != 'true'

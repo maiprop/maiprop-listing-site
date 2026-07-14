@@ -41,14 +41,20 @@ describe("live operational smoke workflow", () => {
     expect(liveAiQuotaSpec).not.toContain("AI insight requests remaining this month");
   });
 
-  it("repairs seeded live role data before running the role matrix", () => {
+  it("repairs seeded live accounts before login-dependent smoke tests", () => {
+    const serviceRoleIndex = workflow.indexOf("Validate Supabase service role key");
     const repairIndex = workflow.indexOf("Repair live demo role matrix");
+    const aiSmokeIndex = workflow.indexOf("Run non-consuming AI quota smoke");
     const authPreflightIndex = workflow.indexOf("Validate live demo account sign-in");
     const matrixIndex = workflow.indexOf("Run role and tier matrix smoke");
 
+    expect(serviceRoleIndex).toBeGreaterThan(-1);
     expect(repairIndex).toBeGreaterThan(-1);
+    expect(aiSmokeIndex).toBeGreaterThan(-1);
     expect(authPreflightIndex).toBeGreaterThan(-1);
     expect(matrixIndex).toBeGreaterThan(-1);
+    expect(serviceRoleIndex).toBeLessThan(repairIndex);
+    expect(repairIndex).toBeLessThan(aiSmokeIndex);
     expect(repairIndex).toBeLessThan(authPreflightIndex);
     expect(authPreflightIndex).toBeLessThan(matrixIndex);
     expect(repairIndex).toBeLessThan(matrixIndex);
