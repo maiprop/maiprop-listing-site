@@ -34,10 +34,16 @@ describe("live operational smoke workflow", () => {
   });
 
   it("asserts the current non-consuming live quota UI contract", () => {
-    expect(liveAiQuotaSpec).toContain("expectedTierStatus");
-    expect(liveAiQuotaSpec).toContain("AI Nearby Places requests");
-    expect(liveAiQuotaSpec).toContain("Neighbourhood Report requests");
-    expect(liveAiQuotaSpec).toContain("Free:\\s*5\\/month\\.\\s*Pro:\\s*50\\/month\\.");
+    expect(liveAiQuotaSpec).toContain("minimumLimit");
+    expect(liveAiQuotaSpec).toContain("quotaSnapshot");
+    expect(liveAiQuotaSpec).toContain('"property-valuation"');
+    expect(liveAiQuotaSpec).toContain('"neighbourhood-report"');
+    expect(liveAiQuotaSpec).toContain('"property-pois"');
+    expect(liveAiQuotaSpec).toContain("ai-quota-status");
+    expect(liveAiQuotaSpec).toContain("AI request allowance will be checked before loading");
+    expect(liveAiQuotaSpec).toContain("expect(after).toEqual(before)");
+    expect(liveAiQuotaSpec).not.toContain("AI Nearby Places requests");
+    expect(liveAiQuotaSpec).not.toContain("Neighbourhood Report requests");
     expect(liveAiQuotaSpec).not.toContain("AI insight requests remaining this month");
   });
 
