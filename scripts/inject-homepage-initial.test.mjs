@@ -3,7 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  assertStrictHomepageInitialPayload,
   buildHomepageInitialPayload,
+  buildHomepageInitialPayloadWithDiagnostics,
   injectHomepageInitialPayload,
 } from "./inject-homepage-initial.mjs";
 
@@ -428,6 +430,56 @@ describe("homepage initial payload injection", () => {
       const parsed = new URL(String(url));
       return parsed.pathname === "/api/public/listings" && !parsed.searchParams.has("listing_type");
     })).toBe(false);
+  });
+
+  it("distinguishes an unavailable featured origin from a valid empty catalogue", async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      const parsed = new URL(String(url));
+      if (parsed.pathname === "/api/public/homepage" && parsed.searchParams.get("section") === "open-houses") {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (parsed.pathname === "/api/public/listings" && parsed.searchParams.has("listing_type")) {
+        return new Response(JSON.stringify({ data: [], hasMore: false }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "upstream unavailable" }), {
+        status: 503,
+        headers: { "content-type": "application/json" },
+      });
+    });
+
+    const result = await buildHomepageInitialPayloadWithDiagnostics({
+      origin: "https://portal.maiprop.co",
+      now: new Date("2026-07-01T10:00:00.000Z"),
+      fetchImpl,
+      fetchOptions: { attempts: 1, timeoutMs: 1_000 },
+    });
+
+    expect(result.payload.featured).toEqual([]);
+    expect(result.diagnostics).toMatchObject({
+      featuredSectionAvailable: false,
+      featuredFallbackAvailable: false,
+    });
+    expect(() => assertStrictHomepageInitialPayload(result)).toThrow(/no featured listings/i);
+    expect(() => assertStrictHomepageInitialPayload(result, { allowOriginUnavailable: true })).not.toThrow();
+  });
+
+  it("keeps strict deployment rejection when reachable featured sources are valid but empty", async () => {
+    const result = {
+      payload: { featured: [] },
+      diagnostics: {
+        featuredSectionAvailable: true,
+        featuredFallbackAvailable: true,
+      },
+    };
+
+    expect(() => assertStrictHomepageInitialPayload(result, { allowOriginUnavailable: true }))
+      .toThrow(/no featured listings/i);
   });
 
   it("injects the payload into dist index.html without executable inline JavaScript", async () => {

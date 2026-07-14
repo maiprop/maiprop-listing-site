@@ -249,13 +249,16 @@ async function fetchHomepageSection(origin, section, limit, fetchImpl, fetchOpti
   url.searchParams.set("section", section);
   try {
     const json = await fetchJsonWithTimeout(url, fetchImpl, fetchOptions);
-    return publicRowsFromResponse(json)
-      .map(sanitizeHomepageRow)
-      .filter(Boolean)
-      .slice(0, limit);
+    return {
+      available: true,
+      rows: publicRowsFromResponse(json)
+        .map(sanitizeHomepageRow)
+        .filter(Boolean)
+        .slice(0, limit),
+    };
   } catch (error) {
     console.warn(`[homepage-initial] Could not fetch ${section}: ${error.message}`);
-    return [];
+    return { available: false, rows: [] };
   }
 }
 
@@ -265,13 +268,16 @@ async function fetchFeaturedListingsFallback(origin, limit, fetchImpl, fetchOpti
   url.searchParams.set("pageSize", String(limit));
   try {
     const json = await fetchJsonWithTimeout(url, fetchImpl, fetchOptions);
-    return publicRowsFromResponse(json)
-      .map(sanitizeHomepageRow)
-      .filter(Boolean)
-      .slice(0, limit);
+    return {
+      available: true,
+      rows: publicRowsFromResponse(json)
+        .map(sanitizeHomepageRow)
+        .filter(Boolean)
+        .slice(0, limit),
+    };
   } catch (error) {
     console.warn(`[homepage-initial] Could not fetch featured fallback listings: ${error.message}`);
-    return [];
+    return { available: false, rows: [] };
   }
 }
 
@@ -323,31 +329,63 @@ async function fetchInitialListingsPage(origin, listingType, fetchImpl, fetchOpt
   }
 }
 
-export async function buildHomepageInitialPayload({
+export async function buildHomepageInitialPayloadWithDiagnostics({
   origin = DEFAULT_ORIGIN,
   now = new Date(),
   fetchImpl = globalThis.fetch,
   fetchOptions,
 } = {}) {
-  let [featured, openHouses, saleListings, rentListings] = await Promise.all([
+  const [featuredSection, openHouseSection, saleListings, rentListings] = await Promise.all([
     fetchHomepageSection(origin, "featured", MAX_FEATURED_ROWS, fetchImpl, fetchOptions),
     fetchHomepageSection(origin, "open-houses", MAX_OPEN_HOUSE_ROWS, fetchImpl, fetchOptions),
     fetchInitialListingsPage(origin, "sale", fetchImpl, fetchOptions),
     fetchInitialListingsPage(origin, "rent", fetchImpl, fetchOptions),
   ]);
 
+  let featured = featuredSection.rows;
+  let featuredFallback = { available: true, rows: [] };
   if (featured.length === 0) {
-    featured = await fetchFeaturedListingsFallback(origin, MAX_FEATURED_ROWS, fetchImpl, fetchOptions);
+    featuredFallback = await fetchFeaturedListingsFallback(origin, MAX_FEATURED_ROWS, fetchImpl, fetchOptions);
+    featured = featuredFallback.rows;
   }
 
   return {
-    version: HOMEPAGE_INITIAL_VERSION,
-    generatedAt: now.toISOString(),
-    featured,
-    openHouses,
-    saleListings,
-    rentListings,
+    payload: {
+      version: HOMEPAGE_INITIAL_VERSION,
+      generatedAt: now.toISOString(),
+      featured,
+      openHouses: openHouseSection.rows,
+      saleListings,
+      rentListings,
+    },
+    diagnostics: {
+      featuredSectionAvailable: featuredSection.available,
+      featuredFallbackAvailable: featuredFallback.available,
+    },
   };
+}
+
+export async function buildHomepageInitialPayload(options = {}) {
+  const { payload } = await buildHomepageInitialPayloadWithDiagnostics(options);
+  return payload;
+}
+
+export function assertStrictHomepageInitialPayload(
+  { payload, diagnostics },
+  { allowOriginUnavailable = false } = {},
+) {
+  if (payload.featured.length > 0) return;
+
+  const featuredOriginUnavailable = diagnostics.featuredSectionAvailable === false
+    && diagnostics.featuredFallbackAvailable === false;
+  if (allowOriginUnavailable && featuredOriginUnavailable) {
+    console.warn(
+      "[homepage-initial] Featured origin is unavailable; deploying without an embedded featured payload so the client can recover through the live API.",
+    );
+    return;
+  }
+
+  throw new Error("Strict homepage initial payload generation found no featured listings.");
 }
 
 export async function injectHomepageInitialPayload({ distDir = DEFAULT_DIST_DIR, payload }) {
@@ -384,11 +422,18 @@ function isStrict(env = process.env, argv = process.argv) {
   return env.HOMEPAGE_INITIAL_STRICT === "1" || argv.includes("--strict");
 }
 
+function allowsUnavailableOrigin(env = process.env, argv = process.argv) {
+  return env.HOMEPAGE_INITIAL_ALLOW_UNAVAILABLE === "1" || argv.includes("--allow-origin-unavailable");
+}
+
 async function main() {
-  const payload = await buildHomepageInitialPayload({ origin: envOrigin() });
+  const initialResult = await buildHomepageInitialPayloadWithDiagnostics({ origin: envOrigin() });
+  const { payload } = initialResult;
   const strict = isStrict();
-  if (strict && payload.featured.length === 0) {
-    throw new Error("Strict homepage initial payload generation found no featured listings.");
+  if (strict) {
+    assertStrictHomepageInitialPayload(initialResult, {
+      allowOriginUnavailable: allowsUnavailableOrigin(),
+    });
   }
   const result = await injectHomepageInitialPayload({ payload });
   console.log(

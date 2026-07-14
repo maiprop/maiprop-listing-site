@@ -64,7 +64,7 @@ jobs:
           VITE_APP_URL:                  ${{ secrets.VITE_APP_URL }}
 
       - name: Generate homepage initial payload
-        run: npm run build:homepage-initial -- --strict
+        run: npm run build:homepage-initial -- --strict --allow-origin-unavailable
         env:
           HOMEPAGE_INITIAL_ORIGIN: ${{ secrets.VITE_APP_URL }}
 

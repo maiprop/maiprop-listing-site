@@ -7,6 +7,10 @@ const productionDeployWorkflowPath = resolve(
   process.cwd(),
   ".github/workflows/reusable-cloudflare-production-deploy.yml",
 );
+const directProductionDeployWorkflowPath = resolve(
+  process.cwd(),
+  ".github/workflows/direct-cloudflare-production-deploy.yml",
+);
 const ciWorkflowPath = resolve(process.cwd(), ".github/workflows/ci.yml");
 const packageJsonPath = resolve(process.cwd(), "package.json");
 const pagesWorkerBuildScriptPath = resolve(process.cwd(), "scripts/build-cloudflare-pages-worker.mjs");
@@ -132,6 +136,7 @@ describe("Cloudflare Pages deploy workflow routing", () => {
 
   it("injects real homepage initial data after build and before Cloudflare deploy", () => {
     const productionWorkflow = readFileSync(productionDeployWorkflowPath, "utf8");
+    const directProductionWorkflow = readFileSync(directProductionDeployWorkflowPath, "utf8");
     const ciWorkflow = readFileSync(ciWorkflowPath, "utf8");
     const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
     const injector = readFileSync(homepageInitialScriptPath, "utf8");
@@ -147,7 +152,12 @@ describe("Cloudflare Pages deploy workflow routing", () => {
     const productionPackageIndex = productionWorkflow.indexOf("Package Cloudflare Pages Functions worker");
     expect(productionInjectIndex).toBeGreaterThan(productionBuildIndex);
     expect(productionPackageIndex).toBeGreaterThan(productionInjectIndex);
-    expect(productionWorkflow).toContain("npm run build:homepage-initial");
+    expect(productionWorkflow).toContain(
+      "npm run build:homepage-initial -- --strict --allow-origin-unavailable",
+    );
+    expect(directProductionWorkflow).toContain(
+      "npm run build:homepage-initial -- --strict --allow-origin-unavailable",
+    );
     expect(productionWorkflow).toContain("HOMEPAGE_INITIAL_ORIGIN: ${{ secrets.VITE_APP_URL }}");
 
     const previewBuildIndex = ciWorkflow.indexOf("Build app with staging environment");
