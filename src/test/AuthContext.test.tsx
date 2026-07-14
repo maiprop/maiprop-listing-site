@@ -81,6 +81,7 @@ beforeEach(() => {
   supabaseMock.auth.signUp.mockResolvedValue({ data: { user: null, session: null }, error: null });
   supabaseMock.functions.invoke.mockResolvedValue({ data: null, error: null });
   authActivityMock.recordUserAuthActivity.mockResolvedValue("auth-event-1");
+  window.history.replaceState({}, "", "/");
 });
 
 describe("profileNeedsOnboarding (pure helper)", () => {
@@ -416,6 +417,109 @@ describe("AuthProvider auth API methods", () => {
       await result.current.refreshSubscription();
     });
     expect(supabaseMock.functions.invoke).toHaveBeenCalledWith("check-subscription", {});
+  });
+
+  it("refreshSubscription reconciles only the exact checkout-success session", async () => {
+    supabaseMock.auth.getSession.mockResolvedValue({
+      data: { session: { user: { id: "u-checkout" } } },
+    });
+    supabaseMock.functions.invoke.mockResolvedValue({
+      data: {
+        subscribed: false,
+        product_id: null,
+        subscription_end: null,
+        source: "investor",
+        sync_status: "pending",
+      },
+      error: null,
+    });
+    window.history.replaceState(
+      {},
+      "",
+      "/pricing?checkout=success&session_id=cs_test_exact_checkout",
+    );
+
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await act(async () => {
+      authStateCallbackHolder.current?.("INITIAL_SESSION", {
+        user: { id: "u-checkout" },
+      });
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    supabaseMock.functions.invoke.mockClear();
+
+    await act(async () => {
+      await result.current.refreshSubscription();
+    });
+
+    expect(supabaseMock.functions.invoke).toHaveBeenCalledWith(
+      "check-subscription",
+      { body: { checkout_session_id: "cs_test_exact_checkout" } },
+    );
+    expect(result.current.subscription.syncStatus).toBe("pending");
+    expect(result.current.subscription.source).toBe("investor");
+  });
+
+  it("queues exact-session reconciliation behind an in-flight login check", async () => {
+    supabaseMock.auth.getSession.mockResolvedValue({
+      data: { session: { user: { id: "u-checkout-race" } } },
+    });
+    let finishLoginCheck!: (value: {
+      data: Record<string, unknown>;
+      error: null;
+    }) => void;
+    supabaseMock.functions.invoke
+      .mockImplementationOnce(() =>
+        new Promise((resolve) => {
+          finishLoginCheck = resolve;
+        })
+      )
+      .mockResolvedValue({
+        data: {
+          subscribed: false,
+          product_id: null,
+          subscription_end: null,
+          source: "database",
+          sync_status: "pending",
+        },
+        error: null,
+      });
+
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await waitFor(() => {
+      expect(supabaseMock.functions.invoke).toHaveBeenCalledWith(
+        "check-subscription",
+        {},
+      );
+    });
+    window.history.replaceState(
+      {},
+      "",
+      "/pricing?checkout=success&session_id=cs_test_queued_checkout",
+    );
+
+    let refreshPromise!: Promise<void>;
+    act(() => {
+      refreshPromise = result.current.refreshSubscription();
+    });
+    await act(async () => {
+      finishLoginCheck({
+        data: {
+          subscribed: false,
+          product_id: null,
+          subscription_end: null,
+          source: "database",
+          sync_status: "synced",
+        },
+        error: null,
+      });
+      await refreshPromise;
+    });
+
+    expect(supabaseMock.functions.invoke).toHaveBeenCalledWith(
+      "check-subscription",
+      { body: { checkout_session_id: "cs_test_queued_checkout" } },
+    );
   });
 });
 

@@ -93,10 +93,15 @@ function errorMessage(err: unknown): string {
 function decodeBase64UrlJson(segment: string): Record<string, unknown> {
   try {
     const base64 = segment.replaceAll("-", "+").replaceAll("_", "/");
-    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
+    const padded = base64.padEnd(
+      base64.length + ((4 - (base64.length % 4)) % 4),
+      "=",
+    );
     const json = atob(padded);
     const value = JSON.parse(json) as unknown;
-    if (!value || typeof value !== "object") throw new AuthError("Invalid bearer token");
+    if (!value || typeof value !== "object") {
+      throw new AuthError("Invalid bearer token");
+    }
     return value as Record<string, unknown>;
   } catch (err) {
     if (err instanceof AuthError) throw err;
@@ -155,15 +160,17 @@ Deno.serve(async (req) => {
     });
     const userId = verifiedUserIdFromJwt(req);
 
-    const quotaEntries = await Promise.all(
-      buckets.map(async (bucket) => {
-        const { data, error } = await supabase.rpc("check_ai_quota_for_user", {
-          _user_id: userId,
-          p_bucket: bucket,
-        });
-        if (error) throw error;
-        return [bucket, normalizeQuota(data as Partial<QuotaStatus> | null)] as const;
-      }),
+    const { data, error } = await supabase.rpc("check_ai_quotas_for_user", {
+      _user_id: userId,
+      p_buckets: buckets,
+    });
+    if (error) throw error;
+
+    const quotaMap = data && typeof data === "object" && !Array.isArray(data)
+      ? data as Record<string, Partial<QuotaStatus> | null>
+      : {};
+    const quotaEntries = buckets.map((bucket) =>
+      [bucket, normalizeQuota(quotaMap[bucket] ?? null)] as const
     );
 
     if (batched) {

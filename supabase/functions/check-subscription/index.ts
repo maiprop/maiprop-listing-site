@@ -13,7 +13,10 @@ import {
   resolveSubscriptionEntitlement,
 } from "../_shared/entitlements.ts";
 import { hasProvisionedSubscriptionAccess } from "../_shared/subscriptionStatus.ts";
-import { createStripeClient, getStripeRuntimeMode } from "../_shared/stripeClient.ts";
+import {
+  createStripeClient,
+  getStripeRuntimeMode,
+} from "../_shared/stripeClient.ts";
 
 const log = createLogger("check-subscription");
 const checkSubLimiter = makeRateLimiter({
@@ -33,9 +36,56 @@ export type FallbackSubscriptionState = {
   status?: string | null;
 };
 
-// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-function isStripeSubscribed(status: string | null | undefined) {
+export type SubscriptionSyncStatus = "synced" | "pending" | "timeout";
+
+export type SubscriptionCheckState = FallbackSubscriptionState & {
+  sync_status: SubscriptionSyncStatus;
+};
+
+type SubscriptionCheckOptions = {
+  stripeKey?: string | null;
+  createStripe?: (stripeKey: string) => StripeCheckoutRetriever;
+  reconciliationTimeoutMs?: number;
+};
+
+type StripeCheckoutRetriever = {
+  checkout: {
+    sessions: {
+      retrieve(
+        id: string,
+        params: { expand: string[] },
+        options: { timeout: number; maxNetworkRetries: number },
+      ): Promise<Stripe.Checkout.Session>;
+    };
+  };
+};
+
+const CHECKOUT_RECONCILIATION_TIMEOUT_MS = 3_000;
+const CHECKOUT_SESSION_ID_RE = /^cs_(test|live)_[A-Za-z0-9_]+$/;
+
+class CheckoutReconciliationTimeoutError extends Error {}
+
+function isStripeSubscribed(status: string | null | undefined): boolean {
   return hasProvisionedSubscriptionAccess(status);
+}
+
+async function withHardTimeout<T>(
+  operation: Promise<T>,
+  timeoutMs: number,
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new CheckoutReconciliationTimeoutError()),
+      timeoutMs,
+    );
+  });
+
+  try {
+    return await Promise.race([operation, timeout]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
 }
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
@@ -73,6 +123,7 @@ function subscriptionUnavailableResponse(corsHeaders: Record<string, string>) {
 }
 
 type DurableBillingSubscriptionRow = {
+  stripe_subscription_id?: string | null;
   status?: string | null;
   stripe_product_id?: string | null;
   current_period_end?: string | null;
@@ -85,14 +136,13 @@ type DurableBillingSubscriptionRow = {
 type ProfileSubscriptionRow = {
   role?: string | null;
   participant_type?: string | null;
-  subscription_product_id?: string | null;
 };
 
 function isValidDurableBillingSubscription(
   row: DurableBillingSubscriptionRow | null,
   now = new Date(),
 ) {
-  if (!row || !hasProvisionedSubscriptionAccess(row.status)) return false;
+  if (!row || !isStripeSubscribed(row.status)) return false;
   const entitlementEnd = row.status === "trialing"
     ? row.trial_end ?? row.current_period_end
     : row.current_period_end;
@@ -101,11 +151,30 @@ function isValidDurableBillingSubscription(
   return !Number.isNaN(periodEnd.getTime()) && periodEnd > now;
 }
 
+function isValidCheckoutSubscription(
+  subscription: Stripe.Subscription | null,
+  now = Date.now(),
+) {
+  if (!subscription || !isStripeSubscribed(subscription.status)) {
+    return false;
+  }
+  if (subscription.status !== "trialing") return true;
+
+  return typeof subscription.trial_end === "number" &&
+    Number.isFinite(subscription.trial_end) &&
+    subscription.trial_end * 1_000 > now;
+}
+
 function durableBillingStateFromRows(
   rows: DurableBillingSubscriptionRow[],
   profileAudience: string | null,
+  requiredStripeSubscriptionId?: string,
 ): FallbackSubscriptionState | null {
   const row = rows.find((candidate) => {
+    if (
+      requiredStripeSubscriptionId &&
+      candidate.stripe_subscription_id !== requiredStripeSubscriptionId
+    ) return false;
     if (!isValidDurableBillingSubscription(candidate)) return false;
     const rowAudience = normalizeEntitlementAudience(candidate.audience);
     return Boolean(profileAudience && rowAudience === profileAudience);
@@ -126,27 +195,33 @@ function durableBillingStateFromRows(
 }
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-export async function getDatabaseFallback( // skipcq: JS-R1005 - Fallback subscription resolution intentionally checks product IDs, direct subscription state, and investor grants.
+export async function getDatabaseFallback( // skipcq: JS-R1005 - Durable resolution checks billing state and investor grants in parallel.
   supabaseClient: unknown,
   userId: string,
-  { allowProfileEntitlement = false }: { allowProfileEntitlement?: boolean } =
-    {},
+  {
+    requiredStripeSubscriptionId,
+  }: {
+    requiredStripeSubscriptionId?: string;
+  } = {},
 ): Promise<FallbackSubscriptionState> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const client = supabaseClient as { from: any };
   const runtimeMode = getStripeRuntimeMode();
   const [profileResult, investorResult, billingResult] = await Promise.all([
     client.from("profiles")
-      .select("role, participant_type, subscription_product_id")
+      .select("role, participant_type")
       .eq("user_id", userId)
       .maybeSingle(),
     client.from("investor_subscriptions")
       .select("status, expires_at")
       .eq("user_id", userId)
       .eq("runtime_mode", runtimeMode)
+      .eq("livemode", runtimeMode === "live")
       .in("status", ["active", "trial"]),
     client.from("billing_subscriptions")
-      .select("status, stripe_product_id, current_period_end, trial_end, plan_key, audience, billing_cycle")
+      .select(
+        "stripe_subscription_id, status, stripe_product_id, current_period_end, trial_end, plan_key, audience, billing_cycle",
+      )
       .eq("user_id", userId)
       .eq("runtime_mode", runtimeMode)
       .eq("livemode", runtimeMode === "live")
@@ -178,15 +253,10 @@ export async function getDatabaseFallback( // skipcq: JS-R1005 - Fallback subscr
   const durableBillingState = durableBillingStateFromRows(
     billingRows,
     profileAudience,
+    requiredStripeSubscriptionId,
   );
   if (durableBillingState) return durableBillingState;
 
-  const productId = profileRow?.subscription_product_id ?? null;
-  const entitlement = allowProfileEntitlement && productId
-    ? await resolveSubscriptionEntitlement(supabaseClient, userId, {
-      productId,
-    })
-    : null;
   const investors =
     (Array.isArray(investorResult.data)
       ? investorResult.data
@@ -198,17 +268,156 @@ export async function getDatabaseFallback( // skipcq: JS-R1005 - Fallback subscr
           expires_at?: string | null;
         } | null
       >;
-  const investor = investors.find((row) => isValidInvestorSubscription(row)) ??
-    null;
+  const hasInvestorAudience = profileAudience === "investor" ||
+    profileAudience === "institutional";
+  const investor = hasInvestorAudience
+    ? investors.find((row) => isValidInvestorSubscription(row)) ?? null
+    : null;
   const hasInvestorSubscription = Boolean(investor);
 
   return {
-    subscribed: Boolean(entitlement) || hasInvestorSubscription,
-    product_id: entitlement?.productId ?? null,
+    subscribed: hasInvestorSubscription,
+    product_id: null,
     subscription_end: hasInvestorSubscription
       ? investor?.expires_at ?? null
       : null,
-    source: "database",
+    source: hasInvestorSubscription ? "investor" : "database",
+  };
+}
+
+// skipcq: JS-0067 - Exported orchestration helper keeps the DB-only path directly testable.
+export async function resolveSubscriptionCheck(
+  supabaseClient: unknown,
+  userId: string,
+  body: { checkout_session_id?: unknown },
+  options: SubscriptionCheckOptions = {},
+): Promise<{ httpStatus: number; state: SubscriptionCheckState }> {
+  const cachedState = await getDatabaseFallback(supabaseClient, userId);
+  const checkoutSessionId = typeof body.checkout_session_id === "string"
+    ? body.checkout_session_id.trim()
+    : "";
+  if (!checkoutSessionId) {
+    return {
+      httpStatus: 200,
+      state: { ...cachedState, sync_status: "synced" },
+    };
+  }
+
+  const runtimeMode = getStripeRuntimeMode();
+  const expectedSessionPrefix = runtimeMode === "live"
+    ? "cs_live_"
+    : "cs_test_";
+  if (
+    !CHECKOUT_SESSION_ID_RE.test(checkoutSessionId) ||
+    !checkoutSessionId.startsWith(expectedSessionPrefix)
+  ) {
+    return {
+      httpStatus: 202,
+      state: { ...cachedState, sync_status: "pending" },
+    };
+  }
+
+  const stripeKey = options.stripeKey ?? null;
+  if (!stripeKey) {
+    return {
+      httpStatus: 202,
+      state: { ...cachedState, sync_status: "pending" },
+    };
+  }
+
+  const stripe = options.createStripe?.(stripeKey) ??
+    createStripeClient(stripeKey);
+  const reconciliationTimeoutMs = options.reconciliationTimeoutMs ??
+    CHECKOUT_RECONCILIATION_TIMEOUT_MS;
+  let session: Stripe.Checkout.Session;
+  try {
+    session = await withHardTimeout(
+      stripe.checkout.sessions.retrieve(
+        checkoutSessionId,
+        { expand: ["subscription"] },
+        { timeout: reconciliationTimeoutMs, maxNetworkRetries: 0 },
+      ),
+      reconciliationTimeoutMs,
+    );
+  } catch (error) {
+    if (error instanceof CheckoutReconciliationTimeoutError) {
+      log.warn("checkout reconciliation timed out", {
+        timeout_ms: reconciliationTimeoutMs,
+      });
+      return {
+        httpStatus: 200,
+        state: { ...cachedState, sync_status: "timeout" },
+      };
+    }
+    log.warn("checkout reconciliation pending", {
+      err: getErrorMessage(error),
+    });
+    return {
+      httpStatus: 202,
+      state: { ...cachedState, sync_status: "pending" },
+    };
+  }
+  const customerId = typeof session.customer === "string"
+    ? session.customer
+    : session.customer?.id ?? null;
+  const subscription = typeof session.subscription === "object" &&
+      session.subscription && !("deleted" in session.subscription)
+    ? session.subscription as Stripe.Subscription
+    : null;
+  const itemIds = getSubscriptionItemIds(subscription);
+  const sessionAudience = normalizeEntitlementAudience(
+    session.metadata?.audience,
+  );
+  const subscriptionAudience = normalizeEntitlementAudience(
+    subscription?.metadata?.audience,
+  );
+  const isOwnedSession = session.metadata?.user_id === userId &&
+    subscription?.metadata?.user_id === userId;
+  const checkoutType = session.metadata?.checkout_type;
+  const isSubscriptionCheckout = (checkoutType === "subscription" ||
+    checkoutType === "subscription_trial") &&
+    subscription?.metadata?.checkout_type === checkoutType;
+  const isMatchingAudience = Boolean(
+    sessionAudience && subscriptionAudience === sessionAudience,
+  );
+  const expectedLivemode = runtimeMode === "live";
+  const isMatchingRuntime = session.livemode === expectedLivemode &&
+    subscription?.livemode === expectedLivemode;
+  const isReconciliationCandidate = session.id === checkoutSessionId &&
+    session.mode === "subscription" && session.status === "complete" &&
+    Boolean(customerId && subscription) &&
+    isValidCheckoutSubscription(subscription) && isOwnedSession &&
+    isSubscriptionCheckout && isMatchingAudience && isMatchingRuntime;
+  const entitlement = subscription && isReconciliationCandidate
+    ? await resolveSubscriptionEntitlement(
+      supabaseClient,
+      userId,
+      itemIds,
+      sessionAudience,
+    )
+    : null;
+
+  if (
+    !isReconciliationCandidate || !customerId || !subscription || !entitlement
+  ) {
+    return {
+      httpStatus: 202,
+      state: { ...cachedState, sync_status: "pending" },
+    };
+  }
+
+  const state = await getDatabaseFallback(supabaseClient, userId, {
+    requiredStripeSubscriptionId: subscription.id,
+  });
+  if (state.source !== "billing_state") {
+    return {
+      httpStatus: 202,
+      state: { ...cachedState, sync_status: "pending" },
+    };
+  }
+  return {
+    httpStatus: 200,
+    state: { ...state, sync_status: "synced" },
   };
 }
 
@@ -235,9 +444,7 @@ export async function resolveSubscriptionResponse(
     };
   }
 
-  const fallback = await getDatabaseFallback(supabaseClient, userId, {
-    allowProfileEntitlement: false,
-  });
+  const fallback = await getDatabaseFallback(supabaseClient, userId);
   if (fallback.subscribed) return fallback;
 
   return {
@@ -261,78 +468,7 @@ function getSubscriptionItemIds(subscription: Stripe.Subscription | null): {
   };
 }
 
-function getSubscriptionCurrentPeriodEnd(subscription: Stripe.Subscription | null) {
-  const rootPeriodEnd = (subscription as unknown as {
-    current_period_end?: number | null;
-  } | null)?.current_period_end;
-  const itemPeriodEnd = (subscription?.items.data[0] as
-    | { current_period_end?: number | null }
-    | undefined)?.current_period_end;
-  return rootPeriodEnd ?? itemPeriodEnd ?? null;
-}
-
-// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-async function listOwnedCustomers(stripe: Stripe, userId: string) {
-  const search = await stripe.customers.search({
-    query: `metadata['user_id']:'${userId}'`,
-    limit: 10,
-  });
-  return search.data.filter((customer) =>
-    customer.metadata?.user_id === userId
-  );
-}
-
-// skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
-async function resolveCustomerAndSubscription(
-  stripe: Stripe,
-  supabaseClient: unknown,
-  userId: string,
-) {
-  const candidates = await listOwnedCustomers(stripe, userId);
-  let chosenCustomer: Stripe.Customer | null = null;
-  let chosenSubscription: Stripe.Subscription | null = null;
-  let chosenEntitlement: Awaited<ReturnType<typeof resolveSubscriptionEntitlement>> =
-    null;
-
-  for (const customer of candidates) {
-    const subs = await stripe.subscriptions.list({
-      customer: customer.id,
-      status: "all",
-      limit: 100,
-    });
-    if (!chosenCustomer) chosenCustomer = customer;
-
-    for (const subscription of subs.data) {
-      if (!isStripeSubscribed(subscription.status)) continue;
-      const entitlement = await resolveSubscriptionEntitlement(
-        supabaseClient,
-        userId,
-        getSubscriptionItemIds(subscription),
-      );
-      if (!entitlement) continue;
-      chosenCustomer = customer;
-      chosenSubscription = subscription;
-      chosenEntitlement = entitlement;
-      return {
-        customer: chosenCustomer,
-        subscription: chosenSubscription,
-        entitlement: chosenEntitlement,
-      };
-    }
-  }
-
-  if (!chosenCustomer && candidates[0]) {
-    chosenCustomer = candidates[0];
-  }
-
-  return {
-    customer: chosenCustomer,
-    subscription: chosenSubscription,
-    entitlement: chosenEntitlement,
-  };
-}
-
-Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates auth, Stripe lookup, DB fallback, and normalized subscription response.
+Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates auth, durable billing state, and explicit checkout reconciliation.
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
@@ -357,89 +493,20 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
 
   try {
     const user = await verifyBearerToken(req, supabaseClient);
-    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-
-    if (!stripeKey) {
-      try {
-        const fallback = await getDatabaseFallback(supabaseClient, user.id);
-        return new Response(JSON.stringify(fallback), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 200,
-        });
-      } catch (fallbackError: unknown) {
-        log.error("database fallback failed without Stripe key", {
-          userId: user.id,
-          message: getErrorMessage(fallbackError),
-        });
-        return subscriptionUnavailableResponse(corsHeaders);
-      }
-    }
-
-    try {
-      const stripe = createStripeClient(stripeKey);
-      const { customer, subscription, entitlement } =
-        await resolveCustomerAndSubscription(
-        stripe,
-        supabaseClient,
-        user.id,
-      );
-
-      const currentPeriodEnd = getSubscriptionCurrentPeriodEnd(subscription);
-      const subscriptionEnd = currentPeriodEnd
-        ? new Date(currentPeriodEnd * 1000).toISOString()
-        : null;
-      const subscriptionState = await resolveSubscriptionResponse(
-        supabaseClient,
-        user.id,
-        {
-          customerFound: Boolean(customer),
-          entitlement,
-          subscriptionEnd,
-        },
-      );
-
-      const { error: updateError } = await supabaseClient
-        .from("profiles")
-        .update({
-          subscription_product_id: subscriptionState.product_id ?? null,
-        })
-        .eq("user_id", user.id);
-
-      if (updateError) {
-        log.warn("profile subscription update failed", {
-          message: updateError.message,
-          userId: user.id,
-        });
-      }
-
-      return new Response(
-        JSON.stringify(subscriptionState),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 200,
-        },
-      );
-    } catch (stripeError: unknown) {
-      log.warn("stripe lookup failed; using database fallback", {
-        userId: user.id,
-        message: getErrorMessage(stripeError),
-      });
-      try {
-        const fallback = await getDatabaseFallback(supabaseClient, user.id, {
-          allowProfileEntitlement: false,
-        });
-        return new Response(JSON.stringify(fallback), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 200,
-        });
-      } catch (fallbackError: unknown) {
-        log.error("database fallback failed after Stripe error", {
-          userId: user.id,
-          message: getErrorMessage(fallbackError),
-        });
-        return subscriptionUnavailableResponse(corsHeaders);
-      }
-    }
+    const parsedBody = await req.json().catch(() => ({})) as unknown;
+    const body = parsedBody && typeof parsedBody === "object"
+      ? parsedBody as { checkout_session_id?: unknown }
+      : {};
+    const result = await resolveSubscriptionCheck(
+      supabaseClient,
+      user.id,
+      body,
+      { stripeKey: Deno.env.get("STRIPE_SECRET_KEY") },
+    );
+    return new Response(JSON.stringify(result.state), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: result.httpStatus,
+    });
   } catch (error: unknown) {
     if (!(error instanceof AuthError)) {
       log.error("unexpected subscription check failure", {

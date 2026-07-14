@@ -35,6 +35,8 @@ export interface SubscriptionState {
   subscribed: boolean;
   productId: string | null;
   subscriptionEnd: string | null;
+  source: "billing_state" | "investor" | "database" | "stripe";
+  syncStatus: "synced" | "pending" | "timeout";
   loading: boolean;
 }
 
@@ -70,6 +72,21 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const CHECKOUT_SESSION_ID_RE = /^cs_(?:test|live)_[A-Za-z0-9_]{6,240}$/;
+
+const checkoutSessionIdForReconciliation = (): string | null => {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search);
+  const checkoutSucceeded = params.get("checkout") === "success" ||
+    params.get("checkout") === "trial_started" ||
+    params.get("pro") === "success";
+  if (!checkoutSucceeded) return null;
+
+  const sessionId = params.get("checkout_session_id") ??
+    params.get("session_id");
+  return sessionId && CHECKOUT_SESSION_ID_RE.test(sessionId) ? sessionId : null;
+};
+
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 export function profileRoleSwitchInProgress(
   profile: { role_switch_in_progress_at?: string | null } | null,
@@ -100,13 +117,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     subscribed: false,
     productId: null,
     subscriptionEnd: null,
+    source: "database",
+    syncStatus: "synced",
     loading: false,
   });
 
   // Guard: discard profile fetch results that belong to a previous user session
   const expectedUserIdRef = useRef<string | null>(null);
-  // Guard: prevent concurrent subscription checks
-  const subCheckInProgressRef = useRef(false);
+  // Normal refreshes deduplicate; exact checkout reconciliation waits its turn.
+  const subCheckInProgressRef = useRef<Promise<void> | null>(null);
   // Guard: avoid duplicate auth telemetry from INITIAL_SESSION + getSession races.
   const lastAuthActivityRef = useRef<{ key: string; at: number } | null>(null);
 
@@ -128,29 +147,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const checkSubscription = useCallback(
-    async (currentSession: Session | null) => {
+    async (
+      currentSession: Session | null,
+      checkoutSessionId: string | null = null,
+    ) => {
       if (!currentSession) {
         setSubscription({
           subscribed: false,
           productId: null,
           subscriptionEnd: null,
+          source: "database",
+          syncStatus: "synced",
           loading: false,
         });
         return;
       }
-      if (subCheckInProgressRef.current) return;
-      subCheckInProgressRef.current = true;
+      if (subCheckInProgressRef.current && !checkoutSessionId) return;
+      while (subCheckInProgressRef.current) {
+        await subCheckInProgressRef.current;
+      }
+
+      let releaseCheck = () => {};
+      const currentCheck = new Promise<void>((resolve) => {
+        releaseCheck = resolve;
+      });
+      subCheckInProgressRef.current = currentCheck;
       setSubscription((prev) => ({ ...prev, loading: true }));
       try {
         const { data, error } = await supabase.functions.invoke(
           "check-subscription",
-          {},
+          checkoutSessionId
+            ? { body: { checkout_session_id: checkoutSessionId } }
+            : {},
         );
         if (!error && data) {
           setSubscription({
             subscribed: data.subscribed ?? false,
             productId: data.product_id ?? null,
             subscriptionEnd: data.subscription_end ?? null,
+            source: data.source === "billing_state" ||
+                data.source === "investor" || data.source === "stripe"
+              ? data.source
+              : "database",
+            syncStatus: data.sync_status === "pending" ||
+                data.sync_status === "timeout"
+              ? data.sync_status
+              : "synced",
             loading: false,
           });
         } else {
@@ -163,7 +205,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         );
         setSubscription((prev) => ({ ...prev, loading: false }));
       } finally {
-        subCheckInProgressRef.current = false;
+        if (subCheckInProgressRef.current === currentCheck) {
+          subCheckInProgressRef.current = null;
+        }
+        releaseCheck();
       }
     },
     [],
@@ -239,6 +284,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           subscribed: false,
           productId: null,
           subscriptionEnd: null,
+          source: "database",
+          syncStatus: "synced",
           loading: false,
         });
         setLoading(false);
@@ -369,6 +416,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       subscribed: false,
       productId: null,
       subscriptionEnd: null,
+      source: "database",
+      syncStatus: "synced",
       loading: false,
     });
   }, []);
@@ -423,10 +472,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, fetchProfile]);
 
   const refreshSubscription = useCallback(async () => {
+    const checkoutSessionId = checkoutSessionIdForReconciliation();
     const {
       data: { session: sess },
     } = await supabase.auth.getSession();
-    await checkSubscription(sess);
+    await checkSubscription(sess, checkoutSessionId);
   }, [checkSubscription]);
 
   const needsOnboarding = profileNeedsOnboarding(profile);

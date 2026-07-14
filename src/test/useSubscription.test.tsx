@@ -54,6 +54,7 @@ vi.mock("@/contexts/AuthContext", () => ({
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
+import { supabase } from "@/integrations/supabase/client";
 
 const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -102,6 +103,31 @@ describe("useSubscription", () => {
     expect(result.current.productId).toBe("prod_abc");
     expect(result.current.accessSource).toBe("stripe");
     expect(result.current.hasStripeBilling).toBe(true);
+  });
+
+  it("does not use a stale profile product when durable subscription state has no product", async () => {
+    (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
+      subscription: {
+        subscribed: true,
+        productId: null,
+        subscriptionEnd: null,
+        loading: false,
+      },
+      refreshSubscription: vi.fn(),
+      profile: {
+        role: "buyer",
+        participant_type: "buyer",
+        subscription_product_id: "prod_participant",
+      },
+      user: { id: "u-stale-product" },
+    });
+
+    const { result } = renderHook(() => useSubscription(), { wrapper });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.isPro).toBe(false);
+    expect(result.current.productId).toBeNull();
+    expect(result.current.accessSource).toBe("free");
   });
 
   it("rejects participant Pro as developer entitlement", async () => {
@@ -188,5 +214,28 @@ describe("useSubscription", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.isPro).toBe(false);
     expect(result.current.accessSource).toBe("free");
+  });
+
+  it("uses the runtime-scoped investor state without a second investor query", async () => {
+    (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
+      subscription: {
+        subscribed: true,
+        productId: null,
+        subscriptionEnd: "2099-06-30T00:00:00.000Z",
+        source: "investor",
+        syncStatus: "synced",
+        loading: false,
+      },
+      refreshSubscription: vi.fn(),
+      profile: { role: "investor", participant_type: "investor" },
+      user: { id: "u-investor" },
+    });
+
+    const { result } = renderHook(() => useSubscription(), { wrapper });
+
+    expect(result.current.isPro).toBe(true);
+    expect(result.current.accessSource).toBe("investor");
+    expect(result.current.isInvestorManagedPlan).toBe(true);
+    expect(supabase.from).not.toHaveBeenCalled();
   });
 });
