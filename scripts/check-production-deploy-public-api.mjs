@@ -135,10 +135,15 @@ function validatePublicApiShape(path, body, assertOk) {
 
   if (path.includes("section=featured")) {
     assertOk(Array.isArray(body), `${path} returned an invalid homepage featured payload; expected an array`);
-    assertOk(body.length > 0, `${path} returned no Spotlight listings`);
-    const row = body[0];
-    for (const key of ["owner_id", "profiles", "has_video_tour", "has_virtual_tour", "is_featured", "priority_placement"]) {
-      assertOk(hasOwn(row, key), `${path} returned Spotlight row without ${key}`);
+    for (const [index, row] of body.entries()) {
+      for (const key of ["owner_id", "profiles", "has_video_tour", "has_virtual_tour", "is_featured", "featured_until", "priority_placement"]) {
+        assertOk(hasOwn(row, key), `${path} returned Spotlight row without ${key}`);
+      }
+      const featuredUntil = Date.parse(String(row.featured_until ?? ""));
+      assertOk(
+        row.is_featured === true && Number.isFinite(featuredUntil) && featuredUntil > Date.now(),
+        `${path} returned inactive or expired Spotlight row at index ${index}`,
+      );
     }
     return;
   }

@@ -34,8 +34,20 @@ function featuredHomepagePayload() {
     has_video_tour: false,
     has_virtual_tour: true,
     is_featured: true,
+    featured_until: "2099-01-01T00:00:00.000Z",
     priority_placement: 1,
   }];
+}
+
+function publicApiPayloadForUrl(href, { featured = featuredHomepagePayload() } = {}) {
+  const url = new URL(href);
+  const path = url.pathname + url.search;
+  if (path.startsWith("/api/public/listings?")) return publicListingsPayloadFromUrl(href);
+  if (path.startsWith("/api/public/auctions?")) return { data: [] };
+  if (path.includes("section=type-counts")) return { apartment: 1, land: 1 };
+  if (path.includes("section=auction-count")) return 1;
+  if (path.includes("section=featured")) return featured;
+  return [];
 }
 
 describe("production deploy site-lock smoke helpers", () => {
@@ -189,6 +201,45 @@ describe("production deploy public API fixture guard", () => {
     expect(calls).toContain("https://portal.maiprop.co/api/public/listing?id=listing-1");
     expect(calls).toContain("https://portal.maiprop.co/api/public/listing?id=new-build-1");
     expect(calls).toContain("https://portal.maiprop.co/api/public/listing?id=auction-1");
+  });
+
+  it("accepts a valid empty Spotlight response when no paid placement is active", async () => {
+    const { validatePublicApiEndpoints } = await import("./check-production-deploy-public-api.mjs");
+
+    await expect(validatePublicApiEndpoints("https://portal.maiprop.co", {
+      fetchText: async (url) => {
+        const payload = publicApiPayloadForUrl(url, { featured: [] });
+        return {
+          res: Response.json(payload),
+          text: JSON.stringify(payload),
+        };
+      },
+    })).resolves.toBeUndefined();
+  });
+
+  it("rejects inactive or expired rows returned by the Spotlight endpoint", async () => {
+    const { validatePublicApiEndpoints } = await import("./check-production-deploy-public-api.mjs");
+    const invalidRows = [
+      {
+        ...featuredHomepagePayload()[0],
+        is_featured: false,
+      },
+      {
+        ...featuredHomepagePayload()[0],
+        id: "expired-featured",
+        featured_until: "2000-01-01T00:00:00.000Z",
+      },
+    ];
+
+    await expect(validatePublicApiEndpoints("https://portal.maiprop.co", {
+      fetchText: async (url) => {
+        const payload = publicApiPayloadForUrl(url, { featured: invalidRows });
+        return {
+          res: Response.json(payload),
+          text: JSON.stringify(payload),
+        };
+      },
+    })).rejects.toThrow(/inactive or expired Spotlight row/);
   });
 
   it("reports Cloudflare Pages fail-open HTML when public API functions are not invoked", async () => {
