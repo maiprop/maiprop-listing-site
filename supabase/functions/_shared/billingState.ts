@@ -55,16 +55,23 @@ export type BillingSubscriptionInput = {
 
 type SupabaseQueryResult<T = unknown> = {
   data?: T | null;
-  error?: unknown;
+  error?: { message?: string } | null;
 };
 
-type SupabaseFilterBuilder<T = unknown> =
+export type SupabaseFilterBuilder<T = unknown> =
   & PromiseLike<SupabaseQueryResult<T>>
   & {
     select<U = T>(columns: string): SupabaseFilterBuilder<U>;
     eq(column: string, value: unknown): SupabaseFilterBuilder<T>;
+    in(column: string, values: readonly unknown[]): SupabaseFilterBuilder<T>;
     lt(column: string, value: unknown): SupabaseFilterBuilder<T>;
     maybeSingle(): PromiseLike<SupabaseQueryResult<T>>;
+    insert(payload: Record<string, unknown>): SupabaseFilterBuilder<T>;
+    update(payload: Record<string, unknown>): SupabaseFilterBuilder<T>;
+    upsert(
+      payload: Record<string, unknown>,
+      options?: Record<string, unknown>,
+    ): SupabaseFilterBuilder<T>;
   };
 
 type StripeWebhookEventLeaseRow = {
@@ -115,16 +122,12 @@ export type BillingSubscriptionRow = {
   stripe_event_created_at?: string | null;
 };
 
-type SupabaseAdminClient = {
-  from(table: string): {
-    upsert(
-      payload: Record<string, unknown>,
-      options?: Record<string, unknown>,
-    ): Promise<{ error: unknown }>;
-    insert(payload: Record<string, unknown>): Promise<{ error: unknown }>;
-    select<T = unknown>(columns: string): SupabaseFilterBuilder<T>;
-    update(payload: Record<string, unknown>): SupabaseFilterBuilder;
-  };
+export type SupabaseAdminClient = {
+  from(table: string): SupabaseFilterBuilder;
+  rpc<T = unknown>(
+    functionName: string,
+    args?: Record<string, unknown>,
+  ): PromiseLike<SupabaseQueryResult<T>>;
 };
 
 const WEBHOOK_PROCESSING_LEASE_MS = 10 * 60 * 1000;

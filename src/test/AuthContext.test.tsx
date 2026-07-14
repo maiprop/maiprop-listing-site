@@ -606,7 +606,6 @@ describe("AuthProvider auth API methods", () => {
   });
 
   it("fails closed when a refresh exceeds the subscription deadline", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
     supabaseMock.auth.getSession.mockResolvedValue({
       data: { session: { user: { id: "user-timeout" } } },
     });
@@ -622,28 +621,29 @@ describe("AuthProvider auth API methods", () => {
     });
 
     const { result } = renderHook(() => useAuth(), { wrapper: wrap });
-    await act(async () => {
-      authStateCallbackHolder.current?.("SIGNED_IN", { user: { id: "user-timeout" } });
-    });
     await waitFor(() => expect(result.current.subscription.subscribed).toBe(true));
 
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     supabaseMock.functions.invoke.mockImplementationOnce(
       () => new Promise(() => undefined),
     );
-    let refreshPromise!: Promise<void>;
-    await act(async () => {
-      refreshPromise = result.current.refreshSubscription();
-      await vi.advanceTimersByTimeAsync(6_500);
-      await refreshPromise;
-    });
+    try {
+      let refreshPromise!: Promise<void>;
+      await act(async () => {
+        refreshPromise = result.current.refreshSubscription();
+        await vi.advanceTimersByTimeAsync(6_500);
+        await refreshPromise;
+      });
 
-    expect(result.current.subscription).toMatchObject({
-      subscribed: false,
-      productId: null,
-      syncStatus: "timeout",
-      loading: false,
-    });
-    vi.useRealTimers();
+      expect(result.current.subscription).toMatchObject({
+        subscribed: false,
+        productId: null,
+        syncStatus: "timeout",
+        loading: false,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

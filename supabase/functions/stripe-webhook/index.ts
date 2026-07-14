@@ -24,6 +24,7 @@ import {
   beginStripeWebhookEvent,
   type BillingSubscriptionCanonical,
   type BillingSubscriptionObservation,
+  type SupabaseAdminClient,
   finishStripeWebhookEvent,
   stripeRuntimeModeFromLivemode,
   upsertBillingCustomer,
@@ -95,11 +96,8 @@ type SubscriptionEntitlement = {
   productId: string;
 } | null;
 
-// The generated Supabase database type is not available inside Edge Functions.
-// Keep the admin client intentionally dynamic while retaining Stripe-side types.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SupabaseAdminClient = any;
-
+// Share a narrow database port with the billing-state helpers so webhook queries
+// stay type-checked without coupling Edge Function tests to the generated schema.
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req, "stripe-signature");
   if (req.method === "OPTIONS") {
@@ -1760,8 +1758,7 @@ async function applyAgentDataInputDiscount(
       invoice_id: invoice.id,
       err: stripeErr instanceof Error ? stripeErr.message : String(stripeErr),
     });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: rollbackErr } = await (supabase as any).from(
+    const { error: rollbackErr } = await supabase.from(
       "agent_data_inputs",
     )
       .update({
