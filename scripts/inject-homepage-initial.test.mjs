@@ -430,6 +430,105 @@ describe("homepage initial payload injection", () => {
     })).toBe(false);
   });
 
+  it("reuses the deployed sanitized bootstrap when every live JSON endpoint is unavailable", async () => {
+    const previousPayload = {
+      version: 1,
+      generatedAt: "2026-06-30T10:00:00.000Z",
+      featured: [
+        {
+          id: "previous-featured",
+          title: "Previously deployed home",
+          city: "Athens",
+          owner_id: "must-not-ship",
+          private_note: "must-not-ship",
+        },
+      ],
+      openHouses: [
+        {
+          id: "previous-open-house",
+          title: "Previously deployed open house",
+          city: "Glyfada",
+        },
+      ],
+      saleListings: {
+        data: [{ id: "previous-sale", title: "Previously deployed sale", city: "Athens" }],
+        hasMore: false,
+        page: 1,
+        pageSize: 12,
+        offset: 0,
+      },
+    };
+    const fetchImpl = vi.fn(async (url) => {
+      const parsed = new URL(String(url));
+      if (parsed.pathname === "/") {
+        return new Response(
+          `<html><body><script id="maiprop-homepage-initial" type="application/json">${JSON.stringify(previousPayload)}</script></body></html>`,
+          { status: 200, headers: { "content-type": "text/html" } },
+        );
+      }
+      return new Response(JSON.stringify({ error: "upstream unavailable" }), {
+        status: 503,
+        headers: { "content-type": "application/json" },
+      });
+    });
+
+    const payload = await buildHomepageInitialPayload({
+      origin: "https://portal.maiprop.co",
+      now: new Date("2026-07-01T10:00:00.000Z"),
+      fetchImpl,
+      fetchOptions: { attempts: 1, timeoutMs: 1_000 },
+    });
+
+    expect(payload.featured).toEqual([
+      { id: "previous-featured", title: "Previously deployed home", city: "Athens" },
+    ]);
+    expect(payload.openHouses).toEqual([
+      { id: "previous-open-house", title: "Previously deployed open house", city: "Glyfada" },
+    ]);
+    expect(payload.saleListings).toEqual(previousPayload.saleListings);
+    expect(payload.rentListings).toBeUndefined();
+    expect(payload.generatedAt).toBe("2026-07-01T10:00:00.000Z");
+    expect(JSON.stringify(payload)).not.toContain("owner_id");
+    expect(JSON.stringify(payload)).not.toContain("private_note");
+  });
+
+  it("does not resurrect prior open houses when the live endpoint validly returns no rows", async () => {
+    const previousPayload = {
+      version: 1,
+      generatedAt: "2026-06-30T10:00:00.000Z",
+      featured: [{ id: "previous-featured", title: "Previous home", city: "Athens" }],
+      openHouses: [{ id: "expired-open-house", title: "Expired event", city: "Athens" }],
+    };
+    const fetchImpl = vi.fn(async (url) => {
+      const parsed = new URL(String(url));
+      if (parsed.pathname === "/") {
+        return new Response(
+          `<script id="maiprop-homepage-initial" type="application/json">${JSON.stringify(previousPayload)}</script>`,
+          { status: 200, headers: { "content-type": "text/html" } },
+        );
+      }
+      if (parsed.pathname === "/api/public/homepage") {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ data: [], hasMore: false }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+
+    const payload = await buildHomepageInitialPayload({
+      origin: "https://portal.maiprop.co",
+      fetchImpl,
+      fetchOptions: { attempts: 1, timeoutMs: 1_000 },
+    });
+
+    expect(payload.openHouses).toEqual([]);
+    expect(JSON.stringify(payload)).not.toContain("expired-open-house");
+  });
+
   it("injects the payload into dist index.html without executable inline JavaScript", async () => {
     const distDir = createTempDist(`
       <html><body>

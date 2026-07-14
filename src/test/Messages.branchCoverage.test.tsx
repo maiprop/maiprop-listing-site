@@ -127,8 +127,14 @@ describe("Messages business branches", () => {
   });
 
   it("opens query deep links without clearing router state and ignores non-string state IDs", async () => {
-    const queryView = renderMessages({ pathname: "/messages", search: "?conversation=conversation-1" });
-    await waitFor(() => expect(mocks.useMessages).toHaveBeenCalledWith("conversation-1"));
+    const second = conversation({
+      id: "conversation-2",
+      participant_b: "second-id",
+      profile_b: { user_id: "second-id", display_name: "Second Agent", avatar_url: null },
+    });
+    mocks.useConversations.mockReturnValue({ data: [conversation(), second], isLoading: false });
+    const queryView = renderMessages({ pathname: "/messages", search: "?conversation=conversation-2" });
+    await waitFor(() => expect(mocks.useMessages).toHaveBeenCalledWith("conversation-2"));
     expect(mocks.navigate).not.toHaveBeenCalled();
     queryView.unmount();
 
@@ -142,6 +148,19 @@ describe("Messages business branches", () => {
     renderMessages({ pathname: "/messages", state: { openConversationId: 42 } });
 
     await waitFor(() => expect(mocks.useMessages).toHaveBeenCalledWith("conversation-1"));
+    expect(mocks.navigate).not.toHaveBeenCalled();
+  });
+
+  it("keeps legacy conv deep links working while callers migrate to conversation", async () => {
+    const second = conversation({
+      id: "conversation-2",
+      participant_b: "second-id",
+      profile_b: { user_id: "second-id", display_name: "Second Agent", avatar_url: null },
+    });
+    mocks.useConversations.mockReturnValue({ data: [conversation(), second], isLoading: false });
+    renderMessages({ pathname: "/messages", search: "?conv=conversation-2" });
+
+    await waitFor(() => expect(mocks.useMessages).toHaveBeenCalledWith("conversation-2"));
     expect(mocks.navigate).not.toHaveBeenCalled();
   });
 

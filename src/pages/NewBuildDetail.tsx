@@ -297,7 +297,7 @@ export default function NewBuildDetail() { // skipcq: JS-R1005
     setContactLoading(true);
     try {
       const convId = await startConv.mutateAsync({ other_user_id: listing.owner_id, listing_id: id });
-      navigate(`/messages?conv=${convId}`);
+      navigate(`/messages?conversation=${encodeURIComponent(convId)}`);
     } catch (err: unknown) {
       toast.error(getPlanLimitErrorMessage(err) ?? tr("property.errorStartConversation", "Could not start conversation"));
     } finally {

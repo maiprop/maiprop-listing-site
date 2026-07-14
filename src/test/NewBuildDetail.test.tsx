@@ -426,13 +426,13 @@ describe("NewBuildDetail", () => {
     expect(screen.getByText(/500\.000/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Ask developer" }));
-    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/messages?conv=conv-1"));
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/messages?conversation=conv-1"));
 
     fireEvent.click(screen.getByRole("button", { name: "favorite" }));
     expect(toggleFavoriteMock).toHaveBeenCalledWith({ listing_id: "listing-1", isFavorited: false });
 
     fireEvent.click(screen.getByRole("button", { name: "floor plans child" }));
-    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/messages?conv=conv-1"));
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/messages?conversation=conv-1"));
 
     fireEvent.click(screen.getByRole("button", { name: "submit interest" }));
     await waitFor(() =>
@@ -605,7 +605,7 @@ describe("NewBuildDetail", () => {
     expect(askDeveloperButtons.length).toBeGreaterThanOrEqual(2);
 
     fireEvent.click(askDeveloperButtons[0]);
-    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/messages?conv=conv-1"));
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/messages?conversation=conv-1"));
   });
 
   it("handles contact errors without leaving the loading state stuck", async () => {

@@ -410,8 +410,6 @@ test.describe("Buyer — listings and property detail", () => {
 
       await expect(contactBtn).toBeVisible({ timeout: 30_000 });
 
-      await contactBtn.click();
-
       // Accept either: a modal/dialog overlay OR navigation to /messages.
       const dialogOrMessages = page
         .locator(
@@ -420,9 +418,20 @@ test.describe("Buyer — listings and property detail", () => {
         )
         .first();
 
+      const messagesOutcome = page
+        .waitForURL(/\/messages/, { timeout: 15_000 })
+        .then(() => "messages" as const)
+        .catch(() => null);
+      const modalOutcome = dialogOrMessages
+        .waitFor({ state: "visible", timeout: 15_000 })
+        .then(() => "modal" as const)
+        .catch(() => null);
+
+      await contactBtn.click();
+
       const outcome = await Promise.race([
-        page.waitForURL(/\/messages/, { timeout: 15_000 }).then(() => "messages").catch(() => null),
-        dialogOrMessages.waitFor({ state: "visible", timeout: 15_000 }).then(() => "modal").catch(() => null),
+        messagesOutcome,
+        modalOutcome,
       ]);
 
       expect(
