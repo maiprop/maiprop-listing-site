@@ -33,6 +33,7 @@ import {
 } from "../_shared/stripeClient.ts";
 import { pricingConfigMatchesStripeItem } from "../_shared/entitlements.ts";
 import { SELF_SERVE_ADDON_CREDITS } from "../create-checkout/constants.ts";
+import { getCurrentBillingRuntimeMode } from "../create-checkout/pricing.ts";
 import { shouldSkipProfileEntitlementSync } from "./addonGuard.ts";
 
 const log = createLogger("stripe-webhook");
@@ -443,7 +444,9 @@ export function addonRefundCreditsForAmount(
   refundedAmount: number | null | undefined,
 ): number {
   if (creditsGranted <= 0) return 0;
-  if (!totalAmount || totalAmount <= 0 || !refundedAmount || refundedAmount <= 0) {
+  if (
+    !totalAmount || totalAmount <= 0 || !refundedAmount || refundedAmount <= 0
+  ) {
     return 0;
   }
   return Math.min(
@@ -546,7 +549,9 @@ async function addonRefundInputFromRefund(
     refundedAmount: charge?.amount_refunded
       ? Number(charge.amount_refunded)
       : Number(refund.amount ?? 0),
-    livemode: Boolean((refund as Stripe.Refund & { livemode?: boolean }).livemode),
+    livemode: Boolean(
+      (refund as Stripe.Refund & { livemode?: boolean }).livemode,
+    ),
     metadata: { ...paymentIntentMetadata, ...(refund.metadata ?? {}) },
     status: refund.status ?? null,
   };
@@ -697,7 +702,9 @@ async function syncAddonCreditNoteRefund(
     refundId: creditNote.id,
     chargeId: null,
     paymentIntentId: metadata.payment_intent_id ?? null,
-    totalAmount: Number(metadata.amount_total ?? metadata.total_amount ?? amount),
+    totalAmount: Number(
+      metadata.amount_total ?? metadata.total_amount ?? amount,
+    ),
     refundedAmount: amount,
     livemode: Boolean(creditNote.livemode),
     metadata,
@@ -718,8 +725,28 @@ async function addonCheckoutProfileExists(
   return Boolean(data?.user_id);
 }
 
+async function addonCheckoutCustomerIsOwnedByUser(
+  supabase: SupabaseAdminClient,
+  userId: string,
+  stripeCustomerId: string,
+  livemode: boolean,
+): Promise<boolean> {
+  const runtimeMode = stripeRuntimeModeFromLivemode(livemode);
+  const { data, error } = await supabase
+    .from("billing_customers")
+    .select("user_id, stripe_customer_id")
+    .eq("user_id", userId)
+    .eq("stripe_customer_id", stripeCustomerId)
+    .eq("runtime_mode", runtimeMode)
+    .eq("livemode", livemode)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.user_id === userId &&
+    data?.stripe_customer_id === stripeCustomerId;
+}
+
 // skipcq: JS-0067 - Top-level helper is used by the webhook switch.
-async function fulfillAddonCheckoutSession(
+export async function fulfillAddonCheckoutSession(
   supabase: SupabaseAdminClient,
   session: Stripe.Checkout.Session,
 ): Promise<boolean> {
@@ -735,11 +762,45 @@ async function fulfillAddonCheckoutSession(
   if (!userId || !addonKey || !module || !audience || !unit) {
     throw new Error("addon checkout session missing required metadata");
   }
+  const livemode = Boolean(session.livemode);
+  const runtimeMode = stripeRuntimeModeFromLivemode(livemode);
+  const billingRuntimeMode = await getCurrentBillingRuntimeMode(supabase);
+  if (
+    metadata.runtime_mode !== runtimeMode ||
+    billingRuntimeMode !== runtimeMode
+  ) {
+    log.warn("add-on checkout runtime does not match active billing mode", {
+      session_id: session.id,
+      metadata_runtime_mode: metadata.runtime_mode ?? null,
+      billing_runtime_mode: billingRuntimeMode,
+      event_runtime_mode: runtimeMode,
+    });
+    return true;
+  }
   if (!(await addonCheckoutProfileExists(supabase, userId))) {
     log.warn("orphaned add-on checkout session", {
       session_id: session.id,
       user_id: userId,
       addon_key: addonKey,
+    });
+    return true;
+  }
+  const stripeCustomerId = objectId(session.customer);
+  if (
+    session.client_reference_id !== userId ||
+    !stripeCustomerId ||
+    !(await addonCheckoutCustomerIsOwnedByUser(
+      supabase,
+      userId,
+      stripeCustomerId,
+      livemode,
+    ))
+  ) {
+    log.warn("add-on checkout identity does not match billing customer", {
+      session_id: session.id,
+      user_id: userId,
+      client_reference_id: session.client_reference_id,
+      stripe_customer_id: stripeCustomerId,
     });
     return true;
   }
@@ -764,20 +825,21 @@ async function fulfillAddonCheckoutSession(
       stripe_subscription_id: typeof session.subscription === "string"
         ? session.subscription
         : null,
-      stripe_customer_id: typeof session.customer === "string"
-        ? session.customer
-        : null,
+      stripe_customer_id: stripeCustomerId,
       stripe_payment_intent_id: stripePaymentIntentId,
       credits_granted: addonCreditsGranted(addonKey, quantity),
-      runtime_mode: stripeRuntimeModeFromLivemode(Boolean(session.livemode)),
-      livemode: Boolean(session.livemode),
+      runtime_mode: runtimeMode,
+      livemode,
       metadata: {
         ...metadata,
         ...(stripePaymentIntentId
           ? { payment_intent_id: stripePaymentIntentId }
           : {}),
       },
-    }, { onConflict: "stripe_session_id" });
+    }, {
+      onConflict: "stripe_session_id",
+      ignoreDuplicates: true,
+    });
 
   if (error) throw error;
   return true;
