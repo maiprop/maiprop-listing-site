@@ -1,7 +1,10 @@
 /**
  * Tests for stripe-webhook edge function (Stripe HMAC-verified webhook).
  */
-import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import {
+  assertEquals,
+  assertRejects,
+} from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { captureHandler, req } from "../_shared/testUtils.ts";
 
 const { handler, restore } = await captureHandler(
@@ -25,6 +28,14 @@ const fulfillAddonCheckoutSession = (
     ) => Promise<boolean>;
   }
 ).fulfillAddonCheckoutSession;
+const retrieveCanonicalSubscriptionForEvent = (
+  webhookModule as unknown as {
+    retrieveCanonicalSubscriptionForEvent?: (
+      stripe: unknown,
+      eventSubscription: { id: string },
+    ) => Promise<Record<string, unknown>>;
+  }
+).retrieveCanonicalSubscriptionForEvent;
 
 const addonFulfillmentClient = (input: {
   profileUserId: string;
@@ -166,6 +177,45 @@ Deno.test("webhook handler records event idempotency and durable billing state",
   assertEquals(eventLedgerIndex >= 0, true);
   assertEquals(switchIndex > eventLedgerIndex, true);
   assertEquals(duplicateIndex > eventLedgerIndex, true);
+});
+
+Deno.test("subscription webhooks retrieve canonical current state instead of trusting event order", async () => {
+  assertEquals(typeof retrieveCanonicalSubscriptionForEvent, "function");
+  if (!retrieveCanonicalSubscriptionForEvent) return;
+
+  const retrievedIds: string[] = [];
+  const canonical = await retrieveCanonicalSubscriptionForEvent({
+    subscriptions: {
+      retrieve(id: string) {
+        retrievedIds.push(id);
+        return Promise.resolve({ id, status: "canceled" });
+      },
+    },
+  }, {
+    id: "sub_ordered",
+    status: "active",
+  } as never);
+
+  assertEquals(retrievedIds, ["sub_ordered"]);
+  assertEquals(canonical.status, "canceled");
+});
+
+Deno.test("subscription webhook persistence carries event-created ordering context", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./index.ts", import.meta.url),
+  );
+  const subscriptionCase = source.indexOf(
+    'case "customer.subscription.created"',
+  );
+  const subscriptionEnd = source.indexOf(
+    'case "customer.subscription.deleted"',
+    subscriptionCase,
+  );
+  const block = source.slice(subscriptionCase, subscriptionEnd);
+
+  assertEquals(block.includes("retrieveCanonicalSubscriptionForEvent"), true);
+  assertEquals(block.includes("event.created"), true);
+  assertEquals(block.includes("event.id"), true);
 });
 
 Deno.test("deleted subscriptions reconcile active replacements before clearing profile access", async () => {
@@ -408,6 +458,41 @@ Deno.test("promotion fulfillment is idempotent per Stripe session", async () => 
   );
 });
 
+Deno.test("promotion fulfillment rejects unsupported add-on keys before ledger write", async () => {
+  assertEquals(typeof fulfillAddonCheckoutSession, "function");
+  if (!fulfillAddonCheckoutSession) return;
+
+  const state = addonFulfillmentClient({
+    profileUserId: "user-1",
+    billingCustomer: {
+      user_id: "user-1",
+      stripe_customer_id: "cus_user_1",
+      runtime_mode: "test",
+      livemode: false,
+    },
+  });
+  const session = paidPromotionSession({
+    metadata: {
+      checkout_type: "addon",
+      user_id: "user-1",
+      addon_key: "unsupported_promotion",
+      module: "adhoc_charges",
+      audience: "participant",
+      unit: "per_listing",
+      quantity: "1",
+      runtime_mode: "test",
+    },
+  });
+
+  await assertRejects(
+    () => fulfillAddonCheckoutSession(state.client, session),
+    Error,
+    "unsupported self-serve add-on key",
+  );
+  assertEquals(state.purchases.size, 0);
+  assertEquals(state.upserts.length, 0);
+});
+
 Deno.test("promotion fulfillment rejects a Stripe customer owned by another user", async () => {
   assertEquals(typeof fulfillAddonCheckoutSession, "function");
   if (!fulfillAddonCheckoutSession) return;
@@ -543,8 +628,8 @@ Deno.test("add-on, investor, and trial webhook writes persist Stripe runtime mod
   const source = await Deno.readTextFile(
     new URL("./index.ts", import.meta.url),
   );
-  const addonStart = source.indexOf(
-    "async function fulfillAddonCheckoutSession",
+  const addonSource = await Deno.readTextFile(
+    new URL("../_shared/addonFulfillment.ts", import.meta.url),
   );
   const investorStart = source.indexOf(
     "async function activateInvestorPaymentSession",
@@ -552,15 +637,14 @@ Deno.test("add-on, investor, and trial webhook writes persist Stripe runtime mod
   const trialStart = source.indexOf(
     "async function syncSubscriptionTrialClaim",
   );
-  const addonBlock = source.slice(addonStart, investorStart);
   const investorBlock = source.slice(investorStart, trialStart);
   const trialBlock = source.slice(trialStart);
 
   assertEquals(
-    addonBlock.includes("const livemode = Boolean(session.livemode)"),
+    addonSource.includes("const livemode = Boolean(session.livemode)"),
     true,
   );
-  assertEquals(addonBlock.includes("runtime_mode: runtimeMode"), true);
+  assertEquals(addonSource.includes("runtime_mode: runtimeMode"), true);
   assertEquals(
     investorBlock.includes("livemode: Boolean(session.livemode)"),
     true,
@@ -621,16 +705,12 @@ Deno.test("one-time checkout fulfillment requires paid status and metadata-owned
 
 Deno.test("add-on fulfillment skips orphaned sessions before ledger insert", async () => {
   const source = await Deno.readTextFile(
-    new URL("./index.ts", import.meta.url),
+    new URL("../_shared/addonFulfillment.ts", import.meta.url),
   );
   const addonStart = source.indexOf(
-    "async function fulfillAddonCheckoutSession",
+    "async function reconcileAddonCheckoutSession",
   );
-  const addonEnd = source.indexOf(
-    "async function activateInvestorPaymentSession",
-    addonStart,
-  );
-  const addonBlock = source.slice(addonStart, addonEnd);
+  const addonBlock = source.slice(addonStart);
   const profileCheck = addonBlock.indexOf(
     "await addonCheckoutProfileExists(supabase, userId)",
   );
@@ -639,7 +719,7 @@ Deno.test("add-on fulfillment skips orphaned sessions before ledger insert", asy
   assertEquals(profileCheck > 0, true);
   assertEquals(ledgerInsert > profileCheck, true);
   assertEquals(addonBlock.includes("orphaned add-on checkout session"), true);
-  assertEquals(addonBlock.includes("return true;"), true);
+  assertEquals(addonBlock.includes('return "rejected";'), true);
 });
 
 Deno.test("investor payment activation computes a one-year expiry from one activation timestamp", async () => {

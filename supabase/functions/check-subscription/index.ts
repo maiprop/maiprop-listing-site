@@ -17,6 +17,14 @@ import {
   createStripeClient,
   getStripeRuntimeMode,
 } from "../_shared/stripeClient.ts";
+import {
+  upsertBillingCustomer,
+  upsertBillingSubscription,
+} from "../_shared/billingState.ts";
+import {
+  type AddonCheckoutFulfillmentResult,
+  reconcileAddonCheckoutSession,
+} from "../_shared/addonFulfillment.ts";
 
 const log = createLogger("check-subscription");
 const checkSubLimiter = makeRateLimiter({
@@ -46,6 +54,11 @@ type SubscriptionCheckOptions = {
   stripeKey?: string | null;
   createStripe?: (stripeKey: string) => StripeCheckoutRetriever;
   reconciliationTimeoutMs?: number;
+  handlerTimeoutMs?: number;
+  fulfillAddonCheckout?: (
+    supabase: unknown,
+    session: Stripe.Checkout.Session,
+  ) => Promise<AddonCheckoutFulfillmentResult>;
 };
 
 type StripeCheckoutRetriever = {
@@ -61,9 +74,11 @@ type StripeCheckoutRetriever = {
 };
 
 const CHECKOUT_RECONCILIATION_TIMEOUT_MS = 3_000;
+const SUBSCRIPTION_CHECK_DEADLINE_MS = 5_000;
 const CHECKOUT_SESSION_ID_RE = /^cs_(test|live)_[A-Za-z0-9_]+$/;
 
 class CheckoutReconciliationTimeoutError extends Error {}
+class SubscriptionCheckDeadlineError extends Error {}
 
 function isStripeSubscribed(status: string | null | undefined): boolean {
   return hasProvisionedSubscriptionAccess(status);
@@ -72,11 +87,13 @@ function isStripeSubscribed(status: string | null | undefined): boolean {
 async function withHardTimeout<T>(
   operation: Promise<T>,
   timeoutMs: number,
+  createTimeoutError: () => Error = () =>
+    new CheckoutReconciliationTimeoutError(),
 ): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_resolve, reject) => {
     timeoutId = setTimeout(
-      () => reject(new CheckoutReconciliationTimeoutError()),
+      () => reject(createTimeoutError()),
       timeoutMs,
     );
   });
@@ -146,7 +163,7 @@ function isValidDurableBillingSubscription(
   const entitlementEnd = row.status === "trialing"
     ? row.trial_end ?? row.current_period_end
     : row.current_period_end;
-  if (!entitlementEnd) return row.status !== "trialing";
+  if (!entitlementEnd) return false;
   const periodEnd = new Date(entitlementEnd);
   return !Number.isNaN(periodEnd.getTime()) && periodEnd > now;
 }
@@ -158,11 +175,18 @@ function isValidCheckoutSubscription(
   if (!subscription || !isStripeSubscribed(subscription.status)) {
     return false;
   }
-  if (subscription.status !== "trialing") return true;
+  if (subscription.status === "trialing") {
+    return typeof subscription.trial_end === "number" &&
+      Number.isFinite(subscription.trial_end) &&
+      subscription.trial_end * 1_000 > now;
+  }
 
-  return typeof subscription.trial_end === "number" &&
-    Number.isFinite(subscription.trial_end) &&
-    subscription.trial_end * 1_000 > now;
+  const currentPeriodEnd = (subscription as Stripe.Subscription & {
+    current_period_end?: number | null;
+  }).current_period_end ??
+    subscription.items.data[0]?.current_period_end;
+  return typeof currentPeriodEnd === "number" &&
+    Number.isFinite(currentPeriodEnd) && currentPeriodEnd * 1_000 > now;
 }
 
 function durableBillingStateFromRows(
@@ -226,8 +250,7 @@ export async function getDatabaseFallback( // skipcq: JS-R1005 - Durable resolut
       .eq("runtime_mode", runtimeMode)
       .eq("livemode", runtimeMode === "live")
       .in("status", ["active", "trialing", "past_due"])
-      .order("updated_at", { ascending: false })
-      .limit(5),
+      .order("updated_at", { ascending: false }),
   ]);
   const profileError = queryErrorMessage(profileResult.error);
   if (profileError) {
@@ -286,7 +309,7 @@ export async function getDatabaseFallback( // skipcq: JS-R1005 - Durable resolut
 }
 
 // skipcq: JS-0067 - Exported orchestration helper keeps the DB-only path directly testable.
-export async function resolveSubscriptionCheck(
+async function resolveSubscriptionCheckWithinDeadline(
   supabaseClient: unknown,
   userId: string,
   body: { checkout_session_id?: unknown },
@@ -360,6 +383,37 @@ export async function resolveSubscriptionCheck(
   const customerId = typeof session.customer === "string"
     ? session.customer
     : session.customer?.id ?? null;
+  const expectedLivemode = runtimeMode === "live";
+  const isExactAddonCandidate = session.id === checkoutSessionId &&
+    session.mode === "payment" && session.status === "complete" &&
+    session.payment_status === "paid" &&
+    session.metadata?.checkout_type === "addon" &&
+    session.metadata?.user_id === userId &&
+    session.client_reference_id === userId &&
+    session.metadata?.runtime_mode === runtimeMode &&
+    session.livemode === expectedLivemode;
+
+  if (session.mode === "payment") {
+    if (!isExactAddonCandidate) {
+      return {
+        httpStatus: 202,
+        state: { ...cachedState, sync_status: "pending" },
+      };
+    }
+    const fulfillAddon = options.fulfillAddonCheckout ??
+      reconcileAddonCheckoutSession;
+    const fulfillment = await fulfillAddon(supabaseClient, session);
+    return fulfillment === "fulfilled"
+      ? {
+        httpStatus: 200,
+        state: { ...cachedState, sync_status: "synced" },
+      }
+      : {
+        httpStatus: 202,
+        state: { ...cachedState, sync_status: "pending" },
+      };
+  }
+
   const subscription = typeof session.subscription === "object" &&
       session.subscription && !("deleted" in session.subscription)
     ? session.subscription as Stripe.Subscription
@@ -372,7 +426,8 @@ export async function resolveSubscriptionCheck(
     subscription?.metadata?.audience,
   );
   const isOwnedSession = session.metadata?.user_id === userId &&
-    subscription?.metadata?.user_id === userId;
+    subscription?.metadata?.user_id === userId &&
+    session.client_reference_id === userId;
   const checkoutType = session.metadata?.checkout_type;
   const isSubscriptionCheckout = (checkoutType === "subscription" ||
     checkoutType === "subscription_trial") &&
@@ -380,7 +435,6 @@ export async function resolveSubscriptionCheck(
   const isMatchingAudience = Boolean(
     sessionAudience && subscriptionAudience === sessionAudience,
   );
-  const expectedLivemode = runtimeMode === "live";
   const isMatchingRuntime = session.livemode === expectedLivemode &&
     subscription?.livemode === expectedLivemode;
   const isReconciliationCandidate = session.id === checkoutSessionId &&
@@ -406,6 +460,37 @@ export async function resolveSubscriptionCheck(
     };
   }
 
+  await upsertBillingCustomer(supabaseClient as never, {
+    userId,
+    stripeCustomerId: customerId,
+    livemode: subscription.livemode,
+    metadata: {
+      user_id: userId,
+      checkout_session_id: session.id,
+    },
+  });
+  const billingCycle = subscription.metadata?.billing_cycle === "annual"
+    ? "annual"
+    : subscription.metadata?.billing_cycle === "monthly"
+    ? "monthly"
+    : null;
+  await upsertBillingSubscription(supabaseClient as never, {
+    userId,
+    stripeCustomerId: customerId,
+    subscription,
+    canonical: {
+      planKey: entitlement.planKey,
+      audience: entitlement.audience,
+      productId: entitlement.productId,
+      priceId: itemIds.priceId,
+      billingCycle,
+    },
+    observation: {
+      source: "reconciliation",
+      observedAt: new Date().toISOString(),
+    },
+  });
+
   const state = await getDatabaseFallback(supabaseClient, userId, {
     requiredStripeSubscriptionId: subscription.id,
   });
@@ -419,6 +504,43 @@ export async function resolveSubscriptionCheck(
     httpStatus: 200,
     state: { ...state, sync_status: "synced" },
   };
+}
+
+export async function resolveSubscriptionCheck(
+  supabaseClient: unknown,
+  userId: string,
+  body: { checkout_session_id?: unknown },
+  options: SubscriptionCheckOptions = {},
+): Promise<{ httpStatus: number; state: SubscriptionCheckState }> {
+  const handlerTimeoutMs = options.handlerTimeoutMs ??
+    SUBSCRIPTION_CHECK_DEADLINE_MS;
+  try {
+    return await withHardTimeout(
+      resolveSubscriptionCheckWithinDeadline(
+        supabaseClient,
+        userId,
+        body,
+        options,
+      ),
+      handlerTimeoutMs,
+      () => new SubscriptionCheckDeadlineError(),
+    );
+  } catch (error) {
+    if (!(error instanceof SubscriptionCheckDeadlineError)) throw error;
+    log.warn("subscription check deadline exceeded", {
+      timeout_ms: handlerTimeoutMs,
+    });
+    return {
+      httpStatus: 503,
+      state: {
+        subscribed: false,
+        product_id: null,
+        subscription_end: null,
+        source: "deadline",
+        sync_status: "timeout",
+      },
+    };
+  }
 }
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
@@ -473,52 +595,68 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
   if (corsPreflightResponse) return corsPreflightResponse;
   const corsHeaders = getCorsHeaders(req);
 
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    "anonymous";
-  try {
-    if (await checkSubLimiter.isLimited(ip)) {
-      return tooManyRequestsResponse(corsHeaders);
-    }
-  } catch (rateLimitError: unknown) {
-    log.warn("subscription rate limiter unavailable; allowing request", {
-      message: getErrorMessage(rateLimitError),
-    });
-  }
-
-  const supabaseClient = createClient(
-    Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-    { auth: { persistSession: false } },
-  );
-
-  try {
-    const user = await verifyBearerToken(req, supabaseClient);
-    const parsedBody = await req.json().catch(() => ({})) as unknown;
-    const body = parsedBody && typeof parsedBody === "object"
-      ? parsedBody as { checkout_session_id?: unknown }
-      : {};
-    const result = await resolveSubscriptionCheck(
-      supabaseClient,
-      user.id,
-      body,
-      { stripeKey: Deno.env.get("STRIPE_SECRET_KEY") },
-    );
-    return new Response(JSON.stringify(result.state), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: result.httpStatus,
-    });
-  } catch (error: unknown) {
-    if (!(error instanceof AuthError)) {
-      log.error("unexpected subscription check failure", {
-        message: getErrorMessage(error),
+  const operation = async (): Promise<Response> => {
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      "anonymous";
+    try {
+      if (await checkSubLimiter.isLimited(ip)) {
+        return tooManyRequestsResponse(corsHeaders);
+      }
+    } catch (rateLimitError: unknown) {
+      log.warn("subscription rate limiter unavailable; allowing request", {
+        message: getErrorMessage(rateLimitError),
       });
-      return subscriptionUnavailableResponse(corsHeaders);
     }
-    const status = error.status;
-    const message = getErrorMessage(error);
-    return new Response(JSON.stringify({ error: message }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status,
+
+    const supabaseClient = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      { auth: { persistSession: false } },
+    );
+
+    try {
+      const user = await verifyBearerToken(req, supabaseClient);
+      const parsedBody = await req.json().catch(() => ({})) as unknown;
+      const body = parsedBody && typeof parsedBody === "object"
+        ? parsedBody as { checkout_session_id?: unknown }
+        : {};
+      const result = await resolveSubscriptionCheck(
+        supabaseClient,
+        user.id,
+        body,
+        { stripeKey: Deno.env.get("STRIPE_SECRET_KEY") },
+      );
+      return new Response(JSON.stringify(result.state), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: result.httpStatus,
+      });
+    } catch (error: unknown) {
+      if (!(error instanceof AuthError)) {
+        log.error("unexpected subscription check failure", {
+          message: getErrorMessage(error),
+        });
+        return subscriptionUnavailableResponse(corsHeaders);
+      }
+      const status = error.status;
+      const message = getErrorMessage(error);
+      return new Response(JSON.stringify({ error: message }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status,
+      });
+    }
+  };
+
+  try {
+    return await withHardTimeout(
+      operation(),
+      SUBSCRIPTION_CHECK_DEADLINE_MS,
+      () => new SubscriptionCheckDeadlineError(),
+    );
+  } catch (error) {
+    log.error("subscription handler deadline exceeded", {
+      message: getErrorMessage(error),
+      timeout_ms: SUBSCRIPTION_CHECK_DEADLINE_MS,
     });
+    return subscriptionUnavailableResponse(corsHeaders);
   }
 });

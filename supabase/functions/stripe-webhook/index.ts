@@ -22,6 +22,8 @@ import {
 } from "../_shared/subscriptionStatus.ts";
 import {
   beginStripeWebhookEvent,
+  type BillingSubscriptionCanonical,
+  type BillingSubscriptionObservation,
   finishStripeWebhookEvent,
   stripeRuntimeModeFromLivemode,
   upsertBillingCustomer,
@@ -32,9 +34,13 @@ import {
   ensureSubscriptionCompanyInvoiceSettings,
 } from "../_shared/stripeClient.ts";
 import { pricingConfigMatchesStripeItem } from "../_shared/entitlements.ts";
-import { SELF_SERVE_ADDON_CREDITS } from "../create-checkout/constants.ts";
-import { getCurrentBillingRuntimeMode } from "../create-checkout/pricing.ts";
+import { fulfillAddonCheckoutSession } from "../_shared/addonFulfillment.ts";
 import { shouldSkipProfileEntitlementSync } from "./addonGuard.ts";
+
+export {
+  addonCreditsGranted,
+  fulfillAddonCheckoutSession,
+} from "../_shared/addonFulfillment.ts";
 
 const log = createLogger("stripe-webhook");
 
@@ -151,15 +157,32 @@ Deno.serve(async (req) => {
       case "customer.subscription.pending_update_applied":
       case "customer.subscription.pending_update_expired":
       case "customer.subscription.resumed": {
-        const sub = event.data.object as Stripe.Subscription;
-        await syncSubscription(supabase, stripe, sub);
+        const eventSubscription = event.data.object as Stripe.Subscription;
+        const sub = await retrieveCanonicalSubscriptionForEvent(
+          stripe,
+          eventSubscription,
+        );
+        const observation = subscriptionEventObservation(
+          event.id,
+          event.created,
+        );
+        await syncSubscription(supabase, stripe, sub, observation);
         await syncSubscriptionTrialStatus(supabase, sub);
         break;
       }
 
       case "customer.subscription.deleted": {
-        const sub = event.data.object as Stripe.Subscription;
-        await clearSubscription(supabase, stripe, sub);
+        const eventSubscription = event.data.object as Stripe.Subscription;
+        const sub = await retrieveCanonicalSubscriptionForEvent(
+          stripe,
+          eventSubscription,
+        );
+        await clearSubscription(
+          supabase,
+          stripe,
+          sub,
+          subscriptionEventObservation(event.id, event.created),
+        );
         await syncSubscriptionTrialStatus(supabase, sub);
         break;
       }
@@ -171,6 +194,7 @@ Deno.serve(async (req) => {
           stripe,
           invoice,
           "invoice.payment_failed",
+          subscriptionEventObservation(event.id, event.created),
         );
         break;
       }
@@ -219,7 +243,12 @@ Deno.serve(async (req) => {
           const sub = await stripe.subscriptions.retrieve(
             session.subscription as string,
           );
-          await syncSubscription(supabase, stripe, sub);
+          await syncSubscription(
+            supabase,
+            stripe,
+            sub,
+            subscriptionEventObservation(event.id, event.created),
+          );
           await syncSubscriptionTrialClaim(supabase, session, sub);
           log.info("checkout.session.completed synced subscription", {
             session_id: session.id,
@@ -267,6 +296,7 @@ Deno.serve(async (req) => {
           stripe,
           invoice,
           "invoice.payment_succeeded",
+          subscriptionEventObservation(event.id, event.created),
         );
         break;
       }
@@ -280,7 +310,12 @@ Deno.serve(async (req) => {
         const subscriptionId = getScheduleSubscriptionId(schedule);
         if (subscriptionId) {
           const sub = await stripe.subscriptions.retrieve(subscriptionId);
-          await syncSubscription(supabase, stripe, sub);
+          await syncSubscription(
+            supabase,
+            stripe,
+            sub,
+            subscriptionEventObservation(event.id, event.created),
+          );
         }
         break;
       }
@@ -339,6 +374,25 @@ function normalizeAudience(raw: string | null | undefined): string | null {
   return null;
 }
 
+function subscriptionEventObservation(
+  eventId: string,
+  eventCreated: number,
+): BillingSubscriptionObservation {
+  return {
+    source: "webhook_canonical",
+    observedAt: new Date().toISOString(),
+    stripeEventId: eventId,
+    stripeEventCreatedAt: new Date(eventCreated * 1_000).toISOString(),
+  };
+}
+
+export async function retrieveCanonicalSubscriptionForEvent(
+  stripe: Pick<Stripe, "subscriptions">,
+  eventSubscription: Pick<Stripe.Subscription, "id">,
+): Promise<Stripe.Subscription> {
+  return await stripe.subscriptions.retrieve(eventSubscription.id);
+}
+
 function investorTierFromPlanKey(
   planKey: string | null | undefined,
 ): string | null {
@@ -370,21 +424,6 @@ export function investorPaymentExpiresAt(
   return expiresAt;
 }
 
-function normalizePositiveQuantity(raw: string | null | undefined): number {
-  const parsed = Number(raw ?? 1);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 10_000) {
-    throw new Error("addon checkout session has invalid quantity metadata");
-  }
-  return parsed;
-}
-
-function normalizeAddonCheckoutMode(
-  mode: Stripe.Checkout.Session.Mode | null,
-): "payment" | "subscription" {
-  if (mode === "payment" || mode === "subscription") return mode;
-  throw new Error("addon checkout session has unsupported checkout mode");
-}
-
 export function addonPurchaseStatusForSubscription(
   sub: Pick<Stripe.Subscription, "status">,
 ): "active" | "cancelled" {
@@ -414,17 +453,6 @@ async function syncAddonSubscriptionLifecycle(
     addon_status: status,
   });
   return true;
-}
-
-export function addonCreditsGranted(
-  addonKey: string,
-  quantity: number,
-): number {
-  const units = SELF_SERVE_ADDON_CREDITS[addonKey];
-  if (!units) {
-    throw new Error(`unsupported self-serve add-on key: ${addonKey}`);
-  }
-  return units * quantity;
 }
 
 type AddonRefundInput = {
@@ -710,139 +738,6 @@ async function syncAddonCreditNoteRefund(
     metadata,
     status: "succeeded",
   });
-}
-
-async function addonCheckoutProfileExists(
-  supabase: SupabaseAdminClient,
-  userId: string,
-): Promise<boolean> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("user_id")
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (error) throw error;
-  return Boolean(data?.user_id);
-}
-
-async function addonCheckoutCustomerIsOwnedByUser(
-  supabase: SupabaseAdminClient,
-  userId: string,
-  stripeCustomerId: string,
-  livemode: boolean,
-): Promise<boolean> {
-  const runtimeMode = stripeRuntimeModeFromLivemode(livemode);
-  const { data, error } = await supabase
-    .from("billing_customers")
-    .select("user_id, stripe_customer_id")
-    .eq("user_id", userId)
-    .eq("stripe_customer_id", stripeCustomerId)
-    .eq("runtime_mode", runtimeMode)
-    .eq("livemode", livemode)
-    .maybeSingle();
-  if (error) throw error;
-  return data?.user_id === userId &&
-    data?.stripe_customer_id === stripeCustomerId;
-}
-
-// skipcq: JS-0067 - Top-level helper is used by the webhook switch.
-export async function fulfillAddonCheckoutSession(
-  supabase: SupabaseAdminClient,
-  session: Stripe.Checkout.Session,
-): Promise<boolean> {
-  const metadata = session.metadata ?? {};
-  if (metadata.checkout_type !== "addon") return false;
-  if (!isPaidCheckoutSession(session)) return true;
-
-  const userId = metadata.user_id;
-  const addonKey = metadata.addon_key;
-  const module = metadata.module;
-  const audience = metadata.audience;
-  const unit = metadata.unit;
-  if (!userId || !addonKey || !module || !audience || !unit) {
-    throw new Error("addon checkout session missing required metadata");
-  }
-  const livemode = Boolean(session.livemode);
-  const runtimeMode = stripeRuntimeModeFromLivemode(livemode);
-  const billingRuntimeMode = await getCurrentBillingRuntimeMode(supabase);
-  if (
-    metadata.runtime_mode !== runtimeMode ||
-    billingRuntimeMode !== runtimeMode
-  ) {
-    log.warn("add-on checkout runtime does not match active billing mode", {
-      session_id: session.id,
-      metadata_runtime_mode: metadata.runtime_mode ?? null,
-      billing_runtime_mode: billingRuntimeMode,
-      event_runtime_mode: runtimeMode,
-    });
-    return true;
-  }
-  if (!(await addonCheckoutProfileExists(supabase, userId))) {
-    log.warn("orphaned add-on checkout session", {
-      session_id: session.id,
-      user_id: userId,
-      addon_key: addonKey,
-    });
-    return true;
-  }
-  const stripeCustomerId = objectId(session.customer);
-  if (
-    session.client_reference_id !== userId ||
-    !stripeCustomerId ||
-    !(await addonCheckoutCustomerIsOwnedByUser(
-      supabase,
-      userId,
-      stripeCustomerId,
-      livemode,
-    ))
-  ) {
-    log.warn("add-on checkout identity does not match billing customer", {
-      session_id: session.id,
-      user_id: userId,
-      client_reference_id: session.client_reference_id,
-      stripe_customer_id: stripeCustomerId,
-    });
-    return true;
-  }
-  const checkoutMode = normalizeAddonCheckoutMode(session.mode);
-  const quantity = normalizePositiveQuantity(metadata.quantity);
-  const stripePaymentIntentId = objectId(
-    session.payment_intent as string | Stripe.PaymentIntent | null,
-  );
-
-  const { error } = await supabase
-    .from("addon_purchases")
-    .upsert({
-      user_id: userId,
-      addon_key: addonKey,
-      module,
-      audience,
-      unit,
-      quantity,
-      checkout_mode: checkoutMode,
-      status: checkoutMode === "subscription" ? "active" : "paid",
-      stripe_session_id: session.id,
-      stripe_subscription_id: typeof session.subscription === "string"
-        ? session.subscription
-        : null,
-      stripe_customer_id: stripeCustomerId,
-      stripe_payment_intent_id: stripePaymentIntentId,
-      credits_granted: addonCreditsGranted(addonKey, quantity),
-      runtime_mode: runtimeMode,
-      livemode,
-      metadata: {
-        ...metadata,
-        ...(stripePaymentIntentId
-          ? { payment_intent_id: stripePaymentIntentId }
-          : {}),
-      },
-    }, {
-      onConflict: "stripe_session_id",
-      ignoreDuplicates: true,
-    });
-
-  if (error) throw error;
-  return true;
 }
 
 // skipcq: JS-0067 - Top-level helper is used by the webhook switch.
@@ -1136,6 +1031,26 @@ async function resolveSubscriptionEntitlement(
   };
 }
 
+function canonicalBillingSubscription(
+  sub: Stripe.Subscription,
+  entitlement: SubscriptionEntitlement,
+): BillingSubscriptionCanonical | null {
+  if (!entitlement) return null;
+  const item = firstSubscriptionItem(sub);
+  const cycle = sub.metadata?.billing_cycle;
+  return {
+    planKey: entitlement.planKey,
+    audience: entitlement.audience,
+    productId: entitlement.productId,
+    priceId: item?.price?.id ?? null,
+    billingCycle: cycle === "annual"
+      ? "annual"
+      : cycle === "monthly"
+      ? "monthly"
+      : null,
+  };
+}
+
 export async function findProvisionedReplacementSubscription(
   stripe: Stripe,
   customerId: string,
@@ -1158,6 +1073,10 @@ async function syncSubscription(
   supabase: SupabaseAdminClient,
   stripe: Stripe,
   sub: Stripe.Subscription,
+  observation: BillingSubscriptionObservation = {
+    source: "webhook_canonical",
+    observedAt: new Date().toISOString(),
+  },
 ) {
   try {
     sub = await ensureSubscriptionCompanyInvoiceSettings(stripe, sub);
@@ -1186,6 +1105,7 @@ async function syncSubscription(
 
   const hasAccess = hasProvisionedSubscriptionAccess(sub.status);
   const shouldRevoke = shouldRevokeSubscriptionAccess(sub.status);
+  const entitlement = await resolveSubscriptionEntitlement(supabase, sub);
   const userId = customer.metadata?.user_id as string | undefined;
   if (userId) {
     await upsertBillingCustomer(supabase, {
@@ -1199,15 +1119,14 @@ async function syncSubscription(
       userId,
       stripeCustomerId: customerId,
       subscription: sub,
+      canonical: canonicalBillingSubscription(sub, entitlement),
+      observation,
     });
   }
   const hasManualAccess = shouldRevoke && userId
     ? await hasManualProAccess(supabase, userId)
     : false;
-  const entitlement = hasAccess
-    ? await resolveSubscriptionEntitlement(supabase, sub)
-    : null;
-  const productId = entitlement?.productId ?? null;
+  const productId = hasAccess ? entitlement?.productId ?? null : null;
 
   const { error } = await supabase
     .from("profiles")
@@ -1259,6 +1178,7 @@ async function clearSubscription(
   supabase: SupabaseAdminClient,
   stripe: Stripe,
   sub: Stripe.Subscription,
+  observation: BillingSubscriptionObservation,
 ) {
   if (await syncAddonSubscriptionLifecycle(supabase, sub)) {
     return;
@@ -1287,10 +1207,13 @@ async function clearSubscription(
     livemode: sub.livemode,
     metadata: customer.metadata ?? {},
   });
+  const entitlement = await resolveSubscriptionEntitlement(supabase, sub);
   await upsertBillingSubscription(supabase, {
     userId,
     stripeCustomerId: customerId,
     subscription: sub,
+    canonical: canonicalBillingSubscription(sub, entitlement),
+    observation,
   });
 
   const replacement = await findProvisionedReplacementSubscription(
@@ -1308,7 +1231,10 @@ async function clearSubscription(
         replacement_status: replacement.status,
       },
     );
-    await syncSubscription(supabase, stripe, replacement);
+    await syncSubscription(supabase, stripe, replacement, {
+      ...observation,
+      observedAt: new Date().toISOString(),
+    });
     await syncSubscriptionTrialStatus(supabase, replacement);
     return;
   }
@@ -1406,6 +1332,7 @@ async function syncInvoiceSubscription(
   stripe: Stripe,
   invoice: Stripe.Invoice,
   eventType: string,
+  observation: BillingSubscriptionObservation,
 ) {
   const subscriptionId = getInvoiceSubscriptionId(invoice);
   if (!subscriptionId) {
@@ -1418,7 +1345,7 @@ async function syncInvoiceSubscription(
   }
 
   const sub = await stripe.subscriptions.retrieve(subscriptionId);
-  await syncSubscription(supabase, stripe, sub);
+  await syncSubscription(supabase, stripe, sub, observation);
   await syncSubscriptionTrialStatus(supabase, sub);
 }
 

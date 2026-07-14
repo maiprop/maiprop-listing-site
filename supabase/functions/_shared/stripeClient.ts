@@ -51,10 +51,14 @@ export function resolveStripeSoftwareTaxCode(
     input.module === "os_data_products";
 
   if (AI_SOFTWARE_KEYS.has(key)) {
-    return isBusiness ? STRIPE_AI_BUSINESS_TAX_CODE : STRIPE_AI_PERSONAL_TAX_CODE;
+    return isBusiness
+      ? STRIPE_AI_BUSINESS_TAX_CODE
+      : STRIPE_AI_PERSONAL_TAX_CODE;
   }
 
-  return isBusiness ? STRIPE_SAAS_BUSINESS_TAX_CODE : STRIPE_SAAS_PERSONAL_TAX_CODE;
+  return isBusiness
+    ? STRIPE_SAAS_BUSINESS_TAX_CODE
+    : STRIPE_SAAS_PERSONAL_TAX_CODE;
 }
 
 export type StripeMetadataInput = {
@@ -81,7 +85,10 @@ export function getStripeRuntimeMode(): StripeRuntimeMode {
       Deno.env.get("STRIPE_RUN_MODE"),
   );
   if (explicit === "live") return "live";
-  return "test";
+  if (explicit === "test") return "test";
+  throw new Error(
+    "STRIPE_RUNTIME_MODE must be explicitly set to test or live.",
+  );
 }
 
 export function assertStripeKeyMatchesRuntimeMode(
@@ -241,7 +248,9 @@ const metadataValue = (
   return String(value);
 };
 
-export function stripeMetadata(input: StripeMetadataInput): Stripe.MetadataParam {
+export function stripeMetadata(
+  input: StripeMetadataInput,
+): Stripe.MetadataParam {
   const raw: Record<string, string | undefined> = {
     checkout_type: metadataValue(input.checkoutType),
     user_id: metadataValue(input.userId),

@@ -1,22 +1,25 @@
-import { assertEquals, assertThrows } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
-  CHECKOUT_TAX_COLLECTION_PARAMS,
-  STRIPE_API_VERSION,
-  STRIPE_AI_BUSINESS_TAX_CODE,
-  STRIPE_AI_PERSONAL_TAX_CODE,
-  STRIPE_COMPANY_VAT_CUSTOM_FIELD_NAME,
-  STRIPE_COMPANY_VAT_ID_DEFAULT,
-  STRIPE_SAAS_BUSINESS_TAX_CODE,
-  STRIPE_SAAS_PERSONAL_TAX_CODE,
+  assertEquals,
+  assertThrows,
+} from "https://deno.land/std@0.224.0/assert/mod.ts";
+import {
+  assertStripeKeyMatchesRuntimeMode,
   buildCompanyVatInvoiceCustomFields,
+  buildIdempotencyKey,
   buildPaymentModeInvoiceCreationParams,
   buildSubscriptionCompanyInvoiceSettingsUpdateParams,
-  assertStripeKeyMatchesRuntimeMode,
-  buildIdempotencyKey,
+  CHECKOUT_TAX_COLLECTION_PARAMS,
   ensureSubscriptionCompanyInvoiceSettings,
   getStripeCompanyVatId,
   getStripeRuntimeMode,
   resolveStripeSoftwareTaxCode,
+  STRIPE_AI_BUSINESS_TAX_CODE,
+  STRIPE_AI_PERSONAL_TAX_CODE,
+  STRIPE_API_VERSION,
+  STRIPE_COMPANY_VAT_CUSTOM_FIELD_NAME,
+  STRIPE_COMPANY_VAT_ID_DEFAULT,
+  STRIPE_SAAS_BUSINESS_TAX_CODE,
+  STRIPE_SAAS_PERSONAL_TAX_CODE,
   stripeMetadata,
 } from "./stripeClient.ts";
 
@@ -78,24 +81,27 @@ Deno.test("Stripe payment-mode Checkout helper creates hosted invoices with meta
     STRIPE_COMPANY_VAT_ID: undefined,
     COMPANY_VAT_ID: undefined,
   }, () => {
-    assertEquals(buildPaymentModeInvoiceCreationParams({
-      checkout_type: "addon",
-      user_id: "user-1",
-    }), {
-      invoice_creation: {
-        enabled: true,
-        invoice_data: {
-          metadata: {
-            checkout_type: "addon",
-            user_id: "user-1",
+    assertEquals(
+      buildPaymentModeInvoiceCreationParams({
+        checkout_type: "addon",
+        user_id: "user-1",
+      }),
+      {
+        invoice_creation: {
+          enabled: true,
+          invoice_data: {
+            metadata: {
+              checkout_type: "addon",
+              user_id: "user-1",
+            },
+            custom_fields: [{
+              name: STRIPE_COMPANY_VAT_CUSTOM_FIELD_NAME,
+              value: STRIPE_COMPANY_VAT_ID_DEFAULT,
+            }],
           },
-          custom_fields: [{
-            name: STRIPE_COMPANY_VAT_CUSTOM_FIELD_NAME,
-            value: STRIPE_COMPANY_VAT_ID_DEFAULT,
-          }],
         },
       },
-    });
+    );
   });
 });
 
@@ -109,25 +115,28 @@ Deno.test("Stripe invoice helpers stamp company VAT and account tax IDs", () => 
       name: STRIPE_COMPANY_VAT_CUSTOM_FIELD_NAME,
       value: "EL802708301",
     }]);
-    assertEquals(buildPaymentModeInvoiceCreationParams({
-      checkout_type: "addon",
-      user_id: "user-1",
-    }), {
-      invoice_creation: {
-        enabled: true,
-        invoice_data: {
-          metadata: {
-            checkout_type: "addon",
-            user_id: "user-1",
+    assertEquals(
+      buildPaymentModeInvoiceCreationParams({
+        checkout_type: "addon",
+        user_id: "user-1",
+      }),
+      {
+        invoice_creation: {
+          enabled: true,
+          invoice_data: {
+            metadata: {
+              checkout_type: "addon",
+              user_id: "user-1",
+            },
+            account_tax_ids: ["txi_test_company_vat"],
+            custom_fields: [{
+              name: STRIPE_COMPANY_VAT_CUSTOM_FIELD_NAME,
+              value: "EL802708301",
+            }],
           },
-          account_tax_ids: ["txi_test_company_vat"],
-          custom_fields: [{
-            name: STRIPE_COMPANY_VAT_CUSTOM_FIELD_NAME,
-            value: "EL802708301",
-          }],
         },
       },
-    });
+    );
     assertEquals(
       buildSubscriptionCompanyInvoiceSettingsUpdateParams({
         invoice_settings: {
@@ -214,11 +223,14 @@ Deno.test("subscription invoice settings fall back to company VAT custom field",
         },
       },
     ]);
-    assertEquals((updated as {
-      invoice_settings: {
-        custom_fields: Array<{ name: string; value: string }>;
-      };
-    }).invoice_settings.custom_fields[0].value, "EL802708301");
+    assertEquals(
+      (updated as {
+        invoice_settings: {
+          custom_fields: Array<{ name: string; value: string }>;
+        };
+      }).invoice_settings.custom_fields[0].value,
+      "EL802708301",
+    );
   });
 });
 
@@ -255,12 +267,28 @@ Deno.test("Stripe software tax-code resolver classifies SaaS and AI products", (
   );
 });
 
-Deno.test("Stripe runtime mode defaults to test mode", () => {
+Deno.test("Stripe runtime mode fails closed when configuration is missing", () => {
   withEnv({
     STRIPE_RUNTIME_MODE: undefined,
+    STRIPE_ENVIRONMENT: undefined,
+    STRIPE_RUN_MODE: undefined,
     STRIPE_LIVE_MODE: undefined,
   }, () => {
-    assertEquals(getStripeRuntimeMode(), "test");
+    assertThrows(
+      () => getStripeRuntimeMode(),
+      Error,
+      "STRIPE_RUNTIME_MODE must be explicitly set",
+    );
+  });
+});
+
+Deno.test("Stripe runtime mode rejects unknown values", () => {
+  withEnv({ STRIPE_RUNTIME_MODE: "preview" }, () => {
+    assertThrows(
+      () => getStripeRuntimeMode(),
+      Error,
+      "STRIPE_RUNTIME_MODE must be explicitly set",
+    );
   });
 });
 
@@ -286,7 +314,11 @@ Deno.test("Stripe runtime mode requires explicit live opt-in for live keys", () 
 });
 
 Deno.test("Stripe helper builds stable idempotency keys and metadata", async () => {
-  const key = await buildIdempotencyKey("checkout", ["user-1", "pro", "monthly"]);
+  const key = await buildIdempotencyKey("checkout", [
+    "user-1",
+    "pro",
+    "monthly",
+  ]);
   assertEquals(key.startsWith("maiprop-checkout-"), true);
   assertEquals(key.length <= 255, true);
   assertEquals(

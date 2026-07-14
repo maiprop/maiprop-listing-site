@@ -30,10 +30,27 @@ type BillingCustomerInput = {
   metadata?: Record<string, unknown> | null;
 };
 
-type BillingSubscriptionInput = {
+export type BillingSubscriptionCanonical = {
+  planKey: string;
+  audience: string;
+  productId: string;
+  priceId: string | null;
+  billingCycle: "monthly" | "annual" | null;
+};
+
+export type BillingSubscriptionObservation = {
+  source: "webhook_canonical" | "reconciliation" | "legacy";
+  observedAt: string;
+  stripeEventId?: string | null;
+  stripeEventCreatedAt?: string | null;
+};
+
+export type BillingSubscriptionInput = {
   userId: string;
   stripeCustomerId: string;
   subscription: StripeSubscriptionLike;
+  canonical?: BillingSubscriptionCanonical | null;
+  observation?: BillingSubscriptionObservation | null;
 };
 
 type SupabaseQueryResult<T = unknown> = {
@@ -87,6 +104,10 @@ export type BillingSubscriptionRow = {
   runtime_mode: StripeRuntimeMode;
   livemode: boolean;
   metadata: Record<string, unknown>;
+  state_source?: BillingSubscriptionObservation["source"];
+  state_observed_at?: string;
+  stripe_event_id?: string | null;
+  stripe_event_created_at?: string | null;
 };
 
 type SupabaseAdminClient = {
@@ -157,16 +178,20 @@ export function buildBillingSubscriptionRow(
   const price = firstSubscriptionPrice(subscription);
   const livemode = Boolean(subscription.livemode);
   const metadata = subscription.metadata ?? {};
+  const canonical = input.canonical;
+  const observation = input.observation;
   return {
     user_id: input.userId,
     stripe_customer_id: input.stripeCustomerId,
     stripe_subscription_id: subscription.id,
-    stripe_product_id: productIdFromPrice(price?.product),
-    stripe_price_id: price?.id ?? null,
-    plan_key: metadata.plan_key ?? metadata.plan ?? null,
-    audience: metadata.audience ?? null,
+    stripe_product_id: canonical?.productId ??
+      productIdFromPrice(price?.product),
+    stripe_price_id: canonical?.priceId ?? price?.id ?? null,
+    plan_key: canonical?.planKey ?? metadata.plan_key ?? metadata.plan ?? null,
+    audience: canonical?.audience ?? metadata.audience ?? null,
     status: subscription.status ?? "unknown",
-    billing_cycle: normalizedBillingCycle(metadata.billing_cycle),
+    billing_cycle: canonical?.billingCycle ??
+      normalizedBillingCycle(metadata.billing_cycle),
     current_period_start: isoFromUnixSeconds(
       subscription.current_period_start ?? item?.current_period_start,
     ),
@@ -179,6 +204,18 @@ export function buildBillingSubscriptionRow(
     runtime_mode: stripeRuntimeModeFromLivemode(livemode),
     livemode,
     metadata,
+    ...(observation
+      ? {
+        state_source: observation.source,
+        state_observed_at: observation.observedAt,
+        ...(observation.stripeEventId
+          ? { stripe_event_id: observation.stripeEventId }
+          : {}),
+        ...(observation.stripeEventCreatedAt
+          ? { stripe_event_created_at: observation.stripeEventCreatedAt }
+          : {}),
+      }
+      : {}),
   };
 }
 

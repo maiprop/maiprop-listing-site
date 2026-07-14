@@ -8,6 +8,9 @@ import {
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { authedReq, captureHandler, req } from "../_shared/testUtils.ts";
 
+const originalStripeRuntimeMode = Deno.env.get("STRIPE_RUNTIME_MODE");
+Deno.env.set("STRIPE_RUNTIME_MODE", "test");
+
 const { handler, restore } = await captureHandler(
   import.meta.url,
   "./index.ts",
@@ -87,7 +90,7 @@ Deno.test("legacy profile product ids are never an entitlement source", async ()
   assertEquals(source.includes("subscription_product_id"), false);
 });
 
-Deno.test("explicit reconciliation retrieves only the exact checkout session and waits for webhook state", async () => {
+Deno.test("explicit reconciliation retrieves the exact session and heals missing durable state", async () => {
   const stripeCalls: Array<{
     id: string;
     params: unknown;
@@ -124,6 +127,7 @@ Deno.test("explicit reconciliation retrieves only the exact checkout session and
                   status: "complete",
                   livemode: false,
                   customer: "cus_exact",
+                  client_reference_id: "00000000-0000-4000-8000-000000000021",
                   metadata: {
                     user_id: "00000000-0000-4000-8000-000000000021",
                     checkout_type: "subscription",
@@ -164,12 +168,15 @@ Deno.test("explicit reconciliation retrieves only the exact checkout session and
     params: { expand: ["subscription"] },
     options: { timeout: 3_000, maxNetworkRetries: 0 },
   }]);
-  assertEquals(result.httpStatus, 202);
-  assertEquals(result.state.sync_status, "pending");
-  assertEquals(result.state.subscribed, false);
-  assertEquals(result.state.product_id, null);
-  assertEquals(billingRows.length, 0);
-  assertEquals(billingWrites, []);
+  assertEquals(result.httpStatus, 200);
+  assertEquals(result.state.sync_status, "synced");
+  assertEquals(result.state.subscribed, true);
+  assertEquals(result.state.product_id, "prod_participant");
+  assertEquals(billingRows.length, 1);
+  assertEquals(
+    billingWrites.some(({ table }) => table === "billing_subscriptions"),
+    true,
+  );
 });
 
 Deno.test("explicit reconciliation rejects a checkout session owned by another user", async () => {
@@ -253,6 +260,7 @@ const mockSupabase = (
     profileError = null,
     investorError = null,
     billingError = null,
+    stallBillingLookup = false,
   }: {
     profileProductId?: string | null;
     profileRole?: string | null;
@@ -268,6 +276,7 @@ const mockSupabase = (
     profileError?: { message: string } | null;
     investorError?: { message: string } | null;
     billingError?: { message: string } | null;
+    stallBillingLookup?: boolean;
   },
 ) => ({
   marker: "this-aware-supabase-mock",
@@ -275,6 +284,7 @@ const mockSupabase = (
     if (this?.marker !== "this-aware-supabase-mock") {
       throw new Error("from called without Supabase client binding");
     }
+    let rowLimit: number | null = null;
     const chain = {
       select() {
         return chain;
@@ -285,7 +295,8 @@ const mockSupabase = (
       in() {
         return chain;
       },
-      limit() {
+      limit(value: number) {
+        rowLimit = value;
         return chain;
       },
       order() {
@@ -293,6 +304,15 @@ const mockSupabase = (
       },
       upsert(payload: Record<string, unknown>) {
         billingWrites.push({ table, payload });
+        if (table === "billing_subscriptions") {
+          const id = payload.stripe_subscription_id;
+          const index = billingRows.findIndex((row) =>
+            row.stripe_subscription_id === id
+          );
+          if (index >= 0) {
+            billingRows[index] = { ...billingRows[index], ...payload };
+          } else billingRows.push(payload);
+        }
         return Promise.resolve({ error: null });
       },
       maybeSingle() {
@@ -334,7 +354,13 @@ const mockSupabase = (
           return;
         }
         if (table === "billing_subscriptions") {
-          resolve({ data: billingRows, error: billingError });
+          if (stallBillingLookup) return;
+          resolve({
+            data: rowLimit === null
+              ? billingRows
+              : billingRows.slice(0, rowLimit),
+            error: billingError,
+          });
           return;
         }
         if (table === "pricing_configs") {
@@ -372,6 +398,7 @@ function completedSubscriptionSession(
     status: "complete",
     livemode: overrides.livemode ?? false,
     customer: "cus_validation",
+    client_reference_id: userId,
     metadata: {
       user_id: userId,
       checkout_type: overrides.checkoutType ?? "subscription",
@@ -414,6 +441,104 @@ function stripeOptionsForSession(session: Record<string, unknown>) {
     }),
   };
 }
+
+function completedAddonSession(
+  userId: string,
+  overrides: {
+    paymentStatus?: string;
+    livemode?: boolean;
+    checkoutType?: string;
+    addonKey?: string;
+  } = {},
+) {
+  return {
+    id: overrides.livemode
+      ? "cs_live_addon_reconciliation"
+      : "cs_test_addon_reconciliation",
+    mode: "payment",
+    status: "complete",
+    payment_status: overrides.paymentStatus ?? "paid",
+    livemode: overrides.livemode ?? false,
+    customer: "cus_addon_owner",
+    client_reference_id: userId,
+    payment_intent: "pi_addon_reconciliation",
+    metadata: {
+      checkout_type: overrides.checkoutType ?? "addon",
+      user_id: userId,
+      addon_key: overrides.addonKey ?? "featured_listing",
+      module: "adhoc_charges",
+      audience: "participant",
+      unit: "per_listing",
+      quantity: "1",
+      runtime_mode: overrides.livemode ? "live" : "test",
+    },
+    subscription: null,
+  };
+}
+
+Deno.test("exact payment-mode reconciliation fulfills a paid promotion add-on", async () => {
+  const userId = "00000000-0000-4000-8000-000000000032";
+  const session = completedAddonSession(userId);
+  const fulfilledSessions: string[] = [];
+  const result = await resolveSubscriptionCheck(
+    mockSupabase({
+      profileRole: "buyer",
+      participantType: "buyer",
+      investorStatus: null,
+    }),
+    userId,
+    { checkout_session_id: session.id },
+    {
+      ...stripeOptionsForSession(session),
+      fulfillAddonCheckout: (_supabase: unknown, candidate: { id: string }) => {
+        fulfilledSessions.push(candidate.id);
+        return Promise.resolve("fulfilled" as const);
+      },
+    } as never,
+  );
+
+  assertEquals(fulfilledSessions, [session.id]);
+  assertEquals(result.httpStatus, 200);
+  assertEquals(result.state.sync_status, "synced");
+  assertEquals(result.state.subscribed, false);
+});
+
+Deno.test("exact add-on reconciliation rejects foreign, unpaid, wrong-runtime, and unsupported sessions", async () => {
+  const userId = "00000000-0000-4000-8000-000000000033";
+  const invalidSessions = [
+    completedAddonSession("00000000-0000-4000-8000-000000000099"),
+    completedAddonSession(userId, { paymentStatus: "unpaid" }),
+    {
+      ...completedAddonSession(userId),
+      livemode: true,
+    },
+    completedAddonSession(userId, { checkoutType: "investor_payment" }),
+  ];
+
+  for (const session of invalidSessions) {
+    let fulfillmentCalls = 0;
+    const result = await resolveSubscriptionCheck(
+      mockSupabase({
+        profileRole: "buyer",
+        participantType: "buyer",
+        investorStatus: null,
+      }),
+      userId,
+      { checkout_session_id: session.id },
+      {
+        ...stripeOptionsForSession(session),
+        fulfillAddonCheckout: () => {
+          fulfillmentCalls += 1;
+          return Promise.resolve("fulfilled" as const);
+        },
+      } as never,
+    );
+
+    assertEquals(fulfillmentCalls, 0, JSON.stringify(session));
+    assertEquals(result.httpStatus, 202, JSON.stringify(session));
+    assertEquals(result.state.sync_status, "pending", JSON.stringify(session));
+  }
+});
 
 Deno.test("explicit reconciliation validates subscription mode and matching audience metadata", async () => {
   const userId = "00000000-0000-4000-8000-000000000023";
@@ -575,7 +700,7 @@ Deno.test("explicit reconciliation never crosses the configured Stripe runtime",
   }
 });
 
-Deno.test("explicit reconciliation is synced only after the webhook row is durable", async () => {
+Deno.test("explicit reconciliation idempotently refreshes an existing durable row", async () => {
   const userId = "00000000-0000-4000-8000-000000000026";
   const session = completedSubscriptionSession(userId);
   const billingWrites: Array<Record<string, unknown>> = [];
@@ -609,7 +734,10 @@ Deno.test("explicit reconciliation is synced only after the webhook row is durab
   assertEquals(result.state.sync_status, "synced");
   assertEquals(result.state.subscribed, true);
   assertEquals(result.state.product_id, "prod_participant");
-  assertEquals(billingWrites, []);
+  assertEquals(
+    billingWrites.some(({ table }) => table === "billing_subscriptions"),
+    true,
+  );
 });
 
 Deno.test("checkout reconciliation hard-timeout returns the durable cached state", async () => {
@@ -661,6 +789,35 @@ Deno.test("checkout reconciliation hard-timeout returns the durable cached state
   assertEquals(result.state.sync_status, "timeout");
   assertEquals(result.state.subscribed, true);
   assertEquals(result.state.product_id, "prod_cached");
+});
+
+Deno.test("whole subscription check deadline bounds stalled database work", async () => {
+  const operation = resolveSubscriptionCheck(
+    mockSupabase({
+      profileRole: "buyer",
+      participantType: "buyer",
+      investorStatus: null,
+      stallBillingLookup: true,
+    }),
+    "00000000-0000-4000-8000-000000000029",
+    {},
+    { handlerTimeoutMs: 5 } as never,
+  );
+
+  let ceilingId: ReturnType<typeof setTimeout> | undefined;
+  const ceiling = new Promise<never>((_resolve, reject) => {
+    ceilingId = setTimeout(
+      () => reject(new Error("whole handler deadline exceeded test ceiling")),
+      250,
+    );
+  });
+  const result = await Promise.race([operation, ceiling]).finally(() => {
+    if (ceilingId !== undefined) clearTimeout(ceilingId);
+  });
+
+  assertEquals(result.httpStatus, 503);
+  assertEquals(result.state.sync_status, "timeout");
+  assertEquals(result.state.subscribed, false);
 });
 
 Deno.test("database fallback prefers durable Stripe billing subscriptions over live Stripe lookups", async () => {
@@ -802,6 +959,63 @@ Deno.test("database fallback keeps failed post-trial payment in recovery grace",
   assertEquals(state.product_id, "prod_professional");
   assertEquals(state.plan_key, "professional_basic");
   assertEquals(state.audience, "professional");
+});
+
+Deno.test("database fallback rejects active and past-due rows without a bounded period", async () => {
+  for (const status of ["active", "past_due"]) {
+    const state = await getDatabaseFallback(
+      mockSupabase({
+        profileRole: "buyer",
+        participantType: "buyer",
+        investorStatus: null,
+        billingRows: [{
+          status,
+          stripe_product_id: "prod_participant",
+          current_period_end: null,
+          plan_key: "pro",
+          audience: "participant",
+          billing_cycle: "monthly",
+        }],
+      }),
+      "00000000-0000-4000-8000-000000000030",
+    );
+    assertEquals(state.subscribed, false, status);
+  }
+});
+
+Deno.test("database fallback finds a valid current-audience row after five legacy rows", async () => {
+  const rows = Array.from({ length: 5 }, (_, index) => ({
+    stripe_subscription_id: `sub_legacy_${index}`,
+    status: "active",
+    stripe_product_id: "prod_participant",
+    current_period_end: "2099-06-30T00:00:00.000Z",
+    plan_key: "pro",
+    audience: "participant",
+    billing_cycle: "monthly",
+  }));
+  rows.push({
+    stripe_subscription_id: "sub_current_developer",
+    status: "active",
+    stripe_product_id: "prod_developer",
+    current_period_end: "2099-07-31T00:00:00.000Z",
+    plan_key: "developer_pro",
+    audience: "developer",
+    billing_cycle: "annual",
+  });
+
+  const state = await getDatabaseFallback(
+    mockSupabase({
+      profileRole: "developer",
+      participantType: "developer",
+      investorStatus: null,
+      billingRows: rows,
+    }),
+    "00000000-0000-4000-8000-000000000031",
+  );
+
+  assertEquals(state.subscribed, true);
+  assertEquals(state.product_id, "prod_developer");
+  assertEquals(state.plan_key, "developer_pro");
 });
 
 Deno.test("database fallback uses trial_end for active trial access", async () => {
@@ -1164,3 +1378,8 @@ Deno.test("subscription response rejects cross-role product fallback when pricin
 });
 
 restore();
+if (originalStripeRuntimeMode === undefined) {
+  Deno.env.delete("STRIPE_RUNTIME_MODE");
+} else {
+  Deno.env.set("STRIPE_RUNTIME_MODE", originalStripeRuntimeMode);
+}

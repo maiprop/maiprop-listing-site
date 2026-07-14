@@ -7,6 +7,7 @@ import {
   isStaleProcessingWebhookEvent,
   stripeRuntimeModeFromLivemode,
   upsertBillingCustomer,
+  upsertBillingSubscription,
 } from "./billingState.ts";
 
 Deno.test("billing customer rows are test-mode by default for test Stripe objects", () => {
@@ -109,6 +110,100 @@ Deno.test("billing subscription rows fall back to item period fields for newer S
   assertEquals(row.billing_cycle, "annual");
 });
 
+Deno.test("billing subscription rows persist canonical entitlement and Stripe event ordering fields", () => {
+  const row = buildBillingSubscriptionRow({
+    userId: "user-1",
+    stripeCustomerId: "cus_test",
+    subscription: {
+      id: "sub_test",
+      status: "active",
+      livemode: false,
+      current_period_end: 4_102_444_800,
+      metadata: {},
+      items: {
+        data: [{
+          price: { id: "price_test", product: "prod_test" },
+        }],
+      },
+    },
+    canonical: {
+      planKey: "pro",
+      audience: "participant",
+      productId: "prod_test",
+      priceId: "price_test",
+      billingCycle: "monthly",
+    },
+    observation: {
+      source: "webhook_canonical",
+      observedAt: "2026-07-14T12:00:00.500Z",
+      stripeEventId: "evt_newer",
+      stripeEventCreatedAt: "2026-07-14T12:00:00.000Z",
+    },
+  } as never);
+
+  assertEquals(row.plan_key, "pro");
+  assertEquals(row.audience, "participant");
+  assertEquals(row.stripe_product_id, "prod_test");
+  assertEquals(row.stripe_price_id, "price_test");
+  assertEquals(row.billing_cycle, "monthly");
+  assertEquals(
+    (row as Record<string, unknown>).state_source,
+    "webhook_canonical",
+  );
+  assertEquals(
+    (row as Record<string, unknown>).state_observed_at,
+    "2026-07-14T12:00:00.500Z",
+  );
+  assertEquals((row as Record<string, unknown>).stripe_event_id, "evt_newer");
+  assertEquals(
+    (row as Record<string, unknown>).stripe_event_created_at,
+    "2026-07-14T12:00:00.000Z",
+  );
+});
+
+Deno.test("billing subscription writes preserve canonical observation payload", async () => {
+  let payload: Record<string, unknown> | undefined;
+  const supabase = {
+    from(table: string) {
+      assertEquals(table, "billing_subscriptions");
+      return {
+        upsert(next: Record<string, unknown>) {
+          payload = next;
+          return Promise.resolve({ error: null });
+        },
+      };
+    },
+  };
+
+  await upsertBillingSubscription(supabase as never, {
+    userId: "user-1",
+    stripeCustomerId: "cus_test",
+    subscription: {
+      id: "sub_test",
+      status: "active",
+      livemode: false,
+      current_period_end: 4_102_444_800,
+      metadata: {},
+      items: { data: [] },
+    },
+    canonical: {
+      planKey: "pro",
+      audience: "participant",
+      productId: "prod_test",
+      priceId: "price_test",
+      billingCycle: "monthly",
+    },
+    observation: {
+      source: "reconciliation",
+      observedAt: "2026-07-14T12:00:00.500Z",
+    },
+  } as never);
+
+  assertEquals(payload?.plan_key, "pro");
+  assertEquals(payload?.audience, "participant");
+  assertEquals(payload?.state_source, "reconciliation");
+});
+
 Deno.test("billing state helpers recognize runtime mode and duplicate event errors", () => {
   assertEquals(stripeRuntimeModeFromLivemode(false), "test");
   assertEquals(stripeRuntimeModeFromLivemode(true), "live");
@@ -123,7 +218,10 @@ Deno.test("billing customer writes conflict on the user and Stripe runtime", asy
     from(table: string) {
       assertEquals(table, "billing_customers");
       return {
-        upsert(_payload: Record<string, unknown>, options?: Record<string, unknown>) {
+        upsert(
+          _payload: Record<string, unknown>,
+          options?: Record<string, unknown>,
+        ) {
           receivedOptions = options;
           return Promise.resolve({ error: null });
         },
@@ -354,5 +452,8 @@ Deno.test("stale processing webhook reclaim is guarded by the updated_at lease",
   });
 
   assertEquals(result, "started");
-  assertEquals(filters.some(([op, column]) => op === "lt" && column === "updated_at"), true);
+  assertEquals(
+    filters.some(([op, column]) => op === "lt" && column === "updated_at"),
+    true,
+  );
 });
