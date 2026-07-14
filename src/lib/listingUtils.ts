@@ -23,6 +23,12 @@ const SYSTEM_TAG_PREFIXES = [
   "commercial_type:",
 ];
 
+const hasActivePromotionWindow = (value: string | null | undefined): boolean => {
+  if (!value) return false;
+  const expiresAt = Date.parse(value);
+  return Number.isFinite(expiresAt) && expiresAt > Date.now();
+};
+
 export interface DbListingToCardOptions {
   /** Include ownership fields (for listings page) */
   includeOwnership?: boolean;
@@ -128,8 +134,10 @@ export function dbListingToCard(
     tags: filterDisplayTags ? displayTags : (tags.filter(Boolean) as string[]),
     hasVideo: l.has_video_tour ?? undefined,
     hasVirtualTour: l.has_virtual_tour ?? undefined,
-    isFeatured: !!l.is_featured,
-    priorityPlacement: Number(l.priority_placement) || 0,
+    isFeatured: Boolean(l.is_featured) && hasActivePromotionWindow(l.featured_until),
+    priorityPlacement: hasActivePromotionWindow(l.priority_until)
+      ? Number(l.priority_placement) || 0
+      : 0,
     isPreSale: l.listing_type === "new_build",
     constructionStatus: l.construction_status ?? undefined,
     ...getNewBuildCardSummary(l),

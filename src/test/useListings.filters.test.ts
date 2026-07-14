@@ -69,6 +69,8 @@ describe("buildListingsQuery — sort variants", () => {
       .split(",")
       .map((column) => column.trim());
     expect(selectedColumns).toContain("status");
+    expect(selectedColumns).toContain("featured_until");
+    expect(selectedColumns).toContain("priority_until");
     expect(calls("order").some((c) =>
       c.args[0] === "sort_order" &&
       (c.args[1] as { referencedTable?: string; ascending?: boolean }).referencedTable === "listing_images" &&
@@ -80,11 +82,10 @@ describe("buildListingsQuery — sort variants", () => {
     )).toBe(true);
   });
 
-  it("default ranking uses Priority only; Spotlight remains a visual showcase", () => {
+  it("keeps direct fallback ranking organic because active Priority fairness belongs to the public API", () => {
     buildListingsQuery();
     const orderArgs = parentOrderArgs();
     expect(orderArgs).toEqual([
-      ["priority_placement", { ascending: false, nullsFirst: false }],
       ["created_at", { ascending: false }],
     ]);
   });
@@ -93,47 +94,42 @@ describe("buildListingsQuery — sort variants", () => {
    * Priority is the paid ranking product. Spotlight is intentionally excluded
    * from catalogue ordering and only affects card treatment/showcase sections.
    */
-  it("'price-asc' leads with priority, then price ascending", () => {
+  it("'price-asc' preserves organic price ordering in direct fallback", () => {
     buildListingsQuery({ sort: "price-asc" });
     const orderArgs = parentOrderArgs();
     expect(orderArgs).toEqual([
-      ["priority_placement", { ascending: false, nullsFirst: false }],
       ["price", { ascending: true }],
     ]);
   });
 
-  it("'price-desc' leads with priority, then price descending", () => {
+  it("'price-desc' preserves organic price ordering in direct fallback", () => {
     buildListingsQuery({ sort: "price-desc" });
     const orderArgs = parentOrderArgs();
     expect(orderArgs).toEqual([
-      ["priority_placement", { ascending: false, nullsFirst: false }],
       ["price", { ascending: false }],
     ]);
   });
 
-  it("'newest' leads with priority, then created_at descending", () => {
+  it("'newest' preserves organic date ordering in direct fallback", () => {
     buildListingsQuery({ sort: "newest" });
     const orderArgs = parentOrderArgs();
     expect(orderArgs).toEqual([
-      ["priority_placement", { ascending: false, nullsFirst: false }],
       ["created_at", { ascending: false }],
     ]);
   });
 
-  it("'ai-score' leads with priority, then ai_score with nullsFirst:false", () => {
+  it("'ai-score' preserves organic score ordering in direct fallback", () => {
     buildListingsQuery({ sort: "ai-score" });
     const orderArgs = parentOrderArgs();
     expect(orderArgs).toEqual([
-      ["priority_placement", { ascending: false, nullsFirst: false }],
       ["ai_score", { ascending: false, nullsFirst: false }],
     ]);
   });
 
-  it("'views' leads with priority, then views_count with nullsFirst:false", () => {
+  it("'views' preserves organic views ordering in direct fallback", () => {
     buildListingsQuery({ sort: "views" });
     const orderArgs = parentOrderArgs();
     expect(orderArgs).toEqual([
-      ["priority_placement", { ascending: false, nullsFirst: false }],
       ["views_count", { ascending: false, nullsFirst: false }],
     ]);
   });

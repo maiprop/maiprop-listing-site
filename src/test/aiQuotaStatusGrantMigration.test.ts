@@ -82,8 +82,9 @@ describe("AI quota status grant hardening", () => {
     expect(aiQuotaStatusConfig).toMatch(/\bverify_jwt\s*=\s*true\b/);
     expect(quotaStatusFunction).toContain("verifiedUserIdFromJwt");
     expect(quotaStatusFunction).toContain("role !== \"authenticated\"");
-    expect(quotaStatusFunction).toContain('"check_ai_quota_for_user"');
+    expect(quotaStatusFunction).toContain('"check_ai_quotas_for_user"');
     expect(quotaStatusFunction).toContain("_user_id: userId");
+    expect(quotaStatusFunction).toContain("p_buckets: buckets");
   });
 
   it("keeps future fresh builds aligned with the live hardening", () => {

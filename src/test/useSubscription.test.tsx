@@ -105,6 +105,30 @@ describe("useSubscription", () => {
     expect(result.current.hasStripeBilling).toBe(true);
   });
 
+  it.each(["pending", "timeout"])(
+    "fails closed while Stripe entitlement reconciliation is %s",
+    async (syncStatus) => {
+      (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
+        subscription: {
+          subscribed: true,
+          productId: "prod_abc",
+          subscriptionEnd: "2027-01-01",
+          source: "stripe",
+          syncStatus,
+          loading: false,
+        },
+        refreshSubscription: vi.fn(),
+        profile: { role: "agent", participant_type: "agent" },
+        user: { id: `u-${syncStatus}` },
+      });
+
+      const { result } = renderHook(() => useSubscription(), { wrapper });
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(result.current.isPro).toBe(false);
+      expect(result.current.accessSource).toBe("free");
+    },
+  );
+
   it("does not use a stale profile product when durable subscription state has no product", async () => {
     (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
       subscription: {

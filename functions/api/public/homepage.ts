@@ -16,6 +16,7 @@ import { getSupabaseRuntime } from "../../_seo";
 import { publicAuctions } from "./auctions";
 import { publicListingRows } from "./_fixture-content";
 import { fetchPublicProfileSummaries, publicProfileDisplay } from "./_publicProfiles";
+import { normalizePublicPromotionState } from "./_promotionState";
 
 type ListingRow = Record<string, unknown> & {
   owner_id?: string | null;
@@ -25,6 +26,10 @@ type ListingRow = Record<string, unknown> & {
   city?: string | null;
   price_per_sqm?: number | string | null;
   created_at?: string | null;
+  is_featured?: boolean | null;
+  featured_until?: string | null;
+  priority_placement?: number | null;
+  priority_until?: string | null;
 };
 
 const SECTIONS = [
@@ -37,7 +42,7 @@ const SECTIONS = [
   "auction-count",
 ] as const;
 const HOMEPAGE_CACHE_VERSION = "popular-location-live-v2";
-const FEATURED_CACHE_VERSION = "featured-card-v8-bounded-cache";
+const FEATURED_CACHE_VERSION = "active-spotlight-v2";
 const FEATURED_CACHE_SECONDS = 5 * 60;
 const HOMEPAGE_PRODUCER_TIMEOUT_MS = 4_500;
 const COUNTED_PROPERTY_TYPES = ["apartment", "land"] as const;
@@ -59,7 +64,7 @@ const featuredProjectSelect = [
 ].join(",");
 
 const featuredSelect =
-  `id,owner_id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,project_id,ai_score,views_count,tags,has_video_tour,has_virtual_tour,is_featured,priority_placement,is_pre_sale,construction_status,project:projects!listings_project_id_fkey(${featuredProjectSelect}),listing_images(url,sort_order)`;
+  `id,owner_id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,project_id,ai_score,views_count,tags,has_video_tour,has_virtual_tour,is_featured,featured_until,priority_placement,priority_until,is_pre_sale,construction_status,project:projects!listings_project_id_fkey(${featuredProjectSelect}),listing_images(url,sort_order)`;
 
 const openHouseSelect =
   "id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,open_house_transaction_type,ai_score,views_count,tags,open_house_date,latitude,longitude,listing_images(url,sort_order)";
@@ -233,11 +238,17 @@ async function fetchSection(env: PublicApiEnv, section: (typeof SECTIONS)[number
   if (section === "featured") {
     params.set("select", featuredSelect);
     params.set("listing_type", "in.(sale,new_build)");
+    params.set("is_featured", "eq.true");
+    params.set("featured_until", `gt.${new Date().toISOString()}`);
     params.set("order", "created_at.desc");
     params.set("listing_images.order", "sort_order.asc");
     params.set("listing_images.limit", "3");
     params.set("limit", "12");
-    const rows = publicListingRows(await supabaseJson<ListingRow>(env, "/rest/v1/listings", params, { failOnTransient: true }), 4);
+    const nowMs = Date.now();
+    const rows = publicListingRows(
+      await supabaseJson<ListingRow>(env, "/rest/v1/listings", params, { failOnTransient: true }),
+      4,
+    ).map((row) => normalizePublicPromotionState(row, nowMs));
     const ownerIds = rows.map((row) => row.owner_id).filter((id): id is string => typeof id === "string");
     const profiles = await fetchPublicProfileSummaries(env, ownerIds);
     return rows.map((row) => ({

@@ -28,10 +28,15 @@ import {
   type CatalogueSort,
 } from "./_listingRank";
 import { fetchPublicProfileSummaries, publicProfileDisplay } from "./_publicProfiles";
+import { normalizePublicPromotionState } from "./_promotionState";
 
 type ListingRow = {
   id: string;
   owner_id?: string | null;
+  is_featured?: boolean | null;
+  featured_until?: string | null;
+  priority_placement?: number | null;
+  priority_until?: string | null;
   [key: string]: unknown;
 };
 
@@ -56,7 +61,7 @@ const LISTING_PROJECT_CARD_SELECT_WITH_UNITS = [
   "delivery_date",
   `project_units!project_units_project_id_fkey(${PROJECT_UNIT_CARD_SELECT})`,
 ].join(",");
-const LISTINGS_CACHE_VERSION = "catalogue-stream-cursor-v1";
+const LISTINGS_CACHE_VERSION = "catalogue-stream-cursor-promotions-v2";
 const LISTINGS_CACHE_OPTIONS = {
   edgeTtlSeconds: 300,
   browserTtlSeconds: 60,
@@ -97,7 +102,9 @@ const LISTING_SELECT_BASE = [
   "has_video_tour",
   "has_virtual_tour",
   "is_featured",
+  "featured_until",
   "priority_placement",
+  "priority_until",
   "is_pre_sale",
   "construction_status",
   "walkability_score",
@@ -471,8 +478,11 @@ async function publicListings(ctx: PublicApiCtx, requestUrl: URL): Promise<Respo
       }
       const priorityRows = priorityResult.value;
       const organicRows = organicResult.value;
-      const cleanPriorityRows = publicListingRows(priorityRows);
-      const cleanOrganicRows = publicListingRows(organicRows);
+      const nowMs = Date.parse(now);
+      const cleanPriorityRows = publicListingRows(priorityRows)
+        .map((row) => normalizePublicPromotionState(row, nowMs));
+      const cleanOrganicRows = publicListingRows(organicRows)
+        .map((row) => normalizePublicPromotionState(row, nowMs));
       const pageResult = interleaveCatalogueStreams(
         cleanPriorityRows,
         cleanOrganicRows,

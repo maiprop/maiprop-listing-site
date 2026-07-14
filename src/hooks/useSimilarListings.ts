@@ -76,7 +76,7 @@ export function dedupeSimilarListings<T extends SimilarListingRow>(
 }
 
 const SIMILAR_LISTINGS_SELECT =
-  "id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,property_type,listing_type,open_house_transaction_type,open_house_date,auction_date,auction_starting_bid,cover_image_url,owner_id,tags,has_video_tour,has_virtual_tour,is_featured,priority_placement,is_pre_sale,construction_status,walkability_score,safety_score,noise_score,listing_images(url,sort_order)";
+  "id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,property_type,listing_type,open_house_transaction_type,open_house_date,auction_date,auction_starting_bid,cover_image_url,owner_id,tags,has_video_tour,has_virtual_tour,is_featured,featured_until,priority_placement,priority_until,is_pre_sale,construction_status,walkability_score,safety_score,noise_score,listing_images(url,sort_order)";
 
 type AbortableQuery<T> = T & { abortSignal?: (signal: AbortSignal) => T };
 
@@ -109,8 +109,6 @@ async function fetchSimilarListingsFallback({
     .select(SIMILAR_LISTINGS_SELECT)
     .eq("status", "active")
     .eq("is_off_market", false)
-    .order("priority_placement", { ascending: false, nullsFirst: false })
-    .order("is_featured", { ascending: false })
     .order("created_at", { ascending: false })
     .order("sort_order", { referencedTable: "listing_images", ascending: true })
     .limit(3, { referencedTable: "listing_images" })

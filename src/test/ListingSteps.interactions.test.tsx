@@ -282,7 +282,7 @@ describe("listing step pricing interactions", () => {
     expect(set).toHaveBeenCalledWith("price", "245000");
   });
 
-  it("forwards rental toggles and Pro featured controls", () => {
+  it("forwards rental toggles without exposing server-owned promotion fields", () => {
     const set = vi.fn();
     const toggle = vi.fn();
     renderWithProviders(
@@ -313,8 +313,6 @@ describe("listing step pricing interactions", () => {
     fireEvent.click(screen.getByRole("button", { name: /pets allowed/i }));
     fireEvent.click(screen.getByRole("button", { name: /short-term/i }));
     fireEvent.click(screen.getByRole("button", { name: "Exclusive" }));
-    fireEvent.click(screen.getByRole("button", { name: /spotlight badge/i }));
-    fireEvent.change(screen.getByDisplayValue("3"), { target: { value: "8" } });
 
     expect(set).toHaveBeenCalledWith("deposit_months", "1");
     expect(set).toHaveBeenCalledWith("monthly_expenses", "65");
@@ -324,8 +322,8 @@ describe("listing step pricing interactions", () => {
     expect(toggle).toHaveBeenCalledWith("pets_allowed");
     expect(toggle).toHaveBeenCalledWith("short_term_rental");
     expect(set).toHaveBeenCalledWith("is_exclusive", true);
-    expect(set).toHaveBeenCalledWith("is_featured", false);
-    expect(set).toHaveBeenCalledWith("priority_placement", 8);
+    expect(screen.queryByRole("button", { name: /spotlight badge/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/priority rank/i)).not.toBeInTheDocument();
   });
 
   it("renders auction and open-house validation branches", () => {

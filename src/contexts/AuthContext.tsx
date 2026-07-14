@@ -67,12 +67,44 @@ interface AuthContextType {
     updates: Partial<Profile>,
   ) => Promise<{ error: Error | null }>;
   refreshProfile: () => Promise<void>;
-  refreshSubscription: () => Promise<void>;
+  refreshSubscription: (checkoutSessionId?: string | null) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const CHECKOUT_SESSION_ID_RE = /^cs_(?:test|live)_[A-Za-z0-9_]{6,240}$/;
+const SUBSCRIPTION_CHECK_TIMEOUT_MS = 6_500;
+
+const emptySubscriptionState = (): SubscriptionState => ({
+  subscribed: false,
+  productId: null,
+  subscriptionEnd: null,
+  source: "database",
+  syncStatus: "synced",
+  loading: false,
+});
+
+const unavailableSubscriptionState = (): SubscriptionState => ({
+  ...emptySubscriptionState(),
+  syncStatus: "timeout",
+});
+
+const withSubscriptionDeadline = async <T,>(promise: Promise<T>): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(
+          () => reject(new Error("Subscription check timed out")),
+          SUBSCRIPTION_CHECK_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+};
 
 const checkoutSessionIdForReconciliation = (): string | null => {
   if (typeof window === "undefined") return null;
@@ -113,19 +145,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
-  const [subscription, setSubscription] = useState<SubscriptionState>({
-    subscribed: false,
-    productId: null,
-    subscriptionEnd: null,
-    source: "database",
-    syncStatus: "synced",
-    loading: false,
-  });
+  const [subscription, setSubscription] = useState<SubscriptionState>(emptySubscriptionState);
 
   // Guard: discard profile fetch results that belong to a previous user session
   const expectedUserIdRef = useRef<string | null>(null);
-  // Normal refreshes deduplicate; exact checkout reconciliation waits its turn.
-  const subCheckInProgressRef = useRef<Promise<void> | null>(null);
+  // Subscription work is scoped to one auth identity and generation. A delayed
+  // response from a prior account can never update the current account.
+  const expectedSubscriptionUserIdRef = useRef<string | null>(null);
+  const subscriptionGenerationRef = useRef(0);
+  const subCheckInProgressRef = useRef<{
+    userId: string;
+    generation: number;
+    promise: Promise<void>;
+  } | null>(null);
   // Guard: avoid duplicate auth telemetry from INITIAL_SESSION + getSession races.
   const lastAuthActivityRef = useRef<{ key: string; at: number } | null>(null);
 
@@ -146,40 +178,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return data;
   }, []);
 
+  const adoptSubscriptionUser = useCallback((userId: string | null) => {
+    if (expectedSubscriptionUserIdRef.current === userId) return false;
+    expectedSubscriptionUserIdRef.current = userId;
+    subscriptionGenerationRef.current += 1;
+    setSubscription(emptySubscriptionState());
+    return true;
+  }, []);
+
   const checkSubscription = useCallback(
     async (
       currentSession: Session | null,
       checkoutSessionId: string | null = null,
     ) => {
       if (!currentSession) {
-        setSubscription({
-          subscribed: false,
-          productId: null,
-          subscriptionEnd: null,
-          source: "database",
-          syncStatus: "synced",
-          loading: false,
-        });
+        adoptSubscriptionUser(null);
         return;
       }
-      if (subCheckInProgressRef.current && !checkoutSessionId) return;
-      while (subCheckInProgressRef.current) {
-        await subCheckInProgressRef.current;
+      const userId = currentSession.user.id;
+      const generation = subscriptionGenerationRef.current;
+      if (expectedSubscriptionUserIdRef.current !== userId) return;
+
+      const inFlight = subCheckInProgressRef.current;
+      if (
+        inFlight?.userId === userId &&
+        inFlight.generation === generation
+      ) {
+        if (!checkoutSessionId) return;
+        await inFlight.promise;
+        if (
+          expectedSubscriptionUserIdRef.current !== userId ||
+          subscriptionGenerationRef.current !== generation
+        ) return;
       }
 
       let releaseCheck = () => {};
       const currentCheck = new Promise<void>((resolve) => {
         releaseCheck = resolve;
       });
-      subCheckInProgressRef.current = currentCheck;
+      const currentWork = { userId, generation, promise: currentCheck };
+      subCheckInProgressRef.current = currentWork;
       setSubscription((prev) => ({ ...prev, loading: true }));
       try {
-        const { data, error } = await supabase.functions.invoke(
-          "check-subscription",
-          checkoutSessionId
-            ? { body: { checkout_session_id: checkoutSessionId } }
-            : {},
+        const { data, error } = await withSubscriptionDeadline(
+          supabase.functions.invoke(
+            "check-subscription",
+            checkoutSessionId
+              ? { body: { checkout_session_id: checkoutSessionId } }
+              : {},
+          ),
         );
+        if (
+          expectedSubscriptionUserIdRef.current !== userId ||
+          subscriptionGenerationRef.current !== generation
+        ) return;
         if (!error && data) {
           setSubscription({
             subscribed: data.subscribed ?? false,
@@ -196,22 +248,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             loading: false,
           });
         } else {
-          setSubscription((prev) => ({ ...prev, loading: false }));
+          setSubscription(unavailableSubscriptionState());
         }
       } catch (err: unknown) {
         logger.warn(
           "[AuthContext] checkSubscription failed:",
           err instanceof Error ? err.message : err,
         );
-        setSubscription((prev) => ({ ...prev, loading: false }));
+        if (
+          expectedSubscriptionUserIdRef.current === userId &&
+          subscriptionGenerationRef.current === generation
+        ) {
+          setSubscription(unavailableSubscriptionState());
+        }
       } finally {
-        if (subCheckInProgressRef.current === currentCheck) {
+        if (subCheckInProgressRef.current === currentWork) {
           subCheckInProgressRef.current = null;
         }
         releaseCheck();
       }
     },
-    [],
+    [adoptSubscriptionUser],
   );
 
   const recordAuthActivity = useCallback(
@@ -261,6 +318,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(sess?.user ?? null);
 
       if (sess?.user) {
+        const userChanged = adoptSubscriptionUser(sess.user.id);
+        if (userChanged) setProfile(null);
         // Unblock UI immediately — profile arrives shortly after
         setLoading(false);
         // Non-blocking: profile and subscription load in background
@@ -278,16 +337,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         // Clear all user-scoped state on sign-out
         expectedUserIdRef.current = null;
+        adoptSubscriptionUser(null);
         setProfile(null);
         setProfileLoading(false);
-        setSubscription({
-          subscribed: false,
-          productId: null,
-          subscriptionEnd: null,
-          source: "database",
-          syncStatus: "synced",
-          loading: false,
-        });
         setLoading(false);
       }
     });
@@ -307,6 +359,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         setSession(sess);
         setUser(sess.user);
+        const userChanged = adoptSubscriptionUser(sess.user.id);
+        if (userChanged) setProfile(null);
         setLoading(false);
 
         fetchProfile(sess.user.id).catch((err) => {
@@ -349,7 +403,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       authSub.unsubscribe();
       clearInterval(interval);
     };
-  }, [fetchProfile, checkSubscription, eventToAuthActivity, recordAuthActivity]);
+  }, [fetchProfile, checkSubscription, eventToAuthActivity, recordAuthActivity, adoptSubscriptionUser]);
 
   const signUp = useCallback(
     async (
@@ -409,21 +463,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    expectedUserIdRef.current = null;
+    adoptSubscriptionUser(null);
     await recordUserAuthActivity({
       eventType: "sign_out",
       metadata: { source: "sign_out" },
     });
     await supabase.auth.signOut();
     setProfile(null);
-    setSubscription({
-      subscribed: false,
-      productId: null,
-      subscriptionEnd: null,
-      source: "database",
-      syncStatus: "synced",
-      loading: false,
-    });
-  }, []);
+  }, [adoptSubscriptionUser]);
 
   const updateProfile = useCallback(
     async (updates: Partial<Profile>) => {
@@ -474,13 +522,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (user) await fetchProfile(user.id);
   }, [user, fetchProfile]);
 
-  const refreshSubscription = useCallback(async () => {
-    const checkoutSessionId = checkoutSessionIdForReconciliation();
+  const refreshSubscription = useCallback(async (requestedSessionId?: string | null) => {
+    const checkoutSessionId = requestedSessionId === undefined
+      ? checkoutSessionIdForReconciliation()
+      : requestedSessionId && CHECKOUT_SESSION_ID_RE.test(requestedSessionId)
+        ? requestedSessionId
+        : null;
     const {
       data: { session: sess },
     } = await supabase.auth.getSession();
+    if (sess?.user) adoptSubscriptionUser(sess.user.id);
     await checkSubscription(sess, checkoutSessionId);
-  }, [checkSubscription]);
+  }, [adoptSubscriptionUser, checkSubscription]);
 
   const needsOnboarding = profileNeedsOnboarding(profile);
 

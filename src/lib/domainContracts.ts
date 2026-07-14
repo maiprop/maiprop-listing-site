@@ -85,7 +85,9 @@ export type DbListingCardRow = {
   has_video_tour?: boolean | null;
   has_virtual_tour?: boolean | null;
   is_featured?: boolean | null;
+  featured_until?: string | null;
   priority_placement?: number | string | null;
+  priority_until?: string | null;
   is_pre_sale?: boolean | null;
   construction_status?: string | null;
   latitude?: number | null;

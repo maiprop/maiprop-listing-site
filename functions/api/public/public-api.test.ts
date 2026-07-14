@@ -570,12 +570,26 @@ describe("public listings endpoint", () => {
 
         if (url.searchParams.get("priority_placement") === "gt.0") {
           return jsonRows([
-            { id: "priority-1", created_at: "2026-07-14T12:00:03.000Z", priority_placement: 1 },
+            {
+              id: "priority-1",
+              created_at: "2026-07-14T12:00:03.000Z",
+              is_featured: true,
+              featured_until: "2000-01-01T00:00:00.000Z",
+              priority_placement: 1,
+              priority_until: "2099-01-01T00:00:00.000Z",
+            },
           ]);
         }
         return jsonRows([
           { id: "organic-new", created_at: "2026-07-14T12:00:02.000Z", is_featured: false, priority_placement: 0 },
-          { id: "organic-spotlight", created_at: "2026-07-14T12:00:01.000Z", is_featured: true, priority_placement: 0 },
+          {
+            id: "organic-spotlight",
+            created_at: "2026-07-14T12:00:01.000Z",
+            is_featured: true,
+            featured_until: "2099-01-01T00:00:00.000Z",
+            priority_placement: 1,
+            priority_until: "2000-01-01T00:00:00.000Z",
+          },
         ]);
       }
       return jsonRows([]);
@@ -585,7 +599,10 @@ describe("public listings endpoint", () => {
     const res = await listingsRequest(
       makeCtx("https://portal.maiprop.co/api/public/listings?pageSize=4"),
     );
-    const body = await res.json() as { data: Array<{ id: string }>; nextCursor: string | null };
+    const body = await res.json() as {
+      data: Array<{ id: string; is_featured: boolean; priority_placement: number }>;
+      nextCursor: string | null;
+    };
 
     expect(maxListingReadsInFlight).toBe(2);
     expect(listingUrls).toHaveLength(2);
@@ -598,6 +615,8 @@ describe("public listings endpoint", () => {
     for (const url of listingUrls) {
       expect(url.searchParams.has("offset")).toBe(false);
       expect(url.searchParams.has("is_featured")).toBe(false);
+      expect(url.searchParams.get("select")).toContain("featured_until");
+      expect(url.searchParams.get("select")).toContain("priority_until");
       expect(url.searchParams.getAll("order")).toEqual(["created_at.desc", "id.desc"]);
     }
     expect(body.data.map((row) => row.id)).toEqual([
@@ -605,6 +624,14 @@ describe("public listings endpoint", () => {
       "organic-new",
       "organic-spotlight",
     ]);
+    expect(body.data.find((row) => row.id === "priority-1")).toMatchObject({
+      is_featured: false,
+      priority_placement: 1,
+    });
+    expect(body.data.find((row) => row.id === "organic-spotlight")).toMatchObject({
+      is_featured: true,
+      priority_placement: 0,
+    });
     expect(body.nextCursor).toBeNull();
   });
 
@@ -938,6 +965,8 @@ describe("public listing detail endpoint", () => {
     const listingsUrl = fetchUrls("/rest/v1/listings")[0];
     expect(listingsUrl.searchParams.get("select")).not.toContain("*");
     expect(listingsUrl.searchParams.get("select")).toContain("description");
+    expect(listingsUrl.searchParams.get("select")).toContain("featured_until");
+    expect(listingsUrl.searchParams.get("select")).toContain("priority_until");
     expect(listingsUrl.searchParams.get("select")).toContain("listing_images(url,sort_order)");
     expect(listingsUrl.searchParams.get("id")).toBe("eq.11111111-1111-4111-8111-111111111111");
     expect(listingsUrl.searchParams.get("status")).toBe("eq.active");
@@ -945,7 +974,32 @@ describe("public listing detail endpoint", () => {
     expect(listingsUrl.searchParams.get("listing_images.order")).toBe("sort_order.asc");
     expect(initFor("/rest/v1/rpc/get_public_profile_summaries").method).toBe("POST");
     expect(jsonBodyFor("/rest/v1/rpc/get_public_profile_summaries")).toEqual({ p_user_ids: ["owner-1"] });
-    expect(cacheApi.put.mock.calls[0][0].url).toContain("v=open-house-transaction-v1");
+    expect(cacheApi.put.mock.calls[0][0].url).toContain("v=promotion-expiry-v2");
+  });
+
+  it("suppresses expired paid flags on exact listing responses", async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/rest/v1/listings") {
+        return jsonRows([{
+          id: "listing-expired",
+          is_featured: true,
+          featured_until: "2000-01-01T00:00:00.000Z",
+          priority_placement: 1,
+          priority_until: "2000-01-01T00:00:00.000Z",
+        }]);
+      }
+      return jsonRows([]);
+    }) as unknown as typeof fetch;
+
+    const response = await listingRequest(
+      makeCtx("https://portal.maiprop.co/api/public/listing?id=11111111-1111-4111-8111-111111111111"),
+    );
+    const body = await response.json() as {
+      data: { is_featured: boolean; priority_placement: number };
+    };
+
+    expect(body.data).toMatchObject({ is_featured: false, priority_placement: 0 });
   });
 
   it("requests and returns the linked project, project units, and project media for new-build details", async () => {
@@ -1638,11 +1692,16 @@ describe("public homepage endpoint", () => {
     expect(url.searchParams.get("limit")).toBe("12");
     expect(url.searchParams.get("listing_type")).toBe("in.(sale,new_build)");
     expect(url.searchParams.get("is_off_market")).toBe("eq.false");
+    expect(url.searchParams.get("is_featured")).toBe("eq.true");
+    expect(url.searchParams.get("featured_until")).toMatch(/^gt\./);
+    expect(url.searchParams.getAll("order")).toEqual(["created_at.desc"]);
     expect(url.searchParams.get("select")).toContain("owner_id");
     expect(url.searchParams.get("select")).toContain("has_video_tour");
     expect(url.searchParams.get("select")).toContain("has_virtual_tour");
     expect(url.searchParams.get("select")).toContain("is_featured");
+    expect(url.searchParams.get("select")).toContain("featured_until");
     expect(url.searchParams.get("select")).toContain("priority_placement");
+    expect(url.searchParams.get("select")).toContain("priority_until");
     expect(url.searchParams.get("select")).toContain("project_id");
     expect(url.searchParams.get("select")).toContain("project:projects!listings_project_id_fkey");
     expect(url.searchParams.get("select")).toContain("delivery_date");
@@ -1652,7 +1711,7 @@ describe("public homepage endpoint", () => {
     expect(jsonBodyFor("/rest/v1/rpc/get_public_profile_summaries")).toEqual({ p_user_ids: ["owner-1", "owner-2"] });
     const featuredCacheKey = new URL(cacheApi.put.mock.calls[0][0].url);
     expect(featuredCacheKey.searchParams.get("day")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(featuredCacheKey.searchParams.get("v")).toBe("featured-card-v8-bounded-cache");
+    expect(featuredCacheKey.searchParams.get("v")).toBe("active-spotlight-v2");
     expect(featured.headers.get("Cache-Control")).toBe("public, max-age=300, stale-while-revalidate=300");
     expect(featured.headers.get("CDN-Cache-Control")).toBe("public, max-age=300, stale-while-revalidate=300");
 

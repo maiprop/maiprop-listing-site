@@ -64,7 +64,9 @@ const LISTING_CARD_SELECT = [
   "has_video_tour",
   "has_virtual_tour",
   "is_featured",
+  "featured_until",
   "priority_placement",
+  "priority_until",
   "is_pre_sale",
   "construction_status",
   "walkability_score",
@@ -140,7 +142,9 @@ const LISTING_DETAIL_SELECT = [
   "has_video_tour",
   "has_virtual_tour",
   "is_featured",
+  "featured_until",
   "priority_placement",
+  "priority_until",
   "is_pre_sale",
   "walkability_score",
   "safety_score",
@@ -334,15 +338,12 @@ export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize
     .order("sort_order", { referencedTable: "listing_images", ascending: true })
     .limit(LISTING_CARD_IMAGE_LIMIT, { referencedTable: "listing_images" });
 
-  // Priority is the paid ranking product. Spotlight affects only visual card
-  // treatment and the dedicated homepage showcase, never catalogue order.
+  // Paid placement requires expiry-aware fair mixing, which is implemented by
+  // the public catalogue API. This constrained fallback remains organic rather
+  // than ranking stale projection flags during an API outage.
   if (sort === "featured") {
-    query = query
-      .order("priority_placement", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false });
+    query = query.order("created_at", { ascending: false });
   } else {
-    query = query
-      .order("priority_placement", { ascending: false, nullsFirst: false });
     if (sort === "price-asc") query = query.order("price", { ascending: true });
     else if (sort === "price-desc") query = query.order("price", { ascending: false });
     else if (sort === "newest") query = query.order("created_at", { ascending: false });

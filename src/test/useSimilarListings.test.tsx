@@ -152,9 +152,10 @@ describe("useSimilarListings", () => {
 
   it("falls back to constrained Supabase reads when the public API is unavailable", async () => {
     publicApiMock.mockRejectedValue(new Error("upstream unavailable"));
-    fromMock.mockReturnValue(makeThenableBuilder([
+    const builder = makeThenableBuilder([
       { id: "db-similar", city: "Athens", property_type: "apartment", listing_type: "sale", price: 310000 },
-    ]));
+    ]);
+    fromMock.mockReturnValue(builder);
 
     const { result } = renderHookWithQuery(() =>
       useSimilarListings({ city: "Athens", propertyType: "apartment", listingType: "sale", price: 320000 }),
@@ -163,6 +164,10 @@ describe("useSimilarListings", () => {
 
     expect(result.current.data?.[0]).toMatchObject({ id: "db-similar" });
     expect(fromMock).toHaveBeenCalledWith("listings");
+    expect(builder.select).toHaveBeenCalledWith(expect.stringContaining("featured_until"));
+    expect(builder.select).toHaveBeenCalledWith(expect.stringContaining("priority_until"));
+    expect(builder.order).not.toHaveBeenCalledWith("is_featured", expect.anything());
+    expect(builder.order).not.toHaveBeenCalledWith("priority_placement", expect.anything());
   });
 
   it("propagates errors when both public API and fallback reads fail", async () => {

@@ -126,11 +126,13 @@ export const useSubscription = () => {
   const effectiveProductId = subscription.productId;
   const hasEffectiveProduct =
     typeof effectiveProductId === "string" && effectiveProductId.length > 0;
+  const entitlementIsSynced =
+    subscription.syncStatus !== "pending" && subscription.syncStatus !== "timeout";
   const { data: validatedProProduct, isLoading: validatedProProductLoading } =
     useValidatedProProduct(effectiveProductId, currentAudience);
-  const hasStripePro = subscription.subscribed && Boolean(validatedProProduct);
+  const hasStripePro = entitlementIsSynced && subscription.subscribed && Boolean(validatedProProduct);
   const hasInvestorPro =
-    isInvestorRole && subscription.subscribed && subscription.source === "investor";
+    entitlementIsSynced && isInvestorRole && subscription.subscribed && subscription.source === "investor";
   const isPro = hasAnyProAccess([
     isAdmin,
     hasStripePro,

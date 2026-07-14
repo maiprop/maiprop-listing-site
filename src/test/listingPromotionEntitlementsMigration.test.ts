@@ -137,24 +137,23 @@ describe("listing promotion entitlement migration", () => {
     expect(migration).not.toContain("NEW.refund_status = 'full'");
   });
 
-  it("backfills every valid legacy projection without depending on owner role", () => {
-    const backfill = sqlSection(
-      migration,
-      "-- Preserve existing administrator-managed promotions",
-      "DO $$\nDECLARE",
+  it("quarantines legacy projections and restores only verified paid or admin evidence", () => {
+    expect(migration).toContain(
+      "Legacy paid columns are untrusted projections",
     );
-
-    expect(backfill).not.toContain("public.has_platform_admin(l.owner_id)");
-    expect(backfill).toContain(
-      "AND (l.featured_until IS NULL OR l.featured_until > now())",
+    expect(migration).toContain(
+      "private.legacy_listing_promotion_quarantine",
     );
-    expect(backfill).toContain(
-      "AND (COALESCE(l.priority_until, l.featured_until) IS NULL",
+    expect(remediationMigration).not.toContain(
+      "public.has_platform_admin(v_candidate.owner_id)",
     );
-    expect(backfill).toContain(
-      "OR COALESCE(l.priority_until, l.featured_until) > now())",
+    expect(remediationMigration).toContain("allocation.source_type = 'plan'");
+    expect(remediationMigration).toContain("allocation.source_type = 'addon'");
+    expect(remediationMigration).toContain("allocation.source_type = 'admin'");
+    expect(remediationMigration).toContain("resolution = 'cleared'");
+    expect(remediationMigration).toContain(
+      "subscription.stripe_product_id = profile.subscription_product_id",
     );
-    expect(backfill).toContain("LEAST(now(),");
   });
 
   it("keeps public promotion RPCs invoker-safe while privileged writes stay private", () => {
@@ -308,15 +307,17 @@ describe("listing promotion entitlement migration", () => {
     const repair = sqlSection(
       remediationMigration,
       "CREATE OR REPLACE FUNCTION private.repair_legacy_priority_promotions",
-      "SELECT private.repair_legacy_priority_promotions",
+      "REVOKE ALL ON FUNCTION private.remediate_legacy_listing_promotions",
     );
 
-    expect(repair).toContain("interval '30 days'");
-    expect(repair).toContain("source_type = 'admin'");
-    expect(repair).toContain("promotion_type = 'priority'");
-    expect(repair).not.toContain("featured_until");
+    expect(repair).toContain(
+      "private.remediate_legacy_listing_promotions(p_grant_started_at)",
+    );
     expect(remediationMigration).toMatch(
-      /SELECT private\.repair_legacy_priority_promotions\(\s*transaction_timestamp\(\)\s*\)/,
+      /SELECT listing\.id, listing\.owner_id, 'priority', listing\.priority_until[\s\S]*?WHERE listing\.priority_placement > 0[\s\S]*?listing\.priority_until IS NULL OR listing\.priority_until > p_observed_at/,
+    );
+    expect(remediationMigration).toMatch(
+      /SELECT private\.remediate_legacy_listing_promotions\(\s*transaction_timestamp\(\)\s*\)/,
     );
   });
 

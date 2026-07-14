@@ -47,7 +47,7 @@ const renderHookWithQuery = <T,>(hook: () => T) => {
 
 const makeThenableBuilder = (data: unknown[] = []) => {
   const b: Record<string, unknown> = {};
-  const chain = ["select", "order", "limit", "eq", "gte", "in"];
+  const chain = ["select", "order", "limit", "eq", "gte", "gt", "in"];
   for (const method of chain) b[method] = vi.fn().mockReturnValue(b);
   b.then = (resolve: (value: unknown) => unknown, reject: (reason?: unknown) => unknown) =>
     Promise.resolve({ data, error: null }).then(resolve, reject);
@@ -135,7 +135,8 @@ describe("homepage public API fallback behavior", () => {
 
   it("falls back to constrained Supabase reads for Spotlight listings when the public API is unavailable", async () => {
     publicApiMock.mockResolvedValue(null);
-    fromMock.mockReturnValue(makeThenableBuilder([{ id: "db-featured", title: "DB Spotlight", city: "Athens" }]));
+    const builder = makeThenableBuilder([{ id: "db-featured", title: "DB Spotlight", city: "Athens" }]);
+    fromMock.mockReturnValue(builder);
 
     const { result } = renderHookWithQuery(() => useHomepageFeaturedListings());
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -146,6 +147,10 @@ describe("homepage public API fallback behavior", () => {
       expect.objectContaining({ throwOnError: true, timeoutMs: 2500, signal: expect.any(AbortSignal) }),
     );
     expect(fromMock).toHaveBeenCalledWith("listings");
+    expect(builder.select).toHaveBeenCalledWith(expect.stringContaining("featured_until"));
+    expect(builder.select).toHaveBeenCalledWith(expect.stringContaining("priority_until"));
+    expect(builder.eq).toHaveBeenCalledWith("is_featured", true);
+    expect(builder.gt).toHaveBeenCalledWith("featured_until", expect.any(String));
   });
 
   it("falls back to constrained Supabase reads for open houses when the public API is unavailable", async () => {

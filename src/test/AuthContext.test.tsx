@@ -551,6 +551,100 @@ describe("AuthProvider auth API methods", () => {
       { body: { checkout_session_id: "cs_test_queued_checkout" } },
     );
   });
+
+  it("discards a delayed entitlement response after the authenticated user changes", async () => {
+    let finishUserACheck!: (value: {
+      data: Record<string, unknown>;
+      error: null;
+    }) => void;
+    supabaseMock.functions.invoke
+      .mockImplementationOnce(() =>
+        new Promise((resolve) => {
+          finishUserACheck = resolve;
+        }),
+      )
+      .mockResolvedValueOnce({
+        data: {
+          subscribed: false,
+          product_id: null,
+          subscription_end: null,
+          source: "database",
+          sync_status: "synced",
+        },
+        error: null,
+      });
+
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await act(async () => {
+      authStateCallbackHolder.current?.("SIGNED_IN", { user: { id: "user-a" } });
+    });
+    await waitFor(() => expect(supabaseMock.functions.invoke).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      authStateCallbackHolder.current?.("SIGNED_IN", { user: { id: "user-b" } });
+    });
+    await waitFor(() => expect(supabaseMock.functions.invoke).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.current.user?.id).toBe("user-b"));
+    expect(result.current.subscription.subscribed).toBe(false);
+
+    await act(async () => {
+      finishUserACheck({
+        data: {
+          subscribed: true,
+          product_id: "prod_user_a",
+          subscription_end: "2099-01-01T00:00:00.000Z",
+          source: "stripe",
+          sync_status: "synced",
+        },
+        error: null,
+      });
+    });
+
+    expect(result.current.user?.id).toBe("user-b");
+    expect(result.current.subscription.subscribed).toBe(false);
+    expect(result.current.subscription.productId).toBeNull();
+  });
+
+  it("fails closed when a refresh exceeds the subscription deadline", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    supabaseMock.auth.getSession.mockResolvedValue({
+      data: { session: { user: { id: "user-timeout" } } },
+    });
+    supabaseMock.functions.invoke.mockResolvedValueOnce({
+      data: {
+        subscribed: true,
+        product_id: "prod_agent",
+        subscription_end: "2099-01-01T00:00:00.000Z",
+        source: "stripe",
+        sync_status: "synced",
+      },
+      error: null,
+    });
+
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await act(async () => {
+      authStateCallbackHolder.current?.("SIGNED_IN", { user: { id: "user-timeout" } });
+    });
+    await waitFor(() => expect(result.current.subscription.subscribed).toBe(true));
+
+    supabaseMock.functions.invoke.mockImplementationOnce(
+      () => new Promise(() => undefined),
+    );
+    let refreshPromise!: Promise<void>;
+    await act(async () => {
+      refreshPromise = result.current.refreshSubscription();
+      await vi.advanceTimersByTimeAsync(6_500);
+      await refreshPromise;
+    });
+
+    expect(result.current.subscription).toMatchObject({
+      subscribed: false,
+      productId: null,
+      syncStatus: "timeout",
+      loading: false,
+    });
+    vi.useRealTimers();
+  });
 });
 
 describe("useAuth exposes the same identity as the rendered component sees", () => {

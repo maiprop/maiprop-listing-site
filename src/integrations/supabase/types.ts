@@ -1584,6 +1584,7 @@ export type Database = {
           price: number
           price_per_sqm: number | null
           priority_placement: number
+          priority_until: string | null
           project_id: string | null
           property_type: Database["public"]["Enums"]["property_type"]
           region: string | null
@@ -1706,6 +1707,7 @@ export type Database = {
           price: number
           price_per_sqm?: number | null
           priority_placement?: number
+          priority_until?: string | null
           project_id?: string | null
           property_type: Database["public"]["Enums"]["property_type"]
           region?: string | null
@@ -1828,6 +1830,7 @@ export type Database = {
           price?: number
           price_per_sqm?: number | null
           priority_placement?: number
+          priority_until?: string | null
           project_id?: string | null
           property_type?: Database["public"]["Enums"]["property_type"]
           region?: string | null
@@ -4254,9 +4257,21 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      activate_listing_promotion: {
+        Args: {
+          p_listing_id: string
+          p_promotion_type: string
+          p_request_key: string
+        }
+        Returns: Json
+      }
       addon_credit_bucket: { Args: { p_addon_key: string }; Returns: string }
       addon_credit_units: {
         Args: { p_addon_key: string; p_quantity?: number }
+        Returns: number
+      }
+      deactivate_listing_promotion: {
+        Args: { p_listing_id: string; p_promotion_type: string }
         Returns: number
       }
       admin_ban_reported_content_owner: {
@@ -4859,6 +4874,7 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: number
       }
+      get_listing_promotion_balance: { Args: never; Returns: Json }
       get_listing_limit:
         | { Args: { p_is_pro: boolean; p_role: string }; Returns: number }
         | { Args: { p_user_id: string }; Returns: number }

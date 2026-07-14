@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
     hasStripeBilling: true,
     isInvestorManagedPlan: false,
     isManuallyManagedPlan: false,
+    refreshSubscription: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -68,8 +69,20 @@ describe("BillingTab add-on checkout", () => {
       hasStripeBilling: true,
       isInvestorManagedPlan: false,
       isManuallyManagedPlan: false,
+      refreshSubscription: vi.fn().mockResolvedValue(undefined),
     });
-    mocks.supabase?.rpc.mockImplementation((_fn: string, args?: { p_bucket?: string }) => {
+    mocks.supabase?.rpc.mockImplementation((fn: string, args?: { p_bucket?: string }) => {
+      if (fn === "get_listing_promotion_balance") {
+        return Promise.resolve({
+          data: {
+            cycle_start: "2026-07-01",
+            spotlight: { included: 1, used: 1, remaining: 0, addons: 0 },
+            priority: { included: 0, used: 0, remaining: 0, addons: 0 },
+            bundles: { addons: 0 },
+          },
+          error: null,
+        });
+      }
       const quotas: Record<string, { used: number; limit: number }> = {
         "property-valuation": { used: 48, limit: 50 },
         "neighbourhood-report": { used: 50, limit: 50 },
@@ -179,7 +192,7 @@ describe("BillingTab add-on checkout", () => {
       .toBeInTheDocument();
     fireEvent.click(
       within(featuredCard as HTMLElement).getByRole("button", {
-        name: /Buy add-on/i,
+        name: /Buy Featured Listing add-on/i,
       }),
     );
     expect(screen.getByText("Priority Placement")).toBeInTheDocument();
@@ -344,8 +357,11 @@ describe("BillingTab add-on checkout", () => {
     expect(within(panel).getByText("Nearby places / POIs")).toBeInTheDocument();
     expect(within(panel).getByText("Property reports")).toBeInTheDocument();
     await waitFor(() => expect(within(panel).getByText("2 / 4")).toBeInTheDocument());
-    expect(within(panel).getByText("Listing promotions")).toBeInTheDocument();
-    await waitFor(() => expect(within(panel).getByText("10 / 10")).toBeInTheDocument());
+    expect(within(panel).getByText("Spotlight credits")).toBeInTheDocument();
+    expect(within(panel).getByText("Priority credits")).toBeInTheDocument();
+    await waitFor(() => expect(within(panel).getByText("1 / 1")).toBeInTheDocument());
+    expect(within(panel).getByText(/Add-on EUR 39\/30 days/)).toBeInTheDocument();
+    expect(within(panel).getByText(/Priority add-on EUR 59\/30 days/)).toBeInTheDocument();
     await waitFor(() => {
       const quotaCalls = mocks.supabase?.functions.invoke.mock.calls.filter(
         ([fn]) => fn === "ai-quota-status",
@@ -430,6 +446,27 @@ describe("BillingTab add-on checkout", () => {
     );
   });
 
+  it("offers self-serve Spotlight and Priority top-ups from monthly usage", async () => {
+    renderWithProviders(<BillingTab />);
+
+    const panel = await screen.findByRole("region", { name: /monthly ai and report usage/i });
+    const buySpotlight = within(panel).getByRole("button", { name: "Buy Spotlight" });
+    expect(within(panel).getByRole("button", { name: "Buy Priority" })).toBeInTheDocument();
+    expect(within(panel).queryByRole("link", { name: /Contact team/i })).not.toBeInTheDocument();
+
+    fireEvent.click(buySpotlight);
+    await waitFor(() => {
+      expect(mocks.supabase?.functions.invoke).toHaveBeenCalledWith("create-checkout", {
+        body: {
+          addon_key: "featured_listing",
+          success_url: "/dashboard/billing?checkout=success",
+          cancel_url: "/dashboard/billing?checkout=cancelled",
+        },
+        timeout: 20_000,
+      });
+    });
+  });
+
   it("lets developers buy the Featured and Priority promotion bundle", async () => {
     authState.profile.role = "developer";
     authState.profile.participant_type = "developer";
@@ -442,7 +479,7 @@ describe("BillingTab add-on checkout", () => {
     expect(within(bundleCard as HTMLElement).getByText("/ 30 days")).toBeInTheDocument();
     fireEvent.click(
       within(bundleCard as HTMLElement).getByRole("button", {
-        name: /Buy add-on/i,
+        name: /Buy Featured\+Priority add-on/i,
       }),
     );
 
@@ -511,6 +548,18 @@ describe("BillingTab add-on checkout", () => {
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["usage_property_reports"] });
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["usage_priority_ads"] });
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["usage_ai_calls"] });
+    });
+  });
+
+  it("reconciles the exact Stripe session on a successful billing return", async () => {
+    renderWithProviders(<BillingTab />, {
+      initialPath: "/dashboard/billing?checkout=success&session_id=cs_test_billing_return",
+    });
+
+    await waitFor(() => {
+      expect(mocks.subscription.refreshSubscription).toHaveBeenCalledWith(
+        "cs_test_billing_return",
+      );
     });
   });
 

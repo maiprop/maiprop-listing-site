@@ -15,6 +15,8 @@ const {
   listingsState,
   updateListingMutate,
   deleteListingMutate,
+  activatePromotionMutate,
+  deactivatePromotionMutate,
   portfoliosState,
   portfolioDetailState,
   favoritesState,
@@ -40,6 +42,8 @@ const {
   listingsState: { data: [] as Array<Record<string, unknown>>, isLoading: false },
   updateListingMutate: vi.fn(),
   deleteListingMutate: vi.fn(),
+  activatePromotionMutate: vi.fn(),
+  deactivatePromotionMutate: vi.fn(),
   portfoliosState: { data: [] as Array<Record<string, unknown>>, isLoading: false },
   portfolioDetailState: { data: null as Record<string, unknown> | null, isLoading: false, isError: false },
   favoritesState: { data: [] as Array<Record<string, unknown>>, isLoading: false },
@@ -67,6 +71,18 @@ vi.mock("@/hooks/useListings", () => ({
   useMyListings: () => listingsState,
   useUpdateListing: () => ({ mutate: updateListingMutate }),
   useDeleteListing: () => ({ mutate: deleteListingMutate }),
+}));
+vi.mock("@/hooks/useListingPromotions", () => ({
+  useListingPromotionBalance: () => ({
+    data: {
+      cycle_start: "2026-07-01",
+      spotlight: { included: 1, used: 0, remaining: 1, addons: 0 },
+      priority: { included: 10, used: 0, remaining: 10, addons: 0 },
+      bundles: { addons: 0 },
+    },
+  }),
+  useActivateListingPromotion: () => ({ mutate: activatePromotionMutate, isPending: false }),
+  useDeactivateListingPromotion: () => ({ mutate: deactivatePromotionMutate, isPending: false }),
 }));
 vi.mock("@/hooks/usePortfolios", () => ({
   usePortfolios: () => portfoliosState,
@@ -408,7 +424,7 @@ describe("dashboard tab behavior", () => {
     expect(updateViewingStatusMutate).toHaveBeenCalledWith({ id: "self-viewing", status: "confirmed" });
   });
 
-  it("filters special listings and mutates featured, priority, status, and delete actions", () => {
+  it("filters special listings and routes paid promotions through entitlement RPC hooks", () => {
     listingsState.data = [
       {
         id: "l-1",
@@ -421,7 +437,7 @@ describe("dashboard tab behavior", () => {
         is_off_market: true,
         is_pre_sale: false,
         is_featured: false,
-        priority_placement: 1,
+        priority_placement: 0,
         tags: ["exclusive"],
       },
       {
@@ -446,11 +462,9 @@ describe("dashboard tab behavior", () => {
     expect(screen.getByText("Quiet off-market")).toBeInTheDocument();
     expect(screen.queryByText("Future launch")).not.toBeInTheDocument();
     fireEvent.click(screen.getByTitle(/Add Spotlight badge/i));
-    expect(updateListingMutate).toHaveBeenCalledWith({ id: "l-1", updates: { is_featured: true } });
-    const priorityInput = screen.getByTitle(/Priority/i);
-    fireEvent.change(priorityInput, { target: { value: "20" } });
-    fireEvent.blur(priorityInput);
-    expect(updateListingMutate).toHaveBeenCalledWith({ id: "l-1", updates: { priority_placement: 10 } });
+    expect(activatePromotionMutate).toHaveBeenCalledWith({ listingId: "l-1", promotionType: "spotlight" });
+    fireEvent.click(screen.getByTitle(/Activate Priority ranking/i));
+    expect(activatePromotionMutate).toHaveBeenCalledWith({ listingId: "l-1", promotionType: "priority" });
     fireEvent.click(screen.getByRole("button", { name: /pause listing/i }));
     expect(updateListingMutate).toHaveBeenCalledWith({ id: "l-1", updates: { status: "paused" } });
     fireEvent.click(screen.getByRole("button", { name: /delete listing/i }));

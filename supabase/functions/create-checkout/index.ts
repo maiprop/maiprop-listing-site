@@ -523,8 +523,10 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
         },
       );
       const success = `${origin}${
-        sanitizeRedirectPath(body.success_url) ??
-          "/dashboard/billing?checkout=success"
+        withCheckoutSessionId(
+          sanitizeRedirectPath(body.success_url) ??
+            "/dashboard/billing?checkout=success",
+        )
       }`;
       const cancel = `${origin}${
         sanitizeRedirectPath(body.cancel_url) ??

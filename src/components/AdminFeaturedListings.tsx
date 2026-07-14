@@ -164,7 +164,6 @@ async function fetchFeaturedListings(): Promise<FeaturedListing[]> {
 export default function AdminFeaturedListings() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
-  const [pendingPriority, setPendingPriority] = useState<Record<string, string>>({});
   const [toggling, setToggling] = useState<Record<string, boolean>>({});
   const [updatingPriority, setUpdatingPriority] = useState<Record<string, boolean>>({});
   const [updatingUntil, setUpdatingUntil] = useState<Record<string, boolean>>({});
@@ -203,48 +202,21 @@ export default function AdminFeaturedListings() {
     [queryClient],
   );
 
-  const handlePriorityBlur = useCallback(
+  const handleTogglePriority = useCallback(
     async (listing: FeaturedListing) => {
-      const raw = pendingPriority[listing.id];
-      if (raw === undefined) return; // no change
-
-      const parsed = parseInt(raw, 10);
-      if (isNaN(parsed)) {
-        toast.error("Priority must be a number between 1 and 10");
-        setPendingPriority((prev) => {
-          const next = { ...prev };
-          delete next[listing.id];
-          return next;
-        });
-        return;
-      }
-      const clamped = Math.min(10, Math.max(1, parsed));
-      if (clamped === listing.priority_placement) {
-        setPendingPriority((prev) => {
-          const next = { ...prev };
-          delete next[listing.id];
-          return next;
-        });
-        return;
-      }
-
+      const enabled = listing.priority_placement <= 0;
       setUpdatingPriority((prev) => ({ ...prev, [listing.id]: true }));
       try {
-        await updateFeaturedListing(listing.id, { priority_placement: clamped }, "featured priority update");
+        await updateFeaturedListing(listing.id, { priority_placement: enabled ? 1 : 0 }, "priority listing update");
         await queryClient.invalidateQueries({ queryKey: ["admin-featured-listings"] });
-        toast.success(`Priority Rank updated to ${clamped}`);
+        toast.success(enabled ? "Priority enabled for listing" : "Priority removed from listing");
       } catch (e: unknown) {
         toast.error((e as Error)?.message ?? "Failed to update priority");
       } finally {
         setUpdatingPriority((prev) => ({ ...prev, [listing.id]: false }));
-        setPendingPriority((prev) => {
-          const next = { ...prev };
-          delete next[listing.id];
-          return next;
-        });
       }
     },
-    [pendingPriority, queryClient],
+    [queryClient],
   );
 
   const handleUntilChange = useCallback(
@@ -266,12 +238,6 @@ export default function AdminFeaturedListings() {
 
   const getDetailPath = (listing: FeaturedListing): string => getListingDetailPath(listing);
 
-  const getPriorityValue = (listing: FeaturedListing): string => {
-    return pendingPriority[listing.id] !== undefined
-      ? pendingPriority[listing.id]
-      : String(listing.priority_placement);
-  };
-
   if (error) {
     return (
       <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-6 text-destructive text-sm">
@@ -290,7 +256,7 @@ export default function AdminFeaturedListings() {
             Listing Promotions
           </h2>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Control Spotlight badges and Priority Rank values for active listings.
+            Control Spotlight badges and Priority placement for active listings.
           </p>
         </div>
         <div className="flex items-center gap-2 text-sm shrink-0">
@@ -351,7 +317,7 @@ export default function AdminFeaturedListings() {
                 <th className="text-center px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Perf.</th>
                 <th className="text-center px-4 py-3 font-medium text-muted-foreground hidden xl:table-cell">Expires</th>
                 <th className="text-center px-4 py-3 font-medium text-muted-foreground">Spotlight</th>
-                <th className="text-center px-4 py-3 font-medium text-muted-foreground">Priority Rank</th>
+                <th className="text-center px-4 py-3 font-medium text-muted-foreground">Priority</th>
                 <th className="text-center px-4 py-3 font-medium text-muted-foreground w-10"></th>
               </tr>
             </thead>
@@ -463,28 +429,13 @@ export default function AdminFeaturedListings() {
                       />
                     </td>
 
-                    {/* Priority input */}
+                    {/* Priority placement */}
                     <td className="px-4 py-3 text-center">
-                      <input
-                        type="number"
-                        min={1}
-                        max={10}
+                      <Switch
+                        checked={listing.priority_placement > 0}
                         disabled={isUpdatingPriorityThis}
-                        value={getPriorityValue(listing)}
-                        onChange={(e) =>
-                          setPendingPriority((prev) => ({
-                            ...prev,
-                            [listing.id]: e.target.value,
-                          }))
-                        }
-                        onBlur={() => handlePriorityBlur(listing)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            (e.currentTarget as HTMLInputElement).blur();
-                          }
-                        }}
-                        className="w-16 h-8 text-center rounded-md border border-border bg-background text-sm outline-none focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                        aria-label={`Priority Rank for ${listing.title}`}
+                        onCheckedChange={() => handleTogglePriority(listing)}
+                        aria-label={`Toggle Priority for ${listing.title}`}
                       />
                     </td>
 
