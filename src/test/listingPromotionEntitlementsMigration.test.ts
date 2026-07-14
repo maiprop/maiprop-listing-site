@@ -183,6 +183,18 @@ describe("listing promotion entitlement migration", () => {
   });
 
   it("keeps public promotion RPCs invoker-safe while privileged writes stay private", () => {
+    for (const signature of [
+      "activate_listing_promotion(uuid,text,text)",
+      "deactivate_listing_promotion(uuid,text)",
+      "get_listing_promotion_balance()",
+    ]) {
+      expect(rpcBoundaryMigration).toContain(
+        `to_regprocedure('private.${signature}') IS NULL`,
+      );
+      expect(rpcBoundaryMigration).toContain(
+        `to_regprocedure('public.${signature}') IS NOT NULL`,
+      );
+    }
     expect(rpcBoundaryMigration).toMatch(
       /ALTER FUNCTION public\.activate_listing_promotion\(uuid, text, text\)\s+SET SCHEMA private/,
     );

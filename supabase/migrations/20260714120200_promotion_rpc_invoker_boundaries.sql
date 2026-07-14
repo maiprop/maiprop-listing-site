@@ -2,12 +2,27 @@
 -- implementations remain private and continue to enforce auth.uid(), listing
 -- ownership, plan/add-on entitlements, and request idempotency themselves.
 
-ALTER FUNCTION public.activate_listing_promotion(uuid, text, text)
-  SET SCHEMA private;
-ALTER FUNCTION public.deactivate_listing_promotion(uuid, text)
-  SET SCHEMA private;
-ALTER FUNCTION public.get_listing_promotion_balance()
-  SET SCHEMA private;
+DO $migration$
+BEGIN
+  IF to_regprocedure('private.activate_listing_promotion(uuid,text,text)') IS NULL
+     AND to_regprocedure('public.activate_listing_promotion(uuid,text,text)') IS NOT NULL THEN
+    EXECUTE 'ALTER FUNCTION public.activate_listing_promotion(uuid, text, text)
+      SET SCHEMA private';
+  END IF;
+
+  IF to_regprocedure('private.deactivate_listing_promotion(uuid,text)') IS NULL
+     AND to_regprocedure('public.deactivate_listing_promotion(uuid,text)') IS NOT NULL THEN
+    EXECUTE 'ALTER FUNCTION public.deactivate_listing_promotion(uuid, text)
+      SET SCHEMA private';
+  END IF;
+
+  IF to_regprocedure('private.get_listing_promotion_balance()') IS NULL
+     AND to_regprocedure('public.get_listing_promotion_balance()') IS NOT NULL THEN
+    EXECUTE 'ALTER FUNCTION public.get_listing_promotion_balance()
+      SET SCHEMA private';
+  END IF;
+END
+$migration$;
 
 CREATE OR REPLACE FUNCTION public.activate_listing_promotion(
   p_listing_id uuid,
