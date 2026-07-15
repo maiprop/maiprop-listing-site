@@ -1820,9 +1820,17 @@ describe("public homepage endpoint", () => {
     expect(jsonBodyFor("/rest/v1/rpc/get_public_profile_summaries")).toEqual({ p_user_ids: ["owner-1", "owner-2"] });
     const featuredCacheKey = new URL(cacheApi.put.mock.calls[0][0].url);
     expect(featuredCacheKey.searchParams.get("day")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(featuredCacheKey.searchParams.get("v")).toBe("active-spotlight-v3");
+    expect(featuredCacheKey.searchParams.get("v")).toBe("active-spotlight-v4");
     expect(featured.headers.get("Cache-Control")).toBe("public, max-age=60, stale-while-revalidate=60");
-    expect(featured.headers.get("CDN-Cache-Control")).toBe("public, max-age=60, stale-while-revalidate=60");
+    expect(featured.headers.get("CDN-Cache-Control")).toBe("no-store");
+    const featuredCacheEntries = [...cacheStore.entries()].filter(([key]) => (
+      key.includes("/api/public/homepage") && key.includes("section=featured")
+    ));
+    expect(featuredCacheEntries).toHaveLength(2);
+    for (const [, cachedResponse] of featuredCacheEntries) {
+      expect(cachedResponse.headers.get("CDN-Cache-Control")).toBe("no-store");
+      await expect(cachedResponse.clone().json()).resolves.toEqual(featuredRows);
+    }
 
     fetchMock().mockClear();
     const openHouses = await homepageRequest(makeCtx("https://portal.maiprop.co/api/public/homepage?section=open-houses"));

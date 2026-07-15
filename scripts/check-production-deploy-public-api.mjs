@@ -29,6 +29,7 @@ const publicApiBudgets = new Map([
   ["/api/public/listings?listing_type=sale&page=1&limit=40", { maxMs: 4_000, maxBytes: 450_000 }],
   ["/api/public/listings?listing_type=rent&page=1&pageSize=12", { maxMs: 1_800, maxBytes: 180_000 }],
   ["/api/public/listings?listing_type=rent&page=1&limit=40", { maxMs: 4_000, maxBytes: 450_000 }],
+  ["/api/public/homepage?section=featured", { maxMs: 2_500, maxBytes: 100_000 }],
 ]);
 
 const listingDetailSourcePaths = new Set([
@@ -62,10 +63,10 @@ function sleep(ms) {
 }
 
 const defaultFetchText = async (url, options = {}) => {
-  const { allowHttpError: _allowHttpError, headers, ...requestOptions } = options;
+  const { allowHttpError: _allowHttpError, headers, timeoutMs = FETCH_TIMEOUT_MS, ...requestOptions } = options;
   const res = await fetch(url, {
     redirect: "follow",
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    signal: AbortSignal.timeout(timeoutMs),
     headers: {
       "user-agent": USER_AGENT,
       ...(headers ?? {}),
@@ -165,11 +166,13 @@ function validatePublicApiShape(path, body, assertOk) {
 
 async function validateJsonApiPath(baseUrl, path, { assertOk, fetchText }) {
   const apiUrl = new URL(path, baseUrl).toString();
+  const budget = publicApiBudgets.get(path);
   for (let attempt = 0; ; attempt += 1) {
     const startedAt = performance.now();
     const { res, text } = await fetchText(apiUrl, {
       headers: { accept: "application/json" },
       allowHttpError: true,
+      timeoutMs: budget ? budget.maxMs + 1_000 : FETCH_TIMEOUT_MS,
     });
     const elapsedMs = performance.now() - startedAt;
     const contentType = res.headers.get("content-type") ?? "";
@@ -214,7 +217,6 @@ async function validateJsonApiPath(baseUrl, path, { assertOk, fetchText }) {
     );
     validatePublicApiShape(path, body, assertOk);
 
-    const budget = publicApiBudgets.get(path);
     if (budget) {
       const responseBytes = new TextEncoder().encode(text).byteLength;
       assertOk(

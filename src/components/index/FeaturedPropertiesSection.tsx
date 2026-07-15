@@ -16,6 +16,10 @@ export function FeaturedPropertiesSection({ listings, isLoading, isError }: Prop
   const { ref, inView } = useInView();
   const visibleListings = listings.slice(0, 4);
 
+  if (!isLoading && !isError && visibleListings.length === 0) {
+    return null;
+  }
+
   return (
     <section className="py-10 sm:py-16 bg-background">
       <div ref={ref} className="container">

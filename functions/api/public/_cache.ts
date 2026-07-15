@@ -42,6 +42,7 @@ type CacheOptions = {
   staleFallbackSeconds?: number;
   producerTimeoutMs?: number;
   cacheReadTimeoutMs?: number;
+  disableCdnCache?: boolean;
 };
 
 type SupabaseFetchOptions = {
@@ -59,7 +60,9 @@ function applyCacheHeaders(headers: Headers, cache: CacheOptions, force = false)
   if (force || !headers.has("Cache-Control")) {
     headers.set("Cache-Control", `public, max-age=${browserTtl}, stale-while-revalidate=${stale}`);
   }
-  if (force || !headers.has("CDN-Cache-Control")) {
+  if (cache.disableCdnCache) {
+    headers.set("CDN-Cache-Control", "no-store");
+  } else if (force || !headers.has("CDN-Cache-Control")) {
     headers.set("CDN-Cache-Control", `public, max-age=${edgeTtl}, stale-while-revalidate=${stale}`);
   }
 }
@@ -298,22 +301,29 @@ function putFreshAndStale(
   cacheApi: Cache,
   cacheRequest: Request,
   staleRequest: Request,
-  outbound: Response,
+  body: string,
+  status: number,
+  headers: Headers,
   cache: CacheOptions,
 ): Promise<void> {
-  const staleHeaders = new Headers(outbound.headers);
+  const freshHeaders = new Headers(headers);
+  const staleHeaders = new Headers(headers);
   const staleSeconds = staleFallbackCacheSeconds(cache);
   staleHeaders.set("Cache-Control", `public, max-age=${staleSeconds}`);
-  staleHeaders.set("CDN-Cache-Control", `public, max-age=${staleSeconds}`);
+  staleHeaders.set("CDN-Cache-Control", cache.disableCdnCache ? "no-store" : `public, max-age=${staleSeconds}`);
   staleHeaders.set("X-Maiprop-Cache", "STALE_SEED");
   applySecurityHeaders(staleHeaders);
-  const staleResponse = new Response(outbound.clone().body, {
-    status: outbound.status,
+  const freshResponse = new Response(body, {
+    status,
+    headers: freshHeaders,
+  });
+  const staleResponse = new Response(body, {
+    status,
     headers: staleHeaders,
   });
 
   const putPromise = Promise.all([
-    cacheApi.put(cacheRequest, outbound.clone()),
+    cacheApi.put(cacheRequest, freshResponse),
     cacheApi.put(staleRequest, staleResponse),
   ]);
   const guardedPut: Promise<void> = putPromise.then(() => undefined).catch((error) => {
@@ -379,7 +389,16 @@ export async function cachedJson(
     const outbound = new Response(body, { status: response.status, headers });
 
     if (cacheApi && response.ok) {
-      cacheSeedState.promise = putFreshAndStale(ctx, cacheApi, cacheRequest, staleRequest, outbound, cache);
+      cacheSeedState.promise = putFreshAndStale(
+        ctx,
+        cacheApi,
+        cacheRequest,
+        staleRequest,
+        body,
+        response.status,
+        headers,
+        cache,
+      );
     }
     return outbound;
   };

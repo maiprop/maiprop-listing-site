@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
   findPublicApiFixtureMarker,
@@ -51,6 +52,13 @@ function publicApiPayloadForUrl(href, { featured = featuredHomepagePayload() } =
 }
 
 describe("production deploy site-lock smoke helpers", () => {
+  it("honors endpoint-specific request timeouts in the deploy wrapper", () => {
+    const source = readFileSync("scripts/check-production-deploy.mjs", "utf8");
+
+    expect(source).toContain("timeoutMs = FETCH_TIMEOUT_MS");
+    expect(source).toContain("signal: AbortSignal.timeout(timeoutMs)");
+  });
+
   it("prefers the dedicated smoke-check passcode secret over the runtime site-lock secret", () => {
     expect(getSiteLockPassword({
       PRODUCTION_DEPLOY_SITE_LOCK_PASSWORD: "smoke-secret",
@@ -215,6 +223,26 @@ describe("production deploy public API fixture guard", () => {
         };
       },
     })).resolves.toBeUndefined();
+  });
+
+  it("fails the live Spotlight probe quickly instead of waiting on the global API timeout", async () => {
+    const { validatePublicApiEndpoints } = await import("./check-production-deploy-public-api.mjs");
+    const requestOptions = new Map();
+
+    await validatePublicApiEndpoints("https://portal.maiprop.co", {
+      fetchText: async (url, options) => {
+        requestOptions.set(url, options);
+        const payload = publicApiPayloadForUrl(url, { featured: [] });
+        return {
+          res: Response.json(payload),
+          text: JSON.stringify(payload),
+        };
+      },
+    });
+
+    expect(requestOptions.get(
+      "https://portal.maiprop.co/api/public/homepage?section=featured",
+    )?.timeoutMs).toBe(3_500);
   });
 
   it("rejects inactive or expired rows returned by the Spotlight endpoint", async () => {
