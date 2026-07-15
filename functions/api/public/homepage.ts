@@ -42,7 +42,7 @@ const SECTIONS = [
   "auction-count",
 ] as const;
 const HOMEPAGE_CACHE_VERSION = "popular-location-live-v2";
-const FEATURED_CACHE_VERSION = "active-spotlight-v3";
+const FEATURED_CACHE_VERSION = "active-spotlight-v4";
 const FEATURED_CACHE_SECONDS = 60;
 const HOMEPAGE_PRODUCER_TIMEOUT_MS = 4_500;
 const COUNTED_PROPERTY_TYPES = ["apartment", "land"] as const;
@@ -320,6 +320,7 @@ async function publicHomepage(ctx: PublicApiCtx, requestUrl: URL): Promise<Respo
         staleSeconds: FEATURED_CACHE_SECONDS,
         staleFallbackSeconds: FEATURED_CACHE_SECONDS,
         producerTimeoutMs: HOMEPAGE_PRODUCER_TIMEOUT_MS,
+        disableCdnCache: true,
       }
     : {
         edgeTtlSeconds: 180,

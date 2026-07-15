@@ -53,6 +53,22 @@ describe("homepage section layout contracts", () => {
     expect(screen.queryByText("Spotlight 5")).not.toBeInTheDocument();
   });
 
+  it("collapses the Spotlight section when no paid placements are active", async () => {
+    const { FeaturedPropertiesSection } = await import("@/components/index/FeaturedPropertiesSection");
+
+    const { container } = renderWithProviders(
+      <FeaturedPropertiesSection
+        listings={[]}
+        isLoading={false}
+        isError={false}
+      />,
+    );
+
+    expect(screen.queryByText("Spotlight Properties")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "View All" })).not.toBeInTheDocument();
+    expect(container.querySelector("section")).toBeNull();
+  });
+
   it("keeps popular location imagery but uses the smaller landscape card shape", async () => {
     const { PopularLocationsSection } = await import("@/components/index/PopularLocationsSection");
 
