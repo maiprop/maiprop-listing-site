@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  assertStrictHomepageInitialPayload,
   buildHomepageInitialPayload,
   injectHomepageInitialPayload,
 } from "./inject-homepage-initial.mjs";
@@ -325,6 +326,34 @@ describe("homepage initial payload injection", () => {
     ]);
     expect(JSON.stringify(payload)).not.toContain("owner_id");
     expect(globalThis.fetch.mock.calls.some(([url]) => String(url).includes("/api/public/listings"))).toBe(true);
+  });
+
+  it("accepts zero Spotlight placements in strict mode when both catalogue snapshots are valid", () => {
+    const payload = {
+      version: 1,
+      generatedAt: "2026-07-15T07:00:00.000Z",
+      featured: [],
+      openHouses: [],
+      saleListings: { data: [], hasMore: false, page: 1, pageSize: 12, offset: 0 },
+      rentListings: { data: [], hasMore: false, page: 1, pageSize: 12, offset: 0 },
+    };
+
+    expect(() => assertStrictHomepageInitialPayload(payload)).not.toThrow();
+  });
+
+  it("rejects strict deployment when a catalogue snapshot could not be generated", () => {
+    const payload = {
+      version: 1,
+      generatedAt: "2026-07-15T07:00:00.000Z",
+      featured: [],
+      openHouses: [],
+      saleListings: { data: [], hasMore: false, page: 1, pageSize: 12, offset: 0 },
+      rentListings: undefined,
+    };
+
+    expect(() => assertStrictHomepageInitialPayload(payload)).toThrow(
+      "Strict homepage initial payload generation could not produce valid sale and rent catalogue snapshots.",
+    );
   });
 
   it("never relabels organic catalogue rows as Spotlight when no paid placement exists", async () => {
