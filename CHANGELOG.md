@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.12.11](https://github.com/maiprop/maiprop-listing-site/compare/v1.12.10...v1.12.11) (2026-07-15)
+
+
+### Bug Fixes
+
+* accelerate initial listing catalogue paint ([#519](https://github.com/maiprop/maiprop-listing-site/issues/519)) ([1666a39](https://github.com/maiprop/maiprop-listing-site/commit/1666a392d9cbd305502ad3cb64b7435f716abad4))
+* enforce paid listing promotion entitlements ([70e5ffe](https://github.com/maiprop/maiprop-listing-site/commit/70e5ffe96f11410758161ceb7d2b31b2c4d71171))
+* stabilize catalogue deploys and message deep links ([6029698](https://github.com/maiprop/maiprop-listing-site/commit/602969857c11c3ad5438ac69aa599bb6a80cd2ea))
+
 ## [1.12.10](https://github.com/maiprop/maiprop-listing-site/compare/v1.12.9...v1.12.10) (2026-07-13)
 
 
