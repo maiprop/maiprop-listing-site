@@ -121,6 +121,7 @@ async function publicOpenHouses(ctx: PublicApiCtx, requestUrl: URL): Promise<Res
     edgeTtlSeconds: 180,
     browserTtlSeconds: 60,
     staleSeconds: 600,
+    producerTimeoutMs: 1_600,
   });
 }
 

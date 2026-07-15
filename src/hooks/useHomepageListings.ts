@@ -85,11 +85,11 @@ export function useHomepageOpenHouseListings(options: HomepageQueryOptions = {})
     queryFn: async ({ signal }) => {
       try {
         const cached = await fetchPublicApi<HomepageListing[]>(
-          "/api/public/homepage?section=open-houses",
+          "/api/public/open-houses?limit=12",
           { throwOnError: true, timeoutMs: HOMEPAGE_SECTION_TIMEOUT_MS, signal },
         );
         if (cached) {
-          const rows = sortByImagePresence(publicHomepageRows(cached));
+          const rows = sortByImagePresence(publicHomepageRows(cached, 6));
           writeHomepageSnapshot(HOMEPAGE_OPEN_HOUSES_SNAPSHOT_KEY, rows);
           return rows;
         }

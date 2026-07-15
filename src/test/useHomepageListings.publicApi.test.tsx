@@ -162,10 +162,37 @@ describe("homepage public API fallback behavior", () => {
 
     expect(result.current.data?.[0]).toMatchObject({ id: "db-open-house" });
     expect(publicApiMock).toHaveBeenCalledWith(
-      "/api/public/homepage?section=open-houses",
+      "/api/public/open-houses?limit=12",
       expect.objectContaining({ throwOnError: true, timeoutMs: 2500, signal: expect.any(AbortSignal) }),
     );
     expect(fromMock).toHaveBeenCalledWith("listings");
+  });
+
+  it("overfetches canonical open houses before removing public test fixtures", async () => {
+    publicApiMock.mockResolvedValue([
+      ...Array.from({ length: 6 }, (_, index) => ({
+        id: `fixture-${index}`,
+        title: `supervisor-${index + 1} open house`,
+        address: "Athens",
+      })),
+      ...Array.from({ length: 7 }, (_, index) => ({
+        id: `real-open-house-${index}`,
+        title: `Glyfada Open House ${index + 1}`,
+        address: "Glyfada",
+      })),
+    ]);
+
+    const { result } = renderHookWithQuery(() => useHomepageOpenHouseListings());
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data?.map((listing) => listing.id)).toEqual(
+      Array.from({ length: 6 }, (_, index) => `real-open-house-${index}`),
+    );
+    expect(publicApiMock).toHaveBeenCalledWith(
+      "/api/public/open-houses?limit=12",
+      expect.objectContaining({ throwOnError: true, timeoutMs: 2500, signal: expect.any(AbortSignal) }),
+    );
+    expect(fromMock).not.toHaveBeenCalled();
   });
 
   it("does not fetch open houses before the deferred section is enabled", async () => {

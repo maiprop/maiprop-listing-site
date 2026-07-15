@@ -381,16 +381,47 @@ describe("public API cache helpers", () => {
 
     const first = await openHousesRequest(ctx);
     expect(first.headers.get("X-Maiprop-Cache")).toBe("MISS");
+    expect(first.headers.get("CDN-Cache-Control")).toBe("no-store");
+    expect(first.headers.get("Cache-Control")).toBe("public, max-age=60, stale-while-revalidate=600");
     expect(fetchUrls("/rest/v1/listings")).toHaveLength(1);
 
     const second = await openHousesRequest(makeCtx("https://portal.maiprop.co/api/public/open-houses?limit=2"));
     expect(second.headers.get("X-Maiprop-Cache")).toBe("HIT");
+    expect(second.headers.get("CDN-Cache-Control")).toBe("no-store");
     expect(second.headers.get("X-Frame-Options")).toBe("DENY");
     expect(second.headers.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
     expect(await second.json()).toEqual(await first.clone().json());
     expect(fetchUrls("/rest/v1/listings")).toHaveLength(1);
     expect(cacheApi.put).toHaveBeenCalledTimes(2);
     expect(cacheApi.put.mock.calls.some(([request]) => request.url.includes("__maiprop_stale=1"))).toBe(true);
+  });
+
+  it("returns a bounded open-house failure before the homepage client deadline", async () => {
+    vi.useFakeTimers();
+    try {
+      cacheApi.match.mockImplementation(() => new Promise((resolve) => {
+        setTimeout(() => resolve(undefined), 100);
+      }));
+      fetchMock().mockImplementation(() => new Promise<Response>(() => undefined));
+      let settled = false;
+      const pending = Promise.resolve(openHousesRequest(
+        makeCtx("https://portal.maiprop.co/api/public/open-houses?limit=6&deadline-test=1"),
+      )).then((response) => {
+        settled = true;
+        return response;
+      });
+
+      await vi.advanceTimersByTimeAsync(2_000);
+      const settledBeforeClientDeadline = settled;
+      if (!settled) await vi.advanceTimersByTimeAsync(1_000);
+
+      const response = await pending;
+      expect(settledBeforeClientDeadline).toBe(true);
+      expect(response.status).toBe(503);
+      expect(response.headers.get("Cache-Control")).toBe("no-store");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("returns successful public API misses before fresh and stale cache entries are committed", async () => {
@@ -666,7 +697,7 @@ describe("public listings endpoint", () => {
     });
     expect(body.nextCursor).toBeNull();
     expect(res.headers.get("Cache-Control")).toBe("public, max-age=30, stale-while-revalidate=60");
-    expect(res.headers.get("CDN-Cache-Control")).toBe("public, max-age=60, stale-while-revalidate=60");
+    expect(res.headers.get("CDN-Cache-Control")).toBe("no-store");
   });
 
   it("returns a keyset cursor with no duplicates or skips across stable consecutive pages", async () => {
@@ -1766,7 +1797,7 @@ describe("public auctions endpoint", () => {
     expect(cacheKey.searchParams.has("day")).toBe(true);
     expect(cacheKey.searchParams.get("v")).toBe("national-sample-promotions-v8");
     expect(res.headers.get("Cache-Control")).toBe("public, max-age=30, stale-while-revalidate=60");
-    expect(res.headers.get("CDN-Cache-Control")).toBe("public, max-age=60, stale-while-revalidate=60");
+    expect(res.headers.get("CDN-Cache-Control")).toBe("no-store");
   });
 
   it("returns 503 instead of falling back to empty auctions on transient upstream failure", async () => {

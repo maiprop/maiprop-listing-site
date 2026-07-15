@@ -367,27 +367,33 @@ export async function cachedJson(
   producer: () => Promise<Response>,
   cache: CacheOptions = {},
 ): Promise<Response> {
+  // cachedJson owns edge caching through the Cache API. Prevent Cloudflare's
+  // outer CDN cache from retaining a second, unbounded copy before this Worker
+  // can enforce cache-read and producer deadlines.
+  const cachePolicy: CacheOptions = cache.disableCdnCache === undefined
+    ? { ...cache, disableCdnCache: true }
+    : cache;
   const cacheApi = typeof caches !== "undefined" ? caches.default : null;
   const cacheRequest = new Request(cacheKey.toString(), { method: "GET" });
   const staleRequest = new Request(staleCacheUrl(cacheKey).toString(), { method: "GET" });
   const cacheSeedState: { promise: Promise<void> | null } = { promise: null };
   if (cacheApi) {
-    const hit = await matchCacheWithinBudget(cacheApi, cacheRequest, cache);
+    const hit = await matchCacheWithinBudget(cacheApi, cacheRequest, cachePolicy);
     if (hit) {
-      return cacheHeaderResponse(hit, "HIT", cache);
+      return cacheHeaderResponse(hit, "HIT", cachePolicy);
     }
   }
 
   const cacheId = cacheRequest.url;
   const produceAndCache = async (): Promise<Response> => {
-    const response = await producerWithTimeout(producer, cache);
+    const response = await producerWithTimeout(producer, cachePolicy);
     if (cacheApi && TRANSIENT_UPSTREAM_STATUSES.has(response.status)) {
-      const stale = await matchStaleFallback(cacheApi, cacheKey, cache);
+      const stale = await matchStaleFallback(cacheApi, cacheKey, cachePolicy);
       if (stale) return stale;
     }
 
     const headers = new Headers(response.headers);
-    if (response.ok) applyCacheHeaders(headers, cache, true);
+    if (response.ok) applyCacheHeaders(headers, cachePolicy, true);
     headers.set("X-Maiprop-Cache", cacheApi ? "MISS" : "BYPASS");
     applySecurityHeaders(headers);
     const body = await response.text();
@@ -402,7 +408,7 @@ export async function cachedJson(
         body,
         response.status,
         headers,
-        cache,
+        cachePolicy,
       );
     }
     return outbound;
@@ -412,7 +418,7 @@ export async function cachedJson(
     return produceAndCache();
   }
 
-  const stale = await matchStaleFallback(cacheApi, cacheKey, cache);
+  const stale = await matchStaleFallback(cacheApi, cacheKey, cachePolicy);
   if (stale) {
     let refresh = inflightCacheMisses.get(cacheId);
     if (!refresh) {
@@ -429,7 +435,7 @@ export async function cachedJson(
   if (existing) {
     const response = await existing;
     const cacheState = response.headers.get("X-Maiprop-Cache") === "STALE" ? "STALE" : "COALESCED";
-    return cacheHeaderResponse(response, cacheState, cache);
+    return cacheHeaderResponse(response, cacheState, cachePolicy);
   }
 
   const pending = produceAndCache();
