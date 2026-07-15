@@ -265,12 +265,8 @@ test.describe("Public — AI Assistant page", () => {
   test("ai-assistant page renders a chat input or widget container", async ({ page }) => {
     await page.goto("/ai-assistant");
     await page.waitForLoadState("networkidle", { timeout: 15_000 });
-    // The AIAssistantWidget renders a textarea or input for the chat
-    const hasInput = await page
-      .locator('textarea, input[type="text"], [role="dialog"], [role="main"]')
-      .first()
-      .isVisible();
-    expect(hasInput).toBe(true);
+    const chatInput = page.getByPlaceholder("Ask a real estate question...");
+    await expect(chatInput).toBeVisible({ timeout: 10_000 });
   });
 });
 
