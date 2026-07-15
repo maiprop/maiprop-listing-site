@@ -123,6 +123,8 @@ async function fetchFeaturedListings(): Promise<FeaturedListing[]> {
     .select(
       "id, title, city, property_type, listing_type, price, cover_image_url, is_featured, priority_placement, featured_until, status, owner_id, views_count, updated_at",
     )
+    .eq("status", "active")
+    .not("owner_id", "is", null)
     .order("is_featured", { ascending: false })
     .order("priority_placement", { ascending: false })
     .order("created_at", { ascending: false });

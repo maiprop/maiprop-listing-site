@@ -115,6 +115,7 @@ function selectBuilder(data: unknown, error: unknown = null) {
   b.order = vi.fn().mockReturnValue(b);
   b.limit = vi.fn().mockReturnValue(b);
   b.eq = vi.fn().mockReturnValue(b);
+  b.not = vi.fn().mockReturnValue(b);
   b.in = vi.fn().mockReturnValue(b);
   b.gte = vi.fn().mockReturnValue(b);
   b.maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
@@ -249,6 +250,22 @@ describe("AdminDashboard tab routing", () => {
 });
 
 describe("AdminFeaturedListings", () => {
+  it("queries active owner-backed promotion inventory instead of unowned catalogue imports", async () => {
+    const listingQuery = selectBuilder([listing]);
+    const eqMock = listingQuery.eq as ReturnType<typeof vi.fn>;
+    const notMock = listingQuery.not as ReturnType<typeof vi.fn>;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "listings") return listingQuery;
+      return selectBuilder([]);
+    });
+
+    renderWithProviders(<AdminFeaturedListings />);
+
+    expect(await screen.findByText("Sea View Flat")).toBeInTheDocument();
+    expect(eqMock).toHaveBeenCalledWith("status", "active");
+    expect(notMock).toHaveBeenCalledWith("owner_id", "is", null);
+  });
+
   it("shows the error branch when listings fail to load", async () => {
     fromMock.mockImplementation((table: string) => {
       if (table === "listings") return selectBuilder(null, new Error("listing db down"));
