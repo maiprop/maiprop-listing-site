@@ -134,9 +134,26 @@ async function matchCacheWithinBudget(
   cache: CacheOptions,
 ): Promise<Response | undefined> {
   const timeoutMs = cacheReadTimeoutMs(cache);
+  let matchedResponse: Response | undefined;
+  let timedOut = false;
   const matchPromise = Promise.resolve()
     .then(() => cacheApi.match(request))
+    .then(async (response) => {
+      if (!response) return undefined;
+      matchedResponse = response;
+      if (timedOut) {
+        await response.body?.cancel().catch(() => undefined);
+        return undefined;
+      }
+      const body = await response.arrayBuffer();
+      return new Response(body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      });
+    })
     .catch((error) => {
+      if (timedOut) return undefined;
       const message = error instanceof Error ? error.message : String(error);
       console.warn(`[public-api] cache read failed for ${request.url}: ${message}`);
       return undefined;
@@ -145,7 +162,9 @@ async function matchCacheWithinBudget(
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<undefined>((resolve) => {
     timeoutId = setTimeout(() => {
+      timedOut = true;
       console.warn(`[public-api] cache read exceeded ${timeoutMs}ms for ${request.url}`);
+      void matchedResponse?.body?.cancel().catch(() => undefined);
       resolve(undefined);
     }, timeoutMs);
   });

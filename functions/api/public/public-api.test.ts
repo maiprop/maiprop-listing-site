@@ -495,6 +495,33 @@ describe("public API cache helpers", () => {
     expect(result).toEqual({ status: 200, cache: "MISS", body: { ok: true } });
   });
 
+  it("bypasses a cached response whose body never completes", async () => {
+    cacheApi.match.mockImplementation(async () => new Response(new ReadableStream({
+      start() {
+        // A poisoned Cloudflare cache entry can resolve the match while leaving
+        // its body stream open indefinitely.
+      },
+    })));
+
+    const pending = cachedJson(
+      makeCtx("https://portal.maiprop.co/api/public/open-houses?cache-body-timeout=1"),
+      new URL("https://portal.maiprop.co/api/public/open-houses?cache-body-timeout=1"),
+      async () => jsonResponse({ ok: true }),
+      { cacheReadTimeoutMs: 5, producerTimeoutMs: 100 },
+    );
+
+    const result = await Promise.race([
+      pending.then(async (res) => ({
+        status: res.status,
+        cache: res.headers.get("X-Maiprop-Cache"),
+        body: await res.json(),
+      })),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 150)),
+    ]);
+
+    expect(result).toEqual({ status: 200, cache: "MISS", body: { ok: true } });
+  });
+
   it("serves stale public cache instead of 503 when Supabase is transiently unavailable", async () => {
     const first = await openHousesRequest(makeCtx("https://portal.maiprop.co/api/public/open-houses?limit=2"));
     expect(first.headers.get("X-Maiprop-Cache")).toBe("MISS");
