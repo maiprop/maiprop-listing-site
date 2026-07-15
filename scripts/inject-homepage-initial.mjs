@@ -422,11 +422,21 @@ function isStrict(env = process.env, argv = process.argv) {
   return env.HOMEPAGE_INITIAL_STRICT === "1" || argv.includes("--strict");
 }
 
+export function assertStrictHomepageInitialPayload(payload) {
+  const hasSaleSnapshot = isRecord(payload?.saleListings) && Array.isArray(payload.saleListings.data);
+  const hasRentSnapshot = isRecord(payload?.rentListings) && Array.isArray(payload.rentListings.data);
+  if (!hasSaleSnapshot || !hasRentSnapshot) {
+    throw new Error(
+      "Strict homepage initial payload generation could not produce valid sale and rent catalogue snapshots.",
+    );
+  }
+}
+
 async function main() {
   const payload = await buildHomepageInitialPayload({ origin: envOrigin() });
   const strict = isStrict();
-  if (strict && payload.featured.length === 0) {
-    throw new Error("Strict homepage initial payload generation found no featured listings.");
+  if (strict) {
+    assertStrictHomepageInitialPayload(payload);
   }
   const result = await injectHomepageInitialPayload({ payload });
   console.log(
