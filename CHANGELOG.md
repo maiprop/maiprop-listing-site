@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.13](https://github.com/maiprop/maiprop-listing-site/compare/v1.12.12...v1.12.13) (2026-07-15)
+
+
+### Bug Fixes
+
+* recover poisoned public cache entries ([#527](https://github.com/maiprop/maiprop-listing-site/issues/527)) ([c8f2f90](https://github.com/maiprop/maiprop-listing-site/commit/c8f2f90089694ee0998b9089c51a0950637f8581))
+
 ## [1.12.12](https://github.com/maiprop/maiprop-listing-site/compare/v1.12.11...v1.12.12) (2026-07-15)
 
 
