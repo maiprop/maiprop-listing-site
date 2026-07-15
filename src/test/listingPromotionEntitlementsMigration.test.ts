@@ -318,8 +318,8 @@ describe("listing promotion entitlement migration", () => {
     expect(correctionMigration).toContain(
       "CREATE UNIQUE INDEX IF NOT EXISTS idx_listings_one_per_project",
     );
-    expect(correctionMigration).toContain(
-      "ON public.listings (project_id)\n  WHERE project_id IS NOT NULL",
+    expect(correctionMigration).toMatch(
+      /ON public\.listings \(project_id\)\r?\n\s+WHERE project_id IS NOT NULL/,
     );
     expect(correctionMigration).toContain(
       "Canonical new-build promotion target",

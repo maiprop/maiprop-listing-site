@@ -466,8 +466,12 @@ export type Database = {
           metadata: Json
           plan_key: string | null
           runtime_mode: string
+          state_observed_at: string
+          state_source: string
           status: string
           stripe_customer_id: string
+          stripe_event_created_at: string | null
+          stripe_event_id: string | null
           stripe_price_id: string | null
           stripe_product_id: string | null
           stripe_subscription_id: string
@@ -488,8 +492,12 @@ export type Database = {
           metadata?: Json
           plan_key?: string | null
           runtime_mode?: string
+          state_observed_at?: string
+          state_source?: string
           status: string
           stripe_customer_id: string
+          stripe_event_created_at?: string | null
+          stripe_event_id?: string | null
           stripe_price_id?: string | null
           stripe_product_id?: string | null
           stripe_subscription_id: string
@@ -510,8 +518,12 @@ export type Database = {
           metadata?: Json
           plan_key?: string | null
           runtime_mode?: string
+          state_observed_at?: string
+          state_source?: string
           status?: string
           stripe_customer_id?: string
+          stripe_event_created_at?: string | null
+          stripe_event_id?: string | null
           stripe_price_id?: string | null
           stripe_product_id?: string | null
           stripe_subscription_id?: string
@@ -1440,6 +1452,102 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "listings"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      listing_promotion_allocations: {
+        Row: {
+          addon_purchase_id: string | null
+          billing_subscription_id: string | null
+          created_at: string
+          created_by: string | null
+          ends_at: string
+          id: string
+          listing_id: string
+          owner_id: string
+          plan_cycle_start: string | null
+          promotion_type: string
+          request_key: string
+          revoke_reason: string | null
+          revoked_at: string | null
+          source_type: string
+          starts_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          addon_purchase_id?: string | null
+          billing_subscription_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          ends_at: string
+          id?: string
+          listing_id: string
+          owner_id: string
+          plan_cycle_start?: string | null
+          promotion_type: string
+          request_key: string
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          source_type: string
+          starts_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          addon_purchase_id?: string | null
+          billing_subscription_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          ends_at?: string
+          id?: string
+          listing_id?: string
+          owner_id?: string
+          plan_cycle_start?: string | null
+          promotion_type?: string
+          request_key?: string
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          source_type?: string
+          starts_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listing_promotion_allocations_addon_purchase_id_fkey"
+            columns: ["addon_purchase_id"]
+            isOneToOne: false
+            referencedRelation: "addon_purchases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listing_promotion_allocations_billing_subscription_id_fkey"
+            columns: ["billing_subscription_id"]
+            isOneToOne: false
+            referencedRelation: "billing_subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listing_promotion_allocations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "listing_promotion_allocations_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listing_promotion_allocations_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -3265,6 +3373,7 @@ export type Database = {
           display_name: string | null
           first_name: string | null
           last_name: string | null
+          owner_participant_type: string | null
           role: Database["public"]["Enums"]["user_role"] | null
           user_id: string
         }
@@ -3273,6 +3382,7 @@ export type Database = {
           display_name?: string | null
           first_name?: string | null
           last_name?: string | null
+          owner_participant_type?: string | null
           role?: Database["public"]["Enums"]["user_role"] | null
           user_id: string
         }
@@ -3281,6 +3391,7 @@ export type Database = {
           display_name?: string | null
           first_name?: string | null
           last_name?: string | null
+          owner_participant_type?: string | null
           role?: Database["public"]["Enums"]["user_role"] | null
           user_id?: string
         }
@@ -4282,10 +4393,6 @@ export type Database = {
         Args: { p_addon_key: string; p_quantity?: number }
         Returns: number
       }
-      deactivate_listing_promotion: {
-        Args: { p_listing_id: string; p_promotion_type: string }
-        Returns: number
-      }
       admin_ban_reported_content_owner: {
         Args: { p_reason?: string; p_report_id: string }
         Returns: string
@@ -4471,6 +4578,16 @@ export type Database = {
           published_to_investors: boolean
           status: string
         }[]
+      }
+      admin_set_listing_promotions: {
+        Args: {
+          p_actor_id: string
+          p_listing_id: string
+          p_priority_enabled: boolean
+          p_spotlight_enabled: boolean
+          p_spotlight_ends_at: string
+        }
+        Returns: undefined
       }
       admin_suspend_reported_listing: {
         Args: { p_reason?: string; p_report_id: string }
@@ -4672,6 +4789,10 @@ export type Database = {
         Args: { _user_id: string; p_bucket: string }
         Returns: Json
       }
+      check_ai_quotas_for_user: {
+        Args: { _user_id: string; p_buckets: string[] }
+        Returns: Json
+      }
       check_and_increment_rate_limit: {
         Args: { p_bucket: string; p_limit: number; p_window_seconds: number }
         Returns: Json
@@ -4816,6 +4937,10 @@ export type Database = {
         }
       }
       current_billing_runtime_mode: { Args: never; Returns: string }
+      deactivate_listing_promotion: {
+        Args: { p_listing_id: string; p_promotion_type: string }
+        Returns: number
+      }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
@@ -4833,6 +4958,7 @@ export type Database = {
         Returns: string
       }
       expire_featured_listings: { Args: never; Returns: undefined }
+      expire_listing_promotions: { Args: never; Returns: number }
       expire_past_auctions: { Args: never; Returns: number }
       get_account_deletion_storage_objects: {
         Args: { p_user_id: string }
@@ -4886,10 +5012,10 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: number
       }
-      get_listing_promotion_balance: { Args: never; Returns: Json }
       get_listing_limit:
         | { Args: { p_is_pro: boolean; p_role: string }; Returns: number }
         | { Args: { p_user_id: string }; Returns: number }
+      get_listing_promotion_balance: { Args: never; Returns: Json }
       get_my_role: {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"]
