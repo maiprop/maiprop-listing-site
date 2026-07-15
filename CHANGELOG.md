@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.12](https://github.com/maiprop/maiprop-listing-site/compare/v1.12.11...v1.12.12) (2026-07-15)
+
+
+### Bug Fixes
+
+* allow empty spotlight deployments ([#525](https://github.com/maiprop/maiprop-listing-site/issues/525)) ([1adbb46](https://github.com/maiprop/maiprop-listing-site/commit/1adbb460c76bea99fbf4e8006d752e9b8ee811d2))
+
 ## [1.12.11](https://github.com/maiprop/maiprop-listing-site/compare/v1.12.10...v1.12.11) (2026-07-15)
 
 
