@@ -30,24 +30,48 @@ type BillingCustomerInput = {
   metadata?: Record<string, unknown> | null;
 };
 
-type BillingSubscriptionInput = {
+export type BillingSubscriptionCanonical = {
+  planKey: string;
+  audience: string;
+  productId: string;
+  priceId: string | null;
+  billingCycle: "monthly" | "annual" | null;
+};
+
+export type BillingSubscriptionObservation = {
+  source: "webhook_canonical" | "reconciliation" | "legacy";
+  observedAt: string;
+  stripeEventId?: string | null;
+  stripeEventCreatedAt?: string | null;
+};
+
+export type BillingSubscriptionInput = {
   userId: string;
   stripeCustomerId: string;
   subscription: StripeSubscriptionLike;
+  canonical?: BillingSubscriptionCanonical | null;
+  observation?: BillingSubscriptionObservation | null;
 };
 
 type SupabaseQueryResult<T = unknown> = {
   data?: T | null;
-  error?: unknown;
+  error?: { message?: string } | null;
 };
 
-type SupabaseFilterBuilder<T = unknown> =
+export type SupabaseFilterBuilder<T = unknown> =
   & PromiseLike<SupabaseQueryResult<T>>
   & {
     select<U = T>(columns: string): SupabaseFilterBuilder<U>;
     eq(column: string, value: unknown): SupabaseFilterBuilder<T>;
+    in(column: string, values: readonly unknown[]): SupabaseFilterBuilder<T>;
     lt(column: string, value: unknown): SupabaseFilterBuilder<T>;
     maybeSingle(): PromiseLike<SupabaseQueryResult<T>>;
+    insert(payload: Record<string, unknown>): SupabaseFilterBuilder<T>;
+    update(payload: Record<string, unknown>): SupabaseFilterBuilder<T>;
+    upsert(
+      payload: Record<string, unknown>,
+      options?: Record<string, unknown>,
+    ): SupabaseFilterBuilder<T>;
   };
 
 type StripeWebhookEventLeaseRow = {
@@ -59,6 +83,11 @@ type StripeWebhookEventLeaseRow = {
 type StripeWebhookEventClaimRow = {
   event_id?: string | null;
 };
+
+export type StripeWebhookEventBeginResult =
+  | { state: "started"; claimToken: string }
+  | { state: "duplicate" }
+  | { state: "in_progress" };
 
 export type BillingCustomerRow = {
   user_id: string;
@@ -87,18 +116,18 @@ export type BillingSubscriptionRow = {
   runtime_mode: StripeRuntimeMode;
   livemode: boolean;
   metadata: Record<string, unknown>;
+  state_source?: BillingSubscriptionObservation["source"];
+  state_observed_at?: string;
+  stripe_event_id?: string | null;
+  stripe_event_created_at?: string | null;
 };
 
-type SupabaseAdminClient = {
-  from(table: string): {
-    upsert(
-      payload: Record<string, unknown>,
-      options?: Record<string, unknown>,
-    ): Promise<{ error: unknown }>;
-    insert(payload: Record<string, unknown>): Promise<{ error: unknown }>;
-    select<T = unknown>(columns: string): SupabaseFilterBuilder<T>;
-    update(payload: Record<string, unknown>): SupabaseFilterBuilder;
-  };
+export type SupabaseAdminClient = {
+  from(table: string): SupabaseFilterBuilder;
+  rpc<T = unknown>(
+    functionName: string,
+    args?: Record<string, unknown>,
+  ): PromiseLike<SupabaseQueryResult<T>>;
 };
 
 const WEBHOOK_PROCESSING_LEASE_MS = 10 * 60 * 1000;
@@ -157,16 +186,20 @@ export function buildBillingSubscriptionRow(
   const price = firstSubscriptionPrice(subscription);
   const livemode = Boolean(subscription.livemode);
   const metadata = subscription.metadata ?? {};
+  const canonical = input.canonical;
+  const observation = input.observation;
   return {
     user_id: input.userId,
     stripe_customer_id: input.stripeCustomerId,
     stripe_subscription_id: subscription.id,
-    stripe_product_id: productIdFromPrice(price?.product),
-    stripe_price_id: price?.id ?? null,
-    plan_key: metadata.plan_key ?? metadata.plan ?? null,
-    audience: metadata.audience ?? null,
+    stripe_product_id: canonical?.productId ??
+      productIdFromPrice(price?.product),
+    stripe_price_id: canonical?.priceId ?? price?.id ?? null,
+    plan_key: canonical?.planKey ?? metadata.plan_key ?? metadata.plan ?? null,
+    audience: canonical?.audience ?? metadata.audience ?? null,
     status: subscription.status ?? "unknown",
-    billing_cycle: normalizedBillingCycle(metadata.billing_cycle),
+    billing_cycle: canonical?.billingCycle ??
+      normalizedBillingCycle(metadata.billing_cycle),
     current_period_start: isoFromUnixSeconds(
       subscription.current_period_start ?? item?.current_period_start,
     ),
@@ -179,6 +212,18 @@ export function buildBillingSubscriptionRow(
     runtime_mode: stripeRuntimeModeFromLivemode(livemode),
     livemode,
     metadata,
+    ...(observation
+      ? {
+        state_source: observation.source,
+        state_observed_at: observation.observedAt,
+        ...(observation.stripeEventId
+          ? { stripe_event_id: observation.stripeEventId }
+          : {}),
+        ...(observation.stripeEventCreatedAt
+          ? { stripe_event_created_at: observation.stripeEventCreatedAt }
+          : {}),
+      }
+      : {}),
   };
 }
 
@@ -239,9 +284,10 @@ export async function beginStripeWebhookEvent(
     api_version?: string | null;
     livemode?: boolean | null;
   },
-): Promise<"started" | "duplicate" | "in_progress"> {
+): Promise<StripeWebhookEventBeginResult> {
   const livemode = Boolean(event.livemode);
   const processingStartedAt = new Date().toISOString();
+  const claimToken = crypto.randomUUID();
   const { error } = await supabase.from("stripe_webhook_events").insert({
     event_id: event.id,
     event_type: event.type,
@@ -249,9 +295,12 @@ export async function beginStripeWebhookEvent(
     runtime_mode: stripeRuntimeModeFromLivemode(livemode),
     livemode,
     status: "processing",
-    metadata: { processing_started_at: processingStartedAt },
+    metadata: {
+      processing_started_at: processingStartedAt,
+      processing_claim_token: claimToken,
+    },
   });
-  if (!error) return "started";
+  if (!error) return { state: "started", claimToken };
   if (isDuplicateWebhookInsertError(error)) {
     const { data, error: lookupError } = await supabase
       .from("stripe_webhook_events")
@@ -261,18 +310,21 @@ export async function beginStripeWebhookEvent(
     if (lookupError) throw lookupError;
     const row = data ?? null;
     if (row?.status === "processing" && !isStaleProcessingWebhookEvent(row)) {
-      return "in_progress";
+      return { state: "in_progress" };
     }
     const rowStatus = row?.status ?? null;
     if (rowStatus === "failed" || isStaleProcessingWebhookEvent(row)) {
-      if (!rowStatus) return "duplicate";
+      if (!rowStatus) return { state: "duplicate" };
       const claimBase = supabase
         .from("stripe_webhook_events")
         .update({
           status: "processing",
           error: null,
           processed_at: null,
-          metadata: { processing_started_at: processingStartedAt },
+          metadata: {
+            processing_started_at: processingStartedAt,
+            processing_claim_token: claimToken,
+          },
         })
         .eq("event_id", event.id)
         .eq("status", rowStatus);
@@ -286,9 +338,11 @@ export async function beginStripeWebhookEvent(
         .select<StripeWebhookEventClaimRow>("event_id")
         .maybeSingle();
       if (claim.error) throw claim.error;
-      return claim.data?.event_id ? "started" : "duplicate";
+      return claim.data?.event_id
+        ? { state: "started", claimToken }
+        : { state: "duplicate" };
     }
-    return "duplicate";
+    return { state: "duplicate" };
   }
   throw error;
 }
@@ -296,16 +350,28 @@ export async function beginStripeWebhookEvent(
 export async function finishStripeWebhookEvent(
   supabase: SupabaseAdminClient,
   eventId: string,
+  claimToken: string,
   status: "processed" | "failed" | "skipped",
   errorMessage: string | null = null,
-): Promise<void> {
-  const { error } = await supabase
+): Promise<boolean> {
+  const normalizedClaimToken = claimToken.trim();
+  if (!normalizedClaimToken) {
+    throw new Error(
+      "Stripe webhook claim token is required to finish an event.",
+    );
+  }
+  const { data, error } = await supabase
     .from("stripe_webhook_events")
     .update({
       status,
       error: errorMessage,
       processed_at: new Date().toISOString(),
     })
-    .eq("event_id", eventId);
+    .eq("event_id", eventId)
+    .eq("status", "processing")
+    .eq("metadata->>processing_claim_token", normalizedClaimToken)
+    .select<StripeWebhookEventClaimRow>("event_id")
+    .maybeSingle();
   if (error) throw error;
+  return data?.event_id === eventId;
 }

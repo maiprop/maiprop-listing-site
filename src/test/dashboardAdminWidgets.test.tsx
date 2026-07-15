@@ -297,26 +297,21 @@ describe("AdminFeaturedListings", () => {
     fireEvent.click(screen.getByRole("switch", { name: /Toggle Spotlight for Sea View Flat/i }));
     await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Spotlight removed from listing"));
 
-    const priority = screen.getByLabelText(/Priority Rank for Sea View Flat/i);
-    fireEvent.change(priority, { target: { value: "11" } });
-    fireEvent.blur(priority);
-    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Priority Rank updated to 10"));
+    fireEvent.click(screen.getByRole("switch", { name: /Toggle Priority for Sea View Flat/i }));
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Priority removed from listing"));
 
     const expiry = screen.getByLabelText(/Spotlight until for Sea View Flat/i);
     fireEvent.change(expiry, { target: { value: "2026-06-20" } });
     await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith(expect.stringMatching(/Expires/i)));
   });
 
-  it("rejects non-numeric priority without updating Supabase", async () => {
-    fromMock.mockImplementation(tableBuilder({ listings: [listing] }));
+  it("enables inactive Priority as a binary paid placement", async () => {
+    fromMock.mockImplementation(tableBuilder({ listings: [{ ...listing, priority_placement: 0 }] }));
 
     renderWithProviders(<AdminFeaturedListings />);
 
-    const priority = await screen.findByLabelText(/Priority Rank for Sea View Flat/i);
-    fireEvent.change(priority, { target: { value: "abc" } });
-    fireEvent.blur(priority);
-
-    expect(toastMock.error).toHaveBeenCalledWith("Priority must be a number between 1 and 10");
+    fireEvent.click(await screen.findByRole("switch", { name: /Toggle Priority for Sea View Flat/i }));
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Priority enabled for listing"));
   });
 });
 

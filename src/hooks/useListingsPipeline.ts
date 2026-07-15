@@ -32,15 +32,11 @@ export interface UseListingsPipelineOptions {
   minWalkability?: number;
 }
 
-const isPromoted = (p: ListingCardWithRaw) =>
-  !!(p.isFeatured || (p.priorityPlacement ?? 0) > 0);
+const isPriority = (p: ListingCardWithRaw) => (p.priorityPlacement ?? 0) > 0;
 
 const byUserSort = (selectedSort: ListingsSort) =>
   (a: ListingCardWithRaw, b: ListingCardWithRaw) => {
     if (selectedSort === "featured") {
-      const aF = a.isFeatured ? 1 : 0;
-      const bF = b.isFeatured ? 1 : 0;
-      if (bF !== aF) return bF - aF;
       const aPri = Number(a.priorityPlacement ?? 0);
       const bPri = Number(b.priorityPlacement ?? 0);
       if (bPri !== aPri) return bPri - aPri;
@@ -59,21 +55,16 @@ const byUserSort = (selectedSort: ListingsSort) =>
 const sortListings = (rows: ListingCardWithRaw[], selectedSort: ListingsSort): ListingCardWithRaw[] => {
   const userSort = byUserSort(selectedSort);
   return [...rows].sort((a, b) => {
-    // "Spotlight First" sort: explicit spotlight ordering, skip automatic promo-first
+    // The legacy "featured" key is the default relevance sort. Priority ranks;
+    // Spotlight remains visual-only.
     if (selectedSort === "featured") return userSort(a, b);
-    const aPromo = isPromoted(a);
-    const bPromo = isPromoted(b);
+    const aPromo = isPriority(a);
+    const bPromo = isPriority(b);
     if (aPromo && !bPromo) return -1;
     if (!aPromo && bPromo) return 1;
     if (aPromo && bPromo) {
       const pri = (b.priorityPlacement ?? 0) - (a.priorityPlacement ?? 0);
       if (pri !== 0) return pri;
-      // Same priority bucket: featured beats non-featured. Mirrors the
-      // server ORDER BY tiebreak in buildListingsQuery so that the client's
-      // re-sort is a no-op on already-paginated server output.
-      const aF = a.isFeatured ? 1 : 0;
-      const bF = b.isFeatured ? 1 : 0;
-      if (bF !== aF) return bF - aF;
     }
     return userSort(a, b);
   });
@@ -161,9 +152,12 @@ export function useListingsPipeline(opts: UseListingsPipelineOptions) {
       return true;
     });
 
-    // User sort must NOT override paid prioritization unless "featured" is explicitly chosen.
-    return sortListings(afterFilter, selectedSort);
-  }, [sourceListings, hasVideoViewing, hasVirtualTour, minAiScore, minWalkability, selectedSort]);
+    // Grid pages arrive in the server's stable Priority/organic order. Re-sorting
+    // after pages append would collapse paid cards back into a block and make
+    // already-rendered cards jump. Map/split mode uses the bounded direct read,
+    // so it still needs the local ordering fallback.
+    return isGrid ? afterFilter : sortListings(afterFilter, selectedSort);
+  }, [sourceListings, hasVideoViewing, hasVirtualTour, minAiScore, minWalkability, selectedSort, isGrid]);
 
   return {
     /** Final post-filter, post-sort listings cards — what the UI iterates. */

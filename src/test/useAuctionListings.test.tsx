@@ -58,7 +58,9 @@ const auctionRow = (id: string, overrides: Partial<AuctionRow> = {}): AuctionRow
     website_url: null,
     region: null,
     is_featured: false,
+    featured_until: null,
     priority_placement: 0,
+    priority_until: null,
     ...overrides,
   };
 };
@@ -138,13 +140,16 @@ describe("useAuctionListings", () => {
 
   it("falls back to constrained Supabase auction reads when the public API is unavailable", async () => {
     publicApiMock.mockResolvedValue(null);
-    fromMock.mockReturnValue(makeThenableBuilder([auctionRow("db-a1")]));
+    const builder = makeThenableBuilder([auctionRow("db-a1")]);
+    fromMock.mockReturnValue(builder);
 
     const { result } = renderHookWithQuery(() => useAuctionListings(60));
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(result.current.data?.[0]).toMatchObject({ id: "db-a1" });
     expect(fromMock).toHaveBeenCalledWith("listings");
+    expect(builder.select).toHaveBeenCalledWith(expect.stringContaining("featured_until"));
+    expect(builder.select).toHaveBeenCalledWith(expect.stringContaining("priority_until"));
     expect(invokeMock).not.toHaveBeenCalled();
   });
 
@@ -163,18 +168,58 @@ describe("useAuctionListings", () => {
     expect(firstPass.map((row) => row.id)).not.toEqual(municipalitySorted.map((row) => row.id));
   });
 
-  it("keeps commercial placement above randomized organic auctions", () => {
+  it("ranks only active Priority while Spotlight remains visual-only", () => {
     const rows = [
       auctionRow("organic-a"),
-      auctionRow("featured", { is_featured: true }),
-      auctionRow("priority", { priority_placement: 5 }),
+      auctionRow("spotlight", {
+        is_featured: true,
+        featured_until: "2099-01-01T00:00:00.000Z",
+      }),
+      auctionRow("priority", {
+        priority_placement: 1,
+        priority_until: "2099-01-01T00:00:00.000Z",
+      }),
       auctionRow("organic-b"),
     ];
+    const withoutSpotlight = rows.map((row) => row.id === "spotlight"
+      ? { ...row, is_featured: false }
+      : row);
 
     const ordered = randomizeAuctionPresentation(rows, "seed:2026-05-15");
+    const comparison = randomizeAuctionPresentation(withoutSpotlight, "seed:2026-05-15");
 
     expect(ordered[0].id).toBe("priority");
-    expect(ordered[1].id).toBe("featured");
+    expect(ordered.map((row) => row.id)).toEqual(comparison.map((row) => row.id));
+  });
+
+  it("suppresses expired paid state before presentation", () => {
+    const ordered = randomizeAuctionPresentation([
+      auctionRow("expired", {
+        is_featured: true,
+        featured_until: "2000-01-01T00:00:00.000Z",
+        priority_placement: 1,
+        priority_until: "2000-01-01T00:00:00.000Z",
+      }),
+      auctionRow("organic"),
+    ], "seed:2026-05-15");
+
+    expect(ordered.find((row) => row.id === "expired")).toMatchObject({
+      is_featured: false,
+      priority_placement: 0,
+    });
+  });
+
+  it("limits active Priority auctions to three slots per twelve results", () => {
+    const priorityRows = Array.from({ length: 8 }, (_, index) => auctionRow(`priority-${index}`, {
+      priority_placement: 1,
+      priority_until: "2099-01-01T00:00:00.000Z",
+    }));
+    const organicRows = Array.from({ length: 20 }, (_, index) => auctionRow(`organic-${index}`));
+
+    const ordered = randomizeAuctionPresentation([...priorityRows, ...organicRows], "seed:2026-05-15");
+
+    expect(ordered.slice(0, 12).filter((row) => row.priority_placement > 0)).toHaveLength(3);
+    expect(ordered.slice(12, 24).filter((row) => row.priority_placement > 0)).toHaveLength(3);
   });
 });
 

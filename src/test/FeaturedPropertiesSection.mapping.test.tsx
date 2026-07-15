@@ -89,7 +89,7 @@ describe("FeaturedPropertiesSection mapping", () => {
     const card = screen.getByTestId("featured-property");
     expect(card).toHaveAttribute("data-listing-type", "sale");
     expect(card).toHaveAttribute("data-is-pre-sale", "false");
-    expect(card).toHaveAttribute("data-is-featured", "true");
+    expect(card).toHaveAttribute("data-is-featured", "false");
     expect(card).toHaveAttribute("data-has-video", "true");
     expect(card).toHaveAttribute("data-has-virtual-tour", "true");
     expect(card).toHaveAttribute("data-views", "110");

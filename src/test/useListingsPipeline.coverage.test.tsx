@@ -98,7 +98,7 @@ describe("useListingsPipeline branch coverage", () => {
     mocks.fullFetch = defaultFullFetch();
   });
 
-  it("uses only paginated grid rows and keeps paid promotion ahead of user price sort", () => {
+  it("preserves the server's paid-slot order as paginated grid pages append", () => {
     mocks.paginated = {
       ...defaultPaginated(),
       data: {
@@ -114,9 +114,9 @@ describe("useListingsPipeline branch coverage", () => {
     const { result } = renderHook(() => useListingsPipeline(options()));
 
     expect(result.current.filtered.map((row) => row.id)).toEqual([
-      "priority",
-      "featured",
       "regular-cheap",
+      "featured",
+      "priority",
       "regular-expensive",
     ]);
     expect(result.current.totalLoaded).toBe(4);
@@ -181,34 +181,32 @@ describe("useListingsPipeline branch coverage", () => {
     ["ai-score", [card("missing-ai", { aiScore: undefined }), card("high-ai", { aiScore: 95 })], ["high-ai", "missing-ai"]],
     ["views", [card("unseen", { views: undefined }), card("popular", { views: 50 })], ["popular", "unseen"]],
     ["future-sort", [card("first"), card("second")], ["first", "second"]],
-  ] as const)("applies the %s user sort inside equal promotion buckets", (selectedSort, rows, expected) => {
-    mocks.paginated = { ...defaultPaginated(), data: { pages: [{ data: rows }] } };
+  ] as const)("applies the %s user sort to the bounded map/split fallback", (selectedSort, rows, expected) => {
+    mocks.fullFetch = { ...defaultFullFetch(), data: rows };
 
-    const { result } = renderHook(() => useListingsPipeline(options({ selectedSort })));
+    const { result } = renderHook(() => useListingsPipeline(options({ selectedSort, viewMode: "split" })));
 
     expect(result.current.filtered.map((row) => row.id)).toEqual(expected);
   });
 
-  it("implements Spotlight ordering by featured flag, priority, then creation time", () => {
-    mocks.paginated = {
-      ...defaultPaginated(),
-      data: {
-        pages: [{ data: [
+  it("keeps Spotlight visual-only in the default relevance sort", () => {
+    mocks.fullFetch = {
+      ...defaultFullFetch(),
+      data: [
           card("priority-low", { priorityPlacement: 1 }),
           card("featured-old", { isFeatured: true, priorityPlacement: 1 }),
           card("featured-new", { isFeatured: true, priorityPlacement: 1, _raw: { created_at: "2026-03-01T00:00:00Z" } }),
           card("priority-high", { priorityPlacement: 8 }),
-        ] }],
-      },
+      ],
     };
 
-    const { result } = renderHook(() => useListingsPipeline(options({ selectedSort: "featured" })));
+    const { result } = renderHook(() => useListingsPipeline(options({ selectedSort: "featured", viewMode: "split" })));
 
     expect(result.current.filtered.map((row) => row.id)).toEqual([
-      "featured-new",
-      "featured-old",
       "priority-high",
+      "featured-new",
       "priority-low",
+      "featured-old",
     ]);
   });
 

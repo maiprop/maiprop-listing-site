@@ -2,8 +2,16 @@ import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { captureHandler, req } from "../_shared/testUtils.ts";
 
 type MockScenario = {
-  quota?: { allowed: boolean; reason: string | null; used: number; limit: number };
-  quotas?: Record<string, { allowed: boolean; reason: string | null; used: number; limit: number }>;
+  quota?: {
+    allowed: boolean;
+    reason: string | null;
+    used: number;
+    limit: number;
+  };
+  quotas?: Record<
+    string,
+    { allowed: boolean; reason: string | null; used: number; limit: number }
+  >;
   rpcError?: string;
   calls: Array<{ name: string; args?: unknown }>;
 };
@@ -35,11 +43,15 @@ export function createClient() {
       if (scenario.rpcError) {
         return { data: null, error: { message: scenario.rpcError } };
       }
-      const bucket = typeof args === "object" && args
-        ? (args as Record<string, unknown>).p_bucket
-        : null;
+      const buckets = typeof args === "object" && args &&
+          Array.isArray((args as Record<string, unknown>).p_buckets)
+        ? (args as Record<string, unknown>).p_buckets as string[]
+        : [];
       return {
-        data: scenario.quotas?.[String(bucket)] ?? scenario.quota ?? { allowed: true, reason: null, used: 1, limit: 5 },
+        data: Object.fromEntries(buckets.map((bucket) => [
+          bucket,
+          scenario.quotas?.[bucket] ?? scenario.quota ?? { allowed: true, reason: null, used: 1, limit: 5 },
+        ])),
         error: null,
       };
     },
@@ -199,7 +211,12 @@ Deno.test("non-authenticated JWT role is rejected before quota lookup", async ()
 
 Deno.test("quota status is returned for the verified caller only", async () => {
   resetScenario({
-    quota: { allowed: false, reason: "monthly_limit_reached", used: 5, limit: 5 },
+    quota: {
+      allowed: false,
+      reason: "monthly_limit_reached",
+      used: 5,
+      limit: 5,
+    },
   });
 
   const res = await handler(authedJson(
@@ -219,12 +236,12 @@ Deno.test("quota status is returned for the verified caller only", async () => {
     globalThis.__aiQuotaStatusScenario.calls.some((call) =>
       call.name === "rpc" &&
       JSON.stringify(call.args) === JSON.stringify({
-        name: "check_ai_quota_for_user",
-        args: {
-          _user_id: "11111111-1111-4111-8111-111111111111",
-          p_bucket: "property-valuation",
-        },
-      })
+          name: "check_ai_quotas_for_user",
+          args: {
+            _user_id: "11111111-1111-4111-8111-111111111111",
+            p_buckets: ["property-valuation"],
+          },
+        })
     ),
     true,
   );
@@ -263,15 +280,23 @@ Deno.test("batched quota status verifies once and returns quotas by bucket", asy
     },
   });
 
-  const calls = globalThis.__aiQuotaStatusScenario.calls;
-  assertEquals(
-    calls
-      .filter((call) => call.name === "rpc")
-      .map((call) =>
-        ((call.args as { args?: { p_bucket?: string } }).args ?? {}).p_bucket
-      ),
-    ["property-valuation", "neighbourhood-report", "property-pois"],
+  const rpcCalls = globalThis.__aiQuotaStatusScenario.calls.filter((call) =>
+    call.name === "rpc"
   );
+  assertEquals(rpcCalls, [{
+    name: "rpc",
+    args: {
+      name: "check_ai_quotas_for_user",
+      args: {
+        _user_id: "00000000-0000-4000-8000-000000000001",
+        p_buckets: [
+          "property-valuation",
+          "neighbourhood-report",
+          "property-pois",
+        ],
+      },
+    },
+  }]);
 });
 
 Deno.test("service RPC errors fail closed", async () => {

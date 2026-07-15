@@ -44,7 +44,9 @@ export type AuctionListingRow = Pick<
   | "website_url"
   | "region"
   | "is_featured"
+  | "featured_until"
   | "priority_placement"
+  | "priority_until"
 > & {
   listing_images?: { url: string; sort_order: number }[];
 };
@@ -85,17 +87,50 @@ const getAuctionShuffleScore = (row: AuctionListingRow, seed: string): number =>
   return hashString(`${seed}:${row.id}:${row.auction_date ?? ""}:${row.city ?? ""}`);
 };
 
+const hasFuturePromotionExpiry = (value: string | null, nowMs: number): boolean => {
+  if (!value) return false;
+  const expiresAt = Date.parse(value);
+  return Number.isFinite(expiresAt) && expiresAt > nowMs;
+};
+
+const normalizeAuctionPromotionState = (
+  row: AuctionListingRow,
+  nowMs: number,
+): AuctionListingRow => ({
+  ...row,
+  is_featured: Boolean(row.is_featured) && hasFuturePromotionExpiry(row.featured_until, nowMs),
+  priority_placement:
+    Number(row.priority_placement ?? 0) > 0 && hasFuturePromotionExpiry(row.priority_until, nowMs)
+      ? 1
+      : 0,
+});
+
 export const randomizeAuctionPresentation = (
   rows: AuctionListingRow[],
   seed = getAuctionRotationSeed(),
 ): AuctionListingRow[] => {
-  return [...rows].sort((a, b) => {
-    const priorityDelta = (b.priority_placement ?? 0) - (a.priority_placement ?? 0);
-    if (priorityDelta !== 0) return priorityDelta;
-    const featuredDelta = Number(b.is_featured) - Number(a.is_featured);
-    if (featuredDelta !== 0) return featuredDelta;
-    return getAuctionShuffleScore(a, seed) - getAuctionShuffleScore(b, seed);
-  });
+  const nowMs = Date.now();
+  const normalized = rows.map((row) => normalizeAuctionPromotionState(row, nowMs));
+  const byDailyRotation = (a: AuctionListingRow, b: AuctionListingRow) =>
+    getAuctionShuffleScore(a, seed) - getAuctionShuffleScore(b, seed);
+  const priorityRows = normalized.filter((row) => row.priority_placement > 0).sort(byDailyRotation);
+  const organicRows = normalized.filter((row) => row.priority_placement === 0).sort(byDailyRotation);
+  const ranked: AuctionListingRow[] = [];
+  let priorityIndex = 0;
+  let organicIndex = 0;
+
+  while (ranked.length < normalized.length) {
+    const prioritySlot = ranked.length % 12 < 3;
+    const priority = priorityRows[priorityIndex];
+    const organic = organicRows[organicIndex];
+    const next = prioritySlot ? priority ?? organic : organic ?? priority;
+    if (!next) break;
+    if (next === priority) priorityIndex += 1;
+    else organicIndex += 1;
+    ranked.push(next);
+  }
+
+  return ranked;
 };
 
 const fetchAuctionByIdFromPublicApi = async (
@@ -113,7 +148,7 @@ const fetchAuctionByIdFromPublicApi = async (
   const row = response?.data ?? null;
   if (!row || row.listing_type !== "auction") return null;
   if (row.auction_date && row.auction_date < today) return null;
-  return row;
+  return normalizeAuctionPromotionState(row, Date.now());
 };
 
 const fetchAuctionByIdFromSupabase = async (
@@ -128,7 +163,7 @@ const fetchAuctionByIdFromSupabase = async (
       id,title,city,address,price,auction_starting_bid,auction_date,auction_court,
       property_type,listing_type,cover_image_url,sqm,bedrooms,bathrooms,floor,total_floors,
       latitude,longitude,tags,year_built,construction_status,website_url,region,
-      is_featured,priority_placement,listing_images(url,sort_order)
+      is_featured,featured_until,priority_placement,priority_until,listing_images(url,sort_order)
     `)
     .eq("status", "active")
     .eq("is_off_market", false)
@@ -143,7 +178,7 @@ const fetchAuctionByIdFromSupabase = async (
 
   const { data, error } = await (signal ? query.abortSignal(signal) : query).maybeSingle();
   if (error) throw error;
-  return (data ?? null) as AuctionListingRow | null;
+  return data ? normalizeAuctionPromotionState(data as AuctionListingRow, Date.now()) : null;
 };
 
 export const fetchAuctionListingById = async (id: string, signal?: AbortSignal): Promise<AuctionListingRow | null> => {

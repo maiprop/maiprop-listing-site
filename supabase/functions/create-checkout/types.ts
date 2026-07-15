@@ -4,6 +4,8 @@ export type PricingConfigRow = {
   module?: string | null;
   unit?: string | null;
   label?: string | null;
+  amount?: number | string | null;
+  currency?: string | null;
   metadata?: {
     stripe_price_id?: string;
     stripe_price_id_monthly?: string;
@@ -41,6 +43,10 @@ export type CheckoutAddon = {
   checkoutMode: "payment" | "subscription";
   label?: string;
   productId?: string;
+  amountMinor: number;
+  currency: string;
+  creditsPerUnit: number;
+  entitlementDays?: number;
 };
 
 export type CheckoutProfileRow = {

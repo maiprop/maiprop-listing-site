@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
@@ -100,7 +100,7 @@ const DEVELOPER_PRO: PlanFeature[] = [
   { label: "New Building showcase pages", icon: Building2,    free: false,        paid: true },
   { label: "Project ad and unit management", icon: Eye,      free: false,        paid: true },
   { label: "Construction timeline & floor plans", icon: FileText, free: false,  paid: true },
-  { label: "Priority Rank in New Buildings", icon: Star,     free: false,        paid: true },
+  { label: "Listing promotions", icon: Crown, free: false, paid: "1 Spotlight + 1 Priority Rank/month" },
   { label: "AI listing & description tools", icon: Sparkles, free: false,        paid: true },
   { label: "Project analytics dashboard", icon: BarChart2,   free: false,        paid: true },
   { label: "AI Neighbourhood Reports",   icon: Globe,        free: false,        paid: "3/month included" },
@@ -283,12 +283,14 @@ const PRICING_EL: Record<string, string> = {
   "Developer plan required": "Απαιτείται πλάνο κατασκευαστή",
   "Developer Pro": "Pro κατασκευαστή",
   "Unlimited projects, new building showcase, project ads, Spotlight and Priority Rank": "Απεριόριστα έργα, προβολή νέων κατασκευών, αγγελίες έργων, Spotlight και Priority Rank",
+  "Unlimited projects, new building showcase, project ads, and 1 Spotlight + 1 Priority Rank/month": "Απεριόριστα έργα, προβολή νέων κατασκευών, αγγελίες έργων και 1 Spotlight + 1 Priority Rank/μήνα",
   "Get Developer Pro": "Απόκτηση Developer Pro",
   "Unlimited project listings": "Απεριόριστες αγγελίες έργων",
   "New Building showcase pages": "Σελίδες προβολής νέων κατασκευών",
   "Project ad and unit management": "Διαχείριση αγγελιών έργου και μονάδων",
   "Construction timeline & floor plans": "Χρονοδιάγραμμα κατασκευής και κατόψεις",
-  "Priority Rank in New Buildings": "Priority Rank στην ενότητα Νέων Κατασκευών",
+  "Listing promotions": "Προωθήσεις αγγελιών",
+  "1 Spotlight + 1 Priority Rank/month": "1 Spotlight + 1 Priority Rank/μήνα",
   "AI listing & description tools": "AI εργαλεία αγγελίας και περιγραφής",
   "Project analytics dashboard": "Πίνακας αναλυτικών έργου",
   "AI Neighbourhood Reports": "AI αναφορές περιοχής",
@@ -363,7 +365,7 @@ const PLANS: Record<AudienceId, PlanDef> = {
   developer: {
     freeLabel: "—", freePrice: "—", freeDesc: "Developer plan required", freeCTA: "—", freeHref: "#",
     paidLabel: "Developer Pro", monthlyPrice: 129, annualPrice: 1290,
-    paidDesc: "Unlimited projects, new building showcase, project ads, Spotlight and Priority Rank", paidCTA: "Get Developer Pro", paidHref: "/pricing",
+    paidDesc: "Unlimited projects, new building showcase, project ads, and 1 Spotlight + 1 Priority Rank/month", paidCTA: "Get Developer Pro", paidHref: "/pricing",
     freeList: [], features: DEVELOPER_PRO,
     accent: "text-orange-600 dark:text-orange-400", accentBg: "bg-orange-500/10", accentBorder: "border-orange-500/40",
     proOnly: true,
@@ -404,6 +406,7 @@ export default function Pricing() {
   const { i18n } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const checkoutRetryRef = useRef<number | undefined>(undefined);
   const tr = useCallback(
     (value: string) => (isGreekLocale(i18n.language) ? PRICING_EL[value] ?? value : value),
     [i18n.language],
@@ -490,15 +493,22 @@ export default function Pricing() {
 
   useEffect(() => {
     const checkoutStatus = searchParams.get("checkout");
-    let retryRefresh: number | undefined;
+    const checkoutSessionId = searchParams.get("checkout_session_id") ??
+      searchParams.get("session_id");
     if (checkoutStatus === "success") {
       if (searchParams.get("billing_mode") === "mock") {
         toast.info(tr("Mock checkout completed. No live payment or subscription entitlement was created."));
       } else {
         toast.success(tr("Payment successful! Your plan has been activated."));
       }
-      void refreshSubscription();
-      retryRefresh = window.setTimeout(() => void refreshSubscription(), 2500);
+      void refreshSubscription(checkoutSessionId);
+      if (checkoutRetryRef.current !== undefined) {
+        window.clearTimeout(checkoutRetryRef.current);
+      }
+      checkoutRetryRef.current = window.setTimeout(
+        () => void refreshSubscription(checkoutSessionId),
+        2500,
+      );
     } else if (checkoutStatus === "cancelled") {
       toast.info(tr("Checkout cancelled — no charge was made."));
     } else {
@@ -509,10 +519,14 @@ export default function Pricing() {
     ["checkout", "billing_mode", "plan", "billing_cycle", "session_id"].forEach((key) => nextParams.delete(key));
     setSearchParams(nextParams, { replace: true });
 
-    return () => {
-      if (retryRefresh !== undefined) window.clearTimeout(retryRefresh);
-    };
+    return undefined;
   }, [refreshSubscription, searchParams, setSearchParams, tr]);
+
+  useEffect(() => () => {
+    if (checkoutRetryRef.current !== undefined) {
+      window.clearTimeout(checkoutRetryRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     if (hasAutoSelected) return;

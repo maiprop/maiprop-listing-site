@@ -2,7 +2,7 @@ import type { User } from "@supabase/supabase-js";
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart2,
-  Bell,
+  Crown,
   FileText,
   Globe,
   Loader2,
@@ -15,15 +15,12 @@ import {
   type AIQuota,
 } from "@/hooks/useAiQuota";
 import {
-  PRIORITY_ADS_EXTRA_COST,
-  PRIORITY_ADS_INCLUDED,
-  PROFESSIONAL_PRIORITY_AD_EXTRA_COST,
   REPORT_EXTRA_COST,
   REPORT_INCLUDED,
   usePropertyReportAddonCredits,
-  usePriorityAdsUsage,
   useReportUsage,
 } from "@/hooks/useUsageAddons";
+import { useListingPromotionBalance } from "@/hooks/useListingPromotions";
 import { buildBillingContactHref } from "@/lib/billingContact";
 import { cn } from "@/lib/utils";
 
@@ -37,7 +34,7 @@ type BillingUsagePanelProps = {
 };
 
 type MetricAction =
-  | { type: "addon"; addonKey: string; label: string }
+  | { type: "addon"; addonKey: string; label: string; ariaLabel?: string }
   | { type: "upgrade"; label: string }
   | { type: "contact"; label: string; href: string };
 
@@ -56,7 +53,7 @@ type UsageMetric = {
 
 type UsageCounter = Pick<UsageMetric, "used" | "limit">;
 
-const SELL_SIDE_PARTICIPANTS = new Set(["seller", "agent", "developer", "professional"]);
+const SELL_SIDE_PARTICIPANTS = new Set(["seller", "agent", "developer"]);
 const BILLING_AI_BUCKETS = [
   "property-valuation",
   "neighbourhood-report",
@@ -129,7 +126,11 @@ function MetricActionButton({
         else onPurchaseAddon(action.addonKey);
       }}
       disabled={loading}
-      aria-label={action.type === "addon" ? `Buy ${metric.label} add-on` : action.label}
+      aria-label={
+        action.type === "addon"
+          ? action.ariaLabel ?? `Buy ${metric.label} add-on`
+          : action.label
+      }
     >
       {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
       {action.label}
@@ -166,12 +167,12 @@ function UsageRow({
             </div>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
           <div className="text-right">
             <p className="text-sm font-bold text-foreground">{getCounterLabel(metric)}</p>
             <p className="text-[11px] text-muted-foreground">{getRemainingLabel(metric)}</p>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {actions.map((action) => {
               const actionLoading =
                 action.type === "addon" && addonLoadingKey === action.addonKey;
@@ -222,17 +223,13 @@ export function BillingUsagePanel({
     isLoading: reportCreditsLoading,
     error: reportCreditsError,
   } = usePropertyReportAddonCredits();
-  const { data: priorityCount = 0, isLoading: priorityLoading, error: priorityError } = usePriorityAdsUsage();
   const showListingPromotions = SELL_SIDE_PARTICIPANTS.has(participantType);
-  const priorityFootnote = participantType === "professional"
-    ? `Extra professional priority ads cost EUR ${PROFESSIONAL_PRIORITY_AD_EXTRA_COST} each.`
-    : `Priority Rank costs EUR ${PRIORITY_ADS_EXTRA_COST} for 30 days; Spotlight starts at EUR 39.`;
+  const promotionBalance = useListingPromotionBalance(showListingPromotions);
 
   const reportBaseLimit = isPro ? REPORT_INCLUDED : 0;
   const reportLimit = reportBaseLimit +
     reportCreditCount +
     Math.max(reportCount - reportBaseLimit, 0);
-  const priorityLimit = isPro ? PRIORITY_ADS_INCLUDED : 0;
   const valuationQuota = aiQuotas.quotas["property-valuation"];
   const neighbourhoodQuota = aiQuotas.quotas["neighbourhood-report"];
   const poiQuota = aiQuotas.quotas["property-pois"];
@@ -248,6 +245,10 @@ export function BillingUsagePanel({
             { type: "addon", addonKey, label: "Top up" },
           ]
       : [{ type: "addon", addonKey, label: "Buy add-on" }];
+  const promotionActions = (addonKey: string, label: string): MetricAction[] => [
+    ...(!isPro ? [{ type: "upgrade" as const, label: "Upgrade" }] : []),
+    { type: "addon", addonKey, label, ariaLabel: label },
+  ];
 
   const metrics: UsageMetric[] = [
     {
@@ -310,26 +311,44 @@ export function BillingUsagePanel({
   ];
 
   if (showListingPromotions) {
-    metrics.push({
-      id: "listing-promotions",
-      label: "Listing promotions",
-      description: "Spotlight badges, featured sections, and Priority Rank usage.",
-      icon: Bell,
-      used: priorityCount,
-      limit: priorityLimit,
-      loading: priorityLoading,
-      error: Boolean(priorityError),
-      actions: [{
-        type: "contact",
-        label: "Contact team",
-        href: buildBillingContactHref({
-          topic: "Listing promotions",
-          addonName: "Listing promotions",
-          participantType,
-        }),
-      }],
-      footnote: isPro ? priorityFootnote : "Choose Spotlight for visual promotion, Priority Rank for search placement.",
-    });
+    const spotlight = promotionBalance.data?.spotlight;
+    const priority = promotionBalance.data?.priority;
+    const balanceUnavailable = Boolean(promotionBalance.error);
+    const balanceLoading = promotionBalance.isLoading;
+
+    metrics.push(
+      {
+        id: "spotlight-promotions",
+        label: "Spotlight credits",
+        description: "Visual badge and Spotlight showcase placement for 30 days.",
+        icon: Crown,
+        used: spotlight?.used ?? null,
+        limit: spotlight?.included ?? null,
+        loading: balanceLoading,
+        error: balanceUnavailable,
+        actions: [
+          ...promotionActions("featured_listing", "Buy Spotlight"),
+          { type: "addon", addonKey: "featured_priority_bundle", label: "Buy bundle", ariaLabel: "Buy bundle" },
+        ],
+        footnote: spotlight
+          ? `${spotlight.remaining + spotlight.addons} available credit${spotlight.remaining + spotlight.addons === 1 ? "" : "s"}. Add-on EUR 39/30 days; credits do not roll over.`
+          : "Spotlight add-on EUR 39/30 days; credits do not roll over.",
+      },
+      {
+        id: "priority-promotions",
+        label: "Priority credits",
+        description: "Higher search placement for one listing for 30 days.",
+        icon: Zap,
+        used: priority?.used ?? null,
+        limit: priority?.included ?? null,
+        loading: balanceLoading,
+        error: balanceUnavailable,
+        actions: promotionActions("priority_placement", "Buy Priority"),
+        footnote: priority
+          ? `${priority.remaining + priority.addons} available credit${priority.remaining + priority.addons === 1 ? "" : "s"}. Priority add-on EUR 59/30 days; bundle EUR 79/30 days.`
+          : "Priority add-on EUR 59/30 days; Spotlight + Priority bundle EUR 79/30 days.",
+      },
+    );
   }
 
   return (

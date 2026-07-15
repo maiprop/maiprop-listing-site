@@ -159,7 +159,7 @@ describe("dashboard utility tabs", () => {
       timeout: 20_000,
     });
 
-    fireEvent.click(screen.getAllByRole("button", { name: /Buy add-on/i })[0]);
+    fireEvent.click(screen.getByRole("button", { name: /Buy Single AI Valuation add-on/i }));
     await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("create-checkout", expect.objectContaining({
       body: expect.objectContaining({ addon_key: "valuation_single" }),
     })));
@@ -169,7 +169,7 @@ describe("dashboard utility tabs", () => {
         ? Promise.resolve({ data: { error: "checkout down" }, error: null })
         : Promise.resolve({ data: billingInfo, error: null })
     ));
-    fireEvent.click(screen.getAllByRole("button", { name: /Buy add-on/i })[1]);
+    fireEvent.click(screen.getByRole("button", { name: /Buy Valuation Bundle × 5 add-on/i }));
     await waitFor(() => expect(mocks.toast.error).toHaveBeenCalledWith("checkout down"));
 
     mocks.useSubscription.mockReturnValue({

@@ -7,15 +7,16 @@
  */
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
-  isInviteOnlyCheckoutPlan,
-  isCheckoutAudienceAllowed,
-  isSupportedCheckoutPlan,
   getStripePriceEnvKey,
   getStripePriceEnvKeys,
+  isCheckoutAudienceAllowed,
+  isInviteOnlyCheckoutPlan,
+  isSupportedCheckoutPlan,
   normalizeBillingCycle,
   normalizePlanKey,
   resolveCheckoutOrigin,
   sanitizeRedirectPath,
+  withCheckoutSessionId,
 } from "./index.ts";
 
 Deno.test("sanitizeRedirectPath: accepts a same-origin path", () => {
@@ -77,6 +78,22 @@ Deno.test("sanitizeRedirectPath: rejects paths not starting with /", () => {
   assertEquals(sanitizeRedirectPath("../etc/passwd"), null);
 });
 
+Deno.test("withCheckoutSessionId: appends Stripe's literal session placeholder", () => {
+  assertEquals(
+    withCheckoutSessionId("/pricing?checkout=success"),
+    "/pricing?checkout=success&session_id={CHECKOUT_SESSION_ID}",
+  );
+});
+
+Deno.test("withCheckoutSessionId: replaces caller session params and preserves fragments", () => {
+  assertEquals(
+    withCheckoutSessionId(
+      "/dashboard?checkout=success&session_id=stale&checkout_session_id=stale#billing",
+    ),
+    "/dashboard?checkout=success&session_id={CHECKOUT_SESSION_ID}#billing",
+  );
+});
+
 Deno.test("normalizePlanKey: defaults to pro and rejects malformed keys", () => {
   assertEquals(normalizePlanKey(undefined), "pro");
   assertEquals(normalizePlanKey("agent_basic"), "agent_basic");
@@ -96,8 +113,14 @@ Deno.test("normalizeBillingCycle: defaults monthly and accepts annual aliases", 
 });
 
 Deno.test("getStripePriceEnvKey: separates monthly and annual price ids", () => {
-  assertEquals(getStripePriceEnvKey("developer_pro", "monthly"), "STRIPE_PRICE_DEVELOPER_PRO_MONTHLY");
-  assertEquals(getStripePriceEnvKey("developer_pro", "annual"), "STRIPE_PRICE_DEVELOPER_PRO_ANNUAL");
+  assertEquals(
+    getStripePriceEnvKey("developer_pro", "monthly"),
+    "STRIPE_PRICE_DEVELOPER_PRO_MONTHLY",
+  );
+  assertEquals(
+    getStripePriceEnvKey("developer_pro", "annual"),
+    "STRIPE_PRICE_DEVELOPER_PRO_ANNUAL",
+  );
 });
 
 Deno.test("getStripePriceEnvKeys: supports role-audience annual secret aliases", () => {
@@ -130,27 +153,45 @@ Deno.test("isSupportedCheckoutPlan: rejects unknown syntactically valid keys", (
 
 Deno.test("isCheckoutAudienceAllowed: blocks cross-role plan use", () => {
   assertEquals(
-    isCheckoutAudienceAllowed("developer", { role: "agent", participant_type: "agent" }),
+    isCheckoutAudienceAllowed("developer", {
+      role: "agent",
+      participant_type: "agent",
+    }),
     false,
   );
   assertEquals(
-    isCheckoutAudienceAllowed("developer", { role: "developer", participant_type: "developer" }),
+    isCheckoutAudienceAllowed("developer", {
+      role: "developer",
+      participant_type: "developer",
+    }),
     true,
   );
   assertEquals(
-    isCheckoutAudienceAllowed("developer", { role: "buyer", participant_type: "developer" }),
+    isCheckoutAudienceAllowed("developer", {
+      role: "buyer",
+      participant_type: "developer",
+    }),
     false,
   );
   assertEquals(
-    isCheckoutAudienceAllowed("participant", { role: "buyer", participant_type: "developer" }),
+    isCheckoutAudienceAllowed("participant", {
+      role: "buyer",
+      participant_type: "developer",
+    }),
     true,
   );
   assertEquals(
-    isCheckoutAudienceAllowed("participant", { role: "buyer", participant_type: "buyer" }),
+    isCheckoutAudienceAllowed("participant", {
+      role: "buyer",
+      participant_type: "buyer",
+    }),
     true,
   );
   assertEquals(
-    isCheckoutAudienceAllowed("participant", { role: "seller", participant_type: "seller" }),
+    isCheckoutAudienceAllowed("participant", {
+      role: "seller",
+      participant_type: "seller",
+    }),
     true,
   );
 });

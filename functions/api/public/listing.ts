@@ -14,16 +14,21 @@ import {
 import { getSupabaseRuntime } from "../../_seo";
 import { publicListingRows } from "./_fixture-content";
 import { fetchPublicProfileSummaries, publicProfileDisplay } from "./_publicProfiles";
+import { normalizePublicPromotionState } from "./_promotionState";
 
 type ListingRow = {
   id: string;
   owner_id?: string | null;
+  is_featured?: boolean | null;
+  featured_until?: string | null;
+  priority_placement?: number | null;
+  priority_until?: string | null;
   [key: string]: unknown;
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EXTERNAL_TAG_RE = /^[A-Za-z0-9:_-]{1,120}$/;
-const LISTING_DETAIL_CACHE_VERSION = "open-house-transaction-v1";
+const LISTING_DETAIL_CACHE_VERSION = "promotion-expiry-v2";
 const PROJECT_UNIT_SELECT = [
   "id",
   "listing_id",
@@ -124,7 +129,9 @@ const LISTING_DETAIL_SELECT = [
   "has_video_tour",
   "has_virtual_tour",
   "is_featured",
+  "featured_until",
   "priority_placement",
+  "priority_until",
   "is_pre_sale",
   "walkability_score",
   "safety_score",
@@ -258,7 +265,9 @@ async function publicListing(ctx: PublicApiCtx, requestUrl: URL): Promise<Respon
     try {
       const rows = await supabaseJson<ListingRow>(ctx.env, "/rest/v1/listings", params, { failOnTransient: true });
       const cleanRows = publicListingRows(rows);
-      const row = cleanRows[0] ?? null;
+      const row = cleanRows[0]
+        ? normalizePublicPromotionState(cleanRows[0], Date.now())
+        : null;
       const profile = await fetchOwnerProfile(ctx.env, row?.owner_id);
 
       return jsonResponse({

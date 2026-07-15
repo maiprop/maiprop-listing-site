@@ -77,9 +77,34 @@ describe("dbListingToCard — basic field mapping", () => {
     expect(card.aiScore).toBe(85);
   });
 
-  it("maps isFeatured as boolean", () => {
-    const card = dbListingToCard(makeDbListing({ is_featured: true }));
+  it("maps Spotlight only while its entitlement is unexpired", () => {
+    const card = dbListingToCard(makeDbListing({
+      is_featured: true,
+      featured_until: "2099-01-01T00:00:00.000Z",
+    }));
     expect(card.isFeatured).toBe(true);
+  });
+
+  it.each([null, "2000-01-01T00:00:00.000Z"])(
+    "hides Spotlight when its expiry is %s",
+    (featuredUntil) => {
+      const card = dbListingToCard(makeDbListing({
+        is_featured: true,
+        featured_until: featuredUntil,
+      }));
+      expect(card.isFeatured).toBe(false);
+    },
+  );
+
+  it("maps Priority only while its entitlement is unexpired", () => {
+    expect(dbListingToCard(makeDbListing({
+      priority_placement: 1,
+      priority_until: "2099-01-01T00:00:00.000Z",
+    })).priorityPlacement).toBe(1);
+    expect(dbListingToCard(makeDbListing({
+      priority_placement: 1,
+      priority_until: "2000-01-01T00:00:00.000Z",
+    })).priorityPlacement).toBe(0);
   });
 
   it("maps energyClass from energy_class", () => {

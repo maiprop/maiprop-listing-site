@@ -9,6 +9,7 @@ import {
   safeInt,
   safeText,
   safeToken,
+  supabaseCount,
   supabaseJson,
   upstreamUnavailable,
   type PublicApiCtx,
@@ -16,11 +17,27 @@ import {
 } from "./_cache";
 import { getSupabaseRuntime } from "../../_seo";
 import { publicListingRows } from "./_fixture-content";
+import {
+  applyCatalogueStreamCursor,
+  buildNextCatalogueCursor,
+  canAdvanceCatalogueCursor,
+  catalogueStreamOffsetsForAvailableRows,
+  decodeCatalogueCursor,
+  interleaveCatalogueStreams,
+  resolveCatalogueSort,
+  type CatalogueCursor,
+  type CatalogueSort,
+} from "./_listingRank";
 import { fetchPublicProfileSummaries, publicProfileDisplay } from "./_publicProfiles";
+import { normalizePublicPromotionState } from "./_promotionState";
 
 type ListingRow = {
   id: string;
   owner_id?: string | null;
+  is_featured?: boolean | null;
+  featured_until?: string | null;
+  priority_placement?: number | null;
+  priority_until?: string | null;
   [key: string]: unknown;
 };
 
@@ -29,7 +46,6 @@ const CATALOG_TYPES_WITH_NEW_BUILD: Partial<Record<(typeof LISTING_TYPES)[number
   sale: "in.(sale,new_build)",
 };
 const PROPERTY_TYPES = ["apartment", "house", "villa", "land", "commercial", "office", "warehouse", "hotel"] as const;
-const SORTS = ["featured", "newest", "price-asc", "price-desc", "ai-score", "views"] as const;
 const ENERGY_CLASSES = ["A+", "A", "B+", "B", "C", "D", "E", "F", "G"] as const;
 const BOOLEAN_FEATURES = new Set([
   "has_parking", "has_elevator", "has_balcony", "has_pool", "pets_allowed",
@@ -46,14 +62,16 @@ const LISTING_PROJECT_CARD_SELECT_WITH_UNITS = [
   "delivery_date",
   `project_units!project_units_project_id_fkey(${PROJECT_UNIT_CARD_SELECT})`,
 ].join(",");
-const LISTINGS_CACHE_VERSION = "default-card-v5-offset-nonblocking";
+const LISTINGS_CACHE_VERSION = "catalogue-stream-cursor-promotions-v3";
 const LISTINGS_CACHE_OPTIONS = {
-  edgeTtlSeconds: 300,
-  browserTtlSeconds: 60,
-  staleSeconds: 900,
+  edgeTtlSeconds: 60,
+  browserTtlSeconds: 30,
+  staleSeconds: 60,
+  staleFallbackSeconds: 60,
   producerTimeoutMs: 5_000,
 };
 const LISTINGS_SUPABASE_TIMEOUT_MS = 4_500;
+const LEGACY_STREAM_PROBE_MAX = 2_000;
 const DEFAULT_LOCATION_RADIUS_M = 750;
 const MAX_LOCATION_RADIUS_M = 5_000;
 const METERS_PER_LATITUDE_DEGREE = 111_320;
@@ -87,7 +105,9 @@ const LISTING_SELECT_BASE = [
   "has_video_tour",
   "has_virtual_tour",
   "is_featured",
+  "featured_until",
   "priority_placement",
+  "priority_until",
   "is_pre_sale",
   "construction_status",
   "walkability_score",
@@ -245,7 +265,13 @@ function listingLocationBounds(requestUrl: URL): LocationBounds | null {
   };
 }
 
-function buildListingParams(requestUrl: URL): { params: URLSearchParams; page: number; pageSize: number; offset: number } {
+function buildListingParams(requestUrl: URL): {
+  params: URLSearchParams;
+  page: number;
+  pageSize: number;
+  offset: number;
+  sort: CatalogueSort;
+} {
   const params = new URLSearchParams();
   const page = safeInt(requestUrl.searchParams.get("page"), 1, 1, 500);
   const pageSize = safeInt(
@@ -255,29 +281,13 @@ function buildListingParams(requestUrl: URL): { params: URLSearchParams; page: n
     200,
   );
   const offset = safeInt(requestUrl.searchParams.get("offset"), (page - 1) * pageSize, 0, 100_000);
-  const sort = safeToken(requestUrl.searchParams.get("sort"), SORTS) ?? "featured";
+  const sort = resolveCatalogueSort(requestUrl.searchParams.get("sort"));
 
   params.set("select", listingSelect(shouldIncludeProjectUnits(requestUrl)));
   params.set("status", "eq.active");
-  params.set("offset", String(offset));
-  params.set("limit", String(pageSize));
   params.set("listing_images.order", "sort_order.asc");
   params.set("listing_images.limit", "3");
   params.set("is_off_market", "eq.false");
-
-  if (sort === "featured") {
-    params.append("order", "is_featured.desc");
-    params.append("order", "priority_placement.desc.nullslast");
-    params.append("order", "created_at.desc");
-  } else {
-    params.append("order", "priority_placement.desc.nullslast");
-    params.append("order", "is_featured.desc");
-    if (sort === "price-asc") params.append("order", "price.asc");
-    else if (sort === "price-desc") params.append("order", "price.desc");
-    else if (sort === "ai-score") params.append("order", "ai_score.desc.nullslast");
-    else if (sort === "views") params.append("order", "views_count.desc.nullslast");
-    else params.append("order", "created_at.desc");
-  }
 
   const listingType = safeToken(requestUrl.searchParams.get("listing_type"), LISTING_TYPES);
   if (listingType) {
@@ -351,33 +361,217 @@ function buildListingParams(requestUrl: URL): { params: URLSearchParams; page: n
     .filter((feature) => BOOLEAN_FEATURES.has(feature));
   for (const feature of new Set(features)) params.set(feature, "eq.true");
 
-  return { params, page, pageSize, offset };
+  return { params, page, pageSize, offset, sort };
+}
+
+function invalidCursorResponse(): Response {
+  return jsonResponse(
+    { error: "Invalid catalogue cursor" },
+    {
+      status: 400,
+      headers: {
+        "Cache-Control": "no-store",
+        "CDN-Cache-Control": "no-store",
+      },
+    },
+  );
+}
+
+function buildCatalogueStreamParams(
+  baseParams: URLSearchParams,
+  sort: CatalogueSort,
+  cursor: CatalogueCursor | null,
+  stream: "priority" | "organic",
+  now: string,
+  limit: number,
+  legacyOffset: boolean,
+): URLSearchParams {
+  const params = new URLSearchParams(baseParams);
+  params.set("limit", String(limit));
+  if (stream === "priority") {
+    params.set("priority_placement", "gt.0");
+    params.set("priority_until", `gt.${now}`);
+  } else {
+    params.append(
+      "or",
+      `(priority_placement.lte.0,priority_placement.is.null,priority_until.lte.${now},priority_until.is.null)`,
+    );
+  }
+
+  applyCatalogueStreamCursor(params, sort, stream === "priority" ? cursor?.priority : cursor?.organic);
+  if (legacyOffset && cursor) {
+    const streamOffset = stream === "priority" ? cursor.priorityOffset : cursor.organicOffset;
+    if (streamOffset > 0) params.set("offset", String(streamOffset));
+  }
+  return params;
+}
+
+function lightweightLegacyStreamParams(
+  baseParams: URLSearchParams,
+  sort: CatalogueSort,
+  stream: "priority" | "organic",
+  now: string,
+  limit: number,
+): URLSearchParams {
+  const params = buildCatalogueStreamParams(baseParams, sort, null, stream, now, limit, false);
+  params.set("select", "id");
+  params.delete("listing_images.order");
+  params.delete("listing_images.limit");
+  return params;
+}
+
+async function catalogueCursorForLegacyOffset(
+  env: PublicApiEnv,
+  baseParams: URLSearchParams,
+  sort: CatalogueSort,
+  offset: number,
+  now: string,
+): Promise<CatalogueCursor | null> {
+  if (offset <= 0) return null;
+
+  let availablePriorityRows: number;
+  let availableOrganicRows: number;
+  if (offset <= LEGACY_STREAM_PROBE_MAX) {
+    const [priorityRows, organicRows] = await Promise.all([
+      supabaseJson<{ id: string }>(
+        env,
+        "/rest/v1/listings",
+        lightweightLegacyStreamParams(baseParams, sort, "priority", now, offset),
+        { failOnTransient: true, timeoutMs: LISTINGS_SUPABASE_TIMEOUT_MS },
+      ),
+      supabaseJson<{ id: string }>(
+        env,
+        "/rest/v1/listings",
+        lightweightLegacyStreamParams(baseParams, sort, "organic", now, offset),
+        { failOnTransient: true, timeoutMs: LISTINGS_SUPABASE_TIMEOUT_MS },
+      ),
+    ]);
+    availablePriorityRows = priorityRows.length;
+    availableOrganicRows = organicRows.length;
+  } else {
+    const countParams = (stream: "priority" | "organic") => {
+      const params = lightweightLegacyStreamParams(baseParams, sort, stream, now, 1);
+      params.delete("limit");
+      params.delete("order");
+      return params;
+    };
+    [availablePriorityRows, availableOrganicRows] = await Promise.all([
+      supabaseCount(env, "/rest/v1/listings", countParams("priority"), {
+        failOnTransient: true,
+        countStrategy: "exact",
+        timeoutMs: LISTINGS_SUPABASE_TIMEOUT_MS,
+      }),
+      supabaseCount(env, "/rest/v1/listings", countParams("organic"), {
+        failOnTransient: true,
+        countStrategy: "exact",
+        timeoutMs: LISTINGS_SUPABASE_TIMEOUT_MS,
+      }),
+    ]);
+  }
+
+  const streamOffsets = catalogueStreamOffsetsForAvailableRows(
+    offset,
+    availablePriorityRows,
+    availableOrganicRows,
+  );
+  return {
+    v: 1,
+    sort: sort.name,
+    slot: streamOffsets.slot,
+    priorityOffset: streamOffsets.priorityOffset,
+    organicOffset: streamOffsets.organicOffset,
+  };
 }
 
 async function publicListings(ctx: PublicApiCtx, requestUrl: URL): Promise<Response> {
   if (!getSupabaseRuntime(ctx.env)) return missingRuntime();
 
-  const { params, page, pageSize, offset } = buildListingParams(requestUrl);
-  params.set("page", String(page));
-  params.set("pageSize", String(pageSize));
-  params.set("offsetKey", String(offset));
-  params.set("v", LISTINGS_CACHE_VERSION);
-  const cacheKey = normalizedCacheUrl(requestUrl, "listings", params);
-  params.delete("page");
-  params.delete("pageSize");
-  params.delete("offsetKey");
-  params.delete("v");
+  const { params, page, pageSize, offset: legacyOutputOffset, sort } = buildListingParams(requestUrl);
+  const encodedCursor = requestUrl.searchParams.get("cursor");
+  const decodedCursor = decodeCatalogueCursor(encodedCursor, sort);
+  if (encodedCursor && !decodedCursor) return invalidCursorResponse();
+
+  const outputOffset = decodedCursor
+    ? decodedCursor.priorityOffset + decodedCursor.organicOffset
+    : legacyOutputOffset;
+  const cacheParams = new URLSearchParams(params);
+  cacheParams.set("page", String(page));
+  cacheParams.set("pageSize", String(pageSize));
+  cacheParams.set("offsetKey", String(outputOffset));
+  cacheParams.set("sortKey", sort.name);
+  if (encodedCursor) cacheParams.set("cursorKey", encodedCursor);
+  cacheParams.set("v", LISTINGS_CACHE_VERSION);
+  const cacheKey = normalizedCacheUrl(requestUrl, "listings", cacheParams);
 
   return cachedJson(ctx, cacheKey, async () => {
     try {
-      const rows = await supabaseJson<ListingRow>(ctx.env, "/rest/v1/listings", params, {
+      const now = new Date().toISOString();
+      const streamLimit = pageSize + 1;
+      const legacyOffset = !decodedCursor && legacyOutputOffset > 0;
+      const cursor = decodedCursor ?? await catalogueCursorForLegacyOffset(
+        ctx.env,
+        params,
+        sort,
+        legacyOutputOffset,
+        now,
+      );
+      const priorityParams = buildCatalogueStreamParams(
+        params,
+        sort,
+        cursor,
+        "priority",
+        now,
+        streamLimit,
+        legacyOffset,
+      );
+      const organicParams = buildCatalogueStreamParams(
+        params,
+        sort,
+        cursor,
+        "organic",
+        now,
+        streamLimit,
+        legacyOffset,
+      );
+      const fetchOptions = {
         failOnTransient: true,
         timeoutMs: LISTINGS_SUPABASE_TIMEOUT_MS,
-      });
-      const cleanRows = publicListingRows(rows);
-      const ownerIds = cleanRows.map((row) => row.owner_id).filter((id): id is string => typeof id === "string");
+      } as const;
+      const streamResults = await Promise.allSettled([
+        supabaseJson<ListingRow>(ctx.env, "/rest/v1/listings", priorityParams, fetchOptions),
+        supabaseJson<ListingRow>(ctx.env, "/rest/v1/listings", organicParams, fetchOptions),
+      ]);
+      const failedStream = streamResults.find((result) => result.status === "rejected");
+      if (failedStream?.status === "rejected") throw failedStream.reason;
+      const [priorityResult, organicResult] = streamResults;
+      if (priorityResult.status !== "fulfilled" || organicResult.status !== "fulfilled") {
+        throw new Error("Catalogue stream did not settle");
+      }
+      const priorityRows = priorityResult.value;
+      const organicRows = organicResult.value;
+      const nowMs = Date.parse(now);
+      const cleanPriorityRows = publicListingRows(priorityRows)
+        .map((row) => normalizePublicPromotionState(row, nowMs));
+      const cleanOrganicRows = publicListingRows(organicRows)
+        .map((row) => normalizePublicPromotionState(row, nowMs));
+      const pageResult = interleaveCatalogueStreams(
+        cleanPriorityRows,
+        cleanOrganicRows,
+        pageSize,
+        cursor?.slot ?? 0,
+      );
+      const hasUnreadRows = pageResult.consumedPriority < cleanPriorityRows.length ||
+        pageResult.consumedOrganic < cleanOrganicRows.length;
+      const mayHaveMoreRows = priorityRows.length === streamLimit || organicRows.length === streamLimit;
+      const hasMore = pageResult.data.length === pageSize &&
+        (hasUnreadRows || mayHaveMoreRows) &&
+        canAdvanceCatalogueCursor(cursor, sort, pageResult);
+      const nextCursor = hasMore ? buildNextCatalogueCursor(cursor, sort, pageResult) : null;
+      const ownerIds = pageResult.data
+        .map((row) => row.owner_id)
+        .filter((id): id is string => typeof id === "string");
       const profiles = await fetchPublicProfileSummaries(ctx.env, ownerIds);
-      const data = cleanRows.map((row) => ({
+      const data = pageResult.data.map((row) => ({
         ...row,
         profiles: publicProfileDisplay(row.owner_id ? profiles.get(row.owner_id) : null),
         ownerParticipantType: row.owner_id ? profiles.get(row.owner_id)?.owner_participant_type ?? null : null,
@@ -385,10 +579,11 @@ async function publicListings(ctx: PublicApiCtx, requestUrl: URL): Promise<Respo
 
       return jsonResponse({
         data,
-        hasMore: rows.length === pageSize,
+        hasMore,
+        nextCursor,
         page,
         pageSize,
-        offset,
+        offset: outputOffset,
       });
     } catch (error) {
       if (isSupabaseTransientError(error)) return upstreamUnavailable();

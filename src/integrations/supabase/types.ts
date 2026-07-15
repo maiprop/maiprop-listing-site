@@ -69,7 +69,11 @@ export type Database = {
           refunded_at: string | null
           runtime_mode: string
           status: string
+          stripe_amount_total: number | null
+          stripe_charge_id: string | null
+          stripe_currency: string | null
           stripe_customer_id: string | null
+          stripe_invoice_id: string | null
           stripe_payment_intent_id: string | null
           stripe_session_id: string
           stripe_subscription_id: string | null
@@ -95,7 +99,11 @@ export type Database = {
           refunded_at?: string | null
           runtime_mode?: string
           status?: string
+          stripe_amount_total?: number | null
+          stripe_charge_id?: string | null
+          stripe_currency?: string | null
           stripe_customer_id?: string | null
+          stripe_invoice_id?: string | null
           stripe_payment_intent_id?: string | null
           stripe_session_id: string
           stripe_subscription_id?: string | null
@@ -121,7 +129,11 @@ export type Database = {
           refunded_at?: string | null
           runtime_mode?: string
           status?: string
+          stripe_amount_total?: number | null
+          stripe_charge_id?: string | null
+          stripe_currency?: string | null
           stripe_customer_id?: string | null
+          stripe_invoice_id?: string | null
           stripe_payment_intent_id?: string | null
           stripe_session_id?: string
           stripe_subscription_id?: string | null
@@ -1584,6 +1596,7 @@ export type Database = {
           price: number
           price_per_sqm: number | null
           priority_placement: number
+          priority_until: string | null
           project_id: string | null
           property_type: Database["public"]["Enums"]["property_type"]
           region: string | null
@@ -1706,6 +1719,7 @@ export type Database = {
           price: number
           price_per_sqm?: number | null
           priority_placement?: number
+          priority_until?: string | null
           project_id?: string | null
           property_type: Database["public"]["Enums"]["property_type"]
           region?: string | null
@@ -1828,6 +1842,7 @@ export type Database = {
           price?: number
           price_per_sqm?: number | null
           priority_placement?: number
+          priority_until?: string | null
           project_id?: string | null
           property_type?: Database["public"]["Enums"]["property_type"]
           region?: string | null
@@ -4254,9 +4269,21 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      activate_listing_promotion: {
+        Args: {
+          p_listing_id: string
+          p_promotion_type: string
+          p_request_key: string
+        }
+        Returns: Json
+      }
       addon_credit_bucket: { Args: { p_addon_key: string }; Returns: string }
       addon_credit_units: {
         Args: { p_addon_key: string; p_quantity?: number }
+        Returns: number
+      }
+      deactivate_listing_promotion: {
+        Args: { p_listing_id: string; p_promotion_type: string }
         Returns: number
       }
       admin_ban_reported_content_owner: {
@@ -4859,6 +4886,7 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: number
       }
+      get_listing_promotion_balance: { Args: never; Returns: Json }
       get_listing_limit:
         | { Args: { p_is_pro: boolean; p_role: string }; Returns: number }
         | { Args: { p_user_id: string }; Returns: number }
@@ -5031,6 +5059,19 @@ export type Database = {
           msg_id: number
           read_ct: number
         }[]
+      }
+      reconcile_addon_refund_event: {
+        Args: {
+          p_livemode: boolean
+          p_metadata?: Json
+          p_purchase_id: string
+          p_refunded_amount: number
+          p_runtime_mode: string
+          p_status: string
+          p_stripe_refund_id: string
+          p_total_amount: number
+        }
+        Returns: Json
       }
       record_ai_call: { Args: { p_bucket: string }; Returns: Json }
       record_listing_view: {

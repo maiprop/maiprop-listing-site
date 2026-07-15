@@ -45,7 +45,9 @@ export const PUBLIC_CARD_LISTING_SELECT = [
   "views_count",
   "tags",
   "is_featured",
+  "featured_until",
   "priority_placement",
+  "priority_until",
   "is_pre_sale",
   "construction_status",
   "latitude",
@@ -84,6 +86,8 @@ export async function fetchHomepageFeaturedFallback(signal?: AbortSignal): Promi
       .eq("status", "active")
       .eq("is_off_market", false)
       .in("listing_type", ["sale", "new_build"])
+      .eq("is_featured", true)
+      .gt("featured_until", new Date().toISOString())
       .order("created_at", { ascending: false })
       .limit(12),
   );
@@ -153,8 +157,6 @@ export async function fetchAuctionsFallback<T = HomepageListing>(limit: number, 
       .eq("is_off_market", false)
       .eq("listing_type", "auction")
       .or(`auction_date.gte.${today},auction_date.is.null`)
-      .order("is_featured", { ascending: false })
-      .order("priority_placement", { ascending: false, nullsFirst: false })
       .order("auction_date", { ascending: true, nullsFirst: false })
       .limit(limit),
   );

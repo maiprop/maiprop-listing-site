@@ -53,8 +53,22 @@ import {
 type InfiniteOptions = {
   queryFn: (context: { pageParam?: unknown; signal?: AbortSignal }) => Promise<unknown>;
   getNextPageParam: (
-    lastPage: { data: unknown[]; hasMore: boolean; page?: number; pageSize?: number; offset?: number },
-    allPages: Array<{ data: unknown[]; hasMore: boolean; page?: number; pageSize?: number; offset?: number }>,
+    lastPage: {
+      data: unknown[];
+      hasMore: boolean;
+      nextCursor?: string | null;
+      page?: number;
+      pageSize?: number;
+      offset?: number;
+    },
+    allPages: Array<{
+      data: unknown[];
+      hasMore: boolean;
+      nextCursor?: string | null;
+      page?: number;
+      pageSize?: number;
+      offset?: number;
+    }>,
   ) => unknown;
   enabled: boolean;
   staleTime: number;
@@ -74,7 +88,14 @@ type QueryOptions = {
 beforeEach(() => {
   vi.clearAllMocks();
   authState.user = null;
-  publicApiMock.mockResolvedValue({ data: [], hasMore: false, page: 1, pageSize: 12, offset: 0 });
+  publicApiMock.mockResolvedValue({
+    data: [],
+    hasMore: false,
+    nextCursor: null,
+    page: 1,
+    pageSize: 12,
+    offset: 0,
+  });
   invokeMock.mockResolvedValue({ data: { isPro: true }, error: null });
 });
 
@@ -87,17 +108,19 @@ describe("useListings query configuration", () => {
     expect(publicApiMock.mock.calls.at(-1)?.[0]).toContain("page=2&pageSize=40");
 
     await options.queryFn({ pageParam: { page: "bad", pageSize: 1000, offset: -4 }, signal });
-    expect(publicApiMock.mock.calls.at(-1)?.[0]).toContain("page=1&pageSize=40&offset=0");
+    expect(publicApiMock.mock.calls.at(-1)?.[0]).toContain("page=1&pageSize=40");
+    expect(publicApiMock.mock.calls.at(-1)?.[0]).not.toContain("offset=");
 
     await options.queryFn({ pageParam: { page: 3.8, pageSize: 0, offset: 41.9 }, signal });
     expect(publicApiMock.mock.calls.at(-1)?.[0]).toContain("page=3&pageSize=1&offset=41");
 
     await options.queryFn({ pageParam: null, signal });
-    expect(publicApiMock.mock.calls.at(-1)?.[0]).toContain("page=1&pageSize=12&offset=0");
-    expect(options.initialPageParam).toEqual({ page: 1, pageSize: 12, offset: 0 });
+    expect(publicApiMock.mock.calls.at(-1)?.[0]).toContain("page=1&pageSize=12");
+    expect(publicApiMock.mock.calls.at(-1)?.[0]).not.toContain("offset=");
+    expect(options.initialPageParam).toEqual({ page: 1, pageSize: 12 });
   });
 
-  it("calculates progressive and later page offsets without duplicates", () => {
+  it("carries opaque cursors while retaining fallback offsets without duplicates", () => {
     const options = useListingsPaginated() as unknown as InfiniteOptions;
     expect(options.getNextPageParam(
       { data: [], hasMore: false, page: 1, pageSize: 12, offset: 0 },
@@ -105,17 +128,55 @@ describe("useListings query configuration", () => {
     )).toBeUndefined();
 
     expect(options.getNextPageParam(
-      { data: Array(12), hasMore: true, page: 1, pageSize: 12, offset: 0 },
-      [{ data: Array(12), hasMore: true, page: 1, pageSize: 12, offset: 0 }],
-    )).toEqual({ page: 1, pageSize: 28, offset: 12 });
+      {
+        data: Array(12),
+        hasMore: true,
+        nextCursor: "v1.first-cursor",
+        page: 1,
+        pageSize: 12,
+        offset: 0,
+      },
+      [{
+        data: Array(12),
+        hasMore: true,
+        nextCursor: "v1.first-cursor",
+        page: 1,
+        pageSize: 12,
+        offset: 0,
+      }],
+    )).toEqual({
+      page: 1,
+      pageSize: 28,
+      cursor: "v1.first-cursor",
+      offset: 12,
+    });
 
     expect(options.getNextPageParam(
-      { data: Array(28), hasMore: true, page: 1, pageSize: 28, offset: 12 },
+      {
+        data: Array(28),
+        hasMore: true,
+        nextCursor: "v1.second-cursor",
+        page: 1,
+        pageSize: 28,
+        offset: 12,
+      },
       [
         { data: Array(12), hasMore: true, page: 1, pageSize: 12, offset: 0 },
-        { data: Array(28), hasMore: true, page: 1, pageSize: 28, offset: 12 },
+        {
+          data: Array(28),
+          hasMore: true,
+          nextCursor: "v1.second-cursor",
+          page: 1,
+          pageSize: 28,
+          offset: 12,
+        },
       ],
-    )).toEqual({ page: 2, pageSize: 40, offset: 40 });
+    )).toEqual({
+      page: 2,
+      pageSize: 40,
+      cursor: "v1.second-cursor",
+      offset: 40,
+    });
 
     expect(options.getNextPageParam(
       { data: [1, 2, 3], hasMore: true, page: 1, pageSize: Number.NaN, offset: Number.NaN },

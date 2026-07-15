@@ -23,3 +23,26 @@ const isSafeRedirectPath = (raw: unknown): raw is string => { // skipcq: JS-R100
 export const sanitizeRedirectPath = (raw: unknown): string | null => {
   return isSafeRedirectPath(raw) ? raw : null;
 };
+
+/**
+ * Adds Stripe's server-substituted Checkout Session placeholder to a safe
+ * same-origin success path. Existing session parameters are discarded so a
+ * caller cannot make post-checkout reconciliation inspect a different session.
+ */
+export const withCheckoutSessionId = (path: string): string => {
+  const fragmentIndex = path.indexOf("#");
+  const fragment = fragmentIndex >= 0 ? path.slice(fragmentIndex) : "";
+  const pathAndQuery = fragmentIndex >= 0 ? path.slice(0, fragmentIndex) : path;
+  const queryIndex = pathAndQuery.indexOf("?");
+  const pathname = queryIndex >= 0
+    ? pathAndQuery.slice(0, queryIndex)
+    : pathAndQuery;
+  const query = queryIndex >= 0 ? pathAndQuery.slice(queryIndex + 1) : "";
+  const params = new URLSearchParams(query);
+  params.delete("session_id");
+  params.delete("checkout_session_id");
+  const existingQuery = params.toString();
+  const separator = existingQuery ? `?${existingQuery}&` : "?";
+
+  return `${pathname}${separator}session_id={CHECKOUT_SESSION_ID}${fragment}`;
+};

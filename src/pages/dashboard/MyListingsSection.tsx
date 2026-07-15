@@ -16,6 +16,8 @@ import {
   Plus,
   Building2,
   Crown,
+  Sparkles,
+  Zap,
   Trash2,
   ToggleLeft,
   ToggleRight,
@@ -30,6 +32,11 @@ import {
   useUpdateListing,
   useDeleteListing,
 } from "@/hooks/useListings";
+import {
+  useActivateListingPromotion,
+  useDeactivateListingPromotion,
+  useListingPromotionBalance,
+} from "@/hooks/useListingPromotions";
 import { cn } from "@/lib/utils";
 import type { ParticipantId } from "@/lib/participantConfig";
 import type { DashboardRole } from "@/lib/dashboardNav";
@@ -50,14 +57,17 @@ const FILTER_ELIGIBLE_ROLES: ReadonlyArray<DashboardRole> = [
 ];
 
 export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
+  const isPromotionEligible = role === "seller" || role === "agent" || role === "developer";
   const { data: myListings = [], isLoading } = useMyListings();
   const updateListing = useUpdateListing();
   const deleteListing = useDeleteListing();
+  const { data: promotionBalance } = useListingPromotionBalance(isPromotionEligible);
+  const activatePromotion = useActivateListingPromotion();
+  const deactivatePromotion = useDeactivateListingPromotion();
 
   const [listingFilter, setListingFilter] = useState<ListingFilter>("all");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  const isSellSide = role === "agent" || role === "developer";
   const showFilterChips =
     FILTER_ELIGIBLE_ROLES.includes(role) &&
     myListings.some((l) => l.is_off_market || l.listing_type === "new_build");
@@ -123,6 +133,18 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
         </div>
       )}
 
+      {isPromotionEligible && promotionBalance && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-border bg-secondary/40 px-3 py-2 text-xs text-muted-foreground">
+          <span className="font-semibold text-foreground">Promotion credits</span>
+          <span>Spotlight {promotionBalance.spotlight.remaining + promotionBalance.spotlight.addons}</span>
+          <span>Priority {promotionBalance.priority.remaining + promotionBalance.priority.addons}</span>
+          <span>Bundles {promotionBalance.bundles.addons}</span>
+          <Link className="ml-auto font-medium text-primary hover:underline" to="/dashboard/billing">
+            Buy add-ons
+          </Link>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-6 h-6 animate-spin text-primary" />
@@ -153,6 +175,9 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
         <div className="space-y-3">
           {filteredListings.map((l) => {
             const isProjectAd = l.listing_type === "new_build";
+            const spotlightActive = Boolean(l.is_featured);
+            const priorityActive = Number(l.priority_placement ?? 0) > 0;
+            const promotionPending = activatePromotion.isPending || deactivatePromotion.isPending;
             const editHref = isProjectAd
               ? (l.project_id ? `/projects/${l.project_id}` : "/projects")
               : `/listings/${l.id}/edit`;
@@ -218,49 +243,55 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
                 data-testid={`my-listing-actions-${l.id}`}
                 className="flex w-full items-center gap-1 flex-wrap justify-between border-t border-border/60 pt-3 sm:w-auto sm:shrink-0 sm:justify-end sm:border-t-0 sm:pt-0"
               >
-                {isSellSide && (
+                {isPromotionEligible && (
                   <>
                     <button
-                      onClick={() =>
-                        updateListing.mutate({
-                          id: l.id,
-                          updates: { is_featured: !l.is_featured },
-                        })
-                      }
+                      onClick={() => spotlightActive
+                        ? deactivatePromotion.mutate({ listingId: l.id, promotionType: "spotlight" })
+                        : activatePromotion.mutate({ listingId: l.id, promotionType: "spotlight" })}
+                      disabled={promotionPending}
                       className={cn(
-                        "p-2 rounded-lg transition-colors",
-                        l.is_featured
+                        "min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg transition-colors disabled:cursor-wait disabled:opacity-50",
+                        spotlightActive
                           ? "bg-brand-gold/20 text-brand-gold"
                           : "text-muted-foreground hover:text-foreground hover:bg-secondary",
                       )}
                       title={
-                        l.is_featured
-                          ? "Spotlight (click to remove)"
+                        spotlightActive
+                          ? "Remove Spotlight badge"
                           : "Add Spotlight badge"
                       }
+                      aria-label={spotlightActive ? "Remove Spotlight badge" : "Add Spotlight badge"}
                     >
                       <Crown className="w-4 h-4" />
                     </button>
-                    <input
-                      type="number"
-                      min={0}
-                      max={10}
-                      defaultValue={l.priority_placement ?? 0}
-                      onBlur={(e) => {
-                        const v = Math.min(
-                          10,
-                          Math.max(0, Number(e.target.value) || 0),
-                        );
-                        if (v !== (l.priority_placement ?? 0)) {
-                          updateListing.mutate({
-                            id: l.id,
-                            updates: { priority_placement: v },
-                          });
-                        }
-                      }}
-                      className="w-12 px-1.5 py-1 rounded-lg border border-border bg-secondary text-xs text-center"
-                      title="Priority 0–10"
-                    />
+                    <button
+                      onClick={() => priorityActive
+                        ? deactivatePromotion.mutate({ listingId: l.id, promotionType: "priority" })
+                        : activatePromotion.mutate({ listingId: l.id, promotionType: "priority" })}
+                      disabled={promotionPending}
+                      className={cn(
+                        "min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg transition-colors disabled:cursor-wait disabled:opacity-50",
+                        priorityActive
+                          ? "bg-primary/15 text-primary"
+                          : "text-muted-foreground hover:text-foreground hover:bg-secondary",
+                      )}
+                      title={priorityActive ? "Remove Priority ranking" : "Activate Priority ranking"}
+                      aria-label={priorityActive ? "Remove Priority ranking" : "Activate Priority ranking"}
+                    >
+                      <Zap className="w-4 h-4" />
+                    </button>
+                    {!spotlightActive && !priorityActive && (promotionBalance?.bundles.addons ?? 0) > 0 && (
+                      <button
+                        onClick={() => activatePromotion.mutate({ listingId: l.id, promotionType: "bundle" })}
+                        disabled={promotionPending}
+                        className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:cursor-wait disabled:opacity-50"
+                        title="Activate Spotlight + Priority bundle"
+                        aria-label="Activate Spotlight and Priority bundle"
+                      >
+                        <Sparkles className="w-4 h-4" />
+                      </button>
+                    )}
                   </>
                 )}
                 <span className="text-xs text-muted-foreground mr-auto sm:mr-2 whitespace-nowrap">

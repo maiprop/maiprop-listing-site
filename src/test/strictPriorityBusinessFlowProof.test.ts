@@ -228,11 +228,15 @@ const proof: readonly FlowProof[] = [
       },
       {
         file: "src/components/dashboard/BillingUsagePanel.tsx",
-        snippets: ["useAiQuota", "useReportUsage", "usePriorityAdsUsage"],
+        snippets: ["useAiQuota", "useReportUsage", "useListingPromotionBalance", "promotionActions"],
       },
       {
         file: "src/hooks/useUsageAddons.ts",
-        snippets: ["usage_ai_calls", "usage_property_reports", "usage_priority_ads"],
+        snippets: ["usage_ai_calls", "usage_property_reports"],
+      },
+      {
+        file: "src/hooks/useListingPromotions.ts",
+        snippets: ["get_listing_promotion_balance", "activate_listing_promotion", "deactivate_listing_promotion"],
       },
       {
         file: "src/pages/dashboard/billing/checkoutActions.ts",

@@ -129,10 +129,23 @@ function installSupabaseFetch(): FetchMock {
       const select = url.searchParams.get("select") ?? "";
 
       if (listingType === "eq.auction") {
-        return jsonRows([
-          { id: "db-2", is_featured: false, priority_placement: 5, auction_date: "2026-06-03" },
-          { id: "db-1", is_featured: true, priority_placement: 1, auction_date: "2026-06-01" },
-        ]);
+        if (url.searchParams.get("priority_placement") === "gt.0") {
+          return jsonRows([{
+            id: "db-2",
+            is_featured: false,
+            priority_placement: 1,
+            priority_until: "2099-01-01T00:00:00.000Z",
+            auction_date: "2026-06-03",
+          }]);
+        }
+        return jsonRows([{
+          id: "db-1",
+          is_featured: true,
+          featured_until: "2099-01-01T00:00:00.000Z",
+          priority_placement: 0,
+          priority_until: null,
+          auction_date: "2026-06-01",
+        }]);
       }
 
       if (select === "city,price_per_sqm,created_at") {
@@ -542,6 +555,169 @@ describe("public API cache helpers", () => {
 });
 
 describe("public listings endpoint", () => {
+  it("reads active Priority and organic streams in parallel without ranking Spotlight or using default offsets", async () => {
+    const listingUrls: URL[] = [];
+    let listingReadsInFlight = 0;
+    let maxListingReadsInFlight = 0;
+    const mock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/rest/v1/listings") {
+        listingUrls.push(url);
+        listingReadsInFlight += 1;
+        maxListingReadsInFlight = Math.max(maxListingReadsInFlight, listingReadsInFlight);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        listingReadsInFlight -= 1;
+
+        if (url.searchParams.get("priority_placement") === "gt.0") {
+          return jsonRows([
+            {
+              id: "priority-1",
+              created_at: "2026-07-14T12:00:03.000Z",
+              is_featured: true,
+              featured_until: "2000-01-01T00:00:00.000Z",
+              priority_placement: 1,
+              priority_until: "2099-01-01T00:00:00.000Z",
+            },
+          ]);
+        }
+        return jsonRows([
+          { id: "organic-new", created_at: "2026-07-14T12:00:02.000Z", is_featured: false, priority_placement: 0 },
+          {
+            id: "organic-spotlight",
+            created_at: "2026-07-14T12:00:01.000Z",
+            is_featured: true,
+            featured_until: "2099-01-01T00:00:00.000Z",
+            priority_placement: 1,
+            priority_until: "2000-01-01T00:00:00.000Z",
+          },
+        ]);
+      }
+      return jsonRows([]);
+    }) as unknown as FetchMock;
+    globalThis.fetch = mock as unknown as typeof fetch;
+
+    const res = await listingsRequest(
+      makeCtx("https://portal.maiprop.co/api/public/listings?pageSize=4"),
+    );
+    const body = await res.json() as {
+      data: Array<{ id: string; is_featured: boolean; priority_placement: number }>;
+      nextCursor: string | null;
+    };
+
+    expect(maxListingReadsInFlight).toBe(2);
+    expect(listingUrls).toHaveLength(2);
+    const priorityUrl = listingUrls.find((url) => url.searchParams.get("priority_placement") === "gt.0");
+    const organicUrl = listingUrls.find((url) => url !== priorityUrl);
+    expect(priorityUrl?.searchParams.get("priority_until")).toMatch(/^gt\./);
+    expect(organicUrl?.searchParams.getAll("or").join("\n")).toContain("priority_placement.lte.0");
+    expect(organicUrl?.searchParams.getAll("or").join("\n")).toContain("priority_until.lte.");
+
+    for (const url of listingUrls) {
+      expect(url.searchParams.has("offset")).toBe(false);
+      expect(url.searchParams.has("is_featured")).toBe(false);
+      expect(url.searchParams.get("select")).toContain("featured_until");
+      expect(url.searchParams.get("select")).toContain("priority_until");
+      expect(url.searchParams.getAll("order")).toEqual(["created_at.desc,id.desc"]);
+    }
+    expect(body.data.map((row) => row.id)).toEqual([
+      "priority-1",
+      "organic-new",
+      "organic-spotlight",
+    ]);
+    expect(body.data.find((row) => row.id === "priority-1")).toMatchObject({
+      is_featured: false,
+      priority_placement: 1,
+    });
+    expect(body.data.find((row) => row.id === "organic-spotlight")).toMatchObject({
+      is_featured: true,
+      priority_placement: 0,
+    });
+    expect(body.nextCursor).toBeNull();
+    expect(res.headers.get("Cache-Control")).toBe("public, max-age=30, stale-while-revalidate=60");
+    expect(res.headers.get("CDN-Cache-Control")).toBe("public, max-age=60, stale-while-revalidate=60");
+  });
+
+  it("returns a keyset cursor with no duplicates or skips across stable consecutive pages", async () => {
+    const priorityRows = Array.from({ length: 6 }, (_, index) => ({
+      id: `priority-${index + 1}`,
+      created_at: new Date(Date.UTC(2026, 6, 14, 12, 0, 20 - index)).toISOString(),
+      priority_placement: 1,
+    }));
+    const organicRows = Array.from({ length: 6 }, (_, index) => ({
+      id: `organic-${index + 1}`,
+      created_at: new Date(Date.UTC(2026, 6, 14, 12, 0, 10 - index)).toISOString(),
+      priority_placement: 0,
+    }));
+    const listingUrls: URL[] = [];
+    const mock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname !== "/rest/v1/listings") return jsonRows([]);
+      listingUrls.push(url);
+
+      const isPriority = url.searchParams.get("priority_placement") === "gt.0";
+      const source = isPriority ? priorityRows : organicRows;
+      const keyset = url.searchParams.getAll("or").find((value) => value.includes("created_at.lt."));
+      const anchorIndex = keyset
+        ? source.findIndex((row) => keyset.includes(`id.lt.${row.id}`))
+        : -1;
+      const start = anchorIndex >= 0 ? anchorIndex + 1 : 0;
+      const limit = Number(url.searchParams.get("limit") ?? source.length);
+      return jsonRows(source.slice(start, start + limit));
+    }) as unknown as FetchMock;
+    globalThis.fetch = mock as unknown as typeof fetch;
+
+    const first = await listingsRequest(
+      makeCtx("https://portal.maiprop.co/api/public/listings?pageSize=4"),
+    );
+    const firstBody = await first.json() as {
+      data: Array<{ id: string }>;
+      hasMore: boolean;
+      nextCursor: string | null;
+    };
+
+    expect(firstBody.data.map((row) => row.id)).toEqual([
+      "priority-1",
+      "priority-2",
+      "priority-3",
+      "organic-1",
+    ]);
+    expect(firstBody.hasMore).toBe(true);
+    expect(firstBody.nextCursor).toEqual(expect.any(String));
+
+    const second = await listingsRequest(
+      makeCtx(`https://portal.maiprop.co/api/public/listings?pageSize=4&cursor=${encodeURIComponent(firstBody.nextCursor ?? "")}`),
+    );
+    const secondBody = await second.json() as { data: Array<{ id: string }>; nextCursor: string | null };
+    const combinedIds = [...firstBody.data, ...secondBody.data].map((row) => row.id);
+
+    expect(secondBody.data.map((row) => row.id)).toEqual([
+      "organic-2",
+      "organic-3",
+      "organic-4",
+      "organic-5",
+    ]);
+    expect(combinedIds).toEqual([
+      "priority-1",
+      "priority-2",
+      "priority-3",
+      "organic-1",
+      "organic-2",
+      "organic-3",
+      "organic-4",
+      "organic-5",
+    ]);
+    expect(new Set(combinedIds)).toHaveLength(combinedIds.length);
+    expect(listingUrls.every((url) => url.searchParams.get("select") !== "id")).toBe(true);
+
+    const secondPageUrls = listingUrls.slice(2);
+    expect(secondPageUrls).toHaveLength(2);
+    expect(secondPageUrls.every((url) => !url.searchParams.has("offset"))).toBe(true);
+    expect(secondPageUrls.find((url) => url.searchParams.get("priority_placement") === "gt.0")
+      ?.searchParams.getAll("or").join("\n")).toContain("id.lt.priority-3");
+    expect(secondPageUrls.find((url) => url.searchParams.get("priority_placement") !== "gt.0")
+      ?.searchParams.getAll("or").join("\n")).toContain("id.lt.organic-1");
+  });
+
   it("clamps page size, keeps listing images capped, attaches public owner profiles, and caches the response", async () => {
     const res = await listingsRequest(
       makeCtx(
@@ -559,9 +735,14 @@ describe("public listings endpoint", () => {
     expect(body.data[0].profiles).not.toHaveProperty("owner_participant_type");
     expect(body.data[0].ownerParticipantType).toBe("agent");
 
-    const listingsUrl = fetchUrls("/rest/v1/listings")[0];
-    expect(listingsUrl.searchParams.get("limit")).toBe("200");
-    expect(listingsUrl.searchParams.get("offset")).toBe("200");
+    const listingUrls = fetchUrls("/rest/v1/listings");
+    const probeUrls = listingUrls.filter((url) => url.searchParams.get("select") === "id");
+    const dataUrls = listingUrls.filter((url) => url.searchParams.get("select") !== "id");
+    expect(probeUrls).toHaveLength(2);
+    expect(probeUrls.every((url) => url.searchParams.get("limit") === "200")).toBe(true);
+    expect(dataUrls).toHaveLength(2);
+    expect(dataUrls.every((url) => url.searchParams.get("limit") === "201")).toBe(true);
+    const listingsUrl = dataUrls[0];
     expect(listingsUrl.searchParams.get("city")).toBeNull();
     const locationOrFilters = listingsUrl.searchParams.getAll("or");
     expect(locationOrFilters).toEqual(expect.arrayContaining([
@@ -615,14 +796,44 @@ describe("public listings endpoint", () => {
     ]);
   });
 
-  it("honors explicit offset for split first-paint catalogue fetches", async () => {
-    const res = await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?listing_type=sale&page=1&pageSize=28&offset=12"));
-    const body = await res.json() as { page: number; pageSize: number; offset: number };
+  it("resolves explicit offsets from sparse Priority inventory without duplicates or omissions", async () => {
+    const priorityRows = [{
+      id: "priority-1",
+      created_at: "2026-07-14T12:00:30.000Z",
+      priority_placement: 1,
+      priority_until: "2099-01-01T00:00:00.000Z",
+    }];
+    const organicRows = Array.from({ length: 30 }, (_, index) => ({
+      id: `organic-${index + 1}`,
+      created_at: new Date(Date.UTC(2026, 6, 14, 12, 0, 29 - index)).toISOString(),
+      priority_placement: 0,
+    }));
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname !== "/rest/v1/listings") return jsonRows([]);
+      const source = url.searchParams.get("priority_placement") === "gt.0" ? priorityRows : organicRows;
+      const offset = Number(url.searchParams.get("offset") ?? 0);
+      const limit = Number(url.searchParams.get("limit") ?? source.length);
+      return jsonRows(source.slice(offset, offset + limit));
+    }) as unknown as typeof fetch;
 
-    expect(body).toMatchObject({ page: 1, pageSize: 28, offset: 12 });
-    const listingsUrl = fetchUrls("/rest/v1/listings")[0];
-    expect(listingsUrl.searchParams.get("limit")).toBe("28");
-    expect(listingsUrl.searchParams.get("offset")).toBe("12");
+    const res = await listingsRequest(makeCtx(
+      "https://portal.maiprop.co/api/public/listings?listing_type=sale&page=1&pageSize=4&offset=12",
+    ));
+    const body = await res.json() as { data: Array<{ id: string }>; page: number; pageSize: number; offset: number };
+
+    expect(body).toMatchObject({ page: 1, pageSize: 4, offset: 12 });
+    expect(body.data.map((row) => row.id)).toEqual([
+      "organic-12",
+      "organic-13",
+      "organic-14",
+      "organic-15",
+    ]);
+    const listingUrls = fetchUrls("/rest/v1/listings");
+    const dataUrls = listingUrls.filter((url) => url.searchParams.get("select") !== "id");
+    expect(dataUrls).toHaveLength(2);
+    expect(dataUrls.every((url) => url.searchParams.get("limit") === "5")).toBe(true);
+    expect(dataUrls.map((url) => url.searchParams.get("offset")).sort()).toEqual(["1", "11"]);
   });
 
   it("uses a coordinate bounding box for selected address suggestions", async () => {
@@ -659,7 +870,7 @@ describe("public listings endpoint", () => {
     let url = fetchUrls("/rest/v1/listings")[0];
     expect(url.searchParams.get("listing_type")).toBe("in.(sale,rent,firesale,new_build)");
     expect(url.searchParams.get("is_off_market")).toBe("eq.false");
-    expect(url.searchParams.getAll("order")).toContain("price.desc");
+    expect(url.searchParams.getAll("order")).toContain("price.desc,id.desc");
     expect(url.searchParams.get("select")).not.toContain("project_units!project_units_project_id_fkey");
 
     fetchMock().mockClear();
@@ -667,7 +878,7 @@ describe("public listings endpoint", () => {
     url = fetchUrls("/rest/v1/listings")[0];
     expect(url.searchParams.has("listing_type")).toBe(false);
     expect(url.searchParams.get("is_off_market")).toBe("eq.false");
-    expect(url.searchParams.getAll("order")).toContain("views_count.desc.nullslast");
+    expect(url.searchParams.getAll("order")).toContain("views_count.desc.nullslast,id.desc");
   });
 
   it("includes canonical new-build project ads on sale pages, while rent stays rent-only", async () => {
@@ -765,10 +976,7 @@ describe("public listings endpoint", () => {
   });
 
   it("returns 503 instead of an empty successful catalogue when the listings upstream is transiently unavailable", async () => {
-    fetchMock()
-      .mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }))
-      .mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }))
-      .mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }));
+    fetchMock().mockResolvedValue(new Response("cloudflare timeout", { status: 522 }));
 
     const res = await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?limit=3"));
 
@@ -792,6 +1000,8 @@ describe("public listing detail endpoint", () => {
     const listingsUrl = fetchUrls("/rest/v1/listings")[0];
     expect(listingsUrl.searchParams.get("select")).not.toContain("*");
     expect(listingsUrl.searchParams.get("select")).toContain("description");
+    expect(listingsUrl.searchParams.get("select")).toContain("featured_until");
+    expect(listingsUrl.searchParams.get("select")).toContain("priority_until");
     expect(listingsUrl.searchParams.get("select")).toContain("listing_images(url,sort_order)");
     expect(listingsUrl.searchParams.get("id")).toBe("eq.11111111-1111-4111-8111-111111111111");
     expect(listingsUrl.searchParams.get("status")).toBe("eq.active");
@@ -799,7 +1009,32 @@ describe("public listing detail endpoint", () => {
     expect(listingsUrl.searchParams.get("listing_images.order")).toBe("sort_order.asc");
     expect(initFor("/rest/v1/rpc/get_public_profile_summaries").method).toBe("POST");
     expect(jsonBodyFor("/rest/v1/rpc/get_public_profile_summaries")).toEqual({ p_user_ids: ["owner-1"] });
-    expect(cacheApi.put.mock.calls[0][0].url).toContain("v=open-house-transaction-v1");
+    expect(cacheApi.put.mock.calls[0][0].url).toContain("v=promotion-expiry-v2");
+  });
+
+  it("suppresses expired paid flags on exact listing responses", async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/rest/v1/listings") {
+        return jsonRows([{
+          id: "listing-expired",
+          is_featured: true,
+          featured_until: "2000-01-01T00:00:00.000Z",
+          priority_placement: 1,
+          priority_until: "2000-01-01T00:00:00.000Z",
+        }]);
+      }
+      return jsonRows([]);
+    }) as unknown as typeof fetch;
+
+    const response = await listingRequest(
+      makeCtx("https://portal.maiprop.co/api/public/listing?id=11111111-1111-4111-8111-111111111111"),
+    );
+    const body = await response.json() as {
+      data: { is_featured: boolean; priority_placement: number };
+    };
+
+    expect(body.data).toMatchObject({ is_featured: false, priority_placement: 0 });
   });
 
   it("requests and returns the linked project, project units, and project media for new-build details", async () => {
@@ -943,8 +1178,128 @@ describe("public similar listings endpoint", () => {
     expect(listingsUrl.searchParams.get("listing_type")).toBe("eq.sale");
     expect(listingsUrl.searchParams.get("limit")).toBe("48");
     expect(listingsUrl.searchParams.get("listing_images.limit")).toBe("3");
+    expect(listingsUrl.searchParams.get("select")).toContain("featured_until");
+    expect(listingsUrl.searchParams.get("select")).toContain("priority_until");
+    expect(listingsUrl.searchParams.getAll("order")).toEqual(["created_at.desc", "id.asc"]);
     expect(cacheApi.put.mock.calls[0][0].url).toContain("responseLimit=1");
-    expect(cacheApi.put.mock.calls[0][0].url).toContain("v=similar-v1");
+    expect(cacheApi.put.mock.calls[0][0].url).toContain("v=similar-promotions-v2");
+  });
+
+  it("keeps price relevance ahead of Priority and uses active Priority only for exact relevance ties", async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname !== "/rest/v1/listings") return jsonRows([]);
+      return jsonRows([
+        {
+          id: "priority-far",
+          price: 500_000,
+          created_at: "2026-07-14T12:00:04.000Z",
+          priority_placement: 1,
+          priority_until: "2099-01-01T00:00:00.000Z",
+        },
+        {
+          id: "organic-near",
+          price: 305_000,
+          created_at: "2026-07-14T12:00:03.000Z",
+          priority_placement: 0,
+        },
+        {
+          id: "organic-tie",
+          price: 290_000,
+          created_at: "2026-07-14T12:00:02.000Z",
+          priority_placement: 0,
+        },
+        {
+          id: "priority-tie",
+          price: 310_000,
+          created_at: "2026-07-14T12:00:01.000Z",
+          priority_placement: 1,
+          priority_until: "2099-01-01T00:00:00.000Z",
+        },
+      ]);
+    }) as unknown as typeof fetch;
+
+    const res = await similarListingsRequest(
+      makeCtx("https://portal.maiprop.co/api/public/similar-listings?city=Athens&price=300000&limit=4"),
+    );
+    const body = await res.json() as { data: Array<{ id: string }> };
+
+    expect(body.data.map((row) => row.id)).toEqual([
+      "organic-near",
+      "priority-tie",
+      "organic-tie",
+      "priority-far",
+    ]);
+  });
+
+  it("does not let Spotlight affect similarity order and only exposes active visual state", async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname !== "/rest/v1/listings") return jsonRows([]);
+      return jsonRows([
+        {
+          id: "spotlight-older",
+          price: 300_000,
+          created_at: "2026-07-14T12:00:01.000Z",
+          is_featured: true,
+          featured_until: "2099-01-01T00:00:00.000Z",
+        },
+        {
+          id: "organic-newer",
+          price: 300_000,
+          created_at: "2026-07-14T12:00:02.000Z",
+          is_featured: false,
+        },
+      ]);
+    }) as unknown as typeof fetch;
+
+    const res = await similarListingsRequest(
+      makeCtx("https://portal.maiprop.co/api/public/similar-listings?city=Athens&price=300000&limit=2"),
+    );
+    const body = await res.json() as {
+      data: Array<{ id: string; is_featured: boolean }>;
+    };
+
+    expect(body.data.map((row) => row.id)).toEqual(["organic-newer", "spotlight-older"]);
+    expect(body.data.find((row) => row.id === "spotlight-older")?.is_featured).toBe(true);
+  });
+
+  it("treats expired Priority and Spotlight flags as organic response state", async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname !== "/rest/v1/listings") return jsonRows([]);
+      return jsonRows([
+        {
+          id: "expired-flags",
+          price: 300_000,
+          created_at: "2026-07-14T12:00:01.000Z",
+          is_featured: true,
+          featured_until: "2000-01-01T00:00:00.000Z",
+          priority_placement: 1,
+          priority_until: "2000-01-01T00:00:00.000Z",
+        },
+        {
+          id: "organic-newer",
+          price: 300_000,
+          created_at: "2026-07-14T12:00:02.000Z",
+          is_featured: false,
+          priority_placement: 0,
+        },
+      ]);
+    }) as unknown as typeof fetch;
+
+    const res = await similarListingsRequest(
+      makeCtx("https://portal.maiprop.co/api/public/similar-listings?city=Athens&price=300000&limit=2"),
+    );
+    const body = await res.json() as {
+      data: Array<{ id: string; is_featured: boolean; priority_placement: number }>;
+    };
+
+    expect(body.data.map((row) => row.id)).toEqual(["organic-newer", "expired-flags"]);
+    expect(body.data.find((row) => row.id === "expired-flags")).toMatchObject({
+      is_featured: false,
+      priority_placement: 0,
+    });
   });
 
   it("deduplicates cloned OS auction rows before slicing related deals", async () => {
@@ -1093,8 +1448,154 @@ describe("public auctions endpoint", () => {
     expect(fetchUrls("/functions/v1/fetch-os-auctions")).toHaveLength(0);
   });
 
+  it("keeps Spotlight visual-only when ordering auctions", async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname !== "/rest/v1/listings") return jsonRows([]);
+      if (url.searchParams.get("priority_placement") === "gt.0") return jsonRows([]);
+      return jsonRows([
+        {
+          id: "spotlight-later",
+          city: "Athens",
+          auction_date: "2026-08-02",
+          is_featured: true,
+          featured_until: "2099-01-01T00:00:00.000Z",
+          priority_placement: 0,
+        },
+        {
+          id: "organic-sooner",
+          city: "Athens",
+          auction_date: "2026-08-01",
+          is_featured: false,
+          priority_placement: 0,
+        },
+      ]);
+    }) as unknown as typeof fetch;
+
+    const rows = await fetchPublicAuctionRows(env, 2);
+
+    expect(rows.map((row) => row.id)).toEqual(["organic-sooner", "spotlight-later"]);
+    expect(rows.find((row) => row.id === "spotlight-later")?.is_featured).toBe(true);
+  });
+
+  it("treats expired auction promotion flags as organic response state", async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname !== "/rest/v1/listings") return jsonRows([]);
+      if (url.searchParams.get("priority_placement") === "gt.0") return jsonRows([]);
+      return jsonRows([
+        {
+          id: "expired-flags",
+          city: "Athens",
+          auction_date: "2026-08-02",
+          is_featured: true,
+          featured_until: "2000-01-01T00:00:00.000Z",
+          priority_placement: 1,
+          priority_until: "2000-01-01T00:00:00.000Z",
+        },
+        {
+          id: "organic-sooner",
+          city: "Athens",
+          auction_date: "2026-08-01",
+          is_featured: false,
+          priority_placement: 0,
+        },
+      ]);
+    }) as unknown as typeof fetch;
+
+    const rows = await fetchPublicAuctionRows(env, 2);
+
+    expect(rows.map((row) => row.id)).toEqual(["organic-sooner", "expired-flags"]);
+    expect(rows.find((row) => row.id === "expired-flags")).toMatchObject({
+      is_featured: false,
+      priority_placement: 0,
+    });
+  });
+
+  it("limits active Priority auctions to three per 12 while preserving stream order", async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname !== "/rest/v1/listings") return jsonRows([]);
+      const priority = url.searchParams.get("priority_placement") === "gt.0";
+      const prefix = priority ? "priority" : "organic";
+      const count = priority ? 5 : 12;
+      return jsonRows(Array.from({ length: count }, (_, index) => ({
+        id: `${prefix}-${String(count - index).padStart(2, "0")}`,
+        city: "Athens",
+        auction_date: "2026-08-01",
+        is_featured: index % 2 === 0,
+        featured_until: "2099-01-01T00:00:00.000Z",
+        priority_placement: priority ? 1 : 0,
+        priority_until: priority ? "2099-01-01T00:00:00.000Z" : null,
+      })));
+    }) as unknown as typeof fetch;
+
+    const rows = await fetchPublicAuctionRows(env, 12);
+
+    expect(rows.map((row) => row.id)).toEqual([
+      "priority-01",
+      "priority-02",
+      "priority-03",
+      "organic-01",
+      "organic-02",
+      "organic-03",
+      "organic-04",
+      "organic-05",
+      "organic-06",
+      "organic-07",
+      "organic-08",
+      "organic-09",
+    ]);
+    expect(rows.filter((row) => Number(row.priority_placement) > 0)).toHaveLength(3);
+
+    const listingUrls = fetchUrls("/rest/v1/listings");
+    const priorityUrl = listingUrls.find((url) => url.searchParams.get("priority_placement") === "gt.0");
+    const organicUrl = listingUrls.find((url) => url.searchParams.get("priority_placement") !== "gt.0");
+    expect(priorityUrl?.searchParams.get("priority_until")).toMatch(/^gt\./);
+    expect(organicUrl?.searchParams.getAll("or").join("\n")).toContain("priority_until.lte.");
+    expect(priorityUrl?.searchParams.getAll("order")).toEqual([
+      "auction_date.asc.nullslast,id.asc",
+    ]);
+    expect(organicUrl?.searchParams.getAll("order")).toEqual([
+      "auction_date.asc.nullslast,id.asc",
+    ]);
+  });
+
+  it("fills a requested auction window when organic inventory is scarce", async () => {
+    const priorityRows = Array.from({ length: 8 }, (_, index) => ({
+      id: `priority-only-${index + 1}`,
+      city: "Athens",
+      auction_date: "2026-08-01",
+      priority_placement: 1,
+      priority_until: "2099-01-01T00:00:00.000Z",
+    }));
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname !== "/rest/v1/listings") return jsonRows([]);
+      const limit = Number(url.searchParams.get("limit") ?? priorityRows.length);
+      return url.searchParams.get("priority_placement") === "gt.0"
+        ? jsonRows(priorityRows.slice(0, limit))
+        : jsonRows([]);
+    }) as unknown as typeof fetch;
+
+    const rows = await fetchPublicAuctionRows(env, 6);
+
+    expect(rows.map((row) => row.id)).toEqual([
+      "priority-only-1",
+      "priority-only-2",
+      "priority-only-3",
+      "priority-only-4",
+      "priority-only-5",
+      "priority-only-6",
+    ]);
+    const priorityLimits = fetchUrls("/rest/v1/listings")
+      .filter((url) => url.searchParams.get("priority_placement") === "gt.0")
+      .map((url) => url.searchParams.get("limit"));
+    expect(priorityLimits).toEqual(["4", "6"]);
+  });
+
   it("samples a wider cached DB window and diversifies organic auctions by municipality", async () => {
-    fetchMock().mockResolvedValueOnce(jsonRows([
+    const rowsByMunicipality = [
       ...Array.from({ length: 30 }, (_, i) => ({
         id: `agrinio-${String(i).padStart(2, "0")}`,
         city: "Agrinio",
@@ -1116,7 +1617,14 @@ describe("public auctions endpoint", () => {
         priority_placement: 0,
         auction_date: "2026-06-01",
       })),
-    ]));
+    ];
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname !== "/rest/v1/listings") return jsonRows([]);
+      return url.searchParams.get("priority_placement") === "gt.0"
+        ? jsonRows([])
+        : jsonRows(rowsByMunicipality);
+    }) as unknown as typeof fetch;
 
     const rows = await fetchPublicAuctionRows(env, 60);
     expect(rows).toHaveLength(60);
@@ -1129,47 +1637,72 @@ describe("public auctions endpoint", () => {
       "Patras",
     ]);
 
-    expect(fetchUrls("/rest/v1/listings")[0].searchParams.get("limit")).toBe("600");
+    const listingUrls = fetchUrls("/rest/v1/listings");
+    const priorityUrl = listingUrls.find((url) => url.searchParams.get("priority_placement") === "gt.0");
+    const organicUrl = listingUrls.find((url) => url.searchParams.get("priority_placement") !== "gt.0");
+    expect(priorityUrl?.searchParams.get("limit")).toBe("17");
+    expect(organicUrl?.searchParams.get("limit")).toBe("180");
     expect(fetchUrls("/functions/v1/fetch-os-auctions")).toHaveLength(0);
   });
 
   it("keeps public auction reads local even when the cached DB window is municipality-clustered", async () => {
-    fetchMock().mockResolvedValueOnce(jsonRows(
-      Array.from({ length: 48 }, (_, i) => ({
+    const clusteredRows = Array.from({ length: 48 }, (_, i) => ({
         id: `cached-agrinio-${i}`,
         city: "Agrinio",
         is_featured: false,
         priority_placement: 0,
         auction_date: "2026-06-01",
-      })),
-    ));
+      }));
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname !== "/rest/v1/listings") return jsonRows([]);
+      return url.searchParams.get("priority_placement") === "gt.0"
+        ? jsonRows([])
+        : jsonRows(clusteredRows);
+    }) as unknown as typeof fetch;
     const rows = await fetchPublicAuctionRows(env, 60);
     expect(rows).toHaveLength(48);
     expect(rows.every((row) => row.city === "Agrinio")).toBe(true);
 
-    expect(fetchUrls("/rest/v1/listings")[0].searchParams.get("limit")).toBe("600");
+    const listingUrls = fetchUrls("/rest/v1/listings");
+    const priorityUrl = listingUrls.find((url) => url.searchParams.get("priority_placement") === "gt.0");
+    const organicUrl = listingUrls.find((url) => url.searchParams.get("priority_placement") !== "gt.0");
+    expect(priorityUrl?.searchParams.get("limit")).toBe("17");
+    expect(organicUrl?.searchParams.get("limit")).toBe("180");
     expect(fetchUrls("/functions/v1/fetch-os-auctions")).toHaveLength(0);
   });
 
   it("falls back to source auctions when the daily cached DB window is empty", async () => {
-    fetchMock().mockResolvedValueOnce(jsonRows([]));
+    fetchMock()
+      .mockResolvedValueOnce(jsonRows([]))
+      .mockResolvedValueOnce(jsonRows([]));
 
     const rows = await fetchPublicAuctionRows(env, 2);
     expect(rows).toHaveLength(2);
 
     const dbCalls = fetchUrls("/rest/v1/listings");
-    expect(dbCalls).toHaveLength(2);
+    expect(dbCalls).toHaveLength(4);
     expect(dbCalls[0].searchParams.get("tags")).toMatch(/^cs\.\{source:maiprop-os,auction_pool:\d{4}-\d{2}-\d{2}\}$/);
-    expect(dbCalls[1].searchParams.get("tags")).toBe("cs.{source:maiprop-os}");
+    expect(dbCalls[1].searchParams.get("tags")).toMatch(/^cs\.\{source:maiprop-os,auction_pool:\d{4}-\d{2}-\d{2}\}$/);
+    expect(dbCalls[2].searchParams.get("tags")).toBe("cs.{source:maiprop-os}");
+    expect(dbCalls[3].searchParams.get("tags")).toBe("cs.{source:maiprop-os}");
     expect(fetchUrls("/functions/v1/fetch-os-auctions")).toHaveLength(0);
   });
 
   it("returns an empty list when both local DB auction windows are empty", async () => {
-    fetchMock().mockResolvedValueOnce(jsonRows([])).mockResolvedValueOnce(jsonRows([]));
+    fetchMock()
+      .mockResolvedValueOnce(jsonRows([]))
+      .mockResolvedValueOnce(jsonRows([]))
+      .mockResolvedValueOnce(jsonRows([]))
+      .mockResolvedValueOnce(jsonRows([]));
     await expect(fetchPublicAuctionRows(env, 1)).resolves.toEqual([]);
 
     fetchMock().mockClear();
-    fetchMock().mockResolvedValueOnce(jsonRows([])).mockResolvedValueOnce(jsonRows([]));
+    fetchMock()
+      .mockResolvedValueOnce(jsonRows([]))
+      .mockResolvedValueOnce(jsonRows([]))
+      .mockResolvedValueOnce(jsonRows([]))
+      .mockResolvedValueOnce(jsonRows([]));
     await expect(fetchPublicAuctionRows(env, 2)).resolves.toEqual([]);
   });
 
@@ -1182,6 +1715,8 @@ describe("public auctions endpoint", () => {
     expect(dbUrl.searchParams.get("tags")).toMatch(/^cs\.\{source:maiprop-os,auction_pool:\d{4}-\d{2}-\d{2}\}$/);
     expect(dbUrl.searchParams.get("listing_images.limit")).toBe("3");
     expect(dbUrl.searchParams.get("limit")).toBe("1");
+    expect(dbUrl.searchParams.get("select")).toContain("featured_until");
+    expect(dbUrl.searchParams.get("select")).toContain("priority_until");
   });
 
   it("clamps public auction requests and caches by day", async () => {
@@ -1189,19 +1724,21 @@ describe("public auctions endpoint", () => {
     const body = await res.json() as { data: unknown[] };
     expect(body.data).toHaveLength(2);
 
-    const dbUrl = fetchUrls("/rest/v1/listings")[0];
-    expect(dbUrl.searchParams.get("limit")).toBe("600");
+    const listingUrls = fetchUrls("/rest/v1/listings");
+    const priorityUrl = listingUrls.find((url) => url.searchParams.get("priority_placement") === "gt.0");
+    const organicUrl = listingUrls.find((url) => url.searchParams.get("priority_placement") !== "gt.0");
+    expect(priorityUrl?.searchParams.get("limit")).toBe("152");
+    expect(organicUrl?.searchParams.get("limit")).toBe("600");
     const cacheKey = new URL(cacheApi.put.mock.calls[0][0].url);
     expect(cacheKey.searchParams.get("limit")).toBe("600");
     expect(cacheKey.searchParams.has("day")).toBe(true);
-    expect(cacheKey.searchParams.get("v")).toBe("national-sample-v6");
+    expect(cacheKey.searchParams.get("v")).toBe("national-sample-promotions-v8");
+    expect(res.headers.get("Cache-Control")).toBe("public, max-age=30, stale-while-revalidate=60");
+    expect(res.headers.get("CDN-Cache-Control")).toBe("public, max-age=60, stale-while-revalidate=60");
   });
 
   it("returns 503 instead of falling back to empty auctions on transient upstream failure", async () => {
-    fetchMock()
-      .mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }))
-      .mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }))
-      .mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }));
+    fetchMock().mockResolvedValue(new Response("cloudflare timeout", { status: 522 }));
 
     const res = await auctionsRequest(makeCtx("https://portal.maiprop.co/api/public/auctions?limit=12"));
 
@@ -1219,10 +1756,13 @@ describe("public homepage endpoint", () => {
     expect(invalid.headers.get("Cache-Control")).toBe("no-store");
 
     await homepageRequest(makeCtx("https://portal.maiprop.co/api/public/homepage?section=auctions"));
-    const dbUrl = fetchUrls("/rest/v1/listings")[0];
-    expect(dbUrl.searchParams.get("listing_type")).toBe("eq.auction");
-    expect(dbUrl.searchParams.get("is_off_market")).toBe("eq.false");
-    expect(dbUrl.searchParams.get("limit")).toBe("600");
+    const listingUrls = fetchUrls("/rest/v1/listings");
+    expect(listingUrls.every((url) => url.searchParams.get("listing_type") === "eq.auction")).toBe(true);
+    expect(listingUrls.every((url) => url.searchParams.get("is_off_market") === "eq.false")).toBe(true);
+    const priorityUrl = listingUrls.find((url) => url.searchParams.get("priority_placement") === "gt.0");
+    const organicUrl = listingUrls.find((url) => url.searchParams.get("priority_placement") !== "gt.0");
+    expect(priorityUrl?.searchParams.get("limit")).toBe("4");
+    expect(organicUrl?.searchParams.get("limit")).toBe("48");
   });
 
   it("fetches lightweight featured and open-house homepage sections", async () => {
@@ -1234,11 +1774,16 @@ describe("public homepage endpoint", () => {
     expect(url.searchParams.get("limit")).toBe("12");
     expect(url.searchParams.get("listing_type")).toBe("in.(sale,new_build)");
     expect(url.searchParams.get("is_off_market")).toBe("eq.false");
+    expect(url.searchParams.get("is_featured")).toBe("eq.true");
+    expect(url.searchParams.get("featured_until")).toMatch(/^gt\./);
+    expect(url.searchParams.getAll("order")).toEqual(["created_at.desc"]);
     expect(url.searchParams.get("select")).toContain("owner_id");
     expect(url.searchParams.get("select")).toContain("has_video_tour");
     expect(url.searchParams.get("select")).toContain("has_virtual_tour");
     expect(url.searchParams.get("select")).toContain("is_featured");
+    expect(url.searchParams.get("select")).toContain("featured_until");
     expect(url.searchParams.get("select")).toContain("priority_placement");
+    expect(url.searchParams.get("select")).toContain("priority_until");
     expect(url.searchParams.get("select")).toContain("project_id");
     expect(url.searchParams.get("select")).toContain("project:projects!listings_project_id_fkey");
     expect(url.searchParams.get("select")).toContain("delivery_date");
@@ -1248,9 +1793,9 @@ describe("public homepage endpoint", () => {
     expect(jsonBodyFor("/rest/v1/rpc/get_public_profile_summaries")).toEqual({ p_user_ids: ["owner-1", "owner-2"] });
     const featuredCacheKey = new URL(cacheApi.put.mock.calls[0][0].url);
     expect(featuredCacheKey.searchParams.get("day")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(featuredCacheKey.searchParams.get("v")).toBe("featured-card-v8-bounded-cache");
-    expect(featured.headers.get("Cache-Control")).toBe("public, max-age=300, stale-while-revalidate=300");
-    expect(featured.headers.get("CDN-Cache-Control")).toBe("public, max-age=300, stale-while-revalidate=300");
+    expect(featuredCacheKey.searchParams.get("v")).toBe("active-spotlight-v3");
+    expect(featured.headers.get("Cache-Control")).toBe("public, max-age=60, stale-while-revalidate=60");
+    expect(featured.headers.get("CDN-Cache-Control")).toBe("public, max-age=60, stale-while-revalidate=60");
 
     fetchMock().mockClear();
     const openHouses = await homepageRequest(makeCtx("https://portal.maiprop.co/api/public/homepage?section=open-houses"));

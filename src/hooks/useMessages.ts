@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { REALTIME_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
+import type { Database } from "@/integrations/supabase/types";
 import {
   conversationCreateSchema,
   conversationTimestampUpdateSchema,
@@ -15,6 +16,70 @@ import {
 
 type ConversationCandidate = { id: string; listing_id: string | null };
 type StartConversationInput = { other_user_id: string; listing_id?: string };
+type SendMessageInput = {
+  conversation_id: string;
+  content: string;
+  attachmentPaths?: { path: string; filename: string; mime_type?: string }[];
+};
+type CachedMessage = Pick<
+  Database["public"]["Tables"]["messages"]["Row"],
+  "id" | "content" | "created_at" | "sender_id" | "conversation_id" | "status"
+> & {
+  message_attachments: {
+    storage_path: string;
+    filename: string;
+    mime_type: string | null;
+  }[];
+  profiles: {
+    user_id: string;
+    display_name: string | null;
+    avatar_url: string | null;
+  } | null;
+};
+type SendMessageContext = {
+  optimisticId: string | null;
+  previousMessages: CachedMessage[] | undefined;
+};
+
+const toCachedMessage = (
+  message: Database["public"]["Tables"]["messages"]["Row"],
+  attachmentPaths: SendMessageInput["attachmentPaths"],
+): CachedMessage => ({
+  id: message.id,
+  content: message.content,
+  created_at: message.created_at,
+  sender_id: message.sender_id,
+  conversation_id: message.conversation_id,
+  status: message.status,
+  message_attachments: (attachmentPaths ?? []).map((attachment) => ({
+    storage_path: attachment.path,
+    filename: attachment.filename,
+    mime_type: attachment.mime_type ?? null,
+  })),
+  profiles: null,
+});
+
+const reconcileSentMessage = (
+  messages: CachedMessage[] | undefined,
+  optimisticId: string,
+  sentMessage: CachedMessage,
+) => {
+  const reconciled: CachedMessage[] = [];
+  let hasServerMessage = false;
+
+  for (const message of messages ?? []) {
+    if (message.id === optimisticId) continue;
+    if (message.id === sentMessage.id) {
+      if (!hasServerMessage) reconciled.push(message);
+      hasServerMessage = true;
+      continue;
+    }
+    reconciled.push(message);
+  }
+
+  if (!hasServerMessage) reconciled.push(sentMessage);
+  return reconciled;
+};
 
 const getParticipantConversationFilter = (currentUserId: string, otherUserId: string) =>
   `and(participant_a.eq.${currentUserId},participant_b.eq.${otherUserId}),and(participant_a.eq.${otherUserId},participant_b.eq.${currentUserId})`;
@@ -265,15 +330,7 @@ export function useSendMessage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: async ({
-      conversation_id,
-      content,
-      attachmentPaths,
-    }: {
-      conversation_id: string;
-      content: string;
-      attachmentPaths?: { path: string; filename: string; mime_type?: string }[];
-    }) => {
+    mutationFn: async ({ conversation_id, content, attachmentPaths }: SendMessageInput) => {
       if (!user) throw new Error("Must be logged in");
       const payload = parseMutationInput(
         messageCreateSchema,
@@ -307,11 +364,60 @@ export function useSendMessage() {
         .eq("id", conversationUpdate.conversationId);
       return data;
     },
-    onSuccess: (_, { conversation_id }) => {
+    onMutate: async ({ conversation_id, content, attachmentPaths }): Promise<SendMessageContext> => {
+      if (!user) return { optimisticId: null, previousMessages: undefined };
+
+      const queryKey = ["messages", conversation_id] as const;
+      await queryClient.cancelQueries({ queryKey });
+      const previousMessages = queryClient.getQueryData<CachedMessage[]>(queryKey);
+      const optimisticId = `optimistic:${crypto.randomUUID()}`;
+      const optimisticMessage: CachedMessage = {
+        id: optimisticId,
+        conversation_id,
+        sender_id: user.id,
+        content,
+        created_at: new Date().toISOString(),
+        status: "sent",
+        message_attachments: (attachmentPaths ?? []).map((attachment) => ({
+          storage_path: attachment.path,
+          filename: attachment.filename,
+          mime_type: attachment.mime_type ?? null,
+        })),
+        profiles: null,
+      };
+      queryClient.setQueryData<CachedMessage[]>(queryKey, (messages = []) => [
+        ...messages,
+        optimisticMessage,
+      ]);
+      return { optimisticId, previousMessages };
+    },
+    onSuccess: (message, { conversation_id, attachmentPaths }, context) => {
+      const optimisticId = context?.optimisticId;
+      if (optimisticId) {
+        queryClient.setQueryData<CachedMessage[]>(
+          ["messages", conversation_id],
+          (messages) => reconcileSentMessage(
+            messages,
+            optimisticId,
+            toCachedMessage(message, attachmentPaths),
+          ),
+        );
+      }
+    },
+    onError: (err: Error, { conversation_id }, context) => {
+      if (context?.optimisticId) {
+        if (context.previousMessages === undefined) {
+          queryClient.removeQueries({ queryKey: ["messages", conversation_id], exact: true });
+        } else {
+          queryClient.setQueryData(["messages", conversation_id], context.previousMessages);
+        }
+      }
+      toast.error(err.message);
+    },
+    onSettled: (_message, _error, { conversation_id }) => {
       queryClient.invalidateQueries({ queryKey: ["messages", conversation_id] });
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
     },
-    onError: (err: Error) => toast.error(err.message),
   });
 }
 

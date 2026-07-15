@@ -507,6 +507,10 @@ describe("useListingForm — handleSubmit", () => {
       latitude: 37.9779,
       longitude: 23.7354,
     }));
+    expect(insertMock).toHaveBeenCalledWith(expect.not.objectContaining({
+      is_featured: expect.anything(),
+      priority_placement: expect.anything(),
+    }));
   });
 
   it("geocodes a manually typed address before inserting when coordinates are missing", async () => {

@@ -7,6 +7,11 @@ const webhook = readFileSync(
   "utf8",
 );
 
+const addonFulfillment = readFileSync(
+  join(process.cwd(), "supabase/functions/_shared/addonFulfillment.ts"),
+  "utf8",
+);
+
 const migration = readFileSync(
   join(process.cwd(), "supabase/migrations/20260707157000_addon_purchase_and_investor_payment_ledger.sql"),
   "utf8",
@@ -50,15 +55,15 @@ const aiBundleCreditTriggerFixMigration = readFileSync(
 describe("stripe webhook add-on and custom annual investor payment fulfillment", () => {
   it("records add-on checkout sessions in a durable ledger without profile entitlement sync", () => {
     expect(webhook).toContain("fulfillAddonCheckoutSession(supabase, session)");
-    expect(webhook).toContain("metadata.checkout_type !== \"addon\"");
-    expect(webhook).toContain("return session.payment_status === \"paid\"");
-    expect(webhook).not.toContain("session.status === \"complete\"");
-    expect(webhook).toContain("normalizeAddonCheckoutMode(session.mode)");
-    expect(webhook).toContain("normalizePositiveQuantity(metadata.quantity)");
-    expect(webhook).toContain("addonCreditsGranted(addonKey, quantity)");
-    expect(webhook).toContain("credits_granted");
-    expect(webhook).toContain(".from(\"addon_purchases\")");
-    expect(webhook).toContain("onConflict: \"stripe_session_id\"");
+    expect(addonFulfillment).toContain("metadata.checkout_type !== \"addon\"");
+    expect(addonFulfillment).toContain("session.payment_status !== \"paid\"");
+    expect(addonFulfillment).not.toContain("session.status === \"complete\"");
+    expect(addonFulfillment).toContain("normalizeAddonCheckoutMode(session.mode)");
+    expect(addonFulfillment).toContain("normalizePositiveQuantity(metadata.quantity)");
+    expect(addonFulfillment).toContain("addonCreditsGranted(addonKey, quantity)");
+    expect(addonFulfillment).toContain("credits_granted");
+    expect(addonFulfillment).toContain(".from(\"addon_purchases\")");
+    expect(addonFulfillment).toContain("onConflict: \"stripe_session_id\"");
     expect(webhook).toContain("metadata.checkout_type");
     expect(webhook).toContain("syncAddonSubscriptionLifecycle(supabase, sub)");
     expect(webhook).toContain(".eq(\"stripe_subscription_id\", sub.id)");

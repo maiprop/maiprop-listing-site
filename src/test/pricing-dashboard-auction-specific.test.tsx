@@ -531,6 +531,29 @@ describe("Pricing focused page behavior", () => {
     }
   });
 
+  it("reconciles the exact Stripe session across the Pricing return retry", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const refreshSubscription = vi.fn().mockResolvedValue(undefined);
+    mocks.useSubscriptionMock.mockReturnValue({
+      isPro: false,
+      loading: false,
+      hasStripeBilling: false,
+      refreshSubscription,
+    });
+    const { default: Pricing } = await import("@/pages/Pricing");
+
+    renderWithProviders(<Pricing />, {
+      initialPath: "/pricing?checkout=success&session_id=cs_test_pricing_return",
+    });
+
+    await waitFor(() => {
+      expect(refreshSubscription).toHaveBeenCalledWith("cs_test_pricing_return");
+    });
+    await vi.advanceTimersByTimeAsync(2_500);
+    expect(refreshSubscription).toHaveBeenNthCalledWith(2, "cs_test_pricing_return");
+    vi.useRealTimers();
+  });
+
   it("shows the active invite-only investor entitlement as a dashboard action", async () => {
     mocks.useAuthMock.mockReturnValue({
       user: { id: "u-investor", email: "investor@example.com" },

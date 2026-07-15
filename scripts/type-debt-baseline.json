@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-06-29T23:36:14.106Z",
-  "total": 99,
+  "generated_at": "2026-07-14T21:29:23.727Z",
+  "total": 98,
   "by_pattern": {
-    "no-explicit-any-disable": 36,
+    "no-explicit-any-disable": 35,
     "explicit-any": 63,
     "ts-ignore": 0
   },
@@ -176,20 +176,6 @@
       ]
     },
     {
-      "file": "supabase/functions/stripe-webhook/index.ts",
-      "total": 3,
-      "findings": [
-        {
-          "name": "no-explicit-any-disable",
-          "count": 2
-        },
-        {
-          "name": "explicit-any",
-          "count": 1
-        }
-      ]
-    },
-    {
       "file": "src/components/auctions/AuctionCard.tsx",
       "total": 2,
       "findings": [
@@ -289,6 +275,20 @@
     },
     {
       "file": "src/components/ProfessionalServicesEditor.tsx",
+      "total": 2,
+      "findings": [
+        {
+          "name": "no-explicit-any-disable",
+          "count": 1
+        },
+        {
+          "name": "explicit-any",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "file": "supabase/functions/_shared/addonFulfillment.ts",
       "total": 2,
       "findings": [
         {

@@ -8,7 +8,7 @@ import {
 import { StatusBadge } from "@/pages/dashboard/billing/StatusBadge";
 
 describe("billing add-on helpers", () => {
-  it("maps delivered report add-ons to Stripe checkout keys and keeps manual add-ons contact-only", () => {
+  it("maps delivered report and promotion add-ons to Stripe checkout keys", () => {
     expect(resolveAddonKey({ name: "Property Report" })).toBe(
       "property_report_single",
     );
@@ -18,7 +18,24 @@ describe("billing add-on helpers", () => {
     expect(resolveAddonKey({ name: "Neighbourhood Bundle x 3" })).toBe(
       "neighbourhood_report_bundle",
     );
-    expect(resolveAddonKey({ name: "Maximum Exposure" })).toBeNull();
+    expect(resolveAddonKey({ name: "Featured Listing" })).toBe(
+      "featured_listing",
+    );
+    expect(resolveAddonKey({ name: "Priority Placement" })).toBe(
+      "priority_placement",
+    );
+    expect(resolveAddonKey({ name: "Featured+Priority" })).toBe(
+      "featured_priority_bundle",
+    );
+    expect(resolveAddonKey({ name: "Spotlight" })).toBe(
+      "featured_listing",
+    );
+    expect(resolveAddonKey({ name: "Priority Rank" })).toBe(
+      "priority_placement",
+    );
+    expect(resolveAddonKey({ name: "Spotlight + Priority Rank" })).toBe(
+      "featured_priority_bundle",
+    );
     expect(resolveAddonKey({ name: "Extra Agent Seat" })).toBeNull();
     expect(resolveAddonKey({ name: "Market Intelligence", manual: true })).toBeNull();
     expect(resolveAddonKey({ name: "Custom onboarding" })).toBeNull();
@@ -43,20 +60,26 @@ describe("billing add-on helpers", () => {
     const secondRead = getAddonSectionsForParticipant("seller");
 
     expect(secondRead[0].category).toBe("Listing Promotions");
-    expect(secondRead[0].items[0].name).toBe("Spotlight Listing");
+    expect(secondRead[0].items[0].name).toBe("Spotlight");
   });
 
-  it("uses distinct promotion names for visual exposure, search ranking, and the bundle", () => {
-    const sellerPromotions = getAddonSectionsForParticipant("seller")
-      .find((section) => section.category === "Listing Promotions");
+  it("exposes the same fixed-price promotion catalog to sellers, agents, and developers", () => {
+    for (const role of ["seller", "agent", "developer"]) {
+      const promotions = getAddonSectionsForParticipant(role)
+        .find((section) => section.category === "Listing Promotions");
+      const purchasable = promotions?.items.flatMap((item) => {
+        const key = resolveAddonKey(item);
+        return key
+          ? [{ name: item.name, key, price: item.price, unit: item.unit }]
+          : [];
+      });
 
-    expect(sellerPromotions?.items.map((item) => item.name)).toEqual(
-      expect.arrayContaining([
-        "Spotlight Listing",
-        "Priority Rank",
-        "Maximum Exposure",
-      ]),
-    );
+      expect(purchasable).toEqual([
+        { name: "Spotlight", key: "featured_listing", price: "€39", unit: "/ 30 days" },
+        { name: "Priority Rank", key: "priority_placement", price: "€59", unit: "/ 30 days" },
+        { name: "Spotlight + Priority Rank", key: "featured_priority_bundle", price: "€79", unit: "/ 30 days" },
+      ]);
+    }
   });
 
   it("renders known, unknown, and empty invoice statuses with stable labels", () => {

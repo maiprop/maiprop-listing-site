@@ -80,6 +80,7 @@ export const AddonCard = ({
           className="mt-auto gap-1.5"
           onClick={onPurchase}
           disabled={loading}
+          aria-label={`Buy ${item.name} add-on`}
         >
           {loading ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />

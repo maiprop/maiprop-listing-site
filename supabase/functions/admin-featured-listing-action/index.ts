@@ -3,7 +3,8 @@
  *
  * Keeps admin-only Spotlight listing updates off direct browser table writes.
  * The function verifies the caller JWT, checks platform-admin authorization,
- * validates the update body, then applies only the allowed listing fields.
+ * validates the update body, then applies promotions through the allocation
+ * ledger RPC.
  */
 
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
@@ -14,7 +15,10 @@ import {
   makeRateLimiter,
   tooManyRequestsResponse,
 } from "../_shared/rateLimit.ts";
-import { errorResponse, jsonResponse as sharedJsonResponse } from "../_shared/response.ts";
+import {
+  errorResponse,
+  jsonResponse as sharedJsonResponse,
+} from "../_shared/response.ts";
 import { parseJsonBody, SchemaValidationError, z } from "../_shared/schema.ts";
 
 const log = createLogger("admin-featured-listing-action");
@@ -24,14 +28,18 @@ const limiter = makeRateLimiter({
   windowMs: 60_000,
 });
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const featuredListingUpdatesSchema = z.object({
   is_featured: z.boolean().optional(),
-  priority_placement: z.number().int().min(1).max(10).optional(),
+  priority_placement: z.number().int().min(0).max(1).optional(),
   featured_until: z.union([
     z.null(),
-    z.string().refine((value) => !Number.isNaN(Date.parse(value)), "Invalid featured_until"),
+    z.string().refine(
+      (value) => !Number.isNaN(Date.parse(value)),
+      "Invalid featured_until",
+    ),
   ]).optional(),
 }).strict().refine((updates) => Object.keys(updates).length > 0, {
   message: "Invalid request body",
@@ -48,8 +56,7 @@ const jsonResponse = (
   req: Request,
   body: Record<string, unknown>,
   status = 200,
-) =>
-  sharedJsonResponse(body, status, getCorsHeaders(req));
+) => sharedJsonResponse(body, status, getCorsHeaders(req));
 
 const jsonErrorResponse = (
   req: Request,
@@ -68,7 +75,9 @@ function errorMessage(err: unknown): string {
 }
 
 function databaseStatus(message: string): number {
-  if (message.includes("forbidden") || message.includes("admin_only")) return 403;
+  if (message.includes("forbidden") || message.includes("admin_only")) {
+    return 403;
+  }
   if (message.includes("not_found")) return 404;
   return 400;
 }
@@ -81,8 +90,11 @@ Deno.serve(async (req) => {
     return jsonErrorResponse(req, "Method not allowed", 405);
   }
 
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
-  if (await limiter.isLimited(ip)) return tooManyRequestsResponse(getCorsHeaders(req));
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    "anonymous";
+  if (await limiter.isLimited(ip)) {
+    return tooManyRequestsResponse(getCorsHeaders(req));
+  }
 
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -91,7 +103,10 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const action: FeaturedListingAction = await parseJsonBody(req, featuredListingActionSchema);
+    const action: FeaturedListingAction = await parseJsonBody(
+      req,
+      featuredListingActionSchema,
+    );
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },
     });
@@ -104,7 +119,10 @@ Deno.serve(async (req) => {
       .single();
 
     if (profileError) {
-      log.warn("admin profile lookup failed", { userId: caller.id, err: profileError.message });
+      log.warn("admin profile lookup failed", {
+        userId: caller.id,
+        err: profileError.message,
+      });
       return jsonErrorResponse(req, "Platform admin only", 403);
     }
 
@@ -113,18 +131,37 @@ Deno.serve(async (req) => {
       return jsonErrorResponse(req, "Platform admin only", 403);
     }
 
-    const { error } = await supabase
-      .from("listings")
-      .update(action.updates)
-      .eq("id", action.id);
+    const hasSpotlightUpdate =
+      Object.prototype.hasOwnProperty.call(action.updates, "is_featured") ||
+      Object.prototype.hasOwnProperty.call(action.updates, "featured_until");
+    const spotlightEnabled = hasSpotlightUpdate
+      ? action.updates.is_featured ?? true
+      : null;
+    const priorityEnabled = action.updates.priority_placement === undefined
+      ? null
+      : action.updates.priority_placement === 1;
+
+    const { error } = await supabase.rpc("admin_set_listing_promotions", {
+      p_listing_id: action.id,
+      p_spotlight_enabled: spotlightEnabled,
+      p_spotlight_ends_at: action.updates.featured_until ?? null,
+      p_priority_enabled: priorityEnabled,
+      p_actor_id: caller.id,
+    });
 
     if (error) {
       const message = errorMessage(error);
-      log.warn("spotlight listing update rejected", { listingId: action.id, err: message });
+      log.warn("spotlight listing update rejected", {
+        listingId: action.id,
+        err: message,
+      });
       return jsonErrorResponse(req, message, databaseStatus(message));
     }
 
-    log.info("spotlight listing update completed", { listingId: action.id, adminId: caller.id });
+    log.info("spotlight listing update completed", {
+      listingId: action.id,
+      adminId: caller.id,
+    });
     return jsonResponse(req, { ok: true });
   } catch (err: unknown) {
     const status = err instanceof AuthError
@@ -138,7 +175,9 @@ Deno.serve(async (req) => {
       req,
       message,
       status,
-      err instanceof SchemaValidationError ? { code: err.code, issues: err.issues } : {},
+      err instanceof SchemaValidationError
+        ? { code: err.code, issues: err.issues }
+        : {},
     );
   }
 });

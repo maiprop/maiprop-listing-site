@@ -1,23 +1,29 @@
-import { assertEquals, assertThrows } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
+  assertEquals,
+  assertRejects,
+  assertThrows,
+} from "https://deno.land/std@0.224.0/assert/mod.ts";
+import {
+  assertStripeKeyMatchesRuntimeMode,
+  buildCompanyVatInvoiceCustomFields,
+  buildIdempotencyKey,
+  buildPaymentModeInvoiceCreationParams,
+  buildSubscriptionCompanyInvoiceSettingsUpdateParams,
   CHECKOUT_TAX_COLLECTION_PARAMS,
-  STRIPE_API_VERSION,
+  ensureSubscriptionCompanyInvoiceSettings,
+  getStripeCompanyVatId,
+  getStripeExpectedAccountId,
+  getStripeRuntimeMode,
+  resolveStripeSoftwareTaxCode,
   STRIPE_AI_BUSINESS_TAX_CODE,
   STRIPE_AI_PERSONAL_TAX_CODE,
+  STRIPE_API_VERSION,
   STRIPE_COMPANY_VAT_CUSTOM_FIELD_NAME,
   STRIPE_COMPANY_VAT_ID_DEFAULT,
   STRIPE_SAAS_BUSINESS_TAX_CODE,
   STRIPE_SAAS_PERSONAL_TAX_CODE,
-  buildCompanyVatInvoiceCustomFields,
-  buildPaymentModeInvoiceCreationParams,
-  buildSubscriptionCompanyInvoiceSettingsUpdateParams,
-  assertStripeKeyMatchesRuntimeMode,
-  buildIdempotencyKey,
-  ensureSubscriptionCompanyInvoiceSettings,
-  getStripeCompanyVatId,
-  getStripeRuntimeMode,
-  resolveStripeSoftwareTaxCode,
   stripeMetadata,
+  verifyStripeAccountIdentity,
 } from "./stripeClient.ts";
 
 function withEnv(
@@ -78,24 +84,27 @@ Deno.test("Stripe payment-mode Checkout helper creates hosted invoices with meta
     STRIPE_COMPANY_VAT_ID: undefined,
     COMPANY_VAT_ID: undefined,
   }, () => {
-    assertEquals(buildPaymentModeInvoiceCreationParams({
-      checkout_type: "addon",
-      user_id: "user-1",
-    }), {
-      invoice_creation: {
-        enabled: true,
-        invoice_data: {
-          metadata: {
-            checkout_type: "addon",
-            user_id: "user-1",
+    assertEquals(
+      buildPaymentModeInvoiceCreationParams({
+        checkout_type: "addon",
+        user_id: "user-1",
+      }),
+      {
+        invoice_creation: {
+          enabled: true,
+          invoice_data: {
+            metadata: {
+              checkout_type: "addon",
+              user_id: "user-1",
+            },
+            custom_fields: [{
+              name: STRIPE_COMPANY_VAT_CUSTOM_FIELD_NAME,
+              value: STRIPE_COMPANY_VAT_ID_DEFAULT,
+            }],
           },
-          custom_fields: [{
-            name: STRIPE_COMPANY_VAT_CUSTOM_FIELD_NAME,
-            value: STRIPE_COMPANY_VAT_ID_DEFAULT,
-          }],
         },
       },
-    });
+    );
   });
 });
 
@@ -109,25 +118,28 @@ Deno.test("Stripe invoice helpers stamp company VAT and account tax IDs", () => 
       name: STRIPE_COMPANY_VAT_CUSTOM_FIELD_NAME,
       value: "EL802708301",
     }]);
-    assertEquals(buildPaymentModeInvoiceCreationParams({
-      checkout_type: "addon",
-      user_id: "user-1",
-    }), {
-      invoice_creation: {
-        enabled: true,
-        invoice_data: {
-          metadata: {
-            checkout_type: "addon",
-            user_id: "user-1",
+    assertEquals(
+      buildPaymentModeInvoiceCreationParams({
+        checkout_type: "addon",
+        user_id: "user-1",
+      }),
+      {
+        invoice_creation: {
+          enabled: true,
+          invoice_data: {
+            metadata: {
+              checkout_type: "addon",
+              user_id: "user-1",
+            },
+            account_tax_ids: ["txi_test_company_vat"],
+            custom_fields: [{
+              name: STRIPE_COMPANY_VAT_CUSTOM_FIELD_NAME,
+              value: "EL802708301",
+            }],
           },
-          account_tax_ids: ["txi_test_company_vat"],
-          custom_fields: [{
-            name: STRIPE_COMPANY_VAT_CUSTOM_FIELD_NAME,
-            value: "EL802708301",
-          }],
         },
       },
-    });
+    );
     assertEquals(
       buildSubscriptionCompanyInvoiceSettingsUpdateParams({
         invoice_settings: {
@@ -214,11 +226,14 @@ Deno.test("subscription invoice settings fall back to company VAT custom field",
         },
       },
     ]);
-    assertEquals((updated as {
-      invoice_settings: {
-        custom_fields: Array<{ name: string; value: string }>;
-      };
-    }).invoice_settings.custom_fields[0].value, "EL802708301");
+    assertEquals(
+      (updated as {
+        invoice_settings: {
+          custom_fields: Array<{ name: string; value: string }>;
+        };
+      }).invoice_settings.custom_fields[0].value,
+      "EL802708301",
+    );
   });
 });
 
@@ -255,12 +270,28 @@ Deno.test("Stripe software tax-code resolver classifies SaaS and AI products", (
   );
 });
 
-Deno.test("Stripe runtime mode defaults to test mode", () => {
+Deno.test("Stripe runtime mode fails closed when configuration is missing", () => {
   withEnv({
     STRIPE_RUNTIME_MODE: undefined,
+    STRIPE_ENVIRONMENT: undefined,
+    STRIPE_RUN_MODE: undefined,
     STRIPE_LIVE_MODE: undefined,
   }, () => {
-    assertEquals(getStripeRuntimeMode(), "test");
+    assertThrows(
+      () => getStripeRuntimeMode(),
+      Error,
+      "STRIPE_RUNTIME_MODE must be explicitly set",
+    );
+  });
+});
+
+Deno.test("Stripe runtime mode rejects unknown values", () => {
+  withEnv({ STRIPE_RUNTIME_MODE: "preview" }, () => {
+    assertThrows(
+      () => getStripeRuntimeMode(),
+      Error,
+      "STRIPE_RUNTIME_MODE must be explicitly set",
+    );
   });
 });
 
@@ -285,8 +316,122 @@ Deno.test("Stripe runtime mode requires explicit live opt-in for live keys", () 
   });
 });
 
+Deno.test("Stripe expected account configuration is required and normalized", () => {
+  withEnv({ STRIPE_EXPECTED_ACCOUNT_ID: undefined }, () => {
+    assertThrows(
+      () => getStripeExpectedAccountId(),
+      Error,
+      "STRIPE_EXPECTED_ACCOUNT_ID is not set",
+    );
+  });
+  withEnv({ STRIPE_EXPECTED_ACCOUNT_ID: "  acct_expected123  " }, () => {
+    assertEquals(getStripeExpectedAccountId(), "acct_expected123");
+  });
+  withEnv({ STRIPE_EXPECTED_ACCOUNT_ID: "not-an-account" }, () => {
+    assertThrows(
+      () => getStripeExpectedAccountId(),
+      Error,
+      "valid Stripe account ID",
+    );
+  });
+});
+
+Deno.test("Stripe account verification rejects a mismatched webhook event account", async () => {
+  let retrieveCalls = 0;
+  const stripe = {
+    accounts: {
+      retrieve() {
+        retrieveCalls += 1;
+        return Promise.resolve({ id: "acct_expected123" });
+      },
+    },
+  };
+
+  await assertRejects(
+    () =>
+      verifyStripeAccountIdentity(stripe as never, {
+        expectedAccountId: " acct_expected123 ",
+        eventAccount: "acct_other456",
+        cacheTtlMs: 0,
+      }),
+    Error,
+    "event account",
+  );
+  assertEquals(retrieveCalls, 0);
+});
+
+Deno.test("Stripe account verification rejects a client authenticated to another account", async () => {
+  const stripe = {
+    accounts: {
+      retrieve() {
+        return Promise.resolve({ id: "acct_other456" });
+      },
+    },
+  };
+
+  await assertRejects(
+    () =>
+      verifyStripeAccountIdentity(stripe as never, {
+        expectedAccountId: "acct_expected123",
+        cacheTtlMs: 0,
+      }),
+    Error,
+    "authenticated account",
+  );
+});
+
+Deno.test("Stripe account verification is bounded and caches successful checks", async () => {
+  let retrieveCalls = 0;
+  const stripe = {
+    accounts: {
+      retrieve() {
+        retrieveCalls += 1;
+        return Promise.resolve({ id: "acct_cache123" });
+      },
+    },
+  };
+
+  await verifyStripeAccountIdentity(stripe as never, {
+    expectedAccountId: "acct_cache123",
+    cacheTtlMs: 60_000,
+    timeoutMs: 100,
+  });
+  await verifyStripeAccountIdentity(stripe as never, {
+    expectedAccountId: "acct_cache123",
+    cacheTtlMs: 60_000,
+    timeoutMs: 100,
+  });
+
+  assertEquals(retrieveCalls, 1);
+});
+
+Deno.test("Stripe account verification fails within its request deadline", async () => {
+  const stripe = {
+    accounts: {
+      retrieve() {
+        return new Promise<{ id: string }>(() => undefined);
+      },
+    },
+  };
+
+  await assertRejects(
+    () =>
+      verifyStripeAccountIdentity(stripe as never, {
+        expectedAccountId: "acct_timeout123",
+        cacheTtlMs: 0,
+        timeoutMs: 5,
+      }),
+    Error,
+    "timed out",
+  );
+});
+
 Deno.test("Stripe helper builds stable idempotency keys and metadata", async () => {
-  const key = await buildIdempotencyKey("checkout", ["user-1", "pro", "monthly"]);
+  const key = await buildIdempotencyKey("checkout", [
+    "user-1",
+    "pro",
+    "monthly",
+  ]);
   assertEquals(key.startsWith("maiprop-checkout-"), true);
   assertEquals(key.length <= 255, true);
   assertEquals(

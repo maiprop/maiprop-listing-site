@@ -5,7 +5,11 @@ import {
   PLAN_ENTITLEMENT,
   PLAN_KEY_RE,
   PLAN_PRICE_ENV_ALIASES,
+  PROMOTION_ADDON_CATALOG,
+  PROMOTION_ADDON_KEYS,
+  PROMOTION_ADDON_PURCHASER_ROLES,
   PUBLIC_CHECKOUT_PLAN_KEYS,
+  SELF_SERVE_ADDON_CREDITS,
   SELF_SERVE_ADDON_KEYS,
   SELF_SERVE_ADDON_MODULES,
 } from "./constants.ts";
@@ -28,6 +32,13 @@ type SupabaseFromClient = {
   from(table: string): SupabaseMaybeSingleQuery<unknown>;
 };
 
+type SupabaseRuntimeClient = {
+  rpc(name: "current_billing_runtime_mode"): PromiseLike<{
+    data: unknown;
+    error?: { message?: string } | null;
+  }>;
+};
+
 const fromTable = <T>(
   supabase: unknown,
   table: string,
@@ -35,6 +46,23 @@ const fromTable = <T>(
   return (supabase as SupabaseFromClient).from(
     table,
   ) as SupabaseMaybeSingleQuery<T>;
+};
+
+export const getCurrentBillingRuntimeMode = async (
+  supabase: unknown,
+): Promise<"test" | "live"> => {
+  const { data, error } = await (supabase as SupabaseRuntimeClient).rpc(
+    "current_billing_runtime_mode",
+  );
+  if (error) {
+    throw new Error(
+      `billing runtime lookup failed: ${String(error.message ?? error)}`,
+    );
+  }
+  if (data !== "test" && data !== "live") {
+    throw new Error("billing runtime lookup returned an invalid mode");
+  }
+  return data;
 };
 
 export const normalizePlanKey = (raw: unknown): string | null => {
@@ -97,7 +125,9 @@ export const getCheckoutProfile = async (
   userId: string,
 ): Promise<CheckoutProfileRow | null> => {
   const { data } = await fromTable<CheckoutProfileRow>(supabase, "profiles")
-    .select("role, participant_type, subscription_product_id, force_pro_access, is_platform_admin")
+    .select(
+      "role, participant_type, subscription_product_id, force_pro_access, is_platform_admin",
+    )
     .eq("user_id", userId)
     .maybeSingle();
   return (data as CheckoutProfileRow | null) ?? null;
@@ -190,7 +220,7 @@ const queryActivePricingConfig = async (
     supabase,
     "pricing_configs",
   )
-    .select("key, audience, module, unit, label, metadata")
+    .select("key, audience, module, unit, label, amount, currency, metadata")
     .eq("key", planKey)
     .eq("is_active", true)
     .maybeSingle();
@@ -269,17 +299,58 @@ const getAddonStripePriceId = (
     row?.metadata?.stripe_monthly_price_id;
 };
 
+type PromotionAddonKey = keyof typeof PROMOTION_ADDON_CATALOG;
+
+const getPromotionAddonDefinition = (
+  addonKey: string | null | undefined,
+) => {
+  return addonKey && PROMOTION_ADDON_KEYS.has(addonKey)
+    ? PROMOTION_ADDON_CATALOG[addonKey as PromotionAddonKey]
+    : null;
+};
+
+const getAmountMinor = (amount: number | string | null | undefined) => {
+  const numericAmount = Number(amount);
+  if (!Number.isFinite(numericAmount) || numericAmount <= 0) return null;
+  return Math.round(numericAmount * 100);
+};
+
+const getCurrency = (currency: string | null | undefined) => {
+  const normalized = currency?.trim().toLowerCase() ?? "";
+  return /^[a-z]{3}$/.test(normalized) ? normalized : null;
+};
+
+const promotionConfigMatchesCatalog = (
+  row: PricingConfigRow,
+): boolean => {
+  const definition = getPromotionAddonDefinition(row.key);
+  if (!definition) return true;
+  return row.audience === "participant" &&
+    row.module === definition.module &&
+    row.unit === definition.unit &&
+    getAmountMinor(row.amount) === definition.amountMinor &&
+    getCurrency(row.currency) === definition.currency;
+};
+
 export const getCheckoutAddon = async (
   supabase: unknown,
   addonKey: string,
 ): Promise<CheckoutAddon | null> => {
   const row = await queryActiveAddonConfig(supabase, addonKey);
   const priceId = getAddonStripePriceId(row);
+  const amountMinor = getAmountMinor(row?.amount);
+  const currency = getCurrency(row?.currency);
+  const creditsPerUnit = row?.key
+    ? SELF_SERVE_ADDON_CREDITS[row.key]
+    : undefined;
+  const promotionDefinition = getPromotionAddonDefinition(row?.key);
   const audience = getProfilePricingAudience({
     role: row?.audience ?? null,
     participant_type: null,
   });
-  return priceId && row?.key && row.module && row.unit && audience
+  return priceId && row?.key && row.module && row.unit && audience &&
+      amountMinor && currency && creditsPerUnit &&
+      promotionConfigMatchesCatalog(row)
     ? {
       priceId,
       addonKey: row.key,
@@ -291,16 +362,38 @@ export const getCheckoutAddon = async (
         : "payment",
       label: row.label ?? undefined,
       productId: row.metadata?.stripe_product_id,
+      amountMinor,
+      currency,
+      creditsPerUnit,
+      ...(promotionDefinition
+        ? { entitlementDays: promotionDefinition.entitlementDays }
+        : {}),
     }
     : null;
 };
 
 export const isCheckoutAddonAudienceAllowed = (
+  addonKey: string,
   addonAudience: string,
   addonModule: string,
   profile: CheckoutProfileRow | null,
 ): boolean => {
-  if (!isSupportedCheckoutAddonModule(addonModule)) return false;
+  if (
+    !isSupportedCheckoutAddonKey(addonKey) ||
+    !isSupportedCheckoutAddonModule(addonModule)
+  ) return false;
+  const promotionDefinition = getPromotionAddonDefinition(addonKey);
+  if (promotionDefinition) {
+    if (
+      addonAudience !== "participant" ||
+      addonModule !== promotionDefinition.module
+    ) return false;
+    if (profile?.is_platform_admin) return true;
+    return Boolean(
+      profile?.role && PROMOTION_ADDON_PURCHASER_ROLES.has(profile.role),
+    );
+  }
+  if (addonModule !== "valuation_reports") return false;
   const profileAudience = getProfilePricingAudience(profile);
   if (!profileAudience) return false;
   if (profileAudience === addonAudience) return true;
@@ -310,4 +403,48 @@ export const isCheckoutAddonAudienceAllowed = (
   // being blocked when they buy the same one-off report or boost.
   return addonAudience === "participant" &&
     isSupportedCheckoutAddonModule(addonModule);
+};
+
+type StripePriceLike = {
+  id: string;
+  active: boolean;
+  livemode: boolean;
+  currency: string;
+  unit_amount: number | null;
+  product: string | { id?: string | null } | null;
+};
+
+const stripeObjectId = (
+  value: string | { id?: string | null } | null,
+): string | null => typeof value === "string" ? value : value?.id ?? null;
+
+export const assertStripePriceMatchesCheckoutAddon = (
+  addon: CheckoutAddon | null,
+  price: StripePriceLike,
+  runtimeMode: "test" | "live",
+): void => {
+  if (!addon) throw new Error("Add-on checkout configuration is unavailable");
+  if (price.id !== addon.priceId || !price.active) {
+    throw new Error(
+      "Stripe add-on price is inactive or does not match the server record",
+    );
+  }
+  if (price.livemode !== (runtimeMode === "live")) {
+    throw new Error(
+      "Stripe add-on price does not match the configured runtime mode",
+    );
+  }
+  if (
+    price.currency.toLowerCase() !== addon.currency ||
+    price.unit_amount !== addon.amountMinor
+  ) {
+    throw new Error(
+      "Stripe add-on price amount does not match the server catalog",
+    );
+  }
+  if (
+    addon.productId && stripeObjectId(price.product) !== addon.productId
+  ) {
+    throw new Error("Stripe add-on product does not match the server record");
+  }
 };

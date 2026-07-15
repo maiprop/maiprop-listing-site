@@ -392,6 +392,7 @@
         "npm:i18next-scanner@^4.6.0",
         "npm:i18next@^25.10.5",
         "npm:input-otp@^1.4.2",
+        "npm:js-yaml@4.2.0",
         "npm:jsdom@^29.1.1",
         "npm:lucide-react@0.462",
         "npm:mapbox-gl@2.15.0",

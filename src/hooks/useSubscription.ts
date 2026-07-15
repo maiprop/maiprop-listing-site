@@ -5,17 +5,12 @@ import {
   getPricingAudienceFromProfile,
 } from "@/lib/participantConfig";
 import { isSubscriptionAudienceAllowed } from "@/lib/subscriptionUtils";
-import { hasCurrentQuickSaleSubscription } from "@/lib/quickSaleEntitlements";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { getClientStripeRuntimeMode } from "@/lib/billingRuntime";
 
 const getProfileSubscriptionFields = (
   profile: ReturnType<typeof useAuth>["profile"],
 ) => ({
-  productId:
-    (profile as { subscription_product_id?: string | null } | null)
-      ?.subscription_product_id ?? null,
   forceProAccess: Boolean(
     (profile as { force_pro_access?: boolean | null } | null)?.force_pro_access,
   ),
@@ -38,28 +33,6 @@ const isInvestorParticipant = (
   return participantType === "investor" || participantType === "institutional";
 };
 
-const useInvestorProStatus = (userId: string | undefined, enabled: boolean) => {
-  const runtimeMode = getClientStripeRuntimeMode();
-  return useQuery({
-    queryKey: ["investor-sub-pro", userId, runtimeMode],
-    queryFn: async () => {
-      if (!userId) return null;
-      let query = supabase
-        .from("investor_subscriptions")
-        .select("status, expires_at")
-        .eq("user_id", userId)
-        .in("status", ["active", "trial"]);
-      if (runtimeMode) query = query.eq("runtime_mode", runtimeMode);
-      const { data } = await query.limit(1).maybeSingle();
-      return data as unknown as { status: string; expires_at: string | null } | null;
-    },
-    enabled: Boolean(userId) && enabled,
-    staleTime: 30_000,
-  });
-};
-
-const isActiveInvestorStatus = (status: string | undefined, expiresAt?: string | null) =>
-  hasCurrentQuickSaleSubscription(status, expiresAt);
 const hasAnyProAccess = (flags: boolean[]) => flags.includes(true);
 type SubscriptionAccessSource =
   | "admin"
@@ -75,13 +48,11 @@ type PricingEntitlementRow = {
 
 const isLoadingSubscriptionAccess = (options: {
   subscriptionLoading: boolean;
-  investorLoading: boolean;
   subscribed: boolean;
   hasEffectiveProduct: boolean;
   proProductLoading: boolean;
 }) =>
   options.subscriptionLoading ||
-  options.investorLoading ||
   [
     options.subscribed,
     options.hasEffectiveProduct,
@@ -147,23 +118,21 @@ const hasDeveloperEntitlement = (options: {
  * current role/audience to prevent cross-role entitlement reuse.
  */
 export const useSubscription = () => {
-  const { subscription, refreshSubscription, profile, user } = useAuth();
-  const { productId: profileProductId, forceProAccess } =
-    getProfileSubscriptionFields(profile);
+  const { subscription, refreshSubscription, profile } = useAuth();
+  const { forceProAccess } = getProfileSubscriptionFields(profile);
   const isAdmin = isPlatformAdmin(profile);
   const isInvestorRole = isInvestorParticipant(profile);
   const currentAudience = getCurrentPricingAudience(profile);
-  const effectiveProductId = subscription.productId ?? profileProductId;
+  const effectiveProductId = subscription.productId;
   const hasEffectiveProduct =
     typeof effectiveProductId === "string" && effectiveProductId.length > 0;
+  const entitlementIsSynced =
+    subscription.syncStatus !== "pending" && subscription.syncStatus !== "timeout";
   const { data: validatedProProduct, isLoading: validatedProProductLoading } =
     useValidatedProProduct(effectiveProductId, currentAudience);
-  const { data: investorSubStatus, isLoading: investorStatusLoading } =
-    useInvestorProStatus(user?.id, isInvestorRole);
-  const hasStripePro = subscription.subscribed && Boolean(validatedProProduct);
+  const hasStripePro = entitlementIsSynced && subscription.subscribed && Boolean(validatedProProduct);
   const hasInvestorPro =
-    isInvestorRole &&
-    isActiveInvestorStatus(investorSubStatus?.status, investorSubStatus?.expires_at);
+    entitlementIsSynced && isInvestorRole && subscription.subscribed && subscription.source === "investor";
   const isPro = hasAnyProAccess([
     isAdmin,
     hasStripePro,
@@ -196,9 +165,9 @@ export const useSubscription = () => {
     subscribed: subscription.subscribed,
     productId: effectiveProductId,
     subscriptionEnd: subscription.subscriptionEnd,
+    syncStatus: subscription.syncStatus,
     loading: isLoadingSubscriptionAccess({
       subscriptionLoading: subscription.loading,
-      investorLoading: investorStatusLoading,
       subscribed: subscription.subscribed,
       hasEffectiveProduct,
       proProductLoading: validatedProProductLoading,

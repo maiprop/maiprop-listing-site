@@ -95,6 +95,12 @@ const addonLabel = (addonKey: string | null | undefined) => {
     case "neighbourhood_report_single":
     case "neighbourhood_report_bundle":
       return "Neighbourhood reports";
+    case "featured_listing":
+      return "Spotlight";
+    case "priority_placement":
+      return "Priority Rank";
+    case "featured_priority_bundle":
+      return "Spotlight + Priority Rank";
     default:
       return addonKey ? addonKey.split("_").join(" ") : "Add-on credits";
   }
@@ -140,6 +146,7 @@ export default function BillingTab() { // skipcq: JS-0067
     hasStripeBilling,
     isInvestorManagedPlan,
     isManuallyManagedPlan,
+    refreshSubscription,
   } = useSubscription();
   const { profile, user } = useAuth();
   const { data, isLoading, refetch, isRefetching, error } = useBillingInfo();
@@ -157,6 +164,11 @@ export default function BillingTab() { // skipcq: JS-0067
 
   useEffect(() => {
     if (searchParams.get("checkout") !== "success") return;
+    const isMockCheckout = searchParams.get("billing_mode") === "mock";
+    const checkoutSessionId = searchParams.get("checkout_session_id") ??
+      searchParams.get("session_id");
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+
     void refetch();
     for (const queryKey of [
       ["billing-info"],
@@ -164,13 +176,24 @@ export default function BillingTab() { // skipcq: JS-0067
       ["usage_property_reports"],
       ["usage_priority_ads"],
       ["usage_ai_calls"],
+      ["listing-promotion-balance"],
     ]) {
       void queryClient.invalidateQueries({ queryKey });
     }
-    if (searchParams.get("billing_mode") === "mock") {
+    if (isMockCheckout) {
       toast.info("Mock add-on checkout completed. No live payment or add-on entitlement was created.");
+    } else {
+      void refreshSubscription(checkoutSessionId);
+      retryTimer = setTimeout(
+        () => void refreshSubscription(checkoutSessionId),
+        2_500,
+      );
     }
-  }, [queryClient, refetch, searchParams]);
+
+    return () => {
+      if (retryTimer) clearTimeout(retryTimer);
+    };
+  }, [queryClient, refetch, refreshSubscription, searchParams]);
 
   const openPortal = async (action: PortalAction = "manage") => {
     if (isLoading || !data) {
