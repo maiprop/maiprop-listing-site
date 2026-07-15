@@ -267,8 +267,9 @@ function staleCacheUrl(cacheKey: URL): URL {
   return key;
 }
 
-function cacheHeaderResponse(response: Response, cacheState: string): Response {
+function cacheHeaderResponse(response: Response, cacheState: string, cache: CacheOptions): Response {
   const headers = new Headers(response.headers);
+  applyCacheHeaders(headers, cache, true);
   headers.set("X-Maiprop-Cache", cacheState);
   applySecurityHeaders(headers);
   return new Response(response.clone().body, { status: response.status, headers });
@@ -290,6 +291,7 @@ async function matchStaleFallback(cacheApi: Cache, cacheKey: URL, cache: CacheOp
   );
   if (!stale) return null;
   const headers = new Headers(stale.headers);
+  applyCacheHeaders(headers, cache, true);
   headers.set("X-Maiprop-Cache", "STALE");
   headers.set("Warning", '110 - "Response is stale due to transient upstream failure"');
   applySecurityHeaders(headers);
@@ -308,9 +310,12 @@ function putFreshAndStale(
 ): Promise<void> {
   const freshHeaders = new Headers(headers);
   const staleHeaders = new Headers(headers);
+  const edgeSeconds = cache.edgeTtlSeconds ?? DEFAULT_EDGE_TTL_SECONDS;
   const staleSeconds = staleFallbackCacheSeconds(cache);
+  freshHeaders.set("Cache-Control", `public, max-age=${edgeSeconds}`);
+  freshHeaders.delete("CDN-Cache-Control");
   staleHeaders.set("Cache-Control", `public, max-age=${staleSeconds}`);
-  staleHeaders.set("CDN-Cache-Control", cache.disableCdnCache ? "no-store" : `public, max-age=${staleSeconds}`);
+  staleHeaders.delete("CDN-Cache-Control");
   staleHeaders.set("X-Maiprop-Cache", "STALE_SEED");
   applySecurityHeaders(staleHeaders);
   const freshResponse = new Response(body, {
@@ -369,7 +374,7 @@ export async function cachedJson(
   if (cacheApi) {
     const hit = await matchCacheWithinBudget(cacheApi, cacheRequest, cache);
     if (hit) {
-      return cacheHeaderResponse(hit, "HIT");
+      return cacheHeaderResponse(hit, "HIT", cache);
     }
   }
 
@@ -424,7 +429,7 @@ export async function cachedJson(
   if (existing) {
     const response = await existing;
     const cacheState = response.headers.get("X-Maiprop-Cache") === "STALE" ? "STALE" : "COALESCED";
-    return cacheHeaderResponse(response, cacheState);
+    return cacheHeaderResponse(response, cacheState, cache);
   }
 
   const pending = produceAndCache();

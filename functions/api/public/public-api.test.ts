@@ -43,6 +43,11 @@ function installCache(): CacheApi {
   cacheApi = {
     match: vi.fn(async (request: Request) => cacheStore.get(request.url)?.clone()),
     put: vi.fn(async (request: Request, response: Response) => {
+      const cacheControl = response.headers.get("Cache-Control") ?? "";
+      const cdnCacheControl = response.headers.get("CDN-Cache-Control") ?? "";
+      if (/\bno-store\b/i.test(cacheControl) || /\bno-store\b/i.test(cdnCacheControl)) {
+        throw new Error("Cloudflare Cache API rejected an uncacheable response");
+      }
       cacheStore.set(request.url, response.clone());
     }),
   };
@@ -1827,10 +1832,23 @@ describe("public homepage endpoint", () => {
       key.includes("/api/public/homepage") && key.includes("section=featured")
     ));
     expect(featuredCacheEntries).toHaveLength(2);
-    for (const [, cachedResponse] of featuredCacheEntries) {
-      expect(cachedResponse.headers.get("CDN-Cache-Control")).toBe("no-store");
+    for (const [key, cachedResponse] of featuredCacheEntries) {
+      const isStaleSeed = new URL(key).searchParams.has("__maiprop_stale");
+      expect(cachedResponse.headers.get("CDN-Cache-Control")).toBeNull();
+      expect(cachedResponse.headers.get("Cache-Control")).toBe("public, max-age=60");
+      expect(cachedResponse.headers.get("X-Maiprop-Cache")).toBe(isStaleSeed ? "STALE_SEED" : "MISS");
       await expect(cachedResponse.clone().json()).resolves.toEqual(featuredRows);
     }
+
+    fetchMock().mockClear();
+    const cachedFeatured = await homepageRequest(
+      makeCtx("https://portal.maiprop.co/api/public/homepage?section=featured"),
+    );
+    expect(cachedFeatured.headers.get("X-Maiprop-Cache")).toBe("HIT");
+    expect(cachedFeatured.headers.get("CDN-Cache-Control")).toBe("no-store");
+    expect(cachedFeatured.headers.get("Cache-Control")).toBe("public, max-age=60, stale-while-revalidate=60");
+    await expect(cachedFeatured.json()).resolves.toEqual(featuredRows);
+    expect(fetchUrls("/rest/v1/listings")).toHaveLength(0);
 
     fetchMock().mockClear();
     const openHouses = await homepageRequest(makeCtx("https://portal.maiprop.co/api/public/homepage?section=open-houses"));
