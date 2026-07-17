@@ -55,6 +55,38 @@ describe("staging migration alias reconciliation", () => {
     expect(result.unknownRemoteMigrations).toEqual([]);
   });
 
+  it("reverts the documented same-version staging collision only", () => {
+    const result = findStagingMigrationAliases({
+      localIndex: buildLocalMigrationIndex([
+        {
+          version: "20260628203708",
+          name: "fix_ai_addon_credit_reservation",
+        },
+      ]),
+      remoteMigrations: parseRemoteMigrationRows(
+        "20260628203708\treconcile_remote_migration_history",
+      ),
+    });
+
+    expect(result.versionsToRevert).toEqual(["20260628203708"]);
+    expect(result.reasons.get("20260628203708")).toMatch(/same-version staging alias/);
+    expect(result.unknownRemoteMigrations).toEqual([]);
+  });
+
+  it("rejects a documented timestamp when either migration name changes", () => {
+    expect(() => findStagingMigrationAliases({
+      localIndex: buildLocalMigrationIndex([
+        {
+          version: "20260628203708",
+          name: "unexpected_canonical_name",
+        },
+      ]),
+      remoteMigrations: parseRemoteMigrationRows(
+        "20260628203708\treconcile_remote_migration_history",
+      ),
+    })).toThrow(/canonical local migration/);
+  });
+
   it("leaves unknown remote-only migrations unresolved so the gate fails closed", () => {
     const result = findStagingMigrationAliases({
       localIndex: buildLocalMigrationIndex(localMigrations),

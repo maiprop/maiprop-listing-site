@@ -33,6 +33,13 @@ export const STAGING_REPAIR_NAME_ALIASES = new Map([
   ["authorize_typing_broadcast_presence_extensions", "authorize_typing_presence_channels"],
 ]);
 
+export const STAGING_VERSION_NAME_ALIASES = new Map([
+  ["20260628203708", {
+    remoteName: "reconcile_remote_migration_history",
+    canonicalName: "fix_ai_addon_credit_reservation",
+  }],
+]);
+
 function assertVersion(version, source) {
   if (!VERSION_PATTERN.test(version)) {
     throw new Error(`${source} migration version must be a 14-digit timestamp: ${version}`);
@@ -88,6 +95,7 @@ export function findStagingMigrationAliases({
   remoteMigrations,
   legacyVersions = LEGACY_STAGING_VERSIONS,
   repairNameAliases = STAGING_REPAIR_NAME_ALIASES,
+  versionNameAliases = STAGING_VERSION_NAME_ALIASES,
 }) {
   const versionsToRevert = new Set();
   const reasons = new Map();
@@ -98,6 +106,18 @@ export function findStagingMigrationAliases({
     const canonicalAtVersion = localIndex.byVersion.get(remote.version);
     if (canonicalAtVersion) {
       if (remote.name && canonicalAtVersion.name !== remote.name) {
+        const documentedAlias = versionNameAliases.get(remote.version);
+        if (
+          documentedAlias?.remoteName === remote.name
+          && documentedAlias.canonicalName === canonicalAtVersion.name
+        ) {
+          versionsToRevert.add(remote.version);
+          reasons.set(
+            remote.version,
+            `documented same-version staging alias of ${remote.version}_${canonicalAtVersion.name}`,
+          );
+          continue;
+        }
         throw new Error(
           `Remote migration ${remote.version} is named ${remote.name}, ` +
           `but the canonical local migration is ${canonicalAtVersion.name}`,
