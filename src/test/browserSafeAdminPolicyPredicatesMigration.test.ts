@@ -13,10 +13,13 @@ const migration = migrationName
 describe("browser-safe admin policy predicates", () => {
   it("moves every affected browser policy to the private caller predicate", () => {
     expect(migrationName).toBeTruthy();
-    expect(migration.match(/ALTER POLICY/g)).toHaveLength(9);
+    expect(migration.match(/^ALTER POLICY/gm)).toHaveLength(9);
     expect(migration).toContain(
       "private.has_platform_admin((SELECT auth.uid()))",
     );
+    expect(migration).toContain("FROM pg_policy AS policy");
+    expect(migration).toContain("pg_get_expr(policy.polqual, policy.polrelid)");
+    expect(migration).toContain("EXECUTE v_alter_policy");
   });
 
   it("keeps the arbitrary-user public helper service-only", () => {

@@ -66,6 +66,107 @@ ALTER POLICY privacy_export_requests_update_admin
   USING (private.has_platform_admin((SELECT auth.uid())))
   WITH CHECK (private.has_platform_admin((SELECT auth.uid())));
 
+-- Historical migrations created additional browser policies after the original
+-- hard-coded inventory was assembled. Repair every surviving policy expression
+-- without changing the policy command, roles, or permissive/restrictive mode.
+DO $policy_repair$
+DECLARE
+  v_policy record;
+  v_qual text;
+  v_with_check text;
+  v_alter_policy text;
+BEGIN
+  FOR v_policy IN
+    SELECT
+      namespace.nspname AS schema_name,
+      relation.relname AS table_name,
+      policy.polname AS policy_name,
+      pg_get_expr(policy.polqual, policy.polrelid) AS qual,
+      pg_get_expr(policy.polwithcheck, policy.polrelid) AS with_check
+    FROM pg_policy AS policy
+    JOIN pg_class AS relation
+      ON relation.oid = policy.polrelid
+    JOIN pg_namespace AS namespace
+      ON namespace.oid = relation.relnamespace
+    WHERE strpos(
+      COALESCE(pg_get_expr(policy.polqual, policy.polrelid), ''),
+      'has_platform_admin('
+    ) > 0
+      OR strpos(
+        COALESCE(pg_get_expr(policy.polwithcheck, policy.polrelid), ''),
+        'has_platform_admin('
+      ) > 0
+  LOOP
+    v_qual := v_policy.qual;
+    v_with_check := v_policy.with_check;
+
+    IF v_qual IS NOT NULL THEN
+      v_qual := replace(
+        v_qual,
+        'private.has_platform_admin(',
+        '__MAIPROP_PRIVATE_ADMIN__('
+      );
+      v_qual := replace(
+        v_qual,
+        'public.has_platform_admin(',
+        '__MAIPROP_PRIVATE_ADMIN__('
+      );
+      v_qual := replace(
+        v_qual,
+        'has_platform_admin(',
+        '__MAIPROP_PRIVATE_ADMIN__('
+      );
+      v_qual := replace(
+        v_qual,
+        '__MAIPROP_PRIVATE_ADMIN__(',
+        'private.has_platform_admin('
+      );
+    END IF;
+
+    IF v_with_check IS NOT NULL THEN
+      v_with_check := replace(
+        v_with_check,
+        'private.has_platform_admin(',
+        '__MAIPROP_PRIVATE_ADMIN__('
+      );
+      v_with_check := replace(
+        v_with_check,
+        'public.has_platform_admin(',
+        '__MAIPROP_PRIVATE_ADMIN__('
+      );
+      v_with_check := replace(
+        v_with_check,
+        'has_platform_admin(',
+        '__MAIPROP_PRIVATE_ADMIN__('
+      );
+      v_with_check := replace(
+        v_with_check,
+        '__MAIPROP_PRIVATE_ADMIN__(',
+        'private.has_platform_admin('
+      );
+    END IF;
+
+    v_alter_policy := format(
+      'ALTER POLICY %I ON %I.%I',
+      v_policy.policy_name,
+      v_policy.schema_name,
+      v_policy.table_name
+    );
+
+    IF v_qual IS NOT NULL THEN
+      v_alter_policy := v_alter_policy || format(' USING (%s)', v_qual);
+    END IF;
+
+    IF v_with_check IS NOT NULL THEN
+      v_alter_policy := v_alter_policy
+        || format(' WITH CHECK (%s)', v_with_check);
+    END IF;
+
+    EXECUTE v_alter_policy;
+  END LOOP;
+END;
+$policy_repair$;
+
 DO $$
 BEGIN
   IF has_function_privilege(
