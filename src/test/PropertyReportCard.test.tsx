@@ -20,8 +20,8 @@ vi.mock("@/hooks/useUsageAddons", () => ({
   REPORT_EXTRA_COST: 49,
   REPORT_INCLUDED: 3,
   useRecordReport: () => ({ mutateAsync: mocks.mutateAsync }),
-  usePropertyReportAddonCredits: () => mocks.usePropertyReportAddonCredits(),
-  useReportUsage: () => mocks.useReportUsage(),
+  usePropertyReportAddonCredits: (...args: unknown[]) => mocks.usePropertyReportAddonCredits(...args),
+  useReportUsage: (...args: unknown[]) => mocks.useReportUsage(...args),
 }));
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: { functions: { invoke: mocks.invoke } },
@@ -51,7 +51,10 @@ describe("PropertyReportCard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     window.history.pushState({}, "", "/property/listing-1");
-    mocks.useAuth.mockReturnValue({ user: { id: "user-1" } });
+    mocks.useAuth.mockReturnValue({
+      user: { id: "user-1" },
+      profile: { role: "buyer", participant_type: "buyer" },
+    });
     mocks.useSubscription.mockReturnValue({ isPro: true });
     mocks.useReportUsage.mockReturnValue({ data: 0 });
     mocks.usePropertyReportAddonCredits.mockReturnValue({ data: 0 });
@@ -77,6 +80,7 @@ describe("PropertyReportCard", () => {
     fireEvent.click(screen.getByRole("button", { name: /load report/i }));
 
     await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("fetch-report-from-os", expect.objectContaining({
+      signal: expect.any(AbortSignal),
       body: expect.objectContaining({
         listing_id: "listing-1",
         report_type: "valuation",
@@ -92,6 +96,25 @@ describe("PropertyReportCard", () => {
     await waitFor(() => expect(screen.getByText(/No valuation report/i)).toBeInTheDocument());
     expect(screen.getByRole("button", { name: /report unavailable/i })).toBeDisabled();
     expect(mocks.mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("keeps report generation retryable while another request owns the generation lease", async () => {
+    mocks.invoke.mockResolvedValue({
+      data: {
+        ok: true,
+        report: null,
+        reason: "Report generation is already in progress. Please retry shortly.",
+        retry_after_ms: 1_500,
+      },
+      error: null,
+    });
+
+    renderCard();
+    fireEvent.click(screen.getByRole("button", { name: /load report/i }));
+
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("button", { name: /load report/i })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: /report unavailable/i })).not.toBeInTheDocument();
   });
 
   it("shows HTML download and browser PDF actions when OS returns report html", async () => {
@@ -133,6 +156,114 @@ describe("PropertyReportCard", () => {
     await waitFor(() =>
       expect(mocks.invoke).toHaveBeenCalledWith("fetch-report-from-os", expect.anything())
     );
+  });
+
+  it("lets a Free participant consume a purchased one-off report credit", async () => {
+    mocks.useSubscription.mockReturnValue({ isPro: false, accessSource: "free" });
+    mocks.useReportUsage.mockReturnValue({ data: 0 });
+    mocks.usePropertyReportAddonCredits.mockReturnValue({ data: 1 });
+
+    renderCard();
+
+    expect(screen.getByText(/1 purchased report credit available/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /load report/i })).toBeEnabled();
+    expect(screen.queryByRole("link", { name: /upgrade to pro/i })).not.toBeInTheDocument();
+  });
+
+  it("offers both upgrade and one-off purchase when a Free user has no report credit", async () => {
+    mocks.useSubscription.mockReturnValue({ isPro: false, accessSource: "free" });
+    mocks.usePropertyReportAddonCredits.mockReturnValue({ data: 0 });
+    mocks.invoke.mockResolvedValue({ data: { url: "#free-report-checkout" }, error: null });
+
+    renderCard();
+
+    expect(screen.getByRole("link", { name: /upgrade to pro/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /buy one-off report/i }));
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith(
+      "create-checkout",
+      expect.objectContaining({ body: expect.objectContaining({ addon_key: "property_report_single" }) }),
+    ));
+    expect(screen.queryByRole("button", { name: /load report/i })).not.toBeInTheDocument();
+  });
+
+  it("uses remaining purchased credits independently of participant Pro usage count", () => {
+    mocks.useReportUsage.mockReturnValue({ data: 4 });
+    mocks.usePropertyReportAddonCredits.mockReturnValue({ data: 1 });
+
+    renderCard();
+
+    expect(screen.getByText(/1 purchased report credit available/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /load report/i })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: /get extra report/i })).not.toBeInTheDocument();
+  });
+
+  it.each(["agent", "developer", "professional", "investor", "institutional"])(
+    "keeps Pro %s property reports unlimited after more than three reports",
+    (role) => {
+      mocks.useAuth.mockReturnValue({
+        user: { id: `${role}-1` },
+        profile: { role, participant_type: role },
+      });
+      mocks.useSubscription.mockReturnValue({ isPro: true, accessSource: "stripe" });
+      mocks.useReportUsage.mockReturnValue({ data: 25 });
+
+      renderCard();
+
+      expect(screen.getByText(/unlimited reports with your business plan/i)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /load report/i })).toBeEnabled();
+      expect(screen.queryByRole("button", { name: /get extra report/i })).not.toBeInTheDocument();
+    },
+  );
+
+  it("does not issue usage or add-on balance reads for unlimited business plans", () => {
+    mocks.useAuth.mockReturnValue({
+      user: { id: "user-agent-pro" },
+      profile: { role: "agent", participant_type: "agent" },
+    });
+    mocks.useSubscription.mockReturnValue({ isPro: true });
+
+    renderCard();
+
+    expect(mocks.useReportUsage).toHaveBeenCalledWith({ enabled: false });
+    expect(mocks.usePropertyReportAddonCredits).toHaveBeenCalledWith({ enabled: false });
+  });
+
+  it("keeps platform-admin property reports unlimited", () => {
+    mocks.useAuth.mockReturnValue({
+      user: { id: "admin-1" },
+      profile: { role: "admin", participant_type: "admin" },
+    });
+    mocks.useSubscription.mockReturnValue({ isPro: true, accessSource: "admin" });
+    mocks.useReportUsage.mockReturnValue({ data: 100 });
+
+    renderCard();
+
+    expect(screen.getByText(/unlimited reports with your business plan/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /load report/i })).toBeEnabled();
+  });
+
+  it("uses authoritative role instead of user-writable participant type for report access", () => {
+    mocks.useAuth.mockReturnValue({
+      user: { id: "buyer-1" },
+      profile: { role: "buyer", participant_type: "agent" },
+    });
+    mocks.useSubscription.mockReturnValue({ isPro: true, accessSource: "stripe" });
+    mocks.useReportUsage.mockReturnValue({ data: 3 });
+
+    const buyerView = renderCard();
+    expect(screen.getByRole("button", { name: /get extra report/i })).toBeEnabled();
+    expect(screen.queryByText(/unlimited reports with your business plan/i)).not.toBeInTheDocument();
+    buyerView.unmount();
+
+    mocks.useAuth.mockReturnValue({
+      user: { id: "agent-1" },
+      profile: { role: "agent", participant_type: "buyer" },
+    });
+    mocks.useReportUsage.mockReturnValue({ data: 25 });
+
+    renderCard();
+    expect(screen.getByText(/unlimited reports with your business plan/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /load report/i })).toBeEnabled();
   });
 
   it("starts property report add-on checkout when included reports and paid credits are exhausted", async () => {

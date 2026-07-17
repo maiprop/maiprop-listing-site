@@ -1,6 +1,6 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(27);
+SELECT plan(28);
 
 SELECT ok(
   NOT (
@@ -165,9 +165,9 @@ INSERT INTO realtime.messages (
 VALUES (
   '93000000-0000-4000-8000-000000000001',
   'typing:92000000-0000-4000-8000-000000000001',
-  'presence',
+  'broadcast',
   '{}'::jsonb,
-  'presence',
+  'typing',
   true
 );
 
@@ -405,13 +405,13 @@ SELECT lives_ok(
     INSERT INTO realtime.messages (topic, extension, payload, event, private)
     VALUES (
       'typing:92000000-0000-4000-8000-000000000001',
-      'presence',
+      'broadcast',
       '{}'::jsonb,
-      'presence',
+      'typing',
       true
     )
   $$,
-  'a conversation participant can publish typing presence'
+  'a conversation participant can publish a private typing broadcast'
 );
 
 RESET ROLE;
@@ -432,15 +432,42 @@ SELECT throws_ok(
     INSERT INTO realtime.messages (topic, extension, payload, event, private)
     VALUES (
       'typing:92000000-0000-4000-8000-000000000001',
-      'presence',
+      'broadcast',
       '{}'::jsonb,
-      'presence',
+      'typing',
       true
     )
   $$,
   '42501',
   NULL,
-  'a non-participant cannot publish typing presence'
+  'a non-participant cannot publish a private typing broadcast'
+);
+
+RESET ROLE;
+UPDATE public.conversations
+SET closed_at = now()
+WHERE id = '92000000-0000-4000-8000-000000000001';
+
+SELECT set_config(
+  'request.jwt.claim.sub',
+  '91000000-0000-4000-8000-000000000001',
+  true
+);
+SELECT set_config(
+  'realtime.topic',
+  'typing:92000000-0000-4000-8000-000000000001',
+  true
+);
+SET LOCAL ROLE authenticated;
+
+SELECT is(
+  (
+    SELECT count(*)::integer
+    FROM realtime.messages
+    WHERE id = '93000000-0000-4000-8000-000000000001'
+  ),
+  0,
+  'participants lose private typing-channel access after a conversation closes'
 );
 
 RESET ROLE;

@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.4"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -1357,6 +1357,7 @@ export type Database = {
           message: string | null
           name: string
           notes: string | null
+          origin_context_key: string
           owner_id: string
           phone: string | null
           professional_id: string | null
@@ -1374,6 +1375,7 @@ export type Database = {
           message?: string | null
           name: string
           notes?: string | null
+          origin_context_key?: string
           owner_id: string
           phone?: string | null
           professional_id?: string | null
@@ -1391,6 +1393,7 @@ export type Database = {
           message?: string | null
           name?: string
           notes?: string | null
+          origin_context_key?: string
           owner_id?: string
           phone?: string | null
           professional_id?: string | null
@@ -1401,21 +1404,21 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "leads_listing_id_fkey1"
+            foreignKeyName: "leads_listing_id_fkey"
             columns: ["listing_id"]
             isOneToOne: false
             referencedRelation: "listings"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "leads_professional_id_fkey1"
+            foreignKeyName: "leads_professional_id_fkey"
             columns: ["professional_id"]
             isOneToOne: false
             referencedRelation: "professionals"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "leads_project_id_fkey1"
+            foreignKeyName: "leads_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -1463,8 +1466,10 @@ export type Database = {
           created_by: string | null
           ends_at: string
           id: string
-          listing_id: string
-          owner_id: string
+          listing_id: string | null
+          listing_snapshot: Json
+          owner_id: string | null
+          owner_snapshot: Json
           plan_cycle_start: string | null
           promotion_type: string
           request_key: string
@@ -1482,8 +1487,10 @@ export type Database = {
           created_by?: string | null
           ends_at: string
           id?: string
-          listing_id: string
-          owner_id: string
+          listing_id?: string | null
+          listing_snapshot?: Json
+          owner_id?: string | null
+          owner_snapshot?: Json
           plan_cycle_start?: string | null
           promotion_type: string
           request_key: string
@@ -1501,8 +1508,10 @@ export type Database = {
           created_by?: string | null
           ends_at?: string
           id?: string
-          listing_id?: string
-          owner_id?: string
+          listing_id?: string | null
+          listing_snapshot?: Json
+          owner_id?: string | null
+          owner_snapshot?: Json
           plan_cycle_start?: string | null
           promotion_type?: string
           request_key?: string
@@ -1998,95 +2007,49 @@ export type Database = {
         Row: {
           created_at: string
           email: string
-          follow_up_at: string | null
           followup_step: number
           full_name: string
           id: string
           investment_budget: number
           investment_timeline: string
-          listing_id: string | null
-          message: string | null
           nationality: string
-          notes: string | null
           owner_id: string | null
           phone: string
           preferred_location: string
-          professional_id: string | null
-          project_id: string | null
           property_type: string
-          source: string
           status: string
-          updated_at: string
         }
         Insert: {
           created_at?: string
           email: string
-          follow_up_at?: string | null
           followup_step?: number
           full_name: string
           id?: string
           investment_budget: number
           investment_timeline?: string
-          listing_id?: string | null
-          message?: string | null
           nationality: string
-          notes?: string | null
           owner_id?: string | null
           phone: string
           preferred_location?: string
-          professional_id?: string | null
-          project_id?: string | null
           property_type?: string
-          source?: string
           status?: string
-          updated_at?: string
         }
         Update: {
           created_at?: string
           email?: string
-          follow_up_at?: string | null
           followup_step?: number
           full_name?: string
           id?: string
           investment_budget?: number
           investment_timeline?: string
-          listing_id?: string | null
-          message?: string | null
           nationality?: string
-          notes?: string | null
           owner_id?: string | null
           phone?: string
           preferred_location?: string
-          professional_id?: string | null
-          project_id?: string | null
           property_type?: string
-          source?: string
           status?: string
-          updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "leads_listing_id_fkey"
-            columns: ["listing_id"]
-            isOneToOne: false
-            referencedRelation: "listings"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "leads_professional_id_fkey"
-            columns: ["professional_id"]
-            isOneToOne: false
-            referencedRelation: "professionals"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "leads_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       message_attachments: {
         Row: {
@@ -2128,6 +2091,7 @@ export type Database = {
       }
       messages: {
         Row: {
+          client_delivery_id: string | null
           content: string
           conversation_id: string
           created_at: string
@@ -2138,6 +2102,7 @@ export type Database = {
           status: Database["public"]["Enums"]["message_status"]
         }
         Insert: {
+          client_delivery_id?: string | null
           content: string
           conversation_id: string
           created_at?: string
@@ -2148,6 +2113,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["message_status"]
         }
         Update: {
+          client_delivery_id?: string | null
           content?: string
           conversation_id?: string
           created_at?: string
@@ -4241,17 +4207,17 @@ export type Database = {
       user_roles: {
         Row: {
           id: string
-          role: Database["public"]["Enums"]["app_role"]
+          role: Database["public"]["Enums"]["user_role"]
           user_id: string
         }
         Insert: {
           id?: string
-          role: Database["public"]["Enums"]["app_role"]
+          role: Database["public"]["Enums"]["user_role"]
           user_id: string
         }
         Update: {
           id?: string
-          role?: Database["public"]["Enums"]["app_role"]
+          role?: Database["public"]["Enums"]["user_role"]
           user_id?: string
         }
         Relationships: []
@@ -4759,6 +4725,10 @@ export type Database = {
             Args: { _user_id: string }
             Returns: Database["public"]["Enums"]["user_role"]
           }
+      authorize_property_report_generation: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
       begin_account_deletion_job: {
         Args: { p_user_id: string }
         Returns: string
@@ -4767,6 +4737,10 @@ export type Database = {
       begin_role_switch_for_user: {
         Args: { _user_id: string }
         Returns: undefined
+      }
+      bulk_update_project_unit_prices: {
+        Args: { p_percentage: number; p_project_id: string }
+        Returns: number
       }
       bulk_update_project_unit_prices_for_user: {
         Args: { _user_id: string; p_percentage: number; p_project_id: string }
@@ -5246,6 +5220,10 @@ export type Database = {
         Args: { _user_id: string; p_bucket: string }
         Returns: Json
       }
+      resolve_subscription_state_for_service: {
+        Args: { p_required_stripe_subscription_id?: string; p_user_id: string }
+        Returns: Json
+      }
       seed_grant_agent_role: {
         Args: { user_ids: string[] }
         Returns: undefined
@@ -5253,6 +5231,31 @@ export type Database = {
       seed_grant_role: {
         Args: { target_role: string; user_ids: string[] }
         Returns: undefined
+      }
+      send_message_with_attachments: {
+        Args: {
+          p_attachments?: Json
+          p_client_delivery_id: string
+          p_content: string
+          p_conversation_id: string
+        }
+        Returns: {
+          client_delivery_id: string | null
+          content: string
+          conversation_id: string
+          created_at: string
+          id: string
+          read_at: string | null
+          receiver_id: string | null
+          sender_id: string
+          status: Database["public"]["Enums"]["message_status"]
+        }
+        SetofOptions: {
+          from: "*"
+          to: "messages"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       set_account_deletion_job_stage: {
         Args: {
@@ -5264,40 +5267,56 @@ export type Database = {
         }
         Returns: undefined
       }
-      submit_agent_data_input:
-        | {
-            Args: {
-              p_buyer_name?: string
-              p_closed_at: string
-              p_closing_price: number
-              p_kaek?: string
-              p_notes?: string
-              p_property_address: string
-              p_property_city: string
-              p_property_postal_code?: string
-              p_property_type?: string
-              p_seller_name?: string
-              p_transaction_type: string
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              p_agent_side?: string
-              p_buyer_name?: string
-              p_closed_at: string
-              p_closing_price: number
-              p_kaek?: string
-              p_notes?: string
-              p_property_address: string
-              p_property_city: string
-              p_property_postal_code?: string
-              p_property_type?: string
-              p_seller_name?: string
-              p_transaction_type: string
-            }
-            Returns: string
-          }
+      store_property_report_cache_generation: {
+        Args: {
+          p_ai: Json
+          p_expires_at: string
+          p_features: Json
+          p_file_name: string
+          p_generated_at: string
+          p_html: string
+          p_lang: string
+          p_listing_id: string
+        }
+        Returns: {
+          ai: Json | null
+          created_at: string
+          expires_at: string
+          features: Json
+          file_name: string
+          generated_at: string
+          html: string
+          id: string
+          lang: string
+          listing_id: string
+          report_type: string
+          source: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "property_report_cache"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      submit_agent_data_input: {
+        Args: {
+          p_agent_side?: string
+          p_buyer_name?: string
+          p_closed_at: string
+          p_closing_price: number
+          p_kaek?: string
+          p_notes?: string
+          p_property_address: string
+          p_property_city: string
+          p_property_postal_code?: string
+          p_property_type?: string
+          p_seller_name?: string
+          p_transaction_type: string
+        }
+        Returns: string
+      }
       submit_firesale_interest: {
         Args: {
           p_deal_id: string
@@ -5504,10 +5523,10 @@ export type Database = {
         | "agent"
         | "professional"
         | "seller"
-        | "admin"
         | "investor"
         | "institutional"
         | "developer"
+        | "admin"
       viewing_status: "pending" | "confirmed" | "cancelled" | "completed"
       viewing_type: "in_person" | "video"
     }
@@ -5732,10 +5751,10 @@ export const Constants = {
         "agent",
         "professional",
         "seller",
-        "admin",
         "investor",
         "institutional",
         "developer",
+        "admin",
       ],
       viewing_status: ["pending", "confirmed", "cancelled", "completed"],
       viewing_type: ["in_person", "video"],

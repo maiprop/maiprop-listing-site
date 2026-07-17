@@ -5,7 +5,7 @@ import { dirname, resolve } from "node:path";
 
 const STRIPE_API_BASE = "https://api.stripe.com";
 const STRIPE_API_VERSION = process.env.STRIPE_API_VERSION ?? "2026-06-24.dahlia";
-const CATALOG_VERSION = "2026-06-28";
+const CATALOG_VERSION = "2026-07-17";
 const STRIPE_SAAS_PERSONAL_TAX_CODE = process.env.STRIPE_SAAS_PERSONAL_TAX_CODE ?? "txcd_10103000";
 const STRIPE_SAAS_BUSINESS_TAX_CODE = process.env.STRIPE_SAAS_BUSINESS_TAX_CODE ?? "txcd_10103001";
 const STRIPE_AI_PERSONAL_TAX_CODE = process.env.STRIPE_AI_PERSONAL_TAX_CODE ?? "txcd_10105001";
@@ -99,7 +99,6 @@ const FEATURE_NAMES = {
   agency_branding: "Agency branding",
   white_label_domain: "White-label domain",
   featured_professional: "Featured professional placement",
-  extra_priority_ad: "Extra priority ad",
   professional_api_access: "Professional API access",
   professional_referral_network: "Professional referral network",
   professional_extra_seat: "Professional extra seat",
@@ -108,6 +107,8 @@ const FEATURE_NAMES = {
   avm_api: "AVM API",
   auction_intelligence: "Auction intelligence",
 };
+
+const RETIRED_CATALOG_KEYS = new Set(["extra_priority_ad"]);
 
 const CATALOG = [
   {
@@ -483,21 +484,6 @@ const CATALOG = [
     entitlementFeatures: ["featured_professional"],
   },
   {
-    key: "extra_priority_ad",
-    label: "Extra priority ad",
-    description: "Push any listing to the top of search for its area.",
-    audience: "professional",
-    role: "professional",
-    module: "adhoc_charges",
-    unit: "per_ad",
-    currency: "EUR",
-    amountMajor: 8,
-    sortOrder: 2,
-    checkoutType: "addon",
-    marketingFeatures: ["Priority ad credit", "Area-targeted boost"],
-    entitlementFeatures: ["extra_priority_ad"],
-  },
-  {
     key: "professional_api_access",
     label: "Professional API access",
     description: "Programmatic access to bookings, leads and AI tools.",
@@ -824,6 +810,50 @@ async function findProductByKey(key) {
   }
 }
 
+async function retireCatalogProduct(key) {
+  const product = await findProductByKey(key);
+  if (!product) return { action: "absent", archivedPrices: 0 };
+
+  const prices = [];
+  let startingAfter = null;
+  do {
+    const page = await stripeRequest("GET", "/v1/prices", {
+      product: product.id,
+      active: true,
+      limit: 100,
+      ...(startingAfter ? { starting_after: startingAfter } : {}),
+    });
+    prices.push(...(page.data ?? []));
+    startingAfter = page.has_more ? page.data.at(-1)?.id : null;
+  } while (startingAfter);
+
+  for (const price of prices) {
+    await stripeRequest("POST", `/v1/prices/${encodeURIComponent(price.id)}`, {
+      active: false,
+    }, {
+      idempotencyKey: idempotencyKey("retired-price", price.id, { active: false }),
+    });
+  }
+
+  if (product.active !== false) {
+    await stripeRequest("POST", `/v1/products/${encodeURIComponent(product.id)}`, {
+      active: false,
+      metadata: {
+        ...product.metadata,
+        maiprop_retired_reason: "no_fulfillment_contract",
+        maiprop_retired_at: "2026-07-17",
+      },
+    }, {
+      idempotencyKey: idempotencyKey("retired-product", product.id, {
+        active: false,
+        reason: "no_fulfillment_contract",
+      }),
+    });
+  }
+
+  return { action: "retired", archivedPrices: prices.length };
+}
+
 async function ensureProduct(item) {
   const metadata = stripeMetadataForItem(item);
   const params = {
@@ -1061,6 +1091,19 @@ function buildSql(results) {
     lines.push("  updated_at = now();");
   }
 
+  if (RETIRED_CATALOG_KEYS.size > 0) {
+    const retiredKeys = [...RETIRED_CATALOG_KEYS].map(sqlLiteral).join(", ");
+    lines.push("");
+    lines.push("UPDATE public.pricing_configs");
+    lines.push("SET is_active = false,");
+    lines.push("    metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object(");
+    lines.push("      'retired_reason', 'no_fulfillment_contract',");
+    lines.push("      'retired_at', '2026-07-17'");
+    lines.push("    ),");
+    lines.push("    updated_at = now()");
+    lines.push(`WHERE key IN (${retiredKeys});`);
+  }
+
   const productRows = results
     .filter((result) => PRO_PRODUCT_KEYS.has(result.item.key))
     .map((result) => result.productId)
@@ -1119,6 +1162,7 @@ function printDryRun() {
   console.log(`Stripe API version: ${STRIPE_API_VERSION}`);
   console.log(`Stripe Tax codes: SaaS personal ${STRIPE_SAAS_PERSONAL_TAX_CODE}, SaaS business ${STRIPE_SAAS_BUSINESS_TAX_CODE}, AI personal ${STRIPE_AI_PERSONAL_TAX_CODE}, AI business ${STRIPE_AI_BUSINESS_TAX_CODE}`);
   console.log(`Stripe Tax behavior: ${STRIPE_DEFAULT_TAX_BEHAVIOR}`);
+  console.log(`Retired catalog products: ${[...RETIRED_CATALOG_KEYS].join(", ")}`);
   console.log("");
   for (const item of CATALOG) {
     const specs = priceSpecsForItem(item);
@@ -1144,6 +1188,13 @@ async function main() {
   }
   if (!args.live && !stripeSecretKey.startsWith("sk_test_")) {
     throw new Error("Refusing to use a non-test Stripe key without --live.");
+  }
+
+  for (const key of RETIRED_CATALOG_KEYS) {
+    const retirement = await retireCatalogProduct(key);
+    console.log(
+      `${retirement.action.padEnd(8)} retired product ${key} (${retirement.archivedPrices} active prices archived)`,
+    );
   }
 
   const featureResults = new Map();

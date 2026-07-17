@@ -57,13 +57,13 @@ describe("DashboardPlanCard role and tier matrix", () => {
     expect(screen.queryByText(/From .*month/i)).not.toBeInTheDocument();
   });
 
-  it("uses seller listing limits and omits an unlimited viewing row", () => {
+  it("uses seller listing and outbound viewing-request limits", () => {
     renderWithProviders(
       <DashboardPlanCard audience="seller" isPro={false} usage={{ ...usage, listings: 2 }} />,
     );
 
     expect(screen.getByText("Listings").nextSibling).toHaveTextContent("2 / 2");
-    expect(screen.queryByText("Viewings this month")).not.toBeInTheDocument();
+    expect(screen.getByText("Viewing requests this month").nextSibling).toHaveTextContent("0 / 1");
     expect(screen.getByText(/Upgrade to Pro/i)).toHaveTextContent("29");
   });
 
@@ -77,7 +77,7 @@ describe("DashboardPlanCard role and tier matrix", () => {
     );
 
     expect(screen.getByText("Listings").nextSibling).toHaveTextContent("4 / 5");
-    expect(screen.getByText("Viewings this month").nextSibling).toHaveTextContent("2 / 3");
+    expect(screen.getByText("Hosted viewings this month").nextSibling).toHaveTextContent("2 / 3");
     expect(screen.queryByText(/higher limits/i)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Upgrade/i })).toHaveAttribute("href", "/pricing");
   });
@@ -93,14 +93,30 @@ describe("DashboardPlanCard role and tier matrix", () => {
     expect(screen.queryByText(/higher limits/i)).not.toBeInTheDocument();
   });
 
-  it("describes the developer Pro entitlement as unlimited", () => {
+  it("does not promise paid promotion credits to developer trial or override access", () => {
     renderWithProviders(
       <DashboardPlanCard audience="developer" isPro usage={{ ...usage, listings: 12 }} />,
     );
 
     expect(screen.getByText("Listings").nextSibling).toHaveTextContent("12");
     expect(screen.getByText(/Unlimited listings, project showcases/i)).toBeInTheDocument();
+    expect(screen.getByText(/Promotion credits begin after paid activation/i)).toBeInTheDocument();
+    expect(screen.queryByText(/1 Spotlight and 1 Priority Rank per month/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Subscribe/i })).not.toBeInTheDocument();
+  });
+
+  it("shows developer promotion credits only for an active paid plan", () => {
+    renderWithProviders(
+      <DashboardPlanCard
+        audience="developer"
+        isPro
+        hasPaidPromotionCredits
+        usage={{ ...usage, listings: 12 }}
+      />,
+    );
+
+    expect(screen.getByText(/1 Spotlight and 1 Priority Rank per month/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Promotion credits begin after paid activation/i)).not.toBeInTheDocument();
   });
 
   it("renders professional Free and Pro status without inventing usage limits", () => {
@@ -115,5 +131,20 @@ describe("DashboardPlanCard role and tier matrix", () => {
     rerender(<DashboardPlanCard audience="professional" isPro usage={usage} />);
     expect(screen.getByText("Pro Plan")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Upgrade/i })).not.toBeInTheDocument();
+  });
+
+  it("renders admins as unlimited without inheriting agent limits or upgrade pricing", () => {
+    renderWithProviders(
+      <DashboardPlanCard
+        audience="admin"
+        isPro
+        usage={{ ...usage, listings: 20, viewingsThisMonth: 20 }}
+      />,
+    );
+
+    expect(screen.getByText("Pro Plan")).toBeInTheDocument();
+    expect(screen.queryByText("Viewings this month")).not.toBeInTheDocument();
+    expect(screen.queryByText("Listings")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Upgrade|Subscribe/i })).not.toBeInTheDocument();
   });
 });

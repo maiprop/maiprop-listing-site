@@ -8,6 +8,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { AuthError } from "../_shared/auth.ts";
+import { verifiedGatewayUserFromJwt } from "../_shared/gatewayJwt.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createLogger } from "../_shared/logger.ts";
 import {
@@ -20,6 +21,7 @@ const limiter = makeRateLimiter({
   bucket: "ai-quota-status",
   maxRequests: 120,
   windowMs: 60_000,
+  databaseTimeoutMs: 500,
 });
 
 type QuotaStatusRequest = {
@@ -46,8 +48,6 @@ const jsonResponse = (
 
 const BUCKET_RE = /^[a-z0-9-]{2,64}$/;
 const MAX_BATCHED_BUCKETS = 12;
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function parseBucketValue(bucket: unknown): string {
   if (typeof bucket !== "string" || !BUCKET_RE.test(bucket)) {
@@ -90,48 +90,6 @@ function errorMessage(err: unknown): string {
   return "Failed to resolve AI quota status";
 }
 
-function decodeBase64UrlJson(segment: string): Record<string, unknown> {
-  try {
-    const base64 = segment.replaceAll("-", "+").replaceAll("_", "/");
-    const padded = base64.padEnd(
-      base64.length + ((4 - (base64.length % 4)) % 4),
-      "=",
-    );
-    const json = atob(padded);
-    const value = JSON.parse(json) as unknown;
-    if (!value || typeof value !== "object") {
-      throw new AuthError("Invalid bearer token");
-    }
-    return value as Record<string, unknown>;
-  } catch (err) {
-    if (err instanceof AuthError) throw err;
-    throw new AuthError("Invalid bearer token");
-  }
-}
-
-function verifiedUserIdFromJwt(req: Request): string {
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader) throw new AuthError("No authorization header");
-
-  const token = authHeader.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
-  if (!token) throw new AuthError("Empty bearer token");
-
-  // Supabase Edge Gateway verifies this function's JWT signature because
-  // supabase/config.toml sets [functions.ai-quota-status].verify_jwt = true.
-  // Decode only the already-verified claims here to avoid an extra Auth Admin
-  // roundtrip on every property page quota widget.
-  const [, payloadSegment] = token.split(".");
-  if (!payloadSegment) throw new AuthError("Invalid bearer token");
-
-  const claims = decodeBase64UrlJson(payloadSegment);
-  const sub = typeof claims.sub === "string" ? claims.sub : "";
-  const role = typeof claims.role === "string" ? claims.role : "";
-  if (!UUID_RE.test(sub) || role !== "authenticated") {
-    throw new AuthError("Authentication failed");
-  }
-  return sub;
-}
-
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
@@ -158,7 +116,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },
     });
-    const userId = verifiedUserIdFromJwt(req);
+    const userId = verifiedGatewayUserFromJwt(req).id;
 
     const { data, error } = await supabase.rpc("check_ai_quotas_for_user", {
       _user_id: userId,

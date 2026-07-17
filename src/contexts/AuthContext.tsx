@@ -34,9 +34,15 @@ export type Profile = Tables<"profiles"> & {
 export interface SubscriptionState {
   subscribed: boolean;
   productId: string | null;
+  planKey?: string | null;
+  audience?: string | null;
+  billingCycle?: string | null;
   subscriptionEnd: string | null;
+  billingStatus?: string | null;
   source: "billing_state" | "investor" | "database" | "stripe";
   syncStatus: "synced" | "pending" | "timeout";
+  /** Temporary fail-soft window after a transport/deadline failure. */
+  staleUntil?: number | null;
   loading: boolean;
 }
 
@@ -74,20 +80,57 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const CHECKOUT_SESSION_ID_RE = /^cs_(?:test|live)_[A-Za-z0-9_]{6,240}$/;
 const SUBSCRIPTION_CHECK_TIMEOUT_MS = 6_500;
+const SUBSCRIPTION_STALE_GRACE_MS = 30_000;
 
 const emptySubscriptionState = (): SubscriptionState => ({
   subscribed: false,
   productId: null,
+  planKey: null,
+  audience: null,
+  billingCycle: null,
   subscriptionEnd: null,
+  billingStatus: null,
   source: "database",
   syncStatus: "synced",
   loading: false,
 });
 
-const unavailableSubscriptionState = (): SubscriptionState => ({
-  ...emptySubscriptionState(),
-  syncStatus: "timeout",
-});
+export const unavailableSubscriptionState = (
+  previous: SubscriptionState,
+  now = Date.now(),
+): SubscriptionState => {
+  const parsedEnd = previous.subscriptionEnd
+    ? Date.parse(previous.subscriptionEnd)
+    : null;
+  const entitlementExpired = parsedEnd !== null &&
+    (!Number.isFinite(parsedEnd) || parsedEnd <= now);
+
+  if (!previous.subscribed || entitlementExpired) {
+    return {
+      ...emptySubscriptionState(),
+      syncStatus: "timeout",
+    };
+  }
+
+  const existingBoundary = previous.syncStatus === "timeout" &&
+      typeof previous.staleUntil === "number"
+    ? previous.staleUntil
+    : null;
+  const staleUntil = existingBoundary ?? now + SUBSCRIPTION_STALE_GRACE_MS;
+  if (staleUntil <= now) {
+    return {
+      ...emptySubscriptionState(),
+      syncStatus: "timeout",
+    };
+  }
+
+  return {
+    ...previous,
+    syncStatus: "timeout",
+    staleUntil,
+    loading: false,
+  };
+};
 
 const withSubscriptionDeadline = async <T,>(promise: Promise<T>): Promise<T> => {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -147,6 +190,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profileLoading, setProfileLoading] = useState(false);
   const [subscription, setSubscription] = useState<SubscriptionState>(emptySubscriptionState);
 
+  useEffect(() => {
+    const staleUntil = subscription.staleUntil;
+    if (!staleUntil) return;
+
+    const expireStaleGrant = () => {
+      setSubscription((current) => {
+        if (current.staleUntil !== staleUntil) return current;
+        return {
+          ...emptySubscriptionState(),
+          syncStatus: "timeout",
+        };
+      });
+    };
+    const remaining = staleUntil - Date.now();
+    if (remaining <= 0) {
+      expireStaleGrant();
+      return;
+    }
+    const timeoutId = setTimeout(expireStaleGrant, remaining);
+    return () => clearTimeout(timeoutId);
+  }, [subscription.staleUntil]);
+
   // Guard: discard profile fetch results that belong to a previous user session
   const expectedUserIdRef = useRef<string | null>(null);
   // Subscription work is scoped to one auth identity and generation. A delayed
@@ -156,6 +221,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const subCheckInProgressRef = useRef<{
     userId: string;
     generation: number;
+    checkoutSessionId: string | null;
     promise: Promise<void>;
   } | null>(null);
   // Guard: avoid duplicate auth telemetry from INITIAL_SESSION + getSession races.
@@ -199,24 +265,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const generation = subscriptionGenerationRef.current;
       if (expectedSubscriptionUserIdRef.current !== userId) return;
 
-      const inFlight = subCheckInProgressRef.current;
-      if (
-        inFlight?.userId === userId &&
-        inFlight.generation === generation
-      ) {
+      while (true) {
+        const inFlight = subCheckInProgressRef.current;
+        if (
+          !inFlight ||
+          inFlight.userId !== userId ||
+          inFlight.generation !== generation
+        ) break;
         if (!checkoutSessionId) return;
+        const sameExactSession = inFlight.checkoutSessionId === checkoutSessionId;
         await inFlight.promise;
         if (
           expectedSubscriptionUserIdRef.current !== userId ||
           subscriptionGenerationRef.current !== generation
         ) return;
+        if (sameExactSession) return;
       }
 
       let releaseCheck = () => {};
       const currentCheck = new Promise<void>((resolve) => {
         releaseCheck = resolve;
       });
-      const currentWork = { userId, generation, promise: currentCheck };
+      const currentWork = {
+        userId,
+        generation,
+        checkoutSessionId,
+        promise: currentCheck,
+      };
       subCheckInProgressRef.current = currentWork;
       setSubscription((prev) => ({ ...prev, loading: true }));
       try {
@@ -233,22 +308,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           subscriptionGenerationRef.current !== generation
         ) return;
         if (!error && data) {
-          setSubscription({
-            subscribed: data.subscribed ?? false,
-            productId: data.product_id ?? null,
-            subscriptionEnd: data.subscription_end ?? null,
-            source: data.source === "billing_state" ||
-                data.source === "investor" || data.source === "stripe"
-              ? data.source
-              : "database",
-            syncStatus: data.sync_status === "pending" ||
-                data.sync_status === "timeout"
-              ? data.sync_status
-              : "synced",
-            loading: false,
-          });
+          if (data.source === "deadline" && data.sync_status === "timeout") {
+            setSubscription((prev) => unavailableSubscriptionState(prev));
+          } else {
+            const nextSubscription: SubscriptionState = {
+              subscribed: data.subscribed ?? false,
+              productId: data.product_id ?? null,
+              planKey: typeof data.plan_key === "string" ? data.plan_key : null,
+              audience: typeof data.audience === "string" ? data.audience : null,
+              billingCycle: typeof data.billing_cycle === "string" ? data.billing_cycle : null,
+              subscriptionEnd: data.subscription_end ?? null,
+              billingStatus: typeof data.status === "string" ? data.status : null,
+              source: data.source === "billing_state" ||
+                  data.source === "investor" || data.source === "stripe"
+                ? data.source
+                : "database",
+              syncStatus: data.sync_status === "pending" || data.sync_status === "timeout"
+                ? data.sync_status
+                : "synced",
+              loading: false,
+            };
+            if (nextSubscription.syncStatus === "timeout") {
+              setSubscription((previous) => {
+                const sameGrant = previous.productId === nextSubscription.productId &&
+                  previous.source === nextSubscription.source;
+                return unavailableSubscriptionState({
+                  ...nextSubscription,
+                  staleUntil: sameGrant ? previous.staleUntil : null,
+                });
+              });
+            } else {
+              setSubscription(nextSubscription);
+            }
+          }
         } else {
-          setSubscription(unavailableSubscriptionState());
+          setSubscription((prev) => unavailableSubscriptionState(prev));
         }
       } catch (err: unknown) {
         logger.warn(
@@ -259,7 +353,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           expectedSubscriptionUserIdRef.current === userId &&
           subscriptionGenerationRef.current === generation
         ) {
-          setSubscription(unavailableSubscriptionState());
+          setSubscription((prev) => unavailableSubscriptionState(prev));
         }
       } finally {
         if (subCheckInProgressRef.current === currentWork) {

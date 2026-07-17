@@ -18,6 +18,7 @@
 import { test, expect, type Page, type Browser } from "@playwright/test";
 import { getBaseURL } from "./helpers/baseURL";
 import { demoAccounts, demoPasswords, seededDemoAccountsEnabled } from "./helpers/demoAccounts";
+import { waitForPostAuthNavigation } from "./helpers/postAuthNavigation";
 
 // ─── Credentials ─────────────────────────────────────────────────────────────
 
@@ -54,9 +55,7 @@ const signIn = async (
       .click();
 
     try {
-      await page.waitForURL(/\/dashboard|\/onboarding|\/admin/, {
-        timeout: 25_000,
-      });
+      await waitForPostAuthNavigation(page, /\/dashboard|\/onboarding|\/admin/);
       return;
     } catch (error) {
       const invalidCredentials = await page

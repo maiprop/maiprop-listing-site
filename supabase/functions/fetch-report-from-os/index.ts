@@ -20,7 +20,13 @@ import type { Database, Json } from "../../../src/integrations/supabase/types.ts
 
 const log = createLogger("fetch-report-from-os");
 const limiter = makeRateLimiter({ bucket: "fetch-report-from-os", maxRequests: 20, windowMs: 60_000 });
-const OS_HTML_REPORT_TIMEOUT_MS = 60_000;
+export const OS_TOKEN_TIMEOUT_MS = 7_000;
+export const OS_HTML_REPORT_TIMEOUT_MS = 25_000;
+export const OS_AI_REPORT_TIMEOUT_MS = 4_000;
+const OS_GENERIC_REPORT_TIMEOUT_MS = 12_000;
+const REPORT_GENERATION_LEASE_SECONDS = 40;
+const REPORT_GENERATION_WAIT_MS = 32_000;
+const REPORT_GENERATION_POLL_MS = 350;
 
 type ListingRow = {
   id: string;
@@ -95,17 +101,61 @@ type ChargePropertyReportFetchResult = {
   alreadyPaid?: boolean;
 };
 
+type AuthorizePropertyReportGenerationResult = {
+  allowed?: boolean;
+  source?: "included" | "addon";
+};
+
 type ReportBillingRpcClient = SupabaseAdminClient & {
   rpc(
     functionName: "charge_property_report_fetch_for_user",
     args: {
       p_user_id: string;
-      p_listing_id: string;
-      p_cache_generated_at: string;
+      p_listing_id: string | null;
+      p_cache_generated_at: string | null;
     },
   ): PromiseLike<{
     data: ChargePropertyReportFetchResult | null;
     error: { hint?: string; message?: string } | null;
+  }>;
+};
+
+type ReportAuthorizationRpcClient = SupabaseAdminClient & {
+  rpc(
+    functionName: "authorize_property_report_generation",
+    args: { p_user_id: string },
+  ): PromiseLike<{
+    data: AuthorizePropertyReportGenerationResult | null;
+    error: { hint?: string; message?: string } | null;
+  }>;
+};
+
+type ReportCacheRpcClient = SupabaseAdminClient & {
+  rpc(
+    functionName: "store_property_report_cache_generation",
+    args: {
+      p_listing_id: string;
+      p_lang: "en" | "el";
+      p_html: string;
+      p_ai: Json | null;
+      p_features: Json;
+      p_file_name: string;
+      p_generated_at: string;
+      p_expires_at: string;
+    },
+  ): PromiseLike<{
+    data: PropertyReportCacheRow | null;
+    error: { message?: string } | null;
+  }>;
+};
+
+type ReportGenerationLeaseRpcClient = SupabaseAdminClient & {
+  rpc(
+    functionName: "claim_property_report_generation" | "release_property_report_generation",
+    args: Record<string, unknown>,
+  ): PromiseLike<{
+    data: boolean | null;
+    error: { message?: string } | null;
   }>;
 };
 
@@ -170,7 +220,7 @@ async function getOsToken(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     },
-    15_000
+    OS_TOKEN_TIMEOUT_MS
   );
   const json = await res.json();
   const token = json?.data?.token ?? json?.token ?? json?.accessToken;
@@ -210,23 +260,6 @@ function buildPropertyFeatures(listing: ListingRow): PropertyFeaturesRequest | n
     propertyCategory,
     propertyFloor,
     ...(address ? { address } : {}),
-  };
-}
-
-function normalizeListingPayload(value: unknown): ListingRow | null {
-  if (!value || typeof value !== "object") return null;
-  const record = value as Record<string, unknown>;
-  const id = typeof record.id === "string" ? record.id : "external-listing";
-  return {
-    id,
-    address: typeof record.address === "string" ? record.address : null,
-    city: typeof record.city === "string" ? record.city : null,
-    latitude: coerceFiniteNumber(record.latitude),
-    longitude: coerceFiniteNumber(record.longitude),
-    sqm: coerceFiniteNumber(record.sqm),
-    property_type: typeof record.property_type === "string" ? record.property_type : null,
-    floor: coerceFiniteNumber(record.floor),
-    year_built: coerceFiniteNumber(record.year_built),
   };
 }
 
@@ -321,18 +354,137 @@ async function chargeReportFetchIfNeeded(
   };
 }
 
-async function chargeExternalReportFetch(
+async function chargeUncachedReportFetch(
   supabase: SupabaseAdminClient,
   userId: string,
 ): Promise<{ charged: boolean; alreadyPaid: boolean }> {
-  const { error } = await supabase
-    .from("usage_property_reports")
-    .insert({ user_id: userId, listing_id: null });
+  const rpcClient = supabase as ReportBillingRpcClient;
+  const { data, error } = await rpcClient.rpc(
+    "charge_property_report_fetch_for_user",
+    {
+      p_user_id: userId,
+      p_listing_id: null,
+      p_cache_generated_at: null,
+    },
+  );
 
   if (error) {
     throw new ReportBillingError(error.hint ?? error.message ?? "Property report charge failed");
   }
-  return { charged: true, alreadyPaid: false };
+  return {
+    charged: data?.charged === true,
+    alreadyPaid: data?.alreadyPaid === true,
+  };
+}
+
+async function claimReportGenerationLease(
+  supabase: SupabaseAdminClient,
+  listingId: string,
+  lang: "en" | "el",
+  holder: string,
+): Promise<boolean> {
+  const client = supabase as ReportGenerationLeaseRpcClient;
+  const { data, error } = await client.rpc("claim_property_report_generation", {
+    p_listing_id: listingId,
+    p_lang: lang,
+    p_holder: holder,
+    p_lease_seconds: REPORT_GENERATION_LEASE_SECONDS,
+  });
+  if (error) throw new Error(error.message ?? "Property report generation lease failed");
+  return data === true;
+}
+
+async function releaseReportGenerationLease(
+  supabase: SupabaseAdminClient,
+  listingId: string,
+  lang: "en" | "el",
+  holder: string,
+): Promise<void> {
+  const client = supabase as ReportGenerationLeaseRpcClient;
+  const { error } = await client.rpc("release_property_report_generation", {
+    p_listing_id: listingId,
+    p_lang: lang,
+    p_holder: holder,
+  });
+  if (error) {
+    log.warn("property report generation lease release failed", {
+      listing_id: listingId,
+      message: error.message ?? "unknown error",
+    });
+  }
+}
+
+async function acquireOrAwaitReportGeneration(
+  supabase: SupabaseAdminClient,
+  listingId: string,
+  lang: "en" | "el",
+  holder: string,
+): Promise<{ acquired: boolean; cached: PropertyReportCacheRow | null }> {
+  const deadline = Date.now() + REPORT_GENERATION_WAIT_MS;
+  while (Date.now() < deadline) {
+    const cached = await getActiveCachedReport(supabase, listingId, lang);
+    if (cached) return { acquired: false, cached };
+    if (await claimReportGenerationLease(supabase, listingId, lang, holder)) {
+      return { acquired: true, cached: null };
+    }
+    await new Promise((resolve) => setTimeout(resolve, REPORT_GENERATION_POLL_MS));
+  }
+  return {
+    acquired: false,
+    cached: await getActiveCachedReport(supabase, listingId, lang),
+  };
+}
+
+async function storeReportGeneration(
+  supabase: SupabaseAdminClient,
+  input: {
+    listingId: string;
+    lang: "en" | "el";
+    html: string;
+    ai: unknown | null;
+    features: PropertyFeaturesRequest;
+    fileName: string;
+    generatedAt: string;
+    expiresAt: string;
+  },
+): Promise<PropertyReportCacheRow> {
+  const rpcClient = supabase as ReportCacheRpcClient;
+  const { data, error } = await rpcClient.rpc(
+    "store_property_report_cache_generation",
+    {
+      p_listing_id: input.listingId,
+      p_lang: input.lang,
+      p_html: input.html,
+      p_ai: input.ai as Json | null,
+      p_features: input.features as unknown as Json,
+      p_file_name: input.fileName,
+      p_generated_at: input.generatedAt,
+      p_expires_at: input.expiresAt,
+    },
+  );
+
+  if (error || !data) {
+    throw new Error(error?.message ?? "Property report cache publication failed");
+  }
+  return data;
+}
+
+async function authorizeReportGeneration(
+  supabase: SupabaseAdminClient,
+  userId: string,
+): Promise<void> {
+  const rpcClient = supabase as ReportAuthorizationRpcClient;
+  const { data, error } = await rpcClient.rpc(
+    "authorize_property_report_generation",
+    { p_user_id: userId },
+  );
+
+  if (error) {
+    throw new ReportBillingError(error.hint ?? error.message ?? "Property report is not available on this plan");
+  }
+  if (data?.allowed !== true) {
+    throw new ReportBillingError("Property report is not available on this plan");
+  }
 }
 
 function cachedReportResponse(
@@ -377,10 +529,19 @@ Deno.serve(async (req) => {
       status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  if (!supabaseUrl || !serviceRoleKey || !anonKey) {
+    return new Response(JSON.stringify({ error: "Service unavailable" }), {
+      status: 503,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const supabase = createClient<FunctionDatabase>(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
   const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.slice(7));
   if (authError || !user) {
     return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
@@ -392,14 +553,12 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const {
       listing_id,
-      listing: requestListing,
       report_type,
       lang = "en",
       since,
       to,
     } = body as {
       listing_id?: string;
-      listing?: unknown;
       report_type?: string;
       lang?: string;
       since?: string;
@@ -424,6 +583,44 @@ Deno.serve(async (req) => {
     const normalizedLang: "en" | "el" = lang === "el" ? "el" : "en";
     const isDatabaseListing = UUID_RE.test(listing_id);
 
+    if (!isDatabaseListing) {
+      return new Response(
+        JSON.stringify({ ok: false, error: "listing_id must identify a platform listing" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Resolve the listing through the caller's JWT before reading a cached
+    // report or contacting the external provider. This deliberately delegates
+    // draft/off-market/tenant access to the same RLS policy used by the app.
+    const callerSupabase = createClient<FunctionDatabase>(supabaseUrl, anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: accessibleListing, error: listingAccessError } = await callerSupabase
+      .from("listings")
+      .select("id,address,city,latitude,longitude,sqm,property_type,floor,year_built")
+      .eq("id", listing_id)
+      .maybeSingle();
+
+    if (listingAccessError) {
+      log.warn("listing access check failed", {
+        listing_id,
+        error: listingAccessError.message,
+      });
+      return new Response(JSON.stringify({ error: "Listing access unavailable" }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (!accessibleListing) {
+      return new Response(JSON.stringify({ error: "Listing not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const listingForFeatures = accessibleListing as ListingRow;
+
     if (report_type === "valuation" && isDatabaseListing) {
       const cached = await getActiveCachedReport(supabase, listing_id, normalizedLang);
       if (cached) {
@@ -431,6 +628,8 @@ Deno.serve(async (req) => {
         return cachedReportResponse(cached, charge, corsHeaders, true);
       }
     }
+
+    await authorizeReportGeneration(supabase, user.id);
 
     const OS_URL = Deno.env.get("MAIPROP_OS_URL")?.replace(/\/$/, "");
     const OS_EMAIL = Deno.env.get("MAIPROP_OS_EMAIL");
@@ -443,21 +642,43 @@ Deno.serve(async (req) => {
       );
     }
 
-    const token = await getOsToken(OS_URL, OS_EMAIL, OS_PASS);
-
     if (report_type === "valuation") {
-      const { data: listing, error: listingError } = isDatabaseListing
-        ? await supabase
-          .from("listings")
-          .select("id,address,city,latitude,longitude,sqm,property_type,floor,year_built")
-          .eq("id", listing_id)
-          .maybeSingle()
-        : { data: null, error: null };
+      const leaseHolder = crypto.randomUUID();
+      const generation = await acquireOrAwaitReportGeneration(
+        supabase,
+        listing_id,
+        normalizedLang,
+        leaseHolder,
+      );
+      if (generation.cached) {
+        const charge = await chargeReportFetchIfNeeded(
+          supabase,
+          user.id,
+          listing_id,
+          generation.cached.generated_at,
+        );
+        return cachedReportResponse(generation.cached, charge, corsHeaders, true);
+      }
+      if (!generation.acquired) {
+        return new Response(JSON.stringify({
+          ok: true,
+          report: null,
+          source: "os",
+          reason: "Report generation is already in progress. Please retry shortly.",
+          retry_after_ms: 1_500,
+        }), {
+          status: 202,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+            "Retry-After": "2",
+          },
+        });
+      }
 
-      if (listingError) throw listingError;
-
-      const listingForFeatures = (listing as ListingRow | null) ?? normalizeListingPayload(requestListing);
-      const features = listingForFeatures ? buildPropertyFeatures(listingForFeatures) : null;
+      try {
+      const token = await getOsToken(OS_URL, OS_EMAIL, OS_PASS);
+      const features = buildPropertyFeatures(listingForFeatures);
       if (!features) {
         return new Response(
           JSON.stringify({
@@ -511,68 +732,45 @@ Deno.serve(async (req) => {
       }
 
       const html = sanitizeOsReportHtml(await reportRes.text());
-      const aiRes = await fetchTextIfOk(aiUrl, token, 5_000).catch(() => null);
+      const aiRes = await fetchTextIfOk(aiUrl, token, OS_AI_REPORT_TIMEOUT_MS).catch(() => null);
       const ai = aiRes?.ok ? await aiRes.json().catch(() => null) : null;
       const fileName = getSafeReportFileName(listing_id);
-
-      if (!isDatabaseListing) {
-        const charge = await chargeExternalReportFetch(supabase, user.id);
-        return new Response(
-          JSON.stringify({
-            ok: true,
-            report: {
-              kind: "valuation-property-html",
-              html,
-              ai,
-              features,
-              fileName,
-              cache: null,
-            },
-            source: "os",
-            billing: charge,
-          }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
 
       const generatedAt = new Date();
       const expiresAt = new Date(generatedAt.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-      const { data: cache, error: cacheError } = await supabase
-        .from("property_report_cache")
-        .upsert(
-          {
-            listing_id,
-            report_type: "valuation",
-            lang: normalizedLang,
-            source: "os",
-            html,
-            ai,
-            features,
-            file_name: fileName,
-            generated_at: generatedAt.toISOString(),
-            expires_at: expiresAt.toISOString(),
-            updated_at: generatedAt.toISOString(),
-          },
-          { onConflict: "listing_id,report_type,lang" },
-        )
-        .select("id,listing_id,report_type,lang,source,html,ai,features,file_name,generated_at,expires_at")
-        .single();
-
-      if (cacheError) throw cacheError;
+      const cache = await storeReportGeneration(supabase, {
+        listingId: listing_id,
+        lang: normalizedLang,
+        html,
+        ai,
+        features,
+        fileName,
+        generatedAt: generatedAt.toISOString(),
+        expiresAt: expiresAt.toISOString(),
+      });
 
       const charge = await chargeReportFetchIfNeeded(
         supabase,
         user.id,
         listing_id,
-        (cache as PropertyReportCacheRow).generated_at,
+        cache.generated_at,
       );
 
-      return cachedReportResponse(cache as PropertyReportCacheRow, charge, corsHeaders, false);
+      return cachedReportResponse(cache, charge, corsHeaders, false);
+      } finally {
+        await releaseReportGenerationLease(
+          supabase,
+          listing_id,
+          normalizedLang,
+          leaseHolder,
+        );
+      }
     }
 
     // OS report endpoint: GET /api/v1/reports/listing/:listingId?type=valuation|neighbourhood
     // Override with MAIPROP_OS_REPORT_PATH e.g. /api/v1/analytics/report (then we use ?listingId= &type=)
+    const token = await getOsToken(OS_URL, OS_EMAIL, OS_PASS);
     const pathTemplate = Deno.env.get("MAIPROP_OS_REPORT_PATH") || "/api/v1/reports/listing";
     const base = pathTemplate.replace(/:listingId|:id/g, listing_id);
     const url = base.includes(listing_id)
@@ -588,7 +786,7 @@ Deno.serve(async (req) => {
           "Content-Type": "application/json",
         },
       },
-      15_000
+      OS_GENERIC_REPORT_TIMEOUT_MS
     );
 
     if (res.status === 404 || res.status === 204) {
@@ -615,8 +813,9 @@ Deno.serve(async (req) => {
       );
     }
 
+    const charge = await chargeUncachedReportFetch(supabase, user.id);
     return new Response(
-      JSON.stringify({ ok: true, report, source: "os" }),
+      JSON.stringify({ ok: true, report, source: "os", billing: charge }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err: unknown) {

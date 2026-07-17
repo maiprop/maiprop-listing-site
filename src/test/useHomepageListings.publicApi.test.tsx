@@ -144,7 +144,7 @@ describe("homepage public API fallback behavior", () => {
     expect(result.current.data?.[0]).toMatchObject({ id: "db-featured" });
     expect(publicApiMock).toHaveBeenCalledWith(
       "/api/public/homepage?section=featured",
-      expect.objectContaining({ throwOnError: true, timeoutMs: 2500, signal: expect.any(AbortSignal) }),
+      expect.objectContaining({ throwOnError: true, timeoutMs: 5500, signal: expect.any(AbortSignal) }),
     );
     expect(fromMock).toHaveBeenCalledWith("listings");
     expect(builder.select).toHaveBeenCalledWith(expect.stringContaining("featured_until"));
@@ -163,7 +163,7 @@ describe("homepage public API fallback behavior", () => {
     expect(result.current.data?.[0]).toMatchObject({ id: "db-open-house" });
     expect(publicApiMock).toHaveBeenCalledWith(
       "/api/public/open-houses?limit=12",
-      expect.objectContaining({ throwOnError: true, timeoutMs: 2500, signal: expect.any(AbortSignal) }),
+      expect.objectContaining({ throwOnError: true, timeoutMs: 5500, signal: expect.any(AbortSignal) }),
     );
     expect(fromMock).toHaveBeenCalledWith("listings");
   });
@@ -190,7 +190,7 @@ describe("homepage public API fallback behavior", () => {
     );
     expect(publicApiMock).toHaveBeenCalledWith(
       "/api/public/open-houses?limit=12",
-      expect.objectContaining({ throwOnError: true, timeoutMs: 2500, signal: expect.any(AbortSignal) }),
+      expect.objectContaining({ throwOnError: true, timeoutMs: 5500, signal: expect.any(AbortSignal) }),
     );
     expect(fromMock).not.toHaveBeenCalled();
   });

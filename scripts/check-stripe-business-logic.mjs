@@ -287,18 +287,6 @@ const EXPECTED_CATALOG = [
     ],
   },
   {
-    key: "extra_priority_ad",
-    label: "Extra Priority Rank Ad",
-    audience: "professional",
-    module: "adhoc_charges",
-    unit: "per_ad",
-    amount: 8,
-    access: "manual_addon",
-    prices: [
-      { cycle: "one_time", lookupKey: "maiprop_extra_priority_ad", amount: 8, recurringInterval: null },
-    ],
-  },
-  {
     key: "professional_api_access",
     label: "Professional API access",
     audience: "professional",
@@ -384,6 +372,7 @@ const EXPECTED_CATALOG = [
   },
 ];
 
+const RETIRED_CATALOG_KEYS = new Set(["extra_priority_ad"]);
 const EXPECTED_BY_KEY = new Map(EXPECTED_CATALOG.map((item) => [item.key, item]));
 const REQUIRED_LOOKUP_KEYS = EXPECTED_CATALOG.flatMap((item) => item.prices.map((price) => price.lookupKey));
 const rawArgs = process.argv.slice(2);
@@ -694,6 +683,10 @@ function validatePricingRows(rows, issues, warnings) {
   }
 
   for (const row of rows) {
+    if (RETIRED_CATALOG_KEYS.has(row.key)) {
+      issues.push(`Retired Supabase pricing_configs row ${row.key} must not be active.`);
+      continue;
+    }
     if (!EXPECTED_BY_KEY.has(row.key) && Number(row.amount) > 0) {
       warnings.push(`Active paid pricing_configs row ${row.key} is outside the audited MaiProp catalog.`);
     }

@@ -7,9 +7,8 @@ import { Link } from "react-router-dom";
 import { Crown, Zap, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { getPlanLimits } from "@/hooks/usePlanLimits";
+import { getPlanLimits, type PlanAudienceId } from "@/hooks/usePlanLimits";
 import { getPlanForParticipant } from "@/lib/rolePlanMap";
-import type { ParticipantId } from "@/lib/participantConfig";
 
 type Usage = {
   savedSearches: number;
@@ -20,13 +19,20 @@ type Usage = {
 };
 
 type Props = {
-  audience: ParticipantId;
+  audience: PlanAudienceId;
   isPro: boolean;
+  hasPaidPromotionCredits?: boolean;
   usage: Usage;
   className?: string;
 };
 
-export function DashboardPlanCard({ audience, isPro, usage, className }: Props) {
+export function DashboardPlanCard({
+  audience,
+  isPro,
+  hasPaidPromotionCredits = false,
+  usage,
+  className,
+}: Props) {
   const tier = isPro ? "pro" : "free";
   const limits = getPlanLimits(audience, tier);
 
@@ -41,7 +47,12 @@ export function DashboardPlanCard({ audience, isPro, usage, className }: Props) 
   }
   if (audience === "seller" || audience === "agent") {
     if (limits.listings != null) rows.push({ label: "Listings", used: usage.listings, limit: limits.listings, atLimit: usage.listings >= limits.listings });
-    if (limits.viewingsPerMonth != null) rows.push({ label: "Viewings this month", used: usage.viewingsThisMonth, limit: limits.viewingsPerMonth, atLimit: usage.viewingsThisMonth >= (limits.viewingsPerMonth ?? 0) });
+    if (limits.viewingsPerMonth != null) rows.push({
+      label: audience === "agent" ? "Hosted viewings this month" : "Viewing requests this month",
+      used: usage.viewingsThisMonth,
+      limit: limits.viewingsPerMonth,
+      atLimit: usage.viewingsThisMonth >= (limits.viewingsPerMonth ?? 0),
+    });
   }
   if (audience === "developer") {
     // Pro only - just show plan status
@@ -52,7 +63,9 @@ export function DashboardPlanCard({ audience, isPro, usage, className }: Props) 
   }
 
   const showUpgrade = !isPro && audience !== "developer" && rows.some(r => r.atLimit);
-  const priceLabel = `€${getPlanForParticipant(audience).monthlyPrice}`;
+  const priceLabel = audience === "admin"
+    ? null
+    : `€${getPlanForParticipant(audience).monthlyPrice}`;
 
   return (
     <div className={cn("glass-card rounded-xl p-5 border", isPro ? "border-brand-gold/30 bg-brand-gold/5" : "border-border", className)}>
@@ -105,7 +118,11 @@ export function DashboardPlanCard({ audience, isPro, usage, className }: Props) 
       )}
 
       {audience === "developer" && isPro && (
-        <p className="text-xs text-muted-foreground mt-2">Unlimited listings, project showcases, Spotlight and Priority Rank.</p>
+        <p className="text-xs text-muted-foreground mt-2">
+          {hasPaidPromotionCredits
+            ? "Unlimited listings, project showcases. Includes 1 Spotlight and 1 Priority Rank per month."
+            : "Unlimited listings, project showcases. Promotion credits begin after paid activation."}
+        </p>
       )}
     </div>
   );

@@ -18,6 +18,8 @@ import { supabase } from "@/integrations/supabase/client";
 import type { ListingWithJoins } from "@/hooks/useListings";
 import i18next from "i18next";
 import { useTranslation } from "react-i18next";
+import { isPlatformAdmin } from "@/lib/authUtils";
+import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
 
 interface OsPrintableReport {
   html: string;
@@ -27,6 +29,7 @@ interface OsPrintableReport {
 interface OsReportResponse {
   ok?: boolean;
   reason?: string;
+  retry_after_ms?: number;
   billing?: { charged?: boolean };
   report?: {
     html?: string;
@@ -223,6 +226,11 @@ const usePropertyReportLoader = (listingId: string, listing?: ListingWithJoins |
       refreshReportUsage(queryClient, osRes);
       return;
     }
+    if (osRes?.retry_after_ms && osRes.retry_after_ms > 0) {
+      setUnavailableReason(null);
+      toast.info(osRes.reason ?? ui("Report generation is in progress. Please retry shortly.", "Η δημιουργία της αναφοράς βρίσκεται σε εξέλιξη. Δοκιμάστε ξανά σε λίγο."));
+      return;
+    }
     setUnavailableReason(osRes?.reason ?? ui("Report unavailable: MAIProp OS has not generated this property report yet.", "Η αναφορά δεν είναι διαθέσιμη: το mAI Prop OS δεν έχει δημιουργήσει ακόμη αναφορά για αυτό το ακίνητο."));
   };
 
@@ -235,9 +243,12 @@ const usePropertyReportLoader = (listingId: string, listing?: ListingWithJoins |
 
     setReportLoading(true);
     setUnavailableReason(null);
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 40_000);
 
     try {
       const { data: osRes, error } = await supabase.functions.invoke<OsReportResponse>("fetch-report-from-os", {
+        signal: controller.signal,
         body: {
           listing_id: listingId,
           report_type: "valuation",
@@ -249,6 +260,7 @@ const usePropertyReportLoader = (listingId: string, listing?: ListingWithJoins |
     } catch (_err) {
       setUnavailableReason(ui("Report unavailable right now. Please try again later.", "Η αναφορά δεν είναι διαθέσιμη αυτή τη στιγμή. Δοκιμάστε ξανά αργότερα."));
     } finally {
+      window.clearTimeout(timeoutId);
       setReportLoading(false);
     }
   };
@@ -262,17 +274,34 @@ const usePropertyReportLoader = (listingId: string, listing?: ListingWithJoins |
   };
 };
 
-const ProUpgradeContent = () => (
+const FreeReportOptionsContent = ({
+  checkoutLoading,
+  onPurchaseReport,
+}: {
+  checkoutLoading: boolean;
+  onPurchaseReport: () => void;
+}) => (
   <div className="text-center space-y-3">
     <p className="text-xs text-muted-foreground leading-relaxed">
-      {ui("Deep-dive: Area trends, comparable sales, property specifics analysis, and charts.", "Πλήρης αναφορά: τάσεις περιοχής, συγκρίσιμες πωλήσεις, ανάλυση χαρακτηριστικών ακινήτου και γραφήματα.")}
+      {ui(
+        `Free plans do not include property reports. Upgrade for included reports or buy one for EUR ${REPORT_EXTRA_COST}.`,
+        `Τα δωρεάν πλάνα δεν περιλαμβάνουν αναφορές ακινήτων. Αναβαθμίστε για περιλαμβανόμενες αναφορές ή αγοράστε μία για EUR ${REPORT_EXTRA_COST}.`,
+      )}
     </p>
     <Button className="w-full bg-gradient-primary border-0 text-primary-foreground gap-2" asChild>
       <Link to="/pricing">
         <Zap className="w-4 h-4" /> {ui("Upgrade to Pro", "Αναβάθμιση σε Pro")}
       </Link>
     </Button>
-    <p className="text-[10px] text-muted-foreground">{ui("Pro Feature - Unlock full reports", "Λειτουργία Pro - Ξεκλειδώστε πλήρεις αναφορές")}</p>
+    <Button
+      className="w-full gap-2"
+      variant="outline"
+      onClick={onPurchaseReport}
+      disabled={checkoutLoading}
+    >
+      {checkoutLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardList className="w-4 h-4" />}
+      {ui("Buy One-Off Report", "Αγορά μεμονωμένης αναφοράς")}
+    </Button>
   </div>
 );
 
@@ -337,28 +366,39 @@ const ExtraReportContent = ({
 
 const LoadReportContent = ({
   currentUnavailableReason,
-  isPro,
+  includedReportsRemaining,
+  isUnlimited,
   loadReport,
-  remainingAddonCredits,
-  reportCount,
+  purchasedCreditsRemaining,
   reportLoading,
 }: {
   currentUnavailableReason: string | null;
-  isPro: boolean;
+  includedReportsRemaining: number;
+  isUnlimited: boolean;
   loadReport: () => void;
-  remainingAddonCredits: number;
-  reportCount: number;
+  purchasedCreditsRemaining: number;
   reportLoading: boolean;
 }) => (
   <div className="text-center space-y-3">
-    {isPro && (
+    {isUnlimited ? (
+      <p className="text-[10px] text-muted-foreground">
+        {ui("Unlimited reports with your business plan", "Απεριόριστες αναφορές με το επαγγελματικό πλάνο σας")}
+      </p>
+    ) : purchasedCreditsRemaining > 0 ? (
       <p className="text-[10px] text-muted-foreground">
         {ui(
-          `${Math.max(0, REPORT_INCLUDED + remainingAddonCredits - reportCount)} reports remaining this month`,
-          `${Math.max(0, REPORT_INCLUDED + remainingAddonCredits - reportCount)} αναφορές απομένουν αυτόν τον μήνα`,
+          `${purchasedCreditsRemaining} purchased report credit${purchasedCreditsRemaining === 1 ? "" : "s"} available`,
+          `${purchasedCreditsRemaining} αγορασμέν${purchasedCreditsRemaining === 1 ? "η πίστωση" : "ες πιστώσεις"} αναφοράς διαθέσιμ${purchasedCreditsRemaining === 1 ? "η" : "ες"}`,
         )}
       </p>
-    )}
+    ) : includedReportsRemaining > 0 ? (
+      <p className="text-[10px] text-muted-foreground">
+        {ui(
+          `${includedReportsRemaining} included report${includedReportsRemaining === 1 ? "" : "s"} remaining this month`,
+          `${includedReportsRemaining} περιλαμβανόμεν${includedReportsRemaining === 1 ? "η αναφορά απομένει" : "ες αναφορές απομένουν"} αυτόν τον μήνα`,
+        )}
+      </p>
+    ) : null}
     <p className="text-xs text-muted-foreground leading-relaxed">
       {ui("Deep-dive: Area trends, comparable sales, property specifics analysis, and charts.", "Πλήρης αναφορά: τάσεις περιοχής, συγκρίσιμες πωλήσεις, ανάλυση χαρακτηριστικών ακινήτου και γραφήματα.")}
     </p>
@@ -375,14 +415,16 @@ const LoadReportContent = ({
 );
 
 type ReportContentContext = {
+  canLoadReport: boolean;
   currentUnavailableReason: string | null;
+  includedReportsRemaining: number;
   isPro: boolean;
+  isUnlimited: boolean;
   loadReport: () => void;
   osReport: OsPrintableReport | null;
   purchaseExtraReport: () => void;
   purchaseExtraReportLoading: boolean;
-  remainingAddonCredits: number;
-  reportCount: number;
+  purchasedCreditsRemaining: number;
   reportLoading: boolean;
 };
 
@@ -392,10 +434,6 @@ type ReportCardViewState = {
 };
 
 const REPORT_CONTENT_RULES = [
-  {
-    when: ({ isPro }: ReportContentContext) => !isPro,
-    render: () => <ProUpgradeContent />,
-  },
   {
     when: ({ currentUnavailableReason }: ReportContentContext) => Boolean(currentUnavailableReason),
     render: ({ currentUnavailableReason }: ReportContentContext) => (
@@ -409,8 +447,16 @@ const REPORT_CONTENT_RULES = [
     ),
   },
   {
-    when: ({ remainingAddonCredits, reportCount }: ReportContentContext) =>
-      reportCount >= REPORT_INCLUDED + remainingAddonCredits,
+    when: ({ canLoadReport, isPro }: ReportContentContext) => !canLoadReport && !isPro,
+    render: ({ purchaseExtraReport, purchaseExtraReportLoading }: ReportContentContext) => (
+      <FreeReportOptionsContent
+        checkoutLoading={purchaseExtraReportLoading}
+        onPurchaseReport={purchaseExtraReport}
+      />
+    ),
+  },
+  {
+    when: ({ canLoadReport }: ReportContentContext) => !canLoadReport,
     render: ({ purchaseExtraReport, purchaseExtraReportLoading }: ReportContentContext) => (
       <ExtraReportContent
         checkoutLoading={purchaseExtraReportLoading}
@@ -429,11 +475,62 @@ const getReportCardClass = (reportLoaded: boolean) => [
   reportLoaded ? "border-primary/30" : "border-primary/20",
 ].join(" ");
 
+const PARTICIPANT_REPORT_AUDIENCES = new Set(["buyer", "seller"]);
+const REPORT_AUDIENCES = new Set([
+  "buyer",
+  "seller",
+  "agent",
+  "developer",
+  "professional",
+  "investor",
+  "institutional",
+]);
+
+const hasUnlimitedReportAccess = (
+  isPro: boolean,
+  profile: ReturnType<typeof useAuth>["profile"],
+) => {
+  const participantType = profile?.role && REPORT_AUDIENCES.has(profile.role)
+    ? profile.role
+    : getParticipantTypeFromProfile(profile);
+  return isPro && (
+    isPlatformAdmin(profile) || !PARTICIPANT_REPORT_AUDIENCES.has(participantType)
+  );
+};
+
+const getReportAccess = ({
+  isPro,
+  profile,
+  purchasedCreditsRemaining,
+  reportCount,
+}: {
+  isPro: boolean;
+  profile: ReturnType<typeof useAuth>["profile"];
+  purchasedCreditsRemaining: number;
+  reportCount: number;
+}) => {
+  const isUnlimited = hasUnlimitedReportAccess(isPro, profile);
+  const includedReports = isPro && !isUnlimited ? REPORT_INCLUDED : 0;
+  const includedReportsRemaining = Math.max(includedReports - reportCount, 0);
+  const safePurchasedCredits = Math.max(purchasedCreditsRemaining, 0);
+
+  return {
+    canLoadReport: isUnlimited || includedReportsRemaining > 0 || safePurchasedCredits > 0,
+    includedReportsRemaining,
+    isUnlimited,
+    purchasedCreditsRemaining: safePurchasedCredits,
+  };
+};
+
 const usePropertyReportCardView = ({ listingId, listing }: Props): ReportCardViewState => {
+  const { profile } = useAuth();
   const { isPro } = useSubscription();
   const queryClient = useQueryClient();
-  const { data: reportCount = 0 } = useReportUsage();
-  const { data: remainingAddonCredits = 0 } = usePropertyReportAddonCredits();
+  const hasUnlimitedReports = hasUnlimitedReportAccess(isPro, profile);
+  const { data: reportCount = 0 } = useReportUsage({ enabled: !hasUnlimitedReports });
+  const { data: remainingAddonCredits = 0 } = usePropertyReportAddonCredits({
+    enabled: !hasUnlimitedReports,
+  });
   const [purchaseExtraReportLoading, setPurchaseExtraReportLoading] = useState(false);
   const {
     currentUnavailableReason,
@@ -442,6 +539,12 @@ const usePropertyReportCardView = ({ listingId, listing }: Props): ReportCardVie
     reportLoaded,
     reportLoading,
   } = usePropertyReportLoader(listingId, listing);
+  const reportAccess = getReportAccess({
+    isPro,
+    profile,
+    purchasedCreditsRemaining: remainingAddonCredits,
+    reportCount,
+  });
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -481,14 +584,13 @@ const usePropertyReportCardView = ({ listingId, listing }: Props): ReportCardVie
     }
   };
   const contentContext = {
+    ...reportAccess,
     currentUnavailableReason,
     isPro,
     loadReport,
     osReport,
     purchaseExtraReport,
     purchaseExtraReportLoading,
-    remainingAddonCredits,
-    reportCount,
     reportLoading,
   };
   const contentRule = REPORT_CONTENT_RULES.find((rule) => rule.when(contentContext)) ?? FALLBACK_CONTENT_RULE;

@@ -1,7 +1,6 @@
 import type { ElementType } from "react";
 import {
   BarChart2,
-  Bell,
   Briefcase,
   Crown,
   FileText,
@@ -25,6 +24,16 @@ export type AddonItem = {
   manual?: boolean;
 };
 export type AddonSection = { category: string; accent: string; items: AddonItem[] };
+
+type AddonPricingConfig = {
+  amount: number;
+  currency: string;
+};
+
+type AddonSectionOptions = {
+  isPro?: boolean;
+  pricingConfigs?: Record<string, AddonPricingConfig>;
+};
 
 export const ADDONS_BY_ROLE: Record<string, AddonSection[]> = {
   buyer: [
@@ -306,13 +315,6 @@ export const ADDONS_BY_ROLE: Record<string, AddonSection[]> = {
           desc: "Top-of-category placement in the Professionals directory for 30 days.",
           icon: Crown,
         },
-        {
-          name: "Extra Priority Rank Ad",
-          price: "€8",
-          unit: "/ ad",
-          desc: "Push a listing to the top of search results when acting as a property manager.",
-          icon: Bell,
-        },
       ],
     },
     {
@@ -451,8 +453,8 @@ const ADDON_KEY_BY_NAME: Record<string, string> = {
   "Agency-Branded Profile": "agency_branded_profile",
   "Dedicated Account Mgr": "agency_dedicated_manager",
   "White-label Domain": "agency_white_label",
+  "Market Intelligence": "market_intelligence",
   "Spotlight Professional": "featured_professional",
-  "Extra Priority Rank Ad": "extra_priority_ad",
   "API Access": "professional_api_access",
   "Referral Network Slot": "professional_referral_network",
   "Extra Client Seat": "professional_extra_seat",
@@ -475,10 +477,16 @@ const SELF_SERVE_ADDON_KEYS = new Set([
   "featured_priority_bundle",
 ]);
 
+const resolveAddonPricingKey = (item: Pick<AddonItem, "name">): string | null => {
+  const prefixMatch = ADDON_KEY_PREFIXES.find(([prefix]) =>
+    item.name.startsWith(prefix)
+  );
+  return prefixMatch?.[1] ?? ADDON_KEY_BY_NAME[item.name] ?? null;
+};
+
 export const resolveAddonKey = (item: Pick<AddonItem, "name" | "manual">): string | null => {
   if (item.manual) return null;
-  const prefixMatch = ADDON_KEY_PREFIXES.find(([prefix]) => item.name.startsWith(prefix));
-  const key = prefixMatch?.[1] ?? ADDON_KEY_BY_NAME[item.name] ?? null;
+  const key = resolveAddonPricingKey(item);
   return key && SELF_SERVE_ADDON_KEYS.has(key) ? key : null;
 };
 
@@ -488,5 +496,49 @@ const cloneAddonSections = (sections: AddonSection[]): AddonSection[] =>
     items: section.items.map((item) => ({ ...item })),
   }));
 
-export const getAddonSectionsForParticipant = (participantType: string): AddonSection[] =>
-  cloneAddonSections(ADDONS_BY_ROLE[participantType] ?? ADDONS_BY_ROLE["buyer"]);
+const BUSINESS_PRO_UNLIMITED_PROPERTY_REPORTS = new Set([
+  "agent",
+  "developer",
+  "professional",
+  "investor",
+  "institutional",
+]);
+
+const formatConfiguredAmount = (config: AddonPricingConfig): string | null => {
+  const amount = Number(config.amount);
+  const currency = config.currency?.trim().toUpperCase();
+  if (!Number.isFinite(amount) || amount <= 0 || !currency) return null;
+  const formattedAmount = amount.toLocaleString("en-GB", {
+    minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+    maximumFractionDigits: 2,
+  });
+  return currency === "EUR" ? `€${formattedAmount}` : `${currency} ${formattedAmount}`;
+};
+
+export const getAddonSectionsForParticipant = (
+  participantType: string,
+  options: AddonSectionOptions = {},
+): AddonSection[] => {
+  const hidePropertyReportCredits = Boolean(
+    options.isPro && BUSINESS_PRO_UNLIMITED_PROPERTY_REPORTS.has(participantType),
+  );
+
+  return cloneAddonSections(
+    ADDONS_BY_ROLE[participantType] ?? ADDONS_BY_ROLE["buyer"],
+  )
+    .map((section) => ({
+      ...section,
+      items: section.items
+        .filter((item) =>
+          !hidePropertyReportCredits ||
+          resolveAddonKey(item) !== "property_report_single"
+        )
+        .map((item) => {
+          const addonKey = resolveAddonPricingKey(item);
+          const config = addonKey ? options.pricingConfigs?.[addonKey] : undefined;
+          const configuredPrice = config ? formatConfiguredAmount(config) : null;
+          return configuredPrice ? { ...item, price: configuredPrice } : item;
+        }),
+    }))
+    .filter((section) => section.items.length > 0);
+};

@@ -7,9 +7,7 @@ import { REALTIME_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 import type { Database } from "@/integrations/supabase/types";
 import {
   conversationCreateSchema,
-  conversationTimestampUpdateSchema,
   markMessagesReadSchema,
-  messageAttachmentRowsSchema,
   messageCreateSchema,
   parseMutationInput,
 } from "@/lib/mutationSchemas";
@@ -20,10 +18,17 @@ type SendMessageInput = {
   conversation_id: string;
   content: string;
   attachmentPaths?: { path: string; filename: string; mime_type?: string }[];
+  client_delivery_id?: string;
 };
 type CachedMessage = Pick<
   Database["public"]["Tables"]["messages"]["Row"],
-  "id" | "content" | "created_at" | "sender_id" | "conversation_id" | "status"
+  | "id"
+  | "client_delivery_id"
+  | "content"
+  | "created_at"
+  | "sender_id"
+  | "conversation_id"
+  | "status"
 > & {
   message_attachments: {
     storage_path: string;
@@ -38,14 +43,15 @@ type CachedMessage = Pick<
 };
 type SendMessageContext = {
   optimisticId: string | null;
-  previousMessages: CachedMessage[] | undefined;
 };
+type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
 
 const toCachedMessage = (
   message: Database["public"]["Tables"]["messages"]["Row"],
   attachmentPaths: SendMessageInput["attachmentPaths"],
 ): CachedMessage => ({
   id: message.id,
+  client_delivery_id: message.client_delivery_id ?? null,
   content: message.content,
   created_at: message.created_at,
   sender_id: message.sender_id,
@@ -79,6 +85,94 @@ const reconcileSentMessage = (
 
   if (!hasServerMessage) reconciled.push(sentMessage);
   return reconciled;
+};
+
+const isOptimisticMessage = (message: Pick<CachedMessage, "id">) =>
+  message.id.startsWith("optimistic:");
+
+const representsSameDelivery = (
+  pending: Pick<
+    CachedMessage,
+    "client_delivery_id" | "content" | "conversation_id" | "created_at" | "sender_id"
+  >,
+  delivered: Pick<
+    MessageRow,
+    "client_delivery_id" | "content" | "conversation_id" | "created_at" | "sender_id"
+  >,
+) => {
+  if (pending.client_delivery_id || delivered.client_delivery_id) {
+    return Boolean(
+      pending.client_delivery_id &&
+      delivered.client_delivery_id &&
+      pending.client_delivery_id === delivered.client_delivery_id,
+    );
+  }
+
+  if (
+    pending.content !== delivered.content ||
+    pending.conversation_id !== delivered.conversation_id ||
+    pending.sender_id !== delivered.sender_id
+  ) {
+    return false;
+  }
+
+  const pendingAt = Date.parse(pending.created_at);
+  const deliveredAt = Date.parse(delivered.created_at);
+  return !Number.isFinite(pendingAt) || !Number.isFinite(deliveredAt) ||
+    Math.abs(pendingAt - deliveredAt) <= 5 * 60 * 1_000;
+};
+
+const appendRealtimeMessage = (
+  messages: CachedMessage[] | undefined,
+  inserted: MessageRow,
+) => {
+  if (messages?.some((message) => message.id === inserted.id)) return messages;
+
+  const optimisticIndex = messages?.findIndex((message) =>
+    isOptimisticMessage(message) && representsSameDelivery(message, inserted)
+  ) ?? -1;
+  if (optimisticIndex >= 0 && messages) {
+    const optimisticMessage = messages[optimisticIndex];
+    const deliveredMessage = toCachedMessage(inserted, []);
+    const next = [...messages];
+    next[optimisticIndex] = {
+      ...deliveredMessage,
+      message_attachments: optimisticMessage.message_attachments,
+      profiles: optimisticMessage.profiles,
+    };
+    return next;
+  }
+
+  return [...(messages ?? []), toCachedMessage(inserted, [])];
+};
+
+const mergeServerMessagesWithPending = (
+  serverMessages: CachedMessage[],
+  cachedMessages: CachedMessage[] | undefined,
+) => {
+  const merged = [...serverMessages];
+  for (const pending of cachedMessages ?? []) {
+    if (!isOptimisticMessage(pending)) continue;
+
+    const deliveredIndex = merged.findIndex((message) =>
+      representsSameDelivery(pending, message)
+    );
+    if (deliveredIndex < 0) {
+      merged.push(pending);
+      continue;
+    }
+
+    if (
+      merged[deliveredIndex].message_attachments.length === 0 &&
+      pending.message_attachments.length > 0
+    ) {
+      merged[deliveredIndex] = {
+        ...merged[deliveredIndex],
+        message_attachments: pending.message_attachments,
+      };
+    }
+  }
+  return merged;
 };
 
 const getParticipantConversationFilter = (currentUserId: string, otherUserId: string) =>
@@ -226,7 +320,12 @@ export function useConversations() {
           messages(content, created_at, sender_id)
         `)
         .or(`participant_a.eq.${user.id},participant_b.eq.${user.id}`)
-        .order("last_message_at", { ascending: false, nullsFirst: false });
+        .order("last_message_at", { ascending: false, nullsFirst: false })
+        .order("created_at", {
+          referencedTable: "messages",
+          ascending: false,
+        })
+        .limit(1, { referencedTable: "messages" });
       if (convError) throw convError;
       const list = convs || [];
       const userIds = new Set<string>();
@@ -260,6 +359,37 @@ export function useMessages(conversation_id: string) {
 
   useEffect(() => {
     if (!conversation_id) return;
+    const queryKey = ["messages", conversation_id] as const;
+    let cancelled = false;
+    let unsubscribeInitialQuery: (() => void) | null = null;
+
+    const closeInitialQueryGap = () => {
+      const activeQuery = queryClient.getQueryCache().find({
+        queryKey,
+        exact: true,
+      });
+      if (activeQuery?.state.fetchStatus !== "fetching") {
+        void queryClient.invalidateQueries({ queryKey });
+        return;
+      }
+
+      unsubscribeInitialQuery?.();
+      unsubscribeInitialQuery = queryClient.getQueryCache().subscribe((event) => {
+        if (event.query !== activeQuery || event.query.state.fetchStatus !== "idle") {
+          return;
+        }
+        unsubscribeInitialQuery?.();
+        unsubscribeInitialQuery = null;
+        if (!cancelled) {
+          void queryClient.refetchQueries({
+            queryKey,
+            exact: true,
+            type: "active",
+          });
+        }
+      });
+      void queryClient.invalidateQueries({ queryKey });
+    };
 
     const channel = supabase
       .channel(`messages:${conversation_id}`)
@@ -271,7 +401,14 @@ export function useMessages(conversation_id: string) {
           table: "messages",
           filter: `conversation_id=eq.${conversation_id}`,
         },
-        () => {
+        (payload) => {
+          const inserted = payload.new as MessageRow;
+          if (inserted.id && inserted.conversation_id === conversation_id) {
+            queryClient.setQueryData<CachedMessage[]>(
+              ["messages", conversation_id],
+              (messages) => appendRealtimeMessage(messages, inserted),
+            );
+          }
           queryClient.invalidateQueries({ queryKey: ["messages", conversation_id] });
           // Also refresh conversations sidebar so last_message_at updates
           queryClient.invalidateQueries({ queryKey: ["conversations"] });
@@ -289,9 +426,16 @@ export function useMessages(conversation_id: string) {
           queryClient.invalidateQueries({ queryKey: ["messages", conversation_id] });
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          closeInitialQueryGap();
+        }
+      });
 
     return () => {
+      cancelled = true;
+      unsubscribeInitialQuery?.();
+      unsubscribeInitialQuery = null;
       supabase.removeChannel(channel);
     };
   }, [conversation_id, queryClient]);
@@ -299,9 +443,10 @@ export function useMessages(conversation_id: string) {
   return useQuery({
     queryKey: ["messages", conversation_id],
     queryFn: async () => {
+      const queryKey = ["messages", conversation_id] as const;
       const { data: msgs, error } = await supabase
         .from("messages")
-        .select("id, content, created_at, sender_id, conversation_id, status, message_attachments(storage_path, filename, mime_type)")
+        .select("id, client_delivery_id, content, created_at, sender_id, conversation_id, status, message_attachments(storage_path, filename, mime_type)")
         .eq("conversation_id", conversation_id)
         .order("created_at", { ascending: true });
       if (error) throw error;
@@ -309,17 +454,23 @@ export function useMessages(conversation_id: string) {
       const senderIds = [...new Set(list.map((m) => m.sender_id).filter((id): id is string => !!id))];
       // Always attach the `profiles` field so the query return type is non-union.
       if (senderIds.length === 0) {
-        return list.map((m) => ({ ...m, profiles: null }));
+        return mergeServerMessagesWithPending(
+          list.map((m) => ({ ...m, profiles: null })),
+          queryClient.getQueryData<CachedMessage[]>(queryKey),
+        );
       }
       const { data: profiles } = await supabase
         .from("profiles_public")
         .select("user_id, display_name, avatar_url")
         .in("user_id", senderIds);
       const profileByUserId = new Map((profiles || []).map((p) => [p.user_id, p]));
-      return list.map((m) => ({
-        ...m,
-        profiles: profileByUserId.get(m.sender_id ?? "") ?? null,
-      }));
+      return mergeServerMessagesWithPending(
+        list.map((m) => ({
+          ...m,
+          profiles: profileByUserId.get(m.sender_id ?? "") ?? null,
+        })),
+        queryClient.getQueryData<CachedMessage[]>(queryKey),
+      );
     },
     enabled: !!conversation_id,
     staleTime: REALTIME_QUERY_STALE_TIME,
@@ -330,49 +481,43 @@ export function useSendMessage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: async ({ conversation_id, content, attachmentPaths }: SendMessageInput) => {
+    mutationFn: async (input: SendMessageInput) => {
       if (!user) throw new Error("Must be logged in");
+      const clientDeliveryId = input.client_delivery_id ?? crypto.randomUUID();
+      input.client_delivery_id = clientDeliveryId;
+      const { conversation_id, content, attachmentPaths } = input;
       const payload = parseMutationInput(
         messageCreateSchema,
         { conversation_id, content, attachmentPaths },
         "message",
       );
        
-      const { data, error } = await supabase.from("messages")
-        .insert({ conversation_id: payload.conversation_id, sender_id: user.id, content: payload.content, receiver_id: null })
-        .select()
+      const { data, error } = await supabase.rpc("send_message_with_attachments", {
+        p_conversation_id: payload.conversation_id,
+        p_content: payload.content,
+        p_client_delivery_id: clientDeliveryId,
+        p_attachments: (payload.attachmentPaths ?? []).map((attachment) => ({
+          storage_path: attachment.path,
+          filename: attachment.filename,
+          mime_type: attachment.mime_type ?? null,
+        })),
+      })
         .single();
       if (error) throw error;
-      if (payload.attachmentPaths?.length) {
-        await supabase.from("message_attachments").insert(
-          parseMutationInput(messageAttachmentRowsSchema, payload.attachmentPaths.map((a) => ({
-            message_id: data.id,
-            storage_path: a.path,
-            filename: a.filename,
-            mime_type: a.mime_type,
-          })), "message attachments")
-        );
-      }
-      const conversationUpdate = parseMutationInput(
-        conversationTimestampUpdateSchema,
-        { conversationId: payload.conversation_id, lastMessageAt: new Date().toISOString() },
-        "conversation update",
-      );
-      await supabase
-        .from("conversations")
-        .update({ last_message_at: conversationUpdate.lastMessageAt })
-        .eq("id", conversationUpdate.conversationId);
       return data;
     },
-    onMutate: async ({ conversation_id, content, attachmentPaths }): Promise<SendMessageContext> => {
-      if (!user) return { optimisticId: null, previousMessages: undefined };
+    onMutate: async (input): Promise<SendMessageContext> => {
+      if (!user) return { optimisticId: null };
+      const clientDeliveryId = input.client_delivery_id ?? crypto.randomUUID();
+      input.client_delivery_id = clientDeliveryId;
+      const { conversation_id, content, attachmentPaths } = input;
 
       const queryKey = ["messages", conversation_id] as const;
       await queryClient.cancelQueries({ queryKey });
-      const previousMessages = queryClient.getQueryData<CachedMessage[]>(queryKey);
       const optimisticId = `optimistic:${crypto.randomUUID()}`;
       const optimisticMessage: CachedMessage = {
         id: optimisticId,
+        client_delivery_id: clientDeliveryId,
         conversation_id,
         sender_id: user.id,
         content,
@@ -389,7 +534,7 @@ export function useSendMessage() {
         ...messages,
         optimisticMessage,
       ]);
-      return { optimisticId, previousMessages };
+      return { optimisticId };
     },
     onSuccess: (message, { conversation_id, attachmentPaths }, context) => {
       const optimisticId = context?.optimisticId;
@@ -406,11 +551,12 @@ export function useSendMessage() {
     },
     onError: (err: Error, { conversation_id }, context) => {
       if (context?.optimisticId) {
-        if (context.previousMessages === undefined) {
-          queryClient.removeQueries({ queryKey: ["messages", conversation_id], exact: true });
-        } else {
-          queryClient.setQueryData(["messages", conversation_id], context.previousMessages);
-        }
+        queryClient.setQueryData<CachedMessage[]>(
+          ["messages", conversation_id],
+          (messages = []) => messages.filter(
+            (message) => message.id !== context.optimisticId,
+          ),
+        );
       }
       toast.error(err.message);
     },

@@ -4,6 +4,7 @@ import {
   getPlanForParticipant,
   classifySwitch,
   ROLE_PLAN_MAP,
+  resolveRolePlanDisplayPricing,
 } from "@/lib/rolePlanMap";
 
 describe("participantToPricingAudience", () => {
@@ -153,6 +154,31 @@ describe("ROLE_PLAN_MAP integrity", () => {
         expect(plan.annualPrice).toBeLessThan(plan.monthlyPrice * 12);
       }
     }
+  });
+});
+
+describe("resolveRolePlanDisplayPricing", () => {
+  it("uses active pricing configuration instead of fallback display amounts", () => {
+    expect(
+      resolveRolePlanDisplayPricing(ROLE_PLAN_MAP.agent, {
+        amount: 175,
+        annualAmount: 1_650,
+        currency: "EUR",
+        unit: "monthly",
+      }),
+    ).toEqual({
+      monthlyPrice: 175,
+      annualPrice: 1_650,
+      currency: "EUR",
+    });
+  });
+
+  it("retains documented fallbacks when active pricing is unavailable", () => {
+    expect(resolveRolePlanDisplayPricing(ROLE_PLAN_MAP.developer)).toEqual({
+      monthlyPrice: 129,
+      annualPrice: 1_290,
+      currency: "EUR",
+    });
   });
 });
 

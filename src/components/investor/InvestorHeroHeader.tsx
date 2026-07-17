@@ -1,4 +1,4 @@
-import { Crown, Flame, DollarSign, TrendingDown, TrendingUp, MailPlus, LayoutGrid } from "lucide-react";
+import { Crown, Flame, DollarSign, TrendingUp, FileCheck, MailPlus, LayoutGrid } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 interface Subscription {
@@ -9,15 +9,26 @@ interface Subscription {
 interface Props {
   dealsCount: number;
   totalValue: number;
-  avgDiscount: string;
-  avgRoi: string;
+  newDealsThisWeek: number;
+  avgValueSpread: number | null;
+  valuedDealsCount: number;
   subscription: Subscription | null;
   subscribed: boolean;
   showInviteCta: boolean;
   onInviteClick: () => void;
 }
 
-export function InvestorHeroHeader({ dealsCount, totalValue, avgDiscount, avgRoi, subscription, subscribed, showInviteCta, onInviteClick }: Props) {
+export function InvestorHeroHeader({
+  dealsCount,
+  totalValue,
+  newDealsThisWeek,
+  avgValueSpread,
+  valuedDealsCount,
+  subscription,
+  subscribed,
+  showInviteCta,
+  onInviteClick,
+}: Props) {
   const { t } = useTranslation();
   return (
     <div className="relative border-b border-border overflow-hidden">
@@ -67,10 +78,10 @@ export function InvestorHeroHeader({ dealsCount, totalValue, avgDiscount, avgRoi
         {/* KPI bar */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 mt-5 sm:mt-8">
           {[
-            { label: t("investor.kpi.liveDeals"), value: String(dealsCount), delta: t("investor.kpi.liveDealsThisWeek"), icon: Flame, color: "text-destructive" },
+            { label: t("investor.kpi.liveDeals"), value: String(dealsCount), delta: t("investor.kpi.liveDealsThisWeek", { count: newDealsThisWeek }), icon: Flame, color: "text-destructive" },
             { label: t("investor.kpi.totalDealValue"), value: `€${(totalValue / 1_000_000).toFixed(1)}M`, delta: t("investor.kpi.totalDealValueDelta"), icon: DollarSign, color: "text-primary" },
-            { label: t("investor.kpi.avgDiscount"), value: `${avgDiscount}%`, delta: t("investor.kpi.avgDiscountDelta"), icon: TrendingDown, color: "text-brand-emerald" },
-            { label: t("investor.kpi.avgRoi"), value: `${avgRoi}%`, delta: t("investor.kpi.avgRoiDelta"), icon: TrendingUp, color: "text-brand-gold" },
+            { label: t("investor.kpi.avgValueSpread"), value: avgValueSpread == null ? "—" : `${avgValueSpread > 0 ? "+" : ""}${avgValueSpread}%`, delta: t("investor.kpi.avgValueSpreadDelta"), icon: TrendingUp, color: "text-brand-emerald" },
+            { label: t("investor.kpi.valuationCoverage"), value: `${valuedDealsCount}/${dealsCount}`, delta: t("investor.kpi.valuationCoverageDelta"), icon: FileCheck, color: "text-brand-gold" },
           ].map(s => (
             <div key={s.label} className="glass-card rounded-xl p-3 sm:p-4 border border-border">
               <div className="flex items-center justify-between mb-1.5 sm:mb-2">

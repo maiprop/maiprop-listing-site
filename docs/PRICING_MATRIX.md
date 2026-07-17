@@ -1,8 +1,9 @@
 # maiProp Pricing Matrix
 ## Database-Configured Pricing & User Role Combinations
 
-**Generated:** April 27, 2026  
-**Source:** Database migrations + AdminPricing.tsx DEFAULT_SEED
+**Verified:** July 16, 2026
+**Source of truth:** active `pricing_configs`, audience-scoped entitlement functions,
+`ai_usage_limits`, `usePlanLimits.ts`, and the Billing/Pricing UI contracts
 
 ---
 
@@ -34,8 +35,8 @@
 ### Subscription Plans
 | Plan Key | Label | Module | Price | Unit | Features |
 |----------|-------|--------|-------|------|----------|
-| `participant_free` | Free | user_subscription | EUR 0 | monthly | Basic search, 1 alert, 1 viewing/mo, 2 listings |
-| `pro` | Participant Pro | user_subscription | EUR 29 | monthly | AI insights, 5 listings, 10 viewings/mo, unlimited alerts |
+| `participant_free` | Free | user_subscription | EUR 0 | monthly | 5 calls/month per core AI feature; buyers and sellers: 1 requested viewing/month; sellers: 2 listings and unlimited hosted viewings |
+| `pro` | Participant Pro | user_subscription | EUR 29 | monthly | 50 calls/month per core AI feature; buyers and sellers: 10 requested viewings/month; sellers: 5 listings, unlimited hosted viewings, and 1 Seller Spotlight/month; 3 property reports |
 
 ### Add-ons (Ad-hoc Charges)
 | Key | Label | Price | Unit | Description |
@@ -61,8 +62,8 @@
 ### Subscription Plans
 | Plan Key | Label | Module | Price | Seats | Features |
 |----------|-------|--------|-------|-------|----------|
-| `agent_free` | Agent Free | agent_subscription | EUR 0 | 1 | 5 listings, 3 viewings/mo, basic profile |
-| `agent_basic` | Agent Pro | agent_subscription | EUR 149 | 1 | Unlimited listings, CRM, 10 priority ads |
+| `agent_free` | Agent Free | agent_subscription | EUR 0 | 1 | 5 listings, 3 hosted listing viewings/mo, basic profile |
+| `agent_basic` | Agent Pro | agent_subscription | EUR 149 | 1 | Unlimited listings, CRM, 10 priority ads, 10 hosted listing viewings/month, 50 calls/month per core AI feature, unlimited property reports |
 
 > Legacy `agency_starter` / `agency_growth` / `agency_enterprise` tiers are deprecated
 > (`is_active: false` in `pricing_configs`). They are kept for historical reference
@@ -92,10 +93,11 @@
 - New Build showcase pages
 - Pre-sale & off-plan management
 - Construction timeline & floor plans
-- Priority in New Builds section
+- 1 Spotlight + 1 Priority Rank promotion per month
 - AI listing & description tools
 - Project analytics dashboard
-- AI Neighbourhood Reports (3/mo included)
+- 50 calls/month per core AI feature
+- Unlimited property reports
 - Lead capture & CRM
 
 **Note:** No free tier (Pro-only)
@@ -108,7 +110,7 @@
 | Plan Key | Label | Module | Price | Features |
 |----------|-------|--------|-------|----------|
 | Free (implied) | Directory Only | - | EUR 0 | Basic listing, enquiries |
-| `professional_basic` | Professional Pro | professional_subscription | EUR 69 | Priority leads, calendar, verified badge, 3 AI tools/mo |
+| `professional_basic` | Professional Pro | professional_subscription | EUR 69 | Priority leads, calendar, verified badge, 50 calls/month per core AI feature, unlimited property reports |
 
 > Legacy `professional_premium` tier is deprecated (`is_active: false`). API access,
 > referral network and additional client seats are now sold as add-ons.
@@ -117,7 +119,6 @@
 | Key | Label | Price | Unit |
 |-----|-------|-------|------|
 | `featured_professional` | Spotlight Professional | EUR 59 | monthly |
-| `extra_priority_ad` | Extra Priority Rank Ad | EUR 8 | per_ad |
 | `professional_api_access` | Professional API access | EUR 59 | monthly |
 | `professional_referral_network` | Referral network slot | EUR 39 | monthly |
 | `professional_extra_seat` | Extra client seat | EUR 19 | monthly |
@@ -130,8 +131,12 @@
 ### Subscription Plans (invitation-only)
 | Plan Key | Label | Module | Price | Features |
 |----------|-------|--------|-------|----------|
-| `investor_private` | Private Investor | investor_subscription | Custom annual link | Deal-flow, AI matching, 5 reports/mo |
+| `investor_private` | Private Investor | investor_subscription | Custom annual link | Deal-flow, AI matching, 50 calls/month per core AI feature, unlimited property reports |
 | `investor_institutional` | Institutional Investor | investor_subscription | Custom annual link | Full pipeline, bulk view, dedicated manager |
+
+Institutional access includes support for listings-data integration. The AVM
+API remains a separately priced maiProp OS data product and is not bundled into
+the Institutional platform plan.
 
 **Flow:**
 1. Applicant submits the **Investor / Institutional Application** form.
@@ -172,8 +177,9 @@ Cross-cutting products available to all B2B users:
 | Create listings | 2 | 5 | Unlimited | Unlimited | - | - |
 | Direct messaging | Yes | Yes | Yes | Yes | Yes | Yes |
 | Saved searches | 1 | Unlimited | Unlimited | Unlimited | Unlimited | Unlimited |
-| AI Valuation | - | 5/mo | 5/mo | 3/mo | 3/mo | 5/mo |
-| Neighbourhood Reports | - | 3/mo | Included | 3/mo | 3/mo | Included |
+| AI Valuation | 5/mo | 50/mo | 50/mo | Pro required (50/mo) | 50/mo | Paid access required (50/mo) |
+| Neighbourhood Reports | 5/mo | 50/mo | 50/mo | Pro required (50/mo) | 50/mo | Paid access required (50/mo) |
+| Printable property reports | Add-on | 3/mo + add-ons | Unlimited | Unlimited | Unlimited | Unlimited |
 | Priority matching | - | Yes | Yes | Yes | Yes | Yes |
 | CRM access | - | - | Yes | Yes | Yes | Yes |
 
@@ -194,10 +200,10 @@ Cross-cutting products available to all B2B users:
 | Scenario | Base | Add-ons | Reports | OS | **Total** |
 |----------|------|---------|---------|-----|-----------|
 | Casual Buyer (Free) | EUR 0 | - | 1x valuation (EUR 39) | - | **EUR 0-39** |
-| Active Seller (Pro) | EUR 29 | 2x extra (EUR 24) | Bundle (EUR 149) | - | **EUR 53 + reports** |
-| Solo Agent | EUR 149 | 5x priority (EUR 40) | - | - | **EUR 189** |
-| Small Agency (3 seats) | EUR 249 | 10x priority (EUR 80) | - | MI (EUR 199) | **EUR 528** |
-| Developer | EUR 129 | Spotlight (EUR 39 x N) | - | - | **EUR 129+** |
+| Active Seller (Pro) | EUR 29 | 1 Seller Spotlight included; 2x extra listings (EUR 24) | Bundle (EUR 149) | - | **EUR 53 + reports** |
+| Solo Agent | EUR 149 | 10 Priority included | - | - | **EUR 149** |
+| Small Agency (3 seats) | EUR 149 + 2 seats (EUR 78) | 10 Priority included | - | Optional MI (EUR 199) | **EUR 227** without MI / **EUR 426** with MI |
+| Developer | EUR 129 | 1 Spotlight + 1 Priority included; extras from EUR 39 / EUR 59 | - | - | **EUR 129 before extras** |
 | Professional | EUR 69 | Spotlight (EUR 59) | - | - | **EUR 128** |
 | Private Investor | Custom annual link | - | Included | - | **Custom annual link** |
 | Institutional | Custom annual link | - | Included | AVM (EUR 299) | **Custom annual link + OS** |
@@ -239,4 +245,4 @@ Cross-cutting products available to all B2B users:
 ---
 
 *Document Version: 1.1*
-*Last Updated: April 27, 2026 (post-fix)*
+*Last Updated: July 16, 2026 (entitlement contract verification)*

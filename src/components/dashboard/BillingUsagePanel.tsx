@@ -1,4 +1,5 @@
 import type { User } from "@supabase/supabase-js";
+import { useEffect } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart2,
@@ -21,6 +22,9 @@ import {
   useReportUsage,
 } from "@/hooks/useUsageAddons";
 import { useListingPromotionBalance } from "@/hooks/useListingPromotions";
+import type { PricingConfigMap } from "@/hooks/usePricingConfigs";
+import { useAuth } from "@/contexts/AuthContext";
+import { isPlatformAdmin } from "@/lib/authUtils";
 import { buildBillingContactHref } from "@/lib/billingContact";
 import { cn } from "@/lib/utils";
 
@@ -28,7 +32,9 @@ type BillingUsagePanelProps = {
   user: User | null | undefined;
   isPro: boolean;
   participantType: string;
+  pricingConfigs?: PricingConfigMap;
   addonLoadingKey: string | null;
+  refreshToken?: number;
   onPurchaseAddon: (addonKey: string) => void;
   onUpgrade: () => void;
 };
@@ -45,6 +51,8 @@ type UsageMetric = {
   icon: LucideIcon;
   used: number | null;
   limit: number | null;
+  unlimited?: boolean;
+  counterLabel?: string;
   loading?: boolean;
   error?: boolean;
   actions?: MetricAction[];
@@ -54,6 +62,7 @@ type UsageMetric = {
 type UsageCounter = Pick<UsageMetric, "used" | "limit">;
 
 const SELL_SIDE_PARTICIPANTS = new Set(["seller", "agent", "developer"]);
+const PARTICIPANT_REPORT_PLANS = new Set(["buyer", "seller"]);
 const BILLING_AI_BUCKETS = [
   "property-valuation",
   "neighbourhood-report",
@@ -67,6 +76,7 @@ const usageFromQuota = (quota: AIQuota | null | undefined) => ({
 
 const getRemainingLabel = (metric: UsageMetric) => {
   if (metric.loading) return "Checking usage...";
+  if (metric.unlimited) return "Unlimited with your plan";
   if (metric.error || metric.used == null || metric.limit == null) return "Counter unavailable";
   if (metric.limit <= 0) return metric.used > 0 ? `${metric.used} used` : "Not included";
   const remaining = Math.max(metric.limit - metric.used, 0);
@@ -75,18 +85,36 @@ const getRemainingLabel = (metric: UsageMetric) => {
 
 const getCounterLabel = (metric: UsageMetric) => {
   if (metric.loading) return "Loading";
+  if (metric.counterLabel) return metric.counterLabel;
+  if (metric.unlimited) return `${metric.used ?? 0} used`;
   if (metric.error || metric.used == null || metric.limit == null) return "Unavailable";
   if (metric.limit <= 0) return `${metric.used} used`;
   return `${metric.used} / ${metric.limit}`;
 };
 
 const getUsagePercent = (metric: UsageMetric) => {
+  if (metric.unlimited) return 0;
   if (metric.used == null || metric.limit == null || metric.limit <= 0) return metric.used && metric.used > 0 ? 100 : 0;
   return Math.min(100, Math.round((metric.used / metric.limit) * 100));
 };
 
 const isAtLimit = (metric: UsageCounter) =>
   metric.used != null && metric.limit != null && metric.limit > 0 && metric.used >= metric.limit;
+
+const formatUsagePrice = (
+  config: PricingConfigMap[string] | undefined,
+  fallbackAmount: number,
+) => {
+  const amount = Number(config?.amount);
+  const currency = config?.currency?.trim().toUpperCase();
+  if (!Number.isFinite(amount) || amount <= 0 || !currency) {
+    return `EUR ${fallbackAmount}`;
+  }
+  return `${currency} ${amount.toLocaleString("en-GB", {
+    minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+    maximumFractionDigits: 2,
+  })}`;
+};
 
 const actionClasses = (metric: UsageMetric) =>
   isAtLimit(metric)
@@ -212,32 +240,56 @@ export function BillingUsagePanel({
   user,
   isPro,
   participantType,
+  pricingConfigs = {},
   addonLoadingKey,
+  refreshToken = 0,
   onPurchaseAddon,
   onUpgrade,
 }: BillingUsagePanelProps) {
-  const aiQuotas = useAiQuotas(BILLING_AI_BUCKETS, user, { enabled: Boolean(user) });
+  const { profile } = useAuth();
+  const isAdmin = isPlatformAdmin(profile);
+  const {
+    quotas: aiQuotas,
+    quotaLoading: aiQuotaLoading,
+    refreshQuotas,
+  } = useAiQuotas(BILLING_AI_BUCKETS, user, { enabled: Boolean(user) });
+  useEffect(() => {
+    if (refreshToken > 0) void refreshQuotas();
+  }, [refreshQuotas, refreshToken]);
   const { data: reportCount = 0, isLoading: reportsLoading, error: reportsError } = useReportUsage();
   const {
     data: reportCreditCount = 0,
     isLoading: reportCreditsLoading,
     error: reportCreditsError,
   } = usePropertyReportAddonCredits();
-  const showListingPromotions = SELL_SIDE_PARTICIPANTS.has(participantType);
+  const showListingPromotions = !isAdmin && SELL_SIDE_PARTICIPANTS.has(participantType);
   const promotionBalance = useListingPromotionBalance(showListingPromotions);
+  const propertyReportPrice = formatUsagePrice(
+    pricingConfigs.property_report_single,
+    REPORT_EXTRA_COST,
+  );
+  const spotlightPrice = formatUsagePrice(pricingConfigs.featured_listing, 39);
+  const priorityPrice = formatUsagePrice(pricingConfigs.priority_placement, 59);
+  const promotionBundlePrice = formatUsagePrice(
+    pricingConfigs.featured_priority_bundle,
+    79,
+  );
 
-  const reportBaseLimit = isPro ? REPORT_INCLUDED : 0;
+  const hasUnlimitedReports = isAdmin || (isPro && !PARTICIPANT_REPORT_PLANS.has(participantType));
+  const reportBaseLimit = isPro ? (hasUnlimitedReports ? 999 : REPORT_INCLUDED) : 0;
   const reportLimit = reportBaseLimit +
-    reportCreditCount +
+    (hasUnlimitedReports ? 0 : reportCreditCount) +
     Math.max(reportCount - reportBaseLimit, 0);
-  const valuationQuota = aiQuotas.quotas["property-valuation"];
-  const neighbourhoodQuota = aiQuotas.quotas["neighbourhood-report"];
-  const poiQuota = aiQuotas.quotas["property-pois"];
+  const valuationQuota = aiQuotas["property-valuation"];
+  const neighbourhoodQuota = aiQuotas["neighbourhood-report"];
+  const poiQuota = aiQuotas["property-pois"];
   const valuationUsage = usageFromQuota(valuationQuota);
   const neighbourhoodUsage = usageFromQuota(neighbourhoodQuota);
   const poiUsage = usageFromQuota(poiQuota);
   const limitActions = (usage: UsageCounter, addonKey: string): MetricAction[] =>
-    isAtLimit(usage)
+    isAdmin
+      ? []
+      : isAtLimit(usage)
       ? isPro
         ? [{ type: "addon", addonKey, label: "Top up" }]
         : [
@@ -257,8 +309,10 @@ export function BillingUsagePanel({
       description: "AI market insights and valuation analysis.",
       icon: BarChart2,
       ...valuationUsage,
-      loading: aiQuotas.quotaLoading,
-      actions: limitActions(valuationUsage, "valuation_single"),
+      unlimited: isAdmin,
+      counterLabel: isAdmin ? "Unlimited" : undefined,
+      loading: aiQuotaLoading,
+      actions: isAdmin ? undefined : limitActions(valuationUsage, "valuation_single"),
     },
     {
       id: "neighbourhood-report",
@@ -266,8 +320,10 @@ export function BillingUsagePanel({
       description: "Area trends, safety, walkability, and local signals.",
       icon: Globe,
       ...neighbourhoodUsage,
-      loading: aiQuotas.quotaLoading,
-      actions: limitActions(neighbourhoodUsage, "neighbourhood_report_single"),
+      unlimited: isAdmin,
+      counterLabel: isAdmin ? "Unlimited" : undefined,
+      loading: aiQuotaLoading,
+      actions: isAdmin ? undefined : limitActions(neighbourhoodUsage, "neighbourhood_report_single"),
     },
     {
       id: "property-pois",
@@ -275,8 +331,10 @@ export function BillingUsagePanel({
       description: "AI-curated places and nearby-location analysis.",
       icon: MapPin,
       ...poiUsage,
-      loading: aiQuotas.quotaLoading,
-      actions: poiUsage.limit != null && poiUsage.used != null && poiUsage.used >= poiUsage.limit
+      unlimited: isAdmin,
+      counterLabel: isAdmin ? "Unlimited" : undefined,
+      loading: aiQuotaLoading,
+      actions: !isAdmin && poiUsage.limit != null && poiUsage.used != null && poiUsage.used >= poiUsage.limit
         ? isPro
           ? [{
               type: "contact",
@@ -296,16 +354,21 @@ export function BillingUsagePanel({
       icon: FileText,
       used: reportCount,
       limit: reportLimit,
+      unlimited: hasUnlimitedReports,
       loading: reportsLoading || reportCreditsLoading,
       error: Boolean(reportsError || reportCreditsError),
-      actions: isPro
+      actions: hasUnlimitedReports
+        ? undefined
+        : isPro
         ? [{ type: "addon", addonKey: "property_report_single", label: isAtLimit({ used: reportCount, limit: reportLimit }) ? "Top up" : "Buy report" }]
         : [
             { type: "upgrade", label: "Upgrade" },
             { type: "addon", addonKey: "property_report_single", label: "Buy report" },
           ],
-      footnote: isPro
-        ? `Extra reports cost EUR ${REPORT_EXTRA_COST} each.`
+      footnote: hasUnlimitedReports
+        ? "Property reports are included without a monthly cap on your business plan."
+        : isPro
+        ? `Extra reports cost ${propertyReportPrice} each.`
         : "Upgrade for included reports, or buy a one-off report add-on.",
     },
   ];
@@ -331,8 +394,8 @@ export function BillingUsagePanel({
           { type: "addon", addonKey: "featured_priority_bundle", label: "Buy bundle", ariaLabel: "Buy bundle" },
         ],
         footnote: spotlight
-          ? `${spotlight.remaining + spotlight.addons} available credit${spotlight.remaining + spotlight.addons === 1 ? "" : "s"}. Add-on EUR 39/30 days; credits do not roll over.`
-          : "Spotlight add-on EUR 39/30 days; credits do not roll over.",
+          ? `${spotlight.remaining + spotlight.addons} available credit${spotlight.remaining + spotlight.addons === 1 ? "" : "s"}. Add-on ${spotlightPrice}/30 days; credits do not roll over.`
+          : `Spotlight add-on ${spotlightPrice}/30 days; credits do not roll over.`,
       },
       {
         id: "priority-promotions",
@@ -345,8 +408,8 @@ export function BillingUsagePanel({
         error: balanceUnavailable,
         actions: promotionActions("priority_placement", "Buy Priority"),
         footnote: priority
-          ? `${priority.remaining + priority.addons} available credit${priority.remaining + priority.addons === 1 ? "" : "s"}. Priority add-on EUR 59/30 days; bundle EUR 79/30 days.`
-          : "Priority add-on EUR 59/30 days; Spotlight + Priority bundle EUR 79/30 days.",
+          ? `${priority.remaining + priority.addons} available credit${priority.remaining + priority.addons === 1 ? "" : "s"}. Priority add-on ${priorityPrice}/30 days; bundle ${promotionBundlePrice}/30 days.`
+          : `Priority add-on ${priorityPrice}/30 days; Spotlight + Priority bundle ${promotionBundlePrice}/30 days.`,
       },
     );
   }

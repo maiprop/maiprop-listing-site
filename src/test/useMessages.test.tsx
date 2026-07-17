@@ -9,10 +9,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
 const {
-  useAuthMock, fromMock, channelMock, removeChannelMock, onMock, subscribeMock, toastMock,
+  useAuthMock, fromMock, rpcMock, channelMock, removeChannelMock, onMock, subscribeMock, toastMock,
 } = vi.hoisted(() => ({
   useAuthMock: vi.fn(),
   fromMock: vi.fn(),
+  rpcMock: vi.fn(),
   channelMock: vi.fn(),
   removeChannelMock: vi.fn(),
   onMock: vi.fn(),
@@ -24,6 +25,7 @@ vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => useAuthMock() }));
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: (...a: unknown[]) => fromMock(...a),
+    rpc: (...a: unknown[]) => rpcMock(...a),
     channel: (...a: unknown[]) => channelMock(...a),
     removeChannel: (...a: unknown[]) => removeChannelMock(...a),
   },
@@ -66,6 +68,7 @@ const deferred = <T,>() => {
 
 const existingMessage = {
   id: "m-existing",
+  client_delivery_id: null,
   conversation_id: "c-1",
   sender_id: "u-2",
   content: "Earlier",
@@ -77,6 +80,7 @@ const existingMessage = {
 
 const serverMessage = {
   id: "m-server",
+  client_delivery_id: null,
   conversation_id: "c-1",
   sender_id: "u-1",
   receiver_id: null,
@@ -97,9 +101,17 @@ const buildChannel = () => {
   return chain;
 };
 
+const conversationQuery = (result: { data: unknown; error: Error | null }) => {
+  const limit = vi.fn().mockResolvedValue(result);
+  const nestedOrder = vi.fn().mockReturnValue({ limit });
+  const rootOrder = vi.fn().mockReturnValue({ order: nestedOrder });
+  return { select: () => ({ or: () => ({ order: rootOrder }) }) };
+};
+
 beforeEach(() => {
   useAuthMock.mockReset();
   fromMock.mockReset();
+  rpcMock.mockReset();
   channelMock.mockReset();
   removeChannelMock.mockReset();
   onMock.mockReset();
@@ -112,7 +124,7 @@ beforeEach(() => {
 
 describe("useConversations", () => {
   it("subscribes to a channel scoped to the user and unsubscribes on unmount", async () => {
-    fromMock.mockReturnValue({ select: () => ({ or: () => ({ order: vi.fn().mockResolvedValue({ data: [], error: null }) }) }) });
+    fromMock.mockReturnValue(conversationQuery({ data: [], error: null }));
     const { unmount } = renderHook(() => useConversations(), { wrapper: wrapper() });
     await waitFor(() => expect(channelMock).toHaveBeenCalledWith("conversations:user:u-1"));
     expect(onMock).toHaveBeenCalledTimes(2); // both filters
@@ -129,8 +141,10 @@ describe("useConversations", () => {
   });
 
   it("returns conversations with null profile_a / profile_b when no participants", async () => {
-    const order = vi.fn().mockResolvedValue({ data: [{ id: "c-1", participant_a: null, participant_b: null }], error: null });
-    fromMock.mockReturnValue({ select: () => ({ or: () => ({ order }) }) });
+    fromMock.mockReturnValue(conversationQuery({
+      data: [{ id: "c-1", participant_a: null, participant_b: null }],
+      error: null,
+    }));
     const { result } = renderHook(() => useConversations(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual([
@@ -139,16 +153,16 @@ describe("useConversations", () => {
   });
 
   it("joins participant profiles via profiles_public", async () => {
-    const order = vi.fn().mockResolvedValue({
+    const queryResult = {
       data: [{ id: "c-1", participant_a: "p-a", participant_b: "p-b" }],
       error: null,
-    });
+    };
     const profilesIn = vi.fn().mockResolvedValue({
       data: [{ user_id: "p-a", display_name: "Alice", avatar_url: null }],
       error: null,
     });
     fromMock.mockImplementation((table: string) => {
-      if (table === "conversations") return { select: () => ({ or: () => ({ order }) }) };
+      if (table === "conversations") return conversationQuery(queryResult);
       if (table === "profiles_public") return { select: () => ({ in: profilesIn }) };
       throw new Error("unexpected " + table);
     });
@@ -160,8 +174,7 @@ describe("useConversations", () => {
   });
 
   it("propagates supabase errors", async () => {
-    const order = vi.fn().mockResolvedValue({ data: null, error: new Error("denied") });
-    fromMock.mockReturnValue({ select: () => ({ or: () => ({ order }) }) });
+    fromMock.mockReturnValue(conversationQuery({ data: null, error: new Error("denied") }));
     const { result } = renderHook(() => useConversations(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isError).toBe(true));
   });
@@ -223,28 +236,245 @@ describe("useMessages", () => {
     expect(insertSubscription).toBeDefined();
 
     act(() => {
-      (insertSubscription?.[2] as () => void)();
+      (insertSubscription?.[2] as (payload: { new: typeof serverMessage }) => void)({
+        new: serverMessage,
+      });
     });
 
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["messages", "c-1"] });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["conversations"] });
   });
+
+  it("refetches once when realtime becomes subscribed to close the initial-query gap", async () => {
+    const client = createQueryClient();
+    const invalidateQueries = vi.spyOn(client, "invalidateQueries");
+    fromMock.mockReturnValue({
+      select: () => ({
+        eq: () => ({ order: vi.fn().mockResolvedValue({ data: [], error: null }) }),
+      }),
+    });
+
+    renderHook(() => useMessages("c-1"), {
+      wrapper: wrapperWithClient(client),
+    });
+    await waitFor(() => expect(subscribeMock).toHaveBeenCalled());
+
+    const onStatus = subscribeMock.mock.calls[0]?.[0] as
+      | ((status: string) => void)
+      | undefined;
+    act(() => onStatus?.("SUBSCRIBED"));
+
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["messages", "c-1"],
+    });
+  });
+
+  it("performs a post-subscription fetch when the initial message query is still in flight", async () => {
+    const client = createQueryClient();
+    const initial = deferred<{ data: []; error: null }>();
+    const order = vi.fn()
+      .mockReturnValueOnce(initial.promise)
+      .mockResolvedValueOnce({ data: [], error: null });
+    fromMock.mockReturnValue({
+      select: () => ({ eq: () => ({ order }) }),
+    });
+
+    renderHook(() => useMessages("c-1"), {
+      wrapper: wrapperWithClient(client),
+    });
+    await waitFor(() => expect(order).toHaveBeenCalledTimes(1));
+    const onStatus = subscribeMock.mock.calls[0]?.[0] as
+      | ((status: string) => void)
+      | undefined;
+
+    act(() => onStatus?.("SUBSCRIBED"));
+    initial.resolve({ data: [], error: null });
+
+    await waitFor(() => expect(order).toHaveBeenCalledTimes(2));
+  });
+
+  it("adds realtime inserts to the active recipient cache immediately", async () => {
+    const client = createQueryClient();
+    fromMock.mockReturnValue({
+      select: () => ({
+        eq: () => ({ order: vi.fn().mockResolvedValue({ data: [], error: null }) }),
+      }),
+    });
+
+    const { result } = renderHook(() => useMessages("c-1"), {
+      wrapper: wrapperWithClient(client),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    const insertSubscription = onMock.mock.calls.find(
+      ([kind, filter]) => kind === "postgres_changes" && filter?.event === "INSERT",
+    );
+    act(() => {
+      (insertSubscription?.[2] as (payload: { new: typeof serverMessage }) => void)({
+        new: serverMessage,
+      });
+    });
+
+    expect(client.getQueryData<Array<{ id: string }>>(["messages", "c-1"]))
+      .toEqual(expect.arrayContaining([expect.objectContaining({ id: "m-server" })]));
+  });
+
+  it("replaces the matching optimistic message when realtime arrives before the mutation response", async () => {
+    const client = createQueryClient();
+    const queryResult = deferred<{ data: typeof existingMessage[]; error: null }>();
+    fromMock.mockReturnValue({
+      select: () => ({
+        eq: () => ({ order: vi.fn().mockReturnValue(queryResult.promise) }),
+      }),
+    });
+    client.setQueryData(["messages", "c-1"], [
+      existingMessage,
+      {
+        ...serverMessage,
+        id: "optimistic:pending-send",
+        created_at: "2026-07-14T08:59:59.000Z",
+        message_attachments: [{
+          storage_path: "u-1/c-1/report.pdf",
+          filename: "report.pdf",
+          mime_type: "application/pdf",
+        }],
+        profiles: null,
+      },
+    ]);
+
+    const view = renderHook(() => useMessages("c-1"), {
+      wrapper: wrapperWithClient(client),
+    });
+    await waitFor(() => expect(subscribeMock).toHaveBeenCalled());
+    const insertSubscription = onMock.mock.calls.find(
+      ([, filter]) => (filter as { event?: string } | undefined)?.event === "INSERT",
+    );
+
+    act(() => {
+      (insertSubscription?.[2] as (payload: { new: typeof serverMessage }) => void)({
+        new: serverMessage,
+      });
+    });
+
+    const cached = client.getQueryData<Array<{
+      id: string;
+      message_attachments: Array<{ filename: string }>;
+    }>>(["messages", "c-1"]);
+    expect(cached?.filter((message) => message.id === "m-server")).toHaveLength(1);
+    expect(cached?.some((message) => message.id.startsWith("optimistic:"))).toBe(false);
+    expect(cached?.find((message) => message.id === "m-server")?.message_attachments)
+      .toEqual([expect.objectContaining({ filename: "report.pdf" })]);
+
+    view.unmount();
+    queryResult.resolve({ data: [], error: null });
+  });
+
+  it("reconciles repeated identical sends by client delivery identity", async () => {
+    const client = createQueryClient();
+    const queryResult = deferred<{ data: []; error: null }>();
+    fromMock.mockReturnValue({
+      select: () => ({
+        eq: () => ({ order: vi.fn().mockReturnValue(queryResult.promise) }),
+      }),
+    });
+    const firstDeliveryId = "00000000-0000-4000-8000-000000000011";
+    const secondDeliveryId = "00000000-0000-4000-8000-000000000012";
+    client.setQueryData(["messages", "c-1"], [
+      {
+        ...serverMessage,
+        id: "optimistic:first",
+        client_delivery_id: firstDeliveryId,
+        message_attachments: [],
+        profiles: null,
+      },
+      {
+        ...serverMessage,
+        id: "optimistic:second",
+        client_delivery_id: secondDeliveryId,
+        message_attachments: [],
+        profiles: null,
+      },
+    ]);
+
+    const view = renderHook(() => useMessages("c-1"), {
+      wrapper: wrapperWithClient(client),
+    });
+    await waitFor(() => expect(subscribeMock).toHaveBeenCalled());
+    const insertSubscription = onMock.mock.calls.find(
+      ([, filter]) => (filter as { event?: string } | undefined)?.event === "INSERT",
+    );
+
+    act(() => {
+      (insertSubscription?.[2] as (payload: { new: typeof serverMessage & {
+        client_delivery_id: string;
+      } }) => void)({
+        new: { ...serverMessage, client_delivery_id: secondDeliveryId },
+      });
+    });
+
+    const cached = client.getQueryData<Array<{
+      id: string;
+      client_delivery_id: string | null;
+    }>>(["messages", "c-1"]);
+    expect(cached).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "optimistic:first", client_delivery_id: firstDeliveryId }),
+      expect.objectContaining({ id: "m-server", client_delivery_id: secondDeliveryId }),
+    ]));
+    expect(cached?.some((message) => message.id === "optimistic:second")).toBe(false);
+
+    view.unmount();
+    queryResult.resolve({ data: [], error: null });
+  });
+
+  it("keeps unmatched optimistic messages when a server refetch completes", async () => {
+    const client = createQueryClient();
+    const optimisticMessage = {
+      ...serverMessage,
+      id: "optimistic:still-pending",
+      content: "Still pending",
+      created_at: "2026-07-14T09:01:00.000Z",
+      message_attachments: [],
+      profiles: null,
+    };
+    client.setQueryData(["messages", "c-1"], [existingMessage, optimisticMessage]);
+    fromMock.mockImplementation((table: string) => {
+      if (table === "messages") {
+        return {
+          select: () => ({
+            eq: () => ({
+              order: vi.fn().mockResolvedValue({ data: [existingMessage], error: null }),
+            }),
+          }),
+        };
+      }
+      if (table === "profiles_public") {
+        return {
+          select: () => ({ in: vi.fn().mockResolvedValue({ data: [], error: null }) }),
+        };
+      }
+      throw new Error("unexpected " + table);
+    });
+
+    const { result } = renderHook(() => useMessages("c-1"), {
+      wrapper: wrapperWithClient(client),
+    });
+    await act(async () => {
+      await result.current.refetch();
+    });
+
+    expect(client.getQueryData<Array<{ id: string }>>(["messages", "c-1"]))
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: "m-existing" }),
+        expect.objectContaining({ id: "optimistic:still-pending" }),
+      ]));
+  });
 });
 
 describe("useSendMessage", () => {
-  it("adds the sender message to the cache before the insert resolves", async () => {
+  it("adds the sender message to the cache before atomic delivery resolves", async () => {
     const client = createQueryClient();
-    const insertResult = deferred<{ data: typeof serverMessage; error: null }>();
-    const single = vi.fn().mockReturnValue(insertResult.promise);
-    const insertMessage = vi.fn().mockReturnValue({ select: () => ({ single }) });
-    const updateConversation = vi.fn().mockReturnValue({
-      eq: vi.fn().mockResolvedValue({ error: null }),
-    });
-    fromMock.mockImplementation((table: string) => {
-      if (table === "messages") return { insert: insertMessage };
-      if (table === "conversations") return { update: updateConversation };
-      throw new Error("unexpected " + table);
-    });
+    const delivery = deferred<{ data: typeof serverMessage; error: null }>();
+    rpcMock.mockReturnValue({ single: vi.fn().mockReturnValue(delivery.promise) });
     client.setQueryData(["messages", "c-1"], [existingMessage]);
 
     const { result } = renderHook(() => useSendMessage(), {
@@ -259,7 +489,11 @@ describe("useSendMessage", () => {
     });
 
     await waitFor(() => {
-      const cached = client.getQueryData<Array<{ id: string; content: string }>>(["messages", "c-1"]);
+      const cached = client.getQueryData<Array<{
+        id: string;
+        content: string;
+        client_delivery_id: string | null;
+      }>>(["messages", "c-1"]);
       expect(cached).toHaveLength(2);
       expect(cached?.[1]).toMatchObject({
         id: expect.stringMatching(/^optimistic:/),
@@ -267,10 +501,25 @@ describe("useSendMessage", () => {
         sender_id: "u-1",
         content: "Optimistic hello",
         status: "sent",
+        client_delivery_id: expect.any(String),
       });
+      expect(rpcMock).toHaveBeenCalledWith(
+        "send_message_with_attachments",
+        expect.objectContaining({
+          p_conversation_id: "c-1",
+          p_content: "Optimistic hello",
+          p_client_delivery_id: cached?.[1].client_delivery_id,
+          p_attachments: [],
+        }),
+      );
     });
 
-    insertResult.resolve({ data: serverMessage, error: null });
+    const deliveryId = (rpcMock.mock.calls[0][1] as { p_client_delivery_id: string })
+      .p_client_delivery_id;
+    delivery.resolve({
+      data: { ...serverMessage, client_delivery_id: deliveryId },
+      error: null,
+    });
     await act(async () => {
       await mutation;
     });
@@ -278,20 +527,8 @@ describe("useSendMessage", () => {
 
   it("reconciles an optimistic message with realtime and mutation results without duplicates", async () => {
     const client = createQueryClient();
-    const insertResult = deferred<{ data: typeof serverMessage; error: null }>();
-    fromMock.mockImplementation((table: string) => {
-      if (table === "messages") {
-        return {
-          insert: vi.fn().mockReturnValue({
-            select: () => ({ single: vi.fn().mockReturnValue(insertResult.promise) }),
-          }),
-        };
-      }
-      if (table === "conversations") {
-        return { update: () => ({ eq: vi.fn().mockResolvedValue({ error: null }) }) };
-      }
-      throw new Error("unexpected " + table);
-    });
+    const delivery = deferred<{ data: typeof serverMessage; error: null }>();
+    rpcMock.mockReturnValue({ single: vi.fn().mockReturnValue(delivery.promise) });
     client.setQueryData(["messages", "c-1"], [existingMessage]);
 
     const { result } = renderHook(() => useSendMessage(), {
@@ -313,7 +550,7 @@ describe("useSendMessage", () => {
       ...cached,
       { ...serverMessage, message_attachments: [], profiles: null },
     ]);
-    insertResult.resolve({ data: serverMessage, error: null });
+    delivery.resolve({ data: serverMessage, error: null });
     await act(async () => {
       await mutation;
     });
@@ -323,14 +560,10 @@ describe("useSendMessage", () => {
     expect(reconciled?.some((message) => message.id.startsWith("optimistic:"))).toBe(false);
   });
 
-  it("restores the previous cache when the message insert fails", async () => {
+  it("removes the optimistic message when atomic delivery fails", async () => {
     const client = createQueryClient();
-    const insertResult = deferred<{ data: null; error: Error }>();
-    fromMock.mockReturnValue({
-      insert: vi.fn().mockReturnValue({
-        select: () => ({ single: vi.fn().mockReturnValue(insertResult.promise) }),
-      }),
-    });
+    const delivery = deferred<{ data: null; error: Error }>();
+    rpcMock.mockReturnValue({ single: vi.fn().mockReturnValue(delivery.promise) });
     client.setQueryData(["messages", "c-1"], [existingMessage]);
 
     const { result } = renderHook(() => useSendMessage(), {
@@ -348,27 +581,69 @@ describe("useSendMessage", () => {
       expect(cached?.some((message) => message.id.startsWith("optimistic:"))).toBe(true);
     });
 
-    insertResult.resolve({ data: null, error: new Error("insert denied") });
+    delivery.resolve({ data: null, error: new Error("delivery denied") });
     await act(async () => {
       await mutation.catch(() => undefined);
     });
 
     expect(client.getQueryData(["messages", "c-1"])).toEqual([existingMessage]);
-    expect(toastMock.error).toHaveBeenCalledWith("insert denied");
+    expect(toastMock.error).toHaveBeenCalledWith("delivery denied");
   });
 
-  it("inserts message + attachments + bumps last_message_at", async () => {
-    const single = vi.fn().mockResolvedValue({ data: { id: "m-new" }, error: null });
-    const select = vi.fn().mockReturnValue({ single });
-    const insertMessage = vi.fn().mockReturnValue({ select });
-    const insertAttach = vi.fn().mockResolvedValue({ error: null });
-    const eq = vi.fn().mockResolvedValue({ error: null });
-    const update = vi.fn().mockReturnValue({ eq });
-    fromMock.mockImplementation((table: string) => {
-      if (table === "messages") return { insert: insertMessage };
-      if (table === "message_attachments") return { insert: insertAttach };
-      if (table === "conversations") return { update };
-      throw new Error("unexpected " + table);
+  it("removes only the failed optimistic message when sends overlap", async () => {
+    const client = createQueryClient();
+    const firstInsert = deferred<{ data: null; error: Error }>();
+    const secondInsert = deferred<{ data: typeof serverMessage; error: null }>();
+    let deliveryCall = 0;
+    rpcMock.mockImplementation(() => ({
+      single: vi.fn().mockImplementation(() => {
+        deliveryCall += 1;
+        return deliveryCall === 1 ? firstInsert.promise : secondInsert.promise;
+      }),
+    }));
+    client.setQueryData(["messages", "c-1"], [existingMessage]);
+
+    const { result } = renderHook(() => useSendMessage(), {
+      wrapper: wrapperWithClient(client),
+    });
+    let failedMutation!: Promise<unknown>;
+    let successfulMutation!: Promise<typeof serverMessage>;
+    act(() => {
+      failedMutation = result.current.mutateAsync({
+        conversation_id: "c-1",
+        content: "First fails",
+      });
+      successfulMutation = result.current.mutateAsync({
+        conversation_id: "c-1",
+        content: "Second survives",
+      });
+    });
+
+    await waitFor(() => {
+      const cached = client.getQueryData<Array<{ id: string; content: string }>>(["messages", "c-1"]);
+      expect(cached?.filter((message) => message.id.startsWith("optimistic:"))).toHaveLength(2);
+    });
+
+    firstInsert.resolve({ data: null, error: new Error("first denied") });
+    await act(async () => {
+      await failedMutation.catch(() => undefined);
+    });
+
+    const afterFailure = client.getQueryData<Array<{ id: string; content: string }>>(["messages", "c-1"]);
+    expect(afterFailure?.some((message) => message.content === "Second survives")).toBe(true);
+
+    secondInsert.resolve({
+      data: { ...serverMessage, id: "m-second", content: "Second survives" },
+      error: null,
+    });
+    await act(async () => {
+      await successfulMutation;
+    });
+  });
+
+  it("delivers message and attachment metadata through one RPC", async () => {
+    rpcMock.mockReturnValue({
+      single: vi.fn().mockResolvedValue({ data: { ...serverMessage, id: "m-new" }, error: null }),
     });
 
     const { result } = renderHook(() => useSendMessage(), { wrapper: wrapper() });
@@ -379,17 +654,16 @@ describe("useSendMessage", () => {
         attachmentPaths: [{ path: "p/a.png", filename: "a.png", mime_type: "image/png" }],
       });
     });
-    expect(insertMessage).toHaveBeenCalledWith({
-      conversation_id: "c-1",
-      sender_id: "u-1",
-      content: "Hey there",
-      receiver_id: null,
+    expect(rpcMock).toHaveBeenCalledWith("send_message_with_attachments", {
+      p_conversation_id: "c-1",
+      p_content: "Hey there",
+      p_client_delivery_id: expect.stringMatching(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+      ),
+      p_attachments: [
+        { storage_path: "p/a.png", filename: "a.png", mime_type: "image/png" },
+      ],
     });
-    expect(insertAttach).toHaveBeenCalledWith([
-      { message_id: "m-new", storage_path: "p/a.png", filename: "a.png", mime_type: "image/png" },
-    ]);
-    expect(update).toHaveBeenCalledWith(expect.objectContaining({ last_message_at: expect.any(String) }));
-    expect(eq).toHaveBeenCalledWith("id", "c-1");
   });
 
   it("rejects + toasts when no user", async () => {
@@ -405,25 +679,22 @@ describe("useSendMessage", () => {
         .catch(() => {});
     });
     expect(setQueryData).not.toHaveBeenCalled();
+    expect(rpcMock).not.toHaveBeenCalled();
     expect(toastMock.error).toHaveBeenCalledWith(expect.stringMatching(/logged in/i));
   });
 
-  it("works without attachments (skips message_attachments insert)", async () => {
-    const single = vi.fn().mockResolvedValue({ data: { id: "m-new" }, error: null });
-    const insertMessage = vi.fn().mockReturnValue({ select: () => ({ single }) });
-    const insertAttach = vi.fn();
-    const eq = vi.fn().mockResolvedValue({ error: null });
-    fromMock.mockImplementation((table: string) => {
-      if (table === "messages") return { insert: insertMessage };
-      if (table === "message_attachments") return { insert: insertAttach };
-      if (table === "conversations") return { update: () => ({ eq }) };
-      throw new Error("unexpected " + table);
+  it("sends an empty attachment array when no files are attached", async () => {
+    rpcMock.mockReturnValue({
+      single: vi.fn().mockResolvedValue({ data: { ...serverMessage, id: "m-new" }, error: null }),
     });
     const { result } = renderHook(() => useSendMessage(), { wrapper: wrapper() });
     await act(async () => {
       await result.current.mutateAsync({ conversation_id: "c-1", content: "no-attach" });
     });
-    expect(insertAttach).not.toHaveBeenCalled();
+    expect(rpcMock).toHaveBeenCalledWith(
+      "send_message_with_attachments",
+      expect.objectContaining({ p_attachments: [] }),
+    );
   });
 });
 

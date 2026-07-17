@@ -80,7 +80,6 @@ export const SELF_SERVE_ADDON_MODULES = new Set([
 
 export const PROMOTION_ADDON_CATALOG = {
   featured_listing: {
-    amountMinor: 3_900,
     currency: "eur",
     module: "adhoc_charges",
     unit: "per_listing",
@@ -88,7 +87,6 @@ export const PROMOTION_ADDON_CATALOG = {
     entitlementDays: 30,
   },
   priority_placement: {
-    amountMinor: 5_900,
     currency: "eur",
     module: "adhoc_charges",
     unit: "per_listing",
@@ -96,7 +94,6 @@ export const PROMOTION_ADDON_CATALOG = {
     entitlementDays: 30,
   },
   featured_priority_bundle: {
-    amountMinor: 7_900,
     currency: "eur",
     module: "adhoc_charges",
     unit: "per_listing",

@@ -1,9 +1,15 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Search, Send, MoreVertical, Paperclip, Loader2, MessageSquare, ArrowLeft, Check, CheckCheck, Link2, Copy, ExternalLink } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { useConversations, useMessages, useSendMessage, useMarkMessagesRead } from "@/hooks/useMessages";
 
 type MsgItem = NonNullable<ReturnType<typeof useMessages>["data"]>[number];
+type PendingMessageFile = { path: string; filename: string; mime_type: string };
+type ConversationDraft = {
+  input: string;
+  pendingFiles: PendingMessageFile[];
+  revision: number;
+};
 import { useAuth } from "@/contexts/AuthContext";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -22,6 +28,8 @@ import { getOtherProfile, getInitials } from "@/lib/messagesHelpers";
 import { MESSAGE_ATTACHMENT_MIME_TYPES, assertAllowedUpload } from "@/lib/uploadValidation";
 import { getListingDetailPath } from "@/lib/listingRoutes";
 
+const TYPING_HEARTBEAT_MS = 750;
+
 export default function Messages() {
   const { user, session } = useAuth();
   const location = useLocation();
@@ -34,13 +42,23 @@ export default function Messages() {
   const [activeConvId, setActiveConvId] = useState<string>("");
   const [input, setInput] = useState("");
   const [search, setSearch] = useState("");
-  const [pendingFiles, setPendingFiles] = useState<{ path: string; filename: string; mime_type: string }[]>([]);
+  const [pendingFiles, setPendingFiles] = useState<PendingMessageFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [otherIsTyping, setOtherIsTyping] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const typingChannelReadyRef = useRef(false);
+  const typingIntentRef = useRef(false);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingHeartbeatRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const remoteTypingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sendInProgressRef = useRef(false);
+  const conversationDraftsRef = useRef(new Map<string, ConversationDraft>());
+  const draftRevisionRef = useRef(new Map<string, number>());
+  const activeConvIdRef = useRef(activeConvId);
+  const inputRef = useRef(input);
+  const pendingFilesRef = useRef(pendingFiles);
   // Mobile: show list or chat pane
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
 
@@ -48,24 +66,146 @@ export default function Messages() {
   const sendMessage = useSendMessage();
   const markAsRead = useMarkMessagesRead(activeConvId);
 
+  useEffect(() => {
+    if (!sendMessage.isPending) sendInProgressRef.current = false;
+  }, [sendMessage.isPending]);
+
   const activeConv = conversations.find((c) => c.id === activeConvId);
   const otherProfile = getOtherProfile(activeConv, user?.id || "");
+
+  activeConvIdRef.current = activeConvId;
+  inputRef.current = input;
+  pendingFilesRef.current = pendingFiles;
+
+  const markActiveDraftEdited = useCallback(() => {
+    const conversationId = activeConvIdRef.current;
+    if (!conversationId) return;
+    draftRevisionRef.current.set(
+      conversationId,
+      (draftRevisionRef.current.get(conversationId) ?? 0) + 1,
+    );
+  }, []);
+
+  const updateInput = useCallback((value: string) => {
+    markActiveDraftEdited();
+    inputRef.current = value;
+    setInput(value);
+  }, [markActiveDraftEdited]);
+
+  const updatePendingFiles = useCallback((
+    nextValue: PendingMessageFile[] | ((current: PendingMessageFile[]) => PendingMessageFile[]),
+  ) => {
+    markActiveDraftEdited();
+    setPendingFiles((current) => {
+      const next = typeof nextValue === "function" ? nextValue(current) : nextValue;
+      pendingFilesRef.current = next;
+      return next;
+    });
+  }, [markActiveDraftEdited]);
+
+  const selectConversation = useCallback((id: string, showChat: boolean) => {
+    if (!id) return;
+    const previousId = activeConvIdRef.current;
+    if (previousId && previousId !== id) {
+      conversationDraftsRef.current.set(previousId, {
+        input: inputRef.current,
+        pendingFiles: [...pendingFilesRef.current],
+        revision: draftRevisionRef.current.get(previousId) ?? 0,
+      });
+    }
+
+    if (previousId !== id) {
+      const nextDraft = conversationDraftsRef.current.get(id);
+      const nextInput = nextDraft?.input ?? "";
+      const nextFiles = nextDraft ? [...nextDraft.pendingFiles] : [];
+      if (nextDraft) {
+        draftRevisionRef.current.set(id, nextDraft.revision);
+      } else if (!draftRevisionRef.current.has(id)) {
+        draftRevisionRef.current.set(id, 0);
+      }
+      activeConvIdRef.current = id;
+      inputRef.current = nextInput;
+      pendingFilesRef.current = nextFiles;
+      setActiveConvId(id);
+      setInput(nextInput);
+      setPendingFiles(nextFiles);
+    }
+    if (showChat) setMobileView("chat");
+  }, []);
+
+  const sendTypingState = useCallback(
+    (channel: ReturnType<typeof supabase.channel>, typing: boolean) => {
+      if (!user) return;
+      channel.send({
+        type: "broadcast",
+        event: "typing",
+        payload: { userId: user.id, typing },
+      }).catch(() => undefined);
+    },
+    [user],
+  );
+
+  const scheduleTypingStop = useCallback(
+    (channel: ReturnType<typeof supabase.channel>) => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => {
+        typingIntentRef.current = false;
+        if (typingHeartbeatRef.current) {
+          clearTimeout(typingHeartbeatRef.current);
+          typingHeartbeatRef.current = null;
+        }
+        if (
+          typingChannelReadyRef.current &&
+          typingChannelRef.current === channel
+        ) {
+          sendTypingState(channel, false);
+        }
+        typingTimeoutRef.current = null;
+      }, 3_000);
+    },
+    [sendTypingState],
+  );
+
+  const publishTypingIntent = useCallback(
+    (channel: ReturnType<typeof supabase.channel>) => {
+      if (typingHeartbeatRef.current) {
+        scheduleTypingStop(channel);
+        return;
+      }
+
+      const publish = () => {
+        if (
+          !typingIntentRef.current ||
+          !typingChannelReadyRef.current ||
+          typingChannelRef.current !== channel
+        ) {
+          typingHeartbeatRef.current = null;
+          return;
+        }
+        sendTypingState(channel, true);
+        typingHeartbeatRef.current = setTimeout(publish, TYPING_HEARTBEAT_MS);
+      };
+
+      publish();
+      scheduleTypingStop(channel);
+    },
+    [scheduleTypingStop, sendTypingState],
+  );
 
   // Open conversation passed from property/detail (e.g. after "Contact") or copied deep link.
   useEffect(() => {
     if (requestedConversationId) {
-      setActiveConvId(requestedConversationId);
-      setMobileView("chat");
+      selectConversation(requestedConversationId, true);
       if (typeof openIdFromState === "string") navigate(location.pathname, { replace: true, state: {} });
     }
-  }, [requestedConversationId, openIdFromState, location.pathname, navigate]);
+  }, [requestedConversationId, openIdFromState, location.pathname, navigate, selectConversation]);
 
   // Auto-select first conversation when none selected
   useEffect(() => {
     if (conversations.length > 0 && !activeConvId && !requestedConversationId) {
-      setActiveConvId(conversations[0].id);
+      selectConversation(conversations[0].id, false);
     }
-  }, [conversations, activeConvId, requestedConversationId]);
+  }, [conversations, activeConvId, requestedConversationId, selectConversation]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -79,15 +219,25 @@ export default function Messages() {
     }
   }, [activeConvId, hasUnreadFromOther, markAsRead]);
 
-  // Typing indicator: subscribe to presence on the active conversation channel
+  // Typing is a transient event, so use private Broadcast rather than Presence.
   useEffect(() => {
     if (typingChannelRef.current) {
       supabase.removeChannel(typingChannelRef.current);
       typingChannelRef.current = null;
     }
+    typingChannelReadyRef.current = false;
+    typingIntentRef.current = false;
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = null;
+    }
+    if (typingHeartbeatRef.current) {
+      clearTimeout(typingHeartbeatRef.current);
+      typingHeartbeatRef.current = null;
+    }
+    if (remoteTypingTimeoutRef.current) {
+      clearTimeout(remoteTypingTimeoutRef.current);
+      remoteTypingTimeoutRef.current = null;
     }
     setOtherIsTyping(false);
 
@@ -98,7 +248,7 @@ export default function Messages() {
     // participation. Previously the public channel name `typing:<convId>` was
     // joinable by anyone who knew or guessed a conversation UUID.
     const channel = supabase.channel(`typing:${activeConvId}`, {
-      config: { presence: { key: user.id }, private: true },
+      config: { broadcast: { self: false }, private: true },
     });
     let cancelled = false;
 
@@ -108,20 +258,52 @@ export default function Messages() {
         await supabase.realtime.setAuth(session.access_token);
         if (cancelled) return;
         channel
-          .on("presence", { event: "sync" }, () => {
-            const state = channel.presenceState<{ typing: boolean }>();
-            const othersTyping = Object.entries(state).some(
-              ([presenceKey, presences]) =>
-                presenceKey !== user.id &&
-                (presences as { typing?: boolean }[]).some((p) => p.typing)
-            );
-            setOtherIsTyping(othersTyping);
+          .on("broadcast", { event: "typing" }, ({ payload }) => {
+            if (cancelled || typingChannelRef.current !== channel) return;
+            const state = payload as { userId?: unknown; typing?: unknown };
+            if (state.userId === user.id || typeof state.typing !== "boolean") return;
+            if (remoteTypingTimeoutRef.current) clearTimeout(remoteTypingTimeoutRef.current);
+            setOtherIsTyping(state.typing);
+            remoteTypingTimeoutRef.current = state.typing
+              ? setTimeout(() => {
+                  if (cancelled || typingChannelRef.current !== channel) return;
+                  setOtherIsTyping(false);
+                  remoteTypingTimeoutRef.current = null;
+                }, 4_000)
+              : null;
           })
-          .subscribe();
+          .subscribe((status) => {
+            if (cancelled || typingChannelRef.current !== channel) return;
+            if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+              typingChannelReadyRef.current = false;
+              typingIntentRef.current = false;
+              typingChannelRef.current = null;
+              if (typingTimeoutRef.current) {
+                clearTimeout(typingTimeoutRef.current);
+                typingTimeoutRef.current = null;
+              }
+              if (typingHeartbeatRef.current) {
+                clearTimeout(typingHeartbeatRef.current);
+                typingHeartbeatRef.current = null;
+              }
+              if (remoteTypingTimeoutRef.current) {
+                clearTimeout(remoteTypingTimeoutRef.current);
+                remoteTypingTimeoutRef.current = null;
+              }
+              setOtherIsTyping(false);
+              void supabase.removeChannel(channel);
+              return;
+            }
+            typingChannelReadyRef.current = status === "SUBSCRIBED";
+            if (status === "SUBSCRIBED" && typingIntentRef.current) {
+              publishTypingIntent(channel);
+            }
+          });
       } catch {
         if (!cancelled && typingChannelRef.current === channel) {
           supabase.removeChannel(channel);
           typingChannelRef.current = null;
+          typingChannelReadyRef.current = false;
         }
       }
     };
@@ -129,34 +311,75 @@ export default function Messages() {
 
     return () => {
       cancelled = true;
-      supabase.removeChannel(channel);
-      if (typingChannelRef.current === channel) typingChannelRef.current = null;
+      if (typingChannelReadyRef.current && typingIntentRef.current) {
+        sendTypingState(channel, false);
+      }
+      if (typingChannelRef.current === channel) {
+        typingChannelRef.current = null;
+        supabase.removeChannel(channel);
+      }
+      typingChannelReadyRef.current = false;
+      typingIntentRef.current = false;
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
         typingTimeoutRef.current = null;
       }
+      if (typingHeartbeatRef.current) {
+        clearTimeout(typingHeartbeatRef.current);
+        typingHeartbeatRef.current = null;
+      }
+      if (remoteTypingTimeoutRef.current) {
+        clearTimeout(remoteTypingTimeoutRef.current);
+        remoteTypingTimeoutRef.current = null;
+      }
     };
-  }, [activeConvId, session?.access_token, user]);
+  }, [activeConvId, publishTypingIntent, sendTypingState, session?.access_token, user]);
 
   const broadcastTyping = () => {
-    if (!typingChannelRef.current || !user) return;
-    typingChannelRef.current.track({ typing: true }).catch(() => undefined);
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = setTimeout(() => {
-      typingChannelRef.current?.track({ typing: false }).catch(() => undefined);
-    }, 3000);
+    typingIntentRef.current = true;
+    if (!typingChannelRef.current || !typingChannelReadyRef.current || !user) return;
+    publishTypingIntent(typingChannelRef.current);
   };
 
   const handleSend = async () => {
+    if (uploading || sendMessage.isPending || sendInProgressRef.current) return;
     if ((!input.trim() && pendingFiles.length === 0) || !activeConvId) return;
-    const content = input.trim() || (pendingFiles.length > 0 ? "📎" : "");
-    sendMessage.mutate({
-      conversation_id: activeConvId,
-      content,
-      attachmentPaths: pendingFiles.length > 0 ? pendingFiles : undefined,
-    });
-    setInput("");
-    setPendingFiles([]);
+    const sendConversationId = activeConvId;
+    const filesSnapshot = [...pendingFiles];
+    const sendDraftRevision = draftRevisionRef.current.get(sendConversationId) ?? 0;
+    const content = input.trim() || (pendingFiles.length > 0 ? "\u{1F4CE}" : "");
+    sendInProgressRef.current = true;
+    typingIntentRef.current = false;
+    if (typingHeartbeatRef.current) {
+      clearTimeout(typingHeartbeatRef.current);
+      typingHeartbeatRef.current = null;
+    }
+    if (typingChannelReadyRef.current) {
+      if (typingChannelRef.current) sendTypingState(typingChannelRef.current, false);
+    }
+    try {
+      await sendMessage.mutateAsync({
+        conversation_id: sendConversationId,
+        content,
+        attachmentPaths: filesSnapshot.length > 0 ? filesSnapshot : undefined,
+      });
+      const savedDraft = conversationDraftsRef.current.get(sendConversationId);
+      if (savedDraft?.revision === sendDraftRevision) {
+        conversationDraftsRef.current.delete(sendConversationId);
+      }
+
+      const sameConversation = activeConvIdRef.current === sendConversationId;
+      const draftUnchanged =
+        (draftRevisionRef.current.get(sendConversationId) ?? 0) === sendDraftRevision;
+      if (sameConversation && draftUnchanged) {
+        updateInput("");
+        updatePendingFiles([]);
+      }
+    } catch {
+      // The mutation hook reports the delivery error; keep this draft intact.
+    } finally {
+      sendInProgressRef.current = false;
+    }
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -176,21 +399,43 @@ export default function Messages() {
         return;
       }
     }
+    const uploadConversationId = activeConvId;
+    const uploaded: PendingMessageFile[] = [];
     setUploading(true);
     try {
-      const uploaded: { path: string; filename: string; mime_type: string }[] = [];
       for (let i = 0; i < files.length; i++) {
         const f = files[i];
         const ext = (f.name.split(".").pop() || "bin").toLowerCase();
-        const path = `${user.id}/${activeConvId}/${crypto.randomUUID()}.${ext}`;
+        const path = `${user.id}/${uploadConversationId}/${crypto.randomUUID()}.${ext}`;
         const { error } = await supabase.storage.from("message-attachments").upload(path, f, {
           contentType: f.type,
         });
         if (error) throw error;
         uploaded.push({ path, filename: f.name, mime_type: f.type });
       }
-      setPendingFiles((prev) => [...prev, ...uploaded]);
+      if (activeConvIdRef.current === uploadConversationId) {
+        updatePendingFiles((current) => [...current, ...uploaded]);
+      } else {
+        const nextRevision =
+          (draftRevisionRef.current.get(uploadConversationId) ?? 0) + 1;
+        draftRevisionRef.current.set(uploadConversationId, nextRevision);
+        const existingDraft = conversationDraftsRef.current.get(uploadConversationId) ?? {
+          input: "",
+          pendingFiles: [],
+          revision: nextRevision - 1,
+        };
+        conversationDraftsRef.current.set(uploadConversationId, {
+          ...existingDraft,
+          pendingFiles: [...existingDraft.pendingFiles, ...uploaded],
+          revision: nextRevision,
+        });
+      }
     } catch (err: unknown) {
+      if (uploaded.length > 0) {
+        await supabase.storage
+          .from("message-attachments")
+          .remove(uploaded.map((file) => file.path));
+      }
       toast.error((err instanceof Error ? err.message : null) || "Upload failed");
     } finally {
       setUploading(false);
@@ -199,8 +444,7 @@ export default function Messages() {
   };
 
   const handleSelectConv = (id: string) => {
-    setActiveConvId(id);
-    setMobileView("chat");
+    selectConversation(id, true);
   };
 
   const activeListingPath = activeConv?.listing_id
@@ -454,7 +698,7 @@ export default function Messages() {
                         {f.filename}
                         <button
                           type="button"
-                          onClick={() => setPendingFiles((p) => p.filter((_, j) => j !== i))}
+                          onClick={() => updatePendingFiles((p) => p.filter((_, j) => j !== i))}
                           className="hover:text-destructive"
                         >
                           ×
@@ -487,7 +731,7 @@ export default function Messages() {
                       type="button"
                       onClick={() => {
                         const path = activeListingPath ?? `/property/${activeConv.listing_id}`;
-                        setInput((prev) => (prev ? `${prev} ${path}` : path));
+                        updateInput(inputRef.current ? `${inputRef.current} ${path}` : path);
                       }}
                       className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
                       title="Share property link"
@@ -499,14 +743,18 @@ export default function Messages() {
                   <input
                     type="text"
                     value={input}
-                    onChange={e => { setInput(e.target.value); broadcastTyping(); }}
+                    onChange={e => { updateInput(e.target.value); broadcastTyping(); }}
                     onKeyDown={e => e.key === "Enter" && !e.shiftKey && handleSend()}
                     placeholder="Type a message..."
                     className="flex-1 bg-secondary border border-border rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
                   />
                   <button
                     onClick={handleSend}
-                    disabled={(!input.trim() && pendingFiles.length === 0) || sendMessage.isPending}
+                    disabled={
+                      uploading ||
+                      (!input.trim() && pendingFiles.length === 0) ||
+                      sendMessage.isPending
+                    }
                     className="p-2.5 rounded-xl bg-gradient-to-r from-brand-purple to-brand-cyan-deep text-primary-foreground disabled:opacity-50 transition-opacity hover:opacity-90 shrink-0"
                   >
                     {sendMessage.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}

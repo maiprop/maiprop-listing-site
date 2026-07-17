@@ -172,6 +172,43 @@ export function getPlanForParticipant(pt: ParticipantId): RolePlan {
   return ROLE_PLAN_MAP[participantToPricingAudience(pt)];
 }
 
+export type RolePlanPricingConfig = {
+  amount: number;
+  annualAmount?: number;
+  currency: string;
+  unit: string;
+};
+
+export type RolePlanDisplayPricing = {
+  monthlyPrice: number;
+  annualPrice: number;
+  currency: string;
+};
+
+const positivePrice = (value: number | undefined): number | null => {
+  const price = Number(value);
+  return Number.isFinite(price) && price > 0 ? price : null;
+};
+
+/** Resolve display amounts from the same active pricing row used by checkout. */
+export function resolveRolePlanDisplayPricing(
+  plan: Pick<RolePlan, "monthlyPrice" | "annualPrice">,
+  config?: RolePlanPricingConfig,
+): RolePlanDisplayPricing {
+  const configuredMonthly = config?.unit === "monthly"
+    ? positivePrice(config.amount)
+    : null;
+  const monthlyPrice = configuredMonthly ?? plan.monthlyPrice;
+  const annualPrice = positivePrice(config?.annualAmount) ??
+    (configuredMonthly ? configuredMonthly * 10 : plan.annualPrice);
+
+  return {
+    monthlyPrice,
+    annualPrice,
+    currency: config?.currency?.trim().toUpperCase() || "EUR",
+  };
+}
+
 export type SwitchKind = "same-tier" | "upgrade" | "downgrade" | "proonly" | "invite-only";
 
 /**

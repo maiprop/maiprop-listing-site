@@ -68,6 +68,10 @@ const transformedSource = functionSource
     `import { createClient } from "${fileUrl(mockClientPath)}";`,
   )
   .replace('from "../_shared/auth.ts"', `from "${shared("auth.ts")}"`)
+  .replace(
+    'from "../_shared/gatewayJwt.ts"',
+    `from "${shared("gatewayJwt.ts")}"`,
+  )
   .replace('from "../_shared/cors.ts"', `from "${shared("cors.ts")}"`)
   .replace('from "../_shared/logger.ts"', `from "${shared("logger.ts")}"`)
   .replace(
@@ -108,6 +112,7 @@ const jwtFor = (
       sub: "00000000-0000-4000-8000-000000000001",
       role: "authenticated",
       email: "user@test.local",
+      exp: Math.floor(Date.now() / 1_000) + 3_600,
       ...claims,
     }),
     "test-signature",

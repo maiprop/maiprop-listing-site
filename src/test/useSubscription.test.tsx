@@ -79,6 +79,26 @@ describe("useSubscription", () => {
     expect(result.current.isPro).toBe(true);
   });
 
+  it("does not hold admin controls behind a remote subscription refresh", () => {
+    (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
+      subscription: {
+        subscribed: false,
+        productId: null,
+        subscriptionEnd: null,
+        syncStatus: "pending",
+        loading: true,
+      },
+      refreshSubscription: vi.fn(),
+      profile: { role: "admin", participant_type: "agent" },
+      user: { id: "u-admin-loading" },
+    });
+
+    const { result } = renderHook(() => useSubscription(), { wrapper });
+
+    expect(result.current.isPro).toBe(true);
+    expect(result.current.loading).toBe(false);
+  });
+
   it("unsubscribed non-admin user is not Pro", () => {
     (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
       subscription: { subscribed: false, productId: null, subscriptionEnd: null, loading: false },
@@ -105,21 +125,89 @@ describe("useSubscription", () => {
     expect(result.current.hasStripeBilling).toBe(true);
   });
 
-  it.each(["pending", "timeout"])(
-    "fails closed while Stripe entitlement reconciliation is %s",
-    async (syncStatus) => {
+  it("keeps server-verified durable Stripe access while reconciliation is pending", async () => {
       (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
         subscription: {
           subscribed: true,
           productId: "prod_abc",
           subscriptionEnd: "2027-01-01",
           source: "stripe",
-          syncStatus,
+          syncStatus: "pending",
           loading: false,
         },
         refreshSubscription: vi.fn(),
         profile: { role: "agent", participant_type: "agent" },
-        user: { id: `u-${syncStatus}` },
+        user: { id: "u-pending" },
+      });
+
+      const { result } = renderHook(() => useSubscription(), { wrapper });
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(result.current.isPro).toBe(true);
+      expect(result.current.accessSource).toBe("stripe");
+  });
+
+  it("uses the server-resolved audience without a second pricing catalogue query", async () => {
+    (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
+      subscription: {
+        subscribed: true,
+        productId: "prod_abc",
+        subscriptionEnd: "2027-01-01",
+        audience: "agent",
+        planKey: "agent_basic",
+        source: "billing_state",
+        syncStatus: "synced",
+        loading: false,
+      },
+      refreshSubscription: vi.fn(),
+      profile: { role: "agent", participant_type: "agent" },
+      user: { id: "u-server-resolved" },
+    });
+
+    const { result } = renderHook(() => useSubscription(), { wrapper });
+
+    expect(result.current.isPro).toBe(true);
+    expect(result.current.accessSource).toBe("stripe");
+    expect(supabase.from).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unbounded stale Stripe timeout grant", async () => {
+    (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
+      subscription: {
+        subscribed: true,
+        productId: "prod_abc",
+        subscriptionEnd: "2099-01-01",
+        source: "stripe",
+        syncStatus: "timeout",
+        loading: false,
+      },
+      refreshSubscription: vi.fn(),
+      profile: { role: "agent", participant_type: "agent" },
+      user: { id: "u-stale-timeout" },
+    });
+
+    const { result } = renderHook(() => useSubscription(), { wrapper });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.isPro).toBe(false);
+    expect(result.current.accessSource).toBe("free");
+  });
+
+  it.each(["billing_state", "investor"])(
+    "rejects an unbounded stale %s timeout grant",
+    async (source) => {
+      (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
+        subscription: {
+          subscribed: true,
+          productId: source === "billing_state" ? "prod_abc" : null,
+          subscriptionEnd: "2099-01-01",
+          source,
+          syncStatus: "timeout",
+          loading: false,
+        },
+        refreshSubscription: vi.fn(),
+        profile: source === "investor"
+          ? { role: "investor", participant_type: "investor" }
+          : { role: "agent", participant_type: "agent" },
+        user: { id: `u-stale-${source}` },
       });
 
       const { result } = renderHook(() => useSubscription(), { wrapper });
@@ -128,6 +216,27 @@ describe("useSubscription", () => {
       expect(result.current.accessSource).toBe("free");
     },
   );
+
+  it("keeps entitlement unknown while the signed-in profile is still loading", () => {
+    (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
+      subscription: {
+        subscribed: false,
+        productId: null,
+        subscriptionEnd: null,
+        syncStatus: "synced",
+        loading: false,
+      },
+      refreshSubscription: vi.fn(),
+      profile: null,
+      profileLoading: true,
+      user: { id: "u-profile-loading" },
+    });
+
+    const { result } = renderHook(() => useSubscription(), { wrapper });
+
+    expect(result.current.isPro).toBe(false);
+    expect(result.current.loading).toBe(true);
+  });
 
   it("does not use a stale profile product when durable subscription state has no product", async () => {
     (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
@@ -170,7 +279,13 @@ describe("useSubscription", () => {
 
   it("accepts developer Pro only for developer entitlement", async () => {
     (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
-      subscription: { subscribed: true, productId: "prod_dev", subscriptionEnd: "2027-01-01", loading: false },
+      subscription: {
+        subscribed: true,
+        productId: "prod_dev",
+        subscriptionEnd: "2027-01-01",
+        billingStatus: "active",
+        loading: false,
+      },
       refreshSubscription: vi.fn(),
       profile: { role: "developer", participant_type: "developer" },
       user: { id: "u7" },
@@ -179,6 +294,26 @@ describe("useSubscription", () => {
     await waitFor(() => expect(result.current.hasDeveloperPro).toBe(true));
     expect(result.current.isPro).toBe(true);
     expect(result.current.accessSource).toBe("stripe");
+    expect(result.current.hasPaidPromotionCredits).toBe(true);
+  });
+
+  it("does not grant paid promotion credits to a Stripe trial", async () => {
+    (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
+      subscription: {
+        subscribed: true,
+        productId: "prod_dev",
+        subscriptionEnd: "2027-01-01",
+        billingStatus: "trialing",
+        loading: false,
+      },
+      refreshSubscription: vi.fn(),
+      profile: { role: "developer", participant_type: "developer" },
+      user: { id: "u-dev-trial" },
+    });
+
+    const { result } = renderHook(() => useSubscription(), { wrapper });
+    await waitFor(() => expect(result.current.hasDeveloperPro).toBe(true));
+    expect(result.current.hasPaidPromotionCredits).toBe(false);
   });
 
   it("does not grant Pro access for a non-developer product during developer use", async () => {
@@ -205,6 +340,31 @@ describe("useSubscription", () => {
     expect(result.current.isPro).toBe(true);
     expect(result.current.accessSource).toBe("override");
     expect(result.current.isManuallyManagedPlan).toBe(true);
+    expect(result.current.hasPaidPromotionCredits).toBe(false);
+  });
+
+  it("does not hold force-Pro controls behind a remote subscription refresh", () => {
+    (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
+      subscription: {
+        subscribed: false,
+        productId: null,
+        subscriptionEnd: null,
+        syncStatus: "pending",
+        loading: true,
+      },
+      refreshSubscription: vi.fn(),
+      profile: {
+        role: "buyer",
+        participant_type: "buyer",
+        force_pro_access: true,
+      },
+      user: { id: "u-override-loading" },
+    });
+
+    const { result } = renderHook(() => useSubscription(), { wrapper });
+
+    expect(result.current.isPro).toBe(true);
+    expect(result.current.loading).toBe(false);
   });
 
   it("does not inherit investor-pro entitlement during a role switch", async () => {

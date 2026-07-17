@@ -69,7 +69,7 @@ beforeEach(() => {
   useEligibleMock.mockReset();
   // Conservative defaults — every guard test overrides what it needs.
   useSubscriptionMock.mockReturnValue({ isPro: false, hasDeveloperPro: false, loading: false });
-  useEligibleMock.mockReturnValue({ eligible: false, loading: false });
+  useEligibleMock.mockReturnValue({ eligible: false, isPro: false, loading: false });
 });
 
 // ─── ProtectedRoute ─────────────────────────────────────────────────────────
@@ -597,7 +597,7 @@ describe("InvestorRoute", () => {
       profileLoading: false,
       needsOnboarding: false,
     });
-    useEligibleMock.mockReturnValue({ eligible: false, loading: true });
+    useEligibleMock.mockReturnValue({ eligible: false, isPro: false, loading: true });
     const { container } = renderGuarded(
       <InvestorRoute>
         <div>QUICK-SALE</div>
@@ -606,7 +606,7 @@ describe("InvestorRoute", () => {
     expect(container.querySelector(".animate-spin")).toBeTruthy();
   });
 
-  it("shows the 'Investor Access Required' upsell to ineligible accounts", () => {
+  it("lets any signed-in ineligible account apply without Participant Pro", () => {
     useAuthMock.mockReturnValue({
       user: { id: "u-1" },
       profile: { user_id: "u-1", role: "buyer" },
@@ -614,18 +614,16 @@ describe("InvestorRoute", () => {
       profileLoading: false,
       needsOnboarding: false,
     });
-    useEligibleMock.mockReturnValue({ eligible: false, loading: false });
+    useEligibleMock.mockReturnValue({ eligible: false, isPro: false, loading: false });
     renderGuarded(
       <InvestorRoute>
         <div>QUICK-SALE</div>
       </InvestorRoute>,
     );
     expect(screen.getByText(/Investor Access Required/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Upgrade to Pro to apply/i })).toHaveAttribute(
-      "href",
-      "/pricing?audience=participant",
-    );
-    expect(screen.queryByRole("button", { name: /Apply for investor access/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Upgrade to Pro to apply/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Apply for investor access/i }));
+    expect(screen.getByRole("dialog", { name: /Request Quick Sale access/i })).toBeInTheDocument();
     expect(screen.queryByText("QUICK-SALE")).toBeNull();
   });
 
@@ -637,8 +635,7 @@ describe("InvestorRoute", () => {
       profileLoading: false,
       needsOnboarding: false,
     });
-    useEligibleMock.mockReturnValue({ eligible: false, loading: false });
-    useSubscriptionMock.mockReturnValue({ isPro: true, hasDeveloperPro: false, loading: false });
+    useEligibleMock.mockReturnValue({ eligible: false, isPro: true, loading: false });
     renderGuarded(
       <InvestorRoute>
         <div>QUICK-SALE</div>
@@ -658,7 +655,7 @@ describe("InvestorRoute", () => {
       profileLoading: false,
       needsOnboarding: false,
     });
-    useEligibleMock.mockReturnValue({ eligible: true, loading: false });
+    useEligibleMock.mockReturnValue({ eligible: true, isPro: true, loading: false });
     renderGuarded(
       <InvestorRoute>
         <div>QUICK-SALE</div>

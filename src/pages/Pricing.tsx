@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getPricingAudienceFromProfile, getParticipantTypeFromProfile, type PricingAudienceId } from "@/lib/participantConfig";
-import { ROLE_PLAN_MAP } from "@/lib/rolePlanMap";
+import { ROLE_PLAN_MAP, resolveRolePlanDisplayPricing } from "@/lib/rolePlanMap";
 import { isPlatformAdmin } from "@/lib/authUtils";
 import { usePricingConfigs } from "@/hooks/usePricingConfigs";
 import { supabase } from "@/integrations/supabase/client";
@@ -53,7 +53,7 @@ const PARTICIPANT_FREE_LIST = [
   "Browse all listings & auction database",
   "View up to 60 auction listings",
   "Buyers: save 1 search + 1 alert; sellers: unlimited saved searches & alerts",
-  "Buyers: book 1 viewing/month; sellers: unlimited viewings",
+  "Buyers and sellers: book 1 viewing/month; sellers host unlimited viewings",
   "Sellers: list up to 2 properties",
   "Buyers: Open House RSVPs up to 3/month; sellers: unlimited Open House RSVPs",
   "Buyers: 1 contact request/month; sellers: direct messaging included",
@@ -62,10 +62,11 @@ const PARTICIPANT_FREE_LIST = [
 const PARTICIPANT_PRO: PlanFeature[] = [
   { label: "AI Property Valuation",      icon: BarChart2,    free: "5/month",    paid: "50/month included · add-ons from €39" },
   { label: "Neighbourhood Reports",      icon: FileText,     free: "5/month",    paid: "50/month included · add-ons from €19" },
+  { label: "Property reports",           icon: FileText,     free: false,          paid: "3/month included" },
   { label: "AI Market Insights",         icon: Zap,          free: false,        paid: true },
   { label: "Full auction filters & 600 listings", icon: Filter, free: "60 max", paid: "600 max" },
   { label: "Buyer/Seller saved searches & alerts", icon: Bell, free: "Buyer: 1 each", paid: "Buyers: unlimited searches + 5 alerts; sellers: unlimited" },
-  { label: "Buyer/Seller viewings",      icon: MessageSquare,free: "Buyer: 1/month", paid: "Buyers: 10/month; sellers: unlimited" },
+  { label: "Buyer/Seller viewing requests", icon: MessageSquare, free: "1 booking request/month each", paid: "10 booking requests/month each; sellers host unlimited viewings" },
   { label: "Sellers: up to 5 listings", icon: Layers,        free: "2 max",     paid: "5 max" },
   { label: "AI listing description",     icon: Sparkles,     free: false,        paid: true },
   { label: "Seller listing promotions",  icon: Crown,        free: false,        paid: "1 Spotlight included · extras from €39" },
@@ -76,8 +77,9 @@ const PARTICIPANT_PRO: PlanFeature[] = [
 
 const AGENT_FREE_LIST = [
   "Up to 5 active listings",
-  "Basic messaging & viewings (3/month)",
+  "Basic messaging & hosted listing viewings (3/month)",
   "View 60 auction listings",
+  "5 AI requests/month per core feature",
   "Basic profile in Professionals directory",
   "maiProp branded video room",
 ];
@@ -90,9 +92,9 @@ const AGENT_PRO: PlanFeature[] = [
   { label: "Private owner listing alerts", icon: Bell,       free: false,        paid: true },
   { label: "Priority Rank ads",          icon: Star,         free: false,        paid: "10 included · extra Priority Rank €59/30 days" },
   { label: "Spotlight directory placement", icon: Crown,      free: "Basic",      paid: "Advanced" },
-  { label: "Up to 10 viewings/month",     icon: MessageSquare,free: "3/month",  paid: "10/month" },
+  { label: "Up to 10 hosted listing viewings/month", icon: MessageSquare, free: "3 hosted/month", paid: "10 hosted/month" },
   { label: "Open House full management", icon: Eye,          free: "—",         paid: "Full analytics & bidding" },
-  { label: "AI Valuations & Reports",    icon: FileText,     free: false,        paid: "50/month core AI · 3 property reports/month" },
+  { label: "AI Valuations & Reports",    icon: FileText,     free: "5/month per core AI feature", paid: "50/month per core AI feature · unlimited property reports" },
 ];
 
 const DEVELOPER_PRO: PlanFeature[] = [
@@ -103,7 +105,8 @@ const DEVELOPER_PRO: PlanFeature[] = [
   { label: "Listing promotions", icon: Crown, free: false, paid: "1 Spotlight + 1 Priority Rank/month" },
   { label: "AI listing & description tools", icon: Sparkles, free: false,        paid: true },
   { label: "Project analytics dashboard", icon: BarChart2,   free: false,        paid: true },
-  { label: "AI Neighbourhood Reports",   icon: Globe,        free: false,        paid: "3/month included" },
+  { label: "AI Neighbourhood Reports",   icon: Globe,        free: false,        paid: "50/month included" },
+  { label: "Unlimited property reports", icon: FileText,     free: false,        paid: true },
   { label: "Lead capture & CRM",         icon: Users,        free: false,        paid: true },
 ];
 
@@ -112,6 +115,7 @@ const PROFESSIONAL_FREE_LIST = [
   "Receive basic enquiries",
   "Consultation request notifications",
   "Booking via profile page (manual confirm)",
+  "5 AI requests/month per core feature",
 ];
 const PROFESSIONAL_PRO: PlanFeature[] = [
   { label: "Priority placement in directory", icon: Star,    free: "Standard",  paid: "Top 3 in category" },
@@ -120,7 +124,8 @@ const PROFESSIONAL_PRO: PlanFeature[] = [
   { label: "Booking & availability calendar", icon: FolderKanban, free: false,  paid: true },
   { label: "Advanced lead analytics",         icon: BarChart2, free: false,     paid: true },
   { label: "Branded video consultation room", icon: Eye,     free: false,       paid: true },
-  { label: "AI property tools (valuation, neighbourhood)", icon: BarChart2, free: false, paid: "3/month included" },
+  { label: "AI property tools (valuation, neighbourhood)", icon: BarChart2, free: "5/month per core AI feature", paid: "50/month per core AI feature" },
+  { label: "Unlimited property reports", icon: FileText, free: false, paid: true },
   { label: "Consultation messaging suite",    icon: MessageSquare, free: false, paid: true },
   { label: "CRM & client management",         icon: Users,   free: false,       paid: true },
 ];
@@ -132,6 +137,7 @@ const INVESTOR_FEATURES: PlanFeature[] = [
   { label: "Portfolio tracking dashboard",                     icon: FolderKanban, free: false, paid: true },
   { label: "Full auction database",                            icon: Gavel, free: false, paid: "Unlimited" },
   { label: "AI Valuation & Neighbourhood Reports",             icon: FileText, free: false, paid: "50/month per core AI feature" },
+  { label: "Unlimited property reports",                       icon: FileText, free: false, paid: true },
   { label: "Direct vendor & agent contact",                    icon: MessageSquare, free: false, paid: true },
   { label: "Due diligence pack download",                      icon: Shield, free: false, paid: true },
   { label: "Quick Sale™ & time-sensitive asset access",        icon: Bell, free: false, paid: true },
@@ -140,7 +146,7 @@ const INVESTOR_FEATURES: PlanFeature[] = [
 const INSTITUTIONAL_FEATURES: PlanFeature[] = [
   { label: "Everything in Investor Plan",                      icon: Check, free: false, paid: true },
   { label: "Bulk deal pipeline & pipeline management",         icon: Database, free: false, paid: true },
-  { label: "White-label API access (AVM + listings)",         icon: Globe, free: false, paid: true },
+  { label: "Listings data integration support",               icon: Globe, free: false, paid: true },
   { label: "Dedicated account manager",                        icon: UserCheck, free: false, paid: true },
   { label: "Custom data exports (CSV, JSON)",                  icon: FileText, free: false, paid: true },
   { label: "Multi-user / team seats",                          icon: Users, free: false, paid: true },
@@ -202,7 +208,7 @@ const PRICING_EL: Record<string, string> = {
   "Already a maiProp OS user?": "Χρησιμοποιείτε ήδη το maiProp OS;",
   "Get 20% off": "Κερδίστε έκπτωση 20%",
   "your maiProp plan.": "στο πλάνο σας στο maiProp.",
-  "Active maiProp OS subscribers — Market Intelligence, AVM API, or Auction Intelligence — are eligible for a 20% discount on any maiProp subscription plan. Apply your OS licence key at checkout.": "Ενεργοί συνδρομητές maiProp OS — Market Intelligence, AVM API ή Auction Intelligence — δικαιούνται έκπτωση 20% σε οποιαδήποτε συνδρομή maiProp. Χρησιμοποιήστε το κλειδί άδειας OS στη διαδικασία πληρωμής.",
+  "Active maiProp OS subscribers — Market Intelligence, AVM API, or Auction Intelligence — may qualify for a 20% discount on a maiProp subscription. Contact sales to verify your OS licence and receive a custom checkout link.": "Ενεργοί συνδρομητές maiProp OS — Market Intelligence, AVM API ή Auction Intelligence — ενδέχεται να δικαιούνται έκπτωση 20% σε συνδρομή maiProp. Επικοινωνήστε με τις πωλήσεις για επαλήθευση της άδειας OS και λήψη προσαρμοσμένου συνδέσμου checkout.",
   discount: "έκπτωση",
   "Claim your discount": "Ζητήστε την έκπτωση",
   "Not on OS yet?": "Δεν χρησιμοποιείτε ακόμα OS;",
@@ -219,7 +225,7 @@ const PRICING_EL: Record<string, string> = {
   "Browse all listings & auction database": "Περιήγηση σε όλες τις αγγελίες και τη βάση πλειστηριασμών",
   "View up to 60 auction listings": "Προβολή έως 60 πλειστηριασμών",
   "Buyers: save 1 search + 1 alert; sellers: unlimited saved searches & alerts": "Αγοραστές: 1 αναζήτηση + 1 ειδοποίηση · πωλητές: απεριόριστες αναζητήσεις και ειδοποιήσεις",
-  "Buyers: book 1 viewing/month; sellers: unlimited viewings": "Αγοραστές: 1 επίσκεψη/μήνα · πωλητές: απεριόριστες επισκέψεις",
+  "Buyers and sellers: book 1 viewing/month; sellers host unlimited viewings": "Αγοραστές και πωλητές: 1 αίτημα επίσκεψης/μήνα · οι πωλητές φιλοξενούν απεριόριστες επισκέψεις",
   "Sellers: list up to 2 properties": "Πωλητές: καταχώρηση έως 2 ακινήτων",
   "Buyers: Open House RSVPs up to 3/month; sellers: unlimited Open House RSVPs": "Αγοραστές: έως 3 δηλώσεις συμμετοχής/μήνα · πωλητές: απεριόριστες δηλώσεις",
   "Buyers: 1 contact request/month; sellers: direct messaging included": "Αγοραστές: 1 αίτημα επικοινωνίας/μήνα · πωλητές: άμεσα μηνύματα",
@@ -231,8 +237,10 @@ const PRICING_EL: Record<string, string> = {
   "AI Market Insights": "AI ανάλυση αγοράς",
   "Full auction filters & 600 listings": "Πλήρη φίλτρα πλειστηριασμών και έως 600 ακίνητα",
   "Buyer/Seller saved searches & alerts": "Αναζητήσεις και ειδοποιήσεις αγοραστών/πωλητών",
-  "Buyer/Seller viewings": "Επισκέψεις αγοραστών/πωλητών",
-  "Up to 10 viewings/month": "Έως 10 επισκέψεις/μήνα",
+  "Buyer/Seller viewing requests": "Αιτήματα επίσκεψης αγοραστών/πωλητών",
+  "Up to 10 hosted listing viewings/month": "Έως 10 φιλοξενούμενες επισκέψεις αγγελιών/μήνα",
+  "3 hosted/month": "3 φιλοξενούμενες/μήνα",
+  "10 hosted/month": "10 φιλοξενούμενες/μήνα",
   "Sellers: up to 5 listings": "Πωλητές: έως 5 αγγελίες",
   "AI listing description": "AI περιγραφή αγγελίας",
   "Seller listing promotions": "Προωθήσεις αγγελιών πωλητή",
@@ -247,8 +255,8 @@ const PRICING_EL: Record<string, string> = {
   "600 max": "έως 600",
   "Buyer: 1 each": "Αγοραστής: 1 από το καθένα",
   "Buyers: unlimited searches + 5 alerts; sellers: unlimited": "Αγοραστές: απεριόριστες αναζητήσεις + 5 ειδοποιήσεις · πωλητές: απεριόριστα",
-  "Buyer: 1/month": "Αγοραστής: 1/μήνα",
-  "Buyers: 10/month; sellers: unlimited": "Αγοραστές: 10/μήνα · πωλητές: απεριόριστα",
+  "1 booking request/month each": "1 αίτημα κράτησης/μήνα για κάθε ρόλο",
+  "10 booking requests/month each; sellers host unlimited viewings": "10 αιτήματα κράτησης/μήνα για κάθε ρόλο · οι πωλητές φιλοξενούν απεριόριστες επισκέψεις",
   Unlimited: "Απεριόριστα",
   "1/month": "1/μήνα",
   "10/month": "10/μήνα",
@@ -262,7 +270,9 @@ const PRICING_EL: Record<string, string> = {
   "Unlimited listings, full CRM, analytics, AI tools & 10 priority ads": "Απεριόριστες αγγελίες, πλήρες CRM, αναλυτικά, AI εργαλεία και 10 διαφημίσεις προτεραιότητας",
   "Get Agent Pro": "Απόκτηση Agent Pro",
   "Up to 5 active listings": "Έως 5 ενεργές αγγελίες",
-  "Basic messaging & viewings (3/month)": "Βασικά μηνύματα και επισκέψεις έως 3/μήνα",
+  "Basic messaging & hosted listing viewings (3/month)": "Βασικά μηνύματα και φιλοξενούμενες επισκέψεις αγγελιών (3/μήνα)",
+  "5 AI requests/month per core feature": "5 αιτήματα AI/μήνα ανά βασικό εργαλείο",
+  "5/month per core AI feature": "5/μήνα ανά βασικό εργαλείο AI",
   "View 60 auction listings": "Προβολή 60 πλειστηριασμών",
   "Basic profile in Professionals directory": "Βασικό προφίλ στον κατάλογο επαγγελματιών",
   "maiProp branded video room": "Αίθουσα βίντεο με branding maiProp",
@@ -279,7 +289,7 @@ const PRICING_EL: Record<string, string> = {
   "Open House full management": "Πλήρης διαχείριση ανοιχτών επισκέψεων",
   "Full analytics & bidding": "Πλήρη αναλυτικά και προσφορές",
   "AI Valuations & Reports": "AI εκτιμήσεις και αναφορές",
-  "50/month core AI · 3 property reports/month": "50/μήνα για βασικά AI εργαλεία · 3 αναφορές ακινήτου/μήνα",
+  "50/month per core AI feature · unlimited property reports": "50/μήνα ανά βασικό AI εργαλείο · απεριόριστες αναφορές ακινήτου",
   "Developer plan required": "Απαιτείται πλάνο κατασκευαστή",
   "Developer Pro": "Pro κατασκευαστή",
   "Unlimited projects, new building showcase, project ads, Spotlight and Priority Rank": "Απεριόριστα έργα, προβολή νέων κατασκευών, αγγελίες έργων, Spotlight και Priority Rank",
@@ -295,6 +305,7 @@ const PRICING_EL: Record<string, string> = {
   "Project analytics dashboard": "Πίνακας αναλυτικών έργου",
   "AI Neighbourhood Reports": "AI αναφορές περιοχής",
   "3/month included": "3/μήνα περιλαμβάνονται",
+  "50/month included": "50/μήνα περιλαμβάνονται",
   "3/month": "3/μήνα",
   "Lead capture & CRM": "Συλλογή υποψήφιων πελατών και CRM",
   "Join the directory & receive basic enquiries": "Εγγραφή στον κατάλογο και λήψη βασικών αιτημάτων",
@@ -337,7 +348,8 @@ const PRICING_EL: Record<string, string> = {
   "Talk to Sales": "Μιλήστε με πωλήσεις",
   "Everything in Investor Plan": "Όλα του πλάνου επενδυτή",
   "Bulk deal pipeline & pipeline management": "Μαζική ροή συμφωνιών και διαχείρισή της",
-  "White-label API access (AVM + listings)": "White-label πρόσβαση API για AVM και αγγελίες",
+  "Listings data integration support": "Υποστήριξη διασύνδεσης δεδομένων αγγελιών",
+  "Full platform access, bulk pipeline, listings data support, dedicated manager & multi-user seats. AVM API is sold separately as a maiProp OS data product.": "Πλήρης πρόσβαση στην πλατφόρμα, μαζική ροή συμφωνιών, υποστήριξη δεδομένων αγγελιών, αποκλειστικός διαχειριστής και πολλαπλές θέσεις. Το AVM API πωλείται ξεχωριστά ως προϊόν δεδομένων maiProp OS.",
   "Dedicated account manager": "Προσωπικός διαχειριστής λογαριασμού",
   "Custom data exports (CSV, JSON)": "Εξατομικευμένες εξαγωγές δεδομένων CSV, JSON",
   "Multi-user / team seats": "Πολλαπλοί χρήστες / θέσεις ομάδας",
@@ -389,7 +401,7 @@ const PLANS: Record<AudienceId, PlanDef> = {
   institutional: {
     freeLabel: "—", freePrice: "—", freeDesc: "Invitation-only", freeCTA: "—", freeHref: "#",
     paidLabel: "Institutional Plan", monthlyPrice: 0, annualPrice: 0,
-    paidDesc: "Full platform access, bulk pipeline, API, dedicated manager & multi-user seats",
+    paidDesc: "Full platform access, bulk pipeline, listings data support, dedicated manager & multi-user seats. AVM API is sold separately as a maiProp OS data product.",
     paidCTA: "Talk to Sales", paidHref: "/contact",
     freeList: [], features: INSTITUTIONAL_FEATURES,
     accent: "text-sky-700 dark:text-sky-400", accentBg: "bg-sky-500/10", accentBorder: "border-sky-500/40",
@@ -406,7 +418,6 @@ export default function Pricing() {
   const { i18n } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const checkoutRetryRef = useRef<number | undefined>(undefined);
   const tr = useCallback(
     (value: string) => (isGreekLocale(i18n.language) ? PRICING_EL[value] ?? value : value),
     [i18n.language],
@@ -500,15 +511,8 @@ export default function Pricing() {
         toast.info(tr("Mock checkout completed. No live payment or subscription entitlement was created."));
       } else {
         toast.success(tr("Payment successful! Your plan has been activated."));
+        void refreshSubscription(checkoutSessionId);
       }
-      void refreshSubscription(checkoutSessionId);
-      if (checkoutRetryRef.current !== undefined) {
-        window.clearTimeout(checkoutRetryRef.current);
-      }
-      checkoutRetryRef.current = window.setTimeout(
-        () => void refreshSubscription(checkoutSessionId),
-        2500,
-      );
     } else if (checkoutStatus === "cancelled") {
       toast.info(tr("Checkout cancelled — no charge was made."));
     } else {
@@ -516,17 +520,11 @@ export default function Pricing() {
     }
 
     const nextParams = new URLSearchParams(searchParams);
-    ["checkout", "billing_mode", "plan", "billing_cycle", "session_id"].forEach((key) => nextParams.delete(key));
+    ["checkout", "billing_mode", "plan", "billing_cycle", "checkout_session_id", "session_id"].forEach((key) => nextParams.delete(key));
     setSearchParams(nextParams, { replace: true });
 
     return undefined;
   }, [refreshSubscription, searchParams, setSearchParams, tr]);
-
-  useEffect(() => () => {
-    if (checkoutRetryRef.current !== undefined) {
-      window.clearTimeout(checkoutRetryRef.current);
-    }
-  }, []);
 
   useEffect(() => {
     if (hasAutoSelected) return;
@@ -554,11 +552,11 @@ export default function Pricing() {
   const config = pricingConfigs[planKey];
   const basePlan = PLANS[activeTab];
 
-  // Prioritize database pricing values, fallback to hardcoded defaults
-  const dbMonthlyPrice = config?.amount ?? basePlan.monthlyPrice;
-  const dbAnnualPrice = config?.amount && config?.unit === 'monthly' 
-    ? config.amount * 10  // Assume 2 months free for annual (10 months billed)
-    : basePlan.annualPrice;
+  // Active pricing_configs is canonical; documented plan values are resilience fallbacks.
+  const {
+    monthlyPrice: dbMonthlyPrice,
+    annualPrice: dbAnnualPrice,
+  } = resolveRolePlanDisplayPricing(basePlan, config);
 
   // Resolve displayed price from billing cycle
   const displayMonthly = billingCycle === "monthly" ? dbMonthlyPrice : Math.round(dbAnnualPrice / 12);
@@ -868,7 +866,7 @@ export default function Pricing() {
                   <span className="text-primary">{tr("Get 20% off")}</span> {tr("your maiProp plan.")}
                 </h2>
                 <p className="text-sm text-muted-foreground max-w-md">
-                  {tr("Active maiProp OS subscribers — Market Intelligence, AVM API, or Auction Intelligence — are eligible for a 20% discount on any maiProp subscription plan. Apply your OS licence key at checkout.")}
+                  {tr("Active maiProp OS subscribers — Market Intelligence, AVM API, or Auction Intelligence — may qualify for a 20% discount on a maiProp subscription. Contact sales to verify your OS licence and receive a custom checkout link.")}
                 </p>
               </div>
 

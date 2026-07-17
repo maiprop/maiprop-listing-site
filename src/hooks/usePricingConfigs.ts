@@ -12,7 +12,11 @@ export type PricingConfigRow = {
   amount: number;
   currency: string;
   unit: string;
-  metadata?: { stripe_price_id?: string; stripe_product_id?: string } | null;
+  metadata?: {
+    stripe_price_id?: string;
+    stripe_product_id?: string;
+    stripe_last_amount_annual?: string | number;
+  } | null;
 };
 
 export type PricingConfigMap = Record<
@@ -25,6 +29,7 @@ export type PricingConfigMap = Record<
     unit: string;
     stripePriceId?: string;
     stripeProductId?: string;
+    annualAmount?: number;
   }
 >;
 
@@ -62,7 +67,8 @@ export function usePricingConfigs() {
       const map: PricingConfigMap = {};
       for (const row of data ?? []) {
         const rawMeta = row.metadata as Record<string, unknown> | null;
-        const meta: { stripe_price_id?: string; stripe_product_id?: string } = rawMeta ?? {};
+        const meta = rawMeta ?? {};
+        const annualAmount = Number(meta.stripe_last_amount_annual);
         map[row.key] = {
           amount: Number(row.amount ?? 0),
           currency: row.currency ?? "EUR",
@@ -71,6 +77,9 @@ export function usePricingConfigs() {
           unit: row.unit ?? "monthly",
           stripePriceId: typeof meta?.stripe_price_id === "string" ? meta.stripe_price_id : undefined,
           stripeProductId: typeof meta?.stripe_product_id === "string" ? meta.stripe_product_id : undefined,
+          annualAmount: Number.isFinite(annualAmount) && annualAmount > 0
+            ? annualAmount
+            : undefined,
         };
       }
       return map;

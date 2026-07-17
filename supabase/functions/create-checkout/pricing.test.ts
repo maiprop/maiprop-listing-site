@@ -160,21 +160,24 @@ Deno.test("promotion add-ons resolve exact server-owned EUR prices and credit me
   }
 });
 
-Deno.test("promotion add-ons fail closed when server pricing drifts from the catalog", async () => {
-  const wrongAmount = {
+Deno.test("promotion add-ons derive their amount from active pricing configuration", async () => {
+  const configuredAmount = {
     key: "featured_listing",
     audience: "participant",
     module: "adhoc_charges",
     unit: "per_listing",
-    amount: 1,
+    amount: 45,
     currency: "EUR",
-    metadata: { stripe_price_id: "price_wrong_amount" },
+    metadata: { stripe_price_id: "price_configured_amount" },
   } as unknown as PricingConfigRow;
 
-  assertEquals(
-    await getCheckoutAddon(pricingClient(wrongAmount), "featured_listing"),
-    null,
+  const addon = await getCheckoutAddon(
+    pricingClient(configuredAmount),
+    "featured_listing",
   );
+
+  assertEquals(addon?.amountMinor, 4_500);
+  assertEquals(addon?.priceId, "price_configured_amount");
 });
 
 Deno.test("Stripe promotion prices must match the server catalog and runtime", async () => {

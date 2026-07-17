@@ -197,7 +197,10 @@ describe("PropertyMiniMap", () => {
       </MemoryRouter>,
     );
     await waitFor(() => expect(invokeCallsFor("property-pois")).toHaveLength(1));
-    expect(invokeMock).toHaveBeenCalledWith("ai-quota-status", { body: { bucket: "property-pois" } });
+    expect(invokeMock).toHaveBeenCalledWith("ai-quota-status", {
+      body: { bucket: "property-pois" },
+      timeout: 4_000,
+    });
     expect(invokeCallsFor("property-pois")[0]).toEqual([
       "property-pois",
       { body: { address: "Kolonaki 12", city: "Athens", lat: 37.98, lng: 23.73 } },

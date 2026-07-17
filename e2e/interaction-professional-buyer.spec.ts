@@ -14,6 +14,7 @@
 import { test, expect, type Page, type Browser, type BrowserContext } from "@playwright/test";
 import { getBaseURL } from "./helpers/baseURL";
 import { demoAccounts, demoPasswords, seededDemoAccountsEnabled } from "./helpers/demoAccounts";
+import { waitForPostAuthNavigation } from "./helpers/postAuthNavigation";
 
 // ─── Credentials ─────────────────────────────────────────────────────────────
 
@@ -40,7 +41,7 @@ async function signIn(page: Page, email: string, password = PASSWORD): Promise<v
       .first()
       .click();
     try {
-      await page.waitForURL(/\/dashboard|\/onboarding/, { timeout: 25_000 });
+      await waitForPostAuthNavigation(page);
       return;
     } catch (error) {
       const invalidCredentials = await page.getByText("Invalid email or password", { exact: true })

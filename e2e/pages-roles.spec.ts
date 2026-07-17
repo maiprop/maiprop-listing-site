@@ -14,6 +14,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { seededDemoAccountsEnabled } from "./helpers/demoAccounts";
 import { expectPublicCatalogContent } from "./helpers/publicCatalog";
+import { waitForPostAuthNavigation } from "./helpers/postAuthNavigation";
 
 // Default to seeded demo buyer account (not admin, not investor — triggers wrong-role gates).
 const TEST_EMAIL = process.env.E2E_TEST_EMAIL ?? "seller.pro@maiprop.demo";
@@ -338,7 +339,7 @@ test.describe("Role guards — wrong role (credentialed)", () => {
       await page.locator('input[type="password"]').first().fill(TEST_PASSWORD);
       await page.locator('button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")').first().click();
       try {
-        await page.waitForURL(/\/dashboard|\/onboarding/, { timeout: 25_000 });
+        await waitForPostAuthNavigation(page);
         return;
       } catch (error) {
         const invalidCredentials = await page.getByText("Invalid email or password", { exact: true })

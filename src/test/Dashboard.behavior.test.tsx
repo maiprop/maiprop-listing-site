@@ -3,6 +3,8 @@ import type React from "react";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderWithProviders } from "@/test/utils";
 import Dashboard from "@/pages/Dashboard";
+import en from "@/locales/en.json";
+import el from "@/locales/el.json";
 
 const {
   authState,
@@ -100,10 +102,12 @@ vi.mock("@/integrations/supabase/client", () => ({
 }));
 vi.mock("@/components/Navbar", () => ({ Navbar: () => <nav data-testid="navbar" /> }));
 vi.mock("@/components/DashboardPlanCard", () => ({
-  DashboardPlanCard: ({ usage }: { usage: Record<string, number> }) => (
+  DashboardPlanCard: ({ usage, hasPaidPromotionCredits }: { usage: Record<string, number>; hasPaidPromotionCredits?: boolean }) => (
     <div data-testid="dashboard-plan-card">
       <span>Saved searches: {usage.savedSearches}</span>
       <span>Listings: {usage.listings}</span>
+      <span>Plan viewings: {usage.viewingsThisMonth}</span>
+      <span>Paid promotions: {String(Boolean(hasPaidPromotionCredits))}</span>
     </div>
   ),
 }));
@@ -228,13 +232,13 @@ describe("Dashboard behavior", () => {
     expect(screen.getAllByText("Auction Alerts").length).toBeGreaterThan(0);
   });
 
-  it("requires buyer Pro before showing investor access application CTAs", () => {
+  it("lets free buyers reach the reviewed investor application flow", () => {
     renderWithProviders(<Dashboard />);
 
-    const upgradeLinks = screen.getAllByRole("link", { name: /Upgrade to Pro to apply/i });
-    expect(upgradeLinks.length).toBeGreaterThanOrEqual(1);
-    expect(upgradeLinks.every((link) => link.getAttribute("href") === "/pricing?audience=participant")).toBe(true);
-    expect(screen.queryByRole("link", { name: /^Apply$/i })).not.toBeInTheDocument();
+    const applicationLinks = screen.getAllByRole("link", { name: /Apply for Access/i });
+    expect(applicationLinks.length).toBeGreaterThanOrEqual(2);
+    expect(applicationLinks.every((link) => link.getAttribute("href") === "/investor-dashboard")).toBe(true);
+    expect(screen.queryByRole("link", { name: /Upgrade to Pro to apply/i })).not.toBeInTheDocument();
   });
 
   it("allows buyer Pro accounts to reach the reviewed investor application flow", () => {
@@ -242,13 +246,17 @@ describe("Dashboard behavior", () => {
 
     renderWithProviders(<Dashboard />);
 
-    expect(screen.getByRole("link", { name: /^Apply$/i })).toHaveAttribute("href", "/investor-dashboard");
+    const applicationLinks = screen.getAllByRole("link", { name: /Apply for Access/i });
+    expect(applicationLinks.length).toBeGreaterThanOrEqual(2);
+    expect(applicationLinks.every((link) => link.getAttribute("href") === "/investor-dashboard")).toBe(true);
     expect(screen.queryByRole("link", { name: /Upgrade to Pro to apply/i })).not.toBeInTheDocument();
   });
 
   it("starts a one-time 7-day Pro trial from the dashboard CTA", async () => {
     renderWithProviders(<Dashboard />);
 
+    expect(screen.getByText(/Unlock analytics, CRM, AI tools, and Pro workflows/i)).toBeInTheDocument();
+    expect(screen.queryByText(/priority ads/i)).not.toBeInTheDocument();
     expect(screen.getByText(/Card required\. After 7 days/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /start 7-day pro trial/i }));
 
@@ -325,6 +333,36 @@ describe("Dashboard behavior", () => {
     renderWithProviders(<Dashboard />);
 
     expect(screen.getByTestId("dashboard-plan-card")).toHaveTextContent("Listings: 1");
+  });
+
+  it("counts seller outbound booking requests instead of hosted listing viewings", () => {
+    authState.profile = { id: "p-1", role: "seller", participant_type: "seller", first_name: "Sofia" };
+    requesterViewingsState.data = [
+      { id: "request-1", created_at: new Date().toISOString() },
+    ];
+    ownerViewingsState.data = [
+      { id: "hosted-1", created_at: new Date().toISOString() },
+      { id: "hosted-2", created_at: new Date().toISOString() },
+    ];
+
+    renderWithProviders(<Dashboard />);
+
+    expect(screen.getByTestId("dashboard-plan-card")).toHaveTextContent("Plan viewings: 1");
+  });
+
+  it("counts agent-hosted listing viewings against the agent allowance", () => {
+    authState.profile = { id: "p-1", role: "agent", participant_type: "agent", first_name: "Alex" };
+    requesterViewingsState.data = [
+      { id: "request-1", created_at: new Date().toISOString() },
+    ];
+    ownerViewingsState.data = [
+      { id: "hosted-1", created_at: new Date().toISOString() },
+      { id: "hosted-2", created_at: new Date().toISOString() },
+    ];
+
+    renderWithProviders(<Dashboard />);
+
+    expect(screen.getByTestId("dashboard-plan-card")).toHaveTextContent("Plan viewings: 2");
   });
 
   it("honors a route tab when it is available for the current role", async () => {
@@ -436,7 +474,26 @@ describe("Dashboard behavior", () => {
 
     expect(screen.getByText(/Manage your project listings and showcases/i)).toBeInTheDocument();
     expect(screen.queryByTestId("dashboard-trial-cta")).not.toBeInTheDocument();
+    expect(screen.getByText(/1 Spotlight and 1 Priority Rank per month/i)).toBeInTheDocument();
+    expect(screen.getByText(/Spotlight and Priority credits begin only after paid activation/i)).toBeInTheDocument();
     expect(screen.getByText("Profile completion")).toBeInTheDocument();
+  });
+
+  it("keeps English and Greek trial copy aligned with paid promotion activation", () => {
+    const english = en.dashboard as typeof en.dashboard & {
+      trial?: { subtitle?: string };
+      overview: typeof en.dashboard.overview & { developerPro: { trialTerms?: string } };
+    };
+    const greek = el.dashboard as typeof el.dashboard & {
+      trial?: { subtitle?: string };
+      overview: typeof el.dashboard.overview & { developerPro: { trialTerms?: string } };
+    };
+
+    expect(english.trial?.subtitle).toMatch(/analytics, CRM, AI tools, and Pro workflows/i);
+    expect(english.trial?.subtitle).not.toMatch(/priority ads|listing promotions/i);
+    expect(english.overview.developerPro.trialTerms).toMatch(/credits begin only after paid activation/i);
+    expect(greek.trial?.subtitle).not.toMatch(/priority|spotlight/i);
+    expect(greek.overview.developerPro.trialTerms).toMatch(/πιστώσεις Spotlight και Priority.*μόνο μετά.*ενεργοποίηση επί πληρωμή/i);
   });
 
   it("renders admin controls without consumer plan or trial promotion", () => {

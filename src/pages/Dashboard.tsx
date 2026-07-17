@@ -106,7 +106,13 @@ export default function Dashboard() { // skipcq: JS-R1005
     [t],
   );
   const { profile, user, signOut, updateProfile, refreshProfile, loading, profileLoading } = useAuth();
-  const { isPro, loading: subscriptionLoading, refreshSubscription, hasStripeBilling } = useSubscription();
+  const {
+    isPro,
+    loading: subscriptionLoading,
+    refreshSubscription,
+    hasStripeBilling,
+    hasPaidPromotionCredits,
+  } = useSubscription();
   const [trialCheckoutLoading, setTrialCheckoutLoading] = useState(false);
   const { eligible: eligibleForQuickSale } = useEligibleForQuickSale();
   const role: DashboardRole = (profile?.role as DashboardRole) || "buyer";
@@ -334,16 +340,17 @@ export default function Dashboard() { // skipcq: JS-R1005
 
   const planUsage = useMemo(() => {
     const monthStart = startOfCurrentMonth().toISOString();
+    const usesHostedViewingAllowance = bioType === "agent" ||
+      (!bioType && role === "agent");
     return {
       savedSearches: savedSearches.length,
       searchAlerts: savedSearches.filter(s => s.email_alerts).length,
-      viewingsThisMonth: (bioType === "buyer" || (role === "buyer" && !isSellerLike))
-        ? viewings.filter(v => v.created_at >= monthStart).length
-        : ownViewings.filter(v => v.created_at >= monthStart).length,
+      viewingsThisMonth: (usesHostedViewingAllowance ? ownViewings : viewings)
+        .filter(v => v.created_at >= monthStart).length,
       auctionAlerts: auctionAlerts.filter(a => a.active).length,
       listings: myListings.filter(l => l.status === "active").length,
     };
-  }, [savedSearches, viewings, ownViewings, auctionAlerts, myListings, bioType, role, isSellerLike]);
+  }, [savedSearches, viewings, ownViewings, auctionAlerts, myListings, bioType, role]);
 
   const showPlanCard = useMemo(
     () => !hasInvestorAccess && (["buyer", "seller", "agent", "developer", "professional"].includes(bioType ?? "") || role === "seller"),
@@ -449,8 +456,9 @@ export default function Dashboard() { // skipcq: JS-R1005
               {/* Plan & Usage card */}
               {showPlanCard && (
                 <DashboardPlanCard
-                  audience={(bioType ?? "buyer") as ParticipantId}
+                  audience={role === "admin" ? "admin" : (bioType ?? "buyer") as ParticipantId}
                   isPro={isPro}
+                  hasPaidPromotionCredits={hasPaidPromotionCredits}
                   usage={planUsage}
                 />
               )}
@@ -465,7 +473,7 @@ export default function Dashboard() { // skipcq: JS-R1005
                     <div className="min-w-0">
                       <p className="font-semibold text-sm">{tr("dashboard.trial.title", "Try Pro free for 7 days")}</p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {tr("dashboard.trial.subtitle", "Unlock analytics, CRM, priority ads, and Pro workflow tools before choosing a paid plan.")}
+                        {tr("dashboard.trial.subtitle", "Unlock analytics, CRM, AI tools, and Pro workflows before choosing a paid plan.")}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
                         {tr("dashboard.trial.terms", "Card required. After 7 days, Stripe bills the selected Pro plan unless you cancel before the trial ends.")}
@@ -542,10 +550,8 @@ export default function Dashboard() { // skipcq: JS-R1005
                         <Button size="sm" className="bg-gradient-gold border-0 text-background" asChild><Link to="/investor-dashboard">{tr("dashboard.overview.quickSale.completePayment", "Complete investor payment")}</Link></Button>
                       ) : invitationRequestStatus === "none" ? (
                         <Button variant="outline" size="sm" className="border-destructive/40 text-destructive" asChild>
-                          <Link to={isPro ? "/investor-dashboard" : "/pricing?audience=participant"}>
-                            {isPro
-                              ? tr("dashboard.overview.quickSale.apply", "Apply for Access")
-                              : tr("dashboard.overview.quickSale.upgradeToApply", "Upgrade to Pro to apply")}
+                          <Link to="/investor-dashboard">
+                            {tr("dashboard.overview.quickSale.apply", "Apply for Access")}
                           </Link>
                         </Button>
                       ) : null}
@@ -573,10 +579,8 @@ export default function Dashboard() { // skipcq: JS-R1005
                         <p className="text-xs text-muted-foreground mt-0.5">{tr("dashboard.overview.investorAccess.subtitle", "Apply for reviewed Quick Sale deal-flow access. Approval and a custom annual payment link are required before activation.")}</p>
                       </div>
                       <Button size="sm" className="shrink-0 text-xs h-8 bg-amber-500 hover:bg-amber-600 border-0 text-white" asChild>
-                        <Link to={isPro ? "/investor-dashboard" : "/pricing?audience=participant"}>
-                          {isPro
-                            ? tr("dashboard.overview.investorAccess.apply", "Apply")
-                            : tr("dashboard.overview.investorAccess.upgradeToApply", "Upgrade to Pro to apply")}
+                        <Link to="/investor-dashboard">
+                          {tr("dashboard.overview.investorAccess.apply", "Apply for Access")}
                         </Link>
                       </Button>
                     </div>
@@ -597,10 +601,10 @@ export default function Dashboard() { // skipcq: JS-R1005
                         <div className="flex-1">
                           <h3 className="font-bold">{tr("dashboard.overview.developerPro.title", "Developer tools require Pro")}</h3>
                           <p className="text-sm text-muted-foreground mt-1 mb-3">
-                            {tr("dashboard.overview.developerPro.subtitle", "Unlimited listings, project showcases, project ad management, Spotlight and Priority Rank are all part of the Developer Pro plan.")}
+                            {tr("dashboard.overview.developerPro.subtitle", "Paid Developer Pro includes unlimited listings, project showcases, project ad management, and 1 Spotlight and 1 Priority Rank per month.")}
                           </p>
                           <p className="text-xs text-muted-foreground mb-3">
-                            {tr("dashboard.overview.developerPro.trialTerms", "Card required. After 7 days, Stripe bills Developer Pro unless you cancel before the trial ends.")}
+                            {tr("dashboard.overview.developerPro.trialTerms", "Trial includes project tools, analytics, and AI tools. Spotlight and Priority credits begin only after paid activation. Card required. After 7 days, Stripe bills Developer Pro unless you cancel before the trial ends.")}
                           </p>
                           <div className="flex gap-2">
                             <Button

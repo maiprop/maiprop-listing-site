@@ -82,6 +82,83 @@ describe("billing add-on helpers", () => {
     }
   });
 
+  it("uses active pricing configuration for self-serve add-on display amounts", () => {
+    const promotions = getAddonSectionsForParticipant("seller", {
+      pricingConfigs: {
+        featured_listing: {
+          amount: 45,
+          currency: "EUR",
+        },
+        priority_placement: {
+          amount: 65,
+          currency: "EUR",
+        },
+      },
+    }).find((section) => section.category === "Listing Promotions");
+
+    expect(promotions?.items.find((item) => item.name === "Spotlight")?.price)
+      .toBe("€45");
+    expect(promotions?.items.find((item) => item.name === "Priority Rank")?.price)
+      .toBe("€65");
+    expect(
+      promotions?.items.find((item) => item.name === "Spotlight + Priority Rank")
+        ?.price,
+    ).toBe("€79");
+  });
+
+  it("uses active pricing configuration for contact-sales products without enabling checkout", () => {
+    const agencyAddons = getAddonSectionsForParticipant("agent", {
+      pricingConfigs: {
+        agent_extra_seat: {
+          amount: 44,
+          currency: "EUR",
+        },
+      },
+    }).find((section) => section.category === "Agency Add-ons");
+    const extraSeat = agencyAddons?.items.find(
+      (item) => item.name === "Extra Agent Seat",
+    );
+
+    expect(extraSeat?.price).toBe("€44");
+    expect(resolveAddonKey(extraSeat ?? { name: "Extra Agent Seat" })).toBeNull();
+  });
+
+  it("hides unusable property-report credits for paid business plans", () => {
+    for (const role of [
+      "agent",
+      "developer",
+      "professional",
+      "investor",
+      "institutional",
+    ]) {
+      const paidItems = getAddonSectionsForParticipant(role, { isPro: true })
+        .flatMap((section) => section.items);
+
+      expect(
+        paidItems.some((item) => resolveAddonKey(item) === "property_report_single"),
+        `${role} should not be offered a credit for an unlimited base allowance`,
+      ).toBe(false);
+    }
+
+    const freeProfessionalItems = getAddonSectionsForParticipant("professional", {
+      isPro: false,
+    }).flatMap((section) => section.items);
+    expect(
+      freeProfessionalItems.some(
+        (item) => resolveAddonKey(item) === "property_report_single",
+      ),
+    ).toBe(true);
+  });
+
+  it("does not expose the unfulfilled extra priority ad product", () => {
+    const professionalItems = getAddonSectionsForParticipant("professional")
+      .flatMap((section) => section.items);
+
+    expect(professionalItems.map((item) => item.name))
+      .not.toContain("Extra Priority Rank Ad");
+    expect(resolveAddonKey({ name: "Extra Priority Rank Ad" })).toBeNull();
+  });
+
   it("renders known, unknown, and empty invoice statuses with stable labels", () => {
     const { rerender } = render(createElement(StatusBadge, { status: "paid" }));
     expect(screen.getByText("Paid")).toBeInTheDocument();
