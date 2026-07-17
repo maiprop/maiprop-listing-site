@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.4"
   }
   public: {
     Tables: {
@@ -1404,21 +1404,21 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "leads_listing_id_fkey"
+            foreignKeyName: "leads_listing_id_fkey1"
             columns: ["listing_id"]
             isOneToOne: false
             referencedRelation: "listings"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "leads_professional_id_fkey"
+            foreignKeyName: "leads_professional_id_fkey1"
             columns: ["professional_id"]
             isOneToOne: false
             referencedRelation: "professionals"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "leads_project_id_fkey"
+            foreignKeyName: "leads_project_id_fkey1"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -2007,49 +2007,95 @@ export type Database = {
         Row: {
           created_at: string
           email: string
+          follow_up_at: string | null
           followup_step: number
           full_name: string
           id: string
           investment_budget: number
           investment_timeline: string
+          listing_id: string | null
+          message: string | null
           nationality: string
+          notes: string | null
           owner_id: string | null
           phone: string
           preferred_location: string
+          professional_id: string | null
+          project_id: string | null
           property_type: string
+          source: string
           status: string
+          updated_at: string
         }
         Insert: {
           created_at?: string
           email: string
+          follow_up_at?: string | null
           followup_step?: number
           full_name: string
           id?: string
           investment_budget: number
           investment_timeline?: string
+          listing_id?: string | null
+          message?: string | null
           nationality: string
+          notes?: string | null
           owner_id?: string | null
           phone: string
           preferred_location?: string
+          professional_id?: string | null
+          project_id?: string | null
           property_type?: string
+          source?: string
           status?: string
+          updated_at?: string
         }
         Update: {
           created_at?: string
           email?: string
+          follow_up_at?: string | null
           followup_step?: number
           full_name?: string
           id?: string
           investment_budget?: number
           investment_timeline?: string
+          listing_id?: string | null
+          message?: string | null
           nationality?: string
+          notes?: string | null
           owner_id?: string | null
           phone?: string
           preferred_location?: string
+          professional_id?: string | null
+          project_id?: string | null
           property_type?: string
+          source?: string
           status?: string
+          updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "leads_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_professional_id_fkey"
+            columns: ["professional_id"]
+            isOneToOne: false
+            referencedRelation: "professionals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       message_attachments: {
         Row: {
@@ -4207,17 +4253,17 @@ export type Database = {
       user_roles: {
         Row: {
           id: string
-          role: Database["public"]["Enums"]["user_role"]
+          role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Insert: {
           id?: string
-          role: Database["public"]["Enums"]["user_role"]
+          role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Update: {
           id?: string
-          role?: Database["public"]["Enums"]["user_role"]
+          role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
         Relationships: []
@@ -4738,10 +4784,6 @@ export type Database = {
         Args: { _user_id: string }
         Returns: undefined
       }
-      bulk_update_project_unit_prices: {
-        Args: { p_percentage: number; p_project_id: string }
-        Returns: number
-      }
       bulk_update_project_unit_prices_for_user: {
         Args: { _user_id: string; p_percentage: number; p_project_id: string }
         Returns: number
@@ -4772,6 +4814,15 @@ export type Database = {
         Returns: Json
       }
       check_listing_quota: { Args: never; Returns: boolean }
+      claim_property_report_generation: {
+        Args: {
+          p_holder: string
+          p_lang: string
+          p_lease_seconds?: number
+          p_listing_id: string
+        }
+        Returns: boolean
+      }
       complete_onboarding_role: {
         Args: {
           p_city?: string
@@ -5211,6 +5262,10 @@ export type Database = {
         Args: { p_deal_id?: string }
         Returns: number
       }
+      release_property_report_generation: {
+        Args: { p_holder: string; p_lang: string; p_listing_id: string }
+        Returns: boolean
+      }
       reopen_open_house_offer_selection: {
         Args: { p_listing_id: string }
         Returns: undefined
@@ -5300,23 +5355,40 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      submit_agent_data_input: {
-        Args: {
-          p_agent_side?: string
-          p_buyer_name?: string
-          p_closed_at: string
-          p_closing_price: number
-          p_kaek?: string
-          p_notes?: string
-          p_property_address: string
-          p_property_city: string
-          p_property_postal_code?: string
-          p_property_type?: string
-          p_seller_name?: string
-          p_transaction_type: string
-        }
-        Returns: string
-      }
+      submit_agent_data_input:
+        | {
+            Args: {
+              p_buyer_name?: string
+              p_closed_at: string
+              p_closing_price: number
+              p_kaek?: string
+              p_notes?: string
+              p_property_address: string
+              p_property_city: string
+              p_property_postal_code?: string
+              p_property_type?: string
+              p_seller_name?: string
+              p_transaction_type: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_agent_side?: string
+              p_buyer_name?: string
+              p_closed_at: string
+              p_closing_price: number
+              p_kaek?: string
+              p_notes?: string
+              p_property_address: string
+              p_property_city: string
+              p_property_postal_code?: string
+              p_property_type?: string
+              p_seller_name?: string
+              p_transaction_type: string
+            }
+            Returns: string
+          }
       submit_firesale_interest: {
         Args: {
           p_deal_id: string
@@ -5523,10 +5595,10 @@ export type Database = {
         | "agent"
         | "professional"
         | "seller"
+        | "admin"
         | "investor"
         | "institutional"
         | "developer"
-        | "admin"
       viewing_status: "pending" | "confirmed" | "cancelled" | "completed"
       viewing_type: "in_person" | "video"
     }
@@ -5751,10 +5823,10 @@ export const Constants = {
         "agent",
         "professional",
         "seller",
+        "admin",
         "investor",
         "institutional",
         "developer",
-        "admin",
       ],
       viewing_status: ["pending", "confirmed", "cancelled", "completed"],
       viewing_type: ["in_person", "video"],
