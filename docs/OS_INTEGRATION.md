@@ -109,7 +109,9 @@ Reads from Hub table `firesale_requests`.
 **Purpose:** Fetch a report from the OS for a given listing. For `report_type: "valuation"` the function builds the OS `PropertyFeaturesRequest` from the Hub listing and fetches the printable HTML property report from `GET /api/v1/reports/valuation/property`. The UI can download that HTML report or open it through the browser print/save-to-PDF flow. Successful OS reports are cached for 30 days in `property_report_cache`.
 
 **Request:**  
-`body: { listing_id: string, report_type: "valuation" | "neighbourhood" }`
+`body: { listing_id: UUID, report_type: "valuation" | "neighbourhood" }`
+
+The target must be a listing stored by the platform. Arbitrary external IDs are rejected before any OS request. On a cache miss, the function calls the service-only `authorize_property_report_generation` RPC before provider authentication or report generation. This blocks users without a plan allowance or paid property-report add-on without spending OS capacity. Final usage/add-on consumption occurs only after a successful report, so provider failures do not consume customer allowance.
 
 **OS API:**
 
@@ -124,6 +126,8 @@ Reads from Hub table `firesale_requests`.
 - Valuation success: `{ ok: true, report: { kind: "valuation-property-html", html, ai, features, fileName }, source: "os" }` where `fileName` is an `.html` file name.
 - Legacy success: `{ ok: true, report: <payload>, source: "os" }` when the OS returns a report.
 - `{ ok: true, report: null, source: "os" }` when the OS has no report (e.g. 404).  
+- HTTP `402` with `code: "report_billing_failed"` when the user needs Pro or a property-report add-on.
+- HTTP `400` when `listing_id` is not a platform listing UUID.
 - `{ ok: false, error }` on failure.
 
 **Frontend:**  

@@ -524,14 +524,14 @@ describe("Pricing focused page behavior", () => {
     renderWithProviders(<Pricing />, { initialPath });
 
     await waitFor(() => expect(mocks.toast[toastKind]).toHaveBeenCalledWith(expect.stringMatching(message)));
-    if (initialPath.includes("success")) {
+    if (initialPath.includes("success") && !initialPath.includes("billing_mode=mock")) {
       expect(refreshSubscription).toHaveBeenCalledTimes(1);
     } else {
       expect(refreshSubscription).not.toHaveBeenCalled();
     }
   });
 
-  it("reconciles the exact Stripe session across the Pricing return retry", async () => {
+  it("reconciles the exact Stripe session once without a stale delayed retry", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const refreshSubscription = vi.fn().mockResolvedValue(undefined);
     mocks.useSubscriptionMock.mockReturnValue({
@@ -550,7 +550,7 @@ describe("Pricing focused page behavior", () => {
       expect(refreshSubscription).toHaveBeenCalledWith("cs_test_pricing_return");
     });
     await vi.advanceTimersByTimeAsync(2_500);
-    expect(refreshSubscription).toHaveBeenNthCalledWith(2, "cs_test_pricing_return");
+    expect(refreshSubscription).toHaveBeenCalledTimes(1);
     vi.useRealTimers();
   });
 

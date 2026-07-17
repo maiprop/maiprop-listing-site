@@ -30,7 +30,7 @@ describe("getPlanLimitErrorMessage", () => {
   it("returns message for viewing_limit_reached", () => {
     const result = getPlanLimitErrorMessage(new Error("viewing_limit_reached"));
     expect(result).not.toBeNull();
-    expect(result).toMatch(/free viewing/i);
+    expect(result).toMatch(/monthly viewing limit/i);
     expect(result).not.toMatch(/viewing_limit_reached/i);
   });
 
@@ -47,7 +47,7 @@ describe("getPlanLimitErrorMessage", () => {
       code: "P0001",
     });
 
-    expect(result).toMatch(/free viewing/i);
+    expect(result).toMatch(/monthly viewing limit/i);
     expect(result).not.toMatch(/viewing_limit_reached/i);
   });
 

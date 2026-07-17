@@ -87,7 +87,7 @@ operational delivery path exists.
   `priority_placement`, `featured_priority_bundle`.
 - Agent add-ons: `agent_extra_seat`, `agency_branded_profile`,
   `agency_dedicated_manager`, `agency_white_label`.
-- Professional add-ons: `featured_professional`, `extra_priority_ad`,
+- Professional add-ons: `featured_professional`,
   `professional_api_access`, `professional_referral_network`,
   `professional_extra_seat`, `professional_branded_email`.
 - B2B data products: `market_intelligence`, `avm_api`,

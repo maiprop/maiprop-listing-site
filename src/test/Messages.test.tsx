@@ -27,6 +27,7 @@ const {
   channelMock,
   removeChannelMock,
   storageUploadMock,
+  storageRemoveMock,
   storageCreateSignedUrlMock,
   navigateMock,
 } = vi.hoisted(() => {
@@ -45,6 +46,7 @@ const {
   };
   const removeChannelMock = vi.fn();
   const storageUploadMock = vi.fn();
+  const storageRemoveMock = vi.fn().mockResolvedValue({ error: null });
   const storageCreateSignedUrlMock = vi.fn().mockResolvedValue({ data: null, error: null });
   const navigateMock = vi.fn();
   return {
@@ -58,6 +60,7 @@ const {
     channelMock,
     removeChannelMock,
     storageUploadMock,
+    storageRemoveMock,
     storageCreateSignedUrlMock,
     navigateMock,
   };
@@ -66,7 +69,7 @@ const {
 vi.mock("@/hooks/useMessages", () => ({
   useConversations: useConversationsMock,
   useMessages: useMessagesMock,
-  useSendMessage: () => ({ mutate: sendMessageMutate, isPending: false }),
+  useSendMessage: () => ({ mutateAsync: sendMessageMutate, isPending: false }),
   useMarkMessagesRead: () => ({ mutate: markReadMutate, isPending: false }),
 }));
 
@@ -81,6 +84,7 @@ vi.mock("@/integrations/supabase/client", () => ({
     storage: {
       from: vi.fn(() => ({
         upload: storageUploadMock,
+        remove: storageRemoveMock,
         createSignedUrl: storageCreateSignedUrlMock,
       })),
     },
@@ -171,10 +175,13 @@ const MSG_ME = {
 beforeEach(() => {
   cleanup();
   sendMessageMutate.mockReset();
+  sendMessageMutate.mockResolvedValue({ id: "sent-message" });
   markReadMutate.mockReset();
   toastErrorMock.mockReset();
   toastSuccessMock.mockReset();
   storageUploadMock.mockReset();
+  storageRemoveMock.mockReset();
+  storageRemoveMock.mockResolvedValue({ error: null });
   storageCreateSignedUrlMock.mockClear();
   removeChannelMock.mockReset();
   channelMock.on.mockClear();
@@ -312,6 +319,17 @@ describe("Messages — send + file upload handlers", () => {
     expect(inputBox.value).toBe("");
   });
 
+  it("keeps the draft when server delivery fails", async () => {
+    sendMessageMutate.mockRejectedValueOnce(new Error("delivery unavailable"));
+    render(<Messages />);
+    const inputBox = screen.getByPlaceholderText("Type a message...") as HTMLInputElement;
+    fireEvent.change(inputBox, { target: { value: "keep this draft" } });
+    fireEvent.keyDown(inputBox, { key: "Enter" });
+
+    await waitFor(() => expect(sendMessageMutate).toHaveBeenCalledTimes(1));
+    expect(inputBox.value).toBe("keep this draft");
+  });
+
   it("shares the active listing detail route when the share-link button is clicked", () => {
     render(<Messages />);
     const linkBtn = screen.getByLabelText("Share property link");
@@ -356,6 +374,24 @@ describe("Messages — send + file upload handlers", () => {
     await waitFor(() => {
       expect(toastErrorMock).toHaveBeenCalledWith(expect.stringMatching(/boom/));
     });
+  });
+
+  it("removes already uploaded objects when a later attachment fails", async () => {
+    storageUploadMock
+      .mockResolvedValueOnce({ error: null })
+      .mockResolvedValueOnce({ error: new Error("second upload failed") });
+    render(<Messages />);
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const first = new File([new Uint8Array(512)], "first.pdf", { type: "application/pdf" });
+    const second = new File([new Uint8Array(512)], "second.pdf", { type: "application/pdf" });
+    Object.defineProperty(input, "files", { value: [first, second], configurable: true });
+    fireEvent.change(input);
+
+    await waitFor(() => expect(storageRemoveMock).toHaveBeenCalledTimes(1));
+    expect(storageRemoveMock).toHaveBeenCalledWith([
+      expect.stringMatching(/^me-id\/conv-1\/.+\.pdf$/),
+    ]);
+    expect(screen.queryByText("first.pdf")).not.toBeInTheDocument();
   });
 });
 
@@ -427,7 +463,7 @@ describe("Messages — additional render branches", () => {
     fireEvent.click(sendBtn);
     await waitFor(() => {
       expect(sendMessageMutate).toHaveBeenCalledWith(
-        expect.objectContaining({ content: "📎" }),
+        expect.objectContaining({ content: "\u{1F4CE}" }),
       );
     });
   });

@@ -18,6 +18,7 @@ import {
   demoPasswords,
   seededDemoAccountsEnabled,
 } from "./helpers/demoAccounts";
+import { waitForPostAuthNavigation } from "./helpers/postAuthNavigation";
 
 // ─── Credentials ─────────────────────────────────────────────────────────────
 
@@ -60,9 +61,7 @@ const signIn = async (
     )
     .first()
     .click();
-  await page.waitForURL(/\/dashboard|\/onboarding|\/admin/, {
-    timeout: 25_000,
-  });
+  await waitForPostAuthNavigation(page, /\/dashboard|\/onboarding|\/admin/);
 };
 
 const expectInvestorDashboardReady = async (page: Page): Promise<void> => {

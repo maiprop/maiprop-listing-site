@@ -14,7 +14,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
 vi.mock("@/integrations/supabase/client", () => ({
-  supabase: { from: vi.fn(), auth: { getUser: vi.fn() } },
+  supabase: {
+    from: vi.fn(),
+    auth: { getUser: vi.fn() },
+    functions: { invoke: vi.fn() },
+  },
 }));
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: vi.fn(),
@@ -29,7 +33,12 @@ vi.mock("react-i18next", () => ({
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { useCreateListing, useUpdateListing, useDeleteListing } from "@/hooks/useListings";
+import {
+  useCreateListing,
+  useDeleteListing,
+  useTrackListingView,
+  useUpdateListing,
+} from "@/hooks/useListings";
 
 const TEST_USER_ID = "user-test-123";
 const TEST_LISTING_ID = "listing-test-456";
@@ -68,7 +77,60 @@ function makeDeleteChain() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
+  sessionStorage.clear();
   vi.mocked(useAuth).mockReturnValue({ user: { id: TEST_USER_ID } } as ReturnType<typeof useAuth>);
+});
+
+describe("useTrackListingView", () => {
+  const listingId = "11111111-1111-4111-8111-111111111111";
+
+  it("retries when the Edge Function accepts but does not record the view", async () => {
+    vi.mocked(supabase.functions.invoke).mockResolvedValue({
+      data: { success: true, recorded: false, reason: "auth_unavailable" },
+      error: null,
+    });
+    const { result } = renderHook(() => useTrackListingView(), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync(listingId);
+      await result.current.mutateAsync(listingId);
+    });
+
+    expect(supabase.functions.invoke).toHaveBeenCalledTimes(2);
+    expect(localStorage.getItem(`maiprop_viewed_${listingId}`)).toBeNull();
+  });
+
+  it("deduplicates only after the Edge Function confirms success", async () => {
+    vi.mocked(supabase.functions.invoke).mockResolvedValue({
+      data: { success: true },
+      error: null,
+    });
+    const { result } = renderHook(() => useTrackListingView(), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync(listingId);
+      await result.current.mutateAsync(listingId);
+    });
+
+    expect(supabase.functions.invoke).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem(`maiprop_viewed_${listingId}`)).not.toBeNull();
+  });
+
+  it("retries after an Edge Function error", async () => {
+    vi.mocked(supabase.functions.invoke).mockResolvedValue({
+      data: null,
+      error: new Error("temporary failure"),
+    });
+    const { result } = renderHook(() => useTrackListingView(), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync(listingId);
+      await result.current.mutateAsync(listingId);
+    });
+
+    expect(supabase.functions.invoke).toHaveBeenCalledTimes(2);
+  });
 });
 
 // ── useCreateListing ────────────────────────────────────────────────────────

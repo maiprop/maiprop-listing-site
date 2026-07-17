@@ -23,15 +23,26 @@ export const useTrackListingView = () => {
       const lastTracked = Number(localStorage.getItem(storageKey) ?? sessionStorage.getItem(storageKey) ?? "0");
       if (Number.isFinite(lastTracked) && now - lastTracked < viewTtlMs) return;
 
-      localStorage.setItem(storageKey, String(now));
-      sessionStorage.setItem(storageKey, String(now));
-
       const sampleRate = Number(import.meta.env.VITE_VIEW_TRACKING_SAMPLE_RATE ?? "1");
       if (Number.isFinite(sampleRate) && sampleRate >= 0 && sampleRate < 1 && Math.random() > sampleRate) return;
 
-      await supabase.functions.invoke("record-listing-view", {
-        body: { listingId: parsedListingId },
-      }).catch((error: unknown) => logger.warn("View tracking failed:", error));
+      try {
+        const { data, error } = await supabase.functions.invoke("record-listing-view", {
+          body: { listingId: parsedListingId },
+        });
+        if (error) {
+          logger.warn("View tracking failed:", error);
+          return;
+        }
+
+        const result = data as { recorded?: boolean } | null;
+        if (result?.recorded === false) return;
+
+        localStorage.setItem(storageKey, String(now));
+        sessionStorage.setItem(storageKey, String(now));
+      } catch (error: unknown) {
+        logger.warn("View tracking failed:", error);
+      }
     },
   });
 };

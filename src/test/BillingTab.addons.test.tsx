@@ -17,6 +17,17 @@ const mocks = vi.hoisted(() => ({
     isManuallyManagedPlan: false,
     refreshSubscription: vi.fn().mockResolvedValue(undefined),
   },
+  pricingConfigs: {} as Record<
+    string,
+    {
+      amount: number;
+      annualAmount?: number;
+      currency: string;
+      label: string;
+      description: null;
+      unit: string;
+    }
+  >,
 }));
 
 vi.mock("@/integrations/supabase/client", async () => {
@@ -27,6 +38,10 @@ vi.mock("@/integrations/supabase/client", async () => {
 
 vi.mock("@/hooks/useSubscription", () => ({
   useSubscription: vi.fn(() => mocks.subscription),
+}));
+
+vi.mock("@/hooks/usePricingConfigs", () => ({
+  usePricingConfigs: () => ({ data: mocks.pricingConfigs }),
 }));
 
 const authState = {
@@ -71,6 +86,7 @@ describe("BillingTab add-on checkout", () => {
       isManuallyManagedPlan: false,
       refreshSubscription: vi.fn().mockResolvedValue(undefined),
     });
+    mocks.pricingConfigs = {};
     mocks.supabase?.rpc.mockImplementation((fn: string, args?: { p_bucket?: string }) => {
       if (fn === "get_listing_promotion_balance") {
         return Promise.resolve({
@@ -103,7 +119,7 @@ describe("BillingTab add-on checkout", () => {
     mocks.supabase?.from.mockImplementation((table: string) => {
       const rowsByTable: Record<string, Array<{ id: string }>> = {
         usage_property_reports: [{ id: "report-1" }, { id: "report-2" }],
-        usage_priority_ads: Array.from({ length: 10 }, (_, i) => ({ id: `boost-${i}` })),
+        listing_promotion_allocations: Array.from({ length: 10 }, (_, i) => ({ id: `boost-${i}` })),
       };
       const addonRows = [
         { credits_granted: 1, credits_consumed: 0 },
@@ -211,6 +227,120 @@ describe("BillingTab add-on checkout", () => {
 
     expect(screen.queryByText("Extra Agent Seat")).not.toBeInTheDocument();
     expect(screen.queryByText("API Access")).not.toBeInTheDocument();
+  });
+
+  it("renders add-on prices from active pricing configuration", async () => {
+    mocks.pricingConfigs = {
+      featured_listing: {
+        amount: 45,
+        currency: "EUR",
+        label: "Spotlight",
+        description: null,
+        unit: "per_listing",
+      },
+      priority_placement: {
+        amount: 65,
+        currency: "EUR",
+        label: "Priority Rank",
+        description: null,
+        unit: "per_listing",
+      },
+      featured_priority_bundle: {
+        amount: 88,
+        currency: "EUR",
+        label: "Spotlight + Priority Rank",
+        description: null,
+        unit: "per_listing",
+      },
+      property_report_single: {
+        amount: 55,
+        currency: "EUR",
+        label: "Property Report",
+        description: null,
+        unit: "per_report",
+      },
+    };
+
+    renderWithProviders(<BillingTab />);
+
+    expect(await screen.findByText("€45")).toBeInTheDocument();
+    expect(screen.getByText(/Extra reports cost EUR 55 each/i))
+      .toBeInTheDocument();
+    expect(screen.getByText(/Add-on EUR 45\/30 days/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Priority add-on EUR 65\/30 days; bundle EUR 88\/30 days/i),
+    ).toBeInTheDocument();
+  });
+
+  it("renders config-backed contact-sales prices without enabling self-serve checkout", async () => {
+    authState.profile.role = "agent";
+    authState.profile.participant_type = "agent";
+    mocks.pricingConfigs = {
+      agent_extra_seat: {
+        amount: 44,
+        currency: "EUR",
+        label: "Extra Agent Seat",
+        description: null,
+        unit: "monthly",
+      },
+    };
+
+    renderWithProviders(<BillingTab />);
+
+    const extraSeatCard = (await screen.findByText("Extra Agent Seat")).closest(
+      "div",
+    );
+    expect(extraSeatCard).not.toBeNull();
+    expect(within(extraSeatCard as HTMLElement).getByText("€44"))
+      .toBeInTheDocument();
+    expect(
+      within(extraSeatCard as HTMLElement).getByRole("link", {
+        name: /Contact team/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(extraSeatCard as HTMLElement).queryByRole("button", {
+        name: /Buy Extra Agent Seat/i,
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders monthly and annual subscription prices from active pricing configuration", async () => {
+    Object.assign(mocks.subscription, {
+      isPro: false,
+      hasStripeBilling: false,
+      accessSource: null,
+    });
+    authState.profile.role = "agent";
+    authState.profile.participant_type = "agent";
+    mocks.pricingConfigs = {
+      agent_basic: {
+        amount: 175,
+        annualAmount: 1_650,
+        currency: "EUR",
+        label: "Agent Pro",
+        description: null,
+        unit: "monthly",
+      },
+    };
+
+    renderWithProviders(<BillingTab />);
+
+    expect(await screen.findByRole("button", { name: /175[.,]00\s*€\/mo/i }))
+      .toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /1[.,]650[.,]00\s*€\/yr/i }))
+      .toBeInTheDocument();
+  });
+
+  it("does not sell redundant report credits or unfulfilled priority ads to B2B Pro users", async () => {
+    authState.profile.role = "professional";
+    authState.profile.participant_type = "professional";
+
+    renderWithProviders(<BillingTab />);
+
+    expect(await screen.findByText("Spotlight Professional")).toBeInTheDocument();
+    expect(screen.queryByText("Property Report")).not.toBeInTheDocument();
+    expect(screen.queryByText("Extra Priority Rank Ad")).not.toBeInTheDocument();
   });
 
   it("starts subscription checkout from the internal Billing tab upgrade action", async () => {
@@ -370,8 +500,13 @@ describe("BillingTab add-on checkout", () => {
       expect(quotaCalls[0][1]).toEqual(
         expect.objectContaining({
           body: {
-            buckets: ["property-valuation", "neighbourhood-report", "property-pois"],
+            buckets: expect.arrayContaining([
+              "property-valuation",
+              "neighbourhood-report",
+              "property-pois",
+            ]),
           },
+          timeout: 4_000,
         }),
       );
     });
@@ -388,6 +523,39 @@ describe("BillingTab add-on checkout", () => {
         timeout: 20_000,
       });
     });
+  });
+
+  it("shows paid business plans the unlimited report contract", async () => {
+    authState.profile.role = "agent";
+    authState.profile.participant_type = "agent";
+
+    renderWithProviders(<BillingTab />);
+
+    const panel = await screen.findByRole("region", { name: /monthly ai and report usage/i });
+    const reportRow = within(panel).getByText("Property reports").closest(".rounded-xl");
+    expect(reportRow).not.toBeNull();
+    await waitFor(() => {
+      expect(within(reportRow as HTMLElement).getByText("2 used")).toBeInTheDocument();
+    });
+    expect(within(reportRow as HTMLElement).getByText("Unlimited with your plan")).toBeInTheDocument();
+    expect(within(reportRow as HTMLElement).queryByRole("button", { name: /report/i })).not.toBeInTheDocument();
+  });
+
+  it("renders admin AI usage as unlimited without purchase actions", async () => {
+    authState.profile.role = "admin";
+    authState.profile.participant_type = "admin";
+
+    renderWithProviders(<BillingTab />);
+
+    const panel = await screen.findByRole("region", { name: /monthly ai and report usage/i });
+    for (const label of ["AI valuations", "Neighbourhood reports", "Nearby places / POIs"]) {
+      const row = within(panel).getByText(label).closest(".rounded-xl");
+      expect(row).not.toBeNull();
+      expect(within(row as HTMLElement).getByText("Unlimited")).toBeInTheDocument();
+      expect(within(row as HTMLElement).getByText("Unlimited with your plan")).toBeInTheDocument();
+    }
+
+    expect(within(panel).queryByRole("button", { name: /buy|top up/i })).not.toBeInTheDocument();
   });
 
   it("offers free users both upgrade and top-up when a monthly add-on-backed quota is consumed", async () => {
@@ -543,23 +711,63 @@ describe("BillingTab add-on checkout", () => {
     });
 
     await waitFor(() => {
-      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["billing-info"] });
+      expect(mocks.subscription.refreshSubscription).toHaveBeenCalledTimes(1);
+      expect(
+        mocks.supabase?.functions.invoke.mock.calls.filter(([name]) => name === "get-invoices"),
+      ).not.toHaveLength(0);
+      expect(
+        mocks.supabase?.functions.invoke.mock.calls.filter(([name]) => name === "ai-quota-status"),
+      ).toHaveLength(2);
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["addon_purchases"] });
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["usage_property_reports"] });
-      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["usage_priority_ads"] });
-      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["usage_ai_calls"] });
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ["listing_promotion_allocations", "priority-plan-usage"],
+      });
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["listing-promotion-balance"] });
     });
   });
 
   it("reconciles the exact Stripe session on a successful billing return", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     renderWithProviders(<BillingTab />, {
       initialPath: "/dashboard/billing?checkout=success&session_id=cs_test_billing_return",
     });
 
+    try {
+      await waitFor(() => {
+        expect(mocks.subscription.refreshSubscription).toHaveBeenCalledWith(
+          "cs_test_billing_return",
+        );
+      });
+      await vi.advanceTimersByTimeAsync(2_500);
+      expect(mocks.subscription.refreshSubscription).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("refreshes checkout-derived usage only after exact reconciliation completes", async () => {
+    let finishReconciliation!: () => void;
+    mocks.subscription.refreshSubscription = vi.fn(() => new Promise<void>((resolve) => {
+      finishReconciliation = resolve;
+    }));
+    const queryClient = createTestQueryClient();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    renderWithProviders(<BillingTab />, {
+      initialPath: "/dashboard/billing?checkout=success&session_id=cs_test_ordered_return",
+      queryClient,
+    });
     await waitFor(() => {
       expect(mocks.subscription.refreshSubscription).toHaveBeenCalledWith(
-        "cs_test_billing_return",
+        "cs_test_ordered_return",
       );
+    });
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ["addon_purchases"] });
+
+    finishReconciliation();
+    await waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["addon_purchases"] });
     });
   });
 

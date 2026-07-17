@@ -17,6 +17,11 @@ const quotaStatusFunction = readFileSync(
   "utf8",
 );
 
+const gatewayJwtHelper = readFileSync(
+  resolve(process.cwd(), "supabase/functions/_shared/gatewayJwt.ts"),
+  "utf8",
+);
+
 const supabaseConfig = readFileSync(
   resolve(process.cwd(), "supabase/config.toml"),
   "utf8",
@@ -80,8 +85,9 @@ describe("AI quota status grant hardening", () => {
     expect(useAiQuotaHook).toContain('"ai-quota-status"');
     expect(useAiQuotaHook).not.toContain('rpc("check_ai_quota"');
     expect(aiQuotaStatusConfig).toMatch(/\bverify_jwt\s*=\s*true\b/);
-    expect(quotaStatusFunction).toContain("verifiedUserIdFromJwt");
-    expect(quotaStatusFunction).toContain("role !== \"authenticated\"");
+    expect(quotaStatusFunction).toContain("verifiedGatewayUserFromJwt");
+    expect(gatewayJwtHelper).toContain('role !== "authenticated"');
+    expect(gatewayJwtHelper).toContain("expiresAt <= nowSeconds");
     expect(quotaStatusFunction).toContain('"check_ai_quotas_for_user"');
     expect(quotaStatusFunction).toContain("_user_id: userId");
     expect(quotaStatusFunction).toContain("p_buckets: buckets");

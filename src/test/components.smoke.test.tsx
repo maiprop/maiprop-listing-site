@@ -1026,8 +1026,9 @@ describe("Component smoke tests", () => {
       <InvestorHeroHeader
         dealsCount={0}
         totalValue={0}
-        avgDiscount="0"
-        avgRoi="0"
+        newDealsThisWeek={0}
+        avgValueSpread={null}
+        valuedDealsCount={0}
         subscription={null}
         subscribed={false}
         showInviteCta={false}

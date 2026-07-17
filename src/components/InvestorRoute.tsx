@@ -3,7 +3,6 @@ import type { User } from "@supabase/supabase-js";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEligibleForQuickSale } from "@/hooks/useEligibleForQuickSale";
-import { useSubscription } from "@/hooks/useSubscription";
 import { Flame, Lock, ArrowRight, CheckCircle2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RoleRoute, type RoleRouteGuardResult } from "./RoleRoute";
@@ -18,10 +17,9 @@ export function InvestorRoute({ children }: { children: React.ReactNode }) {
 function useInvestorRouteGuard(): RoleRouteGuardResult {
   const { user, profile, loading: authLoading } = useAuth();
   const { eligible, loading: eligibilityLoading } = useEligibleForQuickSale();
-  const { isPro, loading: subscriptionLoading } = useSubscription();
   const [timedOut, setTimedOut] = useState(false);
 
-  const stillLoading = authLoading || !profile || eligibilityLoading || subscriptionLoading;
+  const stillLoading = authLoading || !profile || eligibilityLoading;
 
   useEffect(() => {
     if (stillLoading) {
@@ -41,7 +39,7 @@ function useInvestorRouteGuard(): RoleRouteGuardResult {
   }
 
   if (!eligible) {
-    return { denied: <InvestorAccessRequired user={user} isPro={isPro} /> };
+    return { denied: <InvestorAccessRequired user={user} /> };
   }
 
   return { allowed: true };
@@ -69,10 +67,8 @@ function InvestorAccessRetry() {
   );
 }
 
-function InvestorAccessRequired({ user, isPro }: { user: User | null; isPro: boolean }) {
+function InvestorAccessRequired({ user }: { user: User | null }) {
   const [showInvitationModal, setShowInvitationModal] = useState(false);
-  const primaryHref = isPro ? null : "/pricing?audience=participant";
-  const primaryLabel = isPro ? "Apply for investor access" : "Upgrade to Pro to apply";
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
@@ -101,17 +97,9 @@ function InvestorAccessRequired({ user, isPro }: { user: User | null; isPro: boo
           ))}
         </div>
         <div className="flex gap-3 justify-center">
-          {primaryHref ? (
-            <Button asChild className="bg-orange-500 hover:bg-orange-600 text-white gap-2">
-              <Link to={primaryHref}>
-                <Flame className="w-4 h-4" /> {primaryLabel}
-              </Link>
-            </Button>
-          ) : (
-            <Button className="bg-orange-500 hover:bg-orange-600 text-white gap-2" onClick={() => setShowInvitationModal(true)}>
-              <Flame className="w-4 h-4" /> {primaryLabel}
-            </Button>
-          )}
+          <Button className="bg-orange-500 hover:bg-orange-600 text-white gap-2" onClick={() => setShowInvitationModal(true)}>
+            <Flame className="w-4 h-4" /> Apply for investor access
+          </Button>
           <Button asChild variant="outline">
             <Link to="/dashboard">
               Go to Dashboard <ArrowRight className="w-4 h-4 ml-1" />

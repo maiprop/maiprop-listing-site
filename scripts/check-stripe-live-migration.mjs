@@ -87,7 +87,6 @@ const CATALOG = [
   ["agency_dedicated_manager", "agent", [["monthly", "maiprop_agency_dedicated_manager_monthly", 199, "month"]]],
   ["agency_white_label", "agent", [["monthly", "maiprop_agency_white_label_monthly", 149, "month"]]],
   ["featured_professional", "professional", [["monthly", "maiprop_featured_professional_monthly", 59, "month"]]],
-  ["extra_priority_ad", "professional", [["one_time", "maiprop_extra_priority_ad", 8, null]]],
   ["professional_api_access", "professional", [["monthly", "maiprop_professional_api_access_monthly", 59, "month"]]],
   ["professional_referral_network", "professional", [["monthly", "maiprop_professional_referral_network_monthly", 39, "month"]]],
   ["professional_extra_seat", "professional", [["monthly", "maiprop_professional_extra_seat_monthly", 19, "month"]]],
@@ -105,6 +104,8 @@ const CATALOG = [
     recurringInterval,
   })),
 }));
+
+const RETIRED_CATALOG_KEYS = new Set(["extra_priority_ad"]);
 
 const REQUIRED_LOOKUP_KEYS = CATALOG.flatMap((item) => item.prices.map((price) => price.lookupKey));
 
@@ -298,6 +299,15 @@ async function main() {
 
   const rows = await fetchPricingRows();
   const rowByKey = new Map(rows.map((row) => [row.key, row]));
+
+  for (const key of RETIRED_CATALOG_KEYS) {
+    if (rowByKey.has(key)) {
+      issues.push(`Retired Supabase pricing_configs row ${key} is still active.`);
+    }
+    if (productByKey.has(key)) {
+      issues.push(`Retired live Stripe product ${key} is still active.`);
+    }
+  }
 
   for (const item of CATALOG) {
     const row = rowByKey.get(item.key);

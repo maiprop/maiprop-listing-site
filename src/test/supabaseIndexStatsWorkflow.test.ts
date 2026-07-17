@@ -199,7 +199,7 @@ describe("Supabase index stats workflow wiring", () => {
     }
   });
 
-  it("repairs known staging-only migration aliases before staging dry-run validation", () => {
+  it("reconciles staging-only migration aliases before staging dry-run validation", () => {
     const repairStep = supabaseStagingWorkflow.indexOf("- name: Repair legacy staging migration aliases");
     const dryRunStep = supabaseStagingWorkflow.indexOf("- name: Dry-run staging database migrations");
 
@@ -207,32 +207,14 @@ describe("Supabase index stats workflow wiring", () => {
     expect(dryRunStep).toBeGreaterThan(-1);
     expect(repairStep).toBeLessThan(dryRunStep);
 
-    for (const version of [
-      "20260614083000",
-      "20260614090000",
-      "20260614153000",
-      "20260614154000",
-      "20260714114032",
-      "20260714114358",
-      "20260714120414",
-      "20260714124912",
-      "20260714162345",
-      "20260714162407",
-      "20260714164244",
-      "20260714164246",
-      "20260714164249",
-      "20260714164250",
-      "20260714164252",
-      "20260714164254",
-      "20260714173841",
-      "20260714173858",
-    ]) {
-      expect(supabaseStagingWorkflow).toContain(version);
-    }
-
-    expect(supabaseStagingWorkflow).toContain("supabase migration list --db-url \"$SUPABASE_STAGING_EFFECTIVE_DB_URL\"");
     expect(supabaseStagingWorkflow).toContain(
-      "supabase migration repair \"${versions_to_revert[@]}\" --db-url \"$SUPABASE_STAGING_EFFECTIVE_DB_URL\" --status reverted --yes",
+      "node scripts/reconcile-staging-migration-aliases.mjs",
+    );
+    expect(supabaseStagingWorkflow).toContain(
+      "VITE_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}",
+    );
+    expect(supabaseStagingWorkflow).toContain(
+      "STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}",
     );
   });
 

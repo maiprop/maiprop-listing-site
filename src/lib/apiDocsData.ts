@@ -301,28 +301,23 @@ export const SECTIONS: ApiSection[] = [
       },
       {
         id: "check-subscription",
-        method: "GET",
+        method: "POST",
         path: "/check-subscription",
         description:
-          "Check the authenticated user's current subscription status, plan type, and feature limits.",
+          "Check the authenticated user's durable subscription state. Feature limits are resolved separately from the plan contract.",
         auth: true,
         rateLimit: "30 requests / minute",
         responseExample: JSON.stringify(
           {
-            success: true,
-            data: {
-              subscribed: true,
-              plan: "pro",
-              product_id: "prod_U8SJbk3fZQ3xgD",
-              current_period_end: "2026-04-23T00:00:00Z",
-              cancel_at_period_end: false,
-              features: {
-                ai_valuations_monthly: 5,
-                neighbourhood_reports_monthly: 3,
-                max_listings: 5,
-                max_viewings: 10,
-              },
-            },
+            subscribed: true,
+            product_id: "prod_U8SJbk3fZQ3xgD",
+            subscription_end: "2026-04-23T00:00:00Z",
+            source: "billing_state",
+            plan_key: "pro",
+            audience: "participant",
+            billing_cycle: "monthly",
+            status: "active",
+            sync_status: "synced",
           },
           null,
           2
@@ -393,7 +388,7 @@ const token = session?.access_token;
 const response = await fetch(
   \`https://${PROJECT_ID}.supabase.co/functions/v1/check-subscription\`,
   {
-    method: "GET",
+    method: "POST",
     headers: {
       "Authorization": \`Bearer \${token}\`,
       "Content-Type": "application/json",

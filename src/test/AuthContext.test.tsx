@@ -60,7 +60,12 @@ vi.mock("@/lib/authActivity", () => ({
   recordUserAuthActivity: (...args: unknown[]) => authActivityMock.recordUserAuthActivity(...args),
 }));
 
-import { AuthProvider, useAuth, profileNeedsOnboarding } from "@/contexts/AuthContext";
+import {
+  AuthProvider,
+  profileNeedsOnboarding,
+  unavailableSubscriptionState,
+  useAuth,
+} from "@/contexts/AuthContext";
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function wrap({ children }: { children: React.ReactNode }) {
@@ -128,6 +133,29 @@ describe("profileNeedsOnboarding (pure helper)", () => {
   });
 });
 
+describe("subscription outage grace", () => {
+  const verified = {
+    subscribed: true,
+    productId: "prod_agent",
+    subscriptionEnd: "2099-01-01T00:00:00.000Z",
+    source: "billing_state" as const,
+    syncStatus: "synced" as const,
+    loading: false,
+  };
+
+  it("uses one fixed grace boundary and fails closed after it expires", () => {
+    const first = unavailableSubscriptionState(verified, 1_000);
+    expect(first.staleUntil).toBe(31_000);
+
+    const repeated = unavailableSubscriptionState(first, 10_000);
+    expect(repeated.staleUntil).toBe(31_000);
+
+    const expired = unavailableSubscriptionState(repeated, 31_001);
+    expect(expired.subscribed).toBe(false);
+    expect(expired.staleUntil).toBeUndefined();
+  });
+});
+
 describe("useAuth() outside provider", () => {
   it("throws a clear error when no AuthProvider is mounted above", () => {
     // Suppress React's console.error so the assertion error is the only output.
@@ -180,7 +208,12 @@ describe("AuthProvider signed-in flow", () => {
       single: vi.fn().mockResolvedValue({ data: profileRow, error: null }),
     });
     supabaseMock.functions.invoke.mockResolvedValue({
-      data: { subscribed: true, product_id: "prod_pro", subscription_end: "2027-01-01" },
+      data: {
+        subscribed: true,
+        product_id: "prod_pro",
+        subscription_end: "2027-01-01",
+        status: "active",
+      },
       error: null,
     });
 
@@ -198,6 +231,7 @@ describe("AuthProvider signed-in flow", () => {
     expect(result.current.subscription).toMatchObject({
       productId: "prod_pro",
       subscriptionEnd: "2027-01-01",
+      billingStatus: "active",
     });
     expect(result.current.needsOnboarding).toBe(false);
     await waitFor(() =>
@@ -552,6 +586,62 @@ describe("AuthProvider auth API methods", () => {
     );
   });
 
+  it("coalesces duplicate exact-session reconciliation callers behind one request", async () => {
+    supabaseMock.auth.getSession.mockResolvedValue({
+      data: { session: { user: { id: "u-checkout-coalesce" } } },
+    });
+    let finishLoginCheck!: (value: {
+      data: Record<string, unknown>;
+      error: null;
+    }) => void;
+    supabaseMock.functions.invoke
+      .mockImplementationOnce(() =>
+        new Promise((resolve) => {
+          finishLoginCheck = resolve;
+        }),
+      )
+      .mockResolvedValue({
+        data: {
+          subscribed: true,
+          product_id: "prod_participant",
+          subscription_end: "2099-01-01T00:00:00.000Z",
+          source: "stripe",
+          sync_status: "synced",
+        },
+        error: null,
+      });
+
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await waitFor(() => expect(supabaseMock.functions.invoke).toHaveBeenCalledTimes(1));
+
+    let first!: Promise<void>;
+    let second!: Promise<void>;
+    act(() => {
+      first = result.current.refreshSubscription("cs_test_same_checkout");
+      second = result.current.refreshSubscription("cs_test_same_checkout");
+    });
+    await act(async () => {
+      finishLoginCheck({
+        data: {
+          subscribed: false,
+          product_id: null,
+          subscription_end: null,
+          source: "database",
+          sync_status: "synced",
+        },
+        error: null,
+      });
+      await Promise.all([first, second]);
+    });
+
+    const exactCalls = supabaseMock.functions.invoke.mock.calls.filter(
+      ([name, options]) => name === "check-subscription" &&
+        (options as { body?: { checkout_session_id?: string } } | undefined)?.body?.checkout_session_id ===
+          "cs_test_same_checkout",
+    );
+    expect(exactCalls).toHaveLength(1);
+  });
+
   it("discards a delayed entitlement response after the authenticated user changes", async () => {
     let finishUserACheck!: (value: {
       data: Record<string, unknown>;
@@ -605,7 +695,7 @@ describe("AuthProvider auth API methods", () => {
     expect(result.current.subscription.productId).toBeNull();
   });
 
-  it("fails closed when a refresh exceeds the subscription deadline", async () => {
+  it("preserves previously verified access when a refresh exceeds the subscription deadline", async () => {
     supabaseMock.auth.getSession.mockResolvedValue({
       data: { session: { user: { id: "user-timeout" } } },
     });
@@ -636,14 +726,95 @@ describe("AuthProvider auth API methods", () => {
       });
 
       expect(result.current.subscription).toMatchObject({
-        subscribed: false,
-        productId: null,
+        subscribed: true,
+        productId: "prod_agent",
+        source: "stripe",
         syncStatus: "timeout",
         loading: false,
       });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
+      expect(result.current.subscription.subscribed).toBe(false);
+      expect(result.current.subscription.syncStatus).toBe("timeout");
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("preserves previously verified access for the Edge deadline envelope", async () => {
+    supabaseMock.auth.getSession.mockResolvedValue({
+      data: { session: { user: { id: "user-edge-deadline" } } },
+    });
+    supabaseMock.functions.invoke
+      .mockResolvedValueOnce({
+        data: {
+          subscribed: true,
+          product_id: "prod_agent",
+          subscription_end: "2099-01-01T00:00:00.000Z",
+          source: "stripe",
+          sync_status: "synced",
+        },
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: {
+          subscribed: false,
+          product_id: null,
+          subscription_end: null,
+          source: "deadline",
+          sync_status: "timeout",
+        },
+        error: null,
+      });
+
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await waitFor(() => expect(result.current.subscription.subscribed).toBe(true));
+
+    await act(async () => {
+      await result.current.refreshSubscription();
+    });
+
+    expect(result.current.subscription).toMatchObject({
+      subscribed: true,
+      productId: "prod_agent",
+      source: "stripe",
+      syncStatus: "timeout",
+      loading: false,
+    });
+  });
+
+  it("adopts durable access returned with a reconciliation timeout", async () => {
+    supabaseMock.auth.getSession.mockResolvedValue({
+      data: { session: { user: { id: "user-durable-timeout" } } },
+    });
+    supabaseMock.functions.invoke.mockResolvedValue({
+      data: {
+        subscribed: true,
+        product_id: "prod_agent",
+        subscription_end: "2099-01-01T00:00:00.000Z",
+        source: "billing_state",
+        sync_status: "timeout",
+      },
+      error: null,
+    });
+
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await act(async () => {
+      authStateCallbackHolder.current?.("INITIAL_SESSION", {
+        user: { id: "user-durable-timeout" },
+      });
+    });
+
+    await waitFor(() => expect(result.current.subscription.loading).toBe(false));
+    expect(result.current.subscription).toMatchObject({
+      subscribed: true,
+      productId: "prod_agent",
+      source: "billing_state",
+      syncStatus: "timeout",
+      staleUntil: expect.any(Number),
+    });
   });
 });
 

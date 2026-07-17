@@ -31,7 +31,7 @@ import {
 const HOMEPAGE_AUCTION_SOURCE_LIMIT = 6;
 const HOMEPAGE_AUCTION_DISPLAY_LIMIT = 6;
 const FEATURED_STALE_TIME_MS = 5 * 60 * 1000;
-const HOMEPAGE_SECTION_TIMEOUT_MS = 2_500;
+const HOMEPAGE_SECTION_TIMEOUT_MS = 5_500;
 
 type HomepageQueryOptions = {
   enabled?: boolean;

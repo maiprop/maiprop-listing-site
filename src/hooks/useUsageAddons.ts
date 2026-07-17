@@ -18,7 +18,6 @@ const REPORT_INCLUDED = 3;
 const REPORT_EXTRA_COST = 49; // euros, property_report_single
 const PRIORITY_ADS_INCLUDED = 10;
 const PRIORITY_ADS_EXTRA_COST = 59; // euros, priority_placement
-const PROFESSIONAL_PRIORITY_AD_EXTRA_COST = 8; // euros, extra_priority_ad
 const PROPERTY_REPORT_CREDIT_ADDONS = ["property_report_single"] as const;
 
 function startOfMonth() {
@@ -64,13 +63,13 @@ export function useRecordValuation() {
   });
 }
 
-export function useReportUsage() {
+export function useReportUsage(options: { enabled?: boolean } = {}) {
   const { user } = useAuth();
   const monthStart = startOfMonth();
 
   return useQuery({
     queryKey: ["usage_property_reports", user?.id, monthStart],
-    enabled: !!user,
+    enabled: !!user && options.enabled !== false,
     queryFn: async () => {
       if (!user) return 0;
       const { data, error } = await supabase
@@ -84,12 +83,12 @@ export function useReportUsage() {
   });
 }
 
-export function usePropertyReportAddonCredits() {
+export function usePropertyReportAddonCredits(options: { enabled?: boolean } = {}) {
   const { user } = useAuth();
 
   return useQuery({
     queryKey: ["addon_purchases", "property-report-credits", user?.id],
-    enabled: !!user,
+    enabled: !!user && options.enabled !== false,
     queryFn: async () => {
       if (!user) return 0;
       const runtimeMode = getClientStripeRuntimeMode();
@@ -135,14 +134,16 @@ export function usePriorityAdsUsage() {
   const monthStart = startOfMonth();
 
   return useQuery({
-    queryKey: ["usage_priority_ads", user?.id, monthStart],
+    queryKey: ["listing_promotion_allocations", "priority-plan-usage", user?.id, monthStart],
     enabled: !!user,
     queryFn: async () => {
       if (!user) return 0;
       const { data, error } = await supabase
-        .from("usage_priority_ads")
+        .from("listing_promotion_allocations")
         .select("id")
-        .eq("user_id", user.id)
+        .eq("owner_id", user.id)
+        .eq("promotion_type", "priority")
+        .eq("source_type", "plan")
         .gte("created_at", monthStart);
       if (error) throw error;
       return (data ?? []).length;
@@ -163,7 +164,7 @@ export function useRecordPriorityAd() {
       throw new Error("Priority ad usage is recorded server-side by the checkout or boost workflow");
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["usage_priority_ads"] });
+      qc.invalidateQueries({ queryKey: ["listing_promotion_allocations", "priority-plan-usage"] });
     },
     onError: () => toast.error("Failed to record priority ad usage. Please try again."),
   });
@@ -176,5 +177,4 @@ export {
   REPORT_EXTRA_COST,
   PRIORITY_ADS_INCLUDED,
   PRIORITY_ADS_EXTRA_COST,
-  PROFESSIONAL_PRIORITY_AD_EXTRA_COST,
 };

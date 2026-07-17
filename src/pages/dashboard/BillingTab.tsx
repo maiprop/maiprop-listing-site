@@ -21,7 +21,11 @@ import {
 import { toast } from "sonner";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getParticipantTypeFromProfile } from "@/lib/participantConfig";
-import { getPlanForParticipant } from "@/lib/rolePlanMap";
+import {
+  getPlanForParticipant,
+  resolveRolePlanDisplayPricing,
+} from "@/lib/rolePlanMap";
+import { usePricingConfigs } from "@/hooks/usePricingConfigs";
 import { buildBillingContactHref } from "@/lib/billingContact";
 import { getClientStripeRuntimeMode } from "@/lib/billingRuntime";
 import { BillingUsagePanel } from "@/components/dashboard/BillingUsagePanel";
@@ -151,47 +155,55 @@ export default function BillingTab() { // skipcq: JS-0067
   const { profile, user } = useAuth();
   const { data, isLoading, refetch, isRefetching, error } = useBillingInfo();
   const { data: addonCreditRows = [] } = useAddonCreditLedger(user?.id);
+  const { data: pricingConfigs = {} } = usePricingConfigs();
   const [portalLoading, setPortalLoading] = useState(false);
   const [addonLoadingKey, setAddonLoadingKey] = useState<string | null>(null);
   const [subscriptionCheckoutLoading, setSubscriptionCheckoutLoading] =
     useState(false);
   const [subscriptionBillingCycle, setSubscriptionBillingCycle] =
     useState<SubscriptionBillingCycle>("monthly");
+  const [usageRefreshToken, setUsageRefreshToken] = useState(0);
 
   const participantType = getParticipantTypeFromProfile(profile) ?? "buyer";
   const rolePlan = getPlanForParticipant(participantType);
-  const addonSections = getAddonSectionsForParticipant(participantType);
+  const rolePlanPricing = resolveRolePlanDisplayPricing(
+    rolePlan,
+    pricingConfigs[rolePlan.planKey],
+  );
+  const addonSections = getAddonSectionsForParticipant(participantType, {
+    isPro,
+    pricingConfigs,
+  });
 
   useEffect(() => {
     if (searchParams.get("checkout") !== "success") return;
     const isMockCheckout = searchParams.get("billing_mode") === "mock";
     const checkoutSessionId = searchParams.get("checkout_session_id") ??
       searchParams.get("session_id");
-    let retryTimer: ReturnType<typeof setTimeout> | undefined;
-
-    void refetch();
-    for (const queryKey of [
-      ["billing-info"],
-      ["addon_purchases"],
-      ["usage_property_reports"],
-      ["usage_priority_ads"],
-      ["usage_ai_calls"],
-      ["listing-promotion-balance"],
-    ]) {
-      void queryClient.invalidateQueries({ queryKey });
-    }
     if (isMockCheckout) {
       toast.info("Mock add-on checkout completed. No live payment or add-on entitlement was created.");
-    } else {
-      void refreshSubscription(checkoutSessionId);
-      retryTimer = setTimeout(
-        () => void refreshSubscription(checkoutSessionId),
-        2_500,
-      );
+      return;
     }
 
+    let cancelled = false;
+    const refreshCheckoutState = async () => {
+      await refreshSubscription(checkoutSessionId);
+      if (cancelled) return;
+      await Promise.all([
+        refetch(),
+        ...[
+          ["addon_purchases"],
+          ["usage_property_reports"],
+          ["listing_promotion_allocations", "priority-plan-usage"],
+          ["listing-promotion-balance"],
+        ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+      ]);
+      if (!cancelled) setUsageRefreshToken((token) => token + 1);
+    };
+    void refreshCheckoutState();
+
     return () => {
-      if (retryTimer) clearTimeout(retryTimer);
+      cancelled = true;
     };
   }, [queryClient, refetch, refreshSubscription, searchParams]);
 
@@ -451,8 +463,8 @@ export default function BillingTab() { // skipcq: JS-0067
         ) : (
           <div className="rounded-xl bg-secondary p-4 space-y-3">
             <div className="text-sm text-muted-foreground">
-              You're on the free plan. Upgrade to unlock analytics, unlimited
-              viewings, saved searches and more.
+              You're on the free plan. Upgrade to unlock analytics, higher
+              monthly viewing limits, saved searches and more.
             </div>
             {!rolePlan.inviteOnly && (
               <div className="flex flex-wrap items-center gap-2">
@@ -469,8 +481,8 @@ export default function BillingTab() { // skipcq: JS-0067
                       onClick={() => setSubscriptionBillingCycle(cycle)}
                     >
                       {cycle === "monthly"
-                        ? `${formatBillingAmount(rolePlan.monthlyPrice, "EUR")}/mo`
-                        : `${formatBillingAmount(rolePlan.annualPrice, "EUR")}/yr`}
+                        ? `${formatBillingAmount(rolePlanPricing.monthlyPrice, rolePlanPricing.currency)}/mo`
+                        : `${formatBillingAmount(rolePlanPricing.annualPrice, rolePlanPricing.currency)}/yr`}
                     </button>
                   ))}
                 </div>
@@ -590,7 +602,9 @@ export default function BillingTab() { // skipcq: JS-0067
         user={user}
         isPro={isPro}
         participantType={participantType}
+        pricingConfigs={pricingConfigs}
         addonLoadingKey={addonLoadingKey}
+        refreshToken={usageRefreshToken}
         onPurchaseAddon={(addonKey) => void purchaseAddonKey(addonKey)}
         onUpgrade={() => void startSubscriptionCheckout()}
       />

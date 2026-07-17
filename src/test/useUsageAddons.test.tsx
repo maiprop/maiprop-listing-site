@@ -21,7 +21,6 @@ vi.mock("sonner", () => ({ toast: mocks.toast }));
 import {
   PRIORITY_ADS_EXTRA_COST,
   PRIORITY_ADS_INCLUDED,
-  PROFESSIONAL_PRIORITY_AD_EXTRA_COST,
   REPORT_EXTRA_COST,
   REPORT_INCLUDED,
   usePropertyReportAddonCredits,
@@ -46,10 +45,11 @@ function makeWrapper() {
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
 function selectUsage(data: unknown[] = [], error: Error | null = null) {
   const gte = vi.fn().mockResolvedValue({ data, error });
-  const eqBucket = vi.fn().mockReturnValue({ gte });
+  const eqSource = vi.fn().mockReturnValue({ gte });
+  const eqBucket = vi.fn().mockReturnValue({ eq: eqSource, gte });
   const eqUser = vi.fn().mockReturnValue({ eq: eqBucket, gte });
   const select = vi.fn().mockReturnValue({ eq: eqUser });
-  return { select, eqUser, eqBucket, gte };
+  return { select, eqUser, eqBucket, eqSource, gte };
 }
 
 // skipcq: JS-0067 - Top-level test/helper declaration is intentional in this module.
@@ -76,7 +76,6 @@ describe("useUsageAddons", () => {
       REPORT_EXTRA_COST,
       PRIORITY_ADS_INCLUDED,
       PRIORITY_ADS_EXTRA_COST,
-      PROFESSIONAL_PRIORITY_AD_EXTRA_COST,
     }).toEqual({
       VALUATION_INCLUDED: 5,
       VALUATION_EXTRA_COST: 39,
@@ -84,7 +83,6 @@ describe("useUsageAddons", () => {
       REPORT_EXTRA_COST: 49,
       PRIORITY_ADS_INCLUDED: 10,
       PRIORITY_ADS_EXTRA_COST: 59,
-      PROFESSIONAL_PRIORITY_AD_EXTRA_COST: 8,
     });
 
     const first = selectUsage([{ id: "a" }, { id: "b" }]);
@@ -105,7 +103,7 @@ describe("useUsageAddons", () => {
     await waitFor(() => expect(priority.result.current.data).toBe(3));
     expect(mocks.from).toHaveBeenNthCalledWith(1, "usage_ai_calls");
     expect(mocks.from).toHaveBeenNthCalledWith(2, "usage_property_reports");
-    expect(mocks.from).toHaveBeenNthCalledWith(3, "usage_priority_ads");
+    expect(mocks.from).toHaveBeenNthCalledWith(3, "listing_promotion_allocations");
     expect(first.eqBucket).toHaveBeenCalledWith("bucket", "property-valuation");
     expect(second.eqBucket).not.toHaveBeenCalled();
     expect(first.gte.mock.calls[0][1]).toMatch(/T00:00:00\.000Z$/);
@@ -190,7 +188,7 @@ describe("useUsageAddons", () => {
     await expect(priority.result.current.mutateAsync("listing-2")).rejects.toThrow(
       /recorded server-side by the checkout or boost workflow/,
     );
-    expect(mocks.from).not.toHaveBeenCalledWith("usage_priority_ads");
+    expect(mocks.from).not.toHaveBeenCalledWith("listing_promotion_allocations");
 
     mocks.useSubscription.mockReturnValue({ isPro: false });
     const nonPro = renderHook(() => useRecordPriorityAd(), { wrapper: makeWrapper() });

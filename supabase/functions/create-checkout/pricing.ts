@@ -328,7 +328,6 @@ const promotionConfigMatchesCatalog = (
   return row.audience === "participant" &&
     row.module === definition.module &&
     row.unit === definition.unit &&
-    getAmountMinor(row.amount) === definition.amountMinor &&
     getCurrency(row.currency) === definition.currency;
 };
 

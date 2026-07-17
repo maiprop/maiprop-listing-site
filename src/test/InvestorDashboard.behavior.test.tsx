@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
-import { renderWithProviders } from "@/test/utils";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { createTestQueryClient, renderWithProviders } from "@/test/utils";
 import InvestorDashboard from "@/pages/InvestorDashboard";
 
 type DealRow = {
@@ -15,7 +15,6 @@ type DealRow = {
   ai_estimate?: number | null;
   status: string | null;
   created_at: string;
-  days_on_market?: number | null;
 };
 
 let feedRows: DealRow[] = [];
@@ -34,6 +33,7 @@ let subscriptionRow: Record<string, unknown> | null = {
   started_at: "2026-01-01T00:00:00Z",
   expires_at: null,
 };
+let subscriptionLoading = false;
 let invitationRow: Record<string, unknown> | null = null;
 let myInterestsMap = new Map<string, Record<string, unknown>>();
 
@@ -80,6 +80,21 @@ vi.mock("@/contexts/AuthContext", () => ({
     user: authUser,
     profile: authProfile,
   }),
+}));
+
+vi.mock("@/hooks/useSubscription", () => ({
+  useSubscription: () => {
+    const status = typeof subscriptionRow?.status === "string"
+      ? subscriptionRow.status
+      : null;
+    const active = status === "active" || status === "trial";
+    return {
+      isPro: active,
+      isInvestorManagedPlan: active,
+      subscriptionEnd: subscriptionRow?.expires_at ?? null,
+      loading: subscriptionLoading,
+    };
+  },
 }));
 
 vi.mock("@/hooks/useFiresaleInterest", async () => {
@@ -144,13 +159,13 @@ vi.mock("react-i18next", () => ({
         "investor.access.reApply": "Re-apply for access",
         "investor.access.reApplyNote": "Add more proof this time.",
         "investor.kpi.liveDeals": "Live deals",
-        "investor.kpi.liveDealsThisWeek": "Updated this week",
+        "investor.kpi.liveDealsThisWeek": `${params?.count ?? 0} added in last 7 days`,
         "investor.kpi.totalDealValue": "Total deal value",
         "investor.kpi.totalDealValueDelta": "Current pipeline",
-        "investor.kpi.avgDiscount": "Average discount",
-        "investor.kpi.avgDiscountDelta": "Vs market value",
-        "investor.kpi.avgRoi": "Average ROI",
-        "investor.kpi.avgRoiDelta": "Estimated spread",
+        "investor.kpi.avgValueSpread": "Average value gap",
+        "investor.kpi.avgValueSpreadDelta": "AI market value denominator",
+        "investor.kpi.valuationCoverage": "Valuation coverage",
+        "investor.kpi.valuationCoverageDelta": "Deals with asking and AI values",
         "investor.hero.tabDealFeed": "Deal feed",
       };
       return labels[key] ?? key;
@@ -199,24 +214,38 @@ describe("InvestorDashboard behavior", () => {
       started_at: "2026-01-01T00:00:00Z",
       expires_at: null,
     };
+    subscriptionLoading = false;
     invitationRow = null;
     myInterestsMap = new Map();
     queriedTables = [];
-    expressInterestMock.mockClear();
+    expressInterestMock.mockReset().mockResolvedValue({});
   });
 
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it("exposes accessible filters and computed ROI", async () => {
+  it("exposes accessible filters and evidence-backed value metrics without annual ROI claims", async () => {
     renderWithProviders(<InvestorDashboard />);
 
     await screen.findByTestId("investor-filters");
     expect(screen.getByLabelText(/city/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/property type/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/urgency/i)).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByText("20.0%")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("+16.1%")).toBeInTheDocument());
+    expect(screen.getByText("2/2")).toBeInTheDocument();
+    expect(screen.queryByText(/ROI/i)).not.toBeInTheDocument();
+  });
+
+  it("shows the actual number of deals added during the last seven days", async () => {
+    feedRows = [
+      { ...defaultRows[0], created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() },
+      { ...defaultRows[1], created_at: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString() },
+    ];
+
+    renderWithProviders(<InvestorDashboard />);
+
+    expect(await screen.findByText("1 added in last 7 days")).toBeInTheDocument();
   });
 
   it("filters the visible deal feed by city, type, and urgency", async () => {
@@ -246,7 +275,8 @@ describe("InvestorDashboard behavior", () => {
 
     renderWithProviders(<InvestorDashboard />);
 
-    const reportButtons = await screen.findAllByRole("button", { name: /ai report/i });
+    await screen.findByText("Kolonaki 12", {}, { timeout: 5_000 });
+    const reportButtons = screen.getAllByRole("button", { name: /ai report/i });
     fireEvent.click(reportButtons[0]);
 
     expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
@@ -271,7 +301,7 @@ describe("InvestorDashboard behavior", () => {
     renderWithProviders(<InvestorDashboard />);
 
     await screen.findByTestId("investor-dashboard");
-    await waitFor(() => expect(queriedTables).toContain("investor_subscriptions"));
+    await waitFor(() => expect(queriedTables).not.toContain("investor_subscriptions"));
     expect(queriedTables).not.toContain("firesale_requests_investor_feed");
     expect(queriedTables).not.toContain("firesale_requests");
   });
@@ -376,7 +406,7 @@ describe("InvestorDashboard behavior", () => {
     await waitFor(() => expect(opener).toHaveFocus());
   });
 
-  it("uses the admin feed while preserving conservative pricing and urgency arithmetic", async () => {
+  it("uses only complete financial evidence and ignores unsupported days-on-market data", async () => {
     feedRows = [
       {
         id: "deep-discount",
@@ -403,7 +433,6 @@ describe("InvestorDashboard behavior", () => {
         ai_estimate: null,
         status: null,
         created_at: "2020-01-01T00:00:00Z",
-        days_on_market: 90,
       },
       {
         id: "near-market",
@@ -446,10 +475,26 @@ describe("InvestorDashboard behavior", () => {
     expect(queriedTables).toContain("firesale_requests");
     expect(queriedTables).not.toContain("firesale_requests_investor_feed");
     expect(screen.getByText("Significantly below market")).toBeInTheDocument();
-    expect(screen.getByText("Published quick-sale opportunity")).toBeInTheDocument();
-    expect(screen.getAllByText("Near market price")).toHaveLength(2);
+    expect(screen.getByText("Market comparison unavailable")).toBeInTheDocument();
+    expect(screen.getByText("Above market estimate")).toBeInTheDocument();
     expect(screen.getByText("Below market value")).toBeInTheDocument();
-    expect(screen.getAllByText("0%").length).toBeGreaterThan(0);
+
+    const missingEvidenceCard = screen.getByTestId("investor-deal-stale-no-ai");
+    expect(missingEvidenceCard).toHaveTextContent("Asking—");
+    expect(missingEvidenceCard).toHaveTextContent("MEDIUM");
+    expect(missingEvidenceCard).not.toHaveTextContent("12%");
+
+    const discountedCard = screen.getByTestId("investor-deal-deep-discount");
+    expect(discountedCard).toHaveTextContent("50%");
+    expect(discountedCard).toHaveTextContent("+50%");
+
+    const aboveMarketCard = screen.getByTestId("investor-deal-negative-spread");
+    expect(aboveMarketCard).toHaveTextContent("-20%");
+    expect(within(aboveMarketCard).getByText("Discount").previousSibling).toHaveTextContent("—");
+
+    expect(screen.queryByText(/ROI Est\./i)).not.toBeInTheDocument();
+    expect(screen.queryByText("48h")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Added").length).toBeGreaterThan(0);
     expect(screen.getByText("renovated condition")).toBeInTheDocument();
     expect(screen.getAllByText("apartment", { selector: "span" }).length).toBeGreaterThan(0);
   });
@@ -466,7 +511,7 @@ describe("InvestorDashboard behavior", () => {
     subscriptionRow = { ...subscriptionRow!, status: "cancelled" };
     const cancelledView = renderWithProviders(<InvestorDashboard />);
     await screen.findByTestId("investor-dashboard");
-    await waitFor(() => expect(queriedTables).toContain("investor_subscriptions"));
+    expect(queriedTables).not.toContain("investor_subscriptions");
     expect(queriedTables).not.toContain("firesale_requests_investor_feed");
 
     cancelledView.unmount();
@@ -480,8 +525,97 @@ describe("InvestorDashboard behavior", () => {
     };
     renderWithProviders(<InvestorDashboard />);
     await screen.findByTestId("investor-dashboard");
-    await waitFor(() => expect(queriedTables).toContain("investor_subscriptions"));
+    expect(queriedTables).not.toContain("investor_subscriptions");
     expect(queriedTables).not.toContain("firesale_requests_investor_feed");
+  });
+
+  it("keys the investor feed cache by authenticated user identity", async () => {
+    authProfile = { id: "profile-1", role: "investor", participant_type: "investor" };
+    const queryClient = createTestQueryClient();
+
+    renderWithProviders(<InvestorDashboard />, { queryClient });
+
+    await screen.findByText("Kolonaki 12");
+    const [feedQuery] = queryClient.getQueryCache().findAll({
+      queryKey: ["investor-deal-feed"],
+    });
+
+    expect(feedQuery?.queryKey).toContain("user-1");
+  });
+
+  it("keeps granted deal data visible during a background entitlement refresh", async () => {
+    authProfile = { id: "profile-1", role: "investor", participant_type: "investor" };
+    const view = renderWithProviders(<InvestorDashboard />);
+    await screen.findByText("Kolonaki 12");
+
+    subscriptionLoading = true;
+    view.rerender(<InvestorDashboard />);
+
+    expect(screen.getByText("Kolonaki 12")).toBeInTheDocument();
+    expect(screen.getByTestId("investor-deal-list")).not.toBeEmptyDOMElement();
+  });
+
+  it("uses a distinct feed cache context and hides cached deals after entitlement loss", async () => {
+    authProfile = { id: "profile-1", role: "investor", participant_type: "investor" };
+    const queryClient = createTestQueryClient();
+    const view = renderWithProviders(<InvestorDashboard />, { queryClient });
+
+    await screen.findByText("Kolonaki 12");
+    const [grantedFeedQuery] = queryClient.getQueryCache().findAll({
+      queryKey: ["investor-deal-feed"],
+    });
+    const grantedFeedKey = grantedFeedQuery?.queryKey;
+    expect(grantedFeedKey).toContain("granted");
+
+    subscriptionRow = { ...subscriptionRow!, status: "cancelled" };
+    view.rerender(<InvestorDashboard />);
+
+    await waitFor(() => {
+      expect(screen.queryByText("Kolonaki 12")).not.toBeInTheDocument();
+    });
+    const [deniedFeedQuery] = queryClient.getQueryCache().findAll({
+      queryKey: ["investor-deal-feed"],
+    });
+    expect(deniedFeedQuery?.queryKey).not.toEqual(grantedFeedKey);
+    expect(deniedFeedQuery?.queryKey).toContain("user-1");
+    expect(deniedFeedQuery?.queryKey).toContain("denied");
+  });
+
+  it("does not reuse another investor account's cached deal data", async () => {
+    authProfile = { id: "profile-1", role: "investor", participant_type: "investor" };
+    const queryClient = createTestQueryClient();
+    const view = renderWithProviders(<InvestorDashboard />, { queryClient });
+
+    await screen.findByText("Kolonaki 12");
+
+    authUser = { id: "user-2", email: "second.investor@maiprop.demo" };
+    authProfile = { id: "profile-2", role: "investor", participant_type: "investor" };
+    subscriptionRow = {
+      ...subscriptionRow!,
+      user_id: "user-2",
+    };
+    feedRows = [
+      {
+        id: "deal-user-2",
+        address: "Second Account Deal",
+        city: "Patras",
+        property_type: "house",
+        sqm: 90,
+        asking_price: 90_000,
+        ai_estimate: 110_000,
+        status: "reviewed",
+        created_at: "2026-05-03T00:00:00Z",
+      },
+    ];
+    view.rerender(<InvestorDashboard />);
+
+    expect(screen.queryByText("Kolonaki 12")).not.toBeInTheDocument();
+    expect(await screen.findByText("Second Account Deal")).toBeInTheDocument();
+    const [secondAccountFeedQuery] = queryClient.getQueryCache().findAll({
+      queryKey: ["investor-deal-feed"],
+    });
+    expect(secondAccountFeedQuery?.queryKey).not.toContain("user-1");
+    expect(secondAccountFeedQuery?.queryKey).toContain("user-2");
   });
 
   it("normalizes invitation statuses and does not query user-owned records while signed out", async () => {
@@ -541,6 +675,17 @@ describe("InvestorDashboard behavior", () => {
 
     fireEvent.click((await screen.findAllByRole("button", { name: /Express Interest/i }))[0]);
     expect(await screen.findByRole("button", { name: /Register Interest/i })).toBeDisabled();
+  });
+
+  it("keeps the interest dialog open when submission fails without raising an unhandled rejection", async () => {
+    expressInterestMock.mockRejectedValueOnce(new Error("submission rejected"));
+    renderWithProviders(<InvestorDashboard />);
+
+    fireEvent.click((await screen.findAllByRole("button", { name: /Express Interest/i }))[0]);
+    fireEvent.click(await screen.findByRole("button", { name: /Register Interest/i }));
+
+    await waitFor(() => expect(expressInterestMock).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("dialog", { name: /express interest/i })).toBeInTheDocument();
   });
 
   it("distinguishes pending and approved invitation review states", async () => {

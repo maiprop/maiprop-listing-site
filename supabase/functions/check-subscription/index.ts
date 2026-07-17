@@ -5,7 +5,8 @@ import {
   makeRateLimiter,
   tooManyRequestsResponse,
 } from "../_shared/rateLimit.ts";
-import { AuthError, verifyBearerToken } from "../_shared/auth.ts";
+import { AuthError } from "../_shared/auth.ts";
+import { verifiedGatewayUserFromJwt } from "../_shared/gatewayJwt.ts";
 import { createLogger } from "../_shared/logger.ts";
 import {
   getProfilePricingAudience,
@@ -32,6 +33,7 @@ const checkSubLimiter = makeRateLimiter({
   bucket: "check-subscription",
   maxRequests: 30,
   windowMs: 60_000,
+  databaseTimeoutMs: 500,
 });
 
 const subscriptionCheckRequestSchema = z.object({
@@ -41,6 +43,17 @@ const subscriptionCheckRequestSchema = z.object({
 export type SubscriptionCheckRequest = z.infer<
   typeof subscriptionCheckRequestSchema
 >;
+
+type SubscriptionDatabaseClient = {
+  from: ReturnType<typeof createClient>["from"];
+  rpc?: (
+    functionName: string,
+    args?: Record<string, unknown>,
+  ) => PromiseLike<{
+    data: unknown;
+    error: { code?: string; message?: string } | null;
+  }>;
+};
 
 // Normal entitlement refreshes intentionally send no body. Explicit checkout
 // reconciliation sends one strictly validated session identifier.
@@ -102,7 +115,7 @@ const SUBSCRIPTION_CHECK_DEADLINE_MS = 5_000;
 const CHECKOUT_SESSION_ID_RE = /^cs_(test|live)_[A-Za-z0-9_]+$/;
 
 class CheckoutReconciliationTimeoutError extends Error {}
-class SubscriptionCheckDeadlineError extends Error {}
+export class SubscriptionCheckDeadlineError extends Error {}
 
 function isStripeSubscribed(status: string | null | undefined): boolean {
   return hasProvisionedSubscriptionAccess(status);
@@ -161,6 +174,35 @@ function subscriptionUnavailableResponse(corsHeaders: Record<string, string>) {
       status: 503,
     },
   );
+}
+
+export function subscriptionHandlerErrorResponse(
+  error: unknown,
+  corsHeaders: Record<string, string>,
+) {
+  if (error instanceof SubscriptionCheckDeadlineError) {
+    log.warn("subscription handler deadline exceeded", {
+      timeout_ms: SUBSCRIPTION_CHECK_DEADLINE_MS,
+    });
+    return new Response(
+      JSON.stringify({
+        subscribed: false,
+        product_id: null,
+        subscription_end: null,
+        source: "deadline",
+        sync_status: "timeout",
+      }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      },
+    );
+  }
+
+  log.error("unexpected subscription handler failure", {
+    message: getErrorMessage(error),
+  });
+  return subscriptionUnavailableResponse(corsHeaders);
 }
 
 type DurableBillingSubscriptionRow = {
@@ -252,9 +294,29 @@ export async function getDatabaseFallback( // skipcq: JS-R1005 - Durable resolut
     requiredStripeSubscriptionId?: string;
   } = {},
 ): Promise<FallbackSubscriptionState> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const client = supabaseClient as { from: any };
+  const client = supabaseClient as SubscriptionDatabaseClient;
   const runtimeMode = getStripeRuntimeMode();
+  if (typeof client.rpc === "function") {
+    const { data, error } = await client.rpc(
+      "resolve_subscription_state_for_service",
+      {
+        p_user_id: userId,
+        p_required_stripe_subscription_id:
+          requiredStripeSubscriptionId ?? null,
+      },
+    );
+    if (!error && data && typeof data === "object") {
+      return data as FallbackSubscriptionState;
+    }
+    const unavailableRpc = error?.code === "PGRST202" ||
+      error?.code === "42883";
+    if (error && !unavailableRpc) {
+      throw new Error(
+        `subscription resolver failed: ${queryErrorMessage(error) ?? "unknown error"}`,
+      );
+    }
+  }
+
   const [profileResult, investorResult, billingResult] = await Promise.all([
     client.from("profiles")
       .select("role, participant_type")
@@ -555,7 +617,7 @@ export async function resolveSubscriptionCheck(
       timeout_ms: handlerTimeoutMs,
     });
     return {
-      httpStatus: 503,
+      httpStatus: 200,
       state: {
         subscribed: false,
         product_id: null,
@@ -639,7 +701,7 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
     );
 
     try {
-      const user = await verifyBearerToken(req, supabaseClient);
+      const user = verifiedGatewayUserFromJwt(req);
       const body = await parseSubscriptionCheckRequest(req);
       const result = await resolveSubscriptionCheck(
         supabaseClient,
@@ -687,10 +749,6 @@ Deno.serve(async (req) => { // skipcq: JS-R1005 - One Edge handler coordinates a
       () => new SubscriptionCheckDeadlineError(),
     );
   } catch (error) {
-    log.error("subscription handler deadline exceeded", {
-      message: getErrorMessage(error),
-      timeout_ms: SUBSCRIPTION_CHECK_DEADLINE_MS,
-    });
-    return subscriptionUnavailableResponse(corsHeaders);
+    return subscriptionHandlerErrorResponse(error, corsHeaders);
   }
 });

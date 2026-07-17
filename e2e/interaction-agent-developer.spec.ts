@@ -18,6 +18,7 @@ import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { getBaseURL } from "./helpers/baseURL";
 import { demoAccounts, demoPasswords, seededDemoAccountsEnabled } from "./helpers/demoAccounts";
+import { waitForPostAuthNavigation } from "./helpers/postAuthNavigation";
 
 // ---------------------------------------------------------------------------
 // Credentials
@@ -43,16 +44,7 @@ async function signIn(page: Page, email: string, password: string): Promise<void
     .locator('button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")')
     .first()
     .click();
-  await page.waitForFunction(
-    () => {
-      const path = window.location.pathname;
-      const loginForm = document.querySelector('input[type="password"]');
-      const authenticatedShell = document.querySelector("aside, [role='navigation'], [data-testid*='nav']");
-      return /\/dashboard|\/onboarding/.test(path) || (!loginForm && Boolean(authenticatedShell));
-    },
-    undefined,
-    { timeout: 25_000 },
-  );
+  await waitForPostAuthNavigation(page);
   const passwordStillVisible = await page.locator('input[type="password"]').first().isVisible().catch(() => false);
   if (passwordStillVisible && /\/login/.test(page.url())) {
     throw new Error(`Sign-in did not leave the login page for ${email}`);

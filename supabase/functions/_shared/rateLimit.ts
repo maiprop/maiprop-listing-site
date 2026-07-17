@@ -61,6 +61,7 @@ export interface RateLimiterOptions {
   maxRequests: number;
   windowMs: number;
   failClosed?: boolean;
+  databaseTimeoutMs?: number;
 }
 
 const DEFAULT_RATE_LIMIT_DB_TIMEOUT_MS = 2_000;
@@ -184,6 +185,7 @@ export function makeDbRateLimiter(
     supabaseUrl,
     serviceRoleKey,
     failClosed = false,
+    databaseTimeoutMs,
   } = opts;
   const windowSeconds = Math.max(1, Math.round(windowMs / 1000));
 
@@ -201,7 +203,7 @@ export function makeDbRateLimiter(
   }
 
   async function callRpc(key: string): Promise<RpcResponse | null> {
-    const timeoutMs = readPositiveIntEnv(
+    const timeoutMs = databaseTimeoutMs ?? readPositiveIntEnv(
       "RATE_LIMIT_DB_TIMEOUT_MS",
       DEFAULT_RATE_LIMIT_DB_TIMEOUT_MS,
     );

@@ -535,8 +535,7 @@
         "rejected": "Your application was not approved. You may browse auctions and saved searches.",
         "none": "Apply for access to exclusive Quick Sale deals. Invitation-only.",
         "completePayment": "Complete investor payment",
-        "apply": "Apply for Access",
-        "upgradeToApply": "Upgrade to Pro to apply"
+        "apply": "Apply for Access"
       },
       "savedProperties": {
         "title": "Saved Properties",
@@ -546,12 +545,12 @@
       "investorAccess": {
         "title": "Investor access",
         "subtitle": "Apply for reviewed Quick Sale deal-flow access. Approval and a custom annual payment link are required before activation.",
-        "apply": "Apply",
-        "upgradeToApply": "Upgrade to Pro to apply"
+        "apply": "Apply for Access"
       },
       "developerPro": {
         "title": "Developer tools require Pro",
-        "subtitle": "Unlimited listings, project showcases, project ad management, Spotlight and Priority Rank are all part of the Developer Pro plan.",
+        "subtitle": "Paid Developer Pro includes unlimited listings, project showcases, project ad management, and 1 Spotlight and 1 Priority Rank per month.",
+        "trialTerms": "Trial includes project tools, analytics, and AI tools. Spotlight and Priority credits begin only after paid activation. Card required. After 7 days, Stripe bills Developer Pro unless you cancel before the trial ends.",
         "trial": "Start 7-day free trial",
         "previewTools": "View Developer Plan"
       },
@@ -586,6 +585,12 @@
         "calendarSubtitle": "Manage your availability, video links, and calendar sync for client bookings.",
         "configure": "Configure"
       }
+    },
+    "trial": {
+      "title": "Try Pro free for 7 days",
+      "subtitle": "Unlock analytics, CRM, AI tools, and Pro workflows before choosing a paid plan.",
+      "terms": "Card required. After 7 days, Stripe bills the selected Pro plan unless you cancel before the trial ends.",
+      "cta": "Start 7-day Pro trial"
     },
     "booking": {
       "title": "Booking Calendar",
@@ -1275,13 +1280,13 @@
     },
     "kpi": {
       "liveDeals": "Live Deals",
-      "liveDealsThisWeek": "+8 this week",
+      "liveDealsThisWeek": "{{count}} added in last 7 days",
       "totalDealValue": "Total Deal Value",
       "totalDealValueDelta": "In pipeline",
-      "avgDiscount": "Avg. Discount",
-      "avgDiscountDelta": "vs market",
-      "avgRoi": "Avg. Est. ROI",
-      "avgRoiDelta": "p.a."
+      "avgValueSpread": "Avg. Value Gap",
+      "avgValueSpreadDelta": "AI market value denominator",
+      "valuationCoverage": "Valuation Coverage",
+      "valuationCoverageDelta": "Deals with asking and AI values"
     },
     "expiry": {
       "title": "Your {{tier}} access expires in {{count}} day",

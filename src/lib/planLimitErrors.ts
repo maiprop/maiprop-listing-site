@@ -17,7 +17,7 @@ const LIMIT_ERROR_MESSAGES: Record<string, string> = {
   saved_search_limit_reached: "You've reached your saved search limit. Upgrade to Pro for more saved searches.",
   search_alert_limit_reached: "You've reached your search alert limit. Upgrade to Pro for more alerts.",
   auction_alert_limit_reached: "You've reached your auction alert limit. Upgrade to Pro for more alerts.",
-  viewing_limit_reached: "You've used your free viewing this month. Upgrade to Pro to book more viewings.",
+  viewing_limit_reached: "You've reached your monthly viewing limit. Upgrade or wait for the next monthly reset.",
   listing_limit_reached: "You've reached your active listing limit. Upgrade to Pro for more listings.",
   listing_not_allowed: "Your current plan does not include this listing type. Upgrade to Pro to continue.",
   contact_limit_reached: "You've reached your monthly contact limit. Upgrade to Pro for more property contacts.",

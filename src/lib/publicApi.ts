@@ -1,4 +1,4 @@
-const PUBLIC_API_TIMEOUT_MS = 4_000;
+const PUBLIC_API_TIMEOUT_MS = 6_500;
 const PUBLIC_API_ORIGIN = import.meta.env.VITE_PUBLIC_API_ORIGIN ?? import.meta.env.VITE_APP_URL ?? "";
 
 function getPublicApiUrl(path: string): string {

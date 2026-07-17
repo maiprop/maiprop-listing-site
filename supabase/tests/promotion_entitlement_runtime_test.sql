@@ -179,6 +179,62 @@ VALUES
   ('10000000-0000-4000-8000-000000000006', 'seller', false, 'prod_seller_trial'),
   ('10000000-0000-4000-8000-000000000007', 'seller', false, NULL);
 
+INSERT INTO public.pricing_configs (
+  key,
+  label,
+  audience,
+  module,
+  unit,
+  currency,
+  amount,
+  is_active,
+  metadata
+)
+VALUES
+  (
+    'pro',
+    'Participant Pro fixture',
+    'participant',
+    'user_subscription',
+    'monthly',
+    'EUR',
+    29,
+    true,
+    jsonb_build_object('stripe_product_id', 'prod_seller_pro')
+  ),
+  (
+    'agent_basic',
+    'Agent Pro fixture',
+    'agent',
+    'agent_subscription',
+    'monthly',
+    'EUR',
+    149,
+    true,
+    jsonb_build_object('stripe_product_id', 'prod_agent_pro')
+  ),
+  (
+    'developer_pro',
+    'Developer Pro fixture',
+    'developer',
+    'developer_subscription',
+    'monthly',
+    'EUR',
+    129,
+    true,
+    jsonb_build_object('stripe_product_id', 'prod_developer_pro')
+  )
+ON CONFLICT (key) DO UPDATE
+SET
+  audience = EXCLUDED.audience,
+  module = EXCLUDED.module,
+  unit = EXCLUDED.unit,
+  currency = EXCLUDED.currency,
+  amount = EXCLUDED.amount,
+  is_active = EXCLUDED.is_active,
+  metadata = EXCLUDED.metadata,
+  updated_at = statement_timestamp();
+
 INSERT INTO public.billing_subscriptions (
   id,
   user_id,

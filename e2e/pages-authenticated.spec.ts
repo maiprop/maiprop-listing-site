@@ -12,6 +12,7 @@
  */
 import { test, expect, type Page } from "@playwright/test";
 import { seededDemoAccountsEnabled } from "./helpers/demoAccounts";
+import { waitForPostAuthNavigation } from "./helpers/postAuthNavigation";
 
 // Default to the most reliable seeded demo buyer account so credentialed tests run without env vars.
 const TEST_EMAIL = process.env.E2E_TEST_EMAIL ?? "buyer.free@maiprop.demo";
@@ -26,7 +27,7 @@ async function signIn(page: Page): Promise<void> {
     await page.locator('input[type="password"]').first().fill(TEST_PASSWORD);
     await page.locator('button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")').first().click();
     try {
-      await page.waitForURL(/\/dashboard|\/onboarding/, { timeout: 25_000 });
+      await waitForPostAuthNavigation(page);
       return;
     } catch (error) {
       const invalidCredentials = await page.getByText("Invalid email or password", { exact: true })

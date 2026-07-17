@@ -18,7 +18,29 @@ const {
   parseSubscriptionCheckRequest,
   resolveSubscriptionCheck,
   resolveSubscriptionResponse,
+  subscriptionHandlerErrorResponse,
+  SubscriptionCheckDeadlineError,
 } = await import("./index.ts");
+
+Deno.test("outer handler returns 503 for non-deadline infrastructure failures", async () => {
+  const response = subscriptionHandlerErrorResponse(
+    new Error("missing Supabase configuration"),
+    {},
+  );
+
+  assertEquals(response.status, 503);
+  assertStringIncludes(await response.text(), "Subscription service unavailable");
+});
+
+Deno.test("outer handler returns a bounded 200 envelope only for real deadlines", async () => {
+  const response = subscriptionHandlerErrorResponse(
+    new SubscriptionCheckDeadlineError(),
+    {},
+  );
+
+  assertEquals(response.status, 200);
+  assertEquals((await response.json()).source, "deadline");
+});
 
 Deno.test("subscription request parsing accepts an empty normal check", async () => {
   const parsed = await parseSubscriptionCheckRequest(
@@ -120,6 +142,41 @@ Deno.test("subscription checks contain no broad Stripe customer or subscription 
   );
   assertEquals(source.includes("customers.search"), false);
   assertEquals(source.includes("subscriptions.list"), false);
+});
+
+Deno.test("database fallback resolves entitlement through one scoped RPC", async () => {
+  let fromCalls = 0;
+  const rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
+  const expected = {
+    subscribed: true,
+    product_id: "prod_agent",
+    subscription_end: "2099-06-30T00:00:00.000Z",
+    source: "billing_state",
+    plan_key: "agent_basic",
+    audience: "agent",
+    billing_cycle: "monthly",
+    status: "active",
+  };
+  const state = await getDatabaseFallback({
+    async rpc(name: string, args: Record<string, unknown>) {
+      rpcCalls.push({ name, args });
+      return { data: expected, error: null };
+    },
+    from() {
+      fromCalls += 1;
+      throw new Error("fallback table reads must not run");
+    },
+  }, "00000000-0000-4000-8000-000000000099");
+
+  assertEquals(state, expected);
+  assertEquals(rpcCalls, [{
+    name: "resolve_subscription_state_for_service",
+    args: {
+      p_user_id: "00000000-0000-4000-8000-000000000099",
+      p_required_stripe_subscription_id: null,
+    },
+  }]);
+  assertEquals(fromCalls, 0);
 });
 
 Deno.test("legacy profile product ids are never an entitlement source", async () => {
@@ -855,7 +912,7 @@ Deno.test("whole subscription check deadline bounds stalled database work", asyn
     if (ceilingId !== undefined) clearTimeout(ceilingId);
   });
 
-  assertEquals(result.httpStatus, 503);
+  assertEquals(result.httpStatus, 200);
   assertEquals(result.state.sync_status, "timeout");
   assertEquals(result.state.subscribed, false);
 });

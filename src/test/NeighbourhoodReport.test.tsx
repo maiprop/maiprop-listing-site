@@ -152,6 +152,7 @@ describe("NeighbourhoodReport — fetch flows", () => {
     expect(counter).toHaveTextContent(/Free 5\/mo \| Pro 50\/mo/i);
     expect(invokeMock).toHaveBeenCalledWith("ai-quota-status", {
       body: { bucket: "neighbourhood-report" },
+      timeout: 4_000,
     });
     expect(screen.getByText(/UNESCO district/)).toBeInTheDocument();
     expect(screen.getByText(/Excellent/)).toBeInTheDocument();

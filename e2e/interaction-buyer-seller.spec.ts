@@ -12,6 +12,7 @@ import { createClient } from "@supabase/supabase-js";
 import { getBaseURL } from "./helpers/baseURL";
 import { demoAccounts, demoPasswords, seededDemoAccountsEnabled } from "./helpers/demoAccounts";
 import { readCleanEnv } from "./helpers/env";
+import { waitForPostAuthNavigation } from "./helpers/postAuthNavigation";
 
 // ── Credentials ───────────────────────────────────────────────────────────────
 
@@ -66,7 +67,7 @@ const signInAs = async (
       .first()
       .click();
     try {
-      await page.waitForURL(/\/dashboard|\/onboarding/, { timeout: 25_000 });
+      await waitForPostAuthNavigation(page);
       return;
     } catch (error) {
       const invalidCredentials = await page

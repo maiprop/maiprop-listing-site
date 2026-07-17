@@ -395,46 +395,10 @@ jobs:
 
       - name: Repair legacy staging migration aliases
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
-        run: |
-          set -euo pipefail
-
-          legacy_versions=(
-            "20260614083000"
-            "20260614090000"
-            "20260614153000"
-            "20260614154000"
-            # Staging-only aliases from the pre-canonical promotion rollout.
-            "20260714114032"
-            "20260714114358"
-            "20260714120414"
-            "20260714124912"
-            "20260714162345"
-            "20260714162407"
-            "20260714164244"
-            "20260714164246"
-            "20260714164249"
-            "20260714164250"
-            "20260714164252"
-            "20260714164254"
-            "20260714173841"
-            "20260714173858"
-          )
-
-          migration_list="$(supabase migration list --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" --output json || true)"
-          versions_to_revert=()
-          for version in "${legacy_versions[@]}"; do
-            if grep -q "$version" <<< "$migration_list"; then
-              versions_to_revert+=("$version")
-            fi
-          done
-
-          if [ "${#versions_to_revert[@]}" -eq 0 ]; then
-            echo "No legacy staging migration aliases found."
-            exit 0
-          fi
-
-          echo "Repairing staging-only legacy migration aliases: ${versions_to_revert[*]}"
-          supabase migration repair "${versions_to_revert[@]}" --db-url "$SUPABASE_STAGING_EFFECTIVE_DB_URL" --status reverted --yes
+        run: node scripts/reconcile-staging-migration-aliases.mjs
+        env:
+          STAGING_SUPABASE_PROJECT_ID: ${{ secrets.STAGING_SUPABASE_PROJECT_ID }}
+          VITE_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
 
       - name: Repair staging add-on credit migration drift
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'

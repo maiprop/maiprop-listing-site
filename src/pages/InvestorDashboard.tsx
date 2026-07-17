@@ -37,6 +37,13 @@ import { InvestorExpiryBanner } from "@/components/investor/InvestorExpiryBanner
 import { InvestorAccessGate } from "@/components/investor/InvestorAccessGate";
 import { InvestorSidebarAnalytics } from "@/components/investor/InvestorSidebarAnalytics";
 import { calculatePricePerSqm } from "@/lib/priceCalculations";
+import { useSubscription } from "@/hooks/useSubscription";
+import {
+  averageDefinedPercentages,
+  calculateInvestorDealMetrics,
+  countDealsCreatedWithinDays,
+  hasValidTimestamp,
+} from "@/lib/investorMetrics";
 
 type Subscription = {
   id: string;
@@ -55,16 +62,22 @@ type LiveDeal = {
   sqm: number;
   bedrooms: number | null;
   condition: string | null;
-  ai_estimate: number;
-  asking_price: number;
+  ai_estimate: number | null;
+  asking_price: number | null;
   price_per_sqm: number | null;
-  discount_pct: number;
+  discount_pct: number | null;
+  value_spread_pct: number | null;
   status: string;
   created_at: string;
   urgency: "HIGH" | "MEDIUM" | "LOW";
   reason: string;
-  roi_est: number;
 };
+
+function formatMetricPercentage(value: number | null, signed = false): string {
+  if (value == null) return "—";
+  const sign = signed && value > 0 ? "+" : "";
+  return `${sign}${value}%`;
+}
 
 function daysUntilExpiry(expiresAt: string | null): number | null {
   if (!expiresAt) return null;
@@ -136,20 +149,23 @@ export default function InvestorDashboard() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-
-  const { data: subscription = null } = useQuery<Subscription | null>({
-    queryKey: ["investor-subscription", user?.id],
-    queryFn: async () => {
-      if (!user) return null;
-      const { data } = await supabase
-        .from("investor_subscriptions")
-        .select("id, user_id, tier, status, started_at, expires_at")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      return (data as Subscription | null) ?? null;
-    },
-    enabled: !!user,
-  });
+  const {
+    isPro,
+    isInvestorManagedPlan,
+    subscriptionEnd,
+    loading: subscriptionLoading,
+  } = useSubscription();
+  const subscription = useMemo<Subscription | null>(() => {
+    if (!user || !isPro || !isInvestorManagedPlan) return null;
+    return {
+      id: "runtime-scoped-investor-plan",
+      user_id: user.id,
+      tier: profile?.role === "institutional" ? "institutional" : "private",
+      status: "active",
+      started_at: "",
+      expires_at: subscriptionEnd,
+    };
+  }, [isInvestorManagedPlan, isPro, profile?.role, subscriptionEnd, user]);
 
   const { data: invitationStatusRow } = useQuery<string>({
     queryKey: ["invitation-status", user?.id],
@@ -172,11 +188,17 @@ export default function InvestorDashboard() {
   });
   const invitationStatus = (invitationStatusRow ?? "none") as "none" | "pending" | "approved" | "rejected";
 
-  const subscribed = subscription?.status === "active" || subscription?.status === "trial";
+  const subscribed = Boolean(subscription);
   const isInvestorDealFlowRole =
     !profileRoleSwitchInProgress(profile) &&
     (profile?.role === "investor" || profile?.role === "institutional");
   const canAccessDealFlow = isPlatformAdmin(profile) || (isInvestorDealFlowRole && subscribed);
+  const dealFeedEntitlementContext = canAccessDealFlow
+    ? "granted"
+    : subscriptionLoading
+      ? "resolving"
+      : "denied";
+  const canReadDealFeed = Boolean(user && profile && canAccessDealFlow);
   const [showInvitationModal, setShowInvitationModal] = useState(false);
 
   const daysLeft = daysUntilExpiry(subscription?.expires_at ?? null);
@@ -198,12 +220,17 @@ export default function InvestorDashboard() {
   const expressInterest = useExpressInterest();
 
   const {
-    data: liveDeals = [],
+    data: cachedLiveDeals = [],
     isError: liveDealsFailed,
-    isLoading: loading,
+    isLoading: dealQueryLoading,
     refetch: refetchLiveDeals,
   } = useQuery<LiveDeal[]>({
-    queryKey: ["investor-deal-feed", profile?.role],
+    queryKey: [
+      "investor-deal-feed",
+      user?.id ?? "anonymous",
+      profile?.role ?? "no-role",
+      dealFeedEntitlementContext,
+    ],
     queryFn: async () => {
       const isAdmin = isPlatformAdmin(profile);
       const query = isAdmin
@@ -231,27 +258,25 @@ export default function InvestorDashboard() {
           asking_price?: number | null;
           status: string | null;
           created_at: string;
-          days_on_market?: number | null;
         };
-        const aiVal = Number(d.ai_estimate || 0);
-        const askingPrice = Number(d.asking_price || d.ai_estimate || 0);
-        const daysOnMarket = Number(d.days_on_market || 0);
-        const hasAiVal = aiVal > 0 && askingPrice > 0;
-        const discountFrac = hasAiVal ? (aiVal - askingPrice) / askingPrice : 0;
-        const discountPct = hasAiVal ? Number(((1 - askingPrice / aiVal) * 100).toFixed(1)) : 12;
+        const financials = calculateInvestorDealMetrics({
+          askingPrice: d.asking_price,
+          aiMarketEstimate: d.ai_estimate,
+        });
+        const valueSpreadPct = financials.valueSpreadPct;
+        const discountPct = financials.discountPct;
         let urgency: "HIGH" | "MEDIUM" | "LOW";
-        if (hasAiVal && discountFrac > 0.15) urgency = "HIGH";
-        else if (daysOnMarket > 60) urgency = "HIGH";
-        else if (hasAiVal && discountFrac < 0.05) urgency = "LOW";
+        if (discountPct != null && discountPct >= 15) urgency = "HIGH";
+        else if (valueSpreadPct != null && valueSpreadPct < 5) urgency = "LOW";
         else urgency = "MEDIUM";
 
-        const roiRaw = hasAiVal ? Math.round((((aiVal - askingPrice) / askingPrice) * 100) * 10) / 10 : 0;
-        const roiEst = Math.min(40, Math.max(0, roiRaw));
         let reason: string;
-        if (!hasAiVal) reason = "Published quick-sale opportunity";
-        else if (discountFrac > 0.15) reason = "Significantly below market";
-        else if (discountFrac >= 0.05) reason = "Below market value";
-        else reason = "Near market price";
+        if (valueSpreadPct == null) reason = "Market comparison unavailable";
+        else if (valueSpreadPct >= 15) reason = "Significantly below market";
+        else if (valueSpreadPct >= 5) reason = "Below market value";
+        else if (valueSpreadPct > 0) reason = "Near market price";
+        else if (valueSpreadPct === 0) reason = "At market estimate";
+        else reason = "Above market estimate";
 
         return {
           id: d.id,
@@ -261,20 +286,25 @@ export default function InvestorDashboard() {
           sqm: Number(d.sqm || 0),
           bedrooms: d.bedrooms ?? null,
           condition: d.condition ?? null,
-          ai_estimate: aiVal,
-          asking_price: askingPrice,
-          price_per_sqm: calculatePricePerSqm({ price: askingPrice, sqm: d.sqm }),
+          ai_estimate: financials.aiMarketEstimate,
+          asking_price: financials.askingPrice,
+          price_per_sqm: calculatePricePerSqm({ price: financials.askingPrice, sqm: d.sqm }),
           discount_pct: discountPct,
+          value_spread_pct: valueSpreadPct,
           status: d.status || "reviewed",
           created_at: d.created_at,
           urgency,
           reason,
-          roi_est: roiEst,
         };
       });
     },
-    enabled: canAccessDealFlow && !!profile,
+    enabled: canReadDealFeed,
   });
+  const loading = dealQueryLoading || (subscriptionLoading && !canAccessDealFlow);
+  const liveDeals = useMemo(
+    () => (canReadDealFeed ? cachedLiveDeals : []),
+    [cachedLiveDeals, canReadDealFeed],
+  );
 
   const cities = ["all", ...Array.from(new Set(liveDeals.map((deal) => deal.city)))];
   const types = ["all", "apartment", "villa", "house", "commercial", "land", "office"];
@@ -292,7 +322,7 @@ export default function InvestorDashboard() {
       const city = deal.city || "Other";
       if (!acc[city]) acc[city] = { count: 0, value: 0 };
       acc[city].count += 1;
-      acc[city].value += deal.asking_price || 0;
+      acc[city].value += deal.asking_price ?? 0;
       return acc;
     }, {});
     const total = liveDeals.length;
@@ -325,26 +355,16 @@ export default function InvestorDashboard() {
       .slice(0, 5);
   }, [liveDeals]);
 
-  const totalValue = liveDeals.reduce((sum, deal) => sum + (deal.asking_price || 0), 0);
-  const avgDiscount = liveDeals.length
-    ? (liveDeals.reduce((sum, deal) => sum + (deal.discount_pct || 0), 0) / liveDeals.length).toFixed(1)
-    : "0";
-  const avgRoi = liveDeals.length
-    ? (liveDeals.reduce((sum, deal) => sum + (deal.roi_est || 0), 0) / liveDeals.length).toFixed(1)
-    : "0";
+  const totalValue = liveDeals.reduce((sum, deal) => sum + (deal.asking_price ?? 0), 0);
+  const avgValueSpread = averageDefinedPercentages(liveDeals.map((deal) => deal.value_spread_pct));
+  const avgDiscount = averageDefinedPercentages(liveDeals.map((deal) => deal.discount_pct));
+  const valuedDealsCount = liveDeals.filter((deal) => deal.value_spread_pct != null).length;
 
   const marketPulse = useMemo(() => {
-    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    const newThisWeek = liveDeals.filter((deal) => new Date(deal.created_at).getTime() >= sevenDaysAgo).length;
-    const dealsWithAi = liveDeals.filter((deal) => deal.ai_estimate > 0 && deal.asking_price > 0);
-    const avgDiscountVsAi = dealsWithAi.length
-      ? (
-          dealsWithAi.reduce((sum, deal) => sum + (((deal.ai_estimate - deal.asking_price) / deal.asking_price) * 100), 0) /
-          dealsWithAi.length
-        ).toFixed(1)
-      : null;
+    const newThisWeek = countDealsCreatedWithinDays(liveDeals.map((deal) => deal.created_at), 7);
+    const avgDiscountVsAi = avgDiscount != null ? String(avgDiscount) : null;
     return { newThisWeek, avgDiscountVsAi };
-  }, [liveDeals]);
+  }, [avgDiscount, liveDeals]);
 
   const openInterest = (dealId: string) => {
     interestReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -400,11 +420,12 @@ export default function InvestorDashboard() {
         <InvestorHeroHeader
           dealsCount={liveDeals.length}
           totalValue={totalValue}
-          avgDiscount={avgDiscount}
-          avgRoi={avgRoi}
+          newDealsThisWeek={marketPulse.newThisWeek}
+          avgValueSpread={avgValueSpread}
+          valuedDealsCount={valuedDealsCount}
           subscription={subscription}
           subscribed={subscribed}
-          showInviteCta={!canAccessDealFlow}
+          showInviteCta={!subscriptionLoading && !canAccessDealFlow}
           onInviteClick={() => setShowInvitationModal(true)}
         />
 
@@ -417,7 +438,7 @@ export default function InvestorDashboard() {
         )}
 
         <div className="container py-8">
-          {!canAccessDealFlow && user && (
+          {!subscriptionLoading && !canAccessDealFlow && user && (
             <InvestorAccessGate
               invitationStatus={invitationStatus}
               onRequestClick={() => setShowInvitationModal(true)}
@@ -487,7 +508,11 @@ export default function InvestorDashboard() {
                     const canRejoinQueue = myInterest ? ["passed", "expired"].includes(myInterest.status) : false;
 
                     return (
-                      <div key={deal.id} className={`relative glass-card rounded-2xl border border-border overflow-hidden transition-all duration-200 ${!isBlurred ? "hover:border-primary/30" : ""}`}>
+                      <div
+                        key={deal.id}
+                        data-testid={`investor-deal-${deal.id}`}
+                        className={`relative glass-card rounded-2xl border border-border overflow-hidden transition-all duration-200 ${!isBlurred ? "hover:border-primary/30" : ""}`}
+                      >
                         {isBlurred && (
                           <div className="absolute inset-0 backdrop-blur-md bg-background/60 z-10 flex flex-col items-center justify-center gap-3">
                             <Lock className="w-6 h-6 text-muted-foreground" />
@@ -513,7 +538,9 @@ export default function InvestorDashboard() {
                                     {interestBadge.label}
                                   </span>
                                 )}
-                                <span className="text-[10px] text-muted-foreground">{formatTimeAgo(deal.created_at)}</span>
+                                <span className="text-[10px] text-muted-foreground">
+                                  {hasValidTimestamp(deal.created_at) ? formatTimeAgo(deal.created_at) : "—"}
+                                </span>
                               </div>
 
                               <div className="flex items-center gap-1.5 mb-1">
@@ -539,7 +566,7 @@ export default function InvestorDashboard() {
                               <div className="font-display font-black text-xl text-foreground">
                                 {formatPrice(deal.asking_price)}
                               </div>
-                              {deal.ai_estimate > 0 && (
+                              {deal.ai_estimate != null && (
                                 <div className="text-[10px] text-muted-foreground mt-0.5">
                                   AI value: {formatPrice(deal.ai_estimate)}
                                 </div>
@@ -549,20 +576,22 @@ export default function InvestorDashboard() {
 
                           <div className="grid grid-cols-4 gap-2 mt-4 pt-4 border-t border-border">
                             <div className="text-center">
-                              <p className="font-black text-sm text-brand-emerald">-{deal.discount_pct}%</p>
+                              <p className="font-black text-sm text-brand-emerald">{formatMetricPercentage(deal.discount_pct)}</p>
                               <p className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">Discount</p>
                             </div>
                             <div className="text-center">
-                              <p className="font-black text-sm text-brand-gold">{deal.roi_est}%</p>
-                              <p className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">ROI Est.</p>
+                              <p className="font-black text-sm text-brand-gold">{formatMetricPercentage(deal.value_spread_pct, true)}</p>
+                              <p className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">Value gap</p>
                             </div>
                             <div className="text-center">
                               <p className="font-black text-sm text-primary">{deal.price_per_sqm != null ? formatPrice(deal.price_per_sqm) : "—"}</p>
                               <p className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">Per m2</p>
                             </div>
                             <div className="text-center">
-                              <p className="font-black text-sm text-foreground">48h</p>
-                              <p className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">Close</p>
+                              <p className="font-black text-sm text-foreground">
+                                {hasValidTimestamp(deal.created_at) ? formatTimeAgo(deal.created_at) : "—"}
+                              </p>
+                              <p className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">Added</p>
                             </div>
                           </div>
 
@@ -605,7 +634,8 @@ export default function InvestorDashboard() {
                                     address: entry.address,
                                     city: entry.city,
                                     asking_price: entry.asking_price,
-                                    roi_est: entry.roi_est,
+                                    discount_pct: entry.discount_pct,
+                                    value_spread_pct: entry.value_spread_pct,
                                     urgency: entry.urgency,
                                   }));
                                   const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: "application/json" });
@@ -731,13 +761,17 @@ export default function InvestorDashboard() {
                         className="flex-1 bg-gradient-primary border-0 text-primary-foreground gap-1.5"
                         disabled={expressInterest.isPending}
                         onClick={async () => {
-                          await expressInterest.mutateAsync({
-                            dealId: interestDealId,
-                            proofFile: interestProofFile,
-                            proofAmount: interestProofAmount,
-                            message: interestMessage,
-                          });
-                          closeInterest();
+                          try {
+                            await expressInterest.mutateAsync({
+                              dealId: interestDealId,
+                              proofFile: interestProofFile,
+                              proofAmount: interestProofAmount,
+                              message: interestMessage,
+                            });
+                            closeInterest();
+                          } catch {
+                            // The mutation owns error feedback; keep the dialog open for correction/retry.
+                          }
                         }}
                       >
                         {expressInterest.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Flame className="w-3.5 h-3.5" />}

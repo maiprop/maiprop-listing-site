@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 const mocks = vi.hoisted(() => ({
@@ -26,11 +26,11 @@ vi.mock("@tanstack/react-query", async () => {
     asking_price: 100_000,
     price_per_sqm: 1_250,
     discount_pct: 16.7,
+    value_spread_pct: 16.7,
     status: "reviewed",
     created_at: "2026-07-13T00:00:00Z",
     urgency: "HIGH",
     reason: "Below market value",
-    roi_est: 20,
   }));
   return {
     ...actual,
@@ -51,6 +51,15 @@ vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({
     user: { id: "buyer-1", email: "buyer@example.com" },
     profile: { id: "buyer-1", role: "buyer", participant_type: "buyer" },
+    subscription: {
+      subscribed: false,
+      productId: null,
+      subscriptionEnd: null,
+      source: "database",
+      syncStatus: "synced",
+      loading: false,
+    },
+    refreshSubscription: vi.fn(),
   }),
 }));
 
@@ -60,6 +69,14 @@ vi.mock("@/hooks/useFiresaleInterest", () => ({
   isActiveReservation: () => false,
   useMyFiresaleInterests: () => ({ data: new Map() }),
   useExpressInterest: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
+vi.mock("@/hooks/useSubscription", () => ({
+  useSubscription: () => ({
+    isPro: false,
+    isInvestorManagedPlan: false,
+    subscriptionEnd: null,
+    loading: false,
+  }),
 }));
 vi.mock("@/components/Navbar", () => ({ Navbar: () => <nav /> }));
 vi.mock("@/components/Footer", () => ({ Footer: () => <footer /> }));
@@ -92,16 +109,11 @@ describe("InvestorDashboard cached authorization gate", () => {
     );
 
     expect(screen.getByText("Access payment required")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Unlock Deal Flow" })).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: "Report" })).toHaveLength(2);
-    expect(screen.getAllByText("Subscribe to unlock this deal")).toHaveLength(2);
-    expect(screen.getByText("2 more deals in the pipeline")).toBeInTheDocument();
-
-    fireEvent.click(screen.getAllByRole("button", { name: "Report" })[0]);
-    fireEvent.click(screen.getAllByRole("button", { name: "Unlock Deal Flow" })[0]);
-    fireEvent.click(screen.getAllByRole("button", { name: "View Plans" })[0]);
-    fireEvent.click(screen.getByRole("button", { name: "Unlock Full Deal Flow" }));
-    expect(mocks.navigate).toHaveBeenCalledTimes(4);
-    expect(mocks.navigate).toHaveBeenCalledWith("/pricing?audience=investor");
+    expect(screen.getByTestId("investor-deal-list")).toBeEmptyDOMElement();
+    expect(screen.queryByText("Cached Deal 0")).not.toBeInTheDocument();
+    expect(screen.queryByText("Subscribe to unlock this deal")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Report" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Unlock Deal Flow" })).not.toBeInTheDocument();
+    expect(mocks.navigate).not.toHaveBeenCalled();
   });
 });

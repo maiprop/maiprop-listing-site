@@ -47,17 +47,23 @@ type PricingEntitlementRow = {
 };
 
 const isLoadingSubscriptionAccess = (options: {
+  profileLoading: boolean;
   subscriptionLoading: boolean;
   subscribed: boolean;
   hasEffectiveProduct: boolean;
   proProductLoading: boolean;
+  hasImmediateAccess: boolean;
 }) =>
-  options.subscriptionLoading ||
-  [
-    options.subscribed,
-    options.hasEffectiveProduct,
-    options.proProductLoading,
-  ].every(Boolean);
+  !options.hasImmediateAccess &&
+  (
+    options.profileLoading ||
+    options.subscriptionLoading ||
+    [
+      options.subscribed,
+      options.hasEffectiveProduct,
+      options.proProductLoading,
+    ].every(Boolean)
+  );
 
 const getCurrentPricingAudience = (
   profile: ReturnType<typeof useAuth>["profile"],
@@ -110,6 +116,25 @@ const hasDeveloperEntitlement = (options: {
   options.hasValidatedProProduct
 );
 
+const hasCurrentSubscriptionGrant = (subscription: {
+  subscribed: boolean;
+  subscriptionEnd?: string | null;
+  source?: string | null;
+  syncStatus?: string | null;
+  staleUntil?: number | null;
+}) => {
+  if (!subscription.subscribed) return false;
+  if (subscription.subscriptionEnd) {
+    const subscriptionEnd = Date.parse(subscription.subscriptionEnd);
+    if (!Number.isFinite(subscriptionEnd) || subscriptionEnd <= Date.now()) {
+      return false;
+    }
+  }
+  if (subscription.syncStatus !== "timeout") return true;
+  return typeof subscription.staleUntil === "number" &&
+    subscription.staleUntil > Date.now();
+};
+
 /**
  * Thin wrapper around AuthContext.subscription.
  *
@@ -118,7 +143,7 @@ const hasDeveloperEntitlement = (options: {
  * current role/audience to prevent cross-role entitlement reuse.
  */
 export const useSubscription = () => {
-  const { subscription, refreshSubscription, profile } = useAuth();
+  const { subscription, refreshSubscription, profile, profileLoading } = useAuth();
   const { forceProAccess } = getProfileSubscriptionFields(profile);
   const isAdmin = isPlatformAdmin(profile);
   const isInvestorRole = isInvestorParticipant(profile);
@@ -126,13 +151,20 @@ export const useSubscription = () => {
   const effectiveProductId = subscription.productId;
   const hasEffectiveProduct =
     typeof effectiveProductId === "string" && effectiveProductId.length > 0;
-  const entitlementIsSynced =
-    subscription.syncStatus !== "pending" && subscription.syncStatus !== "timeout";
+  const hasServerValidatedProduct = hasEffectiveProduct &&
+    isSubscriptionAudienceAllowed(subscription.audience, currentAudience);
+  const needsLegacyProductValidation = hasEffectiveProduct &&
+    !subscription.audience;
   const { data: validatedProProduct, isLoading: validatedProProductLoading } =
-    useValidatedProProduct(effectiveProductId, currentAudience);
-  const hasStripePro = entitlementIsSynced && subscription.subscribed && Boolean(validatedProProduct);
+    useValidatedProProduct(
+      needsLegacyProductValidation ? effectiveProductId : null,
+      currentAudience,
+    );
+  const hasCurrentGrant = hasCurrentSubscriptionGrant(subscription);
+  const hasStripePro = hasCurrentGrant &&
+    (hasServerValidatedProduct || Boolean(validatedProProduct));
   const hasInvestorPro =
-    entitlementIsSynced && isInvestorRole && subscription.subscribed && subscription.source === "investor";
+    isInvestorRole && hasCurrentGrant && subscription.source === "investor";
   const isPro = hasAnyProAccess([
     isAdmin,
     hasStripePro,
@@ -153,12 +185,15 @@ export const useSubscription = () => {
         : forceProAccess
           ? "override"
           : "free";
+  const hasPaidPromotionCredits =
+    accessSource === "stripe" && subscription.billingStatus === "active";
 
   return {
     isPro,
     hasDeveloperPro,
     accessSource,
     hasStripeBilling: accessSource === "stripe",
+    hasPaidPromotionCredits,
     isInvestorManagedPlan: accessSource === "investor",
     isManuallyManagedPlan:
       accessSource === "admin" || accessSource === "override",
@@ -167,10 +202,12 @@ export const useSubscription = () => {
     subscriptionEnd: subscription.subscriptionEnd,
     syncStatus: subscription.syncStatus,
     loading: isLoadingSubscriptionAccess({
+      profileLoading: Boolean(profileLoading),
       subscriptionLoading: subscription.loading,
       subscribed: subscription.subscribed,
       hasEffectiveProduct,
       proProductLoading: validatedProProductLoading,
+      hasImmediateAccess: isAdmin || forceProAccess,
     }),
     refreshSubscription,
   };

@@ -17,6 +17,7 @@ import { test, expect, type Page, type BrowserContext } from "@playwright/test";
 import { getBaseURL } from "./helpers/baseURL";
 import { seededDemoAccountsEnabled } from "./helpers/demoAccounts";
 import { expectPublicCatalogContent } from "./helpers/publicCatalog";
+import { waitForPostAuthNavigation } from "./helpers/postAuthNavigation";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -46,7 +47,7 @@ async function signIn(page: Page, email: string, password: string): Promise<void
     .locator('button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")')
     .first()
     .click();
-  await page.waitForURL(/\/dashboard|\/onboarding/, { timeout: 25_000 });
+  await waitForPostAuthNavigation(page);
 }
 
 const firstOpenHouseDetailLink = (page: Page) =>
