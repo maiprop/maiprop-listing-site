@@ -174,6 +174,7 @@ const MODE_LABEL_EL: Record<string, string> = {
 const ui = (isGreek: boolean, en: string, el: string) => (isGreek ? el : en);
 
 function fmt(n: number) { return n.toLocaleString("el-GR"); }
+function fmtDecimal(n: number) { return n.toLocaleString("el-GR", { maximumFractionDigits: 2 }); }
 
 function toFiniteNumber(value: unknown, fallback: number): number {
   const numeric = Number(value);
@@ -187,7 +188,7 @@ type RawValuationResult = Partial<ValuationResult> & {
 
 const PROPERTY_VALUATION_TIMEOUT_MS = 45_000;
 
-function normalizeValuationResult(data: RawValuationResult, fallbackPrice: number): ValuationResult {
+function normalizeValuationResult(data: RawValuationResult, fallbackPrice: number, isRental = false): ValuationResult {
   const primaryEstimate = getPrimaryValuationEstimate(data, fallbackPrice);
   const estimatedValue = toFiniteNumber(data.estimatedValue ?? data.estimated_value, primaryEstimate);
   const auctionAdjustedValue = toFiniteNumber(data.auctionAdjustedValue ?? data.auction_adjusted_value, 0);
@@ -195,7 +196,7 @@ function normalizeValuationResult(data: RawValuationResult, fallbackPrice: numbe
     estimatedValue,
     rangeLow: toFiniteNumber(data.rangeLow, Math.round(estimatedValue * 0.9)),
     rangeHigh: toFiniteNumber(data.rangeHigh, Math.round(estimatedValue * 1.1)),
-    executionValue: toFiniteNumber(data.executionValue, Math.round(estimatedValue * 0.88)),
+    executionValue: toFiniteNumber(data.executionValue, isRental ? estimatedValue : Math.round(estimatedValue * 0.88)),
     pricePerSqmEstimate: toFiniteNumber(data.pricePerSqmEstimate, 0),
     confidence: toFiniteNumber(data.confidence, 50),
     confidenceLabel: data.confidenceLabel ?? "Medium",
@@ -251,6 +252,7 @@ export default function PropertyValuation(props: PropertyValuationProps) {
   const { user } = useAuth();
   const { i18n } = useTranslation();
   const isGreek = i18n.language?.toLowerCase().startsWith("el") ?? false;
+  const isRental = props.listingType?.toLowerCase() === "rent";
   const queryClient = useQueryClient();
   const [result, setResult] = useState<ValuationResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -271,7 +273,7 @@ export default function PropertyValuation(props: PropertyValuationProps) {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       if (!getRemoteValuationEstimate(data)) throw new Error(ui(isGreek, "Valuation returned no result", "Η εκτίμηση δεν επέστρεψε αποτέλεσμα"));
-      setResult(normalizeValuationResult(data as RawValuationResult, props.price));
+      setResult(normalizeValuationResult(data as RawValuationResult, props.price, isRental));
       setExpanded(true);
       void queryClient.invalidateQueries({ queryKey: ["usage_ai_calls"] });
     } catch (e: unknown) {
@@ -290,13 +292,17 @@ export default function PropertyValuation(props: PropertyValuationProps) {
   const diff = result ? primaryMarketValue - props.price : 0;
   const diffPct = result ? calculatePercentDelta({ value: primaryMarketValue, baseline: props.price }) ?? 0 : 0;
   const pricing = result ? PRICING_CONFIG[result.pricingPosition as keyof typeof PRICING_CONFIG] : null;
+  const primaryValueSuffix = isRental ? ui(isGreek, "/mo", "/μήνα") : "";
+  const pricePerSqmSuffix = isRental ? ui(isGreek, "sqm/month", "τ.μ./μήνα") : ui(isGreek, "sqm", "τ.μ.");
 
   return (
     <div className="glass-card rounded-2xl overflow-hidden border border-primary/20">
       {/* Header */}
       <div className="flex items-center gap-2 px-5 py-3.5 bg-primary/5 border-b border-primary/20">
         <Zap className="w-4 h-4 text-primary" />
-        <h4 className="font-display font-semibold text-sm flex-1">{ui(isGreek, "Property Valuation", "Εκτίμηση αξίας ακινήτου")}</h4>
+        <h4 className="font-display font-semibold text-sm flex-1">
+          {isRental ? ui(isGreek, "Rental Valuation", "Εκτίμηση μίσθωσης") : ui(isGreek, "Property Valuation", "Εκτίμηση αξίας ακινήτου")}
+        </h4>
         <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary font-semibold">
           mAI Prop · 2026 Model
         </span>
@@ -312,7 +318,9 @@ export default function PropertyValuation(props: PropertyValuationProps) {
                 isGreek,
                 isAuctionValuation
                   ? "Auction-specific AI valuation - price range, confidence, liquidity, and Greek legal/tax overlay (legal cleanliness, planning certainty, transfer readiness)."
-                  : "Type-specific AI valuation - price range, confidence, liquidity, and market evidence.",
+                  : isRental
+                    ? "Rental-specific AI valuation - monthly rent range, rent per m², tenant demand, liquidity, and Greek lease context."
+                    : "Type-specific AI valuation - price range, confidence, liquidity, and market evidence.",
                 isAuctionValuation
                   ? "Εκτίμηση πλειστηριασμού με AI: εύρος τιμής, εμπιστοσύνη, ρευστότητα και ελληνική νομική/φορολογική επισκόπηση."
                   : "Εκτίμηση αξίας με AI ανά τύπο ακινήτου: εύρος τιμής, εμπιστοσύνη, ρευστότητα και δεδομένα αγοράς."
@@ -334,7 +342,7 @@ export default function PropertyValuation(props: PropertyValuationProps) {
             >
               {loading
                 ? <><Loader2 className="w-4 h-4 animate-spin" /> {ui(isGreek, "Analysing...", "Ανάλυση...")}</>
-                : <><Zap className="w-4 h-4" /> {ui(isGreek, "Run AI Valuation", "Εκτέλεση εκτίμησης AI")}</>}
+                : <><Zap className="w-4 h-4" /> {isRental ? ui(isGreek, "Run AI Rent Valuation", "Εκτέλεση εκτίμησης μίσθωσης AI") : ui(isGreek, "Run AI Valuation", "Εκτέλεση εκτίμησης AI")}</>}
             </Button>
             <p className="text-[10px] text-muted-foreground">{ui(isGreek, "Free - Instant - Not a formal appraisal", "Δωρεάν - Άμεση - Δεν αποτελεί επίσημη εκτίμηση")}</p>
           </div>
@@ -349,16 +357,16 @@ export default function PropertyValuation(props: PropertyValuationProps) {
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
                   {hasAuctionAdjustment
                     ? ui(isGreek, "Hybrid clean-market value", "Υβριδική καθαρή εμπορική αξία")
-                    : ui(isGreek, "AI Estimated Value", "Εκτιμώμενη αξία AI")}
+                    : isRental ? ui(isGreek, "AI Monthly Rent", "Μηνιαίο μίσθωμα AI") : ui(isGreek, "AI Estimated Value", "Εκτιμώμενη αξία AI")}
                 </p>
                 <p className="font-display font-black text-2xl text-foreground leading-none">
-                  €{fmt(primaryMarketValue)}
+                  €{fmt(primaryMarketValue)}{primaryValueSuffix}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1.5 font-mono">
-                  €{fmt(result.rangeLow)} — €{fmt(result.rangeHigh)}
+                  €{fmt(result.rangeLow)} — €{fmt(result.rangeHigh)}{primaryValueSuffix}
                 </p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">
-                  ≈ €{fmt(result.pricePerSqmEstimate)}/{ui(isGreek, "sqm", "τ.μ.")} ({ui(isGreek, "market", "αγορά")})
+                  ≈ €{isRental ? fmtDecimal(result.pricePerSqmEstimate) : fmt(result.pricePerSqmEstimate)}/{pricePerSqmSuffix} ({ui(isGreek, "market", "αγορά")})
                 </p>
               </div>
               <div className="flex gap-3 shrink-0">
@@ -397,9 +405,9 @@ export default function PropertyValuation(props: PropertyValuationProps) {
 
             {/* vs listed price */}
             <div className="flex items-center justify-between text-xs border-t border-border pt-3">
-              <span className="text-muted-foreground">{ui(isGreek, "vs. Listed Price", "έναντι ζητούμενης τιμής")}</span>
+              <span className="text-muted-foreground">{isRental ? ui(isGreek, "vs. Listed Rent", "έναντι ζητούμενου μισθώματος") : ui(isGreek, "vs. Listed Price", "έναντι ζητούμενης τιμής")}</span>
               <span className={`font-bold font-mono ${diff >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                {diff >= 0 ? "+" : ""}€{fmt(Math.abs(diff))} ({diffPct > 0 ? "+" : ""}{diffPct}%)
+                {diff >= 0 ? "+" : ""}€{fmt(Math.abs(diff))}{primaryValueSuffix} ({diffPct > 0 ? "+" : ""}{diffPct}%)
               </span>
             </div>
 
@@ -457,8 +465,8 @@ export default function PropertyValuation(props: PropertyValuationProps) {
             {/* Rental yield + listing quality */}
             <div className="grid grid-cols-2 gap-2">
               <div className="flex items-center justify-between text-xs bg-secondary/50 rounded-lg px-2.5 py-2">
-                <span className="text-muted-foreground">{ui(isGreek, "Rental Yield", "Απόδοση μίσθωσης")}</span>
-                <span className="font-semibold text-primary">{result.rentalYieldEstimate}% {ui(isGreek, "p.a.", "ετησίως")}</span>
+                <span className="text-muted-foreground">{isRental ? ui(isGreek, "Rent / sqm", "Μίσθωμα / τ.μ.") : ui(isGreek, "Rental Yield", "Απόδοση μίσθωσης")}</span>
+                <span className="font-semibold text-primary">{isRental ? `€${fmtDecimal(result.pricePerSqmEstimate)}/${pricePerSqmSuffix}` : `${result.rentalYieldEstimate}% ${ui(isGreek, "p.a.", "ετησίως")}`}</span>
               </div>
               <div className="flex items-center justify-between text-xs bg-secondary/50 rounded-lg px-2.5 py-2">
                 <span className="text-muted-foreground">{ui(isGreek, "Data Quality", "Ποιότητα δεδομένων")}</span>
@@ -573,7 +581,9 @@ export default function PropertyValuation(props: PropertyValuationProps) {
                 isGreek,
                 isAuctionValuation
                   ? "AI estimate only - Not a formal appraisal - 2026 Greek market + legal overlay model"
-                  : "AI estimate only - Not a formal appraisal - 2026 Greek market model",
+                  : isRental
+                    ? "AI rental estimate only - Not a formal appraisal - monthly values"
+                    : "AI estimate only - Not a formal appraisal - 2026 Greek market model",
                 isAuctionValuation
                   ? "Μόνο εκτίμηση AI - Δεν αποτελεί επίσημη εκτίμηση - Μοντέλο ελληνικής αγοράς και νομικής επισκόπησης 2026"
                   : "Μόνο εκτίμηση AI - Δεν αποτελεί επίσημη εκτίμηση - Μοντέλο ελληνικής αγοράς 2026"
