@@ -217,6 +217,7 @@ export function LocationSearchField({
         value={draftValue}
         onChange={(event) => {
           const nextValue = event.target.value;
+          if (!focused) setFocused(true);
           selectedDraftRef.current = null;
           setDraftValue(nextValue);
           if (!nextValue.trim()) {

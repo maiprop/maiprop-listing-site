@@ -478,6 +478,12 @@ describe("location address suggestions", () => {
     expect(input).toHaveValue("Athens");
     expect(input).toHaveAttribute("aria-expanded", "false");
     expect(onChange).not.toHaveBeenCalled();
+
+    fireEvent.change(input, { target: { value: "K" } });
+
+    expect(input).toHaveFocus();
+    expect(input).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("option", { name: "Kallithea" })).toBeInTheDocument();
   });
 
   it("uses a selected listings address suggestion's address line for the location filter", async () => {
