@@ -662,11 +662,17 @@ describe("public listings endpoint", () => {
     const res = await listingsRequest(
       makeCtx("https://portal.maiprop.co/api/public/listings?pageSize=4"),
     );
+    const listingCacheUrls = cacheApi.match.mock.calls
+      .map(([request]) => new URL(request.url))
+      .filter((url) => url.pathname.endsWith("/api/public/listings"));
     const body = await res.json() as {
       data: Array<{ id: string; is_featured: boolean; priority_placement: number }>;
       nextCursor: string | null;
     };
 
+    expect(listingCacheUrls.some((url) =>
+      url.searchParams.get("v") === "catalogue-stream-cursor-promotions-v4"
+    )).toBe(true);
     expect(maxListingReadsInFlight).toBe(2);
     expect(listingUrls).toHaveLength(2);
     const priorityUrl = listingUrls.find((url) => url.searchParams.get("priority_placement") === "gt.0");
