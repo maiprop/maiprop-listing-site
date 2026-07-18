@@ -97,6 +97,8 @@ export async function requireProSubscription(userId, corsHeaders, options = {}) 
       ),
   };
 }
+
+export type SupabaseClient = ReturnType<typeof createClient>;
 `,
 );
 
@@ -104,8 +106,8 @@ const shared = (name: string) =>
   new URL(`../_shared/${name}`, import.meta.url).href;
 const transformedSource = functionSource
   .replace(
-    'import { createClient } from "npm:@supabase/supabase-js@2.57.2";',
-    `import { createClient } from "${fileUrl(mockClientPath)}";`,
+    /import\s*\{\s*createClient,\s*type SupabaseClient,\s*\}\s*from\s*"npm:@supabase\/supabase-js@2\.57\.2";/,
+    `import { createClient, type SupabaseClient } from "${fileUrl(mockClientPath)}";`,
   )
   .replace('from "../_shared/auth.ts"', `from "${shared("auth.ts")}"`)
   .replace('from "../_shared/cors.ts"', `from "${shared("cors.ts")}"`)
