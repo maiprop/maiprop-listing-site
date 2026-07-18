@@ -459,7 +459,7 @@ describe("PropertyAIInsightsSection", () => {
     expect(screen.getByText(/5\.440\.000/)).toBeInTheDocument();
   });
 
-  it("does not show a fake 0% vs-market value when rental benchmark is unavailable", async () => {
+  it("does not show a fake 0% vs-market value when the benchmark is unavailable", async () => {
     const { PropertyAIInsightsSection } = await import("@/components/property/PropertyAIInsightsSection");
 
     renderWithProviders(
@@ -483,7 +483,7 @@ describe("PropertyAIInsightsSection", () => {
 
     expect(screen.queryByText(/^0%$/)).not.toBeInTheDocument();
     expect(screen.getByText(/Unavailable/i)).toBeInTheDocument();
-    expect(screen.getByText(/Rent benchmark not returned/i)).toBeInTheDocument();
+    expect(screen.getByText(/Market benchmark not returned/i)).toBeInTheDocument();
   });
 
   it("shows a manual load button and free request counter before spending an AI call", async () => {
