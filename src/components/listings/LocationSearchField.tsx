@@ -11,17 +11,7 @@ import {
   rankAddressPredictionsForQuery,
 } from "@/lib/location/locationSearchSemantics";
 
-const TYPED_LOCATION_COMMIT_DELAY_MS = 600;
 const PENDING_ENTER_PROVIDER_GRACE_MS = 700;
-const PASSIVE_PROVIDER_GRACE_MS = TYPED_LOCATION_COMMIT_DELAY_MS + PENDING_ENTER_PROVIDER_GRACE_MS;
-const HAS_STREET_NUMBER_RE = /\d/;
-const LOCATION_WORD_RE = /\p{L}+/gu;
-
-function shouldPreferProviderForTypedLocation(value: string): boolean {
-  if (!HAS_STREET_NUMBER_RE.test(value)) return false;
-  const locationWords = value.match(LOCATION_WORD_RE) ?? [];
-  return locationWords.length >= 1;
-}
 
 export type ListingLocationSelection = {
   value: string;
@@ -52,7 +42,6 @@ export function LocationSearchField({
   const selectedDraftRef = useRef<string | null>(null);
   const pendingEnterRef = useRef(false);
   const pendingEnterTimerRef = useRef<number | undefined>();
-  const commitTimerRef = useRef<number | undefined>();
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const query = draftValue.trim();
@@ -74,22 +63,11 @@ export function LocationSearchField({
   };
 
   useEffect(() => {
-    if (document.activeElement === inputRef.current) setFocused(true);
-  }, [draftValue]);
-
-  useEffect(() => {
     if (focused) return;
     if (selectedDraftRef.current && value !== selectedDraftRef.current) return;
     selectedDraftRef.current = null;
     setDraftValue(value);
   }, [focused, value]);
-
-  const cancelPendingCommit = useCallback(() => {
-    if (commitTimerRef.current !== undefined) {
-      window.clearTimeout(commitTimerRef.current);
-      commitTimerRef.current = undefined;
-    }
-  }, []);
 
   const cancelPendingEnter = useCallback(() => {
     pendingEnterRef.current = false;
@@ -100,7 +78,6 @@ export function LocationSearchField({
   }, []);
 
   const selectSuggestion = useCallback(async (prediction: AddressPrediction) => {
-    cancelPendingCommit();
     cancelPendingEnter();
     const selection = prediction.resolveDetails
       ? await prediction.resolveDetails().catch(() => prediction)
@@ -119,77 +96,44 @@ export function LocationSearchField({
     });
     clear();
     setFocused(false);
-  }, [cancelPendingCommit, cancelPendingEnter, clear, onChange]);
+    inputRef.current?.blur();
+  }, [cancelPendingEnter, clear, onChange]);
 
-  const commitManualSearch = useCallback((options: { close?: boolean; preferSuggestion?: boolean } = {}) => {
+  const commitManualSearch = useCallback(() => {
     const committedValue = draftValue.trim();
-    cancelPendingCommit();
     if (!committedValue) return;
-    if (options.close) cancelPendingEnter();
-
-    const preferSuggestion = options.preferSuggestion ?? shouldPreferProviderForTypedLocation(committedValue);
-    if (preferSuggestion && !loading && rankedPredictions[0] && rankedPredictions[0].provider !== "manual") {
-      void selectSuggestion(rankedPredictions[0]);
-      return;
-    }
-
+    cancelPendingEnter();
     selectedDraftRef.current = committedValue;
     setDraftValue(committedValue);
     onChange(committedValue);
-    if (options.close) {
-      clear();
-      setFocused(false);
-    }
-  }, [cancelPendingCommit, cancelPendingEnter, clear, draftValue, loading, onChange, rankedPredictions, selectSuggestion]);
+    clear();
+    setFocused(false);
+    inputRef.current?.blur();
+  }, [cancelPendingEnter, clear, draftValue, onChange]);
+
+  const closeWithoutCommit = useCallback(() => {
+    cancelPendingEnter();
+    selectedDraftRef.current = null;
+    setDraftValue(value);
+    clear();
+    setFocused(false);
+  }, [cancelPendingEnter, clear, value]);
 
   useEffect(() => {
+    if (!focused) return undefined;
     const handler = (event: MouseEvent) => {
       const portal = document.getElementById("listing-location-dropdown-portal");
       if (wrapRef.current?.contains(event.target as Node)) return;
       if (portal?.contains(event.target as Node)) return;
-      if (draftValue.trim() && draftValue.trim() !== value.trim()) {
-        commitManualSearch({ close: true });
-      } else {
-        setFocused(false);
-      }
+      closeWithoutCommit();
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [commitManualSearch, draftValue, value]);
+  }, [closeWithoutCommit, focused]);
 
   useEffect(() => {
-    return () => {
-      cancelPendingCommit();
-      cancelPendingEnter();
-    };
-  }, [cancelPendingCommit, cancelPendingEnter]);
-
-  useEffect(() => {
-    if (!focused) return undefined;
-    const committedValue = draftValue.trim();
-    if (!committedValue || committedValue === value.trim() || selectedDraftRef.current === committedValue) {
-      return undefined;
-    }
-    if (loading) {
-      commitTimerRef.current = window.setTimeout(() => {
-        commitManualSearch({
-          close: false,
-          preferSuggestion: false,
-        });
-      }, PASSIVE_PROVIDER_GRACE_MS);
-
-      return () => cancelPendingCommit();
-    }
-
-    commitTimerRef.current = window.setTimeout(() => {
-      commitManualSearch({
-        close: false,
-        preferSuggestion: shouldPreferProviderForTypedLocation(committedValue),
-      });
-    }, TYPED_LOCATION_COMMIT_DELAY_MS);
-
-    return () => cancelPendingCommit();
-  }, [cancelPendingCommit, commitManualSearch, draftValue, focused, loading, value]);
+    return cancelPendingEnter;
+  }, [cancelPendingEnter]);
 
   useEffect(() => {
     if (!pendingEnterRef.current || loading) return;
@@ -198,7 +142,7 @@ export function LocationSearchField({
       void selectSuggestion(rankedPredictions[0]);
       return;
     }
-    commitManualSearch({ close: true });
+    commitManualSearch();
   }, [cancelPendingEnter, commitManualSearch, loading, rankedPredictions, selectSuggestion]);
 
   const showDropdown = focused && shouldUsePredictions && (rankedPredictions.length > 0 || loading);
@@ -273,7 +217,7 @@ export function LocationSearchField({
         value={draftValue}
         onChange={(event) => {
           const nextValue = event.target.value;
-          cancelPendingCommit();
+          if (!focused) setFocused(true);
           selectedDraftRef.current = null;
           setDraftValue(nextValue);
           if (!nextValue.trim()) {
@@ -284,8 +228,15 @@ export function LocationSearchField({
         onFocus={() => {
           setFocused(true);
         }}
+        onClick={() => {
+          setFocused(true);
+        }}
         onKeyDown={(event) => {
-          if (event.key === "Escape") setFocused(false);
+          if (event.key === "Escape") {
+            event.preventDefault();
+            closeWithoutCommit();
+            return;
+          }
           if (event.key !== "Enter") return;
           event.preventDefault();
           if (loading) {
@@ -297,7 +248,7 @@ export function LocationSearchField({
               if (!pendingEnterRef.current) return;
               pendingEnterRef.current = false;
               pendingEnterTimerRef.current = undefined;
-              commitManualSearch({ close: true, preferSuggestion: false });
+              commitManualSearch();
             }, PENDING_ENTER_PROVIDER_GRACE_MS);
             return;
           }
@@ -305,7 +256,7 @@ export function LocationSearchField({
             void selectSuggestion(rankedPredictions[0]);
             return;
           }
-          commitManualSearch({ close: true });
+          commitManualSearch();
         }}
         className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none min-w-0"
         autoComplete="off"
@@ -322,7 +273,8 @@ export function LocationSearchField({
         <button
           type="button"
           onClick={() => {
-            cancelPendingCommit();
+            cancelPendingEnter();
+            selectedDraftRef.current = null;
             setDraftValue("");
             onChange("");
             clear();

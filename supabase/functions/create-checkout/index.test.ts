@@ -134,6 +134,34 @@ Deno.test("checkout audience gate blocks cross-role public plan purchases", () =
   assertEquals(isCheckoutAudienceAllowed("professional", null), false);
 });
 
+Deno.test("catalog resolution fails before mock or live subscription Checkout creation", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./index.ts", import.meta.url),
+  );
+  const subscriptionBranch = source.indexOf("const plan = normalizePlanKey");
+  const resolutionIndex = source.indexOf(
+    "const checkoutPlan = await getCheckoutPlan",
+    subscriptionBranch,
+  );
+  const unavailableIndex = source.indexOf("if (!checkoutPlan)", resolutionIndex);
+  const mockIndex = source.indexOf(
+    "if (isStripeMockMode())",
+    subscriptionBranch,
+  );
+  const sessionIndex = source.indexOf(
+    "stripe.checkout.sessions.create",
+    resolutionIndex,
+  );
+
+  assertEquals(resolutionIndex >= 0, true);
+  assertEquals(unavailableIndex > resolutionIndex, true);
+  assertEquals(mockIndex > unavailableIndex, true);
+  assertEquals(sessionIndex > unavailableIndex, true);
+  assertEquals(source.includes('code: "pricing_catalog_unavailable"'), true);
+  assertEquals(source.includes('code: "plan_unavailable"'), true);
+  assertEquals(source.includes("PricingCatalogUnavailableError"), true);
+});
+
 Deno.test("self-serve add-on modules are explicitly allowlisted", () => {
   assertEquals(isSupportedCheckoutAddonModule("valuation_reports"), true);
   assertEquals(isSupportedCheckoutAddonModule("adhoc_charges"), true);

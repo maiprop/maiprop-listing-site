@@ -86,6 +86,20 @@ function normalizeLocationSearchableText(value: string): string {
   ]).join(" ");
 }
 
+function numericLocationTokens(value: string): string[] {
+  return unique(
+    normalizeGreekLocationText(value)
+      .split(" ")
+      .filter((token) => /^\d+$/.test(token)),
+  );
+}
+
+function containsEveryNumericToken(value: string, numbers: string[]): boolean {
+  if (numbers.length === 0) return true;
+  const tokens = new Set(numericLocationTokens(value));
+  return numbers.every((number) => tokens.has(number));
+}
+
 export function normalizeGreekLocationText(value: string): string {
   return value
     .normalize("NFD")
@@ -211,6 +225,7 @@ export function filterAddressPredictionsForQuery(
   query: string,
 ): AddressPrediction[] {
   const contextTokens = locationContextTokens(query);
+  const queryNumberTokens = numericLocationTokens(query);
   const queryTokenGroups = getListingLocationSearchTokenGroups(query)
     .filter((group) => !group.every((token) => /^\d+$/.test(token)));
   const requiresAddressContextMatch = /\d/.test(query) && queryTokenGroups.length >= 3;
@@ -224,9 +239,16 @@ export function filterAddressPredictionsForQuery(
       prediction.municipality,
       prediction.region,
     ].filter(Boolean).join(" "));
+    const addressSearchable = [
+      prediction.addressLine,
+      prediction.title,
+      prediction.value,
+      prediction.fullAddress,
+    ].filter(Boolean).join(" ");
     if (contextTokens.length > 0 && !contextTokens.some((token) => searchable.includes(token))) {
       return false;
     }
+    if (!containsEveryNumericToken(addressSearchable, queryNumberTokens)) return false;
     if (!requiresAddressContextMatch) return true;
     const matchedGroups = queryTokenGroups.filter((group) => group.some((token) => searchable.includes(token))).length;
     return matchedGroups >= 2;
@@ -255,8 +277,8 @@ function addressNumberScore(prediction: AddressPrediction, numbers: string[]): n
     prediction.value,
   ].filter(Boolean).join(" "));
   const fullAddressText = normalizeGreekLocationText(prediction.fullAddress ?? "");
-  if (numbers.every((number) => visibleAddressText.includes(number))) return 0;
-  if (numbers.every((number) => fullAddressText.includes(number))) return 1;
+  if (containsEveryNumericToken(visibleAddressText, numbers)) return 0;
+  if (containsEveryNumericToken(fullAddressText, numbers)) return 1;
   return 2;
 }
 
@@ -288,7 +310,7 @@ export function rankAddressPredictionsForQuery(
   predictions: AddressPrediction[],
   query: string,
 ): AddressPrediction[] {
-  const numbers = query.match(/\d+/g) ?? [];
+  const numbers = numericLocationTokens(query);
   return predictions
     .map((prediction, index) => ({
       prediction,

@@ -16,7 +16,8 @@ import type { AIInsightsQuota } from "@/hooks/usePropertyAIInsights";
 interface AIInsightsData {
   vsMarket: number | null;
   rentalYield: number;
-  estimatedValue: number;
+  estimatedValue: number | null;
+  pricePerSqmEstimate?: number;
   marketComparison: string | null;
   confidenceLabel: string;
 }
@@ -32,6 +33,7 @@ interface Props {
   onLoad?: () => void;
   errorMessage?: string | null;
   limitReached?: boolean;
+  listingType?: string | null;
 }
 
 const COMPARISON_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
@@ -71,10 +73,20 @@ export function PropertyAIInsightsSection({
   onLoad,
   errorMessage,
   limitReached = false,
+  listingType,
 }: Props) {
+  const isRental = listingType?.toLowerCase() === "rent";
   const quotaReached = limitReached || (!!quota && quota.limit < UNLIMITED_AI_LIMIT && quota.used >= quota.limit);
   const loadLabel = data ? "Refresh AI insights" : "Load AI insights";
   const quotaText = formatQuotaText(quota, isPro, quotaLoading);
+  const rentPerSqm = data?.pricePerSqmEstimate
+    ? `€${data.pricePerSqmEstimate.toLocaleString("el-GR", { maximumFractionDigits: 2 })}/m²/mo`
+    : "Unavailable";
+  const aiEstimate = data?.estimatedValue == null
+    ? "Unavailable"
+    : isRental
+      ? `${formatPrice(data.estimatedValue)}/mo`
+      : formatPrice(data.estimatedValue);
 
   return (
     <Section>
@@ -150,7 +162,7 @@ export function PropertyAIInsightsSection({
           return (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className={`rounded-xl border p-4 flex flex-col gap-1 ${cmp.bg}`}>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">vs Market</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{isRental ? "vs Rental Market" : "vs Market"}</p>
                 <div className="flex items-baseline gap-1">
                   <span className={`font-display font-black text-3xl ${cmp.color}`}>
                     {hasMarketComparison
@@ -159,23 +171,23 @@ export function PropertyAIInsightsSection({
                   </span>
                 </div>
                 <p className={`text-[10px] font-semibold ${cmp.color}`}>
-                  {hasMarketComparison ? cmp.label : "Rent benchmark not returned"}
+                  {hasMarketComparison ? cmp.label : `${isRental ? "Rent" : "Market"} benchmark not returned`}
                 </p>
               </div>
 
               <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Rental Yield</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{isRental ? "Rent / m² / mo" : "Rental Yield"}</p>
                 <div className="flex items-baseline gap-1">
-                  <span className="font-display font-black text-3xl text-primary">{data.rentalYield}%</span>
+                  <span className="font-display font-black text-3xl text-primary">{isRental ? rentPerSqm : `${data.rentalYield}%`}</span>
                 </div>
-                <p className="text-[10px] text-muted-foreground">Est. gross annual yield</p>
+                <p className="text-[10px] text-muted-foreground">{isRental ? "Estimated monthly rent density" : "Est. gross annual yield"}</p>
               </div>
 
               <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">AI Estimate</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{isRental ? "AI Rent Estimate" : "AI Estimate"}</p>
                 <div className="flex items-baseline gap-1">
                   <span className="font-display font-black text-3xl text-foreground">
-                    {formatPrice(data.estimatedValue)}
+                    {aiEstimate}
                   </span>
                 </div>
                 <p className="text-[10px] text-muted-foreground">Confidence: {data.confidenceLabel}</p>

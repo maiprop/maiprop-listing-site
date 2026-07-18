@@ -214,7 +214,7 @@ describe("usePropertyAIInsights", () => {
     expect(result.current.aiInsightsData).toEqual({
       vsMarket: null,
       rentalYield: 6.4,
-      estimatedValue: 178_000,
+      estimatedValue: null,
       marketComparison: null,
       confidenceLabel: "Medium",
     });
@@ -270,7 +270,7 @@ describe("usePropertyAIInsights", () => {
     expect(result.current.aiInsightsData).toEqual({
       vsMarket: -10,
       rentalYield: 6.4,
-      estimatedValue: 178_000,
+      estimatedValue: 1_050,
       marketComparison: "below_market",
       confidenceLabel: "Medium",
     });

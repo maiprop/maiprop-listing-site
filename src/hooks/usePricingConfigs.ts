@@ -7,16 +7,13 @@ import { supabase } from "@/integrations/supabase/client";
 
 export type PricingConfigRow = {
   key: string;
+  audience: string;
   label: string;
   description: string | null;
   amount: number;
   currency: string;
   unit: string;
-  metadata?: {
-    stripe_price_id?: string;
-    stripe_product_id?: string;
-    stripe_last_amount_annual?: string | number;
-  } | null;
+  metadata?: Record<string, unknown> | null;
 };
 
 export type PricingConfigMap = Record<
@@ -24,10 +21,13 @@ export type PricingConfigMap = Record<
   {
     amount: number;
     currency: string;
+    audience: string;
     label: string;
     description: string | null;
     unit: string;
     stripePriceId?: string;
+    stripePriceMonthly?: string;
+    stripePriceAnnual?: string;
     stripeProductId?: string;
     annualAmount?: number;
   }
@@ -55,34 +55,70 @@ export const INVESTOR_TIER_TO_KEY: Record<string, string> = {
   developer: "developer_pro",
 };
 
+const getStringMetadata = (
+  metadata: Record<string, unknown>,
+  key: string,
+): string | undefined => {
+  const value = metadata[key];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+};
+
+const firstStringMetadata = (
+  metadata: Record<string, unknown>,
+  keys: string[],
+): string | undefined => {
+  for (const key of keys) {
+    const value = getStringMetadata(metadata, key);
+    if (value) return value;
+  }
+  return undefined;
+};
+
+export function mapPricingConfigRows(
+  rows: PricingConfigRow[] | null | undefined,
+): PricingConfigMap {
+  const map: PricingConfigMap = {};
+  for (const row of rows ?? []) {
+    const metadata = row.metadata ?? {};
+    const legacyPriceId = getStringMetadata(metadata, "stripe_price_id");
+    const annualAmount = Number(metadata.stripe_last_amount_annual);
+    map[row.key] = {
+      amount: Number(row.amount ?? 0),
+      currency: row.currency ?? "EUR",
+      audience: row.audience,
+      label: row.label,
+      description: row.description ?? null,
+      unit: row.unit ?? "monthly",
+      stripePriceId: legacyPriceId,
+      stripePriceMonthly: firstStringMetadata(metadata, [
+        "stripe_price_id_monthly",
+        "stripe_monthly_price_id",
+      ]) ?? (row.unit !== "yearly" ? legacyPriceId : undefined),
+      stripePriceAnnual: firstStringMetadata(metadata, [
+        "stripe_price_id_annual",
+        "stripe_annual_price_id",
+        "stripe_price_id_yearly",
+        "stripe_yearly_price_id",
+      ]) ?? (row.unit === "yearly" ? legacyPriceId : undefined),
+      stripeProductId: getStringMetadata(metadata, "stripe_product_id"),
+      annualAmount: Number.isFinite(annualAmount) && annualAmount > 0
+        ? annualAmount
+        : undefined,
+    };
+  }
+  return map;
+}
+
 export function usePricingConfigs() {
   return useQuery<PricingConfigMap>({
     queryKey: ["pricing-configs-public"],
     queryFn: async (): Promise<PricingConfigMap> => {
       const { data, error } = await supabase
         .from("pricing_configs")
-        .select("key, label, description, amount, currency, unit, metadata")
+        .select("key, audience, label, description, amount, currency, unit, metadata")
         .eq("is_active", true);
       if (error) throw error;
-      const map: PricingConfigMap = {};
-      for (const row of data ?? []) {
-        const rawMeta = row.metadata as Record<string, unknown> | null;
-        const meta = rawMeta ?? {};
-        const annualAmount = Number(meta.stripe_last_amount_annual);
-        map[row.key] = {
-          amount: Number(row.amount ?? 0),
-          currency: row.currency ?? "EUR",
-          label: row.label,
-          description: row.description ?? null,
-          unit: row.unit ?? "monthly",
-          stripePriceId: typeof meta?.stripe_price_id === "string" ? meta.stripe_price_id : undefined,
-          stripeProductId: typeof meta?.stripe_product_id === "string" ? meta.stripe_product_id : undefined,
-          annualAmount: Number.isFinite(annualAmount) && annualAmount > 0
-            ? annualAmount
-            : undefined,
-        };
-      }
-      return map;
+      return mapPricingConfigRows(data as PricingConfigRow[] | null);
     },
     staleTime: 5 * 60 * 1000,
   });

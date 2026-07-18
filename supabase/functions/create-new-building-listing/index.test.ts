@@ -5,6 +5,7 @@ type MockScenario = {
   user?: { id: string; email: string };
   profileRole?: string | null;
   roleSwitchInProgress?: boolean;
+  proAllowed?: boolean;
   listingImageError?: string;
   calls: Array<{ name: string; args?: unknown }>;
 };
@@ -18,6 +19,7 @@ const functionSource = await Deno.readTextFile(new URL("./index.ts", import.meta
 const tempDir = await Deno.makeTempDir({ prefix: "create-new-building-listing-test-" });
 const mockClientPath = `${tempDir}/mockSupabase.ts`;
 const mockAuditPath = `${tempDir}/mockAudit.ts`;
+const mockProGatePath = `${tempDir}/mockProGate.ts`;
 const transformedPath = `${tempDir}/index.ts`;
 
 function fileUrl(path: string) {
@@ -117,6 +119,26 @@ export async function logAuditEvent(event) {
 `,
 );
 
+await Deno.writeTextFile(
+  mockProGatePath,
+  `
+export async function requireProSubscription(userId, corsHeaders, options = {}) {
+  const scenario = globalThis.__createNewBuildingScenario;
+  scenario.calls.push({ name: "proGate", args: { userId, options } });
+  const allowed = scenario.proAllowed !== false;
+  return {
+    allowed,
+    errorResponse: allowed
+      ? null
+      : new Response(
+        JSON.stringify({ error: "This feature requires a Pro subscription. Please upgrade your plan." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      ),
+  };
+}
+`,
+);
+
 const shared = (name: string) => new URL(`../_shared/${name}`, import.meta.url).href;
 const transformedSource = functionSource
   .replace(
@@ -128,7 +150,8 @@ const transformedSource = functionSource
   .replace('from "../_shared/logger.ts"', `from "${shared("logger.ts")}"`)
   .replace('from "../_shared/rateLimit.ts"', `from "${shared("rateLimit.ts")}"`)
   .replace('from "../_shared/schema.ts"', `from "${shared("schema.ts")}"`)
-  .replace('from "../_shared/auditLog.ts"', `from "${fileUrl(mockAuditPath)}"`);
+  .replace('from "../_shared/auditLog.ts"', `from "${fileUrl(mockAuditPath)}"`)
+  .replace('from "../_shared/proGate.ts"', `from "${fileUrl(mockProGatePath)}"`);
 
 await Deno.writeTextFile(transformedPath, transformedSource);
 
@@ -143,6 +166,7 @@ const resetScenario = (overrides: Partial<MockScenario> = {}) => {
   globalThis.__createNewBuildingScenario = {
     calls: [],
     profileRole: "developer",
+    proAllowed: true,
     user: { id: "11111111-1111-4111-8111-111111111111", email: "dev@test.local" },
     ...overrides,
   };
@@ -208,13 +232,33 @@ Deno.test("non-developer profiles cannot create new-build listings", async () =>
   ));
 });
 
-Deno.test("create forces ownership from the verified developer and writes every row", async () => {
+Deno.test("free developers are denied before any new-building write or rollback", async () => {
+  resetScenario({ proAllowed: false });
+  const res = await handler(authedJson(body()));
+
+  assertEquals(res.status, 403);
+  assertEquals(
+    globalThis.__createNewBuildingScenario.calls.some((call) =>
+      ["insert", "update", "delete", "audit"].includes(call.name)
+    ),
+    false,
+  );
+});
+
+Deno.test("Developer Pro creation forces ownership and writes every row", async () => {
   resetScenario();
   const res = await handler(authedJson(body()));
   const parsed = await res.json();
 
   assertEquals(res.status, 200);
   assertEquals(parsed.data.listingId, "33333333-3333-4333-8333-333333333333");
+  assert(globalThis.__createNewBuildingScenario.calls.some((call) =>
+    call.name === "proGate" &&
+    JSON.stringify(call.args) === JSON.stringify({
+      userId: "11111111-1111-4111-8111-111111111111",
+      options: { audience: "developer" },
+    })
+  ));
 
   const projectInsert = globalThis.__createNewBuildingScenario.calls.find((call) =>
     call.name === "insert" && (call.args as { table?: string })?.table === "projects"

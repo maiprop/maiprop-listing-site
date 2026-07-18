@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { LocationSearchField } from "@/components/listings/LocationSearchField";
 
@@ -86,5 +86,31 @@ describe("LocationSearchField display ranking", () => {
         }),
       );
     });
+  });
+
+  it("keeps the dropdown closed after an explicit suggestion selection", async () => {
+    const onChange = vi.fn();
+    render(
+      <LocationSearchField
+        value=""
+        onChange={onChange}
+        placeholder="City, area, address..."
+        ariaLabel="Search by city or area"
+      />,
+    );
+
+    const input = screen.getByLabelText("Search by city or area");
+    act(() => input.focus());
+    expect(input).toHaveFocus();
+    fireEvent.change(input, {
+      target: { value: "Kalimnou 27 Agioi Anargiroi" },
+    });
+    const option = within(screen.getByRole("listbox")).getByRole("option");
+    fireEvent.mouseDown(option);
+    fireEvent.click(option);
+
+    await waitFor(() => expect(input).toHaveValue("Kalimnou 27"));
+    expect(input).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
 });

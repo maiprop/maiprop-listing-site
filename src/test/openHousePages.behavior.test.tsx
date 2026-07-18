@@ -116,6 +116,19 @@ vi.mock("@/components/PropertyValuation", () => ({ default: () => <div data-test
 vi.mock("@/components/property/PropertyValuationLockedCard", () => ({
   PropertyValuationLockedCard: () => <div data-testid="property-valuation-locked">Upgrade valuation to Pro</div>,
 }));
+vi.mock("@/components/property/PropertyAIInsightsSection", () => ({
+  PropertyAIInsightsSection: ({
+    listingType,
+    user,
+  }: {
+    listingType?: string | null;
+    user?: { id: string } | null;
+  }) => (
+    <div data-testid="property-ai-insights" data-listing-type={listingType ?? ""}>
+      {!user ? "AI Market Insights requires sign-in" : null}
+    </div>
+  ),
+}));
 vi.mock("@/components/NeighbourhoodReport", () => ({ default: () => <div data-testid="neighbourhood-report" /> }));
 vi.mock("@/components/property/PropertyReportCard", () => ({
   PropertyReportCard: () => <div data-testid="property-report-card" />,
@@ -614,6 +627,26 @@ describe("OpenHouseDetail page behavior", () => {
     expect(mocks.trackView.mutate).toHaveBeenCalledWith(TEST_OPEN_HOUSE_ID);
   });
 
+  it("keeps the open-house title, address, and price readable on narrow screens", async () => {
+    mocks.listing = createListing();
+
+    await renderOpenHouseDetail();
+
+    const price = screen
+      .getAllByText("€420,000")
+      .find((element) => element.className.includes("text-3xl"));
+    if (!price) throw new Error("Hero price not found");
+    const priceColumn = price.parentElement;
+    const heroRow = priceColumn?.parentElement;
+    const address = screen.getByText(/Solonos 1, Athens/i);
+
+    expect(heroRow).toHaveClass("grid");
+    expect(heroRow?.className).toContain("min-[560px]:grid-cols-[minmax(0,1fr)_auto]");
+    expect(priceColumn).toHaveClass("w-full");
+    expect(address).toHaveClass("min-w-0");
+    expect(address).toHaveClass("break-words");
+  });
+
   it("uses the same Pro gate as listing and auction details for open-house valuation", async () => {
     mocks.authUser = { id: "buyer-1" };
     mocks.listing = createListing();
@@ -751,6 +784,7 @@ describe("OpenHouseDetail page behavior", () => {
     const rentalRender = await renderOpenHouseDetail();
 
     expect(await screen.findByTestId("registration-dialog")).toHaveAttribute("data-transaction-type", "rent");
+    expect(screen.getByTestId("property-ai-insights")).toHaveAttribute("data-listing-type", "rent");
 
     rentalRender.unmount();
     mocks.listing = createListing({ open_house_transaction_type: "sale", price: 420000 });
@@ -758,6 +792,7 @@ describe("OpenHouseDetail page behavior", () => {
     await renderOpenHouseDetail(`/open-house/${TEST_OPEN_HOUSE_SALE_ID}`);
 
     expect(await screen.findByTestId("registration-dialog")).toHaveAttribute("data-transaction-type", "sale");
+    expect(screen.getByTestId("property-ai-insights")).toHaveAttribute("data-listing-type", "open_house");
   });
 
   it("keeps past open houses from opening a new registration flow", async () => {

@@ -1,5 +1,6 @@
 import {
   assertEquals,
+  assertRejects,
   assertThrows,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { getCheckoutAddon, getCheckoutPlan } from "./pricing.ts";
@@ -17,6 +18,23 @@ const pricingClient = (row: PricingConfigRow | null) => ({
       },
       maybeSingle() {
         return Promise.resolve({ data: row });
+      },
+    };
+  },
+});
+
+const pricingErrorClient = (message: string) => ({
+  from(table: string) {
+    assertEquals(table, "pricing_configs");
+    return {
+      select(_columns: string) {
+        return this;
+      },
+      eq(_column: string, _value: unknown) {
+        return this;
+      },
+      maybeSingle() {
+        return Promise.resolve({ data: null, error: { message } });
       },
     };
   },
@@ -96,6 +114,18 @@ Deno.test("getCheckoutPlan fails closed when the active plan config is missing",
     if (previous === undefined) Deno.env.delete("STRIPE_PRICE_PRO_MONTHLY");
     else Deno.env.set("STRIPE_PRICE_PRO_MONTHLY", previous);
   }
+});
+
+Deno.test("getCheckoutPlan distinguishes a catalog outage from a missing plan", async () => {
+  await assertRejects(
+    () => getCheckoutPlan(
+      pricingErrorClient("database connection details"),
+      "pro",
+      "monthly",
+    ),
+    Error,
+    "Pricing catalog is temporarily unavailable",
+  );
 });
 
 Deno.test("getCheckoutPlan fails closed when an active plan lacks the requested price", async () => {
