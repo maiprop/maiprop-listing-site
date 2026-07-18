@@ -18,6 +18,7 @@ import {
 
 const AUTOCOMPLETE_DEBOUNCE_MS = 300;
 const GOOGLE_PROVIDER_BUDGET_MS = 800;
+const FALLBACK_PROVIDER_BUDGET_MS = 5_000;
 const MIN_QUERY_LEN = 2;
 const LIMIT = 6;
 const PREDICTION_CACHE_LIMIT = 80;
@@ -79,8 +80,6 @@ const looksLikeStreetAddress = (query: string) =>
   /\b(street|st|avenue|ave|road|rd|square|sq|od[oó]s|leof|leoforos|plateia)\b/i.test(query) ||
   /(?:οδός|λεωφόρος|λεωφ\.|πλατεία|πλ\.)/i.test(query);
 
-const hasNonAsciiText = (value: string) => Array.from(value).some((char) => char.charCodeAt(0) > 127);
-
 async function fetchMapboxPredictions(query: string, mode: AddressAutocompleteMode, signal: AbortSignal) {
   const token = getMapboxAddressToken();
   if (!token) return null;
@@ -121,13 +120,43 @@ async function fetchNominatimPredictions(query: string, signal: AbortSignal) {
     .filter((prediction) => prediction.value);
 }
 
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
-  return await Promise.race([
-    promise,
-    new Promise<T>((resolve) => {
-      window.setTimeout(() => resolve(fallback), timeoutMs);
-    }),
-  ]);
+async function runProviderWithinBudget<T>(
+  parentSignal: AbortSignal,
+  timeoutMs: number,
+  task: (signal: AbortSignal) => Promise<T>,
+): Promise<T | null> {
+  if (parentSignal.aborted) return null;
+
+  const providerController = new AbortController();
+  const abortProvider = () => providerController.abort();
+  parentSignal.addEventListener("abort", abortProvider, { once: true });
+
+  let timeoutId: number | undefined;
+  const providerResult = task(providerController.signal).catch(() => null);
+  const timeoutResult = new Promise<null>((resolve) => {
+    timeoutId = window.setTimeout(() => {
+      providerController.abort();
+      resolve(null);
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([providerResult, timeoutResult]);
+  } finally {
+    if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+    parentSignal.removeEventListener("abort", abortProvider);
+  }
+}
+
+async function fetchFallbackPredictions(
+  query: string,
+  mode: AddressAutocompleteMode,
+  signal: AbortSignal,
+): Promise<AddressPrediction[]> {
+  if (getMapboxAddressToken()) {
+    return (await fetchMapboxPredictions(query, mode, signal)) ?? [];
+  }
+  return await fetchNominatimPredictions(query, signal);
 }
 
 export function useAddressAutocomplete(
@@ -176,38 +205,34 @@ export function useAddressAutocomplete(
           }
           return;
         }
-        const shouldCrossCheckAddress = effectiveMode === "address" && looksLikeStreetAddress(normalizedQuery);
-        const shouldCrossCheckCity =
-          mode === "city" &&
-          (hasNonAsciiText(normalizedQuery) || normalizedQuery.includes(","));
-        const googlePromise = fetchGooglePlacePredictions(normalizedQuery, effectiveMode, controller.signal)
-          .catch(() => []);
-        const fallbackPromise = (async () => {
-          const mapboxPredictions = await fetchMapboxPredictions(normalizedQuery, effectiveMode, controller.signal);
-          const nominatimPredictions =
-            shouldCrossCheckAddress || !mapboxPredictions || mapboxPredictions.length === 0
-              ? await fetchNominatimPredictions(normalizedQuery, controller.signal)
-              : [];
-          return shouldCrossCheckAddress
-            ? mergeAddressPredictions(nominatimPredictions, mapboxPredictions ?? [])
-            : (mapboxPredictions && mapboxPredictions.length > 0 ? mapboxPredictions : nominatimPredictions);
-        })().catch(() => []);
         const googlePredictions = filterAddressPredictionsForQuery(
-          await withTimeout(googlePromise, GOOGLE_PROVIDER_BUDGET_MS, []),
+          (await runProviderWithinBudget(
+            controller.signal,
+            GOOGLE_PROVIDER_BUDGET_MS,
+            (signal) => fetchGooglePlacePredictions(normalizedQuery, effectiveMode, signal),
+          )) ?? [],
           normalizedQuery,
         );
-        if (googlePredictions.length > 0 && !shouldCrossCheckAddress && !shouldCrossCheckCity) {
+        if (googlePredictions.length > 0) {
           if (requestSeqRef.current === requestSeq && !controller.signal.aborted) {
-            setRemotePredictions(googlePredictions.slice(0, LIMIT));
+            setRemotePredictions(
+              rankAddressPredictionsForQuery(googlePredictions, normalizedQuery).slice(0, LIMIT),
+            );
           }
           return;
         }
-        const fallbackPredictions = filterAddressPredictionsForQuery(await fallbackPromise, normalizedQuery);
-        const predictions =
-          shouldCrossCheckAddress || shouldCrossCheckCity
-            ? mergeAddressPredictions(fallbackPredictions, googlePredictions)
-            : (fallbackPredictions.length > 0 ? fallbackPredictions : googlePredictions);
-        const rankedPredictions = rankAddressPredictionsForQuery(predictions, normalizedQuery).slice(0, LIMIT);
+        const fallbackPredictions = filterAddressPredictionsForQuery(
+          (await runProviderWithinBudget(
+            controller.signal,
+            FALLBACK_PROVIDER_BUDGET_MS,
+            (signal) => fetchFallbackPredictions(normalizedQuery, effectiveMode, signal),
+          )) ?? [],
+          normalizedQuery,
+        );
+        const rankedPredictions = rankAddressPredictionsForQuery(
+          fallbackPredictions,
+          normalizedQuery,
+        ).slice(0, LIMIT);
         writePredictionCache(cacheKey, rankedPredictions);
         if (requestSeqRef.current === requestSeq && !controller.signal.aborted) {
           setRemotePredictions(rankedPredictions);
