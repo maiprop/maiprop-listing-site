@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.12.14](https://github.com/maiprop/maiprop-listing-site/compare/v1.12.13...v1.12.14) (2026-07-18)
+
+
+### Bug Fixes
+
+* harden entitlements, messaging, and report workflows ([#534](https://github.com/maiprop/maiprop-listing-site/issues/534)) ([88b513d](https://github.com/maiprop/maiprop-listing-site/commit/88b513d4bf9c4a8b9d49df08df07d666675f9672))
+* integrate pricing, address, rental valuation, and mobile corrections ([#541](https://github.com/maiprop/maiprop-listing-site/issues/541)) ([a864a72](https://github.com/maiprop/maiprop-listing-site/commit/a864a72d2bfc207d29d539fbdf23ec85662fe281))
+* make new-build AI insights user-triggered ([#536](https://github.com/maiprop/maiprop-listing-site/issues/536)) ([d8da42e](https://github.com/maiprop/maiprop-listing-site/commit/d8da42ec879e3671d7ed925e70dbb11d97336afd))
+* persist public API cache entries ([#531](https://github.com/maiprop/maiprop-listing-site/issues/531)) ([39e56e7](https://github.com/maiprop/maiprop-listing-site/commit/39e56e7ba677fb966ccaf4199898b2b66e94700e))
+* restore homepage open houses and bound catalogue latency ([#533](https://github.com/maiprop/maiprop-listing-site/issues/533)) ([dc14e25](https://github.com/maiprop/maiprop-listing-site/commit/dc14e25548c702ce43be81e1239dff4a65aab3f9))
+* show owner listings in promotion admin ([#532](https://github.com/maiprop/maiprop-listing-site/issues/532)) ([f4ba1e8](https://github.com/maiprop/maiprop-listing-site/commit/f4ba1e8e40ee114a00f44f25f2b3dc2705772c76))
+* stabilize empty spotlight delivery ([#529](https://github.com/maiprop/maiprop-listing-site/issues/529)) ([afe3946](https://github.com/maiprop/maiprop-listing-site/commit/afe394610b3e0c818ea5ca327e7347007d9e7bcd))
+
 ## [1.12.13](https://github.com/maiprop/maiprop-listing-site/compare/v1.12.12...v1.12.13) (2026-07-15)
 
 
