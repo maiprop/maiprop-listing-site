@@ -6,7 +6,10 @@
  * RPC to update available project units for projects the caller owns.
  */
 
-import { createClient } from "npm:@supabase/supabase-js@2.57.2";
+import {
+  createClient,
+  type SupabaseClient,
+} from "npm:@supabase/supabase-js@2.57.2";
 import { AuthError, verifyBearerToken } from "../_shared/auth.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createLogger } from "../_shared/logger.ts";
@@ -75,7 +78,7 @@ function errorMessage(err: unknown): string {
 }
 
 async function requireDeveloperAccess(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   userId: string,
 ) {
   const { data, error } = await supabase
