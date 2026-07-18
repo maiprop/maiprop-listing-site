@@ -11,18 +11,19 @@ import {
   ArrowLeft, Building2, MapPin, Calendar, Home,
   Zap, Eye, Thermometer, Check,
   ChevronDown, ChevronUp, Shield, Flame, Wifi, Car, TreePine, Phone,
-  Loader2, Maximize2, FileImage, ArrowUpRight,
+  Loader2, Maximize2, FileImage,
 } from "lucide-react";
 import { useAuth, type Profile } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useIsFavorited, useToggleFavorite } from "@/hooks/useFavorites";
 import { PropertyScoresSection } from "@/components/property/PropertyScoresSection";
+import { PropertyAIInsightsSection } from "@/components/property/PropertyAIInsightsSection";
+import { useAiQuota } from "@/hooks/useAiQuota";
 import { useStartConversation } from "@/hooks/useMessages";
 import { toast } from "sonner";
 import { ENERGY_SCALE, ENERGY_COLORS } from "@/types";
 import { CONSTRUCTION_PHASES, formatNewBuildPrice as formatPrice } from "@/lib/newBuildConfig";
 import { getNewBuildCardImages } from "@/lib/newBuildCardSummary";
-import { formatPrice as formatCurrency } from "@/lib/format";
 import { getPrimaryValuationEstimate, type ValuationEstimateSource } from "@/lib/valuationResult";
 import { FeatureSection } from "@/components/property/DetailPrimitives";
 import { PropertyGallery as Gallery } from "@/components/new-build/PropertyGallery";
@@ -165,12 +166,18 @@ export default function NewBuildDetail() { // skipcq: JS-R1005
 
   // AI Market Insights
   const [aiInsightsData, setAiInsightsData] = useState<{
-    vsMarket: number; rentalYield: number; estimatedValue: number;
-    marketComparison: string; confidenceLabel: string;
+    vsMarket: number | null; rentalYield: number; estimatedValue: number;
+    marketComparison: string | null; confidenceLabel: string;
   } | null>(null);
   const [aiInsightsLoading, setAiInsightsLoading] = useState(false);
+  const [aiInsightsRequested, setAiInsightsRequested] = useState(false);
   const [aiInsightsError, setAiInsightsError] = useState<string | null>(null);
   const [aiInsightsQuotaReached, setAiInsightsQuotaReached] = useState(false);
+  const {
+    quota: aiInsightsQuota,
+    quotaLoading: aiInsightsQuotaLoading,
+    refreshQuota: refreshAiInsightsQuota,
+  } = useAiQuota("property-valuation", user, { enabled: Boolean(user) });
 
   const { data: listing, isLoading, error } = useQuery({
     queryKey: ["new-build-listing", id],
@@ -305,51 +312,70 @@ export default function NewBuildDetail() { // skipcq: JS-R1005
     }
   };
 
-  useEffect(() => {
-    if (!listing || !user || !isCanonicalNewBuild) return;
-    if (!displayCity || projectValuationMetrics.price <= 0 || projectValuationMetrics.sqm <= 0) return;
+  const handleLoadAiInsights = async () => {
+    if (!listing || !user || !isCanonicalNewBuild || aiInsightsLoading) return;
+    if (!displayCity || projectValuationMetrics.price <= 0 || projectValuationMetrics.sqm <= 0) {
+      setAiInsightsRequested(true);
+      setAiInsightsError(tr("newBuildDetail.ai.unavailable", "Market analysis unavailable"));
+      return;
+    }
+
+    const currentQuota = await refreshAiInsightsQuota();
+    if (currentQuota && !currentQuota.allowed) {
+      setAiInsightsRequested(true);
+      setAiInsightsQuotaReached(true);
+      setAiInsightsError(
+        currentQuota.reason === "monthly_limit_reached"
+          ? tr("newBuildDetail.ai.quotaReached", "You have reached this month's AI allowance")
+          : tr("newBuildDetail.ai.notIncluded", "AI insights are not included in your current plan"),
+      );
+      return;
+    }
+
+    setAiInsightsRequested(true);
     setAiInsightsLoading(true);
     setAiInsightsError(null);
     setAiInsightsQuotaReached(false);
-    invokeAuthenticatedFunction<AIInsightsResponse>("property-valuation", {
-      timeout: AI_TIMEOUT_MS,
-      body: {
-        listingId: listing.id,
-        title: displayTitle,
-        city: displayCity,
-        address: displayAddress,
-        price: projectValuationMetrics.price,
-        sqm: projectValuationMetrics.sqm,
-        latitude: displayLatitude != null ? Number(displayLatitude) : undefined,
-        longitude: displayLongitude != null ? Number(displayLongitude) : undefined,
-        bedrooms: listing.bedrooms,
-        bathrooms: listing.bathrooms,
-        propertyType: listing.property_type,
-        listingType: valuationListingType,
-        floor: listing.floor,
-        yearBuilt: listing.year_built,
-        energyClass: listing.energy_class,
-        pricePerSqm: projectValuationMetrics.pricePerSqm,
-        hasParking: listing.has_parking,
-        hasPool: listing.has_pool,
-        hasElevator: listing.has_elevator,
-        hasGarden: listing.has_garden,
-        hasStorage: listing.has_storage,
-        hasBalcony: listing.has_balcony,
-        hasView: listing.has_view,
-        hasFurnished: listing.has_furnished,
-        region: displayRegion,
-        description: valuationDescription || undefined,
-        tags: valuationTags,
-        condition: listing.construction_status,
-      },
-    }).then(({ data, error }) => { // skipcq: JS-R1005 - AI insight response normalizes several optional metrics together.
+    try {
+      const { data, error } = await invokeAuthenticatedFunction<AIInsightsResponse>("property-valuation", {
+        timeout: AI_TIMEOUT_MS,
+        body: {
+          listingId: listing.id,
+          title: displayTitle,
+          city: displayCity,
+          address: displayAddress,
+          price: projectValuationMetrics.price,
+          sqm: projectValuationMetrics.sqm,
+          latitude: displayLatitude != null ? Number(displayLatitude) : undefined,
+          longitude: displayLongitude != null ? Number(displayLongitude) : undefined,
+          bedrooms: listing.bedrooms,
+          bathrooms: listing.bathrooms,
+          propertyType: listing.property_type,
+          listingType: valuationListingType,
+          floor: listing.floor,
+          yearBuilt: listing.year_built,
+          energyClass: listing.energy_class,
+          pricePerSqm: projectValuationMetrics.pricePerSqm,
+          hasParking: listing.has_parking,
+          hasPool: listing.has_pool,
+          hasElevator: listing.has_elevator,
+          hasGarden: listing.has_garden,
+          hasStorage: listing.has_storage,
+          hasBalcony: listing.has_balcony,
+          hasView: listing.has_view,
+          hasFurnished: listing.has_furnished,
+          region: displayRegion,
+          description: valuationDescription || undefined,
+          tags: valuationTags,
+          condition: listing.construction_status,
+        },
+      });
       if (data && !data.error) {
         setAiInsightsData({
-          vsMarket: data.marketComparisonPct ?? 0,
+          vsMarket: data.marketComparisonPct ?? null,
           rentalYield: data.rentalYieldEstimate ?? 0,
           estimatedValue: getPrimaryValuationEstimate(data, projectValuationMetrics.price),
-          marketComparison: data.marketComparison ?? "at_market",
+          marketComparison: data.marketComparison ?? null,
           confidenceLabel: data.confidenceLabel ?? "Medium",
         });
         setAiInsightsError(null);
@@ -358,12 +384,21 @@ export default function NewBuildDetail() { // skipcq: JS-R1005
         setAiInsightsError(getAiErrorMessage(error, data, tr("newBuildDetail.ai.unavailable", "Market analysis unavailable")));
         setAiInsightsQuotaReached(isAiMonthlyLimitError(error, data));
       }
-    }).catch((err: unknown) => {
+    } catch (err: unknown) {
       setAiInsightsError(getAiErrorMessage(err, null, tr("newBuildDetail.ai.unavailable", "Market analysis unavailable")));
       setAiInsightsQuotaReached(isAiMonthlyLimitError(err, null));
-    }).finally(() => setAiInsightsLoading(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listing?.id, user, isCanonicalNewBuild]);
+    } finally {
+      setAiInsightsLoading(false);
+      await refreshAiInsightsQuota();
+    }
+  };
+
+  useEffect(() => {
+    setAiInsightsData(null);
+    setAiInsightsRequested(false);
+    setAiInsightsError(null);
+    setAiInsightsQuotaReached(false);
+  }, [listing?.id, user?.id]);
 
   useEffect(() => {
     if (!listing || isCanonicalNewBuild || !canonicalDetailPath) return;
@@ -522,82 +557,18 @@ export default function NewBuildDetail() { // skipcq: JS-R1005
               {/* Type-specific: Building specs */}
               <ConstructionSpecs listing={listing} project={project} units={projectUnits} />
 
-              {/* AI Market Insights */}
-              <div className="glass-card rounded-2xl border border-border overflow-hidden">
-                <div className="flex items-center gap-2.5 px-5 py-4 border-b border-border">
-                  <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <Zap className="w-3.5 h-3.5 text-primary" />
-                  </div>
-                  <h4 className="font-display font-semibold text-sm">{tr("newBuildDetail.ai.title", "AI Market Insights")}</h4>
-                  <span className="ml-auto text-[10px] text-muted-foreground">{tr("newBuildDetail.ai.poweredBy", "Powered by mAI Prop OS")}</span>
-                </div>
-                <div className="p-5">
-                  {user && aiInsightsLoading && (
-                    <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span className="text-xs">{tr("newBuildDetail.ai.analysing", "Analysing market data...")}</span>
-                    </div>
-                  )}
-                  {user && !aiInsightsLoading && aiInsightsData && (() => {
-                    const cmpCfg: Record<string, { label: string; color: string; bg: string }> = {
-                      below_market: { label: tr("newBuildDetail.ai.comparison.belowMarket", "Below Market"), color: "text-emerald-400", bg: "bg-emerald-400/10 border-emerald-400/20" },
-                      at_market:    { label: tr("newBuildDetail.ai.comparison.atMarket", "At Market"),    color: "text-yellow-400",  bg: "bg-yellow-400/10 border-yellow-400/20" },
-                      above_market: { label: tr("newBuildDetail.ai.comparison.aboveMarket", "Above Market"), color: "text-destructive",  bg: "bg-destructive/10 border-destructive/20" },
-                    };
-                    const cmp = cmpCfg[aiInsightsData.marketComparison] ?? cmpCfg.at_market;
-                    return (
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className={`rounded-xl border p-4 flex flex-col gap-1 ${cmp.bg}`}>
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{tr("newBuildDetail.ai.vsMarket", "vs Market")}</p>
-                          <span className={`font-display font-black text-3xl ${cmp.color}`}>
-                            {aiInsightsData.vsMarket > 0 ? "+" : ""}{aiInsightsData.vsMarket}%
-                          </span>
-                          <p className={`text-[10px] font-semibold ${cmp.color}`}>{cmp.label}</p>
-                        </div>
-                        <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{tr("newBuildDetail.ai.rentalYield", "Rental Yield")}</p>
-                          <span className="font-display font-black text-3xl text-primary">{aiInsightsData.rentalYield}%</span>
-                          <p className="text-[10px] text-muted-foreground">{tr("newBuildDetail.ai.grossYield", "Est. gross annual yield")}</p>
-                        </div>
-                        <div className="rounded-xl border border-border bg-secondary/50 p-4 flex flex-col gap-1">
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{tr("newBuildDetail.ai.estimate", "AI Estimate")}</p>
-                          <span className="font-display font-black text-3xl text-foreground">
-                            {formatCurrency(aiInsightsData.estimatedValue)}
-                          </span>
-                          <p className="text-[10px] text-muted-foreground">{trv("newBuildDetail.ai.confidence", "Confidence: {{confidence}}", { confidence: aiInsightsData.confidenceLabel })}</p>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                  {user && !aiInsightsLoading && !aiInsightsData && (
-                    <div className="flex flex-col items-center gap-3 py-4 text-center">
-                      <p className="max-w-md text-xs text-muted-foreground">
-                        {aiInsightsError ?? tr("newBuildDetail.ai.unavailable", "Market analysis unavailable")}
-                      </p>
-                      {aiInsightsQuotaReached && (
-                        <div className="flex flex-wrap justify-center gap-2">
-                          <Button asChild size="sm" className="h-8 gap-1.5 px-3 text-xs">
-                            <Link to="/pricing">
-                              {tr("common.upgrade", "Upgrade")}
-                              <ArrowUpRight className="h-3.5 w-3.5" />
-                            </Link>
-                          </Button>
-                          <Button asChild size="sm" variant="outline" className="h-8 gap-1.5 px-3 text-xs">
-                            <Link to="/dashboard?tab=billing&addon=valuation_single">
-                              {tr("billing.addons.buyAddon", "Buy add-on")}
-                            </Link>
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {!user && (
-                    <p className="text-xs text-muted-foreground text-center py-4">
-                      <Link to="/login" className="text-primary hover:underline">{tr("nav.signIn", "Sign in")}</Link> {tr("newBuildDetail.ai.signInSuffix", "to view AI market analysis")}
-                    </p>
-                  )}
-                </div>
-              </div>
+              <PropertyAIInsightsSection
+                user={user}
+                isPro={isPro}
+                loading={aiInsightsLoading}
+                data={aiInsightsData}
+                quota={aiInsightsQuota}
+                quotaLoading={aiInsightsQuotaLoading}
+                hasRequested={aiInsightsRequested}
+                onLoad={handleLoadAiInsights}
+                errorMessage={aiInsightsError}
+                limitReached={aiInsightsQuotaReached}
+              />
 
               {/* Description */}
               {listing.description && (

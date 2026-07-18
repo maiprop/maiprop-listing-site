@@ -525,7 +525,34 @@ describe("PropertyAIInsightsSection", () => {
     );
 
     expect(screen.getByRole("link", { name: /upgrade to pro/i })).toHaveAttribute("href", "/pricing");
+    expect(screen.getByRole("link", { name: /buy ai add-on/i })).toHaveAttribute(
+      "href",
+      "/dashboard?tab=billing&addon=valuation_single",
+    );
     expect(screen.queryByRole("button", { name: /load ai insights/i })).not.toBeInTheDocument();
+  });
+
+  it("offers a top-up without a redundant upgrade CTA when a Pro user reaches the cap", async () => {
+    const { PropertyAIInsightsSection } = await import("@/components/property/PropertyAIInsightsSection");
+
+    renderWithProviders(
+      <PropertyAIInsightsSection
+        user={{ id: "u-1" } as import("@supabase/supabase-js").User}
+        isPro
+        loading={false}
+        data={null}
+        quota={{ allowed: false, reason: "monthly_limit_reached", used: 50, limit: 50, remaining: 0 }}
+        quotaLoading={false}
+        hasRequested={false}
+        onLoad={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("link", { name: /upgrade to pro/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /buy ai add-on/i })).toHaveAttribute(
+      "href",
+      "/dashboard?tab=billing&addon=valuation_single",
+    );
   });
 });
 

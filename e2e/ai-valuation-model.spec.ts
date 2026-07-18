@@ -450,6 +450,7 @@ test.describe("AI valuation model e2e coverage", () => {
     await page.goto(`/new-build/${NEW_BUILD_ID}`);
     await expect(page.getByText("Snake Case New Build").first()).toBeVisible();
     await expect(page.getByText("AI Market Insights").first()).toBeVisible();
+    await page.getByRole("button", { name: /Load AI insights/i }).click();
     await expect(page.getByText(numberPattern(500000)).first()).toBeVisible();
   });
 

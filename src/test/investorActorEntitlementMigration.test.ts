@@ -7,9 +7,9 @@ const migrationFile = readdirSync(migrationDir)
   .filter((file) => file.endsWith("_restore_caller_scoped_investor_rpc.sql"))
   .sort()
   .at(-1);
-const migration = migrationFile
+const migration = (migrationFile
   ? readFileSync(resolve(migrationDir, migrationFile), "utf8")
-  : "";
+  : "").replace(/\r\n/g, "\n");
 
 describe("caller-scoped investor entitlement runtime", () => {
   it("uses a private no-argument actor helper for runtime-aware checks", () => {
