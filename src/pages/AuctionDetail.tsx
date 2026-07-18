@@ -283,7 +283,7 @@ const AuctionTitleSection = ({ // skipcq: JS-R1005 - Title metadata intentionall
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-6 flex-wrap">
+      <div className="grid gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-2">
             {propertyTypeLabel && (
@@ -303,9 +303,9 @@ const AuctionTitleSection = ({ // skipcq: JS-R1005 - Title metadata intentionall
           <h1 className="font-display text-2xl md:text-3xl font-bold leading-tight line-clamp-3 sm:line-clamp-none pr-2">
             {title}
           </h1>
-          <div className="flex items-center gap-1.5 mt-2 text-sm text-muted-foreground">
+          <div className="flex items-start gap-1.5 mt-2 text-sm text-muted-foreground">
             <MapPin className="w-3.5 h-3.5 shrink-0" />
-            <span>
+            <span className="min-w-0 break-words">
               {address && address !== city ? `${address}, ${city}` : city}
               {region && region !== city ? ` - ${region}` : ""}
             </span>

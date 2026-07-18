@@ -328,7 +328,7 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
 
               {/* Title + Price hero — same as PropertyDetail */}
               <div className="space-y-4">
-                <div className="flex items-start justify-between gap-6 flex-wrap">
+                <div className="grid gap-4 min-[560px]:grid-cols-[minmax(0,1fr)_auto] min-[560px]:items-start">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-2">
                       <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground bg-muted px-2 py-0.5 rounded-full border border-border capitalize">{db.property_type}</span>
@@ -339,12 +339,12 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                       </span>
                     </div>
                     <h1 className="font-display text-2xl md:text-3xl font-bold leading-tight">{db.title}</h1>
-                    <div className="flex items-center gap-1.5 mt-2 text-sm text-muted-foreground">
+                    <div className="flex items-start gap-1.5 mt-2 text-sm text-muted-foreground">
                       <MapPin className="w-3.5 h-3.5 shrink-0" />
-                      <span>{address && address !== city ? `${address}, ${city}` : city}{db.region ? ` · ${db.region}` : ""}</span>
+                      <span className="min-w-0 break-words">{address && address !== city ? `${address}, ${city}` : city}{db.region ? ` · ${db.region}` : ""}</span>
                     </div>
                   </div>
-                  <div className="text-right shrink-0">
+                  <div className="w-full min-w-0 text-left min-[560px]:w-auto min-[560px]:text-right">
                     <div className="font-display text-3xl font-black text-foreground">
                       €{price.toLocaleString()}{rentalPriceSuffix && <span className="text-base font-normal text-muted-foreground">{rentalPriceSuffix}</span>}
                     </div>
