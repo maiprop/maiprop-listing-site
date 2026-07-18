@@ -379,6 +379,7 @@ const PropertyDetail = () => { // skipcq: JS-R1005 - Detail route coordinates li
                 quota={aiInsightsQuota}
                 quotaLoading={aiInsightsQuotaLoading}
                 hasRequested={aiInsightsLoaded}
+                listingType={listingType}
                 onLoad={loadAiInsights}
               />
 

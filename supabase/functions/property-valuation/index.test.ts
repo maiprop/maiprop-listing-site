@@ -15,6 +15,7 @@ const okJson = (body: unknown, status = 200): Response =>
 const withQuotaAndProviderMock = async (
   providerResponse: Response,
   run: () => Promise<void>,
+  onProviderRequest?: (init?: RequestInit) => void,
 ): Promise<void> => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
@@ -26,6 +27,7 @@ const withQuotaAndProviderMock = async (
       return Promise.resolve(okJson({ allowed: true, reason: null, used: 1, limit: 5 }));
     }
     if (url.includes("api.openai.com") || url.includes("generativelanguage.googleapis.com")) {
+      onProviderRequest?.(init);
       return Promise.resolve(providerResponse.clone());
     }
     return originalFetch(input, init);
@@ -189,12 +191,13 @@ Deno.test("fallback valuation uses location benchmarks instead of copying the li
   });
 });
 
-Deno.test("rental listings compute yield from monthly rent and do not compare rent to capital value", async () => {
+Deno.test("rental listings reject sale-style provider values and remain on monthly-rent units", async () => {
   const prevOpenAI = Deno.env.get("OPENAI_API_KEY");
   const prevGemini = Deno.env.get("GEMINI_API_KEY");
   Deno.env.set("OPENAI_API_KEY", "openai-test");
   Deno.env.delete("GEMINI_API_KEY");
 
+  let providerPrompt = "";
   await withQuotaAndProviderMock(okJson({
     choices: [{
       message: {
@@ -244,6 +247,12 @@ Deno.test("rental listings compute yield from monthly rent and do not compare re
       }, { authorization: "Bearer test-valid-token" }));
       const body = await jsonBody(res) as {
         estimatedValue?: number;
+        rangeLow?: number;
+        rangeHigh?: number;
+        executionValue?: number;
+        pricePerSqmEstimate?: number;
+        confidenceLabel?: string;
+        methodUsed?: string;
         marketComparison?: string;
         marketComparisonPct?: number;
         pricingPosition?: string;
@@ -251,18 +260,120 @@ Deno.test("rental listings compute yield from monthly rent and do not compare re
       };
 
       assertEquals(res.status, 200);
-      assertEquals(body.estimatedValue, 178000);
+      assertEquals(body.estimatedValue, 950);
+      assertEquals(body.rangeLow, 855);
+      assertEquals(body.rangeHigh, 1045);
+      assertEquals(body.executionValue, 950);
+      assertEquals(body.pricePerSqmEstimate, 24.36);
+      assertEquals(body.confidenceLabel, "Low");
+      assertEquals(body.methodUsed, "Low-confidence monthly-rent fallback using the current asking rent");
       assertEquals(body.marketComparison, "at_market");
       assertEquals(body.marketComparisonPct, 0);
       assertEquals(body.pricingPosition, "fair");
-      assertEquals(body.rentalYieldEstimate, 6.4);
+      assertEquals(body.rentalYieldEstimate, 0);
+      assertEquals(providerPrompt.includes("RENTAL VALUATION OVERRIDE"), true);
+      assertEquals(providerPrompt.includes("monthly rent, not sale value"), true);
+      assertEquals(providerPrompt.includes("EUR/sqm/month"), true);
     } finally {
       if (prevOpenAI) Deno.env.set("OPENAI_API_KEY", prevOpenAI);
       else Deno.env.delete("OPENAI_API_KEY");
       if (prevGemini) Deno.env.set("GEMINI_API_KEY", prevGemini);
       else Deno.env.delete("GEMINI_API_KEY");
     }
+  }, (init) => {
+    const requestBody = JSON.parse(String(init?.body ?? "{}"));
+    providerPrompt = String(requestBody.messages?.[0]?.content ?? "");
   });
+});
+
+Deno.test("rental listings use OS lease prices and rental comparables", async () => {
+  const originalFetch = globalThis.fetch;
+  const prevOpenAI = Deno.env.get("OPENAI_API_KEY");
+  const prevGemini = Deno.env.get("GEMINI_API_KEY");
+  const prevOsUrl = Deno.env.get("MAIPROP_OS_API_URL");
+  const prevOsEmail = Deno.env.get("MAIPROP_OS_EMAIL");
+  const prevOsPassword = Deno.env.get("MAIPROP_OS_PASSWORD");
+  Deno.env.delete("OPENAI_API_KEY");
+  Deno.env.delete("GEMINI_API_KEY");
+  Deno.env.set("MAIPROP_OS_API_URL", "https://os.test");
+  Deno.env.set("MAIPROP_OS_EMAIL", "os@test.local");
+  Deno.env.set("MAIPROP_OS_PASSWORD", "os-password");
+
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("/auth/v1/user")) {
+      return Promise.resolve(okJson({ user: { id: "user-1", email: "user@test.local" } }));
+    }
+    if (url.includes("/rest/v1/rpc/reserve_ai_quota_for_user")) {
+      return Promise.resolve(okJson({ allowed: true, reason: null, used: 1, limit: 5 }));
+    }
+    if (url === "https://os.test/auth/login") {
+      return Promise.resolve(okJson({ data: { token: "os-token" } }));
+    }
+    if (url === "https://os.test/api/v1/property/valuation") {
+      const requestBody = JSON.parse(String(init?.body ?? "{}"));
+      assertEquals(requestBody.propertyCategory, "RESIDENCE");
+      assertEquals(requestBody.propertySquareMeters, 80);
+      return Promise.resolve(okJson({
+        data: {
+          propertyPredictedPrice: 440000,
+          propertyPredictedLeasePrice: 1500,
+          annualYieldPrc: 0.043,
+          saleValuationOverviews: [{ similarListings: [{ id: "sale-comp" }], propertyEurPerSqm: 5200 }],
+          rentalValuationOverviews: [{ similarRentals: [{ id: "rent-comp" }], propertyEurPerSqm: 18.75 }],
+        },
+      }));
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+
+  try {
+    const res = await handler(req("POST", {
+      listingId: "rental-os-1",
+      title: "Glyfada rental",
+      city: "Glyfada",
+      address: "Angelou Metaxa 11",
+      price: 1200,
+      sqm: 80,
+      propertyType: "apartment",
+      listingType: "rent",
+      latitude: 37.86,
+      longitude: 23.75,
+      yearBuilt: 2022,
+    }, { authorization: "Bearer test-valid-token" }));
+    const body = await jsonBody(res) as {
+      estimatedValue?: number;
+      rangeLow?: number;
+      rangeHigh?: number;
+      executionValue?: number;
+      pricePerSqmEstimate?: number;
+      methodUsed?: string;
+      osEstimatedValue?: number;
+      osComparableCounts?: { sale?: number; rental?: number };
+    };
+
+    assertEquals(res.status, 200);
+    assertEquals(body.estimatedValue, 1500);
+    assertEquals(body.rangeLow, 1350);
+    assertEquals(body.rangeHigh, 1650);
+    assertEquals(body.executionValue, 1500);
+    assertEquals(body.pricePerSqmEstimate, 18.75);
+    assertEquals(body.methodUsed, "Monthly rental valuation using lease evidence and rental comparables");
+    assertEquals(body.osEstimatedValue, 1500);
+    assertEquals(body.osComparableCounts?.rental, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (prevOpenAI) Deno.env.set("OPENAI_API_KEY", prevOpenAI);
+    else Deno.env.delete("OPENAI_API_KEY");
+    if (prevGemini) Deno.env.set("GEMINI_API_KEY", prevGemini);
+    else Deno.env.delete("GEMINI_API_KEY");
+    if (prevOsUrl) Deno.env.set("MAIPROP_OS_API_URL", prevOsUrl);
+    else Deno.env.delete("MAIPROP_OS_API_URL");
+    if (prevOsEmail) Deno.env.set("MAIPROP_OS_EMAIL", prevOsEmail);
+    else Deno.env.delete("MAIPROP_OS_EMAIL");
+    if (prevOsPassword) Deno.env.set("MAIPROP_OS_PASSWORD", prevOsPassword);
+    else Deno.env.delete("MAIPROP_OS_PASSWORD");
+  }
 });
 
 Deno.test("uses OpenAI enriched with structured OS valuation when listing coordinates are available", async () => {

@@ -13,6 +13,7 @@ export interface AIInsightsData {
   vsMarket: number | null;
   rentalYield: number;
   estimatedValue: number;
+  pricePerSqmEstimate?: number;
   marketComparison: string | null;
   confidenceLabel: string;
 }
@@ -31,6 +32,7 @@ const AI_INSIGHTS_FUNCTION_TIMEOUT_MS = 45_000;
 type PropertyInsightsResponse = ValuationEstimateSource & {
   error?: string;
   rentalYieldEstimate?: number;
+  pricePerSqmEstimate?: number;
   confidenceLabel?: string;
   estimatedMonthlyRent?: number;
   monthlyRentEstimate?: number;
@@ -48,10 +50,22 @@ const isRentalListing = (listing: ListingWithJoins): boolean =>
   listing.listing_type === "rent" ||
   (listing.listing_type === "open_house" && listing.open_house_transaction_type === "rent");
 
-const getRentalMarketRentEstimate = (data: PropertyInsightsResponse): number | null =>
-  toPositiveNumber(data.estimatedMonthlyRent) ??
-  toPositiveNumber(data.monthlyRentEstimate) ??
-  toPositiveNumber(data.marketRentEstimate);
+const getRentalMarketRentEstimate = (
+  data: PropertyInsightsResponse,
+  listedMonthlyRent: number | null,
+): number | null => {
+  const dedicatedEstimate =
+    toPositiveNumber(data.estimatedMonthlyRent) ??
+    toPositiveNumber(data.monthlyRentEstimate) ??
+    toPositiveNumber(data.marketRentEstimate);
+  if (dedicatedEstimate) return dedicatedEstimate;
+
+  const primaryEstimate = toPositiveNumber(data.estimatedValue);
+  if (!primaryEstimate || !listedMonthlyRent) return null;
+  return primaryEstimate >= listedMonthlyRent * 0.35 && primaryEstimate <= listedMonthlyRent * 4
+    ? primaryEstimate
+    : null;
+};
 
 const getRentalYield = (
   monthlyRent: number | null,
@@ -200,16 +214,18 @@ export function usePropertyAIInsights(
       });
       if (data && !data.error) {
         const estimatedValue = getPrimaryValuationEstimate(data, Number(snapshot.price));
-        const marketRentEstimate = rentalListing ? getRentalMarketRentEstimate(data) : null;
+        const marketRentEstimate = rentalListing ? getRentalMarketRentEstimate(data, monthlyRent) : null;
         const comparison = rentalListing
           ? getRentalMarketComparison(monthlyRent, marketRentEstimate)
           : deriveListingMarketComparison(snapshot.price, estimatedValue);
+        const returnedPricePerSqm = toPositiveNumber(data.pricePerSqmEstimate);
         setAiInsightsData({
           vsMarket: comparison.marketComparisonPct,
           rentalYield: rentalListing
             ? getRentalYield(monthlyRent, estimatedValue, data.rentalYieldEstimate)
             : data.rentalYieldEstimate ?? 0,
           estimatedValue,
+          ...(returnedPricePerSqm ? { pricePerSqmEstimate: returnedPricePerSqm } : {}),
           marketComparison: comparison.marketComparison,
           confidenceLabel: data.confidenceLabel ?? "Medium",
         });
