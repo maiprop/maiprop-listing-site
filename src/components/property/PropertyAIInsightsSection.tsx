@@ -30,6 +30,8 @@ interface Props {
   quotaLoading?: boolean;
   hasRequested?: boolean;
   onLoad?: () => void;
+  errorMessage?: string | null;
+  limitReached?: boolean;
 }
 
 const COMPARISON_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
@@ -67,8 +69,10 @@ export function PropertyAIInsightsSection({
   quotaLoading,
   hasRequested = false,
   onLoad,
+  errorMessage,
+  limitReached = false,
 }: Props) {
-  const quotaReached = !!quota && quota.limit < UNLIMITED_AI_LIMIT && quota.used >= quota.limit;
+  const quotaReached = limitReached || (!!quota && quota.limit < UNLIMITED_AI_LIMIT && quota.used >= quota.limit);
   const loadLabel = data ? "Refresh AI insights" : "Load AI insights";
   const quotaText = formatQuotaText(quota, isPro, quotaLoading);
 
@@ -90,12 +94,19 @@ export function PropertyAIInsightsSection({
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
               {quotaReached ? (
-                <Button asChild size="sm" className="gap-2">
-                  <Link to="/pricing">
-                    Upgrade to Pro
-                    <ArrowUpRight className="w-3.5 h-3.5" />
-                  </Link>
-                </Button>
+                <>
+                  {!isPro && (
+                    <Button asChild size="sm" className="gap-2">
+                      <Link to="/pricing">
+                        Upgrade to Pro
+                        <ArrowUpRight className="w-3.5 h-3.5" />
+                      </Link>
+                    </Button>
+                  )}
+                  <Button asChild size="sm" variant={isPro ? "default" : "outline"}>
+                    <Link to="/dashboard?tab=billing&addon=valuation_single">Buy AI add-on</Link>
+                  </Button>
+                </>
               ) : (
                 <Button
                   type="button"
@@ -174,7 +185,9 @@ export function PropertyAIInsightsSection({
         })()}
 
         {user && !loading && !data && hasRequested && (
-          <p className="text-xs text-muted-foreground text-center py-4">Market analysis unavailable</p>
+          <p className="text-xs text-muted-foreground text-center py-4">
+            {errorMessage ?? "Market analysis unavailable"}
+          </p>
         )}
       </div>
     </Section>

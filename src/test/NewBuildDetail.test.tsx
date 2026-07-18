@@ -13,6 +13,7 @@ const {
   fromMock,
   publicApiMock,
   functionsInvokeMock,
+  useAiQuotaMock,
   toastMock,
 } = vi.hoisted(() => ({
   useQueryMock: vi.fn(),
@@ -25,6 +26,7 @@ const {
   fromMock: vi.fn(),
   publicApiMock: vi.fn(),
   functionsInvokeMock: vi.fn(),
+  useAiQuotaMock: vi.fn(),
   toastMock: { error: vi.fn(), success: vi.fn() },
 }));
 
@@ -45,6 +47,10 @@ vi.mock("@/lib/publicApi", () => ({
 }));
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => useAuthMock() }));
 vi.mock("@/hooks/useSubscription", () => ({ useSubscription: () => useSubscriptionMock() }));
+vi.mock("@/hooks/useAiQuota", () => ({
+  UNLIMITED_AI_LIMIT: 999_999,
+  useAiQuota: (...args: unknown[]) => useAiQuotaMock(...args),
+}));
 vi.mock("@/hooks/useFavorites", () => ({
   useIsFavorited: (...args: unknown[]) => useIsFavoritedMock(...args),
   useToggleFavorite: () => ({ mutate: toggleFavoriteMock }),
@@ -279,12 +285,19 @@ beforeEach(() => {
     fromMock,
     publicApiMock,
     functionsInvokeMock,
+    useAiQuotaMock,
     toastMock.error,
     toastMock.success,
   ].forEach((mock) => mock.mockReset());
 
   useAuthMock.mockReturnValue({ user: null, profile: null });
   useSubscriptionMock.mockReturnValue({ isPro: false });
+  useAiQuotaMock.mockReturnValue({
+    quota: { allowed: true, reason: null, used: 0, limit: 5, remaining: 5 },
+    quotaLoading: false,
+    quotaChecked: true,
+    refreshQuota: vi.fn().mockResolvedValue({ allowed: true, reason: null, used: 0, limit: 5, remaining: 5 }),
+  });
   useIsFavoritedMock.mockReturnValue({ data: false });
   useQueryMock.mockReturnValue({ data: listing, isLoading: false, error: null });
   startConversationMock.mockResolvedValue("conv-1");
@@ -418,6 +431,7 @@ describe("NewBuildDetail", () => {
 
     renderPage();
 
+    fireEvent.click(screen.getByRole("button", { name: "Load AI insights" }));
     await waitFor(() => expect(functionsInvokeMock).toHaveBeenCalledWith("property-valuation", expect.any(Object)));
     expect(functionsInvokeMock).toHaveBeenCalledWith("property-valuation", expect.objectContaining({
       body: expect.objectContaining({ title: "Marina Heights" }),
@@ -481,6 +495,12 @@ describe("NewBuildDetail", () => {
 
     renderPage();
 
+    expect(screen.getByText("Run AI analysis when you need it")).toBeInTheDocument();
+    expect(screen.getByText("5 of 5 Free AI insight requests remaining this month")).toBeInTheDocument();
+    expect(functionsInvokeMock).not.toHaveBeenCalledWith("property-valuation", expect.anything());
+
+    fireEvent.click(screen.getByRole("button", { name: "Load AI insights" }));
+
     await waitFor(() =>
       expect(functionsInvokeMock).toHaveBeenCalledWith("property-valuation", expect.objectContaining({
         body: expect.objectContaining({
@@ -519,15 +539,43 @@ describe("NewBuildDetail", () => {
 
     renderPage();
 
+    fireEvent.click(screen.getByRole("button", { name: "Load AI insights" }));
+
     expect(
       await screen.findByText(/You have reached this month's AI allowance/i),
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Upgrade/i })).toHaveAttribute("href", "/pricing");
-    expect(screen.getByRole("link", { name: /Buy add-on/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Buy AI add-on/i })).toHaveAttribute(
       "href",
       "/dashboard?tab=billing&addon=valuation_single",
     );
     expect(screen.queryByText("Market analysis unavailable")).not.toBeInTheDocument();
+  });
+
+  it("does not invoke valuation when the non-consuming quota precheck rejects the request", async () => {
+    const exhaustedQuota = {
+      allowed: false,
+      reason: "monthly_limit_reached",
+      used: 5,
+      limit: 5,
+      remaining: 0,
+    };
+    useAuthMock.mockReturnValue({
+      user: { id: "buyer-1", email: "buyer@example.com" },
+      profile: { display_name: "Buyer One" },
+    });
+    useAiQuotaMock.mockReturnValue({
+      quota: exhaustedQuota,
+      quotaLoading: false,
+      quotaChecked: true,
+      refreshQuota: vi.fn().mockResolvedValue(exhaustedQuota),
+    });
+
+    renderPage();
+
+    expect(screen.getByRole("link", { name: /Upgrade to Pro/i })).toHaveAttribute("href", "/pricing");
+    expect(screen.queryByRole("button", { name: /Load AI insights/i })).not.toBeInTheDocument();
+    expect(functionsInvokeMock).not.toHaveBeenCalledWith("property-valuation", expect.anything());
   });
 
   it("uses hybrid sale valuation context for renovation projects shown in the project layout", async () => {
@@ -566,6 +614,8 @@ describe("NewBuildDetail", () => {
     });
 
     renderPage();
+
+    fireEvent.click(screen.getByRole("button", { name: "Load AI insights" }));
 
     await waitFor(() =>
       expect(functionsInvokeMock).toHaveBeenCalledWith("property-valuation", expect.objectContaining({
@@ -705,6 +755,8 @@ describe("NewBuildDetail", () => {
 
     renderPage();
 
+    fireEvent.click(screen.getByRole("button", { name: "Load AI insights" }));
+
     expect(await screen.findByText("AI Estimate")).toBeInTheDocument();
     expect(screen.getByText(/430\.000/)).toBeInTheDocument();
     expect(screen.getByText("Confidence: Medium")).toBeInTheDocument();
@@ -725,6 +777,8 @@ describe("NewBuildDetail", () => {
     functionsInvokeMock.mockRejectedValue(new Error("provider timeout"));
 
     renderPage();
+
+    fireEvent.click(screen.getByRole("button", { name: "Load AI insights" }));
 
     expect(await screen.findByText("provider timeout")).toBeInTheDocument();
     expect(screen.queryByText("AI Estimate")).not.toBeInTheDocument();
