@@ -5,6 +5,7 @@ type MockScenario = {
   user?: { id: string; email: string };
   profileRole?: string | null;
   roleSwitchInProgress?: boolean;
+  proAllowed?: boolean;
   ownedProject?: boolean;
   existingUnit?: Record<string, unknown> | null;
   calls: Array<{ name: string; args?: unknown }>;
@@ -19,6 +20,7 @@ const functionSource = await Deno.readTextFile(new URL("./index.ts", import.meta
 const tempDir = await Deno.makeTempDir({ prefix: "project-management-test-" });
 const mockClientPath = `${tempDir}/mockSupabase.ts`;
 const mockAuditPath = `${tempDir}/mockAudit.ts`;
+const mockProGatePath = `${tempDir}/mockProGate.ts`;
 const transformedPath = `${tempDir}/index.ts`;
 
 function fileUrl(path: string) {
@@ -129,6 +131,26 @@ export async function logAuditEvent(event) {
 `,
 );
 
+await Deno.writeTextFile(
+  mockProGatePath,
+  `
+export async function requireProSubscription(userId, corsHeaders, options = {}) {
+  const scenario = globalThis.__projectManagementScenario;
+  scenario.calls.push({ name: "proGate", args: { userId, options } });
+  const allowed = scenario.proAllowed !== false;
+  return {
+    allowed,
+    errorResponse: allowed
+      ? null
+      : new Response(
+        JSON.stringify({ error: "This feature requires a Pro subscription. Please upgrade your plan." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      ),
+  };
+}
+`,
+);
+
 const shared = (name: string) => new URL(`../_shared/${name}`, import.meta.url).href;
 const transformedSource = functionSource
   .replace(
@@ -140,7 +162,8 @@ const transformedSource = functionSource
   .replace('from "../_shared/logger.ts"', `from "${shared("logger.ts")}"`)
   .replace('from "../_shared/rateLimit.ts"', `from "${shared("rateLimit.ts")}"`)
   .replace('from "../_shared/schema.ts"', `from "${shared("schema.ts")}"`)
-  .replace('from "../_shared/auditLog.ts"', `from "${fileUrl(mockAuditPath)}"`);
+  .replace('from "../_shared/auditLog.ts"', `from "${fileUrl(mockAuditPath)}"`)
+  .replace('from "../_shared/proGate.ts"', `from "${fileUrl(mockProGatePath)}"`);
 
 await Deno.writeTextFile(transformedPath, transformedSource);
 
@@ -159,6 +182,7 @@ const resetScenario = (overrides: Partial<MockScenario> = {}) => {
   globalThis.__projectManagementScenario = {
     calls: [],
     profileRole: "developer",
+    proAllowed: true,
     ownedProject: true,
     user: { id: "11111111-1111-4111-8111-111111111111", email: "dev@test.local" },
     ...overrides,
@@ -187,6 +211,23 @@ Deno.test("non-developer project-management invoke is rejected before writes", a
   assertEquals(res.status, 403);
   assertEquals(parsed.error, "developer_role_required");
   assert(!globalThis.__projectManagementScenario.calls.some((call) => call.name === "delete"));
+});
+
+Deno.test("free developers are denied before project-management writes", async () => {
+  resetScenario({ proAllowed: false });
+  const res = await handler(authedJson({
+    action: "delete_media",
+    projectId: PROJECT_ID,
+    id: ROW_ID,
+  }));
+
+  assertEquals(res.status, 403);
+  assertEquals(
+    globalThis.__projectManagementScenario.calls.some((call) =>
+      ["insert", "update", "delete", "audit"].includes(call.name)
+    ),
+    false,
+  );
 });
 
 Deno.test("non-owner project-management invoke is denied before row mutation", async () => {

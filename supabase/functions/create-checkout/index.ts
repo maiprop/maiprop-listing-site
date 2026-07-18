@@ -40,6 +40,7 @@ import {
   normalizeBillingCycle,
   normalizeExplicitCheckoutKey,
   normalizePlanKey,
+  PricingCatalogUnavailableError,
 } from "./pricing.ts";
 import { sanitizeRedirectPath, withCheckoutSessionId } from "./redirects.ts";
 import { getOrCreateOwnedStripeCustomer } from "./stripeCustomers.ts";
@@ -711,6 +712,29 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
       );
     }
 
+    const checkoutPlan = await getCheckoutPlan(
+      supabaseClient,
+      plan,
+      billingCycle,
+    );
+    if (!checkoutPlan) {
+      log.warn("checkout plan unavailable", {
+        plan,
+        audience: entitlement.audience,
+        billingCycle,
+      });
+      return new Response(
+        JSON.stringify({
+          code: "plan_unavailable",
+          error: "This plan is currently unavailable. Please try again later.",
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 404,
+        },
+      );
+    }
+
     const origin = resolveCheckoutOrigin(req.headers.get("origin"));
     if (isStripeMockMode()) {
       if (wantsTrial) {
@@ -767,18 +791,6 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
 
     const stripe = createStripeClient();
 
-    const checkoutPlan = await getCheckoutPlan(
-      supabaseClient,
-      plan,
-      billingCycle,
-    );
-    if (!checkoutPlan) {
-      log.warn("checkout price not configured", { plan });
-      return new Response(JSON.stringify({ error: "Plan is unavailable" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 404,
-      });
-    }
     if (
       wantsTrial &&
       !isTrialCheckoutAudienceAllowed(checkoutPlan.audience)
@@ -938,6 +950,22 @@ const handleRequest = async (req: Request): Promise<Response> => { // skipcq: JS
       },
     );
   } catch (error: unknown) {
+    if (error instanceof PricingCatalogUnavailableError) {
+      const cause = error.cause instanceof Error
+        ? error.cause.message
+        : String(error.cause ?? "unknown catalog error");
+      log.error("pricing catalog query failed", { cause });
+      return new Response(
+        JSON.stringify({
+          code: "pricing_catalog_unavailable",
+          error: "Pricing is temporarily unavailable. Please try again later.",
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 503,
+        },
+      );
+    }
     const status = error instanceof AuthError ? error.status : 500;
     const message = error instanceof Error ? error.message : String(error);
     logStep("ERROR", { message });

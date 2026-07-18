@@ -4,6 +4,9 @@ import { captureHandler, req } from "../_shared/testUtils.ts";
 type MockScenario = {
   authError?: string;
   user?: { id: string; email: string };
+  profileRole?: string | null;
+  roleSwitchInProgress?: boolean;
+  proAllowed?: boolean;
   updatedCount?: number;
   rpcError?: string;
   calls: Array<{ name: string; args?: unknown }>;
@@ -19,6 +22,7 @@ const functionSource = await Deno.readTextFile(
 );
 const tempDir = await Deno.makeTempDir({ prefix: "project-unit-prices-test-" });
 const mockClientPath = `${tempDir}/mockSupabase.ts`;
+const mockProGatePath = `${tempDir}/mockProGate.ts`;
 const transformedPath = `${tempDir}/index.ts`;
 
 function fileUrl(path: string) {
@@ -43,6 +47,27 @@ export function createClient() {
         };
       },
     },
+    from: (table: string) => ({
+      select: (columns: string) => ({
+        eq: (column: string, value: string) => ({
+          maybeSingle: async () => {
+            scenario.calls.push({
+              name: "select",
+              args: { table, columns, filters: [[column, value]] },
+            });
+            return {
+              data: {
+                role: scenario.profileRole ?? "developer",
+                role_switch_in_progress_at: scenario.roleSwitchInProgress
+                  ? "2026-06-01T00:00:00Z"
+                  : null,
+              },
+              error: null,
+            };
+          },
+        }),
+      }),
+    }),
     rpc: async (name: string, args: unknown) => {
       scenario.calls.push({ name: "rpc", args: { name, args } });
       if (scenario.rpcError) {
@@ -50,6 +75,26 @@ export function createClient() {
       }
       return { data: scenario.updatedCount ?? 3, error: null };
     },
+  };
+}
+`,
+);
+
+await Deno.writeTextFile(
+  mockProGatePath,
+  `
+export async function requireProSubscription(userId, corsHeaders, options = {}) {
+  const scenario = globalThis.__projectUnitPricesScenario;
+  scenario.calls.push({ name: "proGate", args: { userId, options } });
+  const allowed = scenario.proAllowed !== false;
+  return {
+    allowed,
+    errorResponse: allowed
+      ? null
+      : new Response(
+        JSON.stringify({ error: "This feature requires a Pro subscription. Please upgrade your plan." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      ),
   };
 }
 `,
@@ -68,7 +113,8 @@ const transformedSource = functionSource
   .replace(
     'from "../_shared/rateLimit.ts"',
     `from "${shared("rateLimit.ts")}"`,
-  );
+  )
+  .replace('from "../_shared/proGate.ts"', `from "${fileUrl(mockProGatePath)}"`);
 
 await Deno.writeTextFile(transformedPath, transformedSource);
 
@@ -82,6 +128,8 @@ restore();
 const resetScenario = (overrides: Partial<MockScenario> = {}) => {
   globalThis.__projectUnitPricesScenario = {
     calls: [],
+    profileRole: "developer",
+    proAllowed: true,
     user: { id: "user-1", email: "user@test.local" },
     ...overrides,
   };
@@ -144,7 +192,39 @@ Deno.test("invalid percentage is rejected before auth or price update", async ()
   assertEquals(globalThis.__projectUnitPricesScenario.calls.length, 0);
 });
 
-Deno.test("bulk price update is executed for the verified caller only", async () => {
+Deno.test("non-developers are denied before the unit-price RPC", async () => {
+  resetScenario({ profileRole: "agent" });
+  const res = await handler(authedJson({
+    projectId: crypto.randomUUID(),
+    percentage: 5,
+  }));
+
+  assertEquals(res.status, 403);
+  assertEquals(
+    globalThis.__projectUnitPricesScenario.calls.some((call) =>
+      call.name === "rpc"
+    ),
+    false,
+  );
+});
+
+Deno.test("free developers are denied before the unit-price RPC", async () => {
+  resetScenario({ proAllowed: false });
+  const res = await handler(authedJson({
+    projectId: crypto.randomUUID(),
+    percentage: 5,
+  }));
+
+  assertEquals(res.status, 403);
+  assertEquals(
+    globalThis.__projectUnitPricesScenario.calls.some((call) =>
+      call.name === "rpc"
+    ),
+    false,
+  );
+});
+
+Deno.test("bulk price update is executed for the verified Developer Pro caller only", async () => {
   const projectId = crypto.randomUUID();
   resetScenario({
     user: { id: "verified-user", email: "verified@test.local" },
@@ -156,6 +236,16 @@ Deno.test("bulk price update is executed for the verified caller only", async ()
 
   assertEquals(res.status, 200);
   assertEquals(body.updatedCount, 4);
+  assertEquals(
+    globalThis.__projectUnitPricesScenario.calls.some((call) =>
+      call.name === "proGate" &&
+      JSON.stringify(call.args) === JSON.stringify({
+        userId: "verified-user",
+        options: { audience: "developer" },
+      })
+    ),
+    true,
+  );
   assertEquals(
     globalThis.__projectUnitPricesScenario.calls.some((call) =>
       call.name === "rpc" &&

@@ -10,6 +10,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { AuthError, verifyBearerToken } from "../_shared/auth.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createLogger } from "../_shared/logger.ts";
+import { requireProSubscription } from "../_shared/proGate.ts";
 import {
   makeRateLimiter,
   tooManyRequestsResponse,
@@ -25,6 +26,11 @@ const limiter = makeRateLimiter({
 type PriceUpdateRequest = {
   projectId?: unknown;
   percentage?: unknown;
+};
+
+type ProfileRow = {
+  role: string | null;
+  role_switch_in_progress_at: string | null;
 };
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
@@ -68,6 +74,27 @@ function errorMessage(err: unknown): string {
   return "Failed to update project unit prices";
 }
 
+async function requireDeveloperAccess(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("role, role_switch_in_progress_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+
+  const profile = data as ProfileRow | null;
+  const role = profile?.role;
+  if (
+    (role !== "developer" && role !== "admin") ||
+    (role !== "admin" && profile?.role_switch_in_progress_at)
+  ) {
+    throw new AuthError("developer_role_required", 403);
+  }
+}
+
 Deno.serve(async (req) => {
   const corsPreflightResponse = handleCors(req);
   if (corsPreflightResponse) return corsPreflightResponse;
@@ -96,6 +123,11 @@ Deno.serve(async (req) => {
       auth: { persistSession: false },
     });
     const user = await verifyBearerToken(req, supabase);
+    await requireDeveloperAccess(supabase, user.id);
+    const proCheck = await requireProSubscription(user.id, corsHeaders, {
+      audience: "developer",
+    });
+    if (proCheck.errorResponse) return proCheck.errorResponse;
 
     const { data, error } = await supabase.rpc(
       "bulk_update_project_unit_prices_for_user",

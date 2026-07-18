@@ -11,7 +11,7 @@ import { createLogger } from "./logger.ts";
 import {
   getProfilePricingAudience,
   isAudienceAllowed,
-  resolveSubscriptionEntitlement,
+  normalizeEntitlementAudience,
 } from "./entitlements.ts";
 
 const log = createLogger("proGate");
@@ -41,9 +41,38 @@ export type ProGateOptions = {
 type ProfileRow = {
   role: string;
   participant_type: string | null;
-  subscription_product_id: string | null;
+  role_switch_in_progress_at: string | null;
   force_pro_access: boolean | null;
 };
+
+type ResolvedSubscriptionState = {
+  subscribed?: boolean;
+  audience?: string | null;
+  source?: string | null;
+};
+
+export function hasResolvedProAccess({
+  profileAudience,
+  requiredAudience,
+  state,
+}: {
+  profileAudience: string | null;
+  requiredAudience?: string | string[];
+  state: ResolvedSubscriptionState | null;
+}): boolean {
+  if (
+    !state?.subscribed ||
+    !isAudienceAllowed(profileAudience, requiredAudience)
+  ) {
+    return false;
+  }
+
+  const resolvedAudience = normalizeEntitlementAudience(state.audience);
+  if (resolvedAudience) return resolvedAudience === profileAudience;
+
+  return state.source === "investor" &&
+    (profileAudience === "investor" || profileAudience === "institutional");
+}
 
 const jsonError = (
   message: string,
@@ -77,7 +106,9 @@ async function getProfile(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (client as any)
     .from("profiles")
-    .select("role, participant_type, subscription_product_id, force_pro_access")
+    .select(
+      "role, participant_type, role_switch_in_progress_at, force_pro_access",
+    )
     .eq("user_id", userId)
     .maybeSingle() as {
       data: ProfileRow | null;
@@ -86,19 +117,25 @@ async function getProfile(
   return { profile: data, error };
 }
 
-async function hasActiveInvestorSubscription(
+async function resolveDurableSubscriptionState(
   client: SupabaseClient,
   userId: string,
-): Promise<boolean> {
+): Promise<{
+  state: ResolvedSubscriptionState | null;
+  error: { message?: string; code?: string } | null;
+}> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (client as any)
-    .from("investor_subscriptions")
-    .select("id")
-    .eq("user_id", userId)
-    .in("status", ["active", "trial"])
-    .limit(1)
-    .maybeSingle() as { data: { id: string } | null; error: unknown };
-  return Boolean(data);
+  const { data, error } = await (client as any).rpc(
+    "resolve_subscription_state_for_service",
+    {
+      p_user_id: userId,
+      p_required_stripe_subscription_id: null,
+    },
+  ) as {
+    data: ResolvedSubscriptionState | null;
+    error: { message?: string; code?: string } | null;
+  };
+  return { state: data, error };
 }
 
 /**
@@ -136,26 +173,33 @@ export async function requireProSubscription(
     const profileAudience = getProfilePricingAudience(profile);
     const audienceAllowed = isAudienceAllowed(profileAudience, options.audience);
 
+    if (profile.role_switch_in_progress_at) {
+      return { allowed: false, errorResponse: proRequired(corsHeaders) };
+    }
+
     if (profile.force_pro_access && audienceAllowed) {
       return { allowed: true, errorResponse: null };
     }
 
-    if (profile.subscription_product_id) {
-      const entitlement = await resolveSubscriptionEntitlement(
-        client,
-        userId,
-        { productId: profile.subscription_product_id },
-        options.audience,
-      );
-      if (entitlement) {
-        return { allowed: true, errorResponse: null };
-      }
+    const { state, error: resolverError } =
+      await resolveDurableSubscriptionState(client, userId);
+    if (resolverError) {
+      log.error("durable subscription resolver failed - failing closed", {
+        error: resolverError.message ?? resolverError.code ?? "unknown",
+      });
+      return { allowed: false, errorResponse: unavailable(corsHeaders) };
+    }
+    if (!state || typeof state.subscribed !== "boolean") {
+      log.error("durable subscription resolver returned an invalid response");
+      return { allowed: false, errorResponse: unavailable(corsHeaders) };
     }
 
     if (
-      (profileAudience === "investor" || profileAudience === "institutional") &&
-      audienceAllowed &&
-      await hasActiveInvestorSubscription(client, userId)
+      hasResolvedProAccess({
+        profileAudience,
+        requiredAudience: options.audience,
+        state,
+      })
     ) {
       return { allowed: true, errorResponse: null };
     }
