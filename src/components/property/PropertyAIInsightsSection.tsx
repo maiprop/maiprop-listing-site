@@ -16,7 +16,7 @@ import type { AIInsightsQuota } from "@/hooks/usePropertyAIInsights";
 interface AIInsightsData {
   vsMarket: number | null;
   rentalYield: number;
-  estimatedValue: number;
+  estimatedValue: number | null;
   pricePerSqmEstimate?: number;
   marketComparison: string | null;
   confidenceLabel: string;
@@ -82,7 +82,11 @@ export function PropertyAIInsightsSection({
   const rentPerSqm = data?.pricePerSqmEstimate
     ? `€${data.pricePerSqmEstimate.toLocaleString("el-GR", { maximumFractionDigits: 2 })}/m²/mo`
     : "Unavailable";
-  const aiEstimate = isRental ? `${formatPrice(data?.estimatedValue ?? 0)}/mo` : formatPrice(data?.estimatedValue ?? 0);
+  const aiEstimate = data?.estimatedValue == null
+    ? "Unavailable"
+    : isRental
+      ? `${formatPrice(data.estimatedValue)}/mo`
+      : formatPrice(data.estimatedValue);
 
   return (
     <Section>

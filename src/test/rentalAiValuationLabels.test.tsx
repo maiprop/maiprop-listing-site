@@ -55,6 +55,28 @@ describe("rental AI valuation labels", () => {
     expect(screen.getByText("€1.600/mo")).toBeInTheDocument();
   });
 
+  it("does not label a missing rental estimate as a monthly price", () => {
+    renderWithProviders(
+      <PropertyAIInsightsSection
+        user={rentalUser}
+        isPro
+        loading={false}
+        data={{
+          vsMarket: null,
+          rentalYield: 0,
+          estimatedValue: null,
+          marketComparison: null,
+          confidenceLabel: "Medium",
+        }}
+        listingType="rent"
+      />,
+    );
+
+    expect(screen.getByText("AI Rent Estimate")).toBeInTheDocument();
+    expect(screen.getAllByText("Unavailable").length).toBeGreaterThan(0);
+    expect(screen.queryByText("€0/mo")).not.toBeInTheDocument();
+  });
+
   it("renders the detailed valuation result as monthly rent", async () => {
     invokeAuthenticatedFunctionMock.mockResolvedValueOnce({
       error: null,

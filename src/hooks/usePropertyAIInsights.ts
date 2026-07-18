@@ -12,7 +12,7 @@ import { calculatePricePerSqm } from "@/lib/priceCalculations";
 export interface AIInsightsData {
   vsMarket: number | null;
   rentalYield: number;
-  estimatedValue: number;
+  estimatedValue: number | null;
   pricePerSqmEstimate?: number;
   marketComparison: string | null;
   confidenceLabel: string;
@@ -224,7 +224,7 @@ export function usePropertyAIInsights(
           rentalYield: rentalListing
             ? getRentalYield(monthlyRent, estimatedValue, data.rentalYieldEstimate)
             : data.rentalYieldEstimate ?? 0,
-          estimatedValue,
+          estimatedValue: rentalListing ? marketRentEstimate : estimatedValue,
           ...(returnedPricePerSqm ? { pricePerSqmEstimate: returnedPricePerSqm } : {}),
           marketComparison: comparison.marketComparison,
           confidenceLabel: data.confidenceLabel ?? "Medium",
