@@ -368,7 +368,7 @@ describe("location address suggestions", () => {
     expect(screen.getByLabelText("Search by city or area")).not.toBeDisabled();
   });
 
-  it("keeps typed full addresses visible without firing listing queries on every keystroke", async () => {
+  it("keeps typed full addresses visible without passively committing listing queries", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify([]))));
     const onChange = vi.fn();
 
@@ -397,10 +397,11 @@ describe("location address suggestions", () => {
       await vi.advanceTimersByTimeAsync(700);
     });
 
-    expect(onChange).toHaveBeenLastCalledWith("Ermou 12 Athens");
+    expect(input).toHaveValue("Ermou 12 Athens");
+    expect(onChange).not.toHaveBeenCalled();
   });
 
-  it("commits typed listings addresses even when suggestion providers stay pending", async () => {
+  it("does not commit a typed listings address while suggestion providers stay pending", async () => {
     vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise(() => undefined)));
     const onChange = vi.fn();
 
@@ -429,7 +430,54 @@ describe("location address suggestions", () => {
       await vi.advanceTimersByTimeAsync(1400);
     });
 
-    expect(onChange).toHaveBeenLastCalledWith("Kalimnou 27");
+    expect(input).toHaveValue("Kalimnou 27");
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("restores the last committed listing value on outside click without committing the draft", () => {
+    const onChange = vi.fn();
+
+    render(
+      <LocationSearchField
+        value="Athens"
+        onChange={onChange}
+        placeholder="City, area, address..."
+        ariaLabel="Search by city or area"
+      />,
+    );
+
+    const input = screen.getByLabelText("Search by city or area");
+    act(() => input.focus());
+    expect(input).toHaveFocus();
+    fireEvent.change(input, { target: { value: "Voukourestiou 14" } });
+    fireEvent.mouseDown(document.body);
+
+    expect(input).toHaveValue("Athens");
+    expect(input).toHaveAttribute("aria-expanded", "false");
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("restores the last committed listing value on Escape without committing the draft", () => {
+    const onChange = vi.fn();
+
+    render(
+      <LocationSearchField
+        value="Athens"
+        onChange={onChange}
+        placeholder="City, area, address..."
+        ariaLabel="Search by city or area"
+      />,
+    );
+
+    const input = screen.getByLabelText("Search by city or area");
+    act(() => input.focus());
+    expect(input).toHaveFocus();
+    fireEvent.change(input, { target: { value: "Voukourestiou 14" } });
+    fireEvent.keyDown(input, { key: "Escape", code: "Escape" });
+
+    expect(input).toHaveValue("Athens");
+    expect(input).toHaveAttribute("aria-expanded", "false");
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it("uses a selected listings address suggestion's address line for the location filter", async () => {
@@ -983,7 +1031,7 @@ describe("location address suggestions", () => {
     expect(input).toHaveValue("Agioi Anargiroi");
   });
 
-  it("auto-resolves typed street-number searches through the first provider suggestion", async () => {
+  it("does not replace an exact typed address when a provider suggestion arrives passively", async () => {
     configMock.googlePlacesEnabled = true;
     mockGoogleLegacyKalimnouAutocompleteFallback();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify([]))));
@@ -1021,11 +1069,8 @@ describe("location address suggestions", () => {
       await Promise.resolve();
     });
 
-    expect(onFilterChange).toHaveBeenLastCalledWith("Agioi Anargiroi", expect.objectContaining({
-      provider: "google",
-      latitude: undefined,
-      longitude: undefined,
-    }));
+    expect(input).toHaveValue("Kalimnou 27");
+    expect(onFilterChange).not.toHaveBeenCalled();
   });
 
   it("does not let a broad Google Attica prediction override a specific listings municipality fallback", async () => {

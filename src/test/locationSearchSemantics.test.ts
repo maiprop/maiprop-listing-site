@@ -8,6 +8,7 @@ import {
   isBroadAdministrativePrediction,
   normalizeGreekLocationText,
   normalizeListingLocationSearchQuery,
+  rankAddressPredictionsForQuery,
 } from "@/lib/location/locationSearchSemantics";
 
 const prediction = (overrides: Partial<AddressPrediction>): AddressPrediction => ({
@@ -138,5 +139,47 @@ describe("location search semantics", () => {
 
     expect(results).toHaveLength(1);
     expect(results[0].title).toBe("Άγιοι Ανάργυροι Αττικής");
+  });
+
+  it("rejects address suggestions whose numeric tokens only contain the typed house number as a substring", () => {
+    const results = filterAddressPredictionsForQuery([
+      prediction({
+        id: "substring-house-number",
+        title: "Voukourestiou 140",
+        addressLine: "Voukourestiou 140",
+        fullAddress: "Voukourestiou 140, Athens 10671, Greece",
+      }),
+      prediction({
+        id: "substring-postal-code",
+        title: "Voukourestiou",
+        addressLine: "Voukourestiou",
+        fullAddress: "Voukourestiou, Athens 114 71, Greece",
+      }),
+      prediction({
+        id: "exact-house-number",
+        title: "Voukourestiou 14",
+        addressLine: "Voukourestiou 14",
+        fullAddress: "Voukourestiou 14, Athens 10671, Greece",
+      }),
+    ], "Voukourestiou 14");
+
+    expect(results.map((result) => result.id)).toEqual(["exact-house-number"]);
+  });
+
+  it("ranks an exact numeric token before an earlier substring match", () => {
+    const results = rankAddressPredictionsForQuery([
+      prediction({
+        id: "substring-house-number",
+        title: "Βουκουρεστίου 140",
+        addressLine: "Βουκουρεστίου 140",
+      }),
+      prediction({
+        id: "exact-house-number",
+        title: "Βουκουρεστίου 14",
+        addressLine: "Βουκουρεστίου 14",
+      }),
+    ], "Voukourestiou 14");
+
+    expect(results[0].id).toBe("exact-house-number");
   });
 });
