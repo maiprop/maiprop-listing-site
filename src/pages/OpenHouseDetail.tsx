@@ -386,6 +386,7 @@ export default function OpenHouseDetail() { // skipcq: JS-R1005 - Open-house det
                 quotaLoading={aiInsightsQuotaLoading}
                 hasRequested={aiInsightsLoaded}
                 onLoad={loadAiInsights}
+                listingType={isRentalOpenHouse ? "rent" : db.listing_type}
               />
 
               {/* Description */}

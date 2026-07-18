@@ -277,7 +277,7 @@ const fetchStructuredOsValuation = async (input: StructuredValuationInput): Prom
   const predictedPrice = coerceFiniteNumber(data?.propertyPredictedPrice);
   const predictedLeasePrice = coerceFiniteNumber(data?.propertyPredictedLeasePrice);
   const hasPrediction = isRentalListing(input.listingType)
-    ? (predictedLeasePrice != null && predictedLeasePrice > 0) || (predictedPrice != null && predictedPrice > 0)
+    ? predictedLeasePrice != null && predictedLeasePrice > 0
     : predictedPrice != null && predictedPrice > 0;
   return hasPrediction ? data : null;
 };
@@ -482,7 +482,9 @@ const normalizeValuationResult = (
     const monthlyRent = providerIsPlausible
       ? providerMonthlyRent!
       : osMonthlyRent ?? listedPrice;
-    const usedListingFallback = !providerIsPlausible && osMonthlyRent == null;
+    const usedListingFallback = osMonthlyRent == null && (
+      optionalString(result.generatedBy) === "fallback" || !providerIsPlausible
+    );
     const rentPerSqm = getOsRentalPricePerSqm(osData, monthlyRent, source.sqm);
     const rangeLow = coerceFiniteNumber(result.rangeLow);
     const rangeHigh = coerceFiniteNumber(result.rangeHigh);
@@ -580,12 +582,15 @@ const buildOsValuationResult = (osData: JsonRecord, input: StructuredValuationIn
   const annualYield = normalizeAnnualYield(osData.annualYieldPrc);
   const saleComparables = countOverviewComparables(osData.saleValuationOverviews);
   const rentalComparables = countOverviewComparables(osData.rentalValuationOverviews);
+  const confidenceComparableCount = isRental
+    ? rentalComparables
+    : saleComparables + rentalComparables;
   const pricePerSqm = isRental
     ? getOsRentalPricePerSqm(osData, estimatedValue, input.sqm)
     : firstOverviewNumber(osData.saleValuationOverviews, "propertyEurPerSqm") ??
       (input.sqm > 0 ? estimatedValue / input.sqm : null);
   const deltaPct = input.price > 0 ? roundNumber(((estimatedValue - input.price) / input.price) * 100) : 0;
-  const confidence = Math.max(55, Math.min(90, 68 + Math.min(12, saleComparables + rentalComparables)));
+  const confidence = Math.max(55, Math.min(90, 68 + Math.min(12, confidenceComparableCount)));
   const liquidityScore = isAuction
     ? 45
     : Math.max(55, Math.min(82, 62 + Math.min(14, isRental ? rentalComparables : saleComparables)));
@@ -624,7 +629,7 @@ const buildOsValuationResult = (osData: JsonRecord, input: StructuredValuationIn
     ].filter(Boolean).join(" "),
     keyFactors: [
       { factor: "mAI Prop OS valuation", impact: "positive", note: isRental ? "Structured OS lease-price response" : "Structured OS valuation API response" },
-      { factor: "Comparable depth", impact: saleComparables + rentalComparables > 0 ? "positive" : "neutral", note: isRental ? `${rentalComparables} rental comparables` : comparablesText },
+      { factor: "Comparable depth", impact: confidenceComparableCount > 0 ? "positive" : "neutral", note: isRental ? `${rentalComparables} rental comparables` : comparablesText },
       !isRental && annualYield != null ? { factor: "Rental yield", impact: "neutral", note: `${annualYield}% implied gross yield` } : null,
       { factor: isRental ? "Rent delta" : "Asking price delta", impact: Math.abs(deltaPct) <= 5 ? "neutral" : deltaPct > 0 ? "positive" : "negative", note: `${deltaPct}% versus ${isRental ? "listed rent" : "asking price"}` },
       { factor: "Legal/planning data", impact: isAuction ? "negative" : "neutral", note: isAuction ? "Auction risk remains" : "Document review still required" },

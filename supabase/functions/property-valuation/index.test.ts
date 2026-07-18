@@ -286,6 +286,90 @@ Deno.test("rental listings reject sale-style provider values and remain on month
   });
 });
 
+Deno.test("rental listings reject sale-only OS predictions as lease evidence", async () => {
+  const originalFetch = globalThis.fetch;
+  const prevOpenAI = Deno.env.get("OPENAI_API_KEY");
+  const prevGemini = Deno.env.get("GEMINI_API_KEY");
+  const prevOsUrl = Deno.env.get("MAIPROP_OS_API_URL");
+  const prevOsEmail = Deno.env.get("MAIPROP_OS_EMAIL");
+  const prevOsPassword = Deno.env.get("MAIPROP_OS_PASSWORD");
+  Deno.env.delete("OPENAI_API_KEY");
+  Deno.env.delete("GEMINI_API_KEY");
+  Deno.env.set("MAIPROP_OS_API_URL", "https://os-sale-only.test");
+  Deno.env.set("MAIPROP_OS_EMAIL", "os-sale-only@test.local");
+  Deno.env.set("MAIPROP_OS_PASSWORD", "os-password");
+
+  globalThis.fetch = ((input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("/auth/v1/user")) {
+      return Promise.resolve(okJson({ user: { id: "user-1", email: "user@test.local" } }));
+    }
+    if (url.includes("/rest/v1/rpc/reserve_ai_quota_for_user")) {
+      return Promise.resolve(okJson({ allowed: true, reason: null, used: 1, limit: 5 }));
+    }
+    if (url === "https://os-sale-only.test/auth/login") {
+      return Promise.resolve(okJson({ data: { token: "os-sale-only-token" } }));
+    }
+    if (url === "https://os-sale-only.test/api/v1/property/valuation") {
+      return Promise.resolve(okJson({
+        data: {
+          propertyPredictedPrice: 440000,
+          saleValuationOverviews: [{ similarListings: [{ id: "sale-comp" }], propertyEurPerSqm: 5200 }],
+          rentalValuationOverviews: [],
+        },
+      }));
+    }
+    return originalFetch(input);
+  }) as typeof fetch;
+
+  try {
+    const res = await handler(req("POST", {
+      listingId: "rental-sale-only-os-1",
+      title: "Glyfada rental",
+      city: "Glyfada",
+      address: "Angelou Metaxa 11",
+      price: 1200,
+      sqm: 80,
+      propertyType: "apartment",
+      listingType: "rent",
+      latitude: 37.86,
+      longitude: 23.75,
+      yearBuilt: 2022,
+    }, {
+      authorization: "Bearer test-valid-token",
+      "x-forwarded-for": "198.51.100.39",
+    }));
+    const body = await jsonBody(res) as {
+      estimatedValue?: number;
+      confidenceLabel?: string;
+      methodUsed?: string;
+      generatedBy?: string;
+      osEstimatedValue?: number;
+      osValuationStatus?: string;
+    };
+
+    assertEquals(res.status, 200);
+    assertEquals(body.estimatedValue, 1200);
+    assertEquals(body.confidenceLabel, "Low");
+    assertEquals(body.methodUsed, "Low-confidence monthly-rent fallback using the current asking rent");
+    assertEquals(body.generatedBy, "fallback");
+    assertEquals(body.osEstimatedValue, undefined);
+    assertEquals(body.osValuationStatus, "no_prediction");
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (prevOpenAI) Deno.env.set("OPENAI_API_KEY", prevOpenAI);
+    else Deno.env.delete("OPENAI_API_KEY");
+    if (prevGemini) Deno.env.set("GEMINI_API_KEY", prevGemini);
+    else Deno.env.delete("GEMINI_API_KEY");
+    if (prevOsUrl) Deno.env.set("MAIPROP_OS_API_URL", prevOsUrl);
+    else Deno.env.delete("MAIPROP_OS_API_URL");
+    if (prevOsEmail) Deno.env.set("MAIPROP_OS_EMAIL", prevOsEmail);
+    else Deno.env.delete("MAIPROP_OS_EMAIL");
+    if (prevOsPassword) Deno.env.set("MAIPROP_OS_PASSWORD", prevOsPassword);
+    else Deno.env.delete("MAIPROP_OS_PASSWORD");
+  }
+});
+
 Deno.test("rental listings use OS lease prices and rental comparables", async () => {
   const originalFetch = globalThis.fetch;
   const prevOpenAI = Deno.env.get("OPENAI_API_KEY");
