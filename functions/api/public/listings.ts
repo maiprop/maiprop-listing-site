@@ -62,7 +62,7 @@ const LISTING_PROJECT_CARD_SELECT_WITH_UNITS = [
   "delivery_date",
   `project_units!project_units_project_id_fkey(${PROJECT_UNIT_CARD_SELECT})`,
 ].join(",");
-const LISTINGS_CACHE_VERSION = "catalogue-stream-cursor-promotions-v3";
+const LISTINGS_CACHE_VERSION = "catalogue-stream-cursor-promotions-v4";
 const LISTINGS_CACHE_OPTIONS = {
   edgeTtlSeconds: 60,
   browserTtlSeconds: 30,
