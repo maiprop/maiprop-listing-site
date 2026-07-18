@@ -285,7 +285,52 @@ beforeEach(() => {
     refreshProfile: vi.fn(),
   });
   mocks.useSubscriptionMock.mockReturnValue({ isPro: false, loading: false, refreshSubscription: vi.fn() });
-  mocks.usePricingConfigsMock.mockReturnValue({ data: {} });
+  mocks.usePricingConfigsMock.mockReturnValue({
+    data: {
+      pro: {
+        label: "Pro Plan",
+        description: "Participant plan",
+        amount: 29,
+        currency: "EUR",
+        unit: "monthly",
+        audience: "participant",
+        stripePriceMonthly: "price_participant_month",
+        stripePriceAnnual: "price_participant_year",
+      },
+      agent_basic: {
+        label: "Agent Pro",
+        description: "Agent plan",
+        amount: 149,
+        currency: "EUR",
+        unit: "monthly",
+        audience: "agent",
+        stripePriceMonthly: "price_agent_month",
+        stripePriceAnnual: "price_agent_year",
+      },
+      developer_pro: {
+        label: "Developer Pro",
+        description: "Developer plan",
+        amount: 129,
+        currency: "EUR",
+        unit: "monthly",
+        audience: "developer",
+        stripePriceMonthly: "price_developer_month",
+        stripePriceAnnual: "price_developer_year",
+      },
+      professional_basic: {
+        label: "Professional Pro",
+        description: "Professional plan",
+        amount: 69,
+        currency: "EUR",
+        unit: "monthly",
+        audience: "professional",
+        stripePriceMonthly: "price_professional_month",
+        stripePriceAnnual: "price_professional_year",
+      },
+    },
+    isLoading: false,
+    isError: false,
+  });
   mocks.fetchAuctionListingByIdMock.mockResolvedValue(null);
   mocks.useProfessionalMock.mockReturnValue({ data: null, isLoading: false });
   mocks.useProfessionalsMock.mockReturnValue({ data: [], isLoading: false });
@@ -334,8 +379,19 @@ describe("Pricing focused page behavior", () => {
     });
     mocks.usePricingConfigsMock.mockReturnValue({
       data: {
-        agent_basic: { label: "DB Agent Plus", description: "DB plan", amount: 200, unit: "monthly" },
+        agent_basic: {
+          label: "DB Agent Plus",
+          description: "DB plan",
+          amount: 200,
+          currency: "EUR",
+          unit: "monthly",
+          audience: "agent",
+          stripePriceMonthly: "price_agent_month",
+          stripePriceAnnual: "price_agent_year",
+        },
       },
+      isLoading: false,
+      isError: false,
     });
     const { default: Pricing } = await import("@/pages/Pricing");
 
@@ -354,6 +410,58 @@ describe("Pricing focused page behavior", () => {
         timeout: 20_000,
       }),
     );
+  });
+
+  it("fails closed when the pricing catalog cannot be loaded", async () => {
+    mocks.useAuthMock.mockReturnValue({
+      user: { id: "u-agent", email: "agent@example.com" },
+      profile: { role: "agent", participant_type: "agent" },
+      loading: false,
+      profileLoading: false,
+    });
+    mocks.usePricingConfigsMock.mockReturnValue({
+      data: {},
+      isLoading: false,
+      isError: true,
+    });
+    const { default: Pricing } = await import("@/pages/Pricing");
+
+    renderWithProviders(<Pricing />, { initialPath: "/pricing?audience=agent" });
+
+    const unavailable = await screen.findByRole("button", { name: /Pricing unavailable/i });
+    expect(unavailable).toBeDisabled();
+    expect(screen.getByText(/Pricing is temporarily unavailable/i)).toBeInTheDocument();
+    expect(mocks.invokeMock).not.toHaveBeenCalledWith("create-checkout", expect.anything());
+  });
+
+  it("does not invent a checkout mapping when the selected catalog row is incomplete", async () => {
+    mocks.useAuthMock.mockReturnValue({
+      user: { id: "u-agent", email: "agent@example.com" },
+      profile: { role: "agent", participant_type: "agent" },
+      loading: false,
+      profileLoading: false,
+    });
+    mocks.usePricingConfigsMock.mockReturnValue({
+      data: {
+        agent_basic: {
+          label: "Agent Pro",
+          description: "Agent plan",
+          amount: 149,
+          currency: "EUR",
+          unit: "monthly",
+          audience: "developer",
+          stripePriceMonthly: "price_wrong_audience",
+        },
+      },
+      isLoading: false,
+      isError: false,
+    });
+    const { default: Pricing } = await import("@/pages/Pricing");
+
+    renderWithProviders(<Pricing />, { initialPath: "/pricing?audience=agent" });
+
+    expect(await screen.findByRole("button", { name: /Plan unavailable/i })).toBeDisabled();
+    expect(mocks.invokeMock).not.toHaveBeenCalledWith("create-checkout", expect.anything());
   });
 
   it("does not let a logged-in user start checkout for a different account type", async () => {

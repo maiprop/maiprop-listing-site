@@ -25,7 +25,7 @@ import type {
 type SupabaseMaybeSingleQuery<T> = {
   select(columns: string): SupabaseMaybeSingleQuery<T>;
   eq(column: string, value: unknown): SupabaseMaybeSingleQuery<T>;
-  maybeSingle(): Promise<{ data: T | null }>;
+  maybeSingle(): Promise<{ data: T | null; error?: unknown }>;
 };
 
 type SupabaseFromClient = {
@@ -47,6 +47,17 @@ const fromTable = <T>(
     table,
   ) as SupabaseMaybeSingleQuery<T>;
 };
+
+export class PricingCatalogUnavailableError extends Error {
+  readonly code = "pricing_catalog_unavailable";
+
+  constructor(cause: unknown) {
+    super("Pricing catalog is temporarily unavailable. Please try again later.", {
+      cause,
+    });
+    this.name = "PricingCatalogUnavailableError";
+  }
+}
 
 export const getCurrentBillingRuntimeMode = async (
   supabase: unknown,
@@ -216,7 +227,7 @@ const queryActivePricingConfig = async (
   // The runtime Supabase client returned by `createClient(url, key)` carries
   // generics that don't match the value of `ReturnType<typeof createClient>`,
   // so we accept it as `unknown` here and bridge through a small structural type.
-  const { data } = await fromTable<PricingConfigRow>(
+  const { data, error } = await fromTable<PricingConfigRow>(
     supabase,
     "pricing_configs",
   )
@@ -224,6 +235,7 @@ const queryActivePricingConfig = async (
     .eq("key", planKey)
     .eq("is_active", true)
     .maybeSingle();
+  if (error) throw new PricingCatalogUnavailableError(error);
   return data as PricingConfigRow | null;
 };
 
@@ -245,9 +257,10 @@ const buildCheckoutPlan = (
   productId?: string,
 ): CheckoutPlan | null => {
   const entitlement = getPlanEntitlement(planKey);
-  return priceId && entitlement
+  const normalizedPriceId = typeof priceId === "string" ? priceId.trim() : "";
+  return normalizedPriceId && entitlement
     ? {
-      priceId,
+      priceId: normalizedPriceId,
       planKey,
       audience: entitlement.audience,
       role: entitlement.role,
@@ -268,7 +281,9 @@ const buildDbCheckoutPlan = ( // skipcq: JS-R1005 - Mirrors Stripe DB fallback p
     role: row?.audience ?? null,
     participant_type: null,
   });
-  return stripePriceId && rowAudience === entitlement.audience
+  return row?.key === planKey &&
+      stripePriceId &&
+      rowAudience === entitlement.audience
     ? buildCheckoutPlan(
       stripePriceId,
       planKey,

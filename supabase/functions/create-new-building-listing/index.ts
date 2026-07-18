@@ -11,6 +11,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { AuthError, verifyBearerToken } from "../_shared/auth.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createLogger } from "../_shared/logger.ts";
+import { requireProSubscription } from "../_shared/proGate.ts";
 import {
   makeRateLimiter,
   tooManyRequestsResponse,
@@ -373,6 +374,7 @@ Deno.serve(async (req) => {
   let projectId: string | null = null;
   let listingId: string | null = null;
   let userId: string | null = null;
+  let projectCreated = false;
 
   try {
     const payload = await parseJsonBody(req, requestSchema);
@@ -380,8 +382,12 @@ Deno.serve(async (req) => {
 
     const user = await verifyBearerToken(req, supabase);
     userId = user.id;
-    projectId = payload.project.id;
     await requireDeveloperAccess(supabase, user.id);
+    const proCheck = await requireProSubscription(user.id, corsHeaders, {
+      audience: "developer",
+    });
+    if (proCheck.errorResponse) return proCheck.errorResponse;
+    projectId = payload.project.id;
 
     const resolvedCoordinates = await geocodeProjectCoordinates(payload.project, payload.listing);
     const projectRow = resolvedCoordinates
@@ -395,6 +401,7 @@ Deno.serve(async (req) => {
       .from("projects")
       .insert(projectRow);
     if (projectError) throw projectError;
+    projectCreated = true;
 
     const unitIds: string[] = [];
     for (const unitPayload of payload.units ?? [payload.unit]) {
@@ -460,7 +467,7 @@ Deno.serve(async (req) => {
 
     return jsonResponse({ data: { listingId, projectId }, error: null }, 200, corsHeaders);
   } catch (err: unknown) {
-    if (userId && projectId) {
+    if (userId && projectId && projectCreated) {
       await rollbackOwnedRoots(supabase, userId, projectId, listingId).catch((rollbackErr) => {
         log.warn("new building rollback failed", { err: errorMessage(rollbackErr), projectId, listingId });
       });

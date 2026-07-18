@@ -10,6 +10,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import { AuthError, verifyBearerToken } from "../_shared/auth.ts";
 import { getCorsHeaders, handleCors } from "../_shared/cors.ts";
 import { createLogger } from "../_shared/logger.ts";
+import { requireProSubscription } from "../_shared/proGate.ts";
 import {
   makeRateLimiter,
   tooManyRequestsResponse,
@@ -634,6 +635,10 @@ Deno.serve(async (req) => {
     const payload = await parseJsonBody(req, requestSchema);
     const user = await verifyBearerToken(req, supabase);
     await requireDeveloperAccess(supabase, user.id);
+    const proCheck = await requireProSubscription(user.id, corsHeaders, {
+      audience: "developer",
+    });
+    if (proCheck.errorResponse) return proCheck.errorResponse;
     const data = await handleProjectMutation(supabase, user.id, payload);
     return jsonResponse({ data, error: null }, 200, corsHeaders);
   } catch (err: unknown) {

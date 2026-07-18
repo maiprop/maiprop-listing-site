@@ -218,6 +218,12 @@ const PRICING_EL: Record<string, string> = {
   "Checkout cancelled — no charge was made.": "Το checkout ακυρώθηκε — δεν έγινε καμία χρέωση.",
   "Checkout failed": "Το checkout απέτυχε",
   "Could not start checkout": "Δεν ήταν δυνατή η έναρξη checkout",
+  "Checking availability": "Έλεγχος διαθεσιμότητας",
+  "Checking plan availability.": "Γίνεται έλεγχος διαθεσιμότητας του πλάνου.",
+  "Pricing unavailable": "Η τιμολόγηση δεν είναι διαθέσιμη",
+  "Plan unavailable": "Το πλάνο δεν είναι διαθέσιμο",
+  "Pricing is temporarily unavailable. Please try again later.": "Η τιμολόγηση δεν είναι προσωρινά διαθέσιμη. Δοκιμάστε ξανά αργότερα.",
+  "This plan is currently unavailable. Please try again later.": "Αυτό το πλάνο δεν είναι διαθέσιμο αυτή τη στιγμή. Δοκιμάστε ξανά αργότερα.",
   "Switch account type first": "Αλλάξτε πρώτα τύπο λογαριασμού",
   "Failed to open billing portal": "Δεν ήταν δυνατό το άνοιγμα της πύλης χρέωσης",
   "Search, browse & list your own property": "Αναζήτηση, περιήγηση και καταχώρηση δικών σας ακινήτων",
@@ -412,6 +418,26 @@ const PLANS: Record<AudienceId, PlanDef> = {
 // ── Main component ─────────────────────────────────────────────────────────────
 const STRIPE_FUNCTION_TIMEOUT_MS = 20_000;
 
+const getCheckoutErrorMessage = async (
+  data: unknown,
+  error: unknown,
+  fallback: string,
+): Promise<string> => {
+  const dataError = (data as { error?: unknown } | null)?.error;
+  if (typeof dataError === "string" && dataError.trim()) return dataError;
+
+  const context = (error as { context?: unknown } | null)?.context;
+  if (context instanceof Response) {
+    try {
+      const body = await context.clone().json() as { error?: unknown };
+      if (typeof body.error === "string" && body.error.trim()) return body.error;
+    } catch {
+      // Supabase function errors do not always include a JSON response body.
+    }
+  }
+  return fallback;
+};
+
 export default function Pricing() {
   const { user, profile, profileLoading } = useAuth();
   const { isPro, loading: subLoading, refreshSubscription, hasStripeBilling } = useSubscription();
@@ -453,8 +479,35 @@ export default function Pricing() {
     activeTab !== currentAudience &&
     !isPlatformAdmin(profile),
   );
+  const {
+    data: pricingConfigs = {},
+    isLoading: pricingLoading,
+    isError: pricingError,
+  } = usePricingConfigs();
+  const planKey = PLAN_KEYS[activeTab];
+  const config = pricingConfigs[planKey];
+  const basePlan = PLANS[activeTab];
+  const selectedStripePriceId = billingCycle === "annual"
+    ? config?.stripePriceAnnual
+    : config?.stripePriceMonthly;
+  const checkoutAvailability = pricingError
+    ? "catalog-unavailable"
+    : pricingLoading
+    ? "checking"
+    : config?.audience !== activeTab || !selectedStripePriceId
+    ? "plan-unavailable"
+    : "available";
+  const checkoutUnavailableMessage = checkoutAvailability === "checking"
+    ? tr("Checking plan availability.")
+    : checkoutAvailability === "catalog-unavailable"
+    ? tr("Pricing is temporarily unavailable. Please try again later.")
+    : tr("This plan is currently unavailable. Please try again later.");
 
   const handleCheckout = async () => {
+    if (!PLANS[activeTab].inviteOnly && checkoutAvailability !== "available") {
+      toast.error(checkoutUnavailableMessage);
+      return;
+    }
     if (!user) { navigate("/signup"); return; }
     if (isCrossAudienceSelection) {
       toast.info(`Switch your account type before buying ${PLANS[activeTab].paidLabel}.`);
@@ -467,12 +520,15 @@ export default function Pricing() {
     }
     setCheckoutLoading(true);
     try {
-      const planKey = PLAN_KEYS[activeTab];
       const { data, error } = await supabase.functions.invoke("create-checkout", {
         timeout: STRIPE_FUNCTION_TIMEOUT_MS,
         body: { plan: planKey, billing_cycle: billingCycle },
       });
-      if (error || !data?.url) throw new Error(data?.error ?? error?.message ?? tr("Checkout failed"));
+      if (error || !data?.url) {
+        throw new Error(
+          await getCheckoutErrorMessage(data, error, tr("Could not start checkout")),
+        );
+      }
       window.location.href = data.url;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : tr("Could not start checkout");
@@ -547,11 +603,6 @@ export default function Pricing() {
     setHasAutoSelected(true);
   }, [profile, profileLoading, user, hasAutoSelected, searchParams]);
 
-  const { data: pricingConfigs = {} } = usePricingConfigs();
-  const planKey = PLAN_KEYS[activeTab];
-  const config = pricingConfigs[planKey];
-  const basePlan = PLANS[activeTab];
-
   // Active pricing_configs is canonical; documented plan values are resilience fallbacks.
   const {
     monthlyPrice: dbMonthlyPrice,
@@ -575,7 +626,13 @@ export default function Pricing() {
 
   const participant = getPricingAudienceFromProfile(profile);
   const hasAudiencePro = !subLoading && isPro && activeTab === participant;
-  const paidCtaLabel = isCrossAudienceSelection
+  const paidCtaLabel = !plan.inviteOnly && checkoutAvailability !== "available"
+    ? checkoutAvailability === "checking"
+      ? `${tr("Checking availability")}...`
+      : checkoutAvailability === "catalog-unavailable"
+      ? tr("Pricing unavailable")
+      : tr("Plan unavailable")
+    : isCrossAudienceSelection
     ? tr("Switch account type first")
     : user
       ? (checkoutLoading ? `${tr("Redirecting")}…` : tr(plan.paidCTA))
@@ -825,16 +882,22 @@ export default function Pricing() {
                   <Button
                     className="w-full h-11 font-bold gap-2 bg-gradient-primary border-0 text-primary-foreground"
                     onClick={handleCheckout}
-                    disabled={checkoutLoading}
+                    disabled={checkoutLoading || (!plan.inviteOnly && checkoutAvailability !== "available")}
                   >
-                    {checkoutLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                    {checkoutLoading || checkoutAvailability === "checking"
+                      ? <Loader2 className="w-4 h-4 animate-spin" />
+                      : <Zap className="w-4 h-4" />}
                     {paidCtaLabel}
-                    {!checkoutLoading && <ArrowRight className="w-4 h-4" />}
+                    {!checkoutLoading && checkoutAvailability !== "checking" && <ArrowRight className="w-4 h-4" />}
                   </Button>
                 )}
                 {plan.inviteOnly ? (
                   <p className="text-[11px] text-muted-foreground text-center">
                     {tr("Invitation-based access · Custom annual payment link")}
+                  </p>
+                ) : checkoutAvailability !== "available" ? (
+                  <p className="text-[11px] text-muted-foreground text-center" role="status">
+                    {checkoutUnavailableMessage}
                   </p>
                 ) : (
                   <p className="text-[11px] text-muted-foreground text-center">
