@@ -914,6 +914,29 @@ describe("Auctions focused page behavior", () => {
     expect(links[0]).toHaveAttribute("href", "https://eauction.example/listing");
   });
 
+  it("keeps the auction address readable on narrow screens", async () => {
+    mocks.useAuctionListingsMock.mockReturnValue({
+      data: [auction({ address: "11 Δημάρχου Αγγέλου Μεταξά" })],
+      isLoading: false,
+    });
+    const { default: AuctionDetail } = await import("@/pages/AuctionDetail");
+
+    renderWithProviders(
+      <Routes>
+        <Route path="/auction/:id" element={<AuctionDetail />} />
+      </Routes>,
+      { initialPath: "/auction/auction-1" },
+    );
+
+    const heading = (await screen.findAllByRole("heading", { name: "Athens Auction Flat" }))[0];
+    const heroRow = heading.closest("div")?.parentElement;
+    const address = screen.getByText(/Δημάρχου Αγγέλου Μεταξά/);
+
+    expect(heroRow).toHaveClass("grid");
+    expect(address).toHaveClass("break-words");
+    expect(address).toHaveClass("min-w-0");
+  });
+
   it("enriches cached auction detail with the exact row eAuction URL", async () => {
     mocks.useAuctionListingsMock.mockReturnValue({
       data: [auction({ website_url: null })],

@@ -614,6 +614,26 @@ describe("OpenHouseDetail page behavior", () => {
     expect(mocks.trackView.mutate).toHaveBeenCalledWith(TEST_OPEN_HOUSE_ID);
   });
 
+  it("keeps the open-house title, address, and price readable on narrow screens", async () => {
+    mocks.listing = createListing();
+
+    await renderOpenHouseDetail();
+
+    const price = screen
+      .getAllByText("€420,000")
+      .find((element) => element.className.includes("text-3xl"));
+    if (!price) throw new Error("Hero price not found");
+    const priceColumn = price.parentElement;
+    const heroRow = priceColumn?.parentElement;
+    const address = screen.getByText(/Solonos 1, Athens/i);
+
+    expect(heroRow).toHaveClass("grid");
+    expect(heroRow?.className).toContain("min-[560px]:grid-cols-[minmax(0,1fr)_auto]");
+    expect(priceColumn).toHaveClass("w-full");
+    expect(address).toHaveClass("min-w-0");
+    expect(address).toHaveClass("break-words");
+  });
+
   it("uses the same Pro gate as listing and auction details for open-house valuation", async () => {
     mocks.authUser = { id: "buyer-1" };
     mocks.listing = createListing();
