@@ -134,6 +134,45 @@ Deno.serve(async (req) => {
     const hasSpotlightUpdate =
       Object.prototype.hasOwnProperty.call(action.updates, "is_featured") ||
       Object.prototype.hasOwnProperty.call(action.updates, "featured_until");
+    const isExpiryOnlyUpdate =
+      Object.keys(action.updates).length === 1 &&
+      Object.prototype.hasOwnProperty.call(action.updates, "featured_until");
+
+    if (isExpiryOnlyUpdate) {
+      if (!action.updates.featured_until) {
+        return jsonErrorResponse(
+          req,
+          "Choose a future expiry date or remove Spotlight",
+          400,
+        );
+      }
+
+      const { error } = await supabase.rpc(
+        "admin_update_listing_promotion_expiry",
+        {
+          p_listing_id: action.id,
+          p_promotion_type: "spotlight",
+          p_ends_at: action.updates.featured_until,
+          p_actor_id: caller.id,
+        },
+      );
+
+      if (error) {
+        const message = errorMessage(error);
+        log.warn("listing promotion expiry update rejected", {
+          listingId: action.id,
+          err: message,
+        });
+        return jsonErrorResponse(req, message, databaseStatus(message));
+      }
+
+      log.info("listing promotion expiry updated", {
+        listingId: action.id,
+        adminId: caller.id,
+      });
+      return jsonResponse(req, { ok: true });
+    }
+
     const spotlightEnabled = hasSpotlightUpdate
       ? action.updates.is_featured ?? true
       : null;

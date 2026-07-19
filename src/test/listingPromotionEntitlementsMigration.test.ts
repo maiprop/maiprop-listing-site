@@ -86,6 +86,12 @@ const secureCampaignRpcMigrationName = readdirSync(migrationDirectory).find((nam
 const secureCampaignRpcMigration = secureCampaignRpcMigrationName
   ? readFileSync(resolve(migrationDirectory, secureCampaignRpcMigrationName), "utf8")
   : "";
+const campaignExpiryMigrationName = readdirSync(migrationDirectory).find((name) =>
+  /^\d{14}_preserve_listing_promotion_campaign_history\.sql$/.test(name)
+);
+const campaignExpiryMigration = campaignExpiryMigrationName
+  ? readFileSync(resolve(migrationDirectory, campaignExpiryMigrationName), "utf8")
+  : "";
 
 function sqlSection(sql: string, start: string, end: string): string {
   const startIndex = sql.indexOf(start);
@@ -145,6 +151,23 @@ describe("listing promotion entitlement migration", () => {
       secureCampaignRpcMigration.match(/private\.has_platform_admin\(\(SELECT auth\.uid\(\)\)\)/g),
     ).toHaveLength(2);
     expect(secureCampaignRpcMigration.match(/platform_admin_required/g)).toHaveLength(2);
+  });
+
+  it("updates promotion expiry without resetting campaign history or attribution", () => {
+    expect(campaignExpiryMigrationName).toBeDefined();
+    expect(campaignExpiryMigration).toContain(
+      "CREATE OR REPLACE FUNCTION private.admin_update_listing_promotion_expiry",
+    );
+    expect(campaignExpiryMigration).toContain(
+      "CREATE OR REPLACE FUNCTION public.admin_update_listing_promotion_expiry",
+    );
+    expect(campaignExpiryMigration).toContain("SET ends_at = p_ends_at");
+    expect(campaignExpiryMigration).toContain("status = 'active'");
+    expect(campaignExpiryMigration).not.toContain("SET starts_at =");
+    expect(campaignExpiryMigration).not.toContain("source_type =");
+    expect(campaignExpiryMigration).not.toContain("billing_subscription_id =");
+    expect(campaignExpiryMigration).not.toContain("addon_purchase_id =");
+    expect(campaignExpiryMigration).toContain("TO service_role");
   });
 
   it("uses a private fail-closed Stripe runtime configuration", () => {

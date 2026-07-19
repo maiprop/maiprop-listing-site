@@ -4618,6 +4618,15 @@ export type Database = {
           title: string
         }[]
       }
+      admin_update_listing_promotion_expiry: {
+        Args: {
+          p_actor_id: string
+          p_ends_at: string
+          p_listing_id: string
+          p_promotion_type: string
+        }
+        Returns: undefined
+      }
       admin_set_listing_promotions: {
         Args: {
           p_actor_id: string

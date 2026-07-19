@@ -518,6 +518,30 @@ describe("dashboard tab behavior", () => {
     expect(screen.queryByRole("link", { name: /edit listing/i })).not.toBeInTheDocument();
   });
 
+  it("does not offer paid listing promotions for Open Houses", () => {
+    listingsState.data = [{
+      id: "l-open-house",
+      title: "Open House Loft",
+      city: "Athens",
+      price: 950,
+      sqm: 80,
+      status: "active",
+      views_count: 12,
+      listing_type: "open_house",
+      is_off_market: false,
+      is_pre_sale: false,
+      is_featured: false,
+      priority_placement: 0,
+      tags: [],
+    }];
+
+    renderWithProviders(<MyListingsSection bioType="seller" role="seller" />);
+
+    expect(screen.queryByTitle(/Add Spotlight badge/i)).not.toBeInTheDocument();
+    expect(screen.queryByTitle(/Activate Priority ranking/i)).not.toBeInTheDocument();
+    expect(screen.queryByTitle(/Activate Spotlight \+ Priority bundle/i)).not.toBeInTheDocument();
+  });
+
   it("keeps my listing cards from squeezing text under mobile actions", () => {
     listingsState.data = [{
       id: "l-mobile",

@@ -270,17 +270,34 @@ describe("AdminFeaturedListings", () => {
     renderWithProviders(<AdminFeaturedListings />);
 
     expect(await screen.findByText("Sea View Flat")).toBeInTheDocument();
-    expect(screen.getByText("Admin grant")).toBeInTheDocument();
-    expect(screen.getByText(/2 detail views/i)).toBeInTheDocument();
-    expect(screen.getByText(/1 save/i)).toBeInTheDocument();
-    expect(screen.getByText(/1 enquiry/i)).toBeInTheDocument();
-    expect(screen.getByText(/50\.0% enquiry conversion/i)).toBeInTheDocument();
-    expect(screen.getByText(/Collecting data/i)).toBeInTheDocument();
-    expect(screen.getByText(/(?:1 Jul 2026|Jul 1, 2026)/i)).toBeInTheDocument();
-    expect(screen.getByText(/(?:1 Aug 2026|Aug 1, 2026)/i)).toBeInTheDocument();
+    expect(screen.getAllByText("Admin grant")).toHaveLength(2);
+    expect(screen.getAllByText(/2 detail views/i)).toHaveLength(2);
+    expect(screen.getAllByText(/1 save/i)).toHaveLength(2);
+    expect(screen.getAllByText(/1 enquiry/i)).toHaveLength(2);
+    expect(screen.getAllByText(/50\.0% enquiry conversion/i)).toHaveLength(2);
+    expect(screen.getAllByText(/Collecting data/i)).toHaveLength(2);
+    expect(screen.getAllByText(/(?:1 Jul 2026|Jul 1, 2026)/i)).toHaveLength(2);
+    expect(screen.getAllByText(/(?:1 Aug 2026|Aug 1, 2026)/i)).toHaveLength(2);
     expect(screen.queryByText(/Total Spotlight impressions/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/^High$/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/^Low$/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps campaign source, dates, and outcomes available below desktop widths", async () => {
+    rpcMock.mockResolvedValue({
+      data: [promotionRow()],
+      error: null,
+    });
+
+    renderWithProviders(<AdminFeaturedListings />);
+
+    const mobileSummary = await screen.findByTestId("promotion-mobile-summary-listing-1");
+    expect(mobileSummary).toHaveClass("lg:hidden");
+    expect(within(mobileSummary).getByText("Admin grant")).toBeInTheDocument();
+    expect(within(mobileSummary).getByText(/2 detail views/i)).toBeInTheDocument();
+    expect(within(mobileSummary).getByText(/1 save/i)).toBeInTheDocument();
+    expect(within(mobileSummary).getByText(/1 enquiry/i)).toBeInTheDocument();
+    expect(within(mobileSummary).getByText(/50\.0% enquiry conversion/i)).toBeInTheDocument();
   });
 
   it("marks Open Houses ineligible for both paid promotion products", async () => {
@@ -310,7 +327,7 @@ describe("AdminFeaturedListings", () => {
     renderWithProviders(<AdminFeaturedListings />);
 
     expect(await screen.findByText("Open House Loft")).toBeInTheDocument();
-    expect(screen.getByText(/Promotions unavailable for Open Houses/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Promotions unavailable for Open Houses/i)).toHaveLength(2);
     expect(screen.getByRole("switch", { name: /Toggle Spotlight for Open House Loft/i })).toBeDisabled();
     expect(screen.getByRole("switch", { name: /Toggle Priority for Open House Loft/i })).toBeDisabled();
   });
@@ -376,6 +393,20 @@ describe("AdminFeaturedListings", () => {
     const expiry = screen.getByLabelText(/Spotlight until for Sea View Flat/i);
     fireEvent.change(expiry, { target: { value: "2026-08-20" } });
     await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith(expect.stringMatching(/Expires/i)));
+  });
+
+  it("does not silently replace a cleared Spotlight expiry with another 30-day campaign", async () => {
+    rpcMock.mockResolvedValue({ data: [promotionRow()], error: null });
+
+    renderWithProviders(<AdminFeaturedListings />);
+
+    const expiry = await screen.findByLabelText(/Spotlight until for Sea View Flat/i);
+    fireEvent.change(expiry, { target: { value: "" } });
+
+    expect(toastMock.error).toHaveBeenCalledWith(
+      "Choose a future expiry date or remove Spotlight.",
+    );
+    expect(invokeMock).not.toHaveBeenCalled();
   });
 
   it("enables inactive Priority as a binary paid placement", async () => {

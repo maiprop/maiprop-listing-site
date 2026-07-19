@@ -96,6 +96,67 @@ function enquiryConversion(campaign: PromotionCampaign): string {
   return `${((campaign.enquiries / campaign.detailViews) * 100).toFixed(1)}% enquiry conversion`;
 }
 
+function PromotionMobileSummary({
+  campaigns,
+  promotionsEligible,
+  listingId,
+}: {
+  campaigns: PromotionCampaign[];
+  promotionsEligible: boolean;
+  listingId: string;
+}) {
+  return (
+    <details
+      data-testid={`promotion-mobile-summary-${listingId}`}
+      className="mt-2 rounded-md border border-border/70 bg-muted/20 px-2.5 py-2 lg:hidden"
+    >
+      <summary className="flex min-h-8 cursor-pointer list-none items-center gap-1.5 text-xs font-medium text-foreground">
+        <BarChart3 className="h-3.5 w-3.5 text-primary" />
+        Campaign details
+      </summary>
+      <div className="mt-2 space-y-2 border-t border-border/70 pt-2">
+        {!promotionsEligible ? (
+          <p className="text-xs text-muted-foreground">
+            Promotions unavailable for Open Houses.
+          </p>
+        ) : campaigns.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No active campaign</p>
+        ) : (
+          campaigns.map((campaign) => (
+            <div key={`${campaign.type}-${campaign.startsAt}-mobile`} className="space-y-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Badge
+                  variant={campaign.type === "spotlight" ? "default" : "outline"}
+                  className="text-xs capitalize"
+                >
+                  {campaign.type}
+                </Badge>
+                <Badge variant="secondary" className="text-xs">
+                  {SOURCE_LABELS[campaign.source]}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {formatDate(campaign.startsAt)} - {formatDate(campaign.endsAt)}
+              </p>
+              <p className="text-xs text-foreground">
+                {pluralize(campaign.detailViews, "detail view")} &middot;{" "}
+                {pluralize(campaign.saves, "save")} &middot;{" "}
+                {pluralize(campaign.enquiries, "enquiry", "enquiries")}
+              </p>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-xs text-muted-foreground">
+                  {enquiryConversion(campaign)}
+                </span>
+                <Badge variant="outline" className="text-xs">Collecting data</Badge>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </details>
+  );
+}
+
 function groupCampaignRows(rows: CampaignRow[]): FeaturedListing[] {
   const listings = new Map<string, FeaturedListing>();
 
@@ -235,12 +296,16 @@ export default function AdminFeaturedListings() {
 
   const handleUntilChange = useCallback(
     async (listing: FeaturedListing, dateValue: string) => {
+      if (!dateValue) {
+        toast.error("Choose a future expiry date or remove Spotlight.");
+        return;
+      }
       setUpdatingUntil((prev) => ({ ...prev, [listing.id]: true }));
-      const newVal = dateValue ? new Date(dateValue).toISOString() : null;
+      const newVal = new Date(dateValue).toISOString();
       try {
         await updateFeaturedListing(listing.id, { featured_until: newVal }, "featured expiry update");
         await queryClient.invalidateQueries({ queryKey: ["admin-featured-listings"] });
-        toast.success(newVal ? `Expires ${formatDate(newVal)}` : "Expiry cleared");
+        toast.success(`Expires ${formatDate(newVal)}`);
       } catch (e: unknown) {
         toast.error((e as Error)?.message ?? "Failed to update expiry");
       } finally {
@@ -370,6 +435,11 @@ export default function AdminFeaturedListings() {
                       <p className="text-muted-foreground text-xs mt-0.5 truncate">
                         {listing.city} &middot; {listing.property_type.replace(/_/g, " ")}
                       </p>
+                      <PromotionMobileSummary
+                        campaigns={listing.campaigns}
+                        promotionsEligible={promotionsEligible}
+                        listingId={listing.id}
+                      />
                     </td>
 
                     {/* Seller */}
@@ -455,6 +525,7 @@ export default function AdminFeaturedListings() {
                         {promotionsEligible && listing.is_featured && (
                           <input
                             type="date"
+                            required
                             disabled={isUpdatingUntilThis}
                             value={listing.featured_until ? listing.featured_until.slice(0, 10) : ""}
                             min={new Date().toISOString().slice(0, 10)}
