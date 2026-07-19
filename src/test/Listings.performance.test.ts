@@ -43,7 +43,9 @@ describe("Listings performance helpers", () => {
   });
 
   it("computes responsive listing-grid columns for virtualization", () => {
-    expect(getAutoListingGridColumns(390)).toBe(1);
+    expect(getAutoListingGridColumns(279)).toBe(1);
+    expect(getAutoListingGridColumns(280)).toBe(2);
+    expect(getAutoListingGridColumns(390)).toBe(2);
     expect(getAutoListingGridColumns(640)).toBe(2);
     expect(getAutoListingGridColumns(760)).toBe(3);
     expect(getAutoListingGridColumns(1100)).toBe(4);

@@ -49,6 +49,9 @@ const localSupabasePath = () =>
 
 const localSupabaseJsPath = () => join(root, "node_modules", "supabase", "dist", "supabase.js");
 
+const requiresWindowsShell = (command) =>
+  process.platform === "win32" && /\.(?:cmd|bat)$/i.test(command);
+
 const findWindowsSupabase = () => {
   if (process.platform !== "win32") return null;
 
@@ -77,15 +80,15 @@ const supabaseCommand = () => {
   if (existsSync(localJs)) return { command: process.execPath, prefixArgs: [localJs], shell: false };
 
   const localBin = localSupabasePath();
-  if (existsSync(localBin)) return { command: localBin, prefixArgs: [], shell: process.platform === "win32" };
+  if (existsSync(localBin)) return { command: localBin, prefixArgs: [], shell: requiresWindowsShell(localBin) };
 
   const windowsBin = findWindowsSupabase();
-  if (windowsBin) return { command: windowsBin, prefixArgs: [], shell: process.platform === "win32" };
+  if (windowsBin) return { command: windowsBin, prefixArgs: [], shell: requiresWindowsShell(windowsBin) };
 
   return {
     command: process.platform === "win32" ? "npx.cmd" : "npx",
     prefixArgs: ["supabase"],
-    shell: process.platform === "win32",
+    shell: requiresWindowsShell("npx.cmd"),
   };
 };
 
