@@ -1,4 +1,5 @@
 import {
+  CACHE_VALID_UNTIL_HEADER,
   cachedJson,
   isSupabaseTransientError,
   jsonResponse,
@@ -67,7 +68,7 @@ const LISTINGS_CACHE_OPTIONS = {
   edgeTtlSeconds: 60,
   browserTtlSeconds: 30,
   staleSeconds: 60,
-  staleFallbackSeconds: 60,
+  staleFallbackSeconds: 600,
   producerTimeoutMs: 5_000,
 };
 const LISTINGS_SUPABASE_TIMEOUT_MS = 4_500;
@@ -75,6 +76,24 @@ const LEGACY_STREAM_PROBE_MAX = 2_000;
 const DEFAULT_LOCATION_RADIUS_M = 750;
 const MAX_LOCATION_RADIUS_M = 5_000;
 const METERS_PER_LATITUDE_DEGREE = 111_320;
+
+function earliestActivePromotionExpiry(rows: ListingRow[], nowMs: number): string | null {
+  let earliestExpiryMs = Number.POSITIVE_INFINITY;
+  for (const row of rows) {
+    const candidates = [
+      row.is_featured === true ? row.featured_until : null,
+      Number(row.priority_placement ?? 0) > 0 ? row.priority_until : null,
+    ];
+    for (const candidate of candidates) {
+      if (!candidate) continue;
+      const expiryMs = Date.parse(candidate);
+      if (Number.isFinite(expiryMs) && expiryMs > nowMs) {
+        earliestExpiryMs = Math.min(earliestExpiryMs, expiryMs);
+      }
+    }
+  }
+  return Number.isFinite(earliestExpiryMs) ? new Date(earliestExpiryMs).toISOString() : null;
+}
 
 const LISTING_SELECT_BASE = [
   "id",
@@ -576,15 +595,21 @@ async function publicListings(ctx: PublicApiCtx, requestUrl: URL): Promise<Respo
         profiles: publicProfileDisplay(row.owner_id ? profiles.get(row.owner_id) : null),
         ownerParticipantType: row.owner_id ? profiles.get(row.owner_id)?.owner_participant_type ?? null : null,
       }));
+      const promotionValidUntil = earliestActivePromotionExpiry(data, nowMs);
 
-      return jsonResponse({
-        data,
-        hasMore,
-        nextCursor,
-        page,
-        pageSize,
-        offset: outputOffset,
-      });
+      return jsonResponse(
+        {
+          data,
+          hasMore,
+          nextCursor,
+          page,
+          pageSize,
+          offset: outputOffset,
+        },
+        promotionValidUntil
+          ? { headers: { [CACHE_VALID_UNTIL_HEADER]: promotionValidUntil } }
+          : undefined,
+      );
     } catch (error) {
       if (isSupabaseTransientError(error)) return upstreamUnavailable();
       throw error;

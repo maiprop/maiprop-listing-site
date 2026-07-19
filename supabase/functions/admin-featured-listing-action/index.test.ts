@@ -224,6 +224,35 @@ Deno.test("admin callers atomically update Spotlight and Priority in one ledger 
   );
 });
 
+Deno.test("expiry-only updates preserve the active campaign history", async () => {
+  const id = validListingId();
+  resetScenario({ profile: { role: "admin" } });
+
+  const res = await handler(authedJson({
+    id,
+    updates: { featured_until: "2026-08-20T00:00:00.000Z" },
+  }));
+
+  assertEquals(res.status, 200);
+  assertEquals(
+    globalThis.__adminFeaturedListingScenario.calls.filter((call) =>
+      call.name === "rpc"
+    ),
+    [{
+      name: "rpc",
+      args: {
+        name: "admin_update_listing_promotion_expiry",
+        args: {
+          p_listing_id: id,
+          p_promotion_type: "spotlight",
+          p_ends_at: "2026-08-20T00:00:00.000Z",
+          p_actor_id: "admin-user",
+        },
+      },
+    }],
+  );
+});
+
 Deno.test("admin callers can revoke Spotlight through the ledger RPC", async () => {
   const id = validListingId();
   resetScenario({ profile: { role: "admin" } });

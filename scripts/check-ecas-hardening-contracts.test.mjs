@@ -116,6 +116,19 @@ describe("ECAS hardening contracts", () => {
     expect(result.failures.join("\n")).toContain("src/pages/LargePage.tsx");
   });
 
+  it("measures module budgets consistently when a Windows checkout uses CRLF", () => {
+    const root = makeFixture();
+    writeFileSync(
+      join(root, "src", "pages", "WindowsPage.tsx"),
+      "x\r\n".repeat(12_000),
+    );
+
+    const result = checkModuleSizeBudget(root);
+
+    expect(result.ok).toBe(true);
+    expect(result.failures).toEqual([]);
+  });
+
   it("fails when a browser mutation touches a blocked table", () => {
     const root = makeFixture();
     writeFileSync(

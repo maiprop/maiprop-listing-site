@@ -175,6 +175,7 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
         <div className="space-y-3">
           {filteredListings.map((l) => {
             const isProjectAd = l.listing_type === "new_build";
+            const promotionsEligible = isPromotionEligible && l.listing_type !== "open_house";
             const spotlightActive = Boolean(l.is_featured);
             const priorityActive = Number(l.priority_placement ?? 0) > 0;
             const promotionPending = activatePromotion.isPending || deactivatePromotion.isPending;
@@ -243,7 +244,7 @@ export function MyListingsSection({ bioType, role }: MyListingsSectionProps) {
                 data-testid={`my-listing-actions-${l.id}`}
                 className="flex w-full items-center gap-1 flex-wrap justify-between border-t border-border/60 pt-3 sm:w-auto sm:shrink-0 sm:justify-end sm:border-t-0 sm:pt-0"
               >
-                {isPromotionEligible && (
+                {promotionsEligible && (
                   <>
                     <button
                       onClick={() => spotlightActive

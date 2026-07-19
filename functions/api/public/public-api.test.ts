@@ -615,9 +615,54 @@ describe("public API cache helpers", () => {
     await Promise.all(waitUntil.mock.calls.map(([promise]) => promise));
     expect(fetchUrls("/rest/v1/listings")).toHaveLength(2);
   });
+
+  it("rejects stale cache entries after their business-validity deadline", async () => {
+    const url = new URL("https://portal.maiprop.co/api/public/listings?validity-test=1");
+    const backgroundTasks: Promise<unknown>[] = [];
+    const cacheOptions = { staleFallbackSeconds: 600 };
+
+    await cachedJson(
+      makeCtx(url.toString(), { waitUntil: (promise) => backgroundTasks.push(promise) }),
+      url,
+      async () => jsonResponse(
+        { version: 1 },
+        { headers: { "X-Maiprop-Cache-Valid-Until": "2000-01-01T00:00:00.000Z" } },
+      ),
+      cacheOptions,
+    );
+    await Promise.all(backgroundTasks);
+    for (const key of [...cacheStore.keys()]) {
+      if (!key.includes("__maiprop_stale=1")) cacheStore.delete(key);
+    }
+
+    const producer = vi.fn(async () => jsonResponse({ version: 2 }));
+    const response = await cachedJson(makeCtx(url.toString()), url, producer, cacheOptions);
+
+    expect(response.headers.get("X-Maiprop-Cache")).toBe("MISS");
+    await expect(response.json()).resolves.toEqual({ version: 2 });
+    expect(producer).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("public listings endpoint", () => {
+  it("keeps a ten-minute stale catalogue seed for immediate background revalidation", async () => {
+    const backgroundTasks: Promise<unknown>[] = [];
+
+    const response = await listingsRequest(makeCtx(
+      "https://portal.maiprop.co/api/public/listings?listing_type=sale&page=1&pageSize=12",
+      { waitUntil: (promise) => backgroundTasks.push(promise) },
+    ));
+    await Promise.all(backgroundTasks);
+
+    const staleSeed = cacheApi.put.mock.calls.find(([request]) =>
+      new URL(request.url).searchParams.get("__maiprop_stale") === "1"
+    );
+
+    expect(response.status).toBe(200);
+    expect(staleSeed).toBeDefined();
+    expect((staleSeed?.[1] as Response).headers.get("Cache-Control")).toBe("public, max-age=600");
+  });
+
   it("reads active Priority and organic streams in parallel without ranking Spotlight or using default offsets", async () => {
     const listingUrls: URL[] = [];
     let listingReadsInFlight = 0;
@@ -673,6 +718,7 @@ describe("public listings endpoint", () => {
     expect(listingCacheUrls.some((url) =>
       url.searchParams.get("v") === "catalogue-stream-cursor-promotions-v4"
     )).toBe(true);
+    expect(res.headers.get("X-Maiprop-Cache-Valid-Until")).toBe("2099-01-01T00:00:00.000Z");
     expect(maxListingReadsInFlight).toBe(2);
     expect(listingUrls).toHaveLength(2);
     const priorityUrl = listingUrls.find((url) => url.searchParams.get("priority_placement") === "gt.0");

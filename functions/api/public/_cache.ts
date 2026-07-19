@@ -14,6 +14,7 @@ const SUPABASE_TRANSIENT_STATUS_RETRIES = 2;
 const SUPABASE_TRANSIENT_RETRY_DELAY_MS = 50;
 const TRANSIENT_UPSTREAM_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504, 520, 522, 524, 544]);
 const INFLIGHT_CACHE_MISS_TTL_MS = 10_000;
+export const CACHE_VALID_UNTIL_HEADER = "X-Maiprop-Cache-Valid-Until";
 const SECURITY_HEADERS = {
   "X-Frame-Options": "DENY",
   "X-Content-Type-Options": "nosniff",
@@ -283,13 +284,20 @@ function staleFallbackCacheSeconds(cache: CacheOptions): number {
   return Math.max(DEFAULT_STALE_FALLBACK_SECONDS, edgeTtl + stale);
 }
 
+function cacheResponseIsWithinBusinessValidity(response: Response): boolean {
+  const rawValidUntil = response.headers.get(CACHE_VALID_UNTIL_HEADER);
+  if (!rawValidUntil) return true;
+  const validUntil = Date.parse(rawValidUntil);
+  return !Number.isFinite(validUntil) || validUntil > Date.now();
+}
+
 async function matchStaleFallback(cacheApi: Cache, cacheKey: URL, cache: CacheOptions): Promise<Response | null> {
   const stale = await matchCacheWithinBudget(
     cacheApi,
     new Request(staleCacheUrl(cacheKey).toString(), { method: "GET" }),
     cache,
   );
-  if (!stale) return null;
+  if (!stale || !cacheResponseIsWithinBusinessValidity(stale)) return null;
   const headers = new Headers(stale.headers);
   applyCacheHeaders(headers, cache, true);
   headers.set("X-Maiprop-Cache", "STALE");
@@ -379,7 +387,7 @@ export async function cachedJson(
   const cacheSeedState: { promise: Promise<void> | null } = { promise: null };
   if (cacheApi) {
     const hit = await matchCacheWithinBudget(cacheApi, cacheRequest, cachePolicy);
-    if (hit) {
+    if (hit && cacheResponseIsWithinBusinessValidity(hit)) {
       return cacheHeaderResponse(hit, "HIT", cachePolicy);
     }
   }

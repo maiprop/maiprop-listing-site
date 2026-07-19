@@ -154,22 +154,33 @@ const request = {
   status: "pending",
 };
 
-const listing = {
-  id: "listing-1",
-  title: "Sea View Flat",
-  city: "Athens",
-  property_type: "apartment",
-  listing_type: "sale",
-  price: 300000,
-  cover_image_url: null,
-  is_featured: true,
-  priority_placement: 4,
-  featured_until: null,
-  status: "active",
-  owner_id: "owner-1",
-  views_count: 125,
-  updated_at: "2026-04-02T10:00:00Z",
-};
+function promotionRow(overrides: Record<string, unknown> = {}) {
+  return {
+    listing_id: "listing-1",
+    title: "Sea View Flat",
+    city: "Athens",
+    property_type: "apartment",
+    listing_type: "sale",
+    price: 300000,
+    cover_image_url: null,
+    is_featured: true,
+    priority_placement: 1,
+    featured_until: "2026-08-01T00:00:00Z",
+    priority_until: "2026-08-02T00:00:00Z",
+    status: "active",
+    owner_id: "owner-1",
+    seller_name: "Owner One",
+    campaign_type: "spotlight",
+    source_type: "admin",
+    campaign_status: "active",
+    starts_at: "2026-07-01T00:00:00Z",
+    ends_at: "2026-08-01T00:00:00Z",
+    detail_views: 2,
+    saves: 1,
+    enquiries: 1,
+    ...overrides,
+  };
+}
 
 beforeEach(() => {
   vi.useRealTimers();
@@ -250,27 +261,89 @@ describe("AdminDashboard tab routing", () => {
 });
 
 describe("AdminFeaturedListings", () => {
-  it("queries active owner-backed promotion inventory instead of unowned catalogue imports", async () => {
-    const listingQuery = selectBuilder([listing]);
-    const eqMock = listingQuery.eq as ReturnType<typeof vi.fn>;
-    const notMock = listingQuery.not as ReturnType<typeof vi.fn>;
-    fromMock.mockImplementation((table: string) => {
-      if (table === "listings") return listingQuery;
-      return selectBuilder([]);
+  it("reports campaign-window outcomes and source instead of lifetime impressions", async () => {
+    rpcMock.mockResolvedValue({
+      data: [promotionRow()],
+      error: null,
     });
 
     renderWithProviders(<AdminFeaturedListings />);
 
     expect(await screen.findByText("Sea View Flat")).toBeInTheDocument();
-    expect(eqMock).toHaveBeenCalledWith("status", "active");
-    expect(notMock).toHaveBeenCalledWith("owner_id", "is", null);
+    expect(screen.getAllByText("Admin grant")).toHaveLength(2);
+    expect(screen.getAllByText(/2 detail views/i)).toHaveLength(2);
+    expect(screen.getAllByText(/1 save/i)).toHaveLength(2);
+    expect(screen.getAllByText(/1 enquiry/i)).toHaveLength(2);
+    expect(screen.getAllByText(/50\.0% enquiry conversion/i)).toHaveLength(2);
+    expect(screen.getAllByText(/Collecting data/i)).toHaveLength(2);
+    expect(screen.getAllByText(/(?:1 Jul 2026|Jul 1, 2026)/i)).toHaveLength(2);
+    expect(screen.getAllByText(/(?:1 Aug 2026|Aug 1, 2026)/i)).toHaveLength(2);
+    expect(screen.queryByText(/Total Spotlight impressions/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^High$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Low$/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps campaign source, dates, and outcomes available below desktop widths", async () => {
+    rpcMock.mockResolvedValue({
+      data: [promotionRow()],
+      error: null,
+    });
+
+    renderWithProviders(<AdminFeaturedListings />);
+
+    const mobileSummary = await screen.findByTestId("promotion-mobile-summary-listing-1");
+    expect(mobileSummary).toHaveClass("lg:hidden");
+    expect(within(mobileSummary).getByText("Admin grant")).toBeInTheDocument();
+    expect(within(mobileSummary).getByText(/2 detail views/i)).toBeInTheDocument();
+    expect(within(mobileSummary).getByText(/1 save/i)).toBeInTheDocument();
+    expect(within(mobileSummary).getByText(/1 enquiry/i)).toBeInTheDocument();
+    expect(within(mobileSummary).getByText(/50\.0% enquiry conversion/i)).toBeInTheDocument();
+  });
+
+  it("marks Open Houses ineligible for both paid promotion products", async () => {
+    rpcMock.mockResolvedValue({
+      data: [promotionRow({
+        listing_id: "open-house-1",
+        title: "Open House Loft",
+        city: "Glyfada",
+        listing_type: "open_house",
+        price: 950,
+        is_featured: false,
+        priority_placement: 0,
+        featured_until: null,
+        priority_until: null,
+        campaign_type: null,
+        source_type: null,
+        campaign_status: null,
+        starts_at: null,
+        ends_at: null,
+        detail_views: 0,
+        saves: 0,
+        enquiries: 0,
+      })],
+      error: null,
+    });
+
+    renderWithProviders(<AdminFeaturedListings />);
+
+    expect(await screen.findByText("Open House Loft")).toBeInTheDocument();
+    expect(screen.getAllByText(/Promotions unavailable for Open Houses/i)).toHaveLength(2);
+    expect(screen.getByRole("switch", { name: /Toggle Spotlight for Open House Loft/i })).toBeDisabled();
+    expect(screen.getByRole("switch", { name: /Toggle Priority for Open House Loft/i })).toBeDisabled();
+  });
+
+  it("loads active owner-backed promotion inventory from the admin reporting RPC", async () => {
+    rpcMock.mockResolvedValue({ data: [promotionRow()], error: null });
+
+    renderWithProviders(<AdminFeaturedListings />);
+
+    expect(await screen.findByText("Sea View Flat")).toBeInTheDocument();
+    expect(rpcMock).toHaveBeenCalledWith("get_admin_listing_promotion_campaigns");
+    expect(fromMock).not.toHaveBeenCalledWith("listings");
   });
 
   it("shows the error branch when listings fail to load", async () => {
-    fromMock.mockImplementation((table: string) => {
-      if (table === "listings") return selectBuilder(null, new Error("listing db down"));
-      return selectBuilder([]);
-    });
+    rpcMock.mockResolvedValue({ data: null, error: new Error("listing db down") });
 
     renderWithProviders(<AdminFeaturedListings />);
 
@@ -278,7 +351,7 @@ describe("AdminFeaturedListings", () => {
   });
 
   it("renders empty and search-empty states", async () => {
-    fromMock.mockImplementation(tableBuilder({ listings: [] }));
+    rpcMock.mockResolvedValue({ data: [], error: null });
 
     renderWithProviders(<AdminFeaturedListings />);
 
@@ -288,23 +361,23 @@ describe("AdminFeaturedListings", () => {
   });
 
   it("updates featured state, priority, expiry, and detail paths", async () => {
-    fromMock.mockImplementation(tableBuilder({
-      listings: [
-        listing,
-        { ...listing, id: "listing-2", title: "Auction Maisonette", listing_type: "auction", is_featured: false, priority_placement: 1, views_count: 75, owner_id: null },
-        { ...listing, id: "listing-3", title: "Open House Loft", listing_type: "open_house", is_featured: false, priority_placement: 2, views_count: 10, owner_id: null },
-        { ...listing, id: "listing-4", title: "New Build Flat", listing_type: "new_build", is_featured: false, priority_placement: 3, views_count: 20, owner_id: null },
+    rpcMock.mockResolvedValue({
+      data: [
+        promotionRow(),
+        promotionRow({ listing_id: "listing-2", title: "Auction Maisonette", listing_type: "auction", is_featured: false, priority_placement: 1, campaign_type: "priority" }),
+        promotionRow({ listing_id: "listing-3", title: "Open House Loft", listing_type: "open_house", is_featured: false, priority_placement: 0, featured_until: null, priority_until: null, campaign_type: null, source_type: null, starts_at: null, ends_at: null }),
+        promotionRow({ listing_id: "listing-4", title: "New Build Flat", listing_type: "new_build", is_featured: false, priority_placement: 3, campaign_type: "priority" }),
       ],
-      profiles_public: [{ user_id: "owner-1", display_name: "Owner One" }],
-    }));
+      error: null,
+    });
 
     renderWithProviders(<AdminFeaturedListings />);
 
     expect(await screen.findByText("Sea View Flat")).toBeInTheDocument();
-    expect(screen.getByText("Owner One")).toBeInTheDocument();
-    expect(screen.getByText(/High/i)).toBeInTheDocument();
-    expect(screen.getByText(/Medium/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/Low/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Owner One")).toHaveLength(4);
+    expect(screen.queryByText(/^High$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Medium$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Low$/i)).not.toBeInTheDocument();
     const detailLinks = screen.getAllByTitle("View listing");
     expect(detailLinks[0]).toHaveAttribute("href", "/property/listing-1");
     expect(detailLinks[1]).toHaveAttribute("href", "/auction/listing-2");
@@ -318,12 +391,29 @@ describe("AdminFeaturedListings", () => {
     await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Priority removed from listing"));
 
     const expiry = screen.getByLabelText(/Spotlight until for Sea View Flat/i);
-    fireEvent.change(expiry, { target: { value: "2026-06-20" } });
+    fireEvent.change(expiry, { target: { value: "2026-08-20" } });
     await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith(expect.stringMatching(/Expires/i)));
   });
 
+  it("does not silently replace a cleared Spotlight expiry with another 30-day campaign", async () => {
+    rpcMock.mockResolvedValue({ data: [promotionRow()], error: null });
+
+    renderWithProviders(<AdminFeaturedListings />);
+
+    const expiry = await screen.findByLabelText(/Spotlight until for Sea View Flat/i);
+    fireEvent.change(expiry, { target: { value: "" } });
+
+    expect(toastMock.error).toHaveBeenCalledWith(
+      "Choose a future expiry date or remove Spotlight.",
+    );
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
   it("enables inactive Priority as a binary paid placement", async () => {
-    fromMock.mockImplementation(tableBuilder({ listings: [{ ...listing, priority_placement: 0 }] }));
+    rpcMock.mockResolvedValue({
+      data: [promotionRow({ priority_placement: 0, priority_until: null, campaign_type: null, source_type: null, starts_at: null, ends_at: null })],
+      error: null,
+    });
 
     renderWithProviders(<AdminFeaturedListings />);
 
