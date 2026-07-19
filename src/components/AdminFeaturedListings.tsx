@@ -1,12 +1,12 @@
 /**
  * Listing Promotions admin panel. Admin-only.
- * Manage is_featured and priority_placement for all active listings.
- * Includes view analytics: views_count, featured_since, and a performance indicator.
+ * Campaign truth comes from the allocation ledger and is measured only inside
+ * each campaign window. Lifetime listing views are intentionally excluded.
  */
 
 import { useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Star, Search, ImageOff, TrendingUp, ExternalLink } from "lucide-react";
+import { Star, Search, ImageOff, BarChart3, ExternalLink } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +17,7 @@ import { getListingDetailPath } from "@/lib/listingRoutes";
 import { parseMutationInput, rowUpdateMutationSchema } from "@/lib/mutationSchemas";
 
 type ListingStatus = Database["public"]["Enums"]["listing_status"];
-type PropertyType = Database["public"]["Enums"]["property_type"];
+type CampaignRow = Database["public"]["Functions"]["get_admin_listing_promotion_campaigns"]["Returns"][number];
 
 type FeaturedListingActionUpdates = {
   is_featured?: boolean;
@@ -34,7 +34,7 @@ type FeaturedListing = {
   id: string;
   title: string;
   city: string;
-  property_type: PropertyType;
+  property_type: string;
   price: number;
   cover_image_url: string | null;
   is_featured: boolean;
@@ -42,33 +42,21 @@ type FeaturedListing = {
   status: ListingStatus;
   owner_id: string | null;
   seller_name: string | null;
-  views_count: number;
-  /** updated_at used as a proxy for when is_featured was last changed */
-  featured_since: string | null;
   featured_until: string | null;
+  priority_until: string | null;
   listing_type: string;
+  campaigns: PromotionCampaign[];
 };
 
-type RawListingRow = {
-  id: string;
-  title: string;
-  city: string;
-  property_type: PropertyType;
-  price: number;
-  cover_image_url: string | null;
-  is_featured: boolean;
-  priority_placement: number;
-  status: ListingStatus;
-  owner_id: string | null;
-  views_count: number;
-  updated_at: string | null;
-  featured_until: string | null;
-  listing_type: string;
-};
-
-type ProfilesPublicRow = {
-  user_id: string;
-  display_name: string | null;
+type PromotionCampaign = {
+  type: "spotlight" | "priority";
+  source: "admin" | "plan" | "addon";
+  status: string;
+  startsAt: string;
+  endsAt: string;
+  detailViews: number;
+  saves: number;
+  enquiries: number;
 };
 
 const STATUS_BADGE: Record<
@@ -85,17 +73,75 @@ const STATUS_BADGE: Record<
 
 import { formatPrice, formatDate } from "@/lib/format";
 
-/** Returns a colored dot className based on views_count thresholds */
-function performanceDotClass(views: number): string {
-  if (views > 100) return "bg-green-500";
-  if (views >= 50) return "bg-yellow-400";
-  return "bg-red-500";
+const SOURCE_LABELS: Record<PromotionCampaign["source"], string> = {
+  admin: "Admin grant",
+  plan: "Plan benefit",
+  addon: "Paid add-on",
+};
+
+function isCampaignType(value: string | null): value is PromotionCampaign["type"] {
+  return value === "spotlight" || value === "priority";
 }
 
-function performanceLabel(views: number): string {
-  if (views > 100) return "High";
-  if (views >= 50) return "Medium";
-  return "Low";
+function isCampaignSource(value: string | null): value is PromotionCampaign["source"] {
+  return value === "admin" || value === "plan" || value === "addon";
+}
+
+function pluralize(value: number, singular: string, plural = `${singular}s`): string {
+  return `${value.toLocaleString("en-US")} ${value === 1 ? singular : plural}`;
+}
+
+function enquiryConversion(campaign: PromotionCampaign): string {
+  if (campaign.detailViews <= 0) return "No conversion rate yet";
+  return `${((campaign.enquiries / campaign.detailViews) * 100).toFixed(1)}% enquiry conversion`;
+}
+
+function groupCampaignRows(rows: CampaignRow[]): FeaturedListing[] {
+  const listings = new Map<string, FeaturedListing>();
+
+  for (const row of rows) {
+    let listing = listings.get(row.listing_id);
+    if (!listing) {
+      listing = {
+        id: row.listing_id,
+        title: row.title,
+        city: row.city,
+        property_type: row.property_type,
+        price: row.price,
+        cover_image_url: row.cover_image_url,
+        is_featured: row.is_featured,
+        priority_placement: row.priority_placement,
+        status: row.status as ListingStatus,
+        owner_id: row.owner_id,
+        seller_name: row.seller_name,
+        featured_until: row.featured_until,
+        priority_until: row.priority_until,
+        listing_type: row.listing_type,
+        campaigns: [],
+      };
+      listings.set(row.listing_id, listing);
+    }
+
+    if (
+      isCampaignType(row.campaign_type)
+      && isCampaignSource(row.source_type)
+      && row.starts_at
+      && row.ends_at
+    ) {
+      listing.campaigns.push({
+        type: row.campaign_type,
+        source: row.source_type,
+        status: row.campaign_status ?? "active",
+        startsAt: row.starts_at,
+        endsAt: row.ends_at,
+        detailViews: row.detail_views,
+        saves: row.saves,
+        enquiries: row.enquiries,
+      });
+    }
+  }
+
+  return [...listings.values()];
 }
 
 async function updateFeaturedListing(
@@ -118,49 +164,9 @@ async function updateFeaturedListing(
 }
 
 async function fetchFeaturedListings(): Promise<FeaturedListing[]> {
-  const { data: listings, error: listingsError } = await supabase
-    .from("listings")
-    .select(
-      "id, title, city, property_type, listing_type, price, cover_image_url, is_featured, priority_placement, featured_until, status, owner_id, views_count, updated_at",
-    )
-    .eq("status", "active")
-    .not("owner_id", "is", null)
-    .order("is_featured", { ascending: false })
-    .order("priority_placement", { ascending: false })
-    .order("created_at", { ascending: false });
-
-  if (listingsError) throw listingsError;
-  if (!listings || listings.length === 0) return [];
-
-  const rows = (listings as unknown) as RawListingRow[];
-
-  // Collect unique owner_ids to fetch profile names
-  const ownerIds = [
-    ...new Set(rows.map((l) => l.owner_id).filter((id): id is string => id !== null)),
-  ];
-
-  const profileMap: Record<string, string | null> = {};
-  if (ownerIds.length > 0) {
-    const { data: profiles } = await supabase
-      .from("profiles_public")
-      .select("user_id, display_name")
-      .in("user_id", ownerIds);
-
-    if (profiles) {
-      (profiles as ProfilesPublicRow[]).forEach((p) => {
-        profileMap[p.user_id] = p.display_name;
-      });
-    }
-  }
-
-  return rows.map((l) => ({
-    ...l,
-    seller_name: l.owner_id ? (profileMap[l.owner_id] ?? null) : null,
-    views_count: l.views_count ?? 0,
-    featured_since: l.updated_at ?? null,
-    featured_until: l.featured_until ?? null,
-    listing_type: l.listing_type ?? "sale",
-  }));
+  const { data, error } = await supabase.rpc("get_admin_listing_promotion_campaigns");
+  if (error) throw error;
+  return groupCampaignRows(data ?? []);
 }
 
 export default function AdminFeaturedListings() {
@@ -176,10 +182,8 @@ export default function AdminFeaturedListings() {
   });
 
   const featuredCount = listings.filter((l) => l.is_featured).length;
-
-  const totalFeaturedImpressions = listings
-    .filter((l) => l.is_featured)
-    .reduce((sum, l) => sum + (l.views_count ?? 0), 0);
+  const priorityCount = listings.filter((l) => l.priority_placement > 0).length;
+  const campaignCount = listings.reduce((sum, listing) => sum + listing.campaigns.length, 0);
 
   const filtered = listings.filter((l) => {
     if (!search.trim()) return true;
@@ -189,6 +193,10 @@ export default function AdminFeaturedListings() {
 
   const handleToggleFeatured = useCallback(
     async (listing: FeaturedListing) => {
+      if (listing.listing_type === "open_house") {
+        toast.error("Open Houses use chronological scheduling and cannot receive listing boosts.");
+        return;
+      }
       setToggling((prev) => ({ ...prev, [listing.id]: true }));
       const next = !listing.is_featured;
       try {
@@ -206,6 +214,10 @@ export default function AdminFeaturedListings() {
 
   const handleTogglePriority = useCallback(
     async (listing: FeaturedListing) => {
+      if (listing.listing_type === "open_house") {
+        toast.error("Open Houses use chronological scheduling and cannot receive listing boosts.");
+        return;
+      }
       const enabled = listing.priority_placement <= 0;
       setUpdatingPriority((prev) => ({ ...prev, [listing.id]: true }));
       try {
@@ -261,24 +273,25 @@ export default function AdminFeaturedListings() {
             Control Spotlight badges and Priority placement for active listings.
           </p>
         </div>
-        <div className="flex items-center gap-2 text-sm shrink-0">
+        <div className="flex flex-wrap items-center gap-2 text-sm shrink-0">
           <Badge variant="default" className="gap-1.5 text-xs">
             <Star className="w-3 h-3" />
             {featuredCount} Spotlight
           </Badge>
-          <span className="text-muted-foreground">of {listings.length} total</span>
+          <Badge variant="outline" className="text-xs">
+            {priorityCount} Priority
+          </Badge>
+          <span className="text-muted-foreground">across {listings.length} listings</span>
         </div>
       </div>
 
-      {/* Analytics summary bar */}
-      {!isLoading && featuredCount > 0 && (
-        <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-4 py-2.5 text-sm">
-          <TrendingUp className="w-4 h-4 text-primary shrink-0" />
-          <span className="text-muted-foreground">Total Spotlight impressions:</span>
-          <span className="font-semibold tabular-nums">
-            {totalFeaturedImpressions.toLocaleString("en-US")}
-          </span>
-          <span className="text-muted-foreground">views across {featuredCount} Spotlight listing{featuredCount !== 1 ? "s" : ""}</span>
+      {!isLoading && campaignCount > 0 && (
+        <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm">
+          <BarChart3 className="mt-0.5 w-4 h-4 text-primary shrink-0" />
+          <p className="text-muted-foreground">
+            Results cover detail-page activity recorded inside each allocation window. Impressions,
+            CTR, and uplift are not reported until dedicated exposure tracking exists.
+          </p>
         </div>
       )}
 
@@ -314,10 +327,8 @@ export default function AdminFeaturedListings() {
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Seller</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Price</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Status</th>
-                <th className="text-center px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Views</th>
-                <th className="text-center px-4 py-3 font-medium text-muted-foreground hidden xl:table-cell">Since</th>
-                <th className="text-center px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Perf.</th>
-                <th className="text-center px-4 py-3 font-medium text-muted-foreground hidden xl:table-cell">Expires</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Campaign</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden xl:table-cell">Results</th>
                 <th className="text-center px-4 py-3 font-medium text-muted-foreground">Spotlight</th>
                 <th className="text-center px-4 py-3 font-medium text-muted-foreground">Priority</th>
                 <th className="text-center px-4 py-3 font-medium text-muted-foreground w-10"></th>
@@ -330,8 +341,8 @@ export default function AdminFeaturedListings() {
                 const isTogglingThis = toggling[listing.id] ?? false;
                 const isUpdatingPriorityThis = updatingPriority[listing.id] ?? false;
                 const isUpdatingUntilThis = updatingUntil[listing.id] ?? false;
-                const dotClass = performanceDotClass(listing.views_count);
-                const perfLabel = performanceLabel(listing.views_count);
+                const promotionsEligible = listing.listing_type !== "open_house";
+                const priorityCampaign = listing.campaigns.find((campaign) => campaign.type === "priority");
 
                 return (
                   <tr
@@ -382,63 +393,99 @@ export default function AdminFeaturedListings() {
                       </Badge>
                     </td>
 
-                    {/* Views count */}
-                    <td className="px-4 py-3 text-center hidden lg:table-cell tabular-nums">
-                      {listing.views_count.toLocaleString("en-US")}
+                    {/* Campaign dates and source */}
+                    <td className="px-4 py-3 hidden lg:table-cell min-w-52">
+                      {!promotionsEligible ? (
+                        <p className="max-w-52 text-xs text-muted-foreground">
+                          Promotions unavailable for Open Houses.
+                        </p>
+                      ) : listing.campaigns.length === 0 ? (
+                        <span className="text-xs text-muted-foreground">No active campaign</span>
+                      ) : (
+                        <div className="space-y-2">
+                          {listing.campaigns.map((campaign) => (
+                            <div key={`${campaign.type}-${campaign.startsAt}`} className="space-y-1">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <Badge variant={campaign.type === "spotlight" ? "default" : "outline"} className="text-xs capitalize">
+                                  {campaign.type}
+                                </Badge>
+                                <Badge variant="secondary" className="text-xs">
+                                  {SOURCE_LABELS[campaign.source]}
+                                </Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground whitespace-nowrap">
+                                {formatDate(campaign.startsAt)} - {formatDate(campaign.endsAt)}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </td>
 
-                    {/* Spotlight since (approximated via updated_at) */}
-                    <td className="px-4 py-3 text-center hidden xl:table-cell text-muted-foreground text-xs whitespace-nowrap">
-                      {listing.is_featured ? formatDate(listing.featured_since) : "—"}
-                    </td>
-
-                    {/* Performance indicator */}
-                    <td className="px-4 py-3 hidden lg:table-cell">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <span
-                          className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 ${dotClass}`}
-                          title={`${perfLabel} performance (${listing.views_count} views)`}
-                        />
-                        <span className="text-xs text-muted-foreground">{perfLabel}</span>
-                      </div>
-                    </td>
-
-                    {/* Expires column */}
-                    <td className="px-4 py-3 text-center hidden xl:table-cell">
-                      <input
-                        type="date"
-                        disabled={isUpdatingUntilThis}
-                        value={listing.featured_until ? listing.featured_until.slice(0, 10) : ""}
-                        min={new Date().toISOString().slice(0, 10)}
-                        onChange={(e) => handleUntilChange(listing, e.target.value)}
-                        className={`w-32 h-8 px-2 rounded-md border bg-background text-xs outline-none focus:border-primary disabled:opacity-50 ${
-                          listing.featured_until && new Date(listing.featured_until) < new Date()
-                            ? "border-destructive text-destructive"
-                            : "border-border text-foreground"
-                        }`}
-                        aria-label={`Spotlight until for ${listing.title}`}
-                        title={listing.featured_until ? `Expires ${formatDate(listing.featured_until)}` : "No Spotlight expiry set"}
-                      />
+                    {/* Campaign-window outcomes. These are not impressions. */}
+                    <td className="px-4 py-3 hidden xl:table-cell min-w-64">
+                      {listing.campaigns.length === 0 ? (
+                        <span className="text-xs text-muted-foreground">No campaign results</span>
+                      ) : (
+                        <div className="space-y-2">
+                          {listing.campaigns.map((campaign) => (
+                            <div key={`${campaign.type}-${campaign.startsAt}-results`} className="space-y-1">
+                              <p className="text-xs text-foreground">
+                                {pluralize(campaign.detailViews, "detail view")} &middot; {pluralize(campaign.saves, "save")} &middot; {pluralize(campaign.enquiries, "enquiry", "enquiries")}
+                              </p>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="text-xs text-muted-foreground">{enquiryConversion(campaign)}</span>
+                                <Badge variant="outline" className="text-xs">Collecting data</Badge>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </td>
 
                     {/* Spotlight toggle */}
                     <td className="px-4 py-3 text-center">
-                      <Switch
-                        checked={listing.is_featured}
-                        disabled={isTogglingThis}
-                        onCheckedChange={() => handleToggleFeatured(listing)}
-                        aria-label={`Toggle Spotlight for ${listing.title}`}
-                      />
+                      <div className="flex flex-col items-center gap-2">
+                        <Switch
+                          checked={listing.is_featured}
+                          disabled={isTogglingThis || !promotionsEligible}
+                          onCheckedChange={() => handleToggleFeatured(listing)}
+                          aria-label={`Toggle Spotlight for ${listing.title}`}
+                        />
+                        {promotionsEligible && listing.is_featured && (
+                          <input
+                            type="date"
+                            disabled={isUpdatingUntilThis}
+                            value={listing.featured_until ? listing.featured_until.slice(0, 10) : ""}
+                            min={new Date().toISOString().slice(0, 10)}
+                            onChange={(e) => handleUntilChange(listing, e.target.value)}
+                            className={`w-32 h-8 px-2 rounded-md border bg-background text-xs outline-none focus:border-primary disabled:opacity-50 ${
+                              listing.featured_until && new Date(listing.featured_until) < new Date()
+                                ? "border-destructive text-destructive"
+                                : "border-border text-foreground"
+                            }`}
+                            aria-label={`Spotlight until for ${listing.title}`}
+                            title={listing.featured_until ? `Expires ${formatDate(listing.featured_until)}` : "No Spotlight expiry set"}
+                          />
+                        )}
+                      </div>
                     </td>
 
                     {/* Priority placement */}
                     <td className="px-4 py-3 text-center">
-                      <Switch
-                        checked={listing.priority_placement > 0}
-                        disabled={isUpdatingPriorityThis}
-                        onCheckedChange={() => handleTogglePriority(listing)}
-                        aria-label={`Toggle Priority for ${listing.title}`}
-                      />
+                      <div className="flex flex-col items-center gap-1.5">
+                        <Switch
+                          checked={listing.priority_placement > 0}
+                          disabled={isUpdatingPriorityThis || !promotionsEligible}
+                          onCheckedChange={() => handleTogglePriority(listing)}
+                          aria-label={`Toggle Priority for ${listing.title}`}
+                        />
+                        {promotionsEligible && listing.priority_placement > 0 && (
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">
+                            Until {formatDate(listing.priority_until ?? priorityCampaign?.endsAt ?? null)}
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     {/* View listing link */}

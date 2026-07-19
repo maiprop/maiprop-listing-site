@@ -615,6 +615,33 @@ describe("public API cache helpers", () => {
     await Promise.all(waitUntil.mock.calls.map(([promise]) => promise));
     expect(fetchUrls("/rest/v1/listings")).toHaveLength(2);
   });
+
+  it("rejects stale cache entries after their business-validity deadline", async () => {
+    const url = new URL("https://portal.maiprop.co/api/public/listings?validity-test=1");
+    const backgroundTasks: Promise<unknown>[] = [];
+    const cacheOptions = { staleFallbackSeconds: 600 };
+
+    await cachedJson(
+      makeCtx(url.toString(), { waitUntil: (promise) => backgroundTasks.push(promise) }),
+      url,
+      async () => jsonResponse(
+        { version: 1 },
+        { headers: { "X-Maiprop-Cache-Valid-Until": "2000-01-01T00:00:00.000Z" } },
+      ),
+      cacheOptions,
+    );
+    await Promise.all(backgroundTasks);
+    for (const key of [...cacheStore.keys()]) {
+      if (!key.includes("__maiprop_stale=1")) cacheStore.delete(key);
+    }
+
+    const producer = vi.fn(async () => jsonResponse({ version: 2 }));
+    const response = await cachedJson(makeCtx(url.toString()), url, producer, cacheOptions);
+
+    expect(response.headers.get("X-Maiprop-Cache")).toBe("MISS");
+    await expect(response.json()).resolves.toEqual({ version: 2 });
+    expect(producer).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("public listings endpoint", () => {
@@ -691,6 +718,7 @@ describe("public listings endpoint", () => {
     expect(listingCacheUrls.some((url) =>
       url.searchParams.get("v") === "catalogue-stream-cursor-promotions-v4"
     )).toBe(true);
+    expect(res.headers.get("X-Maiprop-Cache-Valid-Until")).toBe("2099-01-01T00:00:00.000Z");
     expect(maxListingReadsInFlight).toBe(2);
     expect(listingUrls).toHaveLength(2);
     const priorityUrl = listingUrls.find((url) => url.searchParams.get("priority_placement") === "gt.0");

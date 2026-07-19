@@ -68,6 +68,19 @@ const remediationMigration = remediationMigrationName
   ? readFileSync(resolve(migrationDirectory, remediationMigrationName), "utf8")
   : "";
 
+const campaignTruthMigrationName = readdirSync(migrationDirectory).find((name) =>
+  /^\d{14}_report_promotion_campaign_truth_and_block_open_houses\.sql$/.test(name)
+);
+const campaignTruthMigration = campaignTruthMigrationName
+  ? readFileSync(resolve(migrationDirectory, campaignTruthMigrationName), "utf8")
+  : "";
+const openHouseTransitionGuardMigrationName = readdirSync(migrationDirectory).find((name) =>
+  /^\d{14}_guard_open_house_listing_type_transition\.sql$/.test(name)
+);
+const openHouseTransitionGuardMigration = openHouseTransitionGuardMigrationName
+  ? readFileSync(resolve(migrationDirectory, openHouseTransitionGuardMigrationName), "utf8")
+  : "";
+
 function sqlSection(sql: string, start: string, end: string): string {
   const startIndex = sql.indexOf(start);
   const endIndex = sql.indexOf(end, startIndex + start.length);
@@ -77,6 +90,35 @@ function sqlSection(sql: string, start: string, end: string): string {
 }
 
 describe("listing promotion entitlement migration", () => {
+  it("reports allocation-window campaign truth and blocks inert Open House promotions", () => {
+    expect(campaignTruthMigrationName).toBeDefined();
+    expect(campaignTruthMigration).toContain(
+      "CREATE OR REPLACE FUNCTION public.get_admin_listing_promotion_campaigns",
+    );
+    expect(campaignTruthMigration).toContain("public.has_platform_admin((SELECT auth.uid()))");
+    expect(campaignTruthMigration).toContain("listing_view_events");
+    expect(campaignTruthMigration).toContain("public.favorites");
+    expect(campaignTruthMigration).toContain("public.conversations");
+    expect(campaignTruthMigration).toContain("allocation.starts_at");
+    expect(campaignTruthMigration).toContain("allocation.ends_at");
+    expect(campaignTruthMigration).toContain("open_house_promotion_not_supported");
+    expect(campaignTruthMigration).toContain("source_type = 'admin'");
+    expect(campaignTruthMigration).toContain(
+      "revoke_reason = 'open_house_promotion_not_supported'",
+    );
+    expect(campaignTruthMigration).toContain("listing_type::text = 'open_house'");
+    expect(openHouseTransitionGuardMigrationName).toBeDefined();
+    expect(openHouseTransitionGuardMigration).toContain(
+      "CREATE OR REPLACE FUNCTION private.guard_open_house_listing_type_transition",
+    );
+    expect(openHouseTransitionGuardMigration).toContain(
+      "BEFORE UPDATE OF listing_type ON public.listings",
+    );
+    expect(openHouseTransitionGuardMigration).toContain(
+      "open_house_active_promotion_must_be_revoked_first",
+    );
+  });
+
   it("uses a private fail-closed Stripe runtime configuration", () => {
     expect(runtimeMigration).toContain(
       "CREATE TABLE IF NOT EXISTS private.billing_runtime_config",

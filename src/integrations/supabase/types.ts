@@ -4591,6 +4591,33 @@ export type Database = {
           status: string
         }[]
       }
+      get_admin_listing_promotion_campaigns: {
+        Args: never
+        Returns: {
+          campaign_status: string | null
+          campaign_type: string | null
+          city: string
+          cover_image_url: string | null
+          detail_views: number
+          ends_at: string | null
+          enquiries: number
+          featured_until: string | null
+          is_featured: boolean
+          listing_id: string
+          listing_type: string
+          owner_id: string
+          price: number
+          priority_placement: number
+          priority_until: string | null
+          property_type: string
+          saves: number
+          seller_name: string | null
+          source_type: string | null
+          starts_at: string | null
+          status: string
+          title: string
+        }[]
+      }
       admin_set_listing_promotions: {
         Args: {
           p_actor_id: string
