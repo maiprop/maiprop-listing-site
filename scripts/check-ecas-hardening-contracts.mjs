@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -61,21 +62,26 @@ export function checkModuleSizeBudget(root = process.cwd()) {
   const legacy = new Map((budget.legacyExceptions ?? []).map((entry) => [entry.path, entry]));
   const owners = new Set(["app-web", "shared-ui", "domain", "data-access"]);
 
-  for (const { relativePath, stat } of walkFiles(
+  for (const { relativePath, absolutePath, stat } of walkFiles(
     root,
     "src",
     (path) => /\.(?:ts|tsx)$/.test(path) && !/\/test\/|\.test\.|\.spec\./.test(path),
   )) {
     if (generated.has(relativePath)) continue;
     if (stat.size <= defaultMaxBytes) continue;
+    const normalizedBytes = Buffer.byteLength(
+      readFileSync(absolutePath, "utf8").replace(/\r\n?/g, "\n"),
+      "utf8",
+    );
+    if (normalizedBytes <= defaultMaxBytes) continue;
 
     const exception = legacy.get(relativePath);
     if (!exception) {
-      failures.push(`${relativePath} is ${stat.size} bytes and needs a module-size-budget exception or refactor`);
+      failures.push(`${relativePath} is ${normalizedBytes} bytes and needs a module-size-budget exception or refactor`);
       continue;
     }
-    if (Number(exception.allowedMaxBytes) < stat.size) {
-      failures.push(`${relativePath} is ${stat.size} bytes and exceeds allowedMaxBytes ${exception.allowedMaxBytes}`);
+    if (Number(exception.allowedMaxBytes) < normalizedBytes) {
+      failures.push(`${relativePath} is ${normalizedBytes} bytes and exceeds allowedMaxBytes ${exception.allowedMaxBytes}`);
     }
     if (!owners.has(exception.owner)) {
       failures.push(`${relativePath} module-size-budget owner must map to a repository boundary`);

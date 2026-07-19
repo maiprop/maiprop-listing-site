@@ -67,7 +67,7 @@ const LISTINGS_CACHE_OPTIONS = {
   edgeTtlSeconds: 60,
   browserTtlSeconds: 30,
   staleSeconds: 60,
-  staleFallbackSeconds: 60,
+  staleFallbackSeconds: 600,
   producerTimeoutMs: 5_000,
 };
 const LISTINGS_SUPABASE_TIMEOUT_MS = 4_500;

@@ -618,6 +618,24 @@ describe("public API cache helpers", () => {
 });
 
 describe("public listings endpoint", () => {
+  it("keeps a ten-minute stale catalogue seed for immediate background revalidation", async () => {
+    const backgroundTasks: Promise<unknown>[] = [];
+
+    const response = await listingsRequest(makeCtx(
+      "https://portal.maiprop.co/api/public/listings?listing_type=sale&page=1&pageSize=12",
+      { waitUntil: (promise) => backgroundTasks.push(promise) },
+    ));
+    await Promise.all(backgroundTasks);
+
+    const staleSeed = cacheApi.put.mock.calls.find(([request]) =>
+      new URL(request.url).searchParams.get("__maiprop_stale") === "1"
+    );
+
+    expect(response.status).toBe(200);
+    expect(staleSeed).toBeDefined();
+    expect((staleSeed?.[1] as Response).headers.get("Cache-Control")).toBe("public, max-age=600");
+  });
+
   it("reads active Priority and organic streams in parallel without ranking Spotlight or using default offsets", async () => {
     const listingUrls: URL[] = [];
     let listingReadsInFlight = 0;
