@@ -80,6 +80,12 @@ const openHouseTransitionGuardMigrationName = readdirSync(migrationDirectory).fi
 const openHouseTransitionGuardMigration = openHouseTransitionGuardMigrationName
   ? readFileSync(resolve(migrationDirectory, openHouseTransitionGuardMigrationName), "utf8")
   : "";
+const secureCampaignRpcMigrationName = readdirSync(migrationDirectory).find((name) =>
+  /^\d{14}_secure_admin_promotion_campaign_rpc\.sql$/.test(name)
+);
+const secureCampaignRpcMigration = secureCampaignRpcMigrationName
+  ? readFileSync(resolve(migrationDirectory, secureCampaignRpcMigrationName), "utf8")
+  : "";
 
 function sqlSection(sql: string, start: string, end: string): string {
   const startIndex = sql.indexOf(start);
@@ -117,6 +123,28 @@ describe("listing promotion entitlement migration", () => {
     expect(openHouseTransitionGuardMigration).toContain(
       "open_house_active_promotion_must_be_revoked_first",
     );
+  });
+
+  it("keeps the browser campaign RPC invoker-safe and privileged aggregation private", () => {
+    expect(secureCampaignRpcMigrationName).toBeDefined();
+    expect(secureCampaignRpcMigration).toContain(
+      "CREATE OR REPLACE FUNCTION private.get_admin_listing_promotion_campaigns_internal",
+    );
+    expect(secureCampaignRpcMigration).toContain("SECURITY DEFINER");
+    expect(secureCampaignRpcMigration).toContain(
+      "CREATE OR REPLACE FUNCTION public.get_admin_listing_promotion_campaigns",
+    );
+    expect(secureCampaignRpcMigration).toContain("SECURITY INVOKER");
+    expect(secureCampaignRpcMigration).toContain(
+      "REVOKE ALL ON FUNCTION private.get_admin_listing_promotion_campaigns_internal()",
+    );
+    expect(secureCampaignRpcMigration).toContain(
+      "GRANT EXECUTE ON FUNCTION private.get_admin_listing_promotion_campaigns_internal() TO authenticated, service_role",
+    );
+    expect(
+      secureCampaignRpcMigration.match(/private\.has_platform_admin\(\(SELECT auth\.uid\(\)\)\)/g),
+    ).toHaveLength(2);
+    expect(secureCampaignRpcMigration.match(/platform_admin_required/g)).toHaveLength(2);
   });
 
   it("uses a private fail-closed Stripe runtime configuration", () => {
