@@ -85,6 +85,7 @@ export interface Property {
 interface PropertyCardProps {
   property: Property;
   compact?: boolean;
+  density?: "comfortable" | "mobile-grid";
   testId?: string;
   imagePriority?: boolean;
   deferOffscreenRendering?: boolean;
@@ -92,7 +93,7 @@ interface PropertyCardProps {
 }
 
 const PROPERTY_IMAGE_WIDTHS = [320, 480, 768, 1024];
-const PROPERTY_CARD_IMAGE_SIZES = "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw";
+const PROPERTY_CARD_IMAGE_SIZES = "(max-width: 359px) 100vw, (max-width: 699px) 50vw, (max-width: 1024px) 33vw, 20vw";
 const COMPACT_PROPERTY_IMAGE_SIZES = "96px";
 
 const getPriorityImageAttributes = (priority: boolean) =>
@@ -171,7 +172,7 @@ const formatNewBuildUnitLabel = (property: Property): string | null => {
   return `${prefix} unit${total === 1 ? "" : "s"}`;
 };
 
-export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(function PropertyCard({ property, compact = false, testId = "property-card", imagePriority = false, deferOffscreenRendering = true, footerAccessory }, _ref) { // skipcq: JS-R1005, JS-W1044 - Card rendering branches compact, auction, and standard listing affordances in one reusable surface.
+export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(function PropertyCard({ property, compact = false, density = "comfortable", testId = "property-card", imagePriority = false, deferOffscreenRendering = true, footerAccessory }, _ref) { // skipcq: JS-R1005, JS-W1044 - Card rendering branches compact, auction, and standard listing affordances in one reusable surface.
   const { t } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -377,7 +378,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
     : "";
 
   return (
-    <div data-testid={testId} className={`property-card h-[332px] w-full min-w-0 rounded-2xl overflow-hidden group grid grid-rows-[132px_minmax(0,1fr)] bg-card transition-shadow duration-300 ${offscreenRenderingClass} ${
+    <div data-testid={testId} data-density={density} className={`property-card h-[332px] w-full min-w-0 rounded-2xl overflow-hidden group grid grid-rows-[132px_minmax(0,1fr)] bg-card transition-shadow duration-300 ${offscreenRenderingClass} ${
       property.isFeatured
         ? "border-2 border-amber-400/70 shadow-[0_0_0_1px_rgba(251,191,36,0.15),0_4px_24px_rgba(251,191,36,0.22)] hover:shadow-[0_0_0_1px_rgba(251,191,36,0.25),0_8px_32px_rgba(251,191,36,0.35)]"
         : "border border-border"
@@ -563,10 +564,10 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
         </div>
 
         {/* Agent row + CTA */}
-        <div data-testid="property-card-footer" className="flex min-h-[2.5rem] max-h-[2.5rem] items-center gap-2 overflow-hidden border-t border-border pt-2">
+        <div data-testid="property-card-footer" className={`flex min-h-[2.5rem] max-h-[2.5rem] items-center overflow-hidden border-t border-border pt-2 ${density === "mobile-grid" ? "gap-1 sm:gap-2" : "gap-2"}`}>
           {/* Agent info */}
           {property.agent && (
-            <div className={`min-w-0 flex-1 items-center gap-2 ${hasPrimaryDetailAction ? "hidden min-[640px]:flex" : "flex"}`}>
+            <div className={`min-w-0 flex-1 items-center gap-2 ${hasPrimaryDetailAction ? "hidden min-[640px]:flex" : density === "mobile-grid" ? "hidden min-[480px]:flex" : "flex"}`}>
               <div className="w-6 h-6 rounded-full bg-gradient-primary flex items-center justify-center text-[10px] font-bold text-primary-foreground shrink-0">
                 {property.agent.name[0]}
               </div>
@@ -579,7 +580,7 @@ export const PropertyCard = memo(forwardRef<HTMLDivElement, PropertyCardProps>(f
             </div>
           )}
           {/* Action row: detail CTA for special inventory + Share + Report */}
-          <div className={`flex min-w-0 shrink-0 items-center gap-2 ${hasPrimaryDetailAction ? "flex-1" : "ml-auto"}`}>
+          <div className={`flex min-w-0 shrink-0 items-center ${density === "mobile-grid" ? "gap-1 sm:gap-2" : "gap-2"} ${hasPrimaryDetailAction ? "flex-1" : "ml-auto"}`}>
             {property.listingType === "open_house" && (
               <Link to={detailPath} state={detailState} className="flex h-9 md:h-8 min-w-0 flex-1 items-center justify-center gap-1.5 truncate rounded-xl bg-gradient-primary px-2.5 text-[11px] font-semibold text-primary-foreground transition-all hover:opacity-90 hover:shadow-md active:scale-[0.98]">
                 <Calendar className="w-3.5 h-3.5 shrink-0" />

@@ -32,9 +32,9 @@ const mockElementClientWidth = (width: number) => {
 };
 
 describe("VirtualizedListingGrid", () => {
-  it("keeps listing cards single-column until 480px", () => {
-    expect(getAutoListingGridColumns(479)).toBe(1);
-    expect(getAutoListingGridColumns(480)).toBe(2);
+  it("uses two columns once the mobile content area can fit readable cards", () => {
+    expect(getAutoListingGridColumns(279)).toBe(1);
+    expect(getAutoListingGridColumns(280)).toBe(2);
   });
 
   it("renders nothing for an empty item set", () => {

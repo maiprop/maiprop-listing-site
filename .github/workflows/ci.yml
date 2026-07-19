@@ -394,16 +394,69 @@ jobs:
             throw new Error("VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.");
           }
 
-          const response = await fetch(`${url.replace(/\/$/, "")}/auth/v1/admin/users?page=1&per_page=1`, {
-            headers: {
-              apikey: serviceRoleKey,
-              Authorization: `Bearer ${serviceRoleKey}`,
-            },
-          });
+          const host = new URL(url).host;
+          const endpoint = `${url.replace(/\/$/, "")}/auth/v1/admin/users?page=1&per_page=1`;
+          const maxAttempts = 3;
+          const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-          if (!response.ok) {
-            const detail = await response.text().catch(() => "");
-            throw new Error(`Selected SUPABASE_SERVICE_ROLE_KEY is not accepted by ${new URL(url).host}: ${detail.slice(0, 240)}`);
+          for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 20_000);
+
+            try {
+              const response = await fetch(endpoint, {
+                headers: {
+                  Accept: "application/json",
+                  apikey: serviceRoleKey,
+                  Authorization: `Bearer ${serviceRoleKey}`,
+                },
+                signal: controller.signal,
+              });
+              clearTimeout(timeout);
+
+              if (response.ok) {
+                console.log(`Validated selected Supabase service-role key for ${host} on attempt ${attempt}.`);
+                process.exit(0);
+              }
+
+              const detail = await response.text().catch(() => "");
+              const contentType = response.headers.get("content-type") ?? "";
+              const retryable =
+                response.status >= 500 ||
+                contentType.toLowerCase().includes("text/html") ||
+                /cloudflare|error code|<!doctype html/i.test(detail);
+
+              if (!retryable || attempt === maxAttempts) {
+                const fatal = new Error(
+                  `Selected SUPABASE_SERVICE_ROLE_KEY is not accepted by ${host} ` +
+                    `(status ${response.status}, content-type ${contentType || "unknown"}): ${detail.slice(0, 240)}`,
+                );
+                fatal.name = "SupabaseServiceRoleValidationError";
+                throw fatal;
+              }
+
+              console.warn(
+                `Supabase service-role validation for ${host} returned retryable status ${response.status} ` +
+                  `with content-type ${contentType || "unknown"} on attempt ${attempt}; retrying.`,
+              );
+            } catch (error) {
+              clearTimeout(timeout);
+
+              if (error instanceof Error && error.name === "SupabaseServiceRoleValidationError") {
+                throw error;
+              }
+
+              if (attempt === maxAttempts) {
+                throw error;
+              }
+
+              console.warn(
+                `Supabase service-role validation for ${host} failed on attempt ${attempt}: ` +
+                  `${error instanceof Error ? error.message : String(error)}; retrying.`,
+              );
+            }
+
+            await sleep(attempt * 5_000);
           }
           NODE
 

@@ -46,9 +46,13 @@ describe("CI live-safe security workflow", () => {
       "Skipping Auth Admin service-role validation because destructive live security tests are disabled",
     );
     expect(ciWorkflow).toContain("/auth/v1/admin/users?page=1&per_page=1");
+    expect(ciWorkflow).toContain("const maxAttempts = 3");
+    expect(ciWorkflow).toContain("AbortController");
+    expect(ciWorkflow).toContain("Supabase service-role validation");
     expect(ciWorkflow).toContain(
       "Selected SUPABASE_SERVICE_ROLE_KEY is not accepted by",
     );
+    expect(ciWorkflow).toContain("SupabaseServiceRoleValidationError");
   });
 
   it("runs onboarding guard tests only against isolated staging", () => {

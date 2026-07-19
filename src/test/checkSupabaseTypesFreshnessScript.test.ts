@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -55,6 +55,14 @@ function runTypesFreshnessScriptIn(cwd: string, args: string[], env: NodeJS.Proc
 }
 
 describe("check-supabase-types-freshness script", () => {
+  it("executes Windows .exe shims directly so paths with spaces remain valid", () => {
+    const source = readFileSync(scriptPath, "utf8");
+
+    expect(source).toContain('const requiresWindowsShell = (command) =>');
+    expect(source).toContain('shell: requiresWindowsShell(windowsBin)');
+    expect(source).not.toContain('shell: process.platform === "win32"');
+  });
+
   it("fails in CI when generated-type credentials are unavailable", async () => {
     const result = await runTypesFreshnessScript({ CI: "true" });
 

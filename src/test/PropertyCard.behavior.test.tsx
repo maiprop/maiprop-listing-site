@@ -414,6 +414,28 @@ describe("PropertyCard behavior", () => {
     ).toBe(false);
   });
 
+  it("keeps all card actions while compacting redundant identity in the mobile grid", async () => {
+    const { PropertyCard } = await import("@/components/PropertyCard");
+
+    renderWithProviders(<PropertyCard property={baseProperty()} density="mobile-grid" />);
+
+    expect(screen.getByTestId("property-card")).toHaveAttribute("data-density", "mobile-grid");
+    expect(screen.getByTestId("property-card-footer")).toHaveClass("gap-1", "sm:gap-2");
+    expect(screen.getByRole("button", { name: /share/i })).toBeVisible();
+    expect(screen.getByRole("button", { name: /report/i })).toBeVisible();
+  });
+
+  it("requests half-viewport images for the two-column mobile results grid", async () => {
+    const { PropertyCard } = await import("@/components/PropertyCard");
+
+    renderWithProviders(<PropertyCard property={baseProperty({ images: ["https://images.unsplash.com/photo.jpg"] })} />);
+
+    expect(screen.getByAltText("Athens Loft")).toHaveAttribute(
+      "sizes",
+      "(max-width: 359px) 100vw, (max-width: 699px) 50vw, (max-width: 1024px) 33vw, 20vw",
+    );
+  });
+
   it("renders remaining badges, non-urgent timers, price deltas, universal specs, and report errors", async () => {
     authMock.mockReturnValue({ user: { id: "u-error" }, profile: null, loading: false });
     insertMock.mockResolvedValueOnce({ error: new Error("duplicate") });

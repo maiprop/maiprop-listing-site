@@ -302,6 +302,35 @@ test.describe("Listings browse", () => {
     expect(listingTypes).toContain("rent");
   });
 
+  test("mobile catalogue uses two readable columns without shrinking the primary touch target", async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 740 });
+    await mockPublicListingApis(page, [
+      makeListing({ id: "mobile-grid-1", title: "Compact Athens Home" }),
+      makeListing({ id: "mobile-grid-2", title: "Compact Glyfada Home", city: "Glyfada" }),
+    ]);
+
+    await gotoRouteAndWaitForPath(page, "/listings?listing_type=sale");
+    await waitForRouteShell(page);
+
+    const cards = page.locator('[data-testid="listing-grid"] [data-testid="property-card"]');
+    await expect(cards).toHaveCount(2);
+    const first = await cards.nth(0).boundingBox();
+    const second = await cards.nth(1).boundingBox();
+    expect(first).not.toBeNull();
+    expect(second).not.toBeNull();
+    expect(Math.abs((first?.y ?? 0) - (second?.y ?? 0))).toBeLessThan(2);
+    expect((second?.x ?? 0)).toBeGreaterThan((first?.x ?? 0));
+    expect(first?.width ?? 0).toBeGreaterThan(135);
+
+    const saveTarget = cards.nth(0).getByRole("button", { name: /save/i });
+    const saveBox = await saveTarget.boundingBox();
+    expect(saveBox?.width ?? 0).toBeGreaterThanOrEqual(44);
+    expect(saveBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow).toBeLessThanOrEqual(1);
+  });
+
   test("canonical redirects use listing_type instead of the legacy is_pre_sale flag", async ({ page }) => {
     const newBuild = makeListing({
       id: "canonical-new-build",

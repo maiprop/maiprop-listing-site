@@ -3,7 +3,7 @@ export function getAutoListingGridColumns(width: number) {
   if (width >= 1180) return 5;
   if (width >= 960) return 4;
   if (width >= 700) return 3;
-  if (width >= 480) return 2;
+  if (width >= 280) return 2;
   return 1;
 }
 
