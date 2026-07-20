@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.12.15](https://github.com/maiprop/maiprop-listing-site/compare/v1.12.14...v1.12.15) (2026-07-19)
+
+
+### Bug Fixes
+
+* harden catalogue cache and promotion reporting ([#544](https://github.com/maiprop/maiprop-listing-site/issues/544)) ([b5f9dc7](https://github.com/maiprop/maiprop-listing-site/commit/b5f9dc74eec3e3eabf93fe6d61c6389c4cab0420))
+* integrate verified worktree improvements ([#545](https://github.com/maiprop/maiprop-listing-site/issues/545)) ([cc5fb1b](https://github.com/maiprop/maiprop-listing-site/commit/cc5fb1bb310e946a1228bbb6af4d51dc9a7b8ac9))
+* rotate poisoned public catalogue cache ([#542](https://github.com/maiprop/maiprop-listing-site/issues/542)) ([fce87ec](https://github.com/maiprop/maiprop-listing-site/commit/fce87ec249373741a386d666b700468678df62ff))
+
 ## [1.12.14](https://github.com/maiprop/maiprop-listing-site/compare/v1.12.13...v1.12.14) (2026-07-18)
 
 
