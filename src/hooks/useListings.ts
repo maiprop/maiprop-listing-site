@@ -33,7 +33,7 @@ const LISTING_PROJECT_CARD_SELECT = [
   "delivery_date",
   `project_units!project_units_project_id_fkey(${PROJECT_UNIT_CARD_SELECT})`,
 ].join(",");
-const LISTING_CARD_SELECT = [
+const LISTING_CARD_SCALAR_COLUMNS = [
   "id",
   "owner_id",
   "created_at",
@@ -79,10 +79,14 @@ const LISTING_CARD_SELECT = [
   "has_elevator",
   "has_garden",
   "has_smart_home",
+];
+const LISTING_CARD_SELECT = [
+  ...LISTING_CARD_SCALAR_COLUMNS,
   `project:projects!listings_project_id_fkey(${LISTING_PROJECT_CARD_SELECT})`,
 ].join(",");
 
 const LISTING_CARD_SELECT_WITH_IMAGES = `${LISTING_CARD_SELECT}, listing_images(url, sort_order)`;
+const PUBLIC_LISTING_CARD_SELECT = [...LISTING_CARD_SCALAR_COLUMNS, "project", "listing_images"].join(",");
 /** Paginated listings for grid view — loads the first visible cards fast, then fills the 40-card window. */
 export const PAGE_SIZE = 40;
 export const INITIAL_GRID_PAGE_SIZE = 12;
@@ -94,7 +98,7 @@ const CATALOG_TYPES_WITH_NEW_BUILD: Partial<Record<Enums<"listing_type">, Enums<
   sale: ["sale", "new_build"],
 };
 
-const LISTING_DETAIL_SELECT = [
+const LISTING_DETAIL_SCALAR_COLUMNS = [
   "id",
   "owner_id",
   "created_at",
@@ -210,7 +214,10 @@ const LISTING_DETAIL_SELECT = [
   "has_view",
   "has_water_supply",
   "has_window_screens",
-  "listing_images(url, sort_order)",
+];
+const PUBLIC_LISTING_DETAIL_SELECT = [
+  ...LISTING_DETAIL_SCALAR_COLUMNS,
+  "listing_images:listing_images_detail",
 ].join(",");
 
 /**
@@ -332,11 +339,18 @@ function listingLocationBounds(filters?: ListingsFilters): LocationBounds | null
 export const buildListingsQuery = (filters?: ListingsFilters, from = 0, pageSize = PAGE_SIZE, scope: ListingsQueryScope = {}) => { // skipcq: JS-R1005 - Listing filters intentionally map one public search model onto Supabase query clauses.
   const sort = filters?.sort ?? "featured";
   const ownerScoped = Boolean(filters?.owner_id) && !scope.publicScope;
-  let query = supabase
-    .from("listings")
-    .select(LISTING_CARD_SELECT_WITH_IMAGES)
-    .order("sort_order", { referencedTable: "listing_images", ascending: true })
-    .limit(LISTING_CARD_IMAGE_LIMIT, { referencedTable: "listing_images" });
+  const publicQuery = supabase
+    .from("public_listing_catalogue")
+    .select(PUBLIC_LISTING_CARD_SELECT);
+  let query = publicQuery;
+  if (ownerScoped) {
+    const ownerQuery = supabase
+      .from("listings")
+      .select(LISTING_CARD_SELECT_WITH_IMAGES)
+      .order("sort_order", { referencedTable: "listing_images", ascending: true })
+      .limit(LISTING_CARD_IMAGE_LIMIT, { referencedTable: "listing_images" });
+    query = ownerQuery as unknown as typeof publicQuery;
+  }
 
   // Paid placement requires expiry-aware fair mixing, which is implemented by
   // the public catalogue API. This constrained fallback remains organic rather
@@ -775,12 +789,11 @@ type PublicListingResponse = {
 
 const fetchPublicListingFromSupabase = async (id: string, signal?: AbortSignal): Promise<ListingWithJoins | null> => {
   const { data, error } = await withAbortSignal(supabase
-    .from("listings")
-    .select(LISTING_DETAIL_SELECT)
+    .from("public_listing_catalogue")
+    .select(PUBLIC_LISTING_DETAIL_SELECT)
     .eq("id", id)
     .eq("status", "active")
     .eq("is_off_market", false)
-    .order("sort_order", { referencedTable: "listing_images", ascending: true })
     .maybeSingle(), signal);
 
   if (error) throw error;

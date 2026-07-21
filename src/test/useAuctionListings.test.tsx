@@ -147,7 +147,7 @@ describe("useAuctionListings", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(result.current.data?.[0]).toMatchObject({ id: "db-a1" });
-    expect(fromMock).toHaveBeenCalledWith("listings");
+    expect(fromMock).toHaveBeenCalledWith("public_listing_catalogue");
     expect(builder.select).toHaveBeenCalledWith(expect.stringContaining("featured_until"));
     expect(builder.select).toHaveBeenCalledWith(expect.stringContaining("priority_until"));
     expect(invokeMock).not.toHaveBeenCalled();

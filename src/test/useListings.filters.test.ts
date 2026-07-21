@@ -62,24 +62,21 @@ function parentOrderArgs() {
 }
 
 describe("buildListingsQuery — sort variants", () => {
-  it("orders and caps embedded listing images for lightweight listing cards", () => {
+  it("uses the allowlisted catalogue and its pre-aggregated card media for public fallbacks", () => {
     buildListingsQuery();
 
+    expect(calls("from")[0]?.args[0]).toBe("public_listing_catalogue");
     const selectedColumns = String(calls("select")[0].args[0])
       .split(",")
       .map((column) => column.trim());
     expect(selectedColumns).toContain("status");
     expect(selectedColumns).toContain("featured_until");
     expect(selectedColumns).toContain("priority_until");
+    expect(selectedColumns).toContain("listing_images");
+    expect(selectedColumns).toContain("project");
     expect(calls("order").some((c) =>
-      c.args[0] === "sort_order" &&
-      (c.args[1] as { referencedTable?: string; ascending?: boolean }).referencedTable === "listing_images" &&
-      (c.args[1] as { ascending?: boolean }).ascending === true
-    )).toBe(true);
-    expect(calls("limit").some((c) =>
-      c.args[0] === 3 &&
-      (c.args[1] as { referencedTable?: string }).referencedTable === "listing_images"
-    )).toBe(true);
+      (c.args[1] as { referencedTable?: string } | undefined)?.referencedTable === "listing_images"
+    )).toBe(false);
   });
 
   it("keeps direct fallback ranking organic because active Priority fairness belongs to the public API", () => {
@@ -185,6 +182,10 @@ describe("buildListingsQuery — listing-type / status scoping", () => {
 
   it("with owner_id and no status, omits the status filter so all states show", () => {
     buildListingsQuery({ owner_id: "owner-1" });
+    expect(calls("from")[1]?.args[0]).toBe("listings");
+    expect(calls("order").some((c) =>
+      (c.args[1] as { referencedTable?: string } | undefined)?.referencedTable === "listing_images"
+    )).toBe(true);
     expect(calls("eq").some((c) => c.args[0] === "status")).toBe(false);
     expect(calls("eq").some((c) => c.args[0] === "owner_id" && c.args[1] === "owner-1")).toBe(true);
   });

@@ -230,6 +230,11 @@ GitHub Actions also sets `CI=true` automatically. Playwright uses this to run
 against the production preview server on port `4173` and to enable stricter
 fail-fast behavior.
 
+GitHub Actions also provides `GITHUB_SHA` automatically. Production deployment
+workflows use it as the immutable source revision and require an exact-SHA
+successful CI run before a manual recovery deployment can proceed. Do not set
+or override it in repository secrets.
+
 | Secret | Purpose | Scope |
 |---|---|---|
 | `E2E_TEST_EMAIL` | auth E2E spec sign-in | repo or `production` env |
