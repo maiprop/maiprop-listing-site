@@ -293,6 +293,7 @@ or override it in repository secrets.
 | `RLS_USER_PASSWORD` | shared live-safe RLS test password | repo or staging environment |
 | `ONBOARDING_TEST_EMAIL` | live-safe onboarding E2E user | repo or staging environment |
 | `ONBOARDING_TEST_PASSWORD` | live-safe onboarding E2E password | repo or staging environment |
+| `E2E_SECURITY_USE_ISOLATED_STAGING` | CI-generated `true` marker that permits staging-only security fixture preparation after the workflow verifies an isolated Supabase target; do not set for production | GitHub Actions generated runtime env |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase `service_role` JWT API key for Edge Functions, staging security fixtures, and the live operational smoke fixture-repair step; destructive checks stay disabled unless an isolated staging project is configured; do not use the `sb_secret_*` key for PostgREST/Auth Admin-backed fixtures | repo or environment scoped to deploy/test jobs |
 | `MAIPROP_EDGE_TEST_AUTH_BYPASS` | explicit CI-only bypass marker for edge-function tests that exercise handler internals without live Supabase Auth | CI test environment only |
 | `PRODUCTION_DEPLOY_URLS` | optional space-separated URL override for the post-deploy production smoke check; defaults to `https://portal.maiprop.co` | deploy diagnostics only |

@@ -499,6 +499,10 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit
 
+      - name: Prepare isolated staging security fixtures
+        if: env.E2E_SECURITY_USE_ISOLATED_STAGING == 'true'
+        run: node scripts/prepare-isolated-security-fixtures.mjs
+
       - name: Skip live type freshness without staged DB changes
         if: needs['deploy-supabase-staging'].outputs.db_changes != 'true'
         run: echo "Live type freshness runs only after the staging database migration path is required."

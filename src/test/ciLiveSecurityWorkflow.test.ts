@@ -6,6 +6,10 @@ const ciWorkflow = readFileSync(
   join(process.cwd(), ".github", "workflows", "ci.yml"),
   "utf8",
 );
+const stagingFixtureScript = readFileSync(
+  join(process.cwd(), "scripts", "prepare-isolated-security-fixtures.mjs"),
+  "utf8",
+);
 
 describe("CI live-safe security workflow", () => {
   it("runs Lighthouse for explicitly dispatched Release Please validation", () => {
@@ -94,6 +98,32 @@ describe("CI live-safe security workflow", () => {
     expect(ciWorkflow).toContain(
       "Skipping onboarding role-selection tests because live-safe security is using production fallback runtime",
     );
+  });
+
+  it("prepares isolated staging identities before security browser tests", () => {
+    const fixtureStepIndex = ciWorkflow.indexOf(
+      "Prepare isolated staging security fixtures",
+    );
+    const playwrightStepIndex = ciWorkflow.indexOf(
+      "Run live-safe RLS + conditional onboarding + GDPR security tests",
+    );
+
+    expect(fixtureStepIndex).toBeGreaterThan(0);
+    expect(playwrightStepIndex).toBeGreaterThan(fixtureStepIndex);
+    expect(ciWorkflow).toContain(
+      "node scripts/prepare-isolated-security-fixtures.mjs",
+    );
+    expect(ciWorkflow).toContain(
+      "if: env.E2E_SECURITY_USE_ISOLATED_STAGING == 'true'",
+    );
+    expect(stagingFixtureScript).toContain(
+      'process.env.E2E_SECURITY_USE_ISOLATED_STAGING !== "true"',
+    );
+    expect(stagingFixtureScript).toContain(
+      'requireEnv("E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS")',
+    );
+    expect(stagingFixtureScript).toContain("is_platform_admin: false");
+    expect(stagingFixtureScript).toContain('role: "user"');
   });
 
   it("does not hard-fail production-fallback security tests when the live data plane is unavailable", () => {
