@@ -113,13 +113,6 @@ async function normalizeNonAdminIdentity(admin, user, role, participantType) {
   if (deleteRoleError) {
     throw new Error(`Could not clear staging roles for ${user.email}: ${deleteRoleError.message}`);
   }
-
-  const { error: insertRoleError } = await admin
-    .from("user_roles")
-    .insert({ user_id: user.id, role: "user" });
-  if (insertRoleError) {
-    throw new Error(`Could not assign staging user role for ${user.email}: ${insertRoleError.message}`);
-  }
 }
 
 export async function prepareIsolatedSecurityFixtures() {
