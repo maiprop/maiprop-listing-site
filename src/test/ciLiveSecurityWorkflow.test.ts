@@ -124,6 +124,7 @@ describe("CI live-safe security workflow", () => {
     );
     expect(stagingFixtureScript).toContain("is_platform_admin: false");
     expect(stagingFixtureScript).toContain('role: "user"');
+    expect(stagingFixtureScript).toContain("realtime: { transport: WebSocket }");
   });
 
   it("does not hard-fail production-fallback security tests when the live data plane is unavailable", () => {

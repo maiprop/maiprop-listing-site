@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import WebSocket from "ws";
 
 const REQUIRED_ENV = [
   "VITE_SUPABASE_URL",
@@ -140,6 +141,7 @@ export async function prepareIsolatedSecurityFixtures() {
 
   const admin = createClient(url, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
+    realtime: { transport: WebSocket },
   });
   const existingByEmail = await listUsersByEmail(admin, new Set(emails));
 
