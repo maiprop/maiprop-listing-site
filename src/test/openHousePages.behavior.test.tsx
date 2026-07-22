@@ -486,7 +486,7 @@ describe("OpenHouses page behavior", () => {
       "/api/public/open-houses?showPast=0&limit=200",
       expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
     );
-    expect(mocks.from).toHaveBeenCalledWith("listings");
+    expect(mocks.from).toHaveBeenCalledWith("public_listing_catalogue");
 
     mocks.publicApi.mockClear().mockResolvedValue([]);
     mocks.from.mockClear();

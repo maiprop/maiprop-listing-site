@@ -146,7 +146,7 @@ describe("homepage public API fallback behavior", () => {
       "/api/public/homepage?section=featured",
       expect.objectContaining({ throwOnError: true, timeoutMs: 5500, signal: expect.any(AbortSignal) }),
     );
-    expect(fromMock).toHaveBeenCalledWith("listings");
+    expect(fromMock).toHaveBeenCalledWith("public_listing_catalogue");
     expect(builder.select).toHaveBeenCalledWith(expect.stringContaining("featured_until"));
     expect(builder.select).toHaveBeenCalledWith(expect.stringContaining("priority_until"));
     expect(builder.eq).toHaveBeenCalledWith("is_featured", true);
@@ -165,7 +165,7 @@ describe("homepage public API fallback behavior", () => {
       "/api/public/open-houses?limit=12",
       expect.objectContaining({ throwOnError: true, timeoutMs: 5500, signal: expect.any(AbortSignal) }),
     );
-    expect(fromMock).toHaveBeenCalledWith("listings");
+    expect(fromMock).toHaveBeenCalledWith("public_listing_catalogue");
   });
 
   it("overfetches canonical open houses before removing public test fixtures", async () => {

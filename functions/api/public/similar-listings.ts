@@ -15,6 +15,7 @@ import {
   type PublicApiEnv,
 } from "./_cache";
 import { getSupabaseRuntime } from "../../_seo";
+import { PUBLIC_LISTING_CATALOGUE_PATH } from "../../_publicListingProjection";
 import { publicListingRows } from "./_fixture-content";
 import { hasActivePriority, normalizePublicPromotionState } from "./_promotionState";
 import { fetchPublicProfileSummaries, publicProfileDisplay } from "./_publicProfiles";
@@ -47,7 +48,7 @@ const SIMILAR_LISTINGS_CANDIDATE_LIMIT = 48;
 const SIMILAR_LISTINGS_LIMIT_MAX = 24;
 const SIMILAR_LISTINGS_CACHE_VERSION = "similar-promotions-v2";
 const SIMILAR_LISTINGS_SELECT =
-  "id,created_at,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,property_type,listing_type,open_house_transaction_type,open_house_date,auction_date,auction_starting_bid,cover_image_url,owner_id,tags,has_video_tour,has_virtual_tour,is_featured,featured_until,priority_placement,priority_until,is_pre_sale,construction_status,walkability_score,safety_score,noise_score,listing_images(url,sort_order)";
+  "id,created_at,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,property_type,listing_type,open_house_transaction_type,open_house_date,auction_date,auction_starting_bid,cover_image_url,owner_id,tags,has_video_tour,has_virtual_tour,is_featured,featured_until,priority_placement,priority_until,is_pre_sale,construction_status,walkability_score,safety_score,noise_score,listing_images";
 
 function buildSimilarParams(requestUrl: URL): {
   params: URLSearchParams;
@@ -69,8 +70,6 @@ function buildSimilarParams(requestUrl: URL): {
   params.set("status", "eq.active");
   params.set("is_off_market", "eq.false");
   params.set("limit", String(SIMILAR_LISTINGS_CANDIDATE_LIMIT));
-  params.set("listing_images.order", "sort_order.asc");
-  params.set("listing_images.limit", "3");
   params.append("order", "created_at.desc");
   params.append("order", "id.asc");
 
@@ -166,7 +165,7 @@ async function publicSimilarListings(ctx: PublicApiCtx, requestUrl: URL): Promis
     try {
       const nowMs = Date.now();
       const rows = publicListingRows(
-        await supabaseJson<ListingRow>(ctx.env, "/rest/v1/listings", built.params, { failOnTransient: true }),
+        await supabaseJson<ListingRow>(ctx.env, PUBLIC_LISTING_CATALOGUE_PATH, built.params, { failOnTransient: true }),
       ).map((row) => normalizePublicPromotionState(row, nowMs));
       const ownerIds = rows.map((row) => row.owner_id).filter((id): id is string => typeof id === "string");
       const profiles = await fetchPublicProfileSummaries(ctx.env, ownerIds);

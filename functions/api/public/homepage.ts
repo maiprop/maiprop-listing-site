@@ -13,6 +13,7 @@ import {
   type PublicApiEnv,
 } from "./_cache";
 import { getSupabaseRuntime } from "../../_seo";
+import { PUBLIC_LISTING_CATALOGUE_PATH } from "../../_publicListingProjection";
 import { publicAuctions } from "./auctions";
 import { publicListingRows } from "./_fixture-content";
 import { fetchPublicProfileSummaries, publicProfileDisplay } from "./_publicProfiles";
@@ -56,18 +57,11 @@ const PRICE_INDEX_FALLBACK = [
 ] as const;
 const POPULAR_LOCATION_NAMES = ["Athens", "Thessaloniki", "Mykonos", "Santorini"] as const;
 
-const PROJECT_UNIT_CARD_SELECT = ["id", "availability_status", "internal_sqm"].join(",");
-const featuredProjectSelect = [
-  "name",
-  "delivery_date",
-  `project_units!project_units_project_id_fkey(${PROJECT_UNIT_CARD_SELECT})`,
-].join(",");
-
 const featuredSelect =
-  `id,owner_id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,project_id,ai_score,views_count,tags,has_video_tour,has_virtual_tour,is_featured,featured_until,priority_placement,priority_until,is_pre_sale,construction_status,project:projects!listings_project_id_fkey(${featuredProjectSelect}),listing_images(url,sort_order)`;
+  "id,owner_id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,project_id,ai_score,views_count,tags,has_video_tour,has_virtual_tour,is_featured,featured_until,priority_placement,priority_until,is_pre_sale,construction_status,project,listing_images";
 
 const openHouseSelect =
-  "id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,open_house_transaction_type,ai_score,views_count,tags,open_house_date,latitude,longitude,listing_images(url,sort_order)";
+  "id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,open_house_transaction_type,ai_score,views_count,tags,open_house_date,latitude,longitude,listing_images";
 
 function sortByImagePresence<T extends ListingRow>(rows: T[]): T[] {
   return [...rows].sort((a, b) => {
@@ -90,7 +84,7 @@ async function fetchPopularLocations(env: PublicApiEnv) {
       params.set("status", "eq.active");
       params.set("is_off_market", "eq.false");
       params.set("city", `eq.${city}`);
-      return [city, await supabaseCount(env, "/rest/v1/listings", params, {
+      return [city, await supabaseCount(env, PUBLIC_LISTING_CATALOGUE_PATH, params, {
         failOnTransient: true,
         countStrategy: "estimated",
       })] as const;
@@ -114,7 +108,7 @@ async function fetchPopularLocations(env: PublicApiEnv) {
   params.set("created_at", `gte.${prevStart.toISOString()}`);
   params.append("created_at", `lt.${now.toISOString()}`);
   params.set("limit", "1000");
-  const priceRows = await supabaseJson<ListingRow>(env, "/rest/v1/listings", params, { failOnTransient: true });
+  const priceRows = await supabaseJson<ListingRow>(env, PUBLIC_LISTING_CATALOGUE_PATH, params, { failOnTransient: true });
 
   const currentPrices: Record<string, number[]> = {};
   const prevPrices: Record<string, number[]> = {};
@@ -172,7 +166,7 @@ async function fetchPriceIndex(env: PublicApiEnv) {
   params.set("created_at", `gte.${prevStart.toISOString()}`);
   params.append("created_at", `lt.${now.toISOString()}`);
   params.set("limit", "1000");
-  const rows = await supabaseJson<ListingRow>(env, "/rest/v1/listings", params, { failOnTransient: true });
+  const rows = await supabaseJson<ListingRow>(env, PUBLIC_LISTING_CATALOGUE_PATH, params, { failOnTransient: true });
 
   const currentPrices: Record<string, number[]> = {};
   const previousPrices: Record<string, number[]> = {};
@@ -221,7 +215,7 @@ async function fetchSection(env: PublicApiEnv, section: (typeof SECTIONS)[number
         params.set("status", "eq.active");
         params.set("is_off_market", "eq.false");
         params.set("property_type", `eq.${propertyType}`);
-        return [propertyType, await supabaseCount(env, "/rest/v1/listings", params, {
+        return [propertyType, await supabaseCount(env, PUBLIC_LISTING_CATALOGUE_PATH, params, {
           failOnTransient: true,
           countStrategy: "estimated",
         })] as const;
@@ -241,12 +235,10 @@ async function fetchSection(env: PublicApiEnv, section: (typeof SECTIONS)[number
     params.set("is_featured", "eq.true");
     params.set("featured_until", `gt.${new Date().toISOString()}`);
     params.set("order", "created_at.desc");
-    params.set("listing_images.order", "sort_order.asc");
-    params.set("listing_images.limit", "3");
     params.set("limit", "12");
     const nowMs = Date.now();
     const rows = publicListingRows(
-      await supabaseJson<ListingRow>(env, "/rest/v1/listings", params, { failOnTransient: true }),
+      await supabaseJson<ListingRow>(env, PUBLIC_LISTING_CATALOGUE_PATH, params, { failOnTransient: true }),
       4,
     ).map((row) => normalizePublicPromotionState(row, nowMs));
     const ownerIds = rows.map((row) => row.owner_id).filter((id): id is string => typeof id === "string");
@@ -261,7 +253,7 @@ async function fetchSection(env: PublicApiEnv, section: (typeof SECTIONS)[number
   if (section === "auction-count") {
     params.set("select", "id");
     params.set("listing_type", "eq.auction");
-    return supabaseCount(env, "/rest/v1/listings", params, {
+    return supabaseCount(env, PUBLIC_LISTING_CATALOGUE_PATH, params, {
       failOnTransient: true,
       countStrategy: "estimated",
     });
@@ -280,10 +272,8 @@ async function fetchSection(env: PublicApiEnv, section: (typeof SECTIONS)[number
   params.set("listing_type", "eq.open_house");
   params.set("open_house_date", `gte.${now}`);
   params.set("order", "open_house_date.asc");
-  params.set("listing_images.order", "sort_order.asc");
-  params.set("listing_images.limit", "3");
   params.set("limit", "12");
-  return sortByImagePresence(publicListingRows(await supabaseJson<ListingRow>(env, "/rest/v1/listings", params, { failOnTransient: true }), 6));
+  return sortByImagePresence(publicListingRows(await supabaseJson<ListingRow>(env, PUBLIC_LISTING_CATALOGUE_PATH, params, { failOnTransient: true }), 6));
 }
 
 async function publicHomepage(ctx: PublicApiCtx, requestUrl: URL): Promise<Response> {

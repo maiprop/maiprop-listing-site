@@ -12,6 +12,7 @@ import {
   type PublicApiEnv,
 } from "./_cache";
 import { getSupabaseRuntime } from "../../_seo";
+import { PUBLIC_LISTING_CATALOGUE_PATH } from "../../_publicListingProjection";
 import { interleaveCatalogueStreams } from "./_listingRank";
 import { normalizePublicPromotionState } from "./_promotionState";
 
@@ -30,7 +31,7 @@ const PUBLIC_AUCTION_LIMIT_MAX = 600;
 const AUCTION_CACHE_VERSION = "national-sample-promotions-v8";
 const UNKNOWN_LOCATION_KEY = "__unknown_location__";
 const AUCTION_SELECT =
-  "id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,ai_score,views_count,tags,auction_date,auction_starting_bid,latitude,longitude,auction_court,website_url,region,is_featured,featured_until,priority_placement,priority_until,construction_status,listing_images(url,sort_order)";
+  "id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,ai_score,views_count,tags,auction_date,auction_starting_bid,latitude,longitude,auction_court,website_url,region,is_featured,featured_until,priority_placement,priority_until,construction_status,listing_images";
 
 function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
@@ -161,10 +162,7 @@ async function fetchDbAuctionStream(
   }
   params.set("order", "auction_date.asc.nullslast,id.asc");
   params.set("limit", String(limit));
-  params.set("listing_images.order", "sort_order.asc");
-  params.set("listing_images.limit", "3");
-
-  return supabaseJson<AuctionRow>(env, "/rest/v1/listings", params, { failOnTransient: true });
+  return supabaseJson<AuctionRow>(env, PUBLIC_LISTING_CATALOGUE_PATH, params, { failOnTransient: true });
 }
 
 async function fetchDbAuctionStreams(

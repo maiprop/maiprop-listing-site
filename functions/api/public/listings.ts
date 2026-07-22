@@ -17,6 +17,7 @@ import {
   type PublicApiEnv,
 } from "./_cache";
 import { getSupabaseRuntime } from "../../_seo";
+import { PUBLIC_LISTING_CATALOGUE_PATH } from "../../_publicListingProjection";
 import { publicListingRows } from "./_fixture-content";
 import {
   applyCatalogueStreamCursor,
@@ -56,13 +57,6 @@ const BOOLEAN_FEATURES = new Set([
   "has_cctv", "has_disability_access", "has_structured_cabling", "has_facade",
   "has_night_power", "has_solar_water",
 ]);
-const PROJECT_UNIT_CARD_SELECT = ["id", "availability_status", "internal_sqm"].join(",");
-const LISTING_PROJECT_CARD_SELECT = "name,delivery_date";
-const LISTING_PROJECT_CARD_SELECT_WITH_UNITS = [
-  "name",
-  "delivery_date",
-  `project_units!project_units_project_id_fkey(${PROJECT_UNIT_CARD_SELECT})`,
-].join(",");
 const LISTINGS_CACHE_VERSION = "catalogue-stream-cursor-promotions-v4";
 const LISTINGS_CACHE_OPTIONS = {
   edgeTtlSeconds: 60,
@@ -139,24 +133,11 @@ const LISTING_SELECT_BASE = [
   "has_elevator",
   "has_garden",
   "has_smart_home",
-  "listing_images(url,sort_order)",
+  "project",
+  "listing_images",
 ];
 
-function listingSelect(includeProjectUnits: boolean): string {
-  const projectSelect = includeProjectUnits ? LISTING_PROJECT_CARD_SELECT_WITH_UNITS : LISTING_PROJECT_CARD_SELECT;
-  return [
-    ...LISTING_SELECT_BASE.slice(0, -1),
-    `project:projects!listings_project_id_fkey(${projectSelect})`,
-    LISTING_SELECT_BASE[LISTING_SELECT_BASE.length - 1],
-  ].join(",");
-}
-
-function shouldIncludeProjectUnits(requestUrl: URL): boolean {
-  const listingType = safeToken(requestUrl.searchParams.get("listing_type"), LISTING_TYPES);
-  return listingType === "new_build" ||
-    listingType === "sale" ||
-    requestUrl.searchParams.get("is_pre_sale") === "true";
-}
+const LISTING_SELECT = LISTING_SELECT_BASE.join(",");
 
 function appendIfPresent(params: URLSearchParams, name: string, value: string | null): void {
   if (value) params.set(name, value);
@@ -302,10 +283,8 @@ function buildListingParams(requestUrl: URL): {
   const offset = safeInt(requestUrl.searchParams.get("offset"), (page - 1) * pageSize, 0, 100_000);
   const sort = resolveCatalogueSort(requestUrl.searchParams.get("sort"));
 
-  params.set("select", listingSelect(shouldIncludeProjectUnits(requestUrl)));
+  params.set("select", LISTING_SELECT);
   params.set("status", "eq.active");
-  params.set("listing_images.order", "sort_order.asc");
-  params.set("listing_images.limit", "3");
   params.set("is_off_market", "eq.false");
 
   const listingType = safeToken(requestUrl.searchParams.get("listing_type"), LISTING_TYPES);
@@ -434,8 +413,6 @@ function lightweightLegacyStreamParams(
 ): URLSearchParams {
   const params = buildCatalogueStreamParams(baseParams, sort, null, stream, now, limit, false);
   params.set("select", "id");
-  params.delete("listing_images.order");
-  params.delete("listing_images.limit");
   return params;
 }
 
@@ -454,13 +431,13 @@ async function catalogueCursorForLegacyOffset(
     const [priorityRows, organicRows] = await Promise.all([
       supabaseJson<{ id: string }>(
         env,
-        "/rest/v1/listings",
+        PUBLIC_LISTING_CATALOGUE_PATH,
         lightweightLegacyStreamParams(baseParams, sort, "priority", now, offset),
         { failOnTransient: true, timeoutMs: LISTINGS_SUPABASE_TIMEOUT_MS },
       ),
       supabaseJson<{ id: string }>(
         env,
-        "/rest/v1/listings",
+        PUBLIC_LISTING_CATALOGUE_PATH,
         lightweightLegacyStreamParams(baseParams, sort, "organic", now, offset),
         { failOnTransient: true, timeoutMs: LISTINGS_SUPABASE_TIMEOUT_MS },
       ),
@@ -475,12 +452,12 @@ async function catalogueCursorForLegacyOffset(
       return params;
     };
     [availablePriorityRows, availableOrganicRows] = await Promise.all([
-      supabaseCount(env, "/rest/v1/listings", countParams("priority"), {
+      supabaseCount(env, PUBLIC_LISTING_CATALOGUE_PATH, countParams("priority"), {
         failOnTransient: true,
         countStrategy: "exact",
         timeoutMs: LISTINGS_SUPABASE_TIMEOUT_MS,
       }),
-      supabaseCount(env, "/rest/v1/listings", countParams("organic"), {
+      supabaseCount(env, PUBLIC_LISTING_CATALOGUE_PATH, countParams("organic"), {
         failOnTransient: true,
         countStrategy: "exact",
         timeoutMs: LISTINGS_SUPABASE_TIMEOUT_MS,
@@ -557,8 +534,8 @@ async function publicListings(ctx: PublicApiCtx, requestUrl: URL): Promise<Respo
         timeoutMs: LISTINGS_SUPABASE_TIMEOUT_MS,
       } as const;
       const streamResults = await Promise.allSettled([
-        supabaseJson<ListingRow>(ctx.env, "/rest/v1/listings", priorityParams, fetchOptions),
-        supabaseJson<ListingRow>(ctx.env, "/rest/v1/listings", organicParams, fetchOptions),
+        supabaseJson<ListingRow>(ctx.env, PUBLIC_LISTING_CATALOGUE_PATH, priorityParams, fetchOptions),
+        supabaseJson<ListingRow>(ctx.env, PUBLIC_LISTING_CATALOGUE_PATH, organicParams, fetchOptions),
       ]);
       const failedStream = streamResults.find((result) => result.status === "rejected");
       if (failedStream?.status === "rejected") throw failedStream.reason;

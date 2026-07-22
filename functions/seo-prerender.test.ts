@@ -254,7 +254,7 @@ describe("SEO Pages Functions", () => {
     await propertyRequest(ctx);
 
     const [request, init] = fetchMock().mock.calls[0];
-    expect(String(request)).toContain("https://testprojectref000000.supabase.co/rest/v1/listings");
+    expect(String(request)).toContain("https://testprojectref000000.supabase.co/rest/v1/public_listing_catalogue");
     expect(init.headers).toMatchObject({
       apikey: "vite_publishable_test_key",
       Authorization: "Bearer vite_publishable_test_key",
@@ -268,7 +268,7 @@ describe("SEO Pages Functions", () => {
 
     await propertyRequest(ctx);
 
-    expect(firstSupabaseUrl()).toContain("https://testprojectref000000.supabase.co/rest/v1/listings");
+    expect(firstSupabaseUrl()).toContain("https://testprojectref000000.supabase.co/rest/v1/public_listing_catalogue");
   });
 
   it("adds first-page listing structured data to /listings", async () => {

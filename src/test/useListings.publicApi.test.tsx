@@ -107,7 +107,7 @@ describe("public listings API fallback behavior", () => {
       expect.stringContaining("/api/public/listings?"),
       expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
     );
-    expect(fromMock).toHaveBeenCalledWith("listings");
+    expect(fromMock).toHaveBeenCalledWith("public_listing_catalogue");
     expect(result.current.data).toEqual([
       expect.objectContaining({ id: "db-listing", profiles: null }),
     ]);
@@ -124,7 +124,7 @@ describe("public listings API fallback behavior", () => {
       { user_id: "owner-1", display_name: "Owner One", avatar_url: "avatar.jpg" },
     ]);
     fromMock.mockImplementation((table: string) => {
-      if (table === "listings") return listingBuilder;
+      if (table === "public_listing_catalogue") return listingBuilder;
       if (table === "profiles_public") return profileBuilder;
       throw new Error(`unexpected table: ${table}`);
     });
@@ -161,7 +161,7 @@ describe("public listings API fallback behavior", () => {
       expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
     );
     expect(publicApiMock.mock.calls[0][0]).toContain("pageSize=12");
-    expect(fromMock).toHaveBeenCalledWith("listings");
+    expect(fromMock).toHaveBeenCalledWith("public_listing_catalogue");
     expect(result.current.data?.pages[0]?.data).toEqual([
       expect.objectContaining({ id: "db-listing", profiles: null }),
     ]);
@@ -299,7 +299,7 @@ describe("public listings API fallback behavior", () => {
     expect(fromMock).toHaveBeenCalledWith("listings");
   });
 
-  it("uses direct Supabase reads for non-active status queries", async () => {
+  it("keeps non-owner non-active status queries inside the public projection", async () => {
     publicApiMock.mockResolvedValue(null);
     fromMock.mockReturnValue(makeThenableBuilder([]));
 
@@ -307,7 +307,7 @@ describe("public listings API fallback behavior", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(publicApiMock).not.toHaveBeenCalled();
-    expect(fromMock).toHaveBeenCalledWith("listings");
+    expect(fromMock).toHaveBeenCalledWith("public_listing_catalogue");
   });
 
   it("normalizes successful public detail responses and accepts a clean not-found response", async () => {
@@ -366,7 +366,7 @@ describe("public listings API fallback behavior", () => {
     });
     publicApiMock.mockRejectedValue(new Error("Public API returned a non-JSON response"));
     fromMock.mockImplementation((table: string) => {
-      if (table === "listings") return listingBuilder;
+      if (table === "public_listing_catalogue") return listingBuilder;
       if (table === "profiles_public") return profileBuilder;
       throw new Error(`unexpected table: ${table}`);
     });
@@ -378,7 +378,7 @@ describe("public listings API fallback behavior", () => {
       "/api/public/listing?id=listing-1",
       expect.objectContaining({ throwOnError: true, signal: expect.any(AbortSignal) }),
     );
-    expect(fromMock).toHaveBeenCalledWith("listings");
+    expect(fromMock).toHaveBeenCalledWith("public_listing_catalogue");
     expect(listingBuilder.eq).toHaveBeenCalledWith("id", "listing-1");
     expect(listingBuilder.eq).toHaveBeenCalledWith("status", "active");
     expect(listingBuilder.eq).toHaveBeenCalledWith("is_off_market", false);

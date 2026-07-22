@@ -4367,7 +4367,141 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      public_listing_catalogue: {
+        Row: {
+          address: string | null
+          agent_fee_included: boolean | null
+          ai_score: number | null
+          auction_court: string | null
+          auction_date: string | null
+          auction_starting_bid: number | null
+          available_from: string | null
+          bathrooms: number | null
+          bedrooms: number | null
+          building_allowance: number | null
+          city: string | null
+          commercial_subtype: string | null
+          construction_status: string | null
+          cover_image_url: string | null
+          coverage_ratio: number | null
+          created_at: string | null
+          deposit_months: number | null
+          description: string | null
+          distance_from_city: number | null
+          distance_from_sea: number | null
+          energy_class: string | null
+          facade_length: number | null
+          featured_until: string | null
+          floor: number | null
+          floor_height: number | null
+          has_ac: boolean | null
+          has_alarm: boolean | null
+          has_attic: boolean | null
+          has_awning: boolean | null
+          has_balcony: boolean | null
+          has_cctv: boolean | null
+          has_disability_access: boolean | null
+          has_double_glazing: boolean | null
+          has_electricity_supply: boolean | null
+          has_elevator: boolean | null
+          has_equipped: boolean | null
+          has_facade: boolean | null
+          has_fireplace: boolean | null
+          has_furnished: boolean | null
+          has_garden: boolean | null
+          has_internal_staircase: boolean | null
+          has_land_concession: boolean | null
+          has_loading_dock: boolean | null
+          has_night_power: boolean | null
+          has_painted: boolean | null
+          has_parking: boolean | null
+          has_pool: boolean | null
+          has_satellite: boolean | null
+          has_secure_door: boolean | null
+          has_security: boolean | null
+          has_smart_home: boolean | null
+          has_solar_water: boolean | null
+          has_storage: boolean | null
+          has_structured_cabling: boolean | null
+          has_three_phase_power: boolean | null
+          has_underfloor_heating: boolean | null
+          has_video_tour: boolean | null
+          has_view: boolean | null
+          has_virtual_tour: boolean | null
+          has_water_supply: boolean | null
+          has_window_screens: boolean | null
+          heating_system: string | null
+          id: string | null
+          is_buildable: boolean | null
+          is_corner: boolean | null
+          is_featured: boolean | null
+          is_neoclassical: boolean | null
+          is_off_market: boolean | null
+          is_penthouse: boolean | null
+          is_pre_sale: boolean | null
+          is_preserved: boolean | null
+          kitchens: number | null
+          land_use: string | null
+          latitude: number | null
+          levels: number | null
+          listing_images: Json | null
+          listing_images_detail: Json | null
+          listing_type: Database["public"]["Enums"]["listing_type"] | null
+          living_rooms: number | null
+          location_search_text: string | null
+          longitude: number | null
+          min_rental_months: number | null
+          monthly_expenses: number | null
+          noise_score: number | null
+          open_house_date: string | null
+          open_house_transaction_type: string | null
+          owner_id: string | null
+          pets_allowed: boolean | null
+          plot_depth: number | null
+          plot_surface: number | null
+          postal_code: string | null
+          price: number | null
+          price_per_sqm: number | null
+          priority_placement: number | null
+          priority_until: string | null
+          project: Json | null
+          project_detail: Json | null
+          project_id: string | null
+          property_type: Database["public"]["Enums"]["property_type"] | null
+          region: string | null
+          road_type: string | null
+          safety_score: number | null
+          short_term_rental: boolean | null
+          slope: string | null
+          sqm: number | null
+          status: Database["public"]["Enums"]["listing_status"] | null
+          suitable_commercial_use: boolean | null
+          suitable_holiday: boolean | null
+          suitable_investment: boolean | null
+          suitable_student: boolean | null
+          tags: string[] | null
+          title: string | null
+          total_floors: number | null
+          updated_at: string | null
+          views_count: number | null
+          walkability_score: number | null
+          wc_count: number | null
+          website_url: string | null
+          within_city_plan: boolean | null
+          within_settlement: boolean | null
+          year_built: number | null
+          zone_type: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       accept_open_house_offer: {

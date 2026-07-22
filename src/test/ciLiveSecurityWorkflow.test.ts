@@ -6,6 +6,10 @@ const ciWorkflow = readFileSync(
   join(process.cwd(), ".github", "workflows", "ci.yml"),
   "utf8",
 );
+const stagingFixtureScript = readFileSync(
+  join(process.cwd(), "scripts", "prepare-isolated-security-fixtures.mjs"),
+  "utf8",
+);
 
 describe("CI live-safe security workflow", () => {
   it("runs Lighthouse for explicitly dispatched Release Please validation", () => {
@@ -15,17 +19,27 @@ describe("CI live-safe security workflow", () => {
     );
   });
 
-  it("uses isolated staging only when a matching staging service-role key exists", () => {
+  it("uses isolated staging only when its service-role key can be resolved ephemerally", () => {
     expect(ciWorkflow).toContain("E2E_SECURITY_USE_ISOLATED_STAGING");
-    expect(ciWorkflow).toContain("secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY != ''");
+    expect(ciWorkflow).toContain("secrets.SUPABASE_ACCESS_TOKEN != ''");
     expect(ciWorkflow).toContain(
-      "SUPABASE_SERVICE_ROLE_KEY: ${{ needs['deploy-supabase-staging'].outputs.isolated_staging == 'true' && secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY != '' && secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY }}",
+      "SUPABASE_SERVICE_ROLE_KEY: ${{ needs['deploy-supabase-staging'].outputs.isolated_staging != 'true' && secrets.SUPABASE_SERVICE_ROLE_KEY || '' }}",
     );
     expect(ciWorkflow).toContain(
-      "E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS: ${{ needs['deploy-supabase-staging'].outputs.isolated_staging == 'true' && secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY != '' && 'true' || 'false' }}",
+      "E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS: ${{ needs['deploy-supabase-staging'].outputs.isolated_staging == 'true' && secrets.SUPABASE_ACCESS_TOKEN != '' && 'true' || 'false' }}",
     );
     expect(ciWorkflow).toContain(
-      "E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS: ${{ needs['deploy-supabase-staging'].outputs.isolated_staging == 'true' && secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY != '' && secrets.STAGING_SUPABASE_PROJECT_ID || '' }}",
+      "E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS: ${{ needs['deploy-supabase-staging'].outputs.isolated_staging == 'true' && secrets.SUPABASE_ACCESS_TOKEN != '' && secrets.STAGING_SUPABASE_PROJECT_ID || '' }}",
+    );
+    expect(ciWorkflow).toContain(
+      "Resolve isolated staging service-role key",
+    );
+    expect(ciWorkflow).toContain(
+      "api.supabase.com/v1/projects/$VITE_SUPABASE_PROJECT_ID/api-keys",
+    );
+    expect(ciWorkflow).toContain('::add-mask::$service_role_key');
+    expect(ciWorkflow).toContain(
+      'SUPABASE_SERVICE_ROLE_KEY=$service_role_key',
     );
   });
 
@@ -40,7 +54,7 @@ describe("CI live-safe security workflow", () => {
     expect(validationStepIndex).toBeGreaterThan(0);
     expect(playwrightStepIndex).toBeGreaterThan(validationStepIndex);
     expect(ciWorkflow).toContain(
-      "steps.pr_supabase_changes.outputs.has_supabase_changes != 'true' && env.E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS == 'true'",
+      "if: env.E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS == 'true'",
     );
     expect(ciWorkflow).toContain(
       "Skipping Auth Admin service-role validation because destructive live security tests are disabled",
@@ -53,6 +67,22 @@ describe("CI live-safe security workflow", () => {
       "Selected SUPABASE_SERVICE_ROLE_KEY is not accepted by",
     );
     expect(ciWorkflow).toContain("SupabaseServiceRoleValidationError");
+  });
+
+  it("treats Supabase-changing PRs as a hard isolated-staging security gate", () => {
+    expect(ciWorkflow).toContain(
+      "Require isolated staging for Supabase-changing PRs",
+    );
+    expect(ciWorkflow).toContain(
+      "steps.pr_supabase_changes.outputs.has_supabase_changes == 'true' && env.E2E_SECURITY_USE_ISOLATED_STAGING != 'true'",
+    );
+    expect(ciWorkflow).toContain(
+      "Supabase-changing PRs require an isolated staging runtime and matching staging service-role key",
+    );
+    expect(ciWorkflow).not.toContain("Defer live security checks");
+    expect(ciWorkflow).not.toContain(
+      "steps.pr_supabase_changes.outputs.has_supabase_changes != 'true' && env.E2E_SECURITY_USE_ISOLATED_STAGING",
+    );
   });
 
   it("runs onboarding guard tests only against isolated staging", () => {
@@ -68,6 +98,36 @@ describe("CI live-safe security workflow", () => {
     expect(ciWorkflow).toContain(
       "Skipping onboarding role-selection tests because live-safe security is using production fallback runtime",
     );
+  });
+
+  it("prepares isolated staging identities before security browser tests", () => {
+    const fixtureStepIndex = ciWorkflow.indexOf(
+      "Prepare isolated staging security fixtures",
+    );
+    const playwrightStepIndex = ciWorkflow.indexOf(
+      "Run live-safe RLS + conditional onboarding + GDPR security tests",
+    );
+
+    expect(fixtureStepIndex).toBeGreaterThan(0);
+    expect(playwrightStepIndex).toBeGreaterThan(fixtureStepIndex);
+    expect(ciWorkflow).toContain(
+      "node scripts/prepare-isolated-security-fixtures.mjs",
+    );
+    expect(ciWorkflow).toContain(
+      "if: env.E2E_SECURITY_USE_ISOLATED_STAGING == 'true'",
+    );
+    expect(stagingFixtureScript).toContain(
+      'process.env.E2E_SECURITY_USE_ISOLATED_STAGING !== "true"',
+    );
+    expect(stagingFixtureScript).toContain(
+      'requireEnv("E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS")',
+    );
+    expect(stagingFixtureScript).toContain("is_platform_admin: false");
+    expect(stagingFixtureScript).toContain('currentProfile?.role === "admin"');
+    expect(stagingFixtureScript).toContain("{ replace: true }");
+    expect(stagingFixtureScript).toContain('.from("user_roles")');
+    expect(stagingFixtureScript).toContain(".delete()");
+    expect(stagingFixtureScript).toContain("realtime: { transport: WebSocket }");
   });
 
   it("does not hard-fail production-fallback security tests when the live data plane is unavailable", () => {

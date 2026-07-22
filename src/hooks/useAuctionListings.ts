@@ -158,19 +158,17 @@ const fetchAuctionByIdFromSupabase = async (
 ): Promise<AuctionListingRow | null> => {
   const auctionId = id.trim();
   let query = supabase
-    .from("listings")
+    .from("public_listing_catalogue")
     .select(`
       id,title,city,address,price,auction_starting_bid,auction_date,auction_court,
       property_type,listing_type,cover_image_url,sqm,bedrooms,bathrooms,floor,total_floors,
       latitude,longitude,tags,year_built,construction_status,website_url,region,
-      is_featured,featured_until,priority_placement,priority_until,listing_images(url,sort_order)
+      is_featured,featured_until,priority_placement,priority_until,listing_images
     `)
     .eq("status", "active")
     .eq("is_off_market", false)
     .eq("listing_type", "auction")
-    .or(`auction_date.gte.${today},auction_date.is.null`)
-    .order("sort_order", { referencedTable: "listing_images", ascending: true })
-    .limit(3, { referencedTable: "listing_images" });
+    .or(`auction_date.gte.${today},auction_date.is.null`);
 
   query = UUID_RE.test(auctionId)
     ? query.eq("id", auctionId)

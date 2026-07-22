@@ -13,6 +13,7 @@ import {
   type PublicApiEnv,
 } from "./_cache";
 import { getSupabaseRuntime } from "../../_seo";
+import { PUBLIC_LISTING_CATALOGUE_PATH } from "../../_publicListingProjection";
 
 type OpenHouseRow = Record<string, unknown>;
 
@@ -61,7 +62,7 @@ const OPEN_HOUSE_SELECT = [
   "has_double_glazing",
   "has_secure_door",
   "has_alarm",
-  "listing_images(url,sort_order)",
+  "listing_images",
 ].join(",");
 
 function isPastRequest(requestUrl: URL): boolean {
@@ -81,8 +82,6 @@ async function fetchOpenHouses(
   params.set("listing_type", "eq.open_house");
   params.set("is_off_market", "eq.false");
   params.set("limit", String(limit));
-  params.set("listing_images.order", "sort_order.asc");
-  params.set("listing_images.limit", "3");
   if (transactionType) params.set("open_house_transaction_type", `eq.${transactionType}`);
 
   if (showPast) {
@@ -93,7 +92,7 @@ async function fetchOpenHouses(
     params.set("order", "open_house_date.asc");
   }
 
-  return supabaseJson<OpenHouseRow>(env, "/rest/v1/listings", params, { failOnTransient: true });
+  return supabaseJson<OpenHouseRow>(env, PUBLIC_LISTING_CATALOGUE_PATH, params, { failOnTransient: true });
 }
 
 async function publicOpenHouses(ctx: PublicApiCtx, requestUrl: URL): Promise<Response> {

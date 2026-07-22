@@ -1,3 +1,5 @@
+import { PUBLIC_LISTING_CATALOGUE_PATH } from "./_publicListingProjection";
+
 type AssetFetcher = {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 };
@@ -423,7 +425,7 @@ export async function fetchActiveListingById(env: SeoEnv, id: string): Promise<S
   const listingId = normalizeListingId(id);
   if (!listingId) return null;
 
-  const url = new URL("/rest/v1/listings", runtime.url);
+  const url = new URL(PUBLIC_LISTING_CATALOGUE_PATH, runtime.url);
   url.searchParams.set("select", SELECT_FIELDS);
   url.searchParams.set("id", `eq.${listingId}`);
   url.searchParams.set("status", "eq.active");
@@ -496,7 +498,7 @@ export async function fetchListingPage(
   const runtime = getSupabaseRuntime(env);
   if (!runtime) return [];
 
-  const url = new URL("/rest/v1/listings", runtime.url);
+  const url = new URL(PUBLIC_LISTING_CATALOGUE_PATH, runtime.url);
   url.searchParams.set("select", SELECT_FIELDS);
   url.searchParams.set("status", "eq.active");
   url.searchParams.set("limit", String(opts.limit ?? 12));

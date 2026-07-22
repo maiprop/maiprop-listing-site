@@ -284,19 +284,19 @@ jobs:
     needs: [quality, release-safety, migrations-validate, deploy-supabase-staging]
     env:
       CI: true
-      E2E_SECURITY_USE_ISOLATED_STAGING: ${{ needs['deploy-supabase-staging'].outputs.isolated_staging == 'true' && secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY != '' && 'true' || 'false' }}
-      VITE_SUPABASE_URL: ${{ needs['deploy-supabase-staging'].outputs.isolated_staging == 'true' && secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY != '' && secrets.STAGING_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
-      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ needs['deploy-supabase-staging'].outputs.isolated_staging == 'true' && secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY != '' && secrets.STAGING_SUPABASE_PUBLISHABLE_KEY || secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-      VITE_SUPABASE_PROJECT_ID: ${{ needs['deploy-supabase-staging'].outputs.isolated_staging == 'true' && secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY != '' && secrets.STAGING_SUPABASE_PROJECT_ID || secrets.VITE_SUPABASE_PROJECT_ID }}
+      E2E_SECURITY_USE_ISOLATED_STAGING: ${{ needs['deploy-supabase-staging'].outputs.isolated_staging == 'true' && secrets.SUPABASE_ACCESS_TOKEN != '' && 'true' || 'false' }}
+      VITE_SUPABASE_URL: ${{ needs['deploy-supabase-staging'].outputs.isolated_staging == 'true' && secrets.SUPABASE_ACCESS_TOKEN != '' && secrets.STAGING_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ needs['deploy-supabase-staging'].outputs.isolated_staging == 'true' && secrets.SUPABASE_ACCESS_TOKEN != '' && secrets.STAGING_SUPABASE_PUBLISHABLE_KEY || secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      VITE_SUPABASE_PROJECT_ID: ${{ needs['deploy-supabase-staging'].outputs.isolated_staging == 'true' && secrets.SUPABASE_ACCESS_TOKEN != '' && secrets.STAGING_SUPABASE_PROJECT_ID || secrets.VITE_SUPABASE_PROJECT_ID }}
       RLS_USER_A_EMAIL: ${{ secrets.RLS_USER_A_EMAIL }}
       RLS_USER_B_EMAIL: ${{ secrets.RLS_USER_B_EMAIL }}
       RLS_USER_PASSWORD: ${{ secrets.RLS_USER_PASSWORD }}
       ONBOARDING_TEST_EMAIL: ${{ secrets.ONBOARDING_TEST_EMAIL }}
       ONBOARDING_TEST_PASSWORD: ${{ secrets.ONBOARDING_TEST_PASSWORD }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ needs['deploy-supabase-staging'].outputs.isolated_staging == 'true' && secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY != '' && secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ needs['deploy-supabase-staging'].outputs.isolated_staging != 'true' && secrets.SUPABASE_SERVICE_ROLE_KEY || '' }}
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS: ${{ needs['deploy-supabase-staging'].outputs.isolated_staging == 'true' && secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY != '' && 'true' || 'false' }}
-      E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS: ${{ needs['deploy-supabase-staging'].outputs.isolated_staging == 'true' && secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY != '' && secrets.STAGING_SUPABASE_PROJECT_ID || '' }}
+      E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS: ${{ needs['deploy-supabase-staging'].outputs.isolated_staging == 'true' && secrets.SUPABASE_ACCESS_TOKEN != '' && 'true' || 'false' }}
+      E2E_ALLOWED_DESTRUCTIVE_PROJECT_REFS: ${{ needs['deploy-supabase-staging'].outputs.isolated_staging == 'true' && secrets.SUPABASE_ACCESS_TOKEN != '' && secrets.STAGING_SUPABASE_PROJECT_ID || '' }}
 
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -329,23 +329,54 @@ jobs:
             echo "has_supabase_changes=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Defer live security checks
-        if: steps.pr_supabase_changes.outputs.has_supabase_changes == 'true'
+      - name: Require isolated staging for Supabase-changing PRs
+        if: github.event_name == 'pull_request' && steps.pr_supabase_changes.outputs.has_supabase_changes == 'true' && env.E2E_SECURITY_USE_ISOLATED_STAGING != 'true'
         run: |
-          echo "This PR changes Supabase deployment files, so live security checks are deferred until mainline Supabase prep handles those changes." | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "::error::Supabase-changing PRs require an isolated staging runtime and matching staging service-role key. Refusing to defer RLS and security E2E until after merge."
+          exit 1
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true'
         with:
           node-version-file: .node-version
           cache: npm
 
       - name: Check runtime
-        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true'
         run: npm run check:runtime
 
+      - name: Resolve isolated staging service-role key
+        if: env.E2E_SECURITY_USE_ISOLATED_STAGING == 'true'
+        run: |
+          set -euo pipefail
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+
+          http_code=$(curl -sS --retry 3 --connect-timeout 10 \
+            -o "$response_file" \
+            -w "%{http_code}" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            -H "Accept: application/json" \
+            "https://api.supabase.com/v1/projects/$VITE_SUPABASE_PROJECT_ID/api-keys")
+          if [ "$http_code" != "200" ]; then
+            echo "::error::Could not resolve isolated staging API keys (HTTP $http_code)."
+            exit 1
+          fi
+
+          service_role_key=$(jq -r '
+            (if type == "array" then . else (.keys // .result // []) end)
+            | map(select((.name // .role // .id // "") == "service_role"))
+            | .[0]
+            | (.api_key // .key // .value // empty)
+          ' "$response_file")
+          if [ -z "$service_role_key" ] || [ "$service_role_key" = "null" ]; then
+            echo "::error::Supabase Management API did not return the staging service-role key."
+            exit 1
+          fi
+
+          echo "::add-mask::$service_role_key"
+          echo "SUPABASE_SERVICE_ROLE_KEY=$service_role_key" >> "$GITHUB_ENV"
+          echo "Resolved and masked the isolated staging service-role key for this job only."
+
       - name: Validate required live security secrets
-        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true'
         run: |
           required=(
             "VITE_SUPABASE_URL"
@@ -375,7 +406,7 @@ jobs:
           fi
 
           if [ "${{ needs['deploy-supabase-staging'].outputs.isolated_staging }}" = "true" ] && [ "$E2E_SECURITY_USE_ISOLATED_STAGING" != "true" ]; then
-            echo "::warning::Isolated staging Supabase runtime is configured, but STAGING_SUPABASE_SERVICE_ROLE_KEY is missing. Live-safe security tests will use production runtime with destructive checks disabled."
+            echo "::warning::Isolated staging Supabase runtime is configured, but the Supabase management token is unavailable. Live-safe security tests will use production runtime with destructive checks disabled."
           fi
 
           if [ "$E2E_SECURITY_USE_ISOLATED_STAGING" != "true" ]; then
@@ -383,7 +414,7 @@ jobs:
           fi
 
       - name: Validate selected Supabase service role key
-        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true' && env.E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS == 'true'
+        if: env.E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS == 'true'
         run: |
           set -euo pipefail
           node --input-type=module <<'NODE'
@@ -461,13 +492,16 @@ jobs:
           NODE
 
       - name: Skip Auth Admin service-role validation in production fallback
-        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true' && env.E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS != 'true'
+        if: env.E2E_ALLOW_DESTRUCTIVE_LIVE_TESTS != 'true'
         run: |
-          echo "::warning::Skipping Auth Admin service-role validation because destructive live security tests are disabled. Configure isolated staging with STAGING_SUPABASE_SERVICE_ROLE_KEY to enable the full Auth Admin security suite."
+          echo "::warning::Skipping Auth Admin service-role validation because destructive live security tests are disabled. Configure isolated staging with SUPABASE_ACCESS_TOKEN so CI can resolve an ephemeral staging service-role key and enable the full Auth Admin security suite."
 
       - name: Install dependencies
-        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true'
         run: npm ci --prefer-offline --no-audit
+
+      - name: Prepare isolated staging security fixtures
+        if: env.E2E_SECURITY_USE_ISOLATED_STAGING == 'true'
+        run: node scripts/prepare-isolated-security-fixtures.mjs
 
       - name: Skip live type freshness without staged DB changes
         if: needs['deploy-supabase-staging'].outputs.db_changes != 'true'
@@ -492,7 +526,7 @@ jobs:
 
       - name: Probe production Supabase data plane before fallback security tests
         id: supabase_data_plane_probe
-        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true' && env.E2E_SECURITY_USE_ISOLATED_STAGING != 'true'
+        if: env.E2E_SECURITY_USE_ISOLATED_STAGING != 'true'
         run: |
           set -euo pipefail
           node --input-type=module <<'NODE'
@@ -533,7 +567,7 @@ jobs:
 
       - name: Probe production fallback RLS test credentials
         id: production_rls_auth_probe
-        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true' && env.E2E_SECURITY_USE_ISOLATED_STAGING != 'true' && steps.supabase_data_plane_probe.outputs.ready == 'true'
+        if: env.E2E_SECURITY_USE_ISOLATED_STAGING != 'true' && steps.supabase_data_plane_probe.outputs.ready == 'true'
         run: |
           set -euo pipefail
           node --input-type=module <<'NODE'
@@ -575,7 +609,6 @@ jobs:
           NODE
 
       - name: Install Playwright browsers
-        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true'
         timeout-minutes: 4
         # Hosted Ubuntu runners already include Chromium's runtime libraries for
         # our CI smoke tests. Avoid --with-deps here because it enters apt and
@@ -583,11 +616,10 @@ jobs:
         run: npx playwright install chromium
 
       - name: Build app
-        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true'
         run: npm run build
 
       - name: Run live-safe RLS + conditional onboarding + GDPR security tests
-        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true' && (env.E2E_SECURITY_USE_ISOLATED_STAGING == 'true' || (steps.supabase_data_plane_probe.outputs.ready == 'true' && steps.production_rls_auth_probe.outputs.ready == 'true'))
+        if: env.E2E_SECURITY_USE_ISOLATED_STAGING == 'true' || (steps.supabase_data_plane_probe.outputs.ready == 'true' && steps.production_rls_auth_probe.outputs.ready == 'true')
         run: |
           set -euo pipefail
           specs=(e2e/rls-security.spec.ts e2e/gdpr-delete-account.spec.ts)
@@ -601,7 +633,7 @@ jobs:
           npx playwright test --project=chromium "${specs[@]}"
 
       - name: Skip production-fallback live-safe security tests while data plane is unavailable
-        if: steps.pr_supabase_changes.outputs.has_supabase_changes != 'true' && env.E2E_SECURITY_USE_ISOLATED_STAGING != 'true' && (steps.supabase_data_plane_probe.outputs.ready != 'true' || steps.production_rls_auth_probe.outputs.ready != 'true')
+        if: env.E2E_SECURITY_USE_ISOLATED_STAGING != 'true' && (steps.supabase_data_plane_probe.outputs.ready != 'true' || steps.production_rls_auth_probe.outputs.ready != 'true')
         run: |
           echo "::warning::Skipped production-fallback live-safe security tests because production Supabase fallback preflight did not pass. This can be data-plane unavailability or stale RLS demo-account credentials. Configure isolated staging to make these tests a hard PR gate independent of production availability."
 

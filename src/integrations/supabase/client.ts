@@ -2,6 +2,7 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/config';
+import { createTimeoutFetch } from './timeoutFetch';
 
 const SUPABASE_PUBLISHABLE_KEY = SUPABASE_ANON_KEY;
 const DEFAULT_TIMEOUT_MS = 20000;
@@ -16,26 +17,10 @@ if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-const timeoutFetch: typeof fetch = async (input, init) => {
-  const controller = new AbortController();
-  const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-  const isFunctionInvoke = url.includes("/functions/v1/");
-  const timeoutMs = isFunctionInvoke ? FUNCTION_TIMEOUT_MS : DEFAULT_TIMEOUT_MS;
-  const timer = setTimeout(
-    () => controller.abort(new DOMException(`Request timed out after ${Math.round(timeoutMs / 1000)}s`, "AbortError")),
-    timeoutMs
-  );
-  try {
-    return await fetch(input, { ...init, signal: controller.signal });
-  } catch (error: unknown) {
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(`Supabase request timed out after ${Math.round(timeoutMs / 1000)}s`);
-    }
-    throw error;
-  } finally {
-    clearTimeout(timer);
-  }
-};
+const timeoutFetch = createTimeoutFetch({
+  defaultTimeoutMs: DEFAULT_TIMEOUT_MS,
+  functionTimeoutMs: FUNCTION_TIMEOUT_MS,
+});
 
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {

@@ -7,13 +7,6 @@ import {
 
 export type OpenHouseTransactionType = "sale" | "rent";
 
-const PROJECT_UNIT_CARD_SELECT = ["id", "availability_status", "internal_sqm"].join(",");
-const LISTING_PROJECT_CARD_SELECT = [
-  "name",
-  "delivery_date",
-  `project_units!project_units_project_id_fkey(${PROJECT_UNIT_CARD_SELECT})`,
-].join(",");
-
 export const PUBLIC_CARD_LISTING_SELECT = [
   "id",
   "owner_id",
@@ -57,17 +50,9 @@ export const PUBLIC_CARD_LISTING_SELECT = [
   "has_elevator",
   "has_garden",
   "has_smart_home",
-  `project:projects!listings_project_id_fkey(${LISTING_PROJECT_CARD_SELECT})`,
-  "listing_images(url,sort_order)",
+  "project",
+  "listing_images",
 ].join(",");
-
-const withImageOrder = <T extends {
-  order: (column: string, options?: Record<string, unknown>) => T;
-  limit: (count: number, options?: Record<string, unknown>) => T;
-}>(query: T): T =>
-  query
-    .order("sort_order", { referencedTable: "listing_images", ascending: true })
-    .limit(3, { referencedTable: "listing_images" });
 
 type AbortableQuery<T> = T & { abortSignal?: (signal: AbortSignal) => T };
 
@@ -79,9 +64,8 @@ const withAbortSignal = <T>(query: T, signal?: AbortSignal): T => {
 };
 
 export async function fetchHomepageFeaturedFallback(signal?: AbortSignal): Promise<HomepageListing[]> {
-  const query = withImageOrder(
-    supabase
-      .from("listings")
+  const query = supabase
+      .from("public_listing_catalogue")
       .select(PUBLIC_CARD_LISTING_SELECT)
       .eq("status", "active")
       .eq("is_off_market", false)
@@ -89,8 +73,7 @@ export async function fetchHomepageFeaturedFallback(signal?: AbortSignal): Promi
       .eq("is_featured", true)
       .gt("featured_until", new Date().toISOString())
       .order("created_at", { ascending: false })
-      .limit(12),
-  );
+      .limit(12);
 
   const { data, error } = await withAbortSignal(query, signal);
   if (error) throw error;
@@ -98,17 +81,15 @@ export async function fetchHomepageFeaturedFallback(signal?: AbortSignal): Promi
 }
 
 export async function fetchHomepageOpenHousesFallback(signal?: AbortSignal): Promise<HomepageListing[]> {
-  const query = withImageOrder(
-    supabase
-      .from("listings")
+  const query = supabase
+      .from("public_listing_catalogue")
       .select(PUBLIC_CARD_LISTING_SELECT)
       .eq("status", "active")
       .eq("is_off_market", false)
       .eq("listing_type", "open_house")
       .gte("open_house_date", new Date().toISOString())
       .order("open_house_date", { ascending: true })
-      .limit(12),
-  );
+      .limit(12);
 
   const { data, error } = await withAbortSignal(query, signal);
   if (error) throw error;
@@ -127,15 +108,13 @@ export async function fetchOpenHousesFallback({
   signal?: AbortSignal;
 }): Promise<HomepageListing[]> {
   const now = new Date().toISOString();
-  let query = withImageOrder(
-    supabase
-      .from("listings")
+  let query = supabase
+      .from("public_listing_catalogue")
       .select(PUBLIC_CARD_LISTING_SELECT)
       .eq("status", "active")
       .eq("is_off_market", false)
       .eq("listing_type", "open_house")
-      .limit(limit),
-  );
+      .limit(limit);
 
   if (transactionType) query = query.eq("open_house_transaction_type", transactionType);
   query = showPast
@@ -149,17 +128,15 @@ export async function fetchOpenHousesFallback({
 
 export async function fetchAuctionsFallback<T = HomepageListing>(limit: number, signal?: AbortSignal): Promise<T[]> {
   const today = new Date().toISOString().slice(0, 10);
-  const query = withImageOrder(
-    supabase
-      .from("listings")
+  const query = supabase
+      .from("public_listing_catalogue")
       .select(PUBLIC_CARD_LISTING_SELECT)
       .eq("status", "active")
       .eq("is_off_market", false)
       .eq("listing_type", "auction")
       .or(`auction_date.gte.${today},auction_date.is.null`)
       .order("auction_date", { ascending: true, nullsFirst: false })
-      .limit(limit),
-  );
+      .limit(limit);
 
   const { data, error } = await withAbortSignal(query, signal);
   if (error) throw error;
