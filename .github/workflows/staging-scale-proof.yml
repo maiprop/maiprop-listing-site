@@ -93,7 +93,22 @@ jobs:
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install --yes postgresql-client
 
-      - uses: grafana/setup-k6-action@db07bd9765aac508ef18982e52ab937fe633a065 # v1
+      - name: Install pinned k6 release
+        shell: bash
+        env:
+          K6_VERSION: v2.0.0
+        run: |
+          set -euo pipefail
+          archive="k6-${K6_VERSION}-linux-amd64.tar.gz"
+          release_url="https://github.com/grafana/k6/releases/download/${K6_VERSION}"
+          curl --fail --location --silent --show-error \
+            --output "$archive" "$release_url/$archive"
+          curl --fail --location --silent --show-error \
+            --output checksums.txt "$release_url/k6-${K6_VERSION}-checksums.txt"
+          grep " $archive$" checksums.txt | sha256sum --check --strict
+          tar --extract --gzip --file "$archive"
+          sudo install -m 0755 "k6-${K6_VERSION}-linux-amd64/k6" /usr/local/bin/k6
+          k6 version
 
       - name: Remove orphaned synthetic datasets
         env:
