@@ -822,7 +822,7 @@ describe("public listings endpoint", () => {
       "organic-5",
     ]);
     expect(new Set(combinedIds)).toHaveLength(combinedIds.length);
-    expect(listingUrls.every((url) => url.searchParams.get("select") !== "id")).toBe(true);
+    expect(listingUrls.every((url) => url.searchParams.get("select") !== "id,created_at")).toBe(true);
 
     const secondPageUrls = listingUrls.slice(2);
     expect(secondPageUrls).toHaveLength(2);
@@ -851,10 +851,11 @@ describe("public listings endpoint", () => {
     expect(body.data[0].ownerParticipantType).toBe("agent");
 
     const listingUrls = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue");
-    const probeUrls = listingUrls.filter((url) => url.searchParams.get("select") === "id");
-    const dataUrls = listingUrls.filter((url) => url.searchParams.get("select") !== "id");
+    const probeUrls = listingUrls.filter((url) => url.searchParams.get("select") === "id,created_at");
+    const dataUrls = listingUrls.filter((url) => url.searchParams.get("select") !== "id,created_at");
     expect(probeUrls).toHaveLength(2);
     expect(probeUrls.every((url) => url.searchParams.get("limit") === "200")).toBe(true);
+    expect(probeUrls.every((url) => url.searchParams.get("select") === "id,created_at")).toBe(true);
     expect(dataUrls).toHaveLength(2);
     expect(dataUrls.every((url) => url.searchParams.get("limit") === "201")).toBe(true);
     const listingsUrl = dataUrls[0];
@@ -946,10 +947,32 @@ describe("public listings endpoint", () => {
       "organic-15",
     ]);
     const listingUrls = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue");
-    const dataUrls = listingUrls.filter((url) => url.searchParams.get("select") !== "id");
+    const probeUrls = listingUrls.filter((url) => url.searchParams.get("select") === "id,created_at");
+    const dataUrls = listingUrls.filter((url) => url.searchParams.get("select") !== "id,created_at");
+    expect(probeUrls).toHaveLength(2);
+    expect(probeUrls.every((url) => url.searchParams.get("select") === "id,created_at")).toBe(true);
     expect(dataUrls).toHaveLength(2);
     expect(dataUrls.every((url) => url.searchParams.get("limit") === "5")).toBe(true);
     expect(dataUrls.map((url) => url.searchParams.get("offset")).sort()).toEqual(["1", "11"]);
+  });
+
+  it.each([
+    ["featured", "created_at"],
+    ["newest", "created_at"],
+    ["price-asc", "price"],
+    ["price-desc", "price"],
+    ["ai-score", "ai_score"],
+    ["views", "views_count"],
+  ])("keeps the %s sort field in lightweight RPC offset probes", async (sort, field) => {
+    const res = await listingsRequest(makeCtx(
+      `https://portal.maiprop.co/api/public/listings?listing_type=sale&pageSize=1&offset=1&sort=${sort}`,
+    ));
+
+    expect(res.status).toBe(200);
+    const probeUrls = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")
+      .filter((url) => url.searchParams.get("select") === `id,${field}`);
+    expect(probeUrls).toHaveLength(2);
+    expect(probeUrls.every((url) => url.searchParams.get("order")?.startsWith(`${field}.`))).toBe(true);
   });
 
   it("uses a coordinate bounding box for selected address suggestions", async () => {
