@@ -1,11 +1,15 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const workflow = readFileSync(".github/workflows/deploy-edge-functions.yml", "utf8");
+const normalizeNewlines = (value: string) => value.replace(/\r\n/g, "\n");
+
+const workflow = normalizeNewlines(
+  readFileSync(".github/workflows/deploy-edge-functions.yml", "utf8"),
+);
 const stagingWorkflow = readFileSync(
   ".github/workflows/reusable-supabase-staging.yml",
   "utf8",
-);
+).replace(/\r\n/g, "\n");
 
 function stepBlock(name: string): string {
   const marker = `      - name: ${name}`;
