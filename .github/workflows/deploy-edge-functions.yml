@@ -139,11 +139,11 @@ jobs:
           set -euo pipefail
           if [ "$TARGET_DEPLOY_ALL" = "true" ]; then
             echo "Deploying ALL edge functions..."
-            supabase functions deploy --project-ref "$PROJECT_REF"
+            supabase functions deploy --use-api --project-ref "$PROJECT_REF"
           elif [ -n "$TARGET_FUNCTIONS" ]; then
             for fn in $TARGET_FUNCTIONS; do
               echo "Deploying: $fn"
-              supabase functions deploy "$fn" --project-ref "$PROJECT_REF"
+              supabase functions deploy "$fn" --use-api --project-ref "$PROJECT_REF"
             done
           else
             echo "No functions to deploy"
