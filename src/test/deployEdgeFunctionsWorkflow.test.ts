@@ -2,6 +2,10 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const workflow = readFileSync(".github/workflows/deploy-edge-functions.yml", "utf8");
+const stagingWorkflow = readFileSync(
+  ".github/workflows/reusable-supabase-staging.yml",
+  "utf8",
+);
 
 function stepBlock(name: string): string {
   const marker = `      - name: ${name}`;
@@ -14,6 +18,14 @@ function stepBlock(name: string): string {
 }
 
 describe("production Edge Function deploy workflow", () => {
+  it("uses Supabase server-side bundling instead of runner Docker for every deployment", () => {
+    expect(workflow).toMatch(/supabase functions deploy[^\n]*--use-api/);
+    expect(workflow).not.toMatch(/supabase functions deploy(?![^\n]*--use-api)/);
+    expect(stagingWorkflow).toMatch(
+      /supabase functions deploy \\\n+\s+--use-api \\\n+\s+--project-ref/,
+    );
+  });
+
   it("lets first-time function deploys proceed while keeping post-deploy live drift blocking", () => {
     const preDeployStepName = "Capture pre-deploy production live function drift inventory";
     const deployStepName = "Deploy functions";

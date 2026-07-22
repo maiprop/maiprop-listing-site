@@ -14,6 +14,7 @@ import React from "react";
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: vi.fn(),
+    rpc: vi.fn(),
     functions: {
       invoke: vi.fn(),
     },
@@ -58,6 +59,13 @@ function mockTableQuery(resolved: { data: unknown; error: null }) {
 describe("useListing detail loading and owner Pro status", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(supabase.rpc).mockImplementation((fn: string) => {
+      const viewByFunction: Record<string, string> = {
+        get_public_listing_catalogue: "public_listing_catalogue",
+        get_listing_management_catalogue: "listing_management_catalogue",
+      };
+      return supabase.from(viewByFunction[fn] ?? fn) as never;
+    });
   });
 
   it("returns ownerIsPro=false when listing has no owner_id", async () => {
@@ -69,7 +77,7 @@ describe("useListing detail loading and owner Pro status", () => {
     };
 
     vi.mocked(supabase.from).mockImplementation((table: string) => {
-      if (table === "listings") {
+      if (table === "listing_management_catalogue") {
         return mockTableQuery({ data: listingRow, error: null }) as unknown as ReturnType<typeof supabase.from>;
       }
       throw new Error(`unexpected table: ${table}`);
@@ -91,7 +99,7 @@ describe("useListing detail loading and owner Pro status", () => {
     };
 
     vi.mocked(supabase.from).mockImplementation((table: string) => {
-      if (table === "listings") {
+      if (table === "listing_management_catalogue") {
         return mockTableQuery({ data: listingRow, error: null }) as unknown as ReturnType<typeof supabase.from>;
       }
       if (table === "profiles_public") {
@@ -153,7 +161,7 @@ describe("useListing detail loading and owner Pro status", () => {
 
   it("returns null when the listing does not exist", async () => {
     vi.mocked(supabase.from).mockImplementation((table: string) => {
-      if (table === "listings") {
+      if (table === "listing_management_catalogue") {
         return mockTableQuery({ data: null, error: null }) as unknown as ReturnType<typeof supabase.from>;
       }
       throw new Error(`unexpected table: ${table}`);

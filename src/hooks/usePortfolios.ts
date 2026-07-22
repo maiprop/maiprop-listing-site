@@ -62,12 +62,15 @@ export function usePortfolio(id: string | undefined) {
       if (ids.length === 0) return { ...portfolio, listings: [] };
 
       const { data: listings, error: le } = await supabase
-        .from("listings")
+        .rpc("get_public_listing_catalogue")
         .select("id, title, city, price, sqm, property_type, cover_image_url, listing_type, status")
         .in("id", ids);
       if (le) throw le;
 
-      const byId = Object.fromEntries((listings || []).map((l: PortfolioListing) => [l.id, l]));
+      const portfolioListings = (listings ?? []).filter(
+        (listing) => Boolean(listing.id),
+      ) as unknown as PortfolioListing[];
+      const byId = Object.fromEntries(portfolioListings.map((listing) => [listing.id, listing]));
       const ordered = ids.map((id) => byId[id]).filter(Boolean);
       return { ...portfolio, listings: ordered };
     },

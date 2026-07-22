@@ -181,13 +181,13 @@ function PlatformOverviewTab() {
       sixMonthsAgo.setHours(0, 0, 0, 0);
 
       const [r1, r2, r3, r4, r5, r6, r7] = await Promise.all([
-        supabase.from("listings").select("id", { count: "exact", head: true }),
-        supabase.from("listings").select("id", { count: "exact", head: true }).eq("status", "active"),
+        supabase.rpc("get_listing_management_catalogue", undefined, { count: "exact", head: true }).select("id"),
+        supabase.rpc("get_listing_management_catalogue", undefined, { count: "exact", head: true }).select("id").eq("status", "active"),
         supabase.from("profiles_public").select("user_id", { count: "exact", head: true }),
         supabase.from("profiles_public").select("user_id", { count: "exact", head: true }).gte("created_at", som),
         supabase.from("firesale_requests").select("id", { count: "exact", head: true }),
         supabase.from("open_house_settings").select("id", { count: "exact", head: true }),
-        supabase.from("listings").select("created_at").gte("created_at", sixMonthsAgo.toISOString()),
+        supabase.rpc("get_listing_management_catalogue").select("created_at").gte("created_at", sixMonthsAgo.toISOString()),
       ]);
 
       if (r1.error) throw r1.error;

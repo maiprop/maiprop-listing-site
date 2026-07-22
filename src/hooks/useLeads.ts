@@ -10,6 +10,7 @@ import {
   leadUpdateMutationSchema,
   parseMutationInput,
 } from "@/lib/mutationSchemas";
+import { attachListingReferences } from "@/lib/listingReferences";
 
 export const LEAD_STATUSES = ["new", "contacted", "qualified", "proposal", "negotiation", "won", "lost"] as const;
 export const LEAD_SOURCES = ["manual", "listing_inquiry", "consultation", "callback", "project_inquiry", "viewing", "message"] as const;
@@ -25,11 +26,11 @@ export function useLeads() {
       if (!user) return [];
       const { data, error } = await supabase
         .from("leads")
-        .select("*, listings(id, title, city, cover_image_url)")
+        .select("*")
         .eq("owner_id", user.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data || [];
+      return attachListingReferences(data ?? []);
     },
     enabled: !!user,
     staleTime: FAST_CHANGING_QUERY_STALE_TIME,

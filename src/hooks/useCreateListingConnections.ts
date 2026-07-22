@@ -35,7 +35,10 @@ export function useCreateListingConnections(): CreateListingConnections {
       let storageOk = false;
 
       try {
-        const { error: listError } = await supabase.from("listings").select("id").limit(1);
+        const { error: listError } = await supabase
+          .rpc("get_public_listing_catalogue")
+          .select("id")
+          .limit(1);
         supabaseOk = !listError;
       } catch (_err: unknown) {
         supabaseOk = false;

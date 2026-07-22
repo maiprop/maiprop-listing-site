@@ -494,6 +494,7 @@ jobs:
         if: steps.supabase_changes.outputs.eligible == 'true' && steps.supabase_target.outputs.isolated_staging == 'true'
         run: |
           supabase functions deploy \
+            --use-api \
             --project-ref "$STAGING_SUPABASE_PROJECT_ID"
         env:
           SUPABASE_ACCESS_TOKEN:         ${{ secrets.SUPABASE_ACCESS_TOKEN }}

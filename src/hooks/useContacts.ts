@@ -12,6 +12,7 @@ import {
   contactUpdateMutationSchema,
   parseMutationInput,
 } from "@/lib/mutationSchemas";
+import { attachListingReferences } from "@/lib/listingReferences";
 
 const DEAL_STAGES = ["new", "contacted", "qualified", "proposal", "negotiation", "won", "lost"] as const;
 
@@ -49,11 +50,11 @@ export function useContacts() {
       if (!user) return [];
       const { data, error } = await supabase
         .from("contacts")
-        .select("id, user_id, name, email, phone, source, deal_stage, notes, follow_up_at, listing_id, created_at, updated_at, listings(id, title, city, cover_image_url)")
+        .select("id, user_id, name, email, phone, source, deal_stage, notes, follow_up_at, listing_id, created_at, updated_at")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data || [];
+      return attachListingReferences(data ?? []);
     },
     enabled: !!user,
     staleTime: USER_SCOPED_QUERY_STALE_TIME,

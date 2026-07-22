@@ -148,7 +148,14 @@ describe("useConversations", () => {
     const { result } = renderHook(() => useConversations(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual([
-      { id: "c-1", participant_a: null, participant_b: null, profile_a: null, profile_b: null },
+      {
+        id: "c-1",
+        participant_a: null,
+        participant_b: null,
+        listings: null,
+        profile_a: null,
+        profile_b: null,
+      },
     ]);
   });
 

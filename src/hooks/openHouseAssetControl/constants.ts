@@ -97,5 +97,5 @@ export const OPEN_HOUSE_OFFER_LOOKUP_SELECT = `
 export const OPEN_HOUSE_REVEAL_LISTING_SELECT = `
   owner_id,
   open_house_date,
-  open_house_settings (offer_deadline)
+  open_house_settings
 `;

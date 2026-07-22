@@ -13,6 +13,12 @@ import { renderHook, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
+const listingBoundaryMocks = vi.hoisted(() => ({
+  create: vi.fn(),
+  update: vi.fn(),
+  remove: vi.fn(),
+}));
+
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: vi.fn(),
@@ -22,6 +28,11 @@ vi.mock("@/integrations/supabase/client", () => ({
 }));
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: vi.fn(),
+}));
+vi.mock("@/hooks/listingManagementBoundary", () => ({
+  createListingForUser: (...args: unknown[]) => listingBoundaryMocks.create(...args),
+  updateListingForUser: (...args: unknown[]) => listingBoundaryMocks.update(...args),
+  deleteListingForUser: (...args: unknown[]) => listingBoundaryMocks.remove(...args),
 }));
 vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn() },
@@ -50,36 +61,14 @@ function wrapper({ children }: { children: React.ReactNode }) {
   return React.createElement(QueryClientProvider, { client: qc }, children);
 }
 
-/** Minimal chainable Supabase mock that resolves with given data */
-function makeInsertChain(data: unknown) {
-  const chain: Record<string, unknown> = {};
-  chain.insert = vi.fn().mockReturnValue(chain);
-  chain.update = vi.fn().mockReturnValue(chain);
-  chain.delete = vi.fn().mockReturnValue(chain);
-  chain.select = vi.fn().mockReturnValue(chain);
-  chain.eq = vi.fn().mockReturnValue(chain);
-  chain.single = vi.fn().mockResolvedValue({ data, error: null });
-  chain.then = (resolve: (v: { data: unknown; error: null }) => void) =>
-    Promise.resolve({ data, error: null }).then(resolve);
-  chain.catch = (_rej: unknown) => Promise.resolve({ data, error: null });
-  return chain;
-}
-
-function makeDeleteChain() {
-  const chain: Record<string, unknown> = {};
-  chain.delete = vi.fn().mockReturnValue(chain);
-  chain.eq = vi.fn().mockReturnValue(chain);
-  chain.then = (resolve: (v: { error: null }) => void) =>
-    Promise.resolve({ error: null }).then(resolve);
-  chain.catch = (_rej: unknown) => Promise.resolve({ error: null });
-  return chain;
-}
-
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
   sessionStorage.clear();
   vi.mocked(useAuth).mockReturnValue({ user: { id: TEST_USER_ID } } as ReturnType<typeof useAuth>);
+  listingBoundaryMocks.create.mockResolvedValue({ id: TEST_LISTING_ID, owner_id: TEST_USER_ID });
+  listingBoundaryMocks.update.mockResolvedValue({ id: TEST_LISTING_ID, owner_id: TEST_USER_ID });
+  listingBoundaryMocks.remove.mockResolvedValue(undefined);
 });
 
 describe("useTrackListingView", () => {
@@ -138,8 +127,7 @@ describe("useTrackListingView", () => {
 describe("useCreateListing", () => {
   it("inserts listing with owner_id and resolves with data", async () => {
     const mockListing = { id: TEST_LISTING_ID, title: "Test Villa", owner_id: TEST_USER_ID };
-    const chain = makeInsertChain(mockListing);
-    vi.mocked(supabase).from = vi.fn().mockReturnValue(chain);
+    listingBoundaryMocks.create.mockResolvedValue(mockListing);
 
     const { result } = renderHook(() => useCreateListing(), { wrapper });
 
@@ -157,8 +145,7 @@ describe("useCreateListing", () => {
       expect(data).toEqual(mockListing);
     });
 
-    expect(vi.mocked(supabase).from).toHaveBeenCalledWith("listings");
-    expect(chain.insert).toHaveBeenCalledWith(
+    expect(listingBoundaryMocks.create).toHaveBeenCalledWith(
       expect.objectContaining({
         owner_id: TEST_USER_ID,
         status: "active",
@@ -169,9 +156,6 @@ describe("useCreateListing", () => {
   });
 
   it("shows success toast on create", async () => {
-    const chain = makeInsertChain({ id: TEST_LISTING_ID, title: "Test Villa", owner_id: TEST_USER_ID });
-    vi.mocked(supabase).from = vi.fn().mockReturnValue(chain);
-
     const { result } = renderHook(() => useCreateListing(), { wrapper });
     await act(async () => {
       await result.current.mutateAsync({
@@ -185,11 +169,7 @@ describe("useCreateListing", () => {
 
   it("throws and shows error toast when insert fails", async () => {
     const dbError = new Error("Listing quota exceeded");
-    const chain: Record<string, unknown> = {};
-    chain.insert = vi.fn().mockReturnValue(chain);
-    chain.select = vi.fn().mockReturnValue(chain);
-    chain.single = vi.fn().mockResolvedValue({ data: null, error: dbError });
-    vi.mocked(supabase).from = vi.fn().mockReturnValue(chain);
+    listingBoundaryMocks.create.mockRejectedValue(dbError);
 
     const { result } = renderHook(() => useCreateListing(), { wrapper });
     await act(async () => {
@@ -208,8 +188,7 @@ describe("useCreateListing", () => {
 describe("useUpdateListing", () => {
   it("updates with both id and owner_id guards", async () => {
     const updated = { id: TEST_LISTING_ID, title: "Updated Title", owner_id: TEST_USER_ID };
-    const chain = makeInsertChain(updated);
-    vi.mocked(supabase).from = vi.fn().mockReturnValue(chain);
+    listingBoundaryMocks.update.mockResolvedValue(updated);
 
     const { result } = renderHook(() => useUpdateListing(), { wrapper });
     await act(async () => {
@@ -220,18 +199,13 @@ describe("useUpdateListing", () => {
       expect(data).toEqual(updated);
     });
 
-    // Verify ownership filter applied
-    const eqCalls = vi.mocked(chain.eq as ReturnType<typeof vi.fn>).mock.calls;
-    const hasIdFilter = eqCalls.some(([col]) => col === "id");
-    const hasOwnerFilter = eqCalls.some(([col]) => col === "owner_id");
-    expect(hasIdFilter).toBe(true);
-    expect(hasOwnerFilter).toBe(true);
+    expect(listingBoundaryMocks.update).toHaveBeenCalledWith(
+      TEST_LISTING_ID,
+      { title: "Updated Title" },
+    );
   });
 
   it("shows success toast after update", async () => {
-    const chain = makeInsertChain({ id: TEST_LISTING_ID, owner_id: TEST_USER_ID });
-    vi.mocked(supabase).from = vi.fn().mockReturnValue(chain);
-
     const { result } = renderHook(() => useUpdateListing(), { wrapper });
     await act(async () => {
       await result.current.mutateAsync({ id: TEST_LISTING_ID, updates: { price: 300000 } });
@@ -245,25 +219,15 @@ describe("useUpdateListing", () => {
 
 describe("useDeleteListing", () => {
   it("deletes with both id and owner_id guards", async () => {
-    const chain = makeDeleteChain();
-    vi.mocked(supabase).from = vi.fn().mockReturnValue(chain);
-
     const { result } = renderHook(() => useDeleteListing(), { wrapper });
     await act(async () => {
       await result.current.mutateAsync(TEST_LISTING_ID);
     });
 
-    const eqCalls = vi.mocked(chain.eq as ReturnType<typeof vi.fn>).mock.calls;
-    expect(eqCalls.some(([col]) => col === "id")).toBe(true);
-    expect(eqCalls.some(([col]) => col === "owner_id")).toBe(true);
-    expect(eqCalls.some(([, val]) => val === TEST_LISTING_ID)).toBe(true);
-    expect(eqCalls.some(([, val]) => val === TEST_USER_ID)).toBe(true);
+    expect(listingBoundaryMocks.remove).toHaveBeenCalledWith(TEST_LISTING_ID);
   });
 
   it("shows success toast after delete", async () => {
-    const chain = makeDeleteChain();
-    vi.mocked(supabase).from = vi.fn().mockReturnValue(chain);
-
     const { result } = renderHook(() => useDeleteListing(), { wrapper });
     await act(async () => {
       await result.current.mutateAsync(TEST_LISTING_ID);

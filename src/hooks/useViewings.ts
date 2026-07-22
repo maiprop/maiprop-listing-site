@@ -11,6 +11,7 @@ import {
   viewingStatusMutationSchema,
   viewingUpdateMutationSchema,
 } from "@/lib/mutationSchemas";
+import { attachListingReferences } from "@/lib/listingReferences";
 
 const getFallbackErrorMessage = (err: unknown) => {
   if (err instanceof Error) return err.message;
@@ -33,11 +34,11 @@ export function useViewings(role: "requester" | "owner" = "requester") {
       const column = role === "requester" ? "requester_id" : "owner_id";
       const { data, error } = await supabase
         .from("viewings")
-        .select("*, listings(title, city, cover_image_url, address)")
+        .select("*")
         .eq(column, user.id)
         .order("scheduled_at", { ascending: true });
       if (error) throw error;
-      return data || [];
+      return attachListingReferences(data ?? []);
     },
     enabled: !!user,
     staleTime: FAST_CHANGING_QUERY_STALE_TIME,

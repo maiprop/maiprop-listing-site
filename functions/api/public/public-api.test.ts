@@ -129,7 +129,7 @@ function installSupabaseFetch(): FetchMock {
       ]);
     }
 
-    if (url.pathname === "/rest/v1/public_listing_catalogue") {
+    if (url.pathname === "/rest/v1/rpc/get_public_listing_catalogue") {
       const listingType = url.searchParams.get("listing_type");
       const select = url.searchParams.get("select") ?? "";
 
@@ -289,12 +289,12 @@ describe("public API cache helpers", () => {
 
   it("calls Supabase with anon auth headers and parses count ranges", async () => {
     const params = new URLSearchParams([["select", "id"]]);
-    await expect(supabaseJson(env, "/rest/v1/public_listing_catalogue", params)).resolves.toHaveLength(2);
+    await expect(supabaseJson(env, "/rest/v1/rpc/get_public_listing_catalogue", params)).resolves.toHaveLength(2);
 
-    const count = await supabaseCount(env, "/rest/v1/public_listing_catalogue", new URLSearchParams([["city", "eq.Athens"]]));
+    const count = await supabaseCount(env, "/rest/v1/rpc/get_public_listing_catalogue", new URLSearchParams([["city", "eq.Athens"]]));
     expect(count).toBe(7);
 
-    const init = initFor("/rest/v1/public_listing_catalogue");
+    const init = initFor("/rest/v1/rpc/get_public_listing_catalogue");
     expect(init.headers).toMatchObject({
       apikey: "publishable_test_key",
       Authorization: "Bearer publishable_test_key",
@@ -305,12 +305,12 @@ describe("public API cache helpers", () => {
 
   it("supports estimated Supabase counts for high-traffic approximate counters", async () => {
     await expect(
-      supabaseCount(env, "/rest/v1/public_listing_catalogue", new URLSearchParams([["select", "id"]]), {
+      supabaseCount(env, "/rest/v1/rpc/get_public_listing_catalogue", new URLSearchParams([["select", "id"]]), {
         countStrategy: "estimated",
       }),
     ).resolves.toBe(3);
 
-    const init = initFor("/rest/v1/public_listing_catalogue");
+    const init = initFor("/rest/v1/rpc/get_public_listing_catalogue");
     expect(init.headers).toMatchObject({
       Prefer: "count=estimated",
     });
@@ -318,28 +318,28 @@ describe("public API cache helpers", () => {
 
   it("degrades transient Supabase public-read failures without hiding schema or auth errors", async () => {
     fetchMock().mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }));
-    await expect(supabaseJson(env, "/rest/v1/public_listing_catalogue", new URLSearchParams([["select", "id"]]))).resolves.toEqual([]);
+    await expect(supabaseJson(env, "/rest/v1/rpc/get_public_listing_catalogue", new URLSearchParams([["select", "id"]]))).resolves.toEqual([]);
 
     fetchMock().mockResolvedValueOnce(new Response(null, { status: 504 }));
-    await expect(supabaseCount(env, "/rest/v1/public_listing_catalogue", new URLSearchParams([["select", "id"]]))).resolves.toBe(0);
+    await expect(supabaseCount(env, "/rest/v1/rpc/get_public_listing_catalogue", new URLSearchParams([["select", "id"]]))).resolves.toBe(0);
 
     fetchMock().mockResolvedValueOnce(new Response("bad column", { status: 400 }));
-    await expect(supabaseJson(env, "/rest/v1/public_listing_catalogue", new URLSearchParams([["select", "missing_column"]]))).rejects.toThrow(
+    await expect(supabaseJson(env, "/rest/v1/rpc/get_public_listing_catalogue", new URLSearchParams([["select", "missing_column"]]))).rejects.toThrow(
       "Supabase request failed with 400",
     );
 
     fetchMock().mockResolvedValueOnce(new Response("forbidden", { status: 403 }));
-    await expect(supabaseCount(env, "/rest/v1/public_listing_catalogue", new URLSearchParams([["select", "id"]]))).rejects.toThrow(
+    await expect(supabaseCount(env, "/rest/v1/rpc/get_public_listing_catalogue", new URLSearchParams([["select", "id"]]))).rejects.toThrow(
       "Supabase count failed with 403",
     );
   });
 
   it("uses abortable Supabase fetches and treats aborts as transient public-read failures", async () => {
     fetchMock().mockRejectedValueOnce(new DOMException("Timeout", "AbortError"));
-    await expect(supabaseJson(env, "/rest/v1/public_listing_catalogue", new URLSearchParams([["select", "id"]]))).resolves.toEqual([]);
+    await expect(supabaseJson(env, "/rest/v1/rpc/get_public_listing_catalogue", new URLSearchParams([["select", "id"]]))).resolves.toEqual([]);
 
     fetchMock().mockRejectedValueOnce(new DOMException("Timeout", "AbortError"));
-    await expect(supabaseCount(env, "/rest/v1/public_listing_catalogue", new URLSearchParams([["select", "id"]]))).resolves.toBe(0);
+    await expect(supabaseCount(env, "/rest/v1/rpc/get_public_listing_catalogue", new URLSearchParams([["select", "id"]]))).resolves.toBe(0);
 
     const jsonInit = fetchMock().mock.calls[0][1] as RequestInit;
     const countInit = fetchMock().mock.calls[1][1] as RequestInit;
@@ -351,7 +351,7 @@ describe("public API cache helpers", () => {
     fetchMock().mockResolvedValueOnce(new Response("cloudflare timeout", { status: 522 }));
 
     await expect(
-      supabaseJson(env, "/rest/v1/public_listing_catalogue", new URLSearchParams([["select", "id"]]), {
+      supabaseJson(env, "/rest/v1/rpc/get_public_listing_catalogue", new URLSearchParams([["select", "id"]]), {
         failOnTransient: true,
         retryDelayMs: 0,
       }),
@@ -359,7 +359,7 @@ describe("public API cache helpers", () => {
       { id: "listing-1", owner_id: "owner-1", title: "Athens flat" },
       { id: "listing-2", owner_id: "owner-2", title: "Piraeus loft" },
     ]);
-    expect(fetchUrls("/rest/v1/public_listing_catalogue")).toHaveLength(2);
+    expect(fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")).toHaveLength(2);
   });
 
   it("recovers public open-house cold cache misses after one transient upstream failure", async () => {
@@ -369,7 +369,7 @@ describe("public API cache helpers", () => {
 
     expect(res.status).toBe(200);
     expect(res.headers.get("X-Maiprop-Cache")).toBe("MISS");
-    expect(fetchUrls("/rest/v1/public_listing_catalogue")).toHaveLength(2);
+    expect(fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")).toHaveLength(2);
     await expect(res.json()).resolves.toEqual(expect.arrayContaining([
       { id: "open-1", cover_image_url: null, listing_images: [{ url: "img", sort_order: 1 }] },
       { id: "open-2", cover_image_url: "cover", listing_images: [] },
@@ -383,7 +383,7 @@ describe("public API cache helpers", () => {
     expect(first.headers.get("X-Maiprop-Cache")).toBe("MISS");
     expect(first.headers.get("CDN-Cache-Control")).toBe("no-store");
     expect(first.headers.get("Cache-Control")).toBe("public, max-age=60, stale-while-revalidate=600");
-    expect(fetchUrls("/rest/v1/public_listing_catalogue")).toHaveLength(1);
+    expect(fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")).toHaveLength(1);
 
     const second = await openHousesRequest(makeCtx("https://portal.maiprop.co/api/public/open-houses?limit=2"));
     expect(second.headers.get("X-Maiprop-Cache")).toBe("HIT");
@@ -391,7 +391,7 @@ describe("public API cache helpers", () => {
     expect(second.headers.get("X-Frame-Options")).toBe("DENY");
     expect(second.headers.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
     expect(await second.json()).toEqual(await first.clone().json());
-    expect(fetchUrls("/rest/v1/public_listing_catalogue")).toHaveLength(1);
+    expect(fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")).toHaveLength(1);
     expect(cacheApi.put).toHaveBeenCalledTimes(2);
     expect(cacheApi.put.mock.calls.some(([request]) => request.url.includes("__maiprop_stale=1"))).toBe(true);
   });
@@ -449,7 +449,7 @@ describe("public API cache helpers", () => {
 
     const coalesced = await openHousesRequest(makeCtx("https://portal.maiprop.co/api/public/open-houses?limit=2"));
     expect(coalesced.headers.get("X-Maiprop-Cache")).toBe("COALESCED");
-    expect(fetchUrls("/rest/v1/public_listing_catalogue")).toHaveLength(1);
+    expect(fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")).toHaveLength(1);
 
     releasePut();
     await Promise.resolve();
@@ -463,7 +463,7 @@ describe("public API cache helpers", () => {
     });
     fetchMock().mockImplementation(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname === "/rest/v1/public_listing_catalogue") {
+      if (url.pathname === "/rest/v1/rpc/get_public_listing_catalogue") {
         await gate;
         return jsonRows([{ id: "open-1", cover_image_url: "cover", listing_images: [] }]);
       }
@@ -479,7 +479,7 @@ describe("public API cache helpers", () => {
 
     expect(firstRes.headers.get("X-Maiprop-Cache")).toBe("MISS");
     expect(secondRes.headers.get("X-Maiprop-Cache")).toBe("COALESCED");
-    expect(fetchUrls("/rest/v1/public_listing_catalogue")).toHaveLength(1);
+    expect(fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")).toHaveLength(1);
     await expect(firstRes.json()).resolves.toEqual(await secondRes.clone().json());
   });
 
@@ -573,7 +573,7 @@ describe("public API cache helpers", () => {
     expect(stale.headers.get("X-Maiprop-Cache")).toBe("STALE");
     expect(stale.headers.get("Warning")).toContain("Response is stale");
     await expect(stale.json()).resolves.toEqual(await first.clone().json());
-    expect(fetchUrls("/rest/v1/public_listing_catalogue")).toHaveLength(2);
+    expect(fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")).toHaveLength(2);
   });
 
   it("serves stale public cache immediately while refreshing the expired fresh key in the background", async () => {
@@ -588,7 +588,7 @@ describe("public API cache helpers", () => {
     });
     fetchMock().mockImplementation(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname === "/rest/v1/public_listing_catalogue") {
+      if (url.pathname === "/rest/v1/rpc/get_public_listing_catalogue") {
         await gate;
         return jsonRows([{ id: "open-refreshed", cover_image_url: "new", listing_images: [] }]);
       }
@@ -613,7 +613,7 @@ describe("public API cache helpers", () => {
 
     releaseFetch();
     await Promise.all(waitUntil.mock.calls.map(([promise]) => promise));
-    expect(fetchUrls("/rest/v1/public_listing_catalogue")).toHaveLength(2);
+    expect(fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")).toHaveLength(2);
   });
 
   it("rejects stale cache entries after their business-validity deadline", async () => {
@@ -669,7 +669,7 @@ describe("public listings endpoint", () => {
     let maxListingReadsInFlight = 0;
     const mock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname === "/rest/v1/public_listing_catalogue") {
+      if (url.pathname === "/rest/v1/rpc/get_public_listing_catalogue") {
         listingUrls.push(url);
         listingReadsInFlight += 1;
         maxListingReadsInFlight = Math.max(maxListingReadsInFlight, listingReadsInFlight);
@@ -766,7 +766,7 @@ describe("public listings endpoint", () => {
     const listingUrls: URL[] = [];
     const mock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/public_listing_catalogue") return jsonRows([]);
+      if (url.pathname !== "/rest/v1/rpc/get_public_listing_catalogue") return jsonRows([]);
       listingUrls.push(url);
 
       const isPriority = url.searchParams.get("priority_placement") === "gt.0";
@@ -822,7 +822,7 @@ describe("public listings endpoint", () => {
       "organic-5",
     ]);
     expect(new Set(combinedIds)).toHaveLength(combinedIds.length);
-    expect(listingUrls.every((url) => url.searchParams.get("select") !== "id")).toBe(true);
+    expect(listingUrls.every((url) => url.searchParams.get("select") !== "id,created_at")).toBe(true);
 
     const secondPageUrls = listingUrls.slice(2);
     expect(secondPageUrls).toHaveLength(2);
@@ -850,11 +850,12 @@ describe("public listings endpoint", () => {
     expect(body.data[0].profiles).not.toHaveProperty("owner_participant_type");
     expect(body.data[0].ownerParticipantType).toBe("agent");
 
-    const listingUrls = fetchUrls("/rest/v1/public_listing_catalogue");
-    const probeUrls = listingUrls.filter((url) => url.searchParams.get("select") === "id");
-    const dataUrls = listingUrls.filter((url) => url.searchParams.get("select") !== "id");
+    const listingUrls = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue");
+    const probeUrls = listingUrls.filter((url) => url.searchParams.get("select") === "id,created_at");
+    const dataUrls = listingUrls.filter((url) => url.searchParams.get("select") !== "id,created_at");
     expect(probeUrls).toHaveLength(2);
     expect(probeUrls.every((url) => url.searchParams.get("limit") === "200")).toBe(true);
+    expect(probeUrls.every((url) => url.searchParams.get("select") === "id,created_at")).toBe(true);
     expect(dataUrls).toHaveLength(2);
     expect(dataUrls.every((url) => url.searchParams.get("limit") === "201")).toBe(true);
     const listingsUrl = dataUrls[0];
@@ -885,7 +886,7 @@ describe("public listings endpoint", () => {
   it("keeps the catalogue available when optional public profile enrichment is unavailable", async () => {
     const mock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname === "/rest/v1/public_listing_catalogue") {
+      if (url.pathname === "/rest/v1/rpc/get_public_listing_catalogue") {
         return jsonRows([{ id: "listing-1", owner_id: "owner-1", title: "Athens flat" }]);
       }
       if (url.pathname === "/rest/v1/rpc/get_public_profile_summaries") {
@@ -926,7 +927,7 @@ describe("public listings endpoint", () => {
     }));
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/public_listing_catalogue") return jsonRows([]);
+      if (url.pathname !== "/rest/v1/rpc/get_public_listing_catalogue") return jsonRows([]);
       const source = url.searchParams.get("priority_placement") === "gt.0" ? priorityRows : organicRows;
       const offset = Number(url.searchParams.get("offset") ?? 0);
       const limit = Number(url.searchParams.get("limit") ?? source.length);
@@ -945,11 +946,33 @@ describe("public listings endpoint", () => {
       "organic-14",
       "organic-15",
     ]);
-    const listingUrls = fetchUrls("/rest/v1/public_listing_catalogue");
-    const dataUrls = listingUrls.filter((url) => url.searchParams.get("select") !== "id");
+    const listingUrls = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue");
+    const probeUrls = listingUrls.filter((url) => url.searchParams.get("select") === "id,created_at");
+    const dataUrls = listingUrls.filter((url) => url.searchParams.get("select") !== "id,created_at");
+    expect(probeUrls).toHaveLength(2);
+    expect(probeUrls.every((url) => url.searchParams.get("select") === "id,created_at")).toBe(true);
     expect(dataUrls).toHaveLength(2);
     expect(dataUrls.every((url) => url.searchParams.get("limit") === "5")).toBe(true);
     expect(dataUrls.map((url) => url.searchParams.get("offset")).sort()).toEqual(["1", "11"]);
+  });
+
+  it.each([
+    ["featured", "created_at"],
+    ["newest", "created_at"],
+    ["price-asc", "price"],
+    ["price-desc", "price"],
+    ["ai-score", "ai_score"],
+    ["views", "views_count"],
+  ])("keeps the %s sort field in lightweight RPC offset probes", async (sort, field) => {
+    const res = await listingsRequest(makeCtx(
+      `https://portal.maiprop.co/api/public/listings?listing_type=sale&pageSize=1&offset=1&sort=${sort}`,
+    ));
+
+    expect(res.status).toBe(200);
+    const probeUrls = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")
+      .filter((url) => url.searchParams.get("select") === `id,${field}`);
+    expect(probeUrls).toHaveLength(2);
+    expect(probeUrls.every((url) => url.searchParams.get("order")?.startsWith(`${field}.`))).toBe(true);
   });
 
   it("uses a coordinate bounding box for selected address suggestions", async () => {
@@ -957,7 +980,7 @@ describe("public listings endpoint", () => {
       "https://portal.maiprop.co/api/public/listings?listing_type=sale&city=Kalimnou%2027&location_lat=38.0301&location_lng=23.7241&location_radius_m=750",
     ));
 
-    const listingsUrl = fetchUrls("/rest/v1/public_listing_catalogue")[0];
+    const listingsUrl = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")[0];
     expect(listingsUrl.searchParams.getAll("location_search_text")).toEqual([]);
     expect(Number(listingsUrl.searchParams.getAll("latitude").find((value) => value.startsWith("gte."))?.replace("gte.", ""))).toBeLessThan(38.0301);
     expect(Number(listingsUrl.searchParams.getAll("latitude").find((value) => value.startsWith("lte."))?.replace("lte.", ""))).toBeGreaterThan(38.0301);
@@ -970,7 +993,7 @@ describe("public listings endpoint", () => {
       "https://portal.maiprop.co/api/public/listings?listing_type=sale&city=%CE%86%CE%B3%CE%B9%CE%BF%CE%B9%20%CE%91%CE%BD%CE%AC%CF%81%CE%B3%CF%85%CF%81%CE%BF%CE%B9",
     ));
 
-    const listingsUrl = fetchUrls("/rest/v1/public_listing_catalogue")[0];
+    const listingsUrl = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")[0];
     expect(listingsUrl.searchParams.getAll("location_search_text")).toEqual([]);
     const locationOrFilters = listingsUrl.searchParams.getAll("or");
     expect(locationOrFilters).toEqual(expect.arrayContaining([
@@ -983,7 +1006,7 @@ describe("public listings endpoint", () => {
 
   it("uses the default public catalogue scope unless auctions are explicitly included", async () => {
     await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?sort=price-desc"));
-    let url = fetchUrls("/rest/v1/public_listing_catalogue")[0];
+    let url = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")[0];
     expect(url.searchParams.get("listing_type")).toBe("in.(sale,rent,firesale,new_build)");
     expect(url.searchParams.get("is_off_market")).toBe("eq.false");
     expect(url.searchParams.getAll("order")).toContain("price.desc,id.desc");
@@ -991,7 +1014,7 @@ describe("public listings endpoint", () => {
 
     fetchMock().mockClear();
     await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?includeAuctions=true&sort=views"));
-    url = fetchUrls("/rest/v1/public_listing_catalogue")[0];
+    url = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")[0];
     expect(url.searchParams.has("listing_type")).toBe(false);
     expect(url.searchParams.get("is_off_market")).toBe("eq.false");
     expect(url.searchParams.getAll("order")).toContain("views_count.desc.nullslast,id.desc");
@@ -999,13 +1022,13 @@ describe("public listings endpoint", () => {
 
   it("includes canonical new-build project ads on sale pages, while rent stays rent-only", async () => {
     await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?listing_type=sale"));
-    let url = fetchUrls("/rest/v1/public_listing_catalogue")[0];
+    let url = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")[0];
     expect(url.searchParams.get("listing_type")).toBe("in.(sale,new_build)");
     expect(url.searchParams.get("select")).toContain("project");
 
     fetchMock().mockClear();
     await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?listing_type=rent"));
-    url = fetchUrls("/rest/v1/public_listing_catalogue")[0];
+    url = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")[0];
     expect(url.searchParams.get("listing_type")).toBe("eq.rent");
     expect(url.searchParams.get("select")).toContain("project");
   });
@@ -1014,7 +1037,7 @@ describe("public listings endpoint", () => {
     const res = await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?listing_type=new_build&limit=1"));
     const body = await res.json() as { data: Array<{ id: string; listing_type: string; is_pre_sale: boolean; project?: { name?: string } }> };
 
-    const url = fetchUrls("/rest/v1/public_listing_catalogue")[0];
+    const url = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")[0];
     expect(url.searchParams.get("listing_type")).toBe("eq.new_build");
     expect(url.searchParams.get("select")).toContain("project");
     expect(url.searchParams.has("pre_sale")).toBe(false);
@@ -1033,7 +1056,7 @@ describe("public listings endpoint", () => {
     const res = await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?is_pre_sale=true&limit=1"));
     const body = await res.json() as { data: Array<{ id: string; listing_type: string; is_pre_sale: boolean }> };
 
-    const url = fetchUrls("/rest/v1/public_listing_catalogue")[0];
+    const url = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")[0];
     expect(url.searchParams.get("listing_type")).toBe("eq.new_build");
     expect(url.searchParams.has("is_pre_sale")).toBe(false);
     expect(body.data[0]).toMatchObject({
@@ -1046,7 +1069,7 @@ describe("public listings endpoint", () => {
   it("does not expose off-market rows through public listing search", async () => {
     await listingsRequest(makeCtx("https://portal.maiprop.co/api/public/listings?is_off_market=true"));
 
-    const url = fetchUrls("/rest/v1/public_listing_catalogue")[0];
+    const url = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")[0];
     expect(url.searchParams.get("is_off_market")).toBe("eq.false");
     expect(url.searchParams.get("id")).toBe("eq.00000000-0000-0000-0000-000000000000");
   });
@@ -1054,7 +1077,7 @@ describe("public listings endpoint", () => {
   it("filters production-blocked fixture records before attaching public owner profiles", async () => {
     const mock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname === "/rest/v1/public_listing_catalogue") {
+      if (url.pathname === "/rest/v1/rpc/get_public_listing_catalogue") {
         return jsonRows([
           { id: "listing-supervisor", owner_id: "owner-fixture", title: "supervisor-177912 smoke" },
           { id: "listing-e2e", owner_id: "owner-fixture", title: "E2E-FULL-PUBLISH-20260526T161856Z test", tags: ["qa-full-publish"] },
@@ -1111,7 +1134,7 @@ describe("public listing detail endpoint", () => {
     expect(body.data.id).toBe("listing-1");
     expect(body.data.profiles).toMatchObject({ display_name: "Maria Agent" });
 
-    const listingsUrl = fetchUrls("/rest/v1/public_listing_catalogue")[0];
+    const listingsUrl = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")[0];
     expect(listingsUrl.searchParams.get("select")).not.toContain("*");
     expect(listingsUrl.searchParams.get("select")).toContain("description");
     expect(listingsUrl.searchParams.get("select")).toContain("featured_until");
@@ -1129,7 +1152,7 @@ describe("public listing detail endpoint", () => {
   it("suppresses expired paid flags on exact listing responses", async () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname === "/rest/v1/public_listing_catalogue") {
+      if (url.pathname === "/rest/v1/rpc/get_public_listing_catalogue") {
         return jsonRows([{
           id: "listing-expired",
           is_featured: true,
@@ -1182,7 +1205,7 @@ describe("public listing detail endpoint", () => {
     };
     const mock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname === "/rest/v1/public_listing_catalogue") {
+      if (url.pathname === "/rest/v1/rpc/get_public_listing_catalogue") {
         return jsonRows([
           {
             id: "listing-1",
@@ -1217,7 +1240,7 @@ describe("public listing detail endpoint", () => {
     expect(body.data.project.project_media).toHaveLength(1);
     expect(body.data.profiles).toMatchObject({ display_name: "Mai Developer" });
 
-    const listingsUrl = fetchUrls("/rest/v1/public_listing_catalogue")[0];
+    const listingsUrl = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")[0];
     const select = listingsUrl.searchParams.get("select") ?? "";
     expect(select).not.toContain("(,");
     expect(select).not.toContain(",)");
@@ -1239,7 +1262,7 @@ describe("public listing detail endpoint", () => {
   it("keeps owner-backed listings loadable when the optional public profile lookup fails", async () => {
     const mock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname === "/rest/v1/public_listing_catalogue") {
+      if (url.pathname === "/rest/v1/rpc/get_public_listing_catalogue") {
         return jsonRows([{ id: "listing-1", owner_id: "owner-1", title: "Athens flat" }]);
       }
       if (url.pathname === "/rest/v1/rpc/get_public_profile_summaries") {
@@ -1285,7 +1308,7 @@ describe("public similar listings endpoint", () => {
     expect(body.data).toHaveLength(1);
     expect(body.data[0].profiles).toMatchObject({ display_name: "Maria Agent" });
 
-    const listingsUrl = fetchUrls("/rest/v1/public_listing_catalogue")[0];
+    const listingsUrl = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")[0];
     expect(listingsUrl.searchParams.get("id")).toBe("neq.11111111-1111-4111-8111-111111111111");
     expect(listingsUrl.searchParams.get("city")).toBe("ilike.*Athens*");
     expect(listingsUrl.searchParams.get("property_type")).toBe("eq.apartment");
@@ -1303,7 +1326,7 @@ describe("public similar listings endpoint", () => {
   it("keeps price relevance ahead of Priority and uses active Priority only for exact relevance ties", async () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/public_listing_catalogue") return jsonRows([]);
+      if (url.pathname !== "/rest/v1/rpc/get_public_listing_catalogue") return jsonRows([]);
       return jsonRows([
         {
           id: "priority-far",
@@ -1350,7 +1373,7 @@ describe("public similar listings endpoint", () => {
   it("does not let Spotlight affect similarity order and only exposes active visual state", async () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/public_listing_catalogue") return jsonRows([]);
+      if (url.pathname !== "/rest/v1/rpc/get_public_listing_catalogue") return jsonRows([]);
       return jsonRows([
         {
           id: "spotlight-older",
@@ -1382,7 +1405,7 @@ describe("public similar listings endpoint", () => {
   it("treats expired Priority and Spotlight flags as organic response state", async () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/public_listing_catalogue") return jsonRows([]);
+      if (url.pathname !== "/rest/v1/rpc/get_public_listing_catalogue") return jsonRows([]);
       return jsonRows([
         {
           id: "expired-flags",
@@ -1420,7 +1443,7 @@ describe("public similar listings endpoint", () => {
   it("deduplicates cloned OS auction rows before slicing related deals", async () => {
     const mock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname === "/rest/v1/public_listing_catalogue") {
+      if (url.pathname === "/rest/v1/rpc/get_public_listing_catalogue") {
         return jsonRows([
           {
             id: "auction-a",
@@ -1508,7 +1531,7 @@ describe("public open houses endpoint", () => {
   it("serves upcoming open houses with capped payloads and bounded limits", async () => {
     await openHousesRequest(makeCtx("https://portal.maiprop.co/api/public/open-houses?limit=999"));
 
-    const url = fetchUrls("/rest/v1/public_listing_catalogue")[0];
+    const url = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")[0];
     expect(url.searchParams.get("limit")).toBe("200");
     expect(url.searchParams.get("listing_type")).toBe("eq.open_house");
     expect(url.searchParams.get("is_off_market")).toBe("eq.false");
@@ -1521,7 +1544,7 @@ describe("public open houses endpoint", () => {
   it("filters open houses by sale or rental transaction subcategory", async () => {
     await openHousesRequest(makeCtx("https://portal.maiprop.co/api/public/open-houses?transactionType=rent&limit=24"));
 
-    const url = fetchUrls("/rest/v1/public_listing_catalogue")[0];
+    const url = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")[0];
     expect(url.searchParams.get("limit")).toBe("24");
     expect(url.searchParams.get("listing_type")).toBe("eq.open_house");
     expect(url.searchParams.get("open_house_transaction_type")).toBe("eq.rent");
@@ -1531,7 +1554,7 @@ describe("public open houses endpoint", () => {
   it("supports past open houses using a separate cache key", async () => {
     await openHousesRequest(makeCtx("https://portal.maiprop.co/api/public/open-houses?showPast=true&limit=12"));
 
-    const url = fetchUrls("/rest/v1/public_listing_catalogue")[0];
+    const url = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")[0];
     expect(url.searchParams.get("limit")).toBe("12");
     expect(url.searchParams.get("is_off_market")).toBe("eq.false");
     expect(url.searchParams.get("open_house_date")).toMatch(/^lt\./);
@@ -1560,14 +1583,14 @@ describe("public auctions endpoint", () => {
     const rows = await fetchPublicAuctionRows(env, 1);
     expect(rows.map((row) => row.id)).toEqual(["db-2"]);
 
-    expect(fetchUrls("/rest/v1/public_listing_catalogue")[0]).toBeDefined();
+    expect(fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")[0]).toBeDefined();
     expect(fetchUrls("/functions/v1/fetch-os-auctions")).toHaveLength(0);
   });
 
   it("keeps Spotlight visual-only when ordering auctions", async () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/public_listing_catalogue") return jsonRows([]);
+      if (url.pathname !== "/rest/v1/rpc/get_public_listing_catalogue") return jsonRows([]);
       if (url.searchParams.get("priority_placement") === "gt.0") return jsonRows([]);
       return jsonRows([
         {
@@ -1597,7 +1620,7 @@ describe("public auctions endpoint", () => {
   it("treats expired auction promotion flags as organic response state", async () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/public_listing_catalogue") return jsonRows([]);
+      if (url.pathname !== "/rest/v1/rpc/get_public_listing_catalogue") return jsonRows([]);
       if (url.searchParams.get("priority_placement") === "gt.0") return jsonRows([]);
       return jsonRows([
         {
@@ -1631,7 +1654,7 @@ describe("public auctions endpoint", () => {
   it("limits active Priority auctions to three per 12 while preserving stream order", async () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/public_listing_catalogue") return jsonRows([]);
+      if (url.pathname !== "/rest/v1/rpc/get_public_listing_catalogue") return jsonRows([]);
       const priority = url.searchParams.get("priority_placement") === "gt.0";
       const prefix = priority ? "priority" : "organic";
       const count = priority ? 5 : 12;
@@ -1664,7 +1687,7 @@ describe("public auctions endpoint", () => {
     ]);
     expect(rows.filter((row) => Number(row.priority_placement) > 0)).toHaveLength(3);
 
-    const listingUrls = fetchUrls("/rest/v1/public_listing_catalogue");
+    const listingUrls = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue");
     const priorityUrl = listingUrls.find((url) => url.searchParams.get("priority_placement") === "gt.0");
     const organicUrl = listingUrls.find((url) => url.searchParams.get("priority_placement") !== "gt.0");
     expect(priorityUrl?.searchParams.get("priority_until")).toMatch(/^gt\./);
@@ -1687,7 +1710,7 @@ describe("public auctions endpoint", () => {
     }));
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/public_listing_catalogue") return jsonRows([]);
+      if (url.pathname !== "/rest/v1/rpc/get_public_listing_catalogue") return jsonRows([]);
       const limit = Number(url.searchParams.get("limit") ?? priorityRows.length);
       return url.searchParams.get("priority_placement") === "gt.0"
         ? jsonRows(priorityRows.slice(0, limit))
@@ -1704,7 +1727,7 @@ describe("public auctions endpoint", () => {
       "priority-only-5",
       "priority-only-6",
     ]);
-    const priorityLimits = fetchUrls("/rest/v1/public_listing_catalogue")
+    const priorityLimits = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")
       .filter((url) => url.searchParams.get("priority_placement") === "gt.0")
       .map((url) => url.searchParams.get("limit"));
     expect(priorityLimits).toEqual(["4", "6"]);
@@ -1736,7 +1759,7 @@ describe("public auctions endpoint", () => {
     ];
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/public_listing_catalogue") return jsonRows([]);
+      if (url.pathname !== "/rest/v1/rpc/get_public_listing_catalogue") return jsonRows([]);
       return url.searchParams.get("priority_placement") === "gt.0"
         ? jsonRows([])
         : jsonRows(rowsByMunicipality);
@@ -1753,7 +1776,7 @@ describe("public auctions endpoint", () => {
       "Patras",
     ]);
 
-    const listingUrls = fetchUrls("/rest/v1/public_listing_catalogue");
+    const listingUrls = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue");
     const priorityUrl = listingUrls.find((url) => url.searchParams.get("priority_placement") === "gt.0");
     const organicUrl = listingUrls.find((url) => url.searchParams.get("priority_placement") !== "gt.0");
     expect(priorityUrl?.searchParams.get("limit")).toBe("17");
@@ -1771,7 +1794,7 @@ describe("public auctions endpoint", () => {
       }));
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
-      if (url.pathname !== "/rest/v1/public_listing_catalogue") return jsonRows([]);
+      if (url.pathname !== "/rest/v1/rpc/get_public_listing_catalogue") return jsonRows([]);
       return url.searchParams.get("priority_placement") === "gt.0"
         ? jsonRows([])
         : jsonRows(clusteredRows);
@@ -1780,7 +1803,7 @@ describe("public auctions endpoint", () => {
     expect(rows).toHaveLength(48);
     expect(rows.every((row) => row.city === "Agrinio")).toBe(true);
 
-    const listingUrls = fetchUrls("/rest/v1/public_listing_catalogue");
+    const listingUrls = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue");
     const priorityUrl = listingUrls.find((url) => url.searchParams.get("priority_placement") === "gt.0");
     const organicUrl = listingUrls.find((url) => url.searchParams.get("priority_placement") !== "gt.0");
     expect(priorityUrl?.searchParams.get("limit")).toBe("17");
@@ -1796,7 +1819,7 @@ describe("public auctions endpoint", () => {
     const rows = await fetchPublicAuctionRows(env, 2);
     expect(rows).toHaveLength(2);
 
-    const dbCalls = fetchUrls("/rest/v1/public_listing_catalogue");
+    const dbCalls = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue");
     expect(dbCalls).toHaveLength(4);
     expect(dbCalls[0].searchParams.get("tags")).toMatch(/^cs\.\{source:maiprop-os,auction_pool:\d{4}-\d{2}-\d{2}\}$/);
     expect(dbCalls[1].searchParams.get("tags")).toMatch(/^cs\.\{source:maiprop-os,auction_pool:\d{4}-\d{2}-\d{2}\}$/);
@@ -1825,7 +1848,7 @@ describe("public auctions endpoint", () => {
   it("queries cached DB auctions with projected image payloads", async () => {
     await expect(fetchPublicAuctionRows(env, 1)).resolves.toMatchObject([{ id: "db-2" }]);
 
-    const dbUrl = fetchUrls("/rest/v1/public_listing_catalogue")[0];
+    const dbUrl = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")[0];
     expect(dbUrl.searchParams.get("listing_type")).toBe("eq.auction");
     expect(dbUrl.searchParams.get("is_off_market")).toBe("eq.false");
     expect(dbUrl.searchParams.get("tags")).toMatch(/^cs\.\{source:maiprop-os,auction_pool:\d{4}-\d{2}-\d{2}\}$/);
@@ -1841,7 +1864,7 @@ describe("public auctions endpoint", () => {
     const body = await res.json() as { data: unknown[] };
     expect(body.data).toHaveLength(2);
 
-    const listingUrls = fetchUrls("/rest/v1/public_listing_catalogue");
+    const listingUrls = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue");
     const priorityUrl = listingUrls.find((url) => url.searchParams.get("priority_placement") === "gt.0");
     const organicUrl = listingUrls.find((url) => url.searchParams.get("priority_placement") !== "gt.0");
     expect(priorityUrl?.searchParams.get("limit")).toBe("152");
@@ -1873,7 +1896,7 @@ describe("public homepage endpoint", () => {
     expect(invalid.headers.get("Cache-Control")).toBe("no-store");
 
     await homepageRequest(makeCtx("https://portal.maiprop.co/api/public/homepage?section=auctions"));
-    const listingUrls = fetchUrls("/rest/v1/public_listing_catalogue");
+    const listingUrls = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue");
     expect(listingUrls.every((url) => url.searchParams.get("listing_type") === "eq.auction")).toBe(true);
     expect(listingUrls.every((url) => url.searchParams.get("is_off_market") === "eq.false")).toBe(true);
     const priorityUrl = listingUrls.find((url) => url.searchParams.get("priority_placement") === "gt.0");
@@ -1887,13 +1910,14 @@ describe("public homepage endpoint", () => {
     const featuredRows = await featured.json() as Array<{ id: string; profiles?: { display_name?: string | null }; is_featured?: boolean; has_video_tour?: boolean; has_virtual_tour?: boolean }>;
     expect(featuredRows.map((row) => row.id)).toEqual(["listing-1", "listing-2", "listing-3", "listing-4"]);
     expect(featuredRows[0]?.profiles?.display_name).toBe("Maria Agent");
-    let url = fetchUrls("/rest/v1/public_listing_catalogue")[0];
+    let url = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")[0];
     expect(url.searchParams.get("limit")).toBe("12");
     expect(url.searchParams.get("listing_type")).toBe("in.(sale,new_build)");
     expect(url.searchParams.get("is_off_market")).toBe("eq.false");
     expect(url.searchParams.get("is_featured")).toBe("eq.true");
     expect(url.searchParams.get("featured_until")).toMatch(/^gt\./);
     expect(url.searchParams.getAll("order")).toEqual(["created_at.desc"]);
+    expect(url.searchParams.get("select")?.split(",")).toContain("created_at");
     expect(url.searchParams.get("select")).toContain("owner_id");
     expect(url.searchParams.get("select")).toContain("has_video_tour");
     expect(url.searchParams.get("select")).toContain("has_virtual_tour");
@@ -1933,17 +1957,18 @@ describe("public homepage endpoint", () => {
     expect(cachedFeatured.headers.get("CDN-Cache-Control")).toBe("no-store");
     expect(cachedFeatured.headers.get("Cache-Control")).toBe("public, max-age=60, stale-while-revalidate=60");
     await expect(cachedFeatured.json()).resolves.toEqual(featuredRows);
-    expect(fetchUrls("/rest/v1/public_listing_catalogue")).toHaveLength(0);
+    expect(fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")).toHaveLength(0);
 
     fetchMock().mockClear();
     const openHouses = await homepageRequest(makeCtx("https://portal.maiprop.co/api/public/homepage?section=open-houses"));
     const openHouseRows = await openHouses.json() as Array<{ id: string }>;
     expect(openHouseRows.map((row) => row.id)).toEqual(["open-1", "open-2"]);
-    url = fetchUrls("/rest/v1/public_listing_catalogue")[0];
+    url = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")[0];
     expect(url.searchParams.get("listing_type")).toBe("eq.open_house");
     expect(url.searchParams.get("is_off_market")).toBe("eq.false");
     expect(url.searchParams.get("open_house_date")).toMatch(/^gte\./);
     expect(url.searchParams.get("limit")).toBe("12");
+    expect(url.searchParams.get("select")?.split(",")).toContain("open_house_date");
     expect(url.searchParams.get("select")).toContain("listing_images");
     expect(url.searchParams.has("listing_images.limit")).toBe(false);
   });
@@ -1956,7 +1981,7 @@ describe("public homepage endpoint", () => {
 
     fetchMock().mockClear();
     await homepageRequest(makeCtx("https://portal.maiprop.co/api/public/homepage?section=auction-count"));
-    expect((initFor("/rest/v1/public_listing_catalogue").headers as Record<string, string>).Prefer).toBe("count=estimated");
+    expect((initFor("/rest/v1/rpc/get_public_listing_catalogue").headers as Record<string, string>).Prefer).toBe("count=estimated");
 
     fetchMock().mockClear();
     const priceIndex = await homepageRequest(makeCtx("https://portal.maiprop.co/api/public/homepage?section=price-index"));
@@ -1968,7 +1993,7 @@ describe("public homepage endpoint", () => {
       trend_up: true,
       trend_is_live: true,
     });
-    const priceIndexUrl = fetchUrls("/rest/v1/public_listing_catalogue")[0];
+    const priceIndexUrl = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue")[0];
     expect(priceIndexUrl.searchParams.get("limit")).toBe("1000");
     expect(priceIndexUrl.searchParams.get("select")).toBe("id,city,price_per_sqm,created_at");
     expect(priceIndexUrl.searchParams.get("is_off_market")).toBe("eq.false");
@@ -1986,7 +2011,7 @@ describe("public homepage endpoint", () => {
       trendIsLive: false,
     });
 
-    const listingsSample = fetchUrls("/rest/v1/public_listing_catalogue").find((url) => url.searchParams.get("select") === "city,price_per_sqm,created_at");
+    const listingsSample = fetchUrls("/rest/v1/rpc/get_public_listing_catalogue").find((url) => url.searchParams.get("select") === "city,price_per_sqm,created_at");
     expect(listingsSample?.searchParams.get("limit")).toBe("1000");
     expect(listingsSample?.searchParams.get("is_off_market")).toBe("eq.false");
   });

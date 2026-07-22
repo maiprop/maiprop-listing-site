@@ -4,6 +4,9 @@ export const LOAD_TEST_ROUTES = [
   { name: "auctions", path: "/auctions" },
   { name: "pricing", path: "/pricing" },
   { name: "api_listings", path: "/api/public/listings?limit=24" },
+  { name: "api_homepage", path: "/api/public/homepage?section=featured" },
+  { name: "api_sale_40", path: "/api/public/listings?listing_type=sale&page=1&limit=40" },
+  { name: "api_rent_40", path: "/api/public/listings?listing_type=rent&page=1&limit=40" },
   { name: "api_open_houses", path: "/api/public/open-houses?limit=24" },
   { name: "sitemap", path: "/sitemap-dynamic.xml" },
 ];

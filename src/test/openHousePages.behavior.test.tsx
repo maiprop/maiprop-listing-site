@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   toastSuccess: vi.fn(),
   toastError: vi.fn(),
   from: vi.fn(),
+  rpc: vi.fn(),
   invoke: vi.fn(),
   streetView: vi.fn(),
   publicApi: vi.fn(),
@@ -195,6 +196,7 @@ vi.mock("@/hooks/usePropertyAIInsights", () => ({
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: (...args: unknown[]) => mocks.from(...args),
+    rpc: (...args: unknown[]) => mocks.rpc(...args),
     functions: { invoke: (...args: unknown[]) => mocks.invoke(...args) },
   },
 }));
@@ -299,6 +301,8 @@ async function renderOpenHouseDetail(initialPath = `/open-house/${TEST_OPEN_HOUS
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.rpc.mockImplementation((fn: string) =>
+    mocks.from(fn === "get_public_listing_catalogue" ? "public_listing_catalogue" : fn));
   mocks.authUser = null;
   mocks.isPro = false;
   mocks.listing = null;

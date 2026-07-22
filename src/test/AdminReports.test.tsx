@@ -13,8 +13,9 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-const { fromMock, invokeMock, toastMock } = vi.hoisted(() => ({
+const { fromMock, rpcMock, invokeMock, toastMock } = vi.hoisted(() => ({
   fromMock: vi.fn(),
+  rpcMock: vi.fn(),
   invokeMock: vi.fn(),
   toastMock: { success: vi.fn(), error: vi.fn() },
 }));
@@ -22,6 +23,7 @@ const { fromMock, invokeMock, toastMock } = vi.hoisted(() => ({
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: (...a: unknown[]) => fromMock(...a),
+    rpc: (...a: unknown[]) => rpcMock(...a),
     functions: {
       invoke: (...a: unknown[]) => invokeMock(...a),
     },
@@ -78,6 +80,7 @@ const makeWrapper = () => {
 
 beforeEach(() => {
   fromMock.mockReset();
+  rpcMock.mockReset();
   invokeMock.mockReset();
   invokeMock.mockResolvedValue({ data: { data: { id: "r-1", status: "resolved" }, error: null }, error: null });
   toastMock.success.mockReset();
@@ -87,6 +90,7 @@ beforeEach(() => {
     if (table === "listing_reports") return rowsQuery([]);
     return countQuery(0);
   });
+  rpcMock.mockImplementation(() => countQuery(0));
 });
 
 describe("AdminReports", () => {

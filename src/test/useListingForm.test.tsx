@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
-const { fromMock, storageMock, useAuthMock, navigateMock, toastMock, useDraftMock, useAIMock, geocodeAddressTextMock } =
+const { fromMock, storageMock, useAuthMock, navigateMock, toastMock, useDraftMock, useAIMock, geocodeAddressTextMock, createListingMock, updateListingMock } =
   vi.hoisted(() => ({
     fromMock: vi.fn(),
     storageMock: { upload: vi.fn(), getPublicUrl: vi.fn() },
@@ -21,6 +21,8 @@ const { fromMock, storageMock, useAuthMock, navigateMock, toastMock, useDraftMoc
     useDraftMock: vi.fn(),
     useAIMock: vi.fn(),
     geocodeAddressTextMock: vi.fn(),
+    createListingMock: vi.fn(),
+    updateListingMock: vi.fn(),
   }));
 
 vi.mock("@/integrations/supabase/client", () => ({
@@ -42,6 +44,10 @@ vi.mock("react-router-dom", async () => {
 vi.mock("sonner", () => ({ toast: toastMock }));
 vi.mock("@/hooks/useListingDraft", () => ({ useListingDraft: () => useDraftMock() }));
 vi.mock("@/hooks/useListingAI", () => ({ useListingAI: () => useAIMock() }));
+vi.mock("@/hooks/listingManagementBoundary", () => ({
+  createListingForUser: (...args: unknown[]) => createListingMock(...args),
+  updateListingForUser: (...args: unknown[]) => updateListingMock(...args),
+}));
 vi.mock("@/lib/location/geocodeAddress", async () => {
   const actual = await vi.importActual<typeof import("@/lib/location/geocodeAddress")>("@/lib/location/geocodeAddress");
   return {
@@ -91,6 +97,20 @@ beforeEach(() => {
   });
   geocodeAddressTextMock.mockReset();
   geocodeAddressTextMock.mockResolvedValue(null);
+  createListingMock.mockReset();
+  createListingMock.mockImplementation(async (payload: Record<string, unknown>) => {
+    const table = fromMock("listings");
+    const result = await table.insert(payload).select().single();
+    if (result.error) throw result.error;
+    return result.data;
+  });
+  updateListingMock.mockReset();
+  updateListingMock.mockImplementation(async (id: string, updates: Record<string, unknown>) => {
+    const table = fromMock("listings");
+    const result = await table.update(updates).eq("id", id).eq("owner_id", "u-1").select().single();
+    if (result.error) throw result.error;
+    return result.data;
+  });
   // crypto.randomUUID is supported in jsdom but stub for determinism.
   let counter = 0;
   vi.stubGlobal("crypto", {

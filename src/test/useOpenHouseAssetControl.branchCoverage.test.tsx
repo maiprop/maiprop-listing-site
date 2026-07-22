@@ -323,15 +323,15 @@ describe("open-house offer mutation authorization branches", () => {
     await rejectMutation(result.current.mutateAsync({ listingId: "listing-1", offerIds: ["offer-1"] }));
     expect(mocks.toast.error).toHaveBeenLastCalledWith("Not authenticated");
 
-    mocks.from.mockReturnValueOnce(maybeSingleQuery({ data: null, error: new Error("listing failed") }));
+    mocks.rpc.mockReturnValueOnce(maybeSingleQuery({ data: null, error: new Error("listing failed") }));
     await rejectMutation(result.current.mutateAsync({ listingId: "listing-1", offerIds: ["offer-1"] }));
     expect(mocks.toast.error).toHaveBeenLastCalledWith("listing failed");
 
-    mocks.from.mockReturnValueOnce(maybeSingleQuery({ data: { owner_id: "other-owner" }, error: null }));
+    mocks.rpc.mockReturnValueOnce(maybeSingleQuery({ data: { owner_id: "other-owner" }, error: null }));
     await rejectMutation(result.current.mutateAsync({ listingId: "listing-1", offerIds: ["offer-1"] }));
     expect(mocks.toast.error).toHaveBeenLastCalledWith("Only the host can reveal sealed bids.");
 
-    mocks.from.mockReturnValueOnce(maybeSingleQuery({
+    mocks.rpc.mockReturnValueOnce(maybeSingleQuery({
       data: {
         owner_id: "user-1",
         open_house_date: "2099-01-01T00:00:00.000Z",

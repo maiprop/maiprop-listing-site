@@ -10,6 +10,8 @@ import { renderHook, waitFor } from "@testing-library/react";
 
 const publicApiMock = vi.fn();
 const fromMock = vi.fn();
+const rpcMock = vi.fn((fn: string) =>
+  fromMock(fn === "get_public_listing_catalogue" ? "public_listing_catalogue" : fn));
 
 vi.mock("@/lib/publicApi", () => ({
   fetchPublicApi: (...args: unknown[]) => publicApiMock(...args),
@@ -19,6 +21,7 @@ vi.mock("@/lib/publicApi", () => ({
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: (...args: unknown[]) => fromMock(...args),
+    rpc: (...args: unknown[]) => rpcMock(...args),
   },
 }));
 
@@ -38,6 +41,7 @@ function renderHookWithQuery<T>(hook: () => T) {
 beforeEach(() => {
   publicApiMock.mockReset();
   fromMock.mockReset();
+  rpcMock.mockClear();
 });
 
 const makeThenableBuilder = (data: unknown[] = [], error: unknown = null) => {

@@ -54,6 +54,12 @@ function renderHookWithQuery<T>(hook: () => T, queryClient?: QueryClient) {
 beforeEach(() => {
   fromMock.mockReset();
   rpcMock.mockReset();
+  rpcMock.mockImplementation((fn: string) => {
+    if (fn === "get_listing_reference_catalogue") {
+      return fromMock("listing_reference_catalogue");
+    }
+    return Promise.resolve({ data: null, error: null });
+  });
   functionsInvokeMock.mockReset();
   useAuthMock.mockReset();
   useAuthMock.mockReturnValue({ user: { id: "u-1" } });
@@ -73,33 +79,64 @@ describe("useProjects()", () => {
       error: null,
     });
     const select = vi.fn().mockReturnValue({ order });
-    fromMock.mockReturnValue({ select });
+    fromMock.mockImplementation((table: string) => {
+      if (table === "projects") return { select };
+      if (table === "listing_reference_catalogue") {
+        return { select: () => ({ in: vi.fn().mockResolvedValue({ data: [], error: null }) }) };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    });
     const { result } = renderHookWithQuery(() => useProjects());
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toEqual([{ id: "pr1", name: "A" }]);
+    expect(result.current.data).toEqual([{ id: "pr1", name: "A", listings: [] }]);
   });
 
   it("selects linked listing metadata needed by project UI and canonical routes", async () => {
     const order = vi.fn().mockResolvedValue({
-      data: [{ id: "pr1", name: "A", listings: [{ id: "l1", listing_type: "new_build" }] }],
+      data: [{ id: "pr1", name: "A" }],
       error: null,
     });
     const select = vi.fn().mockReturnValue({ order });
-    fromMock.mockReturnValue({ select });
+    const listingIn = vi.fn().mockResolvedValue({
+      data: [{
+        id: "l1",
+        project_id: "pr1",
+        title: "Project listing",
+        city: "Athens",
+        listing_type: "new_build",
+        cover_image_url: "https://cdn.example.com/project.webp",
+      }],
+      error: null,
+    });
+    fromMock.mockImplementation((table: string) => {
+      if (table === "projects") return { select };
+      if (table === "listing_reference_catalogue") {
+        return { select: () => ({ in: listingIn }) };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    });
     const { result } = renderHookWithQuery(() => useProjects());
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(select).toHaveBeenCalledWith(expect.stringContaining("listings: listings("));
-    expect(select).toHaveBeenCalledWith(expect.stringContaining("listing_type"));
-    expect(select).toHaveBeenCalledWith(expect.stringContaining("cover_image_url"));
+    expect(fromMock).toHaveBeenCalledWith("listing_reference_catalogue");
+    expect(listingIn).toHaveBeenCalledWith("project_id", ["pr1"]);
+    expect(result.current.data?.[0].listings).toEqual([
+      expect.objectContaining({ id: "l1", listing_type: "new_build" }),
+    ]);
   });
 
   it("filters by owner_id when ownerId is provided", async () => {
     const eq = vi.fn().mockResolvedValue({ data: [{ id: "pr2" }], error: null });
     const order = vi.fn().mockReturnValue({ eq });
     const select = vi.fn().mockReturnValue({ order });
-    fromMock.mockReturnValue({ select });
+    fromMock.mockImplementation((table: string) => {
+      if (table === "projects") return { select };
+      if (table === "listing_reference_catalogue") {
+        return { select: () => ({ in: vi.fn().mockResolvedValue({ data: [], error: null }) }) };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    });
     const { result } = renderHookWithQuery(() => useProjects("u-2"));
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(eq).toHaveBeenCalledWith("owner_id", "u-2");
@@ -114,17 +151,25 @@ describe("useProject(id)", () => {
   });
 
   it("fetches a single project by id", async () => {
-    fromMock.mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({
-        data: { id: "pr1", name: "Solo" },
-        error: null,
-      }),
+    fromMock.mockImplementation((table: string) => {
+      if (table === "projects") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          single: vi.fn().mockResolvedValue({
+            data: { id: "pr1", name: "Solo" },
+            error: null,
+          }),
+        };
+      }
+      if (table === "listing_reference_catalogue") {
+        return { select: () => ({ in: vi.fn().mockResolvedValue({ data: [], error: null }) }) };
+      }
+      throw new Error(`unexpected table: ${table}`);
     });
     const { result } = renderHookWithQuery(() => useProject("pr1"));
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toEqual({ id: "pr1", name: "Solo" });
+    expect(result.current.data).toEqual({ id: "pr1", name: "Solo", listings: [] });
   });
 
   it("rejects when single() returns an error", async () => {

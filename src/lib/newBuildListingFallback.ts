@@ -46,7 +46,7 @@ export async function fetchNewBuildListingFallback(
   signal?: AbortSignal,
 ): Promise<NewBuildListing | null> {
   const query = supabase
-    .from("public_listing_catalogue")
+    .rpc("get_public_listing_catalogue")
     .select(NEW_BUILD_LISTING_SELECT)
     .eq("id", listingId)
     .eq("status", "active")

@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 
 const mocks = vi.hoisted(() => ({
   from: vi.fn(),
+  rpc: vi.fn(),
   invoke: vi.fn(),
   getUser: vi.fn(),
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
@@ -13,6 +14,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: (...args: unknown[]) => mocks.from(...args),
+    rpc: (...args: unknown[]) => mocks.rpc(...args),
     functions: { invoke: (...args: unknown[]) => mocks.invoke(...args) },
     auth: { getUser: (...args: unknown[]) => mocks.getUser(...args) },
   },
@@ -68,13 +70,16 @@ function openAdvanced() {
 beforeEach(() => {
   rows = {
     sync_log: [],
-    listings: [],
+    listing_management_catalogue: [],
     firesale_requests: [],
   };
   errors = {};
   throwingTables = new Set();
   mocks.from.mockReset();
   mocks.from.mockImplementation((table: string) => queryFor(table));
+  mocks.rpc.mockReset();
+  mocks.rpc.mockImplementation((fn: string) =>
+    queryFor(fn === "get_listing_management_catalogue" ? "listing_management_catalogue" : fn));
   mocks.getUser.mockReset();
   mocks.getUser.mockResolvedValue({ data: { user: { id: "admin-1" } }, error: null });
   mocks.invoke.mockReset();
@@ -142,7 +147,7 @@ describe("AdminPanel branch coverage", () => {
   });
 
   it("handles listing and firesale success, skipped credentials, and failures", async () => {
-    rows.listings = [{ id: "listing-1", title: null, city: "Athens", status: "active" }];
+    rows.listing_management_catalogue = [{ id: "listing-1", title: null, city: "Athens", status: "active" }];
     rows.firesale_requests = [{ id: "fire-1", address: null, city: "Piraeus", status: "pending" }];
     let listingCalls = 0;
     let fireCalls = 0;
@@ -178,7 +183,7 @@ describe("AdminPanel branch coverage", () => {
   });
 
   it("does not query an admin's listing inventory when no authenticated user exists", async () => {
-    rows.listings = [{ id: "should-not-show", title: "Private row", city: "Athens", status: "active" }];
+    rows.listing_management_catalogue = [{ id: "should-not-show", title: "Private row", city: "Athens", status: "active" }];
     mocks.getUser.mockResolvedValue({ data: { user: null }, error: null });
 
     renderPanel();
@@ -266,7 +271,7 @@ describe("AdminPanel branch coverage", () => {
 
   it("uses empty defaults when database and OS responses omit optional payloads", async () => {
     rows.sync_log = null;
-    rows.listings = null;
+    rows.listing_management_catalogue = null;
     rows.firesale_requests = null;
     mocks.invoke.mockImplementation((name: string, options?: { body?: Record<string, unknown> }) => {
       if (name === "os-diagnose") return Promise.resolve({ data: { osReachable: false }, error: null });
@@ -296,7 +301,7 @@ describe("AdminPanel branch coverage", () => {
   });
 
   it("surfaces the pending state for pull, listing, and firesale mutations", async () => {
-    rows.listings = [{ id: "listing-1", title: "Pending Listing", city: "Athens", status: "active" }];
+    rows.listing_management_catalogue = [{ id: "listing-1", title: "Pending Listing", city: "Athens", status: "active" }];
     rows.firesale_requests = [{ id: "fire-1", address: "Pending Fire", city: "Athens", status: "pending" }];
     const resolvers: Array<(value: { data: { status: string }; error: null }) => void> = [];
     mocks.invoke.mockImplementation((name: string) => {

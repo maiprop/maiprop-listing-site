@@ -8,10 +8,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor, act } from "@testing-library/react";
 
 const fromMock = vi.fn();
+const rpcMock = vi.fn();
 const useAuthMock = vi.fn();
 
 vi.mock("@/integrations/supabase/client", () => ({
-  supabase: { from: (...args: unknown[]) => fromMock(...args) },
+  supabase: {
+    from: (...args: unknown[]) => fromMock(...args),
+    rpc: (...args: unknown[]) => rpcMock(...args),
+  },
 }));
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => useAuthMock(),
@@ -44,6 +48,7 @@ function renderHookWithQuery<T>(hook: () => T) {
 
 beforeEach(() => {
   fromMock.mockReset();
+  rpcMock.mockReset();
   useAuthMock.mockReset();
   useAuthMock.mockReturnValue({ user: { id: "u-1" } });
 });
@@ -124,8 +129,8 @@ describe("usePortfolio(id)", () => {
         error: null,
       }),
     });
-    // Second from() — listings fetch (returns out of order)
-    fromMock.mockReturnValueOnce({
+    // Scoped catalogue RPC returns listings out of order.
+    rpcMock.mockReturnValueOnce({
       select: vi.fn().mockReturnThis(),
       in: vi.fn().mockResolvedValue({
         data: [{ id: "l1" }, { id: "l2" }, { id: "l3" }],
@@ -150,7 +155,7 @@ describe("usePortfolio(id)", () => {
         error: null,
       }),
     });
-    fromMock.mockReturnValueOnce({
+    rpcMock.mockReturnValueOnce({
       select: vi.fn().mockReturnThis(),
       in: vi.fn().mockResolvedValue({ data: null, error: new Error("scoped") }),
     });

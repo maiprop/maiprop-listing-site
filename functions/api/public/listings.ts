@@ -412,7 +412,10 @@ function lightweightLegacyStreamParams(
   limit: number,
 ): URLSearchParams {
   const params = buildCatalogueStreamParams(baseParams, sort, null, stream, now, limit, false);
-  params.set("select", "id");
+  // PostgREST applies filters/order to the projected result of a set-returning
+  // RPC. Keep the probe lightweight, but retain the active sort column so the
+  // generated `order=<field>,id` clause remains valid.
+  params.set("select", `id,${sort.field}`);
   return params;
 }
 

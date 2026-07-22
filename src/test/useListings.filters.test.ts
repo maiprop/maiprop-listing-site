@@ -29,6 +29,10 @@ const { recorded, supabaseMock } = vi.hoisted(() => {
   }
 
   const supabaseMock = {
+    rpc: vi.fn((fn: string) => {
+      recorded.push({ method: "rpc", args: [fn] });
+      return builder;
+    }),
     from: vi.fn((table: string) => {
       recorded.push({ method: "from", args: [table] });
       return builder;
@@ -47,6 +51,7 @@ let buildListingsQuery: typeof import("@/hooks/useListings")["buildListingsQuery
 beforeEach(async () => {
   vi.resetModules();
   recorded.length = 0;
+  supabaseMock.rpc.mockClear();
   supabaseMock.from.mockClear();
   ({ buildListingsQuery } = await import("@/hooks/useListings"));
 });
@@ -65,7 +70,7 @@ describe("buildListingsQuery — sort variants", () => {
   it("uses the allowlisted catalogue and its pre-aggregated card media for public fallbacks", () => {
     buildListingsQuery();
 
-    expect(calls("from")[0]?.args[0]).toBe("public_listing_catalogue");
+    expect(calls("rpc")[0]?.args[0]).toBe("get_public_listing_catalogue");
     const selectedColumns = String(calls("select")[0].args[0])
       .split(",")
       .map((column) => column.trim());
@@ -182,10 +187,8 @@ describe("buildListingsQuery — listing-type / status scoping", () => {
 
   it("with owner_id and no status, omits the status filter so all states show", () => {
     buildListingsQuery({ owner_id: "owner-1" });
-    expect(calls("from")[1]?.args[0]).toBe("listings");
-    expect(calls("order").some((c) =>
-      (c.args[1] as { referencedTable?: string } | undefined)?.referencedTable === "listing_images"
-    )).toBe(true);
+    expect(calls("rpc")[1]?.args[0]).toBe("get_listing_management_catalogue");
+    expect(calls("select").some((c) => String(c.args[0]).includes("listing_images"))).toBe(true);
     expect(calls("eq").some((c) => c.args[0] === "status")).toBe(false);
     expect(calls("eq").some((c) => c.args[0] === "owner_id" && c.args[1] === "owner-1")).toBe(true);
   });

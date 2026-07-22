@@ -4,12 +4,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 
 const fromMock = vi.fn();
+const rpcMock = vi.fn();
 const publicApiMock = vi.fn();
 const useAuctionListingsMock = vi.hoisted(() => vi.fn(() => ({ data: [], isLoading: false, isSuccess: true })));
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: (...args: unknown[]) => fromMock(...args),
+    rpc: (...args: unknown[]) => rpcMock(...args),
   },
 }));
 
@@ -56,6 +58,7 @@ const makeThenableBuilder = (data: unknown[] = []) => {
 
 beforeEach(() => {
   fromMock.mockReset();
+  rpcMock.mockReset();
   publicApiMock.mockReset();
   useAuctionListingsMock.mockClear();
   useAuctionListingsMock.mockReturnValue({ data: [], isLoading: false, isSuccess: true });
@@ -136,7 +139,7 @@ describe("homepage public API fallback behavior", () => {
   it("falls back to constrained Supabase reads for Spotlight listings when the public API is unavailable", async () => {
     publicApiMock.mockResolvedValue(null);
     const builder = makeThenableBuilder([{ id: "db-featured", title: "DB Spotlight", city: "Athens" }]);
-    fromMock.mockReturnValue(builder);
+    rpcMock.mockReturnValue(builder);
 
     const { result } = renderHookWithQuery(() => useHomepageFeaturedListings());
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -146,7 +149,7 @@ describe("homepage public API fallback behavior", () => {
       "/api/public/homepage?section=featured",
       expect.objectContaining({ throwOnError: true, timeoutMs: 5500, signal: expect.any(AbortSignal) }),
     );
-    expect(fromMock).toHaveBeenCalledWith("public_listing_catalogue");
+    expect(rpcMock).toHaveBeenCalledWith("get_public_listing_catalogue");
     expect(builder.select).toHaveBeenCalledWith(expect.stringContaining("featured_until"));
     expect(builder.select).toHaveBeenCalledWith(expect.stringContaining("priority_until"));
     expect(builder.eq).toHaveBeenCalledWith("is_featured", true);
@@ -155,7 +158,7 @@ describe("homepage public API fallback behavior", () => {
 
   it("falls back to constrained Supabase reads for open houses when the public API is unavailable", async () => {
     publicApiMock.mockResolvedValue(null);
-    fromMock.mockReturnValue(makeThenableBuilder([{ id: "db-open-house", title: "DB Open House", city: "Athens" }]));
+    rpcMock.mockReturnValue(makeThenableBuilder([{ id: "db-open-house", title: "DB Open House", city: "Athens" }]));
 
     const { result } = renderHookWithQuery(() => useHomepageOpenHouseListings());
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -165,7 +168,7 @@ describe("homepage public API fallback behavior", () => {
       "/api/public/open-houses?limit=12",
       expect.objectContaining({ throwOnError: true, timeoutMs: 5500, signal: expect.any(AbortSignal) }),
     );
-    expect(fromMock).toHaveBeenCalledWith("public_listing_catalogue");
+    expect(rpcMock).toHaveBeenCalledWith("get_public_listing_catalogue");
   });
 
   it("overfetches canonical open houses before removing public test fixtures", async () => {

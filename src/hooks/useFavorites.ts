@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { USER_SCOPED_QUERY_STALE_TIME } from "@/lib/queryCachePolicy";
 import { favoriteToggleSchema, parseMutationInput } from "@/lib/mutationSchemas";
+import type { DbListingCardRow } from "@/lib/domainContracts";
 
 /** Returns the current user's saved/favorited listings with full listing data joined. */
 export function useFavorites() {
@@ -13,13 +14,41 @@ export function useFavorites() {
     queryKey: ["favorites", user?.id],
     queryFn: async () => {
       if (!user) return [];
-      const { data, error } = await supabase
+      const { data: favoriteRows, error } = await supabase
         .from("favorites")
-        .select("*, listings(*)")
+        .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data || [];
+      const listingIds = [...new Set((favoriteRows ?? []).map((row) => row.listing_id))];
+      if (listingIds.length === 0) return [];
+
+      const { data: listingRows, error: listingError } = await supabase
+        .rpc("get_public_listing_catalogue")
+        .select("*")
+        .in("id", listingIds);
+      if (listingError) throw listingError;
+      const listingById = new Map(
+        (listingRows ?? [])
+          .filter((row) => typeof row.id === "string")
+          .map((row) => {
+            const listing = {
+              ...row,
+              id: row.id as string,
+              title: row.title ?? "Property",
+              city: row.city ?? "",
+              listing_type: row.listing_type ?? "sale",
+              property_type: row.property_type ?? "apartment",
+              listing_images: Array.isArray(row.listing_images) ? row.listing_images : [],
+            } as unknown as DbListingCardRow;
+            return [listing.id, listing] as const;
+          }),
+      );
+
+      return (favoriteRows ?? []).map((favorite) => ({
+        ...favorite,
+        listings: listingById.get(favorite.listing_id) ?? null,
+      }));
     },
     enabled: !!user,
     staleTime: USER_SCOPED_QUERY_STALE_TIME,

@@ -58,7 +58,7 @@ const PRICE_INDEX_FALLBACK = [
 const POPULAR_LOCATION_NAMES = ["Athens", "Thessaloniki", "Mykonos", "Santorini"] as const;
 
 const featuredSelect =
-  "id,owner_id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,project_id,ai_score,views_count,tags,has_video_tour,has_virtual_tour,is_featured,featured_until,priority_placement,priority_until,is_pre_sale,construction_status,project,listing_images";
+  "id,owner_id,created_at,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,project_id,ai_score,views_count,tags,has_video_tour,has_virtual_tour,is_featured,featured_until,priority_placement,priority_until,is_pre_sale,construction_status,project,listing_images";
 
 const openHouseSelect =
   "id,title,address,city,price,price_per_sqm,bedrooms,bathrooms,sqm,floor,total_floors,year_built,energy_class,cover_image_url,property_type,listing_type,open_house_transaction_type,ai_score,views_count,tags,open_house_date,latitude,longitude,listing_images";

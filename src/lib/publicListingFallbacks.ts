@@ -65,7 +65,7 @@ const withAbortSignal = <T>(query: T, signal?: AbortSignal): T => {
 
 export async function fetchHomepageFeaturedFallback(signal?: AbortSignal): Promise<HomepageListing[]> {
   const query = supabase
-      .from("public_listing_catalogue")
+      .rpc("get_public_listing_catalogue")
       .select(PUBLIC_CARD_LISTING_SELECT)
       .eq("status", "active")
       .eq("is_off_market", false)
@@ -82,7 +82,7 @@ export async function fetchHomepageFeaturedFallback(signal?: AbortSignal): Promi
 
 export async function fetchHomepageOpenHousesFallback(signal?: AbortSignal): Promise<HomepageListing[]> {
   const query = supabase
-      .from("public_listing_catalogue")
+      .rpc("get_public_listing_catalogue")
       .select(PUBLIC_CARD_LISTING_SELECT)
       .eq("status", "active")
       .eq("is_off_market", false)
@@ -109,7 +109,7 @@ export async function fetchOpenHousesFallback({
 }): Promise<HomepageListing[]> {
   const now = new Date().toISOString();
   let query = supabase
-      .from("public_listing_catalogue")
+      .rpc("get_public_listing_catalogue")
       .select(PUBLIC_CARD_LISTING_SELECT)
       .eq("status", "active")
       .eq("is_off_market", false)
@@ -129,7 +129,7 @@ export async function fetchOpenHousesFallback({
 export async function fetchAuctionsFallback<T = HomepageListing>(limit: number, signal?: AbortSignal): Promise<T[]> {
   const today = new Date().toISOString().slice(0, 10);
   const query = supabase
-      .from("public_listing_catalogue")
+      .rpc("get_public_listing_catalogue")
       .select(PUBLIC_CARD_LISTING_SELECT)
       .eq("status", "active")
       .eq("is_off_market", false)
