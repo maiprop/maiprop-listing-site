@@ -1917,6 +1917,7 @@ describe("public homepage endpoint", () => {
     expect(url.searchParams.get("is_featured")).toBe("eq.true");
     expect(url.searchParams.get("featured_until")).toMatch(/^gt\./);
     expect(url.searchParams.getAll("order")).toEqual(["created_at.desc"]);
+    expect(url.searchParams.get("select")?.split(",")).toContain("created_at");
     expect(url.searchParams.get("select")).toContain("owner_id");
     expect(url.searchParams.get("select")).toContain("has_video_tour");
     expect(url.searchParams.get("select")).toContain("has_virtual_tour");
@@ -1967,6 +1968,7 @@ describe("public homepage endpoint", () => {
     expect(url.searchParams.get("is_off_market")).toBe("eq.false");
     expect(url.searchParams.get("open_house_date")).toMatch(/^gte\./);
     expect(url.searchParams.get("limit")).toBe("12");
+    expect(url.searchParams.get("select")?.split(",")).toContain("open_house_date");
     expect(url.searchParams.get("select")).toContain("listing_images");
     expect(url.searchParams.has("listing_images.limit")).toBe(false);
   });
